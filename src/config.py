@@ -8,6 +8,7 @@ changes elsewhere in the project.
 """
 
 import os
+from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -25,3 +26,9 @@ if not API_KEY:
     raise RuntimeError(
         "OPENROUTER_API_KEY is not set. Copy .env.example to .env and fill in your key."
     )
+
+# Standing instructions sent as the system message at the start of every
+# session (and every one-off query). Edit INSTRUCTIONS.txt directly; no code
+# change needed to update it.
+INSTRUCTIONS_PATH = Path(__file__).resolve().parent.parent / "INSTRUCTIONS.txt"
+INSTRUCTIONS = INSTRUCTIONS_PATH.read_text().strip() if INSTRUCTIONS_PATH.exists() else ""

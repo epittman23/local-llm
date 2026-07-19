@@ -42,8 +42,9 @@ def ask(
     Args:
         prompt: The user's message.
         task: One of "coding", "reasoning", or "reasoning_alt".
-        system: Optional system prompt to prepend. Only used if no
-            conversation is supplied, or if the conversation is brand new.
+        system: System prompt to prepend. Only used if no conversation is
+            supplied, or if the conversation is brand new. Defaults to the
+            standing instructions in INSTRUCTIONS.txt (config.INSTRUCTIONS).
         conversation: Optional Conversation instance. If supplied, prior
             turns are included and the new turn is appended and persisted.
 
@@ -54,6 +55,8 @@ def ask(
         raise ValueError(f"Unknown task '{task}'. Expected one of {list(TASK_MODELS)}.")
 
     model = TASK_MODELS[task]
+    if system is None:
+        system = config.INSTRUCTIONS
 
     if conversation is not None:
         if not conversation.messages and system:

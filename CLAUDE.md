@@ -23,13 +23,14 @@ Two specialized models are used, selected on a per-task basis:
 
 - **Coding**: `qwen/qwen-2.5-coder-32b-instruct`
   Used for code generation, review, and debugging tasks.
-- **Math, statistics, and reasoning**: `deepseek/deepseek-r1-distill-qwen-32b`
-  Used for step-by-step mathematical reasoning and statistical analysis. Enable/
-  surface the model's reasoning trace where useful for verifying its work.
-- **Alternative reasoning model to evaluate**: `qwen/qwq-32b`
-  Being A/B tested against the DeepSeek distill on real math/statistics tasks. The model
-  selection for this role is not yet final; note observations in this file's
-  "Decisions log" section below as they accumulate.
+- **Math, statistics, and reasoning**: `qwen/qwen3-32b`
+  Used for step-by-step mathematical reasoning and statistical analysis. Supports a
+  native thinking mode (`include_reasoning` param); surface the reasoning trace where
+  useful for verifying its work.
+- **Alternative reasoning model to evaluate**: `qwen/qwen3-32b`
+  Currently the same model as the primary slot (see 2026-07-19 decision below) — both
+  prior candidates for this role were removed from OpenRouter. Replace with a distinct
+  candidate once one is identified, to resume the A/B evaluation.
 
 Model names should be read from a config value or environment variable, never
 hardcoded inline, so switching models (during evaluation, or at local-migration time)
@@ -48,6 +49,10 @@ change; do not build features that assume a cloud-only environment.
 - Language/framework: _fill in once decided_
 - Testing approach: _fill in once decided_
 - Directory structure: _fill in once established_
+- The user is always the one who runs `main.py` and interfaces with the assistant
+  directly. Claude Code should never invoke `main.py` itself (including for testing
+  or verification) unless the user explicitly instructs it to do so for that
+  specific instance.
 
 ## Commands
 
@@ -58,3 +63,13 @@ change; do not build features that assume a cloud-only environment.
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-07-19**: `deepseek/deepseek-r1-distill-qwen-32b` (reasoning) and
+  `qwen/qwq-32b` (reasoning_alt) both returned 404 "No endpoints found" from
+  OpenRouter and are confirmed removed from its catalog (checked via
+  `GET /api/v1/models`), not just renamed. The only remaining DeepSeek R1 variants
+  are `deepseek-r1-distill-llama-70b` (70B, exceeds the 24GB-GPU-at-Q4 self-host
+  budget) and full `deepseek-r1`/`deepseek-r1-0528` (671B MoE, not self-hostable at
+  all). Switched both `REASONING_MODEL` and `REASONING_MODEL_ALT` to
+  `qwen/qwen3-32b` (dense 32.8B, native thinking mode via `include_reasoning`, fits
+  the self-host constraint). This collapses the A/B slot to a single model for now;
+  the alt slot needs a genuinely different candidate before evaluation can resume.
