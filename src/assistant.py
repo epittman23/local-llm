@@ -12,7 +12,7 @@ models can be compared empirically on real usage rather than benchmarks alone.
 """
 
 import time
-
+from typing import cast
 from openai import OpenAI
 
 from src import config
@@ -35,7 +35,7 @@ def ask(
     task: str = "reasoning",
     system: str | None = None,
     conversation: Conversation | None = None,
-) -> str:
+) -> str | None:
     """
     Send a prompt to the model assigned to the given task type.
 
@@ -83,6 +83,6 @@ def ask(
     )
 
     if conversation is not None:
-        conversation.add("assistant", reply)
+        conversation.add("assistant", cast(str,reply))
 
     return reply
