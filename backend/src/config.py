@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 # OpenRouter is OpenAI-API-compatible. When migrating to a local, self-hosted
 # server (e.g. Ollama, vLLM), only BASE_URL and API_KEY should need to change.

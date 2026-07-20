@@ -46,23 +46,54 @@ change; do not build features that assume a cloud-only environment.
 
 ## Conventions
 
-- Language/framework: _fill in once decided_
-- Testing approach: _fill in once decided_
-- Directory structure: _fill in once established_
-- The user is always the one who runs `main.py` and interfaces with the assistant
-  directly. Claude Code should never invoke `main.py` itself (including for testing
-  or verification) unless the user explicitly instructs it to do so for that
-  specific instance.
+- Language/framework: Python backend (FastAPI + `openai` client), TypeScript/React
+  frontend (Bun, Vite, [assistant-ui](https://www.assistant-ui.com)).
+- Testing approach: _fill in once decided_ — no automated test suite exists yet.
+  Backend/API changes are currently verified with `curl` against the running
+  server; frontend changes with `bun run build` (type-checking) plus manual/
+  browser verification.
+- Directory structure: two self-contained sibling projects, `backend/` and
+  `frontend/`, each with its own dependency manifest (`backend/requirements.txt`,
+  `frontend/package.json`). `backend/src/` holds assistant logic shared by both
+  the CLI (`backend/main.py`) and the web API (`backend/server.py` +
+  `backend/src/api/`); `frontend/src/` holds the React app. See the repo root
+  `README.md` for the full tree.
+- The user is always the one who runs `backend/main.py` and interfaces with the
+  assistant directly via the CLI. Claude Code should never invoke it itself
+  (including for testing or verification) unless the user explicitly instructs
+  it to do so for that specific instance. The FastAPI server (`backend/server.py`)
+  and frontend dev server are not covered by this restriction — those may be
+  started/exercised directly (e.g. via `curl`, a browser, or Playwright) when
+  verifying web-facing changes, since they aren't the user's direct CLI
+  interface.
+- The CLI and web UI share the same session storage (`backend/src/memory.py`'s
+  `Conversation`, persisted under `backend/sessions/`) — a session started in
+  one can be continued in the other.
 
 ## Commands
 
-- _fill in build/run/test commands once the project scaffold exists_
+- Backend: `cd backend && pip install -r requirements.txt`, then
+  `python main.py "..."` (CLI) or `uvicorn server:app --reload --port 8000` (API
+  server for the web frontend).
+- Frontend: `cd frontend && bun install && bun run dev` (requires the API server
+  running for `/api/*` requests, proxied to `localhost:8000` in dev). `bun run
+  build` type-checks and produces a production bundle.
+- Usage analysis: `cd backend && python scripts/analyze_logs.py`.
 
 ## Decisions log
 
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-07-20**: Added a web frontend replicating Claude.ai's UI/UX
+  (assistant-ui + Bun + React, in `frontend/`) backed by a new FastAPI server
+  (`backend/server.py` + `backend/src/api/`). This required moving the entire
+  Python project from the repo root into `backend/`, so `main.py`,
+  `requirements.txt`, `sessions/`, `logs/`, etc. are now under `backend/` — see
+  the updated root `README.md`. Added `ask_stream()` (a streaming sibling to
+  `ask()`, in `src/assistant.py`) and `list_sessions()` (`src/memory.py`) to
+  support the frontend; `ask()`'s signature/behavior is unchanged, so the CLI is
+  unaffected. No provider-specific SDKs were introduced on either side.
 - **2026-07-19**: `deepseek/deepseek-r1-distill-qwen-32b` (reasoning) and
   `qwen/qwq-32b` (reasoning_alt) both returned 404 "No endpoints found" from
   OpenRouter and are confirmed removed from its catalog (checked via

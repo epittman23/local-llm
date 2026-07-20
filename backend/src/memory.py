@@ -59,3 +59,29 @@ class Conversation:
             lines.append(cast(str, message.get("content", "")))
             lines.append("")
         return "\n".join(lines)
+
+
+def list_sessions() -> list[dict]:
+    """
+    List all saved sessions under SESSIONS_DIR, most recently updated first.
+
+    Returns:
+        A list of {"name", "message_count", "updated_at"} dicts, one per
+        session. message_count excludes the injected system prompt so it
+        reflects actual conversation turns. updated_at is a Unix timestamp
+        taken from messages.json's mtime.
+    """
+    sessions = []
+    for session_dir in SESSIONS_DIR.iterdir():
+        json_path = session_dir / "messages.json"
+        if not session_dir.is_dir() or not json_path.exists():
+            continue
+        messages = json.loads(json_path.read_text())
+        turn_count = sum(1 for m in messages if m.get("role") != "system")
+        sessions.append({
+            "name": session_dir.name,
+            "message_count": turn_count,
+            "updated_at": json_path.stat().st_mtime,
+        })
+    sessions.sort(key=lambda s: s["updated_at"], reverse=True)
+    return sessions
