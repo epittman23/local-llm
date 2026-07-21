@@ -218,13 +218,3 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
-
-# Sessions
-sessions/
-
-# Logs
-logs/
-
-# Frontend (Bun/Vite)
-node_modules/
-frontend/dist/

@@ -1,167 +1,60 @@
 # Personal AI Assistant
 
-A personal AI assistant prototyped on cloud-hosted open-weight models via
-OpenRouter, structured so it can migrate to local, self-hosted inference
-later with minimal code changes. See `CLAUDE.md` for the full project
-rationale.
+A personal AI assistant running on cloud-hosted open-weight models via
+OpenRouter, using [Open WebUI](https://github.com/open-webui/open-webui) as
+the chat interface. See `CLAUDE.md` for the full project rationale.
 
-The project has two parts, each a self-contained sibling project:
+Open WebUI runs in Docker and talks directly to OpenRouter's OpenAI-compatible
+API — there is no custom backend or frontend code in this repo; Open WebUI
+*is* the app.
 
-- `backend/` — the Python assistant logic, a CLI (`main.py`), and a FastAPI
-  server (`server.py`) that powers the web frontend.
-- `frontend/` — a Bun-managed React web UI (built on
-  [assistant-ui](https://www.assistant-ui.com)) that talks to the FastAPI
-  server.
+## Running it
 
-The CLI works completely standalone; the frontend/API server are optional.
-
-## Backend setup
-
-1. Create a virtual environment (recommended):
-   ```bash
-   cd backend
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. Set up your API key:
-   ```bash
-   cp .env.example .env
-   ```
-   Then edit `.env` and add your OpenRouter API key (from
-   https://openrouter.ai/keys).
-
-## CLI usage
-
-Run these from the `backend/` directory (or prefix with `backend/`, e.g.
-`python backend/main.py ...`, from the repo root):
+Requires Docker Desktop with WSL integration enabled for this distro
+(Docker Desktop → Settings → Resources → WSL Integration).
 
 ```bash
-# Math/statistics/reasoning question (default)
-python main.py "What is the standard error of the mean for a sample of 30?"
-
-# Coding question
-python main.py --task coding "Write a Python function to compute a rolling average"
-
-# Try the alternative reasoning model instead of the default
-python main.py --task reasoning_alt "Prove that the sum of two even numbers is even"
+docker run -d \
+  -p 3000:8080 \
+  -e OPENAI_API_BASE_URL=https://openrouter.ai/api/v1 \
+  -e OPENAI_API_KEY=<your OpenRouter API key, from https://openrouter.ai/keys> \
+  -v open-webui:/app/backend/data \
+  --name open-webui \
+  --restart unless-stopped \
+  ghcr.io/open-webui/open-webui:main
 ```
 
-## Conversation memory
+Then open `http://localhost:3000`. The first account you create becomes the
+admin. Chat history, settings, and the model list are persisted in the
+`open-webui` Docker volume.
 
-By default, each query is a one-off with no memory of prior turns. To have
-the assistant remember context across queries, use `--session <name>`:
+## Model setup
 
-```bash
-python main.py --session math-help "What's a p-value?"
-python main.py --session math-help "How does that relate to a confidence interval?"
-```
+Under **Workspace → Models**, this project defines one Open WebUI model entry
+per task, each wrapping a specific OpenRouter model id:
 
-The second query will have the first exchange in context. Session history is
-saved to `backend/sessions/<name>/` and persists across separate runs of the
-script, not just within one run.
+- **Coding** → `qwen/qwen-2.5-coder-32b-instruct`
+- **Reasoning** → `qwen/qwen3.6-27b`
 
-For a continuous back-and-forth without re-invoking the script each time, use
-interactive chat mode:
-
-```bash
-python main.py --chat --session math-help --task reasoning
-```
-
-Type `exit` or press Ctrl+D to leave the chat.
-
-## Web frontend
-
-The web frontend replicates a Claude.ai-style chat UI: a sidebar of saved
-sessions, a task (model) selector, and a streaming chat pane. It talks to the
-FastAPI server, which shares the same `Conversation`/session storage as the
-CLI — a session started on the command line can be continued in the browser,
-and vice versa.
-
-Start the API server (from `backend/`, with dependencies installed as above):
-
-```bash
-uvicorn server:app --reload --port 8000
-```
-
-In a separate terminal, start the frontend (requires [Bun](https://bun.sh)):
-
-```bash
-cd frontend
-bun install
-bun run dev
-```
-
-Then open the URL Vite prints (default `http://localhost:5173`).
-
-## Comparing models (A/B evaluation)
-
-Every query — from the CLI or the web UI — is logged to
-`backend/logs/usage.jsonl`, recording which model handled it, how long it
-took, and how many tokens were used. This is what lets you decide between
-`REASONING_MODEL` and `REASONING_MODEL_ALT` based on your own actual queries
-rather than published benchmarks.
-
-To see a summary:
-
-```bash
-cd backend
-python scripts/analyze_logs.py
-```
-
-This prints, per model: number of queries, average latency, and average total
-tokens used. Note that this captures speed and verbosity, not correctness;
-you will still need to judge answer quality yourself, since that isn't
-something a log file can measure. Record any conclusions in the "Decisions
-log" section of `CLAUDE.md` so future sessions retain that context.
-
-Neither `backend/sessions/` nor `backend/logs/` are committed to version
-control (see `.gitignore`), since they may contain the actual content of your
-queries.
-
-## Project structure
+Both models are configured (per-model, in the System Prompt field) with the
+following instructions:
 
 ```
-.
-├── CLAUDE.md              # Project context for Claude Code sessions
-├── README.md
-├── backend/
-│   ├── requirements.txt
-│   ├── .env.example        # Template for required environment variables
-│   ├── .env                # Your actual key (not committed, see .gitignore)
-│   ├── main.py              # CLI entrypoint (single-query and --chat modes)
-│   ├── server.py             # FastAPI app powering the web frontend
-│   ├── src/
-│   │   ├── config.py         # Reads model names and API key from environment
-│   │   ├── assistant.py      # Routes requests to the appropriate model, logs usage
-│   │   ├── memory.py         # Conversation history, persisted per session
-│   │   ├── logging_utils.py  # Per-query usage logging for model A/B comparison
-│   │   └── api/               # FastAPI routers/schemas for the web frontend
-│   ├── scripts/
-│   │   └── analyze_logs.py    # Summarizes logs/usage.jsonl per model
-│   ├── sessions/                # Saved conversation histories (not committed)
-│   └── logs/                    # Usage logs (not committed)
-└── frontend/               # Bun + React + assistant-ui web UI
-    ├── package.json
-    └── src/
+Please use a formal, professional tone. When applicable, try to explain solutions and their steps.
+Be informative and delve into topics to enhance learning and further understanding.
+Please prioritize accuracy and correctness for all responses.
+If there are any assumptions you make for any response please clearly state them and do not hesitate to ask clarifying questions before providing a full response.
+Never use em-dashes, instead use standard punctuation such as colons and semicolons.
 ```
+
+Model choices and reasoning for changing them are logged in the "Decisions
+log" section of `CLAUDE.md`.
 
 ## Migrating to local hardware later
 
-When you're ready to self-host, only two things need to change in
-`backend/.env`:
-
-- `BASE_URL`: point this at your local server (e.g. `http://localhost:11434/v1`
-  for Ollama)
-- `OPENROUTER_API_KEY` / `API_KEY`: local servers often don't require a real
-  key, but the client still expects the field to be present
-
-No changes to `backend/src/assistant.py`, `backend/main.py`, or
-`backend/server.py` should be necessary, since all are written against the
-OpenAI-compatible interface that both OpenRouter and common self-hosting
-tools (Ollama, vLLM) support.
+When ready to self-host (e.g. Ollama, vLLM), update the connection under
+**Admin Panel → Settings → Connections**: change the base URL to your local
+server's OpenAI-compatible endpoint (e.g. `http://localhost:11434/v1` for
+Ollama), and update the API key if your local server requires one. No other
+changes should be necessary, since Open WebUI talks to any OpenAI-compatible
+endpoint.
