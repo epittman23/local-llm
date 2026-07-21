@@ -7,18 +7,20 @@ __pycache__/
 *.so
 
 # Distribution / packaging
+# (anchored to repo root: unanchored generic names like lib/, build/, dist/
+# would otherwise also match legitimate nested dirs, e.g. frontend/src/lib/)
 .Python
-build/
+/build/
 develop-eggs/
-dist/
+/dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
-parts/
+/lib/
+/lib64/
+/parts/
 sdist/
-var/
+/var/
 wheels/
 share/python-wheels/
 *.egg-info/
@@ -216,9 +218,3 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
-
-# Sessions
-sessions/
-
-# Logs
-logs/

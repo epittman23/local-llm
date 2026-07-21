@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CONTAINER_NAME="open-webui"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "${SCRIPT_DIR}/.env" ]; then
+  set -a
+  source "${SCRIPT_DIR}/.env"
+  set +a
+fi
+
+cleanup() {
+  echo
+  echo "Stopping ${CONTAINER_NAME}..."
+  kill "${LOGS_PID}" 2>/dev/null || true
+  docker stop "${CONTAINER_NAME}" >/dev/null
+  echo "Stopped."
+  exit 0
+}
+trap cleanup INT TERM
+
+if docker ps -aq -f "name=^${CONTAINER_NAME}$" | grep -q .; then
+  docker start "${CONTAINER_NAME}" >/dev/null
+else
+  : "${OPENROUTER_API_KEY:?Set OPENROUTER_API_KEY in your environment before running this script (no existing '${CONTAINER_NAME}' container was found, so a new one needs to be created)}"
+  docker run -d \
+    -p 3000:8080 \
+    -e OPENAI_API_BASE_URL=https://openrouter.ai/api/v1 \
+    -e OPENAI_API_KEY="${OPENROUTER_API_KEY}" \
+    -v open-webui:/app/backend/data \
+    --name "${CONTAINER_NAME}" \
+    ghcr.io/open-webui/open-webui:main >/dev/null
+fi
+
+echo "open-webui running at http://localhost:3000 (Ctrl+C to stop)"
+docker logs -f --tail 0 "${CONTAINER_NAME}" &
+LOGS_PID=$!
+wait "${LOGS_PID}"
