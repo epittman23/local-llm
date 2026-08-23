@@ -58,24 +58,72 @@ exposes the same OpenAI-compatible API Open WebUI already speaks. Pointing
 Open WebUI at it is a connection-settings change only (see "Migrating to local
 hardware later" below).
 
-Helper functions and aliases live in `llama-local.sh`. Source it from
-`~/.bashrc`:
+Helper functions live in `scripts/llama-env.sh`. Source it from `~/.bashrc`:
 
 ```bash
-[ -f "$HOME/dev/repos/home-llm/llama-local.sh" ] && . "$HOME/dev/repos/home-llm/llama-local.sh"
+[ -f "$HOME/dev/repos/local-llm/scripts/llama-env.sh" ] \
+  && . "$HOME/dev/repos/local-llm/scripts/llama-env.sh"
 ```
 
-It provides:
+It can also be invoked directly without sourcing:
+`./scripts/llama-env.sh serve qwen38`.
 
-- `llama-qwen` : start `llama-server` on port 8090 serving the model under the
-  alias `qwen3.6-35b-a3b`. Tunable via env vars: `LLAMA_MODEL`, `LLAMA_MOE`
-  (layers whose MoE experts stay on CPU, default 34), `LLAMA_CTX` (default
-  65536), `LLAMA_THREADS` (default 6), `LLAMA_PORT` (default 8090). Any extra
-  arguments are passed through to `llama-server`.
-- `llama-sweep-threads [4,6,8,...]` : run `llama-bench` across thread counts
-  and print a markdown table.
+Serving settings are grouped into profiles rather than scattered across env
+vars. `llama-profiles` lists them and shows whether the weights are on disk:
+
+| profile | arch  | model                             | ctx   | threads | ngl | n-cpu-moe |
+| ------- | ----- | --------------------------------- | ----- | ------: | --: | --------: |
+| qwen36  | MoE   | `Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf` | 65536 |       6 |  99 |        34 |
+| qwen38  | dense | `Qwen3.8-27B-UD-Q3_K_XL.gguf`     | 16384 |      12 |  26 |       n/a |
+
+`qwen38`'s `-ngl 26` is a placeholder pending an `llama-sweep-ngl` run;
+`--n-cpu-moe` is MoE-only and the script refuses to pass it to a dense model.
+
+The functions:
+
+- `llama-serve [profile] [args...]` : start `llama-server` on port 8090 (set
+  `LLAMA_PORT` to change). One-off overrides: `LLAMA_MODEL`, `LLAMA_CTX`,
+  `LLAMA_THREADS`, `LLAMA_NGL`, `LLAMA_MOE`, `LLAMA_REASONING` (thinking
+  effort for `qwen38`). Extra arguments pass through to `llama-server`.
+  `llama-qwen` is a backwards-compatible alias.
+- `llama-fetch [profile]` : download the profile's weights with the `hf` CLI.
+- `llama-sweep-threads [profile] [4,6,8,...]` : `llama-bench` across thread
+  counts, printed as a markdown table.
+- `llama-sweep-ngl [profile] [12,16,20,...]` : `llama-bench` across GPU layer
+  counts, for tuning a dense profile. Values that exceed VRAM error out, which
+  is the useful signal.
 - `llama-check` : `GET /v1/models` against the running server.
 - `llama-vram` : live `nvidia-smi` GPU telemetry.
+- `llama-profiles` : list profiles and whether their weights are present.
+
+### Recorded GPU telemetry
+
+`llama-serve` starts `scripts/llama-vram-log.sh` in the background and stops it
+when the server exits, so every serving run leaves a record of what the GPU
+actually did. The recorder waits for the port to open, samples `nvidia-smi`
+every `LLAMA_VRAM_INTERVAL` seconds (default 5), and appends the run to:
+
+```
+logs/<model-name>-<quant>.log     # e.g. logs/Qwen3.8-27B-UD-Q3_K_XL.log
+```
+
+The file names the model and quantization at the top, then holds one block per
+serving configuration (identified by a `config-id` fingerprint over arch, ngl,
+`--n-cpu-moe`, ctx, threads, cache types, flash attention, batch sizes,
+reasoning effort, and sampler values). Changing any of those opens a new block
+instead of mixing incomparable runs; rebuilding llama.cpp does not, since the
+build string is recorded per run rather than fingerprinted.
+
+Within a block, each run is a markdown table with a UTC timestamp per sample
+(temperature, utilization, memory used/total, power draw, SM clock). Only the
+most recent run of a configuration keeps its full table: when a newer run
+finishes, the older one is collapsed to a single summary row (start, duration,
+sample count, build, and avg/max per metric) under `### previous runs`, so the
+files stay small over time.
+
+`logs/` is gitignored. Set `LLAMA_VRAM_LOG=0` to disable recording, or run
+`./scripts/llama-vram-log.sh record [profile]` by hand to capture a server that
+was started some other way; it stops on its own once the port stops answering.
 
 ### Hardware and model
 
@@ -122,9 +170,10 @@ spread larger than the differences between settings. Generation is bound by
 system-RAM bandwidth for the CPU-resident experts, not by CPU cores. The
 default of 6 threads is kept since nothing above it pays for itself.
 
-Note that `llama-sweep-threads` does not pass `-ngl`/`-ncmoe`, so it benchmarks
-llama-bench's defaults rather than the `llama-qwen` serving configuration; add
-those flags to reproduce the table above.
+These numbers were measured with build `60eeeb608` (10472) and are historical:
+the current build is newer, and `llama-sweep-threads` now passes the profile's
+`-ngl` and `--n-cpu-moe`, so it benchmarks the serving configuration rather
+than llama-bench's defaults. Re-measure before relying on them.
 
 ## Migrating to local hardware later
 

@@ -21,6 +21,9 @@
 #   llama-vram
 #   llama-profiles
 #
+# GPU telemetry is recorded automatically for every llama-serve run by
+# scripts/llama-vram-log.sh; see that file's header and README.md.
+#
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
@@ -81,10 +84,10 @@ _llama_profile() {
             # Context is deliberately conservative. The model supports 262144,
             # but KV cache competes directly with weights for 6 GB of VRAM.
             LLAMA_P_CTX=16384
-            LLAMA_P_THREADS=6
+            LLAMA_P_THREADS=12
             # PLACEHOLDER. Tune this with llama-sweep-ngl before trusting it.
             # A dense model will fail to allocate at -ngl 99 on this hardware.
-            LLAMA_P_NGL=18
+            LLAMA_P_NGL=26
             LLAMA_P_MOE=""          # must stay empty: dense has no experts
             # Qwen3.8 thinking-mode recommended sampling.
             LLAMA_P_SAMPLERS=(--temp 1.0 --top-p 0.95 --top-k 20 --min-p 0.0)
@@ -215,7 +218,29 @@ llama-serve() {
         echo "             VRAM headroom with llama-vram before treating -ngl as tuned." >&2
     fi
 
+    # GPU telemetry for the life of this server. The recorder waits for the port,
+    # samples until it is killed below, and appends the run to logs/. If Ctrl-C
+    # aborts this function before the cleanup runs, it stops on its own once the
+    # port stops answering. Set LLAMA_VRAM_LOG=0 to skip it.
+    local vram_pid=""
+    if [[ "${LLAMA_VRAM_LOG:-1}" != "0" ]] && command -v nvidia-smi >/dev/null 2>&1; then
+        local here
+        here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        if [[ -f "$here/llama-vram-log.sh" ]]; then
+            bash "$here/llama-vram-log.sh" record "$LLAMA_P_NAME" &
+            vram_pid=$!
+        fi
+    fi
+
     "$LLAMA_BIN/llama-server" "${args[@]}" "$@"
+    local rc=$?
+
+    if [[ -n "$vram_pid" ]]; then
+        kill -TERM "$vram_pid" 2>/dev/null
+        wait "$vram_pid" 2>/dev/null
+    fi
+
+    return $rc
 }
 
 # Backwards-compatible name for the old .bashrc function.
@@ -304,9 +329,10 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
         sweep-ngl)      llama-sweep-ngl "$@" ;;
         check)          llama-check "$@" ;;
         vram)           llama-vram "$@" ;;
+        vram-log)       "$(dirname "${BASH_SOURCE[0]}")/llama-vram-log.sh" record "$@" ;;
         profiles)       llama-profiles "$@" ;;
         *)
-            echo "usage: $(basename "$0") {serve|fetch|sweep-threads|sweep-ngl|check|vram|profiles} [profile] [args]" >&2
+            echo "usage: $(basename "$0") {serve|fetch|sweep-threads|sweep-ngl|check|vram|vram-log|profiles} [profile] [args]" >&2
             exit 2
             ;;
     esac

@@ -24,7 +24,7 @@ llama.cpp `llama-server` runs Qwen3.6-35B-A3B on the laptop's RTX 3060 (6 GB)
 and serves the same OpenAI-compatible API on port 8090. It is not yet the
 default backing for Open WebUI; OpenRouter remains the day-to-day path until
 local throughput is acceptable. See "Local inference" below and the
-`llama-local.sh` helpers.
+`scripts/llama-env.sh` helpers.
 
 ## Models in use
 
@@ -50,12 +50,16 @@ choice, not a code path:
 
 Hardware: NVIDIA GeForce RTX 3060 Laptop, 6 GB VRAM, compute capability 8.6.
 
-The 20.81 GiB model cannot fit in 6 GB, so `llama-qwen` offloads all layers
-(`-ngl 99`) but keeps the MoE expert tensors of 34 layers in system RAM
+The 20.81 GiB model cannot fit in 6 GB, so the `qwen36` profile offloads all
+layers (`-ngl 99`) but keeps the MoE expert tensors of 34 layers in system RAM
 (`--n-cpu-moe 34`), with a q8_0-quantized KV cache and flash attention to fit
-64K of context. Serving and benchmarking helpers live in `llama-local.sh`
-(sourced from `~/.bashrc`); README.md documents each function and records the
-measured numbers.
+64K of context. Serving and benchmarking helpers live in
+`scripts/llama-env.sh` (sourced from `~/.bashrc`), which groups settings into
+per-model profiles (`qwen36` MoE, `qwen38` dense) rather than loose env vars;
+`llama-serve` starts them and `llama-qwen` remains as an alias. Every serving
+run also records GPU telemetry via `scripts/llama-vram-log.sh` into
+`logs/<model>-<quant>.log` (gitignored). README.md documents each function and
+records the measured numbers.
 
 Current measured performance: ~7 to 8 tokens/s generation and ~72 to 78
 tokens/s prompt processing. Generation is bound by system-RAM bandwidth for
@@ -83,8 +87,9 @@ assume a cloud-only environment.
 - There is no custom backend or frontend code in this repo — Open WebUI (run
   via Docker) is the entire application. This repo holds documentation
   (`README.md`, `CLAUDE.md`) plus small operational shell scripts
-  (`openWebUI-docker` to run the container, `llama-local.sh` for the local
-  llama.cpp server and benchmarks). Shell scripts here are operational glue,
+  (`openWebUI-docker` to run the container, `scripts/llama-env.sh` for the
+  local llama.cpp server and benchmarks, `scripts/llama-vram-log.sh` for GPU
+  telemetry capture). Shell scripts here are operational glue,
   not application code; keep them thin and keep model/prompt configuration in
   Open WebUI.
 - Testing approach: verify changes by using Open WebUI directly in the
@@ -132,11 +137,15 @@ or agent) updates the docs in the same commit:
   the llama.cpp build, and the flags used. A number without its configuration
   is not reusable. Numbers that predate a hardware or model change are stale;
   re-measure or mark them as historical.
-- **Shell scripts and docs must agree**: if `llama-local.sh` or
-  `openWebUI-docker` changes its defaults, flags, or function names, update
-  the `README.md` description of it in the same change. `llama-local.sh` is
-  the source of truth for the local serving configuration; if it drifts from
-  `~/.bashrc`, reconcile the two rather than letting both exist.
+- **Shell scripts and docs must agree**: if `scripts/llama-env.sh`,
+  `scripts/llama-vram-log.sh`, or `openWebUI-docker` changes its defaults,
+  flags, or function names, update the `README.md` description of it in the
+  same change. `scripts/llama-env.sh` is the source of truth for the local
+  serving configuration; if it drifts from `~/.bashrc`, reconcile the two
+  rather than letting both exist. The configuration lines written into the
+  telemetry logs mirror the flags `llama-serve` passes, so a change to those
+  flags must be reflected in `_vramlog_config` too, or old and new runs get
+  fingerprinted as the same configuration.
 - **Do not document aspirations as facts.** Anything not yet running is stated
   as planned or under evaluation, with what would make it the default.
 - **Prune what is no longer true.** When a section describes something that no
@@ -148,6 +157,28 @@ or agent) updates the docs in the same commit:
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-08-23**: GPU telemetry is now recorded automatically for every local
+  serving run. `llama-serve` (in `scripts/llama-env.sh`, which replaced the
+  deleted `llama-local.sh` and now carries per-model profiles instead of loose
+  env vars) starts `scripts/llama-vram-log.sh` in the background and stops it
+  when `llama-server` exits; the recorder also stops on its own once the port
+  stops answering, so an interrupted shell cannot leave it sampling. Samples
+  (temperature, utilization, memory used/total, power, SM clock, at
+  `LLAMA_VRAM_INTERVAL`, default 5 s) are appended to
+  `logs/<model-name>-<quant>.log` as markdown tables, grouped into blocks by a
+  `config-id` fingerprint over the serving flags and sampler values, so runs
+  under different settings are never averaged together. The llama.cpp build is
+  recorded per run rather than fingerprinted, so a rebuild does not fragment a
+  configuration's history. Retention: only the most recent run of a
+  configuration keeps its full sample table; when a newer run finishes, the
+  previous one collapses to a single avg/max summary row. This was chosen over
+  keeping every sample because a multi-hour session at 5 s intervals is
+  thousands of rows, and the reason to keep old runs is comparison, not
+  replay. `logs/` is gitignored: the captures are machine-specific and
+  regenerated on every run, so README.md and this file stay the durable
+  record. Motivation is tuning the dense `qwen38` profile, whose `-ngl 26` is
+  still an untested placeholder and needs VRAM-headroom evidence that outlives
+  the session. Disable with `LLAMA_VRAM_LOG=0`.
 - **2026-08-17**: Stood up local inference on the laptop's RTX 3060 (6 GB) as
   a parallel track to OpenRouter, using llama.cpp `llama-server` with
   `Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf` (34.66 B total / ~3 B active, 20.81 GiB)
