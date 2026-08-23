@@ -218,3 +218,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# GPU telemetry captures from scripts/llama-vram-log.sh: machine-specific,
+# regenerated on every serving run. README.md/CLAUDE.md are the durable record.
+logs/
