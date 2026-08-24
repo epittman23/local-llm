@@ -169,6 +169,26 @@ or agent) updates the docs in the same commit:
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-08-24**: First multi-prompt measurement of `qwen38` with MTP
+  speculative decoding: `humaneval1`-`humaneval4` in one server session (build
+  95b8e33e1/10597, `-ngl 20` with the `-ot` pin, `--spec-draft-n-max 2`,
+  `--parallel 1`, effort medium, temperature 0, four cold prefills). All four
+  answers were correct. Generation held a 2.87-3.00 t/s band and draft
+  acceptance ran 87.4% to 96.2% (91.9% over the run), so the earlier
+  single-prompt figure of 2.89 t/s at 88.8% was representative rather than
+  lucky. The finding worth keeping is about prefill, not generation: cold
+  prefill ranged 41.26 to 55.24 t/s across prompts of 105-139 tokens under
+  identical flags, a 34% spread, which means a single-prompt prefill comparison
+  cannot resolve anything smaller than that -- and prefill is the instrument the
+  `-ngl` spill cliff is read with. Full numbers with their flags are in
+  README.md. Also learned, and now documented as a known limitation: the
+  `server totals` row is scraped on the sampling interval, and llama.cpp updates
+  its prompt counters when a prompt is processed but its generation counters
+  when the task completes, so stopping the server immediately after a request
+  leaves that row holding the prompt half and not the generation half. It is
+  short by exactly one request's output here while its prompt tokens match the
+  `llama-test` table exactly. Nothing is wrong with either table; they are
+  sampled at different moments, and the per-request rows are the complete ones.
 - **2026-08-23** (last): Each log file now opens with a `## comparison`
   section: one row per `config-id` (ngl, parallel, spec, -ot, fused_gdn, cold
   prefill t/s, generation t/s, acceptance, peak VRAM, headroom, run count),

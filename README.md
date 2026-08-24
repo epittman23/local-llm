@@ -407,6 +407,20 @@ While it is recording it leaves `logs/.active-run.json`, which is how
 `llama-test` knows which run its timings belong to; without it a test still runs
 and prints its numbers, they are just not recorded.
 
+**Known limitation:** the `server totals` row can miss a request that finished
+just before the server stopped. The end scrape is refreshed on each sampling
+pass and once more at finalize, but by then the server is gone, so the row is
+whatever the last successful scrape held — up to `LLAMA_VRAM_INTERVAL` seconds
+stale. On the 2026-08-24T02:39:18Z run the server was killed within a second of
+the fourth request completing, and the last scrape landed mid-generation: its
+`prompt tok`/`prompt s` match the `llama-test` table exactly (518 / 10.8, all
+four prefills), while its output and draft counters are short by exactly that
+request's share (2064 output tokens against 2677, 1466 drafted against 1886).
+llama.cpp updates the prompt counters when a prompt is processed and the
+generation counters when the task completes, so a scrape between the two sees
+half a request. The `llama-test` rows are per-request and complete; when the two
+tables disagree by about one request's generation, this is why.
+
 **Known limitation:** the config lines describe the *profile* as resolved when
 the recorder started, not the argv of the process actually serving. A server
 started by hand, or one whose profile was edited mid-session, can therefore be
@@ -470,6 +484,27 @@ Note the whole request took ~5.5 minutes: 958 tokens at ~2.9 t/s, most of them
 reasoning tokens emitted before any answer text. Generation here is bound by
 system-RAM bandwidth for the CPU-resident layers, which is also why drafting
 helps less than its acceptance rate suggests.
+
+**Four-prompt run, 2026-08-24T02:39:18Z**, same build and same flags as above,
+one server, four cold prefills (`cache_prompt: false`), 2048-token cap,
+reasoning effort `medium`, temperature 0:
+
+| prompt      | prompt tok | prefill t/s | output tok | generation t/s | drafted | accepted | acceptance | answer  |
+| ----------- | ---------: | ----------: | ---------: | -------------: | ------: | -------: | ---------: | ------- |
+| humaneval1  |        136 |       42.73 |       1066 |           3.00 |     754 |      688 |      91.2% | correct |
+| humaneval2  |        105 |       41.26 |        499 |           2.87 |     364 |      318 |      87.4% | correct |
+| humaneval3  |        139 |       55.24 |        499 |           2.98 |     348 |      324 |      93.1% | correct |
+| humaneval4  |        138 |       52.96 |        613 |           2.98 |     420 |      404 |      96.2% | correct |
+| **run**     |        518 |   **47.74** |       2677 |       **2.97** |    1886 |     1734 |  **91.9%** | 4/4     |
+
+All four solutions were correct. Generation sits in a 2.87-3.00 t/s band across
+prompts, so a difference smaller than that band is noise, not a result.
+**Prefill is far less stable than it looks from one prompt**: 41.26 to 55.24 t/s
+across cold prompts of nearly the same length (105-139 tokens), a 34% spread
+under identical flags. Peak VRAM 5521/6144 MiB, 623 MiB headroom, `fused_gdn`
+enabled, `GpuIdle` and `SwPowerCap` both observed. GPU utilization averaged 13%
+over the samples that saw work — the CPU-resident layers, not the GPU, are what
+this configuration waits on.
 
 ### Benchmark: thread-count sweep
 
