@@ -141,9 +141,22 @@ The functions:
   and print the answer followed by llama.cpp's `timings` (prompt and generation
   tokens/s straight from the server, so a profile change can be judged without
   a separate `llama-bench` run). Prompts are `.txt` files in `prompts/`
-  (`llama-test --list`); the default is `humaneval0`. `temperature` is pinned
-  to 0 and the prompt is version-controlled, so two runs differ only by what
-  you changed. The model name comes from the running server (`GET /v1/models`),
+  (`llama-test --list`); the default is `humaneval0`. The set is
+  `humaneval0`-`humaneval4` — the first five HumanEval tasks
+  (`has_close_elements`, `separate_paren_groups`, `truncate_number`,
+  `below_zero`, `mean_absolute_deviation`), each holding the dataset's prompt
+  verbatim, including its typos, so a result here is about the same text the
+  published numbers are about. They differ in prompt length and in how much
+  reasoning they draw, which is the point: `humaneval2` is a two-line problem
+  and `humaneval1` is not. `temperature` is pinned to 0 and the prompt is
+  version-controlled, so two runs differ only by what you changed.
+
+  **Compare configurations on the same prompts.** A run's `cold prompt t/s` is
+  its total prompt tokens over its total prefill time, which aggregates cleanly
+  across prompts — but the token averages beside it, and the generation figures,
+  do not mean the same thing when one configuration was measured on one short
+  task and another on all five. The `prompt` column in the per-request table is
+  what says which is which. The model name comes from the running server (`GET /v1/models`),
   not from the profile — the profile says how a model *would* be served, but
   something is already loaded, and a measurement labelled with the wrong model
   is worthless. A mismatch prints a warning and tests what is actually running.
