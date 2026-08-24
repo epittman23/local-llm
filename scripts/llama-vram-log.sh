@@ -11,11 +11,15 @@
 # was started some other way.
 #
 # It waits for the server's port to open, samples nvidia-smi every
-# LLAMA_VRAM_INTERVAL seconds, and on exit appends the run to
+# LLAMA_VRAM_INTERVAL seconds, scrapes the server's /metrics counters, and on
+# exit hands the run to scripts/llama_log.py, which appends it to
 #   logs/<model-name>-<quant>.log
 # grouped by serving configuration. Only the most recent run of a given
-# configuration keeps its full sample table; older runs are collapsed to one
-# summary row computed when they finished.
+# configuration keeps its full sample and request tables; older runs are
+# collapsed to summary rows computed when they finished.
+#
+# While recording it publishes logs/.active-run.json, which is how llama-test
+# finds the run its request timings belong to.
 #
 # ENVIRONMENT
 #   LLAMA_VRAM_LOG=0        disable entirely (honored by llama-serve)
@@ -122,6 +126,8 @@ _vramlog_config() {
 
     VRAMLOG_CFG_LINES=(
         "arch: $LLAMA_P_ARCH | ngl: $LLAMA_P_NGL | ctx: $LLAMA_P_CTX | threads: $LLAMA_P_THREADS | moe: ${LLAMA_P_MOE:-n/a}"
+        "override-tensors: ${LLAMA_P_OT:-n/a}"
+        "speculative: ${LLAMA_P_SPEC[*]:-off}"
         "cache: k=q8_0 v=q8_0 | fa: $fa | batch: 512 | ubatch: 512"
         "reasoning effort: $effort"
         "samplers: $samplers"
@@ -131,7 +137,22 @@ _vramlog_config() {
 }
 
 # ---------------------------------------------------------------------------
-# finalize: summarize the samples and merge them into the log file.
+# /metrics: cumulative counters covering every client of the server, not just
+# llama-test. Scraped once when sampling starts and refreshed on each pass, so a
+# server that dies still leaves a usable end scrape. The endpoint only exists if
+# llama-serve passed --metrics.
+# ---------------------------------------------------------------------------
+_vramlog_scrape_metrics() {
+    local out="$1" body
+    body="$(curl -sS --connect-timeout 2 --max-time 5 \
+        "http://localhost:$LLAMA_PORT/metrics" 2>/dev/null)" || return 1
+    [[ "$body" == \#* ]] || return 1     # a JSON error means --metrics is off
+    printf '%s\n' "$body" > "$out"
+}
+
+# ---------------------------------------------------------------------------
+# finalize: hand the run to llama_log.py, which owns the log file's structure,
+# statistics and formatting.
 #
 # Runs from the EXIT trap, so it is reached whether the server stopped, a
 # SIGTERM arrived from llama-serve, or the port probe gave up.
@@ -139,130 +160,56 @@ _vramlog_config() {
 _vramlog_finalize() {
     trap - EXIT INT TERM
 
-    [[ -s "$VRAMLOG_SAMPLES" ]] || { rm -f "$VRAMLOG_SAMPLES"; return 0; }
+    rm -f "$VRAMLOG_MARKER"
 
-    local ended dur summary
+    if [[ ! -s "$VRAMLOG_SAMPLES" ]]; then
+        rm -f "$VRAMLOG_SAMPLES" "$VRAMLOG_METRICS_START" "$VRAMLOG_METRICS_END"
+        return 0
+    fi
+
+    local ended dur
     ended="$(_vramlog_epoch)"
     dur="$(printf '%02d:%02d:%02d' \
         $(( (ended - VRAMLOG_START_EPOCH) / 3600 )) \
         $(( (ended - VRAMLOG_START_EPOCH) % 3600 / 60 )) \
         $(( (ended - VRAMLOG_START_EPOCH) % 60 )) )"
 
-    # One summary row: avg/max of each metric across the run.
-    summary="$(awk -F'|' -v started="$VRAMLOG_START_ISO" -v dur="$dur" \
-                   -v build="$VRAMLOG_BUILD" '
-        NR > 1 {
-            n++
-            t += $2; if ($2 > tm) tm = $2
-            u += $3; if ($3 > um) um = $3
-            m += $4; if ($4 > mm) mm = $4
-            p += $6; if ($6 > pm) pm = $6
-            s += $7
-        }
-        END {
-            if (!n) exit 1
-            printf "| %s | %s | %d | %s | %.0f/%.0f | %.0f/%.0f | %.0f/%.0f | %.1f/%.1f | %.0f |",
-                started, dur, n, build, t/n, tm, u/n, um, m/n, mm, p/n, pm, s/n
-        }' "$VRAMLOG_SAMPLES")" || { rm -f "$VRAMLOG_SAMPLES"; return 0; }
+    # One last scrape in case the server is still up; otherwise the newest one
+    # taken during the loop stands.
+    _vramlog_scrape_metrics "$VRAMLOG_METRICS_END" 2>/dev/null
 
     mkdir -p "$VRAMLOG_LOGDIR"
 
-    local tmp="$VRAMLOG_LOG.tmp.$$"
-    if [[ ! -f "$VRAMLOG_LOG" ]]; then
+    if jq -n \
+        --arg log "$VRAMLOG_LOG" \
+        --arg model "$VRAMLOG_MODEL_NAME" \
+        --arg quant "$VRAMLOG_MODEL_QUANT" \
+        --arg id "$VRAMLOG_CFG_ID" \
+        --arg started "$VRAMLOG_START_ISO" \
+        --arg dur "$dur" \
+        --arg build "$VRAMLOG_BUILD" \
+        --arg samples "$VRAMLOG_SAMPLES" \
+        --arg requests "$VRAMLOG_REQUESTS" \
+        --arg mstart "$VRAMLOG_METRICS_START" \
+        --arg mend "$VRAMLOG_METRICS_END" \
+        --args '
         {
-            echo "$VRAMLOG_MODEL_NAME"
-            echo "$VRAMLOG_MODEL_QUANT"
-            _vramlog_emit_block 1 "$summary"
-        } > "$tmp"
+            log: $log, model: $model, quant: $quant,
+            config_id: $id, config_lines: $ARGS.positional,
+            started: $started, duration: $dur, build: $build,
+            samples: $samples, requests: $requests,
+            metrics_start: $mstart, metrics_end: $mend
+        }' "${VRAMLOG_CFG_LINES[@]}" \
+        | python3 "$_VRAMLOG_DIR/llama_log.py" merge
+    then
+        echo "llama-vram-log: wrote $VRAMLOG_LOG (config $VRAMLOG_CFG_ID)" >&2
     else
-        _vramlog_merge "$summary" > "$tmp"
-    fi
-    mv "$tmp" "$VRAMLOG_LOG"
-
-    rm -f "$VRAMLOG_SAMPLES"
-    echo "llama-vram-log: wrote $VRAMLOG_LOG (config $VRAMLOG_CFG_ID)" >&2
-}
-
-# Emit a complete configuration block: header, config lines, the summary table
-# seeded with this run's row, and this run's full sample table.
-_vramlog_emit_block() {
-    local n="$1" summary="$2"
-    echo
-    echo "---"
-    echo
-    echo "## config $n"
-    echo "config-id: $VRAMLOG_CFG_ID"
-    printf '%s\n' "${VRAMLOG_CFG_LINES[@]}"
-    echo
-    echo "### previous runs"
-    echo "| started (UTC) | duration | samples | build | temp avg/max (C) | util avg/max (%) | mem.used avg/max (MiB) | power avg/max (W) | sm avg (MHz) |"
-    echo "| --- | --- | --- | --- | --- | --- | --- | --- | --- |"
-    echo "$summary"
-    echo
-    _vramlog_emit_latest
-}
-
-# Emit the "latest run" section: this run's samples as a markdown table.
-_vramlog_emit_latest() {
-    echo "### latest run - $VRAMLOG_START_ISO (build $VRAMLOG_BUILD)"
-    echo "| timestamp (UTC) | temp (C) | util (%) | mem.used (MiB) | mem.total (MiB) | power (W) | sm (MHz) |"
-    echo "| --- | --- | --- | --- | --- | --- | --- |"
-    awk -F'|' 'NR > 1 { printf "| %s | %s | %s | %s | %s | %s | %s |\n",
-                        $1, $2, $3, $4, $5, $6, $7 }' "$VRAMLOG_SAMPLES"
-}
-
-# Merge into an existing log. If this configuration already has a block, replace
-# its "latest run" section and append the summary row; otherwise append a new
-# block after everything else.
-_vramlog_merge() {
-    local summary="$1"
-
-    if ! grep -q "^config-id: $VRAMLOG_CFG_ID\$" "$VRAMLOG_LOG"; then
-        local n
-        n=$(( $(grep -c '^config-id: ' "$VRAMLOG_LOG") + 1 ))
-        # Trim trailing blank lines so blocks stay uniformly spaced.
-        awk 'BEGIN { blanks = 0 }
-             /^[[:space:]]*$/ { blanks++; next }
-             { while (blanks-- > 0) print ""; blanks = 0; print }' "$VRAMLOG_LOG"
-        _vramlog_emit_block "$n" "$summary"
+        echo "llama-vram-log: failed to write $VRAMLOG_LOG; samples kept at $VRAMLOG_SAMPLES" >&2
         return 0
     fi
 
-    local latest
-    latest="$(_vramlog_emit_latest)"
-
-    awk -v id="$VRAMLOG_CFG_ID" -v summary="$summary" -v latest="$latest" '
-        # Blank lines inside our block are held back so the new summary row can
-        # be appended directly to the end of the summary table.
-        function release_blanks(   i) {
-            for (i = 0; i < blanks; i++) print ""
-            blanks = 0
-        }
-        function emit_run() {
-            if (!done) { print summary; print ""; print latest; print ""; done = 1 }
-        }
-        # A separator ends the current block. If it was ours and nothing has been
-        # written yet (a block with no latest-run section), append the run here.
-        /^---[[:space:]]*$/ {
-            if (mine) { emit_run(); mine = 0; skip = 0; blanks = 0 }
-            print
-            next
-        }
-        /^config-id: / {
-            mine = ($0 == "config-id: " id)
-            skip = 0; blanks = 0
-            print
-            next
-        }
-        # The old latest-run section is dropped: its summary row was recorded
-        # when it finished, so only this run keeps a full table.
-        mine && /^### latest run/ { blanks = 0; skip = 1; emit_run(); next }
-        mine && skip { next }
-        mine && /^[[:space:]]*$/ { blanks++; next }
-        mine { release_blanks(); print; next }
-        { print }
-        END { if (mine) emit_run() }
-    ' "$VRAMLOG_LOG"
+    rm -f "$VRAMLOG_SAMPLES" "$VRAMLOG_REQUESTS" \
+          "$VRAMLOG_METRICS_START" "$VRAMLOG_METRICS_END"
 }
 
 # ---------------------------------------------------------------------------
@@ -272,10 +219,13 @@ llama-vram-log() {
     if [[ "${LLAMA_VRAM_LOG:-1}" == "0" ]]; then
         return 0
     fi
-    if ! command -v nvidia-smi >/dev/null 2>&1; then
-        echo "llama-vram-log: nvidia-smi not found; not recording" >&2
-        return 0
-    fi
+    local c
+    for c in nvidia-smi jq python3; do
+        command -v "$c" >/dev/null 2>&1 || {
+            echo "llama-vram-log: '$c' not found; not recording" >&2
+            return 0
+        }
+    done
 
     _llama_profile "${1:-$LLAMA_DEFAULT_PROFILE}" || return 1
     _vramlog_config
@@ -288,6 +238,10 @@ llama-vram-log() {
     VRAMLOG_LOG="$VRAMLOG_LOGDIR/${VRAMLOG_MODEL_NAME}-${VRAMLOG_MODEL_QUANT}.log"
     VRAMLOG_BUILD="$(_vramlog_build)"
     VRAMLOG_SAMPLES="$(mktemp "${TMPDIR:-/tmp}/llama-vram-log.XXXXXX")"
+    VRAMLOG_METRICS_START="$(mktemp "${TMPDIR:-/tmp}/llama-metrics.XXXXXX")"
+    VRAMLOG_METRICS_END="$(mktemp "${TMPDIR:-/tmp}/llama-metrics.XXXXXX")"
+    VRAMLOG_MARKER="$VRAMLOG_LOGDIR/.active-run.json"
+    VRAMLOG_REQUESTS="$VRAMLOG_LOGDIR/.requests.$$.jsonl"
 
     # Wait for the server to bind its port. A model this size can take minutes to
     # load, and samples taken before it is up describe nothing useful.
@@ -295,7 +249,7 @@ llama-vram-log() {
     while ! _vramlog_port_open; do
         (( waited >= LLAMA_VRAM_WAIT )) && {
             echo "llama-vram-log: no server on port $LLAMA_PORT after ${LLAMA_VRAM_WAIT}s; giving up" >&2
-            rm -f "$VRAMLOG_SAMPLES"
+            rm -f "$VRAMLOG_SAMPLES" "$VRAMLOG_METRICS_START" "$VRAMLOG_METRICS_END"
             return 0
         }
         sleep 1
@@ -305,6 +259,21 @@ llama-vram-log() {
     VRAMLOG_START_ISO="$(_vramlog_now)"
     VRAMLOG_START_EPOCH="$(_vramlog_epoch)"
     echo "# samples" > "$VRAMLOG_SAMPLES"
+
+    # The baseline for this run's server totals. /metrics answers only once the
+    # model is loaded, which is later than the port opening, so this first attempt
+    # usually fails and the sampling loop retries it.
+    _vramlog_scrape_metrics "$VRAMLOG_METRICS_START" 2>/dev/null
+
+    # Announce the run so llama-test can attach its request timings to it without
+    # re-deriving the configuration. Removed in _vramlog_finalize.
+    mkdir -p "$VRAMLOG_LOGDIR"
+    : > "$VRAMLOG_REQUESTS"
+    jq -n --arg log "$VRAMLOG_LOG" --arg id "$VRAMLOG_CFG_ID" \
+          --arg req "$VRAMLOG_REQUESTS" --arg port "$LLAMA_PORT" \
+          --arg started "$VRAMLOG_START_ISO" \
+          '{log: $log, config_id: $id, requests: $req, port: $port, started: $started}' \
+        > "$VRAMLOG_MARKER"
 
     trap '_vramlog_finalize; exit 0' EXIT INT TERM
 
@@ -328,6 +297,15 @@ llama-vram-log() {
             # "63, 95, 5907, 6144, 29.75, 1455" -> pipe-separated, with a timestamp
             echo "$(_vramlog_now)|$(echo "$row" | sed 's/[[:space:]]*,[[:space:]]*/|/g')" \
                 >> "$VRAMLOG_SAMPLES"
+        fi
+
+        # The baseline first, retried until /metrics answers; after that the end
+        # scrape is refreshed every pass, so a server that dies between samples
+        # still leaves one close to when it stopped serving.
+        if [[ ! -s "$VRAMLOG_METRICS_START" ]]; then
+            _vramlog_scrape_metrics "$VRAMLOG_METRICS_START" 2>/dev/null
+        else
+            _vramlog_scrape_metrics "$VRAMLOG_METRICS_END" 2>/dev/null
         fi
 
         sleep "$LLAMA_VRAM_INTERVAL"
