@@ -442,22 +442,34 @@ llama-test() {
     local stream="true"
     [[ "${LLAMA_TEST_STREAM:-1}" == "0" ]] && stream="false"
 
+    # Prompt caching is off by default. llama-server's own default is true
+    # (tools/server/server-task.h:53), which means a repeated prompt is a warm
+    # prefill: it reprocesses only the tokens that differ and reports
+    # cache_n > 0, so its prompt_n/prompt_ms measure the cache, not the
+    # configuration under test. Set LLAMA_TEST_CACHE_PROMPT=1 to measure the
+    # follow-up-turn case deliberately; those requests are summarised
+    # separately in the log, never blended with cold ones.
+    local cache_prompt="false"
+    [[ "${LLAMA_TEST_CACHE_PROMPT:-0}" == "1" ]] && cache_prompt="true"
+
     jq -Rs --arg model "$model" \
            --arg effort "$effort" \
            --argjson max "${LLAMA_TEST_MAX_TOKENS:-2048}" \
+           --argjson cache_prompt "$cache_prompt" \
            --argjson stream "$stream" '
         {
             model: $model,
             messages: [{role: "user", content: .}],
             max_tokens: $max,
-            temperature: 0
+            temperature: 0,
+            cache_prompt: $cache_prompt
         }
         + (if $effort == "" then {}
            else {chat_template_kwargs: {reasoning_effort: $effort}} end)
         + (if $stream then {stream: true} else {} end)
     ' "$file" > "$req" || { rm -f "$req" "$resp"; return 1; }
 
-    echo "llama-test: prompt=$prompt model=$model${effort:+ effort=$effort} port=$LLAMA_PORT stream=$stream" >&2
+    echo "llama-test: prompt=$prompt model=$model${effort:+ effort=$effort} port=$LLAMA_PORT stream=$stream cache_prompt=$cache_prompt" >&2
 
     # A short connect timeout so a stopped server fails immediately, while the
     # overall timeout stays generous: a thinking model at ~7 t/s is slow.

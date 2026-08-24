@@ -151,6 +151,15 @@ The functions:
   `LLAMA_TEST_STREAM=0` for a single blocking request, `LLAMA_TEST_RAW=1` to
   keep the raw response.
 
+  Requests are sent with `cache_prompt: false`. `llama-server`'s own default is
+  `true`, which means running the same prompt twice reprocesses only the tokens
+  that changed: the second request reports `cache_n = 140, prompt_n = 4,
+  prompt_per_second = 2.79` where the first reported `cache_n = 0,
+  prompt_n = 144, prompt_per_second = 56.00`. Those are not two measurements of
+  the same thing, and averaging them describes neither. `LLAMA_TEST_CACHE_PROMPT=1`
+  turns caching back on to measure the follow-up-turn case deliberately; the log
+  keeps those requests in their own columns.
+
   Each request's `timings` are also appended to the running configuration's log
   block (see below), so a comparison survives the terminal scrollback.
 - `llama-check` : `GET /v1/models` against the running server.
@@ -171,8 +180,8 @@ logs/<model-name>-<quant>.log     # e.g. logs/Qwen3.8-27B-UD-Q3_K_XL.log
 
 The file names the model and quantization at the top, then holds one block per
 serving configuration (identified by a `config-id` fingerprint over arch, ngl,
-`--n-cpu-moe`, `-ot`, speculative-decoding flags, ctx, threads, cache types,
-flash attention, batch sizes,
+`--n-cpu-moe`, `-ot`, speculative-decoding flags, ctx, slot count, threads,
+cache types, flash attention, batch sizes,
 reasoning effort, and sampler values). Changing any of those opens a new block
 instead of mixing incomparable runs; rebuilding llama.cpp does not, since the
 build string is recorded per run rather than fingerprinted.
@@ -182,7 +191,7 @@ A block holds four tables:
 | section | one row per | contents |
 | --- | --- | --- |
 | `### previous runs` | run | start, duration, sample count, build, avg/max temperature, utilization, memory used, power, SM clock |
-| `### previous runs - requests` | run | requests, total/avg prompt tokens, total/avg prompt parse seconds, total/avg output tokens, total/avg output seconds, total/avg end-to-end seconds |
+| `### previous runs - requests` | run | requests split into cold and warm, then **cold-only** total/avg prompt tokens, total/avg prompt parse seconds and prompt t/s; warm avg cached tokens, prompt tokens and prompt seconds; total/avg output tokens, total/avg output seconds, total/avg end-to-end seconds |
 | `### previous runs - server totals` | run | `/metrics` deltas: prompt tokens, cached prompt tokens, prompt seconds, prompt t/s, output tokens, output seconds, output t/s, draft tokens, draft tokens accepted |
 | `### latest run` + `#### requests` | sample / request | every GPU sample, and every `llama-test` request with llama.cpp's raw `timings` fields as columns (`cache_n`, `prompt_n`, `prompt_ms`, `prompt_per_token_ms`, `prompt_per_second`, `predicted_n`, `predicted_ms`, `predicted_per_token_ms`, `predicted_per_second`, `draft_n`, `draft_n_accepted`) plus the measured wall clock |
 
@@ -201,9 +210,30 @@ agree:
   finishes loading rather than when the port opens — the endpoint returns 503
   until then.
 
+**Cold and warm prefills are never blended.** `cache_n` is the number of prompt
+tokens llama.cpp took from its cache instead of processing; any request with
+`cache_n > 0` had part of its prompt already in a slot, so its `prompt_n` counts
+only the remainder and its `prompt_per_second` measures a handful of tokens
+against fixed per-request overhead — 2.79 t/s where the same prompt cold gives
+56.00 t/s. Mixing the two produces a prefill number that belongs to no
+configuration. So the `cold prompt ...` columns count only `cache_n == 0`
+requests, warm ones are averaged separately (their prefill is a real cost, just a
+different question: what a follow-up turn costs), and the `cold reqs`/`warm reqs`
+counts say what the run contained. Rows with those two counts empty predate
+2026-08-23 and did blend the two.
+
+The `server totals` table cannot make this split — the `/metrics` counters do not
+break down per request — but it does not need a correction either:
+`prompt_tokens_total` counts only *processed* tokens, with cache hits going to
+the separate `prompt_tokens_cached_total` shown beside it (verified in the build
+10597 sources, not assumed). Its `prompt t/s` is therefore already cache-free,
+while its token totals mix cold and warm runs of every client.
+
 End-to-end time is the wall clock measured around the request, not
 `prompt_ms + predicted_ms`; on a streamed response the two differ, and the wall
-clock is what you actually waited.
+clock is what you actually waited. It covers every request, cold and warm alike,
+as do the output-token columns: generation speed does not depend on how the
+prefill was obtained.
 
 Only the most recent run of a configuration keeps its full sample and request
 tables; when a newer run finishes, the older one survives as its summary rows,

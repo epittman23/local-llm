@@ -58,6 +58,13 @@ HEADER_NOTES = [
     "not 1 but auto, which llama-server resolves to 4 slots with kv_unified = true. "
     "Blocks without a 'parallel:' line therefore ran with an unrecorded slot count, "
     "and their config-ids are not comparable with ids recorded after this date.",
+    "note 2026-08-23: prompt statistics in 'previous runs - requests' are now "
+    "computed from cold prefills only (cache_n == 0), and llama-test now sends "
+    "cache_prompt: false (llama-server's own default is true). Rows recorded "
+    "before this date blended cold and "
+    "warm prefills into the columns now labelled 'cold prompt ...', which "
+    "understates prefill cost whenever a run repeated a prompt; their empty "
+    "cold/warm counts are how those rows are recognised.",
 ]
 
 GPU_SAMPLE_COLUMNS = [
@@ -80,11 +87,26 @@ REQUEST_COLUMNS = [
     "draft_n_accepted", "wall_ms",
 ]
 
+# Prompt statistics are cold-only: a request served from the prompt cache reports
+# cache_n > 0 and reprocesses only the tokens that differ, so its prompt_n/prompt_ms
+# describe the cache rather than the serving configuration. Warm requests are
+# summarised in their own columns because a follow-up turn's prefill is a real cost,
+# just not the same measurement. Output and end-to-end figures cover every request:
+# generation speed does not depend on how the prefill was obtained.
 REQUEST_SUMMARY_COLUMNS = [
-    "started (UTC)", "requests", "prompt tok total", "prompt tok avg",
-    "prompt s total", "prompt s avg", "output tok total", "output tok avg",
-    "output s total", "output s avg", "e2e s total", "e2e s avg",
+    "started (UTC)", "requests", "cold reqs", "warm reqs",
+    "cold prompt tok total", "cold prompt tok avg",
+    "cold prompt s total", "cold prompt s avg", "cold prompt t/s",
+    "warm cached tok avg", "warm prompt tok avg", "warm prompt s avg",
+    "output tok total", "output tok avg", "output s total", "output s avg",
+    "e2e s total", "e2e s avg",
 ]
+
+# Rows written before 2026-08-23 have these twelve cells and blended cold with warm.
+# Mapping them into the columns above keeps every recorded number under a heading
+# that still means what it meant, and leaves the cells that format never held empty.
+LEGACY_REQUEST_SUMMARY = {0: 0, 1: 1, 2: 4, 3: 5, 4: 6, 5: 7,
+                          6: 12, 7: 13, 8: 14, 9: 15, 10: 16, 11: 17}
 
 SERVER_SUMMARY_COLUMNS = [
     "started (UTC)", "prompt tok", "cached tok", "prompt s", "prompt t/s",
@@ -177,30 +199,55 @@ def gpu_summary_row(samples: list[dict], started: str, duration: str,
             avg_max("power", 1), f"{mean([s['sm'] for s in samples]):.0f}"]
 
 
+def is_cold(rec: dict) -> bool:
+    """A prefill that reused nothing. cache_n is llama.cpp's count of prompt tokens
+    taken from the cache; absent means the server did not report one, which only
+    happens on builds without the field, so it is read as no reuse."""
+    return not (rec.get("timings", {}).get("cache_n") or 0)
+
+
 def request_summary_row(requests: list[dict], started: str) -> list[str]:
     """The per-run request statistics.
 
-    end-to-end is the wall clock llama-test measured around the request rather than
-    prompt_ms + predicted_ms: on a streamed response the difference is real, and the
-    wall clock is what the user actually waited.
+    Prompt figures come from cold requests only (see REQUEST_SUMMARY_COLUMNS); warm
+    ones get their own averages. end-to-end is the wall clock llama-test measured
+    around the request rather than prompt_ms + predicted_ms: on a streamed response
+    the difference is real, and the wall clock is what the user actually waited.
     """
-    def field(key: str) -> list[float]:
-        return [r.get("timings", {}).get(key) or 0 for r in requests]
+    cold = [r for r in requests if is_cold(r)]
+    warm = [r for r in requests if not is_cold(r)]
 
-    prompt_tok, prompt_ms = field("prompt_n"), field("prompt_ms")
-    out_tok, out_ms = field("predicted_n"), field("predicted_ms")
+    def field(recs: list[dict], key: str) -> list[float]:
+        return [r.get("timings", {}).get(key) or 0 for r in recs]
+
+    c_tok, c_ms = field(cold, "prompt_n"), field(cold, "prompt_ms")
+    w_cached = field(warm, "cache_n")
+    w_tok, w_ms = field(warm, "prompt_n"), field(warm, "prompt_ms")
+    out_tok, out_ms = field(requests, "predicted_n"), field(requests, "predicted_ms")
     e2e_ms = [r["wall_ms"] if r.get("wall_ms") is not None
               else (r.get("timings", {}).get("prompt_ms") or 0)
                    + (r.get("timings", {}).get("predicted_ms") or 0)
               for r in requests]
 
     def secs(ms: list[float], avg: bool = False) -> str:
+        if not ms:
+            return ""
         return f"{(mean(ms) if avg else sum(ms)) / 1000:.1f}"
 
-    return [started, str(len(requests)),
-            f"{sum(prompt_tok):.0f}", f"{mean(prompt_tok):.0f}",
-            secs(prompt_ms), secs(prompt_ms, avg=True),
-            f"{sum(out_tok):.0f}", f"{mean(out_tok):.0f}",
+    def toks(values: list[float], avg: bool = False) -> str:
+        if not values:
+            return ""
+        return f"{mean(values) if avg else sum(values):.0f}"
+
+    cold_rate = ""
+    if sum(c_ms) > 0:
+        cold_rate = f"{sum(c_tok) / (sum(c_ms) / 1000):.2f}"
+
+    return [started, str(len(requests)), str(len(cold)), str(len(warm)),
+            toks(c_tok), toks(c_tok, avg=True),
+            secs(c_ms), secs(c_ms, avg=True), cold_rate,
+            toks(w_cached, avg=True), toks(w_tok, avg=True), secs(w_ms, avg=True),
+            toks(out_tok), toks(out_tok, avg=True),
             secs(out_ms), secs(out_ms, avg=True),
             secs(e2e_ms), secs(e2e_ms, avg=True)]
 
@@ -230,6 +277,15 @@ def server_summary_row(delta: dict, started: str) -> list[str]:
     There is no request counter in the endpoint (checked against the server source
     for build 10597), so the number of requests is deliberately absent here rather
     than inferred from n_decode_total, which counts decode calls, not requests.
+
+    prompt t/s needs no cache correction: prompt_tokens_total counts only processed
+    tokens. Checked in build 10597 rather than assumed - server-common.h:455 says
+    "only processed tokens, cached ones are counted separately below",
+    server-context.cpp:3938 feeds it n_prompt_queued, and cache hits go to
+    add_prompt_cached() (:3296) which backs the separate cached-token counter shown
+    in its own column. Unlike the llama-test table, these totals do mix cold and
+    warm prefills, because the counters cannot tell them apart per request; the
+    cached column is what says how much of the run was warm.
     """
     def rate(tok: float, sec: float) -> str:
         return f"{tok / sec:.2f}" if sec > 0 else "n/a"
@@ -333,6 +389,11 @@ def parse_block(lines: list[str]) -> Block | None:
             continue
         if cells[0].startswith("started"):          # the table's header row
             continue
+        if section == "request_summary" and len(cells) == len(LEGACY_REQUEST_SUMMARY):
+            row = [""] * len(REQUEST_SUMMARY_COLUMNS)
+            for old, new in LEGACY_REQUEST_SUMMARY.items():
+                row[new] = cells[old]
+            cells = row
         getattr(block, section).append(cells)
 
     if block:
