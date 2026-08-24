@@ -228,7 +228,11 @@ or agent) updates the docs in the same commit:
   the full depth. `draft-mtp` at `p_min = 0` does, and the server log states
   `n_max=2, n_min=0, p_min=0.00` at load; the `server totals` row beside it now
   scrapes `spec_decode_num_drafts_total` and carries the server's exact figure,
-  which is the one to believe if they ever disagree. All four tables were
+  which is the one to believe if they ever disagree. On the first run recorded
+  with both (`qwen38`, 2026-08-24T02:25:34Z, build 95b8e33e1/10597, `-ngl 20`
+  with the `-ot` pin, `--spec-draft-n-max 2`) they agreed exactly: 44 drafted,
+  41 accepted, 22 verification steps counted by the server against 22 inferred,
+  both tables reading acceptance 0.932 and mean_len 2.864. All four tables were
   extended by appending columns only, so historical rows keep their meaning
   positionally and are padded on re-render rather than migrated.
 - **2026-08-23** (later still): A log block's header is now three groups, and

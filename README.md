@@ -311,7 +311,9 @@ was drafted. In the `llama-test` tables `mean_len` is *derived*: a request's
 exact while every step drafts the full depth, which `draft-mtp` at `p_min = 0`
 always does. The `server totals` row beside it carries the server's own exact
 figure from `spec_decode_num_drafts_total`, which is the one to trust if they
-ever disagree.
+ever disagree. On the `qwen38` run of 2026-08-24T02:25:34Z they did not: 44
+tokens drafted, 41 accepted, and the server counted exactly the 22 verification
+steps the derivation assumes, so both tables read `0.932` / `2.864`.
 
 **Cold and warm prefills are never blended.** `cache_n` is the number of prompt
 tokens llama.cpp took from its cache instead of processing; any request with
