@@ -338,6 +338,43 @@ clock is what you actually waited. It covers every request, cold and warm alike,
 as do the output-token columns: generation speed does not depend on how the
 prefill was obtained.
 
+**The head of the file compares configurations.** Everything below the notes and
+above the first block is a `## comparison` section, rebuilt from scratch on every
+merge, holding one row per `config-id` — `ngl`, `parallel`, `spec`, `-ot`,
+`fused_gdn`, cold prefill t/s, generation t/s, acceptance, peak VRAM, headroom,
+and how many runs the block holds — sorted by generation throughput, fastest
+first. Configurations that have never been measured sort last rather than as
+zero: they are unknown, not slow. Each row is that configuration's **most recent
+run**, not an average of its history, because an older run may predate a
+llama.cpp rebuild or have shared the machine with something else, and averaging
+would hide the change being looked for. Long values are shortened for the table
+(`-ot` shows its first pattern and a count of the rest, `spec` shows the draft
+type and depth); the block below always has the full text. A figure marked `*`
+came from `/metrics` rather than from `llama-test` — it covers every client and
+whatever prompts they sent, so it answers a looser question than a row measured
+on the version-controlled prompt.
+
+A `### derived` table follows it with `cpu-resident layers`, `ms/token` (the
+reciprocal of generation t/s), and `cpu bandwidth (GiB/s)` — the CPU-resident
+weights from the load log divided by the time one token takes. On a dense model
+every resident weight is read once per token, so that is close to the real
+effective bandwidth and is what says whether a configuration is bandwidth bound.
+On an MoE it reads `n/a (moe)` rather than a number: only the routed experts are
+read per token, so dividing by all of them would understate the bandwidth
+severalfold.
+
+When two or more configurations differ *only* in `-ngl`, a line beneath the table
+fits `ms/token` against `cpu-resident layers` by least squares and reports it in
+the form `<slope> ms per layer + <intercept> ms fixed`. Read the slope as the
+price of moving one layer off the GPU — that is the number an `-ngl` decision
+turns on. Do **not** divide `ms/token` by `cpu-resident layers` and call that the
+per-layer cost: that charges the whole per-token time to the resident layers,
+fixed part included, so it always overstates the slope, and by more the larger
+the fixed part is. The intercept is that fixed part — the GPU-resident layers,
+sampling, the draft head — and on this hardware it is a large share of the total.
+The fit needs at least two configurations at different layer counts and is simply
+absent otherwise.
+
 Only the most recent run of a configuration keeps its full sample and request
 tables; when a newer run finishes, the older one survives as its summary rows,
 so the files stay small over time. Every table is rewritten with padded,

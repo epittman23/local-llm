@@ -160,7 +160,7 @@ SERVER_COUNTERS = [
 # ---------------------------------------------------------------------------
 def is_number(cell: str) -> bool:
     """A cell that should be right-aligned: a number, a ratio, or empty."""
-    return cell == "" or bool(re.fullmatch(r"\d+(\.\d+)?(/\d+(\.\d+)?)*", cell))
+    return cell == "" or bool(re.fullmatch(r"\d+(\.\d+)?(/\d+(\.\d+)?)*\*?", cell))
 
 
 def render_table(columns: list[str], rows: list[list[str]]) -> list[str]:
@@ -984,6 +984,234 @@ def metrics_delta(start: dict | None, end: dict | None) -> dict | None:
 
 
 # ---------------------------------------------------------------------------
+# cross-configuration comparison
+# ---------------------------------------------------------------------------
+# Everything below is derived from the blocks in the file and is regenerated in
+# full on every merge, so it is stripped before the header is re-rendered rather
+# than parsed back. Nothing here is a measurement of its own: a cell is empty
+# when the block it came from has no run that measured it.
+COMPARISON_HEADING = "## comparison"
+
+COMPARISON_COLUMNS = [
+    "config-id", "ngl", "parallel", "spec", "-ot", "fused_gdn",
+    "cold prefill t/s", "gen t/s", "acceptance", "vram max (MiB)",
+    "headroom (MiB)", "runs",
+]
+
+DERIVED_COLUMNS = [
+    "config-id", "cpu-resident layers", "ms/token", "cpu bandwidth (GiB/s)",
+]
+
+# A figure taken from /metrics rather than from llama-test: it covers every
+# client of the server, including Open WebUI, and its prompts are whatever was
+# typed. Marked so a row that was measured on the version-controlled prompt is
+# never silently compared against one that was not.
+METRICS_MARK = "*"
+
+
+def _cell(row: list[str], columns: list[str], name: str) -> str:
+    """One named cell of a summary row, or "" when the row predates the column."""
+    try:
+        i = columns.index(name)
+    except ValueError:                                  # pragma: no cover
+        return ""
+    return row[i].strip() if len(row) > i else ""
+
+
+def _num(cell: str) -> float | None:
+    try:
+        return float(cell.rstrip(METRICS_MARK))
+    except (TypeError, ValueError):
+        return None
+
+
+def short_spec(value: str | None) -> str:
+    """"--spec-type draft-mtp --spec-draft-n-max 2" -> "draft-mtp n=2"."""
+    if not value or value.strip() in ("off", "n/a", ""):
+        return "off"
+    kind = re.search(r"--spec-type\s+(\S+)", value)
+    depth = re.search(r"--spec-draft-n-max\s+(\d+)", value)
+    out = kind.group(1) if kind else value.strip()
+    return out + (f" n={depth.group(1)}" if depth else "")
+
+
+def short_ot(value: str | None) -> str:
+    """The first -ot pattern plus a count of the rest; the full text is in the block."""
+    if not value or value.strip() in ("n/a", ""):
+        return "none"
+    patterns = [p for p in value.split(",") if p.strip()]
+    head = patterns[0].strip()
+    if len(head) > 22:
+        head = head[:21] + "\u2026"
+    return head + (f" +{len(patterns) - 1}" if len(patterns) > 1 else "")
+
+
+def block_facts(block: "Block") -> dict:
+    """What one configuration's most recent run says, for the comparison tables.
+
+    The most recent run, not an average over the block's history: earlier runs of
+    a configuration may predate a llama.cpp rebuild or a machine that was busy
+    with something else, and averaging them would hide exactly the change being
+    looked for.
+    """
+    _, groups = split_groups(block.config_lines)
+    flags = groups.get(GROUP_SERVER) or block.config_lines
+    load = groups.get(GROUP_LOAD, [])
+    gpu = block.gpu_summary[-1] if block.gpu_summary else []
+    req = block.request_summary[-1] if block.request_summary else []
+    srv = block.server_summary[-1] if block.server_summary else []
+
+    prefill = _cell(req, REQUEST_SUMMARY_COLUMNS, "cold prompt t/s")
+    if not prefill and srv:
+        prefill = _cell(srv, SERVER_SUMMARY_COLUMNS, "prompt t/s")
+        prefill += METRICS_MARK if prefill else ""
+
+    # Generation rate from the llama-test rows is output tokens over the time
+    # llama.cpp spent predicting them -- not wall clock, which includes prefill.
+    out_tok = _num(_cell(req, REQUEST_SUMMARY_COLUMNS, "output tok total"))
+    out_s = _num(_cell(req, REQUEST_SUMMARY_COLUMNS, "output s total"))
+    gen = f"{out_tok / out_s:.2f}" if out_tok and out_s else ""
+    if not gen and srv:
+        gen = _cell(srv, SERVER_SUMMARY_COLUMNS, "output t/s")
+        gen += METRICS_MARK if gen else ""
+
+    accept = _cell(req, REQUEST_SUMMARY_COLUMNS, "acceptance")
+    if not accept and srv:
+        accept = _cell(srv, SERVER_SUMMARY_COLUMNS, "acceptance")
+        accept += METRICS_MARK if accept else ""
+
+    vram = _cell(gpu, GPU_SUMMARY_COLUMNS, "mem.used avg/max (MiB)")
+    fused = next((line.split(":", 1)[1].strip() for line in load
+                  if line.strip().startswith("fused_gdn:")), "")
+    resident = next((m.group(1) for m in
+                     (re.search(r"cpu-resident: (\d+)", line) for line in load) if m), "")
+
+    return {
+        "config_id": block.config_id,
+        "ngl": config_value(flags, "ngl") or "",
+        "parallel": config_value(flags, "parallel") or "",
+        "spec": short_spec(config_value(flags, "speculative")),
+        "ot": short_ot(config_value(flags, "override-tensors")),
+        "arch": config_value(flags, "arch") or "",
+        "fused": fused,
+        "prefill": prefill,
+        "gen": gen,
+        "accept": accept,
+        "vram_max": vram.split("/")[-1] if vram else "",
+        "headroom": _cell(gpu, GPU_SUMMARY_COLUMNS, "vram headroom (MiB)"),
+        "runs": str(len(block.gpu_summary)),
+        "cpu_layers": resident,
+        "cpu_mib": cpu_buffer_mib(load),
+        "flags": [line.strip() for line in flags],
+    }
+
+
+def cpu_buffer_mib(load: list[str]) -> float | None:
+    """MiB of model weights the loader left in system RAM, per the load log."""
+    for line in load:
+        if not line.strip().startswith("model buffers:"):
+            continue
+        hit = re.search(r"CPU\S*\s+([\d.]+) MiB", line)
+        return float(hit.group(1)) if hit else None
+    return None
+
+
+def derived_row(facts: dict) -> list[str] | None:
+    """Per-token cost and what it implies about memory bandwidth.
+
+    ms/token is the reciprocal of the generation rate. The bandwidth figure is
+    the CPU-resident weights divided by that time: on a dense model every
+    resident weight is read once per token, so it is close to the real effective
+    bandwidth and is the number that says whether a configuration is bandwidth
+    bound. On an MoE it is not computed at all -- only the routed experts are
+    read per token, so dividing by all of them would produce a figure several
+    times below the truth and invite the wrong conclusion.
+    """
+    gen = _num(facts["gen"])
+    if not gen:
+        return None
+    ms = 1000.0 / gen
+    band = ""
+    if facts["arch"] == "moe":
+        band = "n/a (moe)"
+    elif facts["cpu_mib"]:
+        band = f"{(facts['cpu_mib'] / 1024) / (ms / 1000):.1f}"
+    return [facts["config_id"], facts["cpu_layers"], f"{ms:.1f}", band]
+
+
+def ngl_family(flags: list[str]) -> str:
+    """The serving flags with the layer count removed: configs that differ only in -ngl."""
+    return "\n".join(re.sub(r"ngl: \S+", "ngl: *", line) for line in flags)
+
+
+def ngl_fit(rows: list[dict]) -> list[str]:
+    """Least squares of ms/token against CPU-resident layers, per -ngl family.
+
+    Reported as slope and intercept, never as ms_per_token / cpu_resident_layers:
+    that ratio charges the whole per-token cost to the resident layers and reads
+    as a much larger per-layer penalty than moving one layer actually costs. The
+    intercept is the part that does not move with -ngl (the GPU-resident layers,
+    sampling, the draft head), and it is most of the time on this hardware.
+    """
+    families: dict[str, list[tuple[float, float]]] = {}
+    for facts in rows:
+        gen, layers = _num(facts["gen"]), _num(facts["cpu_layers"])
+        if gen and layers is not None:
+            families.setdefault(ngl_family(facts["flags"]), []).append(
+                (layers, 1000.0 / gen))
+
+    out: list[str] = []
+    for points in families.values():
+        xs = sorted({x for x, _ in points})
+        if len(points) < 2 or len(xs) < 2:
+            continue                      # a line through one x is not a fit
+        n = len(points)
+        mx = sum(x for x, _ in points) / n
+        my = sum(y for _, y in points) / n
+        denom = sum((x - mx) ** 2 for x, _ in points)
+        slope = sum((x - mx) * (y - my) for x, y in points) / denom
+        intercept = my - slope * mx
+        out.append(f"> ms/token vs cpu-resident layers over {n} configurations "
+                   f"({min(xs):.0f} to {max(xs):.0f} layers): {slope:.1f} ms per "
+                   f"layer + {intercept:.0f} ms fixed.")
+    return out
+
+
+def render_comparison(blocks: list["Block"]) -> list[str]:
+    """The whole-file summary: one row per configuration, best generation first."""
+    facts = [block_facts(b) for b in blocks]
+    rows = [[f["config_id"], f["ngl"], f["parallel"], f["spec"], f["ot"],
+             f["fused"], f["prefill"], f["gen"], f["accept"], f["vram_max"],
+             f["headroom"], f["runs"]] for f in facts]
+    # Unmeasured configurations sort last rather than as zero: they are unknown,
+    # not slow.
+    rows.sort(key=lambda r: _num(r[COMPARISON_COLUMNS.index("gen t/s")]) or -1.0,
+              reverse=True)
+
+    out = [COMPARISON_HEADING, ""]
+    out += render_table(COMPARISON_COLUMNS, rows)
+    if any(METRICS_MARK in c for r in rows for c in r):
+        out += ["", f"> {METRICS_MARK} from /metrics (every client of the server, "
+                    "whatever prompts they sent), not from llama-test."]
+
+    derived = [row for row in (derived_row(f) for f in facts) if row]
+    if derived:
+        out += ["", "### derived", ""]
+        out += render_table(DERIVED_COLUMNS, derived)
+    fit = ngl_fit(facts)
+    if fit:
+        out += [""] + fit
+    return out
+
+
+def strip_comparison(header: list[str]) -> list[str]:
+    """Drop a previously rendered comparison; it is derived, so it is rebuilt."""
+    if COMPARISON_HEADING not in header:
+        return header
+    return header[:header.index(COMPARISON_HEADING)]
+
+
+# ---------------------------------------------------------------------------
 # commands
 # ---------------------------------------------------------------------------
 def cmd_request(args: argparse.Namespace) -> int:
@@ -1038,6 +1266,7 @@ def cmd_merge(args: argparse.Namespace) -> int:
 
     if log.exists():
         header, blocks = parse_log(log)
+        header = strip_comparison(header)
     else:
         header, blocks = [payload["model"], payload["quant"]], []
 
@@ -1081,6 +1310,7 @@ def cmd_merge(args: argparse.Namespace) -> int:
     out = [h for h in header if not h.startswith("note ")]
     if notes:
         out += [""] + notes
+    out += [""] + render_comparison(blocks)
     for i, b in enumerate(blocks, start=1):
         out += ["", "---", ""] + b.render(i)
 

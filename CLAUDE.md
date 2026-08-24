@@ -67,7 +67,8 @@ server's load log said about the model it loaded (layer split, slot
 configuration, fused kernels, ignored tensors, warnings). Per-run GPU
 statistics are distributional (p50/p95, an active-only utilization average,
 minimum free VRAM, and the throttle reasons observed), since the mean over a
-mostly-idle server says little; `scripts/llama_log.py` assembles those files. README.md documents each function
+mostly-idle server says little, and each file opens with a comparison of its
+configurations by throughput; `scripts/llama_log.py` assembles those files. README.md documents each function
 and records the measured numbers.
 
 Current measured performance: ~7 to 8 tokens/s generation and ~72 to 78
@@ -168,6 +169,31 @@ or agent) updates the docs in the same commit:
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-08-23** (last): Each log file now opens with a `## comparison`
+  section: one row per `config-id` (ngl, parallel, spec, -ot, fused_gdn, cold
+  prefill t/s, generation t/s, acceptance, peak VRAM, headroom, run count),
+  sorted by generation throughput descending, plus a `### derived` table of
+  cpu-resident layers, ms/token and effective CPU bandwidth. The blocks
+  themselves already held everything needed to choose an `-ngl`, but choosing
+  meant scrolling between blocks and dividing by hand, which is how the
+  per-layer cost came to be mis-estimated once already. The whole section is
+  derived: it is stripped and rebuilt on every merge rather than parsed back, so
+  it can never drift from the blocks below it, and nothing in it is
+  fingerprinted. Each row is a configuration's most recent run rather than an
+  average over its history, since an older run may predate a rebuild or a busy
+  machine. Figures fall back to `/metrics` when a configuration has no
+  `llama-test` rows, marked `*`, because a number covering every client and
+  arbitrary prompts is worth having but is not the same measurement.
+  Configurations with no throughput at all sort last, not as zero. Effective CPU
+  bandwidth is computed only for dense models -- for an MoE the denominator is
+  the routed experts, not the resident weights, and dividing by all of them
+  would understate it severalfold, so it prints `n/a (moe)`. When two or more
+  configurations differ only in `-ngl`, ms/token is fit against cpu-resident
+  layers by least squares and reported as slope plus intercept. The intercept is
+  the point: `ms_per_token / cpu_resident_layers` charges the fixed cost (the
+  GPU-resident layers, sampling, the draft head) to the resident layers and
+  overstates the per-layer price, which was an error in an earlier analysis of
+  this data and is why the fit is reported rather than the ratio.
 - **2026-08-23** (latest): Run summaries gained distribution, not just means.
   The GPU table now carries p50/p95 for utilization and power, p50/p95/max for
   SM clock, a `util active avg` over the samples with non-zero utilization, the
