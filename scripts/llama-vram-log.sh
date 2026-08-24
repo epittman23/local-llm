@@ -26,6 +26,9 @@
 #   LLAMA_VRAM_INTERVAL     seconds between samples (default 5)
 #   LLAMA_VRAM_WAIT         seconds to wait for the server to come up (default 600)
 #   LLAMA_VRAM_LOGDIR       output directory (default <repo>/logs)
+#   LLAMA_SERVER_LOG        llama-server's own output, tee'd there by llama-serve;
+#                           parsed for what the server said about the model it
+#                           loaded (layer split, slots, fused kernels, warnings)
 #
 # ---------------------------------------------------------------------------
 
@@ -101,8 +104,17 @@ _vramlog_split_model() {
 }
 
 # Build the human-readable configuration lines and their fingerprint. These must
-# mirror the flags llama-serve actually passes; the build string is deliberately
-# excluded so a rebuild does not fragment a configuration's history.
+# mirror the flags llama-serve actually passes -- they are read from the same
+# LLAMA_P_* variables llama-serve builds its argv from, so the two cannot drift.
+# The build string is deliberately excluded so a rebuild does not fragment a
+# configuration's history, as are --metrics and -lv, which change what the server
+# reports about itself but not what it computes.
+#
+# These lines are the fingerprint, and llama_log.py renders them under "server
+# flags:". The other groups in a block's header -- what llama-test actually sent,
+# and what the server's load log said -- are observations of a run, not settings,
+# so they are recorded but not fingerprinted: a run that served no llama-test
+# request would otherwise be a different configuration from one that did.
 _vramlog_config() {
     local fa="on"
     [[ "$LLAMA_FA_LEGACY" == "1" ]] && fa="legacy --flash-attn 1"
@@ -128,7 +140,7 @@ _vramlog_config() {
         "arch: $LLAMA_P_ARCH | ngl: $LLAMA_P_NGL | ctx: $LLAMA_P_CTX (total) | parallel: ${LLAMA_P_PARALLEL:-1} | threads: $LLAMA_P_THREADS | moe: ${LLAMA_P_MOE:-n/a}"
         "override-tensors: ${LLAMA_P_OT:-n/a}"
         "speculative: ${LLAMA_P_SPEC[*]:-off}"
-        "cache: k=q8_0 v=q8_0 | fa: $fa | batch: 512 | ubatch: 512"
+        "cache: k=${LLAMA_P_CACHE_K:-q8_0} v=${LLAMA_P_CACHE_V:-q8_0} | fa: $fa | batch: ${LLAMA_P_BATCH:-512} | ubatch: ${LLAMA_P_UBATCH:-512}"
         "reasoning effort: $effort"
         "samplers: $samplers"
     )
@@ -192,13 +204,15 @@ _vramlog_finalize() {
         --arg requests "$VRAMLOG_REQUESTS" \
         --arg mstart "$VRAMLOG_METRICS_START" \
         --arg mend "$VRAMLOG_METRICS_END" \
+        --arg slog "${LLAMA_SERVER_LOG:-}" \
         --args '
         {
             log: $log, model: $model, quant: $quant,
             config_id: $id, config_lines: $ARGS.positional,
             started: $started, duration: $dur, build: $build,
             samples: $samples, requests: $requests,
-            metrics_start: $mstart, metrics_end: $mend
+            metrics_start: $mstart, metrics_end: $mend,
+            server_log: $slog
         }' "${VRAMLOG_CFG_LINES[@]}" \
         | python3 "$_VRAMLOG_DIR/llama_log.py" merge
     then
@@ -272,7 +286,9 @@ llama-vram-log() {
     jq -n --arg log "$VRAMLOG_LOG" --arg id "$VRAMLOG_CFG_ID" \
           --arg req "$VRAMLOG_REQUESTS" --arg port "$LLAMA_PORT" \
           --arg started "$VRAMLOG_START_ISO" \
-          '{log: $log, config_id: $id, requests: $req, port: $port, started: $started}' \
+          --arg slog "${LLAMA_SERVER_LOG:-}" \
+          '{log: $log, config_id: $id, requests: $req, port: $port,
+            started: $started, server_log: $slog}' \
         > "$VRAMLOG_MARKER"
 
     trap '_vramlog_finalize; exit 0' EXIT INT TERM

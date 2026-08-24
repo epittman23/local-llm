@@ -61,7 +61,10 @@ serves one server slot (`--parallel 1`, `LLAMA_PARALLEL` to override), passed
 unconditionally rather than as part of any other flag group. Every serving
 run also records GPU telemetry via `scripts/llama-vram-log.sh` into
 `logs/<model>-<quant>.log` (gitignored), alongside the throughput of every
-`llama-test` request and the server's own `/metrics` totals for the run;
+`llama-test` request, the server's own `/metrics` totals for the run, the
+parameters `llama-test` actually put in its request bodies, and what the
+server's load log said about the model it loaded (layer split, slot
+configuration, fused kernels, ignored tensors, warnings);
 `scripts/llama_log.py` assembles those files. README.md documents each function
 and records the measured numbers.
 
@@ -163,6 +166,39 @@ or agent) updates the docs in the same commit:
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-08-23** (later still): A log block's header is now three groups, and
+  two of them are not fingerprinted. `server flags:` is the old config lines
+  unchanged -- same text, so every existing `config-id` is preserved -- and is
+  still what the hash covers. `request params (llama-test):` records what was
+  actually in the request body, read back out of the body rather than
+  re-derived; it exists because the `samplers:` line records the *server's*
+  defaults while a `llama-test` request overrides them with `temperature: 0`, so
+  a reader was being shown sampler values that were not in effect for the
+  measurement. `load log:` records what the server said about the model it
+  loaded: the reported layer split (not the `-ngl` that was asked for),
+  `n_slots`/`n_ctx_slot`/`kv_unified`, per-device model buffer sizes, whether
+  the fused Gated Delta Net kernels resolved to enabled or disabled, whether
+  the MTP head was used or ignored, `DEPRECATED` lines verbatim, and a count of
+  ignored tensors with their name prefixes. `fused_gdn` is the reason this
+  group is worth the trouble: llama.cpp resolves those kernels per context at
+  load time by checking that the fused node landed on the same device as its
+  layer (`src/llama-context.cpp:504`), so two runs with an identical
+  fingerprint can execute different operations at different speeds. None of it
+  is fingerprinted: it is observed per run, not configured, and hashing it
+  would make a run that served no `llama-test` request a different
+  configuration from one that did. Each group is replaced by a run that has
+  something to say about it and left alone by one that does not, so a
+  hand-started server does not overwrite an earlier run's observations with
+  "unavailable". To get the facts at all, `llama-serve` now passes `-lv 4`
+  (`LLAMA_LOG_VERBOSITY`) -- `print_info`, `load_tensors` and
+  `resolve_fused_ops` print nothing at the default verbosity -- and tees the
+  server's output to a temporary `logs/.server.<pid>.log` that the recorder
+  parses and `llama-serve` deletes on exit. `-lv` and `--metrics` are both
+  excluded from the fingerprint: they change what the server says about itself,
+  not what it computes. KV cache types and batch sizes became profile variables
+  (`LLAMA_P_CACHE_K/V`, `LLAMA_P_BATCH/UBATCH`) in the same change, so the
+  flags passed and the flags recorded come from one place; their defaults are
+  the previous literals, so the config lines and their hashes are unchanged.
 - **2026-08-23**: `--parallel 1` moved out of `qwen38`'s speculative flags into
   its own profile variable (`LLAMA_P_PARALLEL`, default 1, override
   `LLAMA_PARALLEL`) and is now always passed by `llama-serve`. Bundled with

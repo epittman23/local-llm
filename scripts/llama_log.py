@@ -14,7 +14,18 @@ COMMANDS
   merge     fold a finished run into logs/<model>-<quant>.log (payload on stdin)
 
 A log file holds one block per serving configuration, identified by a config-id
-fingerprint over the serving flags. Within a block:
+fingerprint over the serving flags. A block opens with three groups of context:
+
+  server flags:                what llama-serve passed; these lines ARE the config-id
+  request params (llama-test): what llama-test actually put in the request body
+  load log:                    what the server said about the model it loaded
+
+Only the first is fingerprinted. The other two are observations of a run rather
+than settings, and fingerprinting them would make a run that served no llama-test
+request a different configuration from one that did. They are still worth
+recording: the server's sampler defaults are not what a llama-test request runs
+under, and two runs of identical flags are not comparable if the server resolved
+fused kernels differently. Then:
 
   ### previous runs                one row per run: GPU telemetry avg/max
   ### previous runs - requests     one row per run: llama-test throughput stats
@@ -66,6 +77,20 @@ HEADER_NOTES = [
     "understates prefill cost whenever a run repeated a prompt; their empty "
     "cold/warm counts are how those rows are recognised.",
 ]
+
+# The named groups of a block's header. Order is the rendering order; anything
+# else found in an existing block is preserved after them, so a group added later
+# by some other hand is not silently dropped.
+GROUP_SERVER = "server flags:"
+GROUP_REQUEST = "request params (llama-test):"
+GROUP_LOAD = "load log:"
+GROUP_ORDER = [GROUP_SERVER, GROUP_REQUEST, GROUP_LOAD]
+
+# Request-body fields worth recording, in rendering order. llama-test reads them
+# back out of the body it sent rather than from the variables it built the body
+# from, so what appears here is what the server was actually asked for.
+PARAM_ORDER = ["temperature", "top_p", "top_k", "max_tokens", "cache_prompt",
+               "stream", "chat_template_kwargs"]
 
 GPU_SAMPLE_COLUMNS = [
     "timestamp (UTC)", "temp (C)", "util (%)", "mem.used (MiB)",
@@ -302,8 +327,275 @@ def server_summary_row(delta: dict, started: str) -> list[str]:
 
 
 # ---------------------------------------------------------------------------
+# the server's own load log
+#
+# llama-serve tees llama-server's output to a file and hands the path here. What
+# the server says about the model it loaded is not derivable from the flags: -ngl
+# is a request, the layer split is the answer; fused kernels are resolved per
+# context against the device the layers landed on; an MTP head is either used or
+# quietly ignored. Two runs with identical flags and different answers here are
+# not the same measurement.
+#
+# Nothing is inferred. A field the log does not state is written "unavailable",
+# because a plausible default here would be indistinguishable from an observation.
+# ---------------------------------------------------------------------------
+UNAVAILABLE = "unavailable"
+
+# "0.03.336.929 I print_info: n_layer = 64" -> "print_info: n_layer = 64".
+# The timestamp and level are per-run noise; the message is what is quoted.
+LOG_PREFIX = re.compile(r"^\s*\d+(\.\d+)*\s+[A-Z]\s+")
+
+
+def log_messages(path: Path) -> list[str]:
+    try:
+        raw = path.read_text(errors="replace")
+    except OSError:
+        return []
+    return [LOG_PREFIX.sub("", line).rstrip() for line in raw.split("\n")]
+
+
+def _first(msgs: list[str], pattern: str):
+    """The first match of pattern, or None. First rather than last on purpose:
+    with speculative decoding the server builds a second context and repeats much
+    of this, and the target model's answer is the one being described."""
+    rx = re.compile(pattern)
+    for m in msgs:
+        hit = rx.search(m)
+        if hit:
+            return hit
+    return None
+
+
+def _int(msgs: list[str], pattern: str):
+    hit = _first(msgs, pattern)
+    return int(hit.group(1)) if hit else None
+
+
+def fused_ops(msgs: list[str]) -> tuple[str, list[str]]:
+    """The verdict on the fused Gated Delta Net kernels, plus any warning verbatim.
+
+    Matched on the "resolve_fused_ops:" prefix rather than on the probe's name, so
+    a renamed or added probe still lands in the right bucket (llama.cpp build 10597
+    resolves four families through the same function: flash attention, Gated Delta
+    Net, Lightning Indexer, DeepSeek V4 HC). The disabled path logs a device
+    mismatch and then "<probe> not supported, set to disabled"
+    (src/llama-context.cpp:536-547); the enabled path logs "<probe> enabled".
+    """
+    lines = [m for m in msgs if m.startswith("resolve_fused_ops:")]
+    gdn = [m for m in lines if "Gated Delta Net" in m and not m.endswith("support:")]
+    if not gdn:
+        return UNAVAILABLE, []
+
+    enabled = [m for m in gdn if m.endswith(" enabled")]
+    disabled = [m for m in gdn if "set to disabled" in m]
+    if disabled and enabled:
+        verdict = "mixed"
+    elif disabled:
+        verdict = "disabled"
+    elif enabled:
+        verdict = "enabled"
+    else:
+        verdict = UNAVAILABLE
+
+    # Every warning of the group, not just the GDN ones: a mismatch reported
+    # against another probe is the same device split and explains this one.
+    warnings = [m for m in lines
+                if "set to disabled" in m or "assigned to device" in m]
+    return verdict, list(dict.fromkeys(warnings))
+
+
+def unused_tensors(msgs: list[str]) -> str:
+    """Tensors the loader found in the file and did not use.
+
+    Collapsed to a count and the distinct names minus their last component, which
+    is what makes a family legible ("blk.64.nextn.*" for an MTP head the loader
+    ignored) without pasting one line per tensor.
+    """
+    names = [h.group(1) for h in
+             (re.search(r"model has unused tensor (\S+)", m) for m in msgs) if h]
+    if not names:
+        return "none"
+    prefixes = sorted({n.rsplit(".", 1)[0] for n in names})
+    shown = ", ".join(prefixes[:6])
+    if len(prefixes) > 6:
+        shown += f", +{len(prefixes) - 6} more"
+    return f"{len(names)} ({shown})"
+
+
+def mtp_head(msgs: list[str]) -> str:
+    """Whether the model carries a multi-token-prediction head and whether it ran.
+
+    Presence is the GGUF key (Qwen names it "<arch>.nextn_predict_layers"); use is
+    the server building a draft context for it. A head that is present and unused
+    is worth saying out loud: it is loaded weights doing nothing, and it is the
+    difference between a speculative run and a run that only asked for one.
+    """
+    hit = _first(msgs, r"\.nextn_predict_layers\s+\S*\s*=\s*(\d+)")
+    present = hit is not None and int(hit.group(1)) > 0
+    used = any("MTP draft context" in m for m in msgs) or \
+        any("adding speculative implementation 'draft-mtp'" in m for m in msgs)
+    if not present:
+        # No key at all is not the same as a key saying zero, but neither is a head.
+        return "absent" if any("nextn_predict_layers" in m for m in msgs) or \
+            any(m.startswith("print_info:") for m in msgs) else UNAVAILABLE
+    layers = int(hit.group(1))
+    return (f"present (nextn_predict_layers = {layers}), "
+            f"{'used by draft-mtp' if used else 'ignored'}")
+
+
+def parse_server_log(path: Path | None, ngl: str | None) -> list[str] | None:
+    """The "load log:" group, or None when there is no log to read.
+
+    None means the run was recorded without one -- a hand-started server, or
+    LLAMA_SERVER_LOG unset -- and the caller then leaves whatever the block already
+    had in place. That is the same discipline as the rest of this file: no data
+    writes nothing, rather than writing a row of "unavailable" over an older run's
+    observations of the same configuration.
+    """
+    if not path or not path.exists():
+        return None
+    msgs = log_messages(path)
+    if not msgs:
+        return None
+
+    n_layer = _int(msgs, r"print_info: n_layer\s+=\s+(\d+)")
+    n_layer_all = _int(msgs, r"print_info: n_layer_all\s+=\s+(\d+)")
+    layers = UNAVAILABLE
+    if n_layer is not None:
+        layers = str(n_layer)
+        if n_layer_all is not None and n_layer_all != n_layer:
+            layers += f" (all {n_layer_all})"
+
+    # The split the loader reports, not the one -ngl asked for. -ngl is a ceiling:
+    # it is clamped to what fits and counts the output layer, so the two disagree.
+    split = _first(msgs, r"load_tensors: offloaded (\d+)/(\d+) layers to GPU")
+    if split:
+        gpu, total = int(split.group(1)), int(split.group(2))
+        offload = f"{gpu}/{total} on GPU | cpu-resident: {total - gpu}"
+    elif n_layer is not None and ngl and ngl.isdigit():
+        # llama.cpp counts the output layer alongside the blocks, so its
+        # denominator is one more than the block count it reports.
+        total = (n_layer_all if n_layer_all is not None else n_layer) + 1
+        gpu = min(int(ngl), total)
+        offload = (f"{gpu}/{total} on GPU | cpu-resident: {total - gpu}"
+                   " (derived from -ngl, not reported)")
+    else:
+        offload = UNAVAILABLE
+
+    slots = _first(msgs, r"n_slots = (\d+), n_ctx_slot = (\d+), kv_unified = '(\w+)'")
+    if slots:
+        slot_line = (f"n_slots: {slots.group(1)} | n_ctx_slot: {slots.group(2)}"
+                     f" | kv_unified: {slots.group(3)}")
+    else:
+        # The server's one-line summary is the preferred source; the context's own
+        # lines are the fallback, and each field falls back independently.
+        n_seq = _int(msgs, r"llama_context: n_seq_max\s+=\s+(\d+)")
+        n_ctx_seq = _int(msgs, r"llama_context: n_ctx_seq\s+=\s+(\d+)")
+        kvu = _first(msgs, r"llama_context: kv_unified\s+=\s+(\w+)")
+        slot_line = (f"n_slots: {n_seq if n_seq is not None else UNAVAILABLE}"
+                     f" | n_ctx_slot: {n_ctx_seq if n_ctx_seq is not None else UNAVAILABLE}"
+                     f" | kv_unified: {kvu.group(1) if kvu else UNAVAILABLE}")
+
+    bufs = []
+    seen = set()
+    for m in msgs:
+        hit = re.search(r"load_tensors:\s+(\S+) model buffer size =\s+([\d.]+) MiB", m)
+        if hit and hit.group(1) not in seen:
+            seen.add(hit.group(1))
+            bufs.append(f"{hit.group(1)} {hit.group(2)} MiB")
+
+    verdict, warnings = fused_ops(msgs)
+    deprecated = list(dict.fromkeys(m for m in msgs if "DEPRECATED" in m))
+
+    out = [
+        f"  layers: {layers} | offloaded: {offload}",
+        f"  {slot_line}",
+        f"  model buffers: {' | '.join(bufs) if bufs else UNAVAILABLE}",
+        f"  fused_gdn: {verdict}",
+        f"  mtp head: {mtp_head(msgs)}",
+        f"  unused tensors: {unused_tensors(msgs)}",
+    ]
+    # Warnings verbatim, one per line, because the wording is the evidence.
+    out += [f"  warning: {w}" for w in warnings]
+    out += [f"  {d}" for d in deprecated]
+    return out
+
+
+def render_params(requests: list[dict]) -> list[str] | None:
+    """The "request params (llama-test):" group, or None when the run served none.
+
+    Distinct parameter sets are listed separately with the number of requests that
+    used each: a run that changed max_tokens halfway through did not measure one
+    thing, and averaging its requests without saying so would hide that.
+    """
+    counts: dict[str, int] = {}
+    for rec in requests:
+        params = rec.get("params")
+        if not isinstance(params, dict) or not params:
+            continue
+        parts = []
+        for key in PARAM_ORDER:
+            if key not in params:
+                continue
+            # json.dumps rather than str: these are the body's values, so they
+            # should read as they were sent (false, not False).
+            parts.append(f"{key}: {json.dumps(params[key], separators=(',', ':'))}")
+        for key in sorted(k for k in params if k not in PARAM_ORDER):
+            parts.append(f"{key}: {json.dumps(params[key], separators=(',', ':'))}")
+        line = " | ".join(parts)
+        counts[line] = counts.get(line, 0) + 1
+    if not counts:
+        return None
+    if len(counts) == 1:
+        return [f"  {next(iter(counts))}"]
+    return [f"  x{n}: {line}" for line, n in counts.items()]
+
+
+# ---------------------------------------------------------------------------
 # log file structure
 # ---------------------------------------------------------------------------
+def split_groups(lines: list[str]) -> tuple[list[str], dict[str, list[str]]]:
+    """A block's header lines as (ungrouped, {group header: indented lines}).
+
+    A group header is an unindented line ending in a colon with nothing after it.
+    Ungrouped lines are how blocks written before the grouping look; they are kept
+    as they are unless the block is merged into, so old logs stay readable.
+    """
+    pre: list[str] = []
+    groups: dict[str, list[str]] = {}
+    current: str | None = None
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if not line[:1].isspace() and stripped.endswith(":"):
+            current = stripped
+            groups.setdefault(current, [])
+            continue
+        (groups[current] if current is not None else pre).append(line)
+    return pre, groups
+
+
+def join_groups(pre: list[str], groups: dict[str, list[str]]) -> list[str]:
+    out = list(pre)
+    for name in GROUP_ORDER:
+        if groups.get(name):
+            out += [name] + groups[name]
+    for name, lines in groups.items():
+        if name not in GROUP_ORDER and lines:
+            out += [name] + lines
+    return out
+
+
+def config_value(lines: list[str], key: str) -> str | None:
+    """Read one "key: value" out of the pipe-separated configuration lines."""
+    for line in lines:
+        hit = re.search(rf"(?:^|\| ){re.escape(key)}: (.*?)(?: \||$)", line.strip())
+        if hit:
+            return hit.group(1).strip()
+    return None
+
+
 class Block:
     """One serving configuration's section of a log file."""
 
@@ -506,8 +798,17 @@ def cmd_request(args: argparse.Namespace) -> int:
     if not isinstance(timings, dict):
         return 0
 
+    # What was actually asked for, as read back from the request body. Malformed
+    # or absent means the request is still recorded, just without its parameters.
+    try:
+        params = json.loads(args.params) if args.params else {}
+    except json.JSONDecodeError:
+        params = {}
+
     record = {"timestamp": args.timestamp, "model": args.model,
-              "prompt": args.prompt, "wall_ms": args.wall_ms, "timings": timings}
+              "prompt": args.prompt, "wall_ms": args.wall_ms,
+              "params": params if isinstance(params, dict) else {},
+              "timings": timings}
     with open(active["requests"], "a") as fh:
         fh.write(json.dumps(record) + "\n")
     return 0
@@ -533,12 +834,26 @@ def cmd_merge(args: argparse.Namespace) -> int:
 
     block = next((b for b in blocks if b.config_id == payload["config_id"]), None)
     if block is None:
-        block = Block(payload["config_id"], payload["config_lines"])
+        block = Block(payload["config_id"], [])
         blocks.append(block)
-    else:
-        # The flags are the block's identity, but rewriting them keeps a block
-        # current if their human-readable rendering ever changes.
-        block.config_lines = payload["config_lines"]
+
+    # The flags are the block's identity, so rewriting them changes nothing; the
+    # other two groups are this run's observations and do replace the previous
+    # run's. Each is left alone when this run has nothing to say: a run that served
+    # no llama-test request, or was recorded without the server's output, should
+    # not erase what an earlier run of the same configuration observed.
+    _, groups = split_groups(block.config_lines)
+    groups[GROUP_SERVER] = ["  " + line.strip() for line in payload["config_lines"]]
+    params = render_params(requests)
+    if params:
+        groups[GROUP_REQUEST] = params
+    load = parse_server_log(_path(payload.get("server_log")),
+                            config_value(payload["config_lines"], "ngl"))
+    if load:
+        groups[GROUP_LOAD] = load
+    # pre is dropped rather than carried: a block written before the grouping has
+    # its flat lines re-rendered under "server flags:", which is where they belong.
+    block.config_lines = join_groups([], groups)
 
     block.gpu_summary.append(
         gpu_summary_row(samples, started, payload["duration"], build))
@@ -580,6 +895,7 @@ def main() -> int:
     p.add_argument("--timestamp", default="?")
     p.add_argument("--wall-ms", type=float, default=None)
     p.add_argument("--port", default="")
+    p.add_argument("--params", default="", help="the request body's parameters, JSON")
     p.set_defaults(func=cmd_request)
 
     p = sub.add_parser("merge", help="fold a finished run into its log file")

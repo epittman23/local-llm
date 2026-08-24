@@ -118,9 +118,19 @@ The functions:
   `LLAMA_THREADS`, `LLAMA_NGL`, `LLAMA_MOE`, `LLAMA_OT`, `LLAMA_SPEC`,
   `LLAMA_PARALLEL` (server slots, default 1), `LLAMA_REASONING` (thinking
   effort for `qwen38`). Extra arguments pass through to `llama-server`.
+  KV cache types and batch sizes are profile variables too (`LLAMA_CACHE_K`,
+  `LLAMA_CACHE_V`, `LLAMA_BATCH`, `LLAMA_UBATCH`; all default to the values in
+  the table above), so the flags passed and the flags recorded in the log come
+  from one place.
   `llama-qwen` is a backwards-compatible alias. `--metrics` is always passed, so
-  the run's server-wide token totals can be recorded; it does not affect
-  inference and is deliberately not part of the config fingerprint.
+  the run's server-wide token totals can be recorded, and `-lv 4`
+  (`LLAMA_LOG_VERBOSITY`) so the server prints what it decided about the model
+  it loaded — the layer split, the slot count, the fused kernels it resolved,
+  the tensors it ignored. Neither affects inference, and both are deliberately
+  excluded from the config fingerprint. The server's output is tee'd to a
+  temporary `logs/.server.<pid>.log` for the recorder to parse and deleted when
+  the server exits; the terminal copy is unchanged except that the GGUF metadata
+  dump `-lv 4` adds is filtered out of it.
 - `llama-fetch [profile]` : download the profile's weights with the `hf` CLI.
 - `llama-sweep-threads [profile] [4,6,8,...]` : `llama-bench` across thread
   counts, printed as a markdown table.
@@ -179,14 +189,69 @@ logs/<model-name>-<quant>.log     # e.g. logs/Qwen3.8-27B-UD-Q3_K_XL.log
 ```
 
 The file names the model and quantization at the top, then holds one block per
-serving configuration (identified by a `config-id` fingerprint over arch, ngl,
-`--n-cpu-moe`, `-ot`, speculative-decoding flags, ctx, slot count, threads,
-cache types, flash attention, batch sizes,
-reasoning effort, and sampler values). Changing any of those opens a new block
-instead of mixing incomparable runs; rebuilding llama.cpp does not, since the
-build string is recorded per run rather than fingerprinted.
+serving configuration. Each block opens with three groups of context:
 
-A block holds four tables:
+```
+config-id: 9eab7cfc
+server flags:
+  arch: dense | ngl: 20 | ctx: 16384 (total) | parallel: 1 | threads: 12 | moe: n/a
+  ...
+request params (llama-test):
+  temperature: 0 | max_tokens: 2048 | cache_prompt: false | stream: true | ...
+load log:
+  layers: 64 (all 65) | offloaded: 20/66 on GPU | cpu-resident: 46
+  ...
+```
+
+**Only `server flags:` is fingerprinted.** The `config-id` is a hash over those
+lines — arch, ngl, `--n-cpu-moe`, `-ot`, speculative-decoding flags, ctx, slot
+count, threads, cache types, flash attention, batch sizes, reasoning effort, and
+the server's sampler values. Changing any of them opens a new block instead of
+mixing incomparable runs; rebuilding llama.cpp does not, since the build string
+is recorded per run rather than fingerprinted.
+
+The other two groups are *observations of a run*, not settings, so they are
+recorded but not hashed — a run that served no `llama-test` request would
+otherwise be a different configuration from one that did. They are replaced by
+each new run of the block, and left alone when a run has nothing to say about
+them.
+
+- **`request params (llama-test):`** is what was actually in the request body,
+  read back out of it rather than re-derived. It matters because the `samplers:`
+  line under `server flags:` records the server's *defaults*, and a `llama-test`
+  request overrides them: the server may say `temp 1.0 | top-p 0.95`, but the
+  measured request ran at `temperature: 0`. If a run used more than one set of
+  parameters, each is listed with the number of requests that used it.
+- **`load log:`** is what the server said about the model it loaded, parsed from
+  its own output. None of it is derivable from the flags, and all of it decides
+  whether two runs measure the same thing:
+
+  | field | why it is here |
+  | --- | --- |
+  | `layers` | the block count the model reports (`n_layer`, and `n_layer_all` when a head such as MTP makes them differ) |
+  | `offloaded` | the split llama.cpp *reports*, not the one `-ngl` asked for: `-ngl` is a ceiling, clamped to what fits and counting the output layer. `cpu-resident` is the rest, and is what generation speed on this hardware tracks |
+  | `n_slots`, `n_ctx_slot`, `kv_unified` | the resolved slot configuration — the thing `--parallel` was silently getting wrong before 2026-08-23 |
+  | `model buffers` | per-device weight bytes, so VRAM headroom can be read against what the weights alone took |
+  | `fused_gdn` | whether the fused Gated Delta Net kernels were resolved to `enabled` or `disabled` |
+  | `mtp head` | whether the file carries a multi-token-prediction head, and whether the server used it or ignored it. Present-and-ignored is loaded weights doing nothing |
+  | `unused tensors` | how many tensors the loader found and skipped, with their distinct name prefixes. `blk.64.nextn.*` here means the MTP head was read and dropped |
+  | `warning:` / `DEPRECATED:` | any device-mismatch or deprecation line, verbatim, because the wording is the evidence |
+
+  **`fused_gdn` makes two runs incomparable.** llama.cpp resolves those kernels
+  per context, at load, by checking that the fused node landed on the same device
+  as the layer it belongs to (`src/llama-context.cpp:504`). Whether it succeeds
+  depends on where the layers ended up, so the same `-ngl` on a machine with a
+  slightly different memory state can land on either answer — and the disabled
+  path runs a different set of operations, at a different speed, under a
+  config-id that says nothing about it. When it is `disabled`, the warning lines
+  below it say which layer and which device caused it.
+
+  Anything the log does not state is written `unavailable` rather than guessed;
+  a plausible default here would be indistinguishable from an observation. If
+  the whole group is missing, the run was recorded without the server's output
+  (a hand-started server) and whatever an earlier run observed is left in place.
+
+A block then holds four tables:
 
 | section | one row per | contents |
 | --- | --- | --- |

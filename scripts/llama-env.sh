@@ -61,6 +61,7 @@ _llama_profile() {
     LLAMA_P_NAME=""; LLAMA_P_ARCH=""; LLAMA_P_MODEL=""; LLAMA_P_REPO=""
     LLAMA_P_PATTERN=""; LLAMA_P_ALIAS=""; LLAMA_P_CTX=""; LLAMA_P_THREADS=""
     LLAMA_P_NGL=""; LLAMA_P_MOE=""; LLAMA_P_OT=""; LLAMA_P_PARALLEL=""
+    LLAMA_P_CACHE_K=""; LLAMA_P_CACHE_V=""; LLAMA_P_BATCH=""; LLAMA_P_UBATCH=""
     LLAMA_P_SPEC=(); LLAMA_P_SAMPLERS=(); LLAMA_P_EXTRA=()
 
     case "$p" in
@@ -128,6 +129,14 @@ _llama_profile() {
     # 15.63 t/s prefill at n_slots=4 against 26.38 t/s at n_slots=1.
     : "${LLAMA_P_PARALLEL:=1}"
 
+    # KV cache types and batch sizes. These are profile variables rather than
+    # literals in llama-serve so that the flags actually passed and the flags
+    # recorded in the telemetry log come from one place and cannot drift apart.
+    : "${LLAMA_P_CACHE_K:=q8_0}"
+    : "${LLAMA_P_CACHE_V:=q8_0}"
+    : "${LLAMA_P_BATCH:=512}"
+    : "${LLAMA_P_UBATCH:=512}"
+
     # Environment overrides win over profile defaults.
     [[ -n "${LLAMA_MODEL:-}"   ]] && LLAMA_P_MODEL="$LLAMA_MODEL"
     [[ -n "${LLAMA_CTX:-}"     ]] && LLAMA_P_CTX="$LLAMA_CTX"
@@ -136,6 +145,10 @@ _llama_profile() {
     [[ -n "${LLAMA_MOE:-}"     ]] && LLAMA_P_MOE="$LLAMA_MOE"
     [[ -n "${LLAMA_OT:-}"      ]] && LLAMA_P_OT="$LLAMA_OT"
     [[ -n "${LLAMA_PARALLEL:-}" ]] && LLAMA_P_PARALLEL="$LLAMA_PARALLEL"
+    [[ -n "${LLAMA_CACHE_K:-}"  ]] && LLAMA_P_CACHE_K="$LLAMA_CACHE_K"
+    [[ -n "${LLAMA_CACHE_V:-}"  ]] && LLAMA_P_CACHE_V="$LLAMA_CACHE_V"
+    [[ -n "${LLAMA_BATCH:-}"    ]] && LLAMA_P_BATCH="$LLAMA_BATCH"
+    [[ -n "${LLAMA_UBATCH:-}"   ]] && LLAMA_P_UBATCH="$LLAMA_UBATCH"
     # LLAMA_SPEC replaces the profile's speculative-decoding flags wholesale;
     # LLAMA_SPEC=off turns them off, which is the A/B this exists for.
     if [[ -n "${LLAMA_SPEC+x}" ]]; then
@@ -231,20 +244,24 @@ llama-serve() {
 
     # Assemble arguments. Architecture-specific flags are added only where valid.
     # --metrics exposes /metrics, which llama-vram-log.sh scrapes for the run's
-    # server-wide token totals; it is not part of the config fingerprint because
-    # it does not change how inference runs.
+    # server-wide token totals. -lv 4 is what makes llama.cpp print the model
+    # load detail the telemetry block records (n_layer, the GPU/CPU layer split,
+    # buffer sizes, resolve_fused_ops); at the default 3 those lines never appear
+    # and the block records them as unavailable. Neither flag changes inference,
+    # so neither is part of the config fingerprint.
     local -a args=(
         -m "$LLAMA_P_MODEL"
         -ngl "$LLAMA_P_NGL"
         -c "$LLAMA_P_CTX"       # total context; slots split it unless kv_unified
         -t "$LLAMA_P_THREADS"
-        --cache-type-k q8_0
-        --cache-type-v q8_0
-        -b 512
-        --ubatch-size 512
+        --cache-type-k "$LLAMA_P_CACHE_K"
+        --cache-type-v "$LLAMA_P_CACHE_V"
+        -b "$LLAMA_P_BATCH"
+        --ubatch-size "$LLAMA_P_UBATCH"
         --jinja
         --metrics
         --parallel "$LLAMA_P_PARALLEL"
+        -lv "${LLAMA_LOG_VERBOSITY:-4}"
         --alias "$LLAMA_P_ALIAS"
         --host "$LLAMA_HOST"
         --port "$LLAMA_PORT"
@@ -273,23 +290,43 @@ llama-serve() {
     # samples until it is killed below, and appends the run to logs/. If Ctrl-C
     # aborts this function before the cleanup runs, it stops on its own once the
     # port stops answering. Set LLAMA_VRAM_LOG=0 to skip it.
-    local vram_pid=""
+    local vram_pid="" serverlog=""
     if [[ "${LLAMA_VRAM_LOG:-1}" != "0" ]] && command -v nvidia-smi >/dev/null 2>&1; then
-        local here
+        local here logdir
         here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
         if [[ -f "$here/llama-vram-log.sh" ]]; then
-            bash "$here/llama-vram-log.sh" record "$LLAMA_P_NAME" &
+            logdir="${LLAMA_VRAM_LOGDIR:-$(cd "$here/.." && pwd)/logs}"
+            mkdir -p "$logdir"
+            # llama-server's own load log, kept for the recorder to parse: the
+            # layer split it actually chose, n_layer, fused-kernel resolution and
+            # deprecation warnings are known only to the server. Removed below,
+            # once the recorder has finished with it.
+            serverlog="$logdir/.server.$$.log"
+            LLAMA_SERVER_LOG="$serverlog" \
+                bash "$here/llama-vram-log.sh" record "$LLAMA_P_NAME" &
             vram_pid=$!
         fi
     fi
 
-    "$LLAMA_BIN/llama-server" "${args[@]}" "$@"
-    local rc=$?
+    local rc
+    if [[ -n "$serverlog" ]]; then
+        # The file gets everything; the terminal copy drops the GGUF metadata
+        # dump, which -lv 4 turns into ~60 lines of key/value listing.
+        "$LLAMA_BIN/llama-server" "${args[@]}" "$@" 2>&1 \
+            | tee "$serverlog" \
+            | grep -v --line-buffered 'llama_model_loader: - ' >&2
+        rc=${PIPESTATUS[0]}
+    else
+        "$LLAMA_BIN/llama-server" "${args[@]}" "$@"
+        rc=$?
+    fi
 
     if [[ -n "$vram_pid" ]]; then
         kill -TERM "$vram_pid" 2>/dev/null
         wait "$vram_pid" 2>/dev/null
     fi
+    # After the recorder has read it, not before: it is the recorder's input.
+    [[ -n "$serverlog" ]] && rm -f "$serverlog"
 
     return $rc
 }
@@ -469,6 +506,14 @@ llama-test() {
         + (if $stream then {stream: true} else {} end)
     ' "$file" > "$req" || { rm -f "$req" "$resp"; return 1; }
 
+    # Read back what is actually in the body rather than re-deriving it: the log
+    # should record the request that was sent, not the one this function meant to
+    # send. Absent fields are dropped rather than recorded as null.
+    local params
+    params="$(jq -c '{temperature, top_p, top_k, max_tokens, cache_prompt,
+                      stream, chat_template_kwargs}
+                     | with_entries(select(.value != null))' "$req")"
+
     echo "llama-test: prompt=$prompt model=$model${effort:+ effort=$effort} port=$LLAMA_PORT stream=$stream cache_prompt=$cache_prompt" >&2
 
     # A short connect timeout so a stopped server fails immediately, while the
@@ -538,7 +583,7 @@ llama-test() {
         [[ -n "$timings" ]] && echo "$timings"
     fi
 
-    _llama_test_record "$timings" "$model" "$prompt" "$wall"
+    _llama_test_record "$timings" "$model" "$prompt" "$wall" "$params"
 
     if [[ "${LLAMA_TEST_RAW:-0}" == "1" ]]; then
         echo "llama-test: full response kept at $resp" >&2
@@ -552,7 +597,7 @@ llama-test() {
 # numbers outlive the terminal. llama_log.py does nothing when no run is active,
 # which is the right outcome for a server someone started by hand.
 _llama_test_record() {
-    local timings="$1" model="$2" prompt="$3" wall="$4"
+    local timings="$1" model="$2" prompt="$3" wall="$4" params="${5:-}"
     [[ -n "$timings" && "$timings" != "null" ]] || return 0
     command -v python3 >/dev/null 2>&1 || return 0
 
@@ -564,6 +609,7 @@ _llama_test_record() {
     printf '%s' "$timings" | python3 "$here/llama_log.py" request \
         --logdir "$logdir" --model "$model" --prompt "$prompt" \
         --port "$LLAMA_PORT" --wall-ms "${wall:-0}" \
+        --params "${params:-{\}}" \
         --timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" 2>/dev/null
 }
 
