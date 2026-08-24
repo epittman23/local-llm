@@ -26,6 +26,8 @@
 #   LLAMA_VRAM_INTERVAL     seconds between samples (default 5)
 #   LLAMA_VRAM_WAIT         seconds to wait for the server to come up (default 600)
 #   LLAMA_VRAM_LOGDIR       output directory (default <repo>/logs)
+#   LLAMA_VRAM_HEADROOM_MIB free VRAM below which a run is flagged in its block
+#                           (default 300)
 #   LLAMA_SERVER_LOG        llama-server's own output, tee'd there by llama-serve;
 #                           parsed for what the server said about the model it
 #                           loaded (layer split, slots, fused kernels, warnings)
@@ -306,11 +308,14 @@ llama-vram-log() {
             continue
         fi
 
+        # clocks_throttle_reasons.active is a hex bitmask, comma-free, so it
+        # survives the comma-to-pipe rewrite below. llama_log.py decodes it and
+        # reports the distinct set seen across the run, not per sample.
         row="$(nvidia-smi \
-            --query-gpu=temperature.gpu,utilization.gpu,memory.used,memory.total,power.draw,clocks.sm \
+            --query-gpu=temperature.gpu,utilization.gpu,memory.used,memory.total,power.draw,clocks.sm,clocks_throttle_reasons.active \
             --format=csv,noheader,nounits 2>/dev/null | head -1)"
         if [[ -n "$row" ]]; then
-            # "63, 95, 5907, 6144, 29.75, 1455" -> pipe-separated, with a timestamp
+            # "63, 95, 5907, 6144, 29.75, 1455, 0x1" -> pipe-separated, timestamped
             echo "$(_vramlog_now)|$(echo "$row" | sed 's/[[:space:]]*,[[:space:]]*/|/g')" \
                 >> "$VRAMLOG_SAMPLES"
         fi

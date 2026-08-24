@@ -97,10 +97,17 @@ GPU_SAMPLE_COLUMNS = [
     "mem.total (MiB)", "power (W)", "sm (MHz)",
 ]
 
+# Appended to, never reordered: a row written under an older layout keeps every
+# cell it has under the heading it was written for, and render_table pads the
+# missing tail. Percentiles sit beside the means rather than replacing them
+# because a mean over a run that was idle between requests is not the busy figure
+# and not the idle one; p50 says which of the two the run mostly was.
 GPU_SUMMARY_COLUMNS = [
     "started (UTC)", "duration", "samples", "build", "temp avg/max (C)",
     "util avg/max (%)", "mem.used avg/max (MiB)", "power avg/max (W)",
     "sm avg (MHz)",
+    "util p50/p95 (%)", "util active avg (%)", "power p50/p95 (W)",
+    "sm p50/p95/max (MHz)", "vram headroom (MiB)", "throttle",
 ]
 
 # The raw llama.cpp timings field names are kept as headers so a row can be traced
@@ -109,7 +116,7 @@ REQUEST_COLUMNS = [
     "timestamp (UTC)", "prompt", "model", "cache_n", "prompt_n", "prompt_ms",
     "prompt_per_token_ms", "prompt_per_second", "predicted_n", "predicted_ms",
     "predicted_per_token_ms", "predicted_per_second", "draft_n",
-    "draft_n_accepted", "wall_ms",
+    "draft_n_accepted", "wall_ms", "acceptance", "mean_len",
 ]
 
 # Prompt statistics are cold-only: a request served from the prompt cache reports
@@ -124,7 +131,7 @@ REQUEST_SUMMARY_COLUMNS = [
     "cold prompt s total", "cold prompt s avg", "cold prompt t/s",
     "warm cached tok avg", "warm prompt tok avg", "warm prompt s avg",
     "output tok total", "output tok avg", "output s total", "output s avg",
-    "e2e s total", "e2e s avg",
+    "e2e s total", "e2e s avg", "acceptance", "mean_len",
 ]
 
 # Rows written before 2026-08-23 have these twelve cells and blended cold with warm.
@@ -136,6 +143,7 @@ LEGACY_REQUEST_SUMMARY = {0: 0, 1: 1, 2: 4, 3: 5, 4: 6, 5: 7,
 SERVER_SUMMARY_COLUMNS = [
     "started (UTC)", "prompt tok", "cached tok", "prompt s", "prompt t/s",
     "output tok", "output s", "output t/s", "draft tok", "draft accepted",
+    "drafts", "acceptance", "mean_len",
 ]
 
 # Counter names scraped from /metrics, in the order the delta row uses them.
@@ -143,6 +151,7 @@ SERVER_COUNTERS = [
     "prompt_tokens_total", "prompt_tokens_cached_total", "prompt_seconds_total",
     "tokens_predicted_total", "tokens_predicted_seconds_total",
     "spec_decode_num_draft_tokens_total", "spec_decode_num_accepted_tokens_total",
+    "spec_decode_num_drafts_total",
 ]
 
 
@@ -151,7 +160,7 @@ SERVER_COUNTERS = [
 # ---------------------------------------------------------------------------
 def is_number(cell: str) -> bool:
     """A cell that should be right-aligned: a number, a ratio, or empty."""
-    return cell == "" or bool(re.fullmatch(r"\d+(\.\d+)?(/\d+(\.\d+)?)?", cell))
+    return cell == "" or bool(re.fullmatch(r"\d+(\.\d+)?(/\d+(\.\d+)?)*", cell))
 
 
 def render_table(columns: list[str], rows: list[list[str]]) -> list[str]:
@@ -213,15 +222,134 @@ def mean(values: list[float]) -> float:
     return sum(values) / len(values) if values else 0.0
 
 
+def percentile(values: list[float], p: float) -> float:
+    """Linear interpolation between the closest ranks (numpy's default method).
+
+    Sampling is every LLAMA_VRAM_INTERVAL seconds, so a run has tens of samples,
+    not thousands: p95 of 18 samples is nearly the maximum, and is reported as
+    such rather than pretending to a precision the sample count cannot support.
+    """
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    if len(ordered) == 1:
+        return float(ordered[0])
+    k = (len(ordered) - 1) * p
+    lo = int(k)
+    hi = min(lo + 1, len(ordered) - 1)
+    return ordered[lo] + (ordered[hi] - ordered[lo]) * (k - lo)
+
+
+# nvmlClocksThrottleReasons, the bits nvidia-smi reports in
+# clocks_throttle_reasons.active. Only the documented ones are decoded; anything
+# else is printed as hex rather than guessed at.
+#
+# GpuIdle is not a fault: it is set whenever the GPU has nothing to do, which on
+# this workload is most of a run, since generation is bound by CPU-resident
+# weights. SwPowerCap and the thermal bits are the ones that mean a measurement
+# was taken under a limit and is not comparable with one that was not.
+THROTTLE_BITS = [
+    (0x0000000000000001, "GpuIdle"),
+    (0x0000000000000002, "AppClocksSetting"),
+    (0x0000000000000004, "SwPowerCap"),
+    (0x0000000000000008, "HwSlowdown"),
+    (0x0000000000000010, "SyncBoost"),
+    (0x0000000000000020, "SwThermalSlowdown"),
+    (0x0000000000000040, "HwThermalSlowdown"),
+    (0x0000000000000080, "HwPowerBrakeSlowdown"),
+    (0x0000000000000100, "DisplayClockSetting"),
+]
+
+
+def throttle_reasons(samples: list[dict]) -> str:
+    """The distinct set of reasons seen across the run, not per sample.
+
+    Per sample it would be a column of near-identical hex; what a reader needs is
+    whether the run ever ran under a cap. Empty when no sample carried the field,
+    which is how runs recorded before 2026-08-23 read.
+    """
+    masks = [s["throttle"] for s in samples if s.get("throttle") is not None]
+    if not masks:
+        return ""
+    seen: list[str] = []
+    for mask in masks:
+        rest = mask
+        for bit, name in THROTTLE_BITS:
+            if mask & bit:
+                rest &= ~bit
+                if name not in seen:
+                    seen.append(name)
+        if rest and f"0x{rest:x}" not in seen:
+            seen.append(f"0x{rest:x}")
+    return ", ".join(seen) if seen else "none"
+
+
+def vram_headroom(samples: list[dict]) -> int | None:
+    """MiB still free at the run's peak usage. The number -ngl is tuned against."""
+    usable = [s for s in samples if s.get("mem_total")]
+    if not usable:
+        return None
+    return min(s["mem_total"] - s["mem_used"] for s in usable)
+
+
 def gpu_summary_row(samples: list[dict], started: str, duration: str,
                     build: str) -> list[str]:
     def avg_max(key: str, digits: int = 0) -> str:
         vals = [s[key] for s in samples]
         return f"{mean(vals):.{digits}f}/{max(vals):.{digits}f}"
 
+    def pcts(key: str, digits: int = 0, with_max: bool = False) -> str:
+        vals = [s[key] for s in samples]
+        out = f"{percentile(vals, 0.50):.{digits}f}/{percentile(vals, 0.95):.{digits}f}"
+        return (out + f"/{max(vals):.{digits}f}") if with_max else out
+
+    # Utilization averaged over the samples that saw work. The plain average is
+    # dominated by the idle gaps between requests -- a run can show 14% mean
+    # utilization and still have been at 95% whenever it was answering.
+    active = [s["util"] for s in samples if s["util"] > 0]
+    headroom = vram_headroom(samples)
+
     return [started, duration, str(len(samples)), build,
             avg_max("temp"), avg_max("util"), avg_max("mem_used"),
-            avg_max("power", 1), f"{mean([s['sm'] for s in samples]):.0f}"]
+            avg_max("power", 1), f"{mean([s['sm'] for s in samples]):.0f}",
+            pcts("util"), f"{mean(active):.0f}" if active else "0",
+            pcts("power", 1), pcts("sm", 0, with_max=True),
+            "" if headroom is None else str(headroom),
+            throttle_reasons(samples)]
+
+
+def draft_depth(config_lines: list[str]) -> int | None:
+    """--spec-draft-n-max from the serving flags, or None when not speculating.
+
+    Needed because a request's timings carry draft_n and draft_n_accepted but not
+    the number of verification steps (build 10597 keeps n_draft_verif_steps in
+    server_slot_stats and exposes it only through /metrics, not through the
+    per-request timings: tools/server/server-common.cpp:81-84).
+    """
+    spec = next((line.split(":", 1)[1] for line in config_lines
+                 if line.strip().startswith("speculative:")), "")
+    hit = re.search(r"--spec-draft-n-max\s+(\d+)", spec)
+    return int(hit.group(1)) if hit else None
+
+
+def acceptance(drafted: float, accepted: float) -> str:
+    """Accepted fraction of the tokens the draft head proposed."""
+    return f"{accepted / drafted:.3f}" if drafted else ""
+
+
+def mean_len(drafted: float, accepted: float, n_max: int | None) -> str:
+    """Mean accepted length per verification step: llama.cpp's 1 + accepted/steps.
+
+    Derived, not reported: steps are inferred as drafted/n_max, which is exact
+    while every step drafts the full depth. That holds for the profiles here
+    (draft-mtp with p_min = 0 never returns a short draft), and is why the number
+    is worth having; it stops being exact if a future profile sets --spec-p-min,
+    and the /metrics row beside it carries the server's own exact figure.
+    """
+    if not drafted or not n_max:
+        return ""
+    steps = drafted / n_max
+    return f"{1 + accepted / steps:.3f}" if steps else ""
 
 
 def is_cold(rec: dict) -> bool:
@@ -231,7 +359,8 @@ def is_cold(rec: dict) -> bool:
     return not (rec.get("timings", {}).get("cache_n") or 0)
 
 
-def request_summary_row(requests: list[dict], started: str) -> list[str]:
+def request_summary_row(requests: list[dict], started: str,
+                        n_max: int | None = None) -> list[str]:
     """The per-run request statistics.
 
     Prompt figures come from cold requests only (see REQUEST_SUMMARY_COLUMNS); warm
@@ -268,16 +397,20 @@ def request_summary_row(requests: list[dict], started: str) -> list[str]:
     if sum(c_ms) > 0:
         cold_rate = f"{sum(c_tok) / (sum(c_ms) / 1000):.2f}"
 
+    drafted, accepted = sum(field(requests, "draft_n")), \
+        sum(field(requests, "draft_n_accepted"))
+
     return [started, str(len(requests)), str(len(cold)), str(len(warm)),
             toks(c_tok), toks(c_tok, avg=True),
             secs(c_ms), secs(c_ms, avg=True), cold_rate,
             toks(w_cached, avg=True), toks(w_tok, avg=True), secs(w_ms, avg=True),
             toks(out_tok), toks(out_tok, avg=True),
             secs(out_ms), secs(out_ms, avg=True),
-            secs(e2e_ms), secs(e2e_ms, avg=True)]
+            secs(e2e_ms), secs(e2e_ms, avg=True),
+            acceptance(drafted, accepted), mean_len(drafted, accepted, n_max)]
 
 
-def request_row(rec: dict) -> list[str]:
+def request_row(rec: dict, n_max: int | None = None) -> list[str]:
     t = rec.get("timings", {})
 
     def num(key: str, digits: int = 2) -> str:
@@ -287,13 +420,17 @@ def request_row(rec: dict) -> list[str]:
         return f"{v:.{digits}f}" if isinstance(v, float) else str(v)
 
     wall = rec.get("wall_ms")
+    # Blank rather than zero when nothing was drafted: a run without speculative
+    # decoding has no acceptance rate, and 0.000 would read as a bad one.
+    drafted, accepted = t.get("draft_n") or 0, t.get("draft_n_accepted") or 0
     return [rec.get("timestamp", "?"), rec.get("prompt", "?"), rec.get("model", "?"),
             num("cache_n"), num("prompt_n"), num("prompt_ms"),
             num("prompt_per_token_ms"), num("prompt_per_second"),
             num("predicted_n"), num("predicted_ms"),
             num("predicted_per_token_ms"), num("predicted_per_second"),
             num("draft_n"), num("draft_n_accepted"),
-            f"{wall:.0f}" if isinstance(wall, (int, float)) else "n/a"]
+            f"{wall:.0f}" if isinstance(wall, (int, float)) else "n/a",
+            acceptance(drafted, accepted), mean_len(drafted, accepted, n_max)]
 
 
 def server_summary_row(delta: dict, started: str) -> list[str]:
@@ -319,11 +456,19 @@ def server_summary_row(delta: dict, started: str) -> list[str]:
     p_sec = delta["prompt_seconds_total"]
     o_tok = delta["tokens_predicted_total"]
     o_sec = delta["tokens_predicted_seconds_total"]
+    # Unlike the llama-test table, mean_len here is the server's own arithmetic:
+    # spec_decode_num_drafts_total counts verification steps
+    # (tools/server/server-task.cpp:1560-1565), so nothing has to be inferred.
+    drafted = delta["spec_decode_num_draft_tokens_total"]
+    accepted = delta["spec_decode_num_accepted_tokens_total"]
+    steps = delta["spec_decode_num_drafts_total"]
     return [started, f"{p_tok:.0f}", f"{delta['prompt_tokens_cached_total']:.0f}",
             f"{p_sec:.1f}", rate(p_tok, p_sec),
             f"{o_tok:.0f}", f"{o_sec:.1f}", rate(o_tok, o_sec),
-            f"{delta['spec_decode_num_draft_tokens_total']:.0f}",
-            f"{delta['spec_decode_num_accepted_tokens_total']:.0f}"]
+            f"{drafted:.0f}", f"{accepted:.0f}",
+            f"{steps:.0f}" if steps else "",
+            acceptance(drafted, accepted),
+            f"{1 + accepted / steps:.3f}" if steps else ""]
 
 
 # ---------------------------------------------------------------------------
@@ -443,7 +588,8 @@ def mtp_head(msgs: list[str]) -> str:
             f"{'used by draft-mtp' if used else 'ignored'}")
 
 
-def parse_server_log(path: Path | None, ngl: str | None) -> list[str] | None:
+def parse_server_log(path: Path | None, ngl: str | None,
+                     headroom: int | None = None) -> list[str] | None:
     """The "load log:" group, or None when there is no log to read.
 
     None means the run was recorded without one -- a hand-started server, or
@@ -468,9 +614,11 @@ def parse_server_log(path: Path | None, ngl: str | None) -> list[str] | None:
 
     # The split the loader reports, not the one -ngl asked for. -ngl is a ceiling:
     # it is clamped to what fits and counts the output layer, so the two disagree.
+    gpu_layers = None
     split = _first(msgs, r"load_tensors: offloaded (\d+)/(\d+) layers to GPU")
     if split:
         gpu, total = int(split.group(1)), int(split.group(2))
+        gpu_layers = gpu
         offload = f"{gpu}/{total} on GPU | cpu-resident: {total - gpu}"
     elif n_layer is not None and ngl and ngl.isdigit():
         # llama.cpp counts the output layer alongside the blocks, so its
@@ -498,11 +646,29 @@ def parse_server_log(path: Path | None, ngl: str | None) -> list[str] | None:
 
     bufs = []
     seen = set()
+    cuda_mib = None
     for m in msgs:
         hit = re.search(r"load_tensors:\s+(\S+) model buffer size =\s+([\d.]+) MiB", m)
         if hit and hit.group(1) not in seen:
             seen.add(hit.group(1))
             bufs.append(f"{hit.group(1)} {hit.group(2)} MiB")
+            if hit.group(1).startswith("CUDA") and cuda_mib is None:
+                cuda_mib = float(hit.group(2))
+
+    # What the headroom is worth in the unit -ngl is tuned in. The per-layer cost
+    # is this model's own GPU-resident weights divided by the layers that got
+    # there, so it needs no assumption about the file's layout -- but it is still
+    # an average: the output head and the last block are not the size of a
+    # repeating block, and the KV cache grows with them.
+    if headroom is None:
+        head_line = f"vram headroom: {UNAVAILABLE}"
+    else:
+        head_line = f"vram headroom: {headroom} MiB free at peak"
+        if cuda_mib and gpu_layers:
+            per_layer = cuda_mib / gpu_layers
+            head_line += (f" | ~{headroom / per_layer:.1f} more layers"
+                          f" at {per_layer:.1f} MiB/layer avg"
+                          f" ({cuda_mib:.2f} MiB / {gpu_layers} layers)")
 
     verdict, warnings = fused_ops(msgs)
     deprecated = list(dict.fromkeys(m for m in msgs if "DEPRECATED" in m))
@@ -511,6 +677,7 @@ def parse_server_log(path: Path | None, ngl: str | None) -> list[str] | None:
         f"  layers: {layers} | offloaded: {offload}",
         f"  {slot_line}",
         f"  model buffers: {' | '.join(bufs) if bufs else UNAVAILABLE}",
+        f"  {head_line}",
         f"  fused_gdn: {verdict}",
         f"  mtp head: {mtp_head(msgs)}",
         f"  unused tensors: {unused_tensors(msgs)}",
@@ -554,6 +721,36 @@ def render_params(requests: list[dict]) -> list[str] | None:
 # ---------------------------------------------------------------------------
 # log file structure
 # ---------------------------------------------------------------------------
+# MiB of VRAM that must stay free at a run's peak before the block says so. The
+# cliff is one layer wide on this hardware: the run below the threshold still
+# completed, and the next -ngl will not.
+HEADROOM_WARN_MIB = int(os.environ.get("LLAMA_VRAM_HEADROOM_MIB", "300") or 300)
+
+
+def headroom_warnings(rows: list[list[str]]) -> list[str]:
+    """Runs of this configuration that finished close to full VRAM.
+
+    Read back out of the rendered table rather than kept as state, so a block
+    warns about every run it holds, including ones merged before the threshold
+    was what it is now. Rows without the column -- anything recorded before
+    2026-08-23 -- are silently skipped rather than assumed safe.
+    """
+    try:
+        col = GPU_SUMMARY_COLUMNS.index("vram headroom (MiB)")
+    except ValueError:                                  # pragma: no cover
+        return []
+    out = []
+    for row in rows:
+        if len(row) <= col or not row[col].strip().isdigit():
+            continue
+        free = int(row[col].strip())
+        if free < HEADROOM_WARN_MIB:
+            out.append(f"> warning: run {row[0]} peaked at {free} MiB of free "
+                       f"VRAM, under the {HEADROOM_WARN_MIB} MiB threshold "
+                       f"(LLAMA_VRAM_HEADROOM_MIB).")
+    return out
+
+
 def split_groups(lines: list[str]) -> tuple[list[str], dict[str, list[str]]]:
     """A block's header lines as (ungrouped, {group header: indented lines}).
 
@@ -612,6 +809,9 @@ class Block:
         out += self.config_lines
         out += ["", "### previous runs"]
         out += render_table(GPU_SUMMARY_COLUMNS, self.gpu_summary)
+        warnings = headroom_warnings(self.gpu_summary)
+        if warnings:
+            out += [""] + warnings
         if self.request_summary:
             out += ["", "### previous runs - requests"]
             out += render_table(REQUEST_SUMMARY_COLUMNS, self.request_summary)
@@ -697,14 +897,15 @@ def parse_block(lines: list[str]) -> Block | None:
 
 
 def render_latest(started: str, build: str, samples: list[dict],
-                  requests: list[dict]) -> list[str]:
+                  requests: list[dict], n_max: int | None = None) -> list[str]:
     out = [f"### latest run - {started} (build {build})"]
     out += render_table(GPU_SAMPLE_COLUMNS,
                         [[s["timestamp"], s["temp"], s["util"], s["mem_used"],
                           s["mem_total"], s["power"], s["sm"]] for s in samples])
     if requests:
         out += ["", f"#### requests - {started}"]
-        out += render_table(REQUEST_COLUMNS, [request_row(r) for r in requests])
+        out += render_table(REQUEST_COLUMNS,
+                            [request_row(r, n_max) for r in requests])
     return out
 
 
@@ -721,11 +922,19 @@ def read_samples(path: Path) -> list[dict]:
         if len(f) < 7:
             continue
         try:
-            samples.append({"timestamp": f[0], "temp": int(f[1]), "util": int(f[2]),
-                            "mem_used": int(f[3]), "mem_total": int(f[4]),
-                            "power": float(f[5]), "sm": int(f[6])})
+            sample = {"timestamp": f[0], "temp": int(f[1]), "util": int(f[2]),
+                      "mem_used": int(f[3]), "mem_total": int(f[4]),
+                      "power": float(f[5]), "sm": int(f[6]), "throttle": None}
         except ValueError:
             continue
+        # The throttle bitmask is the eighth field, added 2026-08-23. Samples
+        # written before it have seven, and are read as before.
+        if len(f) > 7:
+            try:
+                sample["throttle"] = int(f[7].strip(), 16)
+            except ValueError:
+                pass
+        samples.append(sample)
     return samples
 
 
@@ -848,20 +1057,22 @@ def cmd_merge(args: argparse.Namespace) -> int:
     if params:
         groups[GROUP_REQUEST] = params
     load = parse_server_log(_path(payload.get("server_log")),
-                            config_value(payload["config_lines"], "ngl"))
+                            config_value(payload["config_lines"], "ngl"),
+                            vram_headroom(samples))
     if load:
         groups[GROUP_LOAD] = load
     # pre is dropped rather than carried: a block written before the grouping has
     # its flat lines re-rendered under "server flags:", which is where they belong.
     block.config_lines = join_groups([], groups)
 
+    n_max = draft_depth(payload["config_lines"])
     block.gpu_summary.append(
         gpu_summary_row(samples, started, payload["duration"], build))
     if requests:
-        block.request_summary.append(request_summary_row(requests, started))
+        block.request_summary.append(request_summary_row(requests, started, n_max))
     if delta:
         block.server_summary.append(server_summary_row(delta, started))
-    block.latest = render_latest(started, build, samples, requests)
+    block.latest = render_latest(started, build, samples, requests, n_max)
 
     # Header notes sort below the model/quant title lines and survive re-parsing,
     # which strips the blank line between them.

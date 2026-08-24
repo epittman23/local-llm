@@ -64,8 +64,10 @@ run also records GPU telemetry via `scripts/llama-vram-log.sh` into
 `llama-test` request, the server's own `/metrics` totals for the run, the
 parameters `llama-test` actually put in its request bodies, and what the
 server's load log said about the model it loaded (layer split, slot
-configuration, fused kernels, ignored tensors, warnings);
-`scripts/llama_log.py` assembles those files. README.md documents each function
+configuration, fused kernels, ignored tensors, warnings). Per-run GPU
+statistics are distributional (p50/p95, an active-only utilization average,
+minimum free VRAM, and the throttle reasons observed), since the mean over a
+mostly-idle server says little; `scripts/llama_log.py` assembles those files. README.md documents each function
 and records the measured numbers.
 
 Current measured performance: ~7 to 8 tokens/s generation and ~72 to 78
@@ -166,6 +168,43 @@ or agent) updates the docs in the same commit:
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-08-23** (latest): Run summaries gained distribution, not just means.
+  The GPU table now carries p50/p95 for utilization and power, p50/p95/max for
+  SM clock, a `util active avg` over the samples with non-zero utilization, the
+  run's minimum free VRAM as `vram headroom (MiB)`, and the distinct set of
+  `clocks_throttle_reasons.active` bits seen over the run. Percentiles were
+  added because the mean was misleading in a specific way: sampling covers the
+  whole life of the server, so a run that spent 32 s of 92 s serving logged
+  `util avg/max = 1/9` and looked idle. The active-only average is the number to
+  compare between configurations; the raw average still measures how much of a
+  session was spent waiting for a prompt. Throttle reasons are recorded per run
+  rather than per sample -- per sample they would be a column of identical hex,
+  and what matters is whether a limit was ever hit while a measurement was
+  taken. `GpuIdle` is expected here and is not a fault; the thermal and power
+  bits are what invalidate a comparison. Bits without a documented name are
+  printed as hex rather than guessed at. Headroom is warned about inline (a
+  `> warning:` line naming the run, under `LLAMA_VRAM_HEADROOM_MIB`, default
+  300) because the whole point of the `-ngl` sweep on this card is finding the
+  layer count just below the spill cliff, and a run that fit with 40 MiB to
+  spare is a result that will not reproduce after a context-size change. The
+  `load log:` group converts headroom into layers using the model's own
+  GPU-resident bytes divided by the layers that got there, which is an average
+  over unequal layers (the output head and `blk.64` are pinned by `-ot` and are
+  not block-sized), so it is a hypothesis to test with a run, not a number to
+  plan around. Speculative decoding gained `acceptance` and `mean_len` in both
+  request tables; they are blank rather than zero when nothing was drafted, so
+  a non-speculative configuration is visibly not a 0% one. `mean_len` in the
+  `llama-test` tables is derived -- build 10597 keeps `n_draft_verif_steps` in
+  the slot's stats and exposes it only through `/metrics`
+  (`tools/server/server-task.cpp:1560`), never in a response's `timings`
+  (`tools/server/server-common.cpp:81`) -- so steps are inferred as
+  `draft_n / --spec-draft-n-max`, which is exact only while every step drafts
+  the full depth. `draft-mtp` at `p_min = 0` does, and the server log states
+  `n_max=2, n_min=0, p_min=0.00` at load; the `server totals` row beside it now
+  scrapes `spec_decode_num_drafts_total` and carries the server's exact figure,
+  which is the one to believe if they ever disagree. All four tables were
+  extended by appending columns only, so historical rows keep their meaning
+  positionally and are padded on re-render rather than migrated.
 - **2026-08-23** (later still): A log block's header is now three groups, and
   two of them are not fingerprinted. `server flags:` is the old config lines
   unchanged -- same text, so every existing `config-id` is preserved -- and is

@@ -255,10 +255,10 @@ A block then holds four tables:
 
 | section | one row per | contents |
 | --- | --- | --- |
-| `### previous runs` | run | start, duration, sample count, build, avg/max temperature, utilization, memory used, power, SM clock |
+| `### previous runs` | run | start, duration, sample count, build, avg/max temperature, utilization, memory used, power, SM clock; then p50/p95 utilization, active-only average utilization, p50/p95 power, p50/p95/max SM clock, VRAM headroom, and the throttle reasons seen |
 | `### previous runs - requests` | run | requests split into cold and warm, then **cold-only** total/avg prompt tokens, total/avg prompt parse seconds and prompt t/s; warm avg cached tokens, prompt tokens and prompt seconds; total/avg output tokens, total/avg output seconds, total/avg end-to-end seconds |
-| `### previous runs - server totals` | run | `/metrics` deltas: prompt tokens, cached prompt tokens, prompt seconds, prompt t/s, output tokens, output seconds, output t/s, draft tokens, draft tokens accepted |
-| `### latest run` + `#### requests` | sample / request | every GPU sample, and every `llama-test` request with llama.cpp's raw `timings` fields as columns (`cache_n`, `prompt_n`, `prompt_ms`, `prompt_per_token_ms`, `prompt_per_second`, `predicted_n`, `predicted_ms`, `predicted_per_token_ms`, `predicted_per_second`, `draft_n`, `draft_n_accepted`) plus the measured wall clock |
+| `### previous runs - server totals` | run | `/metrics` deltas: prompt tokens, cached prompt tokens, prompt seconds, prompt t/s, output tokens, output seconds, output t/s, draft tokens, draft tokens accepted, verification steps, acceptance, mean accepted length |
+| `### latest run` + `#### requests` | sample / request | every GPU sample, and every `llama-test` request with llama.cpp's raw `timings` fields as columns (`cache_n`, `prompt_n`, `prompt_ms`, `prompt_per_token_ms`, `prompt_per_second`, `predicted_n`, `predicted_ms`, `predicted_per_token_ms`, `predicted_per_second`, `draft_n`, `draft_n_accepted`) plus the measured wall clock, acceptance and mean accepted length |
 
 The two throughput tables come from different places on purpose, and will not
 agree:
@@ -274,6 +274,44 @@ agree:
   baseline is taken when `/metrics` first answers, which is after the model
   finishes loading rather than when the port opens — the endpoint returns 503
   until then.
+
+**Utilization has two averages, and they answer different questions.** Sampling
+runs for the life of the server, so an idle server drags the mean toward zero: a
+recorded `qwen38` run that spent 32 s of its 92 s answering two prompts logs
+`util avg/max` of `1/9`. `util active avg` averages only the samples that saw
+work, and `util p50/p95` say which of the two states the run mostly sat in. Note
+that even the busy samples are low here — the CPU-resident layers are the
+bottleneck during generation and the GPU spends most of a token waiting, so a
+small `util active avg` is the expected reading, not a sign of a stalled run.
+
+**VRAM headroom is a first-class column.** `vram headroom (MiB)` is what was
+still free at the run's peak, and the block prints a `> warning:` line naming any
+run that finished under `LLAMA_VRAM_HEADROOM_MIB` (default 300). The `load log:`
+group converts it into the unit `-ngl` is tuned in — how many more layers would
+fit, at this model's own GPU-resident bytes divided by the layers that got there.
+That per-layer figure is an average: the output head and the final block are not
+the size of a repeating block, and the KV cache grows alongside them, so treat a
+prediction of one more layer as a thing to test, not a thing to assume.
+
+**Throttle reasons are recorded per run, not per sample.** The recorder queries
+`clocks_throttle_reasons.active`; the log lists the distinct set decoded across
+the run, because per sample it would be a column of near-identical hex. `GpuIdle`
+is not a fault — it is set whenever the GPU has nothing to do, which here is most
+of a run. `SwPowerCap`, `SwThermalSlowdown` and `HwThermalSlowdown` are the ones
+that mean a measurement was taken under a limit and is not comparable with one
+that was not. Undocumented bits are printed as hex rather than guessed at.
+
+**Speculative decoding gets `acceptance` and `mean_len`.** `acceptance` is
+`draft_n_accepted / draft_n`; `mean_len` is llama.cpp's mean accepted length per
+verification step, `1 + accepted/steps`. Both are blank, not zero, when nothing
+was drafted. In the `llama-test` tables `mean_len` is *derived*: a request's
+`timings` carry `draft_n` and `draft_n_accepted` but not the step count (build
+10597 keeps `n_draft_verif_steps` in the slot's stats and exposes it only through
+`/metrics`), so steps are inferred as `draft_n / --spec-draft-n-max`. That is
+exact while every step drafts the full depth, which `draft-mtp` at `p_min = 0`
+always does. The `server totals` row beside it carries the server's own exact
+figure from `spec_decode_num_drafts_total`, which is the one to trust if they
+ever disagree.
 
 **Cold and warm prefills are never blended.** `cache_n` is the number of prompt
 tokens llama.cpp took from its cache instead of processing; any request with
