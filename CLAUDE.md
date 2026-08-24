@@ -56,7 +56,9 @@ layers (`-ngl 99`) but keeps the MoE expert tensors of 34 layers in system RAM
 64K of context. Serving and benchmarking helpers live in
 `scripts/llama-env.sh` (sourced from `~/.bashrc`), which groups settings into
 per-model profiles (`qwen36` MoE, `qwen38` dense) rather than loose env vars;
-`llama-serve` starts them and `llama-qwen` remains as an alias. Every serving
+`llama-serve` starts them and `llama-qwen` remains as an alias. Every profile
+serves one server slot (`--parallel 1`, `LLAMA_PARALLEL` to override), passed
+unconditionally rather than as part of any other flag group. Every serving
 run also records GPU telemetry via `scripts/llama-vram-log.sh` into
 `logs/<model>-<quant>.log` (gitignored), alongside the throughput of every
 `llama-test` request and the server's own `/metrics` totals for the run;
@@ -161,6 +163,29 @@ or agent) updates the docs in the same commit:
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-08-23**: `--parallel 1` moved out of `qwen38`'s speculative flags into
+  its own profile variable (`LLAMA_P_PARALLEL`, default 1, override
+  `LLAMA_PARALLEL`) and is now always passed by `llama-serve`. Bundled with
+  `--spec-type draft-mtp ...`, it disappeared whenever `LLAMA_SPEC=off` dropped
+  those flags — and omitting `--parallel` is not the same as passing 1:
+  llama-server defaults it to `-1` (auto), which resolves to 4 slots with
+  `kv_unified = true` (build 10597, `common/arg.cpp:1400`,
+  `tools/server/server.cpp:152-155`). Every non-speculative baseline therefore
+  ran a different attention/KV configuration from the speculative run it was
+  meant to be the baseline for, measured at 15.63 t/s prompt processing at
+  `n_slots = 4` against 26.38 t/s at `n_slots = 1`. Consequence: the MTP
+  measurement logged below still has no valid baseline, and any
+  speculative-vs-plain comparison made before this date should be discarded,
+  not adjusted. Checked rather than assumed while fixing this: `-c` is the
+  *total* context, which non-unified slots divide between them
+  (`src/llama-context.cpp:291-301`), so the old auto path was not "4x the KV
+  cache" — it was 4 slots sharing one unified cache of the same size. Passing
+  `--parallel` inside `LLAMA_SPEC` is now refused outright, since it would be
+  sent twice and recorded wrong. `--parallel` also joined the telemetry
+  `config-id` fingerprint, which by construction changes every existing id;
+  `scripts/llama_log.py` now writes a dated note into each log file's header
+  saying so, and a block with no `parallel:` line is one whose slot count was
+  never recorded.
 - **2026-08-23**: Serving logs now record throughput, not just GPU telemetry.
   Each configuration block gained `### previous runs - requests` (per-run
   totals and averages over the `llama-test` requests made during that run:

@@ -60,7 +60,7 @@ _llama_profile() {
     # Reset so a previous profile cannot leak flags into this one.
     LLAMA_P_NAME=""; LLAMA_P_ARCH=""; LLAMA_P_MODEL=""; LLAMA_P_REPO=""
     LLAMA_P_PATTERN=""; LLAMA_P_ALIAS=""; LLAMA_P_CTX=""; LLAMA_P_THREADS=""
-    LLAMA_P_NGL=""; LLAMA_P_MOE=""; LLAMA_P_OT=""
+    LLAMA_P_NGL=""; LLAMA_P_MOE=""; LLAMA_P_OT=""; LLAMA_P_PARALLEL=""
     LLAMA_P_SPEC=(); LLAMA_P_SAMPLERS=(); LLAMA_P_EXTRA=()
 
     case "$p" in
@@ -101,9 +101,9 @@ _llama_profile() {
             # carry qwen35.nextn_predict_layers=1 and blk.64.nextn.* tensors,
             # so no separate draft model is needed. That head sits in blk.64,
             # which -ot above already pins to the GPU. n-max 2 is conservative:
-            # rejected drafts cost real compute on a CPU-bound model. One server
-            # slot because drafting and batched slots contend for the same GPU.
-            LLAMA_P_SPEC=(--spec-type draft-mtp --spec-draft-n-max 2 --parallel 1)
+            # rejected drafts cost real compute on a CPU-bound model. The slot
+            # count is NOT set here; see LLAMA_P_PARALLEL below for why.
+            LLAMA_P_SPEC=(--spec-type draft-mtp --spec-draft-n-max 2)
             # Qwen3.8 thinking-mode recommended sampling.
             LLAMA_P_SAMPLERS=(--temp 1.0 --top-p 0.95 --top-k 20 --min-p 0.0)
             # xhigh is the model default and is punishing at 3-4 t/s.
@@ -118,6 +118,16 @@ _llama_profile() {
             ;;
     esac
 
+    # Server slots, always passed. This must never live in LLAMA_P_SPEC, because
+    # dropping the speculative flags would drop the slot count with them. Omitting
+    # --parallel is not "the default 1": llama-server defaults it to -1 = auto,
+    # and auto means 4 slots *and* kv_unified = true (llama.cpp build 10597:
+    # common/arg.cpp:1400, tools/server/server.cpp:152-155). So an LLAMA_SPEC=off
+    # run without this would serve a different attention/KV configuration than the
+    # speculative run it is supposed to be the baseline for -- measured here as
+    # 15.63 t/s prefill at n_slots=4 against 26.38 t/s at n_slots=1.
+    : "${LLAMA_P_PARALLEL:=1}"
+
     # Environment overrides win over profile defaults.
     [[ -n "${LLAMA_MODEL:-}"   ]] && LLAMA_P_MODEL="$LLAMA_MODEL"
     [[ -n "${LLAMA_CTX:-}"     ]] && LLAMA_P_CTX="$LLAMA_CTX"
@@ -125,6 +135,7 @@ _llama_profile() {
     [[ -n "${LLAMA_NGL:-}"     ]] && LLAMA_P_NGL="$LLAMA_NGL"
     [[ -n "${LLAMA_MOE:-}"     ]] && LLAMA_P_MOE="$LLAMA_MOE"
     [[ -n "${LLAMA_OT:-}"      ]] && LLAMA_P_OT="$LLAMA_OT"
+    [[ -n "${LLAMA_PARALLEL:-}" ]] && LLAMA_P_PARALLEL="$LLAMA_PARALLEL"
     # LLAMA_SPEC replaces the profile's speculative-decoding flags wholesale;
     # LLAMA_SPEC=off turns them off, which is the A/B this exists for.
     if [[ -n "${LLAMA_SPEC+x}" ]]; then
@@ -133,6 +144,14 @@ _llama_profile() {
         else
             read -ra LLAMA_P_SPEC <<< "$LLAMA_SPEC"
         fi
+    fi
+
+    # Guard rail: --parallel via LLAMA_SPEC would be passed twice and would be
+    # recorded as the profile's slot count rather than the served one, which is
+    # the exact confusion LLAMA_P_PARALLEL exists to end.
+    if [[ " ${LLAMA_P_SPEC[*]:-} " == *" --parallel "* ]]; then
+        echo "llama: --parallel does not belong in LLAMA_SPEC; use LLAMA_PARALLEL=N" >&2
+        return 1
     fi
 
     # Guard rail: refuse to pass an MoE-only flag to a dense model.
@@ -217,7 +236,7 @@ llama-serve() {
     local -a args=(
         -m "$LLAMA_P_MODEL"
         -ngl "$LLAMA_P_NGL"
-        -c "$LLAMA_P_CTX"
+        -c "$LLAMA_P_CTX"       # total context; slots split it unless kv_unified
         -t "$LLAMA_P_THREADS"
         --cache-type-k q8_0
         --cache-type-v q8_0
@@ -225,6 +244,7 @@ llama-serve() {
         --ubatch-size 512
         --jinja
         --metrics
+        --parallel "$LLAMA_P_PARALLEL"
         --alias "$LLAMA_P_ALIAS"
         --host "$LLAMA_HOST"
         --port "$LLAMA_PORT"
@@ -242,7 +262,7 @@ llama-serve() {
     [[ ${#LLAMA_P_SAMPLERS[@]} -gt 0 ]] && args+=("${LLAMA_P_SAMPLERS[@]}")
     [[ ${#LLAMA_P_EXTRA[@]}    -gt 0 ]] && args+=("${LLAMA_P_EXTRA[@]}")
 
-    echo "llama-serve: profile=$LLAMA_P_NAME arch=$LLAMA_P_ARCH ngl=$LLAMA_P_NGL${LLAMA_P_MOE:+ moe=$LLAMA_P_MOE}${LLAMA_P_OT:+ ot=$LLAMA_P_OT} ctx=$LLAMA_P_CTX threads=$LLAMA_P_THREADS port=$LLAMA_PORT${LLAMA_P_SPEC:+ spec=\"${LLAMA_P_SPEC[*]}\"}" >&2
+    echo "llama-serve: profile=$LLAMA_P_NAME arch=$LLAMA_P_ARCH ngl=$LLAMA_P_NGL${LLAMA_P_MOE:+ moe=$LLAMA_P_MOE}${LLAMA_P_OT:+ ot=$LLAMA_P_OT} ctx=$LLAMA_P_CTX threads=$LLAMA_P_THREADS parallel=$LLAMA_P_PARALLEL port=$LLAMA_PORT${LLAMA_P_SPEC:+ spec=\"${LLAMA_P_SPEC[*]}\"}" >&2
 
     if [[ "$LLAMA_P_ARCH" == "dense" ]]; then
         echo "llama-serve: dense model. Watch 'n_layer' in the load log and confirm" >&2

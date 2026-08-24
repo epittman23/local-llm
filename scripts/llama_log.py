@@ -46,6 +46,20 @@ from pathlib import Path
 # which is the right outcome for a server someone started by hand.
 ACTIVE_MARKER = ".active-run.json"
 
+# Notes kept in every log file's header. A config-id is a hash of the configuration
+# lines, so changing what those lines contain changes every id, and blocks recorded
+# on either side of such a change are not the same configuration even when they look
+# alike. Each entry here records one such change, so a log read months later says so
+# on its face. Append; never edit or reorder.
+HEADER_NOTES = [
+    "note 2026-08-23: --parallel entered the config-id fingerprint (and the config "
+    "lines). Before this, llama-serve passed it only as part of the speculative "
+    "flags, so runs with speculation off omitted it entirely -- and omitting it is "
+    "not 1 but auto, which llama-server resolves to 4 slots with kv_unified = true. "
+    "Blocks without a 'parallel:' line therefore ran with an unrecorded slot count, "
+    "and their config-ids are not comparable with ids recorded after this date.",
+]
+
 GPU_SAMPLE_COLUMNS = [
     "timestamp (UTC)", "temp (C)", "util (%)", "mem.used (MiB)",
     "mem.total (MiB)", "power (W)", "sm (MHz)",
@@ -473,7 +487,13 @@ def cmd_merge(args: argparse.Namespace) -> int:
         block.server_summary.append(server_summary_row(delta, started))
     block.latest = render_latest(started, build, samples, requests)
 
-    out = list(header)
+    # Header notes sort below the model/quant title lines and survive re-parsing,
+    # which strips the blank line between them.
+    notes = [h for h in header if h.startswith("note ")]
+    notes += [n for n in HEADER_NOTES if n not in notes]
+    out = [h for h in header if not h.startswith("note ")]
+    if notes:
+        out += [""] + notes
     for i, b in enumerate(blocks, start=1):
         out += ["", "---", ""] + b.render(i)
 

@@ -125,7 +125,7 @@ _vramlog_config() {
     fi
 
     VRAMLOG_CFG_LINES=(
-        "arch: $LLAMA_P_ARCH | ngl: $LLAMA_P_NGL | ctx: $LLAMA_P_CTX | threads: $LLAMA_P_THREADS | moe: ${LLAMA_P_MOE:-n/a}"
+        "arch: $LLAMA_P_ARCH | ngl: $LLAMA_P_NGL | ctx: $LLAMA_P_CTX (total) | parallel: ${LLAMA_P_PARALLEL:-1} | threads: $LLAMA_P_THREADS | moe: ${LLAMA_P_MOE:-n/a}"
         "override-tensors: ${LLAMA_P_OT:-n/a}"
         "speculative: ${LLAMA_P_SPEC[*]:-off}"
         "cache: k=q8_0 v=q8_0 | fa: $fa | batch: 512 | ubatch: 512"

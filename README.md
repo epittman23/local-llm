@@ -71,10 +71,10 @@ It can also be invoked directly without sourcing:
 Serving settings are grouped into profiles rather than scattered across env
 vars. `llama-profiles` lists them and shows whether the weights are on disk:
 
-| profile | arch  | model                             | ctx   | threads | ngl | n-cpu-moe | override-tensors                         |
-| ------- | ----- | --------------------------------- | ----- | ------: | --: | --------: | ---------------------------------------- |
-| qwen36  | MoE   | `Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf` | 65536 |       6 |  99 |        34 | n/a                                      |
-| qwen38  | dense | `Qwen3.8-27B-UD-Q3_K_XL.gguf`     | 16384 |      12 |  20 |       n/a | `output\.weight`, `blk\.64\..*` -> CUDA0 |
+| profile | arch  | model                             | ctx   | threads | ngl | slots | n-cpu-moe | override-tensors                         |
+| ------- | ----- | --------------------------------- | ----- | ------: | --: | ----: | --------: | ---------------------------------------- |
+| qwen36  | MoE   | `Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf` | 65536 |       6 |  99 |     1 |        34 | n/a                                      |
+| qwen38  | dense | `Qwen3.8-27B-UD-Q3_K_XL.gguf`     | 16384 |      12 |  20 |     1 |       n/a | `output\.weight`, `blk\.64\..*` -> CUDA0 |
 
 `qwen38`'s `-ngl 20` is a placeholder pending an `llama-sweep-ngl` run;
 `--n-cpu-moe` is MoE-only and the script refuses to pass it to a dense model.
@@ -85,24 +85,38 @@ same `-ot`, so its VRAM headroom matches what `llama-serve` will see. Override
 per run with `LLAMA_OT`.
 
 It additionally runs speculative decoding off the model's own multi-token
-prediction head (`--spec-type draft-mtp --spec-draft-n-max 2 --parallel 1`), so
+prediction head (`--spec-type draft-mtp --spec-draft-n-max 2`), so
 no separate draft model is needed: the weights carry
 `qwen35.nextn_predict_layers = 1` and `blk.64.nextn.*` tensors, and `-ot`
 already keeps that block on the GPU. A draft depth of 2 is deliberately
-conservative — rejected drafts cost real compute on a model this CPU-bound —
-and one server slot avoids batched slots contending with drafting for the GPU.
+conservative — rejected drafts cost real compute on a model this CPU-bound.
 `llama-test` reports `draft_n` and `draft_n_accepted` in its timings, which is
 the acceptance rate to judge it by. `LLAMA_SPEC=off llama-serve qwen38` turns
 it off for an A/B; `LLAMA_SPEC="<flags>"` replaces the flags wholesale.
 `qwen36` sets none of this: its weights are not on disk here, so its MTP
 support is unverified.
 
+Every profile serves with `--parallel 1` (one server slot), overridable with
+`LLAMA_PARALLEL`. This is passed unconditionally and independently of the
+speculative flags, because omitting `--parallel` is *not* the same as passing
+1: `llama-server` defaults it to `-1` (auto), and auto means **4 slots with
+`kv_unified = true`** (build 10597, `common/arg.cpp:1400` and
+`tools/server/server.cpp:152-155`). `-c` is the total context, which
+non-unified slots divide between them, so the slot count changes the attention
+and KV-cache configuration whether or not it changes capacity. Until
+2026-08-23 `--parallel 1` was bundled into `qwen38`'s speculative flags, so
+every `LLAMA_SPEC=off` baseline silently ran 4 unified slots — measured at
+15.63 t/s prompt processing against 26.38 t/s at one slot. Any comparison
+recorded before that date between a speculative run and a non-speculative one
+is invalid, in the direction that flatters speculation. Passing `--parallel`
+inside `LLAMA_SPEC` is refused for the same reason; use `LLAMA_PARALLEL`.
+
 The functions:
 
 - `llama-serve [profile] [args...]` : start `llama-server` on port 8090 (set
   `LLAMA_PORT` to change). One-off overrides: `LLAMA_MODEL`, `LLAMA_CTX`,
   `LLAMA_THREADS`, `LLAMA_NGL`, `LLAMA_MOE`, `LLAMA_OT`, `LLAMA_SPEC`,
-  `LLAMA_REASONING` (thinking
+  `LLAMA_PARALLEL` (server slots, default 1), `LLAMA_REASONING` (thinking
   effort for `qwen38`). Extra arguments pass through to `llama-server`.
   `llama-qwen` is a backwards-compatible alias. `--metrics` is always passed, so
   the run's server-wide token totals can be recorded; it does not affect
@@ -262,7 +276,10 @@ healthy rate for an MTP head. The throughput gain is nonetheless modest, and
 this is **not yet a clean A/B**: the only non-speculative measurement to hand
 (2.50 t/s) came from a server that also differed in `-ngl` (22) and had no
 `-ot`, and it produced a shorter completion. `LLAMA_SPEC=off llama-serve
-qwen38` followed by the same `llama-test` run is the comparison to make.
+qwen38` followed by the same `llama-test` run is the comparison to make — and
+before 2026-08-23 it would not have been valid either, because dropping the
+speculative flags also dropped `--parallel 1` and left the baseline serving 4
+unified slots (fixed 2026-08-23; see the slot-count paragraph above).
 
 Note the whole request took ~5.5 minutes: 958 tokens at ~2.9 t/s, most of them
 reasoning tokens emitted before any answer text. Generation here is bound by
