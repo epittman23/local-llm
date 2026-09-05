@@ -576,10 +576,14 @@ def calibrate(bench: str, adapter: dict, items: list[dict],
     for item in items:
         ref = reference_answer(adapter, item)
         iid = item_id(adapter, item)
+        # Counted before the early return, not after: `n_checked` is the pool
+        # this calibration covers and `n_checked - n_ungradeable` is read as the
+        # gradeable count, so an item that lands in `ungradeable_` without
+        # landing in `checked` makes that subtraction go negative.
+        checked += 1
         if ref is None:
             ungradeable_[iid] = "the dataset ships no reference solution"
             continue
-        checked += 1
         outcome, reason = grade(adapter, item, ref)
         if outcome != PASS:
             ungradeable_[iid] = f"{outcome}: {reason}"[:200]

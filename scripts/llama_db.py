@@ -422,11 +422,33 @@ NOTES_4 = [
      "presence on disk."),
 ]
 
+# No DDL again. config.samplers changed meaning on 2026-09-04 without the
+# schema moving: the parser that fills it was truncating the value, so rows
+# either side of the fix hold different things under the same column name. The
+# fingerprint is untouched, so no config_id changes and nothing becomes
+# incomparable -- but a column whose meaning shifts mid-table is exactly what
+# this table exists to explain.
+SCHEMA_5 = ""
+
+NOTES_5 = [
+    ("2026-09-04",
+     "config.samplers is truncated on every row written before 2026-09-04. "
+     "config_value() stopped at the first ' | ', and the recorded line is "
+     "'samplers: temp 1.0 | top-p 0.95 | ...', so the column holds the first "
+     "sampler alone ('temp 1.0') where it should hold the set. Rows written "
+     "after that date hold the full line. No config_id changed and no "
+     "measurement is affected: the fingerprint is computed in the shell over "
+     "config_text, which was always complete, and this column is written but "
+     "never read back. Read config_text, not this column, for a run that "
+     "predates the fix."),
+]
+
 MIGRATIONS: list[tuple[int, str, list[tuple[str, str]]]] = [
     (1, SCHEMA_1, NOTES_1),
     (2, SCHEMA_2, NOTES_2),
     (3, SCHEMA_3, NOTES_3),
     (4, SCHEMA_4, NOTES_4),
+    (5, SCHEMA_5, NOTES_5),
 ]
 
 

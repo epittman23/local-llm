@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -53,8 +54,13 @@ REPO = Path(__file__).resolve().parent.parent
 # ---------------------------------------------------------------------------
 # joining test results to the serving configuration that produced them
 # ---------------------------------------------------------------------------
-FLAG_KEYS = ["ngl", "parallel", "context", "threads", "n-cpu-moe", "batch",
-             "ubatch", "cache-type-k", "cache-type-v"]
+# These are the keys `_vramlog_config` writes, not the CLI spellings of the
+# flags behind them: `-c` is recorded as `ctx`, `--n-cpu-moe` as `moe`, and the
+# two cache types share one `cache: k=... v=...` line. A key that is not in the
+# recorded lines is read as absent, so naming a flag the way llama-server spells
+# it drops it silently -- and a dropped flag is one `differing()` cannot report,
+# which is the whole reason this list exists.
+FLAG_KEYS = ["ngl", "parallel", "ctx", "threads", "moe", "batch", "ubatch"]
 
 
 def flags_of(config_lines: list[str]) -> dict[str, str]:
@@ -64,6 +70,11 @@ def flags_of(config_lines: list[str]) -> dict[str, str]:
         value = config_value(config_lines, key)
         if value is not None:
             out[key] = value
+    cache = config_value(config_lines, "cache") or ""
+    for name, pattern in (("cache-k", r"k=(\S+)"), ("cache-v", r"v=(\S+)")):
+        hit = re.search(pattern, cache)
+        if hit:
+            out[name] = hit.group(1)
     out["spec"] = short_spec(config_value(config_lines, "speculative"))
     out["-ot"] = short_ot(config_value(config_lines, "override-tensors"))
     return out
@@ -279,7 +290,11 @@ def rows_for(groups: list[Group], blocks: dict[str, list[str]]) -> list[list[str
 def benchmark_rows(groups: list[Group]) -> tuple[list[str], list[list[str]]]:
     names = sorted({r.get("benchmark", "")
                     for g in groups for r in g.records if r.get("benchmark")})
-    columns = ["model", "config-id", "tier", "system"] + names + ["all"]
+    # Every field of the grouping key gets a column, "adapter" included: two
+    # rows differing only by adapter_sha are two different measurements, and a
+    # table that does not name the difference reads as a contradiction.
+    columns = (["model", "config-id", "tier", "system", "adapter"]
+               + names + ["all"])
     rows = []
     for g in sorted(groups, key=lambda x: -(x.rate()[2] or 0)):
         cells = [g.model, g.config_id, g.tier, g.system_label(),

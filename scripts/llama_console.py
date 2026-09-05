@@ -92,6 +92,12 @@ class Console_:
               styles: dict[int, str] | None = None) -> None:
         """Render a table. Plain output is the markdown llama_stats writes."""
         rows = [[("" if c is None else str(c)) for c in row] for row in rows]
+        # Same rule as the two markdown renderers: size to the widest row, so a
+        # miscounted column is a visibly unnamed one rather than an exception
+        # from Rich's add_row or an off-by-one index into a short row.
+        ncol = max([len(headers)] + [len(r) for r in rows])
+        headers = list(headers) + [""] * (ncol - len(headers))
+        rows = [r + [""] * (ncol - len(r)) for r in rows]
         if not self.rich:
             if title:
                 self.out(f"\n{title}")
@@ -144,11 +150,17 @@ def render_markdown_table(headers: list[str], rows: list[list[str]]) -> str:
     Reimplemented rather than imported so this module stays usable when
     llama_stats.py is not importable, which is the situation it exists for.
     """
-    widths = [len(h) for h in headers]
-    for row in rows:
+    # Sized to the longest row rather than to the header, for the reason
+    # llama_stats.render_table gives: a row longer than the header is a bug in
+    # the caller, and this function's job is to show it, not to crash on it or
+    # to silently drop the overflow.
+    ncol = max([len(headers)] + [len(r) for r in rows])
+    widths = [0] * ncol
+    for row in [headers] + list(rows):
         for i, cell in enumerate(row):
             widths[i] = max(widths[i], len(str(cell)))
     def line(cells):
+        cells = list(cells) + [""] * (ncol - len(cells))
         return "| " + " | ".join(str(c).ljust(widths[i])
                                  for i, c in enumerate(cells)) + " |"
     out = [line(headers), "|" + "|".join("-" * (w + 2) for w in widths) + "|"]
@@ -214,7 +226,7 @@ def _env_sh():
     return Path(__file__).resolve().parent / "llama-env.sh"
 
 
-def _profile_names():
+def profile_names():
     """The defined profiles, asked of the shell rather than listed here.
 
     scripts/llama-env.sh is the single source of truth for serving
@@ -236,18 +248,34 @@ def _profile_names():
     return ["qwen38"]
 
 
-def cmd_profiles(argv) -> int:
+def profile_json(name: str) -> dict:
+    """One profile's resolved fields, asked of the shell for the same reason.
+
+    `llama-env.sh profile-json` runs the same `_llama_profile` resolution
+    `llama-serve` runs, so what comes back is what would actually be served --
+    including the environment overrides in effect -- rather than a second
+    reading of the profile table. An empty dict means the question could not be
+    asked (no bash, no jq, a broken profile); callers show that as unknown
+    rather than substituting defaults, since a wrong default here would be a
+    command line that claims to describe a server it does not.
+    """
     import json
     import subprocess
+    try:
+        proc = subprocess.run(["bash", str(_env_sh()), "profile-json", name],
+                              capture_output=True, text=True, timeout=30)
+        if proc.returncode == 0:
+            return json.loads(proc.stdout)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        pass
+    return {}
+
+
+def cmd_profiles(argv) -> int:
     con = console()
     rows = []
-    for name in _profile_names():
-        try:
-            proc = subprocess.run(["bash", str(_env_sh()), "profile-json", name],
-                                  capture_output=True, text=True, timeout=30)
-            prof = json.loads(proc.stdout) if proc.returncode == 0 else {}
-        except (OSError, ValueError, subprocess.SubprocessError):
-            prof = {}
+    for name in profile_names():
+        prof = profile_json(name)
         if not prof:
             rows.append([name, "?", "unreadable", "", "", "", ""])
             continue

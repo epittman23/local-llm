@@ -265,6 +265,56 @@ or agent) updates the docs in the same commit:
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-09-04** (sixth): Fixed five defects found by a review of the
+  `feat/config-comparison` branch before it merged. Two of them mattered.
+  **`llama-test compare --by benchmark` could not run at all.** `benchmark_rows`
+  built a four-label header and emitted five leading cells -- it added the
+  `adapter` cell that the sibling `COLUMNS` list already names and gave it no
+  column -- so every row was one cell wider than its header and the command
+  raised `IndexError` on every output path: markdown, plain, Rich, and the
+  `llama-ui` Compare tab. The header gained the column rather than the row
+  losing the cell, because `adapter_sha` is part of the grouping key: two rows
+  differing only by adapter are two different measurements, and a table that
+  does not name the difference reads as a contradiction.
+  **The multi-flag warning was under-reporting.** `FLAG_KEYS` named four flags
+  by their llama-server spelling -- `context`, `n-cpu-moe`, `cache-type-k`,
+  `cache-type-v` -- and `_vramlog_config` records them as `ctx`, `moe` and one
+  combined `cache: k=... v=...` line, so `config_value` returned None and
+  `flags_of` dropped them silently. A comparison whose two configurations
+  differed in context size, `--n-cpu-moe` or KV cache type reported neither.
+  That warning exists because this project lost a measurement to exactly that
+  failure (the 2026-08-23 `--parallel` entry), so a check that cannot see three
+  of the flags most likely to change between runs is worse than none: it reads
+  as an all-clear. Against the current database the warning went from 5 flags
+  to 9. The list now carries a comment saying these are recorded keys and not
+  CLI spellings, which is the trap that produced the bug.
+  Three smaller ones. `llama_stats.render_table` padded short rows and indexed
+  past the end of long ones, which is why a caller's column-count mistake
+  surfaced as `IndexError` rather than a visibly odd table; it and both other
+  renderers (`llama_console.render_markdown_table`, and `Console_.table`'s Rich
+  path) now size to the widest row. Deliberately widening rather than
+  truncating: dropping a row's extra cells would turn a caller's bug into a
+  table that is quietly wrong about which value sits under which heading, and an
+  unnamed trailing column is visible where a shifted one is not.
+  `config_value` stopped at the first ` | `, so `config.samplers` recorded
+  `temp 0.7` for a profile serving `--temp 0.7 --top-p 0.8 --top-k 20
+  --repeat-penalty 1.1`; it takes an opt-in `rest=True` for that one line, whose
+  value is itself pipe-separated. And `calibrate()` counted an item with no
+  reference solution as ungradeable without counting it as checked, so
+  `n_checked - n_ungradeable` -- read as the gradeable count by `llama-test
+  list` -- could go negative. Neither is a measurement error: the samplers
+  column is written and never read, the fingerprint is computed in the shell
+  over the complete text, and no published item in HumanEval, MBPP or DS-1000
+  ships without a reference, so the calibration counts on disk are unaffected.
+  **Migration 5 carries no DDL and one `schema_note`**, for the samplers fix:
+  the column holds different things either side of 2026-09-04 under the same
+  name, and a column whose meaning shifts mid-table is what that table exists to
+  explain. No `config_id` changed and nothing became incomparable. Verified: all
+  five reproduced before the fix and pass after; all four `compare` modes run
+  against the real database; `logs/llama.db` backed up first, and integrity,
+  foreign keys and every row count (3 runs, 186 results, 186 answers, 185
+  requests, 1392 GPU samples, 11104 scrapes) identical afterwards, with the
+  migration applying once and staying idempotent on reconnect.
 - **2026-09-04** (fifth): Deleted the pre-database files from the gitignored
   `logs/`. The 2026-08-30 entry below kept them deliberately -- "the old files
   stay in gitignored `logs/` as a reference that no code reads" -- and five days

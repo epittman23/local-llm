@@ -44,7 +44,12 @@ def is_number(cell: str) -> bool:
 def render_table(columns: list[str], rows: list[list[str]]) -> list[str]:
     """One markdown table with every column padded to a uniform width."""
     cells = [[str(c) for c in columns]] + [[str(c) for c in r] for r in rows]
-    ncol = len(columns)
+    # Widen to the longest row, not to the header: a row with more cells than
+    # there are columns is a caller's bug, and dropping its extra cells would
+    # turn that bug into a table that is quietly wrong about which value sits
+    # under which heading. An unnamed trailing column is visible; a shifted one
+    # is not. Short rows are padded, as align_tables() already does.
+    ncol = max([len(r) for r in cells] or [0])
     cells = [r + [""] * (ncol - len(r)) for r in cells]
     width = [max(3, max(len(r[i]) for r in cells)) for i in range(ncol)]
     # A column is right-aligned only if every data cell in it is numeric.
@@ -283,10 +288,17 @@ def is_cold(rec: dict) -> bool:
 # text is what the hash covers; these parsers fill the typed columns beside it so
 # a query can filter on ngl without a LIKE.
 # ---------------------------------------------------------------------------
-def config_value(lines: list[str], key: str) -> str | None:
-    """Read one "key: value" out of the pipe-separated configuration lines."""
+def config_value(lines: list[str], key: str, rest: bool = False) -> str | None:
+    """Read one "key: value" out of the pipe-separated configuration lines.
+
+    `rest=True` reads to the end of the line instead of stopping at the next
+    ` | `. It is for the one recorded line whose value is itself pipe-separated
+    (`samplers: temp 1.0 | top-p 0.95 | ...`), where the default would return
+    the first sampler and call it the whole set.
+    """
+    tail = "(.*)" if rest else "(.*?)(?: \\||$)"
     for line in lines:
-        hit = re.search(rf"(?:^|\| ){re.escape(key)}: (.*?)(?: \||$)", line.strip())
+        hit = re.search(rf"(?:^|\| ){re.escape(key)}: {tail}", line.strip())
         if hit:
             return hit.group(1).strip()
     return None
@@ -339,7 +351,7 @@ def parse_config_text(text: str) -> dict:
         "batch": _as_int(config_value(lines, "batch")),
         "ubatch": _as_int(config_value(lines, "ubatch")),
         "reasoning_effort": _clean(config_value(lines, "reasoning effort")),
-        "samplers": _clean(config_value(lines, "samplers")),
+        "samplers": _clean(config_value(lines, "samplers", rest=True)),
     }
 
 
