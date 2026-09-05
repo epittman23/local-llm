@@ -80,9 +80,12 @@ Every sample is kept; per-run statistics are derived on read and are
 distributional (p50/p95, an active-only utilization average, minimum free
 VRAM, and the throttle reasons observed), since the mean over a mostly-idle
 server says little. `llama-test compare --by serving` ranks configurations by
-throughput and prints the derived `-ngl` analysis; `llama-db` is raw SQL
-access. README.md documents each function, the schema, and the measured
-numbers.
+throughput and prints the derived `-ngl` analysis; `llama-report` (added
+2026-09-05) writes the statistical version of that question as markdown with
+figures — auditing the design first and refusing a contrast the design cannot
+support, which on the current store means every throughput comparison drawn
+across the 2026-09-05 power-cap event; `llama-db` is raw SQL access. README.md
+documents each function, the schema, and the measured numbers.
 
 Throughput is only half of what a serving configuration has to be judged on.
 `llama-test` runs scored items from three published benchmarks (HumanEval,
@@ -158,6 +161,14 @@ assume a cloud-only environment.
     `scripts/llama_console.py` (Rich-or-plain output, and the one place Rich is
     allowed to touch stdout, in `write_markdown`), `scripts/llama_ui.py`
     (the Textual dashboard: serve, live, tests, compare, answers).
+  - `scripts/llama_report.py` is `llama-report`, added 2026-09-05: the
+    statistical report over the store — design audit, paired tests, power,
+    throughput with the throttle regime as a blocking factor, and figures. It
+    is the only module here that requires scipy (matplotlib is optional and
+    degrades to text plots), and it **reads only**: it opens the database
+    `mode=ro` rather than through `llama_db.connect()`, which migrates and
+    sweeps stale runs and therefore writes. Its markdown is output like every
+    other markdown here; nothing reads it back.
   - `tests/adapters/*.toml` and `tests/suites/*.toml` describe how each
     published benchmark is adapted and how the tiers are sampled. They are
     the only hand-written test artifacts, and they contain no answers —
@@ -265,6 +276,87 @@ or agent) updates the docs in the same commit:
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-09-05**: Added `llama-report` (`scripts/llama_report.py`), a
+  statistical report over `logs/llama.db`, and used it to analyse the
+  system-prompt ablation the 2026-09-04 (third) entry set up and left unmeasured.
+  It was measured on 2026-09-05 02:59-03:33. **The answer is null, and the more
+  useful finding is that this experiment could not have found anything.** The
+  reason for a second command rather than more columns in `compare` is that
+  `compare` ranks and has no way to say whether a difference it shows is real:
+  at `smoke` two adjacent rows differ by one item, and the repo's own
+  never-a-bare-percentage rule exists because that reads as 4pp.
+  **The tests are paired, and not ANOVA.** The tiers are seeded so every
+  configuration draws the same items, which makes this a repeated-measures
+  design; a one-way test across levels discards the pairing, which is the only
+  thing that makes 8 items informative. So: Cochran's Q with an exact
+  permutation p, exact McNemar against the no-prompt baseline with Holm, Wilson
+  intervals. Over the two complete blocks (mbpp x `9b503170` and ds1000 x
+  `107a9a47`, each 8 items x 6 levels, 48/48 cells, no holes) the pooled result
+  is **Q = 0.9259 on 5 df, permutation p = 1.000 over all 10800 arrangements**.
+  Twelve of the sixteen items are constant across all six prompts, so the whole
+  comparison rests on four. Pooling is keyed on the *set* of levels rather than
+  the sequence, which was a real bug caught in testing: columns are ordered by
+  when each level was first measured, the two blocks ran the same six prompts in
+  a different order, and keying on the ordered tuple silently refused to pool
+  the two blocks the analysis exists for.
+  **What the null is worth is the actionable part.** Discordance -- the share of
+  item comparisons changing verdict, and what a paired binary test's power
+  actually depends on -- is 15/104 = 14.4%. At the 32 items entering a baseline
+  comparison, even a 14.4 pp difference (the largest that *can* exist under that
+  discordance rate) would be detected 58% of the time. There is no effect size
+  this experiment had an 80% chance of finding. Detecting 5 pp needs 451 items;
+  15 and 20 pp are reported as `impossible` rather than as a number, since in a
+  paired design the pass-rate difference cannot exceed the discordance rate. **No
+  claim is made or should be made about which system prompt is better**, and
+  `assistant.txt` stays what Open WebUI serves.
+  **A throughput trap was found and is refused rather than reported.** Levels ran
+  sequentially, one suite per level. Partway through run 4 generation fell from a
+  39.6-50.8 t/s band (40 requests, median 49.4) to 6.06-6.12 t/s at
+  2026-09-05T03:05:59Z and never recovered -- not one of the following 72
+  requests exceeded 20 t/s. Mean board power was 27.2 W after against 51.2 W
+  before, and after the cliff every non-idle GPU sample carries throttle word
+  `36` (`SwPowerCap | SwThermalSlowdown`), the rest being `GpuIdle` between
+  requests. In the mbpp block the cap is therefore confounded with the level: a
+  naive one-way ANOVA of generation t/s by system prompt there returns
+  **F = 419.268, p < 0.001** and is measuring the power cap. The report computes
+  that test and prints it labelled as the wrong answer beside the refusal,
+  because it is what a reader would otherwise have run; four throughput contrasts
+  are refused outright, naming the ordering and the power state. Stratifying by
+  regime collapses most strata to one level. `predicted_n` and `prompt_n` are
+  analysed as the defensible responses, being counts the model produced rather
+  than divisions by a wall clock. **Any throughput number from run 4 after
+  03:05:59Z is a measurement of a thermally capped GPU**, not of a serving
+  configuration, and should not be compared with the figures in `README.md`.
+  **A pre-existing belief was corrected by writing the query.** The reliability
+  floor was expected to come from 24 cells measured more than once, 6 of which
+  flipped. It does not: under the strict cell key (model, config, tier,
+  benchmark, item, system prompt, adapter) **no cell in this store was measured
+  twice**, so there is no run-to-run estimate at all. The 24 repeat on a looser
+  key that ignores the model -- a different model answering the same question is
+  a different condition, and counting it would put a between-model effect on the
+  noise floor and then use that floor to dismiss between-model effects. The
+  report says so in those words. Consequence: **re-running one existing
+  condition unchanged is the cheapest and highest-value next run**, ahead of any
+  new condition.
+  Two design decisions worth recording. scipy is a hard requirement and the
+  command exits 2 with the install line rather than degrading, because a
+  statistics report with the statistics removed is not a smaller version of
+  itself; matplotlib is optional and every figure falls back to a unicode block
+  plot in a fenced block, naming the reason, since a missing wheel should cost
+  the picture and not the analysis printed beside it. And the store is opened
+  `mode=ro`, deliberately **not** through `llama_db.connect()`, which applies
+  migrations and sweeps stale runs -- a reporting command must not be able to
+  change what it is reporting on. No migration and no `schema_note`: nothing
+  here changes what a stored row means.
+  Verified: the hand-written statistics (Cochran's Q, its exact permutation p,
+  exact McNemar, Wilson, Holm, the power/MDE search) cross-checked against
+  statsmodels and scipy on 40 random matrices plus the real ones, with the
+  permutation p also checked by brute-force enumeration and the sample-size
+  formula checked by simulating the exact test at the n it claims; `--stdout`,
+  `--no-figures` and a matplotlib-blocked run each producing a complete
+  document; and `logs/llama.db` byte-identical by md5 with integrity, foreign
+  keys and all row counts (4 runs, 1 config, 298 results, 298 answers, 297
+  requests, 1941 GPU samples, 15488 scrapes) unchanged after every run.
 - **2026-09-04** (sixth): Fixed five defects found by a review of the
   `feat/config-comparison` branch before it merged. Two of them mattered.
   **`llama-test compare --by benchmark` could not run at all.** `benchmark_rows`

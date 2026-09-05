@@ -547,6 +547,41 @@ llama-ui() {
 }
 
 # ---------------------------------------------------------------------------
+# llama-report: a statistical report over the measurement store
+#
+#   llama-report                       # logs/report/<UTC date>/report.md + PNGs
+#   llama-report --out /tmp/r          # somewhere else
+#   llama-report --stdout              # the document on stdout, so it pipes
+#   llama-report --tier smoke --benchmark mbpp     # narrow the scope
+#   llama-report --no-figures          # text plots instead of PNGs
+#
+# This is `llama-test compare` grown a spine. `compare` ranks; it has no way to
+# say whether a difference it shows is real, and with a smoke tier at n = 24 the
+# gap between two adjacent rows is routinely one item. The report audits the
+# design first -- which factors actually varied, what is confounded with what,
+# whether the levels of a contrast even ran under the same GPU regime -- and
+# refuses a comparison the design cannot support, naming the reason, rather than
+# printing a p-value over it. Where the design does support a test it runs the
+# paired one, because the tiers are seeded so every configuration draws the same
+# items, and a test that ignores the pairing throws away the only thing making
+# 8 items informative.
+#
+# It reads the database and writes nothing back: no migration, no schema_note,
+# no row. The markdown is output, as all markdown here has been since the store
+# moved to SQLite; nothing reads it.
+#
+# Needs the venv, and specifically scipy (see requirements-extra.txt); it exits
+# 2 with the install line rather than degrading, since a statistics report with
+# the statistics removed is not a smaller version of itself. matplotlib is
+# optional: without it every figure renders as a unicode plot in a fenced block
+# and the document is otherwise identical.
+# ---------------------------------------------------------------------------
+llama-report() {
+    local py; py="$(_llama_python)"
+    "$py" "$LLAMA_REPO/scripts/llama_report.py" "$@"
+}
+
+# ---------------------------------------------------------------------------
 # llama-db: the store itself
 #
 #   llama-db                 # open the sqlite3 shell on logs/llama.db
@@ -706,6 +741,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
         sweep-ngl)      llama-sweep-ngl "$@" ;;
         test)           llama-test "$@" ;;
         ui)             llama-ui "$@" ;;
+        report)         llama-report "$@" ;;
         db)             llama-db "$@" ;;
         check)          llama-check "$@" ;;
         vram)           llama-vram "$@" ;;
@@ -714,7 +750,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
         profile-json)   llama-profile-json "$@" ;;
         profile-names)  llama-profile-names "$@" ;;
         *)
-            echo "usage: $(basename "$0") {serve|fetch|test|ui|db|sweep-threads|sweep-ngl|check|vram|vram-log|profiles|profile-json|profile-names} [profile] [args]" >&2
+            echo "usage: $(basename "$0") {serve|fetch|test|ui|report|db|sweep-threads|sweep-ngl|check|vram|vram-log|profiles|profile-json|profile-names} [profile] [args]" >&2
             exit 2
             ;;
     esac

@@ -1003,6 +1003,102 @@ involved). Filters: `--tier`, `--model`, `--baseline <config-id>`. Output:
 `--format table|markdown|json`, where markdown is for pasting a measured table
 into this README and is never read back.
 
+### Reporting — `llama-report`
+
+```bash
+llama-report                        # logs/report/<UTC date>/report.md + PNGs
+llama-report --out /tmp/r           # somewhere else
+llama-report --stdout               # the document on stdout, so it pipes
+llama-report --tier smoke --benchmark mbpp   # narrow the scope
+llama-report --no-figures           # text plots instead of PNGs
+```
+
+`compare` ranks; it has no way to say whether a difference it shows is real. At
+`smoke` the gap between two adjacent rows is routinely one item, and this repo's
+own rule — never a bare percentage — exists because that gap reads as 4pp.
+`llama-report` is the other half: it audits the design first, refuses the
+comparisons the design cannot support, and runs the *paired* test where it can,
+which matters because the tiers are seeded so every configuration draws the same
+items and a test that ignores the pairing throws away the only thing that makes
+8 items informative.
+
+Seven sections, ordered so each gates the next: **provenance** (which database,
+which rows, which revisions — the store is gitignored, so a number without this
+is not checkable), **design audit**, **reliability floor**, **paired accuracy**,
+**power/MDE**, **throughput**, **throttle audit**.
+
+The design audit is the part that earns the command. It is mechanical, and
+against the current store it finds:
+
+- **`model` and `config_id` are perfectly confounded** (one real config plus
+  NULL), so no result here separates the model from the flags it was served
+  under. `is_cold` is constant across all 297 requests. Both are reported as
+  untestable rather than tested.
+- **Levels ran sequentially, one suite per level, never interleaved**, and the
+  GPU changed power state partway through run 4. Generation fell from a 39.6–50.8
+  t/s band (40 requests, median 49.4) to 6.06–6.12 t/s at 03:05:59 and never
+  recovered — not one of the 72 requests after that point exceeded 20 t/s. GPU
+  telemetry says why: mean board power 27.2 W against 51.2 W before, and after
+  the cliff *every non-idle sample* carries the throttle word `36`
+  (`SwPowerCap | SwThermalSlowdown`), the remainder being `GpuIdle` between
+  requests. The levels therefore do not share one GPU state, and the report
+  prints which regimes each level actually ran under. **Four throughput
+  contrasts are refused**, naming both the ordering and, where it applies, the
+  power state.
+
+  The naive test is computed anyway and printed beside the refusal, because it
+  is what a reader would otherwise have run: for the mbpp × `9b503170` block a
+  one-way ANOVA of generation t/s by system prompt returns **F = 419.3,
+  p < 0.001** (Kruskal-Wallis H = 36.0), and it is measuring the power cap.
+  Stratifying by regime collapses most strata to a single level, which is the
+  honest picture: after the cliff there is no within-regime contrast left to
+  make. `predicted_n` and `prompt_n` are analysed as the defensible
+  responses, being properties of the response rather than of the clock, and a
+  prompt-token manipulation check confirms `--system` actually reached the
+  request body — this repo has already shipped a bug where it did not (the
+  2026-09-04 second entry).
+
+On accuracy the answer is null and the report says so with an interval rather
+than a shrug: over the two complete blocks (mbpp × `9b503170` and ds1000 ×
+`107a9a47`, each 8 items × 6 system levels, 48/48 cells, no holes), pooled
+**Cochran's Q = 0.926 on 5 df, exact permutation p = 1.000 over all 10800
+arrangements**. Twelve of the sixteen items are constant across all six prompts
+and contribute nothing to a within-item test, so the comparison rests on the
+four that vary at all — which the report states in those words rather than
+printing `8/8` beside `7/8` and leaving a reader to infer a winner from one
+item.
+
+The power section then says what that null is worth, which is the part a ranking
+table can never supply. Discordance — the share of item comparisons that change
+verdict, and the quantity a paired binary test's power actually depends on — is
+15/104 = 14.4%. At the 32 items entering a baseline comparison, **even a 14.4 pp
+difference, the largest that can exist under that discordance rate, would be
+found only 58% of the time**: there is no effect size this experiment had an 80%
+chance of detecting, so its null is a statement about the experiment and not
+about the prompts. Detecting 5 pp needs 451 items; 15 pp and 20 pp are reported
+as `impossible` rather than as a number, because in a paired design the
+difference in pass rate cannot exceed the discordance rate. The output is
+therefore "run this next" — re-run one condition unchanged first, since **nothing
+in this store measures run-to-run variability at all** and there is currently no
+noise floor to read any difference against.
+
+Statistics: scipy for the standard tests; Cochran's Q, its permutation p (exact
+by enumeration when the arrangement count allows, Monte Carlo with the `+1`
+correction otherwise), Wilson intervals, Holm correction and the MDE search are
+written out in `scripts/llama_report.py`, and were cross-checked against
+statsmodels. Every test prints its `n` and its assumption check; a test whose
+assumptions fail is printed as refused with the reason, never dropped silently.
+
+**Reads only.** No migration, no `schema_note`, no row written — verified by
+checksum and row counts either side of a run. The database is opened
+`mode=ro`, deliberately not through `llama_db.connect()`, which migrates and
+sweeps stale runs and would therefore write.
+
+scipy is required and the command exits 2 with the install line rather than
+degrading. matplotlib is optional: without it every figure becomes a unicode
+block plot in a fenced code block, naming the reason, and the document is
+otherwise byte-identical.
+
 ### Dependencies
 
 Rich, Textual, numpy, pandas and pyyaml, in a repo-local `.venv`. This box's
@@ -1013,8 +1109,12 @@ in an interactive shell (`LLAMA_NO_BOOTSTRAP=1` disables that).
 Everything degrades without it: `llama-test list`, `compare`, `check` and
 `profiles` print plain markdown tables under bare `python3`. Only DS-1000
 grading genuinely needs the venv, since it needs pandas and numpy.
-`requirements-extra.txt` adds scipy and scikit-learn for a wider DS-1000 slice;
-the adapter's filter would need widening to use them.
+`requirements-extra.txt` carries two things: **scipy**, which `llama-report`
+requires outright (it exits 2 with the install line rather than degrading) and
+which also widens the DS-1000 slice alongside scikit-learn — the adapter's filter
+would need widening to use them for that — and **matplotlib**, which only
+`llama-report` uses and which is genuinely optional, since without it the figures
+render as unicode plots in fenced blocks and the document is otherwise identical.
 
 **`scripts/llama_db.py`, `llama_record.py`, `llama_stats.py`, `llama_tests.py`
 and `llama_results.py` are stdlib-only and must stay that way.** The telemetry

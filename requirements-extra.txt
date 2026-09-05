@@ -1,5 +1,24 @@
-# Widens the DS-1000 slice beyond Pandas/Numpy. Optional: items whose library is
-# not importable are recorded as skipped, never failed, so installing these
-# changes coverage rather than correctness.
+# Two jobs, and only the second one is optional.
+#
+# scipy is required by `llama-report` (scripts/llama_report.py), which exits 2
+# and prints this file's install line rather than degrading: a statistics report
+# with the statistics removed is not a smaller version of itself. It supplies
+# the distributions and the standard tests -- binomtest, fisher_exact, wilcoxon,
+# mannwhitneyu, kruskal, f_oneway, chi2, norm. The tests scipy has no equivalent
+# for (Cochran's Q and its permutation p, Wilson intervals, Holm, the minimum
+# detectable effect search) are written out in llama_report.py and were
+# cross-checked against statsmodels, which is deliberately not a dependency:
+# five functions are not worth a wheel this size on this machine.
+#
+# scipy and scikit-learn also widen the DS-1000 slice beyond Pandas/Numpy. That
+# part is optional: items whose library is not importable are recorded as
+# skipped, never failed, so installing these changes coverage rather than
+# correctness.
 scipy>=1.11
 scikit-learn>=1.3
+
+# Figures for `llama-report`, and genuinely optional. Without it every figure
+# renders as a unicode block plot inside a fenced code block, naming the reason,
+# and the document is otherwise identical -- the fallback exists because a
+# missing wheel should cost the picture, not the analysis printed beside it.
+matplotlib>=3.8
