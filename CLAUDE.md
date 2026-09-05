@@ -280,6 +280,65 @@ All commits should use conventional commit style and stay focused on one topic.
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-09-05** (second): Reviewed the first document `llama-report` produced
+  and rewrote its figures, because three of them contradicted the prose beside
+  them. The prose in that first report is careful -- it refuses contrasts the
+  design cannot support and prints counts beside every rate -- and **the figures
+  did not hold that line**, which matters more than a tidiness complaint: the
+  PNGs are what a future reader skims to decide what to run next.
+  **Two defects could have produced a wrong conclusion.** First, `fig4-mde`
+  omitted its own subject. `detectable_effect` returns `None` when nothing is
+  reachable at 80% power -- which is exactly this experiment at n = 32,
+  psi = 0.144 -- and the marker was drawn inside an `if here is not None` guard,
+  so the figure silently dropped the "this experiment" rule in the one case the
+  section exists to report. A reader saw a smooth curve from 64 items down and
+  no indication that their own design sits off the left edge of it. It now draws
+  the rule unconditionally and says in words: *no effect is reachable at 80%
+  power -- even 14.4 pp is found only 58% of the time*, with the psi ceiling
+  drawn as a horizontal asymptote so `impossible` in the section-5 table has a
+  picture. Second, `fig3` was a bar chart of marginal pass rates, **the picture
+  of the unpaired comparison this command was written to refuse**. Six near-equal
+  bars over eight items invite exactly the ranking the surrounding paragraph
+  says the design cannot support. It is replaced by `fig3-discordance-*`: one
+  row per level showing the items lost and gained against the baseline -- the
+  `b` and `c` of the McNemar tables printed above it -- with `n disc` labelled.
+  The marginal rates stay in the table, where an interval sits beside them.
+  The rest were legibility, and are listed because each one hid something.
+  Two titles ran off the canvas entirely on the 2-level humaneval block, since
+  figure width scaled with the level count and the title did not (fixed with a
+  width floor plus wrapping); five throttle-regime labels in `fig1` were all
+  annotated at the same y and overprinted into an unreadable pile (now one
+  legend entry, with the cliff annotated at `03:05:59Z, median 49.4 -> 6.1 t/s`
+  and the system-prompt boundaries ruled, so the confound is visible rather
+  than described); `fig2` gave the 46 constant cells the saturated fill and let
+  the 2 varying ones -- the entire effective sample -- recede (emphasis now
+  follows information); level labels were cut at 16 characters, mid-sha, though
+  the sha is the identity the report groups by; and `fig4`'s log axis left the
+  default minor-tick formatter on, so `6x10^1` overprinted the explicit `64`.
+  Item ids sorted lexically, putting mbpp `74` between `641` and `750` in both
+  the figure and the markdown table above it; they now sort naturally, from one
+  shared `Block.items()` so the two cannot disagree.
+  Three text defects went with them, in the same commit because they are the
+  same defect class -- the document saying something its own data contradicts.
+  "the six marginal totals" and "no difference among the six" were hardcoded,
+  and rendered verbatim over a two-row table on the humaneval block; both now
+  take `k`. And a block where **no item varies** printed the full Cochran's Q
+  apparatus and a verdict without ever saying that there is no within-item
+  comparison to make -- Q is 0 by construction there, which is the same output
+  a broken harness would produce, and the two are told apart by the section-6
+  manipulation check rather than by that table. It now says so before the table.
+  A figure with nothing to draw is suppressed and replaced by one sentence
+  naming why, rather than rendering an empty grid.
+  No schema change, no migration, no `schema_note`: nothing here changes what a
+  stored row means, and the module is still `mode=ro`. Verified: every
+  regenerated PNG read against the tables it accompanies (the ds1000 and mbpp
+  discordance plots reproduce their McNemar `b`/`c` exactly); `--no-figures`,
+  `--stdout` and a matplotlib-blocked run each producing a complete 1181-line
+  document, with the new discordance fallback rendering as a `lost`/`gained`/
+  `n disc` text table rather than as bars, since a paired difference has no bar
+  form; and `logs/llama.db` md5-identical (`e6b20a50...`) with integrity,
+  foreign keys and all row counts (4 runs, 1 config, 298 results, 298 answers,
+  297 requests, 1941 GPU samples, 15488 scrapes) unchanged.
 - **2026-09-05**: Added `llama-report` (`scripts/llama_report.py`), a
   statistical report over `logs/llama.db`, and used it to analyse the
   system-prompt ablation the 2026-09-04 (third) entry set up and left unmeasured.

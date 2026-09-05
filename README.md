@@ -1094,6 +1094,23 @@ checksum and row counts either side of a run. The database is opened
 `mode=ro`, deliberately not through `llama_db.connect()`, which migrates and
 sweeps stale runs and would therefore write.
 
+Four figures, each drawing the test printed beside it rather than a
+friendlier one. `fig1-timeline-run<n>` is generation throughput over run 4 in
+request order, with the throttled spans shaded, the system-prompt boundaries
+ruled, and the cliff labelled with its UTC timestamp and the medians either
+side — the confound itself, in one picture. `fig2-matrix-<benchmark>-<config>`
+is the item x level pass/fail grid with the *varying* rows drawn in full colour
+and the constant ones muted, because the constant rows are the majority and
+carry none of the information. `fig3-discordance-<benchmark>-<config>` is the
+paired difference against the baseline — items lost and gained per level, the
+`b` and `c` of the McNemar tables above it — and deliberately **not** a bar
+chart of marginal pass rates, which would be the picture of the unpaired
+comparison this command exists to refuse. `fig4-mde` is the detectable
+difference against items per level, with the psi ceiling drawn as a horizontal
+asymptote and this experiment's `n` marked whether or not any effect is
+reachable at it. A figure with nothing to show is suppressed and replaced by
+the sentence saying so, rather than drawn empty.
+
 scipy is required and the command exits 2 with the install line rather than
 degrading. matplotlib is optional: without it every figure becomes a unicode
 block plot in a fenced code block, naming the reason, and the document is

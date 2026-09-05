@@ -53,6 +53,7 @@ import os
 import random
 import sqlite3
 import sys
+import textwrap
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -98,9 +99,60 @@ SURFACE = "#fcfcfb"
 SERIES = "#2a78d6"     # primary mark
 FLAG = "#eb6834"       # flagged: throttled, discordant, refused
 FILL_OFF = "#e6e5df"   # the empty half of a binary cell
+FILL_ON = "#cfd8e3"    # a filled cell in a row that carries no information
 
 TS = "%Y-%m-%dT%H:%M:%SZ"
 Z95 = 1.959963984540054
+
+
+# ---------------------------------------------------------------------------
+# labels and ordering, shared by the figures and the tables beside them
+# ---------------------------------------------------------------------------
+def natural_key(item_id: str):
+    """Sort benchmark item ids the way a reader reads them.
+
+    MBPP names its items with bare integers, and a plain string sort puts 74
+    between 641 and 750, which reads as a hole in the sample. Numeric where the
+    id is a number, string otherwise, so `HumanEval/9` and `HumanEval/117` also
+    land in the order their authors numbered them.
+    """
+    parts = []
+    for chunk in str(item_id).replace("/", " ").split():
+        parts.append((0, int(chunk), "") if chunk.isdigit() else (1, 0, chunk))
+    return parts
+
+
+def short_level(level: str, levels: list[str]) -> str:
+    """A level label short enough to draw and still able to name the level.
+
+    A system prompt's identity is the sha of its bytes -- that is the whole
+    reason `system_sha` and not `system_name` is in the grouping key -- so a
+    label truncated to a fixed width is the one thing this must not do: it cut
+    `assistant-direct@0e72741612ff` down to `assistant-direct` and
+    `assistant-local@ad9f409dcd8b` down to a trailing bare `@`, which names
+    nothing. The name alone is unambiguous whenever it is unique within the
+    block, and the sha comes back, shortened but whole-prefixed, when it is not.
+    """
+    name = level.split("@", 1)[0]
+    clash = sum(1 for other in levels if other.split("@", 1)[0] == name) > 1
+    if not clash or "@" not in level:
+        return name
+    return f"{name}@{level.split('@', 1)[1][:6]}"
+
+
+def wrap_title(text: str, width_in: float, fontsize: float = 11.0) -> str:
+    """Wrap a figure title to the canvas it is drawn on.
+
+    Figure widths here scale with the number of levels, and a two-level block
+    is narrow enough that an unwrapped title runs off the right edge and is
+    saved that way -- matplotlib clips it without complaining, and
+    `tight_layout` does not shrink a title to fit. Characters-per-inch is
+    approximate on purpose: erring toward a wrap costs a line of height, and
+    erring the other way costs the end of the sentence.
+    """
+    per_inch = 72.0 / (fontsize * 0.55)
+    chars = max(24, int((width_in - 1.8) * per_inch))
+    return "\n".join(textwrap.wrap(text, chars)) or text
 
 
 # ---------------------------------------------------------------------------
@@ -409,7 +461,9 @@ class Block:
         return sorted(seen, key=lambda lv: (seen[lv], lv))
 
     def items(self) -> list[str]:
-        return sorted({item for item, _ in self.cells})
+        # Natural order, not lexical: see natural_key. The figure and the
+        # markdown table above it both read this list, so they cannot disagree.
+        return sorted({item for item, _ in self.cells}, key=natural_key)
 
     def outcome(self, item: str, level: str) -> int | None:
         """1 pass, 0 graded-and-not-pass, None absent.
@@ -952,7 +1006,7 @@ def block_accuracy(b: Block, figs, audit: Audit) -> tuple[str, dict]:
                      "baseline" if j == bi else ""])
     out += [h(4, "Per level"), "", table(
         ["system prompt", "passed/attempted", "95% Wilson", ""], rows), ""]
-    figs.level_rates(b, levels, matrix, out)
+    figs.level_discordance(b, levels, matrix, bi, out)
 
     # --- Cochran's Q ------------------------------------------------------
     q, dfree, p_asym, n_eff = cochran_q(matrix)
@@ -961,7 +1015,7 @@ def block_accuracy(b: Block, figs, audit: Audit) -> tuple[str, dict]:
             "The k-sample McNemar. The null is that the pass probability does not",
             "depend on which system prompt was sent, tested *within* each item, so",
             "item difficulty cancels instead of being averaged over. This is the",
-            "test the design supports; a chi-square over the six marginal totals",
+            f"test the design supports; a chi-square over the {k} marginal totals",
             "would discard the pairing, and a one-way ANOVA would model a binary",
             "outcome as normal with equal variance, which it is not at either end",
             "of the range where nearly all of this data sits.",
@@ -975,6 +1029,13 @@ def block_accuracy(b: Block, figs, audit: Audit) -> tuple[str, dict]:
                 ["permutation method", how],
             ]),
             ""]
+    if n_eff == 0:
+        out += ["**No item varies across the levels here**, so there is no "
+                "within-item comparison to make: Q is 0 by construction and the "
+                "permutation test has nothing to permute. This is not evidence "
+                "that the levels agree -- it is the same result a broken "
+                "harness would produce, and the two are told apart by the "
+                "manipulation check in section 6, not by this table.", ""]
     if n_eff < 5:
         out += [f"The asymptotic p is quoted for completeness and should not be "
                 f"believed: the chi-square approximation to Q needs many items "
@@ -1005,9 +1066,9 @@ def block_accuracy(b: Block, figs, audit: Audit) -> tuple[str, dict]:
                       detail),
                 ""]
 
-    verdict = ("No level differs from the baseline at any conventional level, "
-               "and the permutation test finds no difference among the six "
-               "either.")
+    verdict = (f"No level differs from the baseline at any conventional level, "
+               f"and the permutation test finds no difference among the {k} "
+               f"either.")
     if p_perm < 0.05 or any(a < 0.05 for a in adjusted):
         verdict = ("At least one contrast survives correction. Read it against "
                    "the reliability floor in section 3 before acting on it.")
@@ -1616,7 +1677,12 @@ class Figures:
             self.reason = ""
 
     # -- plumbing ---------------------------------------------------------
+    MIN_WIDTH_IN = 7.5
+
     def _new(self, name: str, size=(8.0, 4.0)):
+        # A floor on the width, because these figures size themselves to their
+        # level count and the title does not shrink with them.
+        size = (max(size[0], self.MIN_WIDTH_IN), size[1])
         fig, ax = plt.subplots(figsize=size, dpi=140)
         fig.patch.set_facecolor(SURFACE)
         ax.set_facecolor(SURFACE)
@@ -1631,7 +1697,8 @@ class Figures:
         return fig, ax
 
     def _save(self, fig, ax, name: str, title: str, out: list[str], alt: str):
-        ax.set_title(title, color=INK, fontsize=11, loc="left", pad=12)
+        ax.set_title(wrap_title(title, fig.get_size_inches()[0]),
+                     color=INK, fontsize=11, loc="left", pad=12)
         fig.tight_layout()
         path = self.outdir / name
         fig.savefig(path, facecolor=SURFACE)
@@ -1662,41 +1729,93 @@ class Figures:
             self._skip(out, title, unicode_bars(labels, values, unit=" t/s"))
             return
 
-        fig, ax = self._new(f"fig1-timeline-run{run_id}.png", size=(9.0, 4.0))
+        fig, ax = self._new(f"fig1-timeline-run{run_id}.png", size=(9.5, 4.4))
         x = list(range(len(series)))
-        # Shade the contiguous spans that were served under a throttle, before
-        # the line, so the line stays the topmost mark.
-        start = None
+        # Shade the contiguous spans served under a throttle, before the line,
+        # so the line stays the topmost mark. One legend entry rather than one
+        # annotation per span: the spans are adjacent and every label was drawn
+        # at the same y, which overprinted them into an unreadable smear.
+        shaded = False
+        start_i = None
         for i, m in enumerate(marks + ["none"]):
             throttled = m not in ("none", "no telemetry") and "GpuIdle" not in m
-            if throttled and start is None:
-                start = i
-            elif not throttled and start is not None:
-                ax.axvspan(start - 0.5, i - 0.5, color=FLAG, alpha=0.12, lw=0)
-                ax.annotate(marks[start], xy=(start, max(v for v in values if v)),
-                            xytext=(4, -10), textcoords="offset points",
-                            color=FLAG, fontsize=8, ha="left")
-                start = None
+            if throttled and start_i is None:
+                start_i = i
+            elif not throttled and start_i is not None:
+                ax.axvspan(start_i - 0.5, i - 0.5, color=FLAG, alpha=0.12, lw=0,
+                           label="served under a throttle" if not shaded else None)
+                shaded = True
+                start_i = None
+
+        # The level boundaries are the confound this figure exists to show: the
+        # levels ran one after another, so anything that drifted with time --
+        # and the power cap did -- is the level as far as the data can tell.
+        prompts = [(r.get("system_name") or NONE_LEVEL) for r in series]
+        for i in range(1, len(prompts)):
+            if prompts[i] != prompts[i - 1]:
+                ax.axvline(i - 0.5, color=MUTED, linewidth=0.8,
+                           linestyle=(0, (2, 3)), zorder=1)
+
         ax.plot(x, values, color=SERIES, linewidth=2.0, marker="o",
-                markersize=4.5, markeredgecolor=SURFACE, markeredgewidth=1.5)
-        ax.set_xlabel("request, in the order served", color=INK_2, fontsize=9)
+                markersize=4.5, markeredgecolor=SURFACE, markeredgewidth=1.5,
+                zorder=3, label="generation t/s, one request")
+        ax.set_xlabel("request, in the order served  (dashed rules: system "
+                      "prompt changes)", color=INK_2, fontsize=9)
         ax.set_ylabel("generation t/s", color=INK_2, fontsize=9)
-        ax.set_ylim(bottom=0)
-        if values:
-            last = len(values) - 1
-            ax.annotate(f"{values[last]:.1f} t/s", xy=(last, values[last]),
-                        xytext=(-6, 8), textcoords="offset points",
-                        color=INK_2, fontsize=8, ha="right")
-            first = values.index(max(v for v in values if v))
-            ax.annotate(f"{values[first]:.1f} t/s", xy=(first, values[first]),
-                        xytext=(6, -4), textcoords="offset points",
-                        color=INK_2, fontsize=8)
+        ax.set_ylim(bottom=0, top=max(v for v in values if v) * 1.28)
+
+        # The cliff, named with the moment it happened and the medians either
+        # side of it. Section 6's refusals rest on this event, and a reader who
+        # has to infer it from the shape of the line has to take the prose on
+        # trust.
+        cut = self._cliff(values)
+        if cut is not None:
+            before = lstats.percentile(values[:cut], 0.5)
+            after = lstats.percentile(values[cut:], 0.5)
+            at = (series[cut].get("at") or "")[:19]
+            ax.axvline(cut - 0.5, color=FLAG, linewidth=1.4,
+                       linestyle=(0, (4, 3)), zorder=2)
+            ax.annotate(f"{at}Z: median {before:.1f} -> {after:.1f} t/s,\n"
+                        f"and never recovers",
+                        xy=(cut - 0.5, max(v for v in values if v)),
+                        xytext=(8, -4), textcoords="offset points",
+                        color=FLAG, fontsize=8.5, ha="left", va="top")
+        ax.legend(loc="upper right", frameon=False, fontsize=8,
+                  labelcolor=INK_2)
         self._save(fig, ax, f"fig1-timeline-run{run_id}.png", title, out,
-                   "generation throughput per request, with throttled spans shaded")
+                   "generation throughput per request, with the throttle cliff "
+                   "and the system-prompt boundaries marked")
+
+    @staticmethod
+    def _cliff(values: list[float]) -> int | None:
+        """The index of the largest single step down in the series.
+
+        Reported only when the step is a fall of more than half, which is the
+        difference between a throttle event and the ordinary spread between two
+        requests. Nothing downstream depends on this; it decides where to put
+        one annotation.
+        """
+        best, at = 0.0, None
+        for i in range(1, len(values)):
+            prev, cur = values[i - 1], values[i]
+            if not prev or not cur:
+                continue
+            drop = (prev - cur) / prev
+            if drop > best:
+                best, at = drop, i
+        return at if best > 0.5 else None
 
     # -- figure 2: the paired matrix --------------------------------------
     def paired_matrix(self, b: Block, items, levels, matrix, discordant, out):
         title = f"Outcome by item and system prompt -- {b.benchmark} x {b.adapter}"
+        if not discordant:
+            # A grid of identical cells is a picture of nothing. The sentence
+            # says what the figure would have said, in less space and without
+            # inviting a reader to hunt the grid for the difference.
+            out += [f"*No figure: every one of the {len(items)} items returns "
+                    f"the same verdict under all {len(levels)} levels, so the "
+                    f"matrix has no variation to draw.*", ""]
+            return
         if not self.png:
             lines = ["item".ljust(max(len(i) for i in items) + 2)
                      + "  ".join(lv[:10].ljust(10) for lv in levels)]
@@ -1708,66 +1827,129 @@ class Figures:
             self._skip(out, title, lines)
             return
         name = f"fig2-matrix-{b.slug()}.png"
-        fig, ax = self._new(name, size=(1.4 * len(levels) + 3.0,
-                                        0.42 * len(items) + 2.0))
+        fig, ax = self._new(name, size=(1.6 * len(levels) + 3.0,
+                                        0.42 * len(items) + 2.2))
         ax.grid(False)
+        labels = [short_level(lv, levels) for lv in levels]
         for i, row in enumerate(matrix):
+            varies = i in discordant
             for j, value in enumerate(row):
+                # Emphasis follows information, not polarity. A constant row is
+                # 46 cells of ink saying nothing, and the two varying rows are
+                # the whole effective sample, so the constant passes recede to
+                # a quiet fill and the failures inside a varying row carry the
+                # flag colour. Still labelled in words: nothing here depends on
+                # seeing the difference between two hues.
+                if value:
+                    face, ink = (FILL_ON, INK_2) if not varies else (SERIES, SURFACE)
+                else:
+                    face, ink = (FILL_OFF, MUTED) if not varies else (FLAG, SURFACE)
                 ax.add_patch(plt.Rectangle(
-                    (j + 0.03, i + 0.03), 0.94, 0.94,
-                    facecolor=SERIES if value else FILL_OFF, linewidth=0))
+                    (j + 0.03, i + 0.03), 0.94, 0.94, facecolor=face, linewidth=0))
                 ax.text(j + 0.5, i + 0.5, "pass" if value else "fail",
-                        ha="center", va="center", fontsize=8,
-                        color=SURFACE if value else INK_2)
+                        ha="center", va="center", fontsize=8, color=ink)
         for i in discordant:
             ax.add_patch(plt.Rectangle((-0.06, i + 0.03), 0.06, 0.94,
                                        facecolor=FLAG, linewidth=0))
         ax.set_xlim(-0.1, len(levels))
         ax.set_ylim(len(items), 0)
         ax.set_xticks([j + 0.5 for j in range(len(levels))])
-        ax.set_xticklabels([lv[:16] for lv in levels], rotation=30, ha="right")
+        ax.set_xticklabels(labels, rotation=30, ha="right")
         ax.set_yticks([i + 0.5 for i in range(len(items))])
         ax.set_yticklabels([f"{it}  {'*' if i in discordant else ' '}"
                             for i, it in enumerate(items)], fontsize=8)
         for side in ("left", "bottom"):
             ax.spines[side].set_visible(False)
         self._save(fig, ax, name,
-                   title + f" ({len(discordant)} of {len(items)} items vary, "
-                   "marked * and ruled in orange)", out,
-                   "pass/fail per item under each system prompt")
+                   title + f" ({len(discordant)} of {len(items)} items vary; "
+                   "only those rows are drawn in full colour and ruled in "
+                   "orange, the rest are constant and carry no information)",
+                   out, "pass/fail per item under each system prompt, with the "
+                        "varying items emphasised")
 
-    # -- figure 3: per-level rates with intervals -------------------------
-    def level_rates(self, b: Block, levels, matrix, out):
+    # -- figure 3: discordance against the baseline -----------------------
+    def level_discordance(self, b: Block, levels, matrix, bi, out):
+        """What each level actually changed, item by item, against the baseline.
+
+        This replaces a bar chart of marginal pass rates. That chart drew the
+        comparison this report spends section 4 refusing: bars are the picture
+        of a between-groups test, and six of them differing by one item read as
+        a ranking, when the six columns are measurements of the *same* eight
+        items and only the within-item changes carry any information. The
+        marginal rates keep their table; the figure shows the pairing.
+        """
+        base = levels[bi]
+        others = [j for j in range(len(levels)) if j != bi]
+        lost, gained = {}, {}
+        for j in others:
+            lost[j] = [i for i, row in enumerate(matrix)
+                       if row[bi] == 1 and row[j] == 0]
+            gained[j] = [i for i, row in enumerate(matrix)
+                         if row[bi] == 0 and row[j] == 1]
         n = len(matrix)
-        passed = [sum(row[j] for row in matrix) for j in range(len(levels))]
-        title = (f"Pass rate by system prompt with 95% Wilson intervals -- "
-                 f"{b.benchmark} x {b.adapter} (n = {n} items per level)")
-        if not self.png:
-            self._skip(out, title, unicode_bars(
-                [f"{lv[:22]:<22} {p}/{n}" for lv, p in zip(levels, passed)],
-                [100.0 * p / n for p in passed], unit="%"))
+        if not any(lost[j] or gained[j] for j in others):
+            # Same reasoning as the matrix above: an empty plot is a worse way
+            # to say "nothing changed" than the sentence is.
+            out += [f"*No figure: no item changes verdict between `{base}` and "
+                    f"any of the {len(others)} other level(s), so every McNemar "
+                    f"table here is empty and there is nothing to plot.*", ""]
             return
-        name = f"fig3-rates-{b.slug()}.png"
-        fig, ax = self._new(name, size=(1.1 * len(levels) + 3.0, 4.2))
-        xs = list(range(len(levels)))
-        rates = [100.0 * p / n for p in passed]
-        lows, highs = [], []
-        for j, p in enumerate(passed):
-            ci = wilson(p, n) or (0.0, 1.0)
-            lows.append(max(0.0, rates[j] - 100 * ci[0]))
-            highs.append(max(0.0, 100 * ci[1] - rates[j]))
-        ax.bar(xs, rates, width=0.62, color=SERIES, linewidth=0)
-        ax.errorbar(xs, rates, yerr=[lows, highs], fmt="none",
-                    ecolor=INK_2, elinewidth=1.4, capsize=5)
-        for x, r, p in zip(xs, rates, passed):
-            ax.text(x, 2, f"{p}/{n}", ha="center", va="bottom",
-                    color=SURFACE, fontsize=9)
-        ax.set_xticks(xs)
-        ax.set_xticklabels([lv[:16] for lv in levels], rotation=30, ha="right")
-        ax.set_ylabel("pass rate %", color=INK_2, fontsize=9)
-        ax.set_ylim(0, 105)
+        title = (f"Items changed against baseline `{base}` -- "
+                 f"{b.benchmark} x {b.adapter} (n = {n} per level)")
+        if not self.png:
+            rows = [f"{'level':<32} {'lost':>5} {'gained':>7} {'n disc':>7}"]
+            for j in others:
+                rows.append(f"{levels[j][:32]:<32} {len(lost[j]):>5} "
+                            f"{len(gained[j]):>7} "
+                            f"{len(lost[j]) + len(gained[j]):>7}")
+            rows += ["",
+                     "lost   = baseline passed, this level failed  (McNemar b)",
+                     "gained = baseline failed, this level passed  (McNemar c)",
+                     "n disc = what the exact p-value rests on; the concordant",
+                     "         items are not in the denominator."]
+            self._skip(out, title, rows)
+            return
+        name = f"fig3-discordance-{b.slug()}.png"
+        fig, ax = self._new(name, size=(8.0, 0.46 * len(others) + 1.9))
+        ax.grid(True, axis="x", color=GRID, linewidth=0.8)
+        ax.axvline(0, color=INK_2, linewidth=1.2, zorder=2)
+        for row, j in enumerate(others):
+            y = len(others) - 1 - row
+            ndisc = len(lost[j]) + len(gained[j])
+            if ndisc == 0:
+                ax.annotate("no item changed verdict", xy=(0, y), xytext=(8, 0),
+                            textcoords="offset points", color=MUTED,
+                            fontsize=8.5, va="center")
+                continue
+            for k, i in enumerate(lost[j]):
+                ax.plot([-(k + 1)], [y], marker="o", markersize=9,
+                        color=FLAG, markeredgecolor=SURFACE,
+                        markeredgewidth=1.2, zorder=3)
+            for k, i in enumerate(gained[j]):
+                ax.plot([k + 1], [y], marker="o", markersize=9,
+                        color=SERIES, markeredgecolor=SURFACE,
+                        markeredgewidth=1.2, zorder=3)
+            ax.annotate(f"n disc {ndisc}",
+                        xy=(max(len(gained[j]), 1), y), xytext=(14, 0),
+                        textcoords="offset points", color=INK_2, fontsize=8.5,
+                        va="center")
+        span = max(1, max((len(lost[j]) for j in others), default=1),
+                   max((len(gained[j]) for j in others), default=1))
+        ax.set_xlim(-span - 0.8, span + 2.2)
+        ax.set_ylim(-0.55, len(others) - 0.45)
+        ax.set_yticks(list(range(len(others))))
+        ax.set_yticklabels([short_level(levels[j], levels)
+                            for j in reversed(others)], fontsize=9)
+        ticks = list(range(-span, span + 1))
+        ax.set_xticks(ticks)
+        ax.set_xticklabels([str(abs(t)) for t in ticks])
+        ax.set_xlabel("items lost (left, orange) and gained (right, blue) "
+                      "against the baseline", color=INK_2, fontsize=9)
+        for side in ("left",):
+            ax.spines[side].set_visible(False)
         self._save(fig, ax, name, title, out,
-                   "pass rate per system prompt with Wilson intervals")
+                   "items each system prompt lost and gained against the "
+                   "baseline, the pairing the McNemar test rests on")
 
     # -- figure 4: the MDE curve ------------------------------------------
     def mde_curve(self, psi: float, ci: tuple[float, float], now: int,
@@ -1782,25 +1964,67 @@ class Figures:
                 [None if m is None else 100 * m for m in mde], unit=" pp"))
             return
         name = "fig4-mde.png"
-        fig, ax = self._new(name, size=(8.0, 4.0))
+        fig, ax = self._new(name, size=(8.5, 4.4))
         xs = [n for n, m in zip(ns, mde) if m is not None]
         ys = [100 * m for m in mde if m is not None]
         ax.plot(xs, ys, color=SERIES, linewidth=2.0, marker="o", markersize=4.5,
-                markeredgecolor=SURFACE, markeredgewidth=1.5)
+                markeredgecolor=SURFACE, markeredgewidth=1.5, zorder=3)
         ax.set_xscale("log")
         ax.set_xticks(xs)
         ax.set_xticklabels([str(x) for x in xs])
+        # A log axis keeps its own minor ticks and formats them, so 6x10^1 and
+        # 2x10^2 were being drawn straight through the explicit labels above.
+        ax.xaxis.set_minor_locator(plt.NullLocator())
+        ax.xaxis.set_minor_formatter(plt.NullFormatter())
         ax.set_xlabel("items per level", color=INK_2, fontsize=9)
         ax.set_ylabel("detectable difference, percentage points", color=INK_2,
                       fontsize=9)
+
+        # Headroom above the ceiling, so the annotations below have somewhere to
+        # sit that is not the title.
+        top = 100 * psi * 1.35
+        ax.set_ylim(0, top)
+
+        # The ceiling. A paired difference cannot exceed the discordance rate,
+        # since every unit of it has to come from an item that changed, so this
+        # line is where the section-5 table's `impossible` comes from.
+        ax.axhline(100 * psi, color=MUTED, linewidth=1.2,
+                   linestyle=(0, (5, 4)), zorder=1)
+        ax.annotate(f"psi = {100 * psi:.1f} pp: no larger effect can exist",
+                    xy=(xs[-1] if xs else 1, 100 * psi), xytext=(0, 5),
+                    textcoords="offset points", color=MUTED, fontsize=8.5,
+                    ha="right")
+
+        # The marker is drawn whether or not an MDE exists at this n. It used
+        # to be guarded on detectable_effect() being non-None, which is exactly
+        # None when nothing is reachable at 80% power -- so the figure dropped
+        # its own subject in the one case this section exists to report.
         here = detectable_effect(now, psi)
+        ax.axvline(now, color=FLAG, linewidth=1.4, linestyle=(0, (4, 3)),
+                   zorder=2)
         if here is not None:
-            ax.axvline(now, color=FLAG, linewidth=1.4, linestyle=(0, (4, 3)))
-            ax.annotate(f"this experiment: {now} items, {100 * here:.0f} pp",
-                        xy=(now, 100 * here), xytext=(8, 8),
-                        textcoords="offset points", color=FLAG, fontsize=9)
+            note = f"this experiment:\n{now} items, {100 * here:.0f} pp"
+        else:
+            ceiling = mcnemar_power(now, psi, psi * 0.999)
+            note = (f"this experiment: {now} items.\nNo effect is reachable at "
+                    f"80% power --\neven {100 * psi:.1f} pp is found only "
+                    f"{100 * ceiling:.0f}% of the time.")
+        ax.annotate(note, xy=(now, top * 0.30), xytext=(10, 0),
+                    textcoords="offset points", color=FLAG, fontsize=9,
+                    ha="left", va="center")
+        if xs and min(xs) > min(ns):
+            # The curve starts where it starts for a reason; shade the dead
+            # region and say why, rather than leaving a reader to wonder how an
+            # axis of items per level begins at 64.
+            ax.axvspan(min(ns), min(xs), color=MUTED, alpha=0.07, lw=0, zorder=0)
+            ax.annotate(f"under {min(xs)} items nothing is\ndetectable at 80% "
+                        f"power",
+                        xy=(min(ns), top * 0.06), xytext=(6, 0),
+                        textcoords="offset points", color=MUTED, fontsize=8.5,
+                        ha="left", va="bottom")
         self._save(fig, ax, name, title, out,
-                   "minimum detectable effect against items per level")
+                   "minimum detectable effect against items per level, with "
+                   "the psi ceiling and this experiment's position marked")
 
 
 # ---------------------------------------------------------------------------
