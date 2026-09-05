@@ -1,0 +1,25 @@
+/* llama_ui.tcss - the dashboard's stylesheet.
+ *
+ * Phase 0 carries the rules across from the CSS string that used to live in
+ * LlamaApp verbatim, so the split can be verified against an unchanged
+ * appearance. The layout pass that removes the magic numbers below is a
+ * separate change.
+ */
+
+.fields { height: auto; }
+.fields > Vertical { width: 1fr; height: auto; padding: 0 1; }
+.buttons { height: auto; padding: 1 0; }
+.buttons > Button { margin-right: 1; }
+
+CommandBar {
+    background: $panel;
+    color: $text;
+    padding: 1;
+    border: round $primary;
+    margin: 1 0;
+}
+
+Log { height: 1fr; min-height: 10; border: round $panel; }
+DataTable { height: auto; max-height: 20; }
+#ans-body { height: 1fr; min-height: 20; border: round $panel; padding: 0 1; }
+#ans-table { max-height: 12; }
