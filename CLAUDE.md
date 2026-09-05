@@ -271,6 +271,10 @@ or agent) updates the docs in the same commit:
   longer exists, delete it and log the deletion; leaving dead configuration in
   place has repeatedly cost time in this project.
 
+## Commit policy
+
+All commits should use conventional commit style and stay focused on one topic.
+
 ## Decisions log
 
 - Keep a short, dated log here of model evaluation results and any changes to the
