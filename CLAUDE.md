@@ -265,7 +265,38 @@ or agent) updates the docs in the same commit:
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
-- **2026-09-04** (latest): Investigated a run full of `fail_error`s and found
+- **2026-09-04** (fifth): Deleted the pre-database files from the gitignored
+  `logs/`. The 2026-08-30 entry below kept them deliberately -- "the old files
+  stay in gitignored `logs/` as a reference that no code reads" -- and five days
+  later nothing had read them, which is the evidence that entry was waiting for.
+  Gone: `tests.jsonl` (252K), `tests.log`, `answers/` (three suite runs of
+  exported markdown), `.active-run.json`, `.requests.37995.jsonl` and the
+  markdown serving log `Qwen3.8-27B-UD-Q3_K_XL.log`. Two orphaned
+  `.server.<pid>.log` captures went with them: `llama-serve` tees the server's
+  `-lv 4` output there and deletes it on exit, so a surviving one is a server
+  that was killed, and both pids were long dead. `logs/llama.db` is the only
+  thing left in the directory. **What this costs, stated rather than
+  discovered later: every measurement taken before 2026-08-30 is now gone.**
+  They were never imported and now cannot be. That is acceptable for the reason
+  the move happened in the first place -- those formats stored statistics
+  computed at write time rather than the samples behind them, so a figure in
+  them could never be recomputed, which is exactly the defect that made this
+  project mis-estimate the per-layer `-ngl` cost once -- and the numbers worth
+  keeping were transcribed into `README.md` with their full configuration, as
+  the maintenance policy requires. The reason to delete rather than keep
+  indefinitely is that a directory of files no code reads is a trap: a reader
+  finds `tests.jsonl` sitting beside `llama.db` and has no way to tell which
+  one is authoritative, and the answer has been "the database" since
+  2026-08-30. Migration 4 carries **no DDL and one `schema_note`**, because the
+  deletion falsified a note already inside the database: `NOTES_1` tells a
+  reader those files "remain in logs/ as a historical reference", and an
+  applied migration is never edited, so the correction is a new note rather
+  than a rewrite. `README.md`'s copy of the same sentence was updated in the
+  same change, since it is documentation rather than history. `llama.db` itself
+  was not touched: backed up first, and integrity, foreign keys and every row
+  count (3 runs, 186 results, 186 answers, 185 requests, 1392 GPU samples,
+  11104 scrapes) checked identical afterwards.
+- **2026-09-04** (fourth): Investigated a run full of `fail_error`s and found
   two defects, one in the harness and one in an adapter, plus a structural gap
   that let the second one exist. Both are fixed here.
   **First, a dead server was being recorded as a model failure.** `run_item`
@@ -331,7 +362,7 @@ or agent) updates the docs in the same commit:
   reader re-deriving the same correction. A `prune` of samples would not have
   touched them; the append-only rule covers the schema, not rows that record an
   event that never happened.
-- **2026-09-04** (later): Wrote four candidate system prompts for the local
+- **2026-09-04** (third): Wrote four candidate system prompts for the local
   models and put them beside the deployed one, so the question "what does the
   assistant's own prompt cost a local model" has an experiment rather than an
   opinion. `assistant.txt` stays the verbatim Open WebUI text and is the
@@ -368,7 +399,7 @@ or agent) updates the docs in the same commit:
   measured yet.** The run is `--suite smoke` once with no `--system` and once
   per prompt against a served profile; until that exists, no claim is made
   here about which prompt is better or about what any of them costs.
-- **2026-09-04** (later still): `llama-test` can send a system prompt, and a system
+- **2026-09-04** (second): `llama-test` can send a system prompt, and a system
   prompt is now part of what identifies a measurement. `--system <name>` puts
   the contents of `prompts/system/<name>.txt` in front of the item as a
   `system` message; without the flag nothing is sent, which is the same request
@@ -416,7 +447,7 @@ or agent) updates the docs in the same commit:
   prompt yet — the A/B (`--suite smoke` with and without `--system assistant`)
   is the user's to run, and until it is, nothing here claims what a system
   prompt costs.
-- **2026-09-04** (last): Added a third serving profile, `qwen25c`
+- **2026-09-04** (first): Added a third serving profile, `qwen25c`
   (`unsloth/Qwen2.5-Coder-7B-Instruct-GGUF`, `Q4_K_M`, 4.36 GiB, alias
   `qwen2.5-coder-7b`). The reason it is worth a profile rather than a one-off
   `llama-server` invocation is that it is the first local model here that fits

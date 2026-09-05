@@ -486,9 +486,11 @@ model name the server reported, which at least makes that detectable.
 **The database starts empty.** The markdown serving logs and `logs/tests.jsonl`
 that preceded it were deliberately not imported, so nothing in it predates
 2026-08-30 and `llama-test compare` says nothing until a new serving run and a new
-test run happen. Those files remain in `logs/` as a historical reference and are
-read by no code. `schema_note` records this, and every later discontinuity, inside
-the database itself.
+test run happen. Those files were **deleted on 2026-09-04**: they had been kept
+in `logs/` as a historical reference, read by no code, and five days of that was
+enough to establish that nothing wanted them. Measurements taken before
+2026-08-30 therefore no longer exist anywhere. `schema_note` records this, and
+every other discontinuity, inside the database itself.
 
 ### Hardware and model
 

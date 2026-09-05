@@ -401,10 +401,32 @@ NOTES_3 = [
      "which use the variable each problem actually names."),
 ]
 
+# No DDL. A migration is the only thing that writes a schema_note, and this note
+# has to be written because a previous one became false outside the database:
+# NOTES_1 tells a reader that the markdown serving logs, tests.jsonl and
+# logs/answers/ "remain in logs/ as a historical reference". They were deleted
+# on 2026-09-04. An applied migration is never edited, so the correction is a
+# new note rather than a rewrite of the old one.
+SCHEMA_4 = ""
+
+NOTES_4 = [
+    ("2026-09-04",
+     "The pre-database files NOTES_1 points at are gone. logs/tests.jsonl, "
+     "logs/tests.log, logs/answers/, logs/.active-run.json, "
+     "logs/.requests.<pid>.jsonl and the markdown serving log "
+     "logs/<model>-<quant>.log were deleted on 2026-09-04, five days after "
+     "this store replaced them and read by no code in between. Nothing here "
+     "changed and nothing was imported: this database still starts on "
+     "2026-08-30, and measurements taken before that date no longer exist "
+     "anywhere. NOTES_1 is accurate about everything except their continued "
+     "presence on disk."),
+]
+
 MIGRATIONS: list[tuple[int, str, list[tuple[str, str]]]] = [
     (1, SCHEMA_1, NOTES_1),
     (2, SCHEMA_2, NOTES_2),
     (3, SCHEMA_3, NOTES_3),
+    (4, SCHEMA_4, NOTES_4),
 ]
 
 
