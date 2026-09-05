@@ -14,16 +14,23 @@
 #
 # COMMANDS
 #   llama-serve [profile] [-- extra llama-server args]
-#   llama-test  [prompt] [profile]
+#   llama-test  <benchmark>/<item-id> | --suite smoke|standard|full
+#               [--system <name>]            # prompts/system/<name>.txt
+#   llama-test  list | fetch | selfcheck | compare | answer | ui
+#   llama-ui                                 # the Textual dashboard
+#   llama-db    sql | prune | vacuum | export | schema
 #   llama-sweep-threads [profile] [thread-list]
 #   llama-sweep-ngl     [profile] [ngl-list]
-#   llama-fetch         [profile]
+#   llama-fetch         [profile]            # model weights, not test data
 #   llama-check
 #   llama-vram
 #   llama-profiles
+#   llama-profile-names
 #
-# GPU telemetry is recorded automatically for every llama-serve run by
-# scripts/llama-vram-log.sh; see that file's header and README.md.
+# GPU telemetry, request timings and test results all go into one SQLite
+# database, logs/llama.db, written by scripts/llama-vram-log.sh (serving) and
+# scripts/llama_test.py (tests). Nothing writes a markdown log any more; see
+# README.md for the schema and llama-db below for the query entry points.
 #
 # ---------------------------------------------------------------------------
 
@@ -36,7 +43,7 @@
 : "${LLAMA_HOST:=0.0.0.0}"
 : "${LLAMA_PORT:=8090}"          # 8080 is reserved for work tooling
 : "${LLAMA_DEFAULT_PROFILE:=qwen38}"
-: "${LLAMA_PROMPTS:=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/prompts}"
+: "${LLAMA_REPO:=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
 # Flash attention flag spelling changed in llama.cpp during 2026: older builds
 # accept `--flash-attn 1`, current builds accept `-fa on|off|auto`. This script
@@ -44,7 +51,13 @@
 : "${LLAMA_FA:=on}"
 : "${LLAMA_FA_LEGACY:=0}"
 
-export LLAMA_BIN LLAMA_MODELS LLAMA_HOST LLAMA_PORT
+export LLAMA_BIN LLAMA_MODELS LLAMA_HOST LLAMA_PORT LLAMA_REPO
+
+# Every profile _llama_profile knows about, in the order diagnostics list them.
+# Declared once here rather than repeated in each place that enumerates them:
+# the two Python front ends read it back through `profile-names` below, so
+# adding a profile means editing this file and nothing else.
+LLAMA_PROFILE_NAMES=(qwen38 qwen36 qwen25c)
 
 # ---------------------------------------------------------------------------
 # Profile definitions
@@ -112,9 +125,42 @@ _llama_profile() {
                 "{\"reasoning_effort\":\"${LLAMA_REASONING:-medium}\"}")
             ;;
 
+        qwen25c|qwen2.5-coder|coder)
+            LLAMA_P_NAME="qwen25c"
+            LLAMA_P_ARCH="dense"
+            LLAMA_P_MODEL="$LLAMA_MODELS/qwen25-coder-7b/Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf"
+            LLAMA_P_REPO="unsloth/Qwen2.5-Coder-7B-Instruct-GGUF"
+            LLAMA_P_PATTERN="*Q4_K_M*"
+            LLAMA_P_ALIAS="qwen2.5-coder-7b"
+            # The first profile here whose weights fit in VRAM outright: 4.36
+            # GiB of 6, so -ngl 99 puts all 28 blocks and the output head on the
+            # GPU and nothing is read from system RAM. There is no -ngl to tune
+            # and no -ot to pin; those exist above only because those models are
+            # 3-5x the size of this card.
+            LLAMA_P_NGL=99
+            LLAMA_P_MOE=""          # must stay empty: dense has no experts
+            # 16384, not the model's full 32768. This GGUF is 28 layers with 4
+            # KV heads of 128, so a q8_0 KV cache costs ~29.7 KiB/token: ~476
+            # MiB at 16K, ~952 MiB at 32K, on top of 4.36 GiB of weights and the
+            # compute buffer. The full window fits inside 6 GiB only with less
+            # room to spare than LLAMA_VRAM_HEADROOM_MIB warns at. Raise it with
+            # LLAMA_CTX and confirm with llama-vram if you need the context more
+            # than the margin.
+            LLAMA_P_CTX=16384
+            LLAMA_P_THREADS=6       # batch assembly only; no layer runs on CPU
+            # Qwen2.5-Coder's own generation_config.json, which is not the
+            # Qwen3.8 thinking-mode set above. llama-test pins temperature to 0
+            # in its request body regardless, so these govern Open WebUI traffic.
+            LLAMA_P_SAMPLERS=(--temp 0.7 --top-p 0.8 --top-k 20 --repeat-penalty 1.1)
+            # No LLAMA_P_SPEC: Qwen2.5 predates the nextn/MTP tensors qwen38
+            # drafts from, and no draft model is worth 4.36 GiB of this card.
+            # No LLAMA_P_EXTRA: not a thinking model, so there is no
+            # reasoning_effort to set and no reasoning_content in its responses.
+            ;;
+
         *)
             echo "llama: unknown profile '$p'" >&2
-            echo "known profiles: qwen36, qwen38" >&2
+            echo "known profiles: ${LLAMA_PROFILE_NAMES[*]}" >&2
             return 1
             ;;
     esac
@@ -180,9 +226,17 @@ _llama_profile() {
 # llama-profiles: list what is defined and whether the weights are on disk
 # ---------------------------------------------------------------------------
 llama-profiles() {
+    local py; py="$(_llama_python 2>/dev/null)"
+    if [[ -n "$py" && -f "$LLAMA_REPO/scripts/llama_console.py" ]]; then
+        "$py" "$LLAMA_REPO/scripts/llama_console.py" profiles
+        return $?
+    fi
+    # Fallback: no Python at all. Diagnostics have to work in exactly the
+    # circumstances that break everything else, so this path is kept, not
+    # deleted as redundant.
     local p
     printf '%-10s %-7s %-9s %s\n' PROFILE ARCH STATUS MODEL
-    for p in qwen36 qwen38; do
+    for p in "${LLAMA_PROFILE_NAMES[@]}"; do
         ( _llama_profile "$p" >/dev/null 2>&1
           local status="missing"
           [[ -f "$LLAMA_P_MODEL" ]] && status="present"
@@ -281,9 +335,10 @@ llama-serve() {
 
     echo "llama-serve: profile=$LLAMA_P_NAME arch=$LLAMA_P_ARCH ngl=$LLAMA_P_NGL${LLAMA_P_MOE:+ moe=$LLAMA_P_MOE}${LLAMA_P_OT:+ ot=$LLAMA_P_OT} ctx=$LLAMA_P_CTX threads=$LLAMA_P_THREADS parallel=$LLAMA_P_PARALLEL port=$LLAMA_PORT${LLAMA_P_SPEC:+ spec=\"${LLAMA_P_SPEC[*]}\"}" >&2
 
-    if [[ "$LLAMA_P_ARCH" == "dense" ]]; then
-        echo "llama-serve: dense model. Watch 'n_layer' in the load log and confirm" >&2
-        echo "             VRAM headroom with llama-vram before treating -ngl as tuned." >&2
+    if [[ "$LLAMA_P_ARCH" == "dense" && "$LLAMA_P_NGL" != "99" ]]; then
+        echo "llama-serve: dense model, partial offload. Watch 'n_layer' in the load" >&2
+        echo "             log and confirm VRAM headroom with llama-vram before" >&2
+        echo "             treating -ngl as tuned." >&2
     fi
 
     # GPU telemetry for the life of this server. The recorder waits for the port,
@@ -404,269 +459,235 @@ llama-sweep-ngl() {
 }
 
 # ---------------------------------------------------------------------------
-# llama-test: send a saved prompt to the running server and print the answer
-# alongside llama.cpp's own timings
+# _llama_python: the interpreter the Python tooling runs under
 #
-#   llama-test                       # default prompt, default profile
-#   llama-test humaneval0            # named prompt from prompts/
-#   llama-test humaneval0 qwen36     # another profile's sampling/effort
-#   llama-test --list                # what prompts exist
+# This box's python3 is externally managed (PEP 668), so `pip install` refuses
+# outright and a venv is required rather than merely tidy. The venv is created
+# on first use when the shell is interactive; a non-interactive caller gets bare
+# python3 and the plain-text output path instead of an unexpected 200 MB
+# download. LLAMA_NO_BOOTSTRAP=1 disables creation entirely.
 #
-# The model name comes from the running server (GET /v1/models), not from the
-# profile: the profile describes how a model would be served, but the server is
-# already serving something, and mislabelling a measurement makes it worthless.
-# The profile still supplies reasoning_effort and the prompt's sampling context.
+# NOTE: scripts/llama-vram-log.sh deliberately does NOT go through this. The
+# telemetry recorder runs in the background for the life of every server and
+# must keep working with bare python3, which is why llama_db.py, llama_record.py,
+# llama_stats.py, llama_tests.py and llama_results.py are all stdlib-only.
+# ---------------------------------------------------------------------------
+_llama_python() {
+    local venv="$LLAMA_REPO/.venv/bin/python"
+    if [[ -x "$venv" ]]; then
+        printf '%s' "$venv"; return 0
+    fi
+    if [[ "${LLAMA_NO_BOOTSTRAP:-0}" != "1" && $- == *i* && -t 2 ]]; then
+        echo "llama: creating $LLAMA_REPO/.venv (first run; needs rich, textual," \
+             "numpy, pandas)" >&2
+        if python3 -m venv "$LLAMA_REPO/.venv" >&2 \
+           && "$venv" -m pip install -q --upgrade pip >&2 \
+           && "$venv" -m pip install -q -r "$LLAMA_REPO/requirements.txt" >&2; then
+            printf '%s' "$venv"; return 0
+        fi
+        echo "llama: venv setup failed; falling back to python3 (plain output," \
+             "and DS-1000 grading will be unavailable)" >&2
+    fi
+    printf '%s' "$(command -v python3)"
+}
+
+# ---------------------------------------------------------------------------
+# llama-test: run published benchmark items against the running server, grade
+# them with the benchmark's own tests, and record the result
 #
-# Prompts are files in $LLAMA_PROMPTS (default <repo>/prompts) so a comparison
-# run is reproducible: the prompt is version-controlled, not retyped. temperature
-# is pinned to 0 for the same reason.
+#   llama-test humaneval/HumanEval/0     # one item
+#   llama-test --suite smoke             # a tier (24 items)
+#   llama-test --suite smoke --system assistant   # ... under a system prompt
+#   llama-test --suite full --resume     # continue an interrupted run
+#   llama-test list                      # benchmarks, tiers, revisions
+#   llama-test fetch                     # download the datasets
+#   llama-test selfcheck                 # grade the datasets' own answers
+#   llama-test compare                   # rank models/configs by pass rate
+#   llama-test answer humaneval/HumanEval/0   # print a stored answer
+#   llama-test ui                        # the Textual dashboard
 #
-# The response is streamed, because at a few tokens per second a blocking call
-# looks indistinguishable from a hung server. The answer goes to stdout and the
-# model's thinking to stderr, so `llama-test > answer.md` still captures only
-# the completion while the reasoning stays watchable on the terminal.
-# LLAMA_TEST_STREAM=0 falls back to one blocking request; LLAMA_TEST_RAW=1 keeps
-# the raw response instead of deleting it.
+# The body lives in scripts/llama_test.py; this is a wrapper so the command
+# keeps its name and its place beside llama-serve. Everything the bash version
+# guaranteed still holds, and for the same reasons:
+#
+#   * The model name comes from the running server (GET /v1/models), not from
+#     the profile. The profile describes how a model would be served; the server
+#     is already serving something, and mislabelling a measurement makes it
+#     worthless.
+#   * temperature is pinned to 0 and cache_prompt defaults to false, so a
+#     repeated prompt measures the configuration and not the prefix cache.
+#   * The answer goes to stdout and the model's thinking to stderr, so
+#     `llama-test humaneval/HumanEval/0 > answer.md` captures the completion
+#     alone. Rich output is on stderr only, and only when it is a terminal.
+#
+# The item prompts are not files in prompts/. They are rendered from the
+# datasets' own text through the templates in tests/adapters/*.toml, which is
+# what makes a pass rate comparable to a published one. What does live in
+# prompts/system/ is the optional *system* prompt --system names: not a test,
+# not graded, and carrying no ground truth, just a request variable that gets
+# recorded with the result and grouped on by `compare`, so a run made with one
+# is never averaged with a run made without. LLAMA_TEST_STREAM=0 restores a
+# single blocking request; the other LLAMA_TEST_* variables are unchanged
+# (MAX_TOKENS, TIMEOUT, CACHE_PROMPT).
 # ---------------------------------------------------------------------------
 llama-test() {
-    if [[ "${1:-}" == "--list" || "${1:-}" == "-l" ]]; then
-        _llama_test_prompts
-        return 0
+    local py; py="$(_llama_python)"
+    LLAMA_PORT="$LLAMA_PORT" "$py" "$LLAMA_REPO/scripts/llama_test.py" "$@"
+}
+
+# ---------------------------------------------------------------------------
+# llama-ui: the Textual dashboard over serving, tests and comparison
+#
+# Every screen displays the shell command equivalent to its current form state,
+# so it teaches the flags rather than hiding them.
+# ---------------------------------------------------------------------------
+llama-ui() {
+    local py; py="$(_llama_python)"
+    LLAMA_PORT="$LLAMA_PORT" "$py" "$LLAMA_REPO/scripts/llama_ui.py" "$@"
+}
+
+# ---------------------------------------------------------------------------
+# llama-db: the store itself
+#
+#   llama-db                 # open the sqlite3 shell on logs/llama.db
+#   llama-db sql "SELECT ..."          # one query, as a table
+#   llama-db schema                    # .schema
+#   llama-db prune --before 2026-08-01 # drop samples and scrapes before a date
+#   llama-db vacuum                    # reclaim the space a prune freed
+#   llama-db export <dir>              # every table as CSV
+#
+# Reading is deliberately not wrapped: the whole reason for moving off markdown
+# is that the store answers questions nobody wrote a command for, and a menu of
+# canned queries would put that back. `llama-db` opens the shell; llama-test
+# compare and llama-ui are the two views worth having as commands.
+#
+# prune is the escape valve for the reversed retention rule (CLAUDE.md,
+# 2026-08-30): every GPU sample is now kept, at roughly 1 MB per day of
+# continuous serving, so nothing needs pruning for a long time, and when it does
+# it should be a decision rather than a silent discard. It touches only the
+# telemetry -- results, answers, requests and configurations are never dropped
+# by it, because those are the measurements.
+# ---------------------------------------------------------------------------
+llama-db() {
+    local db="${LLAMA_DB:-${LLAMA_VRAM_LOGDIR:-$LLAMA_REPO/logs}/llama.db}"
+    local cmd="${1:-shell}"; shift 2>/dev/null || true
+
+    if ! command -v sqlite3 >/dev/null 2>&1; then
+        echo "llama-db: sqlite3 is not installed" >&2; return 1
     fi
-
-    local prompt="humaneval0" profile="$LLAMA_DEFAULT_PROFILE"
-    [[ $# -gt 0 && "$1" != -* ]] && { prompt="$1"; shift; }
-    [[ $# -gt 0 && "$1" != -* ]] && { profile="$1"; shift; }
-    _llama_profile "$profile" || return 1
-
-    local c
-    for c in curl jq; do
-        command -v "$c" >/dev/null 2>&1 || {
-            echo "llama-test: '$c' not found" >&2; return 1; }
-    done
-
-    local file="$LLAMA_PROMPTS/$prompt.txt"
-    if [[ ! -f "$file" ]]; then
-        echo "llama-test: no prompt '$prompt' in $LLAMA_PROMPTS" >&2
-        _llama_test_prompts >&2
+    if [[ ! -f "$db" && "$cmd" != "shell" ]]; then
+        echo "llama-db: no database at $db (it is created by llama-serve or llama-test)" >&2
         return 1
     fi
 
-    # The profile only says which model *would* be served; the server serves
-    # whatever llama-serve last loaded, which is what actually answers. Ask it,
-    # and fall back to the profile alias only when it cannot be reached.
-    local model="$LLAMA_P_ALIAS" served
-    served="$(curl -sS --connect-timeout 5 \
-        "http://localhost:${LLAMA_PORT}/v1/models" 2>/dev/null \
-        | jq -r '.data[0].id // empty' 2>/dev/null)"
-    if [[ -n "$served" ]]; then
-        if [[ "$served" != "$LLAMA_P_ALIAS" ]]; then
-            echo "llama-test: port $LLAMA_PORT is serving '$served', not profile" \
-                 "$LLAMA_P_NAME's '$LLAMA_P_ALIAS' - testing what is running" >&2
-        fi
-        model="$served"
-    fi
-
-    # Only profiles that actually serve reasoning_effort get the field; sending
-    # it to a model whose template ignores it would silently mean nothing.
-    local effort=""
-    [[ "${LLAMA_P_EXTRA[*]:-}" == *reasoning_effort* ]] && effort="${LLAMA_REASONING:-medium}"
-
-    local req resp
-    req="$(mktemp "${TMPDIR:-/tmp}/llama-test-req.XXXXXX.json")"
-    resp="$(mktemp "${TMPDIR:-/tmp}/llama-test-resp.XXXXXX.json")"
-
-    local stream="true"
-    [[ "${LLAMA_TEST_STREAM:-1}" == "0" ]] && stream="false"
-
-    # Prompt caching is off by default. llama-server's own default is true
-    # (tools/server/server-task.h:53), which means a repeated prompt is a warm
-    # prefill: it reprocesses only the tokens that differ and reports
-    # cache_n > 0, so its prompt_n/prompt_ms measure the cache, not the
-    # configuration under test. Set LLAMA_TEST_CACHE_PROMPT=1 to measure the
-    # follow-up-turn case deliberately; those requests are summarised
-    # separately in the log, never blended with cold ones.
-    local cache_prompt="false"
-    [[ "${LLAMA_TEST_CACHE_PROMPT:-0}" == "1" ]] && cache_prompt="true"
-
-    jq -Rs --arg model "$model" \
-           --arg effort "$effort" \
-           --argjson max "${LLAMA_TEST_MAX_TOKENS:-2048}" \
-           --argjson cache_prompt "$cache_prompt" \
-           --argjson stream "$stream" '
-        {
-            model: $model,
-            messages: [{role: "user", content: .}],
-            max_tokens: $max,
-            temperature: 0,
-            cache_prompt: $cache_prompt
-        }
-        + (if $effort == "" then {}
-           else {chat_template_kwargs: {reasoning_effort: $effort}} end)
-        + (if $stream then {stream: true} else {} end)
-    ' "$file" > "$req" || { rm -f "$req" "$resp"; return 1; }
-
-    # Read back what is actually in the body rather than re-deriving it: the log
-    # should record the request that was sent, not the one this function meant to
-    # send. Absent fields are dropped rather than recorded as null.
-    local params
-    params="$(jq -c '{temperature, top_p, top_k, max_tokens, cache_prompt,
-                      stream, chat_template_kwargs}
-                     | with_entries(select(.value != null))' "$req")"
-
-    echo "llama-test: prompt=$prompt model=$model${effort:+ effort=$effort} port=$LLAMA_PORT stream=$stream cache_prompt=$cache_prompt" >&2
-
-    # A short connect timeout so a stopped server fails immediately, while the
-    # overall timeout stays generous: a thinking model at ~7 t/s is slow.
-    local -a curl_args=(
-        -sS --connect-timeout 5 --max-time "${LLAMA_TEST_TIMEOUT:-900}"
-        "http://localhost:${LLAMA_PORT}/v1/chat/completions"
-        -H 'Content-Type: application/json'
-        -d @"$req"
-    )
-
-    # Wall clock around the request. prompt_ms + predicted_ms is the server's
-    # accounting; this is what the caller actually waited, and on a streamed
-    # response the two differ.
-    local t0 wall timings=""
-    t0=$(date +%s%3N)
-
-    if [[ "$stream" == "true" ]]; then
-        # -N disables curl's output buffering; without it the whole point of
-        # streaming is lost. The raw SSE stream is tee'd aside so the timings in
-        # the final chunk survive the loop.
-        local rc
-        curl -N "${curl_args[@]}" | tee "$resp" | _llama_test_stream
-        # The pipeline's exit status is the renderer's, so ask curl directly.
-        rc=${PIPESTATUS[0]}
-        wall=$(( $(date +%s%3N) - t0 ))
-        if (( rc != 0 )); then
-            echo "llama-test: no response from port $LLAMA_PORT (is llama-serve running?)" >&2
-            rm -f "$req" "$resp"
-            return 1
-        fi
-
-        if ! grep -q '^data: ' "$resp"; then
-            echo "llama-test: unexpected response:" >&2
-            cat "$resp" >&2
-            rm -f "$req" "$resp"
-            return 1
-        fi
-
-        # Generation and prompt-processing rates straight from the server, so a
-        # profile change can be judged without a separate llama-bench run. In a
-        # streamed response they ride on the last chunk.
-        echo
-        timings="$(sed -n 's/^data: //p' "$resp" | grep -v '^\[DONE\]$' \
-            | jq -s 'map(select(has("timings"))) | last | .timings // empty')"
-        [[ -n "$timings" ]] && echo "$timings"
-    else
-        curl "${curl_args[@]}" > "$resp"
-        local rc=$?
-        wall=$(( $(date +%s%3N) - t0 ))
-        if (( rc != 0 )); then
-            echo "llama-test: no response from port $LLAMA_PORT (is llama-serve running?)" >&2
-            rm -f "$req" "$resp"
-            return 1
-        fi
-
-        if ! jq -e '.choices[0].message' "$resp" >/dev/null 2>&1; then
-            echo "llama-test: unexpected response:" >&2
-            cat "$resp" >&2
-            rm -f "$req" "$resp"
-            return 1
-        fi
-
-        jq -r '.choices[0].message.content' "$resp"
-        echo
-        timings="$(jq '.timings // empty' "$resp")"
-        [[ -n "$timings" ]] && echo "$timings"
-    fi
-
-    _llama_test_record "$timings" "$model" "$prompt" "$wall" "$params"
-
-    if [[ "${LLAMA_TEST_RAW:-0}" == "1" ]]; then
-        echo "llama-test: full response kept at $resp" >&2
-        rm -f "$req"
-    else
-        rm -f "$req" "$resp"
-    fi
+    case "$cmd" in
+        shell)  sqlite3 -box "$db" ;;
+        sql)    [[ $# -gt 0 ]] || { echo "usage: llama-db sql \"SELECT ...\"" >&2; return 2; }
+                sqlite3 -box -header "$db" "$*" ;;
+        schema) sqlite3 "$db" ".schema" ;;
+        vacuum) sqlite3 "$db" "VACUUM;" && echo "vacuumed $db" ;;
+        prune)
+            local before=""
+            while [[ $# -gt 0 ]]; do
+                case "$1" in
+                    --before) before="$2"; shift 2 ;;
+                    *) echo "llama-db prune: unknown argument '$1'" >&2; return 2 ;;
+                esac
+            done
+            [[ -n "$before" ]] || { echo "usage: llama-db prune --before YYYY-MM-DD" >&2; return 2; }
+            sqlite3 "$db" <<SQL
+DELETE FROM gpu_sample WHERE at < '$before';
+DELETE FROM metrics_scrape WHERE at < '$before';
+SELECT 'gpu_sample rows left: ' || count(*) FROM gpu_sample;
+SELECT 'metrics_scrape rows left: ' || count(*) FROM metrics_scrape;
+SQL
+            echo "run 'llama-db vacuum' to reclaim the space" ;;
+        export)
+            local out="${1:-$LLAMA_REPO/logs/export}"
+            mkdir -p "$out" || return 1
+            local t
+            for t in $(sqlite3 "$db" \
+                    "SELECT name FROM sqlite_master WHERE type='table' \
+                     AND name NOT LIKE 'sqlite_%' ORDER BY name"); do
+                sqlite3 -header -csv "$db" "SELECT * FROM $t;" > "$out/$t.csv"
+            done
+            echo "exported $(ls -1 "$out"/*.csv | wc -l) tables to $out" ;;
+        *)
+            echo "usage: llama-db {shell|sql|schema|prune|vacuum|export}" >&2
+            return 2 ;;
+    esac
 }
 
-# Hand this request's timings to the run llama-vram-log.sh is recording, so the
-# numbers outlive the terminal. llama_log.py does nothing when no run is active,
-# which is the right outcome for a server someone started by hand.
-_llama_test_record() {
-    local timings="$1" model="$2" prompt="$3" wall="$4" params="${5:-}"
-    [[ -n "$timings" && "$timings" != "null" ]] || return 0
-    command -v python3 >/dev/null 2>&1 || return 0
-
-    local here logdir
-    here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    [[ -f "$here/llama_log.py" ]] || return 0
-    logdir="${LLAMA_VRAM_LOGDIR:-$(cd "$here/.." && pwd)/logs}"
-
-    printf '%s' "$timings" | python3 "$here/llama_log.py" request \
-        --logdir "$logdir" --model "$model" --prompt "$prompt" \
-        --port "$LLAMA_PORT" --wall-ms "${wall:-0}" \
-        --params "${params:-{\}}" \
-        --timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" 2>/dev/null
+# ---------------------------------------------------------------------------
+# llama-profile-names: the defined profiles, one per line
+#
+# The Python front ends (llama_console.py, llama_ui.py) call this rather than
+# carrying their own copy of the list, so a new profile appears in llama-profiles
+# and in the dashboard's picker without editing either.
+# ---------------------------------------------------------------------------
+llama-profile-names() {
+    printf '%s\n' "${LLAMA_PROFILE_NAMES[@]}"
 }
 
-# Render an OpenAI-style SSE stream: answer to stdout, thinking to stderr.
-# jq writes to the terminal directly rather than through a command substitution,
-# which would strip the trailing newlines that matter in a code answer.
-_llama_test_stream() {
-    local line json kind thinking="" answering=""
-    while IFS= read -r line; do
-        [[ "$line" == data:\ * ]] || continue
-        json="${line#data: }"
-        [[ "$json" == "[DONE]" ]] && break
-
-        # One jq classifies the chunk, a second prints its text. Classifying in
-        # jq rather than pattern-matching the raw JSON keeps a completion that
-        # merely mentions "reasoning_content" from being mistaken for thinking.
-        kind="$(jq -r '[(if .choices[0].delta.reasoning_content != null
-                         then "r" else empty end),
-                        (if .choices[0].delta.content != null
-                         then "c" else empty end)] | join("")' \
-                <<< "$json" 2>/dev/null)"
-
-        # Both banners go to stderr, including the one announcing the answer:
-        # stdout must stay the completion and nothing else.
-        if [[ "$kind" == *r* ]]; then
-            [[ -n "$thinking" ]] || { printf '\n--- thinking ---\n' >&2; thinking=1; }
-            # Order matters: >&2 must copy the real stderr onto stdout before 2>
-            # is pointed at /dev/null, or the thinking goes to /dev/null instead.
-            jq -j '.choices[0].delta.reasoning_content // empty' <<< "$json" >&2 2>/dev/null
-        fi
-        if [[ "$kind" == *c* ]]; then
-            [[ -n "$answering" ]] || { printf '\n\n--- response ---\n' >&2; answering=1; }
-            jq -j '.choices[0].delta.content // empty' <<< "$json" 2>/dev/null
-        fi
-    done
-    echo
-}
-
-_llama_test_prompts() {
-    local f
-    echo "prompts in $LLAMA_PROMPTS:"
-    for f in "$LLAMA_PROMPTS"/*.txt; do
-        [[ -f "$f" ]] || { echo "  (none)"; return 0; }
-        f="$(basename "$f")"; echo "  ${f%.txt}"
-    done
+# ---------------------------------------------------------------------------
+# llama-profile-json: a profile's resolved settings, as JSON
+#
+# Exists so the Python tooling can read the serving configuration without
+# re-declaring the profile table. scripts/llama-env.sh is the single source of
+# truth for serving configuration (CLAUDE.md); a second copy in Python would
+# disagree with this one the first time either changed.
+# ---------------------------------------------------------------------------
+llama-profile-json() {
+    _llama_profile "${1:-$LLAMA_DEFAULT_PROFILE}" || return 1
+    local spec extra samplers
+    # Empty for a profile that takes no thinking budget, the same test
+    # _vramlog_config in llama-vram-log.sh makes before recording "n/a". A
+    # non-thinking model reported as reasoning "medium" would have a caller
+    # setting LLAMA_REASONING for a server that ignores it.
+    local reasoning=""
+    [[ "${LLAMA_P_EXTRA[*]:-}" == *reasoning_effort* ]] && reasoning="${LLAMA_REASONING:-medium}"
+    spec="$(printf '%s\n' "${LLAMA_P_SPEC[@]:-}" | jq -R . | jq -sc 'map(select(. != ""))')"
+    extra="$(printf '%s\n' "${LLAMA_P_EXTRA[@]:-}" | jq -R . | jq -sc 'map(select(. != ""))')"
+    samplers="$(printf '%s\n' "${LLAMA_P_SAMPLERS[@]:-}" | jq -R . | jq -sc 'map(select(. != ""))')"
+    jq -nc \
+        --arg name "$LLAMA_P_NAME" --arg arch "$LLAMA_P_ARCH" \
+        --arg model "$LLAMA_P_MODEL" --arg alias "$LLAMA_P_ALIAS" \
+        --arg ot "$LLAMA_P_OT" --arg port "$LLAMA_PORT" \
+        --arg ctx "$LLAMA_P_CTX" --arg threads "$LLAMA_P_THREADS" \
+        --arg ngl "$LLAMA_P_NGL" --arg moe "$LLAMA_P_MOE" \
+        --arg parallel "${LLAMA_P_PARALLEL:-1}" \
+        --arg reasoning "$reasoning" \
+        --argjson spec "$spec" --argjson extra "$extra" \
+        --argjson samplers "$samplers" \
+        '{name: $name, arch: $arch, model: $model, alias: $alias,
+          port: ($port | tonumber), ctx: $ctx, threads: $threads, ngl: $ngl,
+          moe: $moe, parallel: $parallel, ot: $ot, reasoning: $reasoning,
+          spec: $spec, extra: $extra, samplers: $samplers,
+          weights_present: ($model | length > 0)}' \
+    | jq -c --argjson present "$([[ -f "$LLAMA_P_MODEL" ]] && echo true || echo false)" \
+        '.weights_present = $present'
 }
 
 # ---------------------------------------------------------------------------
 # Diagnostics
 # ---------------------------------------------------------------------------
 llama-check() {
+    local py; py="$(_llama_python 2>/dev/null)"
+    if [[ -n "$py" && -f "$LLAMA_REPO/scripts/llama_console.py" ]]; then
+        "$py" "$LLAMA_REPO/scripts/llama_console.py" check
+        return $?
+    fi
     curl -fsS "http://localhost:${LLAMA_PORT}/v1/models" \
         || { echo "llama-check: no server responding on port $LLAMA_PORT" >&2; return 1; }
     echo
 }
 
 llama-vram() {
+    local py; py="$(_llama_python 2>/dev/null)"
+    if [[ -n "$py" && -f "$LLAMA_REPO/scripts/llama_console.py" ]]; then
+        "$py" "$LLAMA_REPO/scripts/llama_console.py" vram
+        return $?
+    fi
     watch -n 1 nvidia-smi \
         --query-gpu=temperature.gpu,utilization.gpu,memory.used,memory.total,power.draw,clocks.sm \
         --format=csv
@@ -684,12 +705,16 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
         sweep-threads)  llama-sweep-threads "$@" ;;
         sweep-ngl)      llama-sweep-ngl "$@" ;;
         test)           llama-test "$@" ;;
+        ui)             llama-ui "$@" ;;
+        db)             llama-db "$@" ;;
         check)          llama-check "$@" ;;
         vram)           llama-vram "$@" ;;
         vram-log)       "$(dirname "${BASH_SOURCE[0]}")/llama-vram-log.sh" record "$@" ;;
         profiles)       llama-profiles "$@" ;;
+        profile-json)   llama-profile-json "$@" ;;
+        profile-names)  llama-profile-names "$@" ;;
         *)
-            echo "usage: $(basename "$0") {serve|fetch|test|sweep-threads|sweep-ngl|check|vram|vram-log|profiles} [profile] [args]" >&2
+            echo "usage: $(basename "$0") {serve|fetch|test|ui|db|sweep-threads|sweep-ngl|check|vram|vram-log|profiles|profile-json|profile-names} [profile] [args]" >&2
             exit 2
             ;;
     esac

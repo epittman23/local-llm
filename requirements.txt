@@ -1,0 +1,16 @@
+# Terminal front end for the llama-* helpers (scripts/llama_console.py,
+# scripts/llama_ui.py). Every entry point degrades to plain stdlib output when
+# these are absent, so the venv is a convenience, not a hard dependency.
+rich>=13.7
+textual>=0.79
+
+# DS-1000 grading only. Its problems are real StackOverflow pandas/numpy tasks
+# and its code_context harness imports these directly; without them those items
+# are recorded as skipped rather than failed. HumanEval and MBPP need nothing
+# beyond the standard library.
+numpy>=1.26
+pandas>=2.1
+
+# DS-1000 items occasionally round-trip through YAML. One module, and it is the
+# difference between an item being gradeable here and being dropped.
+pyyaml>=6.0

@@ -1,0 +1,5 @@
+# Widens the DS-1000 slice beyond Pandas/Numpy. Optional: items whose library is
+# not importable are recorded as skipped, never failed, so installing these
+# changes coverage rather than correctness.
+scipy>=1.11
+scikit-learn>=1.3
