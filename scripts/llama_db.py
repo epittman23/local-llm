@@ -443,12 +443,198 @@ NOTES_5 = [
      "predates the fix."),
 ]
 
+# The scheduling record for llama-tune. Five tables and two views, and
+# deliberately not another store of measurements: throughput already lives in
+# request and verdicts already live in result, so everything here is the
+# schedule that produced them plus the keys to join back.
+#
+# The identity worth explaining is tune_candidate.candidate_sha. config_id is
+# the natural key and is not usable as the primary one, because it is computed
+# by the recorder and the recorder only opens a run once the port binds -- a
+# candidate that OOMs at a high -ngl never reaches upsert_config at all, and
+# infeasibility is a result this search has to be able to record. So a
+# candidate is identified by a hash of the override dict the optimizer chose,
+# and config_id is filled in on its first successful load.
+#
+# The join back to existing rows is one suite_run_id per (sweep, candidate).
+# That is what makes the existing UNIQUE (suite_run_id, benchmark, item_id) do
+# the work: a round cannot double-count an item an earlier round already ran,
+# and completed() gives crash-safe resume per candidate for free.
+SCHEMA_6 = """
+CREATE TABLE tune_sweep (
+    sweep_id            TEXT PRIMARY KEY,
+    started_at          TEXT NOT NULL,
+    ended_at            TEXT,
+    ended_reason        TEXT,
+    pid                 INTEGER,
+    profile             TEXT NOT NULL,
+    tier                TEXT NOT NULL,
+    benchmark           TEXT,
+    system_name         TEXT,
+    system_sha          TEXT,
+    grid_path           TEXT NOT NULL,
+    grid_sha            TEXT NOT NULL,
+    item_order_sha      TEXT NOT NULL,
+    item_count          INTEGER NOT NULL,
+    budget_mode         TEXT NOT NULL CHECK (budget_mode IN
+                          ('interactive','overnight','multiday','trials')),
+    budget_seconds      INTEGER,
+    budget_visits       INTEGER,
+    eta                 INTEGER NOT NULL,
+    round_items         INTEGER NOT NULL,
+    candidates          INTEGER NOT NULL,
+    stages              TEXT NOT NULL DEFAULT 'explore,refine',
+    objective           TEXT NOT NULL,
+    alpha               REAL NOT NULL,
+    on_drift            TEXT NOT NULL,
+    seed                INTEGER NOT NULL,
+    baseline_config_id  TEXT REFERENCES config(config_id),
+    winner_candidate    TEXT,
+    verdict             TEXT CHECK (verdict IS NULL OR verdict IN
+                          ('adopted','rejected','indeterminate','incomplete')),
+    verdict_reason      TEXT NOT NULL DEFAULT ''
+) STRICT;
+
+CREATE TABLE tune_candidate (
+    sweep_id          TEXT NOT NULL REFERENCES tune_sweep(sweep_id) ON DELETE CASCADE,
+    candidate_sha     TEXT NOT NULL,
+    stage             TEXT NOT NULL,
+    overrides         TEXT NOT NULL,
+    is_baseline       INTEGER NOT NULL DEFAULT 0,
+    config_id         TEXT REFERENCES config(config_id),
+    suite_run_id      TEXT NOT NULL,
+    status            TEXT NOT NULL CHECK (status IN
+                        ('pending','active','eliminated','infeasible',
+                         'marginal','winner','rejected')),
+    status_reason     TEXT NOT NULL DEFAULT '',
+    score             REAL,
+    eliminated_round  INTEGER,
+    created_at        TEXT NOT NULL,
+    PRIMARY KEY (sweep_id, candidate_sha)
+) STRICT;
+
+CREATE TABLE tune_round (
+    sweep_id          TEXT NOT NULL REFERENCES tune_sweep(sweep_id) ON DELETE CASCADE,
+    round             INTEGER NOT NULL,
+    stage             TEXT NOT NULL,
+    started_at        TEXT NOT NULL,
+    ended_at          TEXT,
+    item_from         INTEGER NOT NULL,
+    item_to           INTEGER NOT NULL,
+    survivors         INTEGER NOT NULL,
+    baseline_gen_tps  REAL,
+    baseline_regime   TEXT,
+    drift_ratio       REAL,
+    decision          TEXT NOT NULL DEFAULT '',
+    notes             TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (sweep_id, round)
+) STRICT;
+
+CREATE TABLE tune_visit (
+    visit_id            INTEGER PRIMARY KEY,
+    sweep_id            TEXT NOT NULL REFERENCES tune_sweep(sweep_id) ON DELETE CASCADE,
+    candidate_sha       TEXT NOT NULL,
+    round               INTEGER NOT NULL,
+    attempt             INTEGER NOT NULL DEFAULT 1,
+    run_id              INTEGER REFERENCES run(run_id) ON DELETE SET NULL,
+    config_id           TEXT REFERENCES config(config_id),
+    started_at          TEXT NOT NULL,
+    ended_at            TEXT,
+    server_pgid         INTEGER,
+    load_ms             REAL,
+    item_from           INTEGER NOT NULL,
+    item_to             INTEGER NOT NULL,
+    items_done          INTEGER NOT NULL DEFAULT 0,
+    since_pause_seconds REAL,
+    counts_toward_round INTEGER NOT NULL DEFAULT 1,
+    status              TEXT NOT NULL CHECK (status IN
+                          ('running','done','infeasible','aborted')),
+    reason              TEXT NOT NULL DEFAULT ''
+) STRICT;
+
+CREATE INDEX tune_visit_sweep ON tune_visit(sweep_id, round);
+CREATE UNIQUE INDEX tune_visit_slot
+    ON tune_visit(sweep_id, candidate_sha, round, attempt);
+
+CREATE TABLE tune_pause (
+    pause_id        INTEGER PRIMARY KEY,
+    sweep_id        TEXT NOT NULL REFERENCES tune_sweep(sweep_id) ON DELETE CASCADE,
+    round           INTEGER,
+    visit_id        INTEGER REFERENCES tune_visit(visit_id) ON DELETE SET NULL,
+    started_at      TEXT NOT NULL,
+    ended_at        TEXT,
+    trigger_kind    TEXT NOT NULL CHECK (trigger_kind IN ('drift','regime','cliff')),
+    drift_ratio     REAL,
+    attempt         INTEGER NOT NULL DEFAULT 1,
+    throttle_before TEXT,
+    throttle_after  TEXT,
+    temp_before     REAL,
+    temp_after      REAL,
+    power_before    REAL,
+    power_after     REAL,
+    probe_tps       REAL,
+    resolution      TEXT CHECK (resolution IS NULL OR resolution IN
+                      ('recovered','timeout','abandoned'))
+) STRICT;
+
+CREATE INDEX tune_pause_sweep ON tune_pause(sweep_id, started_at);
+
+CREATE VIEW v_tune_request AS
+SELECT v.sweep_id, v.candidate_sha, v.round, v.attempt, v.visit_id,
+       v.counts_toward_round, v.since_pause_seconds,
+       c.is_baseline, c.stage,
+       r.benchmark, r.item_id, r.outcome, r.at,
+       q.request_id, q.predicted_n, q.predicted_ms, q.prompt_n, q.prompt_ms,
+       CASE WHEN q.predicted_ms > 0
+            THEN q.predicted_n / q.predicted_ms * 1000.0 END AS gen_tps,
+       r.run_id, r.config_id
+FROM tune_visit v
+JOIN tune_candidate c
+  ON c.sweep_id = v.sweep_id AND c.candidate_sha = v.candidate_sha
+JOIN result r ON r.suite_run_id = c.suite_run_id
+JOIN request q ON q.request_id = r.request_id
+WHERE r.at >= v.started_at AND (v.ended_at IS NULL OR r.at <= v.ended_at);
+
+CREATE VIEW v_tune_pause AS
+SELECT p.pause_id, p.sweep_id, p.round, p.visit_id, p.started_at, p.ended_at,
+       p.trigger_kind, p.drift_ratio, p.attempt, p.throttle_before, p.throttle_after,
+       p.temp_before, p.temp_after, p.power_before, p.power_after, p.probe_tps,
+       p.resolution,
+       (julianday(COALESCE(p.ended_at, p.started_at)) - julianday(p.started_at))
+         * 86400.0 AS seconds,
+       v.candidate_sha AS interrupted_candidate
+FROM tune_pause p
+LEFT JOIN tune_visit v ON v.visit_id = p.visit_id;
+"""
+
+NOTES_6 = [
+    ("2026-09-06",
+     "From this date some result rows are a PREFIX of a tier rather than a "
+     "complete tier. llama-tune eliminates a candidate part way through a "
+     "sweep and its rows stop where it was eliminated, so a config_id can "
+     "appear in v_pass_rate with far fewer rows than the tier it names. "
+     "v_pass_rate groups by tier and has no notion of completeness, so it "
+     "cannot tell a tuning candidate from a short tier. Count rows per "
+     "suite_run_id, or join tune_candidate and read status, before comparing "
+     "a pass rate from this date against one from before it."),
+    ("2026-09-06",
+     "config_id is unchanged by this migration. The fingerprint is still "
+     "_vramlog_config over the same six lines, so every id recorded before "
+     "today names the same serving configuration and nothing became "
+     "incomparable. tune_candidate.candidate_sha is a different identity -- a "
+     "hash of the override dict llama-tune chose -- and exists because a "
+     "candidate that fails to load never reaches upsert_config and therefore "
+     "has no config_id at all. A candidate row with config_id NULL and status "
+     "'infeasible' is a configuration this machine could not serve."),
+]
+
 MIGRATIONS: list[tuple[int, str, list[tuple[str, str]]]] = [
     (1, SCHEMA_1, NOTES_1),
     (2, SCHEMA_2, NOTES_2),
     (3, SCHEMA_3, NOTES_3),
     (4, SCHEMA_4, NOTES_4),
     (5, SCHEMA_5, NOTES_5),
+    (6, SCHEMA_6, NOTES_6),
 ]
 
 
@@ -518,6 +704,7 @@ def connect(path: Path | None = None, *, sweep: bool = True) -> sqlite3.Connecti
     migrate(con)
     if sweep:
         sweep_stale_runs(con)
+        sweep_stale_sweeps(con)
     return con
 
 
@@ -543,6 +730,40 @@ def sweep_stale_runs(con: sqlite3.Connection) -> int:
                            (row["run_id"],)).fetchone()[0]
         con.execute("UPDATE run SET ended_at = ?, ended_reason = 'stale' "
                     "WHERE run_id = ?", (last or row["started_at"], row["run_id"]))
+        closed += 1
+    return closed
+
+
+def sweep_stale_sweeps(con: sqlite3.Connection) -> int:
+    """Close sweeps whose tuner is gone, and the visits and pauses it left open.
+
+    The sibling of sweep_stale_runs, for the same reason and by the same test:
+    a sweep carries the tuner's pid, so a dead tuner is detectable rather than
+    merely likely. This is the whole of llama-tune's crash recovery -- there is
+    deliberately no state file, because the one this project used to keep
+    (logs/.active-run.json) was removed by an EXIT trap that a kill -9 skips,
+    and the stale marker it left behind had later results filed under it.
+
+    An open pause closes as 'abandoned' rather than 'recovered': nothing was
+    watching the card while the tuner was dead, so whether it recovered is
+    unknown, and a resume has to re-probe rather than assume.
+    """
+    closed = 0
+    for row in con.execute("SELECT sweep_id, pid, started_at FROM tune_sweep "
+                           "WHERE ended_at IS NULL").fetchall():
+        pid = row["pid"]
+        if pid and _alive(pid):
+            continue
+        con.execute("UPDATE tune_visit SET status = 'aborted', ended_at = ?, "
+                    "reason = 'tuner gone' "
+                    "WHERE sweep_id = ? AND status = 'running'",
+                    (now(), row["sweep_id"]))
+        con.execute("UPDATE tune_pause SET ended_at = ?, "
+                    "resolution = 'abandoned' "
+                    "WHERE sweep_id = ? AND resolution IS NULL",
+                    (now(), row["sweep_id"]))
+        con.execute("UPDATE tune_sweep SET ended_at = ?, ended_reason = 'stale' "
+                    "WHERE sweep_id = ?", (now(), row["sweep_id"]))
         closed += 1
     return closed
 
@@ -1065,4 +1286,255 @@ def serving_summary(con: sqlite3.Connection) -> list[dict]:
             if pp_n and pp_s and not facts["prefill_tps"]:
                 facts["prefill_tps"] = pp_n / pp_s
         out.append(facts)
+    return out
+
+
+# ---------------------------------------------------------------------------
+# configuration search: sweeps, candidates, rounds, visits, pauses
+# ---------------------------------------------------------------------------
+def open_sweep(con: sqlite3.Connection, sweep_id: str, **fields) -> str:
+    cols = ["sweep_id", "started_at", "pid", "profile", "tier", "benchmark",
+            "system_name", "system_sha", "grid_path", "grid_sha",
+            "item_order_sha", "item_count", "budget_mode", "budget_seconds",
+            "budget_visits", "eta", "round_items", "candidates", "stages",
+            "objective", "alpha", "on_drift", "seed", "baseline_config_id"]
+    row = {c: fields.get(c) for c in cols}
+    row["sweep_id"] = sweep_id
+    row["started_at"] = fields.get("started_at") or now()
+    con.execute(
+        f"INSERT INTO tune_sweep ({', '.join(cols)}) "
+        f"VALUES ({', '.join(':' + c for c in cols)})", row)
+    return sweep_id
+
+
+def close_sweep(con: sqlite3.Connection, sweep_id: str, *, reason: str,
+                verdict: str | None = None, winner: str | None = None,
+                verdict_reason: str = "") -> None:
+    """Record how a sweep's invocation ended.
+
+    Guarded on verdict, not on ended_at: 'incomplete' is a resumable, non-
+    terminal state (the same status budget/visits exhaustion, an interrupt or
+    a drift give-up all produce), and every resume calls this again at its own
+    end. Gating on ended_at IS NULL -- the run table's model, where a close is
+    genuinely final -- made the very first incomplete close permanent: every
+    later resume's real verdict (adopted/rejected/indeterminate) became a
+    silent no-op UPDATE forever after. Once a verdict is one of those three
+    terminal ones, further closes (e.g. a stale/dead process racing a live
+    one) are refused, matching what the ended_at-based guard protected before.
+    """
+    con.execute("UPDATE tune_sweep SET ended_at = ?, ended_reason = ?, "
+                " verdict = ?, winner_candidate = ?, verdict_reason = ? "
+                "WHERE sweep_id = ? AND (verdict IS NULL OR verdict = 'incomplete')",
+                (now(), reason, verdict, winner, verdict_reason, sweep_id))
+
+
+def sweep(con: sqlite3.Connection, sweep_id: str) -> dict | None:
+    row = con.execute("SELECT * FROM tune_sweep WHERE sweep_id = ?",
+                      (sweep_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def sweeps(con: sqlite3.Connection, limit: int = 20) -> list[dict]:
+    return [dict(r) for r in con.execute(
+        "SELECT * FROM tune_sweep ORDER BY started_at DESC LIMIT ?",
+        (limit,)).fetchall()]
+
+
+def latest_sweep(con: sqlite3.Connection, *, open_only: bool = False) -> str | None:
+    """Most recent sweep, or most recent still-resumable one.
+
+    'Still resumable' means verdict is NULL (never closed at all, e.g. killed
+    before finishing a single round) or 'incomplete' -- the same condition
+    close_sweep() guards its UPDATE on, not ended_at: a sweep that closed
+    incomplete has ended_at set (so sweep_stale_sweeps leaves it alone) but is
+    exactly the case open_only exists to find.
+    """
+    sql = "SELECT sweep_id FROM tune_sweep"
+    if open_only:
+        sql += " WHERE verdict IS NULL OR verdict = 'incomplete'"
+    sql += " ORDER BY started_at DESC LIMIT 1"
+    row = con.execute(sql).fetchone()
+    return row["sweep_id"] if row else None
+
+
+def add_candidates(con: sqlite3.Connection, sweep_id: str,
+                   rows: list[dict]) -> int:
+    """Register candidates. Existing ones are left alone, so a resume is a no-op."""
+    added = 0
+    for r in rows:
+        cur = con.execute(
+            "INSERT INTO tune_candidate (sweep_id, candidate_sha, stage, "
+            " overrides, is_baseline, config_id, suite_run_id, status, "
+            " created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(sweep_id, candidate_sha) DO NOTHING",
+            (sweep_id, r["candidate_sha"], r["stage"], r["overrides"],
+             1 if r.get("is_baseline") else 0, r.get("config_id"),
+             r["suite_run_id"], r.get("status", "pending"), now()))
+        added += cur.rowcount or 0
+    return added
+
+
+def set_candidate(con: sqlite3.Connection, sweep_id: str, candidate_sha: str,
+                  **fields) -> None:
+    allowed = ("status", "status_reason", "config_id", "score",
+               "eliminated_round", "stage")
+    sets = {k: v for k, v in fields.items() if k in allowed}
+    if not sets:
+        return
+    clause = ", ".join(f"{k} = :{k}" for k in sets)
+    con.execute(f"UPDATE tune_candidate SET {clause} "
+                "WHERE sweep_id = :sweep_id AND candidate_sha = :candidate_sha",
+                {**sets, "sweep_id": sweep_id, "candidate_sha": candidate_sha})
+
+
+def sweep_candidates(con: sqlite3.Connection, sweep_id: str,
+                     *, stage: str | None = None) -> list[dict]:
+    sql = "SELECT * FROM tune_candidate WHERE sweep_id = ?"
+    args: list = [sweep_id]
+    if stage:
+        sql += " AND stage = ?"
+        args.append(stage)
+    sql += " ORDER BY is_baseline DESC, created_at, candidate_sha"
+    return [dict(r) for r in con.execute(sql, args).fetchall()]
+
+
+def open_round(con: sqlite3.Connection, sweep_id: str, rnd: int, *, stage: str,
+               item_from: int, item_to: int, survivors: int) -> None:
+    con.execute(
+        "INSERT INTO tune_round (sweep_id, round, stage, started_at, "
+        " item_from, item_to, survivors) VALUES (?, ?, ?, ?, ?, ?, ?) "
+        "ON CONFLICT(sweep_id, round) DO NOTHING",
+        (sweep_id, rnd, stage, now(), item_from, item_to, survivors))
+
+
+def close_round(con: sqlite3.Connection, sweep_id: str, rnd: int,
+                **fields) -> None:
+    allowed = ("baseline_gen_tps", "baseline_regime", "drift_ratio",
+               "decision", "notes", "survivors")
+    sets = {k: v for k, v in fields.items() if k in allowed}
+    clause = "".join(f"{k} = :{k}, " for k in sets)
+    con.execute(f"UPDATE tune_round SET {clause} ended_at = :at "
+                "WHERE sweep_id = :sweep_id AND round = :round",
+                {**sets, "at": now(), "sweep_id": sweep_id, "round": rnd})
+
+
+def sweep_rounds(con: sqlite3.Connection, sweep_id: str) -> list[dict]:
+    return [dict(r) for r in con.execute(
+        "SELECT * FROM tune_round WHERE sweep_id = ? ORDER BY round",
+        (sweep_id,)).fetchall()]
+
+
+def open_visit(con: sqlite3.Connection, sweep_id: str, candidate_sha: str,
+               rnd: int, *, attempt: int = 1, item_from: int, item_to: int,
+               since_pause_seconds: float | None = None) -> int:
+    cur = con.execute(
+        "INSERT INTO tune_visit (sweep_id, candidate_sha, round, attempt, "
+        " started_at, item_from, item_to, since_pause_seconds, status) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'running')",
+        (sweep_id, candidate_sha, rnd, attempt, now(), item_from, item_to,
+         since_pause_seconds))
+    return int(cur.lastrowid)
+
+
+def close_visit(con: sqlite3.Connection, visit_id: int, *, status: str,
+                **fields) -> None:
+    allowed = ("run_id", "config_id", "server_pgid", "load_ms", "items_done",
+               "counts_toward_round", "reason")
+    sets = {k: v for k, v in fields.items() if k in allowed}
+    clause = "".join(f"{k} = :{k}, " for k in sets)
+    con.execute(f"UPDATE tune_visit SET {clause} status = :status, "
+                " ended_at = :at WHERE visit_id = :visit_id",
+                {**sets, "status": status, "at": now(), "visit_id": visit_id})
+
+
+def set_visit(con: sqlite3.Connection, visit_id: int, **fields) -> None:
+    """Update a visit that is still running (the pgid and run_id land early)."""
+    allowed = ("run_id", "config_id", "server_pgid", "load_ms", "items_done",
+               "counts_toward_round", "reason")
+    sets = {k: v for k, v in fields.items() if k in allowed}
+    if not sets:
+        return
+    clause = ", ".join(f"{k} = :{k}" for k in sets)
+    con.execute(f"UPDATE tune_visit SET {clause} WHERE visit_id = :visit_id",
+                {**sets, "visit_id": visit_id})
+
+
+def sweep_visits(con: sqlite3.Connection, sweep_id: str,
+                 *, rnd: int | None = None) -> list[dict]:
+    sql = "SELECT * FROM tune_visit WHERE sweep_id = ?"
+    args: list = [sweep_id]
+    if rnd is not None:
+        sql += " AND round = ?"
+        args.append(rnd)
+    sql += " ORDER BY started_at, visit_id"
+    return [dict(r) for r in con.execute(sql, args).fetchall()]
+
+
+def open_pause(con: sqlite3.Connection, sweep_id: str, *, trigger: str,
+               rnd: int | None = None, visit_id: int | None = None,
+               attempt: int = 1, drift_ratio: float | None = None,
+               throttle_before: str | None = None,
+               temp_before: float | None = None,
+               power_before: float | None = None) -> int:
+    """Record a pause when it STARTS.
+
+    Written at the start rather than the end so a kill -9 during a long
+    cooldown still leaves a record of what the machine was doing; the stale
+    sweep closes it as 'abandoned'.
+    """
+    cur = con.execute(
+        "INSERT INTO tune_pause (sweep_id, round, visit_id, started_at, "
+        " trigger_kind, drift_ratio, attempt, throttle_before, temp_before, "
+        " power_before) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (sweep_id, rnd, visit_id, now(), trigger, drift_ratio, attempt,
+         throttle_before, temp_before, power_before))
+    return int(cur.lastrowid)
+
+
+def close_pause(con: sqlite3.Connection, pause_id: int, *, resolution: str,
+                **fields) -> None:
+    allowed = ("throttle_after", "temp_after", "power_after", "probe_tps")
+    sets = {k: v for k, v in fields.items() if k in allowed}
+    clause = "".join(f"{k} = :{k}, " for k in sets)
+    con.execute(f"UPDATE tune_pause SET {clause} resolution = :resolution, "
+                " ended_at = :at WHERE pause_id = :pause_id",
+                {**sets, "resolution": resolution, "at": now(),
+                 "pause_id": pause_id})
+
+
+def sweep_pauses(con: sqlite3.Connection, sweep_id: str) -> list[dict]:
+    return [dict(r) for r in con.execute(
+        "SELECT * FROM v_tune_pause WHERE sweep_id = ? ORDER BY started_at",
+        (sweep_id,)).fetchall()]
+
+
+def tune_matrix(con: sqlite3.Connection, sweep_id: str, *,
+                rnd: int | None = None,
+                counted_only: bool = True) -> dict[tuple[str, str, str], dict]:
+    """(benchmark, item_id, candidate_sha) -> the cell measured for it.
+
+    Keyed on the item and the candidate because the whole design is paired:
+    every candidate draws the same items in the same order, so a cell missing
+    on one side is a pair that cannot be used rather than a zero.
+
+    counted_only drops visits a mid-visit pause contaminated. Those rows stay
+    in result -- they are real graded outcomes -- but their throughput sits
+    either side of a machine-state change, so they are not a measurement of the
+    candidate.
+    """
+    sql = ("SELECT benchmark, item_id, candidate_sha, gen_tps, outcome, "
+           " round, attempt, at FROM v_tune_request WHERE sweep_id = ?")
+    args: list = [sweep_id]
+    if rnd is not None:
+        sql += " AND round = ?"
+        args.append(rnd)
+    if counted_only:
+        sql += " AND counts_toward_round = 1"
+    sql += " ORDER BY at"
+    out: dict[tuple[str, str, str], dict] = {}
+    for r in con.execute(sql, args).fetchall():
+        # Last write wins: a re-run after a pause supersedes the attempt the
+        # pause contaminated.
+        out[(r["benchmark"], r["item_id"], r["candidate_sha"])] = dict(r)
     return out

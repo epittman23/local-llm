@@ -520,15 +520,36 @@ class Block:
         return sum(1 for records in self.cells.values() if len(records) > 1)
 
 
-def blocks_of(records: list[dict]) -> list[Block]:
+#: The block key when the levels are system prompts, which is what every
+#: caller before llama-tune wanted: hold everything else fixed and vary the
+#: prompt.
+BLOCK_KEY = ["tier", "model", "config_id", "benchmark", "adapter_sha"]
+
+
+def blocks_of(records: list[dict], level_factor: str = "system_sha",
+              key_factors: list[str] | None = None) -> list[Block]:
+    """Group graded records into blocks whose columns are levels of one factor.
+
+    `level_factor` is a parameter because llama-tune asks the same question of
+    a different axis: its levels are serving configurations, not system
+    prompts. Block itself never assumed what a level is -- only that levels are
+    strings -- so the axis is genuinely all that changes, and the paired tests,
+    the discordance figures and the refusal machinery are reused rather than
+    rewritten against a second, less careful implementation.
+
+    The default keeps every existing caller on the system-prompt axis.
+    """
+    if key_factors is None:
+        key_factors = [f for f in BLOCK_KEY if f != level_factor]
+        if "system_sha" not in key_factors and level_factor != "system_sha":
+            key_factors.append("system_sha")
     blocks: dict[tuple, Block] = {}
     for r in records:
         if r.get("outcome") not in store.GRADED:
             continue
-        key = (level_of(r, "tier"), level_of(r, "model"), level_of(r, "config_id"),
-               level_of(r, "benchmark"), level_of(r, "adapter_sha"))
+        key = tuple(level_of(r, f) for f in key_factors)
         block = blocks.setdefault(key, Block(key))
-        cell = (str(r.get("item_id")), level_of(r, "system_sha"))
+        cell = (str(r.get("item_id")), level_of(r, level_factor))
         block.cells.setdefault(cell, []).append(r)
     return sorted(blocks.values(), key=lambda b: b.key)
 
@@ -658,6 +679,14 @@ def determines(records: list[dict], a: str, b: str) -> bool:
 def audit_design(con: sqlite3.Connection, records: list[dict],
                  blocks: list[Block], regimes: Regimes) -> tuple[str, Audit]:
     audit = Audit()
+    # Every factor is audited, including whichever one blocks_of put on the
+    # level axis. Excluding the level factor was considered, on the theory that
+    # a factor cannot be confounded with itself -- but it cannot be, since
+    # aliasing only ever compares distinct pairs, and excluding it would
+    # suppress the one veto that matters most to llama-tune: a sweep down to a
+    # single surviving config_id has to be told that it has one level and no
+    # contrast, not quietly analysed as though it had two.
+    factors = list(FACTORS)
     out = [h(2, "2. Design audit"),
            "",
            "What follows is derived from the rows, not asserted. A factor with one",
@@ -670,7 +699,7 @@ def audit_design(con: sqlite3.Connection, records: list[dict],
 
     graded = store.graded(records)
     rows = []
-    for factor in FACTORS:
+    for factor in factors:
         levels = sorted({level_of(r, factor) for r in graded})
         shown = ", ".join(levels[:6]) + (" ..." if len(levels) > 6 else "")
         rows.append([factor, str(len(levels)), shown])
@@ -678,7 +707,7 @@ def audit_design(con: sqlite3.Connection, records: list[dict],
         ["factor", "levels", "values"], rows), ""]
 
     # --- constant factors -------------------------------------------------
-    constant = [f for f in FACTORS
+    constant = [f for f in factors
                 if len({level_of(r, f) for r in graded}) < 2]
     if constant:
         out += ["", f"**Constant, so untestable:** {', '.join(constant)}. "
@@ -690,7 +719,7 @@ def audit_design(con: sqlite3.Connection, records: list[dict],
 
     # --- aliasing ---------------------------------------------------------
     aliased = []
-    for a, b in itertools.combinations(FACTORS, 2):
+    for a, b in itertools.combinations(factors, 2):
         if a in constant or b in constant:
             continue
         if determines(graded, a, b) and determines(graded, b, a):

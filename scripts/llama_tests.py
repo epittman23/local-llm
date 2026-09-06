@@ -431,6 +431,43 @@ def build_suite(suite: dict, adapters: dict[str, dict],
     return selected, skipped
 
 
+def interleave(selected: list[dict]) -> list[dict]:
+    """Round-robin the selected items across benchmarks, each in item order.
+
+    Exists for llama-tune, which measures a candidate over a prefix of the tier
+    and lengthens that prefix each round. A contiguous prefix of the natural
+    order would make round 1 a HumanEval-only measurement and a later round a
+    DS-1000 one, confounding the round with prompt length and difficulty --
+    which is the same confound the interleaved *candidate* order exists to
+    avoid, one level down.
+
+    Ordering within a benchmark is the sample's own, not sorted: `sample` is
+    seeded so every configuration draws the same items in the same sequence,
+    and re-sorting here would throw that away for no gain.
+    """
+    by_bench: dict[str, list[dict]] = {}
+    for row in selected:
+        by_bench.setdefault(row["benchmark"], []).append(row)
+    names = sorted(by_bench)
+    out: list[dict] = []
+    for i in range(max((len(v) for v in by_bench.values()), default=0)):
+        for name in names:
+            if i < len(by_bench[name]):
+                out.append(by_bench[name][i])
+    return out
+
+
+def order_sha(selected: list[dict]) -> str:
+    """A fingerprint of an item order, so a resume can prove it got the same one.
+
+    Over (benchmark, item_id) pairs in sequence: the identity of the items and
+    the order they run in are both part of what a sweep's rounds mean, since a
+    round is a slice of this list.
+    """
+    text = "\n".join(f"{r['benchmark']}/{r['item_id']}" for r in selected)
+    return hashlib.sha1(text.encode()).hexdigest()[:12]
+
+
 def missing_libraries(selected: list[dict]) -> dict[str, str]:
     """Item ids that cannot be graded here, mapped to why.
 

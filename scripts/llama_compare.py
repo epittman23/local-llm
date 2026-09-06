@@ -71,7 +71,12 @@ def flags_of(config_lines: list[str]) -> dict[str, str]:
         if value is not None:
             out[key] = value
     cache = config_value(config_lines, "cache") or ""
-    for name, pattern in (("cache-k", r"k=(\S+)"), ("cache-v", r"v=(\S+)")):
+    # `fa` shares the cache line and so is extracted here rather than through
+    # FLAG_KEYS. It is a flag a tuning grid can set, and a flag this warning
+    # cannot see reads as an all-clear -- the same defect as the four keys
+    # corrected on 2026-09-04.
+    for name, pattern in (("cache-k", r"k=(\S+)"), ("cache-v", r"v=(\S+)"),
+                          ("fa", r"fa: (\S+)")):
         hit = re.search(pattern, cache)
         if hit:
             out[name] = hit.group(1)

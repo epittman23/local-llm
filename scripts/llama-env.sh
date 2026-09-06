@@ -17,6 +17,8 @@
 #   llama-test  <benchmark>/<item-id> | --suite smoke|standard|full
 #               [--system <name>]            # prompts/system/<name>.txt
 #   llama-test  list | fetch | selfcheck | compare | answer | ui
+#   llama-tune  [profile] [--tier ...] [--budget ...]   # search the config space
+#   llama-tune  resume | status | report | list
 #   llama-ui                                 # the Textual dashboard
 #   llama-db    sql | prune | vacuum | export | schema
 #   llama-sweep-threads [profile] [thread-list]
@@ -26,6 +28,7 @@
 #   llama-vram
 #   llama-profiles
 #   llama-profile-names
+#   llama-config-id     [profile]            # the fingerprint, without serving
 #
 # GPU telemetry, request timings and test results all go into one SQLite
 # database, logs/llama.db, written by scripts/llama-vram-log.sh (serving) and
@@ -125,7 +128,7 @@ _llama_profile() {
                 "{\"reasoning_effort\":\"${LLAMA_REASONING:-medium}\"}")
             ;;
 
-        qwen25c|qwen2.5-coder|coder)
+        qwen25c|qwen2.5-coder|coder-2.5)
             LLAMA_P_NAME="qwen25c"
             LLAMA_P_ARCH="dense"
             LLAMA_P_MODEL="$LLAMA_MODELS/qwen25-coder-7b/Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf"
@@ -156,6 +159,19 @@ _llama_profile() {
             # drafts from, and no draft model is worth 4.36 GiB of this card.
             # No LLAMA_P_EXTRA: not a thinking model, so there is no
             # reasoning_effort to set and no reasoning_content in its responses.
+            ;;
+
+            qwen3c|qwen3.0-coder|coder-3)
+            LLAMA_P_NAME="qwen3c"
+            LLAMA_P_ARCH="moe"
+            LLAMA_P_MODEL="$LLAMA_MODELS/qwen3-coder-30b-a3b/Qwen3-Coder-30B-A3B-Instruct-Q4_1.gguf"
+            LLAMA_P_REPO="unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF"
+            LLAMA_P_PATTERN="*Q4_1*"
+            LLAMA_P_ALIAS="qwen3-coder-30b-a3b"
+            LLAMA_P_CTX=65536
+            LLAMA_P_THREADS=6
+            LLAMA_P_NGL=99          # all layers offloaded; experts live in RAM
+            LLAMA_P_MOE=34          # measured optimum on 6 GB VRAM
             ;;
 
         *)
@@ -388,6 +404,20 @@ llama-serve() {
 
 # Backwards-compatible name for the old .bashrc function.
 llama-qwen() { llama-serve "$@"; }
+
+# ---------------------------------------------------------------------------
+# The two sweeps below drive llama-bench, not llama-server. They write nothing
+# to logs/llama.db, so their numbers are not comparable with a served run and do
+# not survive the terminal; they are pre-flight, for getting into the right
+# neighbourhood before serving anything. `llama-tune` supersedes them for
+# choosing a serving configuration: it searches over served runs, records every
+# request, and judges correctness alongside throughput.
+#
+# They are kept rather than folded into llama-tune because llama-bench retains
+# GPU allocations across reloads on WSL2 (see the note in llama-sweep-ngl), so
+# reusing them as a feasibility pre-screen would import that defect into the
+# search.
+# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # llama-sweep-threads: generation throughput across thread counts
@@ -671,6 +701,11 @@ llama-profile-names() {
 # re-declaring the profile table. scripts/llama-env.sh is the single source of
 # truth for serving configuration (CLAUDE.md); a second copy in Python would
 # disagree with this one the first time either changed.
+#
+# Every key is exactly `LLAMA_<KNOB>` lowercased with the prefix dropped, because
+# llama_ui_app.py maps a form field back to an override variable by that
+# transform; a key spelled any other way makes the dashboard report the field as
+# overridden on every run.
 # ---------------------------------------------------------------------------
 llama-profile-json() {
     _llama_profile "${1:-$LLAMA_DEFAULT_PROFILE}" || return 1
@@ -681,6 +716,10 @@ llama-profile-json() {
     # setting LLAMA_REASONING for a server that ignores it.
     local reasoning=""
     [[ "${LLAMA_P_EXTRA[*]:-}" == *reasoning_effort* ]] && reasoning="${LLAMA_REASONING:-medium}"
+    # Same resolution _vramlog_config makes, so the key and the fingerprint's
+    # `fa:` field cannot disagree about which spelling this build takes.
+    local fa="$LLAMA_FA"
+    [[ "$LLAMA_FA_LEGACY" == "1" ]] && fa="legacy --flash-attn 1"
     spec="$(printf '%s\n' "${LLAMA_P_SPEC[@]:-}" | jq -R . | jq -sc 'map(select(. != ""))')"
     extra="$(printf '%s\n' "${LLAMA_P_EXTRA[@]:-}" | jq -R . | jq -sc 'map(select(. != ""))')"
     samplers="$(printf '%s\n' "${LLAMA_P_SAMPLERS[@]:-}" | jq -R . | jq -sc 'map(select(. != ""))')"
@@ -691,16 +730,82 @@ llama-profile-json() {
         --arg ctx "$LLAMA_P_CTX" --arg threads "$LLAMA_P_THREADS" \
         --arg ngl "$LLAMA_P_NGL" --arg moe "$LLAMA_P_MOE" \
         --arg parallel "${LLAMA_P_PARALLEL:-1}" \
+        --arg cache_k "${LLAMA_P_CACHE_K:-q8_0}" \
+        --arg cache_v "${LLAMA_P_CACHE_V:-q8_0}" \
+        --arg batch "${LLAMA_P_BATCH:-512}" \
+        --arg ubatch "${LLAMA_P_UBATCH:-512}" \
+        --arg fa "$fa" \
         --arg reasoning "$reasoning" \
         --argjson spec "$spec" --argjson extra "$extra" \
         --argjson samplers "$samplers" \
         '{name: $name, arch: $arch, model: $model, alias: $alias,
           port: ($port | tonumber), ctx: $ctx, threads: $threads, ngl: $ngl,
           moe: $moe, parallel: $parallel, ot: $ot, reasoning: $reasoning,
+          cache_k: $cache_k, cache_v: $cache_v, batch: $batch,
+          ubatch: $ubatch, fa: $fa,
           spec: $spec, extra: $extra, samplers: $samplers,
           weights_present: ($model | length > 0)}' \
     | jq -c --argjson present "$([[ -f "$LLAMA_P_MODEL" ]] && echo true || echo false)" \
         '.weights_present = $present'
+}
+
+# ---------------------------------------------------------------------------
+# llama-config-id: the fingerprint a set of overrides would produce
+#
+#   llama-config-id qwen36
+#   LLAMA_MOE=30 LLAMA_THREADS=8 llama-config-id qwen36
+#
+# Prints {"config_id": "...", "alias": "...", "lines": [...]} -- the same six
+# lines _vramlog_config records with a run, and the same sha1 over them, without
+# starting a server.
+#
+# It exists for llama-tune, which has to know whether two candidates are the
+# same configuration before it spends an hour measuring both. The alternative
+# was reimplementing the fingerprint in Python, which would have put a second
+# copy of it beside the one in llama-vram-log.sh and guaranteed they eventually
+# disagreed -- and a fingerprint that disagrees with itself files two different
+# configurations under one id.
+#
+# The sourcing runs in a subshell because llama-vram-log.sh sources this file:
+# pulling it into the current shell would redefine every function here while one
+# of them is running.
+# ---------------------------------------------------------------------------
+llama-config-id() {
+    local dir; dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    (
+        # shellcheck source=./llama-vram-log.sh
+        source "$dir/llama-vram-log.sh"
+        _llama_profile "${1:-$LLAMA_DEFAULT_PROFILE}" || exit 1
+        _vramlog_config
+        printf '%s\n' "${VRAMLOG_CFG_LINES[@]}" \
+            | jq -R . \
+            | jq -sc --arg id "$VRAMLOG_CFG_ID" --arg alias "$LLAMA_P_ALIAS" \
+                  '{config_id: $id, alias: $alias, lines: .}'
+    )
+}
+
+# ---------------------------------------------------------------------------
+# llama-tune: search the serving configuration space
+#
+#   llama-tune qwen25c --tier smoke --budget interactive
+#   llama-tune qwen36 --tier standard --budget overnight
+#   llama-tune --dry-run                     # the schedule, launching nothing
+#   llama-tune resume | status | report | list
+#
+# Runs a batch of served configurations against the same benchmark items,
+# eliminates the slow ones round by round, and narrows onto the best values.
+# Candidates are ranked on generation throughput and the winner then has to
+# survive a paired correctness check against the profile's own defaults -- so
+# the answer is "faster, with no regression detectable at this sample size",
+# never "answers better".
+#
+# It drives this file rather than replacing it: a candidate is served by
+# `llama-serve` under LLAMA_* overrides, so it is fingerprinted, recorded and
+# telemetered exactly like a hand-started run.
+# ---------------------------------------------------------------------------
+llama-tune() {
+    local py; py="$(_llama_python)"
+    LLAMA_PORT="$LLAMA_PORT" "$py" "$LLAMA_REPO/scripts/llama_tune.py" "$@"
 }
 
 # ---------------------------------------------------------------------------
@@ -731,8 +836,16 @@ llama-vram() {
 # ---------------------------------------------------------------------------
 # Direct-invocation dispatch. Sourcing this file defines the functions above and
 # stops here; executing it runs a subcommand.
+#
+# The depth check is load-bearing, not belt-and-braces. llama-config-id sources
+# llama-vram-log.sh, which sources this file back, and on that path
+# BASH_SOURCE[0] and $0 are both the absolute path of this script and therefore
+# equal -- so the nested source re-entered the dispatch with the *function's*
+# positional parameters and exited 2 with the usage text. A file being sourced
+# always has something above it on the source stack; the top-level program
+# never does.
 # ---------------------------------------------------------------------------
-if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+if [[ "${BASH_SOURCE[0]}" == "$0" && "${#BASH_SOURCE[@]}" -eq 1 ]]; then
     cmd="${1:-serve}"; shift 2>/dev/null || true
     case "$cmd" in
         serve)          llama-serve "$@" ;;
@@ -740,6 +853,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
         sweep-threads)  llama-sweep-threads "$@" ;;
         sweep-ngl)      llama-sweep-ngl "$@" ;;
         test)           llama-test "$@" ;;
+        tune)           llama-tune "$@" ;;
         ui)             llama-ui "$@" ;;
         report)         llama-report "$@" ;;
         db)             llama-db "$@" ;;
@@ -749,8 +863,9 @@ if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
         profiles)       llama-profiles "$@" ;;
         profile-json)   llama-profile-json "$@" ;;
         profile-names)  llama-profile-names "$@" ;;
+        config-id)      llama-config-id "$@" ;;
         *)
-            echo "usage: $(basename "$0") {serve|fetch|test|ui|report|db|sweep-threads|sweep-ngl|check|vram|vram-log|profiles|profile-json|profile-names} [profile] [args]" >&2
+            echo "usage: $(basename "$0") {serve|fetch|test|tune|ui|report|db|sweep-threads|sweep-ngl|check|vram|vram-log|profiles|profile-json|profile-names|config-id} [profile] [args]" >&2
             exit 2
             ;;
     esac

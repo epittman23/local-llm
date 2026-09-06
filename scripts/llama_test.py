@@ -557,6 +557,60 @@ def _report_one(con, record: dict, target: str) -> None:
              f"read it back with: llama-test answer {target}")
 
 
+def _slice_bounds(text: str, total: int) -> tuple[int, int]:
+    """Parse FROM:TO, where either side may be empty."""
+    if ":" not in text:
+        raise SystemExit("llama-test: --slice takes FROM:TO, e.g. 0:6 or 12:")
+    lo_s, hi_s = text.split(":", 1)
+    try:
+        lo = int(lo_s) if lo_s.strip() else 0
+        hi = int(hi_s) if hi_s.strip() else total
+    except ValueError:
+        raise SystemExit(f"llama-test: --slice '{text}' is not FROM:TO") from None
+    if lo < 0 or hi < lo:
+        raise SystemExit(f"llama-test: --slice '{text}' is not a forward range")
+    return lo, min(hi, total)
+
+
+def run_items(rows: list[dict], ctx: dict, con, *, show: bool,
+              results: list[dict] | None = None,
+              on_record=None, should_stop=None) -> list[dict]:
+    """Run graded items against the server, one committed transaction each.
+
+    Factored out of cmd_suite so llama-tune can drive the same loop: a tuning
+    visit is a suite run over a slice of the tier, and a second implementation
+    of it would eventually grade or record something differently from this one.
+
+    Exceptions propagate rather than being handled here, because the two
+    callers say different things about them -- a suite prints a --resume line,
+    a sweep closes the visit and moves to the next candidate. `results` is
+    passed in and appended to for the same reason: on KeyboardInterrupt or
+    ServerGone the caller still needs what was measured before it, and a return
+    value would have been lost with the stack.
+
+    on_record sees each record as it lands (the tuner watches for a mid-visit
+    throughput collapse); should_stop is asked before each item and ends the
+    loop cleanly when it answers true (budget spent, drift detected).
+    """
+    if results is None:
+        results = []
+    total = len(rows)
+    for i, row in enumerate(rows, 1):
+        if should_stop is not None and should_stop():
+            break
+        con.rule(f"[{i}/{total}] {row['benchmark']}/{row['item_id']}")
+        record = run_item(row, ctx, con, show=show)
+        results.append(record)
+        passed, attempted, rate = store.pass_rate(results)
+        style = "green" if record["outcome"] == store.PASS else "yellow"
+        con.say(f"  {record['outcome']}"
+                + (f" - {record['reason'][:120]}" if record["reason"] else "")
+                + f"   [{passed}/{attempted} passing]", style)
+        if on_record is not None:
+            on_record(record)
+    return results
+
+
 def cmd_suite(args) -> int:
     con = console()
     adapters = bench.load_adapters()
@@ -564,6 +618,19 @@ def cmd_suite(args) -> int:
     selected, skipped = bench.build_suite(suite, adapters, only=args.benchmark)
     if not selected:
         raise SystemExit(f"llama-test: suite '{args.suite}' selected no items")
+
+    # One canonical order for a tier, shared with llama-tune: round-robin across
+    # benchmarks, each in its sampled sequence. --slice cuts this list, so a
+    # tuning visit printed by llama-tune can be re-run by hand and land on the
+    # same items.
+    selected = bench.interleave(selected)
+    if getattr(args, "slice", None):
+        lo, hi = _slice_bounds(args.slice, len(selected))
+        con.note(f"slice {lo}:{hi} of {len(selected)} items "
+                 f"(order {bench.order_sha(selected)})")
+        selected = selected[lo:hi]
+        if not selected:
+            raise SystemExit(f"llama-test: --slice {args.slice} selected no items")
 
     # Checked once up front: importing pandas costs about a second, and a full
     # DS-1000 run would otherwise pay it 500 times to learn the same fact.
@@ -618,17 +685,8 @@ def cmd_suite(args) -> int:
 
     results: list[dict] = []
     started = time.time()
-    show = args.show
     try:
-        for i, row in enumerate(todo, 1):
-            con.rule(f"[{i}/{len(todo)}] {row['benchmark']}/{row['item_id']}")
-            record = run_item(row, ctx, con, show=show)
-            results.append(record)
-            passed, attempted, rate = store.pass_rate(results)
-            style = "green" if record["outcome"] == store.PASS else "yellow"
-            con.say(f"  {record['outcome']}"
-                    + (f" - {record['reason'][:120]}" if record["reason"] else "")
-                    + f"   [{passed}/{attempted} passing]", style)
+        run_items(todo, ctx, con, show=args.show, results=results)
     except KeyboardInterrupt:
         # The database is already complete up to the last finished item, because
         # each one is its own committed transaction. Say so, since the whole
@@ -881,6 +939,10 @@ def main(argv: list[str] | None = None) -> int:
                                           "default profile in llama-env.sh)")
     parser.add_argument("--suite", help="run a tier: smoke, standard, or full")
     parser.add_argument("--benchmark", help="restrict a suite to one benchmark")
+    parser.add_argument("--slice", metavar="FROM:TO",
+                        help="run only part of a tier, in its canonical "
+                             "interleaved order; this is what one llama-tune "
+                             "visit runs, so a visit can be reproduced by hand")
     parser.add_argument("--system", metavar="NAME",
                         help="send a system prompt from prompts/system/"
                              "<NAME>.txt. Recorded with the result and grouped "
