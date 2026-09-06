@@ -920,7 +920,12 @@ class Cooldown:
                 con.note(f"  probe {probe_tps:.2f} t/s against a round-1 "
                          f"baseline of {self.sweep.baseline_tps:.2f} "
                          f"({ratio:.2f}x)")
-                if abs(1 - ratio) <= self.o.drift_tolerance:
+                # One-sided: this probe exists to prove the card will hold up
+                # under load, and round-1's own baseline is not a ceiling --
+                # it ran after other candidates had already been warming the
+                # card, so a fully-cooled probe legitimately beats it. Only a
+                # probe that is still slow is a sign the cap has not lifted.
+                if ratio >= 1 - self.o.drift_tolerance:
                     resolution = "recovered"
                     break
             elif probe_tps is not None:
