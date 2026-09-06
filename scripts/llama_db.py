@@ -628,6 +628,28 @@ NOTES_6 = [
      "'infeasible' is a configuration this machine could not serve."),
 ]
 
+# tune_sweep.stages was missing from the version of migration 6 that first ran
+# against a real store during llama-tune's own development -- SCHEMA_6 above
+# gained the column in a later working-tree edit, before migration 6 had ever
+# been committed, but after it had already been *applied* here and recorded at
+# user_version 6. Editing SCHEMA_6 in place would therefore do nothing for a
+# database that already ran it, per the append-only rule: a migration is
+# never edited once applied, even one that turns out to have shipped early.
+SCHEMA_7 = """
+ALTER TABLE tune_sweep ADD COLUMN stages TEXT NOT NULL DEFAULT 'explore,refine';
+"""
+
+NOTES_7 = [
+    ("2026-09-06",
+     "tune_sweep.stages was added here, not in migration 6, because this "
+     "database had already applied migration 6 without it: the column was "
+     "added to llama_tune.py's schema after that migration had already run "
+     "once against this store during development, and an applied migration "
+     "is never edited. Existing rows backfill to 'explore,refine' -- the "
+     "column's own default -- because what stages an earlier sweep actually "
+     "ran under is not recoverable from what it wrote."),
+]
+
 MIGRATIONS: list[tuple[int, str, list[tuple[str, str]]]] = [
     (1, SCHEMA_1, NOTES_1),
     (2, SCHEMA_2, NOTES_2),
@@ -635,6 +657,7 @@ MIGRATIONS: list[tuple[int, str, list[tuple[str, str]]]] = [
     (4, SCHEMA_4, NOTES_4),
     (5, SCHEMA_5, NOTES_5),
     (6, SCHEMA_6, NOTES_6),
+    (7, SCHEMA_7, NOTES_7),
 ]
 
 
@@ -661,7 +684,23 @@ def migrate(con: sqlite3.Connection) -> int:
                 con.execute("ROLLBACK")
                 continue
             for statement in _statements(script):
-                con.execute(statement)
+                try:
+                    con.execute(statement)
+                except sqlite3.OperationalError as exc:
+                    # An ADD COLUMN whose column is already there is the one
+                    # DDL error safe to treat as already-satisfied rather than
+                    # a real failure: it is exactly what migration 7 produces
+                    # on a database that reached user_version 6 through a
+                    # schema draft where SCHEMA_6 already had the column (every
+                    # database migrated from today's SCHEMA_6 onward), versus
+                    # one that reached it through an earlier draft that did not
+                    # (the one real store this was written for). Both must
+                    # finish this migration and land on the same version.
+                    stmt = statement.strip().upper()
+                    if not (stmt.startswith("ALTER TABLE")
+                            and "ADD COLUMN" in stmt
+                            and "duplicate column name" in str(exc)):
+                        raise
             for noted_on, text in notes:
                 con.execute("INSERT OR IGNORE INTO schema_note (noted_on, note) "
                             "VALUES (?, ?)", (noted_on, text))
