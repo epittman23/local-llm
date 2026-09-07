@@ -22,3 +22,14 @@ scikit-learn>=1.3
 # and the document is otherwise identical -- the fallback exists because a
 # missing wheel should cost the picture, not the analysis printed beside it.
 matplotlib>=3.8
+
+# The web dashboard (`llama-web`, scripts/llama_web.py, replaced the Textual
+# dashboard on 2026-09-06). Hard requirements, unlike everything else in this
+# file: there is no plain-text fallback for a browser page, so a missing
+# install is a clear message at startup rather than a degrade. uvicorn is run
+# with `workers=1` always -- the job registry that tracks a started
+# llama-server or test suite lives in that one process's memory, and a second
+# worker would have its own empty copy of it and could not stop what the first
+# started.
+fastapi>=0.110
+uvicorn>=0.29

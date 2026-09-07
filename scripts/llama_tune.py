@@ -81,7 +81,7 @@ import llama_stats as stats                # noqa: E402
 import llama_test as harness               # noqa: E402
 import llama_tests as bench                # noqa: E402
 from llama_console import console          # noqa: E402
-from llama_ui import Command               # noqa: E402
+from llama_proc import Command             # noqa: E402
 
 
 def refuse(message: str):
@@ -249,9 +249,9 @@ COMPARISONS = [("<=", lambda a, b: a <= b), (">=", lambda a, b: a >= b),
 def profile_key(var: str) -> str:
     """LLAMA_UBATCH -> ubatch, the key llama-profile-json reports it under.
 
-    The same transform llama_ui_app uses to decide whether a form field is an
-    override. Spelling it once, here, is why the profile-json keys had to be
-    exactly this and not something more readable.
+    The same transform llama_web_routes uses to decide whether a Serve form
+    field is an override. Spelling it once, here, is why the profile-json keys
+    had to be exactly this and not something more readable.
     """
     return var[len("LLAMA_"):].lower() if var.startswith("LLAMA_") else var.lower()
 

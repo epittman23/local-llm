@@ -1,8 +1,11 @@
-# Terminal front end for the llama-* helpers (scripts/llama_console.py,
-# scripts/llama_ui.py). Every entry point degrades to plain stdlib output when
-# these are absent, so the venv is a convenience, not a hard dependency.
+# Rich table/markdown rendering for the llama-* CLI helpers
+# (scripts/llama_console.py, used by llama_test.py, llama_compare.py,
+# llama_tune.py and llama_web.py). Every entry point degrades to plain stdlib
+# output when this is absent, so the venv is a convenience, not a hard
+# dependency. Textual was here for the Textual dashboard (llama-ui); it was
+# retired for the web dashboard (llama-web, requirements-extra.txt) on
+# 2026-09-06 and dropped from here in the same change.
 rich>=13.7
-textual>=0.79
 
 # DS-1000 grading only. Its problems are real StackOverflow pandas/numpy tasks
 # and its code_context harness imports these directly; without them those items

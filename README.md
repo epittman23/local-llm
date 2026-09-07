@@ -13,20 +13,35 @@ API — there is no custom backend or frontend code in this repo; Open WebUI
 Requires Docker Desktop with WSL integration enabled for this distro
 (Docker Desktop → Settings → Resources → WSL Integration).
 
+As of 2026-09-06, Open WebUI runs behind a small Caddy reverse proxy
+(`open-web-ui/docker-compose.yml` + `open-web-ui/Caddyfile`) instead of being
+published directly, so it can share one port with the web dashboard (see
+"Local inference" → `llama-web` below). Put your OpenRouter key in
+`open-web-ui/.env` (gitignored, same shape as before):
+
 ```bash
-docker run -d \
-  -p 3000:8080 \
-  -e OPENAI_API_BASE_URL=https://openrouter.ai/api/v1 \
-  -e OPENAI_API_KEY=<your OpenRouter API key, from https://openrouter.ai/keys> \
-  -v open-webui:/app/backend/data \
-  --name open-webui \
-  --restart unless-stopped \
-  ghcr.io/open-webui/open-webui:main
+# open-web-ui/.env
+OPENROUTER_API_KEY=<your OpenRouter API key, from https://openrouter.ai/keys>
 ```
 
-Then open `http://localhost:3000`. The first account you create becomes the
+then:
+
+```bash
+docker compose -f open-web-ui/docker-compose.yml up -d
+```
+
+Chat is at `http://localhost:4000/` and the dashboard is at
+`http://localhost:4000/ops` — both through the same Caddy container, which is
+the only thing bound to a host port; Open WebUI's own container publishes
+nothing directly. The first account you create in Open WebUI becomes the
 admin. Chat history, settings, and the model list are persisted in the
-`open-webui` Docker volume.
+`open-webui` Docker volume, unchanged by this move.
+
+Open WebUI's own image, environment and configuration are untouched by this
+split — the whole point is that upgrading or reconfiguring it never has to
+know a dashboard exists on the other side of the proxy. See "Local inference"
+→ `llama-web` for what actually lives at `/ops` and why the topology is
+shaped this way.
 
 ## Model setup
 
@@ -167,9 +182,37 @@ The functions:
   "send a saved prompt from `prompts/` and eyeball the answer" version. Test
   items now come from the datasets; `prompts/` holds only the optional system
   prompts `--system` sends, and nothing in it is a test item or an answer.
-- `llama-ui` : a Textual dashboard over serving, testing, comparison and the
-  stored answers. Every screen shows the shell command equivalent to its current
-  form state, so it teaches the flags rather than hiding them.
+- `llama-web` : the browser dashboard over serving, testing, comparison,
+  answers, reports and tuning — replaced the Textual dashboard (`llama-ui`) on
+  2026-09-06. Binds `0.0.0.0:${LLAMA_WEB_PORT:-8095}/ops` and is reachable
+  either directly there or through the Caddy proxy at
+  `http://localhost:4000/ops` alongside Open WebUI (see "Running it" above).
+  Seven pages, none of them a reimplementation of the CLI they sit on top of:
+  - **Serve** starts and stops `llama-server` from a profile with the same
+    overrides `llama-serve` takes, and streams its output live.
+  - **Live** polls the run being recorded right now, every 5s to match the
+    recorder's own sample interval.
+  - **Tests** runs a tier and streams one structured event per graded item —
+    in-process, not by shelling out to `llama-test`, so cancelling mid-run
+    stops the loop directly rather than sending a signal to a subprocess;
+    every item is still its own committed transaction, so the run is exactly
+    as resumable either way.
+  - **Compare** and **Answers** are the same tables and the same stored
+    responses `llama-test compare`/`llama-test answer` print, read through
+    the same functions.
+  - **Report** and **Tune** are new here — there was no TUI equivalent —
+    and drive `llama-report`/`llama-tune` exactly as the CLI does: Report
+    renders `llama_report.py`'s own markdown and PNGs unmodified rather than
+    inventing a second output path through its statistics; Tune shells out to
+    `llama-tune run`/`resume` the same way Serve shells out to `llama-serve`,
+    since a sweep is a long-lived, checkpointed process with its own
+    port-guarding and cooldown logic that has no business running inside a
+    web request.
+  See `scripts/llama_web.py`, `scripts/llama_web_routes.py` and
+  `scripts/llama_web_static/` for the implementation, and
+  `open-web-ui/dashboard-link.user.js` for the optional, per-browser userscript
+  that adds a link to it from inside Open WebUI (nothing server-side reaches
+  into Open WebUI's own page — see the decisions log for why).
 - `llama-db {shell|sql|schema|prune|vacuum|export}` : raw access to
   `logs/llama.db`, where every measurement this repo takes is stored.
 - `llama-check` : `GET /v1/models` against the running server.
@@ -342,16 +385,15 @@ draft head — and on this hardware it is a large share of the total. The fit ne
 at least two configurations at different layer counts and is simply absent
 otherwise.
 
-`llama-ui` shows the same tables, plus two tabs of its own. **Live** is the run
+`llama-web`'s Compare page shows the same tables. Its Live page is the run
 that is serving right now — its GPU statistics, its `/metrics` deltas and its most
 recent samples, refreshed every 5 seconds; that view is possible because samples
 land in the database as they are taken rather than being folded in when the
-recorder exits. **Answers** is the pairing for `--by failures`: pick a suite run,
-list its failures (or all its items, or its passes), and read the response
-rendered as markdown, with the `llama-test answer` invocation for the highlighted
-row shown above it. The thinking is off by default and toggled with a button —
-reasoning dominates the token budget on this model, so a trace routinely runs to
-tens of thousands of characters, and it is never graded.
+recorder exits. Its Answers page is the pairing for `--by failures`: pick a suite
+run, list its failures (or all its items, or its passes), and read the response
+rendered as markdown. The thinking is off by default and toggled with a
+checkbox — reasoning dominates the token budget on this model, so a trace
+routinely runs to tens of thousands of characters, and it is never graded.
 
 `llama-db` is the raw access:
 
@@ -654,8 +696,10 @@ in-filter items); rows recorded before that carry a NULL `adapter_sha`, show as
 | `llama-test compare [...]` | Rank models and configurations — see below |
 | `llama-test answer <benchmark>/<item-id>` | Print a stored answer, rendered as markdown on a terminal and raw when redirected. `--run-id` picks a suite run, `--export <dir>` writes a whole run's answers as files |
 | `llama-test report` | The comparison, to the terminal, without running anything (`llama-test compare` with `--format`/`--tier` only) |
-| `llama-test ui` | The Textual dashboard (same as `llama-ui`) |
 | `llama-db {shell\|sql\|schema\|prune\|vacuum\|export}` | Raw access to `logs/llama.db` |
+
+`llama-test ui` is gone along with the Textual dashboard it launched; the
+dashboard is now `llama-web` (see "Running it" and "Local inference" above).
 
 `--profile` names the serving profile whose alias and `reasoning_effort` are
 used; the model name itself is read from the running server (`GET /v1/models`)
@@ -946,8 +990,12 @@ Two shape differences follow from *where* the document is going, and only there:
 
 - The chain of thought is wrapped in `<details>` in a file and printed under a
   plain heading on a terminal. Nothing in a terminal expands a `<details>`, and
-  both Rich and Textual drop raw HTML, so a collapsed document rendered to a
-  terminal would show the reasoning with no heading at all.
+  Rich drops raw HTML, so a collapsed document rendered to a terminal would
+  show the reasoning with no heading at all. `llama-web`'s Answers page always
+  asks for the uncollapsed form too, for the same reason, and toggles the
+  reasoning on and off with a checkbox that changes what the browser is sent
+  rather than what a `<details>` element hides — a trace can run to tens of
+  thousands of characters, and it should not cross the wire by default.
 - A response that carries a fence of its own is handed over intact so it gets
   highlighted; one that does not keeps the outer fence, because the graded text
   is code and reflowing it into paragraphs would destroy the indentation that
@@ -1118,7 +1166,7 @@ otherwise byte-identical.
 
 ### Dependencies
 
-Rich, Textual, numpy, pandas and pyyaml, in a repo-local `.venv`. This box's
+Rich, numpy, pandas and pyyaml, in a repo-local `.venv`. This box's
 Python is externally managed (PEP 668), so `pip install` refuses outright and a
 venv is required rather than merely tidy — `llama-test` creates it on first use
 in an interactive shell (`LLAMA_NO_BOOTSTRAP=1` disables that).
@@ -1126,12 +1174,60 @@ in an interactive shell (`LLAMA_NO_BOOTSTRAP=1` disables that).
 Everything degrades without it: `llama-test list`, `compare`, `check` and
 `profiles` print plain markdown tables under bare `python3`. Only DS-1000
 grading genuinely needs the venv, since it needs pandas and numpy.
-`requirements-extra.txt` carries two things: **scipy**, which `llama-report`
+`requirements-extra.txt` carries three things: **scipy**, which `llama-report`
 requires outright (it exits 2 with the install line rather than degrading) and
 which also widens the DS-1000 slice alongside scikit-learn — the adapter's filter
-would need widening to use them for that — and **matplotlib**, which only
+would need widening to use them for that; **matplotlib**, which only
 `llama-report` uses and which is genuinely optional, since without it the figures
-render as unicode plots in fenced blocks and the document is otherwise identical.
+render as unicode plots in fenced blocks and the document is otherwise identical;
+and **fastapi**/**uvicorn**, which `llama-web` requires outright — there is no
+plain-text fallback for a browser page, so a missing install is a startup
+message rather than a degrade, the same stance `llama-report` takes on scipy.
+Textual was here for the Textual dashboard (`llama-ui`); it was retired for
+`llama-web` on 2026-09-06 and dropped from `requirements.txt` in the same
+change.
+
+### Web dashboard topology (`llama-web` behind Open WebUI's port)
+
+`llama-web` is a host process (started via `scripts/llama-env.sh`, like
+`llama-serve`), not a container: it manages real host process groups against
+the actual GPU and shells to `llama-env.sh` on the host filesystem, so
+containerizing it would mean bind-mounting the whole repo and passing through
+the GPU device for no benefit. Reaching it from the *same port* as Open WebUI
+(`http://localhost:4000/`) therefore means a proxy in front of two independent
+things — one container, one host process — rather than one app serving both.
+
+`open-web-ui/docker-compose.yml` runs Open WebUI and a `caddy:2-alpine`
+container; only Caddy publishes a host port. `open-web-ui/Caddyfile` routes by
+path: `/ops/*` goes to `host.docker.internal:${LLAMA_WEB_PORT:-8095}` (the
+host, i.e. `llama-web`), everything else goes to the `open-webui` container.
+Two details that look like they could be swapped but cannot:
+
+- **`host.docker.internal`, not `localhost`.** Caddy runs inside its own
+  container; `localhost` there means the Caddy container itself. The
+  `extra_hosts: host.docker.internal:host-gateway` entry in
+  `docker-compose.yml` is what makes the name resolve to the host outside
+  Docker Desktop (plain Docker Engine under WSL2 included).
+- **`handle`, not `handle_path`, for `/ops/*`.** `llama_web.py` mounts its own
+  app under `/ops` internally, so the path is forwarded unchanged: hitting
+  `llama-web` directly at `http://localhost:8095/ops/...` during development
+  and going through the proxy at `http://localhost:4000/ops/...` reach the
+  identical route. Open WebUI, on the other side, is left completely
+  path-unaware — routed at `/` with nothing rewritten — because its own static
+  asset references are root-relative and its container/config is not meant to
+  know a dashboard exists at all.
+
+Chat → dashboard navigation is a small **userscript**
+(`open-web-ui/dashboard-link.user.js`, install with Tampermonkey/Violentmonkey
+or similar), not a fork of Open WebUI and not a server-side rewrite of its
+HTML — see CLAUDE.md's 2026-09-06 decisions-log entry for why both of those
+were rejected. It adds a small fixed-position "Dashboard" link in the corner
+of the page rather than inserting into Open WebUI's own sidebar markup: Open
+WebUI's DOM is not something this repo controls or pins a version of, so a
+selector aimed at one of its internal containers would be exactly as fragile
+as the server-side rewrite it replaces, just failing in the browser instead of
+on the proxy. It is optional and per-browser; the dashboard's own header
+carries a "← Chat" link back to `/` regardless of whether it is installed.
 
 **`scripts/llama_db.py`, `llama_record.py`, `llama_stats.py`, `llama_tests.py`
 and `llama_results.py` are stdlib-only and must stay that way.** The telemetry

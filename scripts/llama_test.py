@@ -611,8 +611,18 @@ def run_items(rows: list[dict], ctx: dict, con, *, show: bool,
     return results
 
 
-def cmd_suite(args) -> int:
-    con = console()
+def prepare_suite(args, con) -> tuple[dict, list[dict], list[dict]]:
+    """Resolve a suite into (ctx, todo, skipped). No items are run.
+
+    Split out of cmd_suite so a caller other than this CLI -- the web
+    dashboard's Tests page, in particular -- can resolve exactly the same todo
+    list (interleaving, --slice, missing-library exclusion, calibration
+    warnings, --resume diffing) and then drive it through run_items() itself,
+    instead of re-deriving any of these rules. A second implementation of this
+    setup would eventually disagree with this one about what a tier actually
+    contains, which is the same failure CompareScreen's docstring warned
+    against for the comparison table.
+    """
     adapters = bench.load_adapters()
     suite = bench.load_suite(args.suite)
     selected, skipped = bench.build_suite(suite, adapters, only=args.benchmark)
@@ -683,6 +693,13 @@ def cmd_suite(args) -> int:
          "kind": s.get("kind", "unattemptable"), "reason": s["reason"]}
         for s in skipped])
 
+    return ctx, todo, skipped
+
+
+def cmd_suite(args) -> int:
+    con = console()
+    ctx, todo, skipped = prepare_suite(args, con)
+
     results: list[dict] = []
     started = time.time()
     try:
@@ -693,7 +710,7 @@ def cmd_suite(args) -> int:
         # point of that choice is that an interrupted run is still usable.
         con.warn(f"interrupted after {len(results)} items; "
                  f"{store.db_path()} holds them. resume with: "
-                 f"llama-test --suite {suite['id']} --resume")
+                 f"llama-test --suite {ctx['tier']} --resume")
         summarise(con, ctx, results, time.time() - started)
         ctx["db"].close()
         return 130
@@ -706,7 +723,7 @@ def cmd_suite(args) -> int:
         con.warn(f"{exc}")
         con.warn(f"aborted after {len(results)} of {len(todo)} items; "
                  f"the rest were not recorded. restart the server, then: "
-                 f"llama-test --suite {suite['id']} --resume")
+                 f"llama-test --suite {ctx['tier']} --resume")
         summarise(con, ctx, results, time.time() - started)
         ctx["db"].close()
         return 1
@@ -921,11 +938,6 @@ def cmd_compare(args, extra: list[str]) -> int:
     return llama_compare.main(extra)
 
 
-def cmd_ui(args, extra: list[str]) -> int:
-    import llama_ui
-    return llama_ui.main(extra)
-
-
 # ---------------------------------------------------------------------------
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
@@ -956,25 +968,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("item", nargs="?",
                         help="a single item as <benchmark>/<item-id>, or a "
                              "subcommand: list, fetch, selfcheck, compare, "
-                             "report, answer, ui")
+                             "report, answer")
     # No REMAINDER catch-all here. There was one, unread and SUPPRESSed, and
     # its only effect was to swallow every flag written after the item:
     # `llama-test humaneval/HumanEval/0 --system assistant` parsed, ran, and
     # recorded a run made without the system prompt it names. Subcommand flags
-    # do not need it either -- `compare` and `ui` are matched before argparse
-    # and take their argv untouched. Without it argparse interleaves flags and
+    # do not need it either -- `compare` is matched before argparse and takes
+    # its argv untouched. Without it argparse interleaves flags and
     # positionals normally, and an unknown flag is an error instead of silence.
 
     # Subcommands are matched before argparse so `llama-test compare --by
     # benchmark` passes its own flags through untouched.
-    subcommands = {"list", "fetch", "selfcheck", "compare", "report", "ui",
-                   "answer"}
+    subcommands = {"list", "fetch", "selfcheck", "compare", "report", "answer"}
     if argv and argv[0] in subcommands:
         name, extra = argv[0], argv[1:]
         if name == "compare":
             return cmd_compare(None, extra)
-        if name == "ui":
-            return cmd_ui(None, extra)
         sub = argparse.ArgumentParser(prog=f"llama-test {name}")
         if name == "fetch":
             sub.add_argument("benchmark", nargs="*")

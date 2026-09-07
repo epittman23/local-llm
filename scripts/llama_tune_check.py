@@ -5,7 +5,7 @@ Part of https://github.com/epittman23/local-llm
 
 Reached as `llama-tune --check` is not a thing (llama-tune has no dashboard to
 smoke-test); this is run directly: `.venv/bin/python scripts/llama_tune_check.py`.
-It follows the convention `llama_ui_check.py` set: not under `tests/` (that
+It follows the convention `llama_web_check.py` sets: not under `tests/` (that
 directory is benchmark items, per CLAUDE.md), not pytest (there is no pytest in
 requirements.txt), each check a function returning a list of failure strings.
 

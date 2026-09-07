@@ -99,9 +99,9 @@ minute; `llama-test answer` prints a stored response and `--export` writes a
 run's answers out as files. A response is markdown with code in it, so
 `llama-test answer` renders it on a terminal and writes it raw when redirected
 (the `llama_console.wanted()` guard, so a captured answer stays byte-identical),
-and `llama-ui` has an Answers tab that lists a suite run's failures and renders
-the selected one into a Textual `Markdown` widget with the thinking toggled off
-by default. Tiers: `smoke` (24 items, the A/B for a flag
+and `llama-web`'s Answers page lists a suite run's failures and renders the
+selected one as markdown in the browser, with the thinking toggled off by
+default. Tiers: `smoke` (24 items, the A/B for a flag
 change), `standard` (300), `full` (1030). The datasets are downloaded, not
 vendored, into the gitignored `tests/data/`, pinned by upstream revision and
 content hash; `llama-test fetch` gets them and `llama-test selfcheck` verifies
@@ -133,12 +133,18 @@ assume a cloud-only environment.
 
 - There is no custom backend or frontend code for the *assistant itself* —
   Open WebUI (run via Docker) is the entire chat application, and nothing in
-  this repo sits between it and a model. What this repo holds is
+  this repo sits between it and a model. Since 2026-09-06 a Caddy reverse
+  proxy (`open-web-ui/Caddyfile`) sits between the *browser* and Open WebUI,
+  so it can share a port with the web dashboard — that is a different line
+  than the one this bullet protects: Open WebUI's own container, image and
+  configuration are untouched by it, and its connection to whatever model
+  backend it talks to is exactly as before. What this repo holds is
   documentation (`README.md`, `CLAUDE.md`), operational shell scripts
-  (`openWebUI-docker` to run the container, `scripts/llama-env.sh` for the
-  local llama.cpp server and benchmarks, `scripts/llama-vram-log.sh` for GPU
-  telemetry capture), and — since 2026-08-30 — a Python evaluation harness
-  for the local-inference track:
+  (`open-web-ui/docker-compose.yml` + `Caddyfile` to run Open WebUI and the
+  proxy, `scripts/llama-env.sh` for the local llama.cpp server and
+  benchmarks, `scripts/llama-vram-log.sh` for GPU telemetry capture), and —
+  since 2026-08-30 — a Python evaluation harness for the local-inference
+  track:
   - `scripts/llama_db.py` owns `logs/llama.db`: the schema, the ordered
     `MIGRATIONS` list applied by `connect()`, the stale-run sweep, and every
     insert and query the other modules call. Append a migration; never edit
@@ -159,8 +165,19 @@ assume a cloud-only environment.
     (cross model/config comparison, and the serving comparison),
     `scripts/llama_results.py` (the result vocabulary over `llama_db`),
     `scripts/llama_console.py` (Rich-or-plain output, and the one place Rich is
-    allowed to touch stdout, in `write_markdown`), `scripts/llama_ui.py`
-    (the Textual dashboard: serve, live, tests, compare, answers).
+    allowed to touch stdout, in `write_markdown`), `scripts/llama_proc.py`
+    (`Command`, the process-group wrapper shared by the web dashboard and
+    `llama_tune.py` for launching a shell surface command and signalling the
+    whole tree it starts). `scripts/llama_web.py` + `llama_web_routes.py` +
+    `llama_web_static/` are `llama-web`, added 2026-09-06 to replace the
+    Textual dashboard (`llama-ui`): seven browser pages over serving, live
+    telemetry, tests, comparison, answers, reports and tuning, all thin HTTP
+    wrappers over the same functions the CLI tools call — nothing here is a
+    second implementation of anything the CLI already does correctly. FastAPI
+    and uvicorn are hard requirements of these three, unlike the stdlib-only
+    modules below; `uvicorn.run(..., workers=1)` is load-bearing, since the
+    job registry that tracks a started `llama-server` or test suite lives in
+    that one process's memory.
   - `scripts/llama_report.py` is `llama-report`, added 2026-09-05: the
     statistical report over the store — design audit, paired tests, power,
     throughput with the throttle regime as a blocking factor, and figures. It
@@ -197,8 +214,10 @@ assume a cloud-only environment.
   every server. `sqlite3` is stdlib, so the database costs nothing here.
 - Testing approach, two separate things:
   - Changes to Open WebUI configuration are verified by using it in the
-    browser at `http://localhost:3000` (manual — there is no code to run
-    automated tests against).
+    browser at `http://localhost:4000` (manual — there is no code to run
+    automated tests against). Port 4000, not 3000, since 2026-09-06: Caddy is
+    what is bound to the host now, not Open WebUI's container directly (see
+    "Local inference" below).
   - Local serving configurations are verified with `llama-test`: three
     published benchmarks (HumanEval, MBPP sanitized, DS-1000), executed and
     scored, tiered `smoke` / `standard` / `full`. See "Local inference"
@@ -214,20 +233,16 @@ assume a cloud-only environment.
 
 ## Commands
 
-- Start/ensure the container is running:
+- Start/ensure Open WebUI and its Caddy proxy are running:
   ```bash
-  docker run -d \
-    -p 3000:8080 \
-    -e OPENAI_API_BASE_URL=https://openrouter.ai/api/v1 \
-    -e OPENAI_API_KEY=<your OpenRouter API key> \
-    -v open-webui:/app/backend/data \
-    --name open-webui \
-    --restart unless-stopped \
-    ghcr.io/open-webui/open-webui:main
+  docker compose -f open-web-ui/docker-compose.yml up -d
   ```
-  (only needed once — `--restart unless-stopped` keeps it running across
-  reboots; use `docker start open-webui` if the container already exists but
-  is stopped).
+  (`open-web-ui/.env` holds `OPENROUTER_API_KEY`; `--restart unless-stopped` on
+  both services keeps them running across reboots). As of 2026-09-06 Caddy,
+  not Open WebUI's container, is the only thing bound to a host port (4000) —
+  see "Local inference" below and `open-web-ui/Caddyfile` for why. Chat is at
+  `http://localhost:4000/`, the web dashboard (`llama-web`) at
+  `http://localhost:4000/ops`.
 - Requires Docker Desktop with WSL integration enabled for this distro.
 
 ## Maintenance policy
@@ -250,8 +265,9 @@ or agent) updates the docs in the same commit:
   is not reusable. Numbers that predate a hardware or model change are stale;
   re-measure or mark them as historical.
 - **Shell scripts and docs must agree**: if `scripts/llama-env.sh`,
-  `scripts/llama-vram-log.sh`, or `openWebUI-docker` changes its defaults,
-  flags, or function names, update the `README.md` description of it in the
+  `scripts/llama-vram-log.sh`, or `open-web-ui/docker-compose.yml`/`Caddyfile`
+  changes its defaults, flags, or function names, update the `README.md`
+  description of it in the
   same change. `scripts/llama-env.sh` is the source of truth for the local
   serving configuration; if it drifts from `~/.bashrc`, reconcile the two
   rather than letting both exist. The configuration lines recorded with every
@@ -273,13 +289,136 @@ or agent) updates the docs in the same commit:
 
 ## Commit policy
 
-All commits should use conventional commit style and stay focused on one topic.
+All commits should use conventional commit style and stay focused on one topic. Do not add yourself as a co-author in commits or pull requests.
 
 ## Decisions log
 
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-09-06**: Replaced the Textual dashboard (`llama-ui`,
+  `scripts/llama_ui.py` + `llama_ui_app.py` + `llama_ui.tcss` +
+  `llama_ui_check.py`, all deleted) with a browser dashboard, `llama-web`
+  (`scripts/llama_web.py` + `llama_web_routes.py` + `llama_web_static/` +
+  `llama_web_check.py`), reachable at the same port as Open WebUI. The
+  motivation was wanting everything -- chat and the serving/testing/tuning
+  tooling -- usable from one browser tab rather than a mix of a terminal UI
+  and a separate chat app.
+  **What moved and what didn't.** `Command` (the process-group `Popen`
+  wrapper `llama-tune` also depends on for launching sweep candidates) moved
+  out of `llama_ui.py` into a new stdlib-only `scripts/llama_proc.py`, so
+  deleting the TUI file did not break `llama-tune`; `llama_tune.py`'s import
+  and one comment referencing `llama_ui_app`'s override-diffing transform were
+  updated to point at the new home. `llama_test.py`'s `cmd_suite` had its
+  setup half (adapter/suite loading, `--slice`, missing-library exclusion,
+  calibration warnings, `--resume` diffing) extracted into a new
+  `prepare_suite(args, con) -> (ctx, todo, skipped)`, a pure, behavior-
+  preserving split -- `cmd_suite` is now two lines calling it plus the
+  unchanged `try/except KeyboardInterrupt/ServerGone` around `run_items`. The
+  dashboard's Tests page calls `prepare_suite` + `run_items` **in-process**
+  rather than shelling out to `llama-test --suite` the way the TUI's Tests
+  screen did, using `run_items`'s existing `on_record`/`should_stop`
+  parameters (added for `llama-tune`, per the 2026-08-30 entry below) to
+  stream one structured SSE event per item and to cancel via a
+  `threading.Event` instead of an OS signal -- per-item autocommit in
+  `run_item` makes the two cancellation paths equally resumable. `llama-test
+  ui` is gone (`cmd_ui` deleted, `"ui"` dropped from the subcommand set).
+  **The seven pages.** Serve, Live, Tests, Compare and Answers port the TUI's
+  five screens as thin HTTP routes over the same functions those screens
+  called (`llama_console.profile_names`/`profile_json`, `llama_compare`'s
+  group/row builders, `llama_db`'s readers, `llama_test._answer_document`) --
+  none of them reimplemented. Report and Tune are new pages with no TUI
+  precedent. Report renders `llama_report.build()`'s own markdown and PNGs
+  unmodified rather than adding a JSON return path through it, deliberately:
+  that module is the one this log documents as having been carefully
+  re-audited for subtle figure bugs (the 2026-09-05, second, entry below), and
+  a second output path through its statistics is a second way for that class
+  of bug to return, for a benefit markdown-plus-images already delivers. Tune
+  shells out to `llama-tune run`/`resume` through the same `Command` class
+  Serve uses, rather than driving `Sweep.execute()` in-process like Tests
+  drives `run_items` -- a sweep is a long-lived (possibly overnight),
+  checkpointed process with its own port-guarding and cooldown logic that has
+  no business running inside a web request's thread pool, and its status is
+  fully pollable from `llama_db`'s `sweep()`/`sweep_rounds()`/`sweep_visits()`/
+  `sweep_candidates()` without touching the process at all.
+  **Same port as Open WebUI, without touching Open WebUI.** A Caddy reverse
+  proxy (`open-web-ui/Caddyfile`, `open-web-ui/docker-compose.yml`, replacing
+  the deleted `openWebUI-docker` script) is the only thing now bound to a host
+  port (4000, moved from 3000 so it can coexist with other work on this
+  machine); Open WebUI's own container publishes nothing directly. `/ops/*`
+  routes to `host.docker.internal:${LLAMA_WEB_PORT:-8095}` (`llama-web`, a
+  *host* process -- it manages real process groups against the actual GPU, so
+  containerizing it would mean bind-mounting the repo and passing through the
+  GPU device for nothing) with the path forwarded unchanged, since
+  `llama_web.py` already mounts its app under `/ops`; everything else routes
+  to the `open-webui` container, left completely path-unaware since its own
+  asset references are root-relative. This was chosen over the two
+  alternatives considered and rejected: **forking Open WebUI** for full
+  control over its UI, which would mean maintaining a permanent diff against
+  an actively-developed upstream forever -- exactly the maintenance burden the
+  2026-07-21 entry below walked away from on purpose, for the sake of one nav
+  link; and **an Open WebUI Function/Pipe/Action plugin**
+  (`open-web-ui/plugins/`, explored but abandoned in this change), which would
+  mean running the benchmark harness *inside* Open WebUI's own container,
+  contradicting the "nothing in this repo sits between Open WebUI and a
+  model" principle in the Conventions section far more directly than a proxy
+  in front of the browser does. Chat -> dashboard navigation is a small
+  client-side-only userscript (`open-web-ui/dashboard-link.user.js`,
+  Tampermonkey/Violentmonkey), not a fork and not a server-side rewrite of
+  Open WebUI's HTML: it adds a fixed-position "Dashboard" link rather than
+  inserting into Open WebUI's own sidebar markup, because that markup is not
+  something this repo controls or pins a version of, and a selector aimed at
+  it would be exactly as fragile as the server-side rewrite this design
+  rejected, just failing in the browser instead of on the proxy. It is
+  optional and per-browser; the dashboard's own header carries a "<- Chat"
+  link back to `/` regardless.
+  `requirements.txt` dropped `textual`; `rich` stays, still used by
+  `llama_console.py`'s callers (`llama_test.py`, `llama_compare.py`,
+  `llama_tune.py`, now also `llama_web.py`/`llama_web_routes.py`).
+  `requirements-extra.txt` gained `fastapi`/`uvicorn` as hard requirements --
+  there is no plain-text fallback for a browser page, so a missing install is
+  a startup message, the same stance `llama-report` takes on scipy.
+  `uvicorn.run(..., workers=1)` is not a default left alone: the job registry
+  tracking a started `llama-server` or test suite lives in that process's
+  memory, and a second worker would have its own empty copy of it.
+  No schema change, no migration, no `schema_note`: nothing here changes what
+  a stored row means or how it is written: `llama-web`'s routes read through
+  the same `llama_db` functions the CLI already used, and Serve/Tune write
+  exactly the way `llama-serve`/`llama-tune` always have, through the same
+  `llama-env.sh` shell surface.
+  **Verified, and what remains unverified, stated plainly.** The FastAPI app
+  was exercised with `fastapi.testclient.TestClient` and, separately, as a
+  real `uvicorn` subprocess hit with `curl`, against the actual production
+  `logs/llama.db` (not a fixture) for every read route -- Serve/profiles,
+  Live, Compare (`config`/`serving`/`failures`), Answers/runs, Tune/status all
+  returned real, correct data. The Tests page's full pipeline was exercised
+  end to end against a dead server on purpose: `prepare_suite` resolved a real
+  `smoke` slice from the real datasets, `run_items` hit the connection-refused
+  path, `ServerGone` was caught and turned into a structured SSE `error`
+  event, and the database was confirmed to hold zero stray rows for that
+  run -- the same "nothing written before a verdict exists" guarantee
+  `llama_test.py` has always made. A real bug was caught this way: `Figures
+  .written` holds filename strings, not `Path` objects, and the Report route's
+  first draft crashed formatting the figure URLs; fixed and re-verified
+  against the real store, which produced a complete, correct report
+  byte-for-byte in the shape the 2026-09-05 entries below describe. The
+  frontend (`scripts/llama_web_static/app.js`) was driven headlessly through
+  `jsdom` with mocked `fetch` responses shaped like the real API's, and every
+  one of the seven routes mounted its page and populated its DOM without
+  throwing. The Caddyfile was validated with `caddy validate` and the compose
+  file with `docker compose config`, both against the real image. **Not
+  verified**: no Open WebUI container was ever started in this session (none
+  existed beforehand either), so the Caddy<->Open WebUI hop, the
+  Caddy<->host.docker.internal<->llama-web hop end-to-end through an actual
+  proxy, and the userscript's actual appearance on a real Open WebUI page are
+  unverified by this change -- the CLI/proxy tooling was checked in isolation
+  (Caddyfile syntax, compose resolution) but not as a running stack. Starting
+  a real `llama-server`/`llama-tune` sweep from the dashboard against the GPU
+  was also not exercised, since doing so has real hardware side effects this
+  session did not have standing authorization to trigger; the Serve/Tune
+  routes are a direct, unmodified port of the `Command`/shell-surface pattern
+  `llama_ui_app.py` already used for exactly this, which is the basis for
+  trusting them short of that run.
 - **2026-09-05** (second): Reviewed the first document `llama-report` produced
   and rewrote its figures, because three of them contradicted the prose beside
   them. The prose in that first report is careful -- it refuses contrasts the

@@ -16,10 +16,15 @@
 #   llama-serve [profile] [-- extra llama-server args]
 #   llama-test  <benchmark>/<item-id> | --suite smoke|standard|full
 #               [--system <name>]            # prompts/system/<name>.txt
-#   llama-test  list | fetch | selfcheck | compare | answer | ui
+#   llama-test  list | fetch | selfcheck | compare | answer
 #   llama-tune  [profile] [--tier ...] [--budget ...]   # search the config space
 #   llama-tune  resume | status | report | list
-#   llama-ui                                 # the Textual dashboard
+#   llama-web                                # the browser dashboard: serve,
+#                                             # live, tests, compare, answers,
+#                                             # report, tune -- at /ops on
+#                                             # $LLAMA_WEB_PORT (default 8095),
+#                                             # or /ops behind the Caddy proxy
+#                                             # in open-web-ui/ (see README.md)
 #   llama-db    sql | prune | vacuum | export | schema
 #   llama-sweep-threads [profile] [thread-list]
 #   llama-sweep-ngl     [profile] [ngl-list]
@@ -566,14 +571,26 @@ llama-test() {
 }
 
 # ---------------------------------------------------------------------------
-# llama-ui: the Textual dashboard over serving, tests and comparison
+# llama-web: the browser dashboard over serving, tests, comparison, reports
+# and tuning
 #
-# Every screen displays the shell command equivalent to its current form state,
-# so it teaches the flags rather than hiding them.
+#   llama-web                      # binds 0.0.0.0:${LLAMA_WEB_PORT:-8095}/ops
+#   llama-web --check               # headless smoke test, no server started
+#
+# Replaced the Textual dashboard (llama-ui) on 2026-09-06. Every page it
+# serves calls straight through to this file, llama_test.py, llama_compare.py,
+# llama_report.py and llama_tune.py -- it is a caller of the shell surface,
+# never a reimplementation of it. Bound to 0.0.0.0 rather than 127.0.0.1 by
+# default: the Caddy reverse proxy in open-web-ui/ reaches it via
+# host.docker.internal, which arrives on the host's real interface under
+# WSL2/Docker Desktop, not through loopback. See README.md for the
+# open-web-ui/docker-compose.yml topology that puts this and Open WebUI behind
+# one port.
 # ---------------------------------------------------------------------------
-llama-ui() {
+llama-web() {
     local py; py="$(_llama_python)"
-    LLAMA_PORT="$LLAMA_PORT" "$py" "$LLAMA_REPO/scripts/llama_ui.py" "$@"
+    LLAMA_PORT="$LLAMA_PORT" LLAMA_WEB_PORT="${LLAMA_WEB_PORT:-8095}" \
+        "$py" "$LLAMA_REPO/scripts/llama_web.py" "$@"
 }
 
 # ---------------------------------------------------------------------------
@@ -624,7 +641,7 @@ llama-report() {
 # Reading is deliberately not wrapped: the whole reason for moving off markdown
 # is that the store answers questions nobody wrote a command for, and a menu of
 # canned queries would put that back. `llama-db` opens the shell; llama-test
-# compare and llama-ui are the two views worth having as commands.
+# compare and llama-web are the views worth having as commands.
 #
 # prune is the escape valve for the reversed retention rule (CLAUDE.md,
 # 2026-08-30): every GPU sample is now kept, at roughly 1 MB per day of
@@ -686,7 +703,7 @@ SQL
 # ---------------------------------------------------------------------------
 # llama-profile-names: the defined profiles, one per line
 #
-# The Python front ends (llama_console.py, llama_ui.py) call this rather than
+# The Python front ends (llama_console.py, llama_web.py) call this rather than
 # carrying their own copy of the list, so a new profile appears in llama-profiles
 # and in the dashboard's picker without editing either.
 # ---------------------------------------------------------------------------
@@ -703,7 +720,7 @@ llama-profile-names() {
 # disagree with this one the first time either changed.
 #
 # Every key is exactly `LLAMA_<KNOB>` lowercased with the prefix dropped, because
-# llama_ui_app.py maps a form field back to an override variable by that
+# llama_web_routes.py maps a form field back to an override variable by that
 # transform; a key spelled any other way makes the dashboard report the field as
 # overridden on every run.
 # ---------------------------------------------------------------------------
@@ -854,7 +871,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" && "${#BASH_SOURCE[@]}" -eq 1 ]]; then
         sweep-ngl)      llama-sweep-ngl "$@" ;;
         test)           llama-test "$@" ;;
         tune)           llama-tune "$@" ;;
-        ui)             llama-ui "$@" ;;
+        web)            llama-web "$@" ;;
         report)         llama-report "$@" ;;
         db)             llama-db "$@" ;;
         check)          llama-check "$@" ;;
@@ -865,7 +882,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" && "${#BASH_SOURCE[@]}" -eq 1 ]]; then
         profile-names)  llama-profile-names "$@" ;;
         config-id)      llama-config-id "$@" ;;
         *)
-            echo "usage: $(basename "$0") {serve|fetch|test|tune|ui|report|db|sweep-threads|sweep-ngl|check|vram|vram-log|profiles|profile-json|profile-names|config-id} [profile] [args]" >&2
+            echo "usage: $(basename "$0") {serve|fetch|test|tune|web|report|db|sweep-threads|sweep-ngl|check|vram|vram-log|profiles|profile-json|profile-names|config-id} [profile] [args]" >&2
             exit 2
             ;;
     esac
