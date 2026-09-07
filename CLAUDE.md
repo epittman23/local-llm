@@ -297,7 +297,7 @@ or agent) updates the docs in the same commit:
 
 ## Commit policy
 
-All commits should use conventional commit style and stay focused on one topic. Do not add yourself as a co-author in commits or pull requests.
+All commits should use conventional commit style and stay focused on one topic. Do not add yourself as a co-author in commits or pull requests; this incudes adding "🤖 Generated with Claude Code" or "Co-Authored-By: Claude <\model> <noreply@anthropic.com>"
 
 ## Decisions log
 
