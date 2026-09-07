@@ -1,0 +1,24 @@
+timeline
+    title local-llm: Past Milestones and Planned Direction
+    section Cloud Prototype (Jul 2026)
+      2026-07-18 : Project scaffolded against OpenRouter : custom Python CLI, per-session memory, and JSONL usage logging : Qwen2.5-Coder-32B (coding) and DeepSeek-R1-Distill-Qwen-32B (reasoning)
+      2026-07-20 : Custom React and FastAPI chat frontend added
+      2026-07-21 : Custom frontend and backend retired in favor of Open WebUI, run via Docker
+    section Local Inference Begins (Aug 2026)
+      2026-08-17 : llama.cpp stood up on the laptop's RTX 3060 (6 GB) : Qwen3.6-35B-A3B MoE served via --n-cpu-moe as a parallel evaluation track
+      2026-08-23 : Automated GPU telemetry : -ot tensor pinning for Qwen3.8-27B : MTP speculative decoding enabled : llama-test harness added : critical --parallel slot-count bug found and fixed
+      2026-08-24 : First multi-prompt MTP speculative decoding measurement, 91.9% acceptance
+      2026-08-30 : Correctness benchmarking added against HumanEval, MBPP, and DS-1000 : SQLite-backed results store (llama.db) : Textual terminal dashboard (llama-ui)
+    section Hardening and Tooling (Sep 2026)
+      2026-09-04 : qwen25c VRAM-resident profile added : system-prompt A/B testing capability added : five defects from a pre-merge code review fixed
+      2026-09-05 : Statistical reporting command (llama-report) added with paired significance testing : server build specification finalized ($1,316.10 of a $2,000 ceiling)
+      2026-09-06 : Textual dashboard replaced by a browser dashboard (llama-web) reachable behind a Caddy reverse proxy at the same port as Open WebUI
+      2026-09-07 : qwen3c serving profile completed and documented (today)
+    section Near-Term
+      "~1 week" : Resolve the blocking rack hole-type question : confirm riser and PSU questions : re-verify current component pricing
+    section Short-Term
+      "~1-2 months" : Purchase and provision the R730 and V100 server : run the five acceptance tests : migrate Qwen3.8-27B to fully VRAM-resident serving
+    section Medium-Term
+      "~6 months" : Add math and statistics benchmark coverage : stand up Tailscale network exposure : evaluate a second V100 : watch for a Qwen3.8-35B-A3B release
+    section Long-Term
+      "~2 years" : Network-accessible household inference backend behind Open WebUI : early groundwork for smart-home integration
