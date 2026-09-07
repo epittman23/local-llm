@@ -294,6 +294,14 @@ or agent) updates the docs in the same commit:
 - **Prune what is no longer true.** When a section describes something that no
   longer exists, delete it and log the deletion; leaving dead configuration in
   place has repeatedly cost time in this project.
+- **`docs/ROADMAP.md` and its `docs/roadmap-timeline.mmd` diagram move
+  together with the Decisions log.** Whenever a change here would add a dated
+  entry below, also add the corresponding milestone to `roadmap-timeline.mmd`
+  and, if it changes what's next, revise the timeframes in `ROADMAP.md`'s
+  "Planned future additions" table. `roadmap-timeline.mmd` is the canonical
+  source; `ROADMAP.md` embeds a copy of it in a fenced `mermaid` block only
+  because GitHub's renderer cannot transclude an external file, so the two
+  must be updated together and stay byte-identical in their diagram content.
 
 ## Commit policy
 
