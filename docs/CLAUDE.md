@@ -301,6 +301,11 @@ or agent) updates the docs in the same commit:
   source; `ROADMAP.md` embeds a copy of it in a fenced `mermaid` block only
   because GitHub's renderer cannot transclude an external file, so the two
   must be updated together and stay byte-identical in their diagram content.
+- **`MAP.md` mirrors the repo layout.** Whenever a change adds, removes,
+  moves, or repurposes a top-level directory or a major file, update the
+  corresponding entry in `MAP.md` in the same change. `MAP.md` is a
+  structural index only — per-file rationale and conventions stay documented
+  here in "Conventions," not duplicated there.
 
 ## Commit policy
 
