@@ -1,44 +1,51 @@
 #!/usr/bin/env bash
 #
-# llama-env.sh - local llama.cpp inference helpers
+# main.sh - local-llm shell orchestrator (llama.cpp inference + Open WebUI dev)
 # Part of https://github.com/epittman23/local-llm
 #
-# Suggested repo location: scripts/llama-env.sh
+# Suggested repo location: scripts/shell/main.sh
 #
 # USAGE
-#   source scripts/llama-env.sh            # load helpers into the current shell
-#   ./scripts/llama-env.sh serve qwen38    # or invoke directly, no sourcing needed
+#   source scripts/shell/main.sh            # load helpers into the current shell
+#   ./scripts/shell/main.sh serve qwen38     # or invoke directly, no sourcing needed
 #
 # To keep this out of your personal dotfiles, add exactly one line to ~/.bashrc:
-#   source "$HOME/code/local-llm/scripts/llama-env.sh"
+#   source "$HOME/code/local-llm/scripts/shell/main.sh"
 #
 # COMMANDS
-#   llama-serve [profile] [-- extra llama-server args]
-#   llama-test  <benchmark>/<item-id> | --suite smoke|standard|full
-#               [--system <name>]            # prompts/system/<name>.txt
-#   llama-test  list | fetch | selfcheck | compare | answer
-#   llama-tune  [profile] [--tier ...] [--budget ...]   # search the config space
-#   llama-tune  resume | status | report | list
-#   llama-web                                # the browser dashboard: serve,
-#                                             # live, tests, compare, answers,
-#                                             # report, tune -- at /ops on
-#                                             # $LLAMA_WEB_PORT (default 8095),
-#                                             # or /ops behind the Caddy proxy
-#                                             # in open-web-ui/ (see README.md)
-#   llama-db    sql | prune | vacuum | export | schema
-#   llama-sweep-threads [profile] [thread-list]
-#   llama-sweep-ngl     [profile] [ngl-list]
-#   llama-fetch         [profile]            # model weights, not test data
-#   llama-check
-#   llama-vram
-#   llama-profiles
-#   llama-profile-names
-#   llama-config-id     [profile]            # the fingerprint, without serving
+#   lllm-serve [profile] [-- extra llama-server args]
+#   lllm-test  <benchmark>/<item-id> | --suite smoke|standard|full
+#              [--system <name>]            # prompts/system/<name>.txt
+#   lllm-test  list | fetch | selfcheck | compare | answer
+#   lllm-tune  [profile] [--tier ...] [--budget ...]   # search the config space
+#   lllm-tune  resume | status | report | list
+#   lllm-web                                # the browser dashboard: serve,
+#                                            # live, tests, compare, answers,
+#                                            # report, tune -- at /ops on
+#                                            # $LLAMA_WEB_PORT (default 8095)
+#   lllm-frontend                           # Open WebUI fork's vite dev server
+#                                            # (localhost:5173), proxying API/WS
+#                                            # calls to lllm-backend
+#   lllm-backend                            # Open WebUI fork's backend
+#                                            # (uvicorn, localhost:4000) plus the
+#                                            # Postgres+pgvector container it
+#                                            # depends on; tearing this down also
+#                                            # tears Postgres down (see the trap
+#                                            # inside the function)
+#   lllm-db    sql | prune | vacuum | export | schema
+#   lllm-sweep-threads [profile] [thread-list]
+#   lllm-sweep-ngl     [profile] [ngl-list]
+#   lllm-fetch         [profile]            # model weights, not test data
+#   lllm-check
+#   lllm-vram
+#   lllm-profiles
+#   lllm-profile-names
+#   lllm-config-id     [profile]            # the fingerprint, without serving
 #
 # GPU telemetry, request timings and test results all go into one SQLite
-# database, logs/llama.db, written by scripts/llama-vram-log.sh (serving) and
+# database, logs/llama.db, written by scripts/shell/vram-log.sh (serving) and
 # scripts/llama_test.py (tests). Nothing writes a markdown log any more; see
-# README.md for the schema and llama-db below for the query entry points.
+# README.md for the schema and lllm-db below for the query entry points.
 #
 # ---------------------------------------------------------------------------
 
@@ -51,7 +58,9 @@
 : "${LLAMA_HOST:=0.0.0.0}"
 : "${LLAMA_PORT:=8090}"          # 8080 is reserved for work tooling
 : "${LLAMA_DEFAULT_PROFILE:=qwen38}"
-: "${LLAMA_REPO:=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+# This file now lives at scripts/shell/main.sh, two directories below the
+# repo root -- one more ".." than when it was scripts/llama-env.sh.
+: "${LLAMA_REPO:=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 
 # Flash attention flag spelling changed in llama.cpp during 2026: older builds
 # accept `--flash-attn 1`, current builds accept `-fa on|off|auto`. This script
@@ -61,7 +70,7 @@
 
 export LLAMA_BIN LLAMA_MODELS LLAMA_HOST LLAMA_PORT LLAMA_REPO
 
-# Every profile _llama_profile knows about, in the order diagnostics list them.
+# Every profile _lllm_profile knows about, in the order diagnostics list them.
 # Declared once here rather than repeated in each place that enumerates them:
 # the two Python front ends read it back through `profile-names` below, so
 # adding a profile means editing this file and nothing else.
@@ -75,7 +84,7 @@ LLAMA_PROFILE_NAMES=(qwen38 qwen36 qwen25c qwen3c)
 # dense, so every parameter is read on every forward pass and -ngl must be tuned
 # by hand against available VRAM rather than set to 99.
 # ---------------------------------------------------------------------------
-_llama_profile() {
+_lllm_profile() {
     local p="${1:-$LLAMA_DEFAULT_PROFILE}"
 
     # Reset so a previous profile cannot leak flags into this one.
@@ -110,7 +119,7 @@ _llama_profile() {
             # but KV cache competes directly with weights for 6 GB of VRAM.
             LLAMA_P_CTX=16384
             LLAMA_P_THREADS=12
-            # PLACEHOLDER. Tune this with llama-sweep-ngl before trusting it.
+            # PLACEHOLDER. Tune this with lllm-sweep-ngl before trusting it.
             # A dense model will fail to allocate at -ngl 99 on this hardware.
             LLAMA_P_NGL=20
             LLAMA_P_MOE=""          # must stay empty: dense has no experts
@@ -152,12 +161,12 @@ _llama_profile() {
             # MiB at 16K, ~952 MiB at 32K, on top of 4.36 GiB of weights and the
             # compute buffer. The full window fits inside 6 GiB only with less
             # room to spare than LLAMA_VRAM_HEADROOM_MIB warns at. Raise it with
-            # LLAMA_CTX and confirm with llama-vram if you need the context more
+            # LLAMA_CTX and confirm with lllm-vram if you need the context more
             # than the margin.
             LLAMA_P_CTX=16384
             LLAMA_P_THREADS=6       # batch assembly only; no layer runs on CPU
             # Qwen2.5-Coder's own generation_config.json, which is not the
-            # Qwen3.8 thinking-mode set above. llama-test pins temperature to 0
+            # Qwen3.8 thinking-mode set above. lllm-test pins temperature to 0
             # in its request body regardless, so these govern Open WebUI traffic.
             LLAMA_P_SAMPLERS=(--temp 0.7 --top-p 0.8 --top-k 20 --repeat-penalty 1.1)
             # No LLAMA_P_SPEC: Qwen2.5 predates the nextn/MTP tensors qwen38
@@ -180,7 +189,7 @@ _llama_profile() {
             ;;
 
         *)
-            echo "llama: unknown profile '$p'" >&2
+            echo "lllm: unknown profile '$p'" >&2
             echo "known profiles: ${LLAMA_PROFILE_NAMES[*]}" >&2
             return 1
             ;;
@@ -197,7 +206,7 @@ _llama_profile() {
     : "${LLAMA_P_PARALLEL:=1}"
 
     # KV cache types and batch sizes. These are profile variables rather than
-    # literals in llama-serve so that the flags actually passed and the flags
+    # literals in lllm-serve so that the flags actually passed and the flags
     # recorded in the telemetry log come from one place and cannot drift apart.
     : "${LLAMA_P_CACHE_K:=q8_0}"
     : "${LLAMA_P_CACHE_V:=q8_0}"
@@ -230,13 +239,13 @@ _llama_profile() {
     # recorded as the profile's slot count rather than the served one, which is
     # the exact confusion LLAMA_P_PARALLEL exists to end.
     if [[ " ${LLAMA_P_SPEC[*]:-} " == *" --parallel "* ]]; then
-        echo "llama: --parallel does not belong in LLAMA_SPEC; use LLAMA_PARALLEL=N" >&2
+        echo "lllm: --parallel does not belong in LLAMA_SPEC; use LLAMA_PARALLEL=N" >&2
         return 1
     fi
 
     # Guard rail: refuse to pass an MoE-only flag to a dense model.
     if [[ "$LLAMA_P_ARCH" == "dense" && -n "$LLAMA_P_MOE" ]]; then
-        echo "llama: --n-cpu-moe is not applicable to dense model '$LLAMA_P_NAME'; ignoring" >&2
+        echo "lllm: --n-cpu-moe is not applicable to dense model '$LLAMA_P_NAME'; ignoring" >&2
         LLAMA_P_MOE=""
     fi
 
@@ -244,10 +253,10 @@ _llama_profile() {
 }
 
 # ---------------------------------------------------------------------------
-# llama-profiles: list what is defined and whether the weights are on disk
+# lllm-profiles: list what is defined and whether the weights are on disk
 # ---------------------------------------------------------------------------
-llama-profiles() {
-    local py; py="$(_llama_python 2>/dev/null)"
+lllm-profiles() {
+    local py; py="$(_lllm_python 2>/dev/null)"
     if [[ -n "$py" && -f "$LLAMA_REPO/scripts/llama_console.py" ]]; then
         "$py" "$LLAMA_REPO/scripts/llama_console.py" profiles
         return $?
@@ -258,7 +267,7 @@ llama-profiles() {
     local p
     printf '%-10s %-7s %-9s %s\n' PROFILE ARCH STATUS MODEL
     for p in "${LLAMA_PROFILE_NAMES[@]}"; do
-        ( _llama_profile "$p" >/dev/null 2>&1
+        ( _lllm_profile "$p" >/dev/null 2>&1
           local status="missing"
           [[ -f "$LLAMA_P_MODEL" ]] && status="present"
           printf '%-10s %-7s %-9s %s\n' \
@@ -267,23 +276,23 @@ llama-profiles() {
 }
 
 # ---------------------------------------------------------------------------
-# llama-fetch: download a profile's weights into the WSL filesystem
+# lllm-fetch: download a profile's weights into the WSL filesystem
 #
 # Deliberately targets $LLAMA_MODELS rather than /mnt/c, which would incur the
 # 9p translation penalty on every cold load.
 # ---------------------------------------------------------------------------
-llama-fetch() {
-    _llama_profile "${1:-$LLAMA_DEFAULT_PROFILE}" || return 1
+lllm-fetch() {
+    _lllm_profile "${1:-$LLAMA_DEFAULT_PROFILE}" || return 1
 
     if ! command -v hf >/dev/null 2>&1; then
-        echo "llama-fetch: 'hf' CLI not found. Install with:" >&2
+        echo "lllm-fetch: 'hf' CLI not found. Install with:" >&2
         echo "  pip install -U \"huggingface_hub[cli]\"" >&2
         return 1
     fi
 
     local dir
     dir="$(dirname "$LLAMA_P_MODEL")"
-    echo "llama-fetch: $LLAMA_P_REPO ($LLAMA_P_PATTERN) -> $dir" >&2
+    echo "lllm-fetch: $LLAMA_P_REPO ($LLAMA_P_PATTERN) -> $dir" >&2
 
     hf download "$LLAMA_P_REPO" \
         --local-dir "$dir" \
@@ -291,34 +300,34 @@ llama-fetch() {
 }
 
 # ---------------------------------------------------------------------------
-# llama-serve: start llama-server for a profile
+# lllm-serve: start llama-server for a profile
 #
-#   llama-serve                       # default profile
-#   llama-serve qwen38                # named profile
-#   llama-serve qwen38 --verbose      # trailing args pass through to llama-server
-#   LLAMA_NGL=22 llama-serve qwen38   # one-off override
+#   lllm-serve                       # default profile
+#   lllm-serve qwen38                # named profile
+#   lllm-serve qwen38 --verbose      # trailing args pass through to llama-server
+#   LLAMA_NGL=22 lllm-serve qwen38   # one-off override
 # ---------------------------------------------------------------------------
-llama-serve() {
+lllm-serve() {
     local profile="$LLAMA_DEFAULT_PROFILE"
     if [[ $# -gt 0 && "$1" != -* ]]; then
         profile="$1"; shift
     fi
-    _llama_profile "$profile" || return 1
+    _lllm_profile "$profile" || return 1
 
     if [[ ! -x "$LLAMA_BIN/llama-server" ]]; then
-        echo "llama-serve: llama-server not found at $LLAMA_BIN" >&2
+        echo "lllm-serve: llama-server not found at $LLAMA_BIN" >&2
         echo "  rebuild, then re-source this script if the path changed" >&2
         return 1
     fi
 
     if [[ ! -f "$LLAMA_P_MODEL" ]]; then
-        echo "llama-serve: model not found: $LLAMA_P_MODEL" >&2
-        echo "  run: llama-fetch $LLAMA_P_NAME" >&2
+        echo "lllm-serve: model not found: $LLAMA_P_MODEL" >&2
+        echo "  run: lllm-fetch $LLAMA_P_NAME" >&2
         return 1
     fi
 
     # Assemble arguments. Architecture-specific flags are added only where valid.
-    # --metrics exposes /metrics, which llama-vram-log.sh scrapes for the run's
+    # --metrics exposes /metrics, which vram-log.sh scrapes for the run's
     # server-wide token totals. -lv 4 is what makes llama.cpp print the model
     # load detail the telemetry block records (n_layer, the GPU/CPU layer split,
     # buffer sizes, resolve_fused_ops); at the default 3 those lines never appear
@@ -354,12 +363,12 @@ llama-serve() {
     [[ ${#LLAMA_P_SAMPLERS[@]} -gt 0 ]] && args+=("${LLAMA_P_SAMPLERS[@]}")
     [[ ${#LLAMA_P_EXTRA[@]}    -gt 0 ]] && args+=("${LLAMA_P_EXTRA[@]}")
 
-    echo "llama-serve: profile=$LLAMA_P_NAME arch=$LLAMA_P_ARCH ngl=$LLAMA_P_NGL${LLAMA_P_MOE:+ moe=$LLAMA_P_MOE}${LLAMA_P_OT:+ ot=$LLAMA_P_OT} ctx=$LLAMA_P_CTX threads=$LLAMA_P_THREADS parallel=$LLAMA_P_PARALLEL port=$LLAMA_PORT${LLAMA_P_SPEC:+ spec=\"${LLAMA_P_SPEC[*]}\"}" >&2
+    echo "lllm-serve: profile=$LLAMA_P_NAME arch=$LLAMA_P_ARCH ngl=$LLAMA_P_NGL${LLAMA_P_MOE:+ moe=$LLAMA_P_MOE}${LLAMA_P_OT:+ ot=$LLAMA_P_OT} ctx=$LLAMA_P_CTX threads=$LLAMA_P_THREADS parallel=$LLAMA_P_PARALLEL port=$LLAMA_PORT${LLAMA_P_SPEC:+ spec=\"${LLAMA_P_SPEC[*]}\"}" >&2
 
     if [[ "$LLAMA_P_ARCH" == "dense" && "$LLAMA_P_NGL" != "99" ]]; then
-        echo "llama-serve: dense model, partial offload. Watch 'n_layer' in the load" >&2
-        echo "             log and confirm VRAM headroom with llama-vram before" >&2
-        echo "             treating -ngl as tuned." >&2
+        echo "lllm-serve: dense model, partial offload. Watch 'n_layer' in the load" >&2
+        echo "            log and confirm VRAM headroom with lllm-vram before" >&2
+        echo "            treating -ngl as tuned." >&2
     fi
 
     # GPU telemetry for the life of this server. The recorder waits for the port,
@@ -370,8 +379,13 @@ llama-serve() {
     if [[ "${LLAMA_VRAM_LOG:-1}" != "0" ]] && command -v nvidia-smi >/dev/null 2>&1; then
         local here logdir
         here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-        if [[ -f "$here/llama-vram-log.sh" ]]; then
-            logdir="${LLAMA_VRAM_LOGDIR:-$(cd "$here/.." && pwd)/logs}"
+        if [[ -f "$here/vram-log.sh" ]]; then
+            # $LLAMA_REPO/logs directly, not a path relative to this file's own
+            # directory: this file lives two levels down (scripts/shell/), so a
+            # relative "$here/.." no longer lands on the repo root the way it did
+            # when this was scripts/llama-env.sh. LLAMA_REPO is already resolved
+            # correctly above regardless of how deep this file lives.
+            logdir="${LLAMA_VRAM_LOGDIR:-$LLAMA_REPO/logs}"
             mkdir -p "$logdir"
             # llama-server's own load log, kept for the recorder to parse: the
             # layer split it actually chose, n_layer, fused-kernel resolution and
@@ -379,7 +393,7 @@ llama-serve() {
             # once the recorder has finished with it.
             serverlog="$logdir/.server.$$.log"
             LLAMA_SERVER_LOG="$serverlog" \
-                bash "$here/llama-vram-log.sh" record "$LLAMA_P_NAME" &
+                bash "$here/vram-log.sh" record "$LLAMA_P_NAME" &
             vram_pid=$!
         fi
     fi
@@ -407,62 +421,59 @@ llama-serve() {
     return $rc
 }
 
-# Backwards-compatible name for the old .bashrc function.
-llama-qwen() { llama-serve "$@"; }
-
 # ---------------------------------------------------------------------------
 # The two sweeps below drive llama-bench, not llama-server. They write nothing
 # to logs/llama.db, so their numbers are not comparable with a served run and do
 # not survive the terminal; they are pre-flight, for getting into the right
-# neighbourhood before serving anything. `llama-tune` supersedes them for
+# neighbourhood before serving anything. `lllm-tune` supersedes them for
 # choosing a serving configuration: it searches over served runs, records every
 # request, and judges correctness alongside throughput.
 #
-# They are kept rather than folded into llama-tune because llama-bench retains
-# GPU allocations across reloads on WSL2 (see the note in llama-sweep-ngl), so
+# They are kept rather than folded into lllm-tune because llama-bench retains
+# GPU allocations across reloads on WSL2 (see the note in lllm-sweep-ngl), so
 # reusing them as a feasibility pre-screen would import that defect into the
 # search.
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# llama-sweep-threads: generation throughput across thread counts
+# lllm-sweep-threads: generation throughput across thread counts
 #
 # Worth re-running for the dense profile. The earlier finding that throughput
 # plateaus above four threads was measured on a 3B-active MoE, which is almost
 # purely bandwidth-bound. A dense 27B does roughly nine times the arithmetic per
 # token, so the compute-versus-bandwidth balance shifts and the curve may differ.
 # ---------------------------------------------------------------------------
-llama-sweep-threads() {
+lllm-sweep-threads() {
     local profile="$LLAMA_DEFAULT_PROFILE"
     if [[ $# -gt 0 && "$1" != *,* && "$1" != -* ]]; then
         profile="$1"; shift
     fi
-    _llama_profile "$profile" || return 1
+    _lllm_profile "$profile" || return 1
 
     local threads="${1:-4,6,8,10}"
 
     local -a args=(-m "$LLAMA_P_MODEL" -t "$threads" -ngl "$LLAMA_P_NGL" -o md)
     [[ -n "$LLAMA_P_MOE" ]] && args+=(--n-cpu-moe "$LLAMA_P_MOE")
 
-    echo "llama-sweep-threads: profile=$LLAMA_P_NAME threads=$threads" >&2
+    echo "lllm-sweep-threads: profile=$LLAMA_P_NAME threads=$threads" >&2
     "$LLAMA_BIN/llama-bench" "${args[@]}"
 }
 
 # ---------------------------------------------------------------------------
-# llama-sweep-ngl: find the GPU layer count that fills VRAM without spilling
+# lllm-sweep-ngl: find the GPU layer count that fills VRAM without spilling
 #
 # This is the dense-model equivalent of tuning --n-cpu-moe. Start low, walk up,
 # and take the highest value that does not fail to allocate or start swapping.
 # ---------------------------------------------------------------------------
-llama-sweep-ngl() {
+lllm-sweep-ngl() {
     local profile="$LLAMA_DEFAULT_PROFILE"
     if [[ $# -gt 0 && "$1" != *,* && "$1" != -* ]]; then
         profile="$1"; shift
     fi
-    _llama_profile "$profile" || return 1
+    _lllm_profile "$profile" || return 1
 
     if [[ "$LLAMA_P_ARCH" == "moe" ]]; then
-        echo "llama-sweep-ngl: '$LLAMA_P_NAME' is MoE; sweep --n-cpu-moe instead:" >&2
+        echo "lllm-sweep-ngl: '$LLAMA_P_NAME' is MoE; sweep --n-cpu-moe instead:" >&2
         echo "  $LLAMA_BIN/llama-bench -m \"$LLAMA_P_MODEL\" -ngl 99 --n-cpu-moe 30,32,34,36 -o md" >&2
         return 1
     fi
@@ -475,7 +486,7 @@ llama-sweep-ngl() {
     # reloads, so on WSL2 every configuration after the first is contaminated
     # once any value spills into system memory.
     # -ot is passed through so the sweep measures the same tensor placement
-    # llama-serve uses; without it the VRAM headroom found here is not the
+    # lllm-serve uses; without it the VRAM headroom found here is not the
     # headroom the server will see.
     local -a ot=()
     [[ -n "$LLAMA_P_OT" ]] && ot=(-ot "$LLAMA_P_OT")
@@ -494,7 +505,7 @@ llama-sweep-ngl() {
 }
 
 # ---------------------------------------------------------------------------
-# _llama_python: the interpreter the Python tooling runs under
+# _lllm_python: the interpreter the local-llm Python tooling runs under
 #
 # This box's python3 is externally managed (PEP 668), so `pip install` refuses
 # outright and a venv is required rather than merely tidy. The venv is created
@@ -502,47 +513,51 @@ llama-sweep-ngl() {
 # python3 and the plain-text output path instead of an unexpected 200 MB
 # download. LLAMA_NO_BOOTSTRAP=1 disables creation entirely.
 #
-# NOTE: scripts/llama-vram-log.sh deliberately does NOT go through this. The
+# NOTE: scripts/shell/vram-log.sh deliberately does NOT go through this. The
 # telemetry recorder runs in the background for the life of every server and
 # must keep working with bare python3, which is why llama_db.py, llama_record.py,
 # llama_stats.py, llama_tests.py and llama_results.py are all stdlib-only.
+#
+# Kept entirely separate from _lllm_openwebui_python below: the Open WebUI
+# fork's backend pulls in torch, sentence-transformers and faster-whisper,
+# which have no business anywhere near this stdlib-light venv.
 # ---------------------------------------------------------------------------
-_llama_python() {
+_lllm_python() {
     local venv="$LLAMA_REPO/.venv/bin/python"
     if [[ -x "$venv" ]]; then
         printf '%s' "$venv"; return 0
     fi
     if [[ "${LLAMA_NO_BOOTSTRAP:-0}" != "1" && $- == *i* && -t 2 ]]; then
-        echo "llama: creating $LLAMA_REPO/.venv (first run; needs rich, textual," \
+        echo "lllm: creating $LLAMA_REPO/.venv (first run; needs rich, textual," \
              "numpy, pandas)" >&2
         if python3 -m venv "$LLAMA_REPO/.venv" >&2 \
            && "$venv" -m pip install -q --upgrade pip >&2 \
            && "$venv" -m pip install -q -r "$LLAMA_REPO/requirements.txt" >&2; then
             printf '%s' "$venv"; return 0
         fi
-        echo "llama: venv setup failed; falling back to python3 (plain output," \
+        echo "lllm: venv setup failed; falling back to python3 (plain output," \
              "and DS-1000 grading will be unavailable)" >&2
     fi
     printf '%s' "$(command -v python3)"
 }
 
 # ---------------------------------------------------------------------------
-# llama-test: run published benchmark items against the running server, grade
+# lllm-test: run published benchmark items against the running server, grade
 # them with the benchmark's own tests, and record the result
 #
-#   llama-test humaneval/HumanEval/0     # one item
-#   llama-test --suite smoke             # a tier (24 items)
-#   llama-test --suite smoke --system assistant   # ... under a system prompt
-#   llama-test --suite full --resume     # continue an interrupted run
-#   llama-test list                      # benchmarks, tiers, revisions
-#   llama-test fetch                     # download the datasets
-#   llama-test selfcheck                 # grade the datasets' own answers
-#   llama-test compare                   # rank models/configs by pass rate
-#   llama-test answer humaneval/HumanEval/0   # print a stored answer
-#   llama-test ui                        # the Textual dashboard
+#   lllm-test humaneval/HumanEval/0     # one item
+#   lllm-test --suite smoke             # a tier (24 items)
+#   lllm-test --suite smoke --system assistant   # ... under a system prompt
+#   lllm-test --suite full --resume     # continue an interrupted run
+#   lllm-test list                      # benchmarks, tiers, revisions
+#   lllm-test fetch                     # download the datasets
+#   lllm-test selfcheck                 # grade the datasets' own answers
+#   lllm-test compare                   # rank models/configs by pass rate
+#   lllm-test answer humaneval/HumanEval/0   # print a stored answer
+#   lllm-test ui                        # the Textual dashboard
 #
 # The body lives in scripts/llama_test.py; this is a wrapper so the command
-# keeps its name and its place beside llama-serve. Everything the bash version
+# keeps its name and its place beside lllm-serve. Everything the bash version
 # guaranteed still holds, and for the same reasons:
 #
 #   * The model name comes from the running server (GET /v1/models), not from
@@ -552,7 +567,7 @@ _llama_python() {
 #   * temperature is pinned to 0 and cache_prompt defaults to false, so a
 #     repeated prompt measures the configuration and not the prefix cache.
 #   * The answer goes to stdout and the model's thinking to stderr, so
-#     `llama-test humaneval/HumanEval/0 > answer.md` captures the completion
+#     `lllm-test humaneval/HumanEval/0 > answer.md` captures the completion
 #     alone. Rich output is on stderr only, and only when it is a terminal.
 #
 # The item prompts are not files in prompts/. They are rendered from the
@@ -565,44 +580,144 @@ _llama_python() {
 # single blocking request; the other LLAMA_TEST_* variables are unchanged
 # (MAX_TOKENS, TIMEOUT, CACHE_PROMPT).
 # ---------------------------------------------------------------------------
-llama-test() {
-    local py; py="$(_llama_python)"
+lllm-test() {
+    local py; py="$(_lllm_python)"
     LLAMA_PORT="$LLAMA_PORT" "$py" "$LLAMA_REPO/scripts/llama_test.py" "$@"
 }
 
 # ---------------------------------------------------------------------------
-# llama-web: the browser dashboard over serving, tests, comparison, reports
+# lllm-web: the browser dashboard over serving, tests, comparison, reports
 # and tuning
 #
-#   llama-web                      # binds 0.0.0.0:${LLAMA_WEB_PORT:-8095}/ops
-#   llama-web --check               # headless smoke test, no server started
+#   lllm-web                      # binds 0.0.0.0:${LLAMA_WEB_PORT:-8095}/ops
+#   lllm-web --check               # headless smoke test, no server started
 #
-# Replaced the Textual dashboard (llama-ui) on 2026-09-06. Every page it
-# serves calls straight through to this file, llama_test.py, llama_compare.py,
-# llama_report.py and llama_tune.py -- it is a caller of the shell surface,
-# never a reimplementation of it. Bound to 0.0.0.0 rather than 127.0.0.1 by
-# default: the Caddy reverse proxy in open-web-ui/ reaches it via
-# host.docker.internal, which arrives on the host's real interface under
-# WSL2/Docker Desktop, not through loopback. See README.md for the
-# open-web-ui/docker-compose.yml topology that puts this and Open WebUI behind
-# one port.
+# Every page it serves calls straight through to this file, llama_test.py,
+# llama_compare.py, llama_report.py and llama_tune.py -- it is a caller of the
+# shell surface, never a reimplementation of it. Bound to 0.0.0.0 rather than
+# 127.0.0.1 by default. Runs on its own port, independent of lllm-frontend/
+# lllm-backend (the Open WebUI fork) -- merging the two is a deferred,
+# separate piece of work; see the decisions log.
 # ---------------------------------------------------------------------------
-llama-web() {
-    local py; py="$(_llama_python)"
+lllm-web() {
+    local py; py="$(_lllm_python)"
     LLAMA_PORT="$LLAMA_PORT" LLAMA_WEB_PORT="${LLAMA_WEB_PORT:-8095}" \
         "$py" "$LLAMA_REPO/scripts/llama_web.py" "$@"
 }
 
 # ---------------------------------------------------------------------------
-# llama-report: a statistical report over the measurement store
+# _lllm_openwebui_python: the interpreter the Open WebUI fork's backend runs
+# under
 #
-#   llama-report                       # logs/report/<UTC date>/report.md + PNGs
-#   llama-report --out /tmp/r          # somewhere else
-#   llama-report --stdout              # the document on stdout, so it pipes
-#   llama-report --tier smoke --benchmark mbpp     # narrow the scope
-#   llama-report --no-figures          # text plots instead of PNGs
+# A dedicated venv at open-web-ui/openwebui/backend/.venv, bootstrapped on
+# first use exactly like _lllm_python bootstraps the shared one -- kept
+# completely separate on purpose (see the comment on _lllm_python above).
+# ---------------------------------------------------------------------------
+_lllm_openwebui_python() {
+    local dir="$LLAMA_REPO/open-web-ui/openwebui/backend"
+    local venv="$dir/.venv/bin/python"
+    if [[ -x "$venv" ]]; then
+        printf '%s' "$venv"; return 0
+    fi
+    echo "lllm: creating $dir/.venv (first run; installs the Open WebUI" \
+         "fork's backend requirements)" >&2
+    python3 -m venv "$dir/.venv" >&2
+    "$venv" -m pip install -q --upgrade pip >&2
+    "$venv" -m pip install -q -r "$dir/requirements.txt" >&2
+    printf '%s' "$venv"
+}
+
+# ---------------------------------------------------------------------------
+# lllm-frontend: the Open WebUI fork's frontend, in dev mode
 #
-# This is `llama-test compare` grown a spine. `compare` ranks; it has no way to
+#   lllm-frontend                  # vite dev server on :5173
+#
+# Proxies API/WS calls to lllm-backend via WEBUI_BACKEND_URL (read by the
+# fork's vite.config.ts; defaults to :8080 upstream, which is reserved on
+# this host for other tooling -- see LLAMA_PORT above -- so it is pointed at
+# :4000, where lllm-backend actually listens).
+#
+# Uses bun, not npm: nothing in the fork requires npm specifically (Vite/
+# SvelteKit tooling is package-manager agnostic), but be aware this is
+# genuinely untested upstream -- Open WebUI's own dev docs and package.json's
+# engines field only reference Node.js/npm. If the build ever misbehaves in a
+# way that's hard to explain, `cd open-web-ui/openwebui && npm ci && npm run
+# dev` is the documented, CI/Docker-tested fallback to try first.
+# ---------------------------------------------------------------------------
+lllm-frontend() (
+    cd "$LLAMA_REPO/open-web-ui/openwebui" || exit 1
+    [[ -d node_modules ]] || bun install
+    WEBUI_BACKEND_URL="http://localhost:${LLLM_BACKEND_PORT:-4000}" bun run dev
+)
+
+# ---------------------------------------------------------------------------
+# lllm-backend: the Open WebUI fork's backend, in dev mode -- plus the
+# Postgres+pgvector container it depends on
+#
+#   lllm-backend                   # uvicorn --reload on :4000, Postgres via
+#                                   # open-web-ui/docker-compose.yml
+#
+# Starts Postgres before the backend and tears it down when the backend
+# stops (Ctrl-C included) via the trap below. Run as a subshell `(...)`,
+# not a plain function body: a `trap ... EXIT` set directly in a sourced
+# function attaches to the caller's *interactive shell*, and would tear
+# Postgres down on every future shell exit, not just when this command's
+# uvicorn process stops. The parens give the trap its own, correctly-scoped
+# lifetime.
+#
+# DATABASE_URL/VECTOR_DB/WEBUI_SECRET_KEY/OPENAI_* need POSTGRES_PASSWORD,
+# WEBUI_SECRET_KEY and OPENROUTER_API_KEY, which this function loads itself
+# from open-web-ui/.env -- it does not rely on the caller having sourced
+# anything first. Without WEBUI_SECRET_KEY set, the app exits immediately on
+# import (env.py's own hard-requirement check), and under --reload the
+# supervisor just respawns the dying worker in a tight loop rather than
+# failing loudly -- a real failure mode this hit once, hence loading the env
+# file explicitly here instead of documenting it as the caller's job.
+# ---------------------------------------------------------------------------
+lllm-backend() (
+    trap 'docker compose -f "$LLAMA_REPO/open-web-ui/docker-compose.yml" down' EXIT
+
+    local envfile="$LLAMA_REPO/open-web-ui/.env"
+    if [[ ! -f "$envfile" ]]; then
+        echo "lllm-backend: $envfile not found -- create it with OPENROUTER_API_KEY, POSTGRES_PASSWORD, WEBUI_SECRET_KEY" >&2
+        exit 1
+    fi
+    set -a
+    # shellcheck source=/dev/null
+    source "$envfile"
+    set +a
+
+    docker compose -f "$LLAMA_REPO/open-web-ui/docker-compose.yml" up -d postgres
+
+    local py; py="$(_lllm_openwebui_python)"
+    cd "$LLAMA_REPO/open-web-ui/openwebui/backend" || exit 1
+
+    CORS_ALLOW_ORIGIN="http://localhost:5173" \
+    WEBUI_SECRET_KEY="$WEBUI_SECRET_KEY" \
+    DATABASE_URL="postgresql://openwebui:${POSTGRES_PASSWORD}@localhost:5432/openwebui" \
+    VECTOR_DB=pgvector \
+    OPENAI_API_BASE_URL="https://openrouter.ai/api/v1" \
+    OPENAI_API_KEY="$OPENROUTER_API_KEY" \
+    HF_HUB_OFFLINE=1 \
+    "$py" -m uvicorn open_webui.main:app --host 0.0.0.0 \
+        --port "${LLLM_BACKEND_PORT:-4000}" --reload
+    # No `exec` on the line above, deliberately: exec would replace this
+    # subshell's process image *and its trap* with uvicorn, so Ctrl-C would
+    # kill uvicorn without ever running the docker compose down. Running it
+    # as a normal foreground command lets control return here when it
+    # exits, so the subshell reaches its end and the EXIT trap fires.
+)
+
+# ---------------------------------------------------------------------------
+# lllm-report: a statistical report over the measurement store
+#
+#   lllm-report                       # logs/report/<UTC date>/report.md + PNGs
+#   lllm-report --out /tmp/r          # somewhere else
+#   lllm-report --stdout              # the document on stdout, so it pipes
+#   lllm-report --tier smoke --benchmark mbpp     # narrow the scope
+#   lllm-report --no-figures          # text plots instead of PNGs
+#
+# This is `lllm-test compare` grown a spine. `compare` ranks; it has no way to
 # say whether a difference it shows is real, and with a smoke tier at n = 24 the
 # gap between two adjacent rows is routinely one item. The report audits the
 # design first -- which factors actually varied, what is confounded with what,
@@ -623,25 +738,25 @@ llama-web() {
 # optional: without it every figure renders as a unicode plot in a fenced block
 # and the document is otherwise identical.
 # ---------------------------------------------------------------------------
-llama-report() {
-    local py; py="$(_llama_python)"
+lllm-report() {
+    local py; py="$(_lllm_python)"
     "$py" "$LLAMA_REPO/scripts/llama_report.py" "$@"
 }
 
 # ---------------------------------------------------------------------------
-# llama-db: the store itself
+# lllm-db: the store itself
 #
-#   llama-db                 # open the sqlite3 shell on logs/llama.db
-#   llama-db sql "SELECT ..."          # one query, as a table
-#   llama-db schema                    # .schema
-#   llama-db prune --before 2026-08-01 # drop samples and scrapes before a date
-#   llama-db vacuum                    # reclaim the space a prune freed
-#   llama-db export <dir>              # every table as CSV
+#   lllm-db                 # open the sqlite3 shell on logs/llama.db
+#   lllm-db sql "SELECT ..."          # one query, as a table
+#   lllm-db schema                    # .schema
+#   lllm-db prune --before 2026-08-01 # drop samples and scrapes before a date
+#   lllm-db vacuum                    # reclaim the space a prune freed
+#   lllm-db export <dir>              # every table as CSV
 #
 # Reading is deliberately not wrapped: the whole reason for moving off markdown
 # is that the store answers questions nobody wrote a command for, and a menu of
-# canned queries would put that back. `llama-db` opens the shell; llama-test
-# compare and llama-web are the views worth having as commands.
+# canned queries would put that back. `lllm-db` opens the shell; lllm-test
+# compare and lllm-web are the views worth having as commands.
 #
 # prune is the escape valve for the reversed retention rule (CLAUDE.md,
 # 2026-08-30): every GPU sample is now kept, at roughly 1 MB per day of
@@ -650,21 +765,21 @@ llama-report() {
 # telemetry -- results, answers, requests and configurations are never dropped
 # by it, because those are the measurements.
 # ---------------------------------------------------------------------------
-llama-db() {
+lllm-db() {
     local db="${LLAMA_DB:-${LLAMA_VRAM_LOGDIR:-$LLAMA_REPO/logs}/llama.db}"
     local cmd="${1:-shell}"; shift 2>/dev/null || true
 
     if ! command -v sqlite3 >/dev/null 2>&1; then
-        echo "llama-db: sqlite3 is not installed" >&2; return 1
+        echo "lllm-db: sqlite3 is not installed" >&2; return 1
     fi
     if [[ ! -f "$db" && "$cmd" != "shell" ]]; then
-        echo "llama-db: no database at $db (it is created by llama-serve or llama-test)" >&2
+        echo "lllm-db: no database at $db (it is created by lllm-serve or lllm-test)" >&2
         return 1
     fi
 
     case "$cmd" in
         shell)  sqlite3 -box "$db" ;;
-        sql)    [[ $# -gt 0 ]] || { echo "usage: llama-db sql \"SELECT ...\"" >&2; return 2; }
+        sql)    [[ $# -gt 0 ]] || { echo "usage: lllm-db sql \"SELECT ...\"" >&2; return 2; }
                 sqlite3 -box -header "$db" "$*" ;;
         schema) sqlite3 "$db" ".schema" ;;
         vacuum) sqlite3 "$db" "VACUUM;" && echo "vacuumed $db" ;;
@@ -673,17 +788,17 @@ llama-db() {
             while [[ $# -gt 0 ]]; do
                 case "$1" in
                     --before) before="$2"; shift 2 ;;
-                    *) echo "llama-db prune: unknown argument '$1'" >&2; return 2 ;;
+                    *) echo "lllm-db prune: unknown argument '$1'" >&2; return 2 ;;
                 esac
             done
-            [[ -n "$before" ]] || { echo "usage: llama-db prune --before YYYY-MM-DD" >&2; return 2; }
+            [[ -n "$before" ]] || { echo "usage: lllm-db prune --before YYYY-MM-DD" >&2; return 2; }
             sqlite3 "$db" <<SQL
 DELETE FROM gpu_sample WHERE at < '$before';
 DELETE FROM metrics_scrape WHERE at < '$before';
 SELECT 'gpu_sample rows left: ' || count(*) FROM gpu_sample;
 SELECT 'metrics_scrape rows left: ' || count(*) FROM metrics_scrape;
 SQL
-            echo "run 'llama-db vacuum' to reclaim the space" ;;
+            echo "run 'lllm-db vacuum' to reclaim the space" ;;
         export)
             local out="${1:-$LLAMA_REPO/logs/export}"
             mkdir -p "$out" || return 1
@@ -695,27 +810,27 @@ SQL
             done
             echo "exported $(ls -1 "$out"/*.csv | wc -l) tables to $out" ;;
         *)
-            echo "usage: llama-db {shell|sql|schema|prune|vacuum|export}" >&2
+            echo "usage: lllm-db {shell|sql|schema|prune|vacuum|export}" >&2
             return 2 ;;
     esac
 }
 
 # ---------------------------------------------------------------------------
-# llama-profile-names: the defined profiles, one per line
+# lllm-profile-names: the defined profiles, one per line
 #
 # The Python front ends (llama_console.py, llama_web.py) call this rather than
-# carrying their own copy of the list, so a new profile appears in llama-profiles
+# carrying their own copy of the list, so a new profile appears in lllm-profiles
 # and in the dashboard's picker without editing either.
 # ---------------------------------------------------------------------------
-llama-profile-names() {
+lllm-profile-names() {
     printf '%s\n' "${LLAMA_PROFILE_NAMES[@]}"
 }
 
 # ---------------------------------------------------------------------------
-# llama-profile-json: a profile's resolved settings, as JSON
+# lllm-profile-json: a profile's resolved settings, as JSON
 #
 # Exists so the Python tooling can read the serving configuration without
-# re-declaring the profile table. scripts/llama-env.sh is the single source of
+# re-declaring the profile table. scripts/shell/main.sh is the single source of
 # truth for serving configuration (CLAUDE.md); a second copy in Python would
 # disagree with this one the first time either changed.
 #
@@ -724,11 +839,11 @@ llama-profile-names() {
 # transform; a key spelled any other way makes the dashboard report the field as
 # overridden on every run.
 # ---------------------------------------------------------------------------
-llama-profile-json() {
-    _llama_profile "${1:-$LLAMA_DEFAULT_PROFILE}" || return 1
+lllm-profile-json() {
+    _lllm_profile "${1:-$LLAMA_DEFAULT_PROFILE}" || return 1
     local spec extra samplers
     # Empty for a profile that takes no thinking budget, the same test
-    # _vramlog_config in llama-vram-log.sh makes before recording "n/a". A
+    # _vramlog_config in vram-log.sh makes before recording "n/a". A
     # non-thinking model reported as reasoning "medium" would have a caller
     # setting LLAMA_REASONING for a server that ignores it.
     local reasoning=""
@@ -767,32 +882,32 @@ llama-profile-json() {
 }
 
 # ---------------------------------------------------------------------------
-# llama-config-id: the fingerprint a set of overrides would produce
+# lllm-config-id: the fingerprint a set of overrides would produce
 #
-#   llama-config-id qwen36
-#   LLAMA_MOE=30 LLAMA_THREADS=8 llama-config-id qwen36
+#   lllm-config-id qwen36
+#   LLAMA_MOE=30 LLAMA_THREADS=8 lllm-config-id qwen36
 #
 # Prints {"config_id": "...", "alias": "...", "lines": [...]} -- the same six
 # lines _vramlog_config records with a run, and the same sha1 over them, without
 # starting a server.
 #
-# It exists for llama-tune, which has to know whether two candidates are the
+# It exists for lllm-tune, which has to know whether two candidates are the
 # same configuration before it spends an hour measuring both. The alternative
 # was reimplementing the fingerprint in Python, which would have put a second
-# copy of it beside the one in llama-vram-log.sh and guaranteed they eventually
+# copy of it beside the one in vram-log.sh and guaranteed they eventually
 # disagreed -- and a fingerprint that disagrees with itself files two different
 # configurations under one id.
 #
-# The sourcing runs in a subshell because llama-vram-log.sh sources this file:
+# The sourcing runs in a subshell because vram-log.sh sources this file:
 # pulling it into the current shell would redefine every function here while one
 # of them is running.
 # ---------------------------------------------------------------------------
-llama-config-id() {
+lllm-config-id() {
     local dir; dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     (
-        # shellcheck source=./llama-vram-log.sh
-        source "$dir/llama-vram-log.sh"
-        _llama_profile "${1:-$LLAMA_DEFAULT_PROFILE}" || exit 1
+        # shellcheck source=./vram-log.sh
+        source "$dir/vram-log.sh"
+        _lllm_profile "${1:-$LLAMA_DEFAULT_PROFILE}" || exit 1
         _vramlog_config
         printf '%s\n' "${VRAMLOG_CFG_LINES[@]}" \
             | jq -R . \
@@ -802,12 +917,12 @@ llama-config-id() {
 }
 
 # ---------------------------------------------------------------------------
-# llama-tune: search the serving configuration space
+# lllm-tune: search the serving configuration space
 #
-#   llama-tune qwen25c --tier smoke --budget interactive
-#   llama-tune qwen36 --tier standard --budget overnight
-#   llama-tune --dry-run                     # the schedule, launching nothing
-#   llama-tune resume | status | report | list
+#   lllm-tune qwen25c --tier smoke --budget interactive
+#   lllm-tune qwen36 --tier standard --budget overnight
+#   lllm-tune --dry-run                     # the schedule, launching nothing
+#   lllm-tune resume | status | report | list
 #
 # Runs a batch of served configurations against the same benchmark items,
 # eliminates the slow ones round by round, and narrows onto the best values.
@@ -817,30 +932,30 @@ llama-config-id() {
 # never "answers better".
 #
 # It drives this file rather than replacing it: a candidate is served by
-# `llama-serve` under LLAMA_* overrides, so it is fingerprinted, recorded and
+# `lllm-serve` under LLAMA_* overrides, so it is fingerprinted, recorded and
 # telemetered exactly like a hand-started run.
 # ---------------------------------------------------------------------------
-llama-tune() {
-    local py; py="$(_llama_python)"
+lllm-tune() {
+    local py; py="$(_lllm_python)"
     LLAMA_PORT="$LLAMA_PORT" "$py" "$LLAMA_REPO/scripts/llama_tune.py" "$@"
 }
 
 # ---------------------------------------------------------------------------
 # Diagnostics
 # ---------------------------------------------------------------------------
-llama-check() {
-    local py; py="$(_llama_python 2>/dev/null)"
+lllm-check() {
+    local py; py="$(_lllm_python 2>/dev/null)"
     if [[ -n "$py" && -f "$LLAMA_REPO/scripts/llama_console.py" ]]; then
         "$py" "$LLAMA_REPO/scripts/llama_console.py" check
         return $?
     fi
     curl -fsS "http://localhost:${LLAMA_PORT}/v1/models" \
-        || { echo "llama-check: no server responding on port $LLAMA_PORT" >&2; return 1; }
+        || { echo "lllm-check: no server responding on port $LLAMA_PORT" >&2; return 1; }
     echo
 }
 
-llama-vram() {
-    local py; py="$(_llama_python 2>/dev/null)"
+lllm-vram() {
+    local py; py="$(_lllm_python 2>/dev/null)"
     if [[ -n "$py" && -f "$LLAMA_REPO/scripts/llama_console.py" ]]; then
         "$py" "$LLAMA_REPO/scripts/llama_console.py" vram
         return $?
@@ -854,35 +969,36 @@ llama-vram() {
 # Direct-invocation dispatch. Sourcing this file defines the functions above and
 # stops here; executing it runs a subcommand.
 #
-# The depth check is load-bearing, not belt-and-braces. llama-config-id sources
-# llama-vram-log.sh, which sources this file back, and on that path
-# BASH_SOURCE[0] and $0 are both the absolute path of this script and therefore
-# equal -- so the nested source re-entered the dispatch with the *function's*
-# positional parameters and exited 2 with the usage text. A file being sourced
-# always has something above it on the source stack; the top-level program
-# never does.
+# The depth check is load-bearing, not belt-and-braces. lllm-config-id sources
+# vram-log.sh, which sources this file back, and on that path BASH_SOURCE[0]
+# and $0 are both the absolute path of this script and therefore equal -- so
+# the nested source re-entered the dispatch with the *function's* positional
+# parameters and exited 2 with the usage text. A file being sourced always has
+# something above it on the source stack; the top-level program never does.
 # ---------------------------------------------------------------------------
 if [[ "${BASH_SOURCE[0]}" == "$0" && "${#BASH_SOURCE[@]}" -eq 1 ]]; then
     cmd="${1:-serve}"; shift 2>/dev/null || true
     case "$cmd" in
-        serve)          llama-serve "$@" ;;
-        fetch)          llama-fetch "$@" ;;
-        sweep-threads)  llama-sweep-threads "$@" ;;
-        sweep-ngl)      llama-sweep-ngl "$@" ;;
-        test)           llama-test "$@" ;;
-        tune)           llama-tune "$@" ;;
-        web)            llama-web "$@" ;;
-        report)         llama-report "$@" ;;
-        db)             llama-db "$@" ;;
-        check)          llama-check "$@" ;;
-        vram)           llama-vram "$@" ;;
-        vram-log)       "$(dirname "${BASH_SOURCE[0]}")/llama-vram-log.sh" record "$@" ;;
-        profiles)       llama-profiles "$@" ;;
-        profile-json)   llama-profile-json "$@" ;;
-        profile-names)  llama-profile-names "$@" ;;
-        config-id)      llama-config-id "$@" ;;
+        serve)          lllm-serve "$@" ;;
+        fetch)          lllm-fetch "$@" ;;
+        sweep-threads)  lllm-sweep-threads "$@" ;;
+        sweep-ngl)      lllm-sweep-ngl "$@" ;;
+        test)           lllm-test "$@" ;;
+        tune)           lllm-tune "$@" ;;
+        web)            lllm-web "$@" ;;
+        frontend)       lllm-frontend "$@" ;;
+        backend)        lllm-backend "$@" ;;
+        report)         lllm-report "$@" ;;
+        db)             lllm-db "$@" ;;
+        check)          lllm-check "$@" ;;
+        vram)           lllm-vram "$@" ;;
+        vram-log)       "$(dirname "${BASH_SOURCE[0]}")/vram-log.sh" record "$@" ;;
+        profiles)       lllm-profiles "$@" ;;
+        profile-json)   lllm-profile-json "$@" ;;
+        profile-names)  lllm-profile-names "$@" ;;
+        config-id)      lllm-config-id "$@" ;;
         *)
-            echo "usage: $(basename "$0") {serve|fetch|test|tune|web|report|db|sweep-threads|sweep-ngl|check|vram|vram-log|profiles|profile-json|profile-names|config-id} [profile] [args]" >&2
+            echo "usage: $(basename "$0") {serve|fetch|test|tune|web|frontend|backend|report|db|sweep-threads|sweep-ngl|check|vram|vram-log|profiles|profile-json|profile-names|config-id} [profile] [args]" >&2
             exit 2
             ;;
     esac

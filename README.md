@@ -1,47 +1,60 @@
 # Personal AI Assistant
 
 A personal AI assistant running on cloud-hosted open-weight models via
-OpenRouter, using [Open WebUI](https://github.com/open-webui/open-webui) as
-the chat interface. See `CLAUDE.md` for the full project rationale.
+OpenRouter, using a pinned fork of [Open WebUI](https://github.com/open-webui/open-webui)
+(`open-web-ui/openwebui`, a git submodule) as the chat interface. See
+`CLAUDE.md` for the full project rationale.
 
-Open WebUI runs in Docker and talks directly to OpenRouter's OpenAI-compatible
-API — there is no custom backend or frontend code in this repo; Open WebUI
-*is* the app.
+The fork is pinned at `v0.11.3` and never merges upstream — every update is a
+deliberate `git checkout <tag>` inside the submodule, not a tracking branch.
+It runs as two host processes, `lllm-frontend` and `lllm-backend`, the same
+way the local-inference tooling below (`lllm-serve`, `lllm-web`) already
+does, rather than in Docker: real integration between Open WebUI and this
+repo's own GPU/process-management tooling needs a host process on both sides
+(see the decisions log for why forking was rejected once, in 2026-09-06, and
+what changed since). Its chat and RAG data live in Postgres+pgvector
+(`open-web-ui/docker-compose.yml`), not SQLite.
 
 ## Running it
 
 Requires Docker Desktop with WSL integration enabled for this distro
-(Docker Desktop → Settings → Resources → WSL Integration).
+(Docker Desktop → Settings → Resources → WSL Integration), plus Bun and a
+Python 3 interpreter on the host for the fork's frontend and backend.
 
-As of 2026-09-06, Open WebUI runs behind a small Caddy reverse proxy
-(`open-web-ui/docker-compose.yml` + `open-web-ui/Caddyfile`) instead of being
-published directly, so it can share one port with the web dashboard (see
-"Local inference" → `llama-web` below). Put your OpenRouter key in
-`open-web-ui/.env` (gitignored, same shape as before):
+Clone this repo with `git submodule update --init --recursive` — the fork
+lives inside `open-web-ui/openwebui/` as a submodule, so a plain clone leaves
+that directory empty. Put your secrets in `open-web-ui/.env` (gitignored):
 
 ```bash
 # open-web-ui/.env
 OPENROUTER_API_KEY=<your OpenRouter API key, from https://openrouter.ai/keys>
+POSTGRES_PASSWORD=<openssl rand -base64 24>
+WEBUI_SECRET_KEY=<openssl rand -base64 24>
 ```
 
-then:
+then, in one terminal:
 
 ```bash
-docker compose -f open-web-ui/docker-compose.yml up -d
+lllm-backend
 ```
 
-Chat is at `http://localhost:4000/` and the dashboard is at
-`http://localhost:4000/ops` — both through the same Caddy container, which is
-the only thing bound to a host port; Open WebUI's own container publishes
-nothing directly. The first account you create in Open WebUI becomes the
-admin. Chat history, settings, and the model list are persisted in the
-`open-webui` Docker volume, unchanged by this move.
+which brings up Postgres (`open-web-ui/docker-compose.yml`) and the fork's
+backend (`uvicorn`, port `4000`) together, and tears Postgres back down when
+the backend stops. In a second terminal:
 
-Open WebUI's own image, environment and configuration are untouched by this
-split — the whole point is that upgrading or reconfiguring it never has to
-know a dashboard exists on the other side of the proxy. See "Local inference"
-→ `llama-web` for what actually lives at `/ops` and why the topology is
-shaped this way.
+```bash
+lllm-frontend
+```
+
+which starts the fork's frontend dev server (`vite`, port `5173`) and proxies
+its API/WebSocket calls to the backend on `4000`.
+
+Chat is at `http://localhost:5173/`. The first account you create becomes the
+admin. This is a fresh database — the SQLite-backed data from before the fork
+(the `open-web-ui_open-webui` Docker volume) is left in place, untouched, but
+no longer used. See "Local inference" → `lllm-web` below for the separate
+`/ops` dashboard, which runs on its own port (`8095`) rather than sharing one
+with chat — merging the two is planned but not done yet (decisions log).
 
 ## Model setup
 
@@ -73,18 +86,18 @@ exposes the same OpenAI-compatible API Open WebUI already speaks. Pointing
 Open WebUI at it is a connection-settings change only (see "Migrating to local
 hardware later" below).
 
-Helper functions live in `scripts/llama-env.sh`. Source it from `~/.bashrc`:
+Helper functions live in `scripts/shell/main.sh`. Source it from `~/.bashrc`:
 
 ```bash
-[ -f "$HOME/dev/repos/local-llm/scripts/llama-env.sh" ] \
-  && . "$HOME/dev/repos/local-llm/scripts/llama-env.sh"
+[ -f "$HOME/dev/repos/local-llm/scripts/shell/main.sh" ] \
+  && . "$HOME/dev/repos/local-llm/scripts/shell/main.sh"
 ```
 
 It can also be invoked directly without sourcing:
-`./scripts/llama-env.sh serve qwen38`.
+`./scripts/shell/main.sh serve qwen38`.
 
 Serving settings are grouped into profiles rather than scattered across env
-vars. `llama-profiles` lists them and shows whether the weights are on disk:
+vars. `lllm-profiles` lists them and shows whether the weights are on disk:
 
 | profile | arch  | model                                    | size on disk | ctx   | threads | ngl | slots | n-cpu-moe | override-tensors                         |
 | ------- | ----- | ---------------------------------------- | -----------: | ----- | ------: | --: | ----: | --------: | ---------------------------------------- |
@@ -98,39 +111,39 @@ vars. `llama-profiles` lists them and shows whether the weights are on disk:
 from system RAM. That is the whole reason it exists: `qwen36` and `qwen38` are
 3-5x this card and are bound by how fast their CPU-resident weights can be read,
 which is what holds them to single-digit tokens/s. Nothing about its throughput
-is measured yet, so no figure for it is quoted here; `llama-test --suite smoke`
+is measured yet, so no figure for it is quoted here; `lllm-test --suite smoke`
 against a served instance is what would produce one. It needs no `-ot` (nothing
 is left on the CPU to pin), sets no speculative flags (Qwen2.5 predates the
 `nextn` tensors `qwen38` drafts from), and sets no reasoning effort: it is not a
 thinking model, so responses carry no `reasoning_content` and the token budget
 is all answer. Its samplers are Qwen2.5-Coder's own
 (`--temp 0.7 --top-p 0.8 --top-k 20 --repeat-penalty 1.1`), which govern Open
-WebUI traffic; `llama-test` pins temperature to 0 in its request body either way.
+WebUI traffic; `lllm-test` pins temperature to 0 in its request body either way.
 Its context is 16384 rather than the model's full 32768 because the KV cache
 here costs ~29.7 KiB/token at `q8_0` (28 layers, 4 KV heads of 128): ~476 MiB at
 16K against ~952 MiB at 32K, on top of 4.36 GiB of weights and the compute
 buffer. The full window fits inside 6 GiB only with less margin than
 `LLAMA_VRAM_HEADROOM_MIB` warns at, so it is opt-in via `LLAMA_CTX`, to be
-confirmed with `llama-vram` rather than assumed.
+confirmed with `lllm-vram` rather than assumed.
 
 `qwen3c` (`unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF`, `Q4_1`, 17.87 GiB,
 alias `qwen3-coder-30b-a3b`) is a fourth profile, weights present on disk but
 **nothing about it is measured yet**: no throughput figure and no
-`llama-test` run. It follows the same `qwen36` shape — sparse MoE, `-ngl 99`
+`lllm-test` run. It follows the same `qwen36` shape — sparse MoE, `-ngl 99`
 with `--n-cpu-moe 34` since the model is ~4.1x this card's 6 GB VRAM, `q8_0`
 KV cache, 65536 context, 6 threads — copied as a starting point rather than
 independently tuned; `LLAMA_MOE` and `LLAMA_CTX` overrides plus
-`llama-sweep-ngl qwen3c` are how that would actually get confirmed. It sets
+`lllm-sweep-ngl qwen3c` are how that would actually get confirmed. It sets
 no `-ot` and no speculative flags: unlike `qwen38`, nothing here has checked
 this GGUF for an MTP head.
 
-`qwen38`'s `-ngl 20` is a placeholder pending an `llama-sweep-ngl` run;
+`qwen38`'s `-ngl 20` is a placeholder pending an `lllm-sweep-ngl` run;
 `--n-cpu-moe` is MoE-only and the script refuses to pass it to a dense model.
 `qwen38` also pins two tensor groups to the GPU with `-ot` regardless of
 `-ngl` — the output projection and the final block (the model has 65 blocks,
-`blk.0` to `blk.64`), both touched on every token. `llama-sweep-ngl` passes the
-same `-ot`, so its VRAM headroom matches what `llama-serve` will see. Override
-per run with `LLAMA_OT`. `llama-serve` warns to check the load log's `n_layer`
+`blk.0` to `blk.64`), both touched on every token. `lllm-sweep-ngl` passes the
+same `-ot`, so its VRAM headroom matches what `lllm-serve` will see. Override
+per run with `LLAMA_OT`. `lllm-serve` warns to check the load log's `n_layer`
 before treating an `-ngl` as tuned, but only for a dense profile that is
 partially offloaded: at `-ngl 99` there is no layer count being chosen.
 
@@ -140,8 +153,8 @@ no separate draft model is needed: the weights carry
 `qwen35.nextn_predict_layers = 1` and `blk.64.nextn.*` tensors, and `-ot`
 already keeps that block on the GPU. A draft depth of 2 is deliberately
 conservative — rejected drafts cost real compute on a model this CPU-bound.
-`llama-test` reports `draft_n` and `draft_n_accepted` in its timings, which is
-the acceptance rate to judge it by. `LLAMA_SPEC=off llama-serve qwen38` turns
+`lllm-test` reports `draft_n` and `draft_n_accepted` in its timings, which is
+the acceptance rate to judge it by. `LLAMA_SPEC=off lllm-serve qwen38` turns
 it off for an A/B; `LLAMA_SPEC="<flags>"` replaces the flags wholesale.
 `qwen36` sets none of this: its weights are not on disk here, so its MTP
 support is unverified.
@@ -163,7 +176,7 @@ inside `LLAMA_SPEC` is refused for the same reason; use `LLAMA_PARALLEL`.
 
 The functions:
 
-- `llama-serve [profile] [args...]` : start `llama-server` on port 8090 (set
+- `lllm-serve [profile] [args...]` : start `llama-server` on port 8090 (set
   `LLAMA_PORT` to change). One-off overrides: `LLAMA_MODEL`, `LLAMA_CTX`,
   `LLAMA_THREADS`, `LLAMA_NGL`, `LLAMA_MOE`, `LLAMA_OT`, `LLAMA_SPEC`,
   `LLAMA_PARALLEL` (server slots, default 1), `LLAMA_REASONING` (thinking
@@ -172,7 +185,7 @@ The functions:
   `LLAMA_CACHE_V`, `LLAMA_BATCH`, `LLAMA_UBATCH`; all default to the values in
   the table above), so the flags passed and the flags recorded in the log come
   from one place.
-  `llama-qwen` is a backwards-compatible alias. `--metrics` is always passed, so
+  `--metrics` is always passed, so
   the run's server-wide token totals can be recorded, and `-lv 4`
   (`LLAMA_LOG_VERBOSITY`) so the server prints what it decided about the model
   it loaded — the layer split, the slot count, the fused kernels it resolved,
@@ -181,42 +194,43 @@ The functions:
   temporary `logs/.server.<pid>.log` for the recorder to parse and deleted when
   the server exits; the terminal copy is unchanged except that the GGUF metadata
   dump `-lv 4` adds is filtered out of it.
-- `llama-fetch [profile]` : download the profile's weights with the `hf` CLI.
-- `llama-sweep-threads [profile] [4,6,8,...]` : `llama-bench` across thread
+- `lllm-fetch [profile]` : download the profile's weights with the `hf` CLI.
+- `lllm-sweep-threads [profile] [4,6,8,...]` : `llama-bench` across thread
   counts, printed as a markdown table.
-- `llama-sweep-ngl [profile] [12,16,20,...]` : `llama-bench` across GPU layer
+- `lllm-sweep-ngl [profile] [12,16,20,...]` : `llama-bench` across GPU layer
   counts, for tuning a dense profile. Values that exceed VRAM error out, which
   is the useful signal.
-- `llama-test <benchmark>/<item-id>` : run one published benchmark item against
+- `lllm-test <benchmark>/<item-id>` : run one published benchmark item against
   the running server, grade it with that benchmark's own tests, and record the
-  result. `llama-test --suite smoke|standard|full` runs a whole tier. See
+  result. `lllm-test --suite smoke|standard|full` runs a whole tier. See
   [Testing](#testing) below — this command replaced the earlier
   "send a saved prompt from `prompts/` and eyeball the answer" version. Test
   items now come from the datasets; `prompts/` holds only the optional system
   prompts `--system` sends, and nothing in it is a test item or an answer.
-- `llama-web` : the browser dashboard over serving, testing, comparison,
+- `lllm-web` : the browser dashboard over serving, testing, comparison,
   answers, reports and tuning — replaced the Textual dashboard (`llama-ui`) on
-  2026-09-06. Binds `0.0.0.0:${LLAMA_WEB_PORT:-8095}/ops` and is reachable
-  either directly there or through the Caddy proxy at
-  `http://localhost:4000/ops` alongside Open WebUI (see "Running it" above).
-  Seven pages, none of them a reimplementation of the CLI they sit on top of:
+  2026-09-06. Binds `0.0.0.0:${LLAMA_WEB_PORT:-8095}/ops`, on its own port,
+  independent of the Open WebUI fork (`lllm-frontend`/`lllm-backend`) — see
+  "Web dashboard topology" below for why, and for the merge that's planned
+  but not done yet. Seven pages, none of them a reimplementation of the CLI
+  they sit on top of:
   - **Serve** starts and stops `llama-server` from a profile with the same
-    overrides `llama-serve` takes, and streams its output live.
+    overrides `lllm-serve` takes, and streams its output live.
   - **Live** polls the run being recorded right now, every 5s to match the
     recorder's own sample interval.
   - **Tests** runs a tier and streams one structured event per graded item —
-    in-process, not by shelling out to `llama-test`, so cancelling mid-run
+    in-process, not by shelling out to `lllm-test`, so cancelling mid-run
     stops the loop directly rather than sending a signal to a subprocess;
     every item is still its own committed transaction, so the run is exactly
     as resumable either way.
   - **Compare** and **Answers** are the same tables and the same stored
-    responses `llama-test compare`/`llama-test answer` print, read through
+    responses `lllm-test compare`/`lllm-test answer` print, read through
     the same functions.
   - **Report** and **Tune** are new here — there was no TUI equivalent —
-    and drive `llama-report`/`llama-tune` exactly as the CLI does: Report
+    and drive `lllm-report`/`lllm-tune` exactly as the CLI does: Report
     renders `llama_report.py`'s own markdown and PNGs unmodified rather than
     inventing a second output path through its statistics; Tune shells out to
-    `llama-tune run`/`resume` the same way Serve shells out to `llama-serve`,
+    `lllm-tune run`/`resume` the same way Serve shells out to `lllm-serve`,
     since a sweep is a long-lived, checkpointed process with its own
     port-guarding and cooldown logic that has no business running inside a
     web request.
@@ -225,26 +239,26 @@ The functions:
   `open-web-ui/dashboard-link.user.js` for the optional, per-browser userscript
   that adds a link to it from inside Open WebUI (nothing server-side reaches
   into Open WebUI's own page — see the decisions log for why).
-- `llama-db {shell|sql|schema|prune|vacuum|export}` : raw access to
+- `lllm-db {shell|sql|schema|prune|vacuum|export}` : raw access to
   `logs/llama.db`, where every measurement this repo takes is stored.
-- `llama-check` : `GET /v1/models` against the running server.
-- `llama-vram` : live GPU telemetry, refreshed in place, with free VRAM called
+- `lllm-check` : `GET /v1/models` against the running server.
+- `lllm-vram` : live GPU telemetry, refreshed in place, with free VRAM called
   out — on a 6 GB card headroom is what decides whether an `-ngl` is viable.
-- `llama-profiles` : list profiles and whether their weights are present.
-- `llama-profile-json [profile]` : a profile's resolved settings as JSON. Exists
+- `lllm-profiles` : list profiles and whether their weights are present.
+- `lllm-profile-json [profile]` : a profile's resolved settings as JSON. Exists
   so the Python tooling can read the serving configuration without re-declaring
-  it; `scripts/llama-env.sh` stays the single source of truth. `reasoning` is
+  it; `scripts/shell/main.sh` stays the single source of truth. `reasoning` is
   empty for a profile that sets no thinking effort, the same test the telemetry
   fingerprint makes before recording `n/a`, so a caller cannot end up setting
   `LLAMA_REASONING` for a server that ignores it.
-- `llama-profile-names` : the defined profiles, one per line, from the
-  `LLAMA_PROFILE_NAMES` array. `llama-profiles` and the dashboard's profile
-  picker both read it, so adding a profile is an edit to `scripts/llama-env.sh`
+- `lllm-profile-names` : the defined profiles, one per line, from the
+  `LLAMA_PROFILE_NAMES` array. `lllm-profiles` and the dashboard's profile
+  picker both read it, so adding a profile is an edit to `scripts/shell/main.sh`
   and nothing else.
 
 ### Recorded telemetry and throughput
 
-`llama-serve` starts `scripts/llama-vram-log.sh` in the background and stops it
+`lllm-serve` starts `scripts/shell/vram-log.sh` in the background and stops it
 when the server exits, so every serving run leaves a record of what the GPU
 actually did and how fast the model answered. That script is now a thin wrapper:
 it resolves the profile, computes the configuration fingerprint, and hands off to
@@ -264,7 +278,7 @@ a filename, so a cross-model question is a query rather than a comparison betwee
 files that never sit beside each other.
 
 Nothing is written as markdown any more and nothing is parsed back out of one.
-Markdown is an *output* format — `llama-test compare --format markdown` renders a
+Markdown is an *output* format — `lllm-test compare --format markdown` renders a
 measured table for pasting into this README, as the maintenance policy requires —
 and no code reads it.
 
@@ -292,14 +306,14 @@ caller), `v_run_gpu`, `v_run_metrics`, and `v_config_latest`.
 2026-08-23 retention rule, which discarded raw samples once a newer run finished
 and kept only the already-computed summary — so a statistic computed wrongly
 could never be recomputed. At roughly 60 bytes a row and 5 s intervals, a day of
-continuous serving is about 1 MB. `llama-db prune --before <date>` exists for the
+continuous serving is about 1 MB. `lllm-db prune --before <date>` exists for the
 day that matters, and it deletes only samples and scrapes, never results,
 answers, requests or configurations.
 
 #### What identifies a configuration
 
 The `config_id` is a `sha1[:8]` over the serving flags, computed by
-`_vramlog_config` in `scripts/llama-vram-log.sh` — the same function, over the
+`_vramlog_config` in `scripts/shell/vram-log.sh` — the same function, over the
 same six lines, as before the database existed. Config ids are therefore
 unchanged: an id quoted in an older log names the same configuration it always
 did.
@@ -324,12 +338,12 @@ separately, so a column cannot disagree with the fingerprint that identifies its
 row.
 
 Two kinds of context are recorded but never fingerprinted, because they are
-observations of a run rather than settings — a run that served no `llama-test`
+observations of a run rather than settings — a run that served no `lllm-test`
 request would otherwise be a different configuration from one that did:
 
 - **`request.params`** is what was actually in the request body, read back out of
   it rather than re-derived. It matters because `config.samplers` records the
-  server's *defaults* and a `llama-test` request overrides them: the server may
+  server's *defaults* and a `lllm-test` request overrides them: the server may
   say `temp 1.0 | top-p 0.95` while the measured request ran at `temperature: 0`.
 - **`run_load_info`** is what the server said about the model it loaded. None of
   it is derivable from the flags, and all of it decides whether two runs measure
@@ -363,7 +377,7 @@ request would otherwise be a different configuration from one that did:
 #### Reading it back
 
 ```bash
-llama-test compare --by serving
+lllm-test compare --by serving
 ```
 
 One row per configuration — `ngl`, `parallel`, `spec`, `-ot`, `fused_gdn`, cold
@@ -373,7 +387,7 @@ row is that configuration's **most recent run**, not an average of its history,
 because an older run may predate a llama.cpp rebuild or have shared the machine
 with something else, and averaging would hide the change being looked for.
 Configurations never measured sort last rather than as zero: they are unknown, not
-slow. A figure marked `*` came from `/metrics` rather than from `llama-test` — it
+slow. A figure marked `*` came from `/metrics` rather than from `lllm-test` — it
 covers every client and whatever prompts they sent, so it answers a looser
 question than a row measured on the version-controlled prompt.
 
@@ -397,7 +411,7 @@ draft head — and on this hardware it is a large share of the total. The fit ne
 at least two configurations at different layer counts and is simply absent
 otherwise.
 
-`llama-web`'s Compare page shows the same tables. Its Live page is the run
+`lllm-web`'s Compare page shows the same tables. Its Live page is the run
 that is serving right now — its GPU statistics, its `/metrics` deltas and its most
 recent samples, refreshed every 5 seconds; that view is possible because samples
 land in the database as they are taken rather than being folded in when the
@@ -407,10 +421,10 @@ rendered as markdown. The thinking is off by default and toggled with a
 checkbox — reasoning dominates the token budget on this model, so a trace
 routinely runs to tens of thousands of characters, and it is never graded.
 
-`llama-db` is the raw access:
+`lllm-db` is the raw access:
 
 ```bash
-llama-db sql "SELECT config_id, ngl, speculative FROM config"
+lllm-db sql "SELECT config_id, ngl, speculative FROM config"
 ```
 
 `shell` opens an interactive `sqlite3`, `schema` prints the DDL, `prune --before
@@ -490,7 +504,7 @@ was obtained.
 **The two throughput sources come from different places on purpose, and will not
 agree:**
 
-- **`request` rows** are exact and per-request, but only `llama-test` contributes
+- **`request` rows** are exact and per-request, but only `lllm-test` contributes
   them — a version-controlled prompt at `temperature 0`, which is what makes two
   runs comparable. Traffic from Open WebUI or a hand-written `curl` is not
   counted.
@@ -514,7 +528,7 @@ measurement.
 #### Crash durability, and the active run
 
 There is no marker file. A run whose `ended_at IS NULL` **is** the active run,
-which is how `llama-test` knows which run its timings belong to, and a run whose
+which is how `lllm-test` knows which run its timings belong to, and a run whose
 recorded `pid` is no longer alive is detectably stale and is closed by a sweep on
 the next connect. This is strictly more robust than the `logs/.active-run.json`
 it replaces: that file was removed by an EXIT trap, which a `kill -9` skips,
@@ -527,7 +541,7 @@ simply NULL, displayed as `unrecorded`, rather than attributed to a guess.
 
 `logs/` is gitignored, so `logs/llama.db` and its `-wal`/`-shm` files need no
 `.gitignore` change. Set `LLAMA_VRAM_LOG=0` to disable recording, or run
-`./scripts/llama-vram-log.sh record [profile]` by hand to capture a server that
+`./scripts/shell/vram-log.sh record [profile]` by hand to capture a server that
 was started some other way; it stops on its own once the port stops answering.
 `LLAMA_DB` overrides the database path.
 
@@ -539,7 +553,7 @@ model name the server reported, which at least makes that detectable.
 
 **The database starts empty.** The markdown serving logs and `logs/tests.jsonl`
 that preceded it were deliberately not imported, so nothing in it predates
-2026-08-30 and `llama-test compare` says nothing until a new serving run and a new
+2026-08-30 and `lllm-test compare` says nothing until a new serving run and a new
 test run happen. Those files were **deleted on 2026-09-04**: they had been kept
 in `logs/` as a historical reference, read by no code, and five days of that was
 enough to establish that nothing wanted them. Measurements taken before
@@ -576,7 +590,7 @@ tokens/s end to end, with a 24-token prompt taking ~1.3 s to prefill.
 > **Prompt source changed 2026-08-30; these numbers still stand.** The runs
 > below were measured on `prompts/humaneval0-4.txt`, hand-typed files that
 > collapsed the two blank lines the canonical HumanEval stub carries between its
-> import and its `def`. `llama-test` now renders prompts from the dataset
+> import and its `def`. `lllm-test` now renders prompts from the dataset
 > itself, so each of these five prompts is two bytes longer than the string that
 > was measured. Checked against the server's `/tokenize` on 2026-08-30 rather
 > than assumed: all five tokenize to **the same length as before** (135, 127,
@@ -586,7 +600,7 @@ tokens/s end to end, with a 24-token prompt taking ~1.3 s to prefill.
 > `humaneval0`-`humaneval4` here are `HumanEval/0`-`HumanEval/4` under the new
 > naming. See the 2026-08-30 decisions-log entry in `CLAUDE.md`.
 
-`llama-test humaneval0` against `llama-serve qwen38`, build `95b8e33e1`
+`lllm-test humaneval0` against `lllm-serve qwen38`, build `95b8e33e1`
 (10597), on the RTX 3060 Laptop (6 GB). Serving flags: `-ngl 20`,
 `-ot "output\.weight=CUDA0,blk\.64\..*=CUDA0"`, `-c 16384`, `-t 12`,
 `--cache-type-k/v q8_0`, `-fa on`, `-b 512 --ubatch-size 512`,
@@ -606,8 +620,8 @@ Acceptance is 88.8% and drafts cover 72% of the generated tokens, which is a
 healthy rate for an MTP head. The throughput gain is nonetheless modest, and
 this is **not yet a clean A/B**: the only non-speculative measurement to hand
 (2.50 t/s) came from a server that also differed in `-ngl` (22) and had no
-`-ot`, and it produced a shorter completion. `LLAMA_SPEC=off llama-serve
-qwen38` followed by the same `llama-test` run is the comparison to make — and
+`-ot`, and it produced a shorter completion. `LLAMA_SPEC=off lllm-serve
+qwen38` followed by the same `lllm-test` run is the comparison to make — and
 before 2026-08-23 it would not have been valid either, because dropping the
 speculative flags also dropped `--parallel 1` and left the baseline serving 4
 unified slots (fixed 2026-08-23; see the slot-count paragraph above).
@@ -659,7 +673,7 @@ system-RAM bandwidth for the CPU-resident experts, not by CPU cores. The
 default of 6 threads is kept since nothing above it pays for itself.
 
 These numbers were measured with build `60eeeb608` (10472) and are historical:
-the current build is newer, and `llama-sweep-threads` now passes the profile's
+the current build is newer, and `lllm-sweep-threads` now passes the profile's
 `-ngl` and `--n-cpu-moe`, so it benchmarks the serving configuration rather
 than llama-bench's defaults. Re-measure before relying on them.
 
@@ -671,7 +685,7 @@ records throughput, GPU behaviour and per-request timings in detail, but until
 answered *correctly* — which is the question that decides whether local
 inference can replace OpenRouter.
 
-`llama-test` now runs items from published benchmarks, grades them with each
+`lllm-test` now runs items from published benchmarks, grades them with each
 benchmark's own test code, and records the result beside the serving telemetry.
 
 **Nothing in this repository states an expected answer.** Every item and every
@@ -699,19 +713,19 @@ in-filter items); rows recorded before that carry a NULL `adapter_sha`, show as
 
 | Command | What it does |
 | --- | --- |
-| `llama-test <benchmark>/<item-id>` | One item, streamed. `llama-test humaneval/HumanEval/0` |
-| `llama-test --suite smoke\|standard\|full` | A whole tier. `--benchmark <id>` restricts it, `--resume` continues the most recent run of that tier, `--quiet` drops the streaming for a long run |
-| `llama-test --system <name>` | Send the system prompt in `prompts/system/<name>.txt` with every item of that run — see below |
-| `llama-test list` | The benchmarks, their pinned revisions, the tiers, what is calibrated, and the defined system prompts with their shas |
-| `llama-test fetch [benchmark]` | Download and pin the datasets (`--force` refetches) |
-| `llama-test selfcheck [benchmark]` | Grade the datasets' own reference solutions and write the calibration |
-| `llama-test compare [...]` | Rank models and configurations — see below |
-| `llama-test answer <benchmark>/<item-id>` | Print a stored answer, rendered as markdown on a terminal and raw when redirected. `--run-id` picks a suite run, `--export <dir>` writes a whole run's answers as files |
-| `llama-test report` | The comparison, to the terminal, without running anything (`llama-test compare` with `--format`/`--tier` only) |
-| `llama-db {shell\|sql\|schema\|prune\|vacuum\|export}` | Raw access to `logs/llama.db` |
+| `lllm-test <benchmark>/<item-id>` | One item, streamed. `lllm-test humaneval/HumanEval/0` |
+| `lllm-test --suite smoke\|standard\|full` | A whole tier. `--benchmark <id>` restricts it, `--resume` continues the most recent run of that tier, `--quiet` drops the streaming for a long run |
+| `lllm-test --system <name>` | Send the system prompt in `prompts/system/<name>.txt` with every item of that run — see below |
+| `lllm-test list` | The benchmarks, their pinned revisions, the tiers, what is calibrated, and the defined system prompts with their shas |
+| `lllm-test fetch [benchmark]` | Download and pin the datasets (`--force` refetches) |
+| `lllm-test selfcheck [benchmark]` | Grade the datasets' own reference solutions and write the calibration |
+| `lllm-test compare [...]` | Rank models and configurations — see below |
+| `lllm-test answer <benchmark>/<item-id>` | Print a stored answer, rendered as markdown on a terminal and raw when redirected. `--run-id` picks a suite run, `--export <dir>` writes a whole run's answers as files |
+| `lllm-test report` | The comparison, to the terminal, without running anything (`lllm-test compare` with `--format`/`--tier` only) |
+| `lllm-db {shell\|sql\|schema\|prune\|vacuum\|export}` | Raw access to `logs/llama.db` |
 
-`llama-test ui` is gone along with the Textual dashboard it launched; the
-dashboard is now `llama-web` (see "Running it" and "Local inference" above).
+`lllm-test ui` is gone along with the Textual dashboard it launched; the
+dashboard is now `lllm-web` (see "Running it" and "Local inference" above).
 
 `--profile` names the serving profile whose alias and `reasoning_effort` are
 used; the model name itself is read from the running server (`GET /v1/models`)
@@ -726,10 +740,10 @@ is where Open WebUI puts its own, and is the only place it can go — this
 `llama-server` build has no system-prompt flag.
 
 ```bash
-llama-test list                               # the prompts, with their shas
-llama-test --suite smoke                      # baseline: no system prompt
-llama-test --suite smoke --system assistant   # the same 24 items, with one
-llama-test compare
+lllm-test list                               # the prompts, with their shas
+lllm-test --suite smoke                      # baseline: no system prompt
+lllm-test --suite smoke --system assistant   # the same 24 items, with one
+lllm-test compare
 ```
 
 Both runs are recorded, and **they are separate rows**: `system_sha` joins
@@ -742,7 +756,7 @@ What is recorded is the prompt's **name and a sha of its exact bytes** (the
 first 12 hex digits of the SHA-1, the same length the run banners print). The
 sha is the identity: a file edited in place is a different prompt under the same
 name, so runs either side of an edit stay separate rows, and `compare` prints a
-note when a name shows up with more than one sha. `llama-test answer` names the
+note when a name shows up with more than one sha. `lllm-test answer` names the
 prompt in its header, since the stored prompt text is the user message alone.
 A result with no system prompt records NULL, which the database's own schema
 note (migration 2) defines as "none was sent" rather than "unknown" — every row
@@ -752,7 +766,7 @@ send one.
 The system prompt is deliberately **not** part of `config_id`. That fingerprint
 covers the serving flags and is computed by `_vramlog_config` before any request
 is made; a system prompt is part of the request. So it is a second grouping key
-beside it, in `v_pass_rate` and in `llama-test compare`, and every existing
+beside it, in `v_pass_rate` and in `lllm-test compare`, and every existing
 `config_id` still means what it always did.
 
 `prompts/system/assistant.txt` is a copy of the text configured per-model in
@@ -814,7 +828,7 @@ output.
 | [MBPP (sanitized)](https://github.com/google-research/google-research/tree/master/mbpp) | 427 | `test_imports` + `test_list` (3 asserts) | CC-BY-4.0 | Austin et al. 2021, [arXiv:2108.07732](https://arxiv.org/abs/2108.07732) |
 | [DS-1000](https://github.com/xlang-ai/DS-1000) | 1000 (511 Pandas/Numpy) | `code_context`, which defines `test_execution(solution)` | CC-BY-SA-4.0 | Lai et al. 2022, [arXiv:2211.11501](https://arxiv.org/abs/2211.11501) |
 
-`llama-test fetch` downloads them into `tests/data/` (gitignored) and writes a
+`lllm-test fetch` downloads them into `tests/data/` (gitignored) and writes a
 `MANIFEST.json` pinning the upstream revision and a SHA-256 of the bytes
 actually downloaded. **Every result records that revision**: per this project's
 convention a number without its configuration is not reusable, and for a pass
@@ -875,7 +889,7 @@ it would make installing a library look like a quality improvement.
 
 Every outcome is a statement about the model's answer, so **a server that stops
 answering produces no outcome at all**. A connection refused, or a stream that
-dies mid-read, aborts the suite: nothing is written for the item, `llama-test`
+dies mid-read, aborts the suite: nothing is written for the item, `lllm-test`
 exits 1, and `--resume` picks up from there. Recording those as `fail_error`
 instead is what the 2026-09-04 entry in `CLAUDE.md` describes — it filed a
 serving failure as a model failure, and because `(suite_run_id, benchmark,
@@ -883,16 +897,16 @@ item_id)` is unique, `--resume` then skipped the item permanently. An HTTP error
 is deliberately not treated this way: the server answered, and a 400 can be
 specific to one item.
 
-> **`llama-test` executes model-generated Python.** It runs in a subprocess, in
+> **`lllm-test` executes model-generated Python.** It runs in a subprocess, in
 > a temporary working directory, under a timeout, and with `-I` (and `-S` for
 > HumanEval/MBPP, which need only the standard library). That is **process
 > isolation, not a sandbox.** It is what the upstream benchmark runners do and is
 > acceptable on a single-user local box; it is not safe against adversarial
 > output. Do not point this at a model you do not trust.
 
-### Calibrating the graders — `llama-test selfcheck`
+### Calibrating the graders — `lllm-test selfcheck`
 
-`llama-test selfcheck` grades every benchmark's **own reference solution**
+`lllm-test selfcheck` grades every benchmark's **own reference solution**
 (`canonical_solution`, `code`, `reference_code`). No model is involved, so a
 correct harness scores 100%; anything less is a bug in the grader. Measured on
 2026-08-30 (Python 3.14.7, numpy 2.5.2, pandas 3.0.5, pyyaml 6.0.3):
@@ -970,18 +984,18 @@ items invalidates them. Recording them per run made a 24-item `smoke` suite writ
 suite's rows that meant nothing. It now writes 24.
 
 **Every item is one committed transaction under `synchronous=FULL`**, so an
-interrupted run leaves a valid partial store. `llama-test --suite full --resume`
+interrupted run leaves a valid partial store. `lllm-test --suite full --resume`
 continues where it stopped. A `full` run is many hours on this hardware and will
 be interrupted.
 
 The serving telemetry is fed by the same transaction: a test run's requests land
-in `request` as before, and `llama-test compare --by serving` reports them.
+in `request` as before, and `lllm-test compare --by serving` reports them.
 Nothing was displaced.
 
 Reading answers back:
 
 ```bash
-llama-test answer humaneval/HumanEval/0
+lllm-test answer humaneval/HumanEval/0
 ```
 
 `--run-id` picks a specific suite run rather than the most recent, and
@@ -991,7 +1005,7 @@ rather than written during a run.
 
 **On a terminal the answer is rendered as markdown** — headings, and the model's
 own fenced code with syntax highlighting, which is most of what there is to read.
-Redirected or piped it is the raw document, unchanged: `llama-test answer ... >
+Redirected or piped it is the raw document, unchanged: `lllm-test answer ... >
 answer.md` and `--export` write exactly the bytes they wrote before. The decision
 goes through the same `llama_console.wanted()` guard every other output path in
 this repo uses — not a TTY, or `NO_COLOR`/`LLAMA_PLAIN` set, or Rich not
@@ -1003,7 +1017,7 @@ Two shape differences follow from *where* the document is going, and only there:
 - The chain of thought is wrapped in `<details>` in a file and printed under a
   plain heading on a terminal. Nothing in a terminal expands a `<details>`, and
   Rich drops raw HTML, so a collapsed document rendered to a terminal would
-  show the reasoning with no heading at all. `llama-web`'s Answers page always
+  show the reasoning with no heading at all. `lllm-web`'s Answers page always
   asks for the uncollapsed form too, for the same reason, and toggles the
   reasoning on and off with a checkbox that changes what the browser is sent
   rather than what a `<details>` element hides — a trace can run to tens of
@@ -1014,7 +1028,7 @@ Two shape differences follow from *where* the document is going, and only there:
   makes it code. Highlighting depends on the model emitting a language tag —
   a missing tag loses the colour, not the content.
 
-### Comparing — `llama-test compare`
+### Comparing — `lllm-test compare`
 
 Groups results by (model, config-id, tier, system prompt, adapter) and ranks by
 pass rate, then by generation throughput. Columns: the flag summary (`ngl`,
@@ -1063,20 +1077,20 @@ involved). Filters: `--tier`, `--model`, `--baseline <config-id>`. Output:
 `--format table|markdown|json`, where markdown is for pasting a measured table
 into this README and is never read back.
 
-### Reporting — `llama-report`
+### Reporting — `lllm-report`
 
 ```bash
-llama-report                        # logs/report/<UTC date>/report.md + PNGs
-llama-report --out /tmp/r           # somewhere else
-llama-report --stdout               # the document on stdout, so it pipes
-llama-report --tier smoke --benchmark mbpp   # narrow the scope
-llama-report --no-figures           # text plots instead of PNGs
+lllm-report                        # logs/report/<UTC date>/report.md + PNGs
+lllm-report --out /tmp/r           # somewhere else
+lllm-report --stdout               # the document on stdout, so it pipes
+lllm-report --tier smoke --benchmark mbpp   # narrow the scope
+lllm-report --no-figures           # text plots instead of PNGs
 ```
 
 `compare` ranks; it has no way to say whether a difference it shows is real. At
 `smoke` the gap between two adjacent rows is routinely one item, and this repo's
 own rule — never a bare percentage — exists because that gap reads as 4pp.
-`llama-report` is the other half: it audits the design first, refuses the
+`lllm-report` is the other half: it audits the design first, refuses the
 comparisons the design cannot support, and runs the *paired* test where it can,
 which matters because the tiers are seeded so every configuration draws the same
 items and a test that ignores the pairing throws away the only thing that makes
@@ -1180,66 +1194,61 @@ otherwise byte-identical.
 
 Rich, numpy, pandas and pyyaml, in a repo-local `.venv`. This box's
 Python is externally managed (PEP 668), so `pip install` refuses outright and a
-venv is required rather than merely tidy — `llama-test` creates it on first use
+venv is required rather than merely tidy — `lllm-test` creates it on first use
 in an interactive shell (`LLAMA_NO_BOOTSTRAP=1` disables that).
 
-Everything degrades without it: `llama-test list`, `compare`, `check` and
+Everything degrades without it: `lllm-test list`, `compare`, `check` and
 `profiles` print plain markdown tables under bare `python3`. Only DS-1000
 grading genuinely needs the venv, since it needs pandas and numpy.
-`requirements-extra.txt` carries three things: **scipy**, which `llama-report`
+`requirements-extra.txt` carries three things: **scipy**, which `lllm-report`
 requires outright (it exits 2 with the install line rather than degrading) and
 which also widens the DS-1000 slice alongside scikit-learn — the adapter's filter
 would need widening to use them for that; **matplotlib**, which only
-`llama-report` uses and which is genuinely optional, since without it the figures
+`lllm-report` uses and which is genuinely optional, since without it the figures
 render as unicode plots in fenced blocks and the document is otherwise identical;
-and **fastapi**/**uvicorn**, which `llama-web` requires outright — there is no
+and **fastapi**/**uvicorn**, which `lllm-web` requires outright — there is no
 plain-text fallback for a browser page, so a missing install is a startup
-message rather than a degrade, the same stance `llama-report` takes on scipy.
+message rather than a degrade, the same stance `lllm-report` takes on scipy.
 Textual was here for the Textual dashboard (`llama-ui`); it was retired for
-`llama-web` on 2026-09-06 and dropped from `requirements.txt` in the same
+`lllm-web` on 2026-09-06 and dropped from `requirements.txt` in the same
 change.
 
-### Web dashboard topology (`llama-web` behind Open WebUI's port)
+### Web dashboard topology (`lllm-web` beside the Open WebUI fork)
 
-`llama-web` is a host process (started via `scripts/llama-env.sh`, like
-`llama-serve`), not a container: it manages real host process groups against
-the actual GPU and shells to `llama-env.sh` on the host filesystem, so
-containerizing it would mean bind-mounting the whole repo and passing through
-the GPU device for no benefit. Reaching it from the *same port* as Open WebUI
-(`http://localhost:4000/`) therefore means a proxy in front of two independent
-things — one container, one host process — rather than one app serving both.
+`lllm-web` is a host process (started via `scripts/shell/main.sh`, like
+`lllm-serve`), not a container: it manages real host process groups against
+the actual GPU and shells to `scripts/shell/main.sh` on the host filesystem,
+so containerizing it would mean bind-mounting the whole repo and passing
+through the GPU device for no benefit. As of the fork (see the decisions
+log), the Open WebUI half of this is a host process too — `lllm-frontend`
+and `lllm-backend` — for the same reason: real integration between the two is
+only possible if neither is sealed inside a container. That merge is
+deferred, separate work; for now the two live on their own ports with no
+proxy stitching them together:
 
-`open-web-ui/docker-compose.yml` runs Open WebUI and a `caddy:2-alpine`
-container; only Caddy publishes a host port. `open-web-ui/Caddyfile` routes by
-path: `/ops/*` goes to `host.docker.internal:${LLAMA_WEB_PORT:-8095}` (the
-host, i.e. `llama-web`), everything else goes to the `open-webui` container.
-Two details that look like they could be swapped but cannot:
+| what | port | started by |
+| --- | --- | --- |
+| Open WebUI chat (vite dev server) | `5173` | `lllm-frontend` |
+| Open WebUI API (uvicorn) | `4000` | `lllm-backend` |
+| `lllm-web` dashboard, at `/ops` | `8095` | `lllm-web` |
 
-- **`host.docker.internal`, not `localhost`.** Caddy runs inside its own
-  container; `localhost` there means the Caddy container itself. The
-  `extra_hosts: host.docker.internal:host-gateway` entry in
-  `docker-compose.yml` is what makes the name resolve to the host outside
-  Docker Desktop (plain Docker Engine under WSL2 included).
-- **`handle`, not `handle_path`, for `/ops/*`.** `llama_web.py` mounts its own
-  app under `/ops` internally, so the path is forwarded unchanged: hitting
-  `llama-web` directly at `http://localhost:8095/ops/...` during development
-  and going through the proxy at `http://localhost:4000/ops/...` reach the
-  identical route. Open WebUI, on the other side, is left completely
-  path-unaware — routed at `/` with nothing rewritten — because its own static
-  asset references are root-relative and its container/config is not meant to
-  know a dashboard exists at all.
+There is no Caddy proxy any more — each of `lllm-frontend`, `lllm-backend`
+and `lllm-web` binds its own port directly, and `lllm-backend` owns
+Postgres's lifecycle (`open-web-ui/docker-compose.yml`), starting it before
+uvicorn and tearing it down via a trap when uvicorn stops. See "Running it"
+above for the full command sequence.
 
 Chat → dashboard navigation is a small **userscript**
 (`open-web-ui/dashboard-link.user.js`, install with Tampermonkey/Violentmonkey
-or similar), not a fork of Open WebUI and not a server-side rewrite of its
-HTML — see CLAUDE.md's 2026-09-06 decisions-log entry for why both of those
-were rejected. It adds a small fixed-position "Dashboard" link in the corner
-of the page rather than inserting into Open WebUI's own sidebar markup: Open
-WebUI's DOM is not something this repo controls or pins a version of, so a
-selector aimed at one of its internal containers would be exactly as fragile
-as the server-side rewrite it replaces, just failing in the browser instead of
-on the proxy. It is optional and per-browser; the dashboard's own header
-carries a "← Chat" link back to `/` regardless of whether it is installed.
+or similar), matching `lllm-web`'s own port (`http://localhost:8095/ops`)
+rather than any proxy path. It adds a small fixed-position "Dashboard" link
+in the corner of the page rather than inserting into the fork's own sidebar
+markup — even with the fork's source in hand, a selector aimed at one of its
+internal containers is fragile in a way a fixed-position element appended to
+`<body>` is not, and this is meant to be replaced outright once the
+`lllm-web` merge lands, not hardened. It is optional and per-browser; the
+dashboard's own header carries a "← Chat" link back to `/` regardless of
+whether it is installed.
 
 **`scripts/llama_db.py`, `llama_record.py`, `llama_stats.py`, `llama_tests.py`
 and `llama_results.py` are stdlib-only and must stay that way.** The telemetry
@@ -1252,7 +1261,7 @@ server and cannot depend on a venv that may not exist. SQLite is stdlib
 When ready to self-host (llama.cpp as above, or Ollama/vLLM), update the
 connection under **Admin Panel → Settings → Connections**: change the base URL
 to your local server's OpenAI-compatible endpoint (`http://localhost:8090/v1`
-for the `llama-qwen` server above, or `http://localhost:11434/v1` for Ollama),
+for the `lllm-serve` server above, or `http://localhost:11434/v1` for Ollama),
 and update the API key if your local server requires one. No other
 changes should be necessary, since Open WebUI talks to any OpenAI-compatible
 endpoint.

@@ -1,10 +1,9 @@
 // ==UserScript==
 // @name         local-llm dashboard link
 // @namespace    https://github.com/epittman23/local-llm
-// @version      1.0.0
-// @description  A small "Dashboard" link on Open WebUI, pointing at /ops. Client-side only -- see open-web-ui/Caddyfile and CLAUDE.md's 2026-09-06 decisions-log entry for why this exists instead of a fork of Open WebUI or a server-side rewrite of its HTML.
-// @match        http://localhost:4000/*
-// @exclude      http://localhost:4000/ops*
+// @version      2.0.0
+// @description  A small "Dashboard" link on the Open WebUI fork, pointing at lllm-web's own origin. Client-side only -- see CLAUDE.md's decisions log for why this exists instead of a server-side rewrite of the fork's HTML (still true post-fork: the fork's own DOM isn't something worth hand-patching just for a nav link, and lllm-web merging directly into it is deferred, separate work).
+// @match        http://localhost:5173/*
 // @run-at       document-idle
 // @grant        none
 // ==/UserScript==
@@ -24,9 +23,9 @@
 
   var link = document.createElement("a");
   link.id = "local-llm-dashboard-link";
-  link.href = "/ops";
+  link.href = "http://localhost:8095/ops";
   link.textContent = "Dashboard";
-  link.title = "local-llm dashboard: serve, tests, compare, answers, report, tune";
+  link.title = "local-llm dashboard (lllm-web): serve, tests, compare, answers, report, tune";
   link.style.cssText = [
     "position:fixed", "right:14px", "bottom:14px", "z-index:2147483647",
     "background:#1f2430", "color:#e6e8ec", "border:1px solid #3a4050",
