@@ -45,6 +45,17 @@ choice, not a code path:
   active parameters, 20.81 GiB on disk. Chosen because a sparse MoE keeps
   per-token compute small enough to stay usable when most weights live in
   system RAM rather than the 6 GB of VRAM available.
+- **Local, fits in VRAM (evaluation only, added 2026-09-04)**:
+  `Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf` from `unsloth/Qwen2.5-Coder-7B-Instruct-GGUF`,
+  served under the alias `qwen2.5-coder-7b` by the `qwen25c` profile. Dense
+  7.6 B, 4.36 GiB on disk, so unlike every other local model here it is fully
+  GPU-resident on the 6 GB card. Coding only, and not a thinking model.
+  Nothing about it is measured yet.
+- **Local (evaluation only)**: `Qwen3-Coder-30B-A3B-Instruct-Q4_1.gguf` from
+  `unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF`, served under the alias
+  `qwen3-coder-30b-a3b` by the `qwen3c` profile. Sparse MoE, 30 B total, 17.87
+  GiB on disk. Coding only. Weights are on disk but nothing about it is
+  measured yet.
 
 ## Local inference
 
@@ -53,15 +64,57 @@ Hardware: NVIDIA GeForce RTX 3060 Laptop, 6 GB VRAM, compute capability 8.6.
 The 20.81 GiB model cannot fit in 6 GB, so the `qwen36` profile offloads all
 layers (`-ngl 99`) but keeps the MoE expert tensors of 34 layers in system RAM
 (`--n-cpu-moe 34`), with a q8_0-quantized KV cache and flash attention to fit
-64K of context. Serving and benchmarking helpers live in
+64K of context. A third profile, `qwen25c`
+(`Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf`, 4.36 GiB), was added on 2026-09-04
+as the first local model small enough to sit entirely in VRAM: `-ngl 99` with
+no `--n-cpu-moe` and no `-ot`, so no weight is read from system RAM. A fourth,
+`qwen3c` (`Qwen3-Coder-30B-A3B-Instruct-Q4_1.gguf`, 17.87 GiB), copies the
+`qwen36` MoE shape (`-ngl 99`, `--n-cpu-moe 34`, q8_0 KV cache, 65536 context,
+6 threads) as an unverified starting point rather than a tuned one; nothing
+about it is measured. Serving and benchmarking helpers live in
 `scripts/llama-env.sh` (sourced from `~/.bashrc`), which groups settings into
-per-model profiles (`qwen36` MoE, `qwen38` dense) rather than loose env vars;
-`llama-serve` starts them and `llama-qwen` remains as an alias. Every serving
-run also records GPU telemetry via `scripts/llama-vram-log.sh` into
-`logs/<model>-<quant>.log` (gitignored), alongside the throughput of every
-`llama-test` request and the server's own `/metrics` totals for the run;
-`scripts/llama_log.py` assembles those files. README.md documents each function
-and records the measured numbers.
+per-model profiles (`qwen36` MoE, `qwen38` dense, `qwen25c` dense and
+GPU-resident, `qwen3c` MoE) rather than loose env vars;
+`llama-serve` starts them and `llama-qwen` remains as an alias. Every profile
+serves one server slot (`--parallel 1`, `LLAMA_PARALLEL` to override), passed
+unconditionally rather than as part of any other flag group. Every serving
+run also records GPU telemetry via `scripts/llama-vram-log.sh` (a wrapper over
+`scripts/llama_record.py`) into the gitignored `logs/llama.db`, alongside the
+throughput of every `llama-test` request, the server's own `/metrics` counters
+sampled on the same interval, the parameters `llama-test` actually put in its
+request bodies, and what the server's load log said about the model it loaded
+(layer split, slot configuration, fused kernels, ignored tensors, warnings).
+Every sample is kept; per-run statistics are derived on read and are
+distributional (p50/p95, an active-only utilization average, minimum free
+VRAM, and the throttle reasons observed), since the mean over a mostly-idle
+server says little. `llama-test compare --by serving` ranks configurations by
+throughput and prints the derived `-ngl` analysis; `llama-report` (added
+2026-09-05) writes the statistical version of that question as markdown with
+figures — auditing the design first and refusing a contrast the design cannot
+support, which on the current store means every throughput comparison drawn
+across the 2026-09-05 power-cap event; `llama-db` is raw SQL access. README.md
+documents each function, the schema, and the measured numbers.
+
+Throughput is only half of what a serving configuration has to be judged on.
+`llama-test` runs scored items from three published benchmarks (HumanEval,
+MBPP sanitized, DS-1000) against whatever the server is currently serving,
+executes the benchmark's own harness against the answer, and appends the
+result — outcome, llama.cpp `timings`, dataset revision, sample seed, and
+foreign keys to the request, run and configuration it belongs to — into the
+same `logs/llama.db`, with the full response text in its `answer` table.
+`llama-test compare` ranks (model, config) pairs by pass rate and passes per
+minute; `llama-test answer` prints a stored response and `--export` writes a
+run's answers out as files. A response is markdown with code in it, so
+`llama-test answer` renders it on a terminal and writes it raw when redirected
+(the `llama_console.wanted()` guard, so a captured answer stays byte-identical),
+and `llama-web`'s Answers page lists a suite run's failures and renders the
+selected one as markdown in the browser, with the thinking toggled off by
+default. Tiers: `smoke` (24 items, the A/B for a flag
+change), `standard` (300), `full` (1030). The datasets are downloaded, not
+vendored, into the gitignored `tests/data/`, pinned by upstream revision and
+content hash; `llama-test fetch` gets them and `llama-test selfcheck` verifies
+the graders against the datasets' own reference solutions. Coding and data
+analysis are covered; math and statistics are not yet.
 
 Current measured performance: ~7 to 8 tokens/s generation and ~72 to 78
 tokens/s prompt processing. Generation is bound by system-RAM bandwidth for
@@ -86,40 +139,118 @@ assume a cloud-only environment.
 
 ## Conventions
 
-- There is no custom backend or frontend code in this repo — Open WebUI (run
-  via Docker) is the entire application. This repo holds documentation
-  (`README.md`, `CLAUDE.md`) plus small operational shell scripts
-  (`openWebUI-docker` to run the container, `scripts/llama-env.sh` for the
-  local llama.cpp server and benchmarks, `scripts/llama-vram-log.sh` for GPU
-  telemetry capture, `scripts/llama_log.py` for assembling the log files), plus
-  `prompts/` — the fixed prompts `llama-test` sends
-  when comparing serving configurations. Shell scripts here are operational glue,
-  not application code; keep them thin and keep model/prompt configuration in
-  Open WebUI.
-- Testing approach: verify changes by using Open WebUI directly in the
-  browser at `http://localhost:3000` (manual verification — there's no code
-  to run automated tests against).
+- There is no custom backend or frontend code for the *assistant itself* —
+  Open WebUI (run via Docker) is the entire chat application, and nothing in
+  this repo sits between it and a model. Since 2026-09-06 a Caddy reverse
+  proxy (`open-web-ui/Caddyfile`) sits between the *browser* and Open WebUI,
+  so it can share a port with the web dashboard — that is a different line
+  than the one this bullet protects: Open WebUI's own container, image and
+  configuration are untouched by it, and its connection to whatever model
+  backend it talks to is exactly as before. What this repo holds is
+  documentation (`README.md`, `CLAUDE.md`), operational shell scripts
+  (`open-web-ui/docker-compose.yml` + `Caddyfile` to run Open WebUI and the
+  proxy, `scripts/llama-env.sh` for the local llama.cpp server and
+  benchmarks, `scripts/llama-vram-log.sh` for GPU telemetry capture), and —
+  since 2026-08-30 — a Python evaluation harness for the local-inference
+  track:
+  - `scripts/llama_db.py` owns `logs/llama.db`: the schema, the ordered
+    `MIGRATIONS` list applied by `connect()`, the stale-run sweep, and every
+    insert and query the other modules call. Append a migration; never edit
+    an applied one.
+  - `scripts/llama_record.py` is the recorder loop `llama-vram-log.sh` execs:
+    wait for the port, open the run, sample `nvidia-smi`, scrape `/metrics`,
+    parse the server's load output, close the run.
+  - `scripts/llama_stats.py` holds the statistics and parsers that must not
+    move into SQL (`percentile`, `throttle_reasons`, `parse_server_log`,
+    `ngl_fit`, `effective_bandwidth`) plus the markdown table renderer, which
+    is now terminal output only and is never read back.
+  - `scripts/llama_test.py` is `llama-test`: it runs benchmark items against
+    the running server, grades them, and writes the request, the result and
+    the answer in one transaction.
+  - `scripts/llama_tests.py` (adapters, dataset loading, answer extraction,
+    the exec harnesses, grader calibration), `scripts/llama_fetch.py`
+    (dataset download and revision pinning), `scripts/llama_compare.py`
+    (cross model/config comparison, and the serving comparison),
+    `scripts/llama_results.py` (the result vocabulary over `llama_db`),
+    `scripts/llama_console.py` (Rich-or-plain output, and the one place Rich is
+    allowed to touch stdout, in `write_markdown`), `scripts/llama_proc.py`
+    (`Command`, the process-group wrapper shared by the web dashboard and
+    `llama_tune.py` for launching a shell surface command and signalling the
+    whole tree it starts). `scripts/llama_web.py` + `llama_web_routes.py` +
+    `llama_web_static/` are `llama-web`, added 2026-09-06 to replace the
+    Textual dashboard (`llama-ui`): seven browser pages over serving, live
+    telemetry, tests, comparison, answers, reports and tuning, all thin HTTP
+    wrappers over the same functions the CLI tools call — nothing here is a
+    second implementation of anything the CLI already does correctly. FastAPI
+    and uvicorn are hard requirements of these three, unlike the stdlib-only
+    modules below; `uvicorn.run(..., workers=1)` is load-bearing, since the
+    job registry that tracks a started `llama-server` or test suite lives in
+    that one process's memory.
+  - `scripts/llama_report.py` is `llama-report`, added 2026-09-05: the
+    statistical report over the store — design audit, paired tests, power,
+    throughput with the throttle regime as a blocking factor, and figures. It
+    is the only module here that requires scipy (matplotlib is optional and
+    degrades to text plots), and it **reads only**: it opens the database
+    `mode=ro` rather than through `llama_db.connect()`, which migrates and
+    sweeps stale runs and therefore writes. Its markdown is output like every
+    other markdown here; nothing reads it back.
+  - `tests/adapters/*.toml` and `tests/suites/*.toml` describe how each
+    published benchmark is adapted and how the tiers are sampled. They are
+    the only hand-written test artifacts, and they contain no answers —
+    ground truth comes from the datasets, which are downloaded into the
+    gitignored `tests/data/` and pinned by revision plus content hash.
+  - `prompts/system/*.txt` are system prompts `llama-test --system <name>`
+    can send with an item, added 2026-09-04. They are not test artifacts:
+    nothing in there is an item, nothing in there is graded, and nothing in
+    there states an expected answer. `prompts/system/assistant.txt` is a
+    copy of what Open WebUI serves, kept so the assistant's own prompt can
+    be measured; Open WebUI remains the source of truth for it. The four
+    beside it (`assistant-local`, `assistant-direct`, `style-only`,
+    `minimal`) are candidates under evaluation and are deployed nowhere.
+    `prompts/system/README.md` says what each one isolates.
+
+  The line to keep: shell scripts here are operational glue, kept thin, with
+  `scripts/llama-env.sh` the single source of truth for serving
+  configuration; the Python is a *measurement* harness for local inference,
+  not application code, and model/system-prompt configuration for the
+  assistant still lives in Open WebUI, never in this repo — the copies under
+  `prompts/system/` are measurement inputs, read only by `llama-test`, and
+  nothing in this repo serves them to anybody. `llama_db.py`,
+  `llama_record.py`, `llama_stats.py`, `llama_tests.py`, `llama_results.py`
+  and everything `llama-vram-log.sh` invokes must stay **stdlib-only**,
+  because the telemetry recorder runs under bare `python3` for the life of
+  every server. `sqlite3` is stdlib, so the database costs nothing here.
+- Testing approach, two separate things:
+  - Changes to Open WebUI configuration are verified by using it in the
+    browser at `http://localhost:4000` (manual — there is no code to run
+    automated tests against). Port 4000, not 3000, since 2026-09-06: Caddy is
+    what is bound to the host now, not Open WebUI's container directly (see
+    "Local inference" below).
+  - Local serving configurations are verified with `llama-test`: three
+    published benchmarks (HumanEval, MBPP sanitized, DS-1000), executed and
+    scored, tiered `smoke` / `standard` / `full`. See "Local inference"
+    below and the Testing section of `README.md`.
 - Model/system-prompt configuration lives inside Open WebUI itself (Admin
   Panel → Settings → Connections; Workspace → Models), not in any file in
   this repo. See `README.md` for the current model entries and system prompt
-  text.
+  text. The one file that duplicates that text,
+  `prompts/system/assistant.txt`, exists so `llama-test` can measure a local
+  configuration under it; it is a copy, it configures nothing, and when the
+  prompt changes in Open WebUI it must be copied here in the same change or
+  the benchmark measures a prompt nobody is using.
 
 ## Commands
 
-- Start/ensure the container is running:
+- Start/ensure Open WebUI and its Caddy proxy are running:
   ```bash
-  docker run -d \
-    -p 3000:8080 \
-    -e OPENAI_API_BASE_URL=https://openrouter.ai/api/v1 \
-    -e OPENAI_API_KEY=<your OpenRouter API key> \
-    -v open-webui:/app/backend/data \
-    --name open-webui \
-    --restart unless-stopped \
-    ghcr.io/open-webui/open-webui:main
+  docker compose -f open-web-ui/docker-compose.yml up -d
   ```
-  (only needed once — `--restart unless-stopped` keeps it running across
-  reboots; use `docker start open-webui` if the container already exists but
-  is stopped).
+  (`open-web-ui/.env` holds `OPENROUTER_API_KEY`; `--restart unless-stopped` on
+  both services keeps them running across reboots). As of 2026-09-06 Caddy,
+  not Open WebUI's container, is the only thing bound to a host port (4000) —
+  see "Local inference" below and `open-web-ui/Caddyfile` for why. Chat is at
+  `http://localhost:4000/`, the web dashboard (`llama-web`) at
+  `http://localhost:4000/ops`.
 - Requires Docker Desktop with WSL integration enabled for this distro.
 
 ## Maintenance policy
@@ -142,25 +273,926 @@ or agent) updates the docs in the same commit:
   is not reusable. Numbers that predate a hardware or model change are stale;
   re-measure or mark them as historical.
 - **Shell scripts and docs must agree**: if `scripts/llama-env.sh`,
-  `scripts/llama-vram-log.sh`, or `openWebUI-docker` changes its defaults,
-  flags, or function names, update the `README.md` description of it in the
+  `scripts/llama-vram-log.sh`, or `open-web-ui/docker-compose.yml`/`Caddyfile`
+  changes its defaults, flags, or function names, update the `README.md`
+  description of it in the
   same change. `scripts/llama-env.sh` is the source of truth for the local
   serving configuration; if it drifts from `~/.bashrc`, reconcile the two
-  rather than letting both exist. The configuration lines written into the
-  telemetry logs mirror the flags `llama-serve` passes, so a change to those
+  rather than letting both exist. The configuration lines recorded with every
+  serving run mirror the flags `llama-serve` passes, so a change to those
   flags must be reflected in `_vramlog_config` too, or old and new runs get
   fingerprinted as the same configuration.
+- **The database schema is append-only.** `MIGRATIONS` in
+  `scripts/llama_db.py` is an ordered list; add a migration, never edit one
+  that has been applied. When a change alters what the `config_id`
+  fingerprint covers — which changes every existing id and makes rows either
+  side of it incomparable — add a `schema_note` row saying so, in the same
+  change, so the database explains its own discontinuities without needing
+  this file.
 - **Do not document aspirations as facts.** Anything not yet running is stated
   as planned or under evaluation, with what would make it the default.
 - **Prune what is no longer true.** When a section describes something that no
   longer exists, delete it and log the deletion; leaving dead configuration in
   place has repeatedly cost time in this project.
 
+## Commit policy
+
+All commits should use conventional commit style and stay focused on one topic. Do not add yourself as a co-author in commits or pull requests; this incudes adding "🤖 Generated with Claude Code" or "Co-Authored-By: Claude <\model> <noreply@anthropic.com>"
+
 ## Decisions log
 
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-09-07**: Fixed `qwen3c` (`unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF`,
+  `Q4_1`, 17.87 GiB, alias `qwen3-coder-30b-a3b`), which the 2026-09-05
+  (`feat: add llama-tune`) commit added to `_llama_profile` in
+  `scripts/llama-env.sh` but left out of `LLAMA_PROFILE_NAMES` and out of
+  every doc — a violation of this file's own maintenance policy, caught
+  rather than repeated. Left out of the array, it was unreachable from
+  `llama-profiles`, `llama-profile-names`, and the `llama-web` picker (all of
+  which read that array, per the 2026-09-04 entry making it the single source
+  other tools defer to), even though `_llama_profile qwen3c` itself worked —
+  the profile ran, it just could not be discovered. Added to the array (now
+  `qwen38 qwen36 qwen25c qwen3c`) and documented in "Models in use" and
+  "Local inference" above and in the profile table in `README.md`. Also fixed
+  a stray four-space over-indent on the `qwen3c|...)` case pattern that made
+  it visually inconsistent with the other profile cases (cosmetic only —
+  bash's `case` does not care about indentation, so this changed no
+  behavior). The weights are already on disk (verified: 19192503456 bytes);
+  nothing about the profile is measured, and it copies the `qwen36` MoE shape
+  (`-ngl 99`, `--n-cpu-moe 34`, q8_0 KV cache, 65536 context, 6 threads)
+  unverified rather than independently tuned — stated as still true, not
+  newly true, since none of that changed here. `model-downloads.md`, added
+  this session, already had the correct `hf download` command for this model
+  (repo, `Q4_1` pattern, and `~/models/qwen3-coder-30b-a3b` local-dir all
+  match the profile), so it needed no change.
+- **2026-09-06**: Replaced the Textual dashboard (`llama-ui`,
+  `scripts/llama_ui.py` + `llama_ui_app.py` + `llama_ui.tcss` +
+  `llama_ui_check.py`, all deleted) with a browser dashboard, `llama-web`
+  (`scripts/llama_web.py` + `llama_web_routes.py` + `llama_web_static/` +
+  `llama_web_check.py`), reachable at the same port as Open WebUI. The
+  motivation was wanting everything -- chat and the serving/testing/tuning
+  tooling -- usable from one browser tab rather than a mix of a terminal UI
+  and a separate chat app.
+  **What moved and what didn't.** `Command` (the process-group `Popen`
+  wrapper `llama-tune` also depends on for launching sweep candidates) moved
+  out of `llama_ui.py` into a new stdlib-only `scripts/llama_proc.py`, so
+  deleting the TUI file did not break `llama-tune`; `llama_tune.py`'s import
+  and one comment referencing `llama_ui_app`'s override-diffing transform were
+  updated to point at the new home. `llama_test.py`'s `cmd_suite` had its
+  setup half (adapter/suite loading, `--slice`, missing-library exclusion,
+  calibration warnings, `--resume` diffing) extracted into a new
+  `prepare_suite(args, con) -> (ctx, todo, skipped)`, a pure, behavior-
+  preserving split -- `cmd_suite` is now two lines calling it plus the
+  unchanged `try/except KeyboardInterrupt/ServerGone` around `run_items`. The
+  dashboard's Tests page calls `prepare_suite` + `run_items` **in-process**
+  rather than shelling out to `llama-test --suite` the way the TUI's Tests
+  screen did, using `run_items`'s existing `on_record`/`should_stop`
+  parameters (added for `llama-tune`, per the 2026-08-30 entry below) to
+  stream one structured SSE event per item and to cancel via a
+  `threading.Event` instead of an OS signal -- per-item autocommit in
+  `run_item` makes the two cancellation paths equally resumable. `llama-test
+  ui` is gone (`cmd_ui` deleted, `"ui"` dropped from the subcommand set).
+  **The seven pages.** Serve, Live, Tests, Compare and Answers port the TUI's
+  five screens as thin HTTP routes over the same functions those screens
+  called (`llama_console.profile_names`/`profile_json`, `llama_compare`'s
+  group/row builders, `llama_db`'s readers, `llama_test._answer_document`) --
+  none of them reimplemented. Report and Tune are new pages with no TUI
+  precedent. Report renders `llama_report.build()`'s own markdown and PNGs
+  unmodified rather than adding a JSON return path through it, deliberately:
+  that module is the one this log documents as having been carefully
+  re-audited for subtle figure bugs (the 2026-09-05, second, entry below), and
+  a second output path through its statistics is a second way for that class
+  of bug to return, for a benefit markdown-plus-images already delivers. Tune
+  shells out to `llama-tune run`/`resume` through the same `Command` class
+  Serve uses, rather than driving `Sweep.execute()` in-process like Tests
+  drives `run_items` -- a sweep is a long-lived (possibly overnight),
+  checkpointed process with its own port-guarding and cooldown logic that has
+  no business running inside a web request's thread pool, and its status is
+  fully pollable from `llama_db`'s `sweep()`/`sweep_rounds()`/`sweep_visits()`/
+  `sweep_candidates()` without touching the process at all.
+  **Same port as Open WebUI, without touching Open WebUI.** A Caddy reverse
+  proxy (`open-web-ui/Caddyfile`, `open-web-ui/docker-compose.yml`, replacing
+  the deleted `openWebUI-docker` script) is the only thing now bound to a host
+  port (4000, moved from 3000 so it can coexist with other work on this
+  machine); Open WebUI's own container publishes nothing directly. `/ops/*`
+  routes to `host.docker.internal:${LLAMA_WEB_PORT:-8095}` (`llama-web`, a
+  *host* process -- it manages real process groups against the actual GPU, so
+  containerizing it would mean bind-mounting the repo and passing through the
+  GPU device for nothing) with the path forwarded unchanged, since
+  `llama_web.py` already mounts its app under `/ops`; everything else routes
+  to the `open-webui` container, left completely path-unaware since its own
+  asset references are root-relative. This was chosen over the two
+  alternatives considered and rejected: **forking Open WebUI** for full
+  control over its UI, which would mean maintaining a permanent diff against
+  an actively-developed upstream forever -- exactly the maintenance burden the
+  2026-07-21 entry below walked away from on purpose, for the sake of one nav
+  link; and **an Open WebUI Function/Pipe/Action plugin**
+  (`open-web-ui/plugins/`, explored but abandoned in this change), which would
+  mean running the benchmark harness *inside* Open WebUI's own container,
+  contradicting the "nothing in this repo sits between Open WebUI and a
+  model" principle in the Conventions section far more directly than a proxy
+  in front of the browser does. Chat -> dashboard navigation is a small
+  client-side-only userscript (`open-web-ui/dashboard-link.user.js`,
+  Tampermonkey/Violentmonkey), not a fork and not a server-side rewrite of
+  Open WebUI's HTML: it adds a fixed-position "Dashboard" link rather than
+  inserting into Open WebUI's own sidebar markup, because that markup is not
+  something this repo controls or pins a version of, and a selector aimed at
+  it would be exactly as fragile as the server-side rewrite this design
+  rejected, just failing in the browser instead of on the proxy. It is
+  optional and per-browser; the dashboard's own header carries a "<- Chat"
+  link back to `/` regardless.
+  `requirements.txt` dropped `textual`; `rich` stays, still used by
+  `llama_console.py`'s callers (`llama_test.py`, `llama_compare.py`,
+  `llama_tune.py`, now also `llama_web.py`/`llama_web_routes.py`).
+  `requirements-extra.txt` gained `fastapi`/`uvicorn` as hard requirements --
+  there is no plain-text fallback for a browser page, so a missing install is
+  a startup message, the same stance `llama-report` takes on scipy.
+  `uvicorn.run(..., workers=1)` is not a default left alone: the job registry
+  tracking a started `llama-server` or test suite lives in that process's
+  memory, and a second worker would have its own empty copy of it.
+  No schema change, no migration, no `schema_note`: nothing here changes what
+  a stored row means or how it is written: `llama-web`'s routes read through
+  the same `llama_db` functions the CLI already used, and Serve/Tune write
+  exactly the way `llama-serve`/`llama-tune` always have, through the same
+  `llama-env.sh` shell surface.
+  **Verified, and what remains unverified, stated plainly.** The FastAPI app
+  was exercised with `fastapi.testclient.TestClient` and, separately, as a
+  real `uvicorn` subprocess hit with `curl`, against the actual production
+  `logs/llama.db` (not a fixture) for every read route -- Serve/profiles,
+  Live, Compare (`config`/`serving`/`failures`), Answers/runs, Tune/status all
+  returned real, correct data. The Tests page's full pipeline was exercised
+  end to end against a dead server on purpose: `prepare_suite` resolved a real
+  `smoke` slice from the real datasets, `run_items` hit the connection-refused
+  path, `ServerGone` was caught and turned into a structured SSE `error`
+  event, and the database was confirmed to hold zero stray rows for that
+  run -- the same "nothing written before a verdict exists" guarantee
+  `llama_test.py` has always made. A real bug was caught this way: `Figures
+  .written` holds filename strings, not `Path` objects, and the Report route's
+  first draft crashed formatting the figure URLs; fixed and re-verified
+  against the real store, which produced a complete, correct report
+  byte-for-byte in the shape the 2026-09-05 entries below describe. The
+  frontend (`scripts/llama_web_static/app.js`) was driven headlessly through
+  `jsdom` with mocked `fetch` responses shaped like the real API's, and every
+  one of the seven routes mounted its page and populated its DOM without
+  throwing. The Caddyfile was validated with `caddy validate` and the compose
+  file with `docker compose config`, both against the real image. **Not
+  verified**: no Open WebUI container was ever started in this session (none
+  existed beforehand either), so the Caddy<->Open WebUI hop, the
+  Caddy<->host.docker.internal<->llama-web hop end-to-end through an actual
+  proxy, and the userscript's actual appearance on a real Open WebUI page are
+  unverified by this change -- the CLI/proxy tooling was checked in isolation
+  (Caddyfile syntax, compose resolution) but not as a running stack. Starting
+  a real `llama-server`/`llama-tune` sweep from the dashboard against the GPU
+  was also not exercised, since doing so has real hardware side effects this
+  session did not have standing authorization to trigger; the Serve/Tune
+  routes are a direct, unmodified port of the `Command`/shell-surface pattern
+  `llama_ui_app.py` already used for exactly this, which is the basis for
+  trusting them short of that run.
+- **2026-09-05** (second): Reviewed the first document `llama-report` produced
+  and rewrote its figures, because three of them contradicted the prose beside
+  them. The prose in that first report is careful -- it refuses contrasts the
+  design cannot support and prints counts beside every rate -- and **the figures
+  did not hold that line**, which matters more than a tidiness complaint: the
+  PNGs are what a future reader skims to decide what to run next.
+  **Two defects could have produced a wrong conclusion.** First, `fig4-mde`
+  omitted its own subject. `detectable_effect` returns `None` when nothing is
+  reachable at 80% power -- which is exactly this experiment at n = 32,
+  psi = 0.144 -- and the marker was drawn inside an `if here is not None` guard,
+  so the figure silently dropped the "this experiment" rule in the one case the
+  section exists to report. A reader saw a smooth curve from 64 items down and
+  no indication that their own design sits off the left edge of it. It now draws
+  the rule unconditionally and says in words: *no effect is reachable at 80%
+  power -- even 14.4 pp is found only 58% of the time*, with the psi ceiling
+  drawn as a horizontal asymptote so `impossible` in the section-5 table has a
+  picture. Second, `fig3` was a bar chart of marginal pass rates, **the picture
+  of the unpaired comparison this command was written to refuse**. Six near-equal
+  bars over eight items invite exactly the ranking the surrounding paragraph
+  says the design cannot support. It is replaced by `fig3-discordance-*`: one
+  row per level showing the items lost and gained against the baseline -- the
+  `b` and `c` of the McNemar tables printed above it -- with `n disc` labelled.
+  The marginal rates stay in the table, where an interval sits beside them.
+  The rest were legibility, and are listed because each one hid something.
+  Two titles ran off the canvas entirely on the 2-level humaneval block, since
+  figure width scaled with the level count and the title did not (fixed with a
+  width floor plus wrapping); five throttle-regime labels in `fig1` were all
+  annotated at the same y and overprinted into an unreadable pile (now one
+  legend entry, with the cliff annotated at `03:05:59Z, median 49.4 -> 6.1 t/s`
+  and the system-prompt boundaries ruled, so the confound is visible rather
+  than described); `fig2` gave the 46 constant cells the saturated fill and let
+  the 2 varying ones -- the entire effective sample -- recede (emphasis now
+  follows information); level labels were cut at 16 characters, mid-sha, though
+  the sha is the identity the report groups by; and `fig4`'s log axis left the
+  default minor-tick formatter on, so `6x10^1` overprinted the explicit `64`.
+  Item ids sorted lexically, putting mbpp `74` between `641` and `750` in both
+  the figure and the markdown table above it; they now sort naturally, from one
+  shared `Block.items()` so the two cannot disagree.
+  Three text defects went with them, in the same commit because they are the
+  same defect class -- the document saying something its own data contradicts.
+  "the six marginal totals" and "no difference among the six" were hardcoded,
+  and rendered verbatim over a two-row table on the humaneval block; both now
+  take `k`. And a block where **no item varies** printed the full Cochran's Q
+  apparatus and a verdict without ever saying that there is no within-item
+  comparison to make -- Q is 0 by construction there, which is the same output
+  a broken harness would produce, and the two are told apart by the section-6
+  manipulation check rather than by that table. It now says so before the table.
+  A figure with nothing to draw is suppressed and replaced by one sentence
+  naming why, rather than rendering an empty grid.
+  No schema change, no migration, no `schema_note`: nothing here changes what a
+  stored row means, and the module is still `mode=ro`. Verified: every
+  regenerated PNG read against the tables it accompanies (the ds1000 and mbpp
+  discordance plots reproduce their McNemar `b`/`c` exactly); `--no-figures`,
+  `--stdout` and a matplotlib-blocked run each producing a complete 1181-line
+  document, with the new discordance fallback rendering as a `lost`/`gained`/
+  `n disc` text table rather than as bars, since a paired difference has no bar
+  form; and `logs/llama.db` md5-identical (`e6b20a50...`) with integrity,
+  foreign keys and all row counts (4 runs, 1 config, 298 results, 298 answers,
+  297 requests, 1941 GPU samples, 15488 scrapes) unchanged.
+- **2026-09-05**: Added `llama-report` (`scripts/llama_report.py`), a
+  statistical report over `logs/llama.db`, and used it to analyse the
+  system-prompt ablation the 2026-09-04 (third) entry set up and left unmeasured.
+  It was measured on 2026-09-05 02:59-03:33. **The answer is null, and the more
+  useful finding is that this experiment could not have found anything.** The
+  reason for a second command rather than more columns in `compare` is that
+  `compare` ranks and has no way to say whether a difference it shows is real:
+  at `smoke` two adjacent rows differ by one item, and the repo's own
+  never-a-bare-percentage rule exists because that reads as 4pp.
+  **The tests are paired, and not ANOVA.** The tiers are seeded so every
+  configuration draws the same items, which makes this a repeated-measures
+  design; a one-way test across levels discards the pairing, which is the only
+  thing that makes 8 items informative. So: Cochran's Q with an exact
+  permutation p, exact McNemar against the no-prompt baseline with Holm, Wilson
+  intervals. Over the two complete blocks (mbpp x `9b503170` and ds1000 x
+  `107a9a47`, each 8 items x 6 levels, 48/48 cells, no holes) the pooled result
+  is **Q = 0.9259 on 5 df, permutation p = 1.000 over all 10800 arrangements**.
+  Twelve of the sixteen items are constant across all six prompts, so the whole
+  comparison rests on four. Pooling is keyed on the *set* of levels rather than
+  the sequence, which was a real bug caught in testing: columns are ordered by
+  when each level was first measured, the two blocks ran the same six prompts in
+  a different order, and keying on the ordered tuple silently refused to pool
+  the two blocks the analysis exists for.
+  **What the null is worth is the actionable part.** Discordance -- the share of
+  item comparisons changing verdict, and what a paired binary test's power
+  actually depends on -- is 15/104 = 14.4%. At the 32 items entering a baseline
+  comparison, even a 14.4 pp difference (the largest that *can* exist under that
+  discordance rate) would be detected 58% of the time. There is no effect size
+  this experiment had an 80% chance of finding. Detecting 5 pp needs 451 items;
+  15 and 20 pp are reported as `impossible` rather than as a number, since in a
+  paired design the pass-rate difference cannot exceed the discordance rate. **No
+  claim is made or should be made about which system prompt is better**, and
+  `assistant.txt` stays what Open WebUI serves.
+  **A throughput trap was found and is refused rather than reported.** Levels ran
+  sequentially, one suite per level. Partway through run 4 generation fell from a
+  39.6-50.8 t/s band (40 requests, median 49.4) to 6.06-6.12 t/s at
+  2026-09-05T03:05:59Z and never recovered -- not one of the following 72
+  requests exceeded 20 t/s. Mean board power was 27.2 W after against 51.2 W
+  before, and after the cliff every non-idle GPU sample carries throttle word
+  `36` (`SwPowerCap | SwThermalSlowdown`), the rest being `GpuIdle` between
+  requests. In the mbpp block the cap is therefore confounded with the level: a
+  naive one-way ANOVA of generation t/s by system prompt there returns
+  **F = 419.268, p < 0.001** and is measuring the power cap. The report computes
+  that test and prints it labelled as the wrong answer beside the refusal,
+  because it is what a reader would otherwise have run; four throughput contrasts
+  are refused outright, naming the ordering and the power state. Stratifying by
+  regime collapses most strata to one level. `predicted_n` and `prompt_n` are
+  analysed as the defensible responses, being counts the model produced rather
+  than divisions by a wall clock. **Any throughput number from run 4 after
+  03:05:59Z is a measurement of a thermally capped GPU**, not of a serving
+  configuration, and should not be compared with the figures in `README.md`.
+  **A pre-existing belief was corrected by writing the query.** The reliability
+  floor was expected to come from 24 cells measured more than once, 6 of which
+  flipped. It does not: under the strict cell key (model, config, tier,
+  benchmark, item, system prompt, adapter) **no cell in this store was measured
+  twice**, so there is no run-to-run estimate at all. The 24 repeat on a looser
+  key that ignores the model -- a different model answering the same question is
+  a different condition, and counting it would put a between-model effect on the
+  noise floor and then use that floor to dismiss between-model effects. The
+  report says so in those words. Consequence: **re-running one existing
+  condition unchanged is the cheapest and highest-value next run**, ahead of any
+  new condition.
+  Two design decisions worth recording. scipy is a hard requirement and the
+  command exits 2 with the install line rather than degrading, because a
+  statistics report with the statistics removed is not a smaller version of
+  itself; matplotlib is optional and every figure falls back to a unicode block
+  plot in a fenced block, naming the reason, since a missing wheel should cost
+  the picture and not the analysis printed beside it. And the store is opened
+  `mode=ro`, deliberately **not** through `llama_db.connect()`, which applies
+  migrations and sweeps stale runs -- a reporting command must not be able to
+  change what it is reporting on. No migration and no `schema_note`: nothing
+  here changes what a stored row means.
+  Verified: the hand-written statistics (Cochran's Q, its exact permutation p,
+  exact McNemar, Wilson, Holm, the power/MDE search) cross-checked against
+  statsmodels and scipy on 40 random matrices plus the real ones, with the
+  permutation p also checked by brute-force enumeration and the sample-size
+  formula checked by simulating the exact test at the n it claims; `--stdout`,
+  `--no-figures` and a matplotlib-blocked run each producing a complete
+  document; and `logs/llama.db` byte-identical by md5 with integrity, foreign
+  keys and all row counts (4 runs, 1 config, 298 results, 298 answers, 297
+  requests, 1941 GPU samples, 15488 scrapes) unchanged after every run.
+- **2026-09-04** (sixth): Fixed five defects found by a review of the
+  `feat/config-comparison` branch before it merged. Two of them mattered.
+  **`llama-test compare --by benchmark` could not run at all.** `benchmark_rows`
+  built a four-label header and emitted five leading cells -- it added the
+  `adapter` cell that the sibling `COLUMNS` list already names and gave it no
+  column -- so every row was one cell wider than its header and the command
+  raised `IndexError` on every output path: markdown, plain, Rich, and the
+  `llama-ui` Compare tab. The header gained the column rather than the row
+  losing the cell, because `adapter_sha` is part of the grouping key: two rows
+  differing only by adapter are two different measurements, and a table that
+  does not name the difference reads as a contradiction.
+  **The multi-flag warning was under-reporting.** `FLAG_KEYS` named four flags
+  by their llama-server spelling -- `context`, `n-cpu-moe`, `cache-type-k`,
+  `cache-type-v` -- and `_vramlog_config` records them as `ctx`, `moe` and one
+  combined `cache: k=... v=...` line, so `config_value` returned None and
+  `flags_of` dropped them silently. A comparison whose two configurations
+  differed in context size, `--n-cpu-moe` or KV cache type reported neither.
+  That warning exists because this project lost a measurement to exactly that
+  failure (the 2026-08-23 `--parallel` entry), so a check that cannot see three
+  of the flags most likely to change between runs is worse than none: it reads
+  as an all-clear. Against the current database the warning went from 5 flags
+  to 9. The list now carries a comment saying these are recorded keys and not
+  CLI spellings, which is the trap that produced the bug.
+  Three smaller ones. `llama_stats.render_table` padded short rows and indexed
+  past the end of long ones, which is why a caller's column-count mistake
+  surfaced as `IndexError` rather than a visibly odd table; it and both other
+  renderers (`llama_console.render_markdown_table`, and `Console_.table`'s Rich
+  path) now size to the widest row. Deliberately widening rather than
+  truncating: dropping a row's extra cells would turn a caller's bug into a
+  table that is quietly wrong about which value sits under which heading, and an
+  unnamed trailing column is visible where a shifted one is not.
+  `config_value` stopped at the first ` | `, so `config.samplers` recorded
+  `temp 0.7` for a profile serving `--temp 0.7 --top-p 0.8 --top-k 20
+  --repeat-penalty 1.1`; it takes an opt-in `rest=True` for that one line, whose
+  value is itself pipe-separated. And `calibrate()` counted an item with no
+  reference solution as ungradeable without counting it as checked, so
+  `n_checked - n_ungradeable` -- read as the gradeable count by `llama-test
+  list` -- could go negative. Neither is a measurement error: the samplers
+  column is written and never read, the fingerprint is computed in the shell
+  over the complete text, and no published item in HumanEval, MBPP or DS-1000
+  ships without a reference, so the calibration counts on disk are unaffected.
+  **Migration 5 carries no DDL and one `schema_note`**, for the samplers fix:
+  the column holds different things either side of 2026-09-04 under the same
+  name, and a column whose meaning shifts mid-table is what that table exists to
+  explain. No `config_id` changed and nothing became incomparable. Verified: all
+  five reproduced before the fix and pass after; all four `compare` modes run
+  against the real database; `logs/llama.db` backed up first, and integrity,
+  foreign keys and every row count (3 runs, 186 results, 186 answers, 185
+  requests, 1392 GPU samples, 11104 scrapes) identical afterwards, with the
+  migration applying once and staying idempotent on reconnect.
+- **2026-09-04** (fifth): Deleted the pre-database files from the gitignored
+  `logs/`. The 2026-08-30 entry below kept them deliberately -- "the old files
+  stay in gitignored `logs/` as a reference that no code reads" -- and five days
+  later nothing had read them, which is the evidence that entry was waiting for.
+  Gone: `tests.jsonl` (252K), `tests.log`, `answers/` (three suite runs of
+  exported markdown), `.active-run.json`, `.requests.37995.jsonl` and the
+  markdown serving log `Qwen3.8-27B-UD-Q3_K_XL.log`. Two orphaned
+  `.server.<pid>.log` captures went with them: `llama-serve` tees the server's
+  `-lv 4` output there and deletes it on exit, so a surviving one is a server
+  that was killed, and both pids were long dead. `logs/llama.db` is the only
+  thing left in the directory. **What this costs, stated rather than
+  discovered later: every measurement taken before 2026-08-30 is now gone.**
+  They were never imported and now cannot be. That is acceptable for the reason
+  the move happened in the first place -- those formats stored statistics
+  computed at write time rather than the samples behind them, so a figure in
+  them could never be recomputed, which is exactly the defect that made this
+  project mis-estimate the per-layer `-ngl` cost once -- and the numbers worth
+  keeping were transcribed into `README.md` with their full configuration, as
+  the maintenance policy requires. The reason to delete rather than keep
+  indefinitely is that a directory of files no code reads is a trap: a reader
+  finds `tests.jsonl` sitting beside `llama.db` and has no way to tell which
+  one is authoritative, and the answer has been "the database" since
+  2026-08-30. Migration 4 carries **no DDL and one `schema_note`**, because the
+  deletion falsified a note already inside the database: `NOTES_1` tells a
+  reader those files "remain in logs/ as a historical reference", and an
+  applied migration is never edited, so the correction is a new note rather
+  than a rewrite. `README.md`'s copy of the same sentence was updated in the
+  same change, since it is documentation rather than history. `llama.db` itself
+  was not touched: backed up first, and integrity, foreign keys and every row
+  count (3 runs, 186 results, 186 answers, 185 requests, 1392 GPU samples,
+  11104 scrapes) checked identical afterwards.
+- **2026-09-04** (fourth): Investigated a run full of `fail_error`s and found
+  two defects, one in the harness and one in an adapter, plus a structural gap
+  that let the second one exist. Both are fixed here.
+  **First, a dead server was being recorded as a model failure.** `run_item`
+  graded any transport error as `fail_error`, so when the server stopped
+  mid-suite on 2026-09-05T00:05:49Z, the remaining 56 items were written as
+  failures in one second with the reason `no response from port 8090`. That run
+  reads 13/100 = 13% and what it actually measured is 13/44 = 30%. It was not
+  self-correcting either: `(suite_run_id, benchmark, item_id)` is unique, so
+  `--resume` found those items already done and would have skipped them
+  forever. A benchmark outcome is a statement about the model's answer and a
+  connection refused is not one, so `ask()` now marks that case and `run_item`
+  raises `ServerGone` **before anything is written**; the suite catches it,
+  reports what was measured, prints the resume line and exits 1. HTTPError is
+  deliberately excluded: the server answered, and a 400 can be specific to one
+  item, which is a per-item fact worth recording. Verified against a stub server
+  rigged to answer three requests and die: 3 rows written, 21 not, exit 1, and
+  `--resume` then ran exactly those 21 to a complete 24.
+  **Second, `tests/adapters/ds1000.toml` was telling the model the wrong
+  answer variable.** Its `prompt_template` ended "Assign the answer to `result`
+  as the problem asks", which is false for **194 of the 511 in-filter items**:
+  DS-1000 items name their own output variable in the problem text (`b = ... #
+  put solution in this variable`), and the reference solutions assign `result`
+  in 317, `df` in 103, `a` in 13, `B` in 6, `b` in 5. Items 295 and 297 failed
+  `NameError: name 'b' is not defined`; item 295's answer (`np.eye(4)[a]`) was
+  executed by hand and is numerically identical to the expected result, so a
+  correct answer was graded wrong by this repo's own instruction. The template
+  now defers to the problem. Stated because it bounds the claim: among the 44
+  items actually attempted, those wanting `result` passed 8/25 and those wanting
+  another name 4/13, so at this n the bug shows **no aggregate effect** — it is
+  a definite defect that cost at least two confirmed items, not a demonstrated
+  driver of the failure rate. Grader calibration could never have caught it:
+  `selfcheck` runs the reference solutions, which use the right names, and
+  reports 100% while the template misleads every model.
+  **Third, and the reason the second one could happen silently: nothing
+  fingerprinted the adapter.** `dataset_revision` pins the published items and
+  nothing pinned the wrapper this repo puts around them, so editing a
+  `prompt_template` made every old result incomparable with every new one with
+  nothing recording the discontinuity — the exact failure `config_id` prevents
+  for serving flags and `system_sha` for system prompts. Migration 3 adds
+  `result.adapter_sha` and puts it in the grouping key of `v_pass_rate` and of
+  `llama-test compare`, beside `model`, `config_id`, `tier` and `system_sha`.
+  It is a sha1 over the **parsed** `prompt_template`, `[item]`, `[filter]` and
+  `[check]`, not over the file's bytes, which is the one place it deliberately
+  differs from `system_sha`: an adapter carries the prose explaining why it is
+  shaped as it is, and hashing that would file every comment edit as a
+  measurement discontinuity. NULL means **unknown**, not none — the opposite of
+  `system_sha`'s NULL — because a row predating the migration cannot say what
+  adapter it ran under; `compare` shows it as `?` and never pools it with a
+  known adapter. Two `schema_note` rows record both facts, including that
+  NULL-adapter ds1000 rows were measured under the wrong template.
+  **The rows already written were deleted**, since the fix above prevents new
+  ones but cannot clean up old ones. 65 of them, not the 56 first counted: 56
+  in `20260904T235723Z-d6e7b5`, 8 in `20260905T000635Z-220db1` and 1 in
+  `20260904T223432Z-3ae35a`. None had a `request` or an `answer` row -- a
+  transport failure produces neither -- so nothing was orphaned, and integrity
+  and foreign keys were checked after. What that corrected: the ds1000 standard
+  run reads **13/44 = 29.5%** instead of 13/100 = 13.0%, `3ae35a` reads 66/78
+  instead of 66/79, and `220db1` disappeared from `compare` entirely rather
+  than sitting there as a 0/8 = 0.0% row, because all eight of its rows were
+  the same dead server and it never measured anything. Both surviving runs are
+  resumable again. This is the one kind of deletion this store permits: the
+  rows were not measurements, and keeping them would have meant every future
+  reader re-deriving the same correction. A `prune` of samples would not have
+  touched them; the append-only rule covers the schema, not rows that record an
+  event that never happened.
+- **2026-09-04** (third): Wrote four candidate system prompts for the local
+  models and put them beside the deployed one, so the question "what does the
+  assistant's own prompt cost a local model" has an experiment rather than an
+  opinion. `assistant.txt` stays the verbatim Open WebUI text and is the
+  baseline. The rewrite is `assistant-local.txt`, and `assistant-direct.txt`,
+  `style-only.txt` and `minimal.txt` are an ablation of it, each dropping one
+  thing from the one above, so a `compare` table attributes a difference
+  instead of only showing one. **None of them is deployed**; Open WebUI still
+  serves `assistant.txt`, and if a candidate measures better it is adopted
+  there with the copy here updated in the same change, per the convention
+  above. The three substantive changes in the rewrite are all things that bite
+  a 7B model with a 2048 token cap and do not bite a hosted 27B. First, the
+  deployed prompt's "do not hesitate to ask clarifying questions before
+  providing a full response" is a **scored failure** on a single-turn
+  benchmark item: a model that asks instead of answering emits no code and
+  grades as wrong. That is a real property of the prompt and not a harness
+  artifact, so the rewrite keeps the intent -- state assumptions, invite
+  correction -- and moves the question after the answer rather than in place of
+  it. Second, "be informative and delve into topics" can spend the whole token
+  budget on prose and truncate the code mid-function, which grades as wrong and
+  reads as a quality problem rather than a length one; the rewrite bounds the
+  explanation to the question instead. Third, the rewrites name the code fence,
+  because `extract_code` takes the last fenced block containing a definition
+  and passes an unfenced answer to the grader whole. That third one is a
+  **confound and is recorded as one**: all four rewrites name the fence and
+  `assistant.txt` does not, so an `assistant` versus `assistant-local` delta
+  mixes the rewrite with formatting compliance, while the comparison among the
+  four rewrites is clean because that instruction is identical across them. The
+  alternative was writing prompts that win the benchmark, which was rejected:
+  a prompt tuned to the grader measures the grader, and the thing under
+  evaluation is a prompt somebody would actually deploy. `llama-test list`
+  gained a third table naming each prompt with its sha and first line, since
+  with five of them the sha is the identity a result is grouped by and it
+  should be readable without opening files or running a suite. **Nothing is
+  measured yet.** The run is `--suite smoke` once with no `--system` and once
+  per prompt against a served profile; until that exists, no claim is made
+  here about which prompt is better or about what any of them costs.
+- **2026-09-04** (second): `llama-test` can send a system prompt, and a system
+  prompt is now part of what identifies a measurement. `--system <name>` puts
+  the contents of `prompts/system/<name>.txt` in front of the item as a
+  `system` message; without the flag nothing is sent, which is the same request
+  body every run before today made. Opt-in is the whole design: the alternative
+  considered was a default prompt, and it would have silently made every
+  recorded result incomparable with every new one, which is the exact failure
+  the 2026-08-23 `--parallel` entry describes. There is no server-side option
+  to do this instead — checked `llama-server --help` on this build rather than
+  assumed — so it lives in the request body, which is also where Open WebUI
+  puts its own. The design question that mattered was where the identity goes.
+  It is deliberately **not** in `config_id`: that fingerprint is computed by
+  `_vramlog_config` over the serving flags before any request exists, folding a
+  request property into it would change every existing id, and a server serves
+  many prompts. Instead migration 2 adds `system_name` and `system_sha` to
+  `result` and puts `system_sha` in the grouping key of `v_pass_rate` and of
+  `llama-test compare`, beside `model`, `config_id` and `tier`. Grouping is the
+  point rather than a nicety: without it a run with a prompt and a run without
+  one would be averaged into a single pass rate, and the measurement would look
+  fine while answering the wrong question. The identity is the **sha of the
+  file's bytes**, with the name carried alongside for reading. A prompt edited
+  in place is a different prompt, so runs either side of an edit stay separate,
+  and `compare` prints a caveat naming any prompt whose name appears under more
+  than one sha — the case that would otherwise look like an unexplained
+  regression. NULL means *no system prompt was sent*, not *unknown*: migration
+  2 carries a `schema_note` saying so, because nothing else in the database
+  distinguishes "recorded before the feature existed" from "deliberately none",
+  and both are in fact the same thing here. This brings `prompts/` back, five
+  days after the 2026-08-30 entry deleted it, and the rule that deleted it is
+  unchanged: the five files removed then were *unscored test items*, and
+  nothing under `prompts/system/` is a test item, is graded, or states an
+  expected answer. `prompts/system/assistant.txt` is the Open WebUI prompt
+  copied verbatim so the assistant's actual configuration can be benchmarked;
+  Open WebUI stays the source of truth and the copy has to be updated with it.
+  `llama-ui`'s Tests screen gained a matching selector defaulting to none.
+  One bug was found and fixed on the way, worth recording because it failed
+  quietly in the worst possible way: `llama_test.py` carried an unused
+  `nargs=argparse.REMAINDER` positional, so `llama-test humaneval/HumanEval/0
+  --system assistant` swallowed the flag, sent no system message, and recorded
+  the run as having had none — a wrong measurement with no error anywhere. The
+  catch-all is deleted; unknown flags now fail loudly, and `--system` works in
+  either position. Verified end to end against a stub OpenAI-compatible server
+  that echoes the request body, so the message actually sent could be read
+  rather than inferred; its rows were then deleted from `logs/llama.db` and the
+  database integrity-checked. No GPU measurement has been made with a system
+  prompt yet — the A/B (`--suite smoke` with and without `--system assistant`)
+  is the user's to run, and until it is, nothing here claims what a system
+  prompt costs.
+- **2026-09-04** (first): Added a third serving profile, `qwen25c`
+  (`unsloth/Qwen2.5-Coder-7B-Instruct-GGUF`, `Q4_K_M`, 4.36 GiB, alias
+  `qwen2.5-coder-7b`). The reason it is worth a profile rather than a one-off
+  `llama-server` invocation is that it is the first local model here that fits
+  in 6 GB of VRAM outright: `-ngl 99` with no `--n-cpu-moe` and no `-ot`, so
+  nothing is read from system RAM. Every throughput number recorded in this
+  project so far is bound by exactly that -- `qwen36` at ~7-8 t/s and `qwen38`
+  at ~3 t/s are reading CPU-resident weights over system RAM at every token --
+  so a fully resident model is the one configuration whose speed the existing
+  measurements say nothing about. **Nothing about it is measured yet**, and no
+  figure for it is quoted in `README.md`; `llama-test --suite smoke` against a
+  served instance is what would produce one, and it will be directly comparable
+  to the existing runs because it lands in `logs/llama.db` under its own
+  `config_id` (`71bc58dd` as of this change) with the same benchmark items.
+  What it costs, stated because it is a real trade and not a free win: the
+  model is a 7.6 B coder against a 27 B and a 35 B, it covers coding only, and
+  quality is the thing `llama-test` exists to measure rather than assume.
+  Three configuration decisions worth recording. Its context is **16384, not
+  the model's full 32768**: this GGUF is 28 layers with 4 KV heads of 128, so a
+  `q8_0` KV cache costs ~29.7 KiB/token, which is ~476 MiB at 16K against ~952
+  MiB at 32K on top of 4.36 GiB of weights and the compute buffer -- the full
+  window fits inside 6 GiB only with less margin than this project's own
+  `LLAMA_VRAM_HEADROOM_MIB` (300) warns at, so it is opt-in via `LLAMA_CTX` and
+  to be confirmed with `llama-vram`, not assumed. It sets **no speculative
+  flags** (Qwen2.5 predates the `nextn`/MTP tensors `qwen38` drafts from) and
+  **no reasoning effort** (not a thinking model: no `reasoning_content`, so the
+  token budget is all answer, which matters more than it sounds given that
+  reasoning tokens dominate `qwen36`'s wall clock on short prompts). Its
+  samplers are Qwen2.5-Coder's own `generation_config.json` values
+  (`--temp 0.7 --top-p 0.8 --top-k 20 --repeat-penalty 1.1`), read from the
+  repo rather than guessed. Three smaller fixes came with it, each of which was
+  a latent copy of the profile list waiting to disagree with `llama-env.sh`.
+  Profile names now live in one `LLAMA_PROFILE_NAMES` array exposed as
+  `llama-env.sh profile-names`; `llama_console.py` and `llama_ui.py` read it
+  instead of the hardcoded `("qwen38", "qwen36")` each carried, so a fourth
+  profile will appear in `llama-profiles` and the dashboard picker without
+  touching either. `llama-profile-json` now reports `reasoning` as empty for a
+  profile that sets no thinking effort -- it was reporting `medium`
+  unconditionally, which would have had the dashboard emit `LLAMA_REASONING`
+  for a server that ignores it -- matching the test `_vramlog_config` already
+  made before recording `n/a`. And `llama-serve`'s "confirm VRAM headroom
+  before treating `-ngl` as tuned" warning is now scoped to a dense profile
+  that is *partially* offloaded, since at `-ngl 99` there is no layer count
+  being chosen. Nothing in the fingerprint changed, so every existing
+  `config_id` still names the same configuration.
+- **2026-08-30** (last): Stored answers are rendered as markdown when a human
+  is reading them, and left alone when a machine is. Two paths: `llama-test
+  answer` prints through a new `llama_console.write_markdown`, and `llama-ui`
+  gained an **Answers** tab that lists a suite run's items and renders the
+  selected one into a Textual `Markdown` widget. The reason is that a response
+  is markdown with fenced code in it, and the code is the part that reads worst
+  as flat text -- which is what a grading harness was leaving people to read.
+  The constraint this had to respect is the one `llama_console` exists for: a
+  piped `llama-test answer ... > answer.md` must contain the document and
+  nothing else, and Rich reflows paragraphs and pads code blocks, so rendering
+  to a redirected stream would corrupt exactly the artifact someone redirected
+  in order to keep. So `write_markdown` is gated on the existing
+  `wanted()` -- not a TTY, or `NO_COLOR`/`LLAMA_PLAIN`, or no Rich, means raw --
+  and it is the only place in this repo Rich writes to stdout at all; `Console_`
+  still writes to stderr on purpose. Verified byte-identical output on the
+  redirected path and on `--export`, which is the whole point of the guard.
+  Two shape decisions follow from the destination and are worth recording
+  because they look like inconsistency otherwise. The chain of thought keeps its
+  `<details>` wrapper in a file and loses it on a terminal: nothing in a
+  terminal expands one, and *both* Rich's and Textual's markdown drop raw HTML
+  blocks, so a collapsed document rendered to a terminal would show the
+  reasoning under no heading at all. And a response is handed over unfenced only
+  when it carries a fence of its own; without one it keeps the outer fence,
+  because the graded text is code and reflowing it into paragraphs would destroy
+  the indentation that makes it code -- unhighlighted and correct beats
+  highlighted and wrong. That check is deliberately *not* the extractor in
+  `llama_tests.py`: that one decides what gets graded and must stay strict,
+  while this one only decides how to print, where a wrong guess costs colour.
+  Known limitation, stated rather than discovered later: highlighting depends on
+  the model emitting a language tag on its fence, so a missing or wrong info
+  string silently loses the colour. Fine for Python today; if a multi-language
+  benchmark is ever added it will be more visible. The UI tab defaults to
+  failures, which is the pairing for `compare --by failures` -- that view names
+  the items worth looking at and this one shows them -- and keeps the thinking
+  off behind a toggle, because reasoning traces run to tens of thousands of
+  characters on this model and parsing one into a widget on every row change
+  would make the table feel broken. It also shows the `llama-test answer`
+  invocation for the highlighted row, per the rule the dashboard already
+  follows: the form teaches the flags rather than hiding them. One helper was
+  added to `llama_db` for it, `suite_runs()`, so a run can be picked without
+  knowing its coined id.
+- **2026-08-30** (later): All measurement data moved from nine hand-rolled
+  file formats in `logs/` to one SQLite database, `logs/llama.db`. The reason
+  is that markdown was not just written but *parsed back*: `llama_log.py`
+  read values out of rendered table cells on every merge, which is where the
+  "all four tables were extended by appending columns only, so historical rows
+  keep their meaning positionally" rule and the `LEGACY_REQUEST_SUMMARY`
+  positional remap came from, and why every block was re-rendered whole on
+  every write. Those rules are retired: markdown is now **output only**
+  (`--format markdown`, so a measured table can be pasted into `README.md` as
+  the maintenance policy requires) and no code reads it. `logs/tests.log`,
+  `logs/tests.jsonl`, `logs/answers/` and `logs/<model>-<quant>.log` stop
+  being written. `scripts/llama_log.py` is deleted; the statistics and parsers
+  worth keeping moved to `scripts/llama_stats.py`, the storage to
+  `scripts/llama_db.py`, and the recorder loop out of shell into
+  `scripts/llama_record.py` (which takes `jq` off the recorder path;
+  `llama-vram-log.sh` is now a wrapper that resolves the profile, computes
+  the fingerprint, and execs it). Six things this bought, each of which was a
+  real defect and not a tidiness argument. **First, the 2026-08-23 retention
+  rule is reversed**: every GPU sample and every `/metrics` scrape is now
+  kept, and summaries are derived on read. The old rule discarded raw samples
+  once a newer run finished and kept only the summary computed at the time,
+  which meant a statistic computed wrongly could never be recomputed — and
+  this project has already had to correct a statistic once (the per-layer
+  `-ngl` cost). At ~60 bytes a row and 5 s intervals a day of continuous
+  serving is ~1 MB; `llama-db prune --before <date>` exists for the day that
+  matters and touches only samples and scrapes, never results or answers.
+  **Second, `config_id` is a foreign key** instead of a string resolved by
+  globbing `logs/*.log` and parsing every markdown block in every file to
+  rebuild a lookup dict. A hand-started server records NULL rather than the
+  string `"unrecorded"`: a string sentinel would have to be exempt from the
+  constraint, and then the constraint would guarantee nothing. The name
+  survives at the display layer. **Third, the `server totals` scrape-timing
+  defect is fixed by storing the whole series.** Only the first and last
+  scrape were kept, so a delta taken as the server stopped held the prompt
+  half of a request and not the generation half (llama.cpp updates prompt
+  counters at prompt time and generation counters at task completion); with
+  every scrape stored the delta can end after the final completion, and the
+  intermediate values are a throughput curve rather than a lost measurement.
+  **Fourth, a request's throughput and its verdict are one transaction and one
+  foreign key** instead of two rows in two independent stores with nothing
+  connecting them. **Fifth, the exclusion blow-up is fixed**: a 24-item
+  `smoke` suite was writing 569 rows, 545 of them `skipped` — 489 DS-1000
+  items outside the adapter's library filter and 72 marked ungradeable by
+  calibration, re-recorded every run. Pass rates were never affected, but the
+  store was 23x the tier it described. Exclusions are a property of the
+  adapter, the calibration and this box's library versions, so they now live
+  in `suite_exclusion`, written once against a dataset revision; the same
+  suite writes 24 rows. **Sixth, `logs/.active-run.json` is gone**: a run with
+  `ended_at IS NULL` is the active run, and one whose recorded pid is dead is
+  closed by a sweep on connect. The file was removed by an EXIT trap that a
+  `kill -9` skips, so a crash left a stale marker that later results were
+  filed under. Two more constraints replaced comments: `outcome` is a `CHECK`
+  so an unknown outcome is unwritable, and `(suite_run_id, benchmark,
+  item_id)` is unique so a resumed suite cannot double-count. Percentiles and
+  throttle-bit decoding deliberately stayed in Python — reimplementing linear
+  interpolation between closest ranks in SQL would silently change every
+  recorded number. **No historical data was imported**, by decision, so
+  `llama-test compare` says nothing until a new serving run and a new test run
+  happen; the old files stay in gitignored `logs/` as a reference that no code
+  reads. **The fingerprint itself is unchanged** — still `_vramlog_config` in
+  `scripts/llama-vram-log.sh`, over the same six lines — so a `config_id`
+  quoted in an old log still names the same serving configuration. Two
+  `schema_note` rows record both of those facts inside the database. The one
+  capability that had to be rebuilt rather than carried over is the serving
+  comparison the log files opened with: it is now `llama-test compare --by
+  serving`, one row per configuration from its most recent run, with the
+  `derived` table (cpu-resident layers, ms/token, effective CPU bandwidth,
+  headroom in layers) and the least-squares `-ngl` fit beneath it, plus a live
+  view in `llama-ui` that is only possible because samples land as they are
+  taken. Verified before shipping: schema integrity and migration idempotency;
+  a stdlib-only import audit plus an end-to-end recorder run under bare
+  `python3` with `.venv` moved aside; a `kill -9` mid-run leaving its samples
+  intact and the run closed as stale on the next connect; one item writing
+  exactly one request, one result and one answer, mutually linked, with the
+  stdout/stderr contract unchanged; a resumed suite finding its work already
+  done; 300 results written while sampling every 0.5 s with no `database is
+  locked`; and statistic parity — a speculative run's acceptance and mean_len
+  came out of `v_request` as 0.932 and 2.864, exactly the figures recorded on
+  2026-08-23. The A/B against the real server is the user's to run.
+- **2026-08-30**: Local serving configurations are now judged on *correctness*
+  as well as speed, which reverses the 2026-08-23 position that "adding scoring
+  would mean application code, which this repo deliberately does not hold". The
+  reversal is deliberate and the reason is that the tuning loop had become
+  unfalsifiable: `-ngl`, `-ot`, `--parallel` and MTP speculative decoding were
+  being chosen on tokens/second alone, with the answers eyeballed once and
+  thrown away, so a configuration that ran faster and answered worse was
+  indistinguishable from one that ran faster and answered the same. The five
+  unscored files in `prompts/` are deleted; their exact wrapper survives as the
+  HumanEval adapter's `prompt_template`. Test items come only from published
+  benchmarks that ship their own ground truth — nothing in this repo authors a
+  test or its answer — because a hand-written suite would measure the author's
+  guesses about the model, and its numbers would compare to nothing outside
+  this machine. The three: **HumanEval** (164, MIT, Chen et al. 2021),
+  **MBPP sanitized** (427, CC-BY-4.0, Austin et al. 2021), **DS-1000** (1000,
+  CC-BY-SA-4.0, Lai et al. 2022, filtered to the 511 Pandas/Numpy items so the
+  grading environment needs only those two libraries). Grading executes the
+  benchmark's own harness; `reasoning_content` is never graded. Tiers are
+  `smoke` (24, the config A/B), `standard` (300), `full` (1030), each seeded so
+  the same items are drawn for every configuration, and the comparison refuses
+  to put rows from different tiers side by side. The metric is pass rate *and*
+  passes per minute, always printed with `passed/attempted` beside it: at
+  n=24 one item is 4pp, so a bare percentage would invite conclusions the
+  sample cannot support. Contamination is expected and is not a defect here —
+  HumanEval and MBPP will sit near ceiling for a 2026 model, but a
+  ceiling-hugging benchmark still detects a serving configuration that breaks
+  output, which is the actual question; DS-1000 is perturbed against
+  memorization and carries the discriminating power. **Known coverage gap,
+  stated rather than papered over**: this measures coding and data analysis.
+  Math and statistics, two of the four primary use cases named above, are not
+  measured at all; adding GSM8K or MATH is a new adapter TOML, not new code.
+  Two findings worth keeping. First, **grader calibration**: 72 of DS-1000's
+  own reference solutions fail in this environment, and none of it is the
+  grader's fault — they are written against pandas 1.x and this box has 3.0.5,
+  so `DataFrame.append`, `replace(method=)` and `delim_whitespace` are simply
+  gone. Scoring those as model failures would have understated every model by
+  ~14pp on that benchmark forever. Instead each benchmark's reference
+  solutions are run with no model involved and the failures are recorded as
+  *ungradeable* in `tests/data/<bench>/CALIBRATION.json`, then dropped from the
+  pool *before* sampling so a tier stays exactly the size it advertises. The
+  calibration self-invalidates when the dataset hash or the library versions
+  change. On pandas 3.0.5 / numpy 2.5.2 / python 3.14.7: HumanEval 164/164 and
+  MBPP 427/427 reference solutions pass, DS-1000 439 of 511 are gradeable.
+  Second, the prompt-source change did **not** invalidate the prefill figures
+  already in `README.md`: checked against the server's `/tokenize` rather than
+  assumed, the five old files and their templated replacements tokenize to the
+  same length and differ in exactly one token id each. Operationally,
+  `llama-test` is now the single entry point (`list`, `fetch`, `selfcheck`,
+  a single item, `--suite`, `compare`, `report`, `ui`), results append to
+  `logs/tests.jsonl` with a fsync per item so an interrupted run is still
+  valid, joined to the serving run by the `config_id` in
+  `logs/.active-run.json`, and the existing `llama_log.py request` path is
+  still written so the four tables in the serving log keep filling. Rich
+  output and a Textual dashboard (`llama-ui`) were added over the shell
+  surface, which introduces this repo's first dependencies: `requirements.txt`
+  and an auto-bootstrapped `<repo>/.venv` (this Python is PEP 668
+  externally-managed, so a venv is required, not merely tidy). Every entry
+  point degrades to plain stdlib output when the venv is absent, and the
+  telemetry recorder was deliberately not routed through it. Stated plainly
+  because it is a real risk and not a theoretical one: grading runs
+  model-generated Python in a subprocess, in a temp cwd, under a timeout, with
+  `-I`. That is process isolation, not a sandbox — it is what the upstream
+  benchmark runners do and is fine on a single-user local box, and it is not
+  safe against adversarial output.
+- **2026-08-24**: First multi-prompt measurement of `qwen38` with MTP
+  speculative decoding: `humaneval1`-`humaneval4` in one server session (build
+  95b8e33e1/10597, `-ngl 20` with the `-ot` pin, `--spec-draft-n-max 2`,
+  `--parallel 1`, effort medium, temperature 0, four cold prefills). All four
+  answers were correct. Generation held a 2.87-3.00 t/s band and draft
+  acceptance ran 87.4% to 96.2% (91.9% over the run), so the earlier
+  single-prompt figure of 2.89 t/s at 88.8% was representative rather than
+  lucky. The finding worth keeping is about prefill, not generation: cold
+  prefill ranged 41.26 to 55.24 t/s across prompts of 105-139 tokens under
+  identical flags, a 34% spread, which means a single-prompt prefill comparison
+  cannot resolve anything smaller than that -- and prefill is the instrument the
+  `-ngl` spill cliff is read with. Full numbers with their flags are in
+  README.md. Also learned, and now documented as a known limitation: the
+  `server totals` row is scraped on the sampling interval, and llama.cpp updates
+  its prompt counters when a prompt is processed but its generation counters
+  when the task completes, so stopping the server immediately after a request
+  leaves that row holding the prompt half and not the generation half. It is
+  short by exactly one request's output here while its prompt tokens match the
+  `llama-test` table exactly. Nothing is wrong with either table; they are
+  sampled at different moments, and the per-request rows are the complete ones.
+- **2026-08-23** (last): Each log file now opens with a `## comparison`
+  section: one row per `config-id` (ngl, parallel, spec, -ot, fused_gdn, cold
+  prefill t/s, generation t/s, acceptance, peak VRAM, headroom, run count),
+  sorted by generation throughput descending, plus a `### derived` table of
+  cpu-resident layers, ms/token and effective CPU bandwidth. The blocks
+  themselves already held everything needed to choose an `-ngl`, but choosing
+  meant scrolling between blocks and dividing by hand, which is how the
+  per-layer cost came to be mis-estimated once already. The whole section is
+  derived: it is stripped and rebuilt on every merge rather than parsed back, so
+  it can never drift from the blocks below it, and nothing in it is
+  fingerprinted. Each row is a configuration's most recent run rather than an
+  average over its history, since an older run may predate a rebuild or a busy
+  machine. Figures fall back to `/metrics` when a configuration has no
+  `llama-test` rows, marked `*`, because a number covering every client and
+  arbitrary prompts is worth having but is not the same measurement.
+  Configurations with no throughput at all sort last, not as zero. Effective CPU
+  bandwidth is computed only for dense models -- for an MoE the denominator is
+  the routed experts, not the resident weights, and dividing by all of them
+  would understate it severalfold, so it prints `n/a (moe)`. When two or more
+  configurations differ only in `-ngl`, ms/token is fit against cpu-resident
+  layers by least squares and reported as slope plus intercept. The intercept is
+  the point: `ms_per_token / cpu_resident_layers` charges the fixed cost (the
+  GPU-resident layers, sampling, the draft head) to the resident layers and
+  overstates the per-layer price, which was an error in an earlier analysis of
+  this data and is why the fit is reported rather than the ratio.
+- **2026-08-23** (latest): Run summaries gained distribution, not just means.
+  The GPU table now carries p50/p95 for utilization and power, p50/p95/max for
+  SM clock, a `util active avg` over the samples with non-zero utilization, the
+  run's minimum free VRAM as `vram headroom (MiB)`, and the distinct set of
+  `clocks_throttle_reasons.active` bits seen over the run. Percentiles were
+  added because the mean was misleading in a specific way: sampling covers the
+  whole life of the server, so a run that spent 32 s of 92 s serving logged
+  `util avg/max = 1/9` and looked idle. The active-only average is the number to
+  compare between configurations; the raw average still measures how much of a
+  session was spent waiting for a prompt. Throttle reasons are recorded per run
+  rather than per sample -- per sample they would be a column of identical hex,
+  and what matters is whether a limit was ever hit while a measurement was
+  taken. `GpuIdle` is expected here and is not a fault; the thermal and power
+  bits are what invalidate a comparison. Bits without a documented name are
+  printed as hex rather than guessed at. Headroom is warned about inline (a
+  `> warning:` line naming the run, under `LLAMA_VRAM_HEADROOM_MIB`, default
+  300) because the whole point of the `-ngl` sweep on this card is finding the
+  layer count just below the spill cliff, and a run that fit with 40 MiB to
+  spare is a result that will not reproduce after a context-size change. The
+  `load log:` group converts headroom into layers using the model's own
+  GPU-resident bytes divided by the layers that got there, which is an average
+  over unequal layers (the output head and `blk.64` are pinned by `-ot` and are
+  not block-sized), so it is a hypothesis to test with a run, not a number to
+  plan around. Speculative decoding gained `acceptance` and `mean_len` in both
+  request tables; they are blank rather than zero when nothing was drafted, so
+  a non-speculative configuration is visibly not a 0% one. `mean_len` in the
+  `llama-test` tables is derived -- build 10597 keeps `n_draft_verif_steps` in
+  the slot's stats and exposes it only through `/metrics`
+  (`tools/server/server-task.cpp:1560`), never in a response's `timings`
+  (`tools/server/server-common.cpp:81`) -- so steps are inferred as
+  `draft_n / --spec-draft-n-max`, which is exact only while every step drafts
+  the full depth. `draft-mtp` at `p_min = 0` does, and the server log states
+  `n_max=2, n_min=0, p_min=0.00` at load; the `server totals` row beside it now
+  scrapes `spec_decode_num_drafts_total` and carries the server's exact figure,
+  which is the one to believe if they ever disagree. On the first run recorded
+  with both (`qwen38`, 2026-08-24T02:25:34Z, build 95b8e33e1/10597, `-ngl 20`
+  with the `-ot` pin, `--spec-draft-n-max 2`) they agreed exactly: 44 drafted,
+  41 accepted, 22 verification steps counted by the server against 22 inferred,
+  both tables reading acceptance 0.932 and mean_len 2.864. All four tables were
+  extended by appending columns only, so historical rows keep their meaning
+  positionally and are padded on re-render rather than migrated.
+- **2026-08-23** (later still): A log block's header is now three groups, and
+  two of them are not fingerprinted. `server flags:` is the old config lines
+  unchanged -- same text, so every existing `config-id` is preserved -- and is
+  still what the hash covers. `request params (llama-test):` records what was
+  actually in the request body, read back out of the body rather than
+  re-derived; it exists because the `samplers:` line records the *server's*
+  defaults while a `llama-test` request overrides them with `temperature: 0`, so
+  a reader was being shown sampler values that were not in effect for the
+  measurement. `load log:` records what the server said about the model it
+  loaded: the reported layer split (not the `-ngl` that was asked for),
+  `n_slots`/`n_ctx_slot`/`kv_unified`, per-device model buffer sizes, whether
+  the fused Gated Delta Net kernels resolved to enabled or disabled, whether
+  the MTP head was used or ignored, `DEPRECATED` lines verbatim, and a count of
+  ignored tensors with their name prefixes. `fused_gdn` is the reason this
+  group is worth the trouble: llama.cpp resolves those kernels per context at
+  load time by checking that the fused node landed on the same device as its
+  layer (`src/llama-context.cpp:504`), so two runs with an identical
+  fingerprint can execute different operations at different speeds. None of it
+  is fingerprinted: it is observed per run, not configured, and hashing it
+  would make a run that served no `llama-test` request a different
+  configuration from one that did. Each group is replaced by a run that has
+  something to say about it and left alone by one that does not, so a
+  hand-started server does not overwrite an earlier run's observations with
+  "unavailable". To get the facts at all, `llama-serve` now passes `-lv 4`
+  (`LLAMA_LOG_VERBOSITY`) -- `print_info`, `load_tensors` and
+  `resolve_fused_ops` print nothing at the default verbosity -- and tees the
+  server's output to a temporary `logs/.server.<pid>.log` that the recorder
+  parses and `llama-serve` deletes on exit. `-lv` and `--metrics` are both
+  excluded from the fingerprint: they change what the server says about itself,
+  not what it computes. KV cache types and batch sizes became profile variables
+  (`LLAMA_P_CACHE_K/V`, `LLAMA_P_BATCH/UBATCH`) in the same change, so the
+  flags passed and the flags recorded come from one place; their defaults are
+  the previous literals, so the config lines and their hashes are unchanged.
+- **2026-08-23**: `--parallel 1` moved out of `qwen38`'s speculative flags into
+  its own profile variable (`LLAMA_P_PARALLEL`, default 1, override
+  `LLAMA_PARALLEL`) and is now always passed by `llama-serve`. Bundled with
+  `--spec-type draft-mtp ...`, it disappeared whenever `LLAMA_SPEC=off` dropped
+  those flags — and omitting `--parallel` is not the same as passing 1:
+  llama-server defaults it to `-1` (auto), which resolves to 4 slots with
+  `kv_unified = true` (build 10597, `common/arg.cpp:1400`,
+  `tools/server/server.cpp:152-155`). Every non-speculative baseline therefore
+  ran a different attention/KV configuration from the speculative run it was
+  meant to be the baseline for, measured at 15.63 t/s prompt processing at
+  `n_slots = 4` against 26.38 t/s at `n_slots = 1`. Consequence: the MTP
+  measurement logged below still has no valid baseline, and any
+  speculative-vs-plain comparison made before this date should be discarded,
+  not adjusted. Checked rather than assumed while fixing this: `-c` is the
+  *total* context, which non-unified slots divide between them
+  (`src/llama-context.cpp:291-301`), so the old auto path was not "4x the KV
+  cache" — it was 4 slots sharing one unified cache of the same size. Passing
+  `--parallel` inside `LLAMA_SPEC` is now refused outright, since it would be
+  sent twice and recorded wrong. `--parallel` also joined the telemetry
+  `config-id` fingerprint, which by construction changes every existing id;
+  `scripts/llama_log.py` now writes a dated note into each log file's header
+  saying so, and a block with no `parallel:` line is one whose slot count was
+  never recorded.
 - **2026-08-23**: Serving logs now record throughput, not just GPU telemetry.
   Each configuration block gained `### previous runs - requests` (per-run
   totals and averages over the `llama-test` requests made during that run:

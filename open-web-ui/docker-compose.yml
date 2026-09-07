@@ -1,0 +1,49 @@
+# Replaces ./openWebUI-docker (deleted 2026-09-06). Two containers instead of
+# one hand-rolled `docker run`, because a third thing joined the picture: the
+# web dashboard (llama-web, a host process -- see scripts/llama-env.sh) needs
+# to be reachable from the *same port* as Open WebUI, and the way to do that
+# without touching Open WebUI's own code is a reverse proxy in front of both.
+#
+# open-webui no longer publishes a host port at all -- caddy is the only
+# thing bound to the host, on 4000. Open WebUI's own container, image and
+# configuration are otherwise completely unchanged: the whole point of this
+# split is that upgrading or reconfiguring Open WebUI never has to know a
+# dashboard exists on the other side of the proxy.
+#
+# Usage: `docker compose -f open-web-ui/docker-compose.yml up -d` (or `cd
+# open-web-ui && docker compose up -d`). `.env` beside this file is loaded
+# automatically for OPENROUTER_API_KEY; LLAMA_WEB_PORT defaults to 8095 to
+# match scripts/llama-env.sh's llama-web().
+services:
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    restart: unless-stopped
+    environment:
+      OPENAI_API_BASE_URL: https://openrouter.ai/api/v1
+      OPENAI_API_KEY: ${OPENROUTER_API_KEY:?set OPENROUTER_API_KEY in open-web-ui/.env}
+    volumes:
+      - open-webui:/app/backend/data
+    # No `ports:` here on purpose -- caddy is the only published entry point.
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: local-llm-caddy
+    restart: unless-stopped
+    depends_on:
+      - open-webui
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    environment:
+      LLAMA_WEB_PORT: ${LLAMA_WEB_PORT:-8095}
+    extra_hosts:
+      # Portable beyond Docker Desktop: this is what makes host.docker.internal
+      # resolve under plain Docker Engine (WSL2 included) as well.
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  open-webui:
+  caddy_data:
