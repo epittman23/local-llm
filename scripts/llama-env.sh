@@ -65,7 +65,7 @@ export LLAMA_BIN LLAMA_MODELS LLAMA_HOST LLAMA_PORT LLAMA_REPO
 # Declared once here rather than repeated in each place that enumerates them:
 # the two Python front ends read it back through `profile-names` below, so
 # adding a profile means editing this file and nothing else.
-LLAMA_PROFILE_NAMES=(qwen38 qwen36 qwen25c)
+LLAMA_PROFILE_NAMES=(qwen38 qwen36 qwen25c qwen3c)
 
 # ---------------------------------------------------------------------------
 # Profile definitions
@@ -166,7 +166,7 @@ _llama_profile() {
             # reasoning_effort to set and no reasoning_content in its responses.
             ;;
 
-            qwen3c|qwen3.0-coder|coder-3)
+        qwen3c|qwen3.0-coder|coder-3)
             LLAMA_P_NAME="qwen3c"
             LLAMA_P_ARCH="moe"
             LLAMA_P_MODEL="$LLAMA_MODELS/qwen3-coder-30b-a3b/Qwen3-Coder-30B-A3B-Instruct-Q4_1.gguf"

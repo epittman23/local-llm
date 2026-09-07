@@ -51,6 +51,11 @@ choice, not a code path:
   7.6 B, 4.36 GiB on disk, so unlike every other local model here it is fully
   GPU-resident on the 6 GB card. Coding only, and not a thinking model.
   Nothing about it is measured yet.
+- **Local (evaluation only)**: `Qwen3-Coder-30B-A3B-Instruct-Q4_1.gguf` from
+  `unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF`, served under the alias
+  `qwen3-coder-30b-a3b` by the `qwen3c` profile. Sparse MoE, 30 B total, 17.87
+  GiB on disk. Coding only. Weights are on disk but nothing about it is
+  measured yet.
 
 ## Local inference
 
@@ -62,11 +67,14 @@ layers (`-ngl 99`) but keeps the MoE expert tensors of 34 layers in system RAM
 64K of context. A third profile, `qwen25c`
 (`Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf`, 4.36 GiB), was added on 2026-09-04
 as the first local model small enough to sit entirely in VRAM: `-ngl 99` with
-no `--n-cpu-moe` and no `-ot`, so no weight is read from system RAM. Its
-throughput is unmeasured. Serving and benchmarking helpers live in
+no `--n-cpu-moe` and no `-ot`, so no weight is read from system RAM. A fourth,
+`qwen3c` (`Qwen3-Coder-30B-A3B-Instruct-Q4_1.gguf`, 17.87 GiB), copies the
+`qwen36` MoE shape (`-ngl 99`, `--n-cpu-moe 34`, q8_0 KV cache, 65536 context,
+6 threads) as an unverified starting point rather than a tuned one; nothing
+about it is measured. Serving and benchmarking helpers live in
 `scripts/llama-env.sh` (sourced from `~/.bashrc`), which groups settings into
 per-model profiles (`qwen36` MoE, `qwen38` dense, `qwen25c` dense and
-GPU-resident) rather than loose env vars;
+GPU-resident, `qwen3c` MoE) rather than loose env vars;
 `llama-serve` starts them and `llama-qwen` remains as an alias. Every profile
 serves one server slot (`--parallel 1`, `LLAMA_PARALLEL` to override), passed
 unconditionally rather than as part of any other flag group. Every serving
@@ -296,6 +304,29 @@ All commits should use conventional commit style and stay focused on one topic. 
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-09-07**: Fixed `qwen3c` (`unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF`,
+  `Q4_1`, 17.87 GiB, alias `qwen3-coder-30b-a3b`), which the 2026-09-05
+  (`feat: add llama-tune`) commit added to `_llama_profile` in
+  `scripts/llama-env.sh` but left out of `LLAMA_PROFILE_NAMES` and out of
+  every doc — a violation of this file's own maintenance policy, caught
+  rather than repeated. Left out of the array, it was unreachable from
+  `llama-profiles`, `llama-profile-names`, and the `llama-web` picker (all of
+  which read that array, per the 2026-09-04 entry making it the single source
+  other tools defer to), even though `_llama_profile qwen3c` itself worked —
+  the profile ran, it just could not be discovered. Added to the array (now
+  `qwen38 qwen36 qwen25c qwen3c`) and documented in "Models in use" and
+  "Local inference" above and in the profile table in `README.md`. Also fixed
+  a stray four-space over-indent on the `qwen3c|...)` case pattern that made
+  it visually inconsistent with the other profile cases (cosmetic only —
+  bash's `case` does not care about indentation, so this changed no
+  behavior). The weights are already on disk (verified: 19192503456 bytes);
+  nothing about the profile is measured, and it copies the `qwen36` MoE shape
+  (`-ngl 99`, `--n-cpu-moe 34`, q8_0 KV cache, 65536 context, 6 threads)
+  unverified rather than independently tuned — stated as still true, not
+  newly true, since none of that changed here. `model-downloads.md`, added
+  this session, already had the correct `hf download` command for this model
+  (repo, `Q4_1` pattern, and `~/models/qwen3-coder-30b-a3b` local-dir all
+  match the profile), so it needed no change.
 - **2026-09-06**: Replaced the Textual dashboard (`llama-ui`,
   `scripts/llama_ui.py` + `llama_ui_app.py` + `llama_ui.tcss` +
   `llama_ui_check.py`, all deleted) with a browser dashboard, `llama-web`

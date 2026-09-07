@@ -91,6 +91,7 @@ vars. `llama-profiles` lists them and shows whether the weights are on disk:
 | qwen36  | MoE   | `Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf`        |    20.81 GiB | 65536 |       6 |  99 |     1 |        34 | n/a                                      |
 | qwen38  | dense | `Qwen3.8-27B-UD-Q3_K_XL.gguf`            |    12.24 GiB | 16384 |      12 |  20 |     1 |       n/a | `output\.weight`, `blk\.64\..*` -> CUDA0 |
 | qwen25c | dense | `Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf`  |     4.36 GiB | 16384 |       6 |  99 |     1 |       n/a | n/a                                      |
+| qwen3c  | MoE   | `Qwen3-Coder-30B-A3B-Instruct-Q4_1.gguf` |    17.87 GiB | 65536 |       6 |  99 |     1 |        34 | n/a                                      |
 
 `qwen25c` is the only profile here whose weights fit in 6 GB outright, so
 `-ngl 99` puts all 28 blocks and the output head on the GPU and nothing is read
@@ -111,6 +112,17 @@ here costs ~29.7 KiB/token at `q8_0` (28 layers, 4 KV heads of 128): ~476 MiB at
 buffer. The full window fits inside 6 GiB only with less margin than
 `LLAMA_VRAM_HEADROOM_MIB` warns at, so it is opt-in via `LLAMA_CTX`, to be
 confirmed with `llama-vram` rather than assumed.
+
+`qwen3c` (`unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF`, `Q4_1`, 17.87 GiB,
+alias `qwen3-coder-30b-a3b`) is a fourth profile, weights present on disk but
+**nothing about it is measured yet**: no throughput figure and no
+`llama-test` run. It follows the same `qwen36` shape — sparse MoE, `-ngl 99`
+with `--n-cpu-moe 34` since the model is ~4.1x this card's 6 GB VRAM, `q8_0`
+KV cache, 65536 context, 6 threads — copied as a starting point rather than
+independently tuned; `LLAMA_MOE` and `LLAMA_CTX` overrides plus
+`llama-sweep-ngl qwen3c` are how that would actually get confirmed. It sets
+no `-ot` and no speculative flags: unlike `qwen38`, nothing here has checked
+this GGUF for an MTP head.
 
 `qwen38`'s `-ngl 20` is a placeholder pending an `llama-sweep-ngl` run;
 `--n-cpu-moe` is MoE-only and the script refuses to pass it to a dense model.
