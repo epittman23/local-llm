@@ -650,6 +650,7 @@ lllm-backend() (
     OPENAI_API_BASE_URL="https://openrouter.ai/api/v1" \
     OPENAI_API_KEY="$OPENROUTER_API_KEY" \
     HF_HUB_OFFLINE=1 \
+    LLAMA_ENV_SH="$LLAMA_REPO/scripts/shell/main.sh" \
     "$py" -m uvicorn open_webui.main:app --host 0.0.0.0 \
         --port "${LLLM_BACKEND_PORT:-4000}" --reload
     # No `exec` on the line above, deliberately: exec would replace this
