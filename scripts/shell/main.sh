@@ -14,15 +14,6 @@
 #
 # COMMANDS
 #   lllm-serve [profile] [-- extra llama-server args]
-#   lllm-test  <benchmark>/<item-id> | --suite smoke|standard|full
-#              [--system <name>]            # prompts/system/<name>.txt
-#   lllm-test  list | fetch | selfcheck | compare | answer
-#   lllm-tune  [profile] [--tier ...] [--budget ...]   # search the config space
-#   lllm-tune  resume | status | report | list
-#   lllm-web                                # the browser dashboard: serve,
-#                                            # live, tests, compare, answers,
-#                                            # report, tune -- at /ops on
-#                                            # $LLAMA_WEB_PORT (default 8095)
 #   lllm-frontend                           # Open WebUI fork's vite dev server
 #                                            # (localhost:5173), proxying API/WS
 #                                            # calls to lllm-backend
@@ -32,7 +23,6 @@
 #                                            # depends on; tearing this down also
 #                                            # tears Postgres down (see the trap
 #                                            # inside the function)
-#   lllm-db    sql | prune | vacuum | export | schema
 #   lllm-sweep-threads [profile] [thread-list]
 #   lllm-sweep-ngl     [profile] [ngl-list]
 #   lllm-fetch         [profile]            # model weights, not test data
@@ -42,10 +32,13 @@
 #   lllm-profile-names
 #   lllm-config-id     [profile]            # the fingerprint, without serving
 #
-# GPU telemetry, request timings and test results all go into one SQLite
-# database, logs/llama.db, written by scripts/shell/vram-log.sh (serving) and
-# scripts/llama_test.py (tests). Nothing writes a markdown log any more; see
-# README.md for the schema and lllm-db below for the query entry points.
+# Benchmark running/grading/comparison/reporting/tuning (previously
+# lllm-test/lllm-tune/lllm-web/lllm-report/lllm-db here) now live in the
+# Open WebUI fork's own "Benchmarks" section at /benchmarks, served by
+# lllm-frontend/lllm-backend -- see docs/CLAUDE.md's decisions log. GPU
+# telemetry and request timings from lllm-serve still go into that same
+# app's Postgres, written by scripts/shell/vram-log.sh via
+# open_webui.benchmarks.telemetry_recorder, not logs/llama.db (retired).
 #
 # ---------------------------------------------------------------------------
 
@@ -514,9 +507,12 @@ lllm-sweep-ngl() {
 # download. LLAMA_NO_BOOTSTRAP=1 disables creation entirely.
 #
 # NOTE: scripts/shell/vram-log.sh deliberately does NOT go through this. The
-# telemetry recorder runs in the background for the life of every server and
-# must keep working with bare python3, which is why llama_db.py, llama_record.py,
-# llama_stats.py, llama_tests.py and llama_results.py are all stdlib-only.
+# telemetry recorder now writes to the Open WebUI fork's own Postgres (see
+# open_webui.benchmarks.telemetry_recorder) and so runs under that fork's
+# backend venv (_lllm_openwebui_python below), not this one -- the recorder
+# stopped being stdlib-only when its store did, but it still runs as a
+# separate subprocess from either venv's own caller, for the same
+# crash-independence reason it always has.
 #
 # Kept entirely separate from _lllm_openwebui_python below: the Open WebUI
 # fork's backend pulls in torch, sentence-transformers and faster-whisper,
@@ -542,68 +538,23 @@ _lllm_python() {
 }
 
 # ---------------------------------------------------------------------------
-# lllm-test: run published benchmark items against the running server, grade
-# them with the benchmark's own tests, and record the result
-#
-#   lllm-test humaneval/HumanEval/0     # one item
-#   lllm-test --suite smoke             # a tier (24 items)
-#   lllm-test --suite smoke --system assistant   # ... under a system prompt
-#   lllm-test --suite full --resume     # continue an interrupted run
-#   lllm-test list                      # benchmarks, tiers, revisions
-#   lllm-test fetch                     # download the datasets
-#   lllm-test selfcheck                 # grade the datasets' own answers
-#   lllm-test compare                   # rank models/configs by pass rate
-#   lllm-test answer humaneval/HumanEval/0   # print a stored answer
-#   lllm-test ui                        # the Textual dashboard
-#
-# The body lives in scripts/llama_test.py; this is a wrapper so the command
-# keeps its name and its place beside lllm-serve. Everything the bash version
-# guaranteed still holds, and for the same reasons:
-#
-#   * The model name comes from the running server (GET /v1/models), not from
-#     the profile. The profile describes how a model would be served; the server
-#     is already serving something, and mislabelling a measurement makes it
-#     worthless.
-#   * temperature is pinned to 0 and cache_prompt defaults to false, so a
-#     repeated prompt measures the configuration and not the prefix cache.
-#   * The answer goes to stdout and the model's thinking to stderr, so
-#     `lllm-test humaneval/HumanEval/0 > answer.md` captures the completion
-#     alone. Rich output is on stderr only, and only when it is a terminal.
-#
-# The item prompts are not files in prompts/. They are rendered from the
-# datasets' own text through the templates in tests/adapters/*.toml, which is
-# what makes a pass rate comparable to a published one. What does live in
-# prompts/system/ is the optional *system* prompt --system names: not a test,
-# not graded, and carrying no ground truth, just a request variable that gets
-# recorded with the result and grouped on by `compare`, so a run made with one
-# is never averaged with a run made without. LLAMA_TEST_STREAM=0 restores a
-# single blocking request; the other LLAMA_TEST_* variables are unchanged
-# (MAX_TOKENS, TIMEOUT, CACHE_PROMPT).
+# lllm-test was retired here: benchmark running/grading/comparison now lives
+# in the Open WebUI fork's own "Benchmarks" section (Tests/Compare/Answers
+# pages), backed by this app's Postgres instead of logs/llama.db. See
+# docs/CLAUDE.md's decisions log. The adapter/suite TOMLs and system-prompt
+# text files moved with it, into
+# open-web-ui/openwebui/backend/open_webui/benchmarks/data/ -- they no
+# longer live at tests/adapters, tests/suites or prompts/system here.
 # ---------------------------------------------------------------------------
-lllm-test() {
-    local py; py="$(_lllm_python)"
-    LLAMA_PORT="$LLAMA_PORT" "$py" "$LLAMA_REPO/scripts/llama_test.py" "$@"
-}
 
 # ---------------------------------------------------------------------------
-# lllm-web: the browser dashboard over serving, tests, comparison, reports
-# and tuning
-#
-#   lllm-web                      # binds 0.0.0.0:${LLAMA_WEB_PORT:-8095}/ops
-#   lllm-web --check               # headless smoke test, no server started
-#
-# Every page it serves calls straight through to this file, llama_test.py,
-# llama_compare.py, llama_report.py and llama_tune.py -- it is a caller of the
-# shell surface, never a reimplementation of it. Bound to 0.0.0.0 rather than
-# 127.0.0.1 by default. Runs on its own port, independent of lllm-frontend/
-# lllm-backend (the Open WebUI fork) -- merging the two is a deferred,
-# separate piece of work; see the decisions log.
+# lllm-web was retired here: its seven pages (Serve/Live/Tests/Compare/
+# Answers/Report/Tune) now live in the Open WebUI fork itself, at
+# /benchmarks in lllm-frontend, served by lllm-backend -- the merge this
+# comment used to call "a deferred, separate piece of work" is the work this
+# migration is. There is no more standalone dashboard port; use
+# lllm-frontend/lllm-backend.
 # ---------------------------------------------------------------------------
-lllm-web() {
-    local py; py="$(_lllm_python)"
-    LLAMA_PORT="$LLAMA_PORT" LLAMA_WEB_PORT="${LLAMA_WEB_PORT:-8095}" \
-        "$py" "$LLAMA_REPO/scripts/llama_web.py" "$@"
-}
 
 # ---------------------------------------------------------------------------
 # _lllm_openwebui_python: the interpreter the Open WebUI fork's backend runs
@@ -709,118 +660,27 @@ lllm-backend() (
 )
 
 # ---------------------------------------------------------------------------
-# lllm-report: a statistical report over the measurement store
-#
-#   lllm-report                       # logs/report/<UTC date>/report.md + PNGs
-#   lllm-report --out /tmp/r          # somewhere else
-#   lllm-report --stdout              # the document on stdout, so it pipes
-#   lllm-report --tier smoke --benchmark mbpp     # narrow the scope
-#   lllm-report --no-figures          # text plots instead of PNGs
-#
-# This is `lllm-test compare` grown a spine. `compare` ranks; it has no way to
-# say whether a difference it shows is real, and with a smoke tier at n = 24 the
-# gap between two adjacent rows is routinely one item. The report audits the
-# design first -- which factors actually varied, what is confounded with what,
-# whether the levels of a contrast even ran under the same GPU regime -- and
-# refuses a comparison the design cannot support, naming the reason, rather than
-# printing a p-value over it. Where the design does support a test it runs the
-# paired one, because the tiers are seeded so every configuration draws the same
-# items, and a test that ignores the pairing throws away the only thing making
-# 8 items informative.
-#
-# It reads the database and writes nothing back: no migration, no schema_note,
-# no row. The markdown is output, as all markdown here has been since the store
-# moved to SQLite; nothing reads it.
-#
-# Needs the venv, and specifically scipy (see requirements-extra.txt); it exits
-# 2 with the install line rather than degrading, since a statistics report with
-# the statistics removed is not a smaller version of itself. matplotlib is
-# optional: without it every figure renders as a unicode plot in a fenced block
-# and the document is otherwise identical.
+# lllm-report was retired here: the same design-audited statistical report
+# (Wilson intervals, Cochran's Q, exact McNemar, power/MDE) is now generated
+# from the fork's Report page at /benchmarks/report, reading this app's
+# Postgres instead of logs/llama.db. See docs/CLAUDE.md's decisions log.
 # ---------------------------------------------------------------------------
-lllm-report() {
-    local py; py="$(_lllm_python)"
-    "$py" "$LLAMA_REPO/scripts/llama_report.py" "$@"
-}
 
 # ---------------------------------------------------------------------------
-# lllm-db: the store itself
-#
-#   lllm-db                 # open the sqlite3 shell on logs/llama.db
-#   lllm-db sql "SELECT ..."          # one query, as a table
-#   lllm-db schema                    # .schema
-#   lllm-db prune --before 2026-08-01 # drop samples and scrapes before a date
-#   lllm-db vacuum                    # reclaim the space a prune freed
-#   lllm-db export <dir>              # every table as CSV
-#
-# Reading is deliberately not wrapped: the whole reason for moving off markdown
-# is that the store answers questions nobody wrote a command for, and a menu of
-# canned queries would put that back. `lllm-db` opens the shell; lllm-test
-# compare and lllm-web are the views worth having as commands.
-#
-# prune is the escape valve for the reversed retention rule (CLAUDE.md,
-# 2026-08-30): every GPU sample is now kept, at roughly 1 MB per day of
-# continuous serving, so nothing needs pruning for a long time, and when it does
-# it should be a decision rather than a silent discard. It touches only the
-# telemetry -- results, answers, requests and configurations are never dropped
-# by it, because those are the measurements.
+# lllm-db was retired here along with logs/llama.db itself: the measurement
+# store is now the Open WebUI fork's own Postgres (the benchmark_* tables),
+# queried through `psql`/a normal Postgres client, not a bespoke wrapper.
+# The historical rows this sqlite file held were backfilled in before it was
+# retired; see docs/CLAUDE.md's decisions log.
 # ---------------------------------------------------------------------------
-lllm-db() {
-    local db="${LLAMA_DB:-${LLAMA_VRAM_LOGDIR:-$LLAMA_REPO/logs}/llama.db}"
-    local cmd="${1:-shell}"; shift 2>/dev/null || true
-
-    if ! command -v sqlite3 >/dev/null 2>&1; then
-        echo "lllm-db: sqlite3 is not installed" >&2; return 1
-    fi
-    if [[ ! -f "$db" && "$cmd" != "shell" ]]; then
-        echo "lllm-db: no database at $db (it is created by lllm-serve or lllm-test)" >&2
-        return 1
-    fi
-
-    case "$cmd" in
-        shell)  sqlite3 -box "$db" ;;
-        sql)    [[ $# -gt 0 ]] || { echo "usage: lllm-db sql \"SELECT ...\"" >&2; return 2; }
-                sqlite3 -box -header "$db" "$*" ;;
-        schema) sqlite3 "$db" ".schema" ;;
-        vacuum) sqlite3 "$db" "VACUUM;" && echo "vacuumed $db" ;;
-        prune)
-            local before=""
-            while [[ $# -gt 0 ]]; do
-                case "$1" in
-                    --before) before="$2"; shift 2 ;;
-                    *) echo "lllm-db prune: unknown argument '$1'" >&2; return 2 ;;
-                esac
-            done
-            [[ -n "$before" ]] || { echo "usage: lllm-db prune --before YYYY-MM-DD" >&2; return 2; }
-            sqlite3 "$db" <<SQL
-DELETE FROM gpu_sample WHERE at < '$before';
-DELETE FROM metrics_scrape WHERE at < '$before';
-SELECT 'gpu_sample rows left: ' || count(*) FROM gpu_sample;
-SELECT 'metrics_scrape rows left: ' || count(*) FROM metrics_scrape;
-SQL
-            echo "run 'lllm-db vacuum' to reclaim the space" ;;
-        export)
-            local out="${1:-$LLAMA_REPO/logs/export}"
-            mkdir -p "$out" || return 1
-            local t
-            for t in $(sqlite3 "$db" \
-                    "SELECT name FROM sqlite_master WHERE type='table' \
-                     AND name NOT LIKE 'sqlite_%' ORDER BY name"); do
-                sqlite3 -header -csv "$db" "SELECT * FROM $t;" > "$out/$t.csv"
-            done
-            echo "exported $(ls -1 "$out"/*.csv | wc -l) tables to $out" ;;
-        *)
-            echo "usage: lllm-db {shell|sql|schema|prune|vacuum|export}" >&2
-            return 2 ;;
-    esac
-}
 
 # ---------------------------------------------------------------------------
 # lllm-profile-names: the defined profiles, one per line
 #
-# The Python front ends (llama_console.py, llama_web.py) call this rather than
-# carrying their own copy of the list, so a new profile appears in lllm-profiles
-# and in the dashboard's picker without editing either.
+# llama_console.py (lllm-profiles) and the Open WebUI fork's
+# benchmarks/env_profile.py both call this rather than carrying their own
+# copy of the list, so a new profile appears in lllm-profiles and in the
+# Benchmarks Serve page's picker without editing either.
 # ---------------------------------------------------------------------------
 lllm-profile-names() {
     printf '%s\n' "${LLAMA_PROFILE_NAMES[@]}"
@@ -917,28 +777,15 @@ lllm-config-id() {
 }
 
 # ---------------------------------------------------------------------------
-# lllm-tune: search the serving configuration space
-#
-#   lllm-tune qwen25c --tier smoke --budget interactive
-#   lllm-tune qwen36 --tier standard --budget overnight
-#   lllm-tune --dry-run                     # the schedule, launching nothing
-#   lllm-tune resume | status | report | list
-#
-# Runs a batch of served configurations against the same benchmark items,
-# eliminates the slow ones round by round, and narrows onto the best values.
-# Candidates are ranked on generation throughput and the winner then has to
-# survive a paired correctness check against the profile's own defaults -- so
-# the answer is "faster, with no regression detectable at this sample size",
-# never "answers better".
-#
-# It drives this file rather than replacing it: a candidate is served by
-# `lllm-serve` under LLAMA_* overrides, so it is fingerprinted, recorded and
-# telemetered exactly like a hand-started run.
+# lllm-tune was retired here: the same round-elimination search (staged
+# explore/refine, paired throughput ranking, a correctness check against the
+# incumbent before adoption, GPU-cooldown/drift handling) now runs from the
+# fork's Tune page at /benchmarks/tune, as an in-process async sweep rather
+# than a CLI subprocess. It still drives `lllm-serve` under LLAMA_* overrides
+# and still reads `lllm-config-id` to fingerprint a candidate before serving
+# it -- only the orchestration and the store moved. See docs/CLAUDE.md's
+# decisions log.
 # ---------------------------------------------------------------------------
-lllm-tune() {
-    local py; py="$(_lllm_python)"
-    LLAMA_PORT="$LLAMA_PORT" "$py" "$LLAMA_REPO/scripts/llama_tune.py" "$@"
-}
 
 # ---------------------------------------------------------------------------
 # Diagnostics
@@ -983,13 +830,8 @@ if [[ "${BASH_SOURCE[0]}" == "$0" && "${#BASH_SOURCE[@]}" -eq 1 ]]; then
         fetch)          lllm-fetch "$@" ;;
         sweep-threads)  lllm-sweep-threads "$@" ;;
         sweep-ngl)      lllm-sweep-ngl "$@" ;;
-        test)           lllm-test "$@" ;;
-        tune)           lllm-tune "$@" ;;
-        web)            lllm-web "$@" ;;
         frontend)       lllm-frontend "$@" ;;
         backend)        lllm-backend "$@" ;;
-        report)         lllm-report "$@" ;;
-        db)             lllm-db "$@" ;;
         check)          lllm-check "$@" ;;
         vram)           lllm-vram "$@" ;;
         vram-log)       "$(dirname "${BASH_SOURCE[0]}")/vram-log.sh" record "$@" ;;
@@ -998,7 +840,7 @@ if [[ "${BASH_SOURCE[0]}" == "$0" && "${#BASH_SOURCE[@]}" -eq 1 ]]; then
         profile-names)  lllm-profile-names "$@" ;;
         config-id)      lllm-config-id "$@" ;;
         *)
-            echo "usage: $(basename "$0") {serve|fetch|test|tune|web|frontend|backend|report|db|sweep-threads|sweep-ngl|check|vram|vram-log|profiles|profile-json|profile-names|config-id} [profile] [args]" >&2
+            echo "usage: $(basename "$0") {serve|fetch|frontend|backend|sweep-threads|sweep-ngl|check|vram|vram-log|profiles|profile-json|profile-names|config-id} [profile] [args]" >&2
             exit 2
             ;;
     esac

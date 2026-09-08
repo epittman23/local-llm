@@ -153,21 +153,41 @@ _vramlog_config() {
 }
 
 # ---------------------------------------------------------------------------
-# record: resolve the configuration, then hand off to llama_record.py
+# record: resolve the configuration, then hand off to the telemetry recorder
+#
+# Writes to the Open WebUI fork's own Postgres now, not logs/llama.db --
+# scripts/llama_record.py and its sqlite store were retired when the
+# lllm-test/lllm-compare/lllm-report/lllm-tune suite migrated into the fork
+# (see docs/CLAUDE.md's decisions log). The recorder stays a *separate
+# subprocess* rather than folding into the fork's backend process itself, on
+# purpose: it must keep recording even if the backend restarts mid-run, the
+# same crash-independence the old sqlite-writing recorder had. That does mean
+# it now needs the fork backend's own venv (for psycopg) rather than bare
+# python3 -- the "no <repo>/.venv dependency" rule this function used to
+# document was a property of writing sqlite, not a goal in itself, and it no
+# longer holds now that Postgres is the one store this repo keeps.
 # ---------------------------------------------------------------------------
 lllm-vram-log() {
     if [[ "${LLAMA_VRAM_LOG:-1}" == "0" ]]; then
         return 0
     fi
-    # Deliberately bare python3, not _lllm_python: this process outlives every
-    # lllm-test and must not depend on <repo>/.venv existing.
     local c
-    for c in nvidia-smi python3; do
+    for c in nvidia-smi; do
         command -v "$c" >/dev/null 2>&1 || {
             echo "lllm-vram-log: '$c' not found; not recording" >&2
             return 0
         }
     done
+
+    local envfile="$LLAMA_REPO/open-web-ui/.env"
+    if [[ ! -f "$envfile" ]]; then
+        echo "lllm-vram-log: $envfile not found -- create it with POSTGRES_PASSWORD; not recording" >&2
+        return 0
+    fi
+    set -a
+    # shellcheck source=/dev/null
+    source "$envfile"
+    set +a
 
     _lllm_profile "${1:-$LLAMA_DEFAULT_PROFILE}" || return 1
     _vramlog_config
@@ -193,10 +213,13 @@ lllm-vram-log() {
         args+=(--config-line "$line")
     done
 
+    local py; py="$(_lllm_openwebui_python)"
+    cd "$LLAMA_REPO/open-web-ui/openwebui/backend" || return 1
+
     # exec so lllm-serve's SIGTERM reaches the recorder directly rather than a
     # shell that would have to forward it.
-    LLAMA_VRAM_LOGDIR="$LLAMA_VRAM_LOGDIR" \
-        exec python3 "$_VRAMLOG_DIR/../llama_record.py" "${args[@]}"
+    DATABASE_URL="postgresql://openwebui:${POSTGRES_PASSWORD}@localhost:5432/openwebui" \
+        exec "$py" -m open_webui.benchmarks.telemetry_recorder "${args[@]}"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
