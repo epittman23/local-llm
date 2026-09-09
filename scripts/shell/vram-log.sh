@@ -216,9 +216,17 @@ lllm-vram-log() {
     local py; py="$(_lllm_openwebui_python)"
     cd "$LLAMA_REPO/open-web-ui/openwebui/backend" || return 1
 
+    # POSTGRES_PASSWORD must be percent-encoded before going into a URL --
+    # see the matching comment in main.sh's lllm-backend(). An unescaped
+    # '/' or '+' here is what was silently crashing this recorder on every
+    # run: psycopg's conninfo parser misread the broken URL and reported
+    # "failed to resolve host 'openwebui'" (the database name, not a host),
+    # so no GPU/telemetry samples were being recorded at all.
+    local db_password; db_password="$(jq -rn --arg v "$POSTGRES_PASSWORD" '$v|@uri')"
+
     # exec so lllm-serve's SIGTERM reaches the recorder directly rather than a
     # shell that would have to forward it.
-    DATABASE_URL="postgresql://openwebui:${POSTGRES_PASSWORD}@localhost:5432/openwebui" \
+    DATABASE_URL="postgresql://openwebui:${db_password}@localhost:5432/openwebui" \
         exec "$py" -m open_webui.benchmarks.telemetry_recorder "${args[@]}"
 }
 

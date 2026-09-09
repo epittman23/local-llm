@@ -643,9 +643,20 @@ lllm-backend() (
     local py; py="$(_lllm_openwebui_python)"
     cd "$LLAMA_REPO/open-web-ui/openwebui/backend" || exit 1
 
+    # POSTGRES_PASSWORD is interpolated straight into a URL, so it must be
+    # percent-encoded first -- an unescaped '/' or '+' (this repo's own
+    # generated passwords use both) otherwise produces a DATABASE_URL that
+    # SQLAlchemy/asyncpg happen to parse leniently but psycopg's stricter
+    # conninfo parser does not, which silently crashed the telemetry
+    # recorder (a separate `python -m ...telemetry_recorder` process that
+    # inherits this same env) on every serve/tune run with "failed to
+    # resolve host 'openwebui'" -- the database *name*, mistaken for the
+    # host once the unescaped password broke the URL's structure.
+    local db_password; db_password="$(jq -rn --arg v "$POSTGRES_PASSWORD" '$v|@uri')"
+
     CORS_ALLOW_ORIGIN="http://localhost:5173" \
     WEBUI_SECRET_KEY="$WEBUI_SECRET_KEY" \
-    DATABASE_URL="postgresql://openwebui:${POSTGRES_PASSWORD}@localhost:5432/openwebui" \
+    DATABASE_URL="postgresql://openwebui:${db_password}@localhost:5432/openwebui" \
     VECTOR_DB=pgvector \
     OPENAI_API_BASE_URL="https://openrouter.ai/api/v1" \
     OPENAI_API_KEY="$OPENROUTER_API_KEY" \
