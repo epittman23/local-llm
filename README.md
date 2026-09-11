@@ -1,47 +1,63 @@
 # Personal AI Assistant
 
 A personal AI assistant running on cloud-hosted open-weight models via
-OpenRouter, using [Open WebUI](https://github.com/open-webui/open-webui) as
-the chat interface. See `CLAUDE.md` for the full project rationale.
+OpenRouter, using a pinned fork of [Open WebUI](https://github.com/open-webui/open-webui)
+(`open-web-ui/openwebui`, a git submodule) as the chat interface. See
+`CLAUDE.md` for the full project rationale.
 
-Open WebUI runs in Docker and talks directly to OpenRouter's OpenAI-compatible
-API — there is no custom backend or frontend code in this repo; Open WebUI
-*is* the app.
+The fork is pinned at `v0.11.3` and never merges upstream — every update is a
+deliberate `git checkout <tag>` inside the submodule, not a tracking branch.
+It runs as two host processes, `lllm-frontend` and `lllm-backend`, the same
+way the local-inference tooling below (`lllm-serve`) already does, rather
+than in Docker: real integration between Open WebUI and this repo's own
+GPU/process-management tooling needs a host process on both sides
+(see the decisions log for why forking was rejected once, in 2026-09-06, and
+what changed since). Its chat and RAG data live in Postgres+pgvector
+(`open-web-ui/docker-compose.yml`), not SQLite.
 
 ## Running it
 
 Requires Docker Desktop with WSL integration enabled for this distro
-(Docker Desktop → Settings → Resources → WSL Integration).
+(Docker Desktop → Settings → Resources → WSL Integration), plus Bun and a
+Python 3 interpreter on the host for the fork's frontend and backend.
 
-As of 2026-09-06, Open WebUI runs behind a small Caddy reverse proxy
-(`open-web-ui/docker-compose.yml` + `open-web-ui/Caddyfile`) instead of being
-published directly, so it can share one port with the web dashboard (see
-"Local inference" → `llama-web` below). Put your OpenRouter key in
-`open-web-ui/.env` (gitignored, same shape as before):
+Clone this repo with `git submodule update --init --recursive` — the fork
+lives inside `open-web-ui/openwebui/` as a submodule, so a plain clone leaves
+that directory empty. Put your secrets in `open-web-ui/.env` (gitignored):
 
 ```bash
 # open-web-ui/.env
 OPENROUTER_API_KEY=<your OpenRouter API key, from https://openrouter.ai/keys>
+POSTGRES_PASSWORD=<openssl rand -base64 24>
+WEBUI_SECRET_KEY=<openssl rand -base64 24>
 ```
 
-then:
+then, in one terminal:
 
 ```bash
-docker compose -f open-web-ui/docker-compose.yml up -d
+lllm-backend
 ```
 
-Chat is at `http://localhost:4000/` and the dashboard is at
-`http://localhost:4000/ops` — both through the same Caddy container, which is
-the only thing bound to a host port; Open WebUI's own container publishes
-nothing directly. The first account you create in Open WebUI becomes the
-admin. Chat history, settings, and the model list are persisted in the
-`open-webui` Docker volume, unchanged by this move.
+which brings up Postgres (`open-web-ui/docker-compose.yml`) and the fork's
+backend (`uvicorn`, port `4000`) together, and tears Postgres back down when
+the backend stops. In a second terminal:
 
-Open WebUI's own image, environment and configuration are untouched by this
-split — the whole point is that upgrading or reconfiguring it never has to
-know a dashboard exists on the other side of the proxy. See "Local inference"
-→ `llama-web` for what actually lives at `/ops` and why the topology is
-shaped this way.
+```bash
+lllm-frontend
+```
+
+which starts the fork's frontend dev server (`vite`, port `5173`) and proxies
+its API/WebSocket calls to the backend on `4000`.
+
+Chat is at `http://localhost:5173/`. The first account you create becomes the
+admin. This is a fresh database — the SQLite-backed data from before the fork
+(the `open-web-ui_open-webui` Docker volume) is left in place, untouched, but
+no longer used. Admin accounts also see a **Benchmarks** entry in the
+sidebar, at `/benchmarks` — serving, testing, comparison, reporting and
+tuning for the local-inference setup below, built into this same frontend
+and backend rather than served from a separate dashboard or port. See
+"Local inference" below, and "Testing" → "The Benchmarks section" further
+down.
 
 ## Model setup
 
@@ -73,18 +89,18 @@ exposes the same OpenAI-compatible API Open WebUI already speaks. Pointing
 Open WebUI at it is a connection-settings change only (see "Migrating to local
 hardware later" below).
 
-Helper functions live in `scripts/llama-env.sh`. Source it from `~/.bashrc`:
+Helper functions live in `scripts/shell/main.sh`. Source it from `~/.bashrc`:
 
 ```bash
-[ -f "$HOME/dev/repos/local-llm/scripts/llama-env.sh" ] \
-  && . "$HOME/dev/repos/local-llm/scripts/llama-env.sh"
+[ -f "$HOME/dev/repos/local-llm/scripts/shell/main.sh" ] \
+  && . "$HOME/dev/repos/local-llm/scripts/shell/main.sh"
 ```
 
 It can also be invoked directly without sourcing:
-`./scripts/llama-env.sh serve qwen38`.
+`./scripts/shell/main.sh serve qwen38`.
 
 Serving settings are grouped into profiles rather than scattered across env
-vars. `llama-profiles` lists them and shows whether the weights are on disk:
+vars. `lllm-profiles` lists them and shows whether the weights are on disk:
 
 | profile | arch  | model                                    | size on disk | ctx   | threads | ngl | slots | n-cpu-moe | override-tensors                         |
 | ------- | ----- | ---------------------------------------- | -----------: | ----- | ------: | --: | ----: | --------: | ---------------------------------------- |
@@ -98,39 +114,41 @@ vars. `llama-profiles` lists them and shows whether the weights are on disk:
 from system RAM. That is the whole reason it exists: `qwen36` and `qwen38` are
 3-5x this card and are bound by how fast their CPU-resident weights can be read,
 which is what holds them to single-digit tokens/s. Nothing about its throughput
-is measured yet, so no figure for it is quoted here; `llama-test --suite smoke`
-against a served instance is what would produce one. It needs no `-ot` (nothing
+is measured yet, so no figure for it is quoted here; running the `smoke` tier
+against a served instance from the Benchmarks section's Tests page is what
+would produce one. It needs no `-ot` (nothing
 is left on the CPU to pin), sets no speculative flags (Qwen2.5 predates the
 `nextn` tensors `qwen38` drafts from), and sets no reasoning effort: it is not a
 thinking model, so responses carry no `reasoning_content` and the token budget
 is all answer. Its samplers are Qwen2.5-Coder's own
 (`--temp 0.7 --top-p 0.8 --top-k 20 --repeat-penalty 1.1`), which govern Open
-WebUI traffic; `llama-test` pins temperature to 0 in its request body either way.
+WebUI traffic; the Benchmarks section's Tests page pins temperature to 0 in
+its request body either way.
 Its context is 16384 rather than the model's full 32768 because the KV cache
 here costs ~29.7 KiB/token at `q8_0` (28 layers, 4 KV heads of 128): ~476 MiB at
 16K against ~952 MiB at 32K, on top of 4.36 GiB of weights and the compute
 buffer. The full window fits inside 6 GiB only with less margin than
 `LLAMA_VRAM_HEADROOM_MIB` warns at, so it is opt-in via `LLAMA_CTX`, to be
-confirmed with `llama-vram` rather than assumed.
+confirmed with `lllm-vram` rather than assumed.
 
 `qwen3c` (`unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF`, `Q4_1`, 17.87 GiB,
 alias `qwen3-coder-30b-a3b`) is a fourth profile, weights present on disk but
-**nothing about it is measured yet**: no throughput figure and no
-`llama-test` run. It follows the same `qwen36` shape — sparse MoE, `-ngl 99`
+**nothing about it is measured yet**: no throughput figure and no run from
+the Benchmarks section's Tests page. It follows the same `qwen36` shape — sparse MoE, `-ngl 99`
 with `--n-cpu-moe 34` since the model is ~4.1x this card's 6 GB VRAM, `q8_0`
 KV cache, 65536 context, 6 threads — copied as a starting point rather than
 independently tuned; `LLAMA_MOE` and `LLAMA_CTX` overrides plus
-`llama-sweep-ngl qwen3c` are how that would actually get confirmed. It sets
+`lllm-sweep-ngl qwen3c` are how that would actually get confirmed. It sets
 no `-ot` and no speculative flags: unlike `qwen38`, nothing here has checked
 this GGUF for an MTP head.
 
-`qwen38`'s `-ngl 20` is a placeholder pending an `llama-sweep-ngl` run;
+`qwen38`'s `-ngl 20` is a placeholder pending an `lllm-sweep-ngl` run;
 `--n-cpu-moe` is MoE-only and the script refuses to pass it to a dense model.
 `qwen38` also pins two tensor groups to the GPU with `-ot` regardless of
 `-ngl` — the output projection and the final block (the model has 65 blocks,
-`blk.0` to `blk.64`), both touched on every token. `llama-sweep-ngl` passes the
-same `-ot`, so its VRAM headroom matches what `llama-serve` will see. Override
-per run with `LLAMA_OT`. `llama-serve` warns to check the load log's `n_layer`
+`blk.0` to `blk.64`), both touched on every token. `lllm-sweep-ngl` passes the
+same `-ot`, so its VRAM headroom matches what `lllm-serve` will see. Override
+per run with `LLAMA_OT`. `lllm-serve` warns to check the load log's `n_layer`
 before treating an `-ngl` as tuned, but only for a dense profile that is
 partially offloaded: at `-ngl 99` there is no layer count being chosen.
 
@@ -140,8 +158,9 @@ no separate draft model is needed: the weights carry
 `qwen35.nextn_predict_layers = 1` and `blk.64.nextn.*` tensors, and `-ot`
 already keeps that block on the GPU. A draft depth of 2 is deliberately
 conservative — rejected drafts cost real compute on a model this CPU-bound.
-`llama-test` reports `draft_n` and `draft_n_accepted` in its timings, which is
-the acceptance rate to judge it by. `LLAMA_SPEC=off llama-serve qwen38` turns
+The Benchmarks section's Tests page reports `draft_n` and `draft_n_accepted`
+in its timings, which is the acceptance rate to judge it by.
+`LLAMA_SPEC=off lllm-serve qwen38` turns
 it off for an A/B; `LLAMA_SPEC="<flags>"` replaces the flags wholesale.
 `qwen36` sets none of this: its weights are not on disk here, so its MTP
 support is unverified.
@@ -163,7 +182,7 @@ inside `LLAMA_SPEC` is refused for the same reason; use `LLAMA_PARALLEL`.
 
 The functions:
 
-- `llama-serve [profile] [args...]` : start `llama-server` on port 8090 (set
+- `lllm-serve [profile] [args...]` : start `llama-server` on port 8090 (set
   `LLAMA_PORT` to change). One-off overrides: `LLAMA_MODEL`, `LLAMA_CTX`,
   `LLAMA_THREADS`, `LLAMA_NGL`, `LLAMA_MOE`, `LLAMA_OT`, `LLAMA_SPEC`,
   `LLAMA_PARALLEL` (server slots, default 1), `LLAMA_REASONING` (thinking
@@ -172,7 +191,7 @@ The functions:
   `LLAMA_CACHE_V`, `LLAMA_BATCH`, `LLAMA_UBATCH`; all default to the values in
   the table above), so the flags passed and the flags recorded in the log come
   from one place.
-  `llama-qwen` is a backwards-compatible alias. `--metrics` is always passed, so
+  `--metrics` is always passed, so
   the run's server-wide token totals can be recorded, and `-lv 4`
   (`LLAMA_LOG_VERBOSITY`) so the server prints what it decided about the model
   it loaded — the layer split, the slot count, the fused kernels it resolved,
@@ -181,125 +200,152 @@ The functions:
   temporary `logs/.server.<pid>.log` for the recorder to parse and deleted when
   the server exits; the terminal copy is unchanged except that the GGUF metadata
   dump `-lv 4` adds is filtered out of it.
-- `llama-fetch [profile]` : download the profile's weights with the `hf` CLI.
-- `llama-sweep-threads [profile] [4,6,8,...]` : `llama-bench` across thread
+- `lllm-fetch [profile]` : download the profile's weights with the `hf` CLI.
+- `lllm-sweep-threads [profile] [4,6,8,...]` : `llama-bench` across thread
   counts, printed as a markdown table.
-- `llama-sweep-ngl [profile] [12,16,20,...]` : `llama-bench` across GPU layer
+- `lllm-sweep-ngl [profile] [12,16,20,...]` : `llama-bench` across GPU layer
   counts, for tuning a dense profile. Values that exceed VRAM error out, which
   is the useful signal.
-- `llama-test <benchmark>/<item-id>` : run one published benchmark item against
-  the running server, grade it with that benchmark's own tests, and record the
-  result. `llama-test --suite smoke|standard|full` runs a whole tier. See
-  [Testing](#testing) below — this command replaced the earlier
-  "send a saved prompt from `prompts/` and eyeball the answer" version. Test
-  items now come from the datasets; `prompts/` holds only the optional system
-  prompts `--system` sends, and nothing in it is a test item or an answer.
-- `llama-web` : the browser dashboard over serving, testing, comparison,
-  answers, reports and tuning — replaced the Textual dashboard (`llama-ui`) on
-  2026-09-06. Binds `0.0.0.0:${LLAMA_WEB_PORT:-8095}/ops` and is reachable
-  either directly there or through the Caddy proxy at
-  `http://localhost:4000/ops` alongside Open WebUI (see "Running it" above).
-  Seven pages, none of them a reimplementation of the CLI they sit on top of:
-  - **Serve** starts and stops `llama-server` from a profile with the same
-    overrides `llama-serve` takes, and streams its output live.
-  - **Live** polls the run being recorded right now, every 5s to match the
-    recorder's own sample interval.
-  - **Tests** runs a tier and streams one structured event per graded item —
-    in-process, not by shelling out to `llama-test`, so cancelling mid-run
-    stops the loop directly rather than sending a signal to a subprocess;
-    every item is still its own committed transaction, so the run is exactly
-    as resumable either way.
-  - **Compare** and **Answers** are the same tables and the same stored
-    responses `llama-test compare`/`llama-test answer` print, read through
-    the same functions.
-  - **Report** and **Tune** are new here — there was no TUI equivalent —
-    and drive `llama-report`/`llama-tune` exactly as the CLI does: Report
-    renders `llama_report.py`'s own markdown and PNGs unmodified rather than
-    inventing a second output path through its statistics; Tune shells out to
-    `llama-tune run`/`resume` the same way Serve shells out to `llama-serve`,
-    since a sweep is a long-lived, checkpointed process with its own
-    port-guarding and cooldown logic that has no business running inside a
-    web request.
-  See `scripts/llama_web.py`, `scripts/llama_web_routes.py` and
-  `scripts/llama_web_static/` for the implementation, and
-  `open-web-ui/dashboard-link.user.js` for the optional, per-browser userscript
-  that adds a link to it from inside Open WebUI (nothing server-side reaches
-  into Open WebUI's own page — see the decisions log for why).
-- `llama-db {shell|sql|schema|prune|vacuum|export}` : raw access to
-  `logs/llama.db`, where every measurement this repo takes is stored.
-- `llama-check` : `GET /v1/models` against the running server.
-- `llama-vram` : live GPU telemetry, refreshed in place, with free VRAM called
+- `lllm-check` : `GET /v1/models` against the running server.
+- `lllm-vram` : live GPU telemetry, refreshed in place, with free VRAM called
   out — on a 6 GB card headroom is what decides whether an `-ngl` is viable.
-- `llama-profiles` : list profiles and whether their weights are present.
-- `llama-profile-json [profile]` : a profile's resolved settings as JSON. Exists
+- `lllm-profiles` : list profiles and whether their weights are present.
+- `lllm-profile-json [profile]` : a profile's resolved settings as JSON. Exists
   so the Python tooling can read the serving configuration without re-declaring
-  it; `scripts/llama-env.sh` stays the single source of truth. `reasoning` is
+  it; `scripts/shell/main.sh` stays the single source of truth. `reasoning` is
   empty for a profile that sets no thinking effort, the same test the telemetry
   fingerprint makes before recording `n/a`, so a caller cannot end up setting
   `LLAMA_REASONING` for a server that ignores it.
-- `llama-profile-names` : the defined profiles, one per line, from the
-  `LLAMA_PROFILE_NAMES` array. `llama-profiles` and the dashboard's profile
-  picker both read it, so adding a profile is an edit to `scripts/llama-env.sh`
-  and nothing else.
+- `lllm-profile-names` : the defined profiles, one per line, from the
+  `LLAMA_PROFILE_NAMES` array. `lllm-profiles` and the Benchmarks section's
+  Serve-page profile picker both read it, so adding a profile is an edit to
+  `scripts/shell/main.sh` and nothing else.
+
+Benchmark running, grading, comparison, reporting and tuning are not shell
+functions any more. `lllm-test`, `lllm-compare` (`lllm-test compare`),
+`lllm-report`, `lllm-tune` and the standalone `lllm-web` dashboard were
+retired outright on 2026-09-08, and the whole suite now lives inside the
+Open WebUI fork itself, as an admin-only **Benchmarks** section at
+`/benchmarks`, served by the same `lllm-frontend`/`lllm-backend` as the rest
+of the fork rather than a separate process or port. See
+[Testing](#testing) below for the harnesses themselves, and "The Benchmarks
+section" further down for the pages and how they got there. Seven pages,
+none of them a thin passthrough to a CLI that no longer exists:
+
+- **Serve** (`/benchmarks/serve`) starts and stops `llama-server` from a
+  profile with the same overrides `lllm-serve` takes, and streams its output
+  live.
+- **Live** (`/benchmarks/live`) polls the run being recorded right now, every
+  5s to match the recorder's own sample interval.
+- **Tests** (`/benchmarks/tests`) runs a tier and streams one structured
+  event per graded item over SSE — in-process, not by shelling out to a
+  `lllm-test` that no longer exists, so cancelling mid-run stops the loop
+  directly rather than sending a signal to a subprocess; every item is still
+  its own committed transaction, so the run is exactly as resumable either
+  way.
+- **Compare** (`/benchmarks/compare`) and **Answers** (`/benchmarks/answers`)
+  read the same tables and the same stored responses the old `lllm-test
+  compare`/`lllm-test answer` printed, through the same underlying query
+  logic, ported into the fork's own backend rather than rewritten.
+- **Report** (`/benchmarks/report`) and **Tune** (`/benchmarks/tune`) drive
+  the same code `lllm-report`/`lllm-tune` did: Report renders the same
+  design-audited markdown and PNGs unmodified, rather than inventing a
+  second output path through the statistics; Tune runs the same
+  round-elimination search as an in-process, checkpointed async sweep with
+  its own port-guarding and cooldown logic, in place of a CLI subprocess —
+  it still drives `lllm-serve` under `LLAMA_*` overrides and still
+  fingerprints a candidate with `lllm-config-id` before serving it.
+
+The adapter/suite TOMLs and system-prompt text files moved with the code,
+into `open-web-ui/openwebui/backend/open_webui/benchmarks/data/`; they no
+longer live at `tests/adapters/`, `tests/suites/`, `tests/tuning/` or
+`prompts/system/` in this repo (the gitignored, fetched-not-vendored
+`tests/data/` cache is left in place, orphaned but harmless, since the fork
+fetches its own copy under its own `DATA_DIR` on first use).
+
+Direct database access, replacing `lllm-db`, is a normal Postgres client
+against the fork's own database — `psql "$DATABASE_URL"`, or anything else
+that speaks that connection string — rather than a bespoke wrapper: every
+table from the old schema is there under a `benchmark_` prefix (`config` →
+`benchmark_config`, `result` → `benchmark_result`, and so on — see "The
+tables" below).
 
 ### Recorded telemetry and throughput
 
-`llama-serve` starts `scripts/llama-vram-log.sh` in the background and stops it
+`lllm-serve` starts `scripts/shell/vram-log.sh` in the background and stops it
 when the server exits, so every serving run leaves a record of what the GPU
-actually did and how fast the model answered. That script is now a thin wrapper:
-it resolves the profile, computes the configuration fingerprint, and hands off to
-`scripts/llama_record.py`, which waits for the port to open, samples `nvidia-smi`
-every `LLAMA_VRAM_INTERVAL` seconds (default 5), scrapes `/metrics` on the same
-pass, parses the server's own load output, and writes each of those as it happens
-to one file:
-
-```
-logs/llama.db
-```
+actually did and how fast the model answered. That script is still a thin
+wrapper: it resolves the profile and computes the configuration fingerprint in
+shell exactly as before, then hands off to a recorder that waits for the port
+to open, samples `nvidia-smi` every `LLAMA_VRAM_INTERVAL` seconds (default 5),
+scrapes `/metrics` on the same pass, parses the server's own load output, and
+writes each of those as it happens — not to a file any more, but into the Open
+WebUI fork's own Postgres database (`open-web-ui/docker-compose.yml`), the
+same one the chat interface itself uses. The recorder is now
+`open_webui.benchmarks.telemetry_recorder`, run under the fork's own backend
+venv rather than bare `python3`, and it writes with `psycopg` directly (no
+SQLAlchemy, no event loop) — but it is still a separate subprocess for the
+life of the server, for the same reason as before: a recording has to survive
+a crash of whatever started it, which folding it into the backend's own event
+loop would give up.
 
 **One database, for everything this repo measures.** Serving configurations, runs,
 GPU samples, `/metrics` scrapes, per-request timings, test results, and the full
-answers are tables in it. Model and quantization are columns rather than halves of
-a filename, so a cross-model question is a query rather than a comparison between
-files that never sit beside each other.
+answers are tables in it, each named with a `benchmark_` prefix so they sit
+beside Open WebUI's own tables without colliding. Model and quantization are
+columns rather than halves of a filename, so a cross-model question is a query
+rather than a comparison between files that never sit beside each other.
 
 Nothing is written as markdown any more and nothing is parsed back out of one.
-Markdown is an *output* format — `llama-test compare --format markdown` renders a
-measured table for pasting into this README, as the maintenance policy requires —
-and no code reads it.
+Markdown is an *output* format — the maintenance policy still requires a
+measured table to be pasted into this README, but the Compare page renders
+only an HTML table now; there is no built-in markdown export, so that table's
+values are copied out by hand. No code reads a markdown table back in
+either way.
 
 #### The tables
 
 | table | one row per | holds |
 | --- | --- | --- |
-| `config` | serving configuration | the fingerprinted configuration text verbatim, plus the flags parsed out of it (`arch`, `ngl`, `ctx`, `parallel`, `threads`, `moe`, `override_tensors`, `speculative`, cache types, flash attention, batch sizes, reasoning effort, samplers) |
-| `run` | serving run | `config_id`, model, quant, llama.cpp build, port, pid, start and end. `ended_at IS NULL` means it is serving now |
-| `gpu_sample` | `nvidia-smi` sample | temperature, utilization, memory used/total, power, SM clock, and the raw `clocks_throttle_reasons.active` bitmask |
-| `metrics_scrape` | counter, per scrape | the server's own `/metrics` counters, the whole series |
-| `run_load_info` | run | what the server said about the model it loaded: the layer split, slot configuration, per-device buffer sizes, `fused_gdn`, the MTP head, unused tensors, warnings, `DEPRECATED` lines |
-| `request` | request | llama.cpp's raw `timings` fields as columns, the measured wall clock, the request parameters, and the whole `timings` object as JSON |
-| `result` | graded item | the verdict, with foreign keys to the `request` that produced it, the `run` it belongs to, and the `config` it was measured under |
-| `answer` | result | prompt, answer, and reasoning as three fields, not one rendered blob |
-| `suite_exclusion` | item | what no run can attempt, recorded once against a dataset revision rather than once per run |
-| `schema_note` | discontinuity | append-only provenance: what changed, and on what date, when it changed the meaning of rows either side of it |
+| `benchmark_config` | serving configuration | the fingerprinted configuration text verbatim, plus the flags parsed out of it (`arch`, `ngl`, `ctx`, `parallel`, `threads`, `moe`, `override_tensors`, `speculative`, cache types, flash attention, batch sizes, reasoning effort, samplers) |
+| `benchmark_run` | serving run | `config_id`, model, quant, llama.cpp build, port, pid, start and end. `ended_at IS NULL` means it is serving now |
+| `benchmark_gpu_sample` | `nvidia-smi` sample | temperature, utilization, memory used/total, power, SM clock, and the raw `clocks_throttle_reasons.active` bitmask |
+| `benchmark_metrics_scrape` | counter, per scrape | the server's own `/metrics` counters, the whole series |
+| `benchmark_run_load_info` | run | what the server said about the model it loaded: the layer split, slot configuration, per-device buffer sizes, `fused_gdn`, the MTP head, unused tensors, warnings, `DEPRECATED` lines |
+| `benchmark_request` | request | llama.cpp's raw `timings` fields as columns, the measured wall clock, the request parameters, and the whole `timings` object as JSON |
+| `benchmark_result` | graded item | the verdict, with foreign keys to the `benchmark_request` that produced it, the `benchmark_run` it belongs to, and the `benchmark_config` it was measured under |
+| `benchmark_answer` | result | prompt, answer, and reasoning as three fields, not one rendered blob |
+| `benchmark_suite_exclusion` | item | what no run can attempt, recorded once against a dataset revision rather than once per run |
+| `benchmark_schema_note` | discontinuity | append-only provenance: what changed, and on what date, when it changed the meaning of rows either side of it |
 
-Views do the arithmetic that used to be computed at write time: `v_request`
-(adds `is_cold`, `acceptance`, `mean_len`), `v_pass_rate` (which encodes
-"`skipped` is excluded from the denominator" in SQL rather than in every
-caller), `v_run_gpu`, `v_run_metrics`, and `v_config_latest`.
+This is a schema-preserving 1:1 port of the old SQLite tables (`config` →
+`benchmark_config`, `result` → `benchmark_result`, and so on), added by an
+ordinary Alembic migration alongside the rest of the fork's schema
+(`b3f8a1d94e70_add_benchmark_tables.py`) rather than hand-rolled DDL, and the
+historical rows were carried over by a one-time backfill script guarded
+against running twice.
+
+The arithmetic that used to be computed at write time (`is_cold`,
+`acceptance`, `mean_len` per request; pass rate excluding `skipped`; per-run
+GPU stats; each config's latest run) is no longer a set of SQL views —
+this fork's own schema uses no views anywhere else, so the same computations
+are plain query methods on the `models/benchmark_*.py` table-wrapper classes
+instead, which has the advantage of being unit-testable directly rather than
+only through a live-Postgres round trip.
 
 **Summaries are derived on read, and every sample is kept.** This reverses the
 2026-08-23 retention rule, which discarded raw samples once a newer run finished
 and kept only the already-computed summary — so a statistic computed wrongly
 could never be recomputed. At roughly 60 bytes a row and 5 s intervals, a day of
-continuous serving is about 1 MB. `llama-db prune --before <date>` exists for the
-day that matters, and it deletes only samples and scrapes, never results,
+continuous serving is about 1 MB. A `DELETE ... WHERE sampled_at < <date>`
+against `benchmark_gpu_sample`/`benchmark_metrics_scrape` exists for the day
+that matters, and it touches only samples and scrapes, never results,
 answers, requests or configurations.
 
 #### What identifies a configuration
 
 The `config_id` is a `sha1[:8]` over the serving flags, computed by
-`_vramlog_config` in `scripts/llama-vram-log.sh` — the same function, over the
+`_vramlog_config` in `scripts/shell/vram-log.sh` — the same function, over the
 same six lines, as before the database existed. Config ids are therefore
 unchanged: an id quoted in an older log names the same configuration it always
 did.
@@ -313,10 +359,11 @@ reasoning effort: medium
 samplers: temp 1.0 | top-p 0.95
 ```
 
-Changing any of them makes a new `config` row instead of mixing incomparable
-runs. Rebuilding llama.cpp does not: the build string is a column on `run`, not
-part of the hash. `-lv` and `--metrics` are excluded for the same reason — they
-change what the server says about itself, not what it computes.
+Changing any of them makes a new `benchmark_config` row instead of mixing
+incomparable runs. Rebuilding llama.cpp does not: the build string is a
+column on `benchmark_run`, not part of the hash. `-lv` and `--metrics` are
+excluded for the same reason — they change what the server says about
+itself, not what it computes.
 
 `config_text` is stored verbatim because it is what the hash covers, and the
 typed columns are parsed out of *that text* on insert rather than supplied
@@ -324,14 +371,16 @@ separately, so a column cannot disagree with the fingerprint that identifies its
 row.
 
 Two kinds of context are recorded but never fingerprinted, because they are
-observations of a run rather than settings — a run that served no `llama-test`
-request would otherwise be a different configuration from one that did:
+observations of a run rather than settings — a run that served no request
+from the Benchmarks section's Tests page would otherwise be a different
+configuration from one that did:
 
-- **`request.params`** is what was actually in the request body, read back out of
-  it rather than re-derived. It matters because `config.samplers` records the
-  server's *defaults* and a `llama-test` request overrides them: the server may
-  say `temp 1.0 | top-p 0.95` while the measured request ran at `temperature: 0`.
-- **`run_load_info`** is what the server said about the model it loaded. None of
+- **`benchmark_request.params`** is what was actually in the request body,
+  read back out of it rather than re-derived. It matters because
+  `benchmark_config.samplers` records the server's *defaults* and a Tests-page
+  request overrides them: the server may say `temp 1.0 | top-p 0.95` while the
+  measured request ran at `temperature: 0`.
+- **`benchmark_run_load_info`** is what the server said about the model it loaded. None of
   it is derivable from the flags, and all of it decides whether two runs measure
   the same thing:
 
@@ -356,15 +405,14 @@ request would otherwise be a different configuration from one that did:
   beside it say which layer and which device caused it.
 
   A run with nothing to say about the load log — a hand-started server — simply
-  has no `run_load_info` row, rather than a row of `unavailable`. Nothing is
+  has no `benchmark_run_load_info` row, rather than a row of `unavailable`. Nothing is
   guessed: a plausible default here would be indistinguishable from an
   observation.
 
 #### Reading it back
 
-```bash
-llama-test compare --by serving
-```
+The Benchmarks section's Compare page, in its **by serving** view, is the
+UI equivalent of the old `lllm-test compare --by serving`:
 
 One row per configuration — `ngl`, `parallel`, `spec`, `-ot`, `fused_gdn`, cold
 prefill t/s, generation t/s, draft acceptance, peak VRAM, headroom, build — sorted
@@ -373,8 +421,8 @@ row is that configuration's **most recent run**, not an average of its history,
 because an older run may predate a llama.cpp rebuild or have shared the machine
 with something else, and averaging would hide the change being looked for.
 Configurations never measured sort last rather than as zero: they are unknown, not
-slow. A figure marked `*` came from `/metrics` rather than from `llama-test` — it
-covers every client and whatever prompts they sent, so it answers a looser
+slow. A figure marked `*` came from `/metrics` rather than from a Tests-page
+run — it covers every client and whatever prompts they sent, so it answers a looser
 question than a row measured on the version-controlled prompt.
 
 The `derived` table carries `cpu-resident layers`, `ms/token` (the reciprocal of
@@ -397,25 +445,27 @@ draft head — and on this hardware it is a large share of the total. The fit ne
 at least two configurations at different layer counts and is simply absent
 otherwise.
 
-`llama-web`'s Compare page shows the same tables. Its Live page is the run
-that is serving right now — its GPU statistics, its `/metrics` deltas and its most
-recent samples, refreshed every 5 seconds; that view is possible because samples
-land in the database as they are taken rather than being folded in when the
-recorder exits. Its Answers page is the pairing for `--by failures`: pick a suite
-run, list its failures (or all its items, or its passes), and read the response
-rendered as markdown. The thinking is off by default and toggled with a
-checkbox — reasoning dominates the token budget on this model, so a trace
-routinely runs to tens of thousands of characters, and it is never graded.
+The Live page (`/benchmarks/live`) is the run that is serving right now — its
+GPU statistics, its `/metrics` deltas and its most recent samples, refreshed
+every 5 seconds; that view is possible because samples land in the database
+as they are taken rather than being folded in when the recorder exits. The
+Answers page (`/benchmarks/answers`) is the pairing for the old `--by
+failures` view: pick a suite run, list its failures (or all its items, or its
+passes), and read the response rendered as markdown. The thinking is off by
+default and toggled with a checkbox — reasoning dominates the token budget on
+this model, so a trace routinely runs to tens of thousands of characters, and
+it is never graded.
 
-`llama-db` is the raw access:
+Raw access, replacing `lllm-db`, is a normal Postgres client:
 
 ```bash
-llama-db sql "SELECT config_id, ngl, speculative FROM config"
+psql "$DATABASE_URL" -c "SELECT config_id, ngl, speculative FROM benchmark_config"
 ```
 
-`shell` opens an interactive `sqlite3`, `schema` prints the DDL, `prune --before
-YYYY-MM-DD` drops old samples and scrapes, `vacuum` reclaims the space, and
-`export` writes every table to CSV.
+An interactive `psql "$DATABASE_URL"` session, `\d benchmark_config` for the
+DDL, and ordinary `DELETE`/`VACUUM`/`COPY ... TO` statements do what
+`lllm-db`'s `shell`/`schema`/`prune`/`vacuum`/`export` subcommands used to —
+there is no bespoke wrapper any more, just the database.
 
 #### Reading the numbers
 
@@ -428,7 +478,9 @@ even the busy samples are low here — the CPU-resident layers are the bottlenec
 during generation and the GPU spends most of a token waiting, so a small active
 average is the expected reading, not a sign of a stalled run.
 
-**Percentiles and throttle decoding stay in Python**, in `scripts/llama_stats.py`.
+**Percentiles and throttle decoding stay in Python**, in the fork's
+`open_webui/benchmarks/stats.py` (the same module `llama_stats.py` was
+ported into on 2026-09-08, unchanged statistics).
 `percentile()` interpolates linearly between closest ranks (numpy's default
 method) and `throttle_reasons()` decodes named bits and prints unnamed ones as
 hex. Reimplementing either in SQL would silently change every recorded number.
@@ -450,8 +502,8 @@ of a run. `SwPowerCap`, `SwThermalSlowdown` and `HwThermalSlowdown` are the ones
 that mean a measurement was taken under a limit and is not comparable with one
 that was not. Undocumented bits are printed as hex rather than guessed at.
 
-**Speculative decoding gets `acceptance` and `mean_len`, both derived in
-`v_request`.** `acceptance` is `draft_n_accepted / draft_n`; `mean_len` is the
+**Speculative decoding gets `acceptance` and `mean_len`, both derived by the
+query method that replaced the old `v_request` view.** `acceptance` is `draft_n_accepted / draft_n`; `mean_len` is the
 mean accepted length per verification step, `1 + accepted/steps`. Both are blank,
 not zero, when nothing was drafted, so a non-speculative configuration is visibly
 not a 0% one. The step count is *inferred*: a request's `timings` carry `draft_n`
@@ -471,8 +523,9 @@ tokens llama.cpp took from its cache instead of processing; any request with
 only the remainder and its `prompt_per_second` measures a handful of tokens
 against fixed per-request overhead — 2.79 t/s where the same prompt cold gives
 56.00 t/s. Mixing the two produces a prefill number that belongs to no
-configuration. `v_request.is_cold` makes the split queryable, and every prefill
-figure reported is cold-only.
+configuration. The `is_cold` split `v_request` used to provide is still one
+query away — now a method on the request model rather than a view — and
+every prefill figure reported is cold-only.
 
 The `/metrics` counters cannot make this split — they do not break down per
 request — but they need no correction either: `prompt_tokens_total` counts only
@@ -490,11 +543,11 @@ was obtained.
 **The two throughput sources come from different places on purpose, and will not
 agree:**
 
-- **`request` rows** are exact and per-request, but only `llama-test` contributes
-  them — a version-controlled prompt at `temperature 0`, which is what makes two
-  runs comparable. Traffic from Open WebUI or a hand-written `curl` is not
-  counted.
-- **`metrics_scrape` rows** are the server's own counters, so they cover *every*
+- **`benchmark_request` rows** are exact and per-request, but only the
+  Benchmarks section's Tests page contributes them — a version-controlled
+  prompt at `temperature 0`, which is what makes two runs comparable. Traffic
+  from Open WebUI or a hand-written `curl` is not counted.
+- **`benchmark_metrics_scrape` rows** are the server's own counters, so they cover *every*
   client. They are cumulative totals only: the endpoint exposes no per-request
   breakdown and, as of build 10597, no request counter at all. The first scrape
   lands when `/metrics` first answers, which is after the model finishes loading
@@ -514,7 +567,8 @@ measurement.
 #### Crash durability, and the active run
 
 There is no marker file. A run whose `ended_at IS NULL` **is** the active run,
-which is how `llama-test` knows which run its timings belong to, and a run whose
+which is how the Benchmarks section's Tests page knows which run its timings
+belong to, and a run whose
 recorded `pid` is no longer alive is detectably stale and is closed by a sweep on
 the next connect. This is strictly more robust than the `logs/.active-run.json`
 it replaces: that file was removed by an EXIT trap, which a `kill -9` skips,
@@ -525,26 +579,33 @@ middle of.
 A test still runs and prints its numbers when no run is open; its `config_id` is
 simply NULL, displayed as `unrecorded`, rather than attributed to a guess.
 
-`logs/` is gitignored, so `logs/llama.db` and its `-wal`/`-shm` files need no
-`.gitignore` change. Set `LLAMA_VRAM_LOG=0` to disable recording, or run
-`./scripts/llama-vram-log.sh record [profile]` by hand to capture a server that
+There is no database file to gitignore any more: the store is the fork's own
+Postgres, reached via `DATABASE_URL` (loaded from `open-web-ui/.env` by
+`lllm-backend`, and by `scripts/shell/vram-log.sh` for the recorder it execs).
+Set `LLAMA_VRAM_LOG=0` to disable recording, or run
+`./scripts/shell/vram-log.sh record [profile]` by hand to capture a server that
 was started some other way; it stops on its own once the port stops answering.
-`LLAMA_DB` overrides the database path.
 
 **Known limitation:** the configuration lines describe the *profile* as resolved
 when the recorder started, not the argv of the process actually serving. A server
 started by hand, or one whose profile was edited mid-session, can therefore be
-filed under a configuration it was never run with. The `request` rows carry the
-model name the server reported, which at least makes that detectable.
+filed under a configuration it was never run with. The `benchmark_request`
+rows carry the model name the server reported, which at least makes that
+detectable.
 
-**The database starts empty.** The markdown serving logs and `logs/tests.jsonl`
-that preceded it were deliberately not imported, so nothing in it predates
-2026-08-30 and `llama-test compare` says nothing until a new serving run and a new
-test run happen. Those files were **deleted on 2026-09-04**: they had been kept
-in `logs/` as a historical reference, read by no code, and five days of that was
-enough to establish that nothing wanted them. Measurements taken before
-2026-08-30 therefore no longer exist anywhere. `schema_note` records this, and
-every other discontinuity, inside the database itself.
+**The database started empty on 2026-08-30.** The markdown serving logs and
+`logs/tests.jsonl` that preceded the original SQLite store were deliberately
+not imported, so nothing in it predates that date, and comparisons said
+nothing until a new serving run and a new test run happened. Those files were
+**deleted on 2026-09-04**: they had been kept in `logs/` as a historical
+reference, read by no code, and five days of that was enough to establish
+that nothing wanted them. Measurements taken before 2026-08-30 therefore no
+longer exist anywhere. **The 2026-09-08 move to Postgres did not repeat
+that reset**: every row the SQLite file held was carried over by a one-time
+backfill run before the file was retired (kept on disk as
+`logs/llama.db.retired-2026-09-08` rather than deleted, since it is no longer
+read by anything). `benchmark_schema_note` records this, and every other
+discontinuity, inside the database itself.
 
 ### Hardware and model
 
@@ -576,7 +637,7 @@ tokens/s end to end, with a 24-token prompt taking ~1.3 s to prefill.
 > **Prompt source changed 2026-08-30; these numbers still stand.** The runs
 > below were measured on `prompts/humaneval0-4.txt`, hand-typed files that
 > collapsed the two blank lines the canonical HumanEval stub carries between its
-> import and its `def`. `llama-test` now renders prompts from the dataset
+> import and its `def`. The test harness now renders prompts from the dataset
 > itself, so each of these five prompts is two bytes longer than the string that
 > was measured. Checked against the server's `/tokenize` on 2026-08-30 rather
 > than assumed: all five tokenize to **the same length as before** (135, 127,
@@ -586,7 +647,8 @@ tokens/s end to end, with a 24-token prompt taking ~1.3 s to prefill.
 > `humaneval0`-`humaneval4` here are `HumanEval/0`-`HumanEval/4` under the new
 > naming. See the 2026-08-30 decisions-log entry in `CLAUDE.md`.
 
-`llama-test humaneval0` against `llama-serve qwen38`, build `95b8e33e1`
+One HumanEval item (`HumanEval/0`, run from the Benchmarks section's Tests
+page) against `lllm-serve qwen38`, build `95b8e33e1`
 (10597), on the RTX 3060 Laptop (6 GB). Serving flags: `-ngl 20`,
 `-ot "output\.weight=CUDA0,blk\.64\..*=CUDA0"`, `-c 16384`, `-t 12`,
 `--cache-type-k/v q8_0`, `-fa on`, `-b 512 --ubatch-size 512`,
@@ -606,8 +668,9 @@ Acceptance is 88.8% and drafts cover 72% of the generated tokens, which is a
 healthy rate for an MTP head. The throughput gain is nonetheless modest, and
 this is **not yet a clean A/B**: the only non-speculative measurement to hand
 (2.50 t/s) came from a server that also differed in `-ngl` (22) and had no
-`-ot`, and it produced a shorter completion. `LLAMA_SPEC=off llama-serve
-qwen38` followed by the same `llama-test` run is the comparison to make — and
+`-ot`, and it produced a shorter completion. `LLAMA_SPEC=off lllm-serve
+qwen38` followed by the same item run again from the Tests page is the
+comparison to make — and
 before 2026-08-23 it would not have been valid either, because dropping the
 speculative flags also dropped `--parallel 1` and left the baseline serving 4
 unified slots (fixed 2026-08-23; see the slot-count paragraph above).
@@ -659,7 +722,7 @@ system-RAM bandwidth for the CPU-resident experts, not by CPU cores. The
 default of 6 threads is kept since nothing above it pays for itself.
 
 These numbers were measured with build `60eeeb608` (10472) and are historical:
-the current build is newer, and `llama-sweep-threads` now passes the profile's
+the current build is newer, and `lllm-sweep-threads` now passes the profile's
 `-ngl` and `--n-cpu-moe`, so it benchmarks the serving configuration rather
 than llama-bench's defaults. Re-measure before relying on them.
 
@@ -671,18 +734,21 @@ records throughput, GPU behaviour and per-request timings in detail, but until
 answered *correctly* — which is the question that decides whether local
 inference can replace OpenRouter.
 
-`llama-test` now runs items from published benchmarks, grades them with each
-benchmark's own test code, and records the result beside the serving telemetry.
+The Benchmarks section's Tests page now runs items from published benchmarks,
+grades them with each benchmark's own test code, and records the result
+beside the serving telemetry.
 
 **Nothing in this repository states an expected answer.** Every item and every
-verdict comes from the dataset. The files in `tests/adapters/` describe only
-*adaptation* — how a completion-style stub becomes a chat turn, which harness
-grades it, how long it may run.
+verdict comes from the dataset. The files under
+`open-web-ui/openwebui/backend/open_webui/benchmarks/data/adapters/` (moved
+there from this repo's own `tests/adapters/` on 2026-09-08, along with the
+code that reads them) describe only *adaptation* — how a completion-style
+stub becomes a chat turn, which harness grades it, how long it may run.
 
 Adaptation is still an input to the measurement, so each adapter is
 fingerprinted: `adapter_sha` is the first 12 hex of a sha1 over its
 `prompt_template`, `[item]`, `[filter]` and `[check]`, recorded on every result
-and part of the `compare` grouping key. It covers the parsed fields rather than
+and part of the Compare page's grouping key. It covers the parsed fields rather than
 the file's bytes — an adapter carries the prose explaining its own shape, and
 hashing that would file a comment edit as a measurement discontinuity. What it
 buys is that editing a `prompt_template` can no longer make old and new results
@@ -693,44 +759,42 @@ A **corrected `prompt_template` should be treated as a new benchmark**, not a
 better version of the old one. The ds1000 template was corrected on 2026-09-04
 (it told every item to assign `result`, which was false for 194 of the 511
 in-filter items); rows recorded before that carry a NULL `adapter_sha`, show as
-`?` in `compare`, and are not comparable to rows after it.
+`?` on the Compare page, and are not comparable to rows after it.
 
 ### Commands
 
-| Command | What it does |
+| Page / action | What it does |
 | --- | --- |
-| `llama-test <benchmark>/<item-id>` | One item, streamed. `llama-test humaneval/HumanEval/0` |
-| `llama-test --suite smoke\|standard\|full` | A whole tier. `--benchmark <id>` restricts it, `--resume` continues the most recent run of that tier, `--quiet` drops the streaming for a long run |
-| `llama-test --system <name>` | Send the system prompt in `prompts/system/<name>.txt` with every item of that run — see below |
-| `llama-test list` | The benchmarks, their pinned revisions, the tiers, what is calibrated, and the defined system prompts with their shas |
-| `llama-test fetch [benchmark]` | Download and pin the datasets (`--force` refetches) |
-| `llama-test selfcheck [benchmark]` | Grade the datasets' own reference solutions and write the calibration |
-| `llama-test compare [...]` | Rank models and configurations — see below |
-| `llama-test answer <benchmark>/<item-id>` | Print a stored answer, rendered as markdown on a terminal and raw when redirected. `--run-id` picks a suite run, `--export <dir>` writes a whole run's answers as files |
-| `llama-test report` | The comparison, to the terminal, without running anything (`llama-test compare` with `--format`/`--tier` only) |
-| `llama-db {shell\|sql\|schema\|prune\|vacuum\|export}` | Raw access to `logs/llama.db` |
+| Tests → run one item | One item, streamed over SSE. Pick a benchmark and an item id (e.g. `humaneval/HumanEval/0`) |
+| Tests → run a tier | A whole `smoke`/`standard`/`full` tier. A benchmark filter restricts it, a resume action continues the most recent run of that tier |
+| Tests → system prompt | Send the selected system prompt with every item of that run — see below |
+| Tests → benchmark list | The benchmarks, their pinned revisions, the tiers, what is calibrated, and the defined system prompts with their shas |
+| Tests → fetch datasets | Download and pin the datasets (a force-refetch option is available) |
+| Tests → selfcheck | Grade the datasets' own reference solutions and write the calibration |
+| Compare | Rank models and configurations — see below |
+| Compare → export answers | Write a whole suite run's stored answers back out as flat markdown files, for grepping/diffing/archiving outside the app |
+| Answers → view one | Render one stored answer as markdown directly in the browser |
+| Report | The statistical comparison, rendered to the page, without running anything new |
+| `psql` (or any Postgres client) against `DATABASE_URL` | Raw access to the fork's own database (the `benchmark_*` tables) |
 
-`llama-test ui` is gone along with the Textual dashboard it launched; the
-dashboard is now `llama-web` (see "Running it" and "Local inference" above).
-
-`--profile` names the serving profile whose alias and `reasoning_effort` are
-used; the model name itself is read from the running server (`GET /v1/models`)
-and a mismatch warns rather than mislabels, since the profile describes an
-intended configuration while the server is already serving something.
+The profile picker on the Serve page names the serving profile whose alias
+and `reasoning_effort` are used; the model name itself is read from the
+running server (`GET /v1/models`) and a mismatch warns rather than
+mislabels, since the profile describes an intended configuration while the
+server is already serving something.
 
 #### System prompts
 
-By default a request carries one message: the item. `--system <name>` puts the
-text of `prompts/system/<name>.txt` in front of it as a `system` message, which
-is where Open WebUI puts its own, and is the only place it can go — this
-`llama-server` build has no system-prompt flag.
+By default a request carries one message: the item. Selecting a system
+prompt on the Tests page puts the text of the matching file under
+`open-web-ui/openwebui/backend/open_webui/benchmarks/data/prompts/` in front
+of it as a `system` message, which is where Open WebUI puts its own, and is
+the only place it can go — this `llama-server` build has no system-prompt
+flag.
 
-```bash
-llama-test list                               # the prompts, with their shas
-llama-test --suite smoke                      # baseline: no system prompt
-llama-test --suite smoke --system assistant   # the same 24 items, with one
-llama-test compare
-```
+On the Tests page: pick `smoke` with no system prompt and run it as the
+baseline, then pick `smoke` again with the `assistant` system prompt — same
+24 items, with one difference — and read both off the Compare page.
 
 Both runs are recorded, and **they are separate rows**: `system_sha` joins
 `model`, `config_id` and `tier` in the grouping key, so a run with a prompt is
@@ -741,9 +805,10 @@ comparison that mixed the two would answer it wrong while looking fine.
 What is recorded is the prompt's **name and a sha of its exact bytes** (the
 first 12 hex digits of the SHA-1, the same length the run banners print). The
 sha is the identity: a file edited in place is a different prompt under the same
-name, so runs either side of an edit stay separate rows, and `compare` prints a
-note when a name shows up with more than one sha. `llama-test answer` names the
-prompt in its header, since the stored prompt text is the user message alone.
+name, so runs either side of an edit stay separate rows, and the Compare page
+prints a note when a name shows up with more than one sha. The Answers page
+names the prompt in its header, since the stored prompt text is the user
+message alone.
 A result with no system prompt records NULL, which the database's own schema
 note (migration 2) defines as "none was sent" rather than "unknown" — every row
 recorded before 2026-09-04 is a genuine baseline, because there was no way to
@@ -752,22 +817,26 @@ send one.
 The system prompt is deliberately **not** part of `config_id`. That fingerprint
 covers the serving flags and is computed by `_vramlog_config` before any request
 is made; a system prompt is part of the request. So it is a second grouping key
-beside it, in `v_pass_rate` and in `llama-test compare`, and every existing
+beside it, in the pass-rate query and on the Compare page, and every existing
 `config_id` still means what it always did.
 
-`prompts/system/assistant.txt` is a copy of the text configured per-model in
-Open WebUI (see [Model setup](#model-setup)), kept so a benchmark run can be
-made under the prompt the assistant actually serves. Open WebUI remains the
-source of truth for that; if it changes there, copy it here in the same change
-or the comparison measures a prompt nobody is using. Note this is the same
-`prompts/` directory the 2026-08-30 decision deleted, and the rule that deleted
-it still holds: nothing in it is a test item, nothing in it is graded, and
-ground truth still comes only from the published datasets.
+`assistant.txt`, under that same `benchmarks/data/prompts/` directory, is a
+copy of the text configured per-model in Open WebUI (see [Model
+setup](#model-setup)), kept so a benchmark run can be made under the prompt
+the assistant actually serves. Open WebUI remains the source of truth for
+that; if it changes there, copy it here in the same change or the comparison
+measures a prompt nobody is using. This is a different directory from the
+`prompts/` this repo's own 2026-08-30 decision deleted (that one held ad hoc
+saved prompts, eyeballed rather than graded); the rule that deleted it still
+holds regardless of which repo the file lives in: nothing here is a test
+item, nothing here is graded, and ground truth still comes only from the
+published datasets.
 
 The four files beside it are a rewrite of that prompt for a local model and an
 ablation of the rewrite, so a comparison attributes a difference rather than
-just showing one. `prompts/system/README.md` has the full reasoning; the shape
-is:
+just showing one (the standalone `prompts/system/README.md` that used to
+carry this reasoning did not move with the files; the reasoning below is now
+the only copy of it). The shape is:
 
 | name | what it is |
 | --- | --- |
@@ -795,16 +864,21 @@ across them.
 rewrite measures better it is adopted there, with `assistant.txt` updated to
 match in the same change. Winning a benchmark here changes nothing on its own.
 
-Request knobs, unchanged from the shell version: `LLAMA_TEST_MAX_TOKENS`
+Request knobs, unchanged from the shell version and read the same way, just
+now by the fork's backend process rather than a CLI: `LLAMA_TEST_MAX_TOKENS`
 (2048), `LLAMA_TEST_TIMEOUT` (900 s), `LLAMA_TEST_CACHE_PROMPT` (`0`;
 prompt-cache reuse makes a prefill figure meaningless, so it is off unless
 asked for), `LLAMA_TEST_STREAM` (`1`), and `LLAMA_REASONING` for the effort
-level. `temperature` is pinned to 0 and is not overridable — two runs must
+level — set them for `lllm-backend` the same way any other override is set.
+`temperature` is pinned to 0 and is not overridable — two runs must
 differ only by the flags under test. `LLAMA_TEST_RAW` is gone: it used to keep
 the response's temp file, and every response is now stored in full in the
-`answer` table regardless. `LLAMA_GRADER_PYTHON` overrides the interpreter the
-graders execute against, and `LLAMA_PLAIN=1` (or `NO_COLOR`) forces plain
-output.
+`benchmark_answer` table regardless. `LLAMA_GRADER_PYTHON` overrides the
+interpreter the graders execute against. `LLAMA_PLAIN=1` (or `NO_COLOR`)
+still forces plain output, and the fork now sets it itself on every
+subprocess it streams into an SSE connection (the Serve and Tune pages, for
+`llama-server`'s and a sweep's own output) — Rich's escape codes would
+otherwise show up raw in a browser rather than being rendered.
 
 ### The benchmarks
 
@@ -814,9 +888,11 @@ output.
 | [MBPP (sanitized)](https://github.com/google-research/google-research/tree/master/mbpp) | 427 | `test_imports` + `test_list` (3 asserts) | CC-BY-4.0 | Austin et al. 2021, [arXiv:2108.07732](https://arxiv.org/abs/2108.07732) |
 | [DS-1000](https://github.com/xlang-ai/DS-1000) | 1000 (511 Pandas/Numpy) | `code_context`, which defines `test_execution(solution)` | CC-BY-SA-4.0 | Lai et al. 2022, [arXiv:2211.11501](https://arxiv.org/abs/2211.11501) |
 
-`llama-test fetch` downloads them into `tests/data/` (gitignored) and writes a
-`MANIFEST.json` pinning the upstream revision and a SHA-256 of the bytes
-actually downloaded. **Every result records that revision**: per this project's
+The Tests page's fetch action downloads them into the fork's own
+`<DATA_DIR>/benchmarks/datasets/` (`BENCHMARKS_DATA_DIR` overrides it) — no
+longer this repo's `tests/data/`, which is gitignored and now orphaned — and
+writes a `MANIFEST.json` pinning the upstream revision and a SHA-256 of the
+bytes actually downloaded. **Every result records that revision**: per this project's
 convention a number without its configuration is not reusable, and for a pass
 rate the configuration includes which items were asked. The datasets are fetched
 rather than vendored — they are upstream-versioned, carry three different
@@ -834,8 +910,9 @@ the discriminating power.
 
 **Coverage gap:** `CLAUDE.md` lists math and statistics among four primary use
 cases; the suite covers coding and data analysis, and measures neither of the
-other two. Adding GSM8K or a MATH subset is a new file in `tests/adapters/`
-rather than new code, but until that exists, a pass rate here says nothing about
+other two. Adding GSM8K or a MATH subset is a new file in the fork's
+`benchmarks/data/adapters/` rather than new code, but until that exists, a
+pass rate here says nothing about
 the math and statistics work this assistant is also for.
 
 ### Tiers
@@ -875,24 +952,25 @@ it would make installing a library look like a quality improvement.
 
 Every outcome is a statement about the model's answer, so **a server that stops
 answering produces no outcome at all**. A connection refused, or a stream that
-dies mid-read, aborts the suite: nothing is written for the item, `llama-test`
-exits 1, and `--resume` picks up from there. Recording those as `fail_error`
-instead is what the 2026-09-04 entry in `CLAUDE.md` describes — it filed a
-serving failure as a model failure, and because `(suite_run_id, benchmark,
-item_id)` is unique, `--resume` then skipped the item permanently. An HTTP error
-is deliberately not treated this way: the server answered, and a 400 can be
-specific to one item.
+dies mid-read, aborts the run: nothing is written for the item, the Tests
+page's stream ends with an error event, and the resume action picks up from
+there. Recording those as `fail_error` instead is what the 2026-09-04 entry in
+`CLAUDE.md` describes — it filed a serving failure as a model failure, and
+because `(suite_run_id, benchmark, item_id)` is unique, resuming then skipped
+the item permanently. An HTTP error is deliberately not treated this way: the
+server answered, and a 400 can be specific to one item.
 
-> **`llama-test` executes model-generated Python.** It runs in a subprocess, in
-> a temporary working directory, under a timeout, and with `-I` (and `-S` for
-> HumanEval/MBPP, which need only the standard library). That is **process
-> isolation, not a sandbox.** It is what the upstream benchmark runners do and is
-> acceptable on a single-user local box; it is not safe against adversarial
-> output. Do not point this at a model you do not trust.
+> **The Tests page executes model-generated Python.** It runs in a
+> subprocess, in a temporary working directory, under a timeout, and with
+> `-I` (and `-S` for HumanEval/MBPP, which need only the standard library).
+> That is **process isolation, not a sandbox.** It is what the upstream
+> benchmark runners do and is acceptable on a single-user local box; it is
+> not safe against adversarial output. Do not point this at a model you do
+> not trust.
 
-### Calibrating the graders — `llama-test selfcheck`
+### Calibrating the graders — the Tests page's selfcheck action
 
-`llama-test selfcheck` grades every benchmark's **own reference solution**
+The selfcheck action grades every benchmark's **own reference solution**
 (`canonical_solution`, `code`, `reference_code`). No model is involved, so a
 correct harness scores 100%; anything less is a bug in the grader. Measured on
 2026-08-30 (Python 3.14.7, numpy 2.5.2, pandas 3.0.5, pyyaml 6.0.3):
@@ -919,35 +997,37 @@ model against a test the dataset's own answer cannot pass measures the library
 versions, not the model — it would have understated every model by about 14
 points on that benchmark.
 
-So `selfcheck` writes `tests/data/<benchmark>/CALIBRATION.json`, and those items
-are **skipped** when a suite runs, with the benchmark's own verdict as the
-evidence. The calibration records the dataset hash and the grading environment's
-library versions, and reports itself stale when either changes — a calibration
-is only valid for the environment that produced it. Re-run `selfcheck` after
-upgrading pandas or refetching a dataset.
+So selfcheck writes `<DATA_DIR>/benchmarks/datasets/<benchmark>/CALIBRATION.json`,
+and those items are **skipped** when a suite runs, with the benchmark's own
+verdict as the evidence. The calibration records the dataset hash and the
+grading environment's library versions, and reports itself stale when either
+changes — a calibration is only valid for the environment that produced it.
+Re-run selfcheck from the Tests page after upgrading pandas or refetching a
+dataset.
 
 Note the consequence for comparability: a `full` DS-1000 pass rate from this box
 is over 439 items, not 511, so it is not directly comparable to a published
-DS-1000 number. The excluded items are in `suite_exclusion`, and their counts
-are reported beneath every comparison table.
+DS-1000 number. The excluded items are in `benchmark_suite_exclusion`, and
+their counts are reported beneath every comparison table.
 
 ### Where results are stored
 
-Results go into the same `logs/llama.db` as the serving telemetry, which is the
-point: the question this harness exists to answer — did the configuration that
-ran faster also answer correctly — is a join, not a comparison between two files.
+Results go into the same Postgres database as the serving telemetry, which is
+the point: the question this harness exists to answer — did the configuration
+that ran faster also answer correctly — is a join, not a comparison between two
+files.
 
 | table | one row per | holds |
 | --- | --- | --- |
-| `result` | attempted item | `suite_run_id`, timestamp, model, profile, benchmark, `item_id`, dataset revision, tier, seed, outcome, reason, `reasoning_chars`, `wall_ms`, the `system_name`/`system_sha` of the system prompt sent (NULL when none was), the `adapter_sha` of the adapter it was asked under (NULL when it predates the fingerprint, which here means *unknown*), the request `params` and the full llama.cpp `timings` — plus foreign keys to the `request`, the `run` and the `config` it was measured under |
-| `answer` | result | the prompt, the answer that was graded, and the reasoning that was not, as three fields rather than one rendered blob |
-| `suite_exclusion` | item | what no run can attempt: outside an adapter's library filter, or marked ungradeable by calibration |
+| `benchmark_result` | attempted item | `suite_run_id`, timestamp, model, profile, benchmark, `item_id`, dataset revision, tier, seed, outcome, reason, `reasoning_chars`, `wall_ms`, the `system_name`/`system_sha` of the system prompt sent (NULL when none was), the `adapter_sha` of the adapter it was asked under (NULL when it predates the fingerprint, which here means *unknown*), the request `params` and the full llama.cpp `timings` — plus foreign keys to the `benchmark_request`, the `benchmark_run` and the `benchmark_config` it was measured under |
+| `benchmark_answer` | result | the prompt, the answer that was graded, and the reasoning that was not, as three fields rather than one rendered blob |
+| `benchmark_suite_exclusion` | item | what no run can attempt: outside an adapter's library filter, or marked ungradeable by calibration |
 
 Three constraints do work a comment used to do:
 
 - **`outcome` is a `CHECK`**, so an unknown outcome is unwritable rather than
-  merely discouraged, and `v_pass_rate` excludes `skipped` from the denominator
-  in SQL rather than depending on every caller remembering to.
+  merely discouraged, and the pass-rate query method excludes `skipped` from
+  the denominator rather than depending on every caller remembering to.
 - **`request_id` links the throughput measurement to the verdict.** The same call
   used to write two rows to two independent stores with nothing connecting them;
   it is now one transaction and one foreign key.
@@ -955,12 +1035,12 @@ Three constraints do work a comment used to do:
   interrupted-and-resumed suite idempotent — a re-run cannot double-count an item
   even if the resume check is skipped.
 
-`config_id` is a foreign key to `config`, so a row's serving flags appear beside
-its pass rate. A hand-started server records NULL, displayed as `unrecorded`,
-rather than a guess — a string sentinel would have to be exempt from the
-constraint, and then the constraint would guarantee nothing. It is denormalised
-onto `result` deliberately: a result keeps its configuration identity even if its
-run row is later pruned.
+`config_id` is a foreign key to `benchmark_config`, so a row's serving flags
+appear beside its pass rate. A hand-started server records NULL, displayed as
+`unrecorded`, rather than a guess — a string sentinel would have to be exempt
+from the constraint, and then the constraint would guarantee nothing. It is
+denormalised onto `benchmark_result` deliberately: a result keeps its
+configuration identity even if its run row is later pruned.
 
 **Exclusions are recorded once, not per run.** They are a property of the
 adapter, the calibration and this box's library versions — not of any serving
@@ -969,56 +1049,45 @@ items invalidates them. Recording them per run made a 24-item `smoke` suite writ
 569 rows, 545 of them exclusions: 23x the tier it described, and a count of a
 suite's rows that meant nothing. It now writes 24.
 
-**Every item is one committed transaction under `synchronous=FULL`**, so an
-interrupted run leaves a valid partial store. `llama-test --suite full --resume`
-continues where it stopped. A `full` run is many hours on this hardware and will
-be interrupted.
+**Every item is one committed transaction**, so an interrupted run leaves a
+valid partial store. Resuming from the Tests page continues where it stopped.
+A `full` run is many hours on this hardware and will be interrupted.
 
-The serving telemetry is fed by the same transaction: a test run's requests land
-in `request` as before, and `llama-test compare --by serving` reports them.
-Nothing was displaced.
+The serving telemetry is fed by the same transaction: a test run's requests
+land in `benchmark_request` as before, and the Compare page's **by serving**
+view reports them. Nothing was displaced.
 
-Reading answers back:
+Reading one answer back is the Answers page (`/benchmarks/answers`): pick a
+suite run, pick `humaneval/HumanEval/0` (or any other item that run
+attempted) from its list, and it renders that answer as markdown directly in
+the browser — headings, and the model's own fenced code with syntax
+highlighting, which is most of what there is to read. There is no
+terminal/file duality any more: the browser is always the destination for a
+single answer, and it always renders.
 
-```bash
-llama-test answer humaneval/HumanEval/0
-```
+`--export <dir>`'s whole-run dump survives, but moved to the Compare page's
+**export-answers** action rather than a flag on the single-answer viewer.
+It recreates the pre-database `<dir>/<run>/*.md` layout on demand — every
+graded item's answer already lives in `benchmark_answer`, so this just writes
+it back out as flat files, named `<benchmark>__<item>.md`, under
+`<DATA_DIR>/benchmarks/answers/<run>/` — for anyone who wants to grep, diff,
+or archive a suite run outside the app. Unlike the single-answer view, the
+export always includes the full chain of thought (there is no reader to
+protect from the wire cost once it is already a file on disk).
 
-`--run-id` picks a specific suite run rather than the most recent, and
-`--export <dir>` writes a whole run's answers as `<dir>/<run>/<benchmark>_<item>.md`
-for reading with an editor. The files are produced on demand from the database
-rather than written during a run.
+One shape difference in the single-answer view follows from what a trace
+costs to send rather than from the document format: the chain of thought
+defaults to hidden, requested from the server only when a checkbox is
+switched on — a trace can run to tens of thousands of characters, and it
+should not cross the wire by default. That is the same reasoning collapsing
+it in a `<details>` used to serve, just enforced earlier, at the request,
+rather than left to whether the viewer happens to expand an element.
 
-**On a terminal the answer is rendered as markdown** — headings, and the model's
-own fenced code with syntax highlighting, which is most of what there is to read.
-Redirected or piped it is the raw document, unchanged: `llama-test answer ... >
-answer.md` and `--export` write exactly the bytes they wrote before. The decision
-goes through the same `llama_console.wanted()` guard every other output path in
-this repo uses — not a TTY, or `NO_COLOR`/`LLAMA_PLAIN` set, or Rich not
-installed, means raw — because Rich reflows paragraphs and pads code blocks, and
-a captured answer must be the answer.
-
-Two shape differences follow from *where* the document is going, and only there:
-
-- The chain of thought is wrapped in `<details>` in a file and printed under a
-  plain heading on a terminal. Nothing in a terminal expands a `<details>`, and
-  Rich drops raw HTML, so a collapsed document rendered to a terminal would
-  show the reasoning with no heading at all. `llama-web`'s Answers page always
-  asks for the uncollapsed form too, for the same reason, and toggles the
-  reasoning on and off with a checkbox that changes what the browser is sent
-  rather than what a `<details>` element hides — a trace can run to tens of
-  thousands of characters, and it should not cross the wire by default.
-- A response that carries a fence of its own is handed over intact so it gets
-  highlighted; one that does not keeps the outer fence, because the graded text
-  is code and reflowing it into paragraphs would destroy the indentation that
-  makes it code. Highlighting depends on the model emitting a language tag —
-  a missing tag loses the colour, not the content.
-
-### Comparing — `llama-test compare`
+### Comparing — the Compare page
 
 Groups results by (model, config-id, tier, system prompt, adapter) and ranks by
 pass rate, then by generation throughput. Columns: the flag summary (`ngl`,
-`parallel`, `spec`, `-ot`) joined from the `config` table with the same helpers
+`parallel`, `spec`, `-ot`) joined from `benchmark_config` with the same helpers
 that render the serving comparison, the `system` column (`<name>@<sha>`, or `-`
 for a run that sent none), the `adapter` column (the adapter sha, or `?` for a
 row recorded before adapters were fingerprinted), dataset revision, `passed/attempted`, pass rate, cold
@@ -1026,18 +1095,19 @@ prefill t/s, generation t/s, draft acceptance, and **passes per minute**.
 
 `passes/min` is the honest combined metric on this hardware: pass rate alone would
 rank a configuration that answers correctly at one token a second above a usable
-one, and throughput alone is what `--by serving` already reports.
+one, and throughput alone is what the **by serving** view already reports.
 
 Four things the output refuses to do, each learned from a mistake in this
 project's decisions log:
 
 - **Never a bare percentage.** `passed/attempted` is printed beside every rate.
 - **Tiers never mix.** A 24-item pass rate and a 164-item one are not comparable,
-  and `--baseline` reports `n/a (different tier)` rather than a delta.
+  and the baseline selector reports `n/a (different tier)` rather than a delta.
 - **A pair of configs differing in more than one flag is flagged as such.** This
   project lost a measurement to exactly that (the 2026-08-23 `--parallel` entry).
-- **Same tier is not the same test.** `--benchmark humaneval` records tier
-  `smoke` while covering a third of it, and two rows are warned about when their
+- **Same tier is not the same test.** Restricting a `smoke` run to one
+  benchmark on the Tests page still records tier `smoke` while covering a
+  third of it, and two rows are warned about when their
   benchmark sets differ or when the same benchmark was asked at two dataset
   revisions. The `revision` column reads `mixed` for any row spanning more than
   one benchmark, so the disagreement check is made per benchmark rather than on
@@ -1056,38 +1126,41 @@ What each row could not attempt is reported once beneath the table, split by
 reason, rather than as a per-configuration column — the exclusion set is identical
 across every configuration, so a column for it said nothing.
 
-`--by config` (the default), `--by benchmark`, `--by failures` (every item that
-did not pass, with its reason and the size of its reasoning, newest first), and
-`--by serving` (throughput and GPU telemetry per configuration, with no test run
-involved). Filters: `--tier`, `--model`, `--baseline <config-id>`. Output:
-`--format table|markdown|json`, where markdown is for pasting a measured table
-into this README and is never read back.
+Four views: **by config** (the default), **by benchmark**, **by failures**
+(every item that did not pass, with its reason and the size of its reasoning,
+newest first), and **by serving** (throughput and GPU telemetry per
+configuration, with no test run involved). Filters on the page: tier, and a
+baseline config to diff against. There is no built-in table export any more
+(see above) — a measured table pasted into this README, per the maintenance
+policy, is copied out of the rendered page by hand.
 
-### Reporting — `llama-report`
+### Reporting — the Report page
 
-```bash
-llama-report                        # logs/report/<UTC date>/report.md + PNGs
-llama-report --out /tmp/r           # somewhere else
-llama-report --stdout               # the document on stdout, so it pipes
-llama-report --tier smoke --benchmark mbpp   # narrow the scope
-llama-report --no-figures           # text plots instead of PNGs
-```
+The Report page's form takes the same scope filters the CLI's flags used to:
+tier, model, benchmark, and a toggle for figures (off falls back to the same
+unicode text plots, inline in the rendered markdown, that `--no-figures` used
+to print). Generating a report writes `report.md` and its PNGs to
+`<DATA_DIR>/benchmarks/reports/<run>/` — a fresh, timestamped directory per
+report, never overwritten — and the page fetches and renders that markdown
+document directly; there is no separate `--stdout` mode, since the browser
+*is* the destination.
 
-`compare` ranks; it has no way to say whether a difference it shows is real. At
+The Compare page's rankings say nothing about whether a difference they show is real. At
 `smoke` the gap between two adjacent rows is routinely one item, and this repo's
 own rule — never a bare percentage — exists because that gap reads as 4pp.
-`llama-report` is the other half: it audits the design first, refuses the
+The Report page is the other half: it audits the design first, refuses the
 comparisons the design cannot support, and runs the *paired* test where it can,
 which matters because the tiers are seeded so every configuration draws the same
 items and a test that ignores the pairing throws away the only thing that makes
 8 items informative.
 
 Seven sections, ordered so each gates the next: **provenance** (which database,
-which rows, which revisions — the store is gitignored, so a number without this
-is not checkable), **design audit**, **reliability floor**, **paired accuracy**,
+which rows, which revisions — the fork's Postgres is not something a reader
+can casually open elsewhere, so a number without this is not checkable),
+**design audit**, **reliability floor**, **paired accuracy**,
 **power/MDE**, **throughput**, **throttle audit**.
 
-The design audit is the part that earns the command. It is mechanical, and
+The design audit is the part that earns the report. It is mechanical, and
 against the current store it finds:
 
 - **`model` and `config_id` are perfectly confounded** (one real config plus
@@ -1145,14 +1218,19 @@ noise floor to read any difference against.
 Statistics: scipy for the standard tests; Cochran's Q, its permutation p (exact
 by enumeration when the arrangement count allows, Monte Carlo with the `+1`
 correction otherwise), Wilson intervals, Holm correction and the MDE search are
-written out in `scripts/llama_report.py`, and were cross-checked against
-statsmodels. Every test prints its `n` and its assumption check; a test whose
-assumptions fail is printed as refused with the reason, never dropped silently.
+written out in the fork's `open_webui/benchmarks/report.py` (a direct port of
+the original `scripts/llama_report.py`, unchanged statistics), and were
+cross-checked against statsmodels. Every test prints its `n` and its
+assumption check; a test whose assumptions fail is printed as refused with
+the reason, never dropped silently.
 
-**Reads only.** No migration, no `schema_note`, no row written — verified by
-checksum and row counts either side of a run. The database is opened
-`mode=ro`, deliberately not through `llama_db.connect()`, which migrates and
-sweeps stale runs and would therefore write.
+**Reads only.** No migration, no `benchmark_schema_note` row, no row
+written — verified by checksum and row counts either side of a run. Rather
+than opening the database itself in a read-only mode the way `mode=ro` did
+against a SQLite file, the report goes through the same read-only async
+Table-wrapper query methods every other read path in the fork uses, and never
+touches the migration/stale-run-sweep path that a normal connection runs on
+first use and that would therefore write.
 
 Four figures, each drawing the test printed beside it rather than a
 friendlier one. `fig1-timeline-run<n>` is generation throughput over run 4 in
@@ -1165,94 +1243,111 @@ carry none of the information. `fig3-discordance-<benchmark>-<config>` is the
 paired difference against the baseline — items lost and gained per level, the
 `b` and `c` of the McNemar tables above it — and deliberately **not** a bar
 chart of marginal pass rates, which would be the picture of the unpaired
-comparison this command exists to refuse. `fig4-mde` is the detectable
+comparison this report exists to refuse. `fig4-mde` is the detectable
 difference against items per level, with the psi ceiling drawn as a horizontal
 asymptote and this experiment's `n` marked whether or not any effect is
 reachable at it. A figure with nothing to show is suppressed and replaced by
 the sentence saying so, rather than drawn empty.
 
-scipy is required and the command exits 2 with the install line rather than
-degrading. matplotlib is optional: without it every figure becomes a unicode
-block plot in a fenced code block, naming the reason, and the document is
-otherwise byte-identical.
+scipy is required and the Report page's request fails with a 503 naming the
+install line rather than degrading (`SciPyUnavailable`, raised as an
+`HTTPException`). matplotlib is optional: without it every figure becomes a
+unicode block plot in a fenced code block, naming the reason, and the
+document is otherwise byte-identical.
 
 ### Dependencies
 
-Rich, numpy, pandas and pyyaml, in a repo-local `.venv`. This box's
-Python is externally managed (PEP 668), so `pip install` refuses outright and a
-venv is required rather than merely tidy — `llama-test` creates it on first use
-in an interactive shell (`LLAMA_NO_BOOTSTRAP=1` disables that).
+The Benchmarks feature needs no separate Python environment of its own any
+more: it runs inside the Open WebUI fork's own backend, under
+`open-web-ui/openwebui/backend/.venv`, which `lllm-backend` already
+bootstraps on first use (installing `open-web-ui/openwebui/backend/requirements.txt`)
+the same way it bootstraps everything else the fork's backend needs. There is
+nothing benchmark-specific left to install by hand.
 
-Everything degrades without it: `llama-test list`, `compare`, `check` and
-`profiles` print plain markdown tables under bare `python3`. Only DS-1000
-grading genuinely needs the venv, since it needs pandas and numpy.
-`requirements-extra.txt` carries three things: **scipy**, which `llama-report`
-requires outright (it exits 2 with the install line rather than degrading) and
-which also widens the DS-1000 slice alongside scikit-learn — the adapter's filter
-would need widening to use them for that; **matplotlib**, which only
-`llama-report` uses and which is genuinely optional, since without it the figures
-render as unicode plots in fenced blocks and the document is otherwise identical;
-and **fastapi**/**uvicorn**, which `llama-web` requires outright — there is no
-plain-text fallback for a browser page, so a missing install is a startup
-message rather than a degrade, the same stance `llama-report` takes on scipy.
-Textual was here for the Textual dashboard (`llama-ui`); it was retired for
-`llama-web` on 2026-09-06 and dropped from `requirements.txt` in the same
-change.
+This repo's own `requirements.txt` now carries exactly one thing, **Rich**,
+for the three shell commands `scripts/llama_console.py` still backs
+(`lllm-profiles`, `lllm-check`, `lllm-vram` — none of them benchmarking).
+It degrades to plain stdlib output when Rich is absent, so its repo-local
+`.venv` is a convenience, not a hard dependency; the venv is still required
+rather than merely tidy on this box, since its Python is externally managed
+(PEP 668) and `pip install` refuses outright otherwise. Textual was here for
+the Textual dashboard (`llama-ui`); it was retired for `lllm-web` on
+2026-09-06 and dropped from `requirements.txt` in that change.
 
-### Web dashboard topology (`llama-web` behind Open WebUI's port)
+`requirements-extra.txt` is gone. It used to carry **numpy**, **pandas**,
+**pyyaml**, **scipy**, **matplotlib**, **fastapi** and **uvicorn** for
+`lllm-test`/`lllm-compare`/`lllm-report`/`lllm-tune`/`lllm-web`; all five were
+retired into the fork on 2026-09-08 (see "The Benchmarks section" below), and
+those dependencies moved with them, into
+`open-web-ui/openwebui/backend/requirements.txt` — alongside a new
+`scikit-learn`, which widens the DS-1000 slice, and the same `pyyaml` pin,
+now needed there for DS-1000 items that round-trip through YAML. scipy is
+still a hard dependency (the Report page's request fails outright rather than
+degrading, as before) and matplotlib is still soft (the same unicode-plot
+fallback as before), just resolved by the fork's own venv now rather than
+this repo's.
 
-`llama-web` is a host process (started via `scripts/llama-env.sh`, like
-`llama-serve`), not a container: it manages real host process groups against
-the actual GPU and shells to `llama-env.sh` on the host filesystem, so
-containerizing it would mean bind-mounting the whole repo and passing through
-the GPU device for no benefit. Reaching it from the *same port* as Open WebUI
-(`http://localhost:4000/`) therefore means a proxy in front of two independent
-things — one container, one host process — rather than one app serving both.
+### The Benchmarks section
 
-`open-web-ui/docker-compose.yml` runs Open WebUI and a `caddy:2-alpine`
-container; only Caddy publishes a host port. `open-web-ui/Caddyfile` routes by
-path: `/ops/*` goes to `host.docker.internal:${LLAMA_WEB_PORT:-8095}` (the
-host, i.e. `llama-web`), everything else goes to the `open-webui` container.
-Two details that look like they could be swapped but cannot:
+Benchmarks is not a second app. It is a set of pages inside the same Open
+WebUI fork as chat, served by the same two host processes described in
+"Running it" above (`lllm-frontend` on `5173`, `lllm-backend` on `4000`), and
+reached through its own entry in the fork's sidebar — admin-only, modeled on
+the existing Playground entry (`isMenuItemVisible`/`getMenuItemMeta`/
+`menuItemPathPrefixes` in `Sidebar.svelte`, a matching pin-menu block in
+`Sidebar/UserMenu.svelte`) rather than a tab inside the Settings modal like
+Analytics, since seven interactive pages do not fit a settings panel. A
+`benchmarks.enable` config flag (`ENABLE_BENCHMARKS` in the admin config
+keys, surfaced as `enable_benchmarks`) gates whether the entry shows at all.
 
-- **`host.docker.internal`, not `localhost`.** Caddy runs inside its own
-  container; `localhost` there means the Caddy container itself. The
-  `extra_hosts: host.docker.internal:host-gateway` entry in
-  `docker-compose.yml` is what makes the name resolve to the host outside
-  Docker Desktop (plain Docker Engine under WSL2 included).
-- **`handle`, not `handle_path`, for `/ops/*`.** `llama_web.py` mounts its own
-  app under `/ops` internally, so the path is forwarded unchanged: hitting
-  `llama-web` directly at `http://localhost:8095/ops/...` during development
-  and going through the proxy at `http://localhost:4000/ops/...` reach the
-  identical route. Open WebUI, on the other side, is left completely
-  path-unaware — routed at `/` with nothing rewritten — because its own static
-  asset references are root-relative and its container/config is not meant to
-  know a dashboard exists at all.
+Those two ports are still the whole port table — there is nothing new to add
+one for:
 
-Chat → dashboard navigation is a small **userscript**
-(`open-web-ui/dashboard-link.user.js`, install with Tampermonkey/Violentmonkey
-or similar), not a fork of Open WebUI and not a server-side rewrite of its
-HTML — see CLAUDE.md's 2026-09-06 decisions-log entry for why both of those
-were rejected. It adds a small fixed-position "Dashboard" link in the corner
-of the page rather than inserting into Open WebUI's own sidebar markup: Open
-WebUI's DOM is not something this repo controls or pins a version of, so a
-selector aimed at one of its internal containers would be exactly as fragile
-as the server-side rewrite it replaces, just failing in the browser instead of
-on the proxy. It is optional and per-browser; the dashboard's own header
-carries a "← Chat" link back to `/` regardless of whether it is installed.
+| what | port | started by |
+| --- | --- | --- |
+| Open WebUI chat + Benchmarks (vite dev server) | `5173` | `lllm-frontend` |
+| Open WebUI + Benchmarks API (uvicorn) | `4000` | `lllm-backend` |
 
-**`scripts/llama_db.py`, `llama_record.py`, `llama_stats.py`, `llama_tests.py`
-and `llama_results.py` are stdlib-only and must stay that way.** The telemetry
-recorder runs with bare `python3` in the background for the life of every
-server and cannot depend on a venv that may not exist. SQLite is stdlib
-(`import sqlite3`), so the database costs nothing here.
+`lllm-backend` still owns Postgres's lifecycle (`open-web-ui/docker-compose.yml`),
+starting it before uvicorn and tearing it down via a trap when uvicorn stops.
+See "Running it" above for the full command sequence.
+
+There is consequently no proxy question to answer any more, and there never
+had to be a userscript bridging two origins for this to work — Caddy
+(`open-web-ui/Caddyfile`) was already removed when the fork itself was set up
+to bind `5173`/`4000` directly (see the 2026-09-07 decisions-log entry), well
+before Benchmarks existed to need reaching from chat at all. Since Benchmarks
+is just another route in the same frontend as chat, there is no second origin
+to bridge and nothing for a userscript to do: `open-web-ui/dashboard-link.user.js`
+is deleted, not merely unused, and a link from chat to Benchmarks is an
+ordinary in-app sidebar entry rather than a fixed-position element glued onto
+`<body>` from the outside.
+
+**The GPU telemetry recorder's "must stay stdlib-only" rule is reversed.**
+`scripts/llama_db.py`, `llama_record.py`, `llama_stats.py`, `llama_tests.py`,
+`llama_compare.py`, `llama_report.py`, `llama_results.py`, `llama_proc.py`,
+`llama_fetch.py`, `llama_tune*.py` and `llama_web*.py` are all deleted — that
+rule existed only because the store was SQLite (stdlib) and the recorder ran
+under bare `python3` for the life of every server; now that the store is
+Postgres, a driver is unavoidable either way, so the recorder runs under the
+fork's own backend venv and writes with `psycopg` directly (no SQLAlchemy, no
+event loop — still a single ~5-second poll loop). It still runs as a
+**separate subprocess**, not a task inside the fork's backend's own event
+loop, and that part is unchanged on purpose: the whole reason it was ever a
+subprocess was so a recording survives a crash or restart of whatever started
+it, and folding it into the backend's event loop would trade that guarantee
+away for no benefit.
+
+**Retirement note, matching the Textual-dashboard note above:** the
+userscript-bridged, two-process `lllm-web` topology this section used to
+describe was retired for the fork-native Benchmarks section on 2026-09-08.
 
 ## Migrating to local hardware later
 
 When ready to self-host (llama.cpp as above, or Ollama/vLLM), update the
 connection under **Admin Panel → Settings → Connections**: change the base URL
 to your local server's OpenAI-compatible endpoint (`http://localhost:8090/v1`
-for the `llama-qwen` server above, or `http://localhost:11434/v1` for Ollama),
+for the `lllm-serve` server above, or `http://localhost:11434/v1` for Ollama),
 and update the API key if your local server requires one. No other
 changes should be necessary, since Open WebUI talks to any OpenAI-compatible
 endpoint.

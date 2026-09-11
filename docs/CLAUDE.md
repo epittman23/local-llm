@@ -11,20 +11,21 @@ A personal AI assistant built for private, unlimited use, prioritizing:
 ## Current phase: cloud prototyping, with local inference under evaluation
 
 The project currently runs against cloud-hosted open-weight models via OpenRouter
-(https://openrouter.ai), using its OpenAI-compatible API, through Open WebUI
-(https://github.com/open-webui/open-webui) as the chat interface. This is a
-deliberate choice: since Open WebUI talks to any OpenAI-compatible endpoint,
-migrating to self-hosted local inference later only requires changing the
-connection's base URL/API key in Open WebUI's admin settings — no code changes
-anywhere, since there is no custom code in this project anymore (see the
-2026-07-21 decision below).
+(https://openrouter.ai), using its OpenAI-compatible API, through a pinned
+fork of Open WebUI (https://github.com/epittman23/open-webui, forked from
+https://github.com/open-webui/open-webui) as the chat interface. Migrating
+to self-hosted local inference later still only requires changing the
+connection's base URL/API key in the fork's admin settings — that part of
+the 2026-07-21 decision below still holds even though the fork means this
+project is no longer code-free (see the decisions log entry reversing that
+half of it).
 
 As of 2026-08-17 that migration is being tested in parallel: a local
 llama.cpp `llama-server` runs Qwen3.6-35B-A3B on the laptop's RTX 3060 (6 GB)
 and serves the same OpenAI-compatible API on port 8090. It is not yet the
 default backing for Open WebUI; OpenRouter remains the day-to-day path until
 local throughput is acceptable. See "Local inference" below and the
-`scripts/llama-env.sh` helpers.
+`scripts/shell/main.sh` helpers.
 
 ## Models in use
 
@@ -72,49 +73,47 @@ no `--n-cpu-moe` and no `-ot`, so no weight is read from system RAM. A fourth,
 `qwen36` MoE shape (`-ngl 99`, `--n-cpu-moe 34`, q8_0 KV cache, 65536 context,
 6 threads) as an unverified starting point rather than a tuned one; nothing
 about it is measured. Serving and benchmarking helpers live in
-`scripts/llama-env.sh` (sourced from `~/.bashrc`), which groups settings into
+`scripts/shell/main.sh` (sourced from `~/.bashrc`), which groups settings into
 per-model profiles (`qwen36` MoE, `qwen38` dense, `qwen25c` dense and
 GPU-resident, `qwen3c` MoE) rather than loose env vars;
-`llama-serve` starts them and `llama-qwen` remains as an alias. Every profile
+`lllm-serve` starts them. Every profile
 serves one server slot (`--parallel 1`, `LLAMA_PARALLEL` to override), passed
 unconditionally rather than as part of any other flag group. Every serving
-run also records GPU telemetry via `scripts/llama-vram-log.sh` (a wrapper over
-`scripts/llama_record.py`) into the gitignored `logs/llama.db`, alongside the
-throughput of every `llama-test` request, the server's own `/metrics` counters
-sampled on the same interval, the parameters `llama-test` actually put in its
-request bodies, and what the server's load log said about the model it loaded
-(layer split, slot configuration, fused kernels, ignored tensors, warnings).
-Every sample is kept; per-run statistics are derived on read and are
-distributional (p50/p95, an active-only utilization average, minimum free
-VRAM, and the throttle reasons observed), since the mean over a mostly-idle
-server says little. `llama-test compare --by serving` ranks configurations by
-throughput and prints the derived `-ngl` analysis; `llama-report` (added
-2026-09-05) writes the statistical version of that question as markdown with
-figures — auditing the design first and refusing a contrast the design cannot
-support, which on the current store means every throughput comparison drawn
-across the 2026-09-05 power-cap event; `llama-db` is raw SQL access. README.md
-documents each function, the schema, and the measured numbers.
+run also records GPU telemetry via `scripts/shell/vram-log.sh` (which execs
+`open_webui.benchmarks.telemetry_recorder`, in the Open WebUI fork's own
+backend, under the fork's Postgres) alongside the throughput of every
+request the Benchmarks section's Tests page sent, the server's own
+`/metrics` counters sampled on the same interval, the parameters actually
+put in those request bodies, and what the server's load log said about the
+model it loaded (layer split, slot configuration, fused kernels, ignored
+tensors, warnings). Every sample is kept; per-run statistics are derived on
+read and are distributional (p50/p95, an active-only utilization average,
+minimum free VRAM, and the throttle reasons observed), since the mean over a
+mostly-idle server says little. The Benchmarks section's Compare page (`by:
+serving`) ranks configurations by throughput and prints the derived `-ngl`
+analysis; its Report page writes the statistical version of that question as
+markdown with figures — auditing the design first and refusing a contrast
+the design cannot support, which on the current store means every
+throughput comparison drawn across the 2026-09-05 power-cap event. Direct
+SQL access is now a normal Postgres client against this app's database (the
+tables are named `benchmark_config`, `benchmark_run`, etc.), not a bespoke
+wrapper. README.md documents the schema and the measured numbers.
 
 Throughput is only half of what a serving configuration has to be judged on.
-`llama-test` runs scored items from three published benchmarks (HumanEval,
-MBPP sanitized, DS-1000) against whatever the server is currently serving,
-executes the benchmark's own harness against the answer, and appends the
-result — outcome, llama.cpp `timings`, dataset revision, sample seed, and
-foreign keys to the request, run and configuration it belongs to — into the
-same `logs/llama.db`, with the full response text in its `answer` table.
-`llama-test compare` ranks (model, config) pairs by pass rate and passes per
-minute; `llama-test answer` prints a stored response and `--export` writes a
-run's answers out as files. A response is markdown with code in it, so
-`llama-test answer` renders it on a terminal and writes it raw when redirected
-(the `llama_console.wanted()` guard, so a captured answer stays byte-identical),
-and `llama-web`'s Answers page lists a suite run's failures and renders the
-selected one as markdown in the browser, with the thinking toggled off by
-default. Tiers: `smoke` (24 items, the A/B for a flag
-change), `standard` (300), `full` (1030). The datasets are downloaded, not
-vendored, into the gitignored `tests/data/`, pinned by upstream revision and
-content hash; `llama-test fetch` gets them and `llama-test selfcheck` verifies
-the graders against the datasets' own reference solutions. Coding and data
-analysis are covered; math and statistics are not yet.
+The Benchmarks section's Tests page runs scored items from three published
+benchmarks (HumanEval, MBPP sanitized, DS-1000) against whatever the server
+is currently serving, executes the benchmark's own harness against the
+answer, and appends the result — outcome, llama.cpp `timings`, dataset
+revision, sample seed, and foreign keys to the request, run and
+configuration it belongs to — into that same Postgres database, with the
+full response text in its `benchmark_answer` table. The Compare page ranks
+(model, config) pairs by pass rate and passes per minute; the Answers page
+lists a suite run's failures and renders a selected one as markdown in the
+browser, with the thinking toggled off by default and exportable to flat
+files. Tiers: `smoke` (24 items, the A/B for a flag change), `standard`
+(300), `full` (1030). The datasets are downloaded, not vendored, into the
+fork's own `DATA_DIR`, pinned by upstream revision and content hash. Coding
+and data analysis are covered; math and statistics are not yet.
 
 Current measured performance: ~7 to 8 tokens/s generation and ~72 to 78
 tokens/s prompt processing. Generation is bound by system-RAM bandwidth for
@@ -139,119 +138,81 @@ assume a cloud-only environment.
 
 ## Conventions
 
-- There is no custom backend or frontend code for the *assistant itself* —
-  Open WebUI (run via Docker) is the entire chat application, and nothing in
-  this repo sits between it and a model. Since 2026-09-06 a Caddy reverse
-  proxy (`open-web-ui/Caddyfile`) sits between the *browser* and Open WebUI,
-  so it can share a port with the web dashboard — that is a different line
-  than the one this bullet protects: Open WebUI's own container, image and
-  configuration are untouched by it, and its connection to whatever model
-  backend it talks to is exactly as before. What this repo holds is
-  documentation (`README.md`, `CLAUDE.md`), operational shell scripts
-  (`open-web-ui/docker-compose.yml` + `Caddyfile` to run Open WebUI and the
-  proxy, `scripts/llama-env.sh` for the local llama.cpp server and
-  benchmarks, `scripts/llama-vram-log.sh` for GPU telemetry capture), and —
-  since 2026-08-30 — a Python evaluation harness for the local-inference
-  track:
-  - `scripts/llama_db.py` owns `logs/llama.db`: the schema, the ordered
-    `MIGRATIONS` list applied by `connect()`, the stale-run sweep, and every
-    insert and query the other modules call. Append a migration; never edit
-    an applied one.
-  - `scripts/llama_record.py` is the recorder loop `llama-vram-log.sh` execs:
-    wait for the port, open the run, sample `nvidia-smi`, scrape `/metrics`,
-    parse the server's load output, close the run.
-  - `scripts/llama_stats.py` holds the statistics and parsers that must not
-    move into SQL (`percentile`, `throttle_reasons`, `parse_server_log`,
-    `ngl_fit`, `effective_bandwidth`) plus the markdown table renderer, which
-    is now terminal output only and is never read back.
-  - `scripts/llama_test.py` is `llama-test`: it runs benchmark items against
-    the running server, grades them, and writes the request, the result and
-    the answer in one transaction.
-  - `scripts/llama_tests.py` (adapters, dataset loading, answer extraction,
-    the exec harnesses, grader calibration), `scripts/llama_fetch.py`
-    (dataset download and revision pinning), `scripts/llama_compare.py`
-    (cross model/config comparison, and the serving comparison),
-    `scripts/llama_results.py` (the result vocabulary over `llama_db`),
-    `scripts/llama_console.py` (Rich-or-plain output, and the one place Rich is
-    allowed to touch stdout, in `write_markdown`), `scripts/llama_proc.py`
-    (`Command`, the process-group wrapper shared by the web dashboard and
-    `llama_tune.py` for launching a shell surface command and signalling the
-    whole tree it starts). `scripts/llama_web.py` + `llama_web_routes.py` +
-    `llama_web_static/` are `llama-web`, added 2026-09-06 to replace the
-    Textual dashboard (`llama-ui`): seven browser pages over serving, live
-    telemetry, tests, comparison, answers, reports and tuning, all thin HTTP
-    wrappers over the same functions the CLI tools call — nothing here is a
-    second implementation of anything the CLI already does correctly. FastAPI
-    and uvicorn are hard requirements of these three, unlike the stdlib-only
-    modules below; `uvicorn.run(..., workers=1)` is load-bearing, since the
-    job registry that tracks a started `llama-server` or test suite lives in
-    that one process's memory.
-  - `scripts/llama_report.py` is `llama-report`, added 2026-09-05: the
-    statistical report over the store — design audit, paired tests, power,
-    throughput with the throttle regime as a blocking factor, and figures. It
-    is the only module here that requires scipy (matplotlib is optional and
-    degrades to text plots), and it **reads only**: it opens the database
-    `mode=ro` rather than through `llama_db.connect()`, which migrates and
-    sweeps stale runs and therefore writes. Its markdown is output like every
-    other markdown here; nothing reads it back.
-  - `tests/adapters/*.toml` and `tests/suites/*.toml` describe how each
-    published benchmark is adapted and how the tiers are sampled. They are
-    the only hand-written test artifacts, and they contain no answers —
-    ground truth comes from the datasets, which are downloaded into the
-    gitignored `tests/data/` and pinned by revision plus content hash.
-  - `prompts/system/*.txt` are system prompts `llama-test --system <name>`
-    can send with an item, added 2026-09-04. They are not test artifacts:
-    nothing in there is an item, nothing in there is graded, and nothing in
-    there states an expected answer. `prompts/system/assistant.txt` is a
-    copy of what Open WebUI serves, kept so the assistant's own prompt can
-    be measured; Open WebUI remains the source of truth for it. The four
-    beside it (`assistant-local`, `assistant-direct`, `style-only`,
-    `minimal`) are candidates under evaluation and are deployed nowhere.
-    `prompts/system/README.md` says what each one isolates.
+- This repo no longer holds zero application code — see the decisions log
+  entry reversing the earlier "no custom backend or frontend code" stance.
+  `open-web-ui/openwebui` is a pinned git submodule (a fork of Open WebUI,
+  `v0.11.3`, on its own `customizations` branch); the assistant's actual
+  frontend and backend live there, not in this repo, and so does the
+  benchmark/testing/reporting/tuning suite described below — see the
+  2026-09-08 decisions log entry for the full migration. What this repo
+  still holds directly is documentation (`README.md`, `CLAUDE.md`),
+  operational shell scripts (`open-web-ui/docker-compose.yml` for the
+  Postgres+pgvector container the fork's backend depends on,
+  `scripts/shell/main.sh` for the local llama.cpp server and the fork's
+  `lllm-frontend`/`lllm-backend` host processes, `scripts/shell/vram-log.sh`
+  for GPU telemetry capture), and `scripts/llama_console.py` (Rich-or-plain
+  terminal output backing `lllm-profiles`/`lllm-check`/`lllm-vram`, and the
+  one place Rich is allowed to touch stdout, in `write_markdown`).
+
+  The benchmark/testing suite itself — adapters, suite tiering, dataset
+  fetch, grading, the run/grade/record loop, config comparison, the
+  statistical report, and the configuration-search tuner — lives in
+  `open-web-ui/openwebui/backend/open_webui/benchmarks/`, reached through
+  the fork's own admin-only "Benchmarks" pages, not through any command in
+  this repo. `scripts/shell/vram-log.sh` still computes each run's
+  configuration fingerprint in shell (the one source of truth
+  `benchmarks/stats.py` parses back out of `config_text`) and still execs a
+  telemetry recorder for the life of the server, but that recorder is now
+  `open_webui.benchmarks.telemetry_recorder`, run under the fork's backend
+  venv and writing to the fork's own Postgres, not a bare-`python3`/
+  stdlib-only script writing sqlite. There is no more `logs/llama.db`, no
+  more `tests/adapters`/`tests/suites`/`tests/tuning`/`prompts/system` in
+  this repo (moved into the fork's `benchmarks/data/`), and no more
+  `lllm-test`/`lllm-compare`/`lllm-report`/`lllm-tune`/`lllm-web`/`lllm-db`
+  shell commands.
 
   The line to keep: shell scripts here are operational glue, kept thin, with
-  `scripts/llama-env.sh` the single source of truth for serving
-  configuration; the Python is a *measurement* harness for local inference,
-  not application code, and model/system-prompt configuration for the
-  assistant still lives in Open WebUI, never in this repo — the copies under
-  `prompts/system/` are measurement inputs, read only by `llama-test`, and
-  nothing in this repo serves them to anybody. `llama_db.py`,
-  `llama_record.py`, `llama_stats.py`, `llama_tests.py`, `llama_results.py`
-  and everything `llama-vram-log.sh` invokes must stay **stdlib-only**,
-  because the telemetry recorder runs under bare `python3` for the life of
-  every server. `sqlite3` is stdlib, so the database costs nothing here.
+  `scripts/shell/main.sh` the single source of truth for serving
+  configuration; application code — including the measurement harness — lives
+  in the fork, never here, and model/system-prompt configuration for the
+  assistant still lives in Open WebUI, never in this repo.
 - Testing approach, two separate things:
-  - Changes to Open WebUI configuration are verified by using it in the
-    browser at `http://localhost:4000` (manual — there is no code to run
-    automated tests against). Port 4000, not 3000, since 2026-09-06: Caddy is
-    what is bound to the host now, not Open WebUI's container directly (see
-    "Local inference" below).
-  - Local serving configurations are verified with `llama-test`: three
-    published benchmarks (HumanEval, MBPP sanitized, DS-1000), executed and
-    scored, tiered `smoke` / `standard` / `full`. See "Local inference"
-    below and the Testing section of `README.md`.
+  - Changes to Open WebUI (the fork), including its Benchmarks section, are
+    verified by using it in the browser at `http://localhost:5173` (manual —
+    there is no code to run automated tests against). `lllm-frontend`/
+    `lllm-backend` bind `5173`/`4000` directly now; there is no proxy in
+    front of either (see "Local inference" below and the decisions log).
+  - Local serving configurations are verified from the Benchmarks section's
+    Tests/Compare/Report pages: three published benchmarks (HumanEval, MBPP
+    sanitized, DS-1000), executed and scored, tiered `smoke` / `standard` /
+    `full`. See "Local inference" below and the Testing section of
+    `README.md`.
 - Model/system-prompt configuration lives inside Open WebUI itself (Admin
   Panel → Settings → Connections; Workspace → Models), not in any file in
   this repo. See `README.md` for the current model entries and system prompt
-  text. The one file that duplicates that text,
-  `prompts/system/assistant.txt`, exists so `llama-test` can measure a local
-  configuration under it; it is a copy, it configures nothing, and when the
-  prompt changes in Open WebUI it must be copied here in the same change or
-  the benchmark measures a prompt nobody is using.
+  text. The one place that duplicates that text is a system-prompt file
+  under the fork's `benchmarks/data/prompts/` (formerly
+  `prompts/system/assistant.txt` in this repo), which exists so a local
+  configuration can be measured under it from the Benchmarks section's Tests
+  page; it is a copy, it configures nothing, and when the prompt changes in
+  Open WebUI it must be copied there in the same change or the benchmark
+  measures a prompt nobody is using.
 
 ## Commands
 
-- Start/ensure Open WebUI and its Caddy proxy are running:
-  ```bash
-  docker compose -f open-web-ui/docker-compose.yml up -d
-  ```
-  (`open-web-ui/.env` holds `OPENROUTER_API_KEY`; `--restart unless-stopped` on
-  both services keeps them running across reboots). As of 2026-09-06 Caddy,
-  not Open WebUI's container, is the only thing bound to a host port (4000) —
-  see "Local inference" below and `open-web-ui/Caddyfile` for why. Chat is at
-  `http://localhost:4000/`, the web dashboard (`llama-web`) at
-  `http://localhost:4000/ops`.
-- Requires Docker Desktop with WSL integration enabled for this distro.
+- Start/ensure the Open WebUI fork is running: `lllm-backend` (Postgres +
+  the fork's backend, `uvicorn` on `4000`) in one terminal, `lllm-frontend`
+  (the fork's frontend dev server, `vite` on `5173`) in another —
+  `scripts/shell/main.sh`. `open-web-ui/.env` holds `OPENROUTER_API_KEY`,
+  `POSTGRES_PASSWORD`, and `WEBUI_SECRET_KEY`. `lllm-backend` owns Postgres's
+  lifecycle directly (brings it up before uvicorn, tears it down via a trap
+  when uvicorn stops) — there is no separate `docker compose up` step. Chat
+  is at `http://localhost:5173/`; the Benchmarks section (testing,
+  comparison, reporting, tuning) is at `http://localhost:5173/benchmarks`,
+  admin-only, in the same frontend — no separate port any more (see "Local
+  inference" below and the decisions log for why).
+- Requires Docker Desktop with WSL integration enabled for this distro (for
+  Postgres), plus Bun and a Python 3 interpreter on the host for the fork.
 
 ## Maintenance policy
 
@@ -272,23 +233,23 @@ or agent) updates the docs in the same commit:
   the llama.cpp build, and the flags used. A number without its configuration
   is not reusable. Numbers that predate a hardware or model change are stale;
   re-measure or mark them as historical.
-- **Shell scripts and docs must agree**: if `scripts/llama-env.sh`,
-  `scripts/llama-vram-log.sh`, or `open-web-ui/docker-compose.yml`/`Caddyfile`
-  changes its defaults, flags, or function names, update the `README.md`
-  description of it in the
-  same change. `scripts/llama-env.sh` is the source of truth for the local
-  serving configuration; if it drifts from `~/.bashrc`, reconcile the two
-  rather than letting both exist. The configuration lines recorded with every
-  serving run mirror the flags `llama-serve` passes, so a change to those
-  flags must be reflected in `_vramlog_config` too, or old and new runs get
-  fingerprinted as the same configuration.
-- **The database schema is append-only.** `MIGRATIONS` in
-  `scripts/llama_db.py` is an ordered list; add a migration, never edit one
-  that has been applied. When a change alters what the `config_id`
-  fingerprint covers — which changes every existing id and makes rows either
-  side of it incomparable — add a `schema_note` row saying so, in the same
-  change, so the database explains its own discontinuities without needing
-  this file.
+- **Shell scripts and docs must agree**: if `scripts/shell/main.sh`,
+  `scripts/shell/vram-log.sh`, or `open-web-ui/docker-compose.yml` changes
+  its defaults, flags, or function names, update the `README.md` description
+  of it in the same change. `scripts/shell/main.sh` is the source of truth
+  for the local serving configuration; if it drifts from `~/.bashrc`,
+  reconcile the two rather than letting both exist. The configuration lines
+  recorded with every serving run mirror the flags `lllm-serve` passes, so a
+  change to those flags must be reflected in `_vramlog_config` too, or old
+  and new runs get fingerprinted as the same configuration.
+- **The database schema is append-only.** The benchmark tables' migrations
+  live as ordinary Alembic revisions under `open-web-ui/openwebui/backend/
+  open_webui/migrations/versions/`, same as the rest of the fork's schema;
+  add a migration, never edit one that has been applied. When a change
+  alters what the `config_id` fingerprint covers — which changes every
+  existing id and makes rows either side of it incomparable — add a
+  `benchmark_schema_note` row saying so, in the same change, so the database
+  explains its own discontinuities without needing this file.
 - **Do not document aspirations as facts.** Anything not yet running is stated
   as planned or under evaluation, with what would make it the default.
 - **Prune what is no longer true.** When a section describes something that no
@@ -302,6 +263,11 @@ or agent) updates the docs in the same commit:
   source; `ROADMAP.md` embeds a copy of it in a fenced `mermaid` block only
   because GitHub's renderer cannot transclude an external file, so the two
   must be updated together and stay byte-identical in their diagram content.
+- **`MAP.md` mirrors the repo layout.** Whenever a change adds, removes,
+  moves, or repurposes a top-level directory or a major file, update the
+  corresponding entry in `MAP.md` in the same change. `MAP.md` is a
+  structural index only — per-file rationale and conventions stay documented
+  here in "Conventions," not duplicated there.
 
 ## Commit policy
 
@@ -312,6 +278,184 @@ All commits should use conventional commit style and stay focused on one topic. 
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-09-08**: Migrated the entire `lllm-test`/`lllm-compare`/`lllm-report`/
+  `lllm-tune`/`lllm-web` suite into the Open WebUI fork itself, closing out
+  the "deferred, not done in this change" merge the 2026-09-07 entry below
+  named. The CLI and the standalone dashboard are retired outright, not kept
+  alongside the new UI: `scripts/llama_db.py`, `llama_record.py`,
+  `llama_stats.py`, `llama_test.py`, `llama_tests.py`, `llama_compare.py`,
+  `llama_report.py`, `llama_results.py`, `llama_proc.py`, `llama_fetch.py`,
+  `llama_tune*.py`, `llama_web*.py` and `llama_web_static/` are deleted, and
+  so are the `lllm-test`/`lllm-tune`/`lllm-web`/`lllm-report`/`lllm-db` shell
+  functions in `scripts/shell/main.sh` (their usage lines and the dispatch
+  case they wired into removed too). `llama_console.py` stays — it backs
+  `lllm-profiles`/`lllm-check`/`lllm-vram`, which have nothing to do with
+  benchmarking and were never part of what moved.
+  Everything the deleted modules did now lives in
+  `open-web-ui/openwebui/backend/open_webui/benchmarks/` (a new fork-owned
+  package, on the fork's `customizations` branch): `stats.py`, `proc.py`
+  (an async `Command`, replacing the sync subprocess wrapper), `adapters.py`/
+  `suites.py`/`datasets.py`/`grading/` (adapter and suite loading, dataset
+  fetch, the HumanEval/MBPP/DS-1000 grading harnesses — the code-execution
+  trust model is unchanged: still host-side, still this machine, still a
+  single-admin deployment), `runner.py` (the run/grade/record loop),
+  `compare.py`, `report.py`+`report_figures.py` (the design-audited
+  statistical report, unchanged statistics, markdown+PNG output preserved
+  exactly rather than growing a second, less-audited JSON path),
+  `tune.py`+`tune_schedule.py`+`tune_probe.py` (the round-elimination
+  search — ported with strictly sequential per-round candidate execution
+  preserved, since this is a one-GPU machine and concurrent candidates would
+  OOM it), and `telemetry_recorder.py`. New FastAPI routers under
+  `routers/benchmarks/` (`serve`, `live`, `tests`, `compare`, `answers`,
+  `report`, `tune`) are mounted at `/api/v1/benchmarks/...` in `main.py`,
+  admin-gated (`get_admin_user`), with a `benchmarks.enable` dynamic config
+  flag (`ADMIN_CONFIG_KEYS` in `routers/auths.py`, surfaced as
+  `enable_benchmarks` in `get_app_config`). New SvelteKit pages under
+  `src/routes/(app)/benchmarks/` (backed by `src/lib/components/benchmarks/`
+  and `src/lib/apis/benchmarks/index.ts`) give it its own admin-only sidebar
+  entry, modeled on Playground (`isMenuItemVisible`/`getMenuItemMeta`/
+  `menuItemPathPrefixes` in `Sidebar.svelte`, a matching pin-menu block in
+  `Sidebar/UserMenu.svelte`) rather than a Settings-modal tab like Analytics,
+  since this is a seven-page interactive surface, not a small settings
+  panel. Storage moved from `logs/llama.db` (sqlite) to this app's own
+  Postgres, as fifteen new `benchmark_`-prefixed tables (a schema-preserving
+  1:1 port — `config`→`benchmark_config`, `result`→`benchmark_result`, etc.
+  — added by migration `b3f8a1d94e70_add_benchmark_tables.py`), and the
+  historical rows were carried over by a one-time
+  `benchmarks/scripts/backfill_from_sqlite.py` run (guarded by a sentinel
+  `benchmark_schema_note` row against an accidental second run); `logs/`
+  keeps the old file as `llama.db.retired-2026-09-08` rather than deleting
+  it outright. Derived aggregates that were SQL views in sqlite (pass rate
+  excluding `skipped`, per-run GPU stats, per-config latest run, tune
+  throughput joins) became plain async query methods on the new
+  `models/benchmark_*.py` Table-wrapper classes instead of database views —
+  matching this fork's own convention (no view is used anywhere else in its
+  schema) and letting the same computation be unit-tested directly rather
+  than only through a live-Postgres round trip.
+  The GPU telemetry recorder's **"must stay stdlib-only" rule is reversed**:
+  that rule existed only because the store was sqlite (stdlib) and the
+  recorder ran under bare `python3` for the life of every server; now that
+  the store is Postgres, a driver is unavoidable either way, so the recorder
+  runs under the fork's own backend venv and writes with `psycopg` directly
+  (no SQLAlchemy, no event loop — still a single ~5-second poll loop, still
+  genuinely simple to reason about as a child process). It still runs as a
+  **separate subprocess**, not an asyncio task inside the fork's backend,
+  and that part of the design is unchanged on purpose: the whole reason it
+  was ever a subprocess was so a recording survives a crash or restart of
+  whatever started it, and folding it into the backend's own event loop
+  would trade that guarantee away for no benefit. `scripts/shell/vram-log.sh`
+  was updated accordingly — it still computes the config fingerprint in
+  shell (unchanged, still the one source of truth `benchmarks/stats.py`
+  parses back out of), but now execs
+  `open_webui.benchmarks.telemetry_recorder` under the fork's backend venv
+  (`_lllm_openwebui_python`, resolved the same way `lllm-backend` resolves
+  it) with `DATABASE_URL` loaded from `open-web-ui/.env`, instead of execing
+  the now-deleted `llama_record.py` under bare `python3`.
+  The adapter/suite TOMLs and system-prompt text files moved with their
+  code, into `benchmarks/data/{adapters,suites,tuning,prompts}/` in the
+  fork; `tests/adapters/`, `tests/suites/`, `tests/tuning/` and
+  `prompts/system/` are deleted from this repo (the gitignored, fetched-not-
+  vendored `tests/data/` cache is left in place, orphaned but harmless — the
+  fork fetches its own copy under its own `DATA_DIR` on first use).
+  `requirements-extra.txt` is deleted (its scipy/scikit-learn/matplotlib/
+  fastapi/uvicorn contents are now `open-web-ui/openwebui/backend/
+  requirements.txt`'s concern, plus a new `pyyaml` pin there for DS-1000
+  items that round-trip through YAML); `requirements.txt` now carries only
+  `rich`, for the three shell commands `llama_console.py` still backs.
+- **2026-09-07** (second): Reversed the 2026-09-06 decision below rejecting a
+  fork of Open WebUI, and reorganized the shell tooling in the same change.
+  What changed: digging into what forking actually costs found that
+  authentication (local accounts, OAuth/OIDC, LDAP, SAML, SCIM, RBAC),
+  the Functions/Pipelines/Tools plugin system, and the license all carry over
+  unchanged at the moment of forking — none of it is gated separately. The
+  real cost is upstream drift, and a fork that is **pinned and never
+  merged** sidesteps that by policy rather than by luck: `open-web-ui/openwebui`
+  is a git submodule of `https://github.com/epittman23/open-webui` (a real
+  GitHub fork of `open-webui/open-webui`), checked out at tag `v0.11.3` in
+  detached HEAD. There is no tracking branch and `git submodule update
+  --remote` is deliberately never run; every future update is an explicit
+  `git checkout <new-tag>` inside the submodule, evaluated on its own
+  merits. A submodule rather than a vendored copy specifically because the
+  fork is ~420MB with a large, unrelated commit history that has no business
+  inside `local-llm`'s own `.git` — the submodule stores one commit SHA, not
+  that history.
+  Two more decisions followed directly from the fork itself. First, storage:
+  SQLite never fit a real multi-request deployment, and Postgres is free
+  with no licensing catch (PostgreSQL License, permissive, no tiers); the
+  fork's backend now runs against a fresh `pgvector/pgvector:pg16` container
+  (`open-web-ui/docker-compose.yml`) with `VECTOR_DB=pgvector`, which
+  consolidates the relational data and the RAG vector store into one
+  database with one migration path for the eventual R730 server move,
+  instead of a SQLite file plus a separate Chroma store under `DATA_DIR`.
+  Started fresh rather than migrated: the pre-fork SQLite data (the
+  `open-web-ui_open-webui` Docker volume, chat history back to 2026-07-21) is
+  left on disk untouched but unreferenced, by explicit choice rather than
+  oversight. Second, runtime: wanting the fork to eventually absorb
+  `lllm-web`'s dashboard directly (deferred, not done in this change — see
+  below) means Open WebUI itself has to run as a **host process**, the same
+  way `lllm-serve`/`lllm-web` already do, because a container cannot do that
+  kind of integration (starting/stopping `llama-server`, reading GPU
+  telemetry) without bind-mounting the whole repo and passing the GPU device
+  through, which the 2026-09-06 entry below already rejected once for a
+  Function/Pipe/Action plugin. Concretely: `lllm-backend` (uvicorn, port
+  `4000`, `--reload`) and `lllm-frontend` (the fork's own `vite` dev server,
+  port `5173`, matching Open WebUI's own documented dev workflow rather than
+  a build-once-and-serve bundle, since active development on the fork is the
+  point of forking it) are both new functions in `scripts/shell/main.sh`.
+  `lllm-backend` owns Postgres's lifecycle directly — brings it up before
+  uvicorn, tears it down via a `trap ... EXIT` when uvicorn stops — running
+  as a subshell (`(...)`, not a plain function body) specifically so that
+  trap is scoped to the one invocation rather than the caller's interactive
+  shell. `WEBUI_BACKEND_URL` (read by the fork's `vite.config.ts`) points the
+  frontend's dev-server proxy at `:4000` rather than its own default `:8080`,
+  which is already claimed on this host (`LLAMA_PORT`'s own comment:
+  "8080 is reserved for work tooling"). Package manager is Bun, not npm —
+  nothing in the fork requires npm specifically, but this is genuinely
+  untested upstream (Open WebUI's own dev docs and `package.json`'s
+  `engines` field reference only Node.js/npm); `npm ci && npm run dev` is
+  the documented fallback if the Bun-based build ever misbehaves
+  unexplainably.
+  Caddy (`open-web-ui/Caddyfile`) is deleted: its two jobs — publish `4000`,
+  route `/ops` to `lllm-web` — are both gone now that the backend binds
+  `4000` directly and `lllm-web` is reached on its own port (`8095`) with no
+  proxy in front of it. `open-web-ui/dashboard-link.user.js` now matches
+  `http://localhost:5173/*` (the frontend dev server, not the old Caddy
+  origin) and links directly to `http://localhost:8095/ops` instead of a
+  Caddy-relative `/ops`.
+  **What's still deferred, on purpose**: actually merging `lllm-web`'s seven
+  pages into the fork's own UI and backend. That's real feature work
+  spanning both codebases and needs its own plan once the fork is verified
+  running standalone; `lllm-web` keeps running exactly as it did before,
+  independently, on its own port.
+  **Shell tooling reorganized in the same change**: `scripts/llama-env.sh`
+  and `scripts/llama-vram-log.sh` moved to `scripts/shell/main.sh` and
+  `scripts/shell/vram-log.sh` respectively (the `llama_*.py` modules did not
+  move — only the shell layer was in scope), and every public function
+  re-prefixed `llama-` → `lllm-` (`lllm-serve`, `lllm-test`, `lllm-tune`,
+  `lllm-web`, `lllm-db`, `lllm-report`, `lllm-check`, `lllm-vram`,
+  `lllm-profiles`, `lllm-profile-names`, `lllm-profile-json`,
+  `lllm-config-id`, `lllm-fetch`, `lllm-sweep-threads`, `lllm-sweep-ngl`,
+  `lllm-vram-log`), plus internal helpers (`_llama_profile`→`_lllm_profile`,
+  `_llama_python`→`_lllm_python`). `LLAMA_*` environment variables and the
+  bare dispatch subcommands (`serve`, `test`, `web`, ...) were deliberately
+  left alone — the ask was to re-prefix callable functions/aliases, not the
+  variable surface. `llama-qwen`, already documented as a "backwards-compatible
+  alias" for an older `.bashrc` function, was dropped rather than carried
+  forward under a new name. The move required two real path fixes, not just
+  renaming: `main.sh`'s own `LLAMA_REPO` self-location needed a second `..`
+  (it now lives two directories below the repo root, not one), and the GPU
+  telemetry log directory inside `lllm-serve` — previously `$here/../logs`,
+  where `$here` was the script's own directory — now reads `$LLAMA_REPO/logs`
+  directly, since the old relative form would have silently pointed at
+  `scripts/logs` after the move. Verified: `bash -n` on both new files, and
+  `lllm-config-id qwen38` exercised end to end (the one path that has
+  `main.sh` and `vram-log.sh` source each other, guarded against infinite
+  recursion by a `BASH_SOURCE` depth check) — it printed a fingerprint
+  matching the pre-move logic exactly.
+  Not a concern raised by any of this, but worth recording once: Open
+  WebUI's post-April-2025 license requires preserving its name/branding in a
+  fork only for deployments of 51+ users in a rolling 30-day window; this
+  one is nowhere near that, so nothing about branding needed changing here.
 - **2026-09-07**: Fixed `qwen3c` (`unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF`,
   `Q4_1`, 17.87 GiB, alias `qwen3-coder-30b-a3b`), which the 2026-09-05
   (`feat: add llama-tune`) commit added to `_llama_profile` in

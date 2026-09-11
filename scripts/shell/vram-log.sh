@@ -1,36 +1,36 @@
 #!/usr/bin/env bash
 #
-# llama-vram-log.sh - record a llama-server run into logs/llama.db
+# vram-log.sh - record a llama-server run into logs/llama.db
 # Part of https://github.com/epittman23/local-llm
 #
 # USAGE
-#   ./scripts/llama-vram-log.sh record [profile]
+#   ./scripts/shell/vram-log.sh record [profile]
 #
-# Normally started automatically by llama-serve (scripts/llama-env.sh) and
+# Normally started automatically by lllm-serve (scripts/shell/main.sh) and
 # stopped when the server exits. Run it by hand only to capture a server that
 # was started some other way.
 #
 # This script resolves the profile and computes the configuration fingerprint;
 # scripts/llama_record.py does the sampling loop and the writing. The split is
 # deliberate: the fingerprint has to be built from the same LLAMA_P_* variables
-# llama-serve builds its argv from, which is a shell fact, while waiting on a
+# lllm-serve builds its argv from, which is a shell fact, while waiting on a
 # port and committing a row every five seconds is not something to write in
 # bash. Everything downstream of the config-id lives in Python now, and with it
 # the sample tmpfile, the merge payload and the jq dependency.
 #
 # The run it opens in logs/llama.db is the active-run marker: a row with
-# ended_at IS NULL is how llama-test finds the run its requests belong to. That
+# ended_at IS NULL is how lllm-test finds the run its requests belong to. That
 # replaces logs/.active-run.json, which an EXIT trap removed and a kill -9
 # therefore left behind.
 #
 # ENVIRONMENT
-#   LLAMA_VRAM_LOG=0        disable entirely (honored by llama-serve)
+#   LLAMA_VRAM_LOG=0        disable entirely (honored by lllm-serve)
 #   LLAMA_VRAM_INTERVAL     seconds between samples (default 5)
 #   LLAMA_VRAM_WAIT         seconds to wait for the server to come up (default 600)
 #   LLAMA_VRAM_LOGDIR       directory holding llama.db (default <repo>/logs)
 #   LLAMA_DB                the database file itself (default $LLAMA_VRAM_LOGDIR/llama.db)
 #   LLAMA_VRAM_HEADROOM_MIB free VRAM below which a run is flagged (default 300)
-#   LLAMA_SERVER_LOG        llama-server's own output, tee'd there by llama-serve;
+#   LLAMA_SERVER_LOG        llama-server's own output, tee'd there by lllm-serve;
 #                           parsed for what the server said about the model it
 #                           loaded (layer split, slots, fused kernels, warnings)
 #
@@ -40,14 +40,18 @@ set -uo pipefail
 
 _VRAMLOG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Profile definitions live in llama-env.sh. Sourcing it only defines functions;
+# Profile definitions live in main.sh. Sourcing it only defines functions;
 # its dispatch block is guarded on BASH_SOURCE[0] == $0.
-# shellcheck source=./llama-env.sh
-source "$_VRAMLOG_DIR/llama-env.sh"
+# shellcheck source=./main.sh
+source "$_VRAMLOG_DIR/main.sh"
 
 : "${LLAMA_VRAM_INTERVAL:=5}"
 : "${LLAMA_VRAM_WAIT:=600}"
-: "${LLAMA_VRAM_LOGDIR:=$(cd "$_VRAMLOG_DIR/.." && pwd)/logs}"
+# $LLAMA_REPO/logs, not a path relative to this file's own directory: this
+# file lives at scripts/shell/vram-log.sh, two levels below the repo root,
+# and main.sh (sourced above) has already resolved LLAMA_REPO correctly
+# regardless of how deep either file lives.
+: "${LLAMA_VRAM_LOGDIR:=$LLAMA_REPO/logs}"
 
 # llama.cpp build string, for the per-run row. Benchmark numbers are only
 # reusable alongside the build that produced them (see CLAUDE.md).
@@ -98,8 +102,8 @@ _vramlog_split_model() {
 }
 
 # Build the human-readable configuration lines and their fingerprint. These must
-# mirror the flags llama-serve actually passes -- they are read from the same
-# LLAMA_P_* variables llama-serve builds its argv from, so the two cannot drift.
+# mirror the flags lllm-serve actually passes -- they are read from the same
+# LLAMA_P_* variables lllm-serve builds its argv from, so the two cannot drift.
 # The build string is deliberately excluded so a rebuild does not fragment a
 # configuration's history, as are --metrics and -lv, which change what the server
 # reports about itself but not what it computes.
@@ -107,10 +111,10 @@ _vramlog_split_model() {
 # These lines ARE the config-id, and they are stored verbatim in config_text
 # because that text is what the hash covers. The typed columns beside it are
 # parsed back out of it by llama_stats.parse_config_text, so a column cannot
-# disagree with the fingerprint. What llama-test actually sent, and what the
+# disagree with the fingerprint. What lllm-test actually sent, and what the
 # server's load log said, are observations of a run rather than settings, so
 # they are recorded against the run and are not fingerprinted: a run that served
-# no llama-test request would otherwise be a different configuration from one
+# no lllm-test request would otherwise be a different configuration from one
 # that did.
 #
 # Unchanged by the move to SQLite, on purpose: a config-id quoted in an older
@@ -149,23 +153,43 @@ _vramlog_config() {
 }
 
 # ---------------------------------------------------------------------------
-# record: resolve the configuration, then hand off to llama_record.py
+# record: resolve the configuration, then hand off to the telemetry recorder
+#
+# Writes to the Open WebUI fork's own Postgres now, not logs/llama.db --
+# scripts/llama_record.py and its sqlite store were retired when the
+# lllm-test/lllm-compare/lllm-report/lllm-tune suite migrated into the fork
+# (see docs/CLAUDE.md's decisions log). The recorder stays a *separate
+# subprocess* rather than folding into the fork's backend process itself, on
+# purpose: it must keep recording even if the backend restarts mid-run, the
+# same crash-independence the old sqlite-writing recorder had. That does mean
+# it now needs the fork backend's own venv (for psycopg) rather than bare
+# python3 -- the "no <repo>/.venv dependency" rule this function used to
+# document was a property of writing sqlite, not a goal in itself, and it no
+# longer holds now that Postgres is the one store this repo keeps.
 # ---------------------------------------------------------------------------
-llama-vram-log() {
+lllm-vram-log() {
     if [[ "${LLAMA_VRAM_LOG:-1}" == "0" ]]; then
         return 0
     fi
-    # Deliberately bare python3, not _llama_python: this process outlives every
-    # llama-test and must not depend on <repo>/.venv existing.
     local c
-    for c in nvidia-smi python3; do
+    for c in nvidia-smi; do
         command -v "$c" >/dev/null 2>&1 || {
-            echo "llama-vram-log: '$c' not found; not recording" >&2
+            echo "lllm-vram-log: '$c' not found; not recording" >&2
             return 0
         }
     done
 
-    _llama_profile "${1:-$LLAMA_DEFAULT_PROFILE}" || return 1
+    local envfile="$LLAMA_REPO/open-web-ui/.env"
+    if [[ ! -f "$envfile" ]]; then
+        echo "lllm-vram-log: $envfile not found -- create it with POSTGRES_PASSWORD; not recording" >&2
+        return 0
+    fi
+    set -a
+    # shellcheck source=/dev/null
+    source "$envfile"
+    set +a
+
+    _lllm_profile "${1:-$LLAMA_DEFAULT_PROFILE}" || return 1
     _vramlog_config
 
     local base
@@ -189,16 +213,27 @@ llama-vram-log() {
         args+=(--config-line "$line")
     done
 
-    # exec so llama-serve's SIGTERM reaches the recorder directly rather than a
+    local py; py="$(_lllm_openwebui_python)"
+    cd "$LLAMA_REPO/open-web-ui/openwebui/backend" || return 1
+
+    # POSTGRES_PASSWORD must be percent-encoded before going into a URL --
+    # see the matching comment in main.sh's lllm-backend(). An unescaped
+    # '/' or '+' here is what was silently crashing this recorder on every
+    # run: psycopg's conninfo parser misread the broken URL and reported
+    # "failed to resolve host 'openwebui'" (the database name, not a host),
+    # so no GPU/telemetry samples were being recorded at all.
+    local db_password; db_password="$(jq -rn --arg v "$POSTGRES_PASSWORD" '$v|@uri')"
+
+    # exec so lllm-serve's SIGTERM reaches the recorder directly rather than a
     # shell that would have to forward it.
-    LLAMA_VRAM_LOGDIR="$LLAMA_VRAM_LOGDIR" \
-        exec python3 "$_VRAMLOG_DIR/llama_record.py" "${args[@]}"
+    DATABASE_URL="postgresql://openwebui:${db_password}@localhost:5432/openwebui" \
+        exec "$py" -m open_webui.benchmarks.telemetry_recorder "${args[@]}"
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
     cmd="${1:-record}"; shift 2>/dev/null || true
     case "$cmd" in
-        record) llama-vram-log "$@" ;;
+        record) lllm-vram-log "$@" ;;
         *)
             echo "usage: $(basename "$0") record [profile]" >&2
             exit 2
