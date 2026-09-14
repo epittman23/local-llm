@@ -179,7 +179,7 @@ lllm-vram-log() {
         }
     done
 
-    local envfile="$LLAMA_REPO/open-web-ui/.env"
+    local envfile="$LLAMA_REPO/infra/.env"
     if [[ ! -f "$envfile" ]]; then
         echo "lllm-vram-log: $envfile not found -- create it with POSTGRES_PASSWORD; not recording" >&2
         return 0
@@ -214,7 +214,7 @@ lllm-vram-log() {
     done
 
     local py; py="$(_lllm_openwebui_python)"
-    cd "$LLAMA_REPO/open-web-ui/openwebui/backend" || return 1
+    cd "$LLAMA_REPO/apps/openwebui/backend" || return 1
 
     # POSTGRES_PASSWORD must be percent-encoded before going into a URL --
     # see the matching comment in main.sh's lllm-backend(). An unescaped

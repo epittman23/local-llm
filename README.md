@@ -2,7 +2,7 @@
 
 A personal AI assistant running on cloud-hosted open-weight models via
 OpenRouter, using a pinned fork of [Open WebUI](https://github.com/open-webui/open-webui)
-(`open-web-ui/openwebui`, vendored into this repo) as the chat interface. See
+(`apps/openwebui`, vendored into this repo) as the chat interface. See
 `CLAUDE.md` for the full project rationale.
 
 The fork is pinned at `v0.11.3` and never merges upstream: it is a permanent
@@ -13,7 +13,7 @@ Docker: real integration between Open WebUI and this repo's own
 GPU/process-management tooling needs a host process on both sides (see the
 decisions log for why forking was rejected once, in 2026-09-06, and what
 changed since). Its chat and RAG data live in Postgres+pgvector
-(`open-web-ui/docker-compose.yml`), not SQLite.
+(`infra/docker-compose.yml`), not SQLite.
 
 ## Running it
 
@@ -21,16 +21,26 @@ Requires Docker Desktop with WSL integration enabled for this distro
 (Docker Desktop → Settings → Resources → WSL Integration), plus Bun and a
 Python 3 interpreter on the host for the fork's frontend and backend.
 
-A plain `git clone` is enough — the fork lives inside
-`open-web-ui/openwebui/` as ordinary tracked files, not a submodule. Put your
-secrets in `open-web-ui/.env` (gitignored):
+A plain `git clone` is enough — the fork lives inside `apps/openwebui/` as
+ordinary tracked files, not a submodule. Put your secrets in `infra/.env`
+(gitignored):
 
 ```bash
-# open-web-ui/.env
+# infra/.env
 OPENROUTER_API_KEY=<your OpenRouter API key, from https://openrouter.ai/keys>
 POSTGRES_PASSWORD=<openssl rand -base64 24>
 WEBUI_SECRET_KEY=<openssl rand -base64 24>
 ```
+
+> **Upgrading an existing checkout (2026-09-14).** The tree moved: the fork
+> from `open-web-ui/openwebui/` to `apps/openwebui/`, and the compose file
+> from `open-web-ui/` to `infra/`. `.env` is gitignored, so git will not move
+> it for you — run `mv open-web-ui/.env infra/.env` once, then delete the
+> leftover `open-web-ui/` directory. Your Postgres data is safe: the compose
+> project name is pinned to `open-web-ui`, so the existing
+> `open-web-ui_postgres-data` volume is still the one used. If
+> `docker volume ls` shows a *new* empty volume after the move, stop and
+> check that pin before going further.
 
 then, in one terminal:
 
@@ -38,7 +48,7 @@ then, in one terminal:
 lllm-backend
 ```
 
-which brings up Postgres (`open-web-ui/docker-compose.yml`) and the fork's
+which brings up Postgres (`infra/docker-compose.yml`) and the fork's
 backend (`uvicorn`, port `4000`) together, and tears Postgres back down when
 the backend stops. In a second terminal:
 
@@ -257,7 +267,7 @@ none of them a thin passthrough to a CLI that no longer exists:
   fingerprints a candidate with `lllm-config-id` before serving it.
 
 The adapter/suite TOMLs and system-prompt text files moved with the code,
-into `open-web-ui/openwebui/backend/open_webui/benchmarks/data/`; they no
+into `apps/openwebui/backend/open_webui/benchmarks/data/`; they no
 longer live at `tests/adapters/`, `tests/suites/`, `tests/tuning/` or
 `prompts/system/` in this repo (the gitignored, fetched-not-vendored
 `tests/data/` cache is left in place, orphaned but harmless, since the fork
@@ -280,7 +290,7 @@ shell exactly as before, then hands off to a recorder that waits for the port
 to open, samples `nvidia-smi` every `LLAMA_VRAM_INTERVAL` seconds (default 5),
 scrapes `/metrics` on the same pass, parses the server's own load output, and
 writes each of those as it happens — not to a file any more, but into the Open
-WebUI fork's own Postgres database (`open-web-ui/docker-compose.yml`), the
+WebUI fork's own Postgres database (`infra/docker-compose.yml`), the
 same one the chat interface itself uses. The recorder is now
 `open_webui.benchmarks.telemetry_recorder`, run under the fork's own backend
 venv rather than bare `python3`, and it writes with `psycopg` directly (no
@@ -580,7 +590,7 @@ A test still runs and prints its numbers when no run is open; its `config_id` is
 simply NULL, displayed as `unrecorded`, rather than attributed to a guess.
 
 There is no database file to gitignore any more: the store is the fork's own
-Postgres, reached via `DATABASE_URL` (loaded from `open-web-ui/.env` by
+Postgres, reached via `DATABASE_URL` (loaded from `infra/.env` by
 `lllm-backend`, and by `scripts/shell/vram-log.sh` for the recorder it execs).
 Set `LLAMA_VRAM_LOG=0` to disable recording, or run
 `./scripts/shell/vram-log.sh record [profile]` by hand to capture a server that
@@ -740,7 +750,7 @@ beside the serving telemetry.
 
 **Nothing in this repository states an expected answer.** Every item and every
 verdict comes from the dataset. The files under
-`open-web-ui/openwebui/backend/open_webui/benchmarks/data/adapters/` (moved
+`apps/openwebui/backend/open_webui/benchmarks/data/adapters/` (moved
 there from this repo's own `tests/adapters/` on 2026-09-08, along with the
 code that reads them) describe only *adaptation* — how a completion-style
 stub becomes a chat turn, which harness grades it, how long it may run.
@@ -787,7 +797,7 @@ server is already serving something.
 
 By default a request carries one message: the item. Selecting a system
 prompt on the Tests page puts the text of the matching file under
-`open-web-ui/openwebui/backend/open_webui/benchmarks/data/prompts/` in front
+`apps/openwebui/backend/open_webui/benchmarks/data/prompts/` in front
 of it as a `system` message, which is where Open WebUI puts its own, and is
 the only place it can go — this `llama-server` build has no system-prompt
 flag.
@@ -1259,8 +1269,8 @@ document is otherwise byte-identical.
 
 The Benchmarks feature needs no separate Python environment of its own any
 more: it runs inside the Open WebUI fork's own backend, under
-`open-web-ui/openwebui/backend/.venv`, which `lllm-backend` already
-bootstraps on first use (installing `open-web-ui/openwebui/backend/requirements.txt`)
+`apps/openwebui/backend/.venv`, which `lllm-backend` already
+bootstraps on first use (installing `apps/openwebui/backend/requirements.txt`)
 the same way it bootstraps everything else the fork's backend needs. There is
 nothing benchmark-specific left to install by hand.
 
@@ -1279,7 +1289,7 @@ the Textual dashboard (`llama-ui`); it was retired for `lllm-web` on
 `lllm-test`/`lllm-compare`/`lllm-report`/`lllm-tune`/`lllm-web`; all five were
 retired into the fork on 2026-09-08 (see "The Benchmarks section" below), and
 those dependencies moved with them, into
-`open-web-ui/openwebui/backend/requirements.txt` — alongside a new
+`apps/openwebui/backend/requirements.txt` — alongside a new
 `scikit-learn`, which widens the DS-1000 slice, and the same `pyyaml` pin,
 now needed there for DS-1000 items that round-trip through YAML. scipy is
 still a hard dependency (the Report page's request fails outright rather than
@@ -1308,7 +1318,7 @@ one for:
 | Open WebUI chat + Benchmarks (vite dev server) | `5173` | `lllm-frontend` |
 | Open WebUI + Benchmarks API (uvicorn) | `4000` | `lllm-backend` |
 
-`lllm-backend` still owns Postgres's lifecycle (`open-web-ui/docker-compose.yml`),
+`lllm-backend` still owns Postgres's lifecycle (`infra/docker-compose.yml`),
 starting it before uvicorn and tearing it down via a trap when uvicorn stops.
 See "Running it" above for the full command sequence.
 

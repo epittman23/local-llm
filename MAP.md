@@ -17,8 +17,10 @@ local-llm/
 ├── README.md                  usage/operations guide
 ├── MAP.md                     this file
 ├── requirements.txt           core Python deps (llama-console CLI helpers)
+├── apps/                      the applications themselves
+│   └── openwebui/             vendored Open WebUI fork (FastAPI + SvelteKit)
 ├── docs/                      meta docs: conventions, roadmap, proposals
-├── open-web-ui/               integration layer + vendored Open WebUI fork
+├── infra/                     docker-compose for Postgres + pgvector
 └── scripts/                   llama-console CLI + shell serving orchestration
 ```
 
@@ -57,17 +59,29 @@ Meta docs — conventions, history, and proposals, not end-user usage docs.
   what each file pins and why. Keep it after the port: it is also the record
   of what the shell layer meant.
 
-## `open-web-ui/`
+## `infra/`
 
-The integration layer around the vendored Open WebUI fork, plus the fork
-itself.
+Infrastructure this repo runs but does not write.
 
 - **`docker-compose.yml`** — Postgres + pgvector service backing the fork.
+  Its Compose project name is **pinned** to `open-web-ui` rather than
+  inherited from this directory's name; the volume name derives from the
+  project name, so without the pin the 2026-09-14 move of this file out of
+  `open-web-ui/` would have orphaned `open-web-ui_postgres-data` and started
+  the backend against an empty database. Do not change it.
 - **`.env`** — secrets (API keys, DB password, webui secret key); not
-  enumerated here.
+  enumerated here, and not tracked. Compose resolves it relative to the
+  compose file, so it lives beside it.
+
+## `apps/`
+
+The applications themselves. Before 2026-09-14 this repo held no application
+code at all; the fork lived in a submodule and that rule was a real
+constraint. It is not any more — see `docs/CLAUDE.md`'s Conventions.
+
 - **`openwebui/`** — the vendored Open WebUI fork (mapped below).
 
-### `open-web-ui/openwebui/` (vendored fork)
+### `apps/openwebui/` (vendored fork)
 
 A pinned fork of [`open-webui/open-webui`](https://github.com/open-webui/open-webui)
 (v0.11.3), vendored into this repo as ordinary tracked files on 2026-09-14 —
@@ -168,5 +182,11 @@ knowing about when navigating the filesystem directly:
   (HumanEval/MBPP/DS-1000 `items.jsonl`/`MANIFEST.json`/`CALIBRATION.json`).
   Nothing reads this any more; the fork's Benchmarks feature fetches its own
   copy under its own `DATA_DIR` on first use. Safe to delete.
+- **`apps/openwebui/node_modules/`** — the frontend dependency tree (~1.3 GB),
+  installed by `lllm-frontend` on first run. `bun.lock` beside it **is**
+  tracked (upstream ignored it; this repo does not — see that file's own
+  `.gitignore` comment).
+- **`apps/openwebui/backend/.venv/`** — the fork backend's own virtualenv,
+  kept separate from the repo-root `.venv/` on purpose.
 - **`__pycache__/`** — Python bytecode cache, scattered under `scripts/` and
   the vendored fork.

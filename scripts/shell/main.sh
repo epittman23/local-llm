@@ -543,7 +543,7 @@ _lllm_python() {
 # pages), backed by this app's Postgres instead of logs/llama.db. See
 # docs/CLAUDE.md's decisions log. The adapter/suite TOMLs and system-prompt
 # text files moved with it, into
-# open-web-ui/openwebui/backend/open_webui/benchmarks/data/ -- they no
+# apps/openwebui/backend/open_webui/benchmarks/data/ -- they no
 # longer live at tests/adapters, tests/suites or prompts/system here.
 # ---------------------------------------------------------------------------
 
@@ -560,12 +560,12 @@ _lllm_python() {
 # _lllm_openwebui_python: the interpreter the Open WebUI fork's backend runs
 # under
 #
-# A dedicated venv at open-web-ui/openwebui/backend/.venv, bootstrapped on
+# A dedicated venv at apps/openwebui/backend/.venv, bootstrapped on
 # first use exactly like _lllm_python bootstraps the shared one -- kept
 # completely separate on purpose (see the comment on _lllm_python above).
 # ---------------------------------------------------------------------------
 _lllm_openwebui_python() {
-    local dir="$LLAMA_REPO/open-web-ui/openwebui/backend"
+    local dir="$LLAMA_REPO/apps/openwebui/backend"
     local venv="$dir/.venv/bin/python"
     if [[ -x "$venv" ]]; then
         printf '%s' "$venv"; return 0
@@ -592,11 +592,11 @@ _lllm_openwebui_python() {
 # SvelteKit tooling is package-manager agnostic), but be aware this is
 # genuinely untested upstream -- Open WebUI's own dev docs and package.json's
 # engines field only reference Node.js/npm. If the build ever misbehaves in a
-# way that's hard to explain, `cd open-web-ui/openwebui && npm ci && npm run
+# way that's hard to explain, `cd apps/openwebui && npm ci && npm run
 # dev` is the documented, CI/Docker-tested fallback to try first.
 # ---------------------------------------------------------------------------
 lllm-frontend() (
-    cd "$LLAMA_REPO/open-web-ui/openwebui" || exit 1
+    cd "$LLAMA_REPO/apps/openwebui" || exit 1
     [[ -d node_modules ]] || bun install
     WEBUI_BACKEND_URL="http://localhost:${LLLM_BACKEND_PORT:-4000}" bun run dev
 )
@@ -606,7 +606,7 @@ lllm-frontend() (
 # Postgres+pgvector container it depends on
 #
 #   lllm-backend                   # uvicorn --reload on :4000, Postgres via
-#                                   # open-web-ui/docker-compose.yml
+#                                   # infra/docker-compose.yml
 #
 # Starts Postgres before the backend and tears it down when the backend
 # stops (Ctrl-C included) via the trap below. Run as a subshell `(...)`,
@@ -618,7 +618,7 @@ lllm-frontend() (
 #
 # DATABASE_URL/VECTOR_DB/WEBUI_SECRET_KEY/OPENAI_* need POSTGRES_PASSWORD,
 # WEBUI_SECRET_KEY and OPENROUTER_API_KEY, which this function loads itself
-# from open-web-ui/.env -- it does not rely on the caller having sourced
+# from infra/.env -- it does not rely on the caller having sourced
 # anything first. Without WEBUI_SECRET_KEY set, the app exits immediately on
 # import (env.py's own hard-requirement check), and under --reload the
 # supervisor just respawns the dying worker in a tight loop rather than
@@ -626,9 +626,9 @@ lllm-frontend() (
 # file explicitly here instead of documenting it as the caller's job.
 # ---------------------------------------------------------------------------
 lllm-backend() (
-    trap 'docker compose -f "$LLAMA_REPO/open-web-ui/docker-compose.yml" down' EXIT
+    trap 'docker compose -f "$LLAMA_REPO/infra/docker-compose.yml" down' EXIT
 
-    local envfile="$LLAMA_REPO/open-web-ui/.env"
+    local envfile="$LLAMA_REPO/infra/.env"
     if [[ ! -f "$envfile" ]]; then
         echo "lllm-backend: $envfile not found -- create it with OPENROUTER_API_KEY, POSTGRES_PASSWORD, WEBUI_SECRET_KEY" >&2
         exit 1
@@ -638,10 +638,10 @@ lllm-backend() (
     source "$envfile"
     set +a
 
-    docker compose -f "$LLAMA_REPO/open-web-ui/docker-compose.yml" up -d postgres
+    docker compose -f "$LLAMA_REPO/infra/docker-compose.yml" up -d postgres
 
     local py; py="$(_lllm_openwebui_python)"
-    cd "$LLAMA_REPO/open-web-ui/openwebui/backend" || exit 1
+    cd "$LLAMA_REPO/apps/openwebui/backend" || exit 1
 
     # POSTGRES_PASSWORD is interpolated straight into a URL, so it must be
     # percent-encoded first -- an unescaped '/' or '+' (this repo's own

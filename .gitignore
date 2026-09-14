@@ -219,12 +219,16 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# GPU telemetry captures from scripts/llama-vram-log.sh: machine-specific,
+# GPU telemetry captures from scripts/shell/vram-log.sh: machine-specific,
 # regenerated on every serving run. README.md/CLAUDE.md are the durable record.
+# (The script moved from scripts/llama-vram-log.sh on 2026-09-07; the old path
+# this comment used to name has not existed since.)
 logs/
 
-# Benchmark datasets fetched by scripts/llama_fetch.py. Upstream-versioned and
-# carrying three different licenses (MIT, CC-BY-4.0, CC-BY-SA-4.0), so they are
-# downloaded rather than vendored; MANIFEST.json pins the revision each result
-# was measured against.
+# Orphaned: the old CLI's fetched-dataset cache. scripts/llama_fetch.py, which
+# this comment used to name as the writer, was deleted on 2026-09-08 when the
+# benchmark suite moved into the fork -- the Benchmarks feature now fetches its
+# own copy under its own DATA_DIR. The rule is kept only so a leftover
+# tests/data/ on an existing checkout stays out of git status; the directory
+# itself is safe to delete.
 tests/data/

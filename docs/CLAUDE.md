@@ -138,26 +138,27 @@ assume a cloud-only environment.
 
 ## Conventions
 
-- This repo no longer holds zero application code — see the decisions log
-  entry reversing the earlier "no custom backend or frontend code" stance.
-  `open-web-ui/openwebui` is a pinned git submodule (a fork of Open WebUI,
-  `v0.11.3`, on its own `customizations` branch); the assistant's actual
-  frontend and backend live there, not in this repo, and so does the
-  benchmark/testing/reporting/tuning suite described below — see the
-  2026-09-08 decisions log entry for the full migration. What this repo
-  still holds directly is documentation (`README.md`, `CLAUDE.md`),
-  operational shell scripts (`open-web-ui/docker-compose.yml` for the
-  Postgres+pgvector container the fork's backend depends on,
-  `scripts/shell/main.sh` for the local llama.cpp server and the fork's
-  `lllm-frontend`/`lllm-backend` host processes, `scripts/shell/vram-log.sh`
-  for GPU telemetry capture), and `scripts/llama_console.py` (Rich-or-plain
-  terminal output backing `lllm-profiles`/`lllm-check`/`lllm-vram`, and the
-  one place Rich is allowed to touch stdout, in `write_markdown`).
+- This repo is a monorepo: it holds the application, not just glue around
+  it. `apps/openwebui/` is the Open WebUI fork (`v0.11.3`), vendored into
+  this repo as ordinary tracked files on 2026-09-14 — it was a pinned git
+  submodule until then. The assistant's frontend and backend live there, and
+  so does the benchmark/testing/reporting/tuning suite described below (see
+  the 2026-09-08 entry for that migration). It is a permanent hard fork:
+  there is no upstream sync path and no `git checkout <tag>` upgrade
+  procedure any more, so it may be restructured and hand-edited freely.
+
+  What this repo holds outside `apps/` is `infra/docker-compose.yml` (the
+  Postgres+pgvector container the fork's backend depends on),
+  `scripts/shell/main.sh` (the local llama.cpp server and the fork's
+  `lllm-frontend`/`lllm-backend` host processes), `scripts/shell/vram-log.sh`
+  (GPU telemetry capture), `scripts/llama_console.py` (Rich-or-plain terminal
+  output backing `lllm-profiles`/`lllm-check`/`lllm-vram`, and the one place
+  Rich is allowed to touch stdout, in `write_markdown`), and documentation.
 
   The benchmark/testing suite itself — adapters, suite tiering, dataset
   fetch, grading, the run/grade/record loop, config comparison, the
   statistical report, and the configuration-search tuner — lives in
-  `open-web-ui/openwebui/backend/open_webui/benchmarks/`, reached through
+  `apps/openwebui/backend/open_webui/benchmarks/`, reached through
   the fork's own admin-only "Benchmarks" pages, not through any command in
   this repo. `scripts/shell/vram-log.sh` still computes each run's
   configuration fingerprint in shell (the one source of truth
@@ -171,11 +172,14 @@ assume a cloud-only environment.
   `lllm-test`/`lllm-compare`/`lllm-report`/`lllm-tune`/`lllm-web`/`lllm-db`
   shell commands.
 
-  The line to keep: shell scripts here are operational glue, kept thin, with
-  `scripts/shell/main.sh` the single source of truth for serving
-  configuration; application code — including the measurement harness — lives
-  in the fork, never here, and model/system-prompt configuration for the
-  assistant still lives in Open WebUI, never in this repo.
+  The line to keep, restated for the monorepo: `scripts/shell/main.sh` is
+  still the single source of truth for serving configuration, and
+  model/system-prompt configuration for the assistant still lives in Open
+  WebUI, never in a repo file. What is *no longer* a rule is "application
+  code lives in the fork, never here" — that sentence described a submodule
+  boundary that does not exist any more. Application code lives under
+  `apps/`; `scripts/` stays operational glue, kept thin, and is itself on the
+  way out (see the 2026-09-14 entry).
 - Testing approach, two separate things:
   - Changes to Open WebUI (the fork), including its Benchmarks section, are
     verified by using it in the browser at `http://localhost:5173` (manual —
@@ -203,7 +207,7 @@ assume a cloud-only environment.
 - Start/ensure the Open WebUI fork is running: `lllm-backend` (Postgres +
   the fork's backend, `uvicorn` on `4000`) in one terminal, `lllm-frontend`
   (the fork's frontend dev server, `vite` on `5173`) in another —
-  `scripts/shell/main.sh`. `open-web-ui/.env` holds `OPENROUTER_API_KEY`,
+  `scripts/shell/main.sh`. `infra/.env` holds `OPENROUTER_API_KEY`,
   `POSTGRES_PASSWORD`, and `WEBUI_SECRET_KEY`. `lllm-backend` owns Postgres's
   lifecycle directly (brings it up before uvicorn, tears it down via a trap
   when uvicorn stops) — there is no separate `docker compose up` step. Chat
@@ -234,7 +238,7 @@ or agent) updates the docs in the same commit:
   is not reusable. Numbers that predate a hardware or model change are stale;
   re-measure or mark them as historical.
 - **Shell scripts and docs must agree**: if `scripts/shell/main.sh`,
-  `scripts/shell/vram-log.sh`, or `open-web-ui/docker-compose.yml` changes
+  `scripts/shell/vram-log.sh`, or `infra/docker-compose.yml` changes
   its defaults, flags, or function names, update the `README.md` description
   of it in the same change. `scripts/shell/main.sh` is the source of truth
   for the local serving configuration; if it drifts from `~/.bashrc`,
@@ -243,7 +247,7 @@ or agent) updates the docs in the same commit:
   change to those flags must be reflected in `_vramlog_config` too, or old
   and new runs get fingerprinted as the same configuration.
 - **The database schema is append-only.** The benchmark tables' migrations
-  live as ordinary Alembic revisions under `open-web-ui/openwebui/backend/
+  live as ordinary Alembic revisions under `apps/openwebui/backend/
   open_webui/migrations/versions/`, same as the rest of the fork's schema;
   add a migration, never edit one that has been applied. When a change
   alters what the `config_id` fingerprint covers — which changes every
@@ -278,6 +282,77 @@ All commits should use conventional commit style and stay focused on one topic. 
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-09-14**: Merged the Open WebUI fork into this repo as a monorepo,
+  reversing the submodule decision in the 2026-09-07 (second) entry below.
+
+  **Why the earlier reasoning no longer applies.** That entry chose a
+  submodule over vendoring for one stated reason: "the fork is ~420MB with a
+  large, unrelated commit history that has no business inside `local-llm`'s
+  own `.git` — the submodule stores one commit SHA, not that history." That
+  objection was about *history*, not about the tree, and a squash import
+  answers it directly. The fork's 18,400 commits (18,391 upstream plus 9 of
+  this project's own) were not imported; one commit carrying the tree was.
+  Measured: `.git` went from 45 MB to 72 MB, not to ~420 MB. The fork's full
+  history still exists at `https://github.com/epittman23/open-webui.git` and
+  is kept as a read-only archive — do not delete that repository.
+
+  **What the submodule was costing.** Clones needed `--recursive` or the
+  directory came up empty; every change that touched both the glue and the
+  app spanned two repositories and two commit graphs; and the Conventions
+  rule "application code lives in the fork, never here" drew a boundary
+  through what is one system, which is why the benchmark suite's shell-out to
+  `main.sh` looked reasonable for as long as it did.
+
+  **Hard fork, explicitly.** There is no upstream sync path any more. The
+  2026-09-07 posture of "pinned, never merged, updated by a deliberate
+  `git checkout <tag>`" is retired along with the submodule; the vendored
+  tree is owned code and may be restructured and hand-edited. This is a
+  one-way door: every future Open WebUI security fix and feature is now this
+  project's own work. It is taken deliberately, because the frontend is being
+  replaced outright (see the Astro/shadcn migration this entry opens), which
+  would have ended upstream mergeability regardless.
+
+  **Layout.** `open-web-ui/openwebui/` → `apps/openwebui/`, and
+  `open-web-ui/docker-compose.yml` → `infra/docker-compose.yml`, with `.env`
+  moving beside it because Compose resolves `.env` relative to the compose
+  file. The fork is deliberately kept whole for now, backend and SvelteKit
+  frontend together, rather than split into `apps/server` and `apps/web`:
+  `pyproject.toml`, the `Dockerfile` and the build hooks all still tie them
+  together, and splitting them while the Svelte frontend is still alive would
+  be churn. When that frontend is deleted, what remains is the server and the
+  rename becomes mechanical.
+
+  **The pin that prevents silent data loss.** Compose derives its project
+  name from the compose file's parent directory, and the volume name from the
+  project name. Moving the file out of `open-web-ui/` would therefore have
+  renamed `open-web-ui_postgres-data` and brought the backend up against an
+  empty database — which looks like a working app, not like an error. The
+  project name is now pinned with a top-level `name: open-web-ui` in the
+  compose file, verified before the move to resolve to the same volume from
+  both the old and new directory. Do not change that value.
+
+  **Two `.gitignore` reversals.** The fork's own ignore file is kept nested
+  rather than folded into the root one — the root file is Python-only and has
+  no `node_modules` or `.svelte-kit` entries, so without the nested file the
+  build output would become untracked chaos. But two of its entries are now
+  wrong for owned code: `bun.lock` is un-ignored, because bun is this repo's
+  documented package manager and its lockfile is the only reproducible record
+  of the frontend dependency tree (upstream ignored it because upstream
+  builds with npm); and `CLAUDE.md` is un-ignored, so a per-app contributor
+  guide can be a tracked file. Two files also needed `git add -f` during the
+  import: `backend/data/readme.txt` and `backend/open_webui/data/readme.txt`,
+  which that same ignore file covers but upstream force-tracks. A plain
+  `git add` would have dropped them silently.
+
+  **A baseline captured first.** `docs/serving-baseline/` holds 24 `config-id`
+  fingerprints, the four profiles' resolved settings, and the verbatim
+  rationale comments from `main.sh`, captured before any of this moved. They
+  exist for the shell-to-Python port that follows, where a one-character drift
+  in the fingerprint would silently file the same serving configuration under
+  a new id and make historical measurements uncomparable with new ones. They
+  already earned their keep once: re-running the capture after the path
+  changes above proved all 24 unchanged.
+
 - **2026-09-08**: Migrated the entire `lllm-test`/`lllm-compare`/`lllm-report`/
   `lllm-tune`/`lllm-web` suite into the Open WebUI fork itself, closing out
   the "deferred, not done in this change" merge the 2026-09-07 entry below

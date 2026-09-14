@@ -1,6 +1,9 @@
 x.py
 yarn.lock
-bun.lock
+# bun.lock is deliberately NOT ignored: bun is this repo's documented
+# package manager for the frontend (lllm-frontend runs `bun install`),
+# so its lockfile is the only reproducible record of the frontend
+# dependency tree. Upstream ignored it because upstream builds with npm.
 .DS_Store
 node_modules
 /build
@@ -16,7 +19,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 .nvmrc
-CLAUDE.md
+# CLAUDE.md is deliberately NOT ignored: this tree is part of the
+# local-llm monorepo now, so a per-app contributor guide here has to be
+# a tracked file. Upstream ignored it as a local scratch file.
 # C extensions
 *.so
 
