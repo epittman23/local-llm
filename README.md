@@ -2,17 +2,17 @@
 
 A personal AI assistant running on cloud-hosted open-weight models via
 OpenRouter, using a pinned fork of [Open WebUI](https://github.com/open-webui/open-webui)
-(`open-web-ui/openwebui`, a git submodule) as the chat interface. See
+(`open-web-ui/openwebui`, vendored into this repo) as the chat interface. See
 `CLAUDE.md` for the full project rationale.
 
-The fork is pinned at `v0.11.3` and never merges upstream — every update is a
-deliberate `git checkout <tag>` inside the submodule, not a tracking branch.
-It runs as two host processes, `lllm-frontend` and `lllm-backend`, the same
-way the local-inference tooling below (`lllm-serve`) already does, rather
-than in Docker: real integration between Open WebUI and this repo's own
-GPU/process-management tooling needs a host process on both sides
-(see the decisions log for why forking was rejected once, in 2026-09-06, and
-what changed since). Its chat and RAG data live in Postgres+pgvector
+The fork is pinned at `v0.11.3` and never merges upstream: it is a permanent
+hard fork, vendored directly into this repo rather than tracked as a submodule.
+It runs as two host processes, `lllm-frontend` and `lllm-backend`, the same way
+the local-inference tooling below (`lllm-serve`) already does, rather than in
+Docker: real integration between Open WebUI and this repo's own
+GPU/process-management tooling needs a host process on both sides (see the
+decisions log for why forking was rejected once, in 2026-09-06, and what
+changed since). Its chat and RAG data live in Postgres+pgvector
 (`open-web-ui/docker-compose.yml`), not SQLite.
 
 ## Running it
@@ -21,9 +21,9 @@ Requires Docker Desktop with WSL integration enabled for this distro
 (Docker Desktop → Settings → Resources → WSL Integration), plus Bun and a
 Python 3 interpreter on the host for the fork's frontend and backend.
 
-Clone this repo with `git submodule update --init --recursive` — the fork
-lives inside `open-web-ui/openwebui/` as a submodule, so a plain clone leaves
-that directory empty. Put your secrets in `open-web-ui/.env` (gitignored):
+A plain `git clone` is enough — the fork lives inside
+`open-web-ui/openwebui/` as ordinary tracked files, not a submodule. Put your
+secrets in `open-web-ui/.env` (gitignored):
 
 ```bash
 # open-web-ui/.env

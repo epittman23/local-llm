@@ -17,7 +17,6 @@ local-llm/
 ├── README.md                  usage/operations guide
 ├── MAP.md                     this file
 ├── requirements.txt           core Python deps (llama-console CLI helpers)
-├── .gitmodules                declares the open-web-ui/openwebui submodule
 ├── docs/                      meta docs: conventions, roadmap, proposals
 ├── open-web-ui/               integration layer + vendored Open WebUI fork
 └── scripts/                   llama-console CLI + shell serving orchestration
@@ -66,18 +65,19 @@ itself.
 - **`docker-compose.yml`** — Postgres + pgvector service backing the fork.
 - **`.env`** — secrets (API keys, DB password, webui secret key); not
   enumerated here.
-- **`openwebui/`** — the submodule (mapped below).
+- **`openwebui/`** — the vendored Open WebUI fork (mapped below).
 
-### `open-web-ui/openwebui/` (git submodule)
+### `open-web-ui/openwebui/` (vendored fork)
 
 A pinned fork of [`open-webui/open-webui`](https://github.com/open-webui/open-webui)
-(currently v0.11.3, tracked via `.gitmodules` at
-`https://github.com/epittman23/open-webui.git`), checked out on its own
-`customizations` branch (off the pinned tag) rather than detached HEAD, so
-this repo's own additions to the fork have somewhere to live as real commits.
-This is otherwise upstream-owned code we don't hand-edit except through the
-fork's own commits — see its own `README.md`/`CHANGELOG.md` for upstream
-feature docs, not restated here. A SvelteKit + FastAPI app:
+(v0.11.3), vendored into this repo as ordinary tracked files on 2026-09-14 —
+previously a git submodule. The import squashed the fork's history to a
+single commit; the full history remains at
+`https://github.com/epittman23/open-webui.git` (branch `customizations`, at
+`67d4039`), which is kept as a read-only archive. This is now owned code, a
+permanent hard fork with no upstream sync path — see `docs/CLAUDE.md`'s
+decisions log. For upstream feature docs see its own
+`README.md`/`CHANGELOG.md`, not restated here. A SvelteKit + FastAPI app:
 
 - **`backend/open_webui/`** — the FastAPI app: `main.py` (entrypoint),
   `routers/` (API endpoints, including `routers/benchmarks/`), `models/` (DB
@@ -152,10 +152,6 @@ Per-module purpose and rationale are documented in detail in
 [`docs/CLAUDE.md`](docs/CLAUDE.md)'s "Conventions" section — this entry is a
 summary, not a replacement.
 
-## `.gitmodules`
-
-Declares the `open-web-ui/openwebui` submodule (see above).
-
 ## Local/generated (not tracked)
 
 Present on disk but gitignored — won't show up in `git ls-files`, but worth
@@ -173,4 +169,4 @@ knowing about when navigating the filesystem directly:
   Nothing reads this any more; the fork's Benchmarks feature fetches its own
   copy under its own `DATA_DIR` on first use. Safe to delete.
 - **`__pycache__/`** — Python bytecode cache, scattered under `scripts/` and
-  the submodule.
+  the vendored fork.
