@@ -52,6 +52,11 @@ Meta docs — conventions, history, and proposals, not end-user usage docs.
 - **`proposed-inference-server.md`** — a hardware proposal (Dell R730 +
   Tesla V100) for a future dedicated inference server. Status: proposed, not
   built.
+- **`migration-plan.md`** — the resumable plan for the in-flight monorepo /
+  shell-removal / Astro-frontend migration: status board, locked decisions,
+  per-phase checklists, and the current session's notes. Read it first when
+  resuming that work, and update it before ending a session. Temporary:
+  delete it (and this entry) when the migration's final phase lands.
 - **`serving-baseline/`** — test input, not prose: `config-id` fingerprints,
   profile seed data and the verbatim profile rationale, captured from
   `scripts/shell/main.sh` on 2026-09-14 before the shell layer is ported to
