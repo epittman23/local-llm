@@ -83,6 +83,86 @@ class ServingProfile:
     reasoning_effort_default: str | None = None
     notes: str = ''
 
+    @classmethod
+    def from_definition(cls, name: str, definition: Mapping[str, Any]) -> ServingProfile:
+        """Build a profile from a stored definition: a version row, or seed data.
+
+        Keys outside DEFINITION_FIELDS are ignored, so a whole row -- ids,
+        timestamps and all -- can be passed as it is. A None where the field
+        has a real default (hf_repo, cache_k, ...) takes the default; a None
+        where None is meaningful (moe, override_tensors,
+        reasoning_effort_default) is kept.
+        """
+        fields = {key: definition[key] for key in DEFINITION_FIELDS if key in definition}
+        for key in ('hf_repo', 'hf_pattern', 'notes', 'parallel', 'cache_k', 'cache_v', 'batch', 'ubatch'):
+            if fields.get(key) is None:
+                fields.pop(key, None)
+        for key in ('spec', 'samplers', 'extra'):
+            fields[key] = tuple(fields.get(key) or ())
+        return cls(name=name, **fields)
+
+
+#: Every field a stored profile definition carries. Anything else in a
+#: definition handed to validate_definition is rejected, not silently dropped.
+DEFINITION_FIELDS = (
+    'arch',
+    'alias',
+    'model_path',
+    'hf_repo',
+    'hf_pattern',
+    'ctx',
+    'threads',
+    'ngl',
+    'moe',
+    'override_tensors',
+    'parallel',
+    'cache_k',
+    'cache_v',
+    'batch',
+    'ubatch',
+    'spec',
+    'samplers',
+    'extra',
+    'reasoning_effort_default',
+    'notes',
+)
+
+REQUIRED_FIELDS = frozenset({'arch', 'alias', 'model_path', 'ctx', 'threads', 'ngl'})
+
+
+def validate_definition(definition: Mapping[str, Any]) -> dict[str, Any]:
+    """Check a profile definition before it is stored, and normalise its lists.
+
+    Stricter than `resolve` on purpose. `resolve` corrects a one-off
+    *override* -- an MoE value on a dense model is dropped with a warning, so
+    the server still starts -- but a stored *definition* with the same mistake
+    is simply wrong, and is refused so that it cannot be saved and then
+    quietly corrected on every launch.
+    """
+    unknown = set(definition) - set(DEFINITION_FIELDS)
+    if unknown:
+        raise ProfileError(f'unknown profile fields: {", ".join(sorted(unknown))}')
+    missing = REQUIRED_FIELDS - set(definition)
+    if missing:
+        raise ProfileError(f'missing profile fields: {", ".join(sorted(missing))}')
+
+    if definition['arch'] not in (ARCH_DENSE, ARCH_MOE):
+        raise ProfileError(f"arch must be '{ARCH_DENSE}' or '{ARCH_MOE}'")
+    if definition['arch'] == ARCH_DENSE and definition.get('moe') is not None:
+        raise ProfileError('--n-cpu-moe is not applicable to a dense model; leave moe empty')
+
+    spec = list(definition.get('spec') or [])
+    extra = list(definition.get('extra') or [])
+    if '--parallel' in spec or '--parallel' in extra:
+        raise ProfileError('--parallel is its own field; it does not belong in the speculative or extra arguments')
+    # The thinking budget is a field, and the launcher builds
+    # --chat-template-kwargs from the *resolved* effort. A literal here would
+    # be fingerprinted as the override but launched as the literal.
+    if any('reasoning_effort' in arg for arg in extra):
+        raise ProfileError('set the thinking budget with reasoning_effort_default, not in extra arguments')
+
+    return {**definition, 'spec': spec, 'samplers': list(definition.get('samplers') or []), 'extra': extra}
+
 
 @dataclass(frozen=True)
 class Overrides:
