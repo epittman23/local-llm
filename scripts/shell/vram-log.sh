@@ -213,7 +213,14 @@ lllm-vram-log() {
         args+=(--config-line "$line")
     done
 
-    local py; py="$(_lllm_openwebui_python)"
+    # Checked, not assumed: a failed venv bootstrap used to hand back a path
+    # to an interpreter with none of the backend's packages, and the recorder
+    # then died on import with no telemetry recorded and nothing in the
+    # server's terminal saying why.
+    local py; py="$(_lllm_openwebui_python)" || {
+        echo "lllm-vram-log: no usable backend venv; not recording" >&2
+        return 0
+    }
     cd "$LLAMA_REPO/apps/openwebui/backend" || return 1
 
     # POSTGRES_PASSWORD must be percent-encoded before going into a URL --

@@ -216,7 +216,11 @@ assume a cloud-only environment.
   admin-only, in the same frontend — no separate port any more (see "Local
   inference" below and the decisions log for why).
 - Requires Docker Desktop with WSL integration enabled for this distro (for
-  Postgres), plus Bun and a Python 3 interpreter on the host for the fork.
+  Postgres), plus Bun and a **Python 3.11 or 3.12** interpreter on the host
+  for the fork (its `requires-python` is `>= 3.11, < 3.13`). `lllm-backend`
+  selects that interpreter by version rather than taking bare `python3`,
+  because on this machine an interactive shell's `python3` is linuxbrew's
+  3.14 — see `README.md`'s Dependencies section.
 
 ## Maintenance policy
 

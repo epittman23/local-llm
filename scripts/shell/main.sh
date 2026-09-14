@@ -560,22 +560,83 @@ _lllm_python() {
 # _lllm_openwebui_python: the interpreter the Open WebUI fork's backend runs
 # under
 #
-# A dedicated venv at apps/openwebui/backend/.venv, bootstrapped on
-# first use exactly like _lllm_python bootstraps the shared one -- kept
-# completely separate on purpose (see the comment on _lllm_python above).
+# A dedicated venv at apps/openwebui/backend/.venv, kept completely separate
+# from _lllm_python's on purpose (see the comment on _lllm_python above).
+#
+# Three things this has to get right, each learned the hard way:
+#
+#   The interpreter. The fork pins requires-python ">= 3.11, < 3.13.0a1"
+#   (apps/openwebui/pyproject.toml; upstream's Dockerfile builds on 3.11), and
+#   bare `python3` is not guaranteed to be in that range -- on this box an
+#   interactive shell resolves it to linuxbrew's 3.14, for which none of the
+#   128 pinned requirements install. So the interpreter is chosen by version,
+#   not by name: LLAMA_OPENWEBUI_PYTHON if set, else the first of python3.12,
+#   python3.11, python3 that falls inside the range.
+#
+#   Failure. The previous version never checked pip's exit status and treated
+#   "bin/python exists" as "the venv is ready", so one failed install left a
+#   venv containing only pip, reused on every later run, with uvicorn dying on
+#   its first import and nothing pointing back at the cause. A stamp file is
+#   now written only after a successful install, and a failed install removes
+#   the half-built venv so the next run retries instead of inheriting it.
+#
+#   Existing venvs. One built before the stamp existed is adopted rather than
+#   rebuilt if it imports the backend's core dependencies under an in-range
+#   interpreter: rebuilding a working venv costs several GB of downloads
+#   (torch, sentence-transformers, faster-whisper) for nothing. Anything else
+#   -- wrong interpreter, missing packages -- is discarded and rebuilt.
 # ---------------------------------------------------------------------------
+_lllm_openwebui_python_in_range() {
+    "$1" -c 'import sys; sys.exit(0 if (3, 11) <= sys.version_info[:2] < (3, 13) else 1)' 2>/dev/null
+}
+
 _lllm_openwebui_python() {
     local dir="$LLAMA_REPO/apps/openwebui/backend"
-    local venv="$dir/.venv/bin/python"
+    local venv_dir="$dir/.venv"
+    local venv="$venv_dir/bin/python"
+    local stamp="$venv_dir/.lllm-bootstrap-complete"
+
     if [[ -x "$venv" ]]; then
+        if [[ -f "$stamp" ]]; then
+            printf '%s' "$venv"; return 0
+        fi
+        if _lllm_openwebui_python_in_range "$venv" \
+           && "$venv" -c 'import uvicorn, alembic, sqlalchemy, fastapi' 2>/dev/null; then
+            : > "$stamp"
+            printf '%s' "$venv"; return 0
+        fi
+        echo "lllm: $venv_dir is incomplete or on an unsupported Python" \
+             "($("$venv" --version 2>&1)); rebuilding it" >&2
+        rm -rf "$venv_dir"
+    fi
+
+    local candidates="${LLAMA_OPENWEBUI_PYTHON:-python3.12 python3.11 python3}"
+    local base="" candidate found
+    for candidate in $candidates; do
+        found="$(command -v "$candidate" 2>/dev/null)" || continue
+        if _lllm_openwebui_python_in_range "$found"; then
+            base="$found"; break
+        fi
+    done
+    if [[ -z "$base" ]]; then
+        echo "lllm: no Python in the fork's supported range (>= 3.11, < 3.13)" \
+             "found; tried: $candidates. Install python3.12, or point" \
+             "LLAMA_OPENWEBUI_PYTHON at a 3.11/3.12 interpreter." >&2
+        return 1
+    fi
+
+    echo "lllm: creating $venv_dir with $base ($("$base" --version 2>&1));" \
+         "first run installs the fork's backend requirements, several GB" >&2
+    if "$base" -m venv "$venv_dir" >&2 \
+       && "$venv" -m pip install -q --upgrade pip >&2 \
+       && "$venv" -m pip install -q -r "$dir/requirements.txt" >&2; then
+        : > "$stamp"
         printf '%s' "$venv"; return 0
     fi
-    echo "lllm: creating $dir/.venv (first run; installs the Open WebUI" \
-         "fork's backend requirements)" >&2
-    python3 -m venv "$dir/.venv" >&2
-    "$venv" -m pip install -q --upgrade pip >&2
-    "$venv" -m pip install -q -r "$dir/requirements.txt" >&2
-    printf '%s' "$venv"
+    echo "lllm: installing the fork's backend requirements failed; removed the" \
+         "partial $venv_dir so the next run retries from scratch" >&2
+    rm -rf "$venv_dir"
+    return 1
 }
 
 # ---------------------------------------------------------------------------
@@ -640,7 +701,10 @@ lllm-backend() (
 
     docker compose -f "$LLAMA_REPO/infra/docker-compose.yml" up -d postgres
 
-    local py; py="$(_lllm_openwebui_python)"
+    # Checked, not assumed: a failed venv bootstrap used to hand back a path
+    # to an interpreter with none of the backend's packages, and uvicorn then
+    # died on its first import with nothing pointing back at the cause.
+    local py; py="$(_lllm_openwebui_python)" || exit 1
     cd "$LLAMA_REPO/apps/openwebui/backend" || exit 1
 
     # POSTGRES_PASSWORD is interpolated straight into a URL, so it must be

@@ -1274,6 +1274,18 @@ bootstraps on first use (installing `apps/openwebui/backend/requirements.txt`)
 the same way it bootstraps everything else the fork's backend needs. There is
 nothing benchmark-specific left to install by hand.
 
+That venv needs **Python 3.11 or 3.12**. The fork pins
+`requires-python = ">= 3.11, < 3.13.0a1"`, and none of its pinned requirements
+install on anything newer. `lllm-backend` therefore picks the interpreter by
+version rather than taking whatever `python3` happens to be: `python3.12`,
+then `python3.11`, then `python3` only if it is in range. This matters on any
+machine with a newer Python ahead on `PATH` — with linuxbrew's Python
+installed, bare `python3` in an interactive shell is 3.14. Set
+`LLAMA_OPENWEBUI_PYTHON` to force a specific interpreter. The venv only counts
+as ready once its install has completed (marked by a `.lllm-bootstrap-complete`
+stamp inside it); a failed install is removed rather than left behind, so the
+next run retries from scratch instead of reusing a venv with nothing in it.
+
 This repo's own `requirements.txt` now carries exactly one thing, **Rich**,
 for the three shell commands `scripts/llama_console.py` still backs
 (`lllm-profiles`, `lllm-check`, `lllm-vram` — none of them benchmarking).
