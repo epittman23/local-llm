@@ -1,0 +1,470 @@
+{
+  "captured_at": "2026-09-14",
+  "source_commit": "e6164039f2dfc36efd714038539fd28c4230295b",
+  "source": "scripts/shell/main.sh config-id (vram-log.sh:122-153 _vramlog_config)",
+  "algorithm": "sha1sum of: alias, then the six lines, each followed by a newline; truncated to the first 8 hex characters",
+  "invariants": [
+    {
+      "id": "spec-empty-is-off",
+      "cases": [
+        "spec-off",
+        "spec-empty"
+      ],
+      "why": "An empty LLAMA_SPEC is treated as off, not as an empty flag list rendered differently."
+    },
+    {
+      "id": "reasoning-noop-on-non-thinking-model",
+      "cases": [
+        "base-qwen36",
+        "reasoning-noop"
+      ],
+      "why": "LLAMA_REASONING is ignored unless the profile carries reasoning_effort in EXTRA; the line stays n/a."
+    },
+    {
+      "id": "moe-flag-dropped-on-dense",
+      "cases": [
+        "base-qwen38",
+        "moe-on-dense"
+      ],
+      "why": "main.sh:239-243 guard rail: an MoE-only flag must never reach a dense model."
+    },
+    {
+      "id": "model-path-not-fingerprinted",
+      "cases": [
+        "base-qwen38",
+        "invariant-model-path"
+      ],
+      "why": "The fingerprint covers served configuration only. Changing the weights path is a new profile version but the same config_id."
+    }
+  ],
+  "cases": [
+    {
+      "case": "base-qwen38",
+      "profile": "qwen38",
+      "note": "dense; carries override-tensors, speculative, samplers and reasoning effort",
+      "env": {},
+      "config_id": "9eab7cfc",
+      "alias": "qwen3.8-27b",
+      "lines": [
+        "arch: dense | ngl: 20 | ctx: 16384 (total) | parallel: 1 | threads: 12 | moe: n/a",
+        "override-tensors: output\\.weight=CUDA0,blk\\.64\\..*=CUDA0",
+        "speculative: --spec-type draft-mtp --spec-draft-n-max 2",
+        "cache: k=q8_0 v=q8_0 | fa: on | batch: 512 | ubatch: 512",
+        "reasoning effort: medium",
+        "samplers: temp 1.0 | top-p 0.95 | top-k 20 | min-p 0.0"
+      ]
+    },
+    {
+      "case": "base-qwen36",
+      "profile": "qwen36",
+      "note": "MoE; no override-tensors, no speculative, llama.cpp default samplers",
+      "env": {},
+      "config_id": "063e630c",
+      "alias": "qwen3.6-35b-a3b",
+      "lines": [
+        "arch: moe | ngl: 99 | ctx: 65536 (total) | parallel: 1 | threads: 6 | moe: 34",
+        "override-tensors: n/a",
+        "speculative: off",
+        "cache: k=q8_0 v=q8_0 | fa: on | batch: 512 | ubatch: 512",
+        "reasoning effort: n/a",
+        "samplers: llama.cpp defaults"
+      ]
+    },
+    {
+      "case": "base-qwen25c",
+      "profile": "qwen25c",
+      "note": "dense; weights fit VRAM at ngl 99; has samplers, no speculative, no reasoning",
+      "env": {},
+      "config_id": "71bc58dd",
+      "alias": "qwen2.5-coder-7b",
+      "lines": [
+        "arch: dense | ngl: 99 | ctx: 16384 (total) | parallel: 1 | threads: 6 | moe: n/a",
+        "override-tensors: n/a",
+        "speculative: off",
+        "cache: k=q8_0 v=q8_0 | fa: on | batch: 512 | ubatch: 512",
+        "reasoning effort: n/a",
+        "samplers: temp 0.7 | top-p 0.8 | top-k 20 | repeat-penalty 1.1"
+      ]
+    },
+    {
+      "case": "base-qwen3c",
+      "profile": "qwen3c",
+      "note": "MoE; mirrors qwen36's shape with a different alias and model",
+      "env": {},
+      "config_id": "1e9720b2",
+      "alias": "qwen3-coder-30b-a3b",
+      "lines": [
+        "arch: moe | ngl: 99 | ctx: 65536 (total) | parallel: 1 | threads: 6 | moe: 34",
+        "override-tensors: n/a",
+        "speculative: off",
+        "cache: k=q8_0 v=q8_0 | fa: on | batch: 512 | ubatch: 512",
+        "reasoning effort: n/a",
+        "samplers: llama.cpp defaults"
+      ]
+    },
+    {
+      "case": "spec-off",
+      "profile": "qwen38",
+      "note": "LLAMA_SPEC=off must render 'speculative: off'",
+      "env": {
+        "LLAMA_SPEC": "off"
+      },
+      "config_id": "0f114f0c",
+      "alias": "qwen3.8-27b",
+      "lines": [
+        "arch: dense | ngl: 20 | ctx: 16384 (total) | parallel: 1 | threads: 12 | moe: n/a",
+        "override-tensors: output\\.weight=CUDA0,blk\\.64\\..*=CUDA0",
+        "speculative: off",
+        "cache: k=q8_0 v=q8_0 | fa: on | batch: 512 | ubatch: 512",
+        "reasoning effort: medium",
+        "samplers: temp 1.0 | top-p 0.95 | top-k 20 | min-p 0.0"
+      ]
+    },
+    {
+      "case": "spec-empty",
+      "profile": "qwen38",
+      "note": "empty LLAMA_SPEC is treated as off",
+      "env": {
+        "LLAMA_SPEC": ""
+      },
+      "config_id": "0f114f0c",
+      "alias": "qwen3.8-27b",
+      "lines": [
+        "arch: dense | ngl: 20 | ctx: 16384 (total) | parallel: 1 | threads: 12 | moe: n/a",
+        "override-tensors: output\\.weight=CUDA0,blk\\.64\\..*=CUDA0",
+        "speculative: off",
+        "cache: k=q8_0 v=q8_0 | fa: on | batch: 512 | ubatch: 512",
+        "reasoning effort: medium",
+        "samplers: temp 1.0 | top-p 0.95 | top-k 20 | min-p 0.0"
+      ]
+    },
+    {
+      "case": "spec-custom",
+      "profile": "qwen38",
+      "note": "a custom spec replaces the profile's flags wholesale",
+      "env": {
+        "LLAMA_SPEC": "--spec-type draft-mtp --spec-draft-n-max 4"
+      },
+      "config_id": "73328832",
+      "alias": "qwen3.8-27b",
+      "lines": [
+        "arch: dense | ngl: 20 | ctx: 16384 (total) | parallel: 1 | threads: 12 | moe: n/a",
+        "override-tensors: output\\.weight=CUDA0,blk\\.64\\..*=CUDA0",
+        "speculative: --spec-type draft-mtp --spec-draft-n-max 4",
+        "cache: k=q8_0 v=q8_0 | fa: on | batch: 512 | ubatch: 512",
+        "reasoning effort: medium",
+        "samplers: temp 1.0 | top-p 0.95 | top-k 20 | min-p 0.0"
+      ]
+    },
+    {
+      "case": "reasoning-high",
+      "profile": "qwen38",
+      "note": "profile carries reasoning_effort, so the override shows",
+      "env": {
+        "LLAMA_REASONING": "high"
+      },
+      "config_id": "f3e219b9",
+      "alias": "qwen3.8-27b",
+      "lines": [
+        "arch: dense | ngl: 20 | ctx: 16384 (total) | parallel: 1 | threads: 12 | moe: n/a",
+        "override-tensors: output\\.weight=CUDA0,blk\\.64\\..*=CUDA0",
+        "speculative: --spec-type draft-mtp --spec-draft-n-max 2",
+        "cache: k=q8_0 v=q8_0 | fa: on | batch: 512 | ubatch: 512",
+        "reasoning effort: high",
+        "samplers: temp 1.0 | top-p 0.95 | top-k 20 | min-p 0.0"
+      ]
+    },
+    {
+      "case": "reasoning-noop",
+      "profile": "qwen36",
+      "note": "NEGATIVE: no reasoning_effort in EXTRA, so it must stay n/a",
+      "env": {
+        "LLAMA_REASONING": "high"
+      },
+      "config_id": "063e630c",
+      "alias": "qwen3.6-35b-a3b",
+      "lines": [
+        "arch: moe | ngl: 99 | ctx: 65536 (total) | parallel: 1 | threads: 6 | moe: 34",
+        "override-tensors: n/a",
+        "speculative: off",
+        "cache: k=q8_0 v=q8_0 | fa: on | batch: 512 | ubatch: 512",
+        "reasoning effort: n/a",
+        "samplers: llama.cpp defaults"
+      ]
+    },
+    {
+      "case": "fa-legacy",
+      "profile": "qwen38",
+      "note": "LLAMA_FA_LEGACY=1 renders 'legacy --flash-attn 1'",
+      "env": {
+        "LLAMA_FA_LEGACY": "1"
+      },
+      "config_id": "bf8acad7",
+      "alias": "qwen3.8-27b",
+      "lines": [
+        "arch: dense | ngl: 20 | ctx: 16384 (total) | parallel: 1 | threads: 12 | moe: n/a",
+        "override-tensors: output\\.weight=CUDA0,blk\\.64\\..*=CUDA0",
+        "speculative: --spec-type draft-mtp --spec-draft-n-max 2",
+        "cache: k=q8_0 v=q8_0 | fa: legacy --flash-attn 1 | batch: 512 | ubatch: 512",
+        "reasoning effort: medium",
+        "samplers: temp 1.0 | top-p 0.95 | top-k 20 | min-p 0.0"
+      ]
+    },
+    {
+      "case": "fa-off",
+      "profile": "qwen38",
+      "note": "LLAMA_FA=off renders 'off'",
+      "env": {
+        "LLAMA_FA": "off"
+      },
+      "config_id": "c0afcd1c",
+      "alias": "qwen3.8-27b",
+      "lines": [
+        "arch: dense | ngl: 20 | ctx: 16384 (total) | parallel: 1 | threads: 12 | moe: n/a",
+        "override-tensors: output\\.weight=CUDA0,blk\\.64\\..*=CUDA0",
+        "speculative: --spec-type draft-mtp --spec-draft-n-max 2",
+        "cache: k=q8_0 v=q8_0 | fa: off | batch: 512 | ubatch: 512",
+        "reasoning effort: medium",
+        "samplers: temp 1.0 | top-p 0.95 | top-k 20 | min-p 0.0"
+      ]
+    },
+    {
+      "case": "fa-auto",
+      "profile": "qwen38",
+      "note": "LLAMA_FA=auto passes through verbatim",
+      "env": {
+        "LLAMA_FA": "auto"
+      },
+      "config_id": "c7d3d342",
+      "alias": "qwen3.8-27b",
+      "lines": [
+        "arch: dense | ngl: 20 | ctx: 16384 (total) | parallel: 1 | threads: 12 | moe: n/a",
+        "override-tensors: output\\.weight=CUDA0,blk\\.64\\..*=CUDA0",
+        "speculative: --spec-type draft-mtp --spec-draft-n-max 2",
+        "cache: k=q8_0 v=q8_0 | fa: auto | batch: 512 | ubatch: 512",
+        "reasoning effort: medium",
+        "samplers: temp 1.0 | top-p 0.95 | top-k 20 | min-p 0.0"
+      ]
+    },
+    {
+      "case": "moe-override",
+      "profile": "qwen36",
+      "note": "LLAMA_MOE=30 overrides the measured 34",
+      "env": {
+        "LLAMA_MOE": "30"
+      },
+      "config_id": "b8c104c5",
+      "alias": "qwen3.6-35b-a3b",
+      "lines": [
+        "arch: moe | ngl: 99 | ctx: 65536 (total) | parallel: 1 | threads: 6 | moe: 30",
+        "override-tensors: n/a",
+        "speculative: off",
+        "cache: k=q8_0 v=q8_0 | fa: on | batch: 512 | ubatch: 512",
+        "reasoning effort: n/a",
+        "samplers: llama.cpp defaults"
+      ]
+    },
+    {
+      "case": "moe-on-dense",
+      "profile": "qwen38",
+      "note": "GUARD RAIL: an MoE flag on a dense model is dropped, stays n/a",
+      "env": {
+        "LLAMA_MOE": "30"
+      },
+      "config_id": "9eab7cfc",
+      "alias": "qwen3.8-27b",
+      "lines": [
+        "arch: dense | ngl: 20 | ctx: 16384 (total) | parallel: 1 | threads: 12 | moe: n/a",
+        "override-tensors: output\\.weight=CUDA0,blk\\.64\\..*=CUDA0",
+        "speculative: --spec-type draft-mtp --spec-draft-n-max 2",
+        "cache: k=q8_0 v=q8_0 | fa: on | batch: 512 | ubatch: 512",
+        "reasoning effort: medium",
+        "samplers: temp 1.0 | top-p 0.95 | top-k 20 | min-p 0.0"
+      ]
+    },
+    {
+      "case": "ngl-override",
+      "profile": "qwen38",
+      "note": "partial-offload layer count, the real search knob here",
+      "env": {
+        "LLAMA_NGL": "24"
+      },
+      "config_id": "9c837593",
+      "alias": "qwen3.8-27b",
+      "lines": [
+        "arch: dense | ngl: 24 | ctx: 16384 (total) | parallel: 1 | threads: 12 | moe: n/a",
+        "override-tensors: output\\.weight=CUDA0,blk\\.64\\..*=CUDA0",
+        "speculative: --spec-type draft-mtp --spec-draft-n-max 2",
+        "cache: k=q8_0 v=q8_0 | fa: on | batch: 512 | ubatch: 512",
+        "reasoning effort: medium",
+        "samplers: temp 1.0 | top-p 0.95 | top-k 20 | min-p 0.0"
+      ]
+    },
+    {
+      "case": "ctx-override",
+      "profile": "qwen25c",
+      "note": "raising ctx past the profile's conservative default",
+      "env": {
+        "LLAMA_CTX": "32768"
+      },
+      "config_id": "a7b3234d",
+      "alias": "qwen2.5-coder-7b",
+      "lines": [
+        "arch: dense | ngl: 99 | ctx: 32768 (total) | parallel: 1 | threads: 6 | moe: n/a",
+        "override-tensors: n/a",
+        "speculative: off",
+        "cache: k=q8_0 v=q8_0 | fa: on | batch: 512 | ubatch: 512",
+        "reasoning effort: n/a",
+        "samplers: temp 0.7 | top-p 0.8 | top-k 20 | repeat-penalty 1.1"
+      ]
+    },
+    {
+      "case": "threads-override",
+      "profile": "qwen36",
+      "note": "thread count",
+      "env": {
+        "LLAMA_THREADS": "8"
+      },
+      "config_id": "e843f56f",
+      "alias": "qwen3.6-35b-a3b",
+      "lines": [
+        "arch: moe | ngl: 99 | ctx: 65536 (total) | parallel: 1 | threads: 8 | moe: 34",
+        "override-tensors: n/a",
+        "speculative: off",
+        "cache: k=q8_0 v=q8_0 | fa: on | batch: 512 | ubatch: 512",
+        "reasoning effort: n/a",
+        "samplers: llama.cpp defaults"
+      ]
+    },
+    {
+      "case": "parallel-override",
+      "profile": "qwen38",
+      "note": "slot count; never via LLAMA_SPEC, see main.sh:231-237",
+      "env": {
+        "LLAMA_PARALLEL": "4"
+      },
+      "config_id": "a5b7a800",
+      "alias": "qwen3.8-27b",
+      "lines": [
+        "arch: dense | ngl: 20 | ctx: 16384 (total) | parallel: 4 | threads: 12 | moe: n/a",
+        "override-tensors: output\\.weight=CUDA0,blk\\.64\\..*=CUDA0",
+        "speculative: --spec-type draft-mtp --spec-draft-n-max 2",
+        "cache: k=q8_0 v=q8_0 | fa: on | batch: 512 | ubatch: 512",
+        "reasoning effort: medium",
+        "samplers: temp 1.0 | top-p 0.95 | top-k 20 | min-p 0.0"
+      ]
+    },
+    {
+      "case": "ot-override",
+      "profile": "qwen38",
+      "note": "replacing the profile's tensor pinning",
+      "env": {
+        "LLAMA_OT": "blk\\.0\\..*=CUDA0"
+      },
+      "config_id": "c427dbfa",
+      "alias": "qwen3.8-27b",
+      "lines": [
+        "arch: dense | ngl: 20 | ctx: 16384 (total) | parallel: 1 | threads: 12 | moe: n/a",
+        "override-tensors: blk\\.0\\..*=CUDA0",
+        "speculative: --spec-type draft-mtp --spec-draft-n-max 2",
+        "cache: k=q8_0 v=q8_0 | fa: on | batch: 512 | ubatch: 512",
+        "reasoning effort: medium",
+        "samplers: temp 1.0 | top-p 0.95 | top-k 20 | min-p 0.0"
+      ]
+    },
+    {
+      "case": "ot-added",
+      "profile": "qwen36",
+      "note": "adding tensor pinning to a profile that has none",
+      "env": {
+        "LLAMA_OT": "output\\.weight=CUDA0"
+      },
+      "config_id": "50532d44",
+      "alias": "qwen3.6-35b-a3b",
+      "lines": [
+        "arch: moe | ngl: 99 | ctx: 65536 (total) | parallel: 1 | threads: 6 | moe: 34",
+        "override-tensors: output\\.weight=CUDA0",
+        "speculative: off",
+        "cache: k=q8_0 v=q8_0 | fa: on | batch: 512 | ubatch: 512",
+        "reasoning effort: n/a",
+        "samplers: llama.cpp defaults"
+      ]
+    },
+    {
+      "case": "cache-f16",
+      "profile": "qwen38",
+      "note": "unquantized KV cache",
+      "env": {
+        "LLAMA_CACHE_K": "f16",
+        "LLAMA_CACHE_V": "f16"
+      },
+      "config_id": "18bf8626",
+      "alias": "qwen3.8-27b",
+      "lines": [
+        "arch: dense | ngl: 20 | ctx: 16384 (total) | parallel: 1 | threads: 12 | moe: n/a",
+        "override-tensors: output\\.weight=CUDA0,blk\\.64\\..*=CUDA0",
+        "speculative: --spec-type draft-mtp --spec-draft-n-max 2",
+        "cache: k=f16 v=f16 | fa: on | batch: 512 | ubatch: 512",
+        "reasoning effort: medium",
+        "samplers: temp 1.0 | top-p 0.95 | top-k 20 | min-p 0.0"
+      ]
+    },
+    {
+      "case": "batch-sizes",
+      "profile": "qwen38",
+      "note": "batch and ubatch diverging",
+      "env": {
+        "LLAMA_BATCH": "1024",
+        "LLAMA_UBATCH": "256"
+      },
+      "config_id": "53517700",
+      "alias": "qwen3.8-27b",
+      "lines": [
+        "arch: dense | ngl: 20 | ctx: 16384 (total) | parallel: 1 | threads: 12 | moe: n/a",
+        "override-tensors: output\\.weight=CUDA0,blk\\.64\\..*=CUDA0",
+        "speculative: --spec-type draft-mtp --spec-draft-n-max 2",
+        "cache: k=q8_0 v=q8_0 | fa: on | batch: 1024 | ubatch: 256",
+        "reasoning effort: medium",
+        "samplers: temp 1.0 | top-p 0.95 | top-k 20 | min-p 0.0"
+      ]
+    },
+    {
+      "case": "invariant-model-path",
+      "profile": "qwen38",
+      "note": "INVARIANT: model path is not fingerprinted; must equal base-qwen38",
+      "env": {
+        "LLAMA_MODEL": "/tmp/does-not-exist.gguf"
+      },
+      "config_id": "9eab7cfc",
+      "alias": "qwen3.8-27b",
+      "lines": [
+        "arch: dense | ngl: 20 | ctx: 16384 (total) | parallel: 1 | threads: 12 | moe: n/a",
+        "override-tensors: output\\.weight=CUDA0,blk\\.64\\..*=CUDA0",
+        "speculative: --spec-type draft-mtp --spec-draft-n-max 2",
+        "cache: k=q8_0 v=q8_0 | fa: on | batch: 512 | ubatch: 512",
+        "reasoning effort: medium",
+        "samplers: temp 1.0 | top-p 0.95 | top-k 20 | min-p 0.0"
+      ]
+    },
+    {
+      "case": "combined-ab",
+      "profile": "qwen38",
+      "note": "the A/B this override mechanism exists for",
+      "env": {
+        "LLAMA_SPEC": "off",
+        "LLAMA_PARALLEL": "2",
+        "LLAMA_REASONING": "high"
+      },
+      "config_id": "a8617464",
+      "alias": "qwen3.8-27b",
+      "lines": [
+        "arch: dense | ngl: 20 | ctx: 16384 (total) | parallel: 2 | threads: 12 | moe: n/a",
+        "override-tensors: output\\.weight=CUDA0,blk\\.64\\..*=CUDA0",
+        "speculative: off",
+        "cache: k=q8_0 v=q8_0 | fa: on | batch: 512 | ubatch: 512",
+        "reasoning effort: high",
+        "samplers: temp 1.0 | top-p 0.95 | top-k 20 | min-p 0.0"
+      ]
+    }
+  ]
+}

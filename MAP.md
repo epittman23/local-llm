@@ -51,6 +51,12 @@ Meta docs — conventions, history, and proposals, not end-user usage docs.
 - **`proposed-inference-server.md`** — a hardware proposal (Dell R730 +
   Tesla V100) for a future dedicated inference server. Status: proposed, not
   built.
+- **`serving-baseline/`** — test input, not prose: `config-id` fingerprints,
+  profile seed data and the verbatim profile rationale, captured from
+  `scripts/shell/main.sh` on 2026-09-14 before the shell layer is ported to
+  Python and the profiles move into Postgres. Its own `README.md` explains
+  what each file pins and why. Keep it after the port: it is also the record
+  of what the shell layer meant.
 
 ## `open-web-ui/`
 

@@ -1,0 +1,127 @@
+########## qwen36  (scripts/shell/main.sh:91-102)
+        qwen36|qwen3.6|moe)
+            LLAMA_P_NAME="qwen36"
+            LLAMA_P_ARCH="moe"
+            LLAMA_P_MODEL="$LLAMA_MODELS/qwen36-35b-a3b/Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf"
+            LLAMA_P_REPO="unsloth/Qwen3.6-35B-A3B-GGUF"
+            LLAMA_P_PATTERN="*UD-Q4_K_XL*"
+            LLAMA_P_ALIAS="qwen3.6-35b-a3b"
+            LLAMA_P_CTX=65536
+            LLAMA_P_THREADS=6
+            LLAMA_P_NGL=99          # all layers offloaded; experts live in RAM
+            LLAMA_P_MOE=34          # measured optimum on 6 GB VRAM
+            ;;
+
+########## qwen38  (scripts/shell/main.sh:104-136)
+        qwen38|qwen3.8|dense)
+            LLAMA_P_NAME="qwen38"
+            LLAMA_P_ARCH="dense"
+            LLAMA_P_MODEL="$LLAMA_MODELS/qwen38-27b/Qwen3.8-27B-UD-Q3_K_XL.gguf"
+            LLAMA_P_REPO="unsloth/Qwen3.8-27B-GGUF"
+            LLAMA_P_PATTERN="*UD-Q3_K_XL*"
+            LLAMA_P_ALIAS="qwen3.8-27b"
+            # Context is deliberately conservative. The model supports 262144,
+            # but KV cache competes directly with weights for 6 GB of VRAM.
+            LLAMA_P_CTX=16384
+            LLAMA_P_THREADS=12
+            # PLACEHOLDER. Tune this with lllm-sweep-ngl before trusting it.
+            # A dense model will fail to allocate at -ngl 99 on this hardware.
+            LLAMA_P_NGL=20
+            LLAMA_P_MOE=""          # must stay empty: dense has no experts
+            # -ot: pin specific tensors to the GPU regardless of -ngl. The
+            # output projection and the last block (65 blocks: blk.0-blk.64)
+            # are hot on every token, so they earn their VRAM even when most
+            # layers stay on the CPU.
+            LLAMA_P_OT="output\.weight=CUDA0,blk\.64\..*=CUDA0"
+            # Speculative decoding off the model's own MTP head: the weights
+            # carry qwen35.nextn_predict_layers=1 and blk.64.nextn.* tensors,
+            # so no separate draft model is needed. That head sits in blk.64,
+            # which -ot above already pins to the GPU. n-max 2 is conservative:
+            # rejected drafts cost real compute on a CPU-bound model. The slot
+            # count is NOT set here; see LLAMA_P_PARALLEL below for why.
+            LLAMA_P_SPEC=(--spec-type draft-mtp --spec-draft-n-max 2)
+            # Qwen3.8 thinking-mode recommended sampling.
+            LLAMA_P_SAMPLERS=(--temp 1.0 --top-p 0.95 --top-k 20 --min-p 0.0)
+            # xhigh is the model default and is punishing at 3-4 t/s.
+            LLAMA_P_EXTRA=(--chat-template-kwargs \
+                "{\"reasoning_effort\":\"${LLAMA_REASONING:-medium}\"}")
+            ;;
+
+########## qwen25c  (scripts/shell/main.sh:138-169)
+        qwen25c|qwen2.5-coder|coder-2.5)
+            LLAMA_P_NAME="qwen25c"
+            LLAMA_P_ARCH="dense"
+            LLAMA_P_MODEL="$LLAMA_MODELS/qwen25-coder-7b/Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf"
+            LLAMA_P_REPO="unsloth/Qwen2.5-Coder-7B-Instruct-GGUF"
+            LLAMA_P_PATTERN="*Q4_K_M*"
+            LLAMA_P_ALIAS="qwen2.5-coder-7b"
+            # The first profile here whose weights fit in VRAM outright: 4.36
+            # GiB of 6, so -ngl 99 puts all 28 blocks and the output head on the
+            # GPU and nothing is read from system RAM. There is no -ngl to tune
+            # and no -ot to pin; those exist above only because those models are
+            # 3-5x the size of this card.
+            LLAMA_P_NGL=99
+            LLAMA_P_MOE=""          # must stay empty: dense has no experts
+            # 16384, not the model's full 32768. This GGUF is 28 layers with 4
+            # KV heads of 128, so a q8_0 KV cache costs ~29.7 KiB/token: ~476
+            # MiB at 16K, ~952 MiB at 32K, on top of 4.36 GiB of weights and the
+            # compute buffer. The full window fits inside 6 GiB only with less
+            # room to spare than LLAMA_VRAM_HEADROOM_MIB warns at. Raise it with
+            # LLAMA_CTX and confirm with lllm-vram if you need the context more
+            # than the margin.
+            LLAMA_P_CTX=16384
+            LLAMA_P_THREADS=6       # batch assembly only; no layer runs on CPU
+            # Qwen2.5-Coder's own generation_config.json, which is not the
+            # Qwen3.8 thinking-mode set above. lllm-test pins temperature to 0
+            # in its request body regardless, so these govern Open WebUI traffic.
+            LLAMA_P_SAMPLERS=(--temp 0.7 --top-p 0.8 --top-k 20 --repeat-penalty 1.1)
+            # No LLAMA_P_SPEC: Qwen2.5 predates the nextn/MTP tensors qwen38
+            # drafts from, and no draft model is worth 4.36 GiB of this card.
+            # No LLAMA_P_EXTRA: not a thinking model, so there is no
+            # reasoning_effort to set and no reasoning_content in its responses.
+            ;;
+
+########## qwen3c  (scripts/shell/main.sh:171-182)
+        qwen3c|qwen3.0-coder|coder-3)
+            LLAMA_P_NAME="qwen3c"
+            LLAMA_P_ARCH="moe"
+            LLAMA_P_MODEL="$LLAMA_MODELS/qwen3-coder-30b-a3b/Qwen3-Coder-30B-A3B-Instruct-Q4_1.gguf"
+            LLAMA_P_REPO="unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF"
+            LLAMA_P_PATTERN="*Q4_1*"
+            LLAMA_P_ALIAS="qwen3-coder-30b-a3b"
+            LLAMA_P_CTX=65536
+            LLAMA_P_THREADS=6
+            LLAMA_P_NGL=99          # all layers offloaded; experts live in RAM
+            LLAMA_P_MOE=34          # measured optimum on 6 GB VRAM
+            ;;
+
+########## SHARED-arch  (scripts/shell/main.sh:72-79)
+# ---------------------------------------------------------------------------
+# Profile definitions
+#
+# Each profile declares its architecture explicitly. This is the important part:
+# --n-cpu-moe is meaningful only for mixture-of-experts models. Qwen3.8-27B is
+# dense, so every parameter is read on every forward pass and -ngl must be tuned
+# by hand against available VRAM rather than set to 99.
+# ---------------------------------------------------------------------------
+
+########## SHARED-parallel  (scripts/shell/main.sh:191-199)
+    # Server slots, always passed. This must never live in LLAMA_P_SPEC, because
+    # dropping the speculative flags would drop the slot count with them. Omitting
+    # --parallel is not "the default 1": llama-server defaults it to -1 = auto,
+    # and auto means 4 slots *and* kv_unified = true (llama.cpp build 10597:
+    # common/arg.cpp:1400, tools/server/server.cpp:152-155). So an LLAMA_SPEC=off
+    # run without this would serve a different attention/KV configuration than the
+    # speculative run it is supposed to be the baseline for -- measured here as
+    # 15.63 t/s prefill at n_slots=4 against 26.38 t/s at n_slots=1.
+    : "${LLAMA_P_PARALLEL:=1}"
+
+########## SHARED-cache  (scripts/shell/main.sh:201-207)
+    # KV cache types and batch sizes. These are profile variables rather than
+    # literals in lllm-serve so that the flags actually passed and the flags
+    # recorded in the telemetry log come from one place and cannot drift apart.
+    : "${LLAMA_P_CACHE_K:=q8_0}"
+    : "${LLAMA_P_CACHE_V:=q8_0}"
+    : "${LLAMA_P_BATCH:=512}"
+    : "${LLAMA_P_UBATCH:=512}"
+
