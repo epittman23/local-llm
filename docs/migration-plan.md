@@ -82,8 +82,8 @@ model; `validate_definition` + `ServingProfile.from_definition` moved into
 `serving/profiles.py` so they test without a DB; `tests/test_serving_profiles.py`.
 **117 tests pass** under the rebuilt venv, including the migration's frozen
 `SEED` reproducing all 24 golden fingerprints and matching `profiles.json`
-field by field. **Not yet done:** ruff reports 35 findings (28 auto-fixable)
-in the new files; the migration has not been run against any database.
+field by field. **Gating step 1 is now done** (see the next block); the
+migration has still not been run against any database.
 
 **It lives on branch `wip/phase-2a-serving-profiles` (pushed), deliberately
 not on this branch.** Open WebUI runs `alembic upgrade head` on every backend
@@ -93,10 +93,46 @@ migration in the working tree would have let the next `lllm-backend` apply
 it to live data. The `BenchmarkRun` model edit must travel with the
 migration: it references a column only the migration creates.
 
+**2026-09-15 (third session, back in a cloud container).** Gating step 1
+done, on `wip/phase-2a-serving-profiles` at `5a11c0e` (pushed; still **not**
+merged here). The lint pass found a real bug, not just style:
+
+- `benchmark_profiles.py` calls `validate_definition()` in `create()` and
+  `add_version()` without importing it — `NameError` the first time a
+  profile is created or edited through the CRUD layer. Invisible to the 117
+  tests because they are deliberately database-free, so every DB-touching
+  method on `BenchmarkProfileTable` has no coverage. It also imported
+  `ARCH_DENSE`/`ARCH_MOE`, which it never used.
+- `serving/profiles.py` annotated with `Mapping` and `Any` without importing
+  either. Latent rather than live: `from __future__ import annotations`
+  makes annotations strings that are never evaluated, so it works until
+  something calls `get_type_hints()` on them.
+- Added an import-guard test so this class of bug fails in the suite rather
+  than only under ruff. It skips without the backend venv (importing the
+  model pulls in the whole app's import chain) and runs on the real machine.
+- **Not applied: the 79 `UP045` findings** (`Optional[X]` → `X | None`). The
+  `models/` package carries **858** of them and all four sibling
+  `benchmark_*.py` files use `Optional` exclusively, so changing only the new
+  file would make it the one model that reads differently from its
+  neighbours. That is a project-wide convention question, not this change's.
+
+Result: ruff check + format clean on the new files (ignoring that
+pre-existing debt), **117 passed, 1 skipped**.
+
+**Static review of the migration**, standing in for the run that needs your
+machine: `_seed` guards on table emptiness and `_add_schema_note` on the note
+text, so a re-run is a no-op; `set_default` clears then sets inside one
+transaction, which the partial unique index requires; `archive` refuses the
+current default and `set_default` refuses an archived profile, so the pair
+cannot strand the default on a hidden row. Nothing found that changes the
+step-2 plan below.
+
 **Next action:** bring the WIP branch in (`git merge
 wip/phase-2a-serving-profiles`) only after:
-1. `ruff check --fix` and `ruff format` on the new files; re-run
-   `backend/.venv/bin/python -m pytest tests/` from `backend/`.
+1. ~~`ruff check --fix` and `ruff format` on the new files; re-run
+   `backend/.venv/bin/python -m pytest tests/` from `backend/`.~~ **Done**
+   in `5a11c0e`. Re-run the suite once under the real backend venv, since
+   the new import-guard test only executes there.
 2. Migration test on a **restored copy** of live data, never the live
    volume: start Postgres, `pg_dump` the `openwebui` DB, stop it;
    `docker run --rm -d --name lllm-migration-test -p 127.0.0.1:55432:5432
