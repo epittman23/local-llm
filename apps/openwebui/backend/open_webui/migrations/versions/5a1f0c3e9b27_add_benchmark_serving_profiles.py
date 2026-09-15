@@ -283,9 +283,7 @@ def _seed(conn):
                 created_at=now,
             )
         )
-        profile_id = conn.execute(
-            sa.select(profile.c.profile_id).where(profile.c.name == entry['name'])
-        ).scalar_one()
+        profile_id = conn.execute(sa.select(profile.c.profile_id).where(profile.c.name == entry['name'])).scalar_one()
         conn.execute(
             version.insert().values(
                 profile_id=profile_id,
@@ -340,9 +338,7 @@ def upgrade():
         op.create_table(
             'benchmark_profile_version',
             sa.Column('version_id', sa.Integer(), primary_key=True, autoincrement=True),
-            sa.Column(
-                'profile_id', sa.Integer(), sa.ForeignKey('benchmark_profile.profile_id'), nullable=False
-            ),
+            sa.Column('profile_id', sa.Integer(), sa.ForeignKey('benchmark_profile.profile_id'), nullable=False),
             sa.Column('version', sa.Integer(), nullable=False),
             sa.Column('created_at', sa.BigInteger(), nullable=False),
             sa.Column('created_by', sa.Text(), nullable=True),

@@ -3,10 +3,9 @@ import time
 from typing import Optional
 
 from open_webui.benchmarks.serving.profiles import (
-    ARCH_DENSE,
-    ARCH_MOE,
     ProfileError,
     ServingProfile,
+    validate_definition,
 )
 from open_webui.internal.db import Base, get_async_db_context
 from pydantic import BaseModel, ConfigDict

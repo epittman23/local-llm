@@ -20,7 +20,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from open_webui.benchmarks.serving.fingerprint import config_id, config_lines
 from open_webui.benchmarks.serving.profiles import (
     Overrides,
@@ -175,3 +174,35 @@ def test_from_definition_ignores_row_metadata(valid):
     profile = ServingProfile.from_definition('example', row)
     assert profile.hf_repo == ''
     assert profile.name == 'example'
+
+
+# ---------------------------------------------------------------------------
+# Import guard
+# ---------------------------------------------------------------------------
+
+
+def test_profile_table_module_imports_and_resolves_its_names():
+    """The CRUD layer's module-level names must actually resolve.
+
+    Everything else in this file is deliberately database-free, which leaves
+    the DB-touching methods on BenchmarkProfileTable with no coverage at all.
+    That is how `validate_definition` came to be *called* by two of them
+    without being imported: nothing executed those lines, so the NameError
+    would not have surfaced until the first profile was created or edited
+    through the UI.
+
+    Importing the module executes its import block and binds every global, so
+    a missing or misspelled import fails here instead. Skipped where the
+    backend's own dependencies are not installed -- this needs the real
+    backend venv, not a bare interpreter.
+    """
+    pytest.importorskip('markdown', reason='needs the backend venv')
+    module = pytest.importorskip('open_webui.models.benchmark_profiles', reason='needs the backend venv')
+
+    for name in ('validate_definition', 'ProfileError', 'ServingProfile'):
+        assert hasattr(module, name), f'{name} is referenced but not imported'
+
+    # The two call sites that were broken.
+    table = module.BenchmarkProfiles
+    assert callable(table.create)
+    assert callable(table.add_version)
