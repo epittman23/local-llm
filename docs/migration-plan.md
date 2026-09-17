@@ -18,7 +18,7 @@
 |---|---|---|---|
 | 0 | Groundwork and safety net | ✅ done | 2026-09-14 |
 | 1 | Monorepo merge (submodule → vendored tree) | ✅ done, verified on-machine | 2026-09-14 |
-| 2 | Shell removal → Python + Makefile | ▶ in progress | 2026-09-14 |
+| 2 | Shell removal → Python + Makefile | ▶ in progress | 2026-09-17 |
 | 3 | Astro + React + shadcn scaffold, dual-serve | ☐ not started | — |
 | 4 | Shared foundation: API, auth, stores, i18n, app shell | ☐ not started | — |
 | 5 | Benchmarks surface (proves the pattern) | ☐ not started | — |
@@ -127,22 +127,38 @@ current default and `set_default` refuses an archived profile, so the pair
 cannot strand the default on a hidden row. Nothing found that changes the
 step-2 plan below.
 
-**Next action:** bring the WIP branch in (`git merge
-wip/phase-2a-serving-profiles`) only after:
-1. ~~`ruff check --fix` and `ruff format` on the new files; re-run
-   `backend/.venv/bin/python -m pytest tests/` from `backend/`.~~ **Done**
-   in `5a11c0e`. Re-run the suite once under the real backend venv, since
-   the new import-guard test only executes there.
-2. Migration test on a **restored copy** of live data, never the live
-   volume: start Postgres, `pg_dump` the `openwebui` DB, stop it;
-   `docker run --rm -d --name lllm-migration-test -p 127.0.0.1:55432:5432
-   -e POSTGRES_PASSWORD=test pgvector/pgvector:pg16`; restore the dump;
-   run `alembic upgrade head` from `backend/open_webui` with `DATABASE_URL`
-   pointed at `127.0.0.1:55432`. Check: 4 profiles, 4 versions, exactly one
-   default (`qwen38`), all 100 existing runs with NULL
-   `profile_version_id`, the schema note present. Then `downgrade
-   b3f8a1d94e70` and `upgrade head` again.
-3. Merge, then continue 2a with `launcher.py`.
+**2026-09-17 (fourth session, on the real machine).** Gating step 2 done,
+then merged. Sequence:
+
+1. Re-ran the suite under the real backend venv with `WEBUI_SECRET_KEY` set
+   (the import-guard test needs it, and this is also what caught that it was
+   missing): **118 passed.**
+2. Migration test on a restored copy, never the live volume: brought up the
+   real `postgres` compose service (the `open-web-ui_postgres-data` volume),
+   `pg_dump`'d it (100 runs, 37 configs, at `b3f8a1d94e70`), then `docker
+   compose down` — the live container never ran the new migration. Restored
+   the dump into a throwaway `lllm-migration-test` container
+   (`pgvector/pgvector:pg16`, port `127.0.0.1:55432`, disposable volume). Ran
+   `alembic upgrade head` from a **git worktree** checked out at
+   `wip/phase-2a-serving-profiles` (kept out of this branch's working tree on
+   purpose, matching the reason this was parked) against that container.
+   Result: revision `5a1f0c3e9b27`, 4 profiles, 4 versions, exactly one
+   default (`qwen38`), all 100 existing runs with NULL `profile_version_id`,
+   the schema note present, seeded `arch`/`alias`/`ngl`/`moe` matching the
+   golden profile data exactly. `downgrade b3f8a1d94e70` then `upgrade head`
+   again both ran clean, and the re-seed stayed at 4/4 with one schema note
+   (no duplication). Cleaned up: throwaway container removed, worktree
+   removed, real `postgres` compose service brought back down (it was not
+   running before this session either, so nothing changed there); the live
+   volume was never written to by anything but its own `pg_dump` read.
+3. Merged `wip/phase-2a-serving-profiles` into this branch — clean, no
+   conflicts (`git merge`, fast commits since the last common ancestor were
+   docs-only on this side). Re-ran the full suite against the merged tree:
+   **118 passed.** `ruff` isn't installed in this venv to re-verify the
+   `5a11c0e` lint fixes here, but nothing has touched those files since that
+   commit.
+
+**Next action:** continue Phase 2a with `launcher.py`.
 
 ---
 
@@ -354,28 +370,28 @@ refiles configurations and breaks comparability with history.
 - [x] **`fingerprint.py`** (`34bc5bc`) — six lines + truncated sha1, every
       value newline-terminated. `backend/tests/test_serving_fingerprint.py`:
       79 tests. Also validated against all 37 real `benchmark_config` rows.
-- [ ] **`models/benchmark_profiles.py`** — following
-      `models/benchmark_configs.py` conventions (declarative `Base`,
-      Pydantic `*Model` with `from_attributes`, `BigInteger` epoch seconds,
-      async `*Table` singleton, `benchmark_` prefix):
+- [x] **`models/benchmark_profiles.py`** (`e32202a`, lint-fixed `5a11c0e`,
+      merged into this branch) — following `models/benchmark_configs.py`
+      conventions (declarative `Base`, Pydantic `*Model` with
+      `from_attributes`, `BigInteger` epoch seconds, async `*Table`
+      singleton, `benchmark_` prefix):
       - `benchmark_profile`: `profile_id`, `name` (unique, immutable),
         `display_name`, `is_default`, `created_at`, `archived_at`.
       - `benchmark_profile_version` (append-only): `version_id`,
         `profile_id` FK, `version`, `created_at`, `created_by`, `note`,
         and every `ServingProfile` field (`spec`/`samplers`/`extra` as
         JSON), plus `notes` (rationale). Unique `(profile_id, version)`.
-- [ ] **Alembic revision** off `b3f8a1d94e70` (the single current head):
-      create both tables with the `if '<name>' not in tables:` guard, seed
-      the four profiles at version 1 from
-      `docs/serving-baseline/profiles.json` (resolve `{LLAMA_MODELS}` —
-      decide: store the template and resolve at launch, which keeps the
-      row machine-independent), `notes` from `profile-rationale.txt`,
-      `qwen38` as default. Add nullable `profile_version_id` FK on
-      `benchmark_run`; leave existing rows NULL.
-- [ ] Seed-to-fingerprint test: fingerprints computed from the **seeded
-      rows** must equal the golden values. Run against a throwaway
-      Postgres (`docker run --rm -p 127.0.0.1:55432:5432
-      pgvector/pgvector:pg16`), never the live volume.
+- [x] **Alembic revision** `5a1f0c3e9b27` off `b3f8a1d94e70` — creates both
+      tables with the `if '<name>' not in tables:` guard, seeds the four
+      profiles at version 1 (frozen literal copy of
+      `docs/serving-baseline/profiles.json`, `{LLAMA_MODELS}` kept as a
+      template and resolved at launch, not baked in), `notes` from
+      `profile-rationale.txt`, `qwen38` as default. Adds nullable
+      `profile_version_id` FK on `benchmark_run`; existing rows stay NULL.
+- [x] Seed-to-fingerprint test: `tests/test_serving_profiles.py::
+      test_seed_reproduces_golden_fingerprints` runs the frozen `SEED`
+      through `config_id()` and checks it against all 24 golden cases,
+      database-free.
 - [ ] **`launcher.py`** — `lllm-serve`'s argv: `-lv 4`, `--metrics`,
       `--parallel` always, `-fa` vs legacy `--flash-attn 1`, server-log tee
       consumed by the recorder and deleted only after it finishes, the
