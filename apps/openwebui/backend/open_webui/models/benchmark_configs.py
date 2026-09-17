@@ -92,6 +92,10 @@ class BenchmarkRun(Base):
     started_at = Column(BigInteger, nullable=False)
     ended_at = Column(BigInteger, nullable=True)
     ended_reason = Column(Text, nullable=True)
+    # Which profile definition this run served. NULL for every run before
+    # 2026-09-14 (profiles lived in main.sh then) and for a hand-started
+    # server; it means "not recorded", never "no profile".
+    profile_version_id = Column(Integer, ForeignKey('benchmark_profile_version.version_id'), nullable=True)
 
 
 class BenchmarkRunModel(BaseModel):
@@ -105,6 +109,7 @@ class BenchmarkRunModel(BaseModel):
     started_at: int
     ended_at: Optional[int] = None
     ended_reason: Optional[str] = None
+    profile_version_id: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 
