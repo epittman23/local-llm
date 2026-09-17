@@ -1,10 +1,13 @@
 """routers/benchmarks/serve.py - start/stop/observe llama-server for benchmarking.
 
-Thin HTTP wrapper over benchmarks.env_profile and benchmarks.proc.Command.
-Overrides are passed as environment variables (LLAMA_NGL, LLAMA_CTX, ...),
-matching main.sh's own override mechanism (`LLAMA_NGL=22 lllm-serve qwen38`)
-exactly -- they are NOT `lllm-serve` CLI flags, which main.sh passes straight
-through to `llama-server` unparsed.
+Thin HTTP wrapper over benchmarks.env_profile and
+benchmarks.serving.launcher.ServeProcess. Overrides are still form fields
+named after the LLAMA_* variables main.sh's override mechanism used
+(`LLAMA_NGL=22 lllm-serve qwen38`), turned into typed `Overrides` via
+`Overrides.from_env()` on a small env-shaped dict -- the same parsing
+golden-tested against docs/serving-baseline/, rather than a second copy of
+it here. Until 2026-09-14 `/start` shelled out to `lllm-serve` through
+benchmarks.proc.Command; see docs/migration-plan.md's Phase 2.
 
 Single-flight by design: only one server (and one recorded run) at a time,
 same as the original CLI dashboard. The in-memory `_job` handle assumes this
@@ -17,22 +20,22 @@ from __future__ import annotations
 import asyncio
 import collections
 import json
-import os
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict
-
 from open_webui.benchmarks import env_profile
-from open_webui.benchmarks.proc import Command
+from open_webui.benchmarks.serving.launcher import LauncherError, ServeProcess
+from open_webui.benchmarks.serving.profiles import Overrides, ProfileError, resolve
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.models.benchmark_configs import BenchmarkRuns
+from open_webui.models.benchmark_profiles import BenchmarkProfiles
 from open_webui.utils.auth import get_admin_user
+from pydantic import BaseModel, ConfigDict
 
 router = APIRouter()
 
-_job: Command | None = None
+_job: ServeProcess | None = None
 
 # Log draining is a background task independent of any HTTP connection, not
 # something `/stream` does itself -- a `Command.lines()` iterator only ever
@@ -50,7 +53,7 @@ _drain_task: asyncio.Task | None = None
 _DONE = object()  # sentinel pushed to subscriber queues when the job ends
 
 
-async def _drain_log(job: Command) -> None:
+async def _drain_log(job: ServeProcess) -> None:
     try:
         async for line in job.lines():
             _log_buffer.append(line)
@@ -59,6 +62,7 @@ async def _drain_log(job: Command) -> None:
     finally:
         for queue in _subscribers:
             queue.put_nowait(_DONE)
+
 
 _OVERRIDE_ENV = {
     'ngl': 'LLAMA_NGL',
@@ -107,18 +111,33 @@ async def start_serve(form_data: ServeStartForm, user=Depends(get_admin_user)):
             detail=ERROR_MESSAGES.DEFAULT('a recorded run is already active on another process'),
         )
 
-    env = dict(os.environ)
-    for field, var in _OVERRIDE_ENV.items():
-        value = getattr(form_data, field)
-        if value is not None:
-            env[var] = str(value)
+    entry = (
+        await BenchmarkProfiles.get_by_name(form_data.profile)
+        if form_data.profile
+        else await BenchmarkProfiles.get_default()
+    )
+    if entry is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
 
-    command = f'lllm-serve {form_data.profile}' if form_data.profile else 'lllm-serve'
-    _job = Command(command, env=env)
-    await _job.start()
+    env_like = {
+        var: str(getattr(form_data, field))
+        for field, var in _OVERRIDE_ENV.items()
+        if getattr(form_data, field) is not None
+    }
+    try:
+        resolved = resolve(entry.to_serving_profile(), Overrides.from_env(env_like))
+    except ProfileError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+    _job = ServeProcess(config=resolved)
+    try:
+        await _job.start()
+    except LauncherError as e:
+        _job = None
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     _log_buffer.clear()
     _drain_task = asyncio.create_task(_drain_log(_job))
-    return {'started': True}
+    return {'started': True, 'warning': _job.warning}
 
 
 @router.post('/stop')

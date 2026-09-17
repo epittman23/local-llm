@@ -189,11 +189,32 @@ then merged. Sequence:
    `ruff` nor `pytest`/`pytest-asyncio` as declared dependencies — a
    pre-existing gap, noted twice now, not yet fixed).
 
-**Next action:** start Phase 2b (rewire the backend to import instead of
-shelling out): `env_profile.py` first — drop `_env_sh()` and both
-subprocess calls, keeping the `{}`/`[]` failure posture — then `proc.py`,
-then the three router call sites (`serve.py:116`, `tune_probe.py:109`,
-`tune_schedule.py:61`), then a `grep` sweep for stragglers.
+6. **Phase 2b, start to finish, same session.** `env_profile.py` rewired
+   first (10 tests), then a real gap found while wiring `ServeProcess` into
+   its first live caller: it couldn't be drained live and refused to serve
+   at all without `DATABASE_URL`. Fixed in `launcher.py` (3 more tests, see
+   the ticked Phase 2a `launcher.py` item above) before continuing.
+   `tune_schedule.py`'s `config_id_of()` rewired to resolve+fingerprint
+   in-process instead of shelling to `lllm-config-id`. `tune_probe.py`'s
+   `Server` rewired to serve through `ServeProcess` directly, keeping
+   `Command` only for the `LLAMA_TUNE_LAUNCH` fault-injection escape hatch
+   (7 tests). `routers/benchmarks/serve.py`'s `/start` rewired last (9
+   tests) — the final live call site. Grep sweep for
+   `LLAMA_ENV_SH|lllm-|main\.sh` across `apps/` is clean: every remaining
+   match is a docstring citing shell line numbers for provenance, nothing
+   functional. **Phase 2b is fully checked off.** Full suite: **226
+   passed.** All new/touched files ruff-clean via the global ruff at
+   `/home/epittman/dev/envs/py/base/bin/ruff`.
+
+**Next action:** Phase 2c (Makefile + deletion). This phase is a different
+shape of risk from 2a/2b: it deletes `scripts/` outright, requires the repo
+owner to remove `scripts/shell/main.sh` from their own `~/.bashrc` (a repo
+cannot edit dotfiles), and its exit criteria need a real `make backend`/
+`make frontend` run against real hardware (Serve starting/stopping a real
+server, Tune launching real candidates) — the kind of GPU-touching
+verification this project has consistently deferred without standing
+authorization (see docs/CLAUDE.md's 2026-09-06 entry). Get that
+authorization, or at least sign-off on the phase, before starting.
 
 ---
 
@@ -483,13 +504,35 @@ refiles configurations and breaks comparability with history.
       longer says the fingerprint is "computed outside this app"; it names
       `benchmarks/serving/fingerprint.py` and the 2026-09-14 move.
 
-### 2b — Rewire the backend to import instead of shell out
-- [ ] `env_profile.py` — drop `_env_sh()` and both subprocess calls; keep
-      the failure posture (`{}` / `[]`, never a 500).
-- [ ] `proc.py` — drop the `LLAMA_ENV_SH` requirement; keep `Command`.
-- [ ] `routers/benchmarks/serve.py:116`, `tune_probe.py:109`,
-      `tune_schedule.py:61` — call the launcher directly.
-- [ ] `grep -rn "LLAMA_ENV_SH\|lllm-\|main\.sh" apps/` for stragglers.
+### 2b — Rewire the backend to import instead of shell out ✅
+- [x] `env_profile.py` — `profile_names()`/`profile()` now read
+      `BenchmarkProfiles` and resolve through `profiles.resolve()`; `_env_sh()`
+      and both subprocess calls are gone. Failure posture kept: a missing
+      profile, a database error, or overrides that don't resolve all still
+      degrade to `{}` / `[]`, never a 500. `_to_profile_json()` preserves the
+      exact `lllm-profile-json` shape (and, deliberately, its stringified
+      numeric fields) since `tune_schedule.py`'s `profile_key()`/
+      `Grid.violated()` still read this dict by those keys.
+- [x] `proc.py` — dropped the `LLAMA_ENV_SH` sourcing requirement; `Command`
+      itself is unchanged and kept for `LLAMA_TUNE_LAUNCH` (tune_probe.py's
+      fault-injection escape hatch) and any other one-off shell command.
+- [x] `routers/benchmarks/serve.py`'s `/start`, `tune_probe.py`'s `Server`,
+      and `tune_schedule.py`'s `config_id_of()` all call the launcher
+      (`ServeProcess`/`resolve()`/`config_id()`) directly now. Along the way,
+      fixed two real defects in `ServeProcess` itself (Phase 2a's tests never
+      caught them because they only ever spawned nothing): it sent
+      llama-server's stdout straight into the server-log file with no way
+      for a caller to read it live, which would have broken Tune's OOM/
+      progress parsing and the Serve page's log stream; and it awaited a
+      second subprocess (`llama-server --version`) and refused to serve at
+      all on a missing `DATABASE_URL`, before returning control to the
+      caller — both fixed (`lines()` is now the one drain point, tee'd into
+      the log file as it's consumed; telemetry startup is a background task,
+      and a missing `DATABASE_URL` sets `telemetry_warning` instead of
+      raising). See the `fix:` commit between the two `refactor:` ones.
+- [x] `grep -rn "LLAMA_ENV_SH\|lllm-\|main\.sh" apps/` — clean. Every match
+      left is a docstring/comment citing shell line numbers for provenance;
+      no functional shell-out remains anywhere under `apps/`.
 
 ### 2c — Makefile and deletion
 - [ ] `make backend` reproducing `lllm-backend`: load `infra/.env`;
