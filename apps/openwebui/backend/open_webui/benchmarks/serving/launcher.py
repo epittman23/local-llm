@@ -22,6 +22,7 @@ have by default.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 import shlex
@@ -264,6 +265,15 @@ class ServeProcess:
     `start_new_session=True` on both children, same reasoning as
     benchmarks/proc.py's `Command`: each owns a process group so `stop()`
     can signal the whole tree, not just the direct child.
+
+    **A caller must start draining `lines()` immediately after `start()`
+    returns**, the same contract `proc.Command` already has (see
+    routers/benchmarks/serve.py's `_drain_log`): llama-server's combined
+    stdout/stderr is a 64 KiB pipe, `-lv 4` is verbose, and nothing else
+    reads it. `lines()` is what tees each line into the server-log file for
+    the recorder, so a caller that never drains it also means the recorder
+    never sees any model-load detail, not just a caller that misses a log
+    view.
     """
 
     config: ResolvedConfig
@@ -277,6 +287,13 @@ class ServeProcess:
     telemetry_proc: asyncio.subprocess.Process | None = None
     server_log_path: Path | None = None
     warning: str | None = None
+    #: Set if telemetry was requested but could not be started (no
+    #: DATABASE_URL). Never prevents serving -- matches `lllm-vram-log`'s own
+    #: posture of warning and not recording, rather than refusing to serve.
+    telemetry_warning: str | None = None
+
+    _log_file: object | None = None
+    _telemetry_task: asyncio.Task | None = None
 
     def __post_init__(self) -> None:
         self.llama_bin = self.llama_bin or os.environ.get('LLAMA_BIN') or str(Path.home() / 'llama.cpp/build/bin')
@@ -296,42 +313,58 @@ class ServeProcess:
 
         argv = build_argv(self.config, host=self.host, port=self.port, log_verbosity=self.log_verbosity)
 
-        server_log = None
         if self.record_telemetry:
             fd, path = tempfile.mkstemp(prefix='lllm-serve-', suffix='.log')
             os.close(fd)
             self.server_log_path = Path(path)
-            server_log = open(self.server_log_path, 'wb')
+            self._log_file = open(self.server_log_path, 'wb')
 
-        try:
-            self.server_proc = await asyncio.create_subprocess_exec(
-                str(binary),
-                *argv,
-                stdout=server_log if server_log else asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.STDOUT,
-                start_new_session=True,
-            )
-        finally:
-            if server_log:
-                server_log.close()
+        self.server_proc = await asyncio.create_subprocess_exec(
+            str(binary),
+            *argv,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            start_new_session=True,
+        )
 
         if self.record_telemetry:
-            build = await llama_server_build(self.llama_bin)
-            tel_argv = telemetry_argv(
-                self.config,
-                resolved_model_path=model_path,
-                port=self.port,
-                llama_build=build,
-                server_log=str(self.server_log_path),
-            )
-            if 'DATABASE_URL' not in os.environ:
-                raise LauncherError('DATABASE_URL is not set; the telemetry recorder cannot connect to Postgres')
+            # A background task, not awaited here: `llama-server --version`
+            # is itself a subprocess spawn, and blocking start() on it would
+            # delay the caller from draining llama-server's own stdout pipe
+            # (see this class's docstring) -- exactly the deadlock risk
+            # lllm-serve avoided by starting vram-log.sh in the background
+            # before running llama-server in the foreground.
+            self._telemetry_task = asyncio.create_task(self._start_telemetry(model_path))
 
-            self.telemetry_proc = await asyncio.create_subprocess_exec(
-                sys.executable,
-                *tel_argv,
-                start_new_session=True,
-            )
+    async def _start_telemetry(self, model_path: str) -> None:
+        if 'DATABASE_URL' not in os.environ:
+            self.telemetry_warning = 'DATABASE_URL is not set; the telemetry recorder cannot connect to Postgres'
+            return
+        build = await llama_server_build(self.llama_bin)
+        tel_argv = telemetry_argv(
+            self.config,
+            resolved_model_path=model_path,
+            port=self.port,
+            llama_build=build,
+            server_log=str(self.server_log_path),
+        )
+        self.telemetry_proc = await asyncio.create_subprocess_exec(
+            sys.executable,
+            *tel_argv,
+            start_new_session=True,
+        )
+
+    async def lines(self):
+        """Stream stdout line by line, tee'd into the server-log file as it goes.
+
+        One pass, safe to iterate once -- same contract as `proc.Command`.
+        """
+        if self.server_proc is None or self.server_proc.stdout is None:
+            return
+        async for raw in self.server_proc.stdout:
+            if self._log_file is not None:
+                self._log_file.write(raw)
+            yield raw.decode(errors='replace').rstrip('\n')
 
     def _signal(self, proc: asyncio.subprocess.Process | None, sig: int) -> bool:
         if proc is None or proc.returncode is not None:
@@ -358,6 +391,13 @@ class ServeProcess:
                 self._signal(self.server_proc, signal.SIGKILL)
                 rc = await self.server_proc.wait()
 
+        if self._telemetry_task is not None:
+            # Lets a telemetry start still in flight (fetching the build
+            # string) finish and assign self.telemetry_proc, rather than
+            # leaving that child unmanaged.
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(self._telemetry_task, timeout=grace)
+
         if self.telemetry_proc is not None:
             self._signal(self.telemetry_proc, signal.SIGTERM)
             try:
@@ -366,6 +406,8 @@ class ServeProcess:
                 self._signal(self.telemetry_proc, signal.SIGKILL)
                 await self.telemetry_proc.wait()
 
+        if self._log_file is not None:
+            self._log_file.close()
         # After the recorder has read it, not before -- it is the recorder's
         # input (main.sh:411-412).
         if self.server_log_path is not None:

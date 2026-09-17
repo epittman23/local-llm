@@ -1,11 +1,14 @@
 """Tests for the launcher's argv assembly, warnings and telemetry wiring.
 
-All database-free and subprocess-free: these exercise the pure functions in
-benchmarks/serving/launcher.py against the same resolved configurations
+Mostly database-free and subprocess-free: these exercise the pure functions
+in benchmarks/serving/launcher.py against the same resolved configurations
 test_serving_fingerprint.py checks, plus the golden cases in
 docs/serving-baseline/fingerprints.json, so a change here that silently
 changes what gets passed to llama-server shows up as a failing test rather
-than as a server that starts with the wrong flags.
+than as a server that starts with the wrong flags. The ServeProcess tests at
+the bottom spawn a small local stub script standing in for llama-server --
+never the real binary, never the GPU -- to exercise start()/lines()/stop()
+end to end.
 
 Run from the backend directory:
 
@@ -321,3 +324,93 @@ async def test_serve_process_rejects_missing_model(tmp_path, monkeypatch, profil
     with pytest.raises(LauncherError, match='model not found'):
         await proc.start()
     assert proc.server_proc is None
+
+
+# ---------------------------------------------------------------------------
+# ServeProcess end to end, against a stub standing in for llama-server --
+# never the real binary, never the GPU. The stub prints a few lines and
+# sleeps briefly so there is something to drain and something to stop.
+# ---------------------------------------------------------------------------
+
+
+def _write_stub_server(tmp_path) -> tuple[Path, Path]:
+    model = tmp_path / 'weights.gguf'
+    model.write_text('not a real gguf, just needs to exist')
+    stub = tmp_path / 'llama-server'
+    stub.write_text(
+        '#!/bin/sh\n'
+        'echo "starting"\n'
+        'echo "load_tensors: layer 0 assigned to device CPU"\n'
+        'sleep 5\n'
+        'echo "should not print: killed before this"\n'
+    )
+    stub.chmod(0o755)
+    return stub, model
+
+
+@pytest.mark.asyncio
+async def test_serve_process_lines_tees_to_the_server_log(tmp_path, monkeypatch, profiles):
+    stub, model = _write_stub_server(tmp_path)
+    config = _resolved(next(c for c in _cases() if c['case'] == 'base-qwen25c'), profiles)
+    monkeypatch.setenv('DATABASE_URL', 'postgresql://openwebui:test@localhost:5432/openwebui')
+
+    proc = ServeProcess(config=config, llama_bin=str(tmp_path), record_telemetry=False)
+    monkeypatch.setattr('open_webui.benchmarks.serving.launcher.resolve_model_path', lambda *a, **k: str(model))
+    await proc.start()
+    try:
+        lines = []
+        async for line in proc.lines():
+            lines.append(line)
+            if len(lines) == 2:
+                break
+    finally:
+        rc = await proc.stop(grace=2.0)
+
+    assert lines == ['starting', 'load_tensors: layer 0 assigned to device CPU']
+    assert rc != 0 or rc is not None  # terminated, not left running
+    assert proc.running is False
+
+
+@pytest.mark.asyncio
+async def test_serve_process_with_telemetry_writes_the_log_file_and_unlinks_it(tmp_path, monkeypatch, profiles):
+    stub, model = _write_stub_server(tmp_path)
+    config = _resolved(next(c for c in _cases() if c['case'] == 'base-qwen25c'), profiles)
+    monkeypatch.delenv('DATABASE_URL', raising=False)  # no recorder subprocess actually spawns
+
+    proc = ServeProcess(config=config, llama_bin=str(tmp_path), record_telemetry=True)
+    monkeypatch.setattr('open_webui.benchmarks.serving.launcher.resolve_model_path', lambda *a, **k: str(model))
+    await proc.start()
+    seen_path = proc.server_log_path
+    assert seen_path is not None
+
+    lines = []
+    async for line in proc.lines():
+        lines.append(line)
+        if len(lines) == 2:
+            break
+    await proc.stop(grace=2.0)
+
+    # DATABASE_URL was missing, so telemetry warned rather than starting --
+    # and, crucially, still did not block serving or draining the log.
+    assert proc.telemetry_proc is None
+    assert proc.telemetry_warning is not None
+    assert 'DATABASE_URL' in proc.telemetry_warning
+    # Deleted only after stop(), which is after the (skipped) recorder would
+    # have had its chance to read it.
+    assert not seen_path.exists()
+
+
+@pytest.mark.asyncio
+async def test_serve_process_warning_set_for_dense_partial_offload(tmp_path, monkeypatch, profiles):
+    stub, model = _write_stub_server(tmp_path)
+    config = _resolved(next(c for c in _cases() if c['case'] == 'base-qwen38'), profiles)
+    monkeypatch.delenv('DATABASE_URL', raising=False)
+
+    proc = ServeProcess(config=config, llama_bin=str(tmp_path), record_telemetry=False)
+    monkeypatch.setattr('open_webui.benchmarks.serving.launcher.resolve_model_path', lambda *a, **k: str(model))
+    await proc.start()
+    try:
+        assert proc.warning is not None
+        assert 'partial offload' in proc.warning
+    finally:
+        await proc.stop(grace=2.0)
