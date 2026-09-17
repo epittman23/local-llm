@@ -17,30 +17,34 @@ no process/DB state of its own:
   * `median()`/`log_ratios()`/`sign_test()` -- the paired-ratio statistics the
     elimination rule in tune.py's `Sweep.eliminate()` is built on.
 
-`config_id_of()` is the one function here with I/O: it shells out to
-scripts/llama-env.sh (via LLAMA_ENV_SH, the same env var benchmarks/proc.py
-and benchmarks/env_profile.py already require, for the same reason -- that
-script is the outer local-llm repo's own serving-profile layer and stays
-outside this app) to ask what config fingerprint a candidate's overrides
-would produce, *without serving it*. It has to live here rather than in
-env_profile.py because it needs a candidate's full override environment, not
-just a profile name.
+`config_id_of()` is the one function here with I/O: it reads a candidate's
+profile from the database and resolves it through the same
+benchmarks/serving/profiles.resolve() and benchmarks/serving/fingerprint.py
+every other caller uses, to ask what config fingerprint a candidate's
+overrides would produce, *without serving it*. It has to live here rather
+than in env_profile.py because it needs a candidate's full override
+environment, not just a profile name. Until 2026-09-14 this shelled out to
+scripts/llama-env.sh's `config-id` subcommand; see
+docs/migration-plan.md's Phase 2b for why that stopped being necessary once
+the fingerprint itself lived in this app (Phase 2a).
 
-Nothing here touches the database and nothing here imports FastAPI.
+Nothing here imports FastAPI.
 """
 
 from __future__ import annotations
 
-import asyncio
 import hashlib
 import json
 import math
 import os
 import random
 import time
+import tomllib
 from pathlib import Path
 
-import tomllib
+from open_webui.benchmarks.serving.fingerprint import config_id, config_lines
+from open_webui.benchmarks.serving.profiles import Overrides, ProfileError, resolve
+from open_webui.models.benchmark_profiles import BenchmarkProfiles
 
 GRID_DIR = Path(__file__).resolve().parent / 'data' / 'tuning'
 
@@ -55,17 +59,6 @@ class TuneRefused(RuntimeError):
     exit code here; a future router catches this and returns a 4xx with the
     message, exactly as it does for SuiteLoadError.
     """
-
-
-def _env_sh() -> Path:
-    configured = os.environ.get('LLAMA_ENV_SH')
-    if not configured:
-        raise RuntimeError(
-            'LLAMA_ENV_SH is not set. It must point at the outer local-llm '
-            "repo's scripts/llama-env.sh -- the serving-profile shell layer "
-            'this app resolves a candidate config fingerprint through.'
-        )
-    return Path(configured)
 
 
 # ---------------------------------------------------------------------------
@@ -222,7 +215,7 @@ def profile_key(var: str) -> str:
     profile-json keys had to be exactly this and not something more
     readable.
     """
-    return var[len('LLAMA_'):].lower() if var.startswith('LLAMA_') else var.lower()
+    return var[len('LLAMA_') :].lower() if var.startswith('LLAMA_') else var.lower()
 
 
 def _numeric(value):
@@ -407,34 +400,23 @@ class Candidate:
 async def config_id_of(candidate: Candidate) -> dict:
     """The fingerprint this candidate would be recorded under, without serving.
 
-    Asks scripts/llama-env.sh's `config-id` subcommand, which asks the same
-    fingerprinting function the telemetry recorder uses (see
-    benchmarks/telemetry_recorder.py's upsert_config() / benchmarks/stats.py's
-    parse_config_text() -- both read the same six lines this shells out to
-    produce). Computing it in Python instead would put a second copy of the
-    fingerprint beside the shell one, and the day they disagreed two
-    different configurations would be filed under one id.
+    Resolves the candidate's profile (read from the database) through the
+    same resolve()/config_id() the telemetry recorder uses to fingerprint an
+    actual run (see benchmarks/serving/launcher.py's telemetry_argv and
+    benchmarks/telemetry_recorder.py's upsert_config()) -- one fingerprint
+    implementation, not a second copy that could disagree with it. Still
+    `async def` and still awaited everywhere it is called, even though
+    nothing here is I/O any more, so no call site needed to change.
     """
-    proc = await asyncio.create_subprocess_exec(
-        str(_env_sh()),
-        'config-id',
-        candidate.profile,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-        env=candidate.env(),
-    )
+    entry = await BenchmarkProfiles.get_by_name(candidate.profile)
+    if entry is None:
+        raise TuneRefused(f"llama-tune: no such profile '{candidate.profile}'")
     try:
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
-    except asyncio.TimeoutError:
-        proc.kill()
-        await proc.wait()
-        raise TuneRefused(f'llama-tune: llama-config-id timed out for {candidate.flags()}')
-    if proc.returncode != 0:
-        raise TuneRefused(
-            f'llama-tune: llama-config-id failed for {candidate.flags()}: '
-            f"{stderr.decode(errors='replace').strip()[:300]}"
-        )
-    return json.loads(stdout)
+        resolved = resolve(entry.to_serving_profile(), Overrides.from_env(candidate.env()))
+    except ProfileError as e:
+        raise TuneRefused(f'llama-tune: {candidate.flags()}: {e}') from e
+    lines = config_lines(resolved)
+    return {'config_id': config_id(resolved, lines), 'alias': resolved.alias, 'lines': lines}
 
 
 async def sample_candidates(
