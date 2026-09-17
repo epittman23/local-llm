@@ -14,12 +14,16 @@ connect, because llama-server binds the port before it loads the model, and
 a port check would start the clock on a candidate whose weights are still
 being read.
 
-Launching is pluggable through LLAMA_TUNE_LAUNCH so the whole algorithm can
-be exercised against a stub with no GPU (see the outer repo's
-llama_tune_check.py / llama_tune_stub.py). That is not a testing convenience
-bolted on: fault injection -- refuse to bind, OOM, hang past the timeout, die
-mid-visit, drop to 12% throughput -- is where this module's real defects
-live, and none of them can be provoked on demand from real hardware.
+A candidate is served through benchmarks/serving/launcher.ServeProcess
+directly -- until 2026-09-14 this shelled out to main.sh's `lllm-serve`
+(see docs/migration-plan.md's Phase 2). LLAMA_TUNE_LAUNCH is kept as an
+escape hatch, still running through benchmarks.proc.Command, a plain shell
+command rather than the launcher: it lets the whole algorithm be exercised
+against a stub with no GPU (fault injection -- refuse to bind, OOM, hang
+past the timeout, die mid-visit, drop to 12% throughput -- is where this
+module's real defects live, and none of them can be provoked on demand from
+real hardware), and a stub is much simpler to write as a shell script than
+as something satisfying ServeProcess's own constructor.
 
 Nothing here imports FastAPI, and nothing here writes to this app's
 database -- Cooldown (in tune.py) is what turns a probe into a recorded
@@ -41,7 +45,10 @@ import aiohttp
 
 from open_webui.benchmarks import stats
 from open_webui.benchmarks.proc import Command
+from open_webui.benchmarks.serving.launcher import LauncherError, ServeProcess
+from open_webui.benchmarks.serving.profiles import Overrides, ProfileError, resolve
 from open_webui.benchmarks.tune_schedule import median
+from open_webui.models.benchmark_profiles import BenchmarkProfiles
 
 if TYPE_CHECKING:  # pragma: no cover - typing only, avoids a real import cycle
     from open_webui.benchmarks.tune_schedule import Candidate
@@ -78,19 +85,19 @@ def _tail_reason(text: str) -> str:
 
 
 class Server:
-    """One `lllm-serve` under a candidate's overrides, and its readiness.
+    """One candidate's server under its overrides, and its readiness.
 
     Readiness is `GET /v1/models` over a shared aiohttp session (the same
     session a caller uses for the rest of a visit's requests), deliberately
     not a TCP connect.
     """
 
-    def __init__(self, candidate: 'Candidate', port: int, *, load_timeout: float, session: aiohttp.ClientSession):
+    def __init__(self, candidate: Candidate, port: int, *, load_timeout: float, session: aiohttp.ClientSession):
         self.candidate = candidate
         self.port = port
         self.load_timeout = load_timeout
         self.session = session
-        self.cmd: Command | None = None
+        self.cmd: Command | ServeProcess | None = None
         self.load_ms: float | None = None
         self.tail: deque[str] = deque(maxlen=40)
         self._drain: asyncio.Task | None = None
@@ -102,15 +109,28 @@ class Server:
         self.n_gen: int | None = None
         self.tokens_per_second: float | None = None
 
-    def _command(self) -> str:
+    async def start(self) -> None:
         launch = os.environ.get('LLAMA_TUNE_LAUNCH')
         if launch:
-            return f'{launch} {shlex.quote(self.candidate.profile)}'
-        return f'lllm-serve {shlex.quote(self.candidate.profile)}'
-
-    async def start(self) -> None:
-        self.cmd = Command(self._command(), env=self.candidate.env(), plain=True)
-        await self.cmd.start()
+            # Escape hatch for fault-injection testing (see this module's
+            # docstring): a plain shell command standing in for a real
+            # server, not the launcher.
+            command = f'{launch} {shlex.quote(self.candidate.profile)}'
+            self.cmd = Command(command, env=self.candidate.env(), plain=True)
+            await self.cmd.start()
+        else:
+            entry = await BenchmarkProfiles.get_by_name(self.candidate.profile)
+            if entry is None:
+                raise Infeasible('load_error', f"no such profile '{self.candidate.profile}'")
+            try:
+                resolved = resolve(entry.to_serving_profile(), Overrides.from_env(self.candidate.env()))
+            except ProfileError as e:
+                raise Infeasible('load_error', str(e)) from e
+            self.cmd = ServeProcess(config=resolved, port=self.port)
+            try:
+                await self.cmd.start()
+            except LauncherError as e:
+                raise Infeasible('load_error', str(e)) from e
         # Drained on a background task rather than read at the end. The pipe
         # is 64 KiB and llama-server runs at -lv 4, so a server left unread
         # blocks on write partway through loading and the caller would wait
@@ -135,7 +155,7 @@ class Server:
                 f'http://127.0.0.1:{self.port}/v1/models', timeout=aiohttp.ClientTimeout(total=3)
             ) as r:
                 return r.status == 200
-        except (aiohttp.ClientError, asyncio.TimeoutError, OSError, ValueError):
+        except (TimeoutError, aiohttp.ClientError, OSError, ValueError):
             return False
 
     async def wait(self) -> float:
@@ -155,21 +175,35 @@ class Server:
         raise Infeasible('load_timeout', f'no /v1/models within {self.load_timeout:.0f}s')
 
     def pgid(self) -> int | None:
-        if self.cmd is None or self.cmd.proc is None:
+        """The server's own process group -- for `kill_pgid` to clean up an
+        orphan left by an earlier, crashed sweep.
+
+        Only the server's group: with `ServeProcess`, the telemetry
+        recorder is a second, separate group (see launcher.ServeProcess's
+        docstring), not covered by this id or by `kill_pgid`. That is a
+        deliberate, known gap rather than an oversight -- the recorder is
+        already designed to notice its server's port has gone dead and stop
+        itself (see benchmarks/telemetry_recorder.py), so an orphaned one
+        is self-healing, not a permanent leak the way an orphaned server
+        holding VRAM would be.
+        """
+        proc = getattr(self.cmd, 'proc', None) or getattr(self.cmd, 'server_proc', None)
+        if proc is None:
             return None
         try:
-            return os.getpgid(self.cmd.proc.pid)
+            return os.getpgid(proc.pid)
         except (ProcessLookupError, OSError):
             return None
 
     async def stop(self) -> None:
         """SIGINT first, so the recorder closes its own run.
 
-        `lllm-serve` backgrounds the telemetry recorder and signals it on
-        the way out; killing the group outright leaves the run row open for
-        a stale-run sweep to close as 'stale' instead of 'clean'. A sweep of
-        eighty visits would then have the store claiming eighty servers
-        crashed, and the one that genuinely did would be indistinguishable.
+        The launcher (or, under LLAMA_TUNE_LAUNCH, the stub) stops the
+        telemetry recorder itself once the server exits; killing the group
+        outright leaves the run row open for a stale-run sweep to close as
+        'stale' instead of 'clean'. A sweep of eighty visits would then have
+        the store claiming eighty servers crashed, and the one that
+        genuinely did would be indistinguishable.
         """
         if self.cmd is None:
             return
@@ -190,7 +224,7 @@ async def port_busy(port: int, session: aiohttp.ClientSession) -> bool:
     try:
         async with session.get(f'http://127.0.0.1:{port}/v1/models', timeout=aiohttp.ClientTimeout(total=3)) as r:
             return r.status == 200
-    except (aiohttp.ClientError, asyncio.TimeoutError, OSError, ValueError):
+    except (TimeoutError, aiohttp.ClientError, OSError, ValueError):
         return False
 
 
@@ -252,7 +286,7 @@ class GpuProbe:
             return None
         try:
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=20)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             proc.kill()
             await proc.wait()
             return None

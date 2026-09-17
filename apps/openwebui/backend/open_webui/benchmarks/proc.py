@@ -1,54 +1,49 @@
-"""benchmarks/proc.py - one llama-env.sh invocation, owning its process group.
+"""benchmarks/proc.py - one shell command, owning its process group.
 
 Async port of local-llm's scripts/llama_proc.py (outer repo), so the backend
-can launch and manage llama-server (Serve) and many concurrent tuning
-candidates (Tune) without blocking the event loop. The process-group and
-signal semantics are unchanged from the original -- only the subprocess
-plumbing is now asyncio's.
+can launch and manage a subprocess (a tuning candidate's stub launcher, or
+any other one-off command) without blocking the event loop. The
+process-group and signal semantics are unchanged from the original -- only
+the subprocess plumbing is now asyncio's.
 
-llama-env.sh itself stays outside this app: it is the outer local-llm repo's
-own operational shell layer (serving profiles, GPU flags), never vendored
-into the fork. LLAMA_ENV_SH must point at it on this host.
+Until 2026-09-14 this ran every command through `bash -c "source
+llama-env.sh && ..."`, because llama-server itself was started through
+main.sh's `lllm-serve` shell function. Serving now goes through
+benchmarks/serving/launcher.ServeProcess directly (routers/benchmarks/
+serve.py, benchmarks/tune_probe.py's Server) -- see docs/migration-plan.md's
+Phase 2 -- so `Command` no longer needs a serving-profile shell layer
+sourced into it; it just runs the command it is given. What it keeps: owning
+a process group so a caller can signal a whole subprocess tree at once,
+which is still useful for anything launched as an arbitrary shell command
+(currently: `LLAMA_TUNE_LAUNCH`, tune_probe.py's escape hatch for launching
+a candidate through something other than the real llama-server, for fault-
+injection testing with no GPU involved).
 """
 
 from __future__ import annotations
 
 import asyncio
 import os
-import shlex
 import signal
-from pathlib import Path
-
-
-def _env_sh() -> Path:
-    configured = os.environ.get('LLAMA_ENV_SH')
-    if not configured:
-        raise RuntimeError(
-            'LLAMA_ENV_SH is not set. It must point at the outer local-llm '
-            "repo's scripts/llama-env.sh -- the serving-profile shell layer "
-            'this app spawns llama-server through.'
-        )
-    return Path(configured)
 
 
 class Command:
-    """One llama-env.sh invocation, owning its process group.
+    """One shell command, owning its process group.
 
     `start_new_session=True` is the whole point. The command runs through
-    `bash -c "source llama-env.sh && ..."`, so llama-server (or a tuning
-    candidate's server) is a child of that bash and not the process a caller
-    holds a handle to -- `proc.terminate()` alone would leave it holding
-    VRAM. A session of its own means the whole tree can be signalled
-    together.
+    `bash -c ...`, so whatever it launches is a child of that bash and not
+    the process a caller holds a handle to -- `proc.terminate()` alone could
+    leave a grandchild holding VRAM. A session of its own means the whole
+    tree can be signalled together.
 
     The signals are chosen for what the harness does with them, not for
     politeness:
 
     - SIGINT is a *clean, resumable* cancel, matching the CLI original's
       cooperative-cancel behaviour for a test suite in progress.
-    - SIGTERM before SIGKILL protects the store: the telemetry recorder
-      calls close_run() on the way out, and killing outright leaves the run
-      open for a stale-run sweep to close as 'stale' instead of 'clean'.
+    - SIGTERM before SIGKILL protects the store: a recorder in this tree
+      may call close_run() on the way out, and killing outright leaves the
+      run open for a stale-run sweep to close as 'stale' instead of 'clean'.
     """
 
     def __init__(self, command: str, *, env: dict | None = None, plain: bool = True):
@@ -64,7 +59,7 @@ class Command:
         self.proc = await asyncio.create_subprocess_exec(
             'bash',
             '-c',
-            f'source {shlex.quote(str(_env_sh()))} && {self.command}',
+            self.command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
             env=self.env,
@@ -105,6 +100,6 @@ class Command:
             return False
         try:
             await asyncio.wait_for(self.proc.wait(), timeout=grace)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             self.signal(signal.SIGKILL)
         return True

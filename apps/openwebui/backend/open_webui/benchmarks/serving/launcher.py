@@ -375,6 +375,16 @@ class ServeProcess:
         except (ProcessLookupError, PermissionError, OSError):
             return False
 
+    def interrupt(self) -> bool:
+        """Cancel the server, the way Ctrl-C at a shell would.
+
+        The server only, matching `proc.Command.interrupt()`'s single-group
+        semantics -- the telemetry recorder is its own process group (see
+        this class's docstring) and is stopped in the right order by
+        `stop()`, not by also being in the blast radius of this signal.
+        """
+        return self._signal(self.server_proc, signal.SIGINT)
+
     async def stop(self, grace: float = 5.0) -> int:
         """Stop the server, then the recorder, then clean up the log file.
 
