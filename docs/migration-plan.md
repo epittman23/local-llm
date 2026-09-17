@@ -172,7 +172,16 @@ then merged. Sequence:
    2026-09-15 session already decided to leave (see that entry above — still
    true, not re-decided). Full suite after: **167 passed.**
 
-**Next action:** continue Phase 2a with `weights.py` (`lllm-fetch`).
+5. Wrote `weights.py` (`lllm-fetch` port): `fetch_argv` builds the `hf
+   download` argv from a profile's `hf_repo`/`hf_pattern`, targeting the
+   resolved model path's own directory (so it follows `LLAMA_MODELS`, never
+   `/mnt/c`); `FetchProcess` wraps it in the same start()/lines()/wait()
+   shape as `Command`/`ServeProcess` for a future streaming download
+   endpoint. 10 new tests, all against the seeded profiles or precondition
+   checks, no network access. Full suite: **177 passed.**
+
+**Next action:** continue Phase 2a with `routers/benchmarks/profiles.py`
+(the profile CRUD router).
 
 ---
 
@@ -438,8 +447,13 @@ refiles configurations and breaks comparability with history.
       `launcher.build_database_url()` (percent-encoding via
       `urllib.parse.quote`, tested) still exists for that Phase 2c caller,
       which has no inherited `DATABASE_URL` yet.
-- [ ] **`weights.py`** — `lllm-fetch`; targets `$LLAMA_MODELS`, not
-      `/mnt/c` (9p penalty).
+- [x] **`weights.py`** — `lllm-fetch`; targets `LLAMA_MODELS` (via
+      `resolve_model_path`'s own resolution), not `/mnt/c` (9p penalty).
+      `FetchProcess` follows the same start()/lines()/wait() shape as
+      `Command` and `ServeProcess`, so a future "Download weights" endpoint
+      (Phase 5) can stream its output the same way. 10 tests against the
+      seeded profiles' real `hf_repo`/`hf_pattern` and the precondition
+      checks; no network access, nothing actually downloaded.
 - [ ] **`routers/benchmarks/profiles.py`** — CRUD; `Depends(get_admin_user)`;
       edits write a new version; reject `name` changes explicitly.
 - [ ] `BenchmarkConfig` docstring (`models/benchmark_configs.py:23-31`).

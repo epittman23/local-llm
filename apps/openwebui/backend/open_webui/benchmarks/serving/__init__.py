@@ -16,5 +16,7 @@ be tested against `docs/serving-baseline/` without a database.
 `lllm-vram-log`, ported together -- they always started and stopped as one
 operation). `build_info` and `model_name` are its two small dependencies,
 each a port of one `_vramlog_*` shell function, kept in their own modules
-because both are pure and independently testable.
+because both are pure and independently testable. `weights` (`lllm-fetch`)
+downloads a profile's own weights and follows the same process-wrapper shape
+as `launcher.ServeProcess`.
 """
