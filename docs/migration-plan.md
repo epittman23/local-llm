@@ -154,11 +154,25 @@ then merged. Sequence:
 3. Merged `wip/phase-2a-serving-profiles` into this branch — clean, no
    conflicts (`git merge`, fast commits since the last common ancestor were
    docs-only on this side). Re-ran the full suite against the merged tree:
-   **118 passed.** `ruff` isn't installed in this venv to re-verify the
-   `5a11c0e` lint fixes here, but nothing has touched those files since that
-   commit.
+   **118 passed.** Pushed.
+4. Wrote `launcher.py`, `build_info.py` and `model_name.py` (see the ticked
+   checklist items above for what each does and what changed from the plan
+   as written — the telemetry-spawn DATABASE_URL design in particular).
+   `tests/test_launcher.py` added: 49 tests, all against pure functions or
+   `ServeProcess`'s precondition checks, none touching a real llama-server
+   or the GPU. Found this session: `ruff` is not in the backend venv (not a
+   declared dependency — `pytest`/`pytest-asyncio` aren't either, a
+   pre-existing gap this session didn't introduce but did lean on for the
+   first time with `pytest-asyncio`, which `test_launcher.py`'s two
+   `ServeProcess` tests need) but a global install exists at
+   `/home/epittman/dev/envs/py/base/bin/ruff`; used that to check and
+   `--fix`/format the three new files (3 auto-fixed `UP041` findings, now
+   clean) and to confirm `profiles.py`/`fingerprint.py` are still clean and
+   `benchmark_profiles.py`'s 24 `Optional` findings are exactly the ones the
+   2026-09-15 session already decided to leave (see that entry above — still
+   true, not re-decided). Full suite after: **167 passed.**
 
-**Next action:** continue Phase 2a with `launcher.py`.
+**Next action:** continue Phase 2a with `weights.py` (`lllm-fetch`).
 
 ---
 
@@ -392,16 +406,38 @@ refiles configurations and breaks comparability with history.
       test_seed_reproduces_golden_fingerprints` runs the frozen `SEED`
       through `config_id()` and checks it against all 24 golden cases,
       database-free.
-- [ ] **`launcher.py`** — `lllm-serve`'s argv: `-lv 4`, `--metrics`,
-      `--parallel` always, `-fa` vs legacy `--flash-attn 1`, server-log tee
-      consumed by the recorder and deleted only after it finishes, the
-      dense partial-offload warning.
-- [ ] **`build_info.py`** — `_vramlog_build` (both `--version` spellings).
-- [ ] **`model_name.py`** — `_vramlog_split_model`.
-- [ ] **Telemetry spawn** — the launcher spawns
-      `python -m open_webui.benchmarks.telemetry_recorder` directly. Keep it
-      a **separate subprocess** (crash-independence from the backend).
-      Percent-encode `POSTGRES_PASSWORD` with `urllib.parse.quote`.
+- [x] **`launcher.py`** — `lllm-serve`'s argv: `-lv 4`, `--metrics`,
+      `--parallel` always, `-fa` vs legacy `--flash-attn 1`, the dense
+      partial-offload warning. `ServeProcess` spawns llama-server with its
+      stdout/stderr into a server-log tempfile, deleted only after the
+      telemetry recorder has had a chance to read it (stop() order:
+      server, then recorder, then unlink). **Not exercised against real
+      hardware this session** (same posture as the 2026-09-06 decisions-log
+      entry for this project's other unattended-GPU-run code) — the pure
+      pieces (`build_argv`, `dense_partial_offload_warning`,
+      `resolve_model_path`, `telemetry_argv`) are covered by
+      `tests/test_launcher.py` against the golden cases, and `ServeProcess`'s
+      two precondition checks (missing binary, missing model file) are
+      tested directly; the actual spawn-and-tee path is not.
+- [x] **`build_info.py`** — `_vramlog_build` (both `--version` spellings),
+      tested against both.
+- [x] **`model_name.py`** — `_vramlog_split_model`, tested against all four
+      seeded profiles' basenames.
+- [x] **Telemetry spawn** — `ServeProcess.start()` spawns
+      `python -m open_webui.benchmarks.telemetry_recorder` directly (via
+      `sys.executable`, not a located venv — the launcher already runs
+      inside the backend's own interpreter) as its own process group,
+      separate from llama-server's. **Design change from the plan as
+      written**: it does *not* re-derive `DATABASE_URL` from
+      `POSTGRES_PASSWORD` with `urllib.parse.quote` — it requires
+      `DATABASE_URL` to already be correct in the backend process's own
+      environment and inherits it, because the backend already builds that
+      URL once (whatever ports `lllm-backend`'s percent-encoding fix,
+      Phase 2c) and a second encoding site is exactly the kind of drift the
+      2026-08-23 decisions-log entries about this same bug warn against.
+      `launcher.build_database_url()` (percent-encoding via
+      `urllib.parse.quote`, tested) still exists for that Phase 2c caller,
+      which has no inherited `DATABASE_URL` yet.
 - [ ] **`weights.py`** — `lllm-fetch`; targets `$LLAMA_MODELS`, not
       `/mnt/c` (9p penalty).
 - [ ] **`routers/benchmarks/profiles.py`** — CRUD; `Depends(get_admin_user)`;

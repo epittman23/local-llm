@@ -10,4 +10,11 @@ override/guard-rail resolution, and `fingerprint` derives the config text and
 its id. Where a profile's fields come from -- seed data, a Postgres row, a
 test fixture -- is somebody else's problem, which is what lets the fingerprint
 be tested against `docs/serving-baseline/` without a database.
+
+`launcher` is what actually turns a `ResolvedConfig` into a running
+`llama-server` plus its telemetry recorder (`lllm-serve` +
+`lllm-vram-log`, ported together -- they always started and stopped as one
+operation). `build_info` and `model_name` are its two small dependencies,
+each a port of one `_vramlog_*` shell function, kept in their own modules
+because both are pure and independently testable.
 """
