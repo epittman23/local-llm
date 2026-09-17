@@ -179,9 +179,21 @@ then merged. Sequence:
    shape as `Command`/`ServeProcess` for a future streaming download
    endpoint. 10 new tests, all against the seeded profiles or precondition
    checks, no network access. Full suite: **177 passed.**
+6. Wrote `routers/benchmarks/profiles.py` (the profile CRUD router) and
+   updated the `BenchmarkConfig` docstring. **Phase 2a is now fully
+   checked off** — everything under "2a — Serving layer in the backend"
+   above is done. 20 new HTTP-layer tests against a minimal FastAPI app
+   with `BenchmarkProfiles` monkeypatched (no real DB). Full suite:
+   **197 passed.** All Phase 2a files ruff-clean (using the global
+   `/home/epittman/dev/envs/py/base/bin/ruff`, since this venv has neither
+   `ruff` nor `pytest`/`pytest-asyncio` as declared dependencies — a
+   pre-existing gap, noted twice now, not yet fixed).
 
-**Next action:** continue Phase 2a with `routers/benchmarks/profiles.py`
-(the profile CRUD router).
+**Next action:** start Phase 2b (rewire the backend to import instead of
+shelling out): `env_profile.py` first — drop `_env_sh()` and both
+subprocess calls, keeping the `{}`/`[]` failure posture — then `proc.py`,
+then the three router call sites (`serve.py:116`, `tune_probe.py:109`,
+`tune_schedule.py:61`), then a `grep` sweep for stragglers.
 
 ---
 
@@ -454,9 +466,22 @@ refiles configurations and breaks comparability with history.
       (Phase 5) can stream its output the same way. 10 tests against the
       seeded profiles' real `hf_repo`/`hf_pattern` and the precondition
       checks; no network access, nothing actually downloaded.
-- [ ] **`routers/benchmarks/profiles.py`** — CRUD; `Depends(get_admin_user)`;
-      edits write a new version; reject `name` changes explicitly.
-- [ ] `BenchmarkConfig` docstring (`models/benchmark_configs.py:23-31`).
+- [x] **`routers/benchmarks/profiles.py`** — CRUD over the existing
+      `BenchmarkProfileTable` (list, get, get-default, list-versions,
+      create, clone, add-version/edit, set-display-name, set-default,
+      archive, unarchive), all `Depends(get_admin_user)`. Edits go through
+      `add_version` (a new row, never an update). `name` changes are
+      rejected by construction: `DefinitionForm` has no `name` field, and
+      every form is `extra='forbid'`, so a client that includes one gets a
+      422, not a silently dropped field. Mounted at `/profiles` in
+      `routers/benchmarks/__init__.py`. 20 HTTP-layer tests
+      (`test_profiles_router.py`) against a minimal app with
+      `BenchmarkProfiles` monkeypatched — status-code mapping (404/409/400)
+      and the immutable-name contract, not the model layer itself (already
+      covered elsewhere).
+- [x] `BenchmarkConfig` docstring (`models/benchmark_configs.py:23-31`) — no
+      longer says the fingerprint is "computed outside this app"; it names
+      `benchmarks/serving/fingerprint.py` and the 2026-09-14 move.
 
 ### 2b — Rewire the backend to import instead of shell out
 - [ ] `env_profile.py` — drop `_env_sh()` and both subprocess calls; keep

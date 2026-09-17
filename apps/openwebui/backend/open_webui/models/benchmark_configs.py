@@ -24,10 +24,12 @@ log = logging.getLogger(__name__)
 #
 # Ported from scripts/llama_db.py's `config`, `run` and `run_load_info`
 # tables (local-llm outer repo). config_id is a sha1[:8] fingerprint of the
-# serving-flag text computed outside this app (by the serving shell layer);
-# config_text is stored verbatim because it is what the fingerprint covers,
-# and the typed columns beside it are parsed out of that same text so a
-# column can never disagree with the hash that identifies the row.
+# serving-flag text, computed by benchmarks/serving/fingerprint.py -- inside
+# this app since 2026-09-14 (see docs/CLAUDE.md's decisions log), no longer
+# by scripts/shell/vram-log.sh's `_vramlog_config`. config_text is stored
+# verbatim because it is what the fingerprint covers, and the typed columns
+# beside it are parsed out of that same text so a column can never disagree
+# with the hash that identifies the row.
 ####################
 
 

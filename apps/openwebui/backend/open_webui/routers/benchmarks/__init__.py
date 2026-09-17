@@ -1,9 +1,9 @@
 from fastapi import APIRouter
-
-from open_webui.routers.benchmarks import answers, compare, live, report, serve, tests
+from open_webui.routers.benchmarks import answers, compare, live, profiles, report, serve, tests
 
 router = APIRouter()
 router.include_router(serve.router, prefix='/serve')
+router.include_router(profiles.router, prefix='/profiles')
 router.include_router(live.router, prefix='/live')
 router.include_router(tests.router, prefix='/tests')
 router.include_router(compare.router, prefix='/compare')
