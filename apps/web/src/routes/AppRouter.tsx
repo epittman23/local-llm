@@ -3,6 +3,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { BenchmarksLayout } from '@/routes/benchmarks/BenchmarksLayout';
 import { LivePage } from '@/routes/benchmarks/LivePage';
 import { ServePage } from '@/routes/benchmarks/ServePage';
+import { TestsPage } from '@/routes/benchmarks/TestsPage';
 import { LegacyFallback } from '@/routes/LegacyFallback';
 import { PlaceholderPage } from '@/routes/PlaceholderPage';
 import { routePaths } from '@/routes/routePaths';
@@ -41,10 +42,7 @@ const router = createBrowserRouter(
 						{ index: true, element: <Navigate to={routePaths.benchmarksServe} replace /> },
 						{ path: routePaths.benchmarksServe, element: <ServePage /> },
 						{ path: routePaths.benchmarksLive, element: <LivePage /> },
-						{
-							path: routePaths.benchmarksTests,
-							element: <PlaceholderPage title="Tests" phase="Phase 5 (later)" />
-						},
+						{ path: routePaths.benchmarksTests, element: <TestsPage /> },
 						{
 							path: routePaths.benchmarksCompare,
 							element: <PlaceholderPage title="Compare" phase="Phase 5 (later)" />

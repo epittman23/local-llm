@@ -206,6 +206,59 @@ test('Live renders an active run and Kill requires AlertDialog confirmation', as
 	await expect(page.getByText('Nothing is currently being recorded')).toBeVisible();
 });
 
+test('Tests runs a suite and streams per-item outcomes to completion', async ({ page }) => {
+	await page.route('**/api/v1/benchmarks/tests/options', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ tiers: ['smoke', 'standard'], benchmarks: ['humaneval'], systems: [] })
+		})
+	);
+	await page.route('**/api/v1/benchmarks/tests/run', (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ started: true }) })
+	);
+	await page.route('**/api/v1/benchmarks/tests/stream', (route) => {
+		const events = [
+			{ type: 'start', suite_run_id: '20260101T000000Z-abc123', total: 2, skipped: 0 },
+			{
+				type: 'item',
+				benchmark: 'humaneval',
+				item_id: 'HumanEval/0',
+				outcome: 'pass',
+				i: 1,
+				total: 2,
+				passed: 1,
+				attempted: 1
+			},
+			{
+				type: 'item',
+				benchmark: 'humaneval',
+				item_id: 'HumanEval/1',
+				outcome: 'fail',
+				reason: 'AssertionError',
+				i: 2,
+				total: 2,
+				passed: 1,
+				attempted: 2
+			},
+			{ type: 'done', passed: 1, attempted: 2, cancelled: false }
+		];
+		const body = events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('');
+		return route.fulfill({ status: 200, contentType: 'text/event-stream', body });
+	});
+
+	await page.goto('/benchmarks/tests');
+
+	await expect(page.getByRole('heading', { name: 'Tests' })).toBeVisible();
+	await page.getByRole('button', { name: 'Run' }).click();
+
+	await expect(page.getByText('20260101T000000Z-abc123')).toBeVisible();
+	await expect(page.getByText('HumanEval/0')).toBeVisible();
+	await expect(page.getByText('HumanEval/1')).toBeVisible();
+	await expect(page.getByText('AssertionError')).toBeVisible();
+	await expect(page.getByText('1 / 2 passed')).toBeVisible();
+});
+
 test('a non-admin user is bounced out of Benchmarks entirely', async ({ page }) => {
 	// Overrides this file's own beforeEach mock -- last-registered route wins
 	// for a matching request in Playwright.
