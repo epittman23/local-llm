@@ -302,6 +302,74 @@ test('Compare renders rows generically and sorts on header click', async ({ page
 	await expect(firstDataRow).toContainText('aaa111');
 });
 
+test('Answers lists results and renders a selected transcript', async ({ page }) => {
+	await page.route('**/api/v1/benchmarks/answers/runs**', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				runs: [
+					{
+						suite_run_id: '20260101T000000Z-abc123',
+						started_at: 1700000000,
+						model: 'qwen38',
+						tier: 'smoke',
+						attempted: 24,
+						passed: 20
+					}
+				]
+			})
+		})
+	);
+	await page.route(/\/api\/v1\/benchmarks\/answers\/\?/, (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				rows: [
+					{
+						benchmark: 'humaneval',
+						item_id: 'HumanEval/3',
+						outcome: 'fail',
+						reason: 'AssertionError',
+						reasoning_chars: 120
+					}
+				]
+			})
+		})
+	);
+	await page.route(/\/api\/v1\/benchmarks\/answers\/one\?/, (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				benchmark: 'humaneval',
+				item_id: 'HumanEval/3',
+				model: 'qwen38',
+				config_id: '71bc58dd',
+				suite_run_id: '20260101T000000Z-abc123',
+				system_name: null,
+				outcome: 'fail',
+				reason: 'AssertionError',
+				timings: null,
+				prompt: 'def has_close_elements(numbers, threshold):\n    """docstring"""',
+				reasoning: null,
+				reasoning_chars: 0,
+				content: 'def has_close_elements(numbers, threshold):\n    return False  # wrong on purpose'
+			})
+		})
+	);
+
+	await page.goto('/benchmarks/answers');
+
+	await expect(page.getByRole('heading', { name: 'Answers' })).toBeVisible();
+	await expect(page.getByText('HumanEval/3')).toBeVisible();
+
+	await page.getByText('HumanEval/3').click();
+	await expect(page.getByText('wrong on purpose')).toBeVisible();
+	await expect(page.getByText('71bc58dd')).toBeVisible();
+});
+
 test('a non-admin user is bounced out of Benchmarks entirely', async ({ page }) => {
 	// Overrides this file's own beforeEach mock -- last-registered route wins
 	// for a matching request in Playwright.

@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
 import { AppShell } from '@/components/layout/AppShell';
+import { AnswersPage } from '@/routes/benchmarks/AnswersPage';
 import { BenchmarksLayout } from '@/routes/benchmarks/BenchmarksLayout';
 import { ComparePage } from '@/routes/benchmarks/ComparePage';
 import { LivePage } from '@/routes/benchmarks/LivePage';
@@ -45,10 +46,7 @@ const router = createBrowserRouter(
 						{ path: routePaths.benchmarksLive, element: <LivePage /> },
 						{ path: routePaths.benchmarksTests, element: <TestsPage /> },
 						{ path: routePaths.benchmarksCompare, element: <ComparePage /> },
-						{
-							path: routePaths.benchmarksAnswers,
-							element: <PlaceholderPage title="Answers" phase="Phase 5 (later)" />
-						},
+						{ path: routePaths.benchmarksAnswers, element: <AnswersPage /> },
 						{
 							path: routePaths.benchmarksReport,
 							element: <PlaceholderPage title="Report" phase="Phase 5 (later)" />
