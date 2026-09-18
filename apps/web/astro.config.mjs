@@ -27,6 +27,13 @@ export default defineConfig({
 	base: isBuild ? '/next' : '/',
 	integrations: [react()],
 	vite: {
+		// Mirrors apps/openwebui/vite.config.ts's own define block: constants.ts
+		// (ported verbatim from the SvelteKit app) reads these as globals rather
+		// than import.meta.env, so the port didn't have to touch that file.
+		define: {
+			APP_VERSION: JSON.stringify(process.env.npm_package_version),
+			APP_BUILD_HASH: JSON.stringify(process.env.APP_BUILD_HASH || 'dev-build')
+		},
 		plugins: [tailwindcss()],
 		server: {
 			proxy: {
