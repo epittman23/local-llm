@@ -643,16 +643,17 @@ fingerprint, so it was not re-run — but the Serve run above reproduced one
 golden id from a real load, which is closer to this criterion's intent than
 the existing golden-value tests alone.
 
-**One loose end, not blocking:** the Tune verification run's
-`benchmark_run` row never closed (`ended_at`/`ended_reason` both still
-NULL, confirmed twice a minute apart with the telemetry process already
-gone) — `tune_probe.Server.stop()`'s SIGINT-first path can apparently skip
-the telemetry shutdown `ServeProcess.stop()` would otherwise run. See the
-2026-09-18 (second) decisions-log entry for what was checked and what
-wasn't; worth a second data point and a read of
-`telemetry_recorder.py`'s main-loop exit conditions before deciding it's a
-real bug in Tune's own stop path, which would be its own fix, not part of
-this phase.
+**A loose end chased down, not a bug.** The first Tune verification run's
+`benchmark_run` row was left with `ended_at IS NULL`; a forced repro
+confirmed the cause was this verification's own cleanup, not
+`tune_probe.Server.stop()` or the recorder: `docker compose down` ran a
+few seconds after `stop()` returned, inside the telemetry recorder's own
+~3-5s self-close window (it detects a dead port after `MISS_LIMIT=3`
+failed probes), killing Postgres mid-write and crashing the recorder with
+`psycopg.errors.AdminShutdown` before it reached `close_run()`. Left alone
+— confirmed with a clean re-run, Postgres untouched — a Tune candidate's
+run closes clean in about 4s every time. See the 2026-09-18 (second)
+decisions-log entry for the full repro.
 
 Phase 2 is now ✅ done.
 

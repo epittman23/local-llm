@@ -399,24 +399,31 @@ All commits should use conventional commit style and stay focused on one topic. 
   the *same* `f04d84af` its own prediction named, closing the loop the
   2026-09-17 `tune_schedule.py` entry above documents but had not yet
   watched happen against real hardware.
-  **One real finding, not fixed here.** `tune_probe.Server.stop()`'s
-  SIGINT-first path (`self.cmd.interrupt()`, waiting up to 20s for the
-  process to exit before ever calling `self.cmd.stop()`) took the fast path
-  in this run — the candidate exited well inside the window — which means
-  `ServeProcess.stop()`'s own telemetry-shutdown sequence never ran.
-  `close_run()` is supposed to fire regardless, from
-  `telemetry_recorder.py`'s own `finally: finish(...)`, but this run's row
-  (104) still shows `ended_at IS NULL` / `ended_reason IS NULL` with the
-  telemetry process itself confirmed gone from the process table, checked
-  twice, a minute apart. The one GPU sample it did record is intact and
-  correctly attributed. Left as an open question rather than patched,
-  since Phase 2c's job was the shell-to-Makefile port, not tune_probe.py's
-  shutdown sequencing, and this needs its own look at
-  `telemetry_recorder.py`'s main loop (specifically what actually breaks
-  it out of the sample loop on a dead port, versus what the docstring
-  claims) before touching it. Worth another data point before deciding it's
-  a real bug and not a one-off: this is the only sweep-stop path exercised
-  this session.
+  **A finding chased down and cleared, not a bug.** Run 104's row was left
+  with `ended_at IS NULL` after this stop path, which first looked like a
+  gap in `tune_probe.Server.stop()`'s SIGINT-first path (it never calls
+  `self.cmd.stop()` when the server exits inside the 20s grace window,
+  which is the common case, so `ServeProcess.stop()`'s own
+  telemetry-shutdown sequence never runs — that part is real). But two
+  follow-up runs the same session isolated the actual cause: it was this
+  verification's own cleanup, not the code. `close_run()` only fires from
+  `telemetry_recorder.py`'s `finish()`, itself called from the sample
+  loop's `finally:` block, which only reaches it once the recorder's own
+  `MISS_LIMIT`-based port-death detection notices the server is gone — a
+  real ~3-5s window (3 misses at ~1s each, confirmed directly: a clean
+  re-run with Postgres left alone closed a fresh run in exactly 4s). The
+  first attempt tore Postgres down with `docker compose down` only a few
+  seconds after `stop()` returned, inside that window, and a forced repro
+  confirms it exactly: `set_load_info()` raised
+  `psycopg.errors.AdminShutdown: terminating connection due to
+  administrator command` mid-`finish()`, before `close_run()` got to run,
+  crashing the recorder with a traceback instead of a clean close.
+  `tune_probe.Server.stop()`'s fast path is exactly as designed — it
+  deliberately leaves telemetry shutdown to the recorder's own dead-port
+  detection rather than reaching into a second process group — and that
+  detection works correctly given a database that is still there to write
+  to. Left alone (as any real caller including the Serve/Tune pages would
+  leave it), a Tune candidate's run closes clean every time.
   No schema change, no `benchmark_schema_note`: nothing here changed what a
   stored row means, only that two of them now exist that did not before.
   GPU idle and no stray processes confirmed after both runs; Postgres
