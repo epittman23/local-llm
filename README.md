@@ -7,19 +7,22 @@ OpenRouter, using a pinned fork of [Open WebUI](https://github.com/open-webui/op
 
 The fork is pinned at `v0.11.3` and never merges upstream: it is a permanent
 hard fork, vendored directly into this repo rather than tracked as a submodule.
-It runs as two host processes, `lllm-frontend` and `lllm-backend`, the same way
-the local-inference tooling below (`lllm-serve`) already does, rather than in
-Docker: real integration between Open WebUI and this repo's own
-GPU/process-management tooling needs a host process on both sides (see the
-decisions log for why forking was rejected once, in 2026-09-06, and what
-changed since). Its chat and RAG data live in Postgres+pgvector
-(`infra/docker-compose.yml`), not SQLite.
+It runs as two host processes, started by `make frontend` and `make backend`,
+rather than in Docker: real integration between Open WebUI and this repo's
+own GPU/process-management tooling (the local-inference serving layer below,
+started from the backend's own Serve page) needs a host process on both
+sides (see the decisions log for why forking was rejected once, in
+2026-09-06, and what changed since). Its chat and RAG data live in
+Postgres+pgvector (`infra/docker-compose.yml`), not SQLite.
 
 ## Running it
 
 Requires Docker Desktop with WSL integration enabled for this distro
-(Docker Desktop → Settings → Resources → WSL Integration), plus Bun and a
-Python 3 interpreter on the host for the fork's frontend and backend.
+(Docker Desktop → Settings → Resources → WSL Integration), `make`, plus Bun
+and a **Python 3.11 or 3.12** interpreter on the host for the fork's frontend
+and backend (its `requires-python` is `>= 3.11, < 3.13`; `make backend`
+selects an interpreter in that range itself rather than trusting whatever
+bare `python3` resolves to — see "Dependencies" below).
 
 A plain `git clone` is enough — the fork lives inside `apps/openwebui/` as
 ordinary tracked files, not a submodule. Put your secrets in `infra/.env`
@@ -45,15 +48,15 @@ WEBUI_SECRET_KEY=<openssl rand -base64 24>
 then, in one terminal:
 
 ```bash
-lllm-backend
+make backend
 ```
 
 which brings up Postgres (`infra/docker-compose.yml`) and the fork's
 backend (`uvicorn`, port `4000`) together, and tears Postgres back down when
-the backend stops. In a second terminal:
+the backend stops (Ctrl-C included). In a second terminal:
 
 ```bash
-lllm-frontend
+make frontend
 ```
 
 which starts the fork's frontend dev server (`vite`, port `5173`) and proxies
@@ -99,18 +102,22 @@ exposes the same OpenAI-compatible API Open WebUI already speaks. Pointing
 Open WebUI at it is a connection-settings change only (see "Migrating to local
 hardware later" below).
 
-Helper functions live in `scripts/shell/main.sh`. Source it from `~/.bashrc`:
-
-```bash
-[ -f "$HOME/dev/repos/local-llm/scripts/shell/main.sh" ] \
-  && . "$HOME/dev/repos/local-llm/scripts/shell/main.sh"
-```
-
-It can also be invoked directly without sourcing:
-`./scripts/shell/main.sh serve qwen38`.
+Serving lives entirely in the backend now — there is no shell layer or
+`~/.bashrc` helper to source any more (`scripts/shell/main.sh` and everything
+under `scripts/` were deleted in Phase 2c of the migration, 2026-09-18; see
+`docs/CLAUDE.md`'s decisions log). Start a server, stop it, and edit or pick
+a profile from the fork's own **Serve** page at `/benchmarks/serve` (admin
+only) once `make backend`/`make frontend` are both running — see "The
+Benchmarks section" further down for what that page and its siblings do.
+GPU telemetry while a server runs is the **Live** page, `/benchmarks/live`.
 
 Serving settings are grouped into profiles rather than scattered across env
-vars. `lllm-profiles` lists them and shows whether the weights are on disk:
+vars, stored in Postgres (`benchmark_profile`/`benchmark_profile_version`,
+versioned and append-only — editing a profile inserts a new version rather
+than overwriting one) and resolved by
+`apps/openwebui/backend/open_webui/benchmarks/serving/profiles.py`. The
+Serve page's profile list shows all four and whether their weights are on
+disk; the table below is the same information for reference:
 
 | profile | arch  | model                                    | size on disk | ctx   | threads | ngl | slots | n-cpu-moe | override-tensors                         |
 | ------- | ----- | ---------------------------------------- | -----------: | ----- | ------: | --: | ----: | --------: | ---------------------------------------- |
@@ -137,9 +144,10 @@ its request body either way.
 Its context is 16384 rather than the model's full 32768 because the KV cache
 here costs ~29.7 KiB/token at `q8_0` (28 layers, 4 KV heads of 128): ~476 MiB at
 16K against ~952 MiB at 32K, on top of 4.36 GiB of weights and the compute
-buffer. The full window fits inside 6 GiB only with less margin than
-`LLAMA_VRAM_HEADROOM_MIB` warns at, so it is opt-in via `LLAMA_CTX`, to be
-confirmed with `lllm-vram` rather than assumed.
+buffer. The full window fits inside 6 GiB only with tighter margin than is
+comfortable, so raising it is opt-in — the Serve page's `ctx` override field —
+and worth confirming against the Live page's free-VRAM figure rather than
+assuming it fits.
 
 `qwen3c` (`unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF`, `Q4_1`, 17.87 GiB,
 alias `qwen3-coder-30b-a3b`) is a fourth profile, weights present on disk but
@@ -147,20 +155,22 @@ alias `qwen3-coder-30b-a3b`) is a fourth profile, weights present on disk but
 the Benchmarks section's Tests page. It follows the same `qwen36` shape — sparse MoE, `-ngl 99`
 with `--n-cpu-moe 34` since the model is ~4.1x this card's 6 GB VRAM, `q8_0`
 KV cache, 65536 context, 6 threads — copied as a starting point rather than
-independently tuned; `LLAMA_MOE` and `LLAMA_CTX` overrides plus
-`lllm-sweep-ngl qwen3c` are how that would actually get confirmed. It sets
-no `-ot` and no speculative flags: unlike `qwen38`, nothing here has checked
-this GGUF for an MTP head.
+independently tuned; the Serve page's `moe`/`ctx` override fields, plus an
+`llama-bench` GPU-layer sweep (see "Preflight sweeps" below), are how that
+would actually get confirmed. It sets no `-ot` and no speculative flags:
+unlike `qwen38`, nothing here has checked this GGUF for an MTP head.
 
-`qwen38`'s `-ngl 20` is a placeholder pending an `lllm-sweep-ngl` run;
-`--n-cpu-moe` is MoE-only and the script refuses to pass it to a dense model.
-`qwen38` also pins two tensor groups to the GPU with `-ot` regardless of
-`-ngl` — the output projection and the final block (the model has 65 blocks,
-`blk.0` to `blk.64`), both touched on every token. `lllm-sweep-ngl` passes the
-same `-ot`, so its VRAM headroom matches what `lllm-serve` will see. Override
-per run with `LLAMA_OT`. `lllm-serve` warns to check the load log's `n_layer`
-before treating an `-ngl` as tuned, but only for a dense profile that is
-partially offloaded: at `-ngl 99` there is no layer count being chosen.
+`qwen38`'s `-ngl 20` is a placeholder pending a GPU-layer sweep;
+`--n-cpu-moe` is MoE-only and the resolver refuses to pass it to a dense
+model. `qwen38` also pins two tensor groups to the GPU with `-ot` regardless
+of `-ngl` — the output projection and the final block (the model has 65
+blocks, `blk.0` to `blk.64`), both touched on every token. The sweep below
+passes the same `-ot`, so its VRAM headroom matches what the Serve page will
+see; override a served run's tensor pinning with the `ot` field. The server's
+own startup log (streamed live on the Serve page) still names the actual
+`n_layer` split it chose, worth checking before treating an `-ngl` as tuned —
+but only for a dense profile that is partially offloaded: at `-ngl 99` there
+is no layer count being chosen.
 
 It additionally runs speculative decoding off the model's own multi-token
 prediction head (`--spec-type draft-mtp --spec-draft-n-max 2`), so
@@ -169,14 +179,16 @@ no separate draft model is needed: the weights carry
 already keeps that block on the GPU. A draft depth of 2 is deliberately
 conservative — rejected drafts cost real compute on a model this CPU-bound.
 The Benchmarks section's Tests page reports `draft_n` and `draft_n_accepted`
-in its timings, which is the acceptance rate to judge it by.
-`LLAMA_SPEC=off lllm-serve qwen38` turns
-it off for an A/B; `LLAMA_SPEC="<flags>"` replaces the flags wholesale.
-`qwen36` sets none of this: its weights are not on disk here, so its MTP
-support is unverified.
+in its timings, which is the acceptance rate to judge it by. The Serve
+page's `spec` override field turns it off for an A/B (empty replaces the
+profile's flags with none) or replaces them with a different set entirely —
+the same three-valued behavior `LLAMA_SPEC` had in the shell (unset keeps the
+profile's flags, empty/`off` turns them off, anything else replaces them),
+now a typed field instead of an environment variable. `qwen36` sets none of
+this: its weights are not on disk here, so its MTP support is unverified.
 
 Every profile serves with `--parallel 1` (one server slot), overridable with
-`LLAMA_PARALLEL`. This is passed unconditionally and independently of the
+the Serve page's `parallel` field. This is passed unconditionally and independently of the
 speculative flags, because omitting `--parallel` is *not* the same as passing
 1: `llama-server` defaults it to `-1` (auto), and auto means **4 slots with
 `kv_unified = true`** (build 10597, `common/arg.cpp:1400` and
@@ -188,63 +200,87 @@ every `LLAMA_SPEC=off` baseline silently ran 4 unified slots — measured at
 15.63 t/s prompt processing against 26.38 t/s at one slot. Any comparison
 recorded before that date between a speculative run and a non-speculative one
 is invalid, in the direction that flatters speculation. Passing `--parallel`
-inside `LLAMA_SPEC` is refused for the same reason; use `LLAMA_PARALLEL`.
+inside the `spec` override is refused for the same reason; use the
+`parallel` field.
 
-The functions:
+What the old shell functions became, now that `scripts/` is gone (Phase 2c,
+2026-09-18):
 
-- `lllm-serve [profile] [args...]` : start `llama-server` on port 8090 (set
-  `LLAMA_PORT` to change). One-off overrides: `LLAMA_MODEL`, `LLAMA_CTX`,
-  `LLAMA_THREADS`, `LLAMA_NGL`, `LLAMA_MOE`, `LLAMA_OT`, `LLAMA_SPEC`,
-  `LLAMA_PARALLEL` (server slots, default 1), `LLAMA_REASONING` (thinking
-  effort for `qwen38`). Extra arguments pass through to `llama-server`.
-  KV cache types and batch sizes are profile variables too (`LLAMA_CACHE_K`,
-  `LLAMA_CACHE_V`, `LLAMA_BATCH`, `LLAMA_UBATCH`; all default to the values in
-  the table above), so the flags passed and the flags recorded in the log come
-  from one place.
-  `--metrics` is always passed, so
-  the run's server-wide token totals can be recorded, and `-lv 4`
-  (`LLAMA_LOG_VERBOSITY`) so the server prints what it decided about the model
-  it loaded — the layer split, the slot count, the fused kernels it resolved,
-  the tensors it ignored. Neither affects inference, and both are deliberately
-  excluded from the config fingerprint. The server's output is tee'd to a
-  temporary `logs/.server.<pid>.log` for the recorder to parse and deleted when
-  the server exits; the terminal copy is unchanged except that the GGUF metadata
-  dump `-lv 4` adds is filtered out of it.
-- `lllm-fetch [profile]` : download the profile's weights with the `hf` CLI.
-- `lllm-sweep-threads [profile] [4,6,8,...]` : `llama-bench` across thread
-  counts, printed as a markdown table.
-- `lllm-sweep-ngl [profile] [12,16,20,...]` : `llama-bench` across GPU layer
-  counts, for tuning a dense profile. Values that exceed VRAM error out, which
-  is the useful signal.
-- `lllm-check` : `GET /v1/models` against the running server.
-- `lllm-vram` : live GPU telemetry, refreshed in place, with free VRAM called
-  out — on a 6 GB card headroom is what decides whether an `-ngl` is viable.
-- `lllm-profiles` : list profiles and whether their weights are present.
-- `lllm-profile-json [profile]` : a profile's resolved settings as JSON. Exists
-  so the Python tooling can read the serving configuration without re-declaring
-  it; `scripts/shell/main.sh` stays the single source of truth. `reasoning` is
-  empty for a profile that sets no thinking effort, the same test the telemetry
-  fingerprint makes before recording `n/a`, so a caller cannot end up setting
-  `LLAMA_REASONING` for a server that ignores it.
-- `lllm-profile-names` : the defined profiles, one per line, from the
-  `LLAMA_PROFILE_NAMES` array. `lllm-profiles` and the Benchmarks section's
-  Serve-page profile picker both read it, so adding a profile is an edit to
-  `scripts/shell/main.sh` and nothing else.
+| shell command | now |
+| --- | --- |
+| `lllm-serve [profile]` | Serve page, `/benchmarks/serve` — pick a profile, set overrides (`ngl`, `ctx`, `threads`, `parallel`, `ot`, `reasoning`, `spec`), start. Server log streams live in the page. `--metrics` and `-lv 4` are still always passed underneath, for the same reasons as before (server-wide token totals; the load-info block), and are still excluded from the config fingerprint |
+| `lllm-fetch [profile]` | no UI yet (planned for Phase 5) — `hf` CLI by hand, see `docs/model-downloads.md` |
+| `lllm-sweep-threads`, `lllm-sweep-ngl` | deleted outright (superseded by Tune's paired search); the raw `llama-bench` invocations are preserved below under "Preflight sweeps" |
+| `lllm-check` | the Serve page shows whether a server is running directly, no separate check |
+| `lllm-vram` | Live page, `/benchmarks/live` — polled GPU telemetry, free VRAM called out |
+| `lllm-profiles`, `lllm-profile-json`, `lllm-profile-names` | the Serve page's profile list (full CRUD: list, create, clone, edit as a new version, archive, set default) |
+
+Profile CRUD replaces `scripts/shell/main.sh` as the single source of truth
+for serving configuration with the `benchmark_profile`/
+`benchmark_profile_version` tables in Postgres, resolved through
+`serving/profiles.py`; a profile's `name` is immutable once created (its
+`display_name` isn't), so tuning search spaces named after it never orphan.
+
+#### Preflight sweeps
+
+`lllm-sweep-threads`/`lllm-sweep-ngl` are gone rather than ported: Tune's
+round-elimination search over served, correctness-checked runs supersedes
+them for actually choosing a configuration, and `main.sh` already documented
+these two as feasibility pre-screens, not a source of comparable
+measurements (their numbers never went into Postgres). Their raw
+`llama-bench` invocations still work — `llama-bench` is a llama.cpp binary,
+not something this repo wraps — and are preserved here for anyone tuning a
+profile's `-ngl`/`--n-cpu-moe` before touching the Serve page. Paths below
+are the shell tooling's old defaults (`~/llama.cpp/build/bin`, `~/models/`);
+substitute your own.
+
+Thread sweep, any profile:
+
+```bash
+~/llama.cpp/build/bin/llama-bench -m <model path> -t 4,6,8,10 -ngl <ngl> \
+  [--n-cpu-moe <moe>] -o md
+```
+
+GPU-layer sweep, dense profiles (`qwen38`, `qwen25c`) — one process per
+value on purpose: `llama-bench` retains GPU allocations across model reloads
+on WSL2, so reusing one process across values would contaminate every
+configuration after the first with the previous one's leftover allocation.
+`-ot` is passed through so headroom matches what the Serve page will
+actually see:
+
+```bash
+for v in 12 16 20 24; do
+  ~/llama.cpp/build/bin/llama-bench -m <model path> -ngl "$v" \
+    [-ot '<override-tensors>'] -t <threads> -p 512 -n 128 -o md
+  sleep 3
+done
+```
+
+MoE profiles (`qwen36`, `qwen3c`) sweep `--n-cpu-moe` instead, at `-ngl 99`:
+
+```bash
+~/llama.cpp/build/bin/llama-bench -m <model path> -ngl 99 \
+  --n-cpu-moe 30,32,34,36 -o md
+```
+
+Neither sweep writes to Postgres; their numbers are pre-flight only; they do
+not survive the terminal and are not comparable with anything the Benchmarks
+section records.
 
 Benchmark running, grading, comparison, reporting and tuning are not shell
 functions any more. `lllm-test`, `lllm-compare` (`lllm-test compare`),
 `lllm-report`, `lllm-tune` and the standalone `lllm-web` dashboard were
 retired outright on 2026-09-08, and the whole suite now lives inside the
 Open WebUI fork itself, as an admin-only **Benchmarks** section at
-`/benchmarks`, served by the same `lllm-frontend`/`lllm-backend` as the rest
+`/benchmarks`, started by the same `make frontend`/`make backend` as the rest
 of the fork rather than a separate process or port. See
 [Testing](#testing) below for the harnesses themselves, and "The Benchmarks
 section" further down for the pages and how they got there. Seven pages,
 none of them a thin passthrough to a CLI that no longer exists:
 
 - **Serve** (`/benchmarks/serve`) starts and stops `llama-server` from a
-  profile with the same overrides `lllm-serve` takes, and streams its output
-  live.
+  profile with the same overrides the shell layer took, now typed request
+  fields instead of environment variables, and streams its output live.
 - **Live** (`/benchmarks/live`) polls the run being recorded right now, every
   5s to match the recorder's own sample interval.
 - **Tests** (`/benchmarks/tests`) runs a tier and streams one structured
@@ -263,8 +299,10 @@ none of them a thin passthrough to a CLI that no longer exists:
   second output path through the statistics; Tune runs the same
   round-elimination search as an in-process, checkpointed async sweep with
   its own port-guarding and cooldown logic, in place of a CLI subprocess —
-  it still drives `lllm-serve` under `LLAMA_*` overrides and still
-  fingerprints a candidate with `lllm-config-id` before serving it.
+  it drives `serving/launcher.py`'s `ServeProcess` directly for each
+  candidate (Phase 2b, 2026-09-17) and fingerprints one in-process with
+  `serving/fingerprint.py`'s `config_id()` before serving it, rather than
+  shelling out to `lllm-serve`/`lllm-config-id`.
 
 The adapter/suite TOMLs and system-prompt text files moved with the code,
 into `apps/openwebui/backend/open_webui/benchmarks/data/`; they no
@@ -282,22 +320,30 @@ tables" below).
 
 ### Recorded telemetry and throughput
 
-`lllm-serve` starts `scripts/shell/vram-log.sh` in the background and stops it
-when the server exits, so every serving run leaves a record of what the GPU
-actually did and how fast the model answered. That script is still a thin
-wrapper: it resolves the profile and computes the configuration fingerprint in
-shell exactly as before, then hands off to a recorder that waits for the port
-to open, samples `nvidia-smi` every `LLAMA_VRAM_INTERVAL` seconds (default 5),
-scrapes `/metrics` on the same pass, parses the server's own load output, and
-writes each of those as it happens — not to a file any more, but into the Open
-WebUI fork's own Postgres database (`infra/docker-compose.yml`), the
-same one the chat interface itself uses. The recorder is now
-`open_webui.benchmarks.telemetry_recorder`, run under the fork's own backend
-venv rather than bare `python3`, and it writes with `psycopg` directly (no
-SQLAlchemy, no event loop) — but it is still a separate subprocess for the
-life of the server, for the same reason as before: a recording has to survive
-a crash of whatever started it, which folding it into the backend's own event
-loop would give up.
+`ServeProcess.start()` (`serving/launcher.py`) spawns the telemetry recorder
+itself as soon as `llama-server` starts, so every serving run started from
+the Serve page leaves a record of what the GPU actually did and how fast the
+model answered. There is no shell wrapper resolving the profile or computing
+the fingerprint any more (that was `scripts/shell/vram-log.sh`, deleted in
+Phase 2c) — `telemetry_argv()` builds the recorder's argv directly from the
+already-resolved `ResolvedConfig` and the fingerprint `serving/fingerprint.py`
+already computed for this run, so the two cannot disagree the way a second
+shell computation could have. The recorder waits for the port to open,
+samples `nvidia-smi` every 5 seconds by default, scrapes `/metrics` on the
+same pass, parses the server's own load output, and writes each of those as
+it happens into the Open WebUI fork's own Postgres database
+(`infra/docker-compose.yml`), the same one the chat interface itself uses.
+It is `open_webui.benchmarks.telemetry_recorder`, run under the fork's own
+backend venv (`sys.executable`, inheriting the backend process's own
+`DATABASE_URL` rather than re-deriving one — see the launcher's own
+docstring for why a second encoding site was rejected) and it writes with
+`psycopg` directly (no SQLAlchemy, no event loop) — but it is still a
+separate process from `llama-server`, for the same reason as always: a
+recording has to survive a crash of whatever started it, which folding it
+into the backend's own event loop would give up. `ServeProcess.stop()` stops
+the server first, then the recorder, then removes the server-log tempfile
+that bridges them — in that order, so the recorder always gets to finish
+reading it.
 
 **One database, for everything this repo measures.** Serving configurations, runs,
 GPU samples, `/metrics` scrapes, per-request timings, test results, and the full
@@ -355,10 +401,12 @@ answers, requests or configurations.
 #### What identifies a configuration
 
 The `config_id` is a `sha1[:8]` over the serving flags, computed by
-`_vramlog_config` in `scripts/shell/vram-log.sh` — the same function, over the
-same six lines, as before the database existed. Config ids are therefore
-unchanged: an id quoted in an older log names the same configuration it always
-did.
+`serving/fingerprint.py`'s `config_id()` — a Python port of the shell's
+`_vramlog_config` (Phase 2a of the migration, 2026-09-14), golden-tested
+against 24 fingerprints captured from the shell before the port and matching
+all of them exactly, over the same six lines. Config ids are therefore
+unchanged: an id quoted in an older log names the same configuration it
+always did.
 
 ```
 arch: dense | ngl: 20 | ctx: 16384 (total) | parallel: 1 | threads: 12 | moe: n/a
@@ -591,10 +639,14 @@ simply NULL, displayed as `unrecorded`, rather than attributed to a guess.
 
 There is no database file to gitignore any more: the store is the fork's own
 Postgres, reached via `DATABASE_URL` (loaded from `infra/.env` by
-`lllm-backend`, and by `scripts/shell/vram-log.sh` for the recorder it execs).
-Set `LLAMA_VRAM_LOG=0` to disable recording, or run
-`./scripts/shell/vram-log.sh record [profile]` by hand to capture a server that
-was started some other way; it stops on its own once the port stops answering.
+`make backend`; the telemetry recorder inherits it directly as a child
+process rather than re-deriving it, see "Recorded telemetry" above). There
+is no `LLAMA_VRAM_LOG=0`-style opt-out and no way to attach a recorder to a
+server started some other way any more — those were `scripts/shell/
+vram-log.sh`'s job, and serving itself now only happens through the Serve
+page's `ServeProcess`, which always attempts telemetry and degrades to a
+`telemetry_warning` rather than refusing to serve if `DATABASE_URL` is
+missing (see the 2026-09-17 fix in the decisions log).
 
 **Known limitation:** the configuration lines describe the *profile* as resolved
 when the recorder started, not the argv of the process actually serving. A server
@@ -825,7 +877,7 @@ recorded before 2026-09-04 is a genuine baseline, because there was no way to
 send one.
 
 The system prompt is deliberately **not** part of `config_id`. That fingerprint
-covers the serving flags and is computed by `_vramlog_config` before any request
+covers the serving flags and is computed by `config_id()` before any request
 is made; a system prompt is part of the request. So it is a second grouping key
 beside it, in the pass-rate query and on the Compare page, and every existing
 `config_id` still means what it always did.
@@ -879,7 +931,10 @@ now by the fork's backend process rather than a CLI: `LLAMA_TEST_MAX_TOKENS`
 (2048), `LLAMA_TEST_TIMEOUT` (900 s), `LLAMA_TEST_CACHE_PROMPT` (`0`;
 prompt-cache reuse makes a prefill figure meaningless, so it is off unless
 asked for), `LLAMA_TEST_STREAM` (`1`), and `LLAMA_REASONING` for the effort
-level — set them for `lllm-backend` the same way any other override is set.
+level — set them for `make backend` the same way any other override is set
+(exported in the shell before running it; the Makefile only loads
+`infra/.env` for the three secrets, everything else in the environment
+passes through to uvicorn as normal).
 `temperature` is pinned to 0 and is not overridable — two runs must
 differ only by the flags under test. `LLAMA_TEST_RAW` is gone: it used to keep
 the response's temp file, and every response is now stored in full in the
@@ -1267,37 +1322,37 @@ document is otherwise byte-identical.
 
 ### Dependencies
 
-The Benchmarks feature needs no separate Python environment of its own any
-more: it runs inside the Open WebUI fork's own backend, under
-`apps/openwebui/backend/.venv`, which `lllm-backend` already
-bootstraps on first use (installing `apps/openwebui/backend/requirements.txt`)
-the same way it bootstraps everything else the fork's backend needs. There is
-nothing benchmark-specific left to install by hand.
+This repo has exactly one Python environment now:
+`apps/openwebui/backend/.venv`, which `make backend` bootstraps on first use
+(installing `apps/openwebui/backend/requirements.txt`). There used to be a
+second, repo-root one (`requirements.txt` + `.venv`, carrying just **Rich**
+for the three shell commands `scripts/llama_console.py` backed —
+`lllm-profiles`, `lllm-check`, `lllm-vram`, none of them benchmarking); both
+were deleted in Phase 2c of the migration (2026-09-18) along with the rest
+of `scripts/`, and those three commands have no replacement of their own —
+the same information is now in the Serve/Live pages (see the table in
+"Local inference" above). Textual was in that old `requirements.txt` too,
+for the Textual dashboard (`llama-ui`); it was retired for `lllm-web` on
+2026-09-06 and dropped from it in that change, well before the file itself
+was deleted.
 
-That venv needs **Python 3.11 or 3.12**. The fork pins
+The backend venv needs **Python 3.11 or 3.12**. The fork pins
 `requires-python = ">= 3.11, < 3.13.0a1"`, and none of its pinned requirements
-install on anything newer. `lllm-backend` therefore picks the interpreter by
-version rather than taking whatever `python3` happens to be: `python3.12`,
-then `python3.11`, then `python3` only if it is in range. This matters on any
-machine with a newer Python ahead on `PATH` — with linuxbrew's Python
-installed, bare `python3` in an interactive shell is 3.14. Set
-`LLAMA_OPENWEBUI_PYTHON` to force a specific interpreter. The venv only counts
-as ready once its install has completed (marked by a `.lllm-bootstrap-complete`
-stamp inside it); a failed install is removed rather than left behind, so the
-next run retries from scratch instead of reusing a venv with nothing in it.
+install on anything newer. `make backend` picks the interpreter by version
+rather than taking whatever `python3` happens to be — the same selection
+`lllm-backend` used to do, now a Makefile recipe instead of a shell function:
+`python3.12`, then `python3.11`, then `python3` only if it is in range. This
+matters on any machine with a newer Python ahead on `PATH` — with
+linuxbrew's Python installed, bare `python3` in an interactive shell is
+3.14. Set `LLAMA_OPENWEBUI_PYTHON` to force a specific interpreter. The venv
+only counts as ready once its install has completed (marked by a
+`.lllm-bootstrap-complete` stamp inside it); a failed install is removed
+rather than left behind, so the next run retries from scratch instead of
+reusing a venv with nothing in it.
 
-This repo's own `requirements.txt` now carries exactly one thing, **Rich**,
-for the three shell commands `scripts/llama_console.py` still backs
-(`lllm-profiles`, `lllm-check`, `lllm-vram` — none of them benchmarking).
-It degrades to plain stdlib output when Rich is absent, so its repo-local
-`.venv` is a convenience, not a hard dependency; the venv is still required
-rather than merely tidy on this box, since its Python is externally managed
-(PEP 668) and `pip install` refuses outright otherwise. Textual was here for
-the Textual dashboard (`llama-ui`); it was retired for `lllm-web` on
-2026-09-06 and dropped from `requirements.txt` in that change.
-
-`requirements-extra.txt` is gone. It used to carry **numpy**, **pandas**,
-**pyyaml**, **scipy**, **matplotlib**, **fastapi** and **uvicorn** for
+`requirements-extra.txt` is gone, and has been since before this migration:
+it used to carry **numpy**, **pandas**, **pyyaml**, **scipy**,
+**matplotlib**, **fastapi** and **uvicorn** for
 `lllm-test`/`lllm-compare`/`lllm-report`/`lllm-tune`/`lllm-web`; all five were
 retired into the fork on 2026-09-08 (see "The Benchmarks section" below), and
 those dependencies moved with them, into
@@ -1305,16 +1360,15 @@ those dependencies moved with them, into
 `scikit-learn`, which widens the DS-1000 slice, and the same `pyyaml` pin,
 now needed there for DS-1000 items that round-trip through YAML. scipy is
 still a hard dependency (the Report page's request fails outright rather than
-degrading, as before) and matplotlib is still soft (the same unicode-plot
-fallback as before), just resolved by the fork's own venv now rather than
-this repo's.
+degrading) and matplotlib is still soft (the same unicode-plot fallback),
+resolved by the fork's own venv.
 
 ### The Benchmarks section
 
 Benchmarks is not a second app. It is a set of pages inside the same Open
-WebUI fork as chat, served by the same two host processes described in
-"Running it" above (`lllm-frontend` on `5173`, `lllm-backend` on `4000`), and
-reached through its own entry in the fork's sidebar — admin-only, modeled on
+WebUI fork as chat, started by the same two `make` targets described in
+"Running it" above (`make frontend` for `5173`, `make backend` for `4000`),
+and reached through its own entry in the fork's sidebar — admin-only, modeled on
 the existing Playground entry (`isMenuItemVisible`/`getMenuItemMeta`/
 `menuItemPathPrefixes` in `Sidebar.svelte`, a matching pin-menu block in
 `Sidebar/UserMenu.svelte`) rather than a tab inside the Settings modal like
@@ -1327,12 +1381,12 @@ one for:
 
 | what | port | started by |
 | --- | --- | --- |
-| Open WebUI chat + Benchmarks (vite dev server) | `5173` | `lllm-frontend` |
-| Open WebUI + Benchmarks API (uvicorn) | `4000` | `lllm-backend` |
+| Open WebUI chat + Benchmarks (vite dev server) | `5173` | `make frontend` |
+| Open WebUI + Benchmarks API (uvicorn) | `4000` | `make backend` |
 
-`lllm-backend` still owns Postgres's lifecycle (`infra/docker-compose.yml`),
-starting it before uvicorn and tearing it down via a trap when uvicorn stops.
-See "Running it" above for the full command sequence.
+`make backend` still owns Postgres's lifecycle (`infra/docker-compose.yml`),
+starting it before uvicorn and tearing it down via a trap when uvicorn stops,
+Ctrl-C included. See "Running it" above for the full command sequence.
 
 There is consequently no proxy question to answer any more, and there never
 had to be a userscript bridging two origins for this to work — Caddy
@@ -1369,7 +1423,7 @@ describe was retired for the fork-native Benchmarks section on 2026-09-08.
 When ready to self-host (llama.cpp as above, or Ollama/vLLM), update the
 connection under **Admin Panel → Settings → Connections**: change the base URL
 to your local server's OpenAI-compatible endpoint (`http://localhost:8090/v1`
-for the `lllm-serve` server above, or `http://localhost:11434/v1` for Ollama),
-and update the API key if your local server requires one. No other
-changes should be necessary, since Open WebUI talks to any OpenAI-compatible
-endpoint.
+for a server started from the Serve page above, or `http://localhost:11434/v1`
+for Ollama), and update the API key if your local server requires one. No
+other changes should be necessary, since Open WebUI talks to any
+OpenAI-compatible endpoint.

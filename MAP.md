@@ -14,19 +14,25 @@ instead.
 
 ```
 local-llm/
+├── Makefile                   make backend, make frontend, make help
 ├── README.md                  usage/operations guide
 ├── MAP.md                     this file
-├── requirements.txt           core Python deps (llama-console CLI helpers)
 ├── apps/                      the applications themselves
 │   └── openwebui/             vendored Open WebUI fork (FastAPI + SvelteKit)
 ├── docs/                      meta docs: conventions, roadmap, proposals
-├── infra/                     docker-compose for Postgres + pgvector
-└── scripts/                   llama-console CLI + shell serving orchestration
+└── infra/                     docker-compose for Postgres + pgvector
 ```
 
+`scripts/` (the shell orchestrator plus the `llama-console` CLI helpers) and
+the root `requirements.txt`/`.venv` are gone as of Phase 2c of the migration
+(2026-09-18) — see `docs/CLAUDE.md`'s decisions log. `make backend`/
+`make frontend` are the replacement entry points; serving configuration
+itself lives in the backend as Python (`apps/openwebui/backend/open_webui/
+benchmarks/serving/`), not in a shell profile table.
+
 Local/generated (not tracked by git — see "Local/generated" section below
-for detail): `.venv/`, `.vscode/`, `.claude/`, `logs/`, `tests/data/`
-(orphaned, see below), and scattered `__pycache__/` directories.
+for detail): `.vscode/`, `.claude/`, `logs/`, `tests/data/` (orphaned, see
+below), and scattered `__pycache__/` directories.
 
 ## `README.md`
 
@@ -124,14 +130,25 @@ functionality (own routers, own SvelteKit pages, own Postgres tables) rather
 than a second app glued on by a userscript. See docs/CLAUDE.md's decisions
 log for the migration and why each piece landed where it did.
 
+- **`serving/`** — the serving layer ported from shell in Phase 2a/2b of the
+  migration (2026-09-14 to 2026-09-17): `profiles.py` (`ServingProfile`,
+  `Overrides`, `resolve()`), `fingerprint.py` (the `config_id` sha1, ported
+  bit-for-bit from `_vramlog_config`), `launcher.py` (`ServeProcess`: argv
+  assembly, spawns `llama-server` and the telemetry recorder), `weights.py`
+  (`FetchProcess`, the `lllm-fetch` port), `build_info.py`/`model_name.py`
+  (small `vram-log.sh` parsers). Profiles themselves are rows in Postgres
+  (`models/benchmark_profiles.py`), versioned and CRUD'd through
+  `routers/benchmarks/profiles.py`, not a shell case statement.
 - **`stats.py`** — percentiles, GPU throttle-bitmask decoding, config-text
   parsing, the server load-log parser. Pure functions.
 - **`proc.py`** — `Command`, the async subprocess wrapper (process-group
-  start/stop/interrupt) that launches `lllm-serve` and tuning candidates via
-  `LLAMA_ENV_SH` (points at `scripts/shell/main.sh`).
+  start/stop/interrupt). Only caller left is `tune_probe.py`'s
+  `LLAMA_TUNE_LAUNCH` fault-injection escape hatch; serving and tuning
+  candidates both go through `serving/launcher.py`'s `ServeProcess` now, not
+  through this plus a shelled-out `lllm-serve`.
 - **`env_profile.py`** — resolves a serving profile and what's actually
-  being served, by shelling out to `main.sh` (never a second copy of the
-  profile table).
+  being served by reading `BenchmarkProfiles` and calling
+  `serving/profiles.py`'s `resolve()` in-process (no subprocess, no shell).
 - **`adapters.py`, `suites.py`, `datasets.py`, `grading/`** — benchmark
   adapter/suite loading, dataset fetch/manifest handling, and the per-
   benchmark grading harnesses (HumanEval/MBPP/DS-1000), plus their TOML/text
@@ -145,29 +162,29 @@ log for the migration and why each piece landed where it did.
   Cochran's Q, exact McNemar, power/MDE), reading the DB read-only.
 - **`tune.py`** + **`tune_schedule.py`** + **`tune_probe.py`** — the
   round-elimination configuration-search engine (staged explore/refine,
-  paired throughput ranking, GPU-cooldown/drift handling).
+  paired throughput ranking, GPU-cooldown/drift handling), driving
+  `ServeProcess` directly for each candidate.
 - **`telemetry_recorder.py`** — the GPU telemetry recorder, still a
-  detached subprocess (spawned by `scripts/shell/vram-log.sh`) for
-  crash-independence, now writing to this app's Postgres via plain
-  `psycopg` instead of a bare-`python3`/stdlib-only sqlite writer.
+  detached subprocess for crash-independence, spawned directly by
+  `ServeProcess.start()` (`python -m open_webui.benchmarks.telemetry_recorder`,
+  inheriting the backend's own `DATABASE_URL`) rather than by a shell script,
+  writing to this app's Postgres via plain `psycopg`.
 - **`scripts/backfill_from_sqlite.py`** — one-time migration of the old
   `logs/llama.db` (see below) into these Postgres tables. Already run; kept
   for reference/disaster-recovery, not part of any regular workflow.
 
-## `scripts/`
+## `Makefile`
 
-What's left after the testing/dashboard/report suite moved into the fork
-(see above): `llama_console.py` (Rich/plain terminal rendering plus
-`profile_names`/`profile_json`, backing `lllm-profiles`/`lllm-check`/
-`lllm-vram`) and `shell/`.
-
-- **`shell/main.sh`** — source of truth for local serving config; starts
-  `lllm-frontend`/`lllm-backend`; defines every `lllm-*` shell command.
-- **`shell/vram-log.sh`** — GPU telemetry capture entrypoint; resolves the
-  config fingerprint in shell and hands off to
-  `open_webui.benchmarks.telemetry_recorder`.
-
-Per-module purpose and rationale are documented in detail in
+Root-level process lifecycle only: `make backend` (Postgres +
+`apps/openwebui/backend`'s `uvicorn --reload` on `:4000`, Postgres torn down
+on exit including Ctrl-C) and `make frontend` (`apps/openwebui`'s `vite dev`
+on `:5173`, proxying to `:4000`). Replaces `scripts/` (deleted in Phase 2c of
+the migration, 2026-09-18 — see `docs/CLAUDE.md`'s decisions log), which held
+a shell orchestrator, `lllm-*` commands, and a Rich/plain terminal CLI
+(`llama_console.py`, backing `lllm-profiles`/`lllm-check`/`lllm-vram`) with
+no replacement of its own; those diagnostics now live in the fork's own
+Benchmarks section (Serve/Live pages), same as serving itself since
+Phase 2a/2b. Per-module purpose and rationale are documented in detail in
 [`docs/CLAUDE.md`](docs/CLAUDE.md)'s "Conventions" section — this entry is a
 summary, not a replacement.
 
@@ -176,7 +193,6 @@ summary, not a replacement.
 Present on disk but gitignored — won't show up in `git ls-files`, but worth
 knowing about when navigating the filesystem directly:
 
-- **`.venv/`** — Python virtualenv.
 - **`.vscode/`** — editor config (currently empty).
 - **`.claude/`** — Claude Code local state (`settings.local.json`,
   scheduled task locks).
@@ -188,10 +204,11 @@ knowing about when navigating the filesystem directly:
   Nothing reads this any more; the fork's Benchmarks feature fetches its own
   copy under its own `DATA_DIR` on first use. Safe to delete.
 - **`apps/openwebui/node_modules/`** — the frontend dependency tree (~1.3 GB),
-  installed by `lllm-frontend` on first run. `bun.lock` beside it **is**
+  installed by `make frontend` on first run. `bun.lock` beside it **is**
   tracked (upstream ignored it; this repo does not — see that file's own
   `.gitignore` comment).
 - **`apps/openwebui/backend/.venv/`** — the fork backend's own virtualenv,
-  kept separate from the repo-root `.venv/` on purpose.
-- **`__pycache__/`** — Python bytecode cache, scattered under `scripts/` and
-  the vendored fork.
+  bootstrapped by `make backend` on first run. The only Python virtualenv in
+  this repo since Phase 2c deleted the root `.venv/` along with `scripts/`.
+- **`__pycache__/`** — Python bytecode cache, scattered under the vendored
+  fork.

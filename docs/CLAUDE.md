@@ -24,8 +24,10 @@ As of 2026-08-17 that migration is being tested in parallel: a local
 llama.cpp `llama-server` runs Qwen3.6-35B-A3B on the laptop's RTX 3060 (6 GB)
 and serves the same OpenAI-compatible API on port 8090. It is not yet the
 default backing for Open WebUI; OpenRouter remains the day-to-day path until
-local throughput is acceptable. See "Local inference" below and the
-`scripts/shell/main.sh` helpers.
+local throughput is acceptable. See "Local inference" below; serving is
+started from the fork's own Serve page, not a shell helper (`scripts/`, the
+shell layer this used to point at, was deleted in Phase 2c of
+`docs/migration-plan.md`, 2026-09-18 — see the decisions log).
 
 ## Models in use
 
@@ -72,16 +74,20 @@ no `--n-cpu-moe` and no `-ot`, so no weight is read from system RAM. A fourth,
 `qwen3c` (`Qwen3-Coder-30B-A3B-Instruct-Q4_1.gguf`, 17.87 GiB), copies the
 `qwen36` MoE shape (`-ngl 99`, `--n-cpu-moe 34`, q8_0 KV cache, 65536 context,
 6 threads) as an unverified starting point rather than a tuned one; nothing
-about it is measured. Serving and benchmarking helpers live in
-`scripts/shell/main.sh` (sourced from `~/.bashrc`), which groups settings into
-per-model profiles (`qwen36` MoE, `qwen38` dense, `qwen25c` dense and
-GPU-resident, `qwen3c` MoE) rather than loose env vars;
-`lllm-serve` starts them. Every profile
-serves one server slot (`--parallel 1`, `LLAMA_PARALLEL` to override), passed
-unconditionally rather than as part of any other flag group. Every serving
-run also records GPU telemetry via `scripts/shell/vram-log.sh` (which execs
-`open_webui.benchmarks.telemetry_recorder`, in the Open WebUI fork's own
-backend, under the fork's Postgres) alongside the throughput of every
+about it is measured. Serving configuration groups settings into per-model
+profiles (`qwen36` MoE, `qwen38` dense, `qwen25c` dense and GPU-resident,
+`qwen3c` MoE) rather than loose env vars, stored as versioned rows in
+Postgres (`benchmark_profile`/`benchmark_profile_version`) and resolved by
+`apps/openwebui/backend/open_webui/benchmarks/serving/profiles.py` — not
+`scripts/shell/main.sh`, deleted along with the rest of `scripts/` in Phase
+2c of the migration (2026-09-18; see the decisions log). The fork's own
+Serve page (`/benchmarks/serve`) starts them. Every profile
+serves one server slot (`--parallel 1`, overridable per run from that page),
+passed unconditionally rather than as part of any other flag group. Every
+serving run also records GPU telemetry, now started directly by
+`ServeProcess` (`serving/launcher.py`) rather than a shell script, which
+spawns `open_webui.benchmarks.telemetry_recorder` in the Open WebUI fork's
+own backend, under the fork's Postgres, alongside the throughput of every
 request the Benchmarks section's Tests page sent, the server's own
 `/metrics` counters sampled on the same interval, the parameters actually
 put in those request bodies, and what the server's load log said about the
@@ -148,43 +154,49 @@ assume a cloud-only environment.
   procedure any more, so it may be restructured and hand-edited freely.
 
   What this repo holds outside `apps/` is `infra/docker-compose.yml` (the
-  Postgres+pgvector container the fork's backend depends on),
-  `scripts/shell/main.sh` (the local llama.cpp server and the fork's
-  `lllm-frontend`/`lllm-backend` host processes), `scripts/shell/vram-log.sh`
-  (GPU telemetry capture), `scripts/llama_console.py` (Rich-or-plain terminal
-  output backing `lllm-profiles`/`lllm-check`/`lllm-vram`, and the one place
-  Rich is allowed to touch stdout, in `write_markdown`), and documentation.
+  Postgres+pgvector container the fork's backend depends on), a root
+  `Makefile` (`make backend`/`make frontend`/`make help` — process lifecycle
+  only, added in Phase 2c of the migration, 2026-09-18), and documentation.
+  There is no `scripts/` any more: it held a shell orchestrator
+  (`shell/main.sh`, `shell/vram-log.sh`) and a Rich-or-plain terminal CLI
+  (`llama_console.py`, backing `lllm-profiles`/`lllm-check`/`lllm-vram`),
+  deleted in that same Phase 2c change once nothing in the backend shelled
+  out to it any more (Phases 2a-2b had already moved serving configuration
+  and its fingerprint into Python) — see that entry in the decisions log for
+  what has and has not been replaced.
 
   The benchmark/testing suite itself — adapters, suite tiering, dataset
   fetch, grading, the run/grade/record loop, config comparison, the
-  statistical report, and the configuration-search tuner — lives in
-  `apps/openwebui/backend/open_webui/benchmarks/`, reached through
-  the fork's own admin-only "Benchmarks" pages, not through any command in
-  this repo. `scripts/shell/vram-log.sh` still computes each run's
-  configuration fingerprint in shell (the one source of truth
-  `benchmarks/stats.py` parses back out of `config_text`) and still execs a
-  telemetry recorder for the life of the server, but that recorder is now
-  `open_webui.benchmarks.telemetry_recorder`, run under the fork's backend
-  venv and writing to the fork's own Postgres, not a bare-`python3`/
-  stdlib-only script writing sqlite. There is no more `logs/llama.db`, no
-  more `tests/adapters`/`tests/suites`/`tests/tuning`/`prompts/system` in
-  this repo (moved into the fork's `benchmarks/data/`), and no more
-  `lllm-test`/`lllm-compare`/`lllm-report`/`lllm-tune`/`lllm-web`/`lllm-db`
-  shell commands.
+  statistical report, the configuration-search tuner, and now also the
+  serving layer itself (`benchmarks/serving/`: profiles, fingerprint,
+  launcher, weights) — lives in `apps/openwebui/backend/open_webui/
+  benchmarks/`, reached through the fork's own admin-only "Benchmarks"
+  pages, not through any command in this repo. The GPU telemetry recorder,
+  `open_webui.benchmarks.telemetry_recorder`, is spawned directly by
+  `serving/launcher.py`'s `ServeProcess` as soon as a server starts,
+  inheriting the backend's own `DATABASE_URL`, rather than by a shell
+  script computing the fingerprint and execing it separately. There is no
+  more `logs/llama.db`, no more `tests/adapters`/`tests/suites`/
+  `tests/tuning`/`prompts/system` in this repo (moved into the fork's
+  `benchmarks/data/`), and no more
+  `lllm-test`/`lllm-compare`/`lllm-report`/`lllm-tune`/`lllm-web`/`lllm-db`/
+  `lllm-serve`/`lllm-fetch`/`lllm-profiles`/`lllm-check`/`lllm-vram` shell
+  commands of any kind.
 
-  The line to keep, restated for the monorepo: `scripts/shell/main.sh` is
-  still the single source of truth for serving configuration, and
-  model/system-prompt configuration for the assistant still lives in Open
-  WebUI, never in a repo file. What is *no longer* a rule is "application
-  code lives in the fork, never here" — that sentence described a submodule
-  boundary that does not exist any more. Application code lives under
-  `apps/`; `scripts/` stays operational glue, kept thin, and is itself on the
-  way out (see the 2026-09-14 entry).
+  The line to keep, restated for the monorepo now that the shell layer is
+  gone: `apps/openwebui/backend/open_webui/benchmarks/serving/profiles.py`
+  (backed by Postgres, not a shell case statement) is the single source of
+  truth for serving configuration, and model/system-prompt configuration for
+  the assistant still lives in Open WebUI, never in a repo file. What is
+  *no longer* a rule is "application code lives in the fork, never here" —
+  that sentence described a submodule boundary that does not exist any
+  more. Application code lives under `apps/`; the Makefile stays thin
+  process-lifecycle glue, the operational role `scripts/` used to have.
 - Testing approach, two separate things:
   - Changes to Open WebUI (the fork), including its Benchmarks section, are
     verified by using it in the browser at `http://localhost:5173` (manual —
-    there is no code to run automated tests against). `lllm-frontend`/
-    `lllm-backend` bind `5173`/`4000` directly now; there is no proxy in
+    there is no code to run automated tests against). `make frontend`/
+    `make backend` bind `5173`/`4000` directly; there is no proxy in
     front of either (see "Local inference" below and the decisions log).
   - Local serving configurations are verified from the Benchmarks section's
     Tests/Compare/Report pages: three published benchmarks (HumanEval, MBPP
@@ -204,20 +216,21 @@ assume a cloud-only environment.
 
 ## Commands
 
-- Start/ensure the Open WebUI fork is running: `lllm-backend` (Postgres +
-  the fork's backend, `uvicorn` on `4000`) in one terminal, `lllm-frontend`
-  (the fork's frontend dev server, `vite` on `5173`) in another —
-  `scripts/shell/main.sh`. `infra/.env` holds `OPENROUTER_API_KEY`,
-  `POSTGRES_PASSWORD`, and `WEBUI_SECRET_KEY`. `lllm-backend` owns Postgres's
+- Start/ensure the Open WebUI fork is running: `make backend` (Postgres +
+  the fork's backend, `uvicorn` on `4000`) in one terminal, `make frontend`
+  (the fork's frontend dev server, `vite` on `5173`) in another — root
+  `Makefile`. `infra/.env` holds `OPENROUTER_API_KEY`,
+  `POSTGRES_PASSWORD`, and `WEBUI_SECRET_KEY`. `make backend` owns Postgres's
   lifecycle directly (brings it up before uvicorn, tears it down via a trap
-  when uvicorn stops) — there is no separate `docker compose up` step. Chat
+  when uvicorn stops, Ctrl-C included) — there is no separate
+  `docker compose up` step. Chat
   is at `http://localhost:5173/`; the Benchmarks section (testing,
   comparison, reporting, tuning) is at `http://localhost:5173/benchmarks`,
   admin-only, in the same frontend — no separate port any more (see "Local
   inference" below and the decisions log for why).
 - Requires Docker Desktop with WSL integration enabled for this distro (for
-  Postgres), plus Bun and a **Python 3.11 or 3.12** interpreter on the host
-  for the fork (its `requires-python` is `>= 3.11, < 3.13`). `lllm-backend`
+  Postgres), `make`, plus Bun and a **Python 3.11 or 3.12** interpreter on the host
+  for the fork (its `requires-python` is `>= 3.11, < 3.13`). `make backend`
   selects that interpreter by version rather than taking bare `python3`,
   because on this machine an interactive shell's `python3` is linuxbrew's
   3.14 — see `README.md`'s Dependencies section.
@@ -241,15 +254,16 @@ or agent) updates the docs in the same commit:
   the llama.cpp build, and the flags used. A number without its configuration
   is not reusable. Numbers that predate a hardware or model change are stale;
   re-measure or mark them as historical.
-- **Shell scripts and docs must agree**: if `scripts/shell/main.sh`,
-  `scripts/shell/vram-log.sh`, or `infra/docker-compose.yml` changes
+- **Code and docs must agree**: if `serving/profiles.py`, `serving/
+  launcher.py`, the root `Makefile`, or `infra/docker-compose.yml` changes
   its defaults, flags, or function names, update the `README.md` description
-  of it in the same change. `scripts/shell/main.sh` is the source of truth
-  for the local serving configuration; if it drifts from `~/.bashrc`,
-  reconcile the two rather than letting both exist. The configuration lines
-  recorded with every serving run mirror the flags `lllm-serve` passes, so a
-  change to those flags must be reflected in `_vramlog_config` too, or old
-  and new runs get fingerprinted as the same configuration.
+  of it in the same change. `serving/profiles.py` is the source of truth
+  for the local serving configuration (there is no shell layer any more to
+  drift from — see the 2026-09-18 decisions-log entry). The configuration
+  lines recorded with every serving run mirror the flags the launcher
+  passes, so a change to those flags must be reflected in
+  `serving/fingerprint.py` too, or old and new runs get fingerprinted as the
+  same configuration.
 - **The database schema is append-only.** The benchmark tables' migrations
   live as ordinary Alembic revisions under `apps/openwebui/backend/
   open_webui/migrations/versions/`, same as the rest of the fork's schema;
@@ -286,6 +300,81 @@ All commits should use conventional commit style and stay focused on one topic. 
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-09-18**: Closed out Phase 2c of the migration (`docs/migration-plan.md`):
+  deleted `scripts/` entirely (`shell/main.sh`, `shell/vram-log.sh`,
+  `llama_console.py`) along with the root `requirements.txt` and `.venv`,
+  added a root `Makefile` (`make backend`, `make frontend`, `make help`) as
+  the replacement entry point, and removed the `source
+  ".../scripts/shell/main.sh"` line from the repo owner's own `~/.bashrc`
+  (outside this repo, done with the owner's explicit permission — a repo
+  cannot edit dotfiles on its own, which is why this line had sat there
+  unremoved since Phase 2a/2b made it dead weight).
+
+  **What the Makefile does and does not own.** Only process lifecycle —
+  the same job `lllm-backend`/`lllm-frontend` had. Serving configuration
+  itself (the profile table, argv assembly, the `config_id` fingerprint)
+  was already Python by this point (Phases 2a-2b, 2026-09-14 to
+  2026-09-17), so there was nothing serving-related left for a Makefile to
+  own. `make backend` ports the venv-bootstrap logic verbatim as a Make
+  recipe instead of a shell function — interpreter chosen by version
+  (`python3.12` → `python3.11` → `python3` if in range, `LLAMA_OPENWEBUI_PYTHON`
+  to override), a `.lllm-bootstrap-complete` stamp written only after a
+  successful install, a failed install removed rather than kept — the exact
+  three fixes from the 2026-09-14 entry below, ported rather than
+  re-derived.
+
+  **One real design decision, not just a port: how `make backend` builds
+  `DATABASE_URL`.** Rather than a second `jq -rn ... | @uri` percent-encoding
+  site (the exact class of bug the 2026-08-23 entries describe — an
+  unescaped `/` or `+` in a generated password broke the telemetry
+  recorder's stricter conninfo parser once already), the recipe shells out
+  to `serving/launcher.py`'s existing `build_database_url()`, whose own
+  docstring already named this Makefile as its intended caller: "the one
+  caller that legitimately has no `DATABASE_URL` yet ... whatever ports
+  `lllm-backend` itself in Phase 2c." One `PYTHONPATH`-qualified `python -c`
+  call inside the recipe, not a new implementation.
+
+  **What was accepted as a gap, per already-locked decisions, not decided
+  here.** `lllm-check`/`lllm-vram`/`lllm-profiles` (`llama_console.py`) have
+  no shell replacement and were not given one — decision 7 in the
+  migration plan puts shell diagnostics in the Astro UI's Serve page, which
+  does not exist until Phase 3+, but the same information has been
+  reachable from the fork's own (SvelteKit) Benchmarks section's Serve/Live
+  pages since Phase 2a/2b, so nothing actually regressed. `lllm-fetch`
+  (download weights) has no HTTP endpoint yet either — that is Phase 5's
+  "Serve (+ ... download weights)" line, not this phase's — so
+  `docs/model-downloads.md` is the interim replacement; it previously
+  documented only two of the four profiles (`qwen25c`, `qwen3c`), so the
+  other two (`qwen36`, `qwen38`) were filled in from
+  `docs/serving-baseline/profiles.json`, checked against it rather than
+  retyped from memory. `lllm-sweep-threads`/`lllm-sweep-ngl` are deleted
+  outright per the migration plan's own assumptions section (superseded by
+  Tune); their raw `llama-bench` invocations are preserved in `README.md`'s
+  new "Preflight sweeps" section, per that same assumption.
+
+  **Verified this session, and what was not.** `make backend` end to end,
+  twice: Postgres up against the real, already-pinned
+  `open-web-ui_postgres-data` volume (confirmed still the volume in use
+  afterward, not a fresh empty one); the existing backend venv reused
+  without a rebuild; `DATABASE_URL` built through the shared helper; uvicorn
+  serving, `/health` returning 200, and `/api/v1/benchmarks/profiles/`
+  returning 401 (not 500 — confirms the DB connection and auth dependency
+  both work under the Makefile-built URL, not just under the shell's);
+  SIGTERM (simulating Ctrl-C) triggering the `EXIT` trap, which stopped
+  uvicorn, then stopped and removed the Postgres container, leaving the
+  volume intact. `make frontend` separately: `vite` serving on `:5173`,
+  reachable. **Not verified, same posture as every other GPU-touching
+  change in this project (see the 2026-09-06 entry's own statement of this,
+  and Phase 2a's `launcher.py` entry above)**: no server was actually
+  started from the Serve page against the real GPU this session, and Tune
+  was not exercised against a real candidate — the exit criteria's
+  "Serve starts/stops a server; Tune launches candidates; telemetry rows
+  written" is accordingly still open, pending the owner's own run.
+
+  `README.md`, `MAP.md` and `docs/model-downloads.md` were rewritten in the
+  same change (dozens of now-dead `lllm-*`/`scripts/shell/*` references
+  either replaced with their current equivalent or left as explicitly
+  past-tense history), per the maintenance policy above.
 - **2026-09-14**: Merged the Open WebUI fork into this repo as a monorepo,
   reversing the submodule decision in the 2026-09-07 (second) entry below.
 
