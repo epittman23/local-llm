@@ -6,5 +6,13 @@ export const routePaths = {
 	home: '/',
 	workspace: '/workspace',
 	notes: '/notes',
-	calendar: '/calendar'
+	calendar: '/calendar',
+	benchmarks: '/benchmarks',
+	benchmarksServe: '/benchmarks/serve',
+	benchmarksLive: '/benchmarks/live',
+	benchmarksTests: '/benchmarks/tests',
+	benchmarksCompare: '/benchmarks/compare',
+	benchmarksAnswers: '/benchmarks/answers',
+	benchmarksReport: '/benchmarks/report',
+	benchmarksTune: '/benchmarks/tune'
 } as const;

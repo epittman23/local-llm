@@ -25,6 +25,7 @@ import { Separator } from '@/components/ui/separator';
 import { signOut } from '@/lib/auth/session';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useConfigStore } from '@/lib/stores/configStore';
 import { useUIStore } from '@/lib/stores/uiStore';
 import { routePaths } from '@/routes/routePaths';
 
@@ -71,7 +72,10 @@ export function SidebarContent({
 	showCollapseToggle?: boolean;
 }) {
 	const user = useAuthStore((state) => state.user);
+	const config = useConfigStore((state) => state.config);
 	const setSidebarOpen = useUIStore((state) => state.setSidebarOpen);
+	const isAdmin = user?.role === 'admin';
+	const benchmarksEnabled = isAdmin && config?.features?.enable_benchmarks !== false;
 
 	return (
 		<div className="flex h-full w-full flex-col">
@@ -123,10 +127,13 @@ export function SidebarContent({
 						<Calendar className="h-4 w-4" />
 						Calendar
 					</NavLink>
-					<LegacyNavLink href="/benchmarks" icon={ChartBar}>
-						Benchmarks
-					</LegacyNavLink>
-					{user?.role === 'admin' && (
+					{benchmarksEnabled && (
+						<NavLink to={routePaths.benchmarks} onClick={onNavigate} className={navLinkClass}>
+							<ChartBar className="h-4 w-4" />
+							Benchmarks
+						</NavLink>
+					)}
+					{isAdmin && (
 						<LegacyNavLink href="/admin" icon={ShieldCheck}>
 							Admin
 						</LegacyNavLink>

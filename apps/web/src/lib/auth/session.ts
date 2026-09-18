@@ -7,9 +7,11 @@
 // notifications on session expiry are dropped -- there is no toast system in
 // this app yet, so a session expiry is a console.warn until one exists.
 
+import { getBackendConfig } from '@/lib/apis';
 import { getSessionUser, userSignOut } from '@/lib/apis/auths';
 import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useConfigStore } from '@/lib/stores/configStore';
 
 const TOKEN_EXPIRY_BUFFER = 60; // seconds
 const TOKEN_CHECK_INTERVAL_MS = 15000;
@@ -152,6 +154,23 @@ export const initAuth = async () => {
 		console.error('Failed to restore session:', error);
 		useAuthStore.getState().clearSession();
 		localStorage.removeItem('token');
+		return () => stopTokenTimer();
+	}
+
+	// Fetched here, not lazily by whatever first needs a feature flag: every
+	// route gate this app has so far (useAuthGate, useBenchmarksGate) needs
+	// config settled at the same time the session itself does, and there's
+	// exactly one bootstrap sequence to add it to. getBackendConfig() (ported
+	// verbatim in apis/index.ts) reads the token cookie the backend's own
+	// sign-in response sets -- see lib/stores/configStore.ts's own note on
+	// why that cookie is already there by the time this runs.
+	try {
+		const backendConfig = await getBackendConfig();
+		if (backendConfig) {
+			useConfigStore.getState().setConfig(backendConfig);
+		}
+	} catch (error) {
+		console.error('Failed to load backend config:', error);
 	}
 
 	stopTokenTimer();

@@ -1,5 +1,7 @@
-import { createBrowserRouter, RouterProvider } from 'react-router';
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
 import { AppShell } from '@/components/layout/AppShell';
+import { BenchmarksLayout } from '@/routes/benchmarks/BenchmarksLayout';
+import { ServePage } from '@/routes/benchmarks/ServePage';
 import { LegacyFallback } from '@/routes/LegacyFallback';
 import { PlaceholderPage } from '@/routes/PlaceholderPage';
 import { routePaths } from '@/routes/routePaths';
@@ -27,6 +29,41 @@ const router = createBrowserRouter(
 				{
 					path: routePaths.calendar,
 					element: <PlaceholderPage title="Calendar" phase="Phase 9" />
+				},
+				{
+					path: routePaths.benchmarks,
+					element: <BenchmarksLayout />,
+					children: [
+						// Bare /benchmarks redirects to /serve, matching apps/openwebui's
+						// own (app)/benchmarks/+page.svelte (an onMount goto, ported here
+						// as an index route's own element instead).
+						{ index: true, element: <Navigate to={routePaths.benchmarksServe} replace /> },
+						{ path: routePaths.benchmarksServe, element: <ServePage /> },
+						{
+							path: routePaths.benchmarksLive,
+							element: <PlaceholderPage title="Live" phase="Phase 5 (later)" />
+						},
+						{
+							path: routePaths.benchmarksTests,
+							element: <PlaceholderPage title="Tests" phase="Phase 5 (later)" />
+						},
+						{
+							path: routePaths.benchmarksCompare,
+							element: <PlaceholderPage title="Compare" phase="Phase 5 (later)" />
+						},
+						{
+							path: routePaths.benchmarksAnswers,
+							element: <PlaceholderPage title="Answers" phase="Phase 5 (later)" />
+						},
+						{
+							path: routePaths.benchmarksReport,
+							element: <PlaceholderPage title="Report" phase="Phase 5 (later)" />
+						},
+						{
+							path: routePaths.benchmarksTune,
+							element: <PlaceholderPage title="Tune" phase="Phase 5 (later)" />
+						}
+					]
 				}
 			]
 		},
