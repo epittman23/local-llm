@@ -20,7 +20,7 @@
 | 1 | Monorepo merge (submodule → vendored tree) | ✅ done, verified on-machine | 2026-09-14 |
 | 2 | Shell removal → Python + Makefile | ✅ done, verified on real hardware | 2026-09-18 |
 | 3 | Astro + React + shadcn scaffold, dual-serve | ✅ done | 2026-09-18 |
-| 4 | Shared foundation: API, auth, stores, i18n, app shell | ☐ not started | — |
+| 4 | Shared foundation: API, auth, stores, i18n, app shell | ▶ in progress | 2026-09-18 |
 | 5 | Benchmarks surface (proves the pattern) | ☐ not started | — |
 | 6 | Public/static surfaces: auth, error, share, watch | ☐ not started | — |
 | 7 | Workspace surface | ☐ not started | — |
@@ -34,6 +34,95 @@ Status values: `☐ not started` · `▶ in progress` · `✅ done` · `⏸ bloc
 ### Current session notes
 
 _Overwrite this block at the end of every session._
+
+**2026-09-18 (Phase 4, new session).** Most of the shared foundation is
+built and verified; one piece is paused on a human decision, so the phase
+is `▶ in progress`, not done.
+
+Done this session, each verified (`astro check` 0 errors, `bun run build`,
+Vitest, and Playwright against a real dev server, not just written):
+
+- **API layer**: all 30 `src/lib/apis/**` modules ported verbatim (only the
+  `$lib` → `@/lib` alias rewritten); `parseBenchmarksEventStream`
+  byte-for-byte unchanged. The four helpers that layer needs from the
+  SvelteKit app's 2334-line `utils/index.ts` were pulled into a new
+  `lib/utils/api-helpers.ts` rather than porting that whole file now.
+  Six ported files carry inherited implicit-any/nullability looseness
+  from the source (which evidently never ran a strict `tsc` pass over its
+  own `lib/` — only `svelte-check` on `.svelte` files) and are marked
+  `@ts-nocheck` with that reasoning, not rewritten, matching this
+  project's own precedent of leaving inherited style debt alone during a
+  port (see this file's 2026-09-15 entry on the Python side's `Optional`
+  debt). `typescript` pinned to 5.6.3 (pre-generic-`Uint8Array`) so the
+  two streaming modules type-check without touching their `pipeThrough`
+  calls.
+- **Auth**: `lib/auth/session.ts` + `AuthProvider` — `localStorage.token`
+  bootstrap, `expires_at` timer, a global `fetch` guard clearing the
+  session on a real 401. Ports `+layout.svelte`'s
+  `clearExpiredSession`/`checkTokenExpiry` pattern; its toast
+  notifications are dropped for now (no toast system exists yet — a
+  documented gap, not a silent one).
+- **State**: Zustand (`authStore`, `uiStore` for the sidebar's
+  open/closed persistence) and a TanStack Query provider, no consumers
+  yet (Phase 5+ adds the first real queries).
+- **i18n**: `react-i18next` wired to the same `i18next` config and the
+  same 65 locale JSON files as the SvelteKit app, copied verbatim.
+- **Socket.IO provider**: ports `setupSocket()`'s connection lifecycle
+  (same `io()` options, connect/disconnect/heartbeat). Drops the pieces
+  with no prerequisite yet (toasts, version-mismatch reload, the
+  config-store heartbeat interval) — documented in the file itself as
+  gaps for whichever phase adds a toast system or the config store, not
+  silent cuts.
+- **Layout + sidebar**: a working `AppShell`/`Sidebar` on shadcn
+  `Sheet`/`DropdownMenu`/`Tooltip`/`ScrollArea` — real navigation
+  (Workspace/Notes/Calendar as React routes, Benchmarks/Admin as plain
+  `<a>` links since those surfaces don't exist in React yet), a mobile
+  drawer, sign-out. Not a port of all 58 of the Svelte sidebar's own
+  components — most of those are chat-history/folder features that
+  don't exist yet either. **Found and fixed a real bug this surfaced**:
+  the collapsed sidebar's content was only visually clipped
+  (`w-0 overflow-hidden` on the parent), not actually removed — a flex
+  child's default `min-width: auto` gave its nav links real (if
+  invisible) click targets several layers down. A Playwright test
+  failing to click a "hidden" link caught it; fixed by unmounting the
+  sidebar content when closed instead of just collapsing its container.
+- **Routing shell**: `react-router`'s data router, mounted from
+  `src/pages/[...path].astro`. **A second real finding**: that catch-all
+  page alone does *not* give `astro dev` a working deep-link fallback —
+  `output: 'static'` enumerates dev-server routes from `getStaticPaths`
+  exactly like `astro build` does, so a direct load or refresh on e.g.
+  `/workspace` still 404s. Closed with `src/middleware.ts`, which
+  rewrites a 404 back to the root route (confirmed astro middleware
+  runs regardless of whether routing found a match) — dev now behaves
+  like production's `SPAStaticFiles` mount in `main.py` already did.
+  Covered by a Playwright test for the direct-load case, alongside the
+  existing click-through one.
+- **Icon and `common/` mapping**: `lib/icons/MAPPING.md` (seeded with
+  what the layout shell actually uses; the other ~165 icons map when the
+  surface that needs them is built) and `components/COMMON_MAPPING.md`
+  (all 62 `common/` components, categorized: shadcn replacement /
+  kept-custom per the plan's own list / deferred to a later surface
+  phase).
+
+**Paused, not done: the routing shell's actual fallback policy.**
+`src/routes/LegacyFallback.tsx` (rendered by the router's own `*` route,
+for any path that isn't one of `routePaths.ts`'s real React routes — which
+today is nearly every real path, since almost nothing has moved out of
+SvelteKit yet) has a `TODO(human)` on `resolveLegacyFallback()`: what
+actually happens when a user lands on a still-Svelte-owned path through
+the React app's own router. This is a real architecture decision with
+several defensible answers (see the TODO's own comment: unconditional
+bounce to Svelte at the same path, an explicit allowlist/pattern set with
+an in-app 404 for genuine dead links, or something that probes first to
+avoid a redirect loop) that shapes every later phase's own routing, so it
+was handed to the repo owner rather than decided here. Everything around
+it — the router, the layout shell, the placeholder routes — is finished
+and independent of this decision; only that one function's body is
+outstanding.
+
+**Next action**: implement `resolveLegacyFallback` in
+`apps/web/src/routes/LegacyFallback.tsx`, then close out whatever's left
+of Phase 4's checklist below (it's now mostly ticked) and move to Phase 5.
 
 **2026-09-14 (second session, on the real machine).**
 
@@ -734,20 +823,40 @@ Phase 2 is now ✅ done.
       deviations above.
 
 ## Phase 4 — Shared foundation
-- [ ] API layer copied from `src/lib/apis/**`; keep
+- [x] API layer copied from `src/lib/apis/**`; keep
       `parseBenchmarksEventStream` unchanged.
-- [ ] Auth: `localStorage.token` bootstrap, 401 handling in a fetch
+- [x] Auth: `localStorage.token` bootstrap, 401 handling in a fetch
       wrapper, `expires_at` timer, sign-out clears token **and** cookie
-      (prevents an OAuth redirect loop), route gate.
-- [ ] Routing shell `src/pages/[...path].astro` + `react-router`, with a
-      `LegacyRedirect` fallback to the SvelteKit app.
-- [ ] Zustand slices; TanStack Query for server lists.
-- [ ] i18n (65 locales unchanged, `react-i18next`).
-- [ ] `lucide-react` icon mapping recorded in a file.
-- [ ] Layout + sidebar (58 components) on shadcn `Sheet`, `DropdownMenu`,
-      `Tooltip`, `ScrollArea`.
-- [ ] Socket.IO provider, stable across navigation.
-- [ ] `common/` → shadcn mapping recorded (keep custom: CodeMirror,
+      (prevents an OAuth redirect loop).
+- [ ] **Route gate** — not built yet. `LegacyFallback`'s `*` route
+      currently renders regardless of auth state; nothing yet redirects
+      an unauthenticated request to `/auth`. Left for whoever implements
+      `resolveLegacyFallback` (see session notes above) or the first
+      surface phase that actually needs it, whichever comes first.
+- [x] Routing shell `src/pages/[...path].astro` + `react-router`, with a
+      `LegacyFallback` catch-all to the SvelteKit app for everything not
+      in `routePaths.ts`. **Its actual fallback policy is a
+      `TODO(human)`** — see the session notes above; the router itself,
+      the Astro catch-all page, and the dev-server 404 fix
+      (`src/middleware.ts`) are done and verified.
+- [x] Zustand slices (`authStore`, `uiStore`); TanStack Query provider.
+      No server-list queries exist yet — nothing consumes it until
+      Phase 5+ adds a real data-fetching surface.
+- [x] i18n (65 locales unchanged, `react-i18next`).
+- [x] `lucide-react` icon mapping recorded in a file
+      (`lib/icons/MAPPING.md`) — seeded with what the layout shell uses;
+      the other ~165 icons map when the surface that needs them is built.
+- [x] Layout + sidebar on shadcn `Sheet`, `DropdownMenu`, `Tooltip`,
+      `ScrollArea`. **Not a port of all 58 of the Svelte sidebar's own
+      components** — those are chat-history/folder features that don't
+      exist yet either; this is a working shell (nav, mobile drawer,
+      sign-out) for later phases to build into.
+- [x] Socket.IO provider, stable across navigation. Toasts,
+      version-mismatch reload, and the config-store heartbeat interval
+      are documented gaps in the file itself, not silent cuts — no
+      prerequisite (toast system, config store) exists yet.
+- [x] `common/` → shadcn mapping recorded
+      (`src/components/COMMON_MAPPING.md`; keep custom: CodeMirror,
       TipTap, PDF/docx/pptx previews, emoji picker, pan/zoom, Valves).
 
 ## Phase 5 — Benchmarks surface
