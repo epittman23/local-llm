@@ -19,7 +19,7 @@
 | 0 | Groundwork and safety net | ✅ done | 2026-09-14 |
 | 1 | Monorepo merge (submodule → vendored tree) | ✅ done, verified on-machine | 2026-09-14 |
 | 2 | Shell removal → Python + Makefile | ✅ done, verified on real hardware | 2026-09-18 |
-| 3 | Astro + React + shadcn scaffold, dual-serve | ☐ not started | — |
+| 3 | Astro + React + shadcn scaffold, dual-serve | ✅ done | 2026-09-18 |
 | 4 | Shared foundation: API, auth, stores, i18n, app shell | ☐ not started | — |
 | 5 | Benchmarks surface (proves the pattern) | ☐ not started | — |
 | 6 | Public/static surfaces: auth, error, share, watch | ☐ not started | — |
@@ -262,16 +262,33 @@ auto-mode PII classifier), served correctly, recorded under `config_id
 load rather than only by the ported-fingerprint tests — closed clean, GPU
 released. One real Tune candidate through `tune_probe.Server` (`qwen25c`,
 `LLAMA_THREADS=4`), served correctly under its own predicted `config_id`
-(`f04d84af`). One loose end found and left open rather than fixed: the
-Tune run's `benchmark_run` row never closed (`ended_at` still NULL with
-the telemetry process confirmed gone) — `tune_probe.Server.stop()`'s
-SIGINT-first path appears able to skip the telemetry shutdown
-`ServeProcess.stop()` normally runs. Out of scope for this phase to chase
-further; noted for whoever next touches `tune_probe.py` or
-`telemetry_recorder.py`.
+(`f04d84af`). A loose end surfaced and then chased all the way down: the
+first Tune run's `benchmark_run` row never closed. Two more real runs
+isolated the cause as this verification's own cleanup, not the code —
+`docker compose down` ran a few seconds after `stop()` returned, inside the
+telemetry recorder's own ~3-5s self-close window, killing Postgres
+mid-write. Left alone, a Tune candidate's run closes clean every time; no
+code change needed.
 
-**Phase 2 is now ✅ done.** Next action: Phase 3 (Astro + React + shadcn
-scaffold, dual-serve).
+**Phase 2 is now ✅ done.**
+
+**2026-09-18 (Phase 3, same day, new session).** `apps/web/` scaffolded:
+Astro, `@astrojs/react`, Tailwind v4, shadcn/ui (`radix-nova` preset, not
+the plan's original "new-york" — that named-style system doesn't exist any
+more in the installed CLI; the owner chose to accept the CLI's own current
+default over hand-porting Open WebUI's colors onto its newer token model,
+see the decisions log). Dark-mode class + `--app-text-scale` ported from
+`apps/openwebui/src/app.html`/`app.css`. Dev server proxy mirrors
+`apps/openwebui/vite.config.ts` exactly. `make astro` added, working around
+a real daemon-vs-foreground quirk in this Astro version's `dev` command
+(see the Makefile's own comment). `/next` mounted in `main.py` before the
+SPA catch-all, verified against a real build and a real backend boot
+(200s all around, SPA fallback included). Vitest + Playwright both wired
+with one smoke test each; Playwright hit the same daemon quirk as `make
+astro` and needed the same fix plus a belt-and-braces `globalTeardown`.
+**Phase 3 is now ✅ done.** Next action: Phase 4 (shared foundation — API
+layer, auth, Zustand/TanStack Query, i18n, routing shell, layout/sidebar,
+Socket.IO provider).
 
 ---
 
@@ -657,18 +674,64 @@ decisions-log entry for the full repro.
 
 Phase 2 is now ✅ done.
 
-## Phase 3 — Astro + React + shadcn scaffold, dual-serve
-- [ ] `apps/web/`: Astro, `output: 'static'`, `@astrojs/react`, TS strict.
-- [ ] Tailwind v4 via `@tailwindcss/vite`; port `@theme` tokens from
-      `apps/openwebui/src/tailwind.css` onto shadcn token names.
-- [ ] `shadcn` init (`new-york`, CSS variables, `tw-animate-css`).
-- [ ] Dark mode (`class` on `<html>`) and the `--app-text-scale` variable.
-- [ ] Dev server :5174 proxying `/api`, `/ollama`, `/openai`, `/oauth`,
-      `/ws` → :4000 (mirror `apps/openwebui/vite.config.ts`, `ws: true`).
-- [ ] `make astro`.
-- [ ] `/next` preview mount in `main.py`, **before** the SPA catch-all.
-- [ ] Vitest + Playwright; one smoke test.
-- [ ] Docs.
+## Phase 3 — Astro + React + shadcn scaffold, dual-serve ✅
+- [x] `apps/web/`: Astro, `output: 'static'`, `@astrojs/react`, TS strict
+      (`astro/tsconfigs/strict` + `@/*` path alias for shadcn's imports).
+- [x] Tailwind v4 via `@tailwindcss/vite`. **Deviated from "port `@theme`
+      tokens from `apps/openwebui/src/tailwind.css` onto shadcn token
+      names"**: the shadcn CLI installed here (v4.21.0) has moved past
+      named styles to bundled presets (colors + icons + fonts together),
+      so there was no "new-york style, then swap in our own colors" path
+      left to take. Given the choice between hand-porting Open WebUI's
+      gray scale onto this CLI's newer token model or accepting its own
+      current default, the repo owner chose the latter (Nova). See the
+      2026-09-18 decisions-log entry.
+- [x] `shadcn init`. **Deviated from "new-york, CSS variables,
+      tw-animate-css"** for the same reason: `style: "radix-nova"` (CSS
+      variables still on, `tw-animate-css` still installed and imported —
+      those two survived; only the named style did not).
+- [x] Dark mode (`class` on `<html>`) and the `--app-text-scale` variable —
+      `src/layouts/Base.astro`, an inline anti-FOUC script mirroring
+      `apps/openwebui/src/app.html`'s own (same `localStorage.theme` key)
+      and a `:root { --app-text-scale: 1 }` declaration. The theme-picker
+      UI itself is Phase 4, not this.
+- [x] Dev server :5174 proxying `/api`, `/ollama`, `/openai`, `/oauth`,
+      `/ws` → :4000 (mirror `apps/openwebui/vite.config.ts`, `ws: true`) —
+      `astro.config.mjs`'s `vite.server.proxy`, `WEBUI_BACKEND_URL` to
+      override, same variable name the SvelteKit dev server already reads.
+- [x] `make astro`. **A real wrinkle found and handled**: this Astro
+      version's `astro dev` always daemonizes — even without `--background`,
+      the CLI wrapper exits almost immediately once the real server is up,
+      leaving nothing in the foreground for Ctrl-C to reach. The recipe
+      starts it explicitly backgrounded, then blocks on `astro dev logs
+      --follow` (a real foreground process) with a trap running `astro dev
+      stop` on exit. See the Makefile's own comment on the `astro` target.
+- [x] `/next` preview mount in `main.py`, before the SPA catch-all — a new
+      `NEXT_BUILD_DIR` in `env.py` (defaults to `apps/web/dist`), mounted
+      via the existing `SPAStaticFiles` (same 404→index.html fallback the
+      SvelteKit mount uses, so client-side deep links work). Verified
+      against a real build and a real backend boot: `/next/` 200, a
+      `/next/_astro/*` asset 200, a deep link 200 via the SPA fallback,
+      and the SvelteKit app's own (pre-existing, unrelated) 404 unchanged.
+      Needed `base: '/next'` in `astro.config.mjs` for the build only
+      (dev stays unprefixed) — set via `process.argv.includes('build')`,
+      not `defineConfig`'s own `({ command }) => (...)` form, which
+      reproducibly broke `@import 'tailwindcss'` resolution in this
+      astro/vite combination (`ENOENT ... open '.../tailwindcss'`) for
+      reasons not chased further than confirming the plain object form
+      doesn't hit whatever code path that was.
+- [x] Vitest + Playwright; one smoke test — one of each, actually: a Vitest
+      + React Testing Library render test (`src/components/App.test.tsx`)
+      and a Playwright test (`e2e/smoke.spec.ts`) against the real dev
+      server. Playwright's `webServer` hit the same daemon issue `make
+      astro` did (`Error: Process from config.webServer exited early`),
+      fixed the same way, plus a `globalTeardown` that force-stops the
+      daemon afterward regardless — a clean run was observed leaving it
+      alive even after Playwright's own teardown reported success, so the
+      signal-based path alone isn't trusted.
+- [x] Docs — this entry, `apps/web/README.md`, `MAP.md`, `README.md`, the
+      ROADMAP pair, and a dated `docs/CLAUDE.md` entry for the two
+      deviations above.
 
 ## Phase 4 — Shared foundation
 - [ ] API layer copied from `src/lib/apis/**`; keep

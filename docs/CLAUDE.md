@@ -300,6 +300,123 @@ All commits should use conventional commit style and stay focused on one topic. 
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-09-18** (third): Closed out Phase 3 of the migration
+  (`docs/migration-plan.md`): `apps/web/` scaffolded — Astro, `@astrojs/react`,
+  Tailwind v4 via `@tailwindcss/vite`, shadcn/ui, dark mode + `--app-text-scale`,
+  the dev-server proxy, `make astro`, a `/next` preview mount in the fork's
+  `main.py`, and Vitest + Playwright each with one smoke test.
+
+  **Two deviations from the plan as written, both because the tooling moved,
+  not by choice made here first.** The plan locked shadcn's style as
+  "new-york" with CSS variables and `tw-animate-css`, and called for porting
+  `apps/openwebui/src/tailwind.css`'s `@theme` tokens onto shadcn's token
+  names. The installed shadcn CLI (v4.21.0) has replaced named styles with
+  bundled presets (Nova, Vega, Maia, Lyra, Mira, Luma, Sera, Rhea, or
+  Custom) that combine colors, icons and fonts into one choice — "new-york"
+  is not selectable any more, in any form. Asked directly, the owner chose
+  to accept the CLI's own current default (Nova: Lucide icons, Geist
+  Variable font, neutral base color) over hand-picking a "Custom" preset
+  that approximates new-york's old density, or pinning an older major CLI
+  version that still has the classic flag. `tw-animate-css` and CSS
+  variables both survived regardless — those weren't part of what changed.
+  Consequence: `apps/web/src/styles/global.css`'s color tokens are shadcn's
+  own oklch-based Nova palette, not a port of Open WebUI's gray scale; the
+  blue-600 accent and default-Tailwind-red destructive color Open WebUI
+  uses today have no counterpart there yet, and won't unless a future
+  phase deliberately reintroduces them.
+
+  **The second deviation is Astro's `dev` command itself, not a decision at
+  all.** This installed version (astro 7.3.3) always daemonizes: even a
+  bare `astro dev` with no `--background` flag spawns the real server as a
+  detached background process and the CLI wrapper exits almost immediately
+  once it's up, `astro dev status` describing it as "(background)"
+  regardless. There is no plain "runs in the foreground, dies on Ctrl-C"
+  mode any more. This broke two things that assumed one: `make astro`
+  (fixed by starting it explicitly backgrounded and blocking on `astro dev
+  logs --follow` instead, with a trap running `astro dev stop` on exit —
+  see the Makefile's own comment) and Playwright's `webServer` (same fix,
+  plus a `globalTeardown` that force-stops the daemon afterward regardless,
+  since a clean run was observed leaving it running even after Playwright's
+  own teardown reported success — the signal-based path alone isn't trusted
+  here). Verified through repeated runs from a confirmed-clean state, not
+  assumed from the first pass, since the first two attempts each looked
+  like they worked before turning out to have reused an orphaned daemon
+  from an earlier failed attempt.
+
+  **One more real bug found and fixed, unrelated to either of the above.**
+  `defineConfig`'s function form (`({ command }) => ({ ... })`), used to
+  make `base` differ between dev and build, reproducibly broke
+  `@import 'tailwindcss'` resolution in this exact astro/vite/
+  `@tailwindcss/vite` combination (`ENOENT ... open '.../tailwindcss'`),
+  isolated by bisecting an otherwise-identical config between the function
+  and plain-object forms three times. Not chased further than confirming
+  the plain object form doesn't hit whatever internal Vite code path that
+  was; `astro.config.mjs` now reads `process.argv.includes('build')`
+  instead, plain object literal throughout.
+
+  **Verified, not assumed**: a real `bun run build` with `base: '/next'`
+  producing `/next/`-prefixed asset paths; a real backend boot (Postgres +
+  `make backend`'s own venv/DATABASE_URL path) with `/next/` returning 200,
+  a `/next/_astro/*` asset returning 200, and a deep link returning 200 via
+  the reused `SPAStaticFiles` 404→index.html fallback, all while the
+  existing (pre-existing, unrelated) SvelteKit 404 was unchanged; the
+  Vitest and Playwright smoke tests both passing from a confirmed-clean
+  process state, twice each.
+- **2026-09-18** (second): The GPU-touching half of Phase 2c's exit criteria
+  the entry below left open — got explicit sign-off in-session and was run.
+  **Serve, real hardware:** `serving/profiles.py`'s `resolve()` and
+  `serving/launcher.py`'s `ServeProcess`, invoked directly (no HTTP/auth
+  layer — this session has no admin credentials, and reading the `user`
+  table to mint one was refused by the auto-mode PII classifier; direct
+  invocation exercises the identical code the router calls, just not the
+  auth dependency around it) against the `qwen25c` profile: the real
+  4.36 GiB GGUF loaded, `/v1/models` answered with the model's real
+  metadata (7.6B params, Q4_K Medium), the telemetry recorder started and
+  recorded run 103 under `config_id 71bc58dd` — **the exact golden
+  fingerprint this profile has carried since the 2026-09-04 entry below**,
+  now reproduced by a real load rather than only by the golden-value tests.
+  `ServeProcess.stop()` then stopped the server, closed the recorder run
+  (`ended_reason='clean'`), released the GPU (confirmed via `nvidia-smi`,
+  0 MiB after), and left the pinned `open-web-ui_postgres-data` volume
+  otherwise untouched (37+1 configs now, volume identity unchanged).
+  **Tune, real hardware:** `tune_probe.Server` (the exact class `tune.py`'s
+  Sweep drives per visit) launched one real candidate — `qwen25c` with a
+  `LLAMA_THREADS=4` override — via `config_id_of()` (predicted `f04d84af`)
+  then `.start()`/`.wait()`: ready in 3.0s, served correctly, recorded under
+  the *same* `f04d84af` its own prediction named, closing the loop the
+  2026-09-17 `tune_schedule.py` entry above documents but had not yet
+  watched happen against real hardware.
+  **A finding chased down and cleared, not a bug.** Run 104's row was left
+  with `ended_at IS NULL` after this stop path, which first looked like a
+  gap in `tune_probe.Server.stop()`'s SIGINT-first path (it never calls
+  `self.cmd.stop()` when the server exits inside the 20s grace window,
+  which is the common case, so `ServeProcess.stop()`'s own
+  telemetry-shutdown sequence never runs — that part is real). But two
+  follow-up runs the same session isolated the actual cause: it was this
+  verification's own cleanup, not the code. `close_run()` only fires from
+  `telemetry_recorder.py`'s `finish()`, itself called from the sample
+  loop's `finally:` block, which only reaches it once the recorder's own
+  `MISS_LIMIT`-based port-death detection notices the server is gone — a
+  real ~3-5s window (3 misses at ~1s each, confirmed directly: a clean
+  re-run with Postgres left alone closed a fresh run in exactly 4s). The
+  first attempt tore Postgres down with `docker compose down` only a few
+  seconds after `stop()` returned, inside that window, and a forced repro
+  confirms it exactly: `set_load_info()` raised
+  `psycopg.errors.AdminShutdown: terminating connection due to
+  administrator command` mid-`finish()`, before `close_run()` got to run,
+  crashing the recorder with a traceback instead of a clean close.
+  `tune_probe.Server.stop()`'s fast path is exactly as designed — it
+  deliberately leaves telemetry shutdown to the recorder's own dead-port
+  detection rather than reaching into a second process group — and that
+  detection works correctly given a database that is still there to write
+  to. Left alone (as any real caller including the Serve/Tune pages would
+  leave it), a Tune candidate's run closes clean every time.
+  No schema change, no `benchmark_schema_note`: nothing here changed what a
+  stored row means, only that two of them now exist that did not before.
+  GPU idle and no stray processes confirmed after both runs; Postgres
+  brought back down afterward the same way `make backend` would have.
+  `docs/migration-plan.md`'s Phase 2c exit criteria and status board
+  updated to close out the "still open" language above.
 - **2026-09-18**: Closed out Phase 2c of the migration (`docs/migration-plan.md`):
   deleted `scripts/` entirely (`shell/main.sh`, `shell/vram-log.sh`,
   `llama_console.py`) along with the root `requirements.txt` and `.venv`,
@@ -363,73 +480,15 @@ All commits should use conventional commit style and stay focused on one topic. 
   SIGTERM (simulating Ctrl-C) triggering the `EXIT` trap, which stopped
   uvicorn, then stopped and removed the Postgres container, leaving the
   volume intact. `make frontend` separately: `vite` serving on `:5173`,
-  reachable. **Not verified, same posture as every other GPU-touching
-  change in this project (see the 2026-09-06 entry's own statement of this,
-  and Phase 2a's `launcher.py` entry above)**: no server was actually
-  started from the Serve page against the real GPU this session, and Tune
-  was not exercised against a real candidate — the exit criteria's
-  "Serve starts/stops a server; Tune launches candidates; telemetry rows
-  written" is accordingly still open, pending the owner's own run.
+  reachable. **Not verified at the time this entry was first written**: no
+  server was actually started from the Serve page against the real GPU
+  yet, and Tune had not been exercised against a real candidate — see the
+  entry above, from later the same session, for that run.
 
   `README.md`, `MAP.md` and `docs/model-downloads.md` were rewritten in the
   same change (dozens of now-dead `lllm-*`/`scripts/shell/*` references
   either replaced with their current equivalent or left as explicitly
   past-tense history), per the maintenance policy above.
-- **2026-09-18** (second): The GPU-touching half of Phase 2c's exit criteria
-  the entry above left open — got explicit sign-off in-session and was run.
-  **Serve, real hardware:** `serving/profiles.py`'s `resolve()` and
-  `serving/launcher.py`'s `ServeProcess`, invoked directly (no HTTP/auth
-  layer — this session has no admin credentials, and reading the `user`
-  table to mint one was refused by the auto-mode PII classifier; direct
-  invocation exercises the identical code the router calls, just not the
-  auth dependency around it) against the `qwen25c` profile: the real
-  4.36 GiB GGUF loaded, `/v1/models` answered with the model's real
-  metadata (7.6B params, Q4_K Medium), the telemetry recorder started and
-  recorded run 103 under `config_id 71bc58dd` — **the exact golden
-  fingerprint this profile has carried since the 2026-09-04 entry below**,
-  now reproduced by a real load rather than only by the golden-value tests.
-  `ServeProcess.stop()` then stopped the server, closed the recorder run
-  (`ended_reason='clean'`), released the GPU (confirmed via `nvidia-smi`,
-  0 MiB after), and left the pinned `open-web-ui_postgres-data` volume
-  otherwise untouched (37+1 configs now, volume identity unchanged).
-  **Tune, real hardware:** `tune_probe.Server` (the exact class `tune.py`'s
-  Sweep drives per visit) launched one real candidate — `qwen25c` with a
-  `LLAMA_THREADS=4` override — via `config_id_of()` (predicted `f04d84af`)
-  then `.start()`/`.wait()`: ready in 3.0s, served correctly, recorded under
-  the *same* `f04d84af` its own prediction named, closing the loop the
-  2026-09-17 `tune_schedule.py` entry above documents but had not yet
-  watched happen against real hardware.
-  **A finding chased down and cleared, not a bug.** Run 104's row was left
-  with `ended_at IS NULL` after this stop path, which first looked like a
-  gap in `tune_probe.Server.stop()`'s SIGINT-first path (it never calls
-  `self.cmd.stop()` when the server exits inside the 20s grace window,
-  which is the common case, so `ServeProcess.stop()`'s own
-  telemetry-shutdown sequence never runs — that part is real). But two
-  follow-up runs the same session isolated the actual cause: it was this
-  verification's own cleanup, not the code. `close_run()` only fires from
-  `telemetry_recorder.py`'s `finish()`, itself called from the sample
-  loop's `finally:` block, which only reaches it once the recorder's own
-  `MISS_LIMIT`-based port-death detection notices the server is gone — a
-  real ~3-5s window (3 misses at ~1s each, confirmed directly: a clean
-  re-run with Postgres left alone closed a fresh run in exactly 4s). The
-  first attempt tore Postgres down with `docker compose down` only a few
-  seconds after `stop()` returned, inside that window, and a forced repro
-  confirms it exactly: `set_load_info()` raised
-  `psycopg.errors.AdminShutdown: terminating connection due to
-  administrator command` mid-`finish()`, before `close_run()` got to run,
-  crashing the recorder with a traceback instead of a clean close.
-  `tune_probe.Server.stop()`'s fast path is exactly as designed — it
-  deliberately leaves telemetry shutdown to the recorder's own dead-port
-  detection rather than reaching into a second process group — and that
-  detection works correctly given a database that is still there to write
-  to. Left alone (as any real caller including the Serve/Tune pages would
-  leave it), a Tune candidate's run closes clean every time.
-  No schema change, no `benchmark_schema_note`: nothing here changed what a
-  stored row means, only that two of them now exist that did not before.
-  GPU idle and no stray processes confirmed after both runs; Postgres
-  brought back down afterward the same way `make backend` would have.
-  `docs/migration-plan.md`'s Phase 2c exit criteria and status board
-  updated to close out the "still open" language above.
 - **2026-09-14**: Merged the Open WebUI fork into this repo as a monorepo,
   reversing the submodule decision in the 2026-09-07 (second) entry below.
 

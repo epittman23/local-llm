@@ -18,7 +18,8 @@ timeline
       2026-09-08 : lllm-test/lllm-compare/lllm-report/lllm-tune/lllm-web suite migrated into the Open WebUI fork as its own Benchmarks section : logs/llama.db backfilled into Postgres and retired : CLI fully retired
       2026-09-14 : Open WebUI fork vendored into this repo as a monorepo, submodule retired : permanent hard fork, no upstream sync : tree moved to apps/openwebui and infra/ : serving-layer baseline captured ahead of the shell-to-Python port
       2026-09-14 to 2026-09-17 : Serving layer ported from shell to Python (Phases 2a-2b) : profiles, fingerprint, and launcher moved into the backend and Postgres : env_profile/proc/tune_schedule/tune_probe/serve router rewired to call it in-process instead of shelling out
-      2026-09-18 : Shell layer deleted entirely (Phase 2c) : scripts/ removed along with root requirements.txt/.venv : root Makefile (make backend, make frontend) added as the process-lifecycle replacement : ~/.bashrc's shell-sourcing line removed
+      2026-09-18 : Shell layer deleted entirely (Phase 2c) : scripts/ removed along with root requirements.txt/.venv : root Makefile (make backend, make frontend) added as the process-lifecycle replacement : ~/.bashrc's shell-sourcing line removed : Serve and Tune verified against real hardware, closing Phase 2
+      2026-09-18 (later) : Astro + React + shadcn/ui scaffold added (Phase 3) : apps/web/, Tailwind v4, dark mode, dev-server proxy, make astro : /next preview mount in main.py alongside the SvelteKit app : Vitest and Playwright wired with one smoke test each
     section Near-Term
       "~1 week" : Resolve the blocking rack hole-type question : confirm riser and PSU questions : re-verify current component pricing
     section Short-Term

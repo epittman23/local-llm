@@ -14,11 +14,12 @@ instead.
 
 ```
 local-llm/
-├── Makefile                   make backend, make frontend, make help
+├── Makefile                   make backend, make frontend, make astro, make help
 ├── README.md                  usage/operations guide
 ├── MAP.md                     this file
 ├── apps/                      the applications themselves
-│   └── openwebui/             vendored Open WebUI fork (FastAPI + SvelteKit)
+│   ├── openwebui/             vendored Open WebUI fork (FastAPI + SvelteKit)
+│   └── web/                   Astro + React + shadcn/ui frontend (Phase 3+)
 ├── docs/                      meta docs: conventions, roadmap, proposals
 └── infra/                     docker-compose for Postgres + pgvector
 ```
@@ -91,6 +92,11 @@ code at all; the fork lived in a submodule and that rule was a real
 constraint. It is not any more — see `docs/CLAUDE.md`'s Conventions.
 
 - **`openwebui/`** — the vendored Open WebUI fork (mapped below).
+- **`web/`** — the Astro + React + shadcn/ui frontend that will eventually
+  replace `openwebui/`'s SvelteKit app (mapped below). Added in Phase 3 of
+  `docs/migration-plan.md` (2026-09-18); dual-serves alongside the fork
+  during the migration, mounted read-only at `/next` in the fork's own
+  `main.py` rather than replacing anything yet.
 
 ### `apps/openwebui/` (vendored fork)
 
@@ -173,12 +179,41 @@ log for the migration and why each piece landed where it did.
   `logs/llama.db` (see below) into these Postgres tables. Already run; kept
   for reference/disaster-recovery, not part of any regular workflow.
 
+### `apps/web/` (Astro + React + shadcn/ui)
+
+The frontend `apps/openwebui/`'s SvelteKit app is being migrated to,
+surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
+`README.md` covers usage in detail; this is a structural summary.
+
+- **`astro.config.mjs`** — `output: 'static'`, `@astrojs/react`,
+  `@tailwindcss/vite`; the dev-server proxy mirrors `apps/openwebui/
+  vite.config.ts`'s exactly (`/api`, `/ollama`, `/openai`, `/oauth`, `/ws`
+  → `:4000`); `base` is `/next` for a production build only (where `main.py`
+  mounts it), unprefixed in dev.
+- **`components.json`** — shadcn/ui's own config: `radix-nova` preset,
+  Lucide icons, CSS variables. See `docs/CLAUDE.md`'s 2026-09-18 decisions
+  entry for why this preset and not the migration plan's original
+  "new-york" (the CLI's own style system changed).
+- **`src/layouts/Base.astro`** — `<html>`/`<head>` shell: the anti-FOUC
+  dark-mode script (mirrors `apps/openwebui/src/app.html`'s own) and the
+  `--app-text-scale` CSS variable's declaration.
+- **`src/components/App.tsx`** — the one persistent `client:only="react"`
+  root Astro mounts (per the migration plan's architecture decision).
+  Placeholder until Phase 4 adds routing, auth, and the real app shell.
+- **`src/components/ui/`** — shadcn/ui components (`bunx shadcn add <name>`).
+- **`e2e/`** — Playwright; `global-teardown.ts` force-stops the dev server
+  after a run (see its own comment for why that isn't left to Playwright's
+  ordinary teardown alone).
+
 ## `Makefile`
 
 Root-level process lifecycle only: `make backend` (Postgres +
 `apps/openwebui/backend`'s `uvicorn --reload` on `:4000`, Postgres torn down
-on exit including Ctrl-C) and `make frontend` (`apps/openwebui`'s `vite dev`
-on `:5173`, proxying to `:4000`). Replaces `scripts/` (deleted in Phase 2c of
+on exit including Ctrl-C), `make frontend` (`apps/openwebui`'s `vite dev`
+on `:5173`, proxying to `:4000`), and `make astro` (`apps/web`'s `astro dev`
+on `:5174`, proxying to `:4000` — added Phase 3, 2026-09-18; works around
+that Astro version's `dev` command always daemonizing, see the target's own
+comment). Replaces `scripts/` (deleted in Phase 2c of
 the migration, 2026-09-18 — see `docs/CLAUDE.md`'s decisions log), which held
 a shell orchestrator, `lllm-*` commands, and a Rich/plain terminal CLI
 (`llama_console.py`, backing `lllm-profiles`/`lllm-check`/`lllm-vram`) with
@@ -210,5 +245,11 @@ knowing about when navigating the filesystem directly:
 - **`apps/openwebui/backend/.venv/`** — the fork backend's own virtualenv,
   bootstrapped by `make backend` on first run. The only Python virtualenv in
   this repo since Phase 2c deleted the root `.venv/` along with `scripts/`.
+- **`apps/web/node_modules/`**, **`apps/web/dist/`**, **`apps/web/.astro/`** —
+  the new frontend's dependency tree, production build output (mounted at
+  `/next` when present — see `apps/openwebui/backend/open_webui/main.py`),
+  and Astro's generated type cache. `bun.lock` beside them **is** tracked.
+- **`apps/web/test-results/`**, **`apps/web/playwright-report/`** — Playwright
+  output from `bun run test:e2e`.
 - **`__pycache__/`** — Python bytecode cache, scattered under the vendored
   fork.
