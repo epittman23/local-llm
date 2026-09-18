@@ -21,7 +21,7 @@
 | 2 | Shell removal → Python + Makefile | ✅ done, verified on real hardware | 2026-09-18 |
 | 3 | Astro + React + shadcn scaffold, dual-serve | ✅ done | 2026-09-18 |
 | 4 | Shared foundation: API, auth, stores, i18n, app shell | ✅ done | 2026-09-18 |
-| 5 | Benchmarks surface (proves the pattern) | ☐ not started | — |
+| 5 | Benchmarks surface (proves the pattern) | ✅ done | 2026-09-18 |
 | 6 | Public/static surfaces: auth, error, share, watch | ☐ not started | — |
 | 7 | Workspace surface | ☐ not started | — |
 | 8 | Admin surface | ☐ not started | — |
@@ -34,6 +34,60 @@ Status values: `☐ not started` · `▶ in progress` · `✅ done` · `⏸ bloc
 ### Current session notes
 
 _Overwrite this block at the end of every session._
+
+**2026-09-18 (Phase 5, new session).** All seven Benchmarks pages built,
+verified, and committed — the gate, Serve, the new Profiles CRUD panel,
+Live, Tests, Compare, Answers, Report, and Tune — closing out the phase in
+one session on top of Phase 4's foundation. Each page landed as its own
+commit with its own Playwright coverage (12 tests total in
+`e2e/benchmarks.spec.ts`, plus the two from Phase 4), `astro check` clean
+throughout, `bun run build` after every commit.
+
+**The one deliberate gap**: "download weights" (part of Serve's own
+checklist bullet) is not built. There is no backend HTTP endpoint for it —
+`weights.py`/`FetchProcess` exist per Phase 2a, but nothing mounts them at
+a route (grepped `routers/benchmarks/*.py` directly, found nothing).
+Building a frontend control with nothing to call would be exactly the kind
+of aspiration-as-fact this project's own maintenance policy rules out.
+`docs/model-downloads.md` stays the documented interim path, as Phase 2c
+already established.
+
+**The Profiles CRUD panel is new UI, not a port** — worth restating since
+it's easy to miss reading the plan alone. Decision 11 locked "full CRUD
+from the Serve page" back on 2026-09-14, and the backend router
+(`routers/benchmarks/profiles.py`) has had 20 passing HTTP-layer tests
+since Phase 2a, but `Serve.svelte` itself only ever built a read-only
+profile picker — no Svelte reference UI exists for create/clone/edit/
+archive/set-default. Built directly against that already-tested backend
+contract instead.
+
+**Two real, worth-remembering findings from testing, not from reading
+the code.** First: an early Profiles-panel test mocked the same URL
+pattern for both the profiles *list* endpoint (an array) and a single
+profile's own GET (used by Edit, one object) — exactly the kind of mock
+imprecision that would have hidden a real crash (`ProfilesPanel`
+destructuring an array's `.version`, undefined) had a screenshot not been
+taken before calling it done. Fixed, and turned into permanent regression
+coverage rather than only fixed in passing. Second: TanStack Table (pinned
+to 8.21.3 after the default install resolved a breaking 9.x with a
+renamed API) defaults a numeric column's first sort click to descending,
+unlike `Compare.svelte`'s own hand-rolled sort, which always started
+ascending — kept rather than fought, and both directions are asserted in
+the test rather than assuming ascending-first.
+
+**One security-relevant hardening added beyond the port**: both Report and
+Tune render backend-generated markdown via `marked` + `{@html}` in the
+Svelte source, unsanitized. The React port runs both through DOMPurify
+before `dangerouslySetInnerHTML` — not because this content is expected to
+be adversarial (it's a statistical report from recorded benchmark data on
+an admin-gated page), but because sanitizing costs nothing and a
+security-review hook flagged the raw injection while writing it. Verified
+directly: a `<script>` tag embedded in a mocked report response is stripped
+and never executes.
+
+Phase 5 is now ✅ done. **Next action**: Phase 6 (public/static surfaces —
+`/auth`, `/error`, `/s/[id]`, `/watch`), the first phase touching
+unauthenticated pages.
 
 **2026-09-18 (Phase 4, new session).** Most of the shared foundation is
 built and verified; one piece is paused on a human decision, so the phase
@@ -883,18 +937,32 @@ Phase 2 is now ✅ done.
       (`src/components/COMMON_MAPPING.md`; keep custom: CodeMirror,
       TipTap, PDF/docx/pptx previews, emoji picker, pan/zoom, Valves).
 
-## Phase 5 — Benchmarks surface
-- [ ] Gate: admin **and** `features.enable_benchmarks !== false`.
-- [ ] Serve (+ health, GPU telemetry, profile list, download weights).
-- [ ] **Profiles panel** — CRUD + version history rendering `notes`;
-      `name` visibly read-only.
-- [ ] Live (polls — `refetchInterval`; Kill → `AlertDialog`).
-- [ ] Tests (SSE). Compare (`Table` + TanStack Table). Report.
-- [ ] Answers — build a minimal transcript renderer; do **not** port
-      `chat/Messages.svelte` for it.
-- [ ] Tune (SSE status is a full-object re-send every ~2s; diff, don't
-      append).
-- [ ] Playwright per page.
+## Phase 5 — Benchmarks surface ✅
+- [x] Gate: admin **and** `features.enable_benchmarks !== false`.
+      `routes/benchmarks/useBenchmarksGate.ts`, wired at `BenchmarksLayout`
+      so it covers every tab in one place.
+- [x] Serve (+ health, profile list). **GPU telemetry lives on the Live
+      page, not Serve** — Serve.svelte itself never had it either;
+      `checkServe` (health/port/model/profile) is what Serve actually
+      shows. **Download weights is NOT built**: no backend HTTP endpoint
+      exists for it (`weights.py`/`FetchProcess` are there per Phase 2a,
+      but nothing mounts them at a route — grepped `routers/benchmarks/
+      *.py` directly). `docs/model-downloads.md` remains the documented
+      interim path.
+- [x] **Profiles panel** — CRUD + version history rendering `notes`;
+      `name` permanently read-only. Genuinely new UI, not a port:
+      Serve.svelte never built one, even though the backend CRUD router
+      (Phase 2a) has been there all along — see the decisions log below.
+- [x] Live (polls — `refetchInterval`; Kill → `AlertDialog`).
+- [x] Tests (SSE). Compare (`Table` + TanStack Table, pinned to the
+      stable 8.x API — see the decisions log below). Report (markdown +
+      figures, sanitized with DOMPurify as defense in depth).
+- [x] Answers — a minimal transcript renderer (plain preformatted text),
+      not a port of `chat/Messages.svelte`.
+- [x] Tune (SSE status is a full-object re-send every ~2s; diffed, not
+      appended — `setStatus(data)` replaces the whole object each time).
+- [x] Playwright per page — `e2e/benchmarks.spec.ts`, 12 tests covering
+      all seven pages plus the gate's admit/deny paths.
 
 ## Phase 6 — Public/static surfaces
 - [ ] `/auth` (incl. OAuth callback token handling), `/error`, `/s/[id]`

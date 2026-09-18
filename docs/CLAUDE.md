@@ -300,6 +300,63 @@ All commits should use conventional commit style and stay focused on one topic. 
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-09-18** (fifth): Closed out Phase 5 of the migration
+  (`docs/migration-plan.md`): the Benchmarks surface, all seven pages
+  (Serve, Live, Tests, Compare, Answers, Report, Tune) plus the admin/
+  feature-flag gate, built on top of Phase 4's shared foundation in one
+  session. Each page is a faithful port of its Svelte source, verified with
+  its own Playwright coverage against a real dev server (mocked backend
+  responses, since this environment has no running backend).
+
+  **Two deviations from a straight port, both deliberate.** First,
+  "download weights" (part of Serve's own line in the Phase 5 checklist)
+  is not built: `routers/benchmarks/*.py` has no HTTP endpoint for it
+  (`weights.py`/`FetchProcess` exist per Phase 2a, but nothing mounts
+  them at a route — grepped directly, found nothing). Building a frontend
+  control with no backend to call would be exactly the kind of aspiration
+  this project's maintenance policy rules out documenting as fact;
+  `docs/model-downloads.md` stays the documented interim path. Second, the
+  Profiles CRUD panel (list, create, clone, edit-as-new-version,
+  set-display-name, set-default, archive/unarchive, version history) is
+  genuinely new UI, not a port: decision 11 (2026-09-14) locked "full CRUD
+  from the Serve page," and the backend router has carried 20 passing
+  HTTP-layer tests since Phase 2a, but `Serve.svelte` itself only ever
+  built a read-only profile picker. Built directly against that
+  already-tested backend contract rather than a Svelte reference that
+  doesn't exist.
+
+  **Two real findings from testing, not from reading the code.** An early
+  Profiles-panel test mocked one URL pattern for both the profiles *list*
+  endpoint (an array) and a single profile's own GET (used by Edit, one
+  object) — exactly the mock imprecision that would have hidden a real
+  crash (`ProfilesPanel` destructuring an array's `.version`, undefined)
+  had a screenshot not been taken before calling it done; fixed, and kept
+  as permanent regression coverage rather than only fixed in passing.
+  Separately, `@tanstack/react-table`'s default install resolved 9.2.4, a
+  breaking major version with a renamed API (`useReactTable` →
+  `ReactTable`, `getCoreRowModel` → `createCoreRowModel`); pinned to the
+  stable, widely-documented 8.21.3 instead. While building the Compare
+  page's sort on that stable API, found that TanStack Table defaults a
+  numeric column's first click to descending (highest first) — a real,
+  useful difference from `Compare.svelte`'s own hand-rolled sort, which
+  always started ascending regardless of column type — kept rather than
+  fought, and both directions are asserted in the test.
+
+  **One security hardening added beyond the port.** Both Report and Tune
+  render backend-generated markdown via `marked` + Svelte's own
+  unsanitized `{@html}`. The React port runs both through DOMPurify before
+  `dangerouslySetInnerHTML` instead — not because this content is expected
+  to be adversarial (a statistical report from recorded benchmark data, on
+  an admin-gated page), but because a security-review hook flagged the raw
+  injection while writing it, and sanitizing costs nothing. Verified
+  directly: a `<script>` tag embedded in a mocked report response is
+  stripped from the rendered output and never executes.
+
+  Verified per page: `astro check` 0 errors, `bun run build`, and a
+  dedicated Playwright test exercising that page's real interaction (SSE
+  streaming for Tests/Tune, an `AlertDialog` confirmation for Live's Kill
+  and Tune's Stop, TanStack Table sorting for Compare, the full CRUD flow
+  for Profiles) — 12 new tests in `e2e/benchmarks.spec.ts`.
 - **2026-09-18** (fourth): Closed out Phase 4 of the migration
   (`docs/migration-plan.md`): the shared foundation `apps/web/`'s later
   surfaces (Phases 5-10) build on. All 30 `src/lib/apis/**` modules ported
