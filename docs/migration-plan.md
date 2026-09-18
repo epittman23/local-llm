@@ -18,7 +18,7 @@
 |---|---|---|---|
 | 0 | Groundwork and safety net | ✅ done | 2026-09-14 |
 | 1 | Monorepo merge (submodule → vendored tree) | ✅ done, verified on-machine | 2026-09-14 |
-| 2 | Shell removal → Python + Makefile | ⏸ blocked (GPU verification) | 2026-09-18 |
+| 2 | Shell removal → Python + Makefile | ✅ done, verified on real hardware | 2026-09-18 |
 | 3 | Astro + React + shadcn scaffold, dual-serve | ☐ not started | — |
 | 4 | Shared foundation: API, auth, stores, i18n, app shell | ☐ not started | — |
 | 5 | Benchmarks surface (proves the pattern) | ☐ not started | — |
@@ -253,11 +253,25 @@ has taken every other time real hardware was on the line (see
 enough in blast radius to ask separately rather than assume one implies the
 other.
 
-**Next action:** get the owner's sign-off (or have them run it themselves)
-on the GPU-touching half of Phase 2c's exit criteria — Serve starting and
-stopping a real server, Tune launching a real candidate, a telemetry row
-landing in Postgres from that run — then mark Phase 2 ✅ done and move to
-Phase 3 (Astro scaffold).
+**2026-09-18 (later, same session).** Owner signed off in-session; the
+GPU-touching half ran. Real `qwen25c` load through `ServeProcess` directly
+(Serve page's own code path, not the HTTP layer — no admin credentials
+this session, and reading the `user` table to mint one was refused by the
+auto-mode PII classifier), served correctly, recorded under `config_id
+71bc58dd` — the golden value for this profile, now reproduced by an actual
+load rather than only by the ported-fingerprint tests — closed clean, GPU
+released. One real Tune candidate through `tune_probe.Server` (`qwen25c`,
+`LLAMA_THREADS=4`), served correctly under its own predicted `config_id`
+(`f04d84af`). One loose end found and left open rather than fixed: the
+Tune run's `benchmark_run` row never closed (`ended_at` still NULL with
+the telemetry process confirmed gone) — `tune_probe.Server.stop()`'s
+SIGINT-first path appears able to skip the telemetry shutdown
+`ServeProcess.stop()` normally runs. Out of scope for this phase to chase
+further; noted for whoever next touches `tune_probe.py` or
+`telemetry_recorder.py`.
+
+**Phase 2 is now ✅ done.** Next action: Phase 3 (Astro + React + shadcn
+scaffold, dual-serve).
 
 ---
 
@@ -451,7 +465,7 @@ From `docs/CLAUDE.md`:
       later moves:** gitignored artifacts (`.venv`, `node_modules`) do not
       follow a `git pull` across a rename.
 
-## Phase 2 — Shell removal → Python + Makefile ▶
+## Phase 2 — Shell removal → Python + Makefile ✅
 
 **Highest-risk phase** because of the fingerprint: every `benchmark_*`
 row is keyed by an 8-char `config_id`, and a one-character drift silently
@@ -618,14 +632,29 @@ real, already-pinned Postgres volume — see the 2026-09-18 decisions-log
 entry for the exact checks); profiles seeded and resolving ✅ (`/api/v1/
 benchmarks/profiles/` returned 401, not 500, under the Makefile-built
 `DATABASE_URL`, confirming the DB connection and auth dependency both
-work). **Still open, not exercised this session**: Serve starting/stopping
-a real `llama-server`; Tune launching a real candidate; telemetry rows
-written from an actual run. Same posture as every other GPU-touching
-verification in this project (see `docs/CLAUDE.md`'s 2026-09-06 entry) —
-needs the owner's own run, or explicit sign-off to do it in-session.
-`config_id` from seeded rows equalling every golden value was already
-verified in Phase 2a and nothing in 2c touches the fingerprint, so it was
-not re-run.
+work); Serve starts/stops a server ✅ (real `qwen25c` load, `/v1/models`
+answered, `config_id 71bc58dd` — the golden value — recorded and closed
+clean, GPU released; see the 2026-09-18 (second) decisions-log entry); Tune
+launches candidates ✅ (`tune_probe.Server` launched one real candidate,
+served correctly under its own predicted `config_id`); telemetry rows
+written ✅ for both. `config_id` from seeded rows equalling every golden
+value was already verified in Phase 2a and nothing in 2c touches the
+fingerprint, so it was not re-run — but the Serve run above reproduced one
+golden id from a real load, which is closer to this criterion's intent than
+the existing golden-value tests alone.
+
+**One loose end, not blocking:** the Tune verification run's
+`benchmark_run` row never closed (`ended_at`/`ended_reason` both still
+NULL, confirmed twice a minute apart with the telemetry process already
+gone) — `tune_probe.Server.stop()`'s SIGINT-first path can apparently skip
+the telemetry shutdown `ServeProcess.stop()` would otherwise run. See the
+2026-09-18 (second) decisions-log entry for what was checked and what
+wasn't; worth a second data point and a read of
+`telemetry_recorder.py`'s main-loop exit conditions before deciding it's a
+real bug in Tune's own stop path, which would be its own fix, not part of
+this phase.
+
+Phase 2 is now ✅ done.
 
 ## Phase 3 — Astro + React + shadcn scaffold, dual-serve
 - [ ] `apps/web/`: Astro, `output: 'static'`, `@astrojs/react`, TS strict.

@@ -375,6 +375,54 @@ All commits should use conventional commit style and stay focused on one topic. 
   same change (dozens of now-dead `lllm-*`/`scripts/shell/*` references
   either replaced with their current equivalent or left as explicitly
   past-tense history), per the maintenance policy above.
+- **2026-09-18** (second): The GPU-touching half of Phase 2c's exit criteria
+  the entry above left open — got explicit sign-off in-session and was run.
+  **Serve, real hardware:** `serving/profiles.py`'s `resolve()` and
+  `serving/launcher.py`'s `ServeProcess`, invoked directly (no HTTP/auth
+  layer — this session has no admin credentials, and reading the `user`
+  table to mint one was refused by the auto-mode PII classifier; direct
+  invocation exercises the identical code the router calls, just not the
+  auth dependency around it) against the `qwen25c` profile: the real
+  4.36 GiB GGUF loaded, `/v1/models` answered with the model's real
+  metadata (7.6B params, Q4_K Medium), the telemetry recorder started and
+  recorded run 103 under `config_id 71bc58dd` — **the exact golden
+  fingerprint this profile has carried since the 2026-09-04 entry below**,
+  now reproduced by a real load rather than only by the golden-value tests.
+  `ServeProcess.stop()` then stopped the server, closed the recorder run
+  (`ended_reason='clean'`), released the GPU (confirmed via `nvidia-smi`,
+  0 MiB after), and left the pinned `open-web-ui_postgres-data` volume
+  otherwise untouched (37+1 configs now, volume identity unchanged).
+  **Tune, real hardware:** `tune_probe.Server` (the exact class `tune.py`'s
+  Sweep drives per visit) launched one real candidate — `qwen25c` with a
+  `LLAMA_THREADS=4` override — via `config_id_of()` (predicted `f04d84af`)
+  then `.start()`/`.wait()`: ready in 3.0s, served correctly, recorded under
+  the *same* `f04d84af` its own prediction named, closing the loop the
+  2026-09-17 `tune_schedule.py` entry above documents but had not yet
+  watched happen against real hardware.
+  **One real finding, not fixed here.** `tune_probe.Server.stop()`'s
+  SIGINT-first path (`self.cmd.interrupt()`, waiting up to 20s for the
+  process to exit before ever calling `self.cmd.stop()`) took the fast path
+  in this run — the candidate exited well inside the window — which means
+  `ServeProcess.stop()`'s own telemetry-shutdown sequence never ran.
+  `close_run()` is supposed to fire regardless, from
+  `telemetry_recorder.py`'s own `finally: finish(...)`, but this run's row
+  (104) still shows `ended_at IS NULL` / `ended_reason IS NULL` with the
+  telemetry process itself confirmed gone from the process table, checked
+  twice, a minute apart. The one GPU sample it did record is intact and
+  correctly attributed. Left as an open question rather than patched,
+  since Phase 2c's job was the shell-to-Makefile port, not tune_probe.py's
+  shutdown sequencing, and this needs its own look at
+  `telemetry_recorder.py`'s main loop (specifically what actually breaks
+  it out of the sample loop on a dead port, versus what the docstring
+  claims) before touching it. Worth another data point before deciding it's
+  a real bug and not a one-off: this is the only sweep-stop path exercised
+  this session.
+  No schema change, no `benchmark_schema_note`: nothing here changed what a
+  stored row means, only that two of them now exist that did not before.
+  GPU idle and no stray processes confirmed after both runs; Postgres
+  brought back down afterward the same way `make backend` would have.
+  `docs/migration-plan.md`'s Phase 2c exit criteria and status board
+  updated to close out the "still open" language above.
 - **2026-09-14**: Merged the Open WebUI fork into this repo as a monorepo,
   reversing the submodule decision in the 2026-09-07 (second) entry below.
 
