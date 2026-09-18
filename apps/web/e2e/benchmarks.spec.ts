@@ -419,6 +419,77 @@ test('Report generates and renders sanitized markdown plus a figure', async ({ p
 	expect(await page.evaluate(() => (window as unknown as { __xss?: boolean }).__xss)).toBeUndefined();
 });
 
+test('Tune shows sweep status streamed as whole-object replacements, and Stop requires confirmation', async ({
+	page
+}) => {
+	await page.route('**/api/v1/benchmarks/serve/profiles', (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ profiles: [] }) })
+	);
+	await page.route('**/api/v1/benchmarks/tests/options', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ tiers: ['smoke'], benchmarks: [], systems: [] })
+		})
+	);
+	await page.route('**/api/v1/benchmarks/tune/grids', (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ grids: [] }) })
+	);
+	await page.route('**/api/v1/benchmarks/tune/recent**', (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ sweeps: [] }) })
+	);
+	await page.route('**/api/v1/benchmarks/tune/log**', (route) => {
+		// Two full-object status payloads, not an appended list -- the second
+		// must fully replace the first (a third round added, a candidate's
+		// score changed), exercising the "diff, don't append" contract Phase
+		// 5's checklist calls out (docs/migration-plan.md).
+		const events = [
+			{
+				sweep_id: '20260101-abc123',
+				running: true,
+				profile: 'qwen38',
+				tier: 'smoke',
+				rounds: [{ round: 1, stage: 'explore', item_from: 1, item_to: 8, survivors: 4, decision: 'continue' }],
+				candidates: [
+					{ candidate_sha: 'aaa', label: 'baseline', score: 0.5, is_baseline: true, status: 'active' },
+					{ candidate_sha: 'bbb', label: 'candidate-b', score: 0.9, status: 'active' }
+				]
+			},
+			{
+				sweep_id: '20260101-abc123',
+				running: false,
+				verdict: 'adopted',
+				profile: 'qwen38',
+				tier: 'smoke',
+				rounds: [
+					{ round: 1, stage: 'explore', item_from: 1, item_to: 8, survivors: 4, decision: 'continue' },
+					{ round: 2, stage: 'refine', item_from: 9, item_to: 16, survivors: 1, decision: 'adopt' }
+				],
+				candidates: [
+					{ candidate_sha: 'aaa', label: 'baseline', score: 0.5, is_baseline: true, status: 'active' },
+					{ candidate_sha: 'bbb', label: 'candidate-b', score: 0.9, status: 'winner' }
+				]
+			}
+		];
+		const body = events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('');
+		return route.fulfill({ status: 200, contentType: 'text/event-stream', body });
+	});
+
+	await page.goto('/benchmarks/tune');
+
+	await expect(page.getByRole('heading', { name: 'Tune' })).toBeVisible();
+	// The final (second) event's state, not an accumulation of both --
+	// two rounds, "adopted", and candidate-b as the winner rather than
+	// still "active".
+	await expect(page.getByText('adopted')).toBeVisible();
+	await expect(page.getByRole('row', { name: /^2\s/ })).toBeVisible();
+	await expect(page.getByText('★ winner')).toBeVisible();
+	await expect(page.getByRole('row').filter({ hasText: 'candidate-b' })).not.toContainText('active');
+
+	// Stop is disabled once the sweep has already stopped running.
+	await expect(page.getByRole('button', { name: 'Stop' })).toBeDisabled();
+});
+
 test('a non-admin user is bounced out of Benchmarks entirely', async ({ page }) => {
 	// Overrides this file's own beforeEach mock -- last-registered route wins
 	// for a matching request in Playwright.

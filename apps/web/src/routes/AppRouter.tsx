@@ -7,6 +7,7 @@ import { LivePage } from '@/routes/benchmarks/LivePage';
 import { ReportPage } from '@/routes/benchmarks/ReportPage';
 import { ServePage } from '@/routes/benchmarks/ServePage';
 import { TestsPage } from '@/routes/benchmarks/TestsPage';
+import { TunePage } from '@/routes/benchmarks/TunePage';
 import { LegacyFallback } from '@/routes/LegacyFallback';
 import { PlaceholderPage } from '@/routes/PlaceholderPage';
 import { routePaths } from '@/routes/routePaths';
@@ -49,10 +50,7 @@ const router = createBrowserRouter(
 						{ path: routePaths.benchmarksCompare, element: <ComparePage /> },
 						{ path: routePaths.benchmarksAnswers, element: <AnswersPage /> },
 						{ path: routePaths.benchmarksReport, element: <ReportPage /> },
-						{
-							path: routePaths.benchmarksTune,
-							element: <PlaceholderPage title="Tune" phase="Phase 5 (later)" />
-						}
+						{ path: routePaths.benchmarksTune, element: <TunePage /> }
 					]
 				}
 			]
