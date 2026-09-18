@@ -370,6 +370,55 @@ test('Answers lists results and renders a selected transcript', async ({ page })
 	await expect(page.getByText('71bc58dd')).toBeVisible();
 });
 
+test('Report generates and renders sanitized markdown plus a figure', async ({ page }) => {
+	await page.route('**/api/v1/benchmarks/tests/options', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ tiers: ['smoke'], benchmarks: ['humaneval'], systems: [] })
+		})
+	);
+	await page.route('**/api/v1/benchmarks/report/', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				markdown_url: '/api/v1/benchmarks/report/files/2026-01-01-abc123/report.md',
+				figures: ['/api/v1/benchmarks/report/files/2026-01-01-abc123/fig1.png']
+			})
+		})
+	);
+	await page.route('**/api/v1/benchmarks/report/files/2026-01-01-abc123/report.md', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'text/plain',
+			body: '# Serving comparison\n\n<script>window.__xss = true</script>\n\nqwen38 leads on pass rate.\n'
+		})
+	);
+	// A 1x1 transparent PNG, just enough for the browser to accept it as a
+	// real image response.
+	const onePixelPng = Buffer.from(
+		'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+		'base64'
+	);
+	await page.route('**/api/v1/benchmarks/report/files/2026-01-01-abc123/fig1.png', (route) =>
+		route.fulfill({ status: 200, contentType: 'image/png', body: onePixelPng })
+	);
+
+	await page.goto('/benchmarks/report');
+
+	await expect(page.getByRole('heading', { name: 'Report' })).toBeVisible();
+	await page.getByRole('button', { name: 'Generate' }).click();
+
+	await expect(page.getByRole('heading', { name: 'Serving comparison' })).toBeVisible();
+	await expect(page.getByText('qwen38 leads on pass rate.')).toBeVisible();
+	await expect(page.locator('img[alt$="fig1.png"]')).toBeVisible();
+	// DOMPurify stripped the <script> tag -- its text must not appear as
+	// literal markup, and it must not have actually executed.
+	await expect(page.locator('script:has-text("__xss")')).toHaveCount(0);
+	expect(await page.evaluate(() => (window as unknown as { __xss?: boolean }).__xss)).toBeUndefined();
+});
+
 test('a non-admin user is bounced out of Benchmarks entirely', async ({ page }) => {
 	// Overrides this file's own beforeEach mock -- last-registered route wins
 	// for a matching request in Playwright.
