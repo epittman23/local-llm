@@ -4,6 +4,7 @@ import { Outlet } from 'react-router';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useAuthGate } from '@/lib/auth/useAuthGate';
 import { useUIStore } from '@/lib/stores/uiStore';
 import { cn } from '@/lib/utils';
 import { SidebarContent } from './Sidebar';
@@ -13,11 +14,30 @@ import { SidebarContent } from './Sidebar';
  * a collapsible desktop sidebar, a Sheet-based mobile drawer sharing the same
  * nav content, and the route's own element in <Outlet />. Reach-for-this-first
  * per the shadcn skill's own mobile-nav recipe (Sheet + Button + Separator).
+ *
+ * Also the route gate: every route in AppRouter.tsx is a child of AppShell,
+ * so gating here (rather than per-route) covers all of them at once, the
+ * same way apps/openwebui/src/routes/(app)/+layout.svelte gates every page
+ * under its route group in one place.
  */
 export function AppShell() {
+	const authStatus = useAuthGate();
 	const sidebarOpen = useUIStore((state) => state.sidebarOpen);
 	const setSidebarOpen = useUIStore((state) => state.setSidebarOpen);
 	const [mobileOpen, setMobileOpen] = useState(false);
+
+	// 'pending': the session bootstrap (lib/auth/session.ts) hasn't resolved
+	// yet -- render nothing rather than flash the shell before we know if
+	// there's a user. 'anonymous': useAuthGate's effect is already navigating
+	// away to /auth; still render nothing so nothing protected flashes during
+	// that redirect's own round trip.
+	if (authStatus !== 'authenticated') {
+		return (
+			<div className="flex h-svh w-full items-center justify-center">
+				<p className="text-muted-foreground text-sm">Loading…</p>
+			</div>
+		);
+	}
 
 	return (
 		<div className="flex h-svh w-full">

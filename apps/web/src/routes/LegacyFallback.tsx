@@ -9,31 +9,38 @@ import { useLocation } from 'react-router';
  * not actually missing -- so the default behavior a "not found" 404 implies
  * would be wrong for nearly every path this ever fires on.
  *
- * TODO(human): implement resolveLegacyFallback. It's called once per mount
- * with the unmatched pathname (e.g. "/c/abc123", "/admin/users",
- * "/benchmarks/tune") and decides what actually happens next.
+ * Policy: unconditional bounce to the SvelteKit app at the same path (a full
+ * `window.location` navigation, not a react-router one -- react-router can't
+ * render a page it doesn't own). Chosen over the two more conservative
+ * options -- an explicit allowlist/pattern set with an in-app 404 for
+ * genuinely dead paths, or probing Svelte first before bouncing -- because
+ * this migration is still at its very first surface (Phase 4 of 11):
+ * routePaths.ts owns four paths total, so "not in routePaths" and "not a
+ * real path" are nowhere near the same set yet, and would need constant
+ * upkeep to even approximate each other at this stage for no real benefit.
  *
- * Some options, not exhaustive:
- *  - Always send it to the SvelteKit app at the same path (a full
- *    `window.location` navigation, not a react-router one -- react-router
- *    can't render a page it doesn't own). Simplest, and correct today since
- *    every real path IS still Svelte-owned except routePaths' own list.
- *  - Keep an explicit allowlist or pattern set of paths known to have NO
- *    Svelte-side counterpart (typos, truly removed routes) and show an
- *    in-app "not found" for those, falling back to Svelte for everything
- *    else. More correct long-term, since by Phase 11 most paths will be
- *    React-owned and an unconditional bounce back to a deleted Svelte app
- *    would be wrong the other direction.
- *  - Something else -- e.g. probing whether the path 404s in Svelte too
- *    before bouncing, to avoid a redirect loop on a genuinely dead link.
+ * Checked, not assumed, that this can't loop: apps/openwebui/src/routes/
+ * +error.svelte (SvelteKit's own catch-all) renders a plain "{status}:
+ * {message}" in place -- it's a client-side error render, not a redirect --
+ * and nothing in the fork's own source references `/next` except main.py's
+ * mount itself (grepped for it directly). So a path unmatched by both apps
+ * lands on Svelte's bare error page exactly once, not a loop.
  *
- * Whatever this becomes also has to consider: an infinite bounce is possible
- * if Svelte's own router ever forwards an unrecognized path back to `/next`
- * (worth checking apps/openwebui/src/routes/+layout.svelte's 404 handling,
- * if any, before assuming a one-way redirect is safe).
+ * Revisit this once that stops being true -- concretely, once more paths are
+ * React-owned than not (Phase 8+ or so), an unconditional bounce starts being
+ * wrong in the other direction: a typo'd or genuinely dead path would bounce
+ * to an ever-shrinking Svelte app instead of showing this app's own 404.
+ * That's also the point at which whoever moves a surface out of Svelte should
+ * check whether Svelte picks up a redirect *toward* `/next` for it (it
+ * doesn't today, per the grep above, but that's a fact about today, not a
+ * guarantee) -- this policy's safety argument stops holding the moment that
+ * changes, and would need re-deriving, not just re-asserting.
  */
-function resolveLegacyFallback(pathname: string): void {
-	// TODO(human): implement -- see the block comment above.
+// Exported for LegacyFallback.test.tsx -- a mocked window.location.assign is
+// the only way to check this without a real backend and SvelteKit build to
+// bounce to.
+export function resolveLegacyFallback(pathname: string): void {
+	window.location.assign(pathname);
 }
 
 export function LegacyFallback() {

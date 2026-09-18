@@ -1,5 +1,29 @@
 import { expect, test } from '@playwright/test';
 
+const fakeUser = {
+	id: 'test-user',
+	email: 'test@example.com',
+	name: 'Test User',
+	role: 'user',
+	profile_image_url: '',
+	expires_at: Math.floor(Date.now() / 1000) + 3600
+};
+
+// The route gate (lib/auth/useAuthGate.ts) redirects anything but an
+// authenticated session to /auth -- which is still a SvelteKit page this
+// dev server (no backend running behind it) can't actually serve, so every
+// test here needs a session or it would just loop against a 404. Mocking
+// the one request session.ts's initAuth() makes (GET .../auths/) stands in
+// for a real backend the same way App.test.tsx's fetch mock does.
+test.beforeEach(async ({ page, context }) => {
+	await context.addInitScript(() => {
+		window.localStorage.setItem('token', 'test-token');
+	});
+	await page.route('**/api/v1/auths/', (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(fakeUser) })
+	);
+});
+
 test('the app shell renders the home route with a working sidebar link', async ({ page }) => {
 	await page.goto('/');
 	await expect(page.getByRole('heading', { name: 'Chat' })).toBeVisible();

@@ -1,9 +1,40 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import App from './App';
 
+const fakeUser = {
+	id: 'test-user',
+	email: 'test@example.com',
+	name: 'Test User',
+	role: 'user',
+	profile_image_url: '',
+	expires_at: Math.floor(Date.now() / 1000) + 3600
+};
+
 describe('App', () => {
+	beforeEach(() => {
+		// The route gate (lib/auth/useAuthGate.ts, ported from apps/openwebui's
+		// own (app)/+layout.svelte) redirects to /auth for any status other than
+		// 'authenticated' -- so exercising the shell at all needs a session.
+		// localStorage.token is what lib/auth/session.ts's initAuth() bootstraps
+		// from; mocking fetch stands in for the real getSessionUser() call it
+		// makes with that token, since there's no backend in this test.
+		localStorage.setItem('token', 'test-token');
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue({
+				ok: true,
+				json: async () => fakeUser
+			})
+		);
+	});
+
+	afterEach(() => {
+		localStorage.clear();
+		vi.unstubAllGlobals();
+	});
+
 	it('renders the app shell and the home route', async () => {
 		render(<App />);
 
