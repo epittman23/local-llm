@@ -154,6 +154,58 @@ test('History shows the version table for a profile', async ({ page }) => {
 	await expect(page.getByRole('cell', { name: 'the dense baseline profile' })).toBeVisible();
 });
 
+test('Live shows the empty state when nothing is recording', async ({ page }) => {
+	await page.route('**/api/v1/benchmarks/live/', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ run: null, summary: {}, deltas: {}, requests: 0, recent_samples: [], warning: null })
+		})
+	);
+
+	await page.goto('/benchmarks/live');
+
+	await expect(page.getByRole('heading', { name: 'Live' })).toBeVisible();
+	await expect(page.getByText('Nothing is currently being recorded')).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Kill' })).not.toBeVisible();
+});
+
+test('Live renders an active run and Kill requires AlertDialog confirmation', async ({ page }) => {
+	let killed = false;
+	await page.route('**/api/v1/benchmarks/live/', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				run: killed ? null : { model: 'qwen38', config_id: 'abc123', port: 8090 },
+				summary: { 'util avg': 42, 'vram_headroom_mib': 512 },
+				deltas: { prompt_tokens: 100 },
+				requests: 3,
+				recent_samples: [{ at: 1700000000, util_pct: 40, mem_used_mib: 5000, mem_total_mib: 6144 }],
+				warning: null
+			})
+		})
+	);
+	await page.route('**/api/v1/benchmarks/live/kill', (route) => {
+		killed = true;
+		return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ killed: true }) });
+	});
+
+	await page.goto('/benchmarks/live');
+
+	await expect(page.getByText('qwen38')).toBeVisible();
+	await expect(page.getByText('abc123')).toBeVisible();
+
+	await page.getByRole('button', { name: 'Kill' }).click();
+	await expect(page.getByRole('heading', { name: 'Kill active run' })).toBeVisible();
+	// AlertDialog, not Dialog, per Phase 5's own checklist wording -- clicking
+	// the trigger must not kill anything by itself.
+	await expect(page.getByText('the currently running server', { exact: false })).toBeVisible();
+
+	await page.getByRole('button', { name: 'Kill', exact: true }).last().click();
+	await expect(page.getByText('Nothing is currently being recorded')).toBeVisible();
+});
+
 test('a non-admin user is bounced out of Benchmarks entirely', async ({ page }) => {
 	// Overrides this file's own beforeEach mock -- last-registered route wins
 	// for a matching request in Playwright.

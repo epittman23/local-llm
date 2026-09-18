@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
 import { AppShell } from '@/components/layout/AppShell';
 import { BenchmarksLayout } from '@/routes/benchmarks/BenchmarksLayout';
+import { LivePage } from '@/routes/benchmarks/LivePage';
 import { ServePage } from '@/routes/benchmarks/ServePage';
 import { LegacyFallback } from '@/routes/LegacyFallback';
 import { PlaceholderPage } from '@/routes/PlaceholderPage';
@@ -39,10 +40,7 @@ const router = createBrowserRouter(
 						// as an index route's own element instead).
 						{ index: true, element: <Navigate to={routePaths.benchmarksServe} replace /> },
 						{ path: routePaths.benchmarksServe, element: <ServePage /> },
-						{
-							path: routePaths.benchmarksLive,
-							element: <PlaceholderPage title="Live" phase="Phase 5 (later)" />
-						},
+						{ path: routePaths.benchmarksLive, element: <LivePage /> },
 						{
 							path: routePaths.benchmarksTests,
 							element: <PlaceholderPage title="Tests" phase="Phase 5 (later)" />
