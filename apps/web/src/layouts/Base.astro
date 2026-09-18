@@ -1,0 +1,42 @@
+---
+import '@/styles/global.css';
+
+interface Props {
+	title?: string;
+}
+
+const { title = 'local-llm' } = Astro.props;
+---
+
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="robots" content="noindex,nofollow" />
+		<title>{title}</title>
+		<script is:inline>
+			// Anti-FOUC: set before first paint, mirroring apps/openwebui/src/app.html's
+			// own inline script (same localStorage.theme key, same class-on-<html>
+			// mechanism) so a shared cookie/localStorage-free preference isn't needed
+			// yet -- ports the mechanism now, not the theme picker UI (that's Phase 4).
+			(() => {
+				const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+				const theme = localStorage.theme || 'system';
+				document.documentElement.classList.add(theme === 'system' ? (prefersDark ? 'dark' : 'light') : theme);
+			})();
+		</script>
+	</head>
+	<body>
+		<slot />
+	</body>
+</html>
+
+<style is:global>
+	:root {
+		/* Updated at runtime by the UI-scale control once it exists (Phase 4);
+		   see apps/openwebui/src/app.css's own --app-text-scale for the
+		   original. Every consumer reads it with a `1` fallback, so it is
+		   safe to declare here before anything sets it. */
+		--app-text-scale: 1;
+	}
+</style>
