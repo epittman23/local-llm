@@ -5,6 +5,10 @@
 #                    including Ctrl-C.
 #   make frontend   the Open WebUI fork's frontend (vite dev, :5173),
 #                    proxying API/WS calls to :4000.
+#   make astro      the new Astro + React + shadcn/ui frontend (apps/web,
+#                    astro dev, :5174), proxying API/WS calls to :4000.
+#                    Dual-serve with `make frontend` during the migration --
+#                    see docs/migration-plan.md's Phase 3.
 #   make help       this text.
 #
 # Replaces scripts/shell/main.sh's lllm-backend/lllm-frontend, deleted along
@@ -21,14 +25,16 @@ SHELL := /bin/bash
 REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 BACKEND_DIR := $(REPO_ROOT)/apps/openwebui/backend
 FRONTEND_DIR := $(REPO_ROOT)/apps/openwebui
+WEB_DIR := $(REPO_ROOT)/apps/web
 COMPOSE := docker compose -f $(REPO_ROOT)/infra/docker-compose.yml
 LLLM_BACKEND_PORT ?= 4000
 
-.PHONY: help backend frontend
+.PHONY: help backend frontend astro
 
 help:
 	@echo "make backend   Postgres + Open WebUI fork backend (uvicorn --reload, :$(LLLM_BACKEND_PORT))"
 	@echo "make frontend  Open WebUI fork frontend (vite dev, :5173)"
+	@echo "make astro     Astro + React + shadcn/ui frontend (astro dev, :5174)"
 
 # One shell invocation for the whole recipe (line continuations, not separate
 # make lines) so the EXIT trap covers the real work below it, Ctrl-C
@@ -95,3 +101,17 @@ frontend:
 	@cd "$(FRONTEND_DIR)" && \
 	if [ ! -d node_modules ]; then CYPRESS_INSTALL_BINARY=0 bun install; fi && \
 	WEBUI_BACKEND_URL="http://localhost:$(LLLM_BACKEND_PORT)" bun run dev
+
+# astro dev always daemonizes (this Astro version's own CLI design, not a
+# choice made here): even a plain `astro dev` reports its dev server as
+# "background" and the wrapping process exits once it is up, leaving the
+# real server as an orphan with nothing left in the foreground for Ctrl-C to
+# reach. So this recipe starts it explicitly backgrounded, blocks on
+# `astro dev logs --follow` instead (a real foreground process Ctrl-C can
+# hit), and the trap runs `astro dev stop` on exit either way.
+astro:
+	@cd "$(WEB_DIR)" && \
+	if [ ! -d node_modules ]; then bun install; fi && \
+	trap 'bunx --bun astro dev stop' EXIT; \
+	WEBUI_BACKEND_URL="http://localhost:$(LLLM_BACKEND_PORT)" bunx --bun astro dev --background; \
+	bunx --bun astro dev logs --follow

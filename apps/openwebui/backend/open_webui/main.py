@@ -104,6 +104,7 @@ from open_webui.env import (
     LICENSE_KEY,
     LOG_FORMAT,
     MAX_BODY_LOG_SIZE,
+    NEXT_BUILD_DIR,
     # Redis
     REDIS_KEY_PREFIX,
     REDIS_URL,
@@ -3031,6 +3032,20 @@ def swagger_ui_html(*args, **kwargs):
 
 
 applications.get_swagger_ui_html = swagger_ui_html
+
+# The Astro + React + shadcn/ui frontend, mounted at /next as a preview
+# alongside the SvelteKit app -- must come before the SPA catch-all below,
+# since mount order decides which one a path resolves against. See
+# docs/migration-plan.md's Phase 3; the cutover in Phase 11 removes this and
+# repoints FRONTEND_BUILD_DIR at apps/web/dist instead.
+if os.path.exists(NEXT_BUILD_DIR):
+    app.mount(
+        '/next',
+        SPAStaticFiles(directory=NEXT_BUILD_DIR, html=True),
+        name='next-static-files',
+    )
+else:
+    log.info(f"Astro frontend build directory not found at '{NEXT_BUILD_DIR}'. Skipping /next mount.")
 
 if os.path.exists(FRONTEND_BUILD_DIR):
     pyodide_dir = FRONTEND_BUILD_DIR / 'pyodide'

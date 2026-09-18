@@ -252,6 +252,15 @@ FRONTEND_BUILD_DIR = Path(os.getenv('FRONTEND_BUILD_DIR', BASE_DIR / 'build')).r
 if FROM_INIT_PY:
     FRONTEND_BUILD_DIR = Path(os.getenv('FRONTEND_BUILD_DIR', OPEN_WEBUI_DIR / 'frontend')).resolve()
 
+# The Astro + React + shadcn/ui frontend's build output (apps/web/dist),
+# mounted at /next as a preview alongside the SvelteKit app rather than in
+# place of it -- see docs/migration-plan.md's Phase 3. BASE_DIR is
+# apps/openwebui/, so its parent is apps/, sibling to apps/web/. Cutover
+# (Phase 11) repoints FRONTEND_BUILD_DIR here and removes /next; until then
+# the two are independent build directories, not the same one under two
+# names.
+NEXT_BUILD_DIR = Path(os.getenv('NEXT_BUILD_DIR', BASE_DIR.parent / 'web' / 'dist')).resolve()
+
 ####################################
 # Database
 ####################################
