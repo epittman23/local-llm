@@ -14,3 +14,12 @@ test('the app shell renders the home route with a working sidebar link', async (
 	await expect(page.getByRole('heading', { name: 'Workspace' })).toBeVisible();
 	await expect(page).toHaveURL(/\/workspace$/);
 });
+
+test('a direct load of a deep link falls back to the app shell, not a 404', async ({ page }) => {
+	// src/middleware.ts's job: without it, Astro's static-output dev server
+	// 404s on any path getStaticPaths didn't enumerate (confirmed directly
+	// while building the routing shell). react-router then takes over once
+	// React mounts and renders the real route.
+	await page.goto('/workspace');
+	await expect(page.getByRole('heading', { name: 'Workspace' })).toBeVisible();
+});

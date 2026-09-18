@@ -1,6 +1,20 @@
 ---
 import Base from '@/layouts/Base.astro';
 import App from '@/components/App';
+
+// Named [...path] to match the migration plan's own naming. On its own this
+// does NOT give `astro dev` a working SPA fallback for a direct load or
+// refresh on a deep link (e.g. /workspace) -- confirmed directly: in
+// `output: 'static'`, Astro's dev server enumerates routes from
+// getStaticPaths the same way `astro build` does, so returning only the
+// root match here still 404s on anything but "/". src/middleware.ts is what
+// actually closes that gap (a 404 there gets rewritten to this route);
+// getStaticPaths stays as-is because a static build still only wants one
+// emitted page, and the middleware's rewrite is what makes dev behave the
+// same way production's SPAStaticFiles mount (main.py) already does.
+export function getStaticPaths() {
+	return [{ params: { path: undefined } }];
+}
 ---
 
 <Base>
