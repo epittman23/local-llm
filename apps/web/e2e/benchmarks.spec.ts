@@ -259,6 +259,49 @@ test('Tests runs a suite and streams per-item outcomes to completion', async ({ 
 	await expect(page.getByText('1 / 2 passed')).toBeVisible();
 });
 
+test('Compare renders rows generically and sorts on header click', async ({ page }) => {
+	await page.route('**/api/v1/benchmarks/tests/options', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ tiers: ['smoke'], benchmarks: ['humaneval'], systems: [] })
+		})
+	);
+	await page.route(/\/api\/v1\/benchmarks\/compare\/\?/, (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				rows: [
+					{ model: 'qwen38', config_id: 'aaa111', pass_rate: 0.72 },
+					{ model: 'qwen25c', config_id: 'bbb222', pass_rate: 0.91 }
+				],
+				notes: ['warning: two configurations differ in --n-cpu-moe']
+			})
+		})
+	);
+
+	await page.goto('/benchmarks/compare');
+
+	await expect(page.getByRole('heading', { name: 'Compare' })).toBeVisible();
+	await expect(page.getByText('72%')).toBeVisible();
+	await expect(page.getByText('91%')).toBeVisible();
+	await expect(page.getByText('warning: two configurations differ', { exact: false })).toBeVisible();
+
+	// TanStack Table defaults a numeric column's first click to descending
+	// (highest first) -- a real, deliberate difference from Compare.svelte's
+	// own hand-rolled sort, which always started ascending regardless of
+	// column type. Kept rather than fought, since "best result first" is the
+	// more useful default for a rate column and the checklist asked for
+	// TanStack Table specifically (docs/migration-plan.md).
+	const firstDataRow = page.getByRole('row').nth(1);
+	await page.getByRole('columnheader', { name: 'Pass Rate' }).click();
+	await expect(firstDataRow).toContainText('bbb222');
+
+	await page.getByRole('columnheader', { name: 'Pass Rate' }).click();
+	await expect(firstDataRow).toContainText('aaa111');
+});
+
 test('a non-admin user is bounced out of Benchmarks entirely', async ({ page }) => {
 	// Overrides this file's own beforeEach mock -- last-registered route wins
 	// for a matching request in Playwright.
