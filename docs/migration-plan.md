@@ -20,7 +20,7 @@
 | 1 | Monorepo merge (submodule → vendored tree) | ✅ done, verified on-machine | 2026-09-14 |
 | 2 | Shell removal → Python + Makefile | ✅ done, verified on real hardware | 2026-09-18 |
 | 3 | Astro + React + shadcn scaffold, dual-serve | ✅ done | 2026-09-18 |
-| 4 | Shared foundation: API, auth, stores, i18n, app shell | ▶ in progress | 2026-09-18 |
+| 4 | Shared foundation: API, auth, stores, i18n, app shell | ✅ done | 2026-09-18 |
 | 5 | Benchmarks surface (proves the pattern) | ☐ not started | — |
 | 6 | Public/static surfaces: auth, error, share, watch | ☐ not started | — |
 | 7 | Workspace surface | ☐ not started | — |
@@ -104,25 +104,44 @@ Vitest, and Playwright against a real dev server, not just written):
   kept-custom per the plan's own list / deferred to a later surface
   phase).
 
-**Paused, not done: the routing shell's actual fallback policy.**
-`src/routes/LegacyFallback.tsx` (rendered by the router's own `*` route,
-for any path that isn't one of `routePaths.ts`'s real React routes — which
-today is nearly every real path, since almost nothing has moved out of
-SvelteKit yet) has a `TODO(human)` on `resolveLegacyFallback()`: what
-actually happens when a user lands on a still-Svelte-owned path through
-the React app's own router. This is a real architecture decision with
-several defensible answers (see the TODO's own comment: unconditional
-bounce to Svelte at the same path, an explicit allowlist/pattern set with
-an in-app 404 for genuine dead links, or something that probes first to
-avoid a redirect loop) that shapes every later phase's own routing, so it
-was handed to the repo owner rather than decided here. Everything around
-it — the router, the layout shell, the placeholder routes — is finished
-and independent of this decision; only that one function's body is
-outstanding.
+**2026-09-18 (Phase 4, later the same session).** The two items left open
+above are closed. `resolveLegacyFallback` (`src/routes/LegacyFallback.tsx`)
+implements the unconditional-bounce policy — `window.location.assign`
+to the same path, verified safe against a redirect loop by reading
+`apps/openwebui/src/routes/+error.svelte` (renders its 404 in place, never
+redirects) and grepping the fork for any reference to `/next` (only
+`main.py`'s own mount). See the decisions log below for the full
+reasoning and what would make this stop being true.
 
-**Next action**: implement `resolveLegacyFallback` in
-`apps/web/src/routes/LegacyFallback.tsx`, then close out whatever's left
-of Phase 4's checklist below (it's now mostly ticked) and move to Phase 5.
+The route gate (`lib/auth/useAuthGate.ts`) was built alongside it, since
+the two are related: it ports `(app)/+layout.svelte`'s `gotoAuth()`
+faithfully, but **had to be wired at the router level, not the component
+level** — an early version nested it in `AppShell` above `LegacyFallback`
+too, which meant an anonymous user hitting *any* unmatched path got
+bounced to `/auth` by *this app's* gate before `LegacyFallback` ever got a
+chance to send them to Svelte, where Svelte's own gate would have made the
+identical call anyway. Harmless today by coincidence, wrong the moment
+`LegacyFallback` ever bounces to something public on the Svelte side
+(Phase 6's `/s/[id]` share links, `/watch`) — so `LegacyFallback` moved to
+be a sibling of the `AppShell` route instead of a child, before that
+became a real bug rather than a latent one.
+
+**A real test-infrastructure bug found while testing the gate, not about
+the gate itself.** `vitest.config.ts` never set `test.globals: true`, so
+`@testing-library/react`'s automatic per-test `cleanup()` — which only
+registers when it finds a *global* `afterEach` — silently never ran.
+Every test file with more than one test that renders a component was
+exposed to this; it only surfaced now because `useAuthGate.test.tsx` is
+the first file where two tests share reactive state (the Zustand auth
+store) that a leftover, still-mounted component from an earlier test
+would keep reacting to. Fixed once in `vitest.setup.ts` rather than
+per file.
+
+Phase 4 is now ✅ done. All nine checklist items ticked, each verified
+(`astro check` 0 errors, 6 Vitest tests across 3 files, 2 Playwright
+e2e tests against a real dev server, `bun run build`) rather than only
+implemented. **Next action**: Phase 5 (Benchmarks surface) — the first
+real surface this shared foundation gets built on.
 
 **2026-09-14 (second session, on the real machine).**
 
@@ -828,17 +847,22 @@ Phase 2 is now ✅ done.
 - [x] Auth: `localStorage.token` bootstrap, 401 handling in a fetch
       wrapper, `expires_at` timer, sign-out clears token **and** cookie
       (prevents an OAuth redirect loop).
-- [ ] **Route gate** — not built yet. `LegacyFallback`'s `*` route
-      currently renders regardless of auth state; nothing yet redirects
-      an unauthenticated request to `/auth`. Left for whoever implements
-      `resolveLegacyFallback` (see session notes above) or the first
-      surface phase that actually needs it, whichever comes first.
+- [x] **Route gate** — `lib/auth/useAuthGate.ts`, wired into `AppShell` so
+      it covers every route beneath it in one place. Ports
+      `(app)/+layout.svelte`'s `gotoAuth()`: redirects to
+      `/auth?redirect=<path>` once the session resolves to anonymous.
+      Deliberately does **not** wrap `LegacyFallback` (a router-level
+      sibling of the `AppShell` route, not a child of it) — see the
+      decisions log entry below for why nesting them would have been
+      wrong the moment a Svelte-owned path becomes public.
 - [x] Routing shell `src/pages/[...path].astro` + `react-router`, with a
       `LegacyFallback` catch-all to the SvelteKit app for everything not
-      in `routePaths.ts`. **Its actual fallback policy is a
-      `TODO(human)`** — see the session notes above; the router itself,
-      the Astro catch-all page, and the dev-server 404 fix
-      (`src/middleware.ts`) are done and verified.
+      in `routePaths.ts`. Fallback policy: unconditional bounce to the
+      same path via `window.location.assign` — see the decisions log
+      entry below for why that's safe today and what would change it.
+      The Astro catch-all page alone doesn't give `astro dev` a working
+      deep-link fallback; `src/middleware.ts` closes that gap (a 404
+      there gets rewritten to the root route).
 - [x] Zustand slices (`authStore`, `uiStore`); TanStack Query provider.
       No server-list queries exist yet — nothing consumes it until
       Phase 5+ adds a real data-fetching surface.

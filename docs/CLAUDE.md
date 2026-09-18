@@ -300,6 +300,81 @@ All commits should use conventional commit style and stay focused on one topic. 
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-09-18** (fourth): Closed out Phase 4 of the migration
+  (`docs/migration-plan.md`): the shared foundation `apps/web/`'s later
+  surfaces (Phases 5-10) build on. All 30 `src/lib/apis/**` modules ported
+  verbatim; `lib/auth/session.ts` + `AuthProvider` (token bootstrap, expiry
+  timer, a global 401-detecting fetch guard); Zustand (`authStore`,
+  `uiStore`) + a TanStack Query provider; `react-i18next` over the same 65
+  locale files; a Socket.IO provider; a working `AppShell`/`Sidebar` on
+  shadcn primitives; and a `react-router` data router mounted from a new
+  Astro catch-all page.
+
+  **Two real bugs found via automated tests, not code review.** First: the
+  collapsed sidebar's nav content was only visually clipped
+  (`w-0 overflow-hidden` on its parent), not actually removed — a flex
+  child's default `min-width: auto` let its links keep their full,
+  clickable layout box several layers down, so a "hidden" nav link was
+  still a real click target. A Playwright test failing to click it caught
+  this; fixed by unmounting the sidebar's content when closed rather than
+  only collapsing its container. Second: the routing shell's own Astro
+  catch-all page (`src/pages/[...path].astro`) does **not**, on its own,
+  give `astro dev` a working fallback for a direct load or refresh on a
+  deep link — `output: 'static'` enumerates dev-server routes from
+  `getStaticPaths` exactly like `astro build` does, so an unmatched path
+  still 404s regardless of the catch-all's existence. Closed with
+  `src/middleware.ts`, which rewrites a 404 response back to the root
+  route (Astro middleware runs on every request regardless of whether
+  routing found a match, confirmed directly) — dev now behaves like
+  production's `SPAStaticFiles` mount in `main.py` already did.
+
+  **The routing shell's fallback policy** (`src/routes/LegacyFallback.tsx`,
+  rendered for any path outside the four routes this phase owns):
+  unconditional bounce to the SvelteKit app at the same path via
+  `window.location.assign`, not react-router. Checked rather than assumed
+  that this can't loop — `apps/openwebui/src/routes/+error.svelte` renders
+  its 404 in place instead of redirecting, and nothing in the fork
+  references `/next` except `main.py`'s own mount (grepped directly). This
+  is a deliberately temporary policy: it's correct only because almost
+  every real path is still Svelte-owned right now, and should be revisited
+  once that balance flips (Phase 8+ or so), not carried forward unexamined.
+
+  **The route gate** (`lib/auth/useAuthGate.ts`) ports
+  `(app)/+layout.svelte`'s own `gotoAuth()` — same trigger (no session),
+  same redirect shape (`/auth?redirect=<path>`). It had to be wired so it
+  covers only the four real React routes, not `LegacyFallback`: an early
+  version nested `LegacyFallback` under the same gated layout, which meant
+  an anonymous user hitting *any* Svelte-owned path got bounced to `/auth`
+  by this app's own gate before ever reaching Svelte's own gate for that
+  page — happened to land on the same URL today, by coincidence, and would
+  stop being equivalent the moment `LegacyFallback` ever bounces to
+  something public on the Svelte side (Phase 6's share links). Fixed by
+  moving `LegacyFallback` to a router-level sibling of the gated route
+  tree instead of a child of it.
+
+  **A real test-infrastructure gap, unrelated to any of the above but
+  found while testing it.** `vitest.config.ts` never set
+  `test.globals: true`, so `@testing-library/react`'s automatic per-test
+  `cleanup()` — which only self-registers when it finds a *global*
+  `afterEach` — silently never ran in this project. Any test file with
+  more than one test that renders a component was exposed to this; it
+  only surfaced now because two tests in the same new file share reactive
+  state (the Zustand auth store), and a component left mounted from an
+  earlier test kept reacting to a later test's state change, turning into
+  a "called once" assertion seeing two identical calls. Fixed once in
+  `vitest.setup.ts`.
+
+  Ten of the fork's `common/` components ported to shadcn primitives are
+  recorded in a new `src/components/COMMON_MAPPING.md` (not built —
+  Phase 4 owns the layout shell, not the shared component kit); the
+  lucide-react icon mapping (`lib/icons/MAPPING.md`) is seeded with what
+  the layout shell actually uses. Both are explicitly partial, extended by
+  whichever later phase's surface needs the rest.
+
+  Verified per commit throughout: `astro check` 0 errors, the full Vitest
+  suite, both Playwright e2e tests against a real dev server (one of them
+  exercising real client-side navigation through the shell), and
+  `bun run build`.
 - **2026-09-18** (third): Closed out Phase 3 of the migration
   (`docs/migration-plan.md`): `apps/web/` scaffolded — Astro, `@astrojs/react`,
   Tailwind v4 via `@tailwindcss/vite`, shadcn/ui, dark mode + `--app-text-scale`,
