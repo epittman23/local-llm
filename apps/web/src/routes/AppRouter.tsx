@@ -15,6 +15,8 @@ import { ErrorPage } from '@/routes/public/ErrorPage';
 import { SharedChatPage } from '@/routes/public/SharedChatPage';
 import { WatchPage } from '@/routes/public/WatchPage';
 import { routePaths } from '@/routes/routePaths';
+import { WorkspaceIndexRedirect } from '@/routes/workspace/WorkspaceIndexRedirect';
+import { WorkspaceLayout } from '@/routes/workspace/WorkspaceLayout';
 
 const router = createBrowserRouter(
 	[
@@ -35,7 +37,30 @@ const router = createBrowserRouter(
 				{ path: routePaths.home, element: <PlaceholderPage title="Chat" phase="Phase 10" /> },
 				{
 					path: routePaths.workspace,
-					element: <PlaceholderPage title="Workspace" phase="Phase 7" />
+					element: <WorkspaceLayout />,
+					children: [
+						{ index: true, element: <WorkspaceIndexRedirect /> },
+						{
+							path: 'models/*',
+							element: <PlaceholderPage title="Models" phase="Phase 7 (in progress)" />
+						},
+						{
+							path: 'knowledge/*',
+							element: <PlaceholderPage title="Knowledge" phase="Phase 7 (in progress)" />
+						},
+						{
+							path: 'prompts/*',
+							element: <PlaceholderPage title="Prompts" phase="Phase 7 (in progress)" />
+						},
+						{
+							path: 'skills/*',
+							element: <PlaceholderPage title="Skills" phase="Phase 7 (in progress)" />
+						},
+						{
+							path: 'tools/*',
+							element: <PlaceholderPage title="Tools" phase="Phase 7 (in progress)" />
+						}
+					]
 				},
 				{ path: routePaths.notes, element: <PlaceholderPage title="Notes" phase="Phase 9" /> },
 				{

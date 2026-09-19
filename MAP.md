@@ -207,16 +207,22 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
   `routes/AppRouter.tsx`.
 - **`src/components/layout/`** — `AppShell` (collapsible sidebar, mobile
   Sheet, and the auth gate for everything beneath it) and `Sidebar`.
+- **`src/components/common/`** — app-level components shared across
+  surfaces (not shadcn primitives): `SplitCreateButton` so far.
 - **`src/components/ui/`** — shadcn/ui components (`bunx shadcn add <name>`).
   `src/components/COMMON_MAPPING.md` records where each of the SvelteKit
   app's `common/` components lands.
 - **`src/routes/`** — react-router. `AppRouter.tsx` has three kinds of
-  route: gated ones under `AppShell` (home/workspace/notes/calendar
-  placeholders, and `benchmarks/`); the public ones (`public/`: `/auth`,
+  route: gated ones under `AppShell` (home/notes/calendar placeholders,
+  `benchmarks/`, and `workspace/`); the public ones (`public/`: `/auth`,
   `/error`, `/watch`, `/s/:id`), which are top-level siblings because they
   must render without a session; and `LegacyFallback`, which bounces every
   path not listed in `routePaths.ts` to the SvelteKit app. `benchmarks/`
   holds all seven Benchmarks pages plus their admin/feature-flag gate.
+  `workspace/` is Phase 7's surface: `WorkspaceLayout` (per-section
+  permission gate, the five tabs with live counts, the split Create button)
+  and `workspaceAccess.ts` (the pure permission rules, unit-tested); the
+  five sections mount beneath it as they are ported.
 - **`src/lib/apis/`** — the SvelteKit app's `src/lib/apis/**` ported
   verbatim (six files `@ts-nocheck`ed for inherited looseness), plus
   `benchmarks/profiles.ts`, new code for the profile CRUD endpoints that

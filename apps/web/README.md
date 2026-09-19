@@ -50,9 +50,11 @@ src/
 ├── components/App.tsx     the one persistent client:only="react" root:
 │                          providers + routes/AppRouter.tsx.
 ├── components/layout/     AppShell (sidebar, mobile Sheet, auth gate).
+├── components/common/     app-level components shared across surfaces.
 ├── components/ui/         shadcn/ui components (`bunx shadcn add <name>`).
 ├── routes/                react-router: AppRouter.tsx, routePaths.ts,
 │   ├── benchmarks/        the seven Benchmarks pages + their gate,
+│   ├── workspace/         Phase 7: layout, tabs, per-section permission gate,
 │   └── public/            /auth, /error, /watch, /s/:id (no session needed).
 ├── lib/                   apis/ (ported from the SvelteKit app), auth/,
 │                          stores/ (Zustand), socket/, i18n/, query/, utils/.

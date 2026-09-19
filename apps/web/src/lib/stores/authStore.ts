@@ -6,13 +6,28 @@ import { create } from 'zustand';
 // and the sign-in response's own `token`/`token_type`) -- see this repo's
 // docs/CLAUDE.md 2026-09-15 entry on that app's inherited type looseness.
 // This is new code, not a port, so it types the whole shape properly.
+// Only the `workspace` group is typed: it is the one Phase 7's section gate
+// reads. The backend sends more groups (chat, features, ...) under the same
+// object, which stay untyped until a surface reads them.
+export type UserPermissions = {
+	workspace?: {
+		models?: boolean;
+		knowledge?: boolean;
+		prompts?: boolean;
+		skills?: boolean;
+		tools?: boolean;
+		[key: string]: boolean | undefined;
+	};
+	[group: string]: unknown;
+};
+
 export type SessionUser = {
 	id: string;
 	email: string;
 	name: string;
 	role: string;
 	profile_image_url: string;
-	permissions?: unknown;
+	permissions?: UserPermissions;
 	expires_at?: number;
 };
 

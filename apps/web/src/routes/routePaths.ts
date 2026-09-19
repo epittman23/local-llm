@@ -5,6 +5,11 @@
 export const routePaths = {
 	home: '/',
 	workspace: '/workspace',
+	workspaceModels: '/workspace/models',
+	workspaceKnowledge: '/workspace/knowledge',
+	workspacePrompts: '/workspace/prompts',
+	workspaceSkills: '/workspace/skills',
+	workspaceTools: '/workspace/tools',
 	notes: '/notes',
 	calendar: '/calendar',
 	benchmarks: '/benchmarks',
