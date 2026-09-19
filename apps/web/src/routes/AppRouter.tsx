@@ -21,6 +21,8 @@ import { SkillCreatePage, SkillEditPage } from '@/routes/workspace/skills/SkillP
 import { SkillsPage } from '@/routes/workspace/skills/SkillsPage';
 import { ToolCreatePage, ToolEditPage } from '@/routes/workspace/tools/ToolPages';
 import { ToolsPage } from '@/routes/workspace/tools/ToolsPage';
+import { KnowledgeBasePage } from '@/routes/workspace/knowledge/KnowledgeBasePage';
+import { KnowledgePage } from '@/routes/workspace/knowledge/KnowledgePage';
 import { WorkspaceIndexRedirect } from '@/routes/workspace/WorkspaceIndexRedirect';
 import { WorkspaceLayout } from '@/routes/workspace/WorkspaceLayout';
 
@@ -50,10 +52,9 @@ const router = createBrowserRouter(
 							path: 'models/*',
 							element: <PlaceholderPage title="Models" phase="Phase 7 (in progress)" />
 						},
-						{
-							path: 'knowledge/*',
-							element: <PlaceholderPage title="Knowledge" phase="Phase 7 (in progress)" />
-						},
+						{ path: 'knowledge', element: <KnowledgePage /> },
+						{ path: 'knowledge/create', element: <KnowledgePage showCreateOnMount /> },
+						{ path: 'knowledge/:id', element: <KnowledgeBasePage /> },
 						{ path: 'prompts', element: <PromptsPage /> },
 						{ path: 'prompts/create', element: <PromptsPage showCreateOnMount /> },
 						{ path: 'prompts/:id', element: <PromptEditPage /> },

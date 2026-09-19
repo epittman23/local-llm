@@ -83,22 +83,25 @@ export function TagSelector({
 	value,
 	tags,
 	onChange,
-	placeholder = 'Tag'
+	placeholder = 'Tag',
+	labels = {}
 }: {
 	value: string;
 	tags: string[];
 	onChange: (value: string) => void;
 	placeholder?: string;
+	/** Display text for a value, where it differs from the value itself. */
+	labels?: Record<string, string>;
 }) {
 	return (
 		<div className="flex items-center">
 			<FilterMenu
 				value={value}
-				items={tags.map((tag) => ({ value: tag, label: tag }))}
+				items={tags.map((tag) => ({ value: tag, label: labels[tag] ?? tag }))}
 				onChange={onChange}
 				trigger={
 					<Button variant="ghost" size="sm" aria-label="Tag" className="capitalize">
-						<span className="truncate">{value || placeholder}</span>
+						<span className="truncate">{value ? (labels[value] ?? value) : placeholder}</span>
 						{!value && <ChevronDown />}
 					</Button>
 				}

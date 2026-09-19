@@ -234,7 +234,11 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
   five sections mount beneath it as they are ported. `workspace/prompts/`
   is the first: list, create dialog, and the edit page with version history;
   `workspace/skills/` and `workspace/tools/` follow (tools: list with
-  client-side filtering, a CodeMirror editor, valves, import/export).
+  client-side filtering, a CodeMirror editor, valves, import/export) and
+  `workspace/knowledge/` (an infinite-scroll list; the detail page with a
+  folder tree, uploads, incremental folder sync and a file-text sheet --
+  `knowledgeFiles.ts` holds its pure path/diff logic, `useKnowledgeUploads.ts`
+  the upload flows).
 - **`src/lib/apis/`** — the SvelteKit app's `src/lib/apis/**` ported
   verbatim (six files `@ts-nocheck`ed for inherited looseness), plus
   `benchmarks/profiles.ts`, new code for the profile CRUD endpoints that

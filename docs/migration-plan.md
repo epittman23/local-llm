@@ -23,7 +23,7 @@
 | 4 | Shared foundation: API, auth, stores, i18n, app shell | ✅ done | 2026-09-18 |
 | 5 | Benchmarks surface (proves the pattern) | ✅ done | 2026-09-18 |
 | 6 | Public/static surfaces: auth, error, share, watch | ✅ done | 2026-09-19 |
-| 7 | Workspace surface | ▶ in progress (shell, kit, access control, Prompts, Skills, Tools done) | 2026-09-19 |
+| 7 | Workspace surface | ▶ in progress (shell, kit, access control, Prompts, Skills, Tools, Knowledge done) | 2026-09-19 |
 | 8 | Admin surface | ☐ not started | — |
 | 9 | Secondary surfaces: notes, calendar, automations, playground, channels | ☐ not started | — |
 | 10 | Chat surface (largest) | ☐ not started | — |
@@ -1130,8 +1130,13 @@ this session, the same posture as Phase 5.
 - [x] **Tools** (`tools`, `tools/create`, `tools/edit`) — first CodeMirror
       use (`CodeEditor`, lazy-loaded); `ValvesModal`/`Valves`, `ManifestModal`,
       import from link/file.
-- [ ] Knowledge (`knowledge`, `knowledge/create`, `knowledge/[id]`) — RAG
-      upload; `KnowledgeBase.svelte` alone is 1,745 lines.
+- [x] **Knowledge** (`knowledge`, `knowledge/create`, `knowledge/[id]`) — RAG
+      upload. `KnowledgeBase.svelte`'s 1,745 lines split into the page (state +
+      layout), `knowledgeFiles.ts` (pure path/diff logic, 9 tests),
+      `useKnowledgeUploads.ts` (upload/sync flows) and small components.
+      **Not exercised end to end:** the folder pickers (`showDirectoryPicker` /
+      `webkitdirectory`) can't be driven by Playwright, so *Upload directory* and
+      *Sync directory* are covered only by the unit tests on their logic.
 - [ ] Models (`models`, `models/create`, `models/edit`) — `ModelEditor.svelte`
       is 1,074 lines plus ~14 selector/capability sub-components.
 - [x] `functions/create` — a redirect to `/admin/functions/create` in the
