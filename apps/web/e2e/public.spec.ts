@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from './test';
+import type { Page } from '@playwright/test';
 
 const sessionUser = {
 	id: 'u1',
@@ -35,18 +36,18 @@ test('an anonymous visit to a protected route lands on /auth, and signing in ret
 		route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
 	);
 
-	await page.goto('/workspace');
+	await page.goto('/notes');
 
 	// useAuthGate navigates in-app (react-router), carrying the original path.
-	await expect(page).toHaveURL(/\/auth\?redirect=%2Fworkspace$/);
+	await expect(page).toHaveURL(/\/auth\?redirect=%2Fnotes$/);
 	await expect(page.getByText('Sign in to local-llm')).toBeVisible();
 
 	await page.getByLabel('Email').fill('user@example.com');
 	await page.getByLabel('Password').fill('hunter2');
 	await page.getByRole('button', { name: 'Sign in' }).click();
 
-	await expect(page).toHaveURL(/\/workspace$/);
-	await expect(page.getByRole('heading', { name: 'Workspace' })).toBeVisible();
+	await expect(page).toHaveURL(/\/notes$/);
+	await expect(page.getByRole('heading', { name: 'Notes' })).toBeVisible();
 	expect(await page.evaluate(() => localStorage.getItem('token'))).toBe('signed-in-token');
 });
 

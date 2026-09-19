@@ -237,7 +237,12 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
   `utils/index.ts` that ported pages actually use), **`icons/MAPPING.md`**.
 - **`e2e/`** — Playwright; `global-teardown.ts` force-stops the dev server
   after a run (see its own comment for why that isn't left to Playwright's
-  ordinary teardown alone).
+  ordinary teardown alone). Specs import `test` from `e2e/test.ts`, not from
+  `@playwright/test`: it auto-applies `no-socket-proxy.ts`, which keeps the
+  app's Socket.IO connection out of the dev server's `/ws` proxy (with no
+  backend running, that proxied websocket crashes the Bun-hosted dev server
+  after ~30s). `workspace-helpers.ts` is the shared session/config mock for
+  the workspace specs.
 
 ## `Makefile`
 
