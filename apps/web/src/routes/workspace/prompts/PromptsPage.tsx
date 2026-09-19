@@ -47,7 +47,14 @@ import { dayjs } from '@/lib/utils/dates';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { routePaths } from '@/routes/routePaths';
 import { PromptCreateDialog } from './PromptCreateDialog';
-import { type PromptDraft, type PromptListItem, toPromptDraft } from './promptTypes';
+import {
+	type PromptDraft,
+	type PromptListItem,
+	communitySharePayload,
+	parsePromptImport,
+	sanitizeExternalDraft,
+	toPromptDraft
+} from './promptTypes';
 
 const PER_PAGE = 30;
 const COMMUNITY_ORIGINS = ['https://openwebui.com', 'https://www.openwebui.com', 'http://localhost:9999'];
@@ -178,21 +185,28 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 		const onMessage = (event: MessageEvent) => {
 			if (!COMMUNITY_ORIGINS.includes(event.origin)) return;
 			try {
-				setCreateDraft(toPromptDraft(JSON.parse(event.data)));
+				const draft = sanitizeExternalDraft(JSON.parse(event.data));
+				if (!draft) return;
+				setCreateDraft(draft);
 				setShowCreate(true);
 			} catch (error) {
 				console.error('Ignoring malformed prompt from community site', error);
 			}
 		};
 		window.addEventListener('message', onMessage);
+		// A fixed string with no data in it, so '*' discloses nothing: the opener's
+		// origin is not knowable from here, and the community site is what listens.
 		if (window.opener) window.opener.postMessage('loaded', '*');
 
 		const stashed = sessionStorage.prompt;
 		if (stashed) {
 			sessionStorage.removeItem('prompt');
 			try {
-				setCreateDraft(toPromptDraft(JSON.parse(stashed)));
-				setShowCreate(true);
+				const draft = sanitizeExternalDraft(JSON.parse(stashed));
+				if (draft) {
+					setCreateDraft(draft);
+					setShowCreate(true);
+				}
 			} catch (error) {
 				console.error('Ignoring malformed stashed prompt', error);
 			}
@@ -268,23 +282,26 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 		toast.success('Redirecting you to Open WebUI Community');
 		const url = 'https://openwebui.com';
 		const tab = window.open(`${url}/prompts/create`, '_blank');
-		window.addEventListener('message', (event) => {
-			if (event.origin !== url) return;
-			if (event.data === 'loaded') tab?.postMessage(JSON.stringify(prompt), '*');
-		});
+		// Answer the community site's 'loaded' once, then stop listening -- the
+		// Svelte version leaves a listener behind per click. The payload goes to
+		// that origin only (not '*') and carries just the prompt's own fields.
+		const onMessage = (event: MessageEvent) => {
+			if (event.origin !== url || event.data !== 'loaded') return;
+			window.removeEventListener('message', onMessage);
+			tab?.postMessage(JSON.stringify(communitySharePayload(prompt)), url);
+		};
+		window.addEventListener('message', onMessage);
+		setTimeout(() => window.removeEventListener('message', onMessage), 60_000);
 	};
 
 	const importFile = (file: File) => {
 		const reader = new FileReader();
 		reader.onload = async (event) => {
 			try {
-				const saved = JSON.parse(String(event.target?.result)) as PromptListItem[];
+				const saved = parsePromptImport(String(event.target?.result));
+				if (saved.length === 0) toast.error('No valid prompts found in that file.');
 				for (const prompt of saved) {
-					await createNewPrompt(token, {
-						command: prompt.command,
-						name: prompt.name,
-						content: prompt.content ?? ''
-					}).catch((error) => {
+					await createNewPrompt(token, prompt).catch((error) => {
 						toast.error(typeof error === 'string' ? error : JSON.stringify(error));
 						return null;
 					});

@@ -209,6 +209,42 @@ test.describe('workspace prompts', () => {
 		expect(calls.some((c) => c.path === '/create')).toBe(false);
 	});
 
+	test('a prompt posted by the community site pre-fills create but cannot choose who it is shared with', async ({
+		page
+	}) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockPromptsApi(page, []);
+		await page.goto('/workspace/prompts');
+		await expect(page.getByText('No prompts found')).toBeVisible();
+
+		const post = (origin: string) =>
+			page.evaluate((o) => {
+				window.dispatchEvent(
+					new MessageEvent('message', {
+						origin: o,
+						data: JSON.stringify({
+							name: 'From community',
+							command: 'from-community',
+							content: 'hello',
+							access_grants: [{ principal_type: 'user', principal_id: '*', permission: 'write' }]
+						})
+					})
+				);
+			}, origin);
+
+		// An unlisted origin is ignored outright.
+		await post('https://evil.example');
+		await expect(page.getByRole('dialog')).toHaveCount(0);
+
+		await post('https://openwebui.com');
+		const dialog = page.getByRole('dialog');
+		await expect(dialog.getByLabel('Name')).toHaveValue('From community');
+		await dialog.getByRole('button', { name: /Save & Create/ }).click();
+		await expect
+			.poll(() => calls.find((c) => c.path === '/create')?.body)
+			.toMatchObject({ command: 'from-community', access_grants: [] });
+	});
+
 	test('clone opens the create dialog pre-filled', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockPromptsApi(page, [makePrompt(1)]);

@@ -86,8 +86,21 @@ Built this session, in commit order:
 2. **My own shell commit broke two older specs** — `smoke` and `public` used
    `/workspace` as their "placeholder heading renders" example, and I ran only
    the new spec at that commit. Fixed one commit later (they now use `/notes`,
-   a placeholder until Phase 9). The suite is 39 e2e + 25 unit, all green at
+   a placeholder until Phase 9). The suite is 40 e2e + 31 unit, all green at
    HEAD.
+
+**A post-commit security review flagged three things in `PromptsPage.tsx`,
+all real, all fixed:** the community-share `postMessage` used `'*'` as its
+target origin and sent the whole list row (author name/email, access grants);
+a message from the community site could pre-fill `access_grants`, so a crafted
+one could make a prompt public for whoever clicked Save; and the JSON import
+trusted the file's shape. Now: share posts to `https://openwebui.com` only,
+with just name/command/content/tags, and removes its listener after one reply;
+all three untrusted inputs (message, `sessionStorage`, import file) go through
+`sanitizeExternalDraft`/`parsePromptImport` in `promptTypes.ts`, which bound
+lengths and never carry grants. 6 unit tests + 1 e2e (untrusted origin ignored;
+trusted origin cannot choose grants). Cloning still copies the source prompt's
+grants, as the Svelte version does -- that is a user acting on their own prompt.
 
 **Known gaps, stated plainly.** No page yet calls `useTranslation`: Phases 5,
 6 and 7 all render English literals, though `react-i18next` and the 65 locales
