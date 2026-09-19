@@ -41,18 +41,25 @@ Phase 11's cutover removes the prefix along with `/next` itself.
 
 ```
 src/
-├── layouts/Base.astro   <html>/<head>, the anti-FOUC dark-mode script
-│                        (mirrors apps/openwebui/src/app.html's), and the
-│                        --app-text-scale variable's declaration.
-├── components/App.tsx   the one persistent client:only="react" root.
-│                        Placeholder until Phase 4's routing/auth/shell.
-├── components/ui/       shadcn/ui components (`bunx shadcn add <name>`).
-├── lib/utils.ts         shadcn's `cn()` helper.
-├── styles/global.css    Tailwind v4 entry + the shadcn Nova preset's
-│                        design tokens (see the 2026-09-18 decisions-log
-│                        entry in docs/CLAUDE.md for why Nova, not the
-│                        migration plan's original "new-york").
-└── pages/index.astro    mounts Base + App.
+├── layouts/Base.astro     <html>/<head>, the anti-FOUC dark-mode script
+│                          (mirrors apps/openwebui/src/app.html's), and the
+│                          --app-text-scale variable's declaration.
+├── pages/[...path].astro  mounts Base + App; the single static entry.
+├── middleware.ts          rewrites a dev-server 404 to the root so deep
+│                          links work (see its own comment).
+├── components/App.tsx     the one persistent client:only="react" root:
+│                          providers + routes/AppRouter.tsx.
+├── components/layout/     AppShell (sidebar, mobile Sheet, auth gate).
+├── components/ui/         shadcn/ui components (`bunx shadcn add <name>`).
+├── routes/                react-router: AppRouter.tsx, routePaths.ts,
+│   ├── benchmarks/        the seven Benchmarks pages + their gate,
+│   └── public/            /auth, /error, /watch, /s/:id (no session needed).
+├── lib/                   apis/ (ported from the SvelteKit app), auth/,
+│                          stores/ (Zustand), socket/, i18n/, query/, utils/.
+└── styles/global.css      Tailwind v4 entry + the shadcn Nova preset's
+                           design tokens (see the 2026-09-18 decisions-log
+                           entry in docs/CLAUDE.md for why Nova, not the
+                           migration plan's original "new-york").
 ```
 
 `components.json` is shadcn/ui's own config (`style: "radix-nova"`, Lucide

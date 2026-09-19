@@ -197,10 +197,34 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
 - **`src/layouts/Base.astro`** — `<html>`/`<head>` shell: the anti-FOUC
   dark-mode script (mirrors `apps/openwebui/src/app.html`'s own) and the
   `--app-text-scale` CSS variable's declaration.
+- **`src/pages/[...path].astro`** + **`src/middleware.ts`** — the single
+  static entry. The catch-all alone doesn't give `astro dev` a deep-link
+  fallback (`output: 'static'` enumerates dev routes from `getStaticPaths`);
+  the middleware rewrites a 404 back to the root, matching what `main.py`'s
+  `SPAStaticFiles` mount already does in production.
 - **`src/components/App.tsx`** — the one persistent `client:only="react"`
-  root Astro mounts (per the migration plan's architecture decision).
-  Placeholder until Phase 4 adds routing, auth, and the real app shell.
+  root: i18n, TanStack Query, auth, and Socket.IO providers around
+  `routes/AppRouter.tsx`.
+- **`src/components/layout/`** — `AppShell` (collapsible sidebar, mobile
+  Sheet, and the auth gate for everything beneath it) and `Sidebar`.
 - **`src/components/ui/`** — shadcn/ui components (`bunx shadcn add <name>`).
+  `src/components/COMMON_MAPPING.md` records where each of the SvelteKit
+  app's `common/` components lands.
+- **`src/routes/`** — react-router. `AppRouter.tsx` has three kinds of
+  route: gated ones under `AppShell` (home/workspace/notes/calendar
+  placeholders, and `benchmarks/`); the public ones (`public/`: `/auth`,
+  `/error`, `/watch`, `/s/:id`), which are top-level siblings because they
+  must render without a session; and `LegacyFallback`, which bounces every
+  path not listed in `routePaths.ts` to the SvelteKit app. `benchmarks/`
+  holds all seven Benchmarks pages plus their admin/feature-flag gate.
+- **`src/lib/apis/`** — the SvelteKit app's `src/lib/apis/**` ported
+  verbatim (six files `@ts-nocheck`ed for inherited looseness), plus
+  `benchmarks/profiles.ts`, new code for the profile CRUD endpoints that
+  never had a frontend.
+- **`src/lib/auth/`**, **`stores/`** (Zustand: auth, config, UI),
+  **`socket/`**, **`i18n/`** (the fork's 65 locale files, verbatim),
+  **`query/`**, **`utils/`** (only the functions from the SvelteKit app's
+  `utils/index.ts` that ported pages actually use), **`icons/MAPPING.md`**.
 - **`e2e/`** — Playwright; `global-teardown.ts` force-stops the dev server
   after a run (see its own comment for why that isn't left to Playwright's
   ordinary teardown alone).

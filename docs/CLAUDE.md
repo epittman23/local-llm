@@ -300,6 +300,54 @@ All commits should use conventional commit style and stay focused on one topic. 
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-09-19**: Closed out Phase 6 of the migration
+  (`docs/migration-plan.md`): the four routes outside SvelteKit's `(app)`
+  group — `/auth`, `/error`, `/watch`, `/s/:id` — built in `apps/web/`.
+  They are top-level siblings of the gated `AppShell` route rather than its
+  children, because `useAuthGate` must not wrap pages an anonymous visitor
+  is meant to reach. `useAuthGate` itself changed: it now navigates to our
+  own `/auth` with react-router, where Phase 4 used a full page load
+  because `/auth` was still Svelte's.
+
+  **A Phase 4 bug this phase surfaced.** `initAuth()` fetched
+  `/api/config` only after a successful session restore. Harmless while the
+  only reader was the Benchmarks gate (for an already signed-in admin), but
+  a sign-in page needs config *before* any session exists: `main.py`'s own
+  `/api/config` labels `auth`, `enable_login_form`, `enable_ldap`,
+  `enable_signup`, `oauth` and `onboarding` "Public: required by
+  login/signup page pre-auth", and `+layout.svelte` fetches it
+  unconditionally, first. Now the same.
+
+  **A second, subtler one in the new page itself.** `AuthPage`'s once-only
+  mount logic (onboarding, auto-redirect to a single SSO provider,
+  trusted-header sign-in) ran while config was still null and, guarded to
+  run once, never ran again — so all three silently never fired, and the
+  LDAP-first default was wrong for the same reason (found from a
+  screenshot, not a test). It now waits for `initAuth` to settle, and
+  settling with no config goes to `/error`, as `+layout.svelte` does.
+
+  **Deliberate simplifications.** Onboarding is a plain card instead of
+  `OnBoarding.svelte`'s autoplaying video (Open WebUI's own footage);
+  OAuth provider buttons carry no brand SVGs; errors are an inline banner
+  because there is still no toast system. `/s/:id` is a read-only
+  transcript through the Phase 5 marked + DOMPurify pipeline — not a port
+  of `chat/Messages.svelte` (Phase 10) — and its Clone Chat button leaves
+  the SPA for `/c/:id`, which is not a React route yet. The helpers these
+  pages need from the SvelteKit app's `utils/index.ts` went into a new
+  `lib/utils/auth-helpers.ts` (same scoping as `api-helpers.ts`);
+  `crypto.randomUUID()` replaces the `uuid` package for the one call site.
+
+  **What could not be verified.** The backend's real OAuth redirect lands
+  on `/auth` at the site root — still SvelteKit's until the Phase 11
+  cutover — not on this app's `/next/auth`. The callback code is covered by
+  an e2e test that simulates the `token` cookie, but a real IdP round trip
+  through this app's `/auth` can't happen until `/next` becomes `/`.
+  Sign-in was likewise exercised only against mocked backend responses.
+
+  Verified: `astro check` 0 errors, 6 Vitest tests, 25 Playwright tests
+  (10 new in `e2e/public.spec.ts`), `bun run build`, a screenshot of the
+  sign-in page. `MAP.md` and `apps/web/README.md` were also brought up to
+  date — both still called `App.tsx` a placeholder after Phases 4 and 5.
 - **2026-09-18** (fifth): Closed out Phase 5 of the migration
   (`docs/migration-plan.md`): the Benchmarks surface, all seven pages
   (Serve, Live, Tests, Compare, Answers, Report, Tune) plus the admin/

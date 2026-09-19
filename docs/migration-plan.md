@@ -22,7 +22,7 @@
 | 3 | Astro + React + shadcn scaffold, dual-serve | ✅ done | 2026-09-18 |
 | 4 | Shared foundation: API, auth, stores, i18n, app shell | ✅ done | 2026-09-18 |
 | 5 | Benchmarks surface (proves the pattern) | ✅ done | 2026-09-18 |
-| 6 | Public/static surfaces: auth, error, share, watch | ☐ not started | — |
+| 6 | Public/static surfaces: auth, error, share, watch | ✅ done | 2026-09-19 |
 | 7 | Workspace surface | ☐ not started | — |
 | 8 | Admin surface | ☐ not started | — |
 | 9 | Secondary surfaces: notes, calendar, automations, playground, channels | ☐ not started | — |
@@ -34,6 +34,34 @@ Status values: `☐ not started` · `▶ in progress` · `✅ done` · `⏸ bloc
 ### Current session notes
 
 _Overwrite this block at the end of every session._
+
+**2026-09-19 (Phase 6, resumed after a usage-limit cutoff).** All four
+public pages built, verified, and committed, closing Phase 6. Resumed from
+a half-finished tree (pages written, `WEBUI_NAME` imports broken, nothing
+type-checked or tested).
+
+**Two bugs found by testing this phase, one of them Phase 4's.**
+`initAuth()` fetched `/api/config` only *after* a successful session
+restore, so an anonymous visitor never got it. Latent through Phase 5 —
+only the Benchmarks gate read config, and only for a signed-in admin — but
+wrong for a sign-in page: `main.py` itself labels `auth`,
+`enable_login_form`, `enable_ldap`, `oauth` and `onboarding` as "Public:
+required by login/signup page pre-auth", and `+layout.svelte` fetches it
+unconditionally first thing. Fixed in its own commit. Then `AuthPage`'s
+own once-only mount logic (onboarding, auto-SSO, trusted-header sign-in)
+ran against a still-null config and, because of the once-only guard,
+never re-ran; the LDAP-first default had the same flaw, found from a
+screenshot rather than a test. Both fixed by waiting for `initAuth` to
+settle; the onboarding test was confirmed to fail against the old logic.
+
+**A maintenance-policy miss, corrected:** `MAP.md` and `apps/web/README.md`
+still called `App.tsx` a placeholder — they weren't updated in Phases 4 or
+5. Rewritten to match the current tree.
+
+Phase 6 is now ✅ done (25 Playwright e2e tests total, 10 new). **Next
+action**: Phase 7 (Workspace: models, prompts, knowledge, tools, skills,
+functions — 48 components, ~13.3k LOC, and the first phase needing
+CodeMirror).
 
 **2026-09-18 (Phase 5, new session).** All seven Benchmarks pages built,
 verified, and committed — the gate, Serve, the new Profiles CRUD panel,
@@ -964,9 +992,35 @@ Phase 2 is now ✅ done.
 - [x] Playwright per page — `e2e/benchmarks.spec.ts`, 12 tests covering
       all seven pages plus the gate's admit/deny paths.
 
-## Phase 6 — Public/static surfaces
-- [ ] `/auth` (incl. OAuth callback token handling), `/error`, `/s/[id]`
-      (read-only React island), `/watch`.
+## Phase 6 — Public/static surfaces ✅
+- [x] `/auth` — sign-in / sign-up / LDAP, OAuth provider buttons, the
+      cookie-based OAuth callback, trusted-header and auto-redirect-to-SSO
+      bypasses, onboarding, login-footer markdown. **Two cosmetic
+      simplifications**: onboarding is a plain card, not
+      `OnBoarding.svelte`'s autoplaying video (its `/assets/welcome.mp4` is
+      Open WebUI's own footage); provider buttons are labeled buttons
+      without hand-drawn brand SVGs. Errors are an inline banner (there is
+      still no toast system).
+- [x] `/error`, `/watch` — verbatim ports.
+- [x] `/s/[id]` — a read-only transcript, not a port of
+      `chat/Messages.svelte` (Phase 10). Messages go through the Phase 5
+      marked + DOMPurify pipeline. Clone Chat leaves the SPA for `/c/:id`,
+      which is not a React route yet.
+- [x] These four are top-level siblings of the `AppShell` route, not
+      children — `useAuthGate` must not wrap pages an anonymous visitor is
+      meant to reach.
+- [x] `useAuthGate` now navigates to `/auth` with react-router instead of a
+      full page load (that was only ever a stand-in while `/auth` was
+      Svelte's).
+
+**Not verifiable before Phase 11, stated plainly:** the backend's real
+OAuth redirect lands on `/auth` at the site root, which is still SvelteKit's
+until the cutover — not on this app's `/next/auth`. The callback code
+(reading the `token` cookie, restoring the session, returning to the saved
+path) is covered by an e2e test that simulates that cookie, but a real IdP
+round trip through this app's own `/auth` can't happen until `/next` becomes
+`/`. Sign-in itself was likewise only run against mocked backend responses
+this session, the same posture as Phase 5.
 
 ## Phase 7 — Workspace (48 components, ~13.3k LOC)
 - [ ] Models, prompts, knowledge (RAG upload), tools (CodeMirror), skills,
