@@ -23,7 +23,7 @@
 | 4 | Shared foundation: API, auth, stores, i18n, app shell | ✅ done | 2026-09-18 |
 | 5 | Benchmarks surface (proves the pattern) | ✅ done | 2026-09-18 |
 | 6 | Public/static surfaces: auth, error, share, watch | ✅ done | 2026-09-19 |
-| 7 | Workspace surface | ▶ in progress (shell, kit, access control, Prompts, Skills done) | 2026-09-19 |
+| 7 | Workspace surface | ▶ in progress (shell, kit, access control, Prompts, Skills, Tools done) | 2026-09-19 |
 | 8 | Admin surface | ☐ not started | — |
 | 9 | Secondary surfaces: notes, calendar, automations, playground, channels | ☐ not started | — |
 | 10 | Chat surface (largest) | ☐ not started | — |
@@ -1127,15 +1127,15 @@ this session, the same posture as Phase 5.
       `AddAccessModal`, `MemberSelector`, `AccessButton`.
 - [x] **Prompts** — list, create, edit + history.
 - [x] **Skills** (`skills`, `skills/create`, `skills/edit`).
-- [ ] Tools (`tools`, `tools/create`, `tools/edit`) — first CodeMirror use
-      (`ToolkitEditor`); also `Tools/AddToolMenu`, `common/ValvesModal`,
-      `common/ManifestModal`.
+- [x] **Tools** (`tools`, `tools/create`, `tools/edit`) — first CodeMirror
+      use (`CodeEditor`, lazy-loaded); `ValvesModal`/`Valves`, `ManifestModal`,
+      import from link/file.
 - [ ] Knowledge (`knowledge`, `knowledge/create`, `knowledge/[id]`) — RAG
       upload; `KnowledgeBase.svelte` alone is 1,745 lines.
 - [ ] Models (`models`, `models/create`, `models/edit`) — `ModelEditor.svelte`
       is 1,074 lines plus ~14 selector/capability sub-components.
-- [ ] `functions/create` (the route exists under workspace; the editor is the
-      Tools one).
+- [x] `functions/create` — a redirect to `/admin/functions/create` in the
+      Svelte app too; kept as a redirect (via LegacyFallback) until Phase 8.
 - [ ] Phase exit: `MAP.md`, `apps/web/README.md`, dated `docs/CLAUDE.md`
       entry, ROADMAP pair; Playwright per section.
 

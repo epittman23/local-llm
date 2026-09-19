@@ -12,6 +12,8 @@ export const routePaths = {
 	workspaceSkillsCreate: '/workspace/skills/create',
 	workspaceSkillsEdit: '/workspace/skills/edit',
 	workspaceTools: '/workspace/tools',
+	workspaceToolsCreate: '/workspace/tools/create',
+	workspaceToolsEdit: '/workspace/tools/edit',
 	notes: '/notes',
 	calendar: '/calendar',
 	benchmarks: '/benchmarks',

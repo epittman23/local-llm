@@ -213,7 +213,9 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
   View/Tag selectors), `ListChrome` (search bar, sortable header, empty
   state shared by every workspace list), `PagePagination`, `Tags`, and the access-control
   family (`AccessControl`, `AccessControlModal`, `AddAccessModal`,
-  `MemberSelector`, `AccessButton`). The app's toast system
+  `MemberSelector`, `AccessButton`), `CodeEditor` (CodeMirror, lazy-loaded
+  by its one caller), `Valves`/`ValvesModal`, `ManifestModal`,
+  `ImportUrlModal`, `SafeMarkdown` (marked + DOMPurify). The app's toast system
   (`ui/sonner.tsx`, mounted in `App.tsx`) reads the theme from the `<html>`
   class rather than `next-themes`.
 - **`src/components/ui/`** — shadcn/ui components (`bunx shadcn add <name>`).
@@ -231,7 +233,8 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
   and `workspaceAccess.ts` (the pure permission rules, unit-tested); the
   five sections mount beneath it as they are ported. `workspace/prompts/`
   is the first: list, create dialog, and the edit page with version history;
-  `workspace/skills/` follows (list, editor, create/edit pages).
+  `workspace/skills/` and `workspace/tools/` follow (tools: list with
+  client-side filtering, a CodeMirror editor, valves, import/export).
 - **`src/lib/apis/`** — the SvelteKit app's `src/lib/apis/**` ported
   verbatim (six files `@ts-nocheck`ed for inherited looseness), plus
   `benchmarks/profiles.ts`, new code for the profile CRUD endpoints that

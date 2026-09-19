@@ -19,6 +19,8 @@ import { PromptEditPage } from '@/routes/workspace/prompts/PromptEditPage';
 import { PromptsPage } from '@/routes/workspace/prompts/PromptsPage';
 import { SkillCreatePage, SkillEditPage } from '@/routes/workspace/skills/SkillPages';
 import { SkillsPage } from '@/routes/workspace/skills/SkillsPage';
+import { ToolCreatePage, ToolEditPage } from '@/routes/workspace/tools/ToolPages';
+import { ToolsPage } from '@/routes/workspace/tools/ToolsPage';
 import { WorkspaceIndexRedirect } from '@/routes/workspace/WorkspaceIndexRedirect';
 import { WorkspaceLayout } from '@/routes/workspace/WorkspaceLayout';
 
@@ -58,10 +60,13 @@ const router = createBrowserRouter(
 						{ path: 'skills', element: <SkillsPage /> },
 						{ path: 'skills/create', element: <SkillCreatePage /> },
 						{ path: 'skills/edit', element: <SkillEditPage /> },
-						{
-							path: 'tools/*',
-							element: <PlaceholderPage title="Tools" phase="Phase 7 (in progress)" />
-						}
+						{ path: 'tools', element: <ToolsPage /> },
+						{ path: 'tools/create', element: <ToolCreatePage /> },
+						{ path: 'tools/edit', element: <ToolEditPage /> },
+						// (app)/workspace/functions/create/+page.svelte is only a redirect to the
+						// admin surface (Phase 8). That path is still Svelte's, so this hands off
+						// through LegacyFallback until Phase 8 makes it a real route.
+						{ path: 'functions/create', element: <Navigate to="/admin/functions/create" replace /> }
 					]
 				},
 				{ path: routePaths.notes, element: <PlaceholderPage title="Notes" phase="Phase 9" /> },
