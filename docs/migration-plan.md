@@ -23,7 +23,7 @@
 | 4 | Shared foundation: API, auth, stores, i18n, app shell | ✅ done | 2026-09-18 |
 | 5 | Benchmarks surface (proves the pattern) | ✅ done | 2026-09-18 |
 | 6 | Public/static surfaces: auth, error, share, watch | ✅ done | 2026-09-19 |
-| 7 | Workspace surface | ▶ in progress (shell, shared kit, access control, Prompts done) | 2026-09-19 |
+| 7 | Workspace surface | ▶ in progress (shell, kit, access control, Prompts, Skills done) | 2026-09-19 |
 | 8 | Admin surface | ☐ not started | — |
 | 9 | Secondary surfaces: notes, calendar, automations, playground, channels | ☐ not started | — |
 | 10 | Chat surface (largest) | ☐ not started | — |
@@ -35,15 +35,36 @@ Status values: `☐ not started` · `▶ in progress` · `✅ done` · `⏸ bloc
 
 _Overwrite this block at the end of every session._
 
-**2026-09-19 (Phase 7, started).** Phase 7 is `▶ in progress`: the shell,
-the shared kit, access control, and the first of the five sections (Prompts)
-are built, verified and committed. **Next action: Skills**
-(`workspace/Skills.svelte` 628 + `Skills/SkillEditor.svelte` 211 +
-`SkillMenu` 105; routes `skills`, `skills/create`, `skills/edit`), then
-Tools (needs CodeMirror), Knowledge, Models, and `functions/create`.
-Prompts is the template: `routes/workspace/prompts/` (list page, create
-dialog, edit view/page), with `lib/access` + `components/common/Access*`
-already covering the Access button every editor has.
+**2026-09-19 (Phase 7, continued).** Skills is done (list, editor,
+create/clone/edit pages, `.json`/`.md` import; 7 e2e + 6 unit tests). **Next
+action: Tools** (`workspace/Tools.svelte` 705 + `Tools/ToolkitEditor.svelte`
+377 + menus; needs CodeMirror for the code editor, plus `ValvesModal` and
+`ManifestModal`), then Knowledge, Models, `functions/create`. The list pages
+now share `components/common/ListChrome.tsx` (search bar, sortable header,
+empty state) and `useShiftKey`; `routes/workspace/prompts/` and `skills/` are
+the templates.
+
+**A bug in my own earlier commit, found while testing Skills:** the workspace
+Create button never appeared. The layout cleared the registered actions in an
+effect on section change, and React runs a child's effects *before* its
+parent's, so the clear ran after each section had registered. Prompts' tests
+went straight to `/create` routes and never looked for the button. Sections now
+clear their own actions on unmount; a regression test looks for the button.
+The lesson worth keeping: a green suite that never asserts on a feature's
+*entry point* says nothing about it.
+
+Skills decisions: importing a `.json` drops `access_grants` (an export is a file
+people pass around; the Svelte importer POSTs objects as-is, so an imported
+skill could arrive public), so export-then-import comes back private. Not
+ported: refreshing the app-wide `skills` store after each change (no consumer
+yet; invalidate the `['skills']` query key when chat/model editors land).
+`parseFrontmatter` returns a prototype-less object (the original's plain `{}`
+would take a `__proto__:` line).
+
+Earlier this session (kept for context):
+
+Phase 7 is `▶ in progress`: the shell, the shared kit, access control, and
+Prompts were built first.
 
 Built this session, in commit order:
 
@@ -86,7 +107,7 @@ Built this session, in commit order:
 2. **My own shell commit broke two older specs** — `smoke` and `public` used
    `/workspace` as their "placeholder heading renders" example, and I ran only
    the new spec at that commit. Fixed one commit later (they now use `/notes`,
-   a placeholder until Phase 9). The suite is 40 e2e + 31 unit, all green at
+   a placeholder until Phase 9). The suite is 48 e2e + 37 unit, all green at
    HEAD.
 
 **A post-commit security review flagged three things in `PromptsPage.tsx`,
@@ -1105,7 +1126,7 @@ this session, the same posture as Phase 5.
 - [x] Access control: `lib/access`, `AccessControl`, `AccessControlModal`,
       `AddAccessModal`, `MemberSelector`, `AccessButton`.
 - [x] **Prompts** — list, create, edit + history.
-- [ ] Skills (`skills`, `skills/create`, `skills/edit`).
+- [x] **Skills** (`skills`, `skills/create`, `skills/edit`).
 - [ ] Tools (`tools`, `tools/create`, `tools/edit`) — first CodeMirror use
       (`ToolkitEditor`); also `Tools/AddToolMenu`, `common/ValvesModal`,
       `common/ManifestModal`.

@@ -210,7 +210,8 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
 - **`src/components/common/`** — app-level components shared across
   surfaces (not shadcn primitives): `SplitCreateButton`, `Spinner`, `Tip`
   (tooltip wrapper), `ConfirmDialog`, `FilterSelects` (the workspace
-  View/Tag selectors), `PagePagination`, `Tags`, and the access-control
+  View/Tag selectors), `ListChrome` (search bar, sortable header, empty
+  state shared by every workspace list), `PagePagination`, `Tags`, and the access-control
   family (`AccessControl`, `AccessControlModal`, `AddAccessModal`,
   `MemberSelector`, `AccessButton`). The app's toast system
   (`ui/sonner.tsx`, mounted in `App.tsx`) reads the theme from the `<html>`
@@ -229,7 +230,8 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
   permission gate, the five tabs with live counts, the split Create button)
   and `workspaceAccess.ts` (the pure permission rules, unit-tested); the
   five sections mount beneath it as they are ported. `workspace/prompts/`
-  is the first: list, create dialog, and the edit page with version history.
+  is the first: list, create dialog, and the edit page with version history;
+  `workspace/skills/` follows (list, editor, create/edit pages).
 - **`src/lib/apis/`** — the SvelteKit app's `src/lib/apis/**` ported
   verbatim (six files `@ts-nocheck`ed for inherited looseness), plus
   `benchmarks/profiles.ts`, new code for the profile CRUD endpoints that

@@ -9,6 +9,8 @@ export const routePaths = {
 	workspaceKnowledge: '/workspace/knowledge',
 	workspacePrompts: '/workspace/prompts',
 	workspaceSkills: '/workspace/skills',
+	workspaceSkillsCreate: '/workspace/skills/create',
+	workspaceSkillsEdit: '/workspace/skills/edit',
 	workspaceTools: '/workspace/tools',
 	notes: '/notes',
 	calendar: '/calendar',

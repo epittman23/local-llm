@@ -17,6 +17,8 @@ import { WatchPage } from '@/routes/public/WatchPage';
 import { routePaths } from '@/routes/routePaths';
 import { PromptEditPage } from '@/routes/workspace/prompts/PromptEditPage';
 import { PromptsPage } from '@/routes/workspace/prompts/PromptsPage';
+import { SkillCreatePage, SkillEditPage } from '@/routes/workspace/skills/SkillPages';
+import { SkillsPage } from '@/routes/workspace/skills/SkillsPage';
 import { WorkspaceIndexRedirect } from '@/routes/workspace/WorkspaceIndexRedirect';
 import { WorkspaceLayout } from '@/routes/workspace/WorkspaceLayout';
 
@@ -53,10 +55,9 @@ const router = createBrowserRouter(
 						{ path: 'prompts', element: <PromptsPage /> },
 						{ path: 'prompts/create', element: <PromptsPage showCreateOnMount /> },
 						{ path: 'prompts/:id', element: <PromptEditPage /> },
-						{
-							path: 'skills/*',
-							element: <PlaceholderPage title="Skills" phase="Phase 7 (in progress)" />
-						},
+						{ path: 'skills', element: <SkillsPage /> },
+						{ path: 'skills/create', element: <SkillCreatePage /> },
+						{ path: 'skills/edit', element: <SkillEditPage /> },
 						{
 							path: 'tools/*',
 							element: <PlaceholderPage title="Tools" phase="Phase 7 (in progress)" />
