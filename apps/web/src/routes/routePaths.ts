@@ -14,5 +14,16 @@ export const routePaths = {
 	benchmarksCompare: '/benchmarks/compare',
 	benchmarksAnswers: '/benchmarks/answers',
 	benchmarksReport: '/benchmarks/report',
-	benchmarksTune: '/benchmarks/tune'
+	benchmarksTune: '/benchmarks/tune',
+	// Phase 6's four public/static surfaces. Unlike everything above, these
+	// are NOT children of AppShell in AppRouter.tsx -- they're the one place
+	// an unauthenticated visitor is supposed to land, so useAuthGate must not
+	// wrap them the way it wraps every authenticated route.
+	auth: '/auth',
+	error: '/error',
+	watch: '/watch',
+	share: '/s/:id'
 } as const;
+
+/** Builds a concrete `/s/<id>` path from `routePaths.share`'s `:id` pattern. */
+export const sharePath = (id: string) => `/s/${id}`;

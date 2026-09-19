@@ -10,6 +10,10 @@ import { TestsPage } from '@/routes/benchmarks/TestsPage';
 import { TunePage } from '@/routes/benchmarks/TunePage';
 import { LegacyFallback } from '@/routes/LegacyFallback';
 import { PlaceholderPage } from '@/routes/PlaceholderPage';
+import { AuthPage } from '@/routes/public/AuthPage';
+import { ErrorPage } from '@/routes/public/ErrorPage';
+import { SharedChatPage } from '@/routes/public/SharedChatPage';
+import { WatchPage } from '@/routes/public/WatchPage';
 import { routePaths } from '@/routes/routePaths';
 
 const router = createBrowserRouter(
@@ -22,8 +26,10 @@ const router = createBrowserRouter(
 			// get intercepted by *our* gate first. Nesting them would still end
 			// up at /auth today since both gates redirect there, but it would be
 			// by accident, and it would stop being equivalent the moment a path
-			// LegacyFallback bounces to is actually public on the Svelte side
-			// (e.g. /s/[id], a share link -- Phase 6).
+			// LegacyFallback bounces to is actually public on the Svelte side.
+			// Phase 6's four public/static pages below are the concrete case
+			// that comment predicted: they're top-level siblings of this route,
+			// not children of it, for exactly the same reason.
 			element: <AppShell />,
 			children: [
 				{ path: routePaths.home, element: <PlaceholderPage title="Chat" phase="Phase 10" /> },
@@ -55,6 +61,14 @@ const router = createBrowserRouter(
 				}
 			]
 		},
+		// Phase 6 (docs/migration-plan.md): the four public/static pages. None
+		// of these should ever require a session -- /auth is precisely where
+		// an anonymous visitor is sent, and /error, /watch, and a shared-chat
+		// link all need to render before or without one.
+		{ path: routePaths.auth, element: <AuthPage /> },
+		{ path: routePaths.error, element: <ErrorPage /> },
+		{ path: routePaths.watch, element: <WatchPage /> },
+		{ path: routePaths.share, element: <SharedChatPage /> },
 		{ path: '*', element: <LegacyFallback /> }
 	],
 	// Astro's own base path: unprefixed in dev (`make astro`), "/next" once

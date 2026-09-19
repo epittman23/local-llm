@@ -1,6 +1,6 @@
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider } from 'react-router';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useAuthGate } from './useAuthGate';
 
@@ -11,46 +11,50 @@ import { useAuthGate } from './useAuthGate';
 // would make every assertion below count two identical calls instead of one).
 function GateProbe() {
 	useAuthGate();
-	return null;
+	return <div>protected content</div>;
 }
 
 function renderGate(initialPath: string) {
-	const router = createMemoryRouter([{ path: '*', element: <GateProbe /> }], {
-		initialEntries: [initialPath]
-	});
-	return render(<RouterProvider router={router} />);
+	const router = createMemoryRouter(
+		[
+			{ path: '*', element: <GateProbe /> },
+			{ path: '/auth', element: <div>auth page</div> }
+		],
+		{ initialEntries: [initialPath] }
+	);
+	return { router, ...render(<RouterProvider router={router} />) };
 }
 
 describe('useAuthGate', () => {
 	afterEach(() => {
-		vi.restoreAllMocks();
 		useAuthStore.setState({ status: 'pending', token: null, user: null });
 	});
 
 	it('does nothing while the session bootstrap is still pending', () => {
-		const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {});
 		useAuthStore.setState({ status: 'pending' });
 
-		renderGate('/workspace?tab=models');
+		const { router } = renderGate('/workspace?tab=models');
 
-		expect(assign).not.toHaveBeenCalled();
+		expect(router.state.location.pathname).toBe('/workspace');
+		expect(screen.getByText('protected content')).toBeInTheDocument();
 	});
 
-	it('redirects to /auth with the current path once the session resolves to anonymous', () => {
-		const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {});
+	it('navigates to /auth with the current path once the session resolves to anonymous', async () => {
 		useAuthStore.setState({ status: 'anonymous' });
 
-		renderGate('/workspace?tab=models');
+		const { router } = renderGate('/workspace?tab=models');
 
-		expect(assign).toHaveBeenCalledExactlyOnceWith('/auth?redirect=%2Fworkspace%3Ftab%3Dmodels');
+		expect(await screen.findByText('auth page')).toBeInTheDocument();
+		expect(router.state.location.pathname).toBe('/auth');
+		expect(router.state.location.search).toBe('?redirect=%2Fworkspace%3Ftab%3Dmodels');
 	});
 
 	it('does not redirect once authenticated', () => {
-		const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {});
 		useAuthStore.setState({ status: 'authenticated' });
 
-		renderGate('/workspace');
+		const { router } = renderGate('/workspace');
 
-		expect(assign).not.toHaveBeenCalled();
+		expect(router.state.location.pathname).toBe('/workspace');
+		expect(screen.getByText('protected content')).toBeInTheDocument();
 	});
 });

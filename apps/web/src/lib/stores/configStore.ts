@@ -1,16 +1,34 @@
 import { create } from 'zustand';
+import { APP_NAME } from '@/lib/constants';
 
 // A minimal slice of apps/openwebui/src/lib/stores/index.ts's much larger
 // `Config` type -- that one carries every feature flag the whole app reads
-// (65+ fields); this app only needs `features.enable_benchmarks` so far
-// (the Benchmarks gate, see routes/benchmarks/useBenchmarksGate.ts). Extend
-// as later phases need more of it, rather than porting the whole shape now
-// for fields nothing reads yet.
+// (65+ fields); this app only ports the fields an actual page reads so far
+// (Phase 5's enable_benchmarks; Phase 6's auth/oauth/onboarding/metadata,
+// all -- per main.py's own comment -- "Public: required by login/signup
+// page pre-auth"). Extend as later phases need more of it, rather than
+// porting the whole shape now for fields nothing reads yet.
 export type BackendConfig = {
 	name: string;
 	version: string;
+	onboarding?: boolean;
+	oauth?: {
+		providers?: Record<string, string>;
+		auto_redirect?: boolean;
+	};
+	metadata?: {
+		auth_logo_position?: string;
+		login_footer?: string;
+		[key: string]: unknown;
+	};
 	features?: {
 		enable_benchmarks?: boolean;
+		auth?: boolean;
+		auth_trusted_header?: boolean;
+		enable_signup_password_confirmation?: boolean;
+		enable_ldap?: boolean;
+		enable_signup?: boolean;
+		enable_login_form?: boolean;
 		[key: string]: unknown;
 	};
 	[key: string]: unknown;
@@ -25,3 +43,9 @@ export const useConfigStore = create<ConfigState>((set) => ({
 	config: null,
 	setConfig: (config) => set({ config })
 }));
+
+// Ports apps/openwebui/src/lib/stores/index.ts's `WEBUI_NAME` writable: it
+// seeds from APP_NAME and is overwritten with the backend's own configured
+// instance name once config loads (main.py's `name` field), everywhere the
+// SvelteKit app would read `$WEBUI_NAME` rather than the constant directly.
+export const useWebUIName = () => useConfigStore((state) => state.config?.name || APP_NAME);

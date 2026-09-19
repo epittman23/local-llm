@@ -6,10 +6,10 @@ import { routePaths } from '@/routes/routePaths';
 
 // Ports apps/openwebui/src/routes/(app)/benchmarks/+layout.svelte's own gate
 // verbatim in spirit: `$user?.role !== 'admin' || $config?.features?.enable_benchmarks
-// === false` redirects to `/`. Unlike useAuthGate (which bounces to a
-// still-Svelte `/auth` via a full navigation), this redirects with
-// react-router's own `navigate()` -- `/` is one of *our* real routes
-// (routePaths.home), so there's no reason to leave the SPA for it.
+// === false` redirects to `/`, with react-router's own `navigate()` -- `/`
+// is one of *our* real routes (routePaths.home), so there's no reason to
+// leave the SPA for it. (useAuthGate now does the same for `/auth`; it only
+// used a full navigation before Phase 6, when `/auth` was still Svelte's.)
 //
 // Returns 'pending' while the session or config bootstrap is still in
 // flight (see lib/auth/session.ts's initAuth, which fetches both), so the
