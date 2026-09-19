@@ -141,6 +141,26 @@ const installAuthFetchGuard = () => {
 export const initAuth = async () => {
 	installAuthFetchGuard();
 
+	// Fetched unconditionally, before any session check -- matching
+	// +layout.svelte's own onMount exactly (getBackendConfig() runs first
+	// thing, session or not: "Initialize i18n even if we didn't get a
+	// backend config, so /error can show something that's not undefined").
+	// This was wrongly gated behind a successful session restore until
+	// Phase 6 needed it: main.py's own /api/config groups `auth`,
+	// `enable_login_form`, `enable_ldap`, `enable_signup`, and `oauth`/
+	// `onboarding` under "Public: required by login/signup page pre-auth"
+	// (read directly, not inferred) -- an anonymous visitor landing on
+	// /auth needs exactly these fields before any session exists, and the
+	// old gated-fetch version never gave them one.
+	try {
+		const backendConfig = await getBackendConfig();
+		if (backendConfig) {
+			useConfigStore.getState().setConfig(backendConfig);
+		}
+	} catch (error) {
+		console.error('Failed to load backend config:', error);
+	}
+
 	const token = localStorage.getItem('token');
 	if (!token) {
 		useAuthStore.getState().clearSession();
@@ -155,22 +175,6 @@ export const initAuth = async () => {
 		useAuthStore.getState().clearSession();
 		localStorage.removeItem('token');
 		return () => stopTokenTimer();
-	}
-
-	// Fetched here, not lazily by whatever first needs a feature flag: every
-	// route gate this app has so far (useAuthGate, useBenchmarksGate) needs
-	// config settled at the same time the session itself does, and there's
-	// exactly one bootstrap sequence to add it to. getBackendConfig() (ported
-	// verbatim in apis/index.ts) reads the token cookie the backend's own
-	// sign-in response sets -- see lib/stores/configStore.ts's own note on
-	// why that cookie is already there by the time this runs.
-	try {
-		const backendConfig = await getBackendConfig();
-		if (backendConfig) {
-			useConfigStore.getState().setConfig(backendConfig);
-		}
-	} catch (error) {
-		console.error('Failed to load backend config:', error);
 	}
 
 	stopTokenTimer();
