@@ -23,7 +23,7 @@
 | 4 | Shared foundation: API, auth, stores, i18n, app shell | ✅ done | 2026-09-18 |
 | 5 | Benchmarks surface (proves the pattern) | ✅ done | 2026-09-18 |
 | 6 | Public/static surfaces: auth, error, share, watch | ✅ done | 2026-09-19 |
-| 7 | Workspace surface | ☐ not started | — |
+| 7 | Workspace surface | ▶ in progress (shell, shared kit, access control, Prompts done) | 2026-09-19 |
 | 8 | Admin surface | ☐ not started | — |
 | 9 | Secondary surfaces: notes, calendar, automations, playground, channels | ☐ not started | — |
 | 10 | Chat surface (largest) | ☐ not started | — |
@@ -34,6 +34,68 @@ Status values: `☐ not started` · `▶ in progress` · `✅ done` · `⏸ bloc
 ### Current session notes
 
 _Overwrite this block at the end of every session._
+
+**2026-09-19 (Phase 7, started).** Phase 7 is `▶ in progress`: the shell,
+the shared kit, access control, and the first of the five sections (Prompts)
+are built, verified and committed. **Next action: Skills**
+(`workspace/Skills.svelte` 628 + `Skills/SkillEditor.svelte` 211 +
+`SkillMenu` 105; routes `skills`, `skills/create`, `skills/edit`), then
+Tools (needs CodeMirror), Knowledge, Models, and `functions/create`.
+Prompts is the template: `routes/workspace/prompts/` (list page, create
+dialog, edit view/page), with `lib/access` + `components/common/Access*`
+already covering the Access button every editor has.
+
+Built this session, in commit order:
+
+- **Shell** (`routes/workspace/`): `WorkspaceLayout` (per-section permission
+  gate, five tabs with live counts, split Create button fed by an actions list
+  each section registers), `WorkspaceIndexRedirect`, and `workspaceAccess.ts`
+  (the permission rules as pure functions, 5 unit tests). Kept, and tested, an
+  asymmetry inherited from the Svelte layout: the *tab bar* hides Tools from
+  admins when `enable_plugins` is off, but the *redirect* exempts admins from
+  every check, so a stale bookmark to `/workspace/tools` still opens for them.
+- **Shared kit**: sonner toasts (closing the "no toast system" gap Phases 4-6
+  documented; its theme reads the `<html>` class instead of `next-themes`),
+  `ConfirmDialog`, `Spinner`, `Tip`, `FilterSelects`, `PagePagination`, `Tags`,
+  `useDebouncedValue`, plus `dayjs` and `file-saver`.
+- **Access control**: `lib/access/accessGrants.ts` holds the grant-rewriting
+  rules as pure functions (11 tests) so `AccessControl.tsx` is only state and
+  layout. The legacy two-way `accessControl` binding is *not* ported: a grep
+  for `bind:accessControl` finds no caller in the SvelteKit app.
+- **Prompts**: list (server-side search/filter/sort/pagination, optimistic
+  enable switch, shift-to-delete, clone/import/export, community sharing),
+  create dialog, edit page (autosaving name/command/tags with revert on
+  failure, version history, set-production, delete-version). The Svelte
+  editor's full-page create layout is unreachable and not ported.
+  12 Playwright tests; screenshots of list, create, edit and access dialogs
+  checked by eye.
+
+**Two things found by running, not reading.**
+
+1. **The e2e dev server was dying mid-run.** With no backend on `:4000`, the
+   app's proxied Socket.IO websocket makes Vite's proxy call
+   `socket.destroySoon()`, which Bun's socket does not implement; the
+   TypeError kills the whole `astro dev` process after ~30s and every test
+   still running fails with `ERR_CONNECTION_REFUSED`. Phases 5-6's suites were
+   short enough to finish first. All specs now import `test` from
+   `e2e/test.ts`, whose auto-fixture stubs `/ws`. **Not fixed at the source**:
+   `make astro` and the Playwright `webServer` both run under `bunx --bun`, so
+   a developer running `make astro` while the backend restarts (uvicorn
+   `--reload`) could hit the same crash. Worth a look before Phase 11 — either
+   run the dev server under Node (22 is installed) or guard the proxy.
+2. **My own shell commit broke two older specs** — `smoke` and `public` used
+   `/workspace` as their "placeholder heading renders" example, and I ran only
+   the new spec at that commit. Fixed one commit later (they now use `/notes`,
+   a placeholder until Phase 9). The suite is 39 e2e + 25 unit, all green at
+   HEAD.
+
+**Known gaps, stated plainly.** No page yet calls `useTranslation`: Phases 5,
+6 and 7 all render English literals, though `react-i18next` and the 65 locales
+are wired. Keys are the English strings, so a later pass is mechanical, but it
+is a pass nobody has scheduled. `Export JSON` on the Prompts list exports the
+loaded page (≤30 rows), as the Svelte version does. Nothing here has run
+against a real backend — every test mocks `/api/v1/**`, the same posture as
+Phases 5-6.
 
 **2026-09-19 (Phase 6, resumed after a usage-limit cutoff).** All four
 public pages built, verified, and committed, closing Phase 6. Resumed from
@@ -1022,9 +1084,26 @@ round trip through this app's own `/auth` can't happen until `/next` becomes
 `/`. Sign-in itself was likewise only run against mocked backend responses
 this session, the same posture as Phase 5.
 
-## Phase 7 — Workspace (48 components, ~13.3k LOC)
-- [ ] Models, prompts, knowledge (RAG upload), tools (CodeMirror), skills,
-      functions create.
+## Phase 7 — Workspace (48 components, ~13.3k LOC) ▶
+- [x] Shell: `WorkspaceLayout`, per-section gate, tabs with counts, split
+      Create button, bare-`/workspace` redirect.
+- [x] Shared kit: toasts (sonner), `ConfirmDialog`, `FilterSelects`,
+      `PagePagination`, `Tags`, `Tip`, `Spinner`.
+- [x] Access control: `lib/access`, `AccessControl`, `AccessControlModal`,
+      `AddAccessModal`, `MemberSelector`, `AccessButton`.
+- [x] **Prompts** — list, create, edit + history.
+- [ ] Skills (`skills`, `skills/create`, `skills/edit`).
+- [ ] Tools (`tools`, `tools/create`, `tools/edit`) — first CodeMirror use
+      (`ToolkitEditor`); also `Tools/AddToolMenu`, `common/ValvesModal`,
+      `common/ManifestModal`.
+- [ ] Knowledge (`knowledge`, `knowledge/create`, `knowledge/[id]`) — RAG
+      upload; `KnowledgeBase.svelte` alone is 1,745 lines.
+- [ ] Models (`models`, `models/create`, `models/edit`) — `ModelEditor.svelte`
+      is 1,074 lines plus ~14 selector/capability sub-components.
+- [ ] `functions/create` (the route exists under workspace; the editor is the
+      Tools one).
+- [ ] Phase exit: `MAP.md`, `apps/web/README.md`, dated `docs/CLAUDE.md`
+      entry, ROADMAP pair; Playwright per section.
 
 ## Phase 8 — Admin (63 components, ~23.3k LOC)
 - [ ] Layout + URL-driven `[tab]`, settings, users/groups, evaluations,
