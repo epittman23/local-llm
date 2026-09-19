@@ -3,11 +3,12 @@ import { APP_NAME } from '@/lib/constants';
 
 // A minimal slice of apps/openwebui/src/lib/stores/index.ts's much larger
 // `Config` type -- that one carries every feature flag the whole app reads
-// (65+ fields); this app only ports the fields an actual page reads so far
-// (Phase 5's enable_benchmarks; Phase 6's auth/oauth/onboarding/metadata,
-// all -- per main.py's own comment -- "Public: required by login/signup
-// page pre-auth"). Extend as later phases need more of it, rather than
-// porting the whole shape now for fields nothing reads yet.
+// (65+ fields); this app only ports the fields an actual page reads so far:
+// Phase 5's enable_benchmarks; Phase 6's auth/oauth/onboarding/metadata (all,
+// per main.py's own comment, "Public: required by login/signup page
+// pre-auth"); Phase 7's enable_plugins and enable_community_sharing. Extend as
+// later phases need more of it, rather than porting the whole shape now for
+// fields nothing reads yet.
 export type BackendConfig = {
 	name: string;
 	version: string;
@@ -23,6 +24,8 @@ export type BackendConfig = {
 	};
 	features?: {
 		enable_benchmarks?: boolean;
+		enable_plugins?: boolean;
+		enable_community_sharing?: boolean;
 		auth?: boolean;
 		auth_trusted_header?: boolean;
 		enable_signup_password_confirmation?: boolean;

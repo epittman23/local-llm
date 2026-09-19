@@ -15,6 +15,8 @@ import { ErrorPage } from '@/routes/public/ErrorPage';
 import { SharedChatPage } from '@/routes/public/SharedChatPage';
 import { WatchPage } from '@/routes/public/WatchPage';
 import { routePaths } from '@/routes/routePaths';
+import { PromptEditPage } from '@/routes/workspace/prompts/PromptEditPage';
+import { PromptsPage } from '@/routes/workspace/prompts/PromptsPage';
 import { WorkspaceIndexRedirect } from '@/routes/workspace/WorkspaceIndexRedirect';
 import { WorkspaceLayout } from '@/routes/workspace/WorkspaceLayout';
 
@@ -48,10 +50,9 @@ const router = createBrowserRouter(
 							path: 'knowledge/*',
 							element: <PlaceholderPage title="Knowledge" phase="Phase 7 (in progress)" />
 						},
-						{
-							path: 'prompts/*',
-							element: <PlaceholderPage title="Prompts" phase="Phase 7 (in progress)" />
-						},
+						{ path: 'prompts', element: <PromptsPage /> },
+						{ path: 'prompts/create', element: <PromptsPage showCreateOnMount /> },
+						{ path: 'prompts/:id', element: <PromptEditPage /> },
 						{
 							path: 'skills/*',
 							element: <PlaceholderPage title="Skills" phase="Phase 7 (in progress)" />

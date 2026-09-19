@@ -208,11 +208,13 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
 - **`src/components/layout/`** — `AppShell` (collapsible sidebar, mobile
   Sheet, and the auth gate for everything beneath it) and `Sidebar`.
 - **`src/components/common/`** — app-level components shared across
-  surfaces (not shadcn primitives): `SplitCreateButton`, `Spinner`,
-  `ConfirmDialog`, `FilterSelects` (the workspace View/Tag selectors) and
-  `PagePagination`. The app's toast system (`ui/sonner.tsx`, mounted in
-  `App.tsx`) reads the theme from the `<html>` class rather than
-  `next-themes`.
+  surfaces (not shadcn primitives): `SplitCreateButton`, `Spinner`, `Tip`
+  (tooltip wrapper), `ConfirmDialog`, `FilterSelects` (the workspace
+  View/Tag selectors), `PagePagination`, `Tags`, and the access-control
+  family (`AccessControl`, `AccessControlModal`, `AddAccessModal`,
+  `MemberSelector`, `AccessButton`). The app's toast system
+  (`ui/sonner.tsx`, mounted in `App.tsx`) reads the theme from the `<html>`
+  class rather than `next-themes`.
 - **`src/components/ui/`** — shadcn/ui components (`bunx shadcn add <name>`).
   `src/components/COMMON_MAPPING.md` records where each of the SvelteKit
   app's `common/` components lands.
@@ -226,7 +228,8 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
   `workspace/` is Phase 7's surface: `WorkspaceLayout` (per-section
   permission gate, the five tabs with live counts, the split Create button)
   and `workspaceAccess.ts` (the pure permission rules, unit-tested); the
-  five sections mount beneath it as they are ported.
+  five sections mount beneath it as they are ported. `workspace/prompts/`
+  is the first: list, create dialog, and the edit page with version history.
 - **`src/lib/apis/`** — the SvelteKit app's `src/lib/apis/**` ported
   verbatim (six files `@ts-nocheck`ed for inherited looseness), plus
   `benchmarks/profiles.ts`, new code for the profile CRUD endpoints that
@@ -234,7 +237,9 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
 - **`src/lib/auth/`**, **`stores/`** (Zustand: auth, config, UI),
   **`socket/`**, **`i18n/`** (the fork's 65 locale files, verbatim),
   **`query/`**, **`utils/`** (only the functions from the SvelteKit app's
-  `utils/index.ts` that ported pages actually use), **`icons/MAPPING.md`**.
+  `utils/index.ts` that ported pages actually use), **`icons/MAPPING.md`**,
+  and **`access/`** (`accessGrants.ts`: the pure grant-rewriting rules behind
+  `AccessControl`).
 - **`e2e/`** — Playwright; `global-teardown.ts` force-stops the dev server
   after a run (see its own comment for why that isn't left to Playwright's
   ordinary teardown alone). Specs import `test` from `e2e/test.ts`, not from
