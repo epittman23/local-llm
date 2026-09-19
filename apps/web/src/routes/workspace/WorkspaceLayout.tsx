@@ -45,16 +45,19 @@ const tabClass = ({ isActive }: { isActive: boolean }) =>
  * every pathname change (the Svelte layout re-ran `loadWorkspaceCounts()` on
  * each navigation *inside* /workspace, which refetched five endpoints just to
  * open a create form); sections keep their own count fresh via `setCount` as
- * they load. And the actions list is cleared when the section changes, in an
- * effect, instead of by a reactive statement -- same behavior, but explicit
- * about being an effect.
+ * they load. And a section clears its own actions when it unmounts, rather than
+ * the layout clearing them when the path changes: React runs a child's effects
+ * before its parent's, so a layout-side clear ran *after* the new section had
+ * registered and wiped the Create button every time.
  */
 export function WorkspaceLayout() {
 	const authStatus = useAuthStore((s) => s.status);
 	const user = useAuthStore((s) => s.user);
 	const token = useAuthStore((s) => s.token);
 	const config = useConfigStore((s) => s.config);
-	const { actions, counts, setCounts, setActions } = useWorkspaceStore();
+	const actions = useWorkspaceStore((s) => s.actions);
+	const counts = useWorkspaceStore((s) => s.counts);
+	const setCounts = useWorkspaceStore((s) => s.setCounts);
 	const { pathname } = useLocation();
 	const navigate = useNavigate();
 	const redirected = useRef(false);
@@ -68,12 +71,6 @@ export function WorkspaceLayout() {
 		redirected.current = true;
 		navigate(routePaths.home, { replace: true });
 	}, [settled, allowed, navigate]);
-
-	// Each section registers its own actions on mount; anything left over from
-	// the previous section must not leak into the next one's Create button.
-	useEffect(() => {
-		setActions([]);
-	}, [section, setActions]);
 
 	useEffect(() => {
 		if (!allowed || !token) return;

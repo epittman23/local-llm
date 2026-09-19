@@ -2,17 +2,13 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import saveAs from 'file-saver';
 import {
 	Check,
-	ChevronDown,
-	ChevronUp,
 	Clipboard,
 	Copy,
 	Download,
 	MoreHorizontal,
 	Pencil,
-	Search,
 	Share2,
-	Trash2,
-	X
+	Trash2
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
@@ -21,9 +17,9 @@ import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
 import { TagSelector, ViewSelector } from '@/components/common/FilterSelects';
+import { ListEmptyState, ListSearchBar, SortHeaderButton, isControlClick } from '@/components/common/ListChrome';
 import { Tip } from '@/components/common/Tip';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -45,6 +41,7 @@ import { useWorkspaceStore } from '@/lib/stores/workspaceStore';
 import { capitalizeFirstLetter, copyToClipboard, slugify } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
+import { useShiftKey } from '@/lib/utils/useShiftKey';
 import { routePaths } from '@/routes/routePaths';
 import { PromptCreateDialog } from './PromptCreateDialog';
 import {
@@ -81,7 +78,8 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 	const webuiName = useWebUIName();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
-	const { setActions, setCount } = useWorkspaceStore();
+	const setActions = useWorkspaceStore((s) => s.setActions);
+	const setCount = useWorkspaceStore((s) => s.setCount);
 
 	const [query, setQuery] = useState('');
 	const debouncedQuery = useDebouncedValue(query, 300);
@@ -95,7 +93,7 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 	const [createDraft, setCreateDraft] = useState<PromptDraft | null>(null);
 	const [deleting, setDeleting] = useState<PromptListItem | null>(null);
 	const [copiedId, setCopiedId] = useState<string | null>(null);
-	const [shiftKey, setShiftKey] = useState(false);
+	const shiftKey = useShiftKey();
 	// Enable/disable is optimistic: the switch flips at once and rolls back if the call fails.
 	const [activeOverride, setActiveOverride] = useState<Record<string, boolean>>({});
 	const importInput = useRef<HTMLInputElement>(null);
@@ -163,22 +161,8 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 				visible: canExport
 			}
 		]);
+		return () => setActions([]);
 	}, [setActions, canImport, canExport, prompts]);
-
-	// --- Shift turns each row's copy/menu into a one-click delete --------
-	useEffect(() => {
-		const down = (e: KeyboardEvent) => e.key === 'Shift' && setShiftKey(true);
-		const up = (e: KeyboardEvent) => e.key === 'Shift' && setShiftKey(false);
-		const blur = () => setShiftKey(false);
-		window.addEventListener('keydown', down);
-		window.addEventListener('keyup', up);
-		window.addEventListener('blur', blur);
-		return () => {
-			window.removeEventListener('keydown', down);
-			window.removeEventListener('keyup', up);
-			window.removeEventListener('blur', blur);
-		};
-	}, []);
 
 	// --- prompts arriving from the Open WebUI community site -------------
 	useEffect(() => {
@@ -326,14 +310,7 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 		}
 		setPage(1);
 	};
-	const sortIndicator = (key: string) =>
-		sortKey === key ? sortDirection === 'asc' ? <ChevronUp className="size-2" /> : <ChevronDown className="size-2" /> : null;
-
 	const openPrompt = (prompt: PromptListItem) => navigate(`${routePaths.workspacePrompts}/${prompt.id}`);
-	// A click on a control inside the row belongs to the control, not the row.
-	const isControlClick = (target: EventTarget | null) =>
-		target instanceof Element && !!target.closest('button, a, input, [role="menu"]');
-
 	useEffect(() => {
 		document.title = `Prompts / ${webuiName}`;
 	}, [webuiName]);
@@ -366,56 +343,33 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 				onChange={(e) => e.target.files?.[0] && importFile(e.target.files[0])}
 			/>
 
-			<div className="flex h-8 w-full items-center gap-2">
-				<div className="flex min-w-0 flex-1 items-center">
-					<Search className="text-muted-foreground mr-3 ml-1 size-3.5" />
-					<input
-						className="w-full rounded-r-xl bg-transparent py-1 pr-4 text-sm outline-hidden"
-						value={query}
-						onChange={(e) => {
-							setQuery(e.target.value);
+			<ListSearchBar
+				value={query}
+				placeholder="Search Prompts"
+				onChange={(value) => {
+					setQuery(value);
+					setPage(1);
+				}}
+			>
+				<ViewSelector
+					value={viewOption}
+					onChange={(value) => {
+						localStorage.workspaceViewOption = value;
+						setViewOption(value);
+						setPage(1);
+					}}
+				/>
+				{tags.length > 0 && (
+					<TagSelector
+						value={selectedTag}
+						tags={tags}
+						onChange={(value) => {
+							setSelectedTag(value);
 							setPage(1);
 						}}
-						aria-label="Search Prompts"
-						placeholder="Search Prompts"
 					/>
-					{query && (
-						<button
-							type="button"
-							className="hover:bg-muted rounded-full p-0.5 transition"
-							aria-label="Clear search"
-							onClick={() => {
-								setQuery('');
-								setPage(1);
-							}}
-						>
-							<X className="size-3" strokeWidth={2} />
-						</button>
-					)}
-				</div>
-				<div className="flex max-w-[55%] shrink-0 overflow-x-auto">
-					<div className="flex w-fit gap-0.5 whitespace-nowrap">
-						<ViewSelector
-							value={viewOption}
-							onChange={(value) => {
-								localStorage.workspaceViewOption = value;
-								setViewOption(value);
-								setPage(1);
-							}}
-						/>
-						{tags.length > 0 && (
-							<TagSelector
-								value={selectedTag}
-								tags={tags}
-								onChange={(value) => {
-									setSelectedTag(value);
-									setPage(1);
-								}}
-							/>
-						)}
-					</div>
-				</div>
-			</div>
+				)}
+			</ListSearchBar>
 
 			{prompts === null ? (
 				<div className="my-16 mb-24 flex h-full w-full items-center justify-center">
@@ -424,23 +378,21 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 			) : prompts.length !== 0 ? (
 				<div className={list.isPlaceholderData ? 'my-1 opacity-60 transition' : 'my-1 transition'}>
 					<div className="text-muted-foreground flex w-full items-center gap-2 px-1.5 pb-0.5 text-xs">
-						<button
-							type="button"
+						<SortHeaderButton
+							label="Title"
+							active={sortKey === 'name'}
+							direction={sortDirection}
 							className="flex min-w-0 flex-1 items-center gap-1 py-0.5 text-left"
 							onClick={() => sortBy('name')}
-						>
-							Title
-							{sortIndicator('name')}
-						</button>
+						/>
 						<div className="hidden w-44 shrink-0 md:block" />
-						<button
-							type="button"
+						<SortHeaderButton
+							label="Updated at"
+							active={sortKey === 'updated_at'}
+							direction={sortDirection}
 							className="flex w-36 shrink-0 items-center justify-end gap-1 py-0.5 text-right"
 							onClick={() => sortBy('updated_at')}
-						>
-							Updated at
-							{sortIndicator('updated_at')}
-						</button>
+						/>
 					</div>
 
 					<div className="grid gap-y-0.5">
@@ -600,14 +552,7 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 					</div>
 				</div>
 			) : (
-				<div className="flex w-full flex-col items-center justify-center py-16 pb-24">
-					<div className="max-w-sm text-center">
-						<div className="mb-1.5 text-sm">No prompts found</div>
-						<div className="text-muted-foreground text-center text-xs leading-5">
-							Try adjusting your search or filter to find what you are looking for.
-						</div>
-					</div>
-				</div>
+				<ListEmptyState title="No prompts found" />
 			)}
 
 			{total > PER_PAGE && (

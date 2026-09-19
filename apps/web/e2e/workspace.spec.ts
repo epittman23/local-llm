@@ -62,3 +62,19 @@ test.describe('workspace shell', () => {
 		await expect(page.getByRole('navigation').getByRole('link', { name: /^Tools/ })).toHaveCount(0);
 	});
 });
+
+test.describe('workspace Create button', () => {
+	test('shows the current section\'s actions, and clears them when the section changes', async ({
+		page
+	}) => {
+		await mockWorkspaceBackend(page);
+		await page.goto('/workspace/prompts');
+		// Prompts registers Create + Import + Export, so it is the split button.
+		await expect(page.getByRole('button', { name: 'Create', exact: true })).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Open create menu' })).toBeVisible();
+
+		// An editor page registers nothing: the button goes away.
+		await page.goto('/workspace/prompts/p1');
+		await expect(page.getByRole('button', { name: 'Create', exact: true })).toHaveCount(0);
+	});
+});
