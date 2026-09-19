@@ -1,3 +1,4 @@
+import { Toaster } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { AuthProvider } from '@/lib/auth/AuthProvider';
 import { I18nProvider } from '@/lib/i18n/I18nProvider';
@@ -20,6 +21,7 @@ export default function App() {
 					<SocketProvider>
 						<TooltipProvider>
 							<AppRouter />
+							<Toaster />
 						</TooltipProvider>
 					</SocketProvider>
 				</AuthProvider>

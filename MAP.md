@@ -208,7 +208,11 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
 - **`src/components/layout/`** — `AppShell` (collapsible sidebar, mobile
   Sheet, and the auth gate for everything beneath it) and `Sidebar`.
 - **`src/components/common/`** — app-level components shared across
-  surfaces (not shadcn primitives): `SplitCreateButton` so far.
+  surfaces (not shadcn primitives): `SplitCreateButton`, `Spinner`,
+  `ConfirmDialog`, `FilterSelects` (the workspace View/Tag selectors) and
+  `PagePagination`. The app's toast system (`ui/sonner.tsx`, mounted in
+  `App.tsx`) reads the theme from the `<html>` class rather than
+  `next-themes`.
 - **`src/components/ui/`** — shadcn/ui components (`bunx shadcn add <name>`).
   `src/components/COMMON_MAPPING.md` records where each of the SvelteKit
   app's `common/` components lands.
