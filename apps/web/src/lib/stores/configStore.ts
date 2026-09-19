@@ -14,6 +14,8 @@ export type BackendConfig = {
 	version: string;
 	/** Upload limits (max_size is in MB). */
 	file?: { max_size?: number | null };
+	/** Comma-separated model ids pinned for users who have not chosen their own. */
+	default_pinned_models?: string | null;
 	onboarding?: boolean;
 	oauth?: {
 		providers?: Record<string, string>;

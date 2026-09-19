@@ -41,6 +41,9 @@ export default defineConfig({
 				'/ollama': { target: backendTarget, changeOrigin: true },
 				'/openai': { target: backendTarget, changeOrigin: true },
 				'/oauth': { target: backendTarget, changeOrigin: true },
+				// The backend serves its own static assets (the fallback model logo, ...)
+				// at /static -- there is no such folder in this app's public/.
+				'/static': { target: backendTarget, changeOrigin: true },
 				'/ws': { target: backendTarget, changeOrigin: true, ws: true }
 			}
 		}

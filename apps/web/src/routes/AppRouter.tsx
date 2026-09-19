@@ -23,6 +23,8 @@ import { ToolCreatePage, ToolEditPage } from '@/routes/workspace/tools/ToolPages
 import { ToolsPage } from '@/routes/workspace/tools/ToolsPage';
 import { KnowledgeBasePage } from '@/routes/workspace/knowledge/KnowledgeBasePage';
 import { KnowledgePage } from '@/routes/workspace/knowledge/KnowledgePage';
+import { ModelCreatePage, ModelEditPage } from '@/routes/workspace/models/ModelPages';
+import { ModelsPage } from '@/routes/workspace/models/ModelsPage';
 import { WorkspaceIndexRedirect } from '@/routes/workspace/WorkspaceIndexRedirect';
 import { WorkspaceLayout } from '@/routes/workspace/WorkspaceLayout';
 
@@ -48,10 +50,9 @@ const router = createBrowserRouter(
 					element: <WorkspaceLayout />,
 					children: [
 						{ index: true, element: <WorkspaceIndexRedirect /> },
-						{
-							path: 'models/*',
-							element: <PlaceholderPage title="Models" phase="Phase 7 (in progress)" />
-						},
+						{ path: 'models', element: <ModelsPage /> },
+						{ path: 'models/create', element: <ModelCreatePage /> },
+						{ path: 'models/edit', element: <ModelEditPage /> },
 						{ path: 'knowledge', element: <KnowledgePage /> },
 						{ path: 'knowledge/create', element: <KnowledgePage showCreateOnMount /> },
 						{ path: 'knowledge/:id', element: <KnowledgeBasePage /> },
