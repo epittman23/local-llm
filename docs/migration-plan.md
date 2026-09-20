@@ -24,7 +24,7 @@
 | 5 | Benchmarks surface (proves the pattern) | ✅ done | 2026-09-18 |
 | 6 | Public/static surfaces: auth, error, share, watch | ✅ done | 2026-09-19 |
 | 7 | Workspace surface | ✅ done | 2026-09-20 |
-| 8 | Admin surface | ☐ not started | — |
+| 8 | Admin surface | ▶ in progress | 2026-09-20 |
 | 9 | Secondary surfaces: notes, calendar, automations, playground, channels | ☐ not started | — |
 | 10 | Chat surface (largest) | ☐ not started | — |
 | 11 | Cutover and Svelte removal | ☐ not started | — |
@@ -34,6 +34,40 @@ Status values: `☐ not started` · `▶ in progress` · `✅ done` · `⏸ bloc
 ### Current session notes
 
 _Overwrite this block at the end of every session._
+
+**2026-09-20 (Phase 8, in progress).** Done and committed, in order: the admin
+shell (`routes/admin/AdminLayout`, gate, tab bar, redirects), **Users + Groups**
+(`04a91cd`), **Functions** (`9ecebb2`), **Evaluations** (`5144190`, plus the CSV
+injection fix `f1bed6e`), and the **Settings modal host with its first five
+tabs** (`3f67ae4`: Sub-agents, Evaluations, Code Execution, Pipelines, Database).
+`astro check` 0 errors, 180 Vitest tests, 147 Playwright tests, all green.
+
+**Two things the plan had wrong.** (1) `/admin/settings[/<tab>]` and
+`/admin/analytics[/<tab>]` are *not pages* in this fork: they redirect to
+`/?settings=admin:<tab>`, a modal in `chat/SettingsModal.svelte`. So ~15k of Phase
+8's 23k LOC (the 16 admin Settings tabs, Analytics included) are modal content, and
+the modal shell is a Phase 8 deliverable here: `components/settings/SettingsModal`
+lists whichever tabs have a component in `adminTabComponents.ts`, so a tab is added
+by registering it there. Phase 10 adds the personal tabs to the same list.
+(2) "analytics (`chart.js`)": only the Leaderboard's activity chart uses chart.js;
+Analytics' `ChartLine` is hand-rolled SVG.
+
+**Remaining Phase 8 work, in this order:** the other 11 Settings tabs -- General
+(with Events, Banners, `InterfaceSettings`), Authentication, Connections (+3 small
+components), Interface, Integrations (with ExternalKnowledge), Audio, Images,
+Documents, Web Search, Models (the biggest: 3.3k LOC across ManageOllama etc.) --
+and Analytics (`Dashboard`, `ChartLine`, `AnalyticsModelModal`). Then the exit
+paperwork: `MAP.md`, `apps/web/README.md`, `docs/START.md`'s route tables (the
+`/admin` rows and the "Settings is a modal" note), a dated `docs/CLAUDE.md`
+entry, the ROADMAP pair. Templates: `routes/admin/settings/CodeExecution.tsx`
+(a config form with conditional blocks), `Pipelines.tsx` (async lists),
+`Evaluations.tsx` (save-on-change list), and `components/settings/controls.tsx`.
+
+**Test-infra note.** Playwright's `webServer` gives Vite 30s to start, and a cold
+start after a dependency change takes longer, so a run can die with "Dev server
+failed to start". Start the server yourself (`bunx --bun astro dev --background
+--port 5174`, wait for `:5174`) and rerun; the first run after adding a dependency
+may also flake a test or two while Vite re-optimizes, and passes on repeat.
 
 **2026-09-20 (Phase 7 closed out).** Models was the last section (commit
 `4cdc230`); this session verified the whole phase at HEAD and finished the
@@ -1161,9 +1195,27 @@ this session, the same posture as Phase 5.
       entry, ROADMAP pair; Playwright per section. (From Phase 8 on, also
       `docs/START.md`'s route tables.)
 
-## Phase 8 — Admin (63 components, ~23.3k LOC)
-- [ ] Layout + URL-driven `[tab]`, settings, users/groups, evaluations,
-      functions, analytics (`chart.js`).
+## Phase 8 — Admin (63 components, ~23.3k LOC) ▶
+- [x] Shell: `AdminLayout` (admin-only gate; `/admin/functions` bounces when
+      plugins are off), Users / Evaluations / Functions / Settings tabs, index
+      redirects, `/admin/settings[/<tab>]` and `/admin/analytics` redirects into
+      the Settings modal.
+- [x] **Users + Groups** -- list (paginated, sortable, debounced search), add
+      (form + CSV), edit, chats, access preview, delete; groups with the 66
+      permission switches table-driven (`permissionRows.ts`), CSV member import,
+      default-permissions modal.
+- [x] **Functions** -- list, editor (Filter/Event starters), create/edit,
+      import/export, valves, global switch.
+- [x] **Evaluations** -- leaderboard with the chart.js activity chart, feedback
+      table, details dialog, JSON/CSV export.
+- [x] Settings modal host (`components/settings/`) + tabs: Sub-agents,
+      Evaluations, Code Execution, Pipelines, Database.
+- [ ] Settings tabs: General (+ Events, Banners, InterfaceSettings),
+      Authentication, Connections, Interface, Integrations (+ ExternalKnowledge),
+      Audio, Images, Documents, Web Search, Models.
+- [ ] Analytics tab (`Dashboard`, `ChartLine`, `AnalyticsModelModal`).
+- [ ] Phase exit: `MAP.md`, `apps/web/README.md`, `docs/START.md` route tables,
+      dated `docs/CLAUDE.md` entry, ROADMAP pair.
 
 ## Phase 9 — Secondary surfaces
 - [ ] Notes (TipTap), calendar, automations, playground, channels (first
