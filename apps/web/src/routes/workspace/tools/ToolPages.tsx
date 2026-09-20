@@ -3,28 +3,13 @@ import { useNavigate, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { Spinner } from '@/components/common/Spinner';
 import { createNewTool, getToolById, updateToolById } from '@/lib/apis/tools';
-import { WEBUI_VERSION } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { compareVersion, extractFrontmatter } from '@/lib/utils/plugins';
+import { refusedForVersion } from '@/lib/utils/pluginVersion';
 import { routePaths } from '@/routes/routePaths';
 import { ToolkitEditor } from './ToolkitEditor';
 import { type ToolDraft, sanitizeIncomingTool } from './toolTypes';
 
 const COMMUNITY_ORIGINS = ['https://openwebui.com', 'https://www.openwebui.com', 'http://localhost:9999'];
-
-/**
- * True (after toasting) when the tool's `required_open_webui_version` header asks
- * for a newer app than this one, in which case saving is refused.
- */
-function refusedForVersion(content: string): boolean {
-	const required = extractFrontmatter(content).required_open_webui_version ?? '0.0.0';
-	if (!compareVersion(required, WEBUI_VERSION)) return false;
-	// LICENSE covers this Open WebUI wordmark.
-	// Do not alter, remove, obscure, or replace it except as LICENSE permits:
-	// https://docs.openwebui.com/license.
-	toast.error(`Open WebUI version (v${WEBUI_VERSION}) is lower than required version (v${required})`);
-	return true;
-}
 
 const payload = (t: ToolDraft) => ({ id: t.id, name: t.name, meta: t.meta, content: t.content, access_grants: t.access_grants });
 

@@ -1,6 +1,8 @@
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
 import { AppShell } from '@/components/layout/AppShell';
 import { AdminLayout } from '@/routes/admin/AdminLayout';
+import { FunctionCreatePage, FunctionEditPage } from '@/routes/admin/functions/FunctionPages';
+import { FunctionsPage } from '@/routes/admin/functions/FunctionsPage';
 import { UsersPage } from '@/routes/admin/users/UsersPage';
 import { AnswersPage } from '@/routes/benchmarks/AnswersPage';
 import { BenchmarksLayout } from '@/routes/benchmarks/BenchmarksLayout';
@@ -68,8 +70,7 @@ const router = createBrowserRouter(
 						{ path: 'tools/create', element: <ToolCreatePage /> },
 						{ path: 'tools/edit', element: <ToolEditPage /> },
 						// (app)/workspace/functions/create/+page.svelte is only a redirect to the
-						// admin surface (Phase 8). That path is still Svelte's, so this hands off
-						// through LegacyFallback until Phase 8 makes it a real route.
+						// admin surface; /admin/functions/create is a real route as of Phase 8.
 						{ path: 'functions/create', element: <Navigate to="/admin/functions/create" replace /> }
 					]
 				},
@@ -81,7 +82,10 @@ const router = createBrowserRouter(
 						// (onMount goto); ported as index routes.
 						{ index: true, element: <Navigate to={routePaths.adminUsers} replace /> },
 						{ path: 'users', element: <Navigate to={routePaths.adminUsersOverview} replace /> },
-						{ path: 'users/:tab', element: <UsersPage /> }
+						{ path: 'users/:tab', element: <UsersPage /> },
+						{ path: 'functions', element: <FunctionsPage /> },
+						{ path: 'functions/create', element: <FunctionCreatePage /> },
+						{ path: 'functions/edit', element: <FunctionEditPage /> }
 					]
 				},
 				{ path: routePaths.notes, element: <PlaceholderPage title="Notes" phase="Phase 9" /> },
