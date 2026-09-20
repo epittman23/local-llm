@@ -8,6 +8,7 @@ import { type ComponentType, type LazyExoticComponent, lazy } from 'react';
  * showing a dead one.
  */
 export const adminTabComponents: Record<string, LazyExoticComponent<ComponentType>> = {
+	'admin:connections': lazy(() => import('@/routes/admin/settings/Connections')),
 	'admin:subagents': lazy(() => import('@/routes/admin/settings/Subagents')),
 	'admin:evaluations': lazy(() => import('@/routes/admin/settings/Evaluations')),
 	'admin:code-execution': lazy(() => import('@/routes/admin/settings/CodeExecution')),

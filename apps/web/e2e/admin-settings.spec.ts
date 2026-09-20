@@ -68,10 +68,13 @@ test.describe('settings modal host', () => {
 
 	test('an unimplemented or unknown tab falls back to the first listed', async ({ page }) => {
 		await mockWorkspaceBackend(page);
-		await mockConfigApi(page, '/configs', { '/configs/subagents': {} });
+		await page.route('**/openai/config', (route) => json(route, { ENABLE_OPENAI_API: false, OPENAI_API_BASE_URLS: [], OPENAI_API_KEYS: [], OPENAI_API_CONFIGS: {} }));
+		await page.route('**/ollama/config', (route) => json(route, { ENABLE_OLLAMA_API: false, OLLAMA_BASE_URLS: [], OLLAMA_API_CONFIGS: {} }));
+		await mockConfigApi(page, '/configs', {});
 		await page.goto('/?settings=admin:nonsense');
-		// Sub-agents is first in the list among the ported tabs.
-		await expect(modal(page).getByRole('tab', { selected: true })).toHaveText('Sub-agents');
+		// Whatever is first in the list, not whatever was asked for.
+		const first = await modal(page).getByRole('tab').first().innerText();
+		await expect(modal(page).getByRole('tab', { selected: true })).toHaveText(first);
 	});
 
 	test('search filters by title and keyword, and moves the selection to the first match', async ({ page }) => {
@@ -282,5 +285,171 @@ test.describe('settings: Pipelines', () => {
 		await m.getByLabel('Tags', { exact: true }).fill('x, y');
 		await m.getByRole('button', { name: 'Save' }).click();
 		await expect.poll(() => updated).toEqual({ api_key: 'k-1', tags: ['x', 'y'] });
+	});
+});
+
+test.describe('settings: Connections', () => {
+	type Upstream = { openaiUpdate: Rec | null; ollamaUpdate: Rec | null; directUpdate: Rec | null; verify: Rec | null };
+
+	async function mockUpstreams(page: Page, opts: { openai?: Rec; ollama?: Rec; direct?: Rec } = {}) {
+		const seen: Upstream = { openaiUpdate: null, ollamaUpdate: null, directUpdate: null, verify: null };
+		const openai = {
+			ENABLE_OPENAI_API: true,
+			OPENAI_API_BASE_URLS: ['https://openrouter.ai/api/v1', 'http://localhost:8090/v1'],
+			OPENAI_API_KEYS: ['sk-or', ''],
+			OPENAI_API_CONFIGS: { 0: { enable: true, prefix_id: 'or' }, 1: { enable: false } },
+			...opts.openai
+		};
+		await page.route('**/openai/config', (route) => json(route, openai));
+		await page.route('**/openai/config/update', (route) => {
+			seen.openaiUpdate = route.request().postDataJSON();
+			return json(route, seen.openaiUpdate);
+		});
+		await page.route('**/openai/verify', (route) => {
+			seen.verify = route.request().postDataJSON();
+			return json(route, { data: [] });
+		});
+		await page.route('**/openai/models/*', (route) => json(route, { data: [], pipelines: route.request().url().endsWith('/0') }));
+		await page.route('**/ollama/config', (route) => json(route, { ENABLE_OLLAMA_API: false, OLLAMA_BASE_URLS: [], OLLAMA_API_CONFIGS: {}, ...opts.ollama }));
+		await page.route('**/ollama/config/update', (route) => {
+			seen.ollamaUpdate = route.request().postDataJSON();
+			return json(route, seen.ollamaUpdate);
+		});
+		await page.route('**/api/v1/configs/connections', (route) => {
+			if (route.request().method() === 'POST') {
+				seen.directUpdate = route.request().postDataJSON();
+				return json(route, seen.directUpdate);
+			}
+			return json(route, { ENABLE_DIRECT_CONNECTIONS: false, ENABLE_BASE_MODELS_CACHE: false, ...opts.direct });
+		});
+		await page.route('**/api/models*', (route) => json(route, { data: [] }));
+		return seen;
+	}
+
+	test('lists the upstreams, marks a disabled one, and flags a Pipelines server', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockUpstreams(page);
+		await page.goto('/?settings=admin:connections');
+		const m = modal(page);
+		await expect(m.getByLabel('API Base URL').first()).toHaveValue('https://openrouter.ai/api/v1');
+		await expect(m.getByLabel('API Base URL').nth(1)).toHaveValue('http://localhost:8090/v1');
+		await expect(m.getByRole('switch', { name: 'Disable https://openrouter.ai/api/v1' })).toBeChecked();
+		await expect(m.getByRole('switch', { name: 'Enable http://localhost:8090/v1' })).not.toBeChecked();
+		await expect(m.getByText('pipeline', { exact: true })).toHaveCount(1);
+	});
+
+	test('the enable switch saves at once, keeping every other upstream as it was', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const seen = await mockUpstreams(page);
+		await page.goto('/?settings=admin:connections');
+		await modal(page).getByRole('switch', { name: 'Enable http://localhost:8090/v1' }).click();
+		await expect.poll(() => seen.openaiUpdate).toEqual({
+			ENABLE_OPENAI_API: true,
+			OPENAI_API_BASE_URLS: ['https://openrouter.ai/api/v1', 'http://localhost:8090/v1'],
+			OPENAI_API_KEYS: ['sk-or', ''],
+			OPENAI_API_CONFIGS: { 0: { enable: true, prefix_id: 'or' }, 1: { enable: true } }
+		});
+	});
+
+	test('adding a connection appends the URL (minus a trailing slash), key and config, and saves', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const seen = await mockUpstreams(page);
+		await page.goto('/?settings=admin:connections');
+		await modal(page).getByRole('button', { name: 'Add OpenAI Connection' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Add Connection' });
+		await dialog.getByLabel('URL', { exact: true }).fill('https://api.groq.com/openai/v1/');
+		await dialog.getByPlaceholder('API Key').fill('gsk_123');
+		await dialog.getByRole('button', { name: 'Save' }).click();
+		await expect.poll(() => seen.openaiUpdate?.OPENAI_API_BASE_URLS).toEqual(['https://openrouter.ai/api/v1', 'http://localhost:8090/v1', 'https://api.groq.com/openai/v1']);
+		expect(seen.openaiUpdate?.OPENAI_API_KEYS).toEqual(['sk-or', '', 'gsk_123']);
+		expect(seen.openaiUpdate?.OPENAI_API_CONFIGS[2]).toMatchObject({ enable: true, connection_type: 'external', auth_type: 'bearer', model_ids: [] });
+	});
+
+	test('deleting the first connection re-indexes the config map', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const seen = await mockUpstreams(page);
+		await page.goto('/?settings=admin:connections');
+		await modal(page).getByRole('button', { name: 'Configure https://openrouter.ai/api/v1' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Edit Connection' });
+		await expect(dialog.getByLabel('URL', { exact: true })).toHaveValue('https://openrouter.ai/api/v1');
+		await dialog.getByRole('button', { name: 'Delete' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+		await expect.poll(() => seen.openaiUpdate).toMatchObject({
+			OPENAI_API_BASE_URLS: ['http://localhost:8090/v1'],
+			OPENAI_API_KEYS: [''],
+			OPENAI_API_CONFIGS: { 0: { enable: false } }
+		});
+	});
+
+	test('Azure needs an API version, then deployment names', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const seen = await mockUpstreams(page);
+		await page.goto('/?settings=admin:connections');
+		await modal(page).getByRole('button', { name: 'Add OpenAI Connection' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Add Connection' });
+		await dialog.getByLabel('URL', { exact: true }).fill('https://mine.openai.azure.com');
+		await dialog.getByPlaceholder('API Key').fill('k');
+		await dialog.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('API Version is required')).toBeVisible();
+		await dialog.getByLabel('API Version').fill('2024-02-01');
+		await dialog.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('Deployment names are required for Azure OpenAI')).toBeVisible();
+		await dialog.getByLabel('Add a model ID').fill('gpt-4o');
+		await dialog.getByRole('button', { name: 'Add', exact: true }).click();
+		await dialog.getByRole('button', { name: 'Save' }).click();
+		await expect.poll(() => seen.openaiUpdate?.OPENAI_API_CONFIGS?.[2]).toMatchObject({ azure: true, api_version: '2024-02-01', model_ids: ['gpt-4o'] });
+	});
+
+	test('bad headers JSON is refused and does not leave Save spinning', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const seen = await mockUpstreams(page);
+		await page.goto('/?settings=admin:connections');
+		await modal(page).getByRole('button', { name: 'Add OpenAI Connection' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Add Connection' });
+		await dialog.getByLabel('URL', { exact: true }).fill('https://x.example/v1');
+		await dialog.getByRole('button', { name: 'Advanced' }).click();
+		await dialog.getByLabel('Headers').fill('[1, 2]');
+		await dialog.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('Headers must be a valid JSON object')).toBeVisible();
+		await expect(dialog.getByRole('button', { name: 'Save' })).toBeEnabled();
+		await expect(dialog.getByRole('status')).toHaveCount(0);
+		expect(seen.openaiUpdate).toBeNull();
+	});
+
+	test('Verify Connection sends the URL, key and auth config', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const seen = await mockUpstreams(page);
+		await page.goto('/?settings=admin:connections');
+		await modal(page).getByRole('button', { name: 'Add OpenAI Connection' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Add Connection' });
+		await dialog.getByLabel('URL', { exact: true }).fill('http://localhost:8090/v1/');
+		await dialog.getByPlaceholder('API Key').fill('local');
+		await dialog.getByRole('button', { name: 'Verify Connection' }).click();
+		await expect.poll(() => seen.verify).toMatchObject({ url: 'http://localhost:8090/v1', key: 'local', config: { auth_type: 'bearer' } });
+		await expect(page.getByText('Server connection verified')).toBeVisible();
+	});
+
+	test('Ollama connections save their key inside the config, and Direct Connections saves at once', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const seen = await mockUpstreams(page, { ollama: { ENABLE_OLLAMA_API: true } });
+		await page.goto('/?settings=admin:connections');
+		await modal(page).getByRole('button', { name: 'Add Ollama Connection' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Add Connection' });
+		await dialog.getByLabel('URL', { exact: true }).fill('http://localhost:11434');
+		await dialog.getByPlaceholder('API Key').fill('olk');
+		await dialog.getByRole('button', { name: 'Save' }).click();
+		await expect.poll(() => seen.ollamaUpdate).toMatchObject({ ENABLE_OLLAMA_API: true, OLLAMA_BASE_URLS: ['http://localhost:11434'], OLLAMA_API_CONFIGS: { 0: { key: 'olk', connection_type: 'local' } } });
+
+		await modal(page).getByRole('switch', { name: 'Direct Connections' }).click();
+		await expect.poll(() => seen.directUpdate).toEqual({ ENABLE_DIRECT_CONNECTIONS: true, ENABLE_BASE_MODELS_CACHE: false });
+	});
+
+	test('the OpenAI API switch turns the list off and saves that', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const seen = await mockUpstreams(page);
+		await page.goto('/?settings=admin:connections');
+		await modal(page).getByRole('switch', { name: 'OpenAI API' }).click();
+		await expect.poll(() => seen.openaiUpdate?.ENABLE_OPENAI_API).toBe(false);
+		await expect(modal(page).getByLabel('API Base URL')).toHaveCount(0);
 	});
 });
