@@ -290,6 +290,16 @@ or agent) updates the docs in the same commit:
   corresponding entry in `MAP.md` in the same change. `MAP.md` is a
   structural index only — per-file rationale and conventions stay documented
   here in "Conventions," not duplicated there.
+- **`docs/START.md` mirrors how the app runs today.** Whenever a change alters
+  how the backend or either frontend is started (the `Makefile` targets, ports,
+  required `infra/.env` keys, tool versions), adds, removes, renames or changes
+  the query parameters of a URL the Astro app serves (`apps/web/src/routes/
+  AppRouter.tsx` / `routePaths.ts`), or moves a surface between the Svelte and
+  Astro apps, update `START.md` in the same change. Each migration phase's exit
+  checklist includes a pass over its route tables. Like `migration-plan.md`,
+  it is temporary: delete it (and its `MAP.md` entry) at Phase 11's cutover,
+  when there is one app and one way to run it, and fold what survives into
+  `README.md`.
 
 ## Commit policy
 

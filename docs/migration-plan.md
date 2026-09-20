@@ -1158,7 +1158,8 @@ this session, the same posture as Phase 5.
 - [x] `functions/create` — a redirect to `/admin/functions/create` in the
       Svelte app too; kept as a redirect (via LegacyFallback) until Phase 8.
 - [x] Phase exit: `MAP.md`, `apps/web/README.md`, dated `docs/CLAUDE.md`
-      entry, ROADMAP pair; Playwright per section.
+      entry, ROADMAP pair; Playwright per section. (From Phase 8 on, also
+      `docs/START.md`'s route tables.)
 
 ## Phase 8 — Admin (63 components, ~23.3k LOC)
 - [ ] Layout + URL-driven `[tab]`, settings, users/groups, evaluations,

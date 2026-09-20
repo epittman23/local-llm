@@ -64,6 +64,9 @@ Meta docs — conventions, history, and proposals, not end-user usage docs.
   per-phase checklists, and the current session's notes. Read it first when
   resuming that work, and update it before ending a session. Temporary:
   delete it (and this entry) when the migration's final phase lands.
+- **`START.md`** — how to run the backend and both frontends right now, and
+  every URL the Astro app serves (plus which paths are still Svelte-only).
+  Kept current by the maintenance policy; temporary, deleted at Phase 11.
 - **`serving-baseline/`** — test input, not prose: `config-id` fingerprints,
   profile seed data and the verbatim profile rationale, captured from
   `scripts/shell/main.sh` on 2026-09-14 before the shell layer is ported to
