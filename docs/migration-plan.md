@@ -23,7 +23,7 @@
 | 4 | Shared foundation: API, auth, stores, i18n, app shell | ✅ done | 2026-09-18 |
 | 5 | Benchmarks surface (proves the pattern) | ✅ done | 2026-09-18 |
 | 6 | Public/static surfaces: auth, error, share, watch | ✅ done | 2026-09-19 |
-| 7 | Workspace surface | ▶ in progress (shell, kit, access control, Prompts, Skills, Tools, Knowledge done) | 2026-09-19 |
+| 7 | Workspace surface | ✅ done | 2026-09-20 |
 | 8 | Admin surface | ☐ not started | — |
 | 9 | Secondary surfaces: notes, calendar, automations, playground, channels | ☐ not started | — |
 | 10 | Chat surface (largest) | ☐ not started | — |
@@ -34,6 +34,18 @@ Status values: `☐ not started` · `▶ in progress` · `✅ done` · `⏸ bloc
 ### Current session notes
 
 _Overwrite this block at the end of every session._
+
+**2026-09-20 (Phase 7 closed out).** Models was the last section (commit
+`4cdc230`); this session verified the whole phase at HEAD and finished the
+paperwork: `astro check` 0 errors, 94 Vitest tests, 84 Playwright tests, all
+green. Phase 7 is ✅ done. Docs updated: `MAP.md`, `apps/web/README.md`, dated
+`docs/CLAUDE.md` entry, ROADMAP pair, this file. Everything is still tested
+against mocked `/api/v1/**` only. **Next action: Phase 8 (Admin, 63
+components, ~23.3k LOC)** — layout + URL-driven `[tab]`, settings, users/
+groups, evaluations, functions, analytics (`chart.js`). The `workspace/`
+routes, `ListChrome`, the access-control family and `CodeEditor` are the
+templates; `functions/create` is still a redirect to `/admin/functions/create`
+and becomes real here.
 
 **2026-09-19 (Phase 7, continued).** Skills is done (list, editor,
 create/clone/edit pages, `.json`/`.md` import; 7 e2e + 6 unit tests). **Next
@@ -1118,7 +1130,7 @@ round trip through this app's own `/auth` can't happen until `/next` becomes
 `/`. Sign-in itself was likewise only run against mocked backend responses
 this session, the same posture as Phase 5.
 
-## Phase 7 — Workspace (48 components, ~13.3k LOC) ▶
+## Phase 7 — Workspace (48 components, ~13.3k LOC) ✅
 - [x] Shell: `WorkspaceLayout`, per-section gate, tabs with counts, split
       Create button, bare-`/workspace` redirect.
 - [x] Shared kit: toasts (sonner), `ConfirmDialog`, `FilterSelects`,
@@ -1137,11 +1149,15 @@ this session, the same posture as Phase 5.
       **Not exercised end to end:** the folder pickers (`showDirectoryPicker` /
       `webkitdirectory`) can't be driven by Playwright, so *Upload directory* and
       *Sync directory* are covered only by the unit tests on their logic.
-- [ ] Models (`models`, `models/create`, `models/edit`) — `ModelEditor.svelte`
-      is 1,074 lines plus ~14 selector/capability sub-components.
+- [x] **Models** (`models`, `models/create`, `models/edit`) — list with bulk
+      actions and pinning; `ModelEditor.svelte`'s 1,074 lines split into the
+      editor (layout), `modelEditorLogic.ts` (state in, object out; unit-tested),
+      `EditorPickers`/`KnowledgePicker`, `AdvancedParams` (table-driven from
+      `advancedParamDefs.ts`), and `modelImport.ts` (import/community
+      sanitizers).
 - [x] `functions/create` — a redirect to `/admin/functions/create` in the
       Svelte app too; kept as a redirect (via LegacyFallback) until Phase 8.
-- [ ] Phase exit: `MAP.md`, `apps/web/README.md`, dated `docs/CLAUDE.md`
+- [x] Phase exit: `MAP.md`, `apps/web/README.md`, dated `docs/CLAUDE.md`
       entry, ROADMAP pair; Playwright per section.
 
 ## Phase 8 — Admin (63 components, ~23.3k LOC)

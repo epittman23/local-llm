@@ -55,10 +55,10 @@ src/
 ├── routes/                react-router: AppRouter.tsx, routePaths.ts,
 │   ├── benchmarks/        the seven Benchmarks pages + their gate,
 │   ├── workspace/         Phase 7: layout, tabs, per-section permission gate;
-│   │                      prompts/ is the first section ported.
+│   │                      prompts/, skills/, tools/, knowledge/, models/.
 │   └── public/            /auth, /error, /watch, /s/:id (no session needed).
 ├── lib/                   apis/ (ported from the SvelteKit app), auth/,
-│                          access/ (grant rules), stores/ (Zustand),
+│                          access/ (grant rules), settings/, stores/ (Zustand),
 │                          socket/, i18n/, query/, utils/.
 └── styles/global.css      Tailwind v4 entry + the shadcn Nova preset's
                            design tokens (see the 2026-09-18 decisions-log

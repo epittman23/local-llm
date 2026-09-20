@@ -300,6 +300,75 @@ All commits should use conventional commit style and stay focused on one topic. 
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-09-19** (second): Closed out Phase 7 of the migration
+  (`docs/migration-plan.md`): the Workspace surface -- Models, Knowledge,
+  Prompts, Skills, Tools, and the `functions/create` redirect -- built in
+  `apps/web/`, roughly 14k lines of Svelte across 48 components. Built
+  section by section, each with its own Playwright coverage against mocked
+  `/api/v1/**` responses (nothing here has met a real backend, the same
+  posture as Phases 5-6).
+
+  **Structure decisions.** The Svelte app repeats itself heavily -- five
+  near-identical list pages, five near-identical "pick from a searchable list"
+  selectors, ~30 hand-written advanced-parameter controls -- so the port
+  extracts what repeats instead of transcribing it: `ListChrome` (search bar,
+  sortable header, empty state), one `ItemPicker` and one `CheckboxGrid`, and
+  `AdvancedParams` driven by a table of parameter definitions. Logic that
+  is easy to get subtly wrong was separated from rendering and unit-tested:
+  the access-grant rewrite rules, the model editor's state-in/object-out flow,
+  the knowledge upload/sync path arithmetic and diff bookkeeping, the
+  workspace permission rules. CodeMirror (the tool editor) is lazy-loaded so
+  only that page pays for it.
+
+  **A bug of my own, found late.** The workspace Create button never
+  appeared: the layout cleared the registered actions in an effect on section
+  change, and React runs a child's effects before its parent's, so the clear
+  ran after each section had registered. The section tests navigated straight
+  to `/create` routes and never looked for the button. Sections now clear
+  their own actions on unmount, and a test asserts the button. A green suite
+  that never touches a feature's entry point says nothing about it.
+
+  **A dev-tooling crash, found by a test that ran long enough.** With no
+  backend on `:4000`, the app's Socket.IO websocket goes through the dev
+  server's `/ws` proxy, which fails and calls `socket.destroySoon()` -- absent
+  from Bun's socket. The TypeError kills `astro dev` ~30s in. Phases 5-6's
+  suites finished first. Every spec now imports `test` from `e2e/test.ts`,
+  which stubs `/ws`. Not fixed at the source: `make astro` also runs under
+  Bun, so a backend restart under `--reload` could hit the same thing.
+
+  **Security hardening beyond the port, all the same rule.** Data from outside
+  the app -- a message from the community site, an imported file, a link
+  import -- never gets to choose who a prompt, skill, tool or model is
+  shared with, because tools are code that runs on the server. Incoming
+  objects are reduced to their own fields with bounded lengths
+  (`sanitizeExternalDraft`, `parseSkillImport`, `parseToolImport`,
+  `sanitizeIncomingModel`, ...); grants are always empty (a same-origin clone
+  of something the user could already see keeps its well-formed grants).
+  "Share to Community" posts to `https://openwebui.com` only, with only the
+  item's own fields (the Svelte version posts the whole record -- author
+  email, grants -- to `*`), and unregisters its listener. A tool manifest's
+  `funding_url` is only linked when http(s) (the Svelte version puts it in an
+  `href`, so a plugin could plant a `javascript:` link); valve descriptions
+  and every other plugin-authored markdown go through DOMPurify;
+  `parseFrontmatter`/`extractFrontmatter` return prototype-less objects. A
+  post-commit security review of Prompts found three of these; the rest were
+  applied to Skills/Tools/Models as they were built rather than after.
+
+  **Deliberate gaps, stated plainly.** No page calls `useTranslation` yet
+  (Phases 5-7 render English literals; keys are the English strings, so the
+  pass is mechanical but unscheduled). The knowledge base's *Upload directory*
+  and *Sync directory* use the browser's folder pickers, which Playwright
+  cannot drive: their logic is unit-tested, the picker plumbing is not. Not
+  ported: speech-to-text language on file upload and the voice button in "Add
+  text content" (no settings store / recorder until Phase 10); Pyodide
+  formatting of tool code for non-admins (admins format through the backend;
+  others save unformatted, as the Svelte app does when formatting fails); the
+  Valves `map` input (marked experimental in the original); the chat-side
+  `skills`/`tools`/`models` stores those pages refresh after a change (the
+  equivalent here is the TanStack Query keys, ready for Phase 10 to consume).
+
+  Verified: `astro check` 0 errors, 94 Vitest tests, 84 Playwright tests,
+  `bun run build`, and screenshots of each section's main views.
 - **2026-09-19**: Closed out Phase 6 of the migration
   (`docs/migration-plan.md`): the four routes outside SvelteKit's `(app)`
   group — `/auth`, `/error`, `/watch`, `/s/:id` — built in `apps/web/`.

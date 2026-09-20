@@ -215,7 +215,9 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
   family (`AccessControl`, `AccessControlModal`, `AddAccessModal`,
   `MemberSelector`, `AccessButton`), `CodeEditor` (CodeMirror, lazy-loaded
   by its one caller), `Valves`/`ValvesModal`, `ManifestModal`,
-  `ImportUrlModal`, `SafeMarkdown` (marked + DOMPurify). The app's toast system
+  `ImportUrlModal`, `SafeMarkdown` (marked + DOMPurify), `AttachWebpageDialog`,
+  and `AdvancedParams` (table-driven request parameters,
+  `advancedParamDefs.ts`). The app's toast system
   (`ui/sonner.tsx`, mounted in `App.tsx`) reads the theme from the `<html>`
   class rather than `next-themes`.
 - **`src/components/ui/`** — shadcn/ui components (`bunx shadcn add <name>`).
@@ -238,7 +240,10 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
   `workspace/knowledge/` (an infinite-scroll list; the detail page with a
   folder tree, uploads, incremental folder sync and a file-text sheet --
   `knowledgeFiles.ts` holds its pure path/diff logic, `useKnowledgeUploads.ts`
-  the upload flows).
+  the upload flows), and `workspace/models/` (list with bulk actions and
+  pinning; `ModelEditor` with its data flow in `modelEditorLogic.ts`, the
+  pickers in `EditorPickers`/`KnowledgePicker`, and import/community
+  sanitizers in `modelImport.ts`).
 - **`src/lib/apis/`** — the SvelteKit app's `src/lib/apis/**` ported
   verbatim (six files `@ts-nocheck`ed for inherited looseness), plus
   `benchmarks/profiles.ts`, new code for the profile CRUD endpoints that
@@ -247,8 +252,9 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
   **`socket/`**, **`i18n/`** (the fork's 65 locale files, verbatim),
   **`query/`**, **`utils/`** (only the functions from the SvelteKit app's
   `utils/index.ts` that ported pages actually use), **`icons/MAPPING.md`**,
-  and **`access/`** (`accessGrants.ts`: the pure grant-rewriting rules behind
-  `AccessControl`).
+  **`access/`** (`accessGrants.ts`: the pure grant-rewriting rules behind
+  `AccessControl`), and **`settings/`** (`userSettings.ts`: the user's saved
+  UI settings through TanStack Query, for model pinning).
 - **`e2e/`** — Playwright; `global-teardown.ts` force-stops the dev server
   after a run (see its own comment for why that isn't left to Playwright's
   ordinary teardown alone). Specs import `test` from `e2e/test.ts`, not from
