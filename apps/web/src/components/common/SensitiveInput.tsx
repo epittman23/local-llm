@@ -4,15 +4,19 @@ import { cn } from '@/lib/utils';
 
 /**
  * Ports common/SensitiveInput.svelte: a text input that is masked until the
- * eye button is pressed. Only the `plain` variant is ported; the `settings`
- * variant (a bordered chip) is used by the admin Settings tabs, which style it
- * themselves through `outerClassName`/`className`.
+ * eye button is pressed. `variant="settings"` is the compact bordered chip the
+ * admin Settings tabs use.
+ *
+ * Always masked at first. The Svelte component only masks when `type="password"`
+ * is passed, and the Settings tabs pass `type="text"` -- so their API keys and
+ * tokens sit on screen in plain text until someone notices.
  */
 export function SensitiveInput({
 	value,
 	onChange,
 	className,
-	outerClassName = 'flex flex-1',
+	outerClassName,
+	variant = 'plain',
 	required = true,
 	readOnly = false,
 	placeholder = '',
@@ -21,17 +25,29 @@ export function SensitiveInput({
 	value: string;
 	onChange: (value: string) => void;
 	outerClassName?: string;
+	variant?: 'plain' | 'settings';
 }) {
 	const id = useId();
 	const [show, setShow] = useState(false);
+	const settings = variant === 'settings';
 	return (
-		<div className={outerClassName}>
+		<div
+			className={cn(
+				settings ? 'bg-muted/40 focus-within:border-ring flex h-7 flex-1 items-center rounded-lg border px-2 transition-colors' : 'flex flex-1',
+				outerClassName
+			)}
+		>
 			<label className="sr-only" htmlFor={id}>
 				{placeholder || 'Password'}
 			</label>
 			<input
 				id={id}
-				className={cn('w-full bg-transparent py-0.5 text-sm outline-hidden', className)}
+				className={cn(
+					settings
+						? 'placeholder:text-muted-foreground/50 min-w-0 flex-1 bg-transparent text-xs outline-hidden disabled:opacity-50'
+						: 'w-full bg-transparent py-0.5 text-sm outline-hidden',
+					!settings && className
+				)}
 				placeholder={placeholder}
 				type={show ? 'text' : 'password'}
 				value={value}
@@ -42,7 +58,7 @@ export function SensitiveInput({
 			/>
 			<button
 				type="button"
-				className="bg-transparent pl-1.5 transition"
+				className={cn('bg-transparent transition', settings ? 'text-muted-foreground hover:text-foreground ml-1.5' : 'pl-1.5')}
 				aria-pressed={show}
 				aria-label="Make password visible in the user interface"
 				onClick={() => setShow((s) => !s)}

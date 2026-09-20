@@ -1,10 +1,12 @@
 import { PanelLeft } from 'lucide-react';
 import { useState } from 'react';
 import { Outlet } from 'react-router';
+import { SettingsModal } from '@/components/settings/SettingsModal';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuthGate } from '@/lib/auth/useAuthGate';
+import { useSettingsUrl } from '@/lib/settings/useSettingsUrl';
 import { useUIStore } from '@/lib/stores/uiStore';
 import { cn } from '@/lib/utils';
 import { SidebarContent } from './Sidebar';
@@ -22,6 +24,7 @@ import { SidebarContent } from './Sidebar';
  */
 export function AppShell() {
 	const authStatus = useAuthGate();
+	useSettingsUrl();
 	const sidebarOpen = useUIStore((state) => state.sidebarOpen);
 	const setSidebarOpen = useUIStore((state) => state.setSidebarOpen);
 	const [mobileOpen, setMobileOpen] = useState(false);
@@ -94,6 +97,7 @@ export function AppShell() {
 				<main className="min-h-0 flex-1 overflow-auto">
 					<Outlet />
 				</main>
+				<SettingsModal />
 			</div>
 		</div>
 	);

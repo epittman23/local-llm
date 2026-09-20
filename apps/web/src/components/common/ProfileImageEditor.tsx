@@ -5,33 +5,8 @@ import { getGravatarUrl } from '@/lib/apis/utils';
 import { WEBUI_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { canvasPixelTest, generateInitialsImage } from '@/lib/utils/auth-helpers';
+import { ACCEPTED_IMAGE_TYPES, resizeToDataUrl } from '@/lib/utils/image';
 import { cn } from '@/lib/utils';
-
-const ACCEPTED = ['image/gif', 'image/webp', 'image/jpeg', 'image/png'];
-
-/** Scales a picked image to a centred 250x250 webp data URL, as the original does. */
-function resizeToDataUrl(file: File): Promise<string> {
-	return new Promise((resolve, reject) => {
-		const reader = new FileReader();
-		reader.onerror = () => reject(reader.error);
-		reader.onload = (event) => {
-			const img = new Image();
-			img.onerror = () => reject(new Error('Could not read that image.'));
-			img.onload = () => {
-				const canvas = document.createElement('canvas');
-				canvas.width = 250;
-				canvas.height = 250;
-				const aspectRatio = img.width / img.height;
-				const width = aspectRatio > 1 ? 250 * aspectRatio : 250;
-				const height = aspectRatio > 1 ? 250 : 250 / aspectRatio;
-				canvas.getContext('2d')?.drawImage(img, (250 - width) / 2, (250 - height) / 2, width, height);
-				resolve(canvas.toDataURL('image/webp', 0.8));
-			};
-			img.src = String(event.target?.result);
-		};
-		reader.readAsDataURL(file);
-	});
-}
 
 /**
  * Ports chat/Settings/Account/UserProfileImage.svelte: click the avatar to
@@ -60,7 +35,7 @@ export function ProfileImageEditor({
 
 	const pick = async (files: FileList | null) => {
 		const file = files?.[0];
-		if (!file || !ACCEPTED.includes(file.type)) return;
+		if (!file || !ACCEPTED_IMAGE_TYPES.includes(file.type)) return;
 		try {
 			onChange(await resizeToDataUrl(file));
 		} catch (error) {

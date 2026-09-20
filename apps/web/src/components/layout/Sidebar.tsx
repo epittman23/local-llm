@@ -3,6 +3,7 @@ import {
 	ChartBar,
 	LayoutGrid,
 	LogOut,
+	Settings,
 	NotebookText,
 	PanelLeft,
 	Search,
@@ -22,10 +23,13 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { implementedTabIds } from '@/components/settings/adminTabComponents';
+import { availableTabs } from '@/components/settings/settingsTabs';
 import { signOut } from '@/lib/auth/session';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
+import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import { useUIStore } from '@/lib/stores/uiStore';
 import { routePaths } from '@/routes/routePaths';
 
@@ -50,7 +54,9 @@ export function SidebarContent({
 	const user = useAuthStore((state) => state.user);
 	const config = useConfigStore((state) => state.config);
 	const setSidebarOpen = useUIStore((state) => state.setSidebarOpen);
+	const openSettings = useSettingsModalStore((state) => state.openSettings);
 	const isAdmin = user?.role === 'admin';
+	const hasSettings = availableTabs(user, config, implementedTabIds).length > 0;
 	const benchmarksEnabled = isAdmin && config?.features?.enable_benchmarks !== false;
 
 	return (
@@ -137,6 +143,12 @@ export function SidebarContent({
 					<DropdownMenuContent align="start" className="w-56">
 						<DropdownMenuLabel className="truncate">{user?.email}</DropdownMenuLabel>
 						<DropdownMenuSeparator />
+						{hasSettings && (
+							<DropdownMenuItem onSelect={() => openSettings()}>
+								<Settings className="h-4 w-4" />
+								Settings
+							</DropdownMenuItem>
+						)}
 						<DropdownMenuItem onSelect={() => void signOut()}>
 							<LogOut className="h-4 w-4" />
 							Sign out

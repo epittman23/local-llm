@@ -27,6 +27,7 @@ export const routePaths = {
 	adminFunctionsCreate: '/admin/functions/create',
 	adminFunctionsEdit: '/admin/functions/edit',
 	adminSettings: '/admin/settings',
+	adminAnalytics: '/admin/analytics',
 	notes: '/notes',
 	calendar: '/calendar',
 	benchmarks: '/benchmarks',
