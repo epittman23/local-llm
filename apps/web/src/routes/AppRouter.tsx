@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
 import { AppShell } from '@/components/layout/AppShell';
 import { AdminLayout } from '@/routes/admin/AdminLayout';
+import { EvaluationsPage } from '@/routes/admin/evaluations/EvaluationsPage';
 import { FunctionCreatePage, FunctionEditPage } from '@/routes/admin/functions/FunctionPages';
 import { FunctionsPage } from '@/routes/admin/functions/FunctionsPage';
 import { UsersPage } from '@/routes/admin/users/UsersPage';
@@ -83,6 +84,8 @@ const router = createBrowserRouter(
 						{ index: true, element: <Navigate to={routePaths.adminUsers} replace /> },
 						{ path: 'users', element: <Navigate to={routePaths.adminUsersOverview} replace /> },
 						{ path: 'users/:tab', element: <UsersPage /> },
+						{ path: 'evaluations', element: <Navigate to={routePaths.adminEvaluationsLeaderboard} replace /> },
+						{ path: 'evaluations/:tab', element: <EvaluationsPage /> },
 						{ path: 'functions', element: <FunctionsPage /> },
 						{ path: 'functions/create', element: <FunctionCreatePage /> },
 						{ path: 'functions/edit', element: <FunctionEditPage /> }

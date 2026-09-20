@@ -49,3 +49,11 @@ export const routePaths = {
 
 /** Builds a concrete `/s/<id>` path from `routePaths.share`'s `:id` pattern. */
 export const sharePath = (id: string) => `/s/${id}`;
+
+/**
+ * An absolute path for a plain `<a>` (e.g. `target="_blank"`), which react-router
+ * does not rewrite: prefixes the app's base (`/next` in a build, nothing in dev).
+ * Use `<Link>` for in-app navigation; this is only for links that leave the SPA
+ * shell into a new tab.
+ */
+export const appHref = (path: string) => `${import.meta.env.BASE_URL.replace(/\/$/, '')}${path}`;
