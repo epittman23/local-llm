@@ -17,6 +17,8 @@ export type BackendConfig = {
 	/** Comma-separated model ids pinned for users who have not chosen their own. */
 	default_pinned_models?: string | null;
 	onboarding?: boolean;
+	/** Present only on licensed builds; `seats` caps the user count. */
+	license_metadata?: { seats?: number | null; [key: string]: unknown } | null;
 	oauth?: {
 		providers?: Record<string, string>;
 		auto_redirect?: boolean;
@@ -30,6 +32,8 @@ export type BackendConfig = {
 		enable_benchmarks?: boolean;
 		enable_plugins?: boolean;
 		enable_community_sharing?: boolean;
+		enable_admin_analytics?: boolean;
+		enable_admin_chat_access?: boolean;
 		auth?: boolean;
 		auth_trusted_header?: boolean;
 		enable_signup_password_confirmation?: boolean;

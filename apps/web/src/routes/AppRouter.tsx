@@ -1,5 +1,7 @@
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
 import { AppShell } from '@/components/layout/AppShell';
+import { AdminLayout } from '@/routes/admin/AdminLayout';
+import { UsersPage } from '@/routes/admin/users/UsersPage';
 import { AnswersPage } from '@/routes/benchmarks/AnswersPage';
 import { BenchmarksLayout } from '@/routes/benchmarks/BenchmarksLayout';
 import { ComparePage } from '@/routes/benchmarks/ComparePage';
@@ -69,6 +71,17 @@ const router = createBrowserRouter(
 						// admin surface (Phase 8). That path is still Svelte's, so this hands off
 						// through LegacyFallback until Phase 8 makes it a real route.
 						{ path: 'functions/create', element: <Navigate to="/admin/functions/create" replace /> }
+					]
+				},
+				{
+					path: routePaths.admin,
+					element: <AdminLayout />,
+					children: [
+						// Bare /admin and /admin/users are redirect pages in the Svelte app
+						// (onMount goto); ported as index routes.
+						{ index: true, element: <Navigate to={routePaths.adminUsers} replace /> },
+						{ path: 'users', element: <Navigate to={routePaths.adminUsersOverview} replace /> },
+						{ path: 'users/:tab', element: <UsersPage /> }
 					]
 				},
 				{ path: routePaths.notes, element: <PlaceholderPage title="Notes" phase="Phase 9" /> },

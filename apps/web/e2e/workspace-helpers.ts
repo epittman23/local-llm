@@ -4,6 +4,10 @@ export type MockUserOptions = {
 	role?: 'admin' | 'user';
 	workspacePermissions?: Record<string, boolean>;
 	enablePlugins?: boolean;
+	/** Extra `config.features` flags (e.g. enable_admin_chat_access). */
+	features?: Record<string, unknown>;
+	/** Extra top-level `config` keys (e.g. license_metadata). */
+	config?: Record<string, unknown>;
 };
 
 // One place for the session + config + count-endpoint mocks every workspace
@@ -12,7 +16,7 @@ export type MockUserOptions = {
 // requests are answered with an empty list rather than left to hit the (absent)
 // backend proxy, so a stray call fails visibly as "no data", not as a hang.
 export async function mockWorkspaceBackend(page: Page, options: MockUserOptions = {}) {
-	const { role = 'admin', workspacePermissions = {}, enablePlugins = true } = options;
+	const { role = 'admin', workspacePermissions = {}, enablePlugins = true, features = {}, config = {} } = options;
 	const user = {
 		id: 'u1',
 		email: 'u@example.com',
@@ -38,7 +42,8 @@ export async function mockWorkspaceBackend(page: Page, options: MockUserOptions 
 			json({
 				name: 'local-llm',
 				version: 'test',
-				features: { enable_plugins: enablePlugins, enable_benchmarks: true }
+				features: { enable_plugins: enablePlugins, enable_benchmarks: true, ...features },
+				...config
 			})
 		)
 	);

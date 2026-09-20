@@ -35,30 +35,6 @@ const navLinkClass = ({ isActive }: { isActive: boolean }) =>
 		isActive ? 'bg-accent text-accent-foreground' : 'text-muted-foreground hover:bg-accent/50'
 	);
 
-// A plain <a>, not react-router's <Link>: these paths have no React route
-// (routePaths.ts) to hand them to, so this is a full-page navigation to the
-// still-SvelteKit-owned surface, exactly like LegacyFallback's own default
-// case for a path nobody typed a Link for.
-function LegacyNavLink({
-	href,
-	icon: Icon,
-	children
-}: {
-	href: string;
-	icon: typeof ChartBar;
-	children: React.ReactNode;
-}) {
-	return (
-		<a
-			href={href}
-			className="text-muted-foreground hover:bg-accent/50 flex items-center gap-2 rounded-md px-2 py-1.5 text-sm"
-		>
-			<Icon className="h-4 w-4" />
-			{children}
-		</a>
-	);
-}
-
 /**
  * The nav content shared by the desktop persistent aside and the mobile
  * Sheet (see AppShell.tsx) -- one component, two containers, so the two
@@ -134,9 +110,10 @@ export function SidebarContent({
 						</NavLink>
 					)}
 					{isAdmin && (
-						<LegacyNavLink href="/admin" icon={ShieldCheck}>
+						<NavLink to={routePaths.admin} onClick={onNavigate} className={navLinkClass}>
+							<ShieldCheck className="h-4 w-4" />
 							Admin
-						</LegacyNavLink>
+						</NavLink>
 					)}
 				</nav>
 			</ScrollArea>

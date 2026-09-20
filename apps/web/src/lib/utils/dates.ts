@@ -1,9 +1,11 @@
 import dayjs from 'dayjs';
+import calendar from 'dayjs/plugin/calendar';
 import isToday from 'dayjs/plugin/isToday';
 import isYesterday from 'dayjs/plugin/isYesterday';
 import localizedFormat from 'dayjs/plugin/localizedFormat';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
+dayjs.extend(calendar);
 dayjs.extend(isToday);
 dayjs.extend(isYesterday);
 dayjs.extend(localizedFormat);
