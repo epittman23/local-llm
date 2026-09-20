@@ -1,3 +1,5 @@
+import { csvCell } from '@/lib/utils/csv';
+
 type FeedbackRow = {
 	id: string;
 	user_id?: string;
@@ -9,8 +11,9 @@ type FeedbackRow = {
 /**
  * The flat CSV of Feedbacks.svelte's "Export as CSV": one row per feedback with
  * the nested `data` object spread into columns (sibling model ids joined by
- * `;`). Fields containing a comma, quote or newline are quoted, quotes doubled.
- * Empty input gives an empty string, not a bare header.
+ * `;`). Quoting and formula-neutralizing are csvCell's (a comment of `=1+1` is
+ * written as text, not left to be run by the spreadsheet). Empty input gives an
+ * empty string, not a bare header.
  */
 export function feedbacksToCsv(feedbacks: FeedbackRow[]): string {
 	const rows = feedbacks.map((f) => ({
@@ -27,11 +30,7 @@ export function feedbacksToCsv(feedbacks: FeedbackRow[]): string {
 	}));
 	if (rows.length === 0) return '';
 	const headers = Object.keys(rows[0]);
-	const escape = (value: unknown) => {
-		const s = String(value ?? '');
-		return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
-	};
-	return [headers.join(','), ...rows.map((r) => headers.map((h) => escape(r[h as keyof typeof r])).join(','))].join('\n');
+	return [headers.join(','), ...rows.map((r) => headers.map((h) => csvCell(r[h as keyof typeof r])).join(','))].join('\n');
 }
 
 /** "won" / "draw" / "lost" for a stored rating (1 / 0 / -1, number or string), or null when unset. */

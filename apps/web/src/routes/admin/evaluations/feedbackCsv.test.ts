@@ -15,6 +15,14 @@ describe('feedbacksToCsv', () => {
 		const csv = feedbacksToCsv([{ id: 'f', data: { comment: 'a, "b"\nc' } }]);
 		expect(csv.split('\n').slice(1).join('\n')).toContain('"a, ""b""\nc"');
 	});
+	it('does not let user-written text run as a spreadsheet formula', () => {
+		const csv = feedbacksToCsv([{ id: 'f', data: { comment: '=HYPERLINK("http://evil","x")', reason: '@SUM(1)', rating: -1 } }]);
+		const row = csv.split('\n')[1];
+		expect(row).toContain(`"'=HYPERLINK(""http://evil"",""x"")"`);
+		expect(row).toContain(`'@SUM(1)`);
+		// A numeric rating of -1 stays a number.
+		expect(row.split(',')).toContain('-1');
+	});
 	it('handles missing data, and no rows', () => {
 		expect(feedbacksToCsv([{ id: 'f', data: null }]).split('\n')[1]).toBe('f,,,,,,,,,');
 		expect(feedbacksToCsv([])).toBe('');
