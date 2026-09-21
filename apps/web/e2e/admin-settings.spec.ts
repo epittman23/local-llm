@@ -802,3 +802,124 @@ test.describe('settings: General', () => {
 		await expect.poll(() => calls.some((c) => c.method === 'DELETE' && c.path === '/api/events/webhooks/b1')).toBe(true);
 	});
 });
+
+test.describe('settings: Interface', () => {
+	const taskCfg = () => ({
+		TASK_MODEL: '',
+		TASK_MODEL_EXTERNAL: '',
+		TASK_MODEL_PARAMS: { temperature: 0.2, top_p: null, seed: '' },
+		ENABLE_TITLE_GENERATION: true,
+		TITLE_GENERATION_PROMPT_TEMPLATE: '',
+		ENABLE_FOLLOW_UP_GENERATION: false,
+		FOLLOW_UP_GENERATION_PROMPT_TEMPLATE: '',
+		IMAGE_PROMPT_GENERATION_PROMPT_TEMPLATE: '',
+		ENABLE_AUTOCOMPLETE_GENERATION: false,
+		AUTOCOMPLETE_GENERATION_INPUT_MAX_LENGTH: -1,
+		AUTOCOMPLETE_GENERATION_PROMPT_TEMPLATE: '',
+		TAGS_GENERATION_PROMPT_TEMPLATE: '',
+		ENABLE_TAGS_GENERATION: true,
+		ENABLE_SEARCH_QUERY_GENERATION: true,
+		ENABLE_RETRIEVAL_QUERY_GENERATION: true,
+		QUERY_GENERATION_PROMPT_TEMPLATE: '',
+		TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE: '',
+		ENABLE_VOICE_MODE_PROMPT: true,
+		VOICE_MODE_PROMPT_TEMPLATE: ''
+	});
+	const chatCfg = () => ({
+		CONTEXT_COMPACTION_MODEL: '',
+		ENABLE_CONTEXT_COMPACTION: false,
+		CONTEXT_COMPACTION_TOKEN_THRESHOLD: 80000,
+		CONTEXT_COMPACTION_TOKEN_CAP: 80000,
+		CONTEXT_COMPACTION_RETENTION_PERCENTAGE: 40,
+		CONTEXT_COMPACTION_PROMPT_TEMPLATE: '',
+		ENABLE_TOOL_PERMISSIONS: false
+	});
+
+	async function mockInterface(page: Page) {
+		const calls: Call[] = [];
+		await page.route('**/api/v1/tasks/config**', (route) => {
+			const req = route.request();
+			const path = new URL(req.url()).pathname;
+			let body: any = null;
+			try {
+				body = req.postDataJSON();
+			} catch {
+				/* none */
+			}
+			calls.push({ method: req.method(), path, body });
+			return json(route, req.method() === 'GET' ? taskCfg() : body);
+		});
+		await page.route('**/api/v1/chats/config', (route) => {
+			const req = route.request();
+			let body: any = null;
+			try {
+				body = req.postDataJSON();
+			} catch {
+				/* none */
+			}
+			calls.push({ method: req.method(), path: '/api/v1/chats/config', body });
+			return json(route, req.method() === 'GET' ? chatCfg() : body);
+		});
+		await page.route('**/api/v1/models/base**', (route) =>
+			json(route, [{ id: 'priv', name: 'Private one', access_grants: [{ principal_type: 'user', principal_id: 'u1', permission: 'read' }] }])
+		);
+		await page.route('**/api/models**', (route) => json(route, { data: [{ id: 'open', name: 'Open one', connection_type: 'local' }, { id: 'priv', name: 'Private base' }] }));
+		return { calls };
+	}
+	const post = (calls: Call[], path: string) => calls.find((c) => c.method === 'POST' && c.path === path)?.body;
+
+	test('shows options only while their feature is on', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockInterface(page);
+		await page.goto('/?settings=admin:interface');
+		const m = modal(page);
+		await expect(m.getByLabel('Local Task Model')).toHaveValue('');
+		await expect(m.getByLabel('Title Generation Prompt')).toBeVisible();
+		await expect(m.getByLabel('Follow Up Generation Prompt')).toHaveCount(0);
+		await expect(m.getByLabel('Token Threshold')).toHaveCount(0);
+		await m.getByRole('switch', { name: 'Context Compaction' }).click();
+		await expect(m.getByLabel('Token Threshold')).toHaveValue('80000');
+		await expect(m.getByLabel('Retained Messages')).toHaveValue('40');
+		await m.getByRole('switch', { name: 'Title Generation' }).click();
+		await expect(m.getByLabel('Title Generation Prompt')).toHaveCount(0);
+	});
+
+	test('a model that is not public is warned about but kept', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockInterface(page);
+		await page.goto('/?settings=admin:interface');
+		const m = modal(page);
+		await expect(m.getByLabel('Local Task Model').locator('option', { hasText: 'Open one (Local)' })).toHaveCount(1);
+		await m.getByLabel('Local Task Model').selectOption('open');
+		await expect(page.getByText('This model is not publicly available')).toHaveCount(0);
+		await m.getByLabel('External Task Model').selectOption('priv');
+		await expect(page.getByText('This model is not publicly available. Please select another model.')).toBeVisible();
+		await expect(m.getByLabel('External Task Model')).toHaveValue('priv');
+	});
+
+	test('saves both configs; unset task parameters are not sent', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockInterface(page);
+		await page.goto('/?settings=admin:interface');
+		const m = modal(page);
+		await m.getByLabel('Local Task Model').selectOption('open');
+		await m.getByRole('switch', { name: 'Follow Up Generation' }).click();
+		await m.getByLabel('Follow Up Generation Prompt').fill('Suggest three.');
+		await m.getByRole('switch', { name: 'Context Compaction' }).click();
+		await m.getByLabel('Retained Messages').fill('25');
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect
+			.poll(() => post(calls, '/api/v1/tasks/config/update'))
+			.toEqual({
+				...taskCfg(),
+				TASK_MODEL: 'open',
+				TASK_MODEL_PARAMS: { temperature: 0.2 },
+				ENABLE_FOLLOW_UP_GENERATION: true,
+				FOLLOW_UP_GENERATION_PROMPT_TEMPLATE: 'Suggest three.'
+			});
+		await expect
+			.poll(() => post(calls, '/api/v1/chats/config'))
+			.toEqual({ ...chatCfg(), ENABLE_CONTEXT_COMPACTION: true, CONTEXT_COMPACTION_RETENTION_PERCENTAGE: 25 });
+		await expect(page.getByText('Settings saved successfully!')).toBeVisible();
+	});
+});
