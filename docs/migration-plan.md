@@ -24,7 +24,7 @@
 | 5 | Benchmarks surface (proves the pattern) | ✅ done | 2026-09-18 |
 | 6 | Public/static surfaces: auth, error, share, watch | ✅ done | 2026-09-19 |
 | 7 | Workspace surface | ✅ done | 2026-09-20 |
-| 8 | Admin surface | ▶ in progress | 2026-09-20 |
+| 8 | Admin surface | ▶ in progress | 2026-09-21 |
 | 9 | Secondary surfaces: notes, calendar, automations, playground, channels | ☐ not started | — |
 | 10 | Chat surface (largest) | ☐ not started | — |
 | 11 | Cutover and Svelte removal | ☐ not started | — |
@@ -35,39 +35,62 @@ Status values: `☐ not started` · `▶ in progress` · `✅ done` · `⏸ bloc
 
 _Overwrite this block at the end of every session._
 
-**2026-09-20 (Phase 8, in progress).** Done and committed, in order: the admin
+**2026-09-21 (Phase 8, in progress).** Done and committed, in order: the admin
 shell (`routes/admin/AdminLayout`, gate, tab bar, redirects), **Users + Groups**
 (`04a91cd`), **Functions** (`9ecebb2`), **Evaluations** (`5144190`, plus the CSV
-injection fix `f1bed6e`), and the **Settings modal host with its first five
-tabs** (`3f67ae4`: Sub-agents, Evaluations, Code Execution, Pipelines, Database).
-`astro check` 0 errors, 180 Vitest tests, 147 Playwright tests, all green.
+injection fix `f1bed6e`), the **Settings modal host with its first five tabs**
+(`3f67ae4`), then **Connections** (`cf6279d`), **Analytics** (`95e8e7a`),
+**General** (`a3736d2`) and **Interface** (`c77d135`). `astro check` 0 errors,
+235 Vitest tests, 174 Playwright tests, all green. Nine of the sixteen admin
+Settings tabs work; the modal lists only tabs registered in
+`adminTabComponents.ts`, so the rest are simply absent, not dead.
 
 **Two things the plan had wrong.** (1) `/admin/settings[/<tab>]` and
 `/admin/analytics[/<tab>]` are *not pages* in this fork: they redirect to
 `/?settings=admin:<tab>`, a modal in `chat/SettingsModal.svelte`. So ~15k of Phase
-8's 23k LOC (the 16 admin Settings tabs, Analytics included) are modal content, and
-the modal shell is a Phase 8 deliverable here: `components/settings/SettingsModal`
-lists whichever tabs have a component in `adminTabComponents.ts`, so a tab is added
-by registering it there. Phase 10 adds the personal tabs to the same list.
-(2) "analytics (`chart.js`)": only the Leaderboard's activity chart uses chart.js;
-Analytics' `ChartLine` is hand-rolled SVG.
+8's 23k LOC are modal content, and the modal shell is a Phase 8 deliverable here.
+Phase 10 adds the personal tabs to the same list. (2) "analytics (`chart.js`)":
+only the Leaderboard's activity chart uses chart.js; Analytics' `ChartLine` is
+hand-rolled SVG.
 
-**Remaining Phase 8 work, in this order:** the other 11 Settings tabs -- General
-(with Events, Banners, `InterfaceSettings`), Authentication, Connections (+3 small
-components), Interface, Integrations (with ExternalKnowledge), Audio, Images,
-Documents, Web Search, Models (the biggest: 3.3k LOC across ManageOllama etc.) --
-and Analytics (`Dashboard`, `ChartLine`, `AnalyticsModelModal`). Then the exit
+**Two things this session found the plan had understated.** (1) *Integrations*
+is not "334 lines + ExternalKnowledge": it needs `AddToolServerModal` (1,080
+lines), `AddTerminalServerModal` (1,006) and `ExternalKnowledge` (888), about
+3.3k in all. (2) *General's* "Default Interface Settings" wraps
+`common/InterfaceSettings.svelte`, 1,921 lines, which is also Phase 10's personal
+Interface tab, so it is one shared component to build once. **General ships
+without that block for now:** `DEFAULT_INTERFACE_SETTINGS` is read with the rest
+of the admin config and written back untouched (an e2e test asserts the
+round-trip), so nothing is lost, but an admin cannot edit it from the new app yet.
+
+**Deliberate deviations in what was built.** Banners reorder with up/down
+buttons, not SortableJS drag (a drag is not keyboard-reachable, and the app has
+no drag library). General has no "See what's new" link: the changelog modal is a
+Phase 10 chat surface. Saving banners does not update a banners store, since the
+chat that reads it is Phase 10; the query key is the hook for it. Backend
+`{detail}` errors from webhook saves now show their message (the Svelte tab only
+handled a bare string).
+
+**Remaining Phase 8 work, suggested order:** Authentication (863 lines), Audio
+(734), Images (1,004), Documents (1,600), Web Search (1,437), Models (the biggest:
+1,261 plus ManageOllama and friends, ~3.3k), Integrations (~3.3k, above), and the
+shared `InterfaceSettings` component that finishes General. Then the exit
 paperwork: `MAP.md`, `apps/web/README.md`, `docs/START.md`'s route tables (the
 `/admin` rows and the "Settings is a modal" note), a dated `docs/CLAUDE.md`
-entry, the ROADMAP pair. Templates: `routes/admin/settings/CodeExecution.tsx`
-(a config form with conditional blocks), `Pipelines.tsx` (async lists),
-`Evaluations.tsx` (save-on-change list), and `components/settings/controls.tsx`.
+entry, the ROADMAP pair. Templates: `routes/admin/settings/Interface.tsx` and
+`General.tsx` (multi-section forms), `CodeExecution.tsx` (conditional blocks),
+`Events.tsx` (a list with a create/edit dialog), and
+`components/settings/controls.tsx`. Put a tab's rules in a `*.ts` beside it with
+a unit test (`eventWebhooks.ts`, `interfaceTasks.ts`, `banners.ts`).
 
 **Test-infra note.** Playwright's `webServer` gives Vite 30s to start, and a cold
 start after a dependency change takes longer, so a run can die with "Dev server
 failed to start". Start the server yourself (`bunx --bun astro dev --background
---port 5174`, wait for `:5174`) and rerun; the first run after adding a dependency
-may also flake a test or two while Vite re-optimizes, and passes on repeat.
+--port 5174`, wait for `:5174`) and rerun. A second cold-start effect: a
+lazy-loaded tab's chunk compiles on first request, so a test whose first step is
+a plain `expect(...)` (5s) can fail on a cold server where one that starts with a
+`click` (auto-waits) passes. It went away on the second run every time; a
+failing page snapshot showing the tab's "Loading" spinner is the tell.
 
 **2026-09-20 (Phase 7 closed out).** Models was the last section (commit
 `4cdc230`); this session verified the whole phase at HEAD and finished the
@@ -1210,10 +1233,12 @@ this session, the same posture as Phase 5.
       table, details dialog, JSON/CSV export.
 - [x] Settings modal host (`components/settings/`) + tabs: Sub-agents,
       Evaluations, Code Execution, Pipelines, Database.
-- [ ] Settings tabs: General (+ Events, Banners, InterfaceSettings),
-      Authentication, Connections, Interface, Integrations (+ ExternalKnowledge),
-      Audio, Images, Documents, Web Search, Models.
-- [ ] Analytics tab (`Dashboard`, `ChartLine`, `AnalyticsModelModal`).
+- [x] Settings tabs: Connections, Analytics (`Dashboard`, `ChartLine`,
+      `AnalyticsModelModal`), General (+ Events, Banners), Interface.
+- [ ] Settings tabs still to do: Authentication, Integrations (+ ExternalKnowledge,
+      AddToolServerModal, AddTerminalServerModal), Audio, Images, Documents,
+      Web Search, Models; and the shared `InterfaceSettings` component, which
+      also gives General its "Default Interface Settings" block.
 - [ ] Phase exit: `MAP.md`, `apps/web/README.md`, `docs/START.md` route tables,
       dated `docs/CLAUDE.md` entry, ROADMAP pair.
 
