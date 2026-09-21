@@ -575,3 +575,230 @@ test.describe('settings: Analytics', () => {
 		await expect(page).toHaveURL(/\/admin\/users\/overview$/);
 	});
 });
+
+test.describe('settings: General', () => {
+	const adminCfg = {
+		ENABLE_COMMUNITY_SHARING: true,
+		ENABLE_MESSAGE_RATING: true,
+		ENABLE_FOLDERS: false,
+		FOLDER_MAX_FILE_COUNT: null,
+		ENABLE_MEMORIES: false,
+		ENABLE_MEMORY_SYSTEM_CONTEXT: false,
+		ENABLE_NOTES: true,
+		ENABLE_CHANNELS: false,
+		CHANNEL_MODEL_RESPONSE_MODE: 'thread',
+		ENABLE_CALENDAR: true,
+		ENABLE_AUTOMATIONS: true,
+		ENABLE_USER_WEBHOOKS: false,
+		ENABLE_USER_STATUS: true,
+		RESPONSE_WATERMARK: '',
+		WEBUI_URL: 'http://localhost:3000',
+		// Not editable here yet: it must come back to the server exactly as it arrived.
+		DEFAULT_INTERFACE_SETTINGS: { theme: 'dark' }
+	};
+	const catalog = {
+		schema: 'x',
+		events: [
+			{ event: 'chat.created', description: 'd', message: 'A chat was created' },
+			{ event: 'user.created', description: 'd', message: 'A user signed up' },
+			{ event: 'user.role.changed', description: 'd', message: 'A role changed' }
+		]
+	};
+	const hooks = () => [
+		{ id: 'b1', name: 'Beta', url: 'https://hooks.example.com/b', enabled: true, events: ['user.*'], targets: [] },
+		{ id: 'default', name: 'Whatever', url: 'https://audit.example.com/x', enabled: false, events: ['*'], targets: null }
+	];
+
+	async function mockGeneral(page: Page, opts: { banners?: Rec[]; failWebhookPut?: boolean; version?: Rec } = {}) {
+		const calls: Call[] = [];
+		const record = (route: any, extra: Rec = {}) => {
+			const req = route.request();
+			let body: any = null;
+			try {
+				body = req.postDataJSON();
+			} catch {
+				/* none */
+			}
+			calls.push({ method: req.method(), path: new URL(req.url()).pathname, body, ...extra });
+			return { req, body };
+		};
+		await page.route('**/api/v1/auths/admin/config', (route) => {
+			const { req } = record(route);
+			return json(route, req.method() === 'GET' ? adminCfg : true);
+		});
+		await page.route('**/api/v1/configs/banners', (route) => {
+			const { req } = record(route);
+			return json(route, req.method() === 'GET' ? (opts.banners ?? []) : true);
+		});
+		await page.route('**/api/version/updates', (route) => json(route, opts.version ?? { current: '1.0.0', latest: '9.9.9' }));
+		await page.route('**/api/events**', (route) => {
+			const { req } = record(route);
+			const path = new URL(req.url()).pathname;
+			if (path === '/api/events') return json(route, catalog);
+			if (req.method() === 'GET') return json(route, hooks());
+			if (req.method() === 'PUT' && opts.failWebhookPut) return json(route, { detail: 'nope' }, 500);
+			return json(route, { id: 'new' });
+		});
+		await page.route('**/api/v1/groups/**', (route) => json(route, [{ id: 'g1', name: 'Staff' }]));
+		await page.route('**/api/v1/users/search**', (route) => json(route, { users: [{ id: 'u9', name: 'Ada Lovelace', email: 'ada@x.test' }], total: 1 }));
+		return { calls };
+	}
+	const saved = (calls: Call[], path: string) => calls.find((c) => c.method === 'POST' && c.path === path)?.body;
+
+	test('saves the whole config back, including the parts it does not edit; an empty folder limit is null', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockGeneral(page);
+		await page.goto('/?settings=admin:general');
+		const m = modal(page);
+		await expect(m.getByLabel('Folder Max File Count')).toHaveCount(0);
+		await m.getByRole('switch', { name: 'Folders' }).click();
+		await m.getByLabel('Folder Max File Count').fill('5');
+		await m.getByLabel('Folder Max File Count').fill('');
+		await m.getByRole('switch', { name: 'Message Rating' }).click();
+		await m.getByLabel('Response Watermark').fill('AI generated');
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect
+			.poll(() => saved(calls, '/api/v1/auths/admin/config'))
+			.toEqual({ ...adminCfg, ENABLE_FOLDERS: true, FOLDER_MAX_FILE_COUNT: null, ENABLE_MESSAGE_RATING: false, RESPONSE_WATERMARK: 'AI generated' });
+		await expect.poll(() => saved(calls, '/api/v1/configs/banners')).toEqual({ banners: [] });
+	});
+
+	test('memory and channel options appear only while their feature is on', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockGeneral(page);
+		await page.goto('/?settings=admin:general');
+		const m = modal(page);
+		await expect(m.getByRole('switch', { name: 'Memory System Context' })).toHaveCount(0);
+		await m.getByRole('switch', { name: 'Memories' }).click();
+		await expect(m.getByRole('switch', { name: 'Memory System Context' })).toBeVisible();
+		await expect(m.getByLabel('Model Response Mode')).toHaveCount(0);
+		await m.getByRole('switch', { name: 'Channels' }).click();
+		await expect(m.getByLabel('Model Response Mode')).toHaveValue('thread');
+	});
+
+	test('the update check is offered only when the backend enables it, and reports a newer release', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockGeneral(page);
+		await page.goto('/?settings=admin:general');
+		await expect(modal(page).getByRole('switch', { name: 'Notes' })).toBeVisible();
+		await expect(modal(page).getByRole('button', { name: 'Check for updates' })).toHaveCount(0);
+
+		const page2 = await page.context().newPage();
+		await mockWorkspaceBackend(page2, { features: { enable_version_update_check: true } });
+		await mockGeneral(page2);
+		await page2.goto('/?settings=admin:general');
+		await modal(page2).getByRole('button', { name: 'Check for updates' }).click();
+		await expect(modal(page2).getByRole('link', { name: '(v9.9.9 available!)' })).toHaveAttribute('href', /releases\/tag\/v9\.9\.9$/);
+	});
+
+	test('banners: one blank at a time, a type is required, reorder and remove, then saved in order', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockGeneral(page, { banners: [{ id: 'old', type: 'info', title: '', content: 'Existing', dismissible: false, timestamp: 1 }] });
+		await page.goto('/?settings=admin:general');
+		const m = modal(page);
+		const items = m.getByTestId('banner-item');
+		await expect(items).toHaveCount(1);
+		await m.getByRole('button', { name: 'Add banner' }).click();
+		await expect(items).toHaveCount(2);
+		await m.getByRole('button', { name: 'Add banner' }).click();
+		await expect(items).toHaveCount(2); // the last one is still blank
+
+		await items.nth(1).getByLabel('Banner content').fill('Maintenance tonight');
+		// No type chosen: the browser refuses the submit, nothing is sent.
+		await m.getByRole('button', { name: 'Save' }).click();
+		await page.waitForTimeout(300);
+		expect(calls.filter((c) => c.method === 'POST')).toHaveLength(0);
+
+		await items.nth(1).getByLabel('Banner type').selectOption('warning');
+		await items.nth(1).getByRole('button', { name: 'Move banner up' }).click();
+		await expect(items.nth(0).getByLabel('Banner content')).toHaveValue('Maintenance tonight');
+		await expect(items.nth(0).getByRole('button', { name: 'Move banner up' })).toBeDisabled();
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect
+			.poll(() => (saved(calls, '/api/v1/configs/banners')?.banners as Rec[] | undefined)?.map((b) => [b.type, b.content, b.dismissible]))
+			.toEqual([
+				['warning', 'Maintenance tonight', true],
+				['info', 'Existing', false]
+			]);
+
+		await items.nth(0).getByRole('button', { name: 'Remove banner' }).click();
+		await expect(items).toHaveCount(1);
+	});
+
+	test('Events lists webhooks with a summary, default first; toggling one that the server refuses snaps back', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockGeneral(page, { failWebhookPut: true });
+		await page.goto('/?settings=admin:general');
+		const rows = modal(page).getByTestId('webhook-row');
+		await expect(rows).toHaveCount(2);
+		await expect(rows.nth(0)).toContainText('Default webhook');
+		await expect(rows.nth(0)).toContainText('audit.example.com - All events - All users and system events');
+		await expect(rows.nth(1)).toContainText('Beta');
+		await expect(rows.nth(1)).toContainText('hooks.example.com - user.* - System events only');
+		const toggle = rows.nth(1).getByRole('switch');
+		await expect(toggle).toBeChecked();
+		await toggle.click();
+		await expect(page.getByText('nope')).toBeVisible();
+		await expect(toggle).toBeChecked();
+	});
+
+	test('adding a webhook: bad patterns are refused, filters and specific targets are sent', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockGeneral(page);
+		await page.goto('/?settings=admin:general');
+		await modal(page).getByRole('button', { name: 'Add webhook' }).click();
+		const d = page.getByRole('dialog', { name: 'Add webhook' });
+		await d.getByLabel('Name').fill('Audit');
+		await d.getByLabel('URL').fill('https://hooks.example.com/audit');
+
+		await d.getByLabel('All events').uncheck();
+		await d.getByLabel('Search or add pattern').fill('nope.*');
+		await d.getByRole('button', { name: 'Add', exact: true }).click();
+		await expect(page.getByText('Use a valid event name or pattern like user.*')).toBeVisible();
+		await d.getByLabel('Search or add pattern').fill('user.*');
+		await d.getByLabel('Search or add pattern').press('Enter');
+		await expect(d.getByRole('button', { name: 'Remove user.*' })).toBeVisible();
+		await d.getByRole('checkbox', { name: /chat\.created/ }).check();
+
+		await d.getByLabel('Send events for').selectOption('selected');
+		await d.getByLabel('Search users or groups').fill('a');
+		await d.getByRole('button', { name: /Ada Lovelace/ }).click();
+		await d.getByLabel('Search users or groups').fill('sta');
+		await d.getByRole('button', { name: /Staff/ }).click();
+		await d.getByRole('button', { name: 'Save' }).click();
+
+		await expect
+			.poll(() => calls.find((c) => c.method === 'POST' && c.path === '/api/events/webhooks')?.body)
+			.toEqual({
+				name: 'Audit',
+				url: 'https://hooks.example.com/audit',
+				enabled: true,
+				events: ['chat.created', 'user.*'],
+				targets: [
+					{ type: 'user', id: 'u9' },
+					{ type: 'group', id: 'g1' }
+				]
+			});
+	});
+
+	test('editing sends a PUT, and Delete asks first', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockGeneral(page);
+		await page.goto('/?settings=admin:general');
+		await modal(page).getByRole('button', { name: 'Configure Beta' }).click();
+		const d = page.getByRole('dialog', { name: 'Edit webhook' });
+		await expect(d.getByLabel('Name')).toHaveValue('Beta');
+		await expect(d.getByLabel('Send events for')).toHaveValue('system');
+		await d.getByLabel('Name').fill('Beta 2');
+		await d.getByRole('button', { name: 'Save' }).click();
+		await expect
+			.poll(() => calls.find((c) => c.method === 'PUT' && c.path === '/api/events/webhooks/b1')?.body)
+			.toEqual({ name: 'Beta 2', url: 'https://hooks.example.com/b', enabled: true, events: ['user.*'], targets: [] });
+
+		await modal(page).getByRole('button', { name: 'Configure Beta' }).click();
+		await page.getByRole('dialog', { name: 'Edit webhook' }).getByRole('button', { name: 'Delete' }).click();
+		expect(calls.some((c) => c.method === 'DELETE')).toBe(false);
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+		await expect.poll(() => calls.some((c) => c.method === 'DELETE' && c.path === '/api/events/webhooks/b1')).toBe(true);
+	});
+});
