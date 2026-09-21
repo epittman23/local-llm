@@ -453,3 +453,125 @@ test.describe('settings: Connections', () => {
 		await expect(modal(page).getByLabel('API Base URL')).toHaveCount(0);
 	});
 });
+
+test.describe('settings: Analytics', () => {
+	async function mockAnalytics(page: Page, opts: { chatAccess?: boolean } = {}) {
+		const calls: { path: string; search: string }[] = [];
+		await page.route('**/api/models*', (route) => json(route, { data: [{ id: 'alpha', name: 'Alpha' }] }));
+		await page.route('**/api/v1/groups/**', (route) => json(route, [{ id: 'g1', name: 'Staff' }]));
+		await page.route('**/api/v1/analytics/**', (route) => {
+			const url = new URL(route.request().url());
+			const path = url.pathname.replace('/api/v1/analytics', '');
+			calls.push({ path, search: url.search });
+			if (path === '/summary') return json(route, { total_messages: 1234, total_chats: 56, total_models: 2, total_users: 7 });
+			if (path === '/models')
+				return json(route, {
+					models: [
+						{ model_id: 'alpha', count: 30, unique_users: 3, unique_chats: 10 },
+						{ model_id: 'zeta', count: 70, unique_users: 5, unique_chats: 20 }
+					]
+				});
+			if (path === '/users') return json(route, { users: [{ user_id: 'u1', name: 'Ada', count: 60, total_tokens: 2000 }, { user_id: 'u2ffffffff', count: 40, total_tokens: 500 }] });
+			if (path === '/daily') return json(route, { data: [{ date: '2026-09-01', models: { alpha: 3, zeta: 5 } }, { date: '2026-09-02', models: { alpha: 1, zeta: 9 } }] });
+			if (path === '/tokens') return json(route, { models: [{ model_id: 'alpha', input_tokens: 100, output_tokens: 900, total_tokens: 1000 }], total_input_tokens: 100, total_output_tokens: 900, total_tokens: 1000 });
+			if (/\/models\/.*\/overview/.test(path)) return json(route, { history: [{ date: '2026-09-01', won: 2, lost: 1 }], tags: [{ tag: 'code', count: 4 }] });
+			if (/\/models\/.*\/chats/.test(path)) return json(route, { chats: [{ chat_id: 'c1', first_message: 'Hello there', updated_at: 1700000000, user_id: 'u1', user_name: 'Ada' }], total: 1 });
+			return json(route, {});
+		});
+		return { calls };
+	}
+
+	test('shows totals, the chart and both tables, with model names resolved and shares computed', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockAnalytics(page);
+		await page.goto('/?settings=admin:analytics');
+		const m = modal(page);
+		await expect(m.getByText('1,234')).toBeVisible();
+		await expect(m.getByText('tokens', { exact: false }).first()).toBeVisible();
+		await expect(m.getByRole('img', { name: 'Messages over time' })).toBeVisible();
+		// Sorted by messages, descending: the unnamed model falls back to its id.
+		const rows = m.locator('table').first().locator('tbody tr');
+		await expect(rows.nth(0)).toContainText('zeta');
+		await expect(rows.nth(0)).toContainText('70.0%');
+		await expect(rows.nth(1)).toContainText('Alpha');
+		await expect(rows.nth(1)).toContainText('30.0%');
+		// A user without a name shows the start of their id.
+		await expect(m.locator('table').nth(1)).toContainText('u2ffffff');
+	});
+
+	test('changing the period and group re-queries with the right window; the choice is remembered', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockAnalytics(page);
+		await page.goto('/?settings=admin:analytics');
+		const m = modal(page);
+		await expect(m.getByText('1,234')).toBeVisible();
+		await m.getByLabel('Period').selectOption('30d');
+		await expect.poll(() => calls.some((c) => c.path === '/summary' && c.search.includes('start_date='))).toBe(true);
+		await m.getByLabel('Group').selectOption('g1');
+		await expect.poll(() => calls.some((c) => c.path === '/summary' && c.search.includes('group_id=g1'))).toBe(true);
+		await m.getByLabel('Period').selectOption('24h');
+		await expect.poll(() => calls.some((c) => c.path === '/daily' && c.search.includes('granularity=hourly'))).toBe(true);
+		expect(await page.evaluate(() => localStorage.getItem('analyticsPeriod'))).toBe('24h');
+	});
+
+	test('a custom range waits for both dates before asking the server', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockAnalytics(page);
+		await page.goto('/?settings=admin:analytics');
+		const m = modal(page);
+		await expect(m.getByText('1,234')).toBeVisible();
+		const before = calls.length;
+		await m.getByLabel('Period').selectOption('custom');
+		await m.getByLabel('Start date').fill('2026-09-01');
+		await page.waitForTimeout(300);
+		expect(calls.length).toBe(before);
+		await m.getByLabel('End date').fill('2026-09-03');
+		await expect.poll(() => calls.some((c) => c.path === '/summary' && c.search.includes('end_date='))).toBe(true);
+	});
+
+	test('sorting the model table flips the order', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockAnalytics(page);
+		await page.goto('/?settings=admin:analytics');
+		const rows = modal(page).locator('table').first().locator('tbody tr');
+		await expect(rows.nth(0)).toContainText('zeta');
+		await modal(page).getByRole('columnheader', { name: 'Model' }).click();
+		await expect(rows.nth(0)).toContainText('Alpha');
+	});
+
+	test('a model row opens its dialog: feedback activity and tags, and Chats only with chat access', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockAnalytics(page);
+		await page.goto('/?settings=admin:analytics');
+		await modal(page).locator('table').first().locator('tbody tr', { hasText: 'Alpha' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Alpha' });
+		await expect(dialog.getByText('Feedback Activity')).toBeVisible();
+		await expect(dialog.getByText('code', { exact: false }).first()).toBeVisible();
+		await expect(dialog.getByRole('button', { name: 'Chats' })).toHaveCount(0);
+	});
+
+	test('with chat access the dialog lists that model\'s chats', async ({ page }) => {
+		await mockWorkspaceBackend(page, { features: { enable_admin_chat_access: true } });
+		await mockAnalytics(page);
+		await page.goto('/?settings=admin:analytics');
+		await modal(page).locator('table').first().locator('tbody tr', { hasText: 'Alpha' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Alpha' });
+		await dialog.getByRole('button', { name: 'Chats' }).click();
+		await expect(dialog.getByRole('link', { name: 'Hello there' })).toHaveAttribute('href', /\/s\/c1$/);
+	});
+
+	test('/admin/analytics opens the tab, and is a redirect home when the feature is off', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockAnalytics(page);
+		await page.goto('/admin/analytics');
+		await expect(modal(page).getByRole('heading', { name: 'Analytics', level: 2 })).toBeVisible();
+	});
+
+	test('with analytics turned off the tab is gone', async ({ page }) => {
+		await mockWorkspaceBackend(page, { features: { enable_admin_analytics: false } });
+		await mockAnalytics(page);
+		await page.route('**/api/v1/users/**', (route) => json(route, { users: [], total: 0 }));
+		await page.goto('/admin/analytics');
+		await expect(page).toHaveURL(/\/admin\/users\/overview$/);
+	});
+});
