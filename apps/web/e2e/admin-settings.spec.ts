@@ -923,3 +923,160 @@ test.describe('settings: Interface', () => {
 		await expect(page.getByText('Settings saved successfully!')).toBeVisible();
 	});
 });
+
+test.describe('settings: Authentication', () => {
+	const adminCfg = () => ({
+		DEFAULT_USER_ROLE: 'pending',
+		DEFAULT_GROUP_ID: '',
+		ENABLE_SIGNUP: true,
+		ENABLE_API_KEYS: false,
+		ENABLE_API_KEYS_ENDPOINT_RESTRICTIONS: false,
+		API_KEYS_ALLOWED_ENDPOINTS: '',
+		JWT_EXPIRES_IN: '4w',
+		SHOW_ADMIN_DETAILS: false,
+		ADMIN_EMAIL: null,
+		PENDING_USER_OVERLAY_TITLE: '',
+		PENDING_USER_OVERLAY_CONTENT: '',
+		// Not on this tab: must come back as it arrived.
+		WEBUI_URL: 'http://localhost:3000'
+	});
+	const oauthCfg = (over: Rec = {}) => ({ ENABLE_OAUTH_PERSISTENT_CONFIG: true, ENABLE_OAUTH: false, OAUTH_PROVIDER_NAME: 'SSO', OAUTH_CLIENT_ID: 'cid', OAUTH_CLIENT_SECRET: 's3cret', ...over });
+	// An older backend: no group-mapping keys at all.
+	const ldapServer = () => ({ label: 'Corp', host: 'ldap.corp', port: null, attribute_for_mail: 'mail', attribute_for_username: 'uid', search_base: 'ou=users' });
+
+	async function mockAuth(page: Page, opts: { ldapEnabled?: boolean; oauth?: Rec | null } = {}) {
+		const calls: Call[] = [];
+		const answer = (path: string, reads: unknown) => async (route: any) => {
+			const req = route.request();
+			let body: any = null;
+			try {
+				body = req.postDataJSON();
+			} catch {
+				/* none */
+			}
+			calls.push({ method: req.method(), path, body });
+			return json(route, req.method() === 'GET' ? reads : (body ?? true));
+		};
+		await page.route('**/api/v1/auths/admin/config', answer('/api/v1/auths/admin/config', adminCfg()));
+		await page.route('**/api/v1/auths/admin/config/ldap', answer('/api/v1/auths/admin/config/ldap', { ENABLE_LDAP: opts.ldapEnabled ?? false }));
+		await page.route('**/api/v1/auths/admin/config/ldap/server', answer('/api/v1/auths/admin/config/ldap/server', ldapServer()));
+		await page.route('**/api/v1/auths/admin/config/oauth', (route) =>
+			opts.oauth === null ? json(route, { detail: 'nope' }, 404) : answer('/api/v1/auths/admin/config/oauth', opts.oauth ?? oauthCfg())(route)
+		);
+		await page.route('**/api/v1/groups/**', (route) => json(route, [{ id: 'g1', name: 'Staff' }]));
+		return { calls };
+	}
+	const posted = (calls: Call[], path: string) => calls.find((c) => c.method === 'POST' && c.path === path)?.body;
+
+	test('saves the admin config whole, LDAP off sends only the switch, OAuth goes back as it came', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockAuth(page);
+		await page.goto('/?settings=admin:authentication');
+		const m = modal(page);
+		await expect(m.getByLabel('Default Group')).toContainText('Staff');
+		await m.getByLabel('Default User Role').selectOption('user');
+		await m.getByLabel('Default Group').selectOption('g1');
+		await m.getByRole('switch', { name: 'New Sign Ups' }).click();
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect
+			.poll(() => posted(calls, '/api/v1/auths/admin/config'))
+			.toEqual({ ...adminCfg(), DEFAULT_USER_ROLE: 'user', DEFAULT_GROUP_ID: 'g1', ENABLE_SIGNUP: false });
+		await expect.poll(() => posted(calls, '/api/v1/auths/admin/config/ldap')).toEqual({ enable_ldap: false });
+		await expect.poll(() => posted(calls, '/api/v1/auths/admin/config/oauth')).toEqual(oauthCfg());
+		expect(posted(calls, '/api/v1/auths/admin/config/ldap/server')).toBeUndefined();
+		await expect(page.getByText('Settings saved successfully!')).toBeVisible();
+	});
+
+	test('API key and pending-account options appear only while their switch is on; -1 warns', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockAuth(page);
+		await page.goto('/?settings=admin:authentication');
+		const m = modal(page);
+		await expect(m.getByRole('switch', { name: 'API Key Endpoint Restrictions' })).toHaveCount(0);
+		await m.getByRole('switch', { name: 'API Keys', exact: true }).click();
+		await m.getByRole('switch', { name: 'API Key Endpoint Restrictions' }).click();
+		await expect(m.getByLabel('Allowed Endpoints')).toBeVisible();
+		await expect(m.getByLabel('Admin Contact Email')).toHaveCount(0);
+		await m.getByRole('switch', { name: 'Admin Details' }).click();
+		await expect(m.getByLabel('Admin Contact Email')).toBeVisible();
+		await expect(m.getByText('No expiration can pose security risks.')).toHaveCount(0);
+		await m.getByLabel('JWT Expiration').fill('-1');
+		await expect(m.getByText('No expiration can pose security risks.')).toBeVisible();
+	});
+
+	test('LDAP on: required fields block saving, a blank group attribute falls back to memberOf, an empty port is null', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockAuth(page, { ldapEnabled: true });
+		await page.goto('/?settings=admin:authentication');
+		const m = modal(page);
+		await expect(m.getByLabel('Host')).toHaveValue('ldap.corp');
+		await m.getByLabel('Search Base').fill('');
+		await m.getByRole('button', { name: 'Save' }).click();
+		// The browser's own validation stops the submit: nothing was sent.
+		await page.waitForTimeout(200);
+		expect(calls.filter((c) => c.method === 'POST')).toHaveLength(0);
+		await m.getByLabel('Search Base').fill('ou=people,dc=corp');
+		await m.getByRole('switch', { name: 'Group Mapping' }).click();
+		await m.getByLabel('Group Attribute').fill('');
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect
+			.poll(() => posted(calls, '/api/v1/auths/admin/config/ldap/server'))
+			.toMatchObject({
+				label: 'Corp',
+				host: 'ldap.corp',
+				port: null,
+				search_base: 'ou=people,dc=corp',
+				enable_group_management: true,
+				attribute_for_groups: 'memberOf',
+				use_tls: false
+			});
+		expect(posted(calls, '/api/v1/auths/admin/config/ldap')).toEqual({ enable_ldap: true });
+	});
+
+	test('the app DN password is masked until revealed', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockAuth(page, { ldapEnabled: true });
+		await page.goto('/?settings=admin:authentication');
+		const m = modal(page);
+		const pw = m.getByPlaceholder('Enter Application DN Password');
+		await expect(pw).toHaveAttribute('type', 'password');
+		await pw.locator('xpath=following-sibling::button').click();
+		await expect(pw).toHaveAttribute('type', 'text');
+	});
+
+	test('OAuth settings that come from the environment are read-only and are not saved', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockAuth(page, { oauth: oauthCfg({ ENABLE_OAUTH_PERSISTENT_CONFIG: false, ENABLE_OAUTH: true }) });
+		await page.goto('/?settings=admin:authentication');
+		const m = modal(page);
+		await expect(m.getByText(/read from environment variables/)).toBeVisible();
+		await expect(m.getByLabel('Provider Name')).toBeDisabled();
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect.poll(() => posted(calls, '/api/v1/auths/admin/config')).toBeTruthy();
+		await expect(page.getByText('Settings saved successfully!')).toBeVisible();
+		expect(posted(calls, '/api/v1/auths/admin/config/oauth')).toBeUndefined();
+	});
+
+	test('OAuth on reveals the provider fields; role and group mapping reveal theirs', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockAuth(page, { oauth: oauthCfg({ ENABLE_OAUTH: true }) });
+		await page.goto('/?settings=admin:authentication');
+		const m = modal(page);
+		await expect(m.getByLabel('Client ID')).toHaveValue('cid');
+		await expect(m.getByLabel('Roles Claim')).toHaveCount(0);
+		await expect(m.getByLabel('Group Claim')).toHaveCount(0);
+		await m.getByRole('switch', { name: 'Role Mapping' }).click();
+		await m.getByRole('switch', { name: 'Group Mapping' }).click();
+		await expect(m.getByLabel('Roles Claim')).toBeVisible();
+		await expect(m.getByLabel('Group Claim')).toBeVisible();
+	});
+
+	test('a failed OAuth read leaves that section out but the rest still works', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockAuth(page, { oauth: null });
+		await page.goto('/?settings=admin:authentication');
+		const m = modal(page);
+		await expect(m.getByRole('heading', { name: 'User Access' })).toBeVisible();
+		await expect(m.getByRole('heading', { name: 'OAuth / OIDC' })).toHaveCount(0);
+	});
+});
