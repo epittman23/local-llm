@@ -1228,3 +1228,186 @@ test.describe('settings: Audio', () => {
 		await expect(tts.getByLabel('TTS Voice')).toBeVisible();
 	});
 });
+
+test.describe('settings: Images', () => {
+	const imagesCfg = (over: Rec = {}) => ({
+		ENABLE_IMAGE_GENERATION: false,
+		ENABLE_IMAGE_PROMPT_GENERATION: true,
+		IMAGE_GENERATION_ENGINE: 'openai',
+		IMAGE_GENERATION_MODEL: '',
+		IMAGE_SIZE: '512x512',
+		IMAGE_STEPS: 50,
+		IMAGES_OPENAI_API_BASE_URL: 'https://api.openai.com/v1',
+		IMAGES_OPENAI_API_KEY: '',
+		IMAGES_OPENAI_API_VERSION: '',
+		IMAGES_OPENAI_API_PARAMS: { quality: 'hd' },
+		AUTOMATIC1111_BASE_URL: '',
+		AUTOMATIC1111_API_AUTH: '',
+		AUTOMATIC1111_PARAMS: {},
+		COMFYUI_BASE_URL: '',
+		COMFYUI_API_KEY: '',
+		COMFYUI_WORKFLOW: '',
+		COMFYUI_WORKFLOW_NODES: [],
+		IMAGES_GEMINI_API_BASE_URL: '',
+		IMAGES_GEMINI_API_KEY: '',
+		IMAGES_GEMINI_ENDPOINT_METHOD: 'predict',
+		ENABLE_IMAGE_EDIT: false,
+		IMAGE_EDIT_ENGINE: 'openai',
+		IMAGE_EDIT_MODEL: '',
+		IMAGE_EDIT_SIZE: '',
+		IMAGES_EDIT_OPENAI_API_BASE_URL: '',
+		IMAGES_EDIT_OPENAI_API_KEY: '',
+		IMAGES_EDIT_OPENAI_API_VERSION: '',
+		IMAGES_EDIT_COMFYUI_BASE_URL: '',
+		IMAGES_EDIT_COMFYUI_API_KEY: '',
+		IMAGES_EDIT_COMFYUI_WORKFLOW: '',
+		IMAGES_EDIT_COMFYUI_WORKFLOW_NODES: [],
+		IMAGES_EDIT_GEMINI_API_BASE_URL: '',
+		IMAGES_EDIT_GEMINI_API_KEY: '',
+		...over
+	});
+
+	async function mockImages(page: Page, cfg: Rec = imagesCfg()) {
+		const calls: Call[] = [];
+		await page.route('**/api/v1/images/**', (route) => {
+			const req = route.request();
+			const path = new URL(req.url()).pathname.replace('/api/v1/images', '');
+			let body: any = null;
+			try {
+				body = req.postDataJSON();
+			} catch {
+				/* none */
+			}
+			calls.push({ method: req.method(), path, body });
+			if (path === '/config' && req.method() === 'GET') return json(route, cfg);
+			if (path === '/config/update') return json(route, body);
+			if (path === '/config/url/verify') return json(route, true);
+			if (path === '/models') return json(route, [{ id: 'dall-e-3', name: 'DALL-E 3' }, { id: 'sdxl', name: 'SDXL' }]);
+			return json(route, {});
+		});
+		return { calls };
+	}
+	const updates = (calls: Call[]) => calls.filter((c) => c.path === '/config/update').map((c) => c.body);
+	const create = (page: Page) => modal(page).getByRole('region', { name: 'Create Image' });
+	const edit = (page: Page) => modal(page).getByRole('region', { name: 'Edit Image' });
+	const workflow = JSON.stringify({ '6': { class_type: 'CLIPTextEncode', inputs: { text: '' } } });
+
+	test('with generation off, params go back as objects, and an unset engine key does not block the save', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockImages(page);
+		await page.goto('/?settings=admin:images');
+		const m = modal(page);
+		await expect(create(page).getByLabel('Additional Parameters')).toHaveValue('{\n  "quality": "hd"\n}');
+		await expect(create(page).getByLabel('Model')).toHaveCount(0);
+		await m.getByRole('switch', { name: 'Image Edit' }).click();
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect.poll(() => updates(calls).length).toBe(1);
+		expect(updates(calls)[0]).toMatchObject({ ENABLE_IMAGE_GENERATION: false, ENABLE_IMAGE_EDIT: true, IMAGES_OPENAI_API_PARAMS: { quality: 'hd' }, AUTOMATIC1111_PARAMS: {} });
+		// No workflow is set, so the node list is the server's own, not the six default rows.
+		expect(updates(calls)[0].COMFYUI_WORKFLOW_NODES).toEqual([]);
+		await expect(page.getByText('Settings saved successfully!')).toBeVisible();
+	});
+
+	test('turning generation on shows model/size/steps and loads the model list; a missing key refuses the save and turns it back off', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockImages(page);
+		await page.goto('/?settings=admin:images');
+		const m = modal(page);
+		await m.getByRole('switch', { name: 'Image Generation', exact: true }).click();
+		await expect(create(page).getByLabel('Model')).toBeVisible();
+		await expect(create(page).getByLabel('Image Size')).toHaveValue('512x512');
+		await create(page).getByLabel('Model').fill('dall-e-3');
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('OpenAI API Key is required.')).toBeVisible();
+		await expect(m.getByRole('switch', { name: 'Image Generation', exact: true })).not.toBeChecked();
+		expect(updates(calls)).toHaveLength(0);
+	});
+
+	test('with generation on at load, the model list is fetched and offered', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockImages(page, imagesCfg({ ENABLE_IMAGE_GENERATION: true, IMAGES_OPENAI_API_KEY: 'sk', IMAGE_GENERATION_MODEL: 'dall-e-3' }));
+		await page.goto('/?settings=admin:images');
+		await expect(create(page).getByLabel('Model')).toHaveValue('dall-e-3');
+		await expect.poll(() => calls.some((c) => c.path === '/models')).toBe(true);
+		await expect(page.locator('#img-model-list option')).toHaveCount(2);
+	});
+
+	test('AUTOMATIC1111: Verify saves first, then checks the connection', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockImages(page, imagesCfg({ IMAGE_GENERATION_ENGINE: 'automatic1111', AUTOMATIC1111_BASE_URL: 'http://sd:7860/' }));
+		await page.goto('/?settings=admin:images');
+		await create(page).getByLabel('Base URL').fill('http://sd:7861/');
+		await create(page).getByRole('button', { name: 'Verify connection' }).click();
+		await expect(page.getByText('Server connection verified')).toBeVisible();
+		const order = calls.map((c) => c.path).filter((p) => p === '/config/update' || p === '/config/url/verify');
+		expect(order).toEqual(['/config/update', '/config/url/verify']);
+		expect(updates(calls)[0].AUTOMATIC1111_BASE_URL).toBe('http://sd:7861/');
+		await expect(create(page).getByPlaceholder('Enter api auth string (e.g. username:password)')).toHaveAttribute('type', 'password');
+	});
+
+	test('a save that cannot be sent (bad params) stops the verify too', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockImages(page, imagesCfg({ IMAGE_GENERATION_ENGINE: 'automatic1111', AUTOMATIC1111_BASE_URL: 'http://sd:7860/' }));
+		await page.goto('/?settings=admin:images');
+		await create(page).getByLabel('Additional Parameters').fill('{oops');
+		await create(page).getByRole('button', { name: 'Verify connection' }).click();
+		await expect(page.getByText('Invalid JSON format for AUTOMATIC1111 Additional Parameters.')).toBeVisible();
+		expect(calls.some((c) => c.path === '/config/url/verify')).toBe(false);
+		expect(updates(calls)).toHaveLength(0);
+	});
+
+	test('ComfyUI: an uploaded workflow reveals the node mapping; ids are saved as lists next to the workflow text', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockImages(page, imagesCfg({ IMAGE_GENERATION_ENGINE: 'comfyui', COMFYUI_BASE_URL: 'http://comfy:8188' }));
+		await page.goto('/?settings=admin:images');
+		const c = create(page);
+		await expect(c.getByText('ComfyUI Workflow Nodes')).toHaveCount(0);
+		await expect(c.getByRole('button', { name: 'Edit workflow.json content' })).toHaveCount(0);
+		await c.locator('input[type=file]').setInputFiles({ name: 'workflow.json', mimeType: 'application/json', buffer: Buffer.from(workflow) });
+		await expect(c.getByText('ComfyUI Workflow Nodes')).toBeVisible();
+		await expect(c.getByLabel('prompt key')).toHaveValue('text');
+		await c.getByLabel('prompt node ids').fill('6, 7');
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect.poll(() => updates(calls).length).toBe(1);
+		const sent = updates(calls)[0];
+		expect(JSON.parse(sent.COMFYUI_WORKFLOW)).toEqual(JSON.parse(workflow));
+		expect(sent.COMFYUI_WORKFLOW_NODES).toContainEqual({ type: 'prompt', key: 'text', node_ids: ['6', '7'] });
+		expect(sent.COMFYUI_WORKFLOW_NODES).toHaveLength(6);
+	});
+
+	test('a workflow that is not a JSON object is refused, naming the workflow', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockImages(page, imagesCfg({ IMAGE_GENERATION_ENGINE: 'comfyui', COMFYUI_BASE_URL: 'http://comfy:8188' }));
+		await page.goto('/?settings=admin:images');
+		await create(page).locator('input[type=file]').setInputFiles({ name: 'w.json', mimeType: 'application/json', buffer: Buffer.from('[1,2]') });
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('Invalid JSON format for ComfyUI Workflow.')).toBeVisible();
+		expect(updates(calls)).toHaveLength(0);
+	});
+
+	test('the workflow opens in a code editor dialog', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockImages(page, imagesCfg({ IMAGE_GENERATION_ENGINE: 'comfyui', COMFYUI_BASE_URL: 'http://comfy:8188', COMFYUI_WORKFLOW: workflow }));
+		await page.goto('/?settings=admin:images');
+		await create(page).getByRole('button', { name: 'Edit workflow.json content' }).click();
+		const dialog = page.getByRole('dialog', { name: 'ComfyUI Workflow' });
+		await expect(dialog.locator('.cm-content')).toContainText('CLIPTextEncode');
+	});
+
+	test('Edit Image: engines show their own fields, with the edit model only while generation and editing are both on', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockImages(page, imagesCfg({ ENABLE_IMAGE_GENERATION: true, IMAGES_OPENAI_API_KEY: 'sk', IMAGE_GENERATION_MODEL: 'dall-e-3' }));
+		await page.goto('/?settings=admin:images');
+		const e = edit(page);
+		await expect(e.getByLabel('Model')).toHaveCount(0);
+		await modal(page).getByRole('switch', { name: 'Image Edit' }).click();
+		await expect(e.getByLabel('Model')).toBeVisible();
+		await e.getByLabel('Image Edit Engine').selectOption('gemini');
+		await expect(e.getByPlaceholder('API Key')).toHaveAttribute('type', 'password');
+		await e.getByLabel('Image Edit Engine').selectOption('comfyui');
+		await expect(e.getByRole('button', { name: 'Verify connection' })).toBeVisible();
+		await e.locator('input[type=file]').setInputFiles({ name: 'edit.json', mimeType: 'application/json', buffer: Buffer.from(workflow) });
+		await expect(e.getByLabel('image key')).toHaveValue('image');
+		await expect(e.getByLabel('unet_name', { exact: false })).toHaveCount(0);
+	});
+});
