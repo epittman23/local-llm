@@ -1898,3 +1898,411 @@ test.describe('settings: Web Search', () => {
 		await expect.poll(() => update(calls)?.web.PLAYWRIGHT_TIMEOUT).toBe('15000');
 	});
 });
+
+test.describe('settings: Models', () => {
+	const pub = { principal_type: 'user', principal_id: '*', permission: 'read' };
+	const grp = { principal_type: 'group', principal_id: 'g1', permission: 'read' };
+	const served = [
+		{ id: 'gpt-4o', name: 'GPT-4o' },
+		{ id: 'llama3', name: 'Llama 3' },
+		{ id: 'helper', name: 'Helper', base_model_id: 'llama3', preset: true }
+	];
+	const provider = [...served, { id: 'mistral', name: 'Mistral' }];
+	const records = () => [
+		{ id: 'llama3', name: 'Llama 3', base_model_id: null, is_active: true, meta: { description: 'A **fast** model' }, access_grants: [pub] },
+		{ id: 'helper', name: 'Helper', base_model_id: 'llama3', is_active: false, meta: { hidden: true }, access_grants: [grp] }
+	];
+	const modelsCfg = (over: Rec = {}) => ({ DEFAULT_MODELS: '', DEFAULT_PINNED_MODELS: '', MODEL_ORDER_LIST: ['llama3', 'gpt-4o'], DEFAULT_MODEL_METADATA: {}, DEFAULT_MODEL_PARAMS: {}, ...over });
+
+	async function mockModels(page: Page, opts: { cfg?: Rec; failToggle?: boolean; failCfgPost?: boolean } = {}) {
+		const calls: Call[] = [];
+		const record = (route: any) => {
+			const req = route.request();
+			let body: any = null;
+			try {
+				body = req.postDataJSON();
+			} catch {
+				/* none */
+			}
+			const url = new URL(req.url());
+			calls.push({ method: req.method(), path: url.pathname.replace('/api/v1', '') + url.search, body });
+			return { req, body, url };
+		};
+		await page.route('**/api/models**', (route) => {
+			const { url } = record(route);
+			return json(route, { data: url.pathname.endsWith('/base') ? provider : served });
+		});
+		await page.route('**/api/v1/models/**', (route) => {
+			const { req, body, url } = record(route);
+			const path = url.pathname.replace('/api/v1', '');
+			if (path === '/models/base/tags') return json(route, ['fast', 'local']);
+			if (path === '/models/base') return json(route, records());
+			if (path === '/models/model/toggle') return opts.failToggle ? json(route, { detail: 'Toggle refused' }, 500) : json(route, { id: url.searchParams.get('id') });
+			if (path === '/models/model/access/update') return json(route, { id: body.id, access_grants: body.access_grants });
+			if (path === '/models/import') return json(route, true);
+			if (path === '/models/delete/all') return json(route, true);
+			if (path === '/models/model' && req.method() === 'GET') return json(route, { ...served.find((m) => m.id === url.searchParams.get('id')), full: true });
+			return json(route, body ?? true);
+		});
+		await page.route('**/api/v1/configs/models', (route) => {
+			const { req, body } = record(route);
+			if (req.method() === 'GET') return json(route, opts.cfg ?? modelsCfg());
+			return opts.failCfgPost ? json(route, { detail: 'Config refused' }, 500) : json(route, body);
+		});
+		await page.route('**/api/v1/configs/suggestions', (route) => (record(route), json(route, [])));
+		return { calls };
+	}
+	const posts = (calls: Call[], path: string) => calls.filter((c) => c.method === 'POST' && c.path.split('?')[0] === path).map((c) => c.body);
+	const row = (page: Page, id: string) => modal(page).locator(`[data-model-row="${id}"]`);
+	const rowIds = (page: Page) => modal(page).locator('[data-model-row]').evaluateAll((els) => els.map((e) => e.getAttribute('data-model-row')));
+	const moreMenu = async (page: Page, id: string, name: string) => {
+		await row(page, id).getByRole('button', { name: `More actions for ${name}` }).click();
+	};
+	const actions = async (page: Page, item: string) => {
+		await modal(page).getByRole('button', { name: 'Actions', exact: true }).click();
+		await page.getByRole('menuitem', { name: item }).click();
+	};
+
+	test('lists served models and connection models with no record, in the saved order, with their access', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockModels(page);
+		await page.goto('/?settings=admin:models');
+		const m = modal(page);
+		await expect(m.getByRole('heading', { name: /^Models/, level: 2 })).toContainText('4');
+		// Saved order first, then anything new alphabetically.
+		await expect.poll(() => rowIds(page)).toEqual(['llama3', 'gpt-4o', 'helper', 'mistral']);
+		await expect(row(page, 'llama3')).toContainText('Public');
+		await expect(row(page, 'helper')).toContainText('Shared');
+		await expect(row(page, 'gpt-4o')).toContainText('Private');
+		await expect(row(page, 'mistral').getByRole('switch')).toBeChecked();
+		await expect(row(page, 'helper').getByRole('switch')).not.toBeChecked();
+	});
+
+	test('search and views narrow the list, and reordering is offered only when nothing is filtered', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockModels(page);
+		await page.goto('/?settings=admin:models');
+		const m = modal(page);
+		await m.getByLabel('Search Models').fill('LLAMA');
+		await expect.poll(() => rowIds(page)).toEqual(['llama3']);
+		await expect(row(page, 'llama3').getByRole('img', { name: 'Reordering is off while filters are set' })).toBeVisible();
+		await m.getByLabel('Clear search').click();
+		await m.getByRole('button', { name: 'View' }).click();
+		await page.getByRole('menuitemradio', { name: 'Disabled' }).click();
+		await expect.poll(() => rowIds(page)).toEqual(['helper']);
+		await m.getByRole('button', { name: 'View' }).click();
+		await page.getByRole('menuitemradio', { name: 'Public' }).click();
+		await expect.poll(() => rowIds(page)).toEqual(['llama3']);
+		await m.getByRole('button', { name: 'View' }).click();
+		await page.getByRole('menuitemradio', { name: 'All' }).click();
+		await expect.poll(async () => (await rowIds(page)).length).toBe(4);
+	});
+
+	test('the enable switch toggles a model that has a record, and creates the record for one that has none', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockModels(page);
+		await page.goto('/?settings=admin:models');
+		await row(page, 'llama3').getByRole('switch').click();
+		await expect.poll(() => calls.filter((c) => c.path.startsWith('/models/model/toggle')).map((c) => c.path)).toEqual(['/models/model/toggle?id=llama3']);
+		await row(page, 'mistral').getByRole('switch').click();
+		await expect.poll(() => posts(calls, '/models/create')[0]).toMatchObject({ id: 'mistral', name: 'Mistral', base_model_id: null, is_active: false, access_grants: [] });
+	});
+
+	test('a toggle the server refuses snaps back and says why', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockModels(page, { failToggle: true });
+		await page.goto('/?settings=admin:models');
+		const sw = row(page, 'llama3').getByRole('switch');
+		await sw.click();
+		await expect(page.getByText('Toggle refused')).toBeVisible();
+		await expect(sw).toBeChecked();
+	});
+
+	test('Set as Selected / Pinned saves the lists at once and marks the row; a refused save puts it back', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockModels(page);
+		await page.goto('/?settings=admin:models');
+		await moreMenu(page, 'gpt-4o', 'GPT-4o');
+		await page.getByRole('menuitem', { name: 'Set as Selected Model' }).click();
+		await expect(page.getByText('Model added to selected models')).toBeVisible();
+		await expect(row(page, 'gpt-4o')).toContainText('Selected');
+		await moreMenu(page, 'gpt-4o', 'GPT-4o');
+		await page.getByRole('menuitem', { name: 'Set as Pinned Model' }).click();
+		await expect(row(page, 'gpt-4o')).toContainText('Pinned');
+		const last = posts(calls, '/configs/models').at(-1);
+		expect(last).toMatchObject({ DEFAULT_MODELS: 'gpt-4o', DEFAULT_PINNED_MODELS: 'gpt-4o', MODEL_ORDER_LIST: ['llama3', 'gpt-4o'] });
+	});
+
+	test('a refused Selected save reverts the mark', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockModels(page, { failCfgPost: true });
+		await page.goto('/?settings=admin:models');
+		await moreMenu(page, 'gpt-4o', 'GPT-4o');
+		await page.getByRole('menuitem', { name: 'Set as Selected Model' }).click();
+		await expect(page.getByText('Config refused')).toBeVisible();
+		await expect(row(page, 'gpt-4o')).not.toContainText('Selected');
+	});
+
+	test('Make Private drops every grant; Make Public adds the everyone grant to what is there', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockModels(page);
+		await page.goto('/?settings=admin:models');
+		await moreMenu(page, 'llama3', 'Llama 3');
+		await page.getByRole('menuitem', { name: 'Make Private' }).click();
+		await expect(row(page, 'llama3')).toContainText('Private');
+		await moreMenu(page, 'helper', 'Helper');
+		await page.getByRole('menuitem', { name: 'Make Public' }).click();
+		await expect(row(page, 'helper')).toContainText('Public');
+		const bodies = posts(calls, '/models/model/access/update');
+		expect(bodies[0]).toEqual({ id: 'llama3', name: 'Llama 3', access_grants: [] });
+		expect(bodies[1]).toEqual({ id: 'helper', name: 'Helper', access_grants: [grp, pub] });
+	});
+
+	test('Hide Model stores the flag through an update and says so', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockModels(page);
+		await page.goto('/?settings=admin:models');
+		await moreMenu(page, 'llama3', 'Llama 3');
+		await page.getByRole('menuitem', { name: 'Hide Model' }).click();
+		await expect(page.getByText('Model llama3 is now hidden')).toBeVisible();
+		expect(posts(calls, '/models/model/update')[0]).toMatchObject({ id: 'llama3', meta: { description: 'A **fast** model', hidden: true }, base_model_id: null });
+	});
+
+	test('Move Down reorders and enables Save, which sends the new order and nothing else changed', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockModels(page);
+		await page.goto('/?settings=admin:models');
+		const save = modal(page).getByRole('button', { name: 'Save' });
+		await expect(save).toBeDisabled();
+		await moreMenu(page, 'llama3', 'Llama 3');
+		await page.getByRole('menuitem', { name: 'Move Down' }).click();
+		await expect.poll(() => rowIds(page)).toEqual(['gpt-4o', 'llama3', 'helper', 'mistral']);
+		await expect(save).toBeEnabled();
+		await save.click();
+		await expect(page.getByText('Model order saved successfully')).toBeVisible();
+		expect(posts(calls, '/configs/models').at(-1)).toMatchObject({ MODEL_ORDER_LIST: ['gpt-4o', 'llama3', 'helper', 'mistral'], DEFAULT_MODELS: '', DEFAULT_MODEL_PARAMS: {} });
+		await expect(save).toBeDisabled();
+	});
+
+	test('dragging a row by its grip moves it', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockModels(page);
+		await page.goto('/?settings=admin:models');
+		await row(page, 'mistral').getByRole('img', { name: /Drag Mistral/ }).dragTo(row(page, 'llama3'));
+		await expect.poll(() => rowIds(page)).toEqual(['mistral', 'llama3', 'gpt-4o', 'helper']);
+		await expect(modal(page).getByRole('button', { name: 'Save' })).toBeEnabled();
+	});
+
+	test('Model Defaults: editing them enables Save; one request carries the current lists, and the starter prompts go to their own endpoint', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockModels(page);
+		await page.goto('/?settings=admin:models');
+		const m = modal(page);
+		// A default model chosen first must not be lost when the defaults are saved after it.
+		await moreMenu(page, 'gpt-4o', 'GPT-4o');
+		await page.getByRole('menuitem', { name: 'Set as Selected Model' }).click();
+		await expect(page.getByText('Model added to selected models')).toBeVisible();
+		await m.getByRole('button', { name: 'Configure model defaults' }).click();
+		await m.getByRole('button', { name: /Model Capabilities/ }).click();
+		await m.getByRole('checkbox', { name: 'Vision' }).click();
+		const save = m.getByRole('button', { name: 'Save' });
+		await expect(save).toBeEnabled();
+		await save.click();
+		await expect(page.getByText('Models configuration saved successfully')).toBeVisible();
+		const body = posts(calls, '/configs/models').at(-1);
+		expect(body.DEFAULT_MODELS).toBe('gpt-4o');
+		expect(body.DEFAULT_MODEL_METADATA.capabilities.vision).toBe(false);
+		expect(posts(calls, '/configs/suggestions')).toEqual([{ suggestions: [] }]);
+		await expect(save).toBeDisabled();
+	});
+
+	test('Actions: Enable All acts on the models in view only', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockModels(page);
+		await page.goto('/?settings=admin:models');
+		await actions(page, 'Enable All');
+		await expect.poll(() => posts(calls, '/models/model/update').length).toBe(1);
+		expect(posts(calls, '/models/model/update')[0]).toMatchObject({ id: 'helper', is_active: true });
+	});
+
+	test('Actions: Reset asks first, then deletes every model', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockModels(page);
+		await page.goto('/?settings=admin:models');
+		await actions(page, 'Reset');
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel' }).click();
+		expect(calls.some((c) => c.path === '/models/delete/all')).toBe(false);
+		await actions(page, 'Reset');
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await expect(page.getByText('All models deleted successfully')).toBeVisible();
+		expect(calls.some((c) => c.path === '/models/delete/all')).toBe(true);
+	});
+
+	test('Actions: Import refuses a file that is not JSON, and sends models without any access grants', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockModels(page);
+		await page.goto('/?settings=admin:models');
+		const input = modal(page).getByLabel('Import models file');
+		await input.setInputFiles({ name: 'm.json', mimeType: 'application/json', buffer: Buffer.from('not json') });
+		await expect(page.getByText('Invalid JSON file')).toBeVisible();
+		expect(posts(calls, '/models/import')).toHaveLength(0);
+		await input.setInputFiles({ name: 'm.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify([{ id: 'x', name: 'X', access_grants: [pub] }])) });
+		await expect(page.getByText('Models imported successfully')).toBeVisible();
+		expect(posts(calls, '/models/import')[0]).toEqual({ models: [expect.objectContaining({ id: 'x', name: 'X', access_grants: [] })] });
+	});
+
+	test('a preset opens in the workspace editor, a connection model in the editor here', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockModels(page);
+		await page.goto('/?settings=admin:models');
+		await row(page, 'gpt-4o').getByRole('button', { name: 'Edit GPT-4o' }).click();
+		await expect(modal(page).getByLabel('Model Name')).toHaveValue('GPT-4o');
+		await modal(page).getByRole('tabpanel').getByRole('button', { name: 'Back' }).click();
+		await expect(row(page, 'gpt-4o')).toBeVisible();
+		await row(page, 'helper').getByRole('button', { name: 'Edit Helper' }).click();
+		await expect(page).toHaveURL(/\/workspace\/models\/edit\?id=helper/);
+		await expect(modal(page)).toHaveCount(0);
+	});
+
+	test('Manage says so when no engine can be managed', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockModels(page);
+		await page.route('**/ollama/config', (route) => json(route, { ENABLE_OLLAMA_API: false, OLLAMA_BASE_URLS: [], OLLAMA_API_CONFIGS: {} }));
+		await page.route('**/openai/config', (route) => json(route, { ENABLE_OPENAI_API: false, OPENAI_API_BASE_URLS: [], OPENAI_API_KEYS: [], OPENAI_API_CONFIGS: {} }));
+		await page.goto('/?settings=admin:models');
+		await actions(page, 'Manage');
+		await expect(page.getByRole('dialog', { name: 'Manage Models' }).getByText('No inference engine with management support found')).toBeVisible();
+	});
+});
+
+test.describe('settings: Models > Manage', () => {
+	const ndjson = (...lines: object[]) => lines.map((l) => JSON.stringify(l)).join('\n') + '\n';
+
+	async function mockManage(page: Page, opts: { openai?: Rec } = {}) {
+		const calls: Call[] = [];
+		await mockWorkspaceBackend(page);
+		await page.route('**/api/models**', (route) => json(route, { data: [] }));
+		await page.route('**/api/v1/models/**', (route) => json(route, []));
+		await page.route('**/api/v1/configs/models', (route) => json(route, { DEFAULT_MODELS: '', DEFAULT_PINNED_MODELS: '', MODEL_ORDER_LIST: [], DEFAULT_MODEL_METADATA: {}, DEFAULT_MODEL_PARAMS: {} }));
+		await page.route('**/ollama/config', (route) => json(route, { ENABLE_OLLAMA_API: true, OLLAMA_BASE_URLS: ['http://ollama-a:11434', 'http://ollama-b:11434'], OLLAMA_API_CONFIGS: {} }));
+		await page.route('**/openai/config', (route) => json(route, opts.openai ?? { ENABLE_OPENAI_API: false, OPENAI_API_BASE_URLS: [], OPENAI_API_KEYS: [], OPENAI_API_CONFIGS: {} }));
+		await page.route('**/ollama/api/**', (route) => {
+			const req = route.request();
+			const url = new URL(req.url());
+			let body: any = null;
+			try {
+				body = req.postDataJSON();
+			} catch {
+				/* none */
+			}
+			calls.push({ method: req.method(), path: url.pathname.replace('/ollama', ''), body });
+			if (url.pathname.startsWith('/ollama/api/tags')) return json(route, { models: [{ model: 'llama3:8b', name: 'llama3:8b', size: 4.7 * 1024 ** 3 }, { model: 'phi3', name: 'phi3', size: 2.2 * 1024 ** 3 }] });
+			if (url.pathname.startsWith('/ollama/api/pull')) return route.fulfill({ status: 200, contentType: 'application/x-ndjson', body: ndjson({ status: 'pulling manifest' }, { status: 'pulling abc', digest: 'sha256:abc', total: 200, completed: 50 }, { status: 'success' }) });
+			if (url.pathname.startsWith('/ollama/api/delete')) return json(route, {});
+			if (url.pathname.startsWith('/ollama/api/create')) return route.fulfill({ status: 200, contentType: 'application/x-ndjson', body: ndjson({ status: 'creating model layer' }, { status: 'success' }) });
+			return json(route, {});
+		});
+		return { calls };
+	}
+	const dialog = (page: Page) => page.getByRole('dialog', { name: 'Manage Models' });
+	const open = async (page: Page) => {
+		await page.goto('/?settings=admin:models');
+		await modal(page).getByRole('button', { name: 'Actions', exact: true }).click();
+		await page.getByRole('menuitem', { name: 'Manage' }).click();
+	};
+
+	test('Ollama: pulls a pasted `ollama run` command as the plain tag, on the chosen instance, and reports success', async ({ page }) => {
+		const { calls } = await mockManage(page);
+		await open(page);
+		const d = dialog(page);
+		await d.getByLabel('Ollama instance').selectOption('1');
+		await d.getByLabel('Model tag to pull').fill('  ollama run mistral:7b ');
+		await d.getByRole('button', { name: 'Pull Model' }).click();
+		await expect(page.getByText("Model 'mistral:7b' has been successfully downloaded.")).toBeVisible();
+		const pull = calls.find((c) => c.path.startsWith('/api/pull'));
+		expect(pull).toMatchObject({ path: '/api/pull/1', body: { name: 'mistral:7b' } });
+		await expect(d.getByLabel('Model tag to pull')).toHaveValue('');
+	});
+
+	test('Ollama: deleting a model asks first, then deletes that tag on that instance', async ({ page }) => {
+		const { calls } = await mockManage(page);
+		await open(page);
+		const d = dialog(page);
+		await expect(d.getByRole('option', { name: 'llama3:8b (4.7 GB)' })).toHaveCount(1);
+		await expect(d.getByRole('button', { name: 'Delete Model' })).toBeDisabled();
+		await d.getByLabel('Model to delete').selectOption('phi3');
+		await d.getByRole('button', { name: 'Delete Model' }).click();
+		expect(calls.some((c) => c.method === 'DELETE')).toBe(false);
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await expect(page.getByText('Deleted phi3')).toBeVisible();
+		expect(calls.find((c) => c.method === 'DELETE')).toMatchObject({ path: '/api/delete/0', body: { model: 'phi3' } });
+	});
+
+	test('Ollama: Create a model needs a tag and valid JSON, and posts them together', async ({ page }) => {
+		const { calls } = await mockManage(page);
+		await open(page);
+		const d = dialog(page);
+		await expect(d.getByRole('button', { name: 'Create Model' })).toBeDisabled();
+		await d.getByLabel('New model tag').fill('my-model');
+		await d.getByLabel('New model definition').fill('{oops');
+		await d.getByRole('button', { name: 'Create Model' }).click();
+		await expect(page.getByText(/JSON/).first()).toBeVisible();
+		expect(calls.some((c) => c.path.startsWith('/api/create'))).toBe(false);
+		await d.getByLabel('New model definition').fill('{"from":"llama3:8b"}');
+		await d.getByRole('button', { name: 'Create Model' }).click();
+		await expect.poll(() => calls.find((c) => c.path.startsWith('/api/create'))?.body).toEqual({ model: 'my-model', from: 'llama3:8b' });
+	});
+
+	test('Ollama: Update All Models pulls each installed model in turn', async ({ page }) => {
+		const { calls } = await mockManage(page);
+		await open(page);
+		await dialog(page).getByRole('button', { name: 'Update All Models' }).click();
+		await expect(page.getByText('All models are up to date')).toBeVisible();
+		expect(calls.filter((c) => c.path.startsWith('/api/pull')).map((c) => c.body.name)).toEqual(['llama3:8b', 'phi3']);
+	});
+
+	test('Ollama: the experimental GGUF upload stays hidden until asked for', async ({ page }) => {
+		await mockManage(page);
+		await open(page);
+		const d = dialog(page);
+		await expect(d.getByText('Upload a GGUF model')).toHaveCount(0);
+		await d.getByRole('button', { name: 'Show' }).click();
+		await expect(d.getByText('Upload a GGUF model')).toBeVisible();
+		await d.getByRole('button', { name: 'File Mode' }).click();
+		await expect(d.getByLabel('Hugging Face URL')).toBeVisible();
+	});
+
+	test('with Ollama and a llama.cpp connection, the engine can be chosen; the provider lists, loads and deletes models', async ({ page }) => {
+		const calls: Call[] = [];
+		await mockManage(page, {
+			openai: { ENABLE_OPENAI_API: true, OPENAI_API_BASE_URLS: ['http://llama:8080/v1'], OPENAI_API_KEYS: [''], OPENAI_API_CONFIGS: { 0: { provider: 'llama.cpp' } } }
+		});
+		await page.route('**/openai/models/0/**', (route) => {
+			const req = route.request();
+			const url = new URL(req.url());
+			let body: any = null;
+			try {
+				body = req.postDataJSON();
+			} catch {
+				/* none */
+			}
+			calls.push({ method: req.method(), path: url.pathname.replace('/openai', '') + url.search, body });
+			if (url.pathname.endsWith('/catalog')) return json(route, { models: [{ id: 'qwen', status: 'unloaded' }, { id: 'gemma', display_name: 'Gemma 2', status: { value: 'loaded' } }] });
+			return json(route, { ok: true });
+		});
+		await page.route('**/openai/models/0?**', (route) => (calls.push({ method: route.request().method(), path: new URL(route.request().url()).pathname.replace('/openai', '') + new URL(route.request().url()).search, body: null }), json(route, { ok: true })));
+		await open(page);
+		const d = dialog(page);
+		await d.getByLabel('Engine').selectOption('provider');
+		await expect(d.getByText('Gemma 2')).toBeVisible();
+		await expect(d.getByText('loaded', { exact: true })).toBeVisible();
+		await expect(d.getByRole('button', { name: 'Load Gemma 2', exact: true })).toBeDisabled();
+		await d.getByRole('button', { name: 'Load qwen', exact: true }).click();
+		await expect(page.getByText('Model loaded successfully')).toBeVisible();
+		expect(calls.find((c) => c.path === '/models/0/load')?.body).toEqual({ model: 'qwen' });
+		await d.getByRole('button', { name: 'Delete qwen', exact: true }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await expect(page.getByText('Model deleted successfully')).toBeVisible();
+		expect(calls.find((c) => c.method === 'DELETE')?.path).toBe('/models/0?model=qwen');
+	});
+});

@@ -13,6 +13,7 @@ export const adminTabComponents: Record<string, LazyExoticComponent<ComponentTyp
 	'admin:web': lazy(() => import('@/routes/admin/settings/WebSearch')),
 	'admin:documents': lazy(() => import('@/routes/admin/settings/Documents')),
 	'admin:images': lazy(() => import('@/routes/admin/settings/Images')),
+	'admin:models': lazy(() => import('@/routes/admin/settings/models/AdminModels')),
 	'admin:audio': lazy(() => import('@/routes/admin/settings/Audio')),
 	'admin:connections': lazy(() => import('@/routes/admin/settings/Connections')),
 	'admin:interface': lazy(() => import('@/routes/admin/settings/Interface')),

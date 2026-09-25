@@ -16,7 +16,7 @@ type Item = { value: string; label: string };
 // radio group in a dropdown has no such restriction, and is what the Svelte
 // `common/Select.svelte` these two wrap looks like anyway (a button-styled
 // trigger opening a menu of checkable rows).
-function FilterMenu({
+export function FilterMenu({
 	value,
 	items,
 	onChange,
