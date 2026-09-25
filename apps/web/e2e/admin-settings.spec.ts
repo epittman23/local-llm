@@ -1728,3 +1728,173 @@ test.describe('settings: Documents', () => {
 		expect(calls.filter((c) => c.path.endsWith('reindex')).map((c) => c.path)).toEqual(['/knowledge/reindex', '/knowledge/metadata/reindex', '/memories/reindex']);
 	});
 });
+
+test.describe('settings: Web Search', () => {
+	const webCfg = (over: Rec = {}) => ({
+		ENABLE_WEB_SEARCH: true,
+		ENABLE_WEB_SEARCH_CONFIRMATION: false,
+		WEB_SEARCH_CONFIRMATION_CONTENT: '',
+		WEB_SEARCH_ENGINE: 'searxng',
+		SEARXNG_QUERY_URL: 'http://searx/search?q=<query>',
+		SEARXNG_LANGUAGE: 'all',
+		WEB_SEARCH_RESULT_COUNT: 3,
+		WEB_SEARCH_CONCURRENT_REQUESTS: 0,
+		WEB_FETCH_MAX_CONTENT_LENGTH: null,
+		WEB_SEARCH_DOMAIN_FILTER_LIST: ['example.com', '!bad.com'],
+		BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL: false,
+		BYPASS_WEB_SEARCH_WEB_LOADER: false,
+		WEB_SEARCH_TRUST_ENV: false,
+		WEB_LOADER_ENGINE: '',
+		WEB_LOADER_TIMEOUT: '',
+		ENABLE_WEB_LOADER_SSL_VERIFICATION: true,
+		PLAYWRIGHT_WS_URL: '',
+		PLAYWRIGHT_TIMEOUT: '',
+		FIRECRAWL_TIMEOUT: '30',
+		WEB_LOADER_CONCURRENT_REQUESTS: 10,
+		YOUTUBE_LOADER_LANGUAGE: ['en'],
+		YOUTUBE_LOADER_PROXY_URL: '',
+		LINKUP_SEARCH_PARAMS: {},
+		...over
+	});
+
+	async function mockWeb(page: Page, web: Rec = webCfg()) {
+		const calls: Call[] = [];
+		await page.route('**/api/v1/retrieval/config**', (route) => {
+			const req = route.request();
+			let body: any = null;
+			try {
+				body = req.postDataJSON();
+			} catch {
+				/* none */
+			}
+			const path = new URL(req.url()).pathname.replace('/api/v1', '');
+			calls.push({ method: req.method(), path, body });
+			// The document settings share this endpoint; this tab must leave them alone.
+			if (req.method() === 'GET') return json(route, { CONTENT_EXTRACTION_ENGINE: 'tika', web });
+			return json(route, body);
+		});
+		return { calls };
+	}
+	const update = (calls: Call[]) => calls.find((c) => c.method === 'POST' && c.path === '/retrieval/config/update')?.body;
+	const search = (page: Page) => modal(page).getByRole('region', { name: 'Search' });
+	const loader = (page: Page) => modal(page).getByRole('region', { name: 'Loader' });
+
+	test('saves only the web block; lists go back as arrays and numeric timeouts as strings', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockWeb(page);
+		await page.goto('/?settings=admin:web');
+		const m = modal(page);
+		await expect(m.getByLabel('Domain Filter List')).toHaveValue('example.com, !bad.com');
+		await m.getByLabel('Domain Filter List').fill('a.com, ,b.org');
+		await m.getByLabel('Youtube Language').fill('en, de');
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('Settings saved successfully!')).toBeVisible();
+		const body = update(calls);
+		expect(Object.keys(body)).toEqual(['web']);
+		expect(body.web).toMatchObject({
+			WEB_SEARCH_ENGINE: 'searxng',
+			WEB_SEARCH_DOMAIN_FILTER_LIST: ['a.com', 'b.org'],
+			YOUTUBE_LOADER_LANGUAGE: ['en', 'de'],
+			FIRECRAWL_TIMEOUT: '30',
+			LINKUP_SEARCH_PARAMS: {},
+			WEB_LOADER_CONCURRENT_REQUESTS: 10
+		});
+	});
+
+	test('the engine choice decides which connection boxes show; required ones block the save', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockWeb(page);
+		await page.goto('/?settings=admin:web');
+		const s = search(page);
+		await expect(s.getByLabel('Searxng Query URL')).toHaveValue('http://searx/search?q=<query>');
+		await s.getByLabel('Web Search Engine').selectOption('brave');
+		await expect(s.getByLabel('Searxng Query URL')).toHaveCount(0);
+		await expect(s.getByPlaceholder('Enter Brave Search API Key')).toHaveAttribute('type', 'password');
+		await s.getByLabel('Web Search Engine').selectOption('openserp');
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		// OpenSERP's URL is required, so the browser stops the submit.
+		await page.waitForTimeout(200);
+		expect(update(calls)).toBeUndefined();
+		await s.getByLabel('OpenSERP URL').fill('http://openserp:7000');
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect.poll(() => update(calls)?.web.OPENSERP_BASE_URL).toBe('http://openserp:7000');
+	});
+
+	test('engines with extra controls: Perplexity has a model and context usage, DDGS has a backend', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockWeb(page);
+		await page.goto('/?settings=admin:web');
+		const s = search(page);
+		await s.getByLabel('Web Search Engine').selectOption('perplexity');
+		await expect(s.getByLabel('Perplexity Model')).toBeVisible();
+		await expect(s.getByLabel('Perplexity Search Context Usage')).toBeVisible();
+		await expect(page.locator('#perplexity-model-list option')).toHaveCount(5);
+		await s.getByLabel('Web Search Engine').selectOption('duckduckgo');
+		await expect(s.getByLabel('DDGS Backend')).toBeVisible();
+		await expect(s.getByLabel('Perplexity Model')).toHaveCount(0);
+		await expect(s.getByRole('option', { name: 'DDGS' })).toHaveCount(1);
+	});
+
+	test('Linkup parameters are sent as an object, and refused when they are not JSON', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockWeb(page);
+		await page.goto('/?settings=admin:web');
+		const s = search(page);
+		await s.getByLabel('Web Search Engine').selectOption('linkup');
+		await s.getByLabel('Parameters').fill('{depth');
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('Invalid JSON format in Linkup Parameters')).toBeVisible();
+		expect(update(calls)).toBeUndefined();
+		await s.getByLabel('Parameters').fill('{"depth":"deep"}');
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect.poll(() => update(calls)?.web.LINKUP_SEARCH_PARAMS).toEqual({ depth: 'deep' });
+	});
+
+	test('search limits and the domain filter show only while web search is on; confirmation text only while confirming', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockWeb(page);
+		await page.goto('/?settings=admin:web');
+		const s = search(page);
+		await expect(s.getByLabel('Search Result Count')).toHaveValue('3');
+		await expect(s.getByLabel('Web Search Confirmation Content')).toHaveCount(0);
+		await s.getByRole('switch', { name: 'Web Search Confirmation' }).click();
+		await expect(s.getByLabel('Web Search Confirmation Content')).toBeVisible();
+		await s.getByRole('switch', { name: 'Web Search', exact: true }).click();
+		await expect(s.getByLabel('Search Result Count')).toHaveCount(0);
+		await expect(s.getByLabel('Domain Filter List')).toHaveCount(0);
+	});
+
+	test('loaders: the default has a timeout and SSL switch; Playwright, Tavily and Firecrawl ask for their own settings', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockWeb(page);
+		await page.goto('/?settings=admin:web');
+		const l = loader(page);
+		await expect(l.getByRole('switch', { name: 'Verify SSL Certificate' })).toBeChecked();
+		await l.getByLabel('Web Loader Engine').selectOption('playwright');
+		await expect(l.getByLabel('Playwright WebSocket URL')).toBeVisible();
+		await expect(l.getByRole('switch', { name: 'Verify SSL Certificate' })).toHaveCount(0);
+		await l.getByLabel('Web Loader Engine').selectOption('tavily');
+		await expect(l.getByLabel('Tavily Extract Depth')).toBeVisible();
+		await expect(l.getByPlaceholder('Enter Tavily API Key')).toBeVisible();
+		await l.getByLabel('Web Loader Engine').selectOption('firecrawl');
+		await expect(l.getByLabel('Firecrawl API Base URL')).toBeVisible();
+	});
+
+	test('a loader that is also the search engine is not asked for its key twice', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockWeb(page, webCfg({ WEB_SEARCH_ENGINE: 'tavily', WEB_LOADER_ENGINE: 'tavily' }));
+		await page.goto('/?settings=admin:web');
+		await expect(search(page).getByPlaceholder('Enter Tavily API Key')).toBeVisible();
+		await expect(loader(page).getByLabel('Tavily Extract Depth')).toBeVisible();
+		await expect(loader(page).getByPlaceholder('Enter Tavily API Key')).toHaveCount(0);
+	});
+
+	test('a Playwright timeout typed as a number is sent as a string', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockWeb(page, webCfg({ WEB_LOADER_ENGINE: 'playwright' }));
+		await page.goto('/?settings=admin:web');
+		await loader(page).getByLabel('Playwright Timeout (ms)').fill('15000');
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect.poll(() => update(calls)?.web.PLAYWRIGHT_TIMEOUT).toBe('15000');
+	});
+});
