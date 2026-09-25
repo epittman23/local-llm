@@ -73,7 +73,7 @@ export function SettingsForm({
 /** Ports AdminSettingSection.svelte: an optional heading over a column of settings. */
 export function SettingsSection({ title, first = false, className, children }: { title?: string; first?: boolean; className?: string; children: ReactNode }) {
 	return (
-		<section className={cn(first ? '' : 'mt-5', className)}>
+		<section aria-label={title} className={cn(first ? '' : 'mt-5', className)}>
 			{title && <h3 className="text-muted-foreground mb-2 text-xs">{title}</h3>}
 			<div className="flex flex-col gap-2.5">{children}</div>
 		</section>

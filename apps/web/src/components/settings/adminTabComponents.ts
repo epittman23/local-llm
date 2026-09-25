@@ -10,6 +10,7 @@ import { type ComponentType, type LazyExoticComponent, lazy } from 'react';
 export const adminTabComponents: Record<string, LazyExoticComponent<ComponentType>> = {
 	'admin:general': lazy(() => import('@/routes/admin/settings/General')),
 	'admin:authentication': lazy(() => import('@/routes/admin/settings/Authentication')),
+	'admin:audio': lazy(() => import('@/routes/admin/settings/Audio')),
 	'admin:connections': lazy(() => import('@/routes/admin/settings/Connections')),
 	'admin:interface': lazy(() => import('@/routes/admin/settings/Interface')),
 	'admin:subagents': lazy(() => import('@/routes/admin/settings/Subagents')),

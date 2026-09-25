@@ -1080,3 +1080,151 @@ test.describe('settings: Authentication', () => {
 		await expect(m.getByRole('heading', { name: 'OAuth / OIDC' })).toHaveCount(0);
 	});
 });
+
+test.describe('settings: Audio', () => {
+	const audioCfg = () => ({
+		tts: {
+			OPENAI_API_BASE_URL: 'https://api.openai.com/v1',
+			OPENAI_API_KEY: 'tk',
+			OPENAI_PARAMS: {},
+			API_KEY: '',
+			ENGINE: '',
+			MODEL: '',
+			VOICE: '',
+			SPLIT_ON: 'punctuation',
+			AZURE_SPEECH_REGION: '',
+			AZURE_SPEECH_BASE_URL: '',
+			AZURE_SPEECH_OUTPUT_FORMAT: 'audio-24khz-160kbitrate-mono-mp3',
+			MISTRAL_API_KEY: '',
+			MISTRAL_API_BASE_URL: ''
+		},
+		stt: {
+			OPENAI_API_BASE_URL: 'https://api.openai.com/v1',
+			OPENAI_API_KEY: 'sk',
+			OPENAI_API_REQUEST_FORMAT: '',
+			ENGINE: '',
+			MODEL: '',
+			SUPPORTED_CONTENT_TYPES: [],
+			ALLOWED_EXTENSIONS: ['wav', 'mp3'],
+			WHISPER_MODEL: 'base',
+			DEEPGRAM_API_KEY: '',
+			AZURE_API_KEY: '',
+			AZURE_REGION: '',
+			AZURE_LOCALES: '',
+			AZURE_BASE_URL: '',
+			AZURE_MAX_SPEAKERS: '',
+			MISTRAL_API_KEY: '',
+			MISTRAL_API_BASE_URL: '',
+			MISTRAL_USE_CHAT_COMPLETIONS: false
+		}
+	});
+
+	async function mockAudio(page: Page) {
+		const calls: Call[] = [];
+		await page.route('**/api/v1/audio/**', (route) => {
+			const req = route.request();
+			const path = new URL(req.url()).pathname;
+			let body: any = null;
+			try {
+				body = req.postDataJSON();
+			} catch {
+				/* none */
+			}
+			calls.push({ method: req.method(), path, body });
+			if (path.endsWith('/config') && req.method() === 'GET') return json(route, audioCfg());
+			if (path.endsWith('/config/update')) return json(route, body);
+			if (path.endsWith('/voices')) return json(route, { voices: [{ id: 'nova', name: 'Nova' }, { id: 'alloy', name: 'Alloy' }] });
+			if (path.endsWith('/models')) return json(route, { models: [{ id: 'tts-1' }, { id: 'tts-1-hd' }] });
+			return json(route, {});
+		});
+		return { calls };
+	}
+	const updates = (calls: Call[]) => calls.filter((c) => c.path.endsWith('/config/update')).map((c) => c.body);
+	const region = (page: Page, name: string) => modal(page).getByRole('region', { name });
+
+	test('local Whisper by default; the update button and Save both post the config, and unedited extensions come back', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockAudio(page);
+		await page.goto('/?settings=admin:audio');
+		const stt = region(page, 'Speech-to-Text');
+		await expect(stt.getByLabel('STT Model')).toHaveValue('base');
+		await stt.getByLabel('STT Model').fill('small');
+		await stt.getByLabel('Supported MIME Types').fill(' audio/wav, ,video/* ');
+		await modal(page).getByRole('button', { name: 'Update model' }).click();
+		await expect.poll(() => updates(calls).length).toBe(1);
+		expect(updates(calls)[0].stt).toMatchObject({ ENGINE: '', WHISPER_MODEL: 'small', SUPPORTED_CONTENT_TYPES: ['audio/wav', 'video/*'], ALLOWED_EXTENSIONS: ['wav', 'mp3'], OPENAI_API_REQUEST_FORMAT: 'multipart' });
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect.poll(() => updates(calls).length).toBe(2);
+		await expect(page.getByText('Settings saved successfully!').first()).toBeVisible();
+	});
+
+	test('each speech-to-text engine shows its own fields, and the API key is masked', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockAudio(page);
+		await page.goto('/?settings=admin:audio');
+		const stt = region(page, 'Speech-to-Text');
+		await expect(stt.getByLabel('STT Model')).toBeVisible();
+		await stt.getByLabel('Speech-to-Text Engine').selectOption('openai');
+		await expect(stt.getByLabel('API Base URL')).toHaveValue('https://api.openai.com/v1');
+		await expect(stt.getByPlaceholder('API Key')).toHaveAttribute('type', 'password');
+		await expect(stt.getByLabel('Request Format')).toHaveValue('multipart');
+		await stt.getByLabel('Speech-to-Text Engine').selectOption('azure');
+		await expect(stt.getByLabel('Azure Region')).toBeVisible();
+		await expect(stt.getByLabel('Max Speakers')).toBeVisible();
+		await stt.getByLabel('Speech-to-Text Engine').selectOption('mistral');
+		await expect(stt.getByRole('switch', { name: 'Use Chat Completions API' })).toBeVisible();
+		await stt.getByLabel('Speech-to-Text Engine').selectOption('web');
+		await expect(stt.getByLabel('Supported MIME Types')).toHaveCount(0);
+	});
+
+	test('choosing a TTS engine saves at once, then loads its voices and models, then resets voice and model', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockAudio(page);
+		await page.goto('/?settings=admin:audio');
+		const tts = region(page, 'Text-to-Speech');
+		await tts.getByLabel('Text-to-Speech Engine').selectOption('openai');
+		await expect(tts.getByLabel('TTS Voice')).toHaveValue('alloy');
+		await expect(tts.getByLabel('TTS Model')).toHaveValue('tts-1');
+		const calledPaths = calls.map((c) => c.path.replace('/api/v1/audio', ''));
+		// The save has to land before the lists are asked for.
+		expect(calledPaths.indexOf('/config/update')).toBeGreaterThan(-1);
+		expect(calledPaths.indexOf('/voices')).toBeGreaterThan(calledPaths.indexOf('/config/update'));
+		expect(calledPaths.indexOf('/models')).toBeGreaterThan(calledPaths.indexOf('/config/update'));
+		expect(updates(calls)[0].tts).toMatchObject({ ENGINE: 'openai', VOICE: '', MODEL: '' });
+		// Provider voices come sorted by name into the suggestion list.
+		await expect(page.locator('#tts-voice-list option')).toHaveCount(2);
+		expect(await page.locator('#tts-voice-list option').evaluateAll((o) => o.map((x) => (x as HTMLOptionElement).value))).toEqual(['alloy', 'nova']);
+		expect(await page.locator('#tts-model-list option').count()).toBe(2);
+	});
+
+	test('the OpenAI parameters must be a JSON object; a valid one is sent as an object and tidied', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockAudio(page);
+		await page.goto('/?settings=admin:audio');
+		const tts = region(page, 'Text-to-Speech');
+		await tts.getByLabel('Text-to-Speech Engine').selectOption('openai');
+		await expect(tts.getByLabel('Additional Parameters')).toBeVisible();
+		const before = updates(calls).length;
+		await tts.getByLabel('Additional Parameters').fill('[1,2]');
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('Invalid JSON format for Parameters')).toBeVisible();
+		expect(updates(calls)).toHaveLength(before);
+		await tts.getByLabel('Additional Parameters').fill('{"speed":1.25}');
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect.poll(() => updates(calls).length).toBe(before + 1);
+		expect(updates(calls).at(-1).tts.OPENAI_PARAMS).toEqual({ speed: 1.25 });
+		await expect(tts.getByLabel('Additional Parameters')).toHaveValue('{\n  "speed": 1.25\n}');
+	});
+
+	test('Azure TTS asks for its region, endpoint, voice and output format; splitting defaults to punctuation', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockAudio(page);
+		await page.goto('/?settings=admin:audio');
+		const tts = region(page, 'Text-to-Speech');
+		await expect(tts.getByLabel('Select how to split message text for TTS requests')).toHaveValue('punctuation');
+		await tts.getByLabel('Text-to-Speech Engine').selectOption('azure');
+		await expect(tts.getByLabel('Azure Region')).toBeVisible();
+		await expect(tts.getByLabel('Output format')).toHaveValue('audio-24khz-160kbitrate-mono-mp3');
+		await expect(tts.getByLabel('TTS Voice')).toBeVisible();
+	});
+});
