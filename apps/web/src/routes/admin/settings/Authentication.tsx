@@ -1,18 +1,8 @@
-import { type ReactNode, useState } from 'react';
+import { useState } from 'react';
 import { toast } from 'sonner';
-import { SensitiveInput } from '@/components/common/SensitiveInput';
 import { Tip } from '@/components/common/Tip';
-import {
-	SettingField,
-	SettingInput,
-	SettingNumber,
-	SettingRow,
-	SettingSelect,
-	SettingSwitch,
-	SettingTextarea,
-	SettingsForm,
-	SettingsSection
-} from '@/components/settings/controls';
+import { BoundSecret as Secret, BoundText as Text, BoundToggle as Toggle } from '@/components/settings/boundFields';
+import { SettingField, SettingNumber, SettingRow, SettingSelect, SettingSwitch, SettingTextarea, SettingsForm, SettingsSection } from '@/components/settings/controls';
 import { getAdminConfig, getLdapConfig, getLdapServer, getOAuthConfig, updateAdminConfig, updateLdapConfig, updateLdapServer, updateOAuthConfig } from '@/lib/apis/auths';
 import { getGroups } from '@/lib/apis/groups';
 import { useAdminConfigSaved } from '@/lib/settings/useAdminSaved';
@@ -27,59 +17,6 @@ const linkClass = 'text-muted-foreground/70 hover:text-foreground mt-1 block tex
 const externalLink = { target: '_blank', rel: 'noopener noreferrer' } as const;
 const grid = 'grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-2';
 const warnClass = 'mt-1 block rounded-lg bg-yellow-500/10 px-2 py-1.5 text-[0.6875rem] text-yellow-700 dark:text-yellow-200';
-
-/** A labelled on/off row bound to one key of `config`. */
-function Toggle({ config, set, name, label, description }: { config: Rec; set: (p: Rec) => void; name: string; label: string; description: string }) {
-	return (
-		<SettingRow label={label} description={description}>
-			{(id) => <SettingSwitch checked={Boolean(config[name])} onChange={(v) => set({ [name]: v })} labelledBy={id} />}
-		</SettingRow>
-	);
-}
-
-/** A labelled text box bound to one key of `config`, optionally with a hover hint. */
-function Text({
-	config,
-	set,
-	name,
-	label,
-	description,
-	placeholder,
-	tip,
-	required,
-	type = 'text',
-	children
-}: {
-	config: Rec;
-	set: (p: Rec) => void;
-	name: string;
-	label: string;
-	description: string;
-	placeholder?: string;
-	tip?: string;
-	required?: boolean;
-	type?: string;
-	children?: ReactNode;
-}) {
-	const id = `auth-${name}`;
-	return (
-		<SettingField label={label} description={description} htmlFor={id}>
-			<Tip content={tip}>
-				<SettingInput id={id} type={type} required={required} placeholder={placeholder} value={config[name] ?? ''} onChange={(e) => set({ [name]: e.target.value })} />
-			</Tip>
-			{children}
-		</SettingField>
-	);
-}
-
-/** A masked box bound to one key of `config`. */
-function Secret({ config, set, name, label, description, placeholder }: { config: Rec; set: (p: Rec) => void; name: string; label: string; description: string; placeholder: string }) {
-	return (
-		<SettingField label={label} description={description}>
-			<SensitiveInput variant="settings" placeholder={placeholder} required={false} value={config[name] ?? ''} onChange={(v) => set({ [name]: v })} />
-		</SettingField>
-	);
-}
 
 function UserAccess({ admin, set, groups }: { admin: Rec; set: (p: Rec) => void; groups: Draft['groups'] }) {
 	return (

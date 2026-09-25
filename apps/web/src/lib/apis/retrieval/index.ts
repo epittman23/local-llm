@@ -50,19 +50,8 @@ type YoutubeConfigForm = {
 	proxy_url: string;
 };
 
-type RAGConfigForm = {
-	PDF_EXTRACT_IMAGES?: boolean;
-	CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES?: string[];
-	ENABLE_GOOGLE_DRIVE_INTEGRATION?: boolean;
-	ENABLE_ONEDRIVE_INTEGRATION?: boolean;
-	EXTERNAL_DOCUMENT_LOADER_HEADERS?: Record<string, string>;
-	TIKA_SERVER_VERSION?: string | null;
-	chunk?: ChunkConfigForm;
-	content_extraction?: ContentExtractConfigForm;
-	web_loader_ssl_verification?: boolean;
-	web?: Record<string, unknown>;
-	youtube?: YoutubeConfigForm;
-};
+// The whole document/web config: the server sends (and expects back) far more keys than any one tab edits.
+type RAGConfigForm = Record<string, any>;
 
 export const updateRAGConfig = async (token: string, payload: RAGConfigForm) => {
 	let error = null;

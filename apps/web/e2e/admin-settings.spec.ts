@@ -1411,3 +1411,320 @@ test.describe('settings: Images', () => {
 		await expect(e.getByLabel('unet_name', { exact: false })).toHaveCount(0);
 	});
 });
+
+test.describe('settings: Documents', () => {
+	const ragCfg = (over: Rec = {}) => ({
+		CONTENT_EXTRACTION_ENGINE: '',
+		CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES: null,
+		PDF_EXTRACT_IMAGES: false,
+		PDF_LOADER_MODE: 'page',
+		BYPASS_EMBEDDING_AND_RETRIEVAL: false,
+		TEXT_SPLITTER: '',
+		ENABLE_MARKDOWN_HEADER_TEXT_SPLITTER: false,
+		CHUNK_SIZE: 1000,
+		CHUNK_OVERLAP: 100,
+		CHUNK_MIN_SIZE_TARGET: 0,
+		RAG_FULL_CONTEXT: false,
+		ENABLE_RAG_HYBRID_SEARCH: false,
+		RAG_RERANKING_ENGINE: '',
+		RAG_RERANKING_MODEL: 'BAAI/bge-reranker-v2-m3',
+		RAG_RERANKING_BATCH_SIZE: 32,
+		TOP_K: 3,
+		TOP_K_RERANKER: 3,
+		RELEVANCE_THRESHOLD: 0,
+		HYBRID_BM25_WEIGHT: null,
+		RAG_TEMPLATE: '',
+		ALLOWED_FILE_EXTENSIONS: ['pdf'],
+		FILE_MAX_SIZE: 25,
+		FILE_MAX_COUNT: null,
+		FILE_IMAGE_COMPRESSION_WIDTH: null,
+		FILE_IMAGE_COMPRESSION_HEIGHT: null,
+		ENABLE_GOOGLE_DRIVE_INTEGRATION: false,
+		ENABLE_ONEDRIVE_INTEGRATION: false,
+		TIKA_SERVER_URL: '',
+		TIKA_SERVER_VERSION: '3',
+		DOCLING_SERVER_URL: '',
+		DOCLING_PARAMS: {},
+		EXTERNAL_DOCUMENT_LOADER_URL: '',
+		EXTERNAL_DOCUMENT_LOADER_HEADERS: {},
+		MINERU_API_MODE: 'local',
+		MINERU_API_URL: 'http://localhost:8000',
+		MINERU_API_KEY: '',
+		MINERU_PARAMS: {},
+		MINERU_FILE_EXTENSIONS: ['pdf'],
+		// Belongs to the Web Search tab: must come back as it arrived.
+		web: { ENABLE_WEB_SEARCH: true },
+		...over
+	});
+	const embeddingCfg = (over: Rec = {}) => ({
+		RAG_EMBEDDING_ENGINE: '',
+		RAG_EMBEDDING_MODEL: 'sentence-transformers/all-MiniLM-L6-v2',
+		RAG_EMBEDDING_BATCH_SIZE: 1,
+		ENABLE_ASYNC_EMBEDDING: true,
+		RAG_EMBEDDING_CONCURRENT_REQUESTS: 0,
+		openai_config: { url: 'https://api.openai.com/v1', key: '' },
+		ollama_config: { url: 'http://localhost:11434', key: '' },
+		azure_openai_config: { url: '', key: '', version: '' },
+		...over
+	});
+
+	async function mockDocuments(page: Page, opts: { rag?: Rec; embedding?: Rec; failEmbeddingUpdate?: boolean } = {}) {
+		const calls: Call[] = [];
+		const record = (route: any) => {
+			const req = route.request();
+			let body: any = null;
+			try {
+				body = req.postDataJSON();
+			} catch {
+				/* none */
+			}
+			const path = new URL(req.url()).pathname.replace('/api/v1', '');
+			calls.push({ method: req.method(), path, body });
+			return { req, body, path };
+		};
+		await page.route('**/api/v1/retrieval/**', (route) => {
+			const { req, body, path } = record(route);
+			if (path === '/retrieval/config' && req.method() === 'GET') return json(route, opts.rag ?? ragCfg());
+			if (path === '/retrieval/embedding' && req.method() === 'GET') return json(route, opts.embedding ?? embeddingCfg());
+			if (path === '/retrieval/embedding/update') return opts.failEmbeddingUpdate ? json(route, { detail: 'Model not found' }, 400) : json(route, body);
+			if (path === '/retrieval/config/update') return json(route, body);
+			return json(route, true);
+		});
+		await page.route('**/api/v1/files/all', (route) => (record(route), json(route, true)));
+		await page.route('**/api/v1/knowledge/**reindex', (route) => (record(route), json(route, true)));
+		await page.route('**/api/v1/memories/reindex', (route) => (record(route), json(route, true)));
+		return { calls };
+	}
+	const sent = (calls: Call[], path: string) => calls.filter((c) => c.method === 'POST' && c.path === path).map((c) => c.body);
+	const region = (page: Page, name: string) => modal(page).getByRole('region', { name });
+
+	test('Save applies the embedding model first, then sends the whole config with lists and objects rebuilt', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockDocuments(page);
+		await page.goto('/?settings=admin:documents');
+		const m = modal(page);
+		await expect(m.getByLabel('Allowed File Extensions')).toHaveValue('pdf');
+		await m.getByLabel('Allowed File Extensions').fill('pdf, docx ,');
+		await m.getByLabel('Max Upload Size').fill('');
+		await m.getByLabel('Max Upload Count').fill('10');
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('Settings saved successfully!')).toBeVisible();
+		const order = calls.filter((c) => c.method === 'POST').map((c) => c.path);
+		expect(order).toEqual(['/retrieval/embedding/update', '/retrieval/config/update']);
+		const cfg = sent(calls, '/retrieval/config/update')[0];
+		expect(cfg).toMatchObject({
+			ALLOWED_FILE_EXTENSIONS: ['pdf', 'docx'],
+			FILE_MAX_SIZE: '',
+			FILE_MAX_COUNT: 10,
+			FILE_IMAGE_COMPRESSION_WIDTH: '',
+			DOCLING_PARAMS: {},
+			EXTERNAL_DOCUMENT_LOADER_HEADERS: {},
+			MINERU_PARAMS: {},
+			MINERU_FILE_EXTENSIONS: ['pdf'],
+			CHUNK_SIZE: 1000,
+			web: { ENABLE_WEB_SEARCH: true }
+		});
+		expect(cfg).not.toHaveProperty('CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES');
+		expect(sent(calls, '/retrieval/embedding/update')[0]).toEqual({
+			RAG_EMBEDDING_ENGINE: '',
+			RAG_EMBEDDING_MODEL: 'sentence-transformers/all-MiniLM-L6-v2',
+			RAG_EMBEDDING_BATCH_SIZE: 1,
+			ENABLE_ASYNC_EMBEDDING: true,
+			RAG_EMBEDDING_CONCURRENT_REQUESTS: 0
+		});
+	});
+
+	test('an extraction engine that needs a URL refuses the save before anything is sent', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockDocuments(page);
+		await page.goto('/?settings=admin:documents');
+		const m = modal(page);
+		await m.getByLabel('Content Extraction Engine').selectOption('tika');
+		await expect(m.getByLabel('Tika Server Version')).toHaveValue('3');
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('Tika Server URL required.')).toBeVisible();
+		expect(calls.filter((c) => c.method === 'POST')).toHaveLength(0);
+		await m.getByLabel('Tika Server URL').fill('http://tika:9998');
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect.poll(() => sent(calls, '/retrieval/config/update').length).toBe(1);
+		expect(sent(calls, '/retrieval/config/update')[0]).toMatchObject({ CONTENT_EXTRACTION_ENGINE: 'tika', TIKA_SERVER_URL: 'http://tika:9998' });
+	});
+
+	test('external loader: headers must be a JSON object, and a hint explains the variables', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockDocuments(page);
+		await page.goto('/?settings=admin:documents');
+		const m = modal(page);
+		await m.getByLabel('Content Extraction Engine').selectOption('external');
+		await m.getByLabel('Document Loader URL').fill('http://loader');
+		await m.getByLabel('Headers').fill('["x"]');
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('Headers must be a valid JSON object')).toBeVisible();
+		await m.getByLabel('Headers').fill('{"X-Id":"{{FILE_ID}}"}');
+		await expect(m.getByText('Available variables')).toHaveCount(0);
+		await m.getByRole('button', { name: 'Header variables' }).click();
+		await expect(m.getByText('Available variables')).toBeVisible();
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect.poll(() => sent(calls, '/retrieval/config/update').length).toBe(1);
+		expect(sent(calls, '/retrieval/config/update')[0].EXTERNAL_DOCUMENT_LOADER_HEADERS).toEqual({ 'X-Id': '{{FILE_ID}}' });
+	});
+
+	test('MinerU: switching mode swaps the stock URL but keeps one that was typed; cloud needs a key', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockDocuments(page);
+		await page.goto('/?settings=admin:documents');
+		const m = modal(page);
+		await m.getByLabel('Content Extraction Engine').selectOption('mineru');
+		await m.getByLabel('API Mode').selectOption('cloud');
+		await expect(m.getByLabel('API URL')).toHaveValue('https://mineru.net/api/v4');
+		await m.getByLabel('API URL').fill('https://mine.example');
+		await m.getByLabel('API Mode').selectOption('local');
+		await expect(m.getByLabel('API URL')).toHaveValue('https://mine.example');
+		await m.getByLabel('API Mode').selectOption('cloud');
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('MinerU API Key required for Cloud API mode.')).toBeVisible();
+	});
+
+	test('bypassing retrieval hides the splitter, embedding and retrieval settings and skips the embedding update', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockDocuments(page);
+		await page.goto('/?settings=admin:documents');
+		const m = modal(page);
+		await expect(m.getByLabel('Chunk Size')).toBeVisible();
+		await expect(region(page, 'Embedding')).toBeVisible();
+		await m.getByRole('switch', { name: 'Bypass Embedding and Retrieval' }).click();
+		await expect(m.getByLabel('Chunk Size')).toHaveCount(0);
+		await expect(region(page, 'Embedding')).toHaveCount(0);
+		await expect(m.getByRole('switch', { name: 'Hybrid Search' })).toHaveCount(0);
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect.poll(() => sent(calls, '/retrieval/config/update').length).toBe(1);
+		expect(sent(calls, '/retrieval/embedding/update')).toHaveLength(0);
+	});
+
+	test('embedding engines: each picks a starting model, shows its connection, and sends only that', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockDocuments(page);
+		await page.goto('/?settings=admin:documents');
+		const e = region(page, 'Embedding');
+		await e.getByLabel('Embedding Model Engine').selectOption('openai');
+		await expect(e.getByLabel('Embedding Model', { exact: true })).toHaveValue('text-embedding-3-small');
+		await expect(e.getByLabel('API Base URL')).toHaveValue('https://api.openai.com/v1');
+		await expect(e.getByRole('switch', { name: 'Async Embedding Processing' })).toBeVisible();
+		await e.getByLabel('API Key').fill('sk-live');
+		await e.getByLabel('Embedding Model Engine').selectOption('ollama');
+		await expect(e.getByLabel('Embedding Model', { exact: true })).toHaveValue('');
+		await e.getByLabel('Embedding Model Engine').selectOption('openai');
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect.poll(() => sent(calls, '/retrieval/embedding/update').length).toBe(1);
+		const body = sent(calls, '/retrieval/embedding/update')[0];
+		expect(body).toMatchObject({ RAG_EMBEDDING_ENGINE: 'openai', RAG_EMBEDDING_MODEL: 'text-embedding-3-small', openai_config: { url: 'https://api.openai.com/v1', key: 'sk-live' } });
+		expect(body).not.toHaveProperty('ollama_config');
+	});
+
+	test('a local model given as a filesystem path is refused and nothing is saved', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockDocuments(page);
+		await page.goto('/?settings=admin:documents');
+		await region(page, 'Embedding').getByLabel('Embedding Model', { exact: true }).fill('/models/hf/all-MiniLM');
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText(/Model filesystem path detected/)).toBeVisible();
+		expect(calls.filter((c) => c.method === 'POST')).toHaveLength(0);
+	});
+
+	test('the update button applies just the embedding model and says so', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockDocuments(page);
+		await page.goto('/?settings=admin:documents');
+		const e = region(page, 'Embedding');
+		await e.getByLabel('Embedding Model', { exact: true }).fill('BAAI/bge-small-en');
+		await e.getByRole('button', { name: 'Update embedding model' }).click();
+		await expect(page.getByText('Embedding model updated')).toBeVisible();
+		expect(sent(calls, '/retrieval/embedding/update')[0]).toMatchObject({ RAG_EMBEDDING_MODEL: 'BAAI/bge-small-en' });
+		expect(sent(calls, '/retrieval/config/update')).toHaveLength(0);
+	});
+
+	test('when the embedding update fails the rest is not saved, and the embedding fields snap back to the server', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockDocuments(page, { failEmbeddingUpdate: true });
+		await page.goto('/?settings=admin:documents');
+		const e = region(page, 'Embedding');
+		await e.getByLabel('Embedding Model', { exact: true }).fill('BAAI/nope');
+		await modal(page).getByLabel('Max Upload Count').fill('7');
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('Model not found')).toBeVisible();
+		await expect(e.getByLabel('Embedding Model', { exact: true })).toHaveValue('sentence-transformers/all-MiniLM-L6-v2');
+		expect(sent(calls, '/retrieval/config/update')).toHaveLength(0);
+		// The other edit is still on screen to try again.
+		await expect(modal(page).getByLabel('Max Upload Count')).toHaveValue('7');
+	});
+
+	test('hybrid search reveals reranking; an external engine clears the model; BM25 weight is Default until made Custom', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockDocuments(page);
+		await page.goto('/?settings=admin:documents');
+		const r = region(page, 'Retrieval');
+		await expect(r.getByLabel('Top K Reranker')).toHaveCount(0);
+		await r.getByRole('switch', { name: 'Hybrid Search' }).click();
+		await expect(r.getByLabel('Reranking Model')).toHaveValue('BAAI/bge-reranker-v2-m3');
+		await r.getByLabel('Reranking Engine').selectOption('external');
+		await expect(r.getByLabel('Reranking Model')).toHaveValue('');
+		await expect(r.getByLabel('API Base URL')).toBeVisible();
+		await r.getByLabel('Reranking Engine').selectOption('');
+		await expect(r.getByLabel('Reranking Model')).toHaveValue('BAAI/bge-reranker-v2-m3');
+		await expect(r.getByLabel('BM25 Weight slider')).toHaveCount(0);
+		await r.getByRole('button', { name: 'Default' }).click();
+		await expect(r.getByLabel('BM25 Weight', { exact: true })).toHaveValue('0.5');
+		await r.getByLabel('BM25 Weight', { exact: true }).fill('0.3');
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect.poll(() => sent(calls, '/retrieval/config/update').length).toBe(1);
+		expect(sent(calls, '/retrieval/config/update')[0]).toMatchObject({ ENABLE_RAG_HYBRID_SEARCH: true, HYBRID_BM25_WEIGHT: 0.3 });
+	});
+
+	test('full context mode hides the segmented-retrieval settings; a template with several placeholders is flagged', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockDocuments(page);
+		await page.goto('/?settings=admin:documents');
+		const r = region(page, 'Retrieval');
+		await expect(r.getByLabel('Top K', { exact: true })).toBeVisible();
+		await r.getByRole('switch', { name: 'Full Context Mode' }).click();
+		await expect(r.getByLabel('Top K', { exact: true })).toHaveCount(0);
+		await expect(r.getByText(/multiple context placeholders/)).toHaveCount(0);
+		await r.getByLabel('RAG Template').fill('Use [context] then {{CONTEXT}}');
+		await expect(r.getByText(/multiple context placeholders/)).toBeVisible();
+	});
+
+	test('Danger Zone: cancelling does nothing; confirming resets the uploads and reports success', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockDocuments(page);
+		await page.goto('/?settings=admin:documents');
+		const z = region(page, 'Danger Zone');
+		await z.getByRole('button', { name: 'Reset' }).first().click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Cancel' }).click();
+		expect(calls.some((c) => c.path === '/files/all')).toBe(false);
+		await z.getByRole('button', { name: 'Reset' }).first().click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await expect(page.getByText('Success')).toBeVisible();
+		expect(calls.filter((c) => c.path === '/files/all').map((c) => c.method)).toEqual(['DELETE']);
+	});
+
+	test('Danger Zone: the vector reset really waits for the server, and reports its failure', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockDocuments(page);
+		await page.route('**/api/v1/retrieval/reset/db', (route) => (calls.push({ method: 'POST', path: '/retrieval/reset/db', body: null }), json(route, { detail: 'Vector DB is busy' }, 500)));
+		await page.goto('/?settings=admin:documents');
+		await region(page, 'Danger Zone').getByRole('button', { name: 'Reset' }).nth(1).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await expect(page.getByText('Vector DB is busy')).toBeVisible();
+		await expect(page.getByText('Success', { exact: true })).toHaveCount(0);
+	});
+
+	test('Danger Zone: reindex runs knowledge files, knowledge metadata, then memories, in that order', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockDocuments(page);
+		await page.goto('/?settings=admin:documents');
+		await region(page, 'Danger Zone').getByRole('button', { name: 'Reindex' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await expect(page.getByText('Success')).toBeVisible();
+		expect(calls.filter((c) => c.path.endsWith('reindex')).map((c) => c.path)).toEqual(['/knowledge/reindex', '/knowledge/metadata/reindex', '/memories/reindex']);
+	});
+});
