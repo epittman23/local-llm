@@ -23,7 +23,7 @@ export const CHAT_LIST_KEY = ['chats'] as const;
 
 export type ChatRecord = { id: string; title?: string; chat?: Record<string, any>; tags?: string[]; pinned?: boolean; folder_id?: string | null; archived?: boolean; share_id?: string | null; current_message_id?: string | null; [k: string]: unknown };
 export type ServerDialog = { type: 'confirmation' | 'input' | 'execute' | 'ask_user'; data: any; reply: (value: unknown) => void };
-type Queued = { id: string; prompt: string; files: ChatFile[] };
+type Queued = { id: string; prompt: string; files: ChatFile[]; modelId?: string };
 
 /**
  * One open chat (Chat.svelte's state and its load/send/stream/stop cycle):
@@ -255,7 +255,7 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 	);
 
 	const send = useCallback(
-		async (prompt: string, files: ChatFile[] = []) => {
+		async (prompt: string, files: ChatFile[] = [], modelId?: string) => {
 			const h = historyRef.current;
 			const current = h.currentId ? h.messages[h.currentId] : null;
 			if (current?.error && !current.content) {
@@ -265,22 +265,23 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 			const docs = files.filter((f) => ['doc', 'text', 'note', 'chat', 'folder', 'collection'].includes(f.type ?? '') || (f.type === 'file' && !(f.content_type ?? '').startsWith('image/')));
 			if (docs.length) setChatFiles((cf) => [...cf, ...docs].filter((f, i, a) => a.findIndex((g) => JSON.stringify(g) === JSON.stringify(f)) === i));
 			latest.current.chatFiles = [...latest.current.chatFiles, ...docs];
-			const { history: next, id } = addUserMessage(h, h.currentId, { content: prompt, files, models: latest.current.selectedModels });
+			const { history: next, id } = addUserMessage(h, h.currentId, { content: prompt, files, models: modelId ? [modelId] : latest.current.selectedModels });
 			setHistory(next);
-			await requestReply(id);
+			await requestReply(id, modelId ? { modelId } : {});
 		},
 		[requestReply, setHistory]
 	);
 
 	/** The input's submit: validated, then sent now or queued behind the reply being written. */
 	const submit = useCallback(
-		(prompt: string, files: ChatFile[] = []) => {
+		/** `modelId`: a model picked with `@` answers just this message. */
+		(prompt: string, files: ChatFile[] = [], modelId?: string) => {
 			const l = latest.current;
 			if (!prompt.trim() && !files.length) {
 				toast.error('Please enter a prompt');
 				return false;
 			}
-			if (!l.selectedModels.length || l.selectedModels.includes('')) {
+			if (!modelId && (!l.selectedModels.length || l.selectedModels.includes(''))) {
 				toast.error('Model not selected');
 				return false;
 			}
@@ -290,10 +291,10 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 				return false;
 			}
 			if (isGenerating(historyRef.current) && (l.settings?.enableMessageQueue ?? true)) {
-				setQueue((q) => [...q, { id: crypto.randomUUID(), prompt, files }]);
+				setQueue((q) => [...q, { id: crypto.randomUUID(), prompt, files, modelId }]);
 				return true;
 			}
-			void send(prompt, files);
+			void send(prompt, files, modelId);
 			return true;
 		},
 		[config, send]
@@ -305,7 +306,7 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 		if (generating || !queue.length) return;
 		const [next, ...rest] = queue;
 		setQueue(rest);
-		void send(next.prompt, next.files);
+		void send(next.prompt, next.files, next.modelId);
 	}, [generating, queue, send]);
 
 	const stop = useCallback(async () => {

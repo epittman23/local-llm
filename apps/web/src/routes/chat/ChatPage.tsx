@@ -10,11 +10,16 @@ import { updateChatById } from '@/lib/apis/chats';
 import type { History } from '@/lib/chat/history';
 import { type Citation, citationIndex, citationsOf } from '@/lib/chat/sources';
 import { initialModels } from '@/lib/chat/request';
+import { canUploadFiles, canUploadWeb, featureButtons, modelDefaults } from '@/lib/chat/attachments';
+import { canUseFeature } from '@/lib/access/features';
+import { getTools } from '@/lib/apis/tools';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore, useDocumentTitle } from '@/lib/stores/configStore';
 import { cn } from '@/lib/utils';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
+import { AttachMenu, IntegrationsMenu, type Toggles } from './InputMenus';
+import { useAttachments } from './useAttachments';
 import { ChatMessages, type MessageHandlers } from './ChatMessages';
 import { ChatPlaceholder } from './ChatPlaceholder';
 import { CitationDialog } from './CitationDialog';
@@ -22,7 +27,7 @@ import { useMessageActions } from './MessageActions';
 import { ModelSelector } from './ModelSelector';
 import { ServerDialogs } from './ServerDialogs';
 import { useChatSession } from './useChatSession';
-import { useModels } from './useModels';
+import { type ChatModel, useModels } from './useModels';
 
 type Folder = { id: string; name: string; data?: { model_ids?: string[] } | null };
 
@@ -49,9 +54,44 @@ export function ChatPage() {
 	const temporaryEnforced = !admin && Boolean(chatPerms.temporary_enforced);
 	const [temporary, setTemporary] = useState(() => temporaryEnforced || search.get('temporary-chat') === 'true');
 	const [selectedModels, setSelectedModels] = useState<string[]>([]);
-	const [toggles] = useState({ webSearch: search.get('web-search') === 'true', imageGeneration: search.get('image-generation') === 'true', codeInterpreter: search.get('code-interpreter') === 'true' });
+	const [toggles, setToggles] = useState<Toggles>({ webSearch: search.get('web-search') === 'true', imageGeneration: search.get('image-generation') === 'true', codeInterpreter: search.get('code-interpreter') === 'true' });
+	const [toolIds, setToolIds] = useState<string[]>(() => (search.get('tools') ?? search.get('tool-ids') ?? '').split(',').map((t) => t.trim()).filter(Boolean));
+	const [atModel, setAtModel] = useState<ChatModel | null>(null);
+	const tools = useQuery({ queryKey: ['tools-for-chat'], enabled: Boolean(token), staleTime: 60_000, queryFn: async () => {
+			// Only a list counts: an error body or a paged object must not reach `.map`.
+			const res = await getTools(token).catch(() => null);
+			return (Array.isArray(res) ? res : []) as { id: string; name: string; meta?: { description?: string } }[];
+		}
+	});
+	const buttons = featureButtons(atModel ? [atModel.id] : selectedModels, models, user, (config?.features ?? {}) as Record<string, unknown>);
 
-	const session = useChatSession({ routeChatId: id, folderId, models, selectedModels, temporary: temporary && !id, toggles, toolIds: [] });
+	const session = useChatSession({ routeChatId: id, folderId, models, selectedModels, temporary: temporary && !id, toggles: { webSearch: toggles.webSearch && buttons.webSearch, imageGeneration: toggles.imageGeneration && buttons.imageGeneration, codeInterpreter: toggles.codeInterpreter && buttons.codeInterpreter }, toolIds });
+	const attachments = useAttachments({ temporary: temporary && !id, selectedModels, models, chatId: session.chatId });
+
+	// One model selected: take its default tools and feature switches (Chat.svelte's setDefaults).
+	const defaultsFor = useRef<string | null>(null);
+	useEffect(() => {
+		if (selectedModels.length !== 1 || !tools.isSuccess || defaultsFor.current === selectedModels[0]) return;
+		defaultsFor.current = selectedModels[0];
+		const d = modelDefaults(models.find((m) => m.id === selectedModels[0]), (tools.data ?? []).map((t) => t.id), (settings as { tools?: string[] } | null)?.tools, buttons);
+		if (!search.get('tools') && !search.get('tool-ids')) setToolIds(d.toolIds);
+		setToggles((t) => ({ webSearch: d.webSearch ?? t.webSearch, imageGeneration: d.imageGeneration ?? t.imageGeneration, codeInterpreter: d.codeInterpreter ?? t.codeInterpreter }));
+		// When the chosen model changes.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [selectedModels, tools.isSuccess]);
+
+	// `?youtube=` (from /watch) and `?load-url=` attach that page to a new chat.
+	const loadedUrl = useRef(false);
+	useEffect(() => {
+		if (loadedUrl.current || id) return;
+		const yt = search.get('youtube');
+		const url = yt ? `https://www.youtube.com/watch?v=${yt}` : search.get('load-url');
+		if (!url) return;
+		loadedUrl.current = true;
+		void attachments.addWeb([url]);
+		// Once.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [id]);
 	const input = useRef<ChatInputHandle>(null);
 	const scroller = useRef<HTMLDivElement>(null);
 	const atBottom = useRef(true);
@@ -141,7 +181,17 @@ export function ChatPage() {
 
 
 	return (
-		<div className="flex h-full min-h-0 w-full flex-col">
+		<div
+			className="flex h-full min-h-0 w-full flex-col"
+			onDragOver={(e) => {
+				if (e.dataTransfer.types.includes('Files')) e.preventDefault();
+			}}
+			onDrop={(e) => {
+				if (!e.dataTransfer.files.length) return;
+				e.preventDefault();
+				attachments.addFiles(Array.from(e.dataTransfer.files));
+			}}
+		>
 			<header className="flex items-start gap-2 px-4 py-2">
 				<ModelSelector models={models} selected={selectedModels} onChange={changeModels} disabled={session.generating} />
 				<div className="ml-auto flex items-center gap-2 pt-1">
@@ -196,9 +246,25 @@ export function ChatPage() {
 				queued={session.queue}
 				onRemoveQueued={session.removeQueued}
 				onStop={() => void session.stop()}
+				files={attachments.files}
+				onRemoveFile={attachments.remove}
+				onAddItem={attachments.addItem}
+				onAddWeb={(urls) => void attachments.addWeb(urls)}
+				onPasteFiles={attachments.addFiles}
+				models={models}
+				atModel={atModel}
+				onAtModel={setAtModel}
+				toolbar={
+					<>
+						<AttachMenu onFiles={attachments.addFiles} onWeb={(urls) => void attachments.addWeb(urls)} onItem={attachments.addItem} canUpload={canUploadFiles(user)} canWeb={canUploadWeb(user)} notesEnabled={canUseFeature('notes', user, config)} />
+						<IntegrationsMenu tools={tools.data ?? []} toolIds={toolIds} onToolIds={setToolIds} buttons={buttons} toggles={toggles} onToggles={setToggles} />
+					</>
+				}
 				onSubmit={(text, files) => {
 					atBottom.current = true;
-					return session.submit(text, files);
+					const ok = session.submit(text, files, atModel?.id);
+					if (ok) attachments.clear();
+					return ok;
 				}}
 			/>
 			<ServerDialogs dialog={session.dialog} onClose={session.closeDialog} />
