@@ -87,7 +87,10 @@ export function AccessControl({
 			})
 			.then((res) => {
 				if (cancelled) return;
-				setGroups((prev) => dedupeById([...prev, ...(res ?? [])]));
+				// Anything but a list (an error body, a paginated shape) means no groups,
+				// not a render crash that takes the whole page down.
+				const list: Group[] = Array.isArray(res) ? res : [];
+				setGroups((prev) => dedupeById([...prev, ...list]));
 			});
 		return () => {
 			cancelled = true;
