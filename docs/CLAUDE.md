@@ -310,6 +310,56 @@ All commits should use conventional commit style and stay focused on one topic. 
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-09-27**: Closed out Phase 8 of the migration
+  (`docs/migration-plan.md`): the Admin surface -- Users and Groups,
+  Evaluations, Functions, and all sixteen admin Settings tabs -- built in
+  `apps/web/`, about 23k lines of Svelte across 63 components. As in Phases
+  5-7, every section was tested against mocked `/api/v1/**` only; nothing
+  here has met a real backend.
+
+  **The plan was wrong about the shape.** `/admin/settings[/<tab>]` and
+  `/admin/analytics` are not pages in this fork: they redirect to
+  `/?settings=admin:<tab>`, a modal. So about 15k of the phase's lines were
+  modal content, and the modal host (`components/settings/SettingsModal`,
+  mounted once in `AppShell`) became a Phase 8 deliverable; Phase 10's
+  personal tabs register in the same list. A tab is listed only once its
+  component exists, which let tabs land one at a time without dead ends.
+
+  **Structure decisions.** The Svelte tabs repeat markup at scale, so the
+  port is table-driven where it repeats: the 66 group permission switches
+  (`permissionRows.ts`, from 1,194 lines), the ~55 interface preferences
+  (`interfaceSettingDefs.ts`, from 1,921), the 30 web-search engines. Each
+  tab's rules sit in a `*.ts` beside it with a unit test. Modals Phase 10
+  reuses in "direct" mode (`AddConnectionModal`, `AddToolServerModal`,
+  `AddTerminalServerModal`, `InterfaceSettings`) live in
+  `components/settings/` with pure models. chart.js is loaded only by the
+  Leaderboard dialog; Analytics' chart is hand-rolled SVG.
+
+  **Security fixes over the original.** The feedback CSV export (and later
+  the users export) neutralizes spreadsheet formulas (CSV injection; the
+  Svelte exporter has the hole). Credentials in every Settings tab are masked
+  until revealed (the Svelte tabs pass `type="text"`). Functions imported
+  from a link, a clone or a community-site message are reduced to their
+  editable fields, and messages from other origins are ignored. A tool-server
+  export no longer writes the API key into the file, and imports never carry
+  access grants.
+
+  **Bugs found by testing.** `SettingsForm` saved a second time when a dialog
+  inside a tab submitted (React bubbles portal events through the component
+  tree); it now ignores submits that are not its own. The shared
+  `AccessControl` crashed the whole page on a non-array groups response;
+  workspace tests never saw it because they always mocked `/groups` with an
+  array. An external knowledge source with no `enabled` flag could never be
+  switched off in the Svelte app (`!undefined` is `true`); fixed here.
+
+  **Deliberate gaps.** Still no `useTranslation`. App-wide stores the Svelte
+  tabs refresh after a save (banners, terminal servers, tools) are left to
+  Phase 10's chat, which is the only consumer; the TanStack Query keys are
+  the hook. Banners reorder with buttons, not drag (not keyboard-reachable,
+  and there's no drag library). No "See what's new" link (the changelog
+  modal is Phase 10).
+
+  Verified: `astro check` 0 errors, 388 Vitest tests, 250 Playwright tests.
 - **2026-09-19** (second): Closed out Phase 7 of the migration
   (`docs/migration-plan.md`): the Workspace surface -- Models, Knowledge,
   Prompts, Skills, Tools, and the `functions/create` redirect -- built in

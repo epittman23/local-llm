@@ -79,7 +79,7 @@ edits, so `:5174` is the place to develop. In a build the router's base is
 ### The Svelte app
 
 `make frontend` → **http://localhost:5173/** — the only place today where chat,
-admin, notes, playground, channels, automations and folders actually work. The
+notes, playground, channels, automations and folders actually work. The
 backend on `:4000` does *not* serve a Svelte build in this setup (no
 `apps/openwebui/build/`), so `:4000/` is API-only.
 
@@ -118,7 +118,17 @@ Anything marked *admin* also needs `role === 'admin'`.
 | `/workspace/tools` | List. Hidden from the tab bar when the backend has plugins off, but an admin can still open the URL |
 | `/workspace/tools/create` | Tool editor, new (CodeMirror) |
 | `/workspace/tools/edit?id=<tool-id>` | Tool editor; query param |
-| `/workspace/functions/create` | Redirects to `/admin/functions/create` (not ported until Phase 8) |
+| `/workspace/functions/create` | Redirects to `/admin/functions/create` |
+| `/admin` | *Admin* (everything under `/admin` is). Redirects to `/admin/users/overview` |
+| `/admin/users/overview` | Users: paginated, sortable, searchable list; add (form or CSV), edit, chats, delete. `/admin/users` redirects here |
+| `/admin/users/groups` | Groups and their permission switches, member CSV import, default permissions |
+| `/admin/evaluations/leaderboard` | Leaderboard and activity chart. `/admin/evaluations` redirects here |
+| `/admin/evaluations/feedback` | Feedback table, details, JSON/CSV export |
+| `/admin/functions` | Functions list. Bounces to `/admin` when the backend has plugins off |
+| `/admin/functions/create` | Function editor, new |
+| `/admin/functions/edit?id=<function-id>` | Function editor; query param |
+| `/admin/settings[/<tab>]` | **Not a page:** redirects to `/?settings=admin:<tab>`, which opens the Settings modal on that tab (see below) |
+| `/admin/analytics[/<tab>]` | Redirects to `/?settings=admin:analytics`, or to `/admin` when analytics is off |
 | `/benchmarks` | Redirects to `/benchmarks/serve`. *Admin*, and the backend's `features.enable_benchmarks` must not be `false`; otherwise you're sent to `/` |
 | `/benchmarks/serve` | Serve + the Profiles panel |
 | `/benchmarks/live` | Live telemetry |
@@ -129,6 +139,15 @@ Anything marked *admin* also needs `role === 'admin'`.
 | `/benchmarks/tune` | Tuning |
 
 A workspace section you lack permission for redirects you to `/`.
+
+**Settings is a modal, not a page.** Any page accepts `?settings=<tab>`; for an
+admin, `?settings=admin:<tab>` opens the modal on that admin tab and the param
+is removed from the URL. Tab ids: `general`, `authentication`, `connections`,
+`models`, `evaluations`, `integrations`, `documents`, `web`, `code-execution`,
+`interface`, `audio`, `images`, `pipelines`, `db`, `subagents`, `analytics`.
+An unknown tab falls back to the first one listed; a non-admin asking for an
+admin tab gets no modal. The personal tabs (plain `?settings=<tab>`) arrive
+with Phase 10.
 
 ### Signed-in, placeholders
 
@@ -142,9 +161,9 @@ which does a full-page `window.location.assign` to the **same path**, on the
 assumption that it's a Svelte route. That assumption holds only where Svelte
 is mounted at the same origin, and today that's nowhere:
 
-- **On `:5174` it loops.** The dev server answers `/admin` with the Astro
+- **On `:5174` it loops.** The dev server answers `/playground` with the Astro
   shell (`200`, by design — `src/middleware.ts` rewrites every 404 to `/`), the
-  catch-all fires, reloads `/admin`, and repeats. Measured with no backend: 14
+  catch-all fires, reloads `/playground`, and repeats. Measured with no backend: 14
   navigations in 4 seconds, blank page. Stop it by editing the URL. The fix is
   a decision for whoever next touches `LegacyFallback` (probably bounce to
   `:5173` in dev, or show a "not ported yet" page).
@@ -156,11 +175,10 @@ So to reach these surfaces, use the Svelte dev server at **`:5173`**:
 | Still Svelte-only | Paths |
 |---|---|
 | Chat | `/c/<id>`, `/home`, `/folders/<folderId>`, `/channels/<id>` |
-| Admin (Phase 8) | `/admin`, `/admin/settings[/<tab>]`, `/admin/users[/<tab>]`, `/admin/analytics[/<tab>]`, `/admin/evaluations[/<tab>]`, `/admin/functions`, `/admin/functions/create`, `/admin/functions/edit` |
 | Notes / automations (Phase 9) | `/notes`, `/notes/<id>`, `/notes/new`, `/automations`, `/automations/<id>`, `/calendar` |
 | Playground (Phase 9) | `/playground`, `/playground/completions`, `/playground/images` |
 
-(`/notes`, `/calendar` and the workspace/benchmarks/public paths exist on
+(`/notes`, `/calendar` and the workspace/admin/benchmarks/public paths exist on
 both apps; on `:5173` you get the Svelte version.)
 
 ## 4. Backend URLs

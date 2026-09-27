@@ -24,7 +24,7 @@
 | 5 | Benchmarks surface (proves the pattern) | ✅ done | 2026-09-18 |
 | 6 | Public/static surfaces: auth, error, share, watch | ✅ done | 2026-09-19 |
 | 7 | Workspace surface | ✅ done | 2026-09-20 |
-| 8 | Admin surface | ▶ in progress | 2026-09-27 |
+| 8 | Admin surface | ✅ done | 2026-09-27 |
 | 9 | Secondary surfaces: notes, calendar, automations, playground, channels | ☐ not started | — |
 | 10 | Chat surface (largest) | ☐ not started | — |
 | 11 | Cutover and Svelte removal | ☐ not started | — |
@@ -34,6 +34,26 @@ Status values: `☐ not started` · `▶ in progress` · `✅ done` · `⏸ bloc
 ### Current session notes
 
 _Overwrite this block at the end of every session._
+
+**2026-09-27, later (Phase 8 closed out).** The shared `InterfaceSettings`
+was the last piece (commit `9ea88c5`): `components/settings/InterfaceSettings.tsx`
+renders the table in `interfaceSettingDefs.ts` (switches, cycling buttons,
+and custom rows for UI scale, font and background image), with the Quick
+Actions and Image Compression dialogs in `InterfaceManageDialogs.tsx`. General's
+"Default Interface Settings" block now edits `DEFAULT_INTERFACE_SETTINGS`
+(folded, with a count and Clear); keys it has no row for survive edits (an
+e2e test asserts it). `mode="personal"` is built and unit-tested at the rules
+level but has no caller until Phase 10. Its dialogs edit a copy until Save
+(the Svelte Quick Actions modal mutated the caller's array in place).
+
+Then the exit paperwork: `MAP.md`, `apps/web/README.md`, `docs/START.md`
+(the `/admin` rows, the Settings-modal note and its tab ids; `/admin` left
+the Svelte-only table), a dated `docs/CLAUDE.md` entry, the ROADMAP pair.
+`astro check` 0 errors, 388 Vitest tests, 250 Playwright tests. **Phase 8 is
+✅ done. Next action: Phase 9** (notes with TipTap, calendar, automations,
+playground, channels as the first Socket.IO consumer, folders, home). The
+`LegacyFallback` loop on `:5174` for unported paths (START.md) still wants a
+decision; Phase 9 is a natural time, since its routes are the ones that hit it.
 
 **2026-09-27 (Phase 8, in progress).** **Integrations** is done, which makes
 all sixteen admin Settings tabs real (Authentication, Audio, Images,
@@ -1254,7 +1274,7 @@ this session, the same posture as Phase 5.
       entry, ROADMAP pair; Playwright per section. (From Phase 8 on, also
       `docs/START.md`'s route tables.)
 
-## Phase 8 — Admin (63 components, ~23.3k LOC) ▶
+## Phase 8 — Admin (63 components, ~23.3k LOC) ✅
 - [x] Shell: `AdminLayout` (admin-only gate; `/admin/functions` bounces when
       plugins are off), Users / Evaluations / Functions / Settings tabs, index
       redirects, `/admin/settings[/<tab>]` and `/admin/analytics` redirects into
@@ -1275,10 +1295,10 @@ this session, the same posture as Phase 5.
       Models (+ Manage Models for Ollama and llama.cpp/LM Studio).
 - [x] Settings tab: Integrations (+ ExternalKnowledge, AddToolServerModal,
       AddTerminalServerModal). All sixteen admin tabs now exist.
-- [ ] The shared `InterfaceSettings` component, which gives General its
-      "Default Interface Settings" block (and is Phase 10's personal
-      Interface tab).
-- [ ] Phase exit: `MAP.md`, `apps/web/README.md`, `docs/START.md` route tables,
+- [x] The shared `InterfaceSettings` component (table-driven,
+      `interfaceSettingDefs.ts`), which gives General its "Default Interface
+      Settings" block and is Phase 10's personal Interface tab.
+- [x] Phase exit: `MAP.md`, `apps/web/README.md`, `docs/START.md` route tables,
       dated `docs/CLAUDE.md` entry, ROADMAP pair.
 
 ## Phase 9 — Secondary surfaces

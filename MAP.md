@@ -220,7 +220,15 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
   by its one caller), `Valves`/`ValvesModal`, `ManifestModal`,
   `ImportUrlModal`, `SafeMarkdown` (marked + DOMPurify), `AttachWebpageDialog`,
   and `AdvancedParams` (table-driven request parameters,
-  `advancedParamDefs.ts`). The app's toast system
+  `advancedParamDefs.ts`).
+- **`src/components/settings/`** — the Settings modal: `SettingsModal`
+  (tab list, search, URL param via `lib/settings/useSettingsUrl.ts`),
+  `settingsTabs.ts` (every tab id), `adminTabComponents.ts` (lazy tab
+  bodies), `controls.tsx` (the compact form vocabulary every tab uses), and
+  the pieces Phase 10's personal tabs reuse: `AddConnectionModal`,
+  `AddToolServerModal`, `AddTerminalServerModal` and `InterfaceSettings`
+  (table-driven, `interfaceSettingDefs.ts`), each with its rules in a
+  `*Model.ts`/`*Defs.ts` and a unit test. The app's toast system
   (`ui/sonner.tsx`, mounted in `App.tsx`) reads the theme from the `<html>`
   class rather than `next-themes`.
 - **`src/components/ui/`** — shadcn/ui components (`bunx shadcn add <name>`).
@@ -228,7 +236,7 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
   app's `common/` components lands.
 - **`src/routes/`** — react-router. `AppRouter.tsx` has three kinds of
   route: gated ones under `AppShell` (home/notes/calendar placeholders,
-  `benchmarks/`, and `workspace/`); the public ones (`public/`: `/auth`,
+  `benchmarks/`, `workspace/` and `admin/`); the public ones (`public/`: `/auth`,
   `/error`, `/watch`, `/s/:id`), which are top-level siblings because they
   must render without a session; and `LegacyFallback`, which bounces every
   path not listed in `routePaths.ts` to the SvelteKit app. `benchmarks/`
@@ -246,7 +254,16 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
   the upload flows), and `workspace/models/` (list with bulk actions and
   pinning; `ModelEditor` with its data flow in `modelEditorLogic.ts`, the
   pickers in `EditorPickers`/`KnowledgePicker`, and import/community
-  sanitizers in `modelImport.ts`).
+  sanitizers in `modelImport.ts`). `admin/` is Phase 8's surface:
+  `AdminLayout` (admin-only gate, tab bar) and `adminAccess.ts`; `users/`
+  (users and groups, permissions table in `permissionRows.ts`),
+  `evaluations/` (leaderboard with the chart.js activity chart, feedback),
+  `functions/` (list and editor). `/admin/settings[/<tab>]` and
+  `/admin/analytics` are only redirects (`SettingsRedirects.tsx`): admin
+  Settings is a *modal* (`?settings=admin:<tab>`), and the sixteen tab
+  bodies live in `admin/settings/` (plus `admin/analytics/` and
+  `admin/settings/models/`), each with its rules in a `*.ts` beside it and a
+  unit test.
 - **`src/lib/apis/`** — the SvelteKit app's `src/lib/apis/**` ported
   verbatim (six files `@ts-nocheck`ed for inherited looseness), plus
   `benchmarks/profiles.ts`, new code for the profile CRUD endpoints that
@@ -257,7 +274,9 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
   `utils/index.ts` that ported pages actually use), **`icons/MAPPING.md`**,
   **`access/`** (`accessGrants.ts`: the pure grant-rewriting rules behind
   `AccessControl`), and **`settings/`** (`userSettings.ts`: the user's saved
-  UI settings through TanStack Query, for model pinning).
+  UI settings through TanStack Query, for model pinning; `useConfigDraft`
+  and `useAdminSaved`, the load-edit-save pattern of the admin tabs;
+  `useSettingsUrl`, the `?settings=` param).
 - **`e2e/`** — Playwright; `global-teardown.ts` force-stops the dev server
   after a run (see its own comment for why that isn't left to Playwright's
   ordinary teardown alone). Specs import `test` from `e2e/test.ts`, not from
@@ -265,7 +284,7 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
   app's Socket.IO connection out of the dev server's `/ws` proxy (with no
   backend running, that proxied websocket crashes the Bun-hosted dev server
   after ~30s). `workspace-helpers.ts` is the shared session/config mock for
-  the workspace specs.
+  the workspace and admin specs.
 
 ## `Makefile`
 

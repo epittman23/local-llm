@@ -51,11 +51,17 @@ src/
 │                          providers + routes/AppRouter.tsx.
 ├── components/layout/     AppShell (sidebar, mobile Sheet, auth gate).
 ├── components/common/     app-level components shared across surfaces.
+├── components/settings/   the Settings modal, its form controls, and the
+│                          connection/tool/terminal modals and
+│                          InterfaceSettings that Phase 10 reuses.
 ├── components/ui/         shadcn/ui components (`bunx shadcn add <name>`).
 ├── routes/                react-router: AppRouter.tsx, routePaths.ts,
 │   ├── benchmarks/        the seven Benchmarks pages + their gate,
 │   ├── workspace/         Phase 7: layout, tabs, per-section permission gate;
 │   │                      prompts/, skills/, tools/, knowledge/, models/.
+│   ├── admin/             Phase 8: layout + gate; users/, evaluations/,
+│   │                      functions/; settings/ and analytics/ are the
+│   │                      Settings modal's admin tab bodies.
 │   └── public/            /auth, /error, /watch, /s/:id (no session needed).
 ├── lib/                   apis/ (ported from the SvelteKit app), auth/,
 │                          access/ (grant rules), settings/, stores/ (Zustand),
