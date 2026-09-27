@@ -25,7 +25,7 @@
 | 6 | Public/static surfaces: auth, error, share, watch | ✅ done | 2026-09-19 |
 | 7 | Workspace surface | ✅ done | 2026-09-20 |
 | 8 | Admin surface | ✅ done | 2026-09-27 |
-| 9 | Secondary surfaces: notes, calendar, automations, playground, channels | ☐ not started | — |
+| 9 | Secondary surfaces: notes, calendar, automations, playground, channels | ✅ done | 2026-09-27 |
 | 10 | Chat surface (largest) | ☐ not started | — |
 | 11 | Cutover and Svelte removal | ☐ not started | — |
 
@@ -34,6 +34,38 @@ Status values: `☐ not started` · `▶ in progress` · `✅ done` · `⏸ bloc
 ### Current session notes
 
 _Overwrite this block at the end of every session._
+
+**2026-09-27, later still (Phase 9 closed out).** This file lagged the
+repo: Calendar (`afb96c9`), Automations (`6d66246`), Playground (`e9b67c1`) and
+Notes (`3a28e49`) were committed in earlier sessions without an update here, and
+the `LegacyFallback` loop was already fixed (`47e92c2`); the checklist below now
+records them. A half-started `channelModel.ts` (`98cd1b2`, "WIP") was the
+starting point for this session.
+
+**Channels** is done: `routes/channels/` holds the page (header, live list,
+composer, thread beside the list on a wide screen or in a sheet on a narrow
+one), `ChannelMessageView`, `MessageComposer` (`@` people and models, `#`
+channels, attachments, reply, typing), `ThreadPanel`, `ChannelDialogs`
+(pinned messages, members with add/remove for group managers, webhooks,
+create/edit/delete), `SidebarChannels`, `useMessageFeed` (one feed for a
+channel or a thread) and `useChannels` (the `['channels']` query and the
+app-wide unread listener in `AppShell`). Emoji reactions use `lib/emoji/`
+(the Svelte app's shortcode tables, loaded on first use, rendered as native
+characters). `e2e/fake-socket.ts` answers the app's websocket as a minimal
+Socket.IO server, so live events have e2e coverage (11 new specs). `/home`
+and `/folders/<id>` are small ports (see the CLAUDE.md entry for why), and
+the fallback now claims only `/c/<id>` for the Svelte app.
+
+**One fix outside the surface:** `features.ts` required an explicit
+`channels` permission for non-admins; the Svelte sidebar and the backend
+default both allow it unless denied. Deliberate gaps (composer features that
+belong to the chat, native emoji, fixed-width thread panel, the sidebar
+folder tree) are listed in the CLAUDE.md entry.
+
+`astro check` 0 errors, 469 Vitest tests, 287 Playwright tests. **Phase 9 is ✅ done. Next action: Phase 10** (chat). Running
+Playwright here needed a scratch config pointing at the pre-installed
+Chromium (the pinned Playwright wants a newer browser build than the cloud
+container has); `playwright.config.ts` itself is unchanged.
 
 **2026-09-27, later (Phase 8 closed out).** The shared `InterfaceSettings`
 was the last piece (commit `9ea88c5`): `components/settings/InterfaceSettings.tsx`
@@ -1301,9 +1333,24 @@ this session, the same posture as Phase 5.
 - [x] Phase exit: `MAP.md`, `apps/web/README.md`, `docs/START.md` route tables,
       dated `docs/CLAUDE.md` entry, ROADMAP pair.
 
-## Phase 9 — Secondary surfaces
-- [ ] Notes (TipTap), calendar, automations, playground, channels (first
-      Socket.IO consumer), folders, home.
+## Phase 9 — Secondary surfaces ✅
+- [x] `LegacyFallback` no longer bounces (it looped on `:5174`): a Svelte-owned
+      path links to the Svelte app, anything else is a 404 (`47e92c2`).
+- [x] **Calendar** -- month/week/day, events, calendars; `lib/access/features.ts`
+      and `FeatureGate`, so the sidebar and typed URLs share one rule (`afb96c9`).
+- [x] **Automations** -- list, detail with runs, create/edit/clone,
+      import/export (`6d66246`).
+- [x] **Playground** -- chat, completions, images; one SSE reader (`e9b67c1`).
+- [x] **Notes** -- list, TipTap editor with autosave, import/export; the shared
+      `RichTextEditor` Phase 10's composer builds on (`3a28e49`).
+- [x] **Channels** -- the first Socket.IO consumer: channel page, threads,
+      reactions, pins, members, webhooks, create/edit, sidebar section with
+      unread badges and an app-wide event listener (`channelModel.ts` started
+      in `98cd1b2`).
+- [x] `/home` (an unlinked stub in the Svelte app) and `/folders/<id>` (folder
+      check; the chat inside it is Phase 10).
+- [x] Phase exit: `MAP.md`, `apps/web/README.md`, `docs/START.md` route tables,
+      dated `docs/CLAUDE.md` entry, ROADMAP pair.
 
 ## Phase 10 — Chat (141 components, ~46k LOC)
 - [ ] Markdown pipeline → input (TipTap) → streaming → attachments →

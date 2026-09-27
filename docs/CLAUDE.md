@@ -310,6 +310,41 @@ All commits should use conventional commit style and stay focused on one topic. 
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-09-27** (second): Closed out Phase 9 of the migration
+  (`docs/migration-plan.md`): the secondary surfaces -- Notes, Calendar,
+  Automations, Playground and Channels, plus the small `/home` and
+  `/folders/<id>` routes -- built in `apps/web/`. As before, everything is
+  tested against mocked `/api/v1/**`; nothing has met a real backend.
+
+  **Channels is the first live surface.** It follows `events:channel` over
+  Socket.IO for new, edited and deleted messages, reactions, thread replies
+  and typing, and an app-wide listener (mounted in `AppShell`) keeps the
+  sidebar's unread badges current and toasts messages from channels you are
+  not looking at. One hook, `useMessageFeed`, drives both a channel and a
+  thread (the Svelte `Messages`/`Thread` pair duplicated that logic). The
+  e2e suite gained `e2e/fake-socket.ts`, a minimal Socket.IO server over
+  `page.routeWebSocket`, so live events are tested, not only REST.
+
+  **Deliberate gaps and differences.** The channel composer is a plain text
+  box with `@`/`#` mention suggestions and attachments, not the chat's rich
+  editor: no formatting toolbar, `/` commands, `:` emoji completion, prompt
+  variables, voice or screen capture (Phase 10 pieces), and images upload
+  without the optional client-side compression. Reactions render native
+  emoji characters rather than the backend's SVG set, and the picker has no
+  "recently used" row. No swipe-to-reply, profile hover card, or
+  structured-output rendering for model replies (that renderer is Phase
+  10's). The thread panel is a fixed width. `/home` in the Svelte app was an
+  unlinked stub whose two tabs pointed at pages that do not exist; here it
+  links to Notes and Calendar. A folder's page validates the folder and
+  names it; chatting in it, and the sidebar's folder tree, are part of the
+  chat list and move with Phase 10.
+
+  **A permission bug fixed.** `lib/access/features.ts` required an explicit
+  `channels` permission for non-admins; the Svelte sidebar reads
+  `permissions.features.channels ?? true` and the backend's default is
+  True, so channels are now allowed unless denied, like notes.
+
+  Verified: `astro check` 0 errors, 469 Vitest tests, 287 Playwright tests.
 - **2026-09-27**: Closed out Phase 8 of the migration
   (`docs/migration-plan.md`): the Admin surface -- Users and Groups,
   Evaluations, Functions, and all sixteen admin Settings tabs -- built in

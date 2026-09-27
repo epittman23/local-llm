@@ -78,8 +78,8 @@ edits, so `:5174` is the place to develop. In a build the router's base is
 
 ### The Svelte app
 
-`make frontend` → **http://localhost:5173/** — the only place today where chat,
-notes, playground, channels, automations and folders actually work. The
+`make frontend` → **http://localhost:5173/** — the only place today where chat
+(`/`, `/c/<id>`, and chatting inside a folder) actually works. The
 backend on `:4000` does *not* serve a Svelte build in this setup (no
 `apps/openwebui/build/`), so `:4000/` is API-only.
 
@@ -137,6 +137,16 @@ Anything marked *admin* also needs `role === 'admin'`.
 | `/benchmarks/answers` | Answers |
 | `/benchmarks/report` | Reports |
 | `/benchmarks/tune` | Tuning |
+| `/notes` | Notes list. Needs the backend's `features.enable_notes` (and not a denied `notes` permission); otherwise you're sent to `/` |
+| `/notes/new` | Creates a note (optionally from `?title=&content=`) and opens it |
+| `/notes/<id>` | Note editor (TipTap, autosave) |
+| `/calendar` | Month/week/day views. Needs `features.enable_calendar` and, for a non-admin, the `calendar` permission |
+| `/automations` | List. Needs `features.enable_automations` and, for a non-admin, the `automations` permission |
+| `/automations/<id>` | Detail and runs |
+| `/playground` | *Admin.* Chat playground; `/playground/completions` and `/playground/images` alongside |
+| `/channels/<id>` | A channel: live messages, threads, reactions, pins, members. Needs `features.enable_channels` (and not a denied `channels` permission). The sidebar lists channels and creates them |
+| `/home` | A small hub linking to Notes and Calendar (the Svelte `/home` was an unfinished stub nothing linked to) |
+| `/folders/<folderId>` | Checks the folder (a missing one sends you to `/`) and names it; chatting inside it is Phase 10 |
 
 A workspace section you lack permission for redirects you to `/`.
 
@@ -151,35 +161,19 @@ with Phase 10.
 
 ### Signed-in, placeholders
 
-`/` (Chat — Phase 10), `/notes` (Phase 9) and `/calendar` (Phase 9) render a
-"coming in Phase N" stub. The sidebar links to them.
+`/` (Chat, Phase 10) renders a "coming in Phase 10" stub.
 
 ### Everything else: not on `:5174`
 
 Any path not listed above falls into the router's catch-all, `LegacyFallback`,
-which does a full-page `window.location.assign` to the **same path**, on the
-assumption that it's a Svelte route. That assumption holds only where Svelte
-is mounted at the same origin, and today that's nowhere:
-
-- **On `:5174` it loops.** The dev server answers `/playground` with the Astro
-  shell (`200`, by design — `src/middleware.ts` rewrites every 404 to `/`), the
-  catch-all fires, reloads `/playground`, and repeats. Measured with no backend: 14
-  navigations in 4 seconds, blank page. Stop it by editing the URL. The fix is
-  a decision for whoever next touches `LegacyFallback` (probably bounce to
-  `:5173` in dev, or show a "not ported yet" page).
-- **On `:4000/next` it lands on the API server**, which has no Svelte build to
-  serve.
-
-So to reach these surfaces, use the Svelte dev server at **`:5173`**:
+which never navigates on its own (it used to bounce to the same path, which
+looped on the dev server). A path that still belongs to the Svelte app says so
+and links to it: `:5173` in development, the same path in a build. Anything
+else is a 404 page.
 
 | Still Svelte-only | Paths |
 |---|---|
-| Chat | `/c/<id>`, `/home`, `/folders/<folderId>`, `/channels/<id>` |
-| Notes / automations (Phase 9) | `/notes`, `/notes/<id>`, `/notes/new`, `/automations`, `/automations/<id>`, `/calendar` |
-| Playground (Phase 9) | `/playground`, `/playground/completions`, `/playground/images` |
-
-(`/notes`, `/calendar` and the workspace/admin/benchmarks/public paths exist on
-both apps; on `:5173` you get the Svelte version.)
+| Chat | `/c/<id>` (and `/`, which here is only a stub) |
 
 ## 4. Backend URLs
 

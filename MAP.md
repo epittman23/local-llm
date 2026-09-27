@@ -235,11 +235,13 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
   `src/components/COMMON_MAPPING.md` records where each of the SvelteKit
   app's `common/` components lands.
 - **`src/routes/`** — react-router. `AppRouter.tsx` has three kinds of
-  route: gated ones under `AppShell` (home/notes/calendar placeholders,
-  `benchmarks/`, `workspace/` and `admin/`); the public ones (`public/`: `/auth`,
-  `/error`, `/watch`, `/s/:id`), which are top-level siblings because they
-  must render without a session; and `LegacyFallback`, which bounces every
-  path not listed in `routePaths.ts` to the SvelteKit app. `benchmarks/`
+  route: gated ones under `AppShell` (the `/` chat placeholder, `benchmarks/`,
+  `workspace/`, `admin/` and the Phase 9 surfaces); the public ones
+  (`public/`: `/auth`, `/error`, `/watch`, `/s/:id`), which are top-level
+  siblings because they must render without a session; and
+  `LegacyFallback`, the catch-all, which never navigates: a path still owned
+  by the SvelteKit app (only `/c/<id>` now) links there, anything else is a
+  404. `benchmarks/`
   holds all seven Benchmarks pages plus their admin/feature-flag gate.
   `workspace/` is Phase 7's surface: `WorkspaceLayout` (per-section
   permission gate, the five tabs with live counts, the split Create button)
@@ -263,7 +265,19 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
   Settings is a *modal* (`?settings=admin:<tab>`), and the sixteen tab
   bodies live in `admin/settings/` (plus `admin/analytics/` and
   `admin/settings/models/`), each with its rules in a `*.ts` beside it and a
-  unit test.
+  unit test. Phase 9's surfaces sit beside them, each gated by
+  `common/FeatureGate` on the rules in `lib/access/features.ts`: `notes/`
+  (list, TipTap editor with autosave; the editor is
+  `components/common/RichTextEditor`), `calendar/`, `automations/`,
+  `playground/` and `channels/`, the first Socket.IO consumer: the page,
+  `MessageList`/`ChannelMessageView`, `MessageComposer` (mentions,
+  attachments), `ThreadPanel`, `ChannelDialogs` (pinned, members, webhooks,
+  create/edit), `SidebarChannels`, `useMessageFeed` (one feed for a channel
+  or a thread: paging, live events, optimistic actions), `useChannels` (the
+  `['channels']` list and the app-wide unread listener mounted in
+  `AppShell`), and the pure rules in `channelModel.ts`. `home/` and
+  `folders/` are small: `/home` was an unlinked stub in the Svelte app, and
+  chatting inside a folder is Phase 10's.
 - **`src/lib/apis/`** — the SvelteKit app's `src/lib/apis/**` ported
   verbatim (six files `@ts-nocheck`ed for inherited looseness), plus
   `benchmarks/profiles.ts`, new code for the profile CRUD endpoints that
@@ -284,7 +298,8 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
   app's Socket.IO connection out of the dev server's `/ws` proxy (with no
   backend running, that proxied websocket crashes the Bun-hosted dev server
   after ~30s). `workspace-helpers.ts` is the shared session/config mock for
-  the workspace and admin specs.
+  the workspace and admin specs; `fake-socket.ts` is a minimal Socket.IO
+  server (over `page.routeWebSocket`) for specs that need live events.
 
 ## `Makefile`
 
