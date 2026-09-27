@@ -20,6 +20,13 @@ type Answer = { type: 'option'; option_index: number; label: string; description
  * an admin-installed function reads something from the browser. It is only
  * ever triggered by the server this app is signed in to.
  */
+const dialogKeys = new WeakMap<ServerDialog, number>();
+let nextDialogKey = 0;
+const dialogKey = (d: ServerDialog) => {
+	if (!dialogKeys.has(d)) dialogKeys.set(d, nextDialogKey++);
+	return dialogKeys.get(d)!;
+};
+
 export function ServerDialogs({ dialog, onClose }: { dialog: ServerDialog | null; onClose: () => void }) {
 	const ran = useRef<ServerDialog | null>(null);
 	useEffect(() => {
@@ -37,8 +44,10 @@ export function ServerDialogs({ dialog, onClose }: { dialog: ServerDialog | null
 	}, [dialog, onClose]);
 
 	if (!dialog || dialog.type === 'execute') return null;
-	if (dialog.type === 'ask_user') return <AskUserDialog dialog={dialog} onClose={onClose} />;
-	return <ConfirmOrInput dialog={dialog} onClose={onClose} />;
+	// Keyed by the dialog itself: a replacement dialog starts with fresh input state.
+	const key = dialogKey(dialog);
+	if (dialog.type === 'ask_user') return <AskUserDialog key={key} dialog={dialog} onClose={onClose} />;
+	return <ConfirmOrInput key={key} dialog={dialog} onClose={onClose} />;
 }
 
 function ConfirmOrInput({ dialog, onClose }: { dialog: ServerDialog; onClose: () => void }) {

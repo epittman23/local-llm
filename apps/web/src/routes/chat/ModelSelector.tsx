@@ -43,10 +43,12 @@ export function ModelSelector({ models, selected, onChange, disabled }: { models
 			<button
 				type="button"
 				className="text-muted-foreground hover:text-foreground px-1 text-xs"
-				onClick={async () => {
-					await update({ models: selected });
-					toast.success('Default model updated');
-				}}
+				onClick={() =>
+					update({ models: selected }).then(
+						() => toast.success('Default model updated'),
+						(e) => toast.error(`${e?.message ?? e}`)
+					)
+				}
 			>
 				Set as default
 			</button>

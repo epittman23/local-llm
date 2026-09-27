@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { getTaskIdsByChatId, stopTask, stopTasksByChatId } from '@/lib/apis';
 import { deleteChatMessageById, getChatById, updateChatById } from '@/lib/apis/chats';
+import { getAndUpdateUserLocation } from '@/lib/apis/users';
 import { createNewFeedback, updateFeedbackById } from '@/lib/apis/evaluations';
 import { generateTags } from '@/lib/apis';
 import { type FeedbackDetails, annotate, feedbackItem } from '@/lib/chat/feedback';
@@ -53,12 +54,19 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 	const [loading, setLoading] = useState(Boolean(routeChatId));
 	const [taskIds, setTaskIds] = useState<string[] | null>(null);
 	const [queue, setQueue] = useState<Queued[]>([]);
-	const [dialog, setDialog] = useState<ServerDialog | null>(null);
+	const [dialog, setDialogState] = useState<ServerDialog | null>(null);
+	const dialogRef = useRef<ServerDialog | null>(null);
+	const setDialog = useCallback((d: ServerDialog | null) => {
+		dialogRef.current = d;
+		setDialogState(d);
+	}, []);
 
 	const historyRef = useRef(history);
 	const chatIdRef = useRef<string | null>(routeChatId);
 	/** The chat this hook created and then moved the URL to: its route change must not reload it. */
 	const adoptedRef = useRef<string | null>(null);
+	/** Stop pressed while a request was still in flight (no task ids yet): cancel its tasks as soon as they are known. */
+	const stopPendingRef = useRef(false);
 	const latest = useRef({ params, chatFiles, settings, models, selectedModels, temporary, toggles, toolIds, folderId, queue });
 	latest.current = { params, chatFiles, settings, models, selectedModels, temporary, toggles, toolIds, folderId, queue };
 
@@ -66,6 +74,12 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 		historyRef.current = typeof h === 'function' ? h(historyRef.current) : h;
 		setHistoryState(historyRef.current);
 	}, []);
+
+	/** `{{USER_LOCATION}}` for the next request, when the user allowed it (Chat.svelte's getAndUpdateUserLocation). */
+	const userLocation = useCallback(async (): Promise<string | undefined> => {
+		if (!latest.current.settings?.userLocation) return undefined;
+		return ((await getAndUpdateUserLocation(token).catch(() => null)) as string | null) ?? undefined;
+	}, [token]);
 
 	const refreshList = useCallback(() => queryClient.invalidateQueries({ queryKey: CHAT_LIST_KEY }), [queryClient]);
 
@@ -82,6 +96,9 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 			const content = record.chat;
 			let h = normalizeHistory(content.history, content.messages, record.current_message_id);
 			const pending = ((await getTaskIdsByChatId(token, id).catch(() => null))?.task_ids ?? []) as string[];
+			// Checked after every await: a slower load of the chat the user just
+			// left must not overwrite the one now open (and later be saved into it).
+			if (chatIdRef.current !== id) return;
 			const current = h.currentId ? h.messages[h.currentId] : null;
 			const complete = current?.role === 'assistant' && current.done;
 			if (pending.length && !complete) setTaskIds(pending);
@@ -133,7 +150,7 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 			setHistory(emptyHistory());
 			setLoading(false);
 		}
-	}, [routeChatId, loadChat, setHistory]);
+	}, [routeChatId, loadChat, setHistory, setDialog]);
 
 	const handleEffects = useCallback(
 		(effects: ChatEffect[], reply?: (v: unknown) => void) => {
@@ -151,7 +168,10 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 						void refreshList();
 						break;
 					case 'tags':
-						if (chatIdRef.current) void getChatById(token, chatIdRef.current).then((r) => r && setChat(r));
+						if (chatIdRef.current) {
+							const id = chatIdRef.current;
+							void getChatById(token, id).then((r) => r && chatIdRef.current === id && setChat(r));
+						}
 						break;
 					case 'reload':
 						if (chatIdRef.current) void loadChat(chatIdRef.current);
@@ -166,13 +186,21 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 					case 'notification':
 						(({ success: toast.success, error: toast.error, warning: toast.warning }) as Record<string, (m: string) => void>)[e.level]?.(e.content) ?? toast.info(e.content);
 						break;
-					case 'dialog':
-						setDialog({ type: e.type, data: e.data, reply: (v) => reply?.(v) });
+					case 'dialog': {
+						const next: ServerDialog = { type: e.type, data: e.data, reply: (v) => reply?.(v) };
+						// One dialog at a time: a newer one dismisses the one still open,
+						// answering it as a cancel so its server-side call isn't left
+						// waiting for its own timeout.
+						const prev = dialogRef.current;
+						if (prev) prev.reply(prev.type === 'ask_user' ? { status: 'cancelled', answers: {} } : false);
+						dialogRef.current = next;
+						setDialog(next);
 						break;
+					}
 				}
 			}
 		},
-		[token, loadChat, refreshList, markRead]
+		[token, loadChat, refreshList, markRead, setDialog]
 	);
 
 	useEffect(() => {
@@ -202,6 +230,7 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 				toast.error('Model not selected');
 				return;
 			}
+			stopPendingRef.current = false;
 			if (!opts.modelId) setHistory((h) => updateMessage(h, parentId, { models: ids }));
 			const { history: h, targets } = addResponses(historyRef.current, parentId, chosen, opts.modelIdx);
 			setHistory(h);
@@ -225,7 +254,7 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 					chatFiles: l.chatFiles,
 					features: requestFeatures(l.toggles, user, config, l.settings),
 					toolIds: l.toolIds,
-					variables: promptVariables(user),
+					variables: promptVariables(user, await userLocation()),
 					regenerationPrompt: opts.regenerationPrompt,
 					messages: opts.messages
 				});
@@ -240,7 +269,12 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 					setHistory((cur) => updateMessage(cur, primary.message_id, (m) => failMessage(m, res.error)));
 					return;
 				}
-				setTaskIds(res.task_ids ?? (res.task_id ? [res.task_id] : null));
+				const ids: string[] = res.task_ids ?? (res.task_id ? [res.task_id] : []);
+				if (stopPendingRef.current) {
+					stopPendingRef.current = false;
+					for (const t of ids) void stopTask(token, t).catch((e) => toast.error(`${e}`));
+					setTaskIds(null);
+				} else setTaskIds(ids.length ? ids : null);
 				if (res.chat_id && !chatIdRef.current && !l.temporary) {
 					chatIdRef.current = adoptedRef.current = res.chat_id;
 					navigate(`/c/${res.chat_id}`, { replace: true });
@@ -251,7 +285,7 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 				clearInterval(usage);
 			}
 		},
-		[socket, token, user, config, navigate, refreshList, setHistory]
+		[socket, token, user, config, navigate, refreshList, setHistory, userLocation]
 	);
 
 	const send = useCallback(
@@ -312,7 +346,9 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 	const stop = useCallback(async () => {
 		const id = chatIdRef.current;
 		if (id) await stopTasksByChatId(token, id).catch((e) => toast.error(`${e}`));
-		else for (const t of taskIds ?? []) await stopTask(token, t).catch((e) => toast.error(`${e}`));
+		else if (taskIds?.length) for (const t of taskIds) await stopTask(token, t).catch((e) => toast.error(`${e}`));
+		// A new chat's POST hasn't answered yet: nothing to cancel by id, so cancel once it does.
+		else stopPendingRef.current = true;
 		setTaskIds(null);
 		setHistory((h) => {
 			const m = h.currentId ? h.messages[h.currentId] : null;
@@ -377,7 +413,7 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 				chatFiles: l.chatFiles,
 				features: requestFeatures(l.toggles, user, config, l.settings),
 				toolIds: l.toolIds,
-				variables: promptVariables(user),
+				variables: promptVariables(user, await userLocation()),
 				continueResponse: true
 			});
 			const res = await generateOpenAIChatCompletion(token, body, `${WEBUI_BASE_URL}/api`).catch((error) => {
@@ -385,9 +421,14 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 				setHistory((cur) => updateMessage(cur, message.id, (m) => failMessage(m, error)));
 				return null;
 			});
+			if (res?.error) {
+				toast.error(errorText(res.error));
+				setHistory((cur) => updateMessage(cur, message.id, (m) => failMessage(m, res.error)));
+				return;
+			}
 			if (res?.task_id || res?.task_ids) setTaskIds(res.task_ids ?? [res.task_id]);
 		},
-		[socket, token, user, config, setHistory]
+		[socket, token, user, config, setHistory, userLocation]
 	);
 
 	/** Edits a prompt and sends it again as a new branch (`resend`), or edits a message in place. */

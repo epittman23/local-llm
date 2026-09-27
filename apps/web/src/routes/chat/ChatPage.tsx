@@ -115,6 +115,9 @@ export function ChatPage() {
 	useEffect(() => {
 		if (!loaded) return;
 		if (id) {
+			// While switching chats `session.chat` is still the previous chat's
+			// record for a render or two; only take models from this route's own.
+			if (session.chat?.id !== id) return;
 			const saved = session.chat?.chat?.models as string[] | undefined;
 			if (saved && pickedFor.current !== id) {
 				pickedFor.current = id;
@@ -172,6 +175,17 @@ export function ChatPage() {
 	const controlsOpen = useUIStore((s) => s.controlsOpen);
 	const setControlsOpen = useUIStore((s) => s.setControlsOpen);
 	const paramsDirty = useRef(false);
+	// Params edited in one chat are never saved into the next: the pending
+	// debounce below is flushed to the chat being left, then cleared.
+	const paramsFor = useRef<{ id: string | null; params: Record<string, any> }>({ id, params: session.params });
+	useEffect(() => {
+		const prev = paramsFor.current;
+		if (prev.id !== id) {
+			if (paramsDirty.current && prev.id) void updateChatById(token, prev.id, { params: prev.params }).catch((e) => toast.error(`${e}`));
+			paramsDirty.current = false;
+		}
+		paramsFor.current = { id, params: session.params };
+	}, [id, session.params, token]);
 	useEffect(() => {
 		if (!paramsDirty.current || !id) return;
 		const t = setTimeout(() => {

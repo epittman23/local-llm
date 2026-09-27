@@ -168,3 +168,26 @@ test('a temporary chat sends the whole conversation and asks for no title', asyn
 	expect(chat.seen.completions[0].messages).toEqual([{ role: 'user', content: 'secret' }]);
 	await expect(page).toHaveURL(/localhost:5174\/$/);
 });
+
+// docs/bug-review-2026-09-27.md H2: switching chats in place (no reload) used
+// to keep the first chat's models, so the next message went to the wrong one.
+test('switching to another saved chat uses that chat\'s own models', async ({ page }) => {
+	await page.context().addInitScript(() => window.localStorage.setItem('sidebar', 'true'));
+	const llama = savedChat('c2', 'Llama chat', [{ id: 'u2', role: 'user', content: 'Q2' }, { id: 'a2', role: 'assistant', content: 'From llama', model: 'llama', done: true }]);
+	llama.chat.models = ['llama'];
+	const chat = await mockChat(page, {
+		chats: [savedChat('c1', 'Qwen chat', [{ id: 'u1', role: 'user', content: 'Q1' }, { id: 'a1', role: 'assistant', content: 'From qwen', model: 'qwen', done: true }]), llama]
+	});
+	await page.goto('/c/c1');
+	await chat.socket.connected;
+	await expect(page.getByTestId('response-message')).toContainText('From qwen');
+
+	await page.getByTestId('chat-item').filter({ hasText: 'Llama chat' }).getByRole('link').click();
+	await expect(page).toHaveURL(/\/c\/c2$/);
+	await expect(page.getByTestId('response-message')).toContainText('From llama');
+
+	await page.getByRole('textbox', { name: 'Message' }).fill('Next');
+	await page.keyboard.press('Enter');
+	await expect.poll(() => chat.seen.completions.length).toBe(1);
+	expect(chat.seen.completions[0]).toMatchObject({ chat_id: 'c2', model: 'llama' });
+});
