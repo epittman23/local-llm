@@ -1,0 +1,23 @@
+# License notice for apps/web
+
+Portions of this frontend are derived from Open WebUI's SvelteKit frontend,
+as vendored in this repository (last present at commit d863707, under
+apps/openwebui/): the API client modules under src/lib/apis/, the locale
+files under src/lib/i18n/locales/, and logic ported file by file elsewhere
+(comments reading `d863707:apps/openwebui/...` name the source file).
+
+Those portions remain under the Open WebUI License and the earlier licenses
+it refers to. Their full texts are in ../server/LICENSE, ../server/LICENSE_NOTICE
+and ../server/LICENSE_HISTORY, and the copyright notice they require is
+reproduced here:
+
+    Copyright (c) 2023- Open WebUI Inc. [Created by Timothy Jaeryang Baek]
+    All rights reserved.
+
+The Settings > About tab shows the same license and copyright lines.
+
+This deployment changes the Open WebUI branding under clause 4(i) of the
+Open WebUI License, which permits it for deployments with no more than fifty
+end users in any rolling thirty-day period. It is a personal, single-user
+deployment; exceeding that limit would require restoring the branding or
+one of clause 4's other permissions.

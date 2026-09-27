@@ -1439,3 +1439,19 @@ for a server started from the Serve page above, or `http://localhost:11434/v1`
 for Ollama), and update the API key if your local server requires one. No
 other changes should be necessary, since Open WebUI talks to any
 OpenAI-compatible endpoint.
+
+## License
+
+The backend in `apps/server/` is a fork of Open WebUI and stays under its
+license: `apps/server/LICENSE`, `LICENSE_NOTICE` and `LICENSE_HISTORY` are
+kept as they are, as are the copyright notices in its source. The frontend
+in `apps/web/` is partly derived from Open WebUI's SvelteKit frontend;
+`apps/web/LICENSE_NOTICE` says which parts and reproduces the required
+copyright notice, and the app's Settings > About tab shows it too.
+
+The new frontend does not carry Open WebUI's branding. Clause 4 of the Open
+WebUI License allows that only in its listed cases; this repo relies on
+clause 4(i), deployments with no more than fifty end users in any rolling
+thirty-day period. It is a personal, single-user deployment. Running it for
+more people than that would mean restoring the branding or obtaining one of
+the clause's other permissions.
