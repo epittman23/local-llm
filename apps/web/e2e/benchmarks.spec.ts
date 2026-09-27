@@ -508,3 +508,38 @@ test('a non-admin user is bounced out of Benchmarks entirely', async ({ page }) 
 	await expect(page).toHaveURL(/\/$/);
 	await expect(page.getByRole('textbox', { name: 'Message' })).toBeVisible();
 });
+
+// docs/bug-review-2026-09-27.md M1: the log stream stays open as long as the
+// server runs; the Start mutation used to await it, so the button read
+// "Starting…" for the server's whole lifetime.
+test('Serve Start settles while the log stream is still open', async ({ page }) => {
+	let started = 0;
+	await page.route('**/api/v1/benchmarks/serve/start', (route) => {
+		started++;
+		return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ started: true, warning: null }) });
+	});
+	// Never answered: a live server's log stream doesn't end.
+	await page.route('**/api/v1/benchmarks/serve/stream', () => {});
+
+	await page.goto('/benchmarks/serve');
+	await page.getByRole('button', { name: 'Start' }).click();
+	await expect.poll(() => started).toBe(1);
+	await expect(page.getByText('Log (streaming…)')).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Starting…' })).toHaveCount(0);
+});
+
+test('Tests Run settles while the run is still streaming', async ({ page }) => {
+	await page.route('**/api/v1/benchmarks/tests/options', (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ tiers: ['smoke'], benchmarks: [], systems: [] }) })
+	);
+	await page.route('**/api/v1/benchmarks/tests/run', (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ started: true }) })
+	);
+	await page.route('**/api/v1/benchmarks/tests/stream', () => {});
+
+	await page.goto('/benchmarks/tests');
+	await page.getByRole('button', { name: 'Run' }).click();
+	await expect(page.getByRole('button', { name: 'Cancel' })).toBeEnabled();
+	await expect(page.getByRole('button', { name: 'Starting…' })).toHaveCount(0);
+});

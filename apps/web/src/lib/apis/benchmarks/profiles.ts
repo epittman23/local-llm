@@ -11,33 +11,46 @@ import { WEBUI_API_BASE_URL } from '@/lib/constants';
 
 const BASE = `${WEBUI_API_BASE_URL}/benchmarks/profiles`;
 
+/**
+ * A FastAPI error `detail` as one readable string: a 422's list of
+ * `{loc, msg}` objects otherwise reached the page as "[object Object]".
+ */
+export function errorMessage(detail: unknown): string {
+	if (typeof detail === 'string') return detail;
+	if (Array.isArray(detail))
+		return detail
+			.map((d) => {
+				const loc = Array.isArray(d?.loc) ? d.loc.filter((p: unknown) => p !== 'body').join('.') : '';
+				return loc ? `${loc}: ${d?.msg ?? d}` : String(d?.msg ?? d);
+			})
+			.join('; ');
+	if (detail instanceof Error) return detail.message;
+	return String(detail ?? 'Request failed');
+}
+
+/**
+ * Unlike the ported helpers, this always throws on failure -- a network error
+ * or a non-JSON error body included -- so a caller never mistakes `null` for
+ * success (docs/bug-review-2026-09-27.md L7). What it throws is a string.
+ */
 const request = async (path: string, token: string, init?: RequestInit) => {
-	let error: unknown = null;
-
-	const res = await fetch(`${BASE}${path}`, {
-		...init,
-		headers: {
-			Accept: 'application/json',
-			'Content-Type': 'application/json',
-			authorization: `Bearer ${token}`,
-			...init?.headers
-		}
-	})
-		.then(async (res) => {
-			if (!res.ok) throw await res.json();
-			return res.json();
-		})
-		.catch((err) => {
-			error = err?.detail ?? err;
-			console.error(err);
-			return null;
+	let res: Response;
+	try {
+		res = await fetch(`${BASE}${path}`, {
+			...init,
+			headers: {
+				Accept: 'application/json',
+				'Content-Type': 'application/json',
+				authorization: `Bearer ${token}`,
+				...init?.headers
+			}
 		});
-
-	if (error) {
-		throw error;
+	} catch (err) {
+		throw errorMessage(err);
 	}
-
-	return res;
+	const body = await res.json().catch(() => null);
+	if (!res.ok) throw errorMessage(body?.detail ?? body ?? `${res.status} ${res.statusText}`);
+	return body;
 };
 
 export type ProfileDefinition = {

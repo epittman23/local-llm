@@ -55,6 +55,25 @@ export function ProfilesPanel({
 	const [newName, setNewName] = useState('');
 	const [newDisplayName, setNewDisplayName] = useState('');
 
+	// One place to change views: clears the last error and the name fields
+	// Create and Clone share, so neither shows the other's leftovers.
+	const go = (next: View) => {
+		setError(null);
+		setNewName('');
+		setNewDisplayName('');
+		setView(next);
+	};
+	const fail = (err: unknown) => setError(String(err));
+	/** Mirrors routers/benchmarks/profiles.py's _check_name. */
+	const nameProblem = (name: string, display: string) =>
+		!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(name)
+			? 'Name must be 1-64 characters of a-z, 0-9, - and _, starting with a letter or digit.'
+			: name === 'default'
+				? "'default' is reserved."
+				: !display.trim()
+					? 'Display name is required.'
+					: null;
+
 	const profilesQuery = useQuery({
 		queryKey: ['profiles', 'all'],
 		queryFn: () => listProfiles(token, true),
@@ -70,14 +89,16 @@ export function ProfilesPanel({
 	const setDefaultMutation = useMutation({
 		mutationFn: (name: string) => setDefaultProfile(token, name),
 		onSuccess: invalidateAll,
-		onError: (err: any) => setError(err?.detail ?? String(err))
+		onMutate: () => setError(null),
+		onError: fail
 	});
 
 	const archiveMutation = useMutation({
 		mutationFn: ({ name, archived }: { name: string; archived: boolean }) =>
 			archived ? unarchiveProfile(token, name) : archiveProfile(token, name),
 		onSuccess: invalidateAll,
-		onError: (err: any) => setError(err?.detail ?? String(err))
+		onMutate: () => setError(null),
+		onError: fail
 	});
 
 	const createMutation = useMutation({
@@ -85,9 +106,10 @@ export function ProfilesPanel({
 			createProfile(token, form),
 		onSuccess: async () => {
 			await invalidateAll();
-			setView({ mode: 'list' });
+			go({ mode: 'list' });
 		},
-		onError: (err: any) => setError(err?.detail ?? String(err))
+		onMutate: () => setError(null),
+		onError: fail
 	});
 
 	const cloneMutation = useMutation({
@@ -100,9 +122,10 @@ export function ProfilesPanel({
 		}) => cloneProfile(token, source, form),
 		onSuccess: async () => {
 			await invalidateAll();
-			setView({ mode: 'list' });
+			go({ mode: 'list' });
 		},
-		onError: (err: any) => setError(err?.detail ?? String(err))
+		onMutate: () => setError(null),
+		onError: fail
 	});
 
 	const addVersionMutation = useMutation({
@@ -117,9 +140,10 @@ export function ProfilesPanel({
 		}) => addProfileVersion(token, name, { definition, note }),
 		onSuccess: async () => {
 			await invalidateAll();
-			setView({ mode: 'list' });
+			go({ mode: 'list' });
 		},
-		onError: (err: any) => setError(err?.detail ?? String(err))
+		onMutate: () => setError(null),
+		onError: fail
 	});
 
 	const openEdit = async (name: string) => {
@@ -128,9 +152,9 @@ export function ProfilesPanel({
 			const entry = await getProfile(token, name);
 			const { version_id, profile_id, version, created_at, created_by, note, ...definition } =
 				entry.version;
-			setView({ mode: 'edit', name, definition: definition as ProfileDefinition });
-		} catch (err: any) {
-			setError(err?.detail ?? String(err));
+			go({ mode: 'edit', name, definition: definition as ProfileDefinition });
+		} catch (err) {
+			fail(err);
 		}
 	};
 
@@ -158,7 +182,7 @@ export function ProfilesPanel({
 				{view.mode === 'list' && (
 					<div className="flex flex-col gap-3">
 						<div className="flex justify-end">
-							<Button size="sm" onClick={() => setView({ mode: 'create' })}>
+							<Button size="sm" onClick={() => go({ mode: 'create' })}>
 								Create profile
 							</Button>
 						</div>
@@ -184,7 +208,7 @@ export function ProfilesPanel({
 											<Button
 												size="sm"
 												variant="ghost"
-												onClick={() => setView({ mode: 'history', name: entry.profile.name })}
+												onClick={() => go({ mode: 'history', name: entry.profile.name })}
 											>
 												History
 											</Button>
@@ -199,7 +223,7 @@ export function ProfilesPanel({
 											<Button
 												size="sm"
 												variant="ghost"
-												onClick={() => setView({ mode: 'clone', name: entry.profile.name })}
+												onClick={() => go({ mode: 'clone', name: entry.profile.name })}
 											>
 												Clone
 											</Button>
@@ -245,7 +269,7 @@ export function ProfilesPanel({
 					<div className="flex flex-col gap-3">
 						<ProfileVersionHistory profileName={view.name} />
 						<div className="flex justify-end">
-							<Button variant="ghost" onClick={() => setView({ mode: 'list' })}>
+							<Button variant="ghost" onClick={() => go({ mode: 'list' })}>
 								Back
 							</Button>
 						</div>
@@ -277,10 +301,12 @@ export function ProfilesPanel({
 						<ProfileDefinitionForm
 							submitLabel="Create"
 							pending={createMutation.isPending}
-							onCancel={() => setView({ mode: 'list' })}
-							onSubmit={(definition, note) =>
-								createMutation.mutate({ name: newName, display_name: newDisplayName, definition, note })
-							}
+							onCancel={() => go({ mode: 'list' })}
+							onSubmit={(definition, note) => {
+								const problem = nameProblem(newName, newDisplayName);
+								if (problem) return setError(problem);
+								createMutation.mutate({ name: newName, display_name: newDisplayName, definition, note });
+							}}
 						/>
 					</div>
 				)}
@@ -312,18 +338,20 @@ export function ProfilesPanel({
 							</div>
 						</div>
 						<div className="flex justify-end gap-2">
-							<Button variant="ghost" onClick={() => setView({ mode: 'list' })}>
+							<Button variant="ghost" onClick={() => go({ mode: 'list' })}>
 								Cancel
 							</Button>
 							<Button
 								disabled={cloneMutation.isPending}
-								onClick={() =>
-									'name' in view &&
+								onClick={() => {
+									if (!('name' in view)) return;
+									const problem = nameProblem(newName, newDisplayName);
+									if (problem) return setError(problem);
 									cloneMutation.mutate({
 										source: view.name,
 										form: { name: newName, display_name: newDisplayName, note: '' }
-									})
-								}
+									});
+								}}
 							>
 								{cloneMutation.isPending ? 'Cloning…' : 'Clone'}
 							</Button>
@@ -336,7 +364,7 @@ export function ProfilesPanel({
 						initial={view.definition}
 						submitLabel="Save as new version"
 						pending={addVersionMutation.isPending}
-						onCancel={() => setView({ mode: 'list' })}
+						onCancel={() => go({ mode: 'list' })}
 						onSubmit={(definition, note) =>
 							addVersionMutation.mutate({ name: view.name, definition, note })
 						}

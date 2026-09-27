@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -94,9 +94,11 @@ export function TestsPage() {
 		stopStream();
 		setRunning(true);
 
-		const [res, controller] = await streamTestRun(token);
+		const controller = new AbortController();
 		abortControllerRef.current = controller;
+		const [res] = await streamTestRun(token, controller).catch(() => [null] as const);
 
+		if (controller.signal.aborted) return;
 		if (!res?.body) {
 			setRunning(false);
 			return;
@@ -129,8 +131,11 @@ export function TestsPage() {
 		} catch (err) {
 			console.error(err);
 		}
-		setRunning(false);
+		if (abortControllerRef.current === controller) setRunning(false);
 	};
+
+	// Abort the SSE connection when leaving the page.
+	useEffect(() => () => abortControllerRef.current?.abort(), []);
 
 	const runMutation = useMutation({
 		mutationFn: () => {
@@ -150,7 +155,10 @@ export function TestsPage() {
 			setSkipped(0);
 			setStreamError(null);
 		},
-		onSuccess: () => startStream()
+		// Not awaited: see ServePage's startMutation.
+		onSuccess: () => {
+			void startStream();
+		}
 	});
 
 	const cancelMutation = useMutation({ mutationFn: () => cancelTestRun(token) });

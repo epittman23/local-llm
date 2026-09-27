@@ -24,21 +24,48 @@ const emptyDefinition: ProfileDefinition = {
 	spec: [],
 	samplers: [],
 	extra: [],
-	reasoning_effort_default: '',
+	reasoning_effort_default: null,
 	notes: ''
 };
 
-// spec/samplers/extra are string[] on the backend (models/benchmark_profiles.py);
-// represented here as comma-separated text rather than a per-item array editor --
-// a reasonable simplification for a first version of a panel that previously
-// didn't exist in any frontend (see this directory's own ProfilesPanel.tsx),
-// not a port of an existing UI's own convention.
-const toCsv = (values: string[] | undefined) => (values ?? []).join(', ');
-const fromCsv = (csv: string) =>
-	csv
-		.split(',')
-		.map((s) => s.trim())
-		.filter(Boolean);
+// spec/samplers/extra are argv token lists on the backend
+// (models/benchmark_profiles.py), edited here as one command-line string.
+// The raw text is kept as typed and only split on submit -- re-deriving the
+// input's value from the parsed list on every keystroke ate commas and spaces
+// (docs/bug-review-2026-09-27.md M7). Split shell-style: whitespace separates
+// tokens, and single or double quotes keep a value with spaces or commas in
+// one token (`-ot "a=CUDA0,b=CUDA0"`).
+const quoteArg = (arg: string) => (/[\s'"]/.test(arg) || arg === '' ? `'${arg.replace(/'/g, `'"'"'`)}'` : arg);
+export const argvToText = (values: string[] | null | undefined) => (values ?? []).map(quoteArg).join(' ');
+export function textToArgv(text: string): string[] {
+	const out: string[] = [];
+	let cur = '';
+	let has = false;
+	let quote: '"' | "'" | null = null;
+	for (const ch of text) {
+		if (quote) {
+			if (ch === quote) quote = null;
+			else cur += ch;
+		} else if (ch === '"' || ch === "'") {
+			quote = ch;
+			has = true;
+		} else if (/\s/.test(ch)) {
+			if (has) out.push(cur);
+			cur = '';
+			has = false;
+		} else {
+			cur += ch;
+			has = true;
+		}
+	}
+	if (has) out.push(cur);
+	return out;
+}
+
+/** Empty text is "none", not an empty string (see validate_definition's BLANK_MEANS_NONE). */
+const orNull = (value: string) => (value.trim() ? value : null);
+
+type ArgvKey = 'spec' | 'samplers' | 'extra';
 
 type Props = {
 	initial?: ProfileDefinition;
@@ -58,6 +85,11 @@ type Props = {
 export function ProfileDefinitionForm({ initial, submitLabel, onSubmit, onCancel, pending }: Props) {
 	const [definition, setDefinition] = useState<ProfileDefinition>(initial ?? emptyDefinition);
 	const [note, setNote] = useState('');
+	const [argvText, setArgvText] = useState<Record<ArgvKey, string>>(() => ({
+		spec: argvToText((initial ?? emptyDefinition).spec),
+		samplers: argvToText((initial ?? emptyDefinition).samplers),
+		extra: argvToText((initial ?? emptyDefinition).extra)
+	}));
 
 	const set = <K extends keyof ProfileDefinition>(key: K, value: ProfileDefinition[K]) =>
 		setDefinition((d) => ({ ...d, [key]: value }));
@@ -67,7 +99,17 @@ export function ProfileDefinitionForm({ initial, submitLabel, onSubmit, onCancel
 			className="flex flex-col gap-3"
 			onSubmit={(e) => {
 				e.preventDefault();
-				onSubmit(definition, note);
+				onSubmit(
+					{
+						...definition,
+						spec: textToArgv(argvText.spec),
+						samplers: textToArgv(argvText.samplers),
+						extra: textToArgv(argvText.extra),
+						override_tensors: orNull(definition.override_tensors ?? ''),
+						reasoning_effort_default: orNull(definition.reasoning_effort_default ?? '')
+					},
+					note
+				);
 			}}
 		>
 			<div className="grid grid-cols-2 gap-3">
@@ -213,27 +255,30 @@ export function ProfileDefinitionForm({ initial, submitLabel, onSubmit, onCancel
 					/>
 				</div>
 				<div className="flex flex-col gap-1">
-					<Label htmlFor="def-spec">spec (comma-separated)</Label>
+					<Label htmlFor="def-spec">spec (command-line arguments)</Label>
 					<Input
 						id="def-spec"
-						value={toCsv(definition.spec)}
-						onChange={(e) => set('spec', fromCsv(e.target.value))}
+						placeholder="--flag value"
+						value={argvText.spec}
+						onChange={(e) => setArgvText((t) => ({ ...t, spec: e.target.value }))}
 					/>
 				</div>
 				<div className="flex flex-col gap-1">
-					<Label htmlFor="def-samplers">samplers (comma-separated)</Label>
+					<Label htmlFor="def-samplers">samplers (command-line arguments)</Label>
 					<Input
 						id="def-samplers"
-						value={toCsv(definition.samplers)}
-						onChange={(e) => set('samplers', fromCsv(e.target.value))}
+						placeholder="--flag value"
+						value={argvText.samplers}
+						onChange={(e) => setArgvText((t) => ({ ...t, samplers: e.target.value }))}
 					/>
 				</div>
 				<div className="flex flex-col gap-1">
-					<Label htmlFor="def-extra">extra (comma-separated)</Label>
+					<Label htmlFor="def-extra">extra (command-line arguments)</Label>
 					<Input
 						id="def-extra"
-						value={toCsv(definition.extra)}
-						onChange={(e) => set('extra', fromCsv(e.target.value))}
+						placeholder="--flag value"
+						value={argvText.extra}
+						onChange={(e) => setArgvText((t) => ({ ...t, extra: e.target.value }))}
 					/>
 				</div>
 			</div>

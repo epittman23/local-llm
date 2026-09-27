@@ -227,9 +227,10 @@ export const checkServe = async (token: string = '') => {
 // above to get parsed `{ event, data }` updates, the same way
 // `createOpenAITextStream(res.body, ...)` is used for chat streaming.
 export const streamServe = async (
-	token: string = ''
+	token: string = '',
+	// Passed in by a caller that must be able to abort before the fetch resolves.
+	controller: AbortController = new AbortController()
 ): Promise<[Response | null, AbortController]> => {
-	const controller = new AbortController();
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/serve/stream`, {
@@ -414,9 +415,10 @@ export const cancelTestRun = async (token: string = '') => {
 // See the comment above `streamServe` — same [Response, AbortController]
 // convention, consumed via `parseBenchmarksEventStream`.
 export const streamTestRun = async (
-	token: string = ''
+	token: string = '',
+	// Passed in by a caller that must be able to abort before the fetch resolves.
+	controller: AbortController = new AbortController()
 ): Promise<[Response | null, AbortController]> => {
-	const controller = new AbortController();
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/tests/stream`, {

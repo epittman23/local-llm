@@ -34,7 +34,6 @@ const reasoningOptions = [
 
 const specOptions = [
 	{ value: 'default', label: 'Default' },
-	{ value: 'on', label: 'on' },
 	{ value: 'off', label: 'off' }
 ];
 
@@ -109,9 +108,13 @@ export function ServePage() {
 		setLogLines([]);
 		setStreaming(true);
 
-		const [res, controller] = await streamServe(token);
+		// Stored before the fetch, so unmounting or stopping mid-request aborts it.
+		const controller = new AbortController();
 		abortControllerRef.current = controller;
+		const [res] = await streamServe(token, controller).catch(() => [null] as const);
 
+		// A newer stream (or unmount) replaced this one: leave its state alone.
+		if (controller.signal.aborted) return;
 		if (!res?.body) {
 			setStreaming(false);
 			return;
@@ -130,7 +133,7 @@ export function ServePage() {
 			// Aborted or connection closed -- not necessarily an error worth surfacing.
 			console.error(err);
 		}
-		setStreaming(false);
+		if (abortControllerRef.current === controller) setStreaming(false);
 	};
 
 	useEffect(() => {
@@ -167,9 +170,11 @@ export function ServePage() {
 			return startServe(token, form);
 		},
 		onMutate: () => setError(null),
-		onSuccess: async () => {
-			await startLogStream();
-			await queryClient.invalidateQueries({ queryKey: ['serve-check'] });
+		// Not awaited: the stream lives as long as the server, and TanStack
+		// Query keeps the mutation pending until onSuccess settles.
+		onSuccess: () => {
+			void startLogStream();
+			return queryClient.invalidateQueries({ queryKey: ['serve-check'] });
 		},
 		onError: (err: any) => setError(err?.detail ?? String(err))
 	});
