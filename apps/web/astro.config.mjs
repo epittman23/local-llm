@@ -9,14 +9,6 @@ import { readFileSync } from 'node:fs';
 // started by `make backend` (see docs/migration-plan.md's Phase 3).
 const backendTarget = process.env.WEBUI_BACKEND_URL || 'http://localhost:4000';
 
-// process.argv, not defineConfig's own (command) => (...) function form:
-// that form reaches @tailwindcss/vite's postcss-import resolution through a
-// different internal Vite code path in this astro/vite combination and
-// breaks `@import 'tailwindcss'` outright (`ENOENT ... open '.../tailwindcss'`)
-// -- reproduced in isolation, config content otherwise identical. A plain
-// object literal does not hit that path.
-const isBuild = process.argv.includes('build');
-
 // Read, not process.env.npm_package_version: that is set only when Astro runs
 // through a package script, and without it APP_VERSION is left undefined and
 // the app fails to hydrate (ReferenceError). Kept equal to the backend's
@@ -26,12 +18,6 @@ const appVersion = JSON.parse(readFileSync(new URL('./package.json', import.meta
 // https://astro.build/config
 export default defineConfig({
 	output: 'static',
-	// Built assets are mounted under /next in main.py (a preview alongside
-	// the SvelteKit app, not a replacement yet -- see docs/migration-plan.md's
-	// Phase 3), so a production build needs its own asset paths prefixed to
-	// match. The standalone dev server (`make astro`, :5174) stays unprefixed
-	// since nothing mounts it under a path there.
-	base: isBuild ? '/next' : '/',
 	integrations: [react()],
 	vite: {
 		// Mirrors apps/openwebui/vite.config.ts's own define block: constants.ts

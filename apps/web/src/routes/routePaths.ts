@@ -58,7 +58,7 @@ export const sharePath = (id: string) => `/s/${id}`;
 
 /**
  * An absolute path for a plain `<a>` (e.g. `target="_blank"`), which react-router
- * does not rewrite: prefixes the app's base (`/next` in a build, nothing in dev).
+ * does not rewrite: prefixes the app's base (`/` today; kept so a sub-path mount works).
  * Use `<Link>` for in-app navigation; this is only for links that leave the SPA
  * shell into a new tab.
  */

@@ -155,8 +155,7 @@ const router = createBrowserRouter(
 		{ path: routePaths.share, element: <SharedChatPage /> },
 		{ path: '*', element: <LegacyFallback /> }
 	],
-	// Astro's own base path: unprefixed in dev (`make astro`), "/next" once
-	// built and mounted in main.py (see astro.config.mjs's own comment).
+	// Astro's own base path (`/`; main.py mounts the build at the root).
 	{ basename: import.meta.env.BASE_URL }
 );
 

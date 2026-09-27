@@ -61,10 +61,10 @@ Required"): the app fetches `/api/config` on load, the proxy has nothing to
 reach, and the session never resolves. Useful only for seeing that page. The
 Playwright suite gets around this by mocking `/api/v1/**` (see §5).
 
-### The built copy at `/next`
+### The built app at `:4000`
 
-The backend also serves a **production build** of the Astro app at
-**http://localhost:4000/next/**:
+The backend serves a **production build** of the Astro app at its root,
+**http://localhost:4000/**:
 
 ```bash
 cd apps/web && bun run build     # writes apps/web/dist/ (gitignored)
@@ -74,19 +74,18 @@ cd apps/web && bun run build     # writes apps/web/dist/ (gitignored)
 Two catches. The mount is decided **when the backend starts**: if `dist/` didn't
 exist then, restart the backend after building (`--reload` only watches Python
 files, and never re-mounts). And `dist/` is a snapshot: it does not follow your
-edits, so `:5174` is the place to develop. In a build the router's base is
-`/next`, so every URL below becomes `/next/<path>`.
+edits, so `:5174` is the place to develop. The same URLs as below work on
+either port.
 
 ### The Svelte app
 
 `make frontend` → **http://localhost:5173/** — the original app, kept for
-comparison until the cutover. The
-backend on `:4000` does *not* serve a Svelte build in this setup (no
-`apps/openwebui/build/`), so `:4000/` is API-only.
+comparison until Phase 11 deletes it. The backend no longer serves a Svelte
+build; `:4000/` is the Astro app.
 
 ## 3. Valid URLs on the Astro app
 
-Base is `http://localhost:5174` (or `http://localhost:4000/next`). Anything
+Base is `http://localhost:5174` (or `http://localhost:4000` with a build). Anything
 signed-in-only bounces to `/auth?redirect=<path>` when you have no session.
 Anything marked *admin* also needs `role === 'admin'`.
 
@@ -182,7 +181,7 @@ is empty.)
 | `/health` | Liveness check |
 | `/api/config` | Public config the frontends read before anyone signs in |
 | `/api/v1/**` | The REST API the pages call (auths, models, knowledge, prompts, skills, tools, benchmarks, ...) |
-| `/next/` | The built Astro app (see §2) |
+| `/` and every page path | The built Astro app, when `apps/web/dist/` exists (see §2) |
 
 Postgres listens on `127.0.0.1:5432` (user/db `openwebui`, password from
 `infra/.env`), loopback only.

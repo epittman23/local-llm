@@ -97,9 +97,8 @@ constraint. It is not any more — see `docs/CLAUDE.md`'s Conventions.
 - **`openwebui/`** — the vendored Open WebUI fork (mapped below).
 - **`web/`** — the Astro + React + shadcn/ui frontend that will eventually
   replace `openwebui/`'s SvelteKit app (mapped below). Added in Phase 3 of
-  `docs/migration-plan.md` (2026-09-18); dual-serves alongside the fork
-  during the migration, mounted read-only at `/next` in the fork's own
-  `main.py` rather than replacing anything yet.
+  `docs/migration-plan.md` (2026-09-18); since Phase 11b its build
+  (`dist/`) is what the fork's `main.py` serves at `/`.
 
 ### `apps/openwebui/` (vendored fork)
 
@@ -191,8 +190,7 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
 - **`astro.config.mjs`** — `output: 'static'`, `@astrojs/react`,
   `@tailwindcss/vite`; the dev-server proxy mirrors `apps/openwebui/
   vite.config.ts`'s exactly (`/api`, `/ollama`, `/openai`, `/oauth`, `/ws`
-  → `:4000`); `base` is `/next` for a production build only (where `main.py`
-  mounts it), unprefixed in dev.
+  → `:4000`); `base` is `/`, where `main.py` mounts the build.
 - **`components.json`** — shadcn/ui's own config: `radix-nova` preset,
   Lucide icons, CSS variables. See `docs/CLAUDE.md`'s 2026-09-18 decisions
   entry for why this preset and not the migration plan's original
@@ -349,8 +347,8 @@ knowing about when navigating the filesystem directly:
   bootstrapped by `make backend` on first run. The only Python virtualenv in
   this repo since Phase 2c deleted the root `.venv/` along with `scripts/`.
 - **`apps/web/node_modules/`**, **`apps/web/dist/`**, **`apps/web/.astro/`** —
-  the new frontend's dependency tree, production build output (mounted at
-  `/next` when present — see `apps/openwebui/backend/open_webui/main.py`),
+  the new frontend's dependency tree, production build output (served at
+  `/` when present — `FRONTEND_BUILD_DIR` in `apps/openwebui/backend/open_webui/env.py`),
   and Astro's generated type cache. `bun.lock` beside them **is** tracked.
 - **`apps/web/test-results/`**, **`apps/web/playwright-report/`** — Playwright
   output from `bun run test:e2e`.

@@ -317,3 +317,9 @@ cypress/videos
 cypress/screenshots
 .vscode/settings.json
 .cptr
+
+# Top-level files in the backend's static dir are copied in at every boot
+# from the frontend build's static/ (config.py deletes and recreates them);
+# the subdirectories are tracked.
+backend/open_webui/static/*
+!backend/open_webui/static/*/

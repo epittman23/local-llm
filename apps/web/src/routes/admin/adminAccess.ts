@@ -18,9 +18,9 @@ export function adminGate(user: SessionUser | null, config: BackendConfig | null
 	return { allowed: true };
 }
 
-// `includes`, as the Svelte layout does, not a prefix test: the app may be
-// mounted under a base path (/next) and `pathname` from react-router is
-// already base-relative, but matching the original keeps behaviour identical.
+// `includes`, as the Svelte layout does, not a prefix test: `pathname` from
+// react-router is already base-relative, but matching the original keeps
+// behaviour identical.
 export const isFunctionsPath = (pathname: string) => pathname.includes('/admin/functions');
 
 export type AdminSection = 'users' | 'evaluations' | 'functions' | 'settings';

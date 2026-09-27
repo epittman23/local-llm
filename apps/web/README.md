@@ -22,11 +22,11 @@ the server running after Ctrl-C unless you `astro dev stop` it yourself.
 
 ## Building it
 
-`bun run build` — static output to `dist/`, with every asset path prefixed
-`/next` (`astro.config.mjs`'s `base`), because that's where `main.py` mounts
-it as a preview alongside the still-live SvelteKit app (`/next/...`, not
-`/`). Dev mode stays unprefixed since nothing mounts *it* under a path.
-Phase 11's cutover removes the prefix along with `/next` itself.
+`bun run build` — static output to `dist/`. The backend serves it at `/`
+(`FRONTEND_BUILD_DIR` in `apps/openwebui/backend/open_webui/env.py` defaults to
+this `dist/`), so after a build `make backend` alone serves the whole app on
+`:4000`. At boot the backend copies `dist/static/` into its own static
+directory, which is where `/static/favicon.png` and friends come from.
 
 ## Testing
 

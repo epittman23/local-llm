@@ -64,9 +64,9 @@ its API/WebSocket calls to the backend on `4000`.
 
 The Astro + React + shadcn/ui frontend that will eventually replace this one
 is under active build-out (`apps/web/`, `make astro` for its own dev server
-on `:5174`, or `http://localhost:4000/next/` once it's built — see
-`apps/web/README.md` and `docs/migration-plan.md`'s Phase 3 onward). It
-dual-serves alongside the app below rather than replacing anything yet.
+on `:5174`, or `http://localhost:4000/` once it's built — see
+`apps/web/README.md` and `docs/migration-plan.md`'s Phase 3 onward). Since
+Phase 11b the backend serves its build instead of the Svelte one.
 
 Chat is at `http://localhost:5173/`. The first account you create becomes the
 admin. This is a fresh database — the SQLite-backed data from before the fork
