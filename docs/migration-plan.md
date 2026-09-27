@@ -27,13 +27,33 @@
 | 8 | Admin surface | ✅ done | 2026-09-27 |
 | 9 | Secondary surfaces: notes, calendar, automations, playground, channels | ✅ done | 2026-09-27 |
 | 10 | Chat surface (largest) | ✅ done | 2026-09-27 |
-| 11 | Cutover and Svelte removal | ☐ not started | — |
+| 11 | Cutover and Svelte removal | ▶ in progress | 2026-09-27 |
 
 Status values: `☐ not started` · `▶ in progress` · `✅ done` · `⏸ blocked`
 
 ### Current session notes
 
 _Overwrite this block at the end of every session._
+
+**2026-09-27, latest (Phase 11a done).** The first real-backend run: both
+servers up on the owner's machine, driven by scripted headless Chromium (the
+Chrome DevTools and Playwright MCPs would not start here). Read-only pass over
+every route, then write paths with small prompts to
+`deepseek/deepseek-v4.1-flash`; all test records deleted afterwards, Channels
+switched back off, personal settings restored byte-for-byte. Six fixes, one
+commit each (see the dated `docs/CLAUDE.md` entry). Local `node_modules` was
+stale and needed `bun install`; `make astro` now does that every run.
+`infra/.env` gained `LLLM_SMOKE_USER`/`LLLM_SMOKE_PASSWORD`, single-quoted
+because the password holds a `$` and the Makefile sources the file under
+`set -u`.
+
+Not exercised: Benchmarks > Serve (loads a model; owner's call), OAuth,
+multi-user sharing. Known, not fixed: sending in the ~1 s before the model
+list arrives gives a "Model not selected" toast (the Svelte app did the same).
+
+`astro check` 0 errors, 550 Vitest, 324 Playwright (`chat-input` `/`-commands
+flaked once under full-suite load, passed alone), 226 backend pytest.
+**Next action: 11b** (serve `apps/web/dist` at `/`, drop `/next`).
 
 **2026-09-27, latest (Phase 10 closed out).** The chat surface is built in
 `apps/web/`, in seven commits: the Markdown pipeline (`4d2fa64`), the chat
@@ -1408,6 +1428,10 @@ this session, the same posture as Phase 5.
       tables, dated `docs/CLAUDE.md` entry, ROADMAP pair.
 
 ## Phase 11 — Cutover and Svelte removal
+- [x] **11a** Real-backend smoke pass: every surface loaded and every write
+      path exercised against the real backend and database; six bugs fixed
+      (`7eb3cc1`..`a9e19e3`), `/user.png` and `/static/*` images carried into
+      `apps/web/public/` for 11b (`f8d37c5`).
 - [ ] `FRONTEND_BUILD_DIR` → `apps/web/dist/`; remove `/next`.
 - [ ] Delete the SvelteKit frontend from `apps/openwebui/` (verify
       `/static` usage at `main.py:2992` first).

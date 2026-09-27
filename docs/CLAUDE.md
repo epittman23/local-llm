@@ -310,6 +310,27 @@ All commits should use conventional commit style and stay focused on one topic. 
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-09-27** (fourth): Phase 11a of the migration: the first run of
+  `apps/web/` against a real backend and database, driven in headless
+  Chromium. Every surface loaded; the write paths were exercised with small
+  prompts to a cheap OpenRouter model (send, stream, stop, regenerate,
+  temporary chat, title, search, share, download, archive, delete, file and
+  knowledge retrieval, `/` prompts, notes autosave, calendar, automations
+  with a run, playground, channels with a live socket message, and admin
+  and personal settings saves), then every test record was deleted.
+
+  **Six bugs, all fixed:** the dev server on Bun died when a websocket
+  closed (`astro dev` now runs on Node); the backend's CORS list lacked
+  `:5174`, so every socket handshake was refused; `APP_VERSION` was undefined
+  outside a package script; admin Settings > General could not save (a 422:
+  `benchmarks.enable` was never seeded, a fork bug the Svelte app had too);
+  deep links to gated pages bounced home because the config was never
+  refetched after the session was restored; and the shared-chat page asked
+  before the token was restored. Mocked e2e could not have caught any of
+  these: each one is in the seam between the frontend and the real server.
+
+  **Not exercised:** starting a model from Benchmarks > Serve (it loads a
+  model onto the GPU; left for the owner), OAuth, and multi-user sharing.
 - **2026-09-27** (third): Closed out Phase 10 of the migration
   (`docs/migration-plan.md`): the chat surface, the largest in the plan
   (141 Svelte components, ~46k lines), built in `apps/web/` in seven
