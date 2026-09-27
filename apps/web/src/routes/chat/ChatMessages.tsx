@@ -10,6 +10,7 @@ import { cn, copyToClipboard } from '@/lib/utils';
 import { formatSecondsTimestamp } from '@/lib/utils/dates';
 import { citationsOf, sourceIdsOf, stripCitations } from '@/lib/chat/sources';
 import { modelImage } from './ModelSelector';
+import { useModels } from './useModels';
 
 export type MessageHandlers = {
 	onBranch: (history: History) => void;
@@ -155,6 +156,10 @@ function Sources({ message, onOpen }: { message: Message; onOpen: (n: number) =>
  */
 export function ResponseMessage({ history, message, h, isLast, chatId, compact = false, citationsEnabled = true }: { history: History; message: Message; h: MessageHandlers; isLast: boolean; chatId: string | null; compact?: boolean; citationsEnabled?: boolean }) {
 	const userId = useAuthStore((s) => s.user?.id);
+	// `modelName` is set only on replies streamed in this session; a loaded
+	// chat has just the id, so look the name up as ResponseMessage.svelte does.
+	const { models } = useModels();
+	const modelName = models.find((m) => m.id === message.model)?.name ?? message.modelName ?? message.model;
 	const sourceIds = sourceIdsOf(message.sources, citationsEnabled);
 	const edit = h.editing?.(message);
 	const empty = !message.content && !message.error && !message.output?.length;
@@ -163,7 +168,7 @@ export function ResponseMessage({ history, message, h, isLast, chatId, compact =
 			{!compact && <img src={modelImage(message.model ?? '')} alt="" className="mt-1 size-7 shrink-0 rounded-full object-cover" onError={(e) => (e.currentTarget.style.visibility = 'hidden')} />}
 			<div className="min-w-0 flex-1">
 				<div className="flex items-baseline gap-2">
-					<span className="text-sm font-medium">{message.modelName ?? message.model}</span>
+					<span className="text-sm font-medium">{modelName}</span>
 					{message.timestamp ? <span className="text-muted-foreground invisible text-xs group-hover:visible">{formatSecondsTimestamp(message.timestamp)}</span> : null}
 				</div>
 				<StatusLine message={message} />
