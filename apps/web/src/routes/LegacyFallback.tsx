@@ -23,7 +23,6 @@ const SVELTE_ONLY: [prefix: string, surface: string][] = [
 	['/home', 'Home'],
 	['/folders/', 'Folders'],
 	['/channels/', 'Channels'],
-	['/automations', 'Automations'],
 	['/playground', 'Playground']
 ];
 

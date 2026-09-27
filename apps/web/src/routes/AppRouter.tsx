@@ -14,6 +14,8 @@ import { ReportPage } from '@/routes/benchmarks/ReportPage';
 import { ServePage } from '@/routes/benchmarks/ServePage';
 import { TestsPage } from '@/routes/benchmarks/TestsPage';
 import { TunePage } from '@/routes/benchmarks/TunePage';
+import { AutomationPage } from '@/routes/automations/AutomationPage';
+import { AutomationsPage } from '@/routes/automations/AutomationsPage';
 import { CalendarPage } from '@/routes/calendar/CalendarPage';
 import { LegacyFallback } from '@/routes/LegacyFallback';
 import { PlaceholderPage } from '@/routes/PlaceholderPage';
@@ -90,6 +92,8 @@ const router = createBrowserRouter(
 						{ path: 'functions/edit', element: <FunctionEditPage /> }
 					]
 				},
+				{ path: routePaths.automations, element: <AutomationsPage /> },
+				{ path: `${routePaths.automations}/:id`, element: <AutomationPage /> },
 				{ path: routePaths.notes, element: <PlaceholderPage title="Notes" phase="Phase 9" /> },
 				{
 					path: routePaths.calendar,
