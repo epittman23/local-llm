@@ -20,7 +20,7 @@ import { CalendarPage } from '@/routes/calendar/CalendarPage';
 import { ChannelPage } from '@/routes/channels/ChannelPage';
 import { ChatPage } from '@/routes/chat/ChatPage';
 import { HomePage } from '@/routes/home/HomePage';
-import { LegacyFallback } from '@/routes/LegacyFallback';
+import { NotFound } from '@/routes/NotFound';
 import { NoteEditorPage } from '@/routes/notes/NoteEditorPage';
 import { NewNotePage, NotesPage } from '@/routes/notes/NotesPage';
 import { PlaygroundChat, PlaygroundCompletions, PlaygroundImages, PlaygroundLayout } from '@/routes/playground/PlaygroundPages';
@@ -46,8 +46,8 @@ const router = createBrowserRouter(
 	[
 		{
 			// Only the real React routes live under AppShell and its route gate.
-			// LegacyFallback (the catch-all below) is outside it: a 404 or a
-			// "still in the Svelte app" notice needs no session. Phase 6's four
+			// NotFound (the catch-all below) is outside it: a 404 needs no
+			// session. Phase 6's four
 			// public pages are top-level siblings for the same reason.
 			element: <AppShell />,
 			children: [
@@ -153,7 +153,7 @@ const router = createBrowserRouter(
 		{ path: routePaths.error, element: <ErrorPage /> },
 		{ path: routePaths.watch, element: <WatchPage /> },
 		{ path: routePaths.share, element: <SharedChatPage /> },
-		{ path: '*', element: <LegacyFallback /> }
+		{ path: '*', element: <NotFound /> }
 	],
 	// Astro's own base path (`/`; main.py mounts the build at the root).
 	{ basename: import.meta.env.BASE_URL }

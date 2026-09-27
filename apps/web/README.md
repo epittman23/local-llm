@@ -7,7 +7,7 @@ onward) for why this exists and what's still ahead of it.
 
 ## Running it
 
-`make astro` from the repo root (needs `make backend` running too, for the
+`make frontend` from the repo root (needs `make backend` running too, for the
 API it proxies to). Standalone: `bun install && bun run dev` — dev server on
 `:5174`, unprefixed, proxying `/api`, `/ollama`, `/openai`, `/oauth`, `/ws`
 to `:4000` (`WEBUI_BACKEND_URL` to override).
@@ -16,7 +16,7 @@ to `:4000` (`WEBUI_BACKEND_URL` to override).
 the real server as a background process, even without `--background` — the
 CLI wrapper exits almost immediately either way. `astro dev status` shows
 what's running; `astro dev stop` stops it; `astro dev logs --follow`
-attaches to a running one. `make astro` and `playwright test` (see below)
+attaches to a running one. `make frontend` and `playwright test` (see below)
 both already account for this; a bare `bun run dev` in a terminal will leave
 the server running after Ctrl-C unless you `astro dev stop` it yourself.
 
@@ -33,7 +33,7 @@ directory, which is where `/static/favicon.png` and friends come from.
 - `bun run test:unit` (Vitest + React Testing Library, `src/**/*.test.tsx`).
 - `bun run test:e2e` (Playwright, `e2e/`). Starts and stops its own dev
   server automatically (`playwright.config.ts`'s `webServer`, with the same
-  daemon workaround as `make astro`, plus a `globalTeardown` that force-stops
+  daemon workaround as `make frontend`, plus a `globalTeardown` that force-stops
   it afterward — a clean Playwright run was observed leaving the daemon
   alive despite the signal-based path, so this doesn't rely on that alone).
 

@@ -3,12 +3,11 @@
 #   make backend    Postgres + the Open WebUI fork's backend (uvicorn
 #                    --reload, :4000); tears Postgres down on exit,
 #                    including Ctrl-C.
-#   make frontend   the Open WebUI fork's frontend (vite dev, :5173),
-#                    proxying API/WS calls to :4000.
-#   make astro      the new Astro + React + shadcn/ui frontend (apps/web,
+#   make frontend   the Astro + React + shadcn/ui frontend (apps/web,
 #                    astro dev, :5174), proxying API/WS calls to :4000.
-#                    Dual-serve with `make frontend` during the migration --
-#                    see docs/migration-plan.md's Phase 3.
+#                    `make astro` is the same target under its old name.
+#                    Not needed to use the app: `make backend` also serves
+#                    the last `bun run build` of apps/web at :4000/.
 #   make help       this text.
 #
 # Replaces scripts/shell/main.sh's lllm-backend/lllm-frontend, deleted along
@@ -24,7 +23,6 @@ SHELL := /bin/bash
 
 REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 BACKEND_DIR := $(REPO_ROOT)/apps/openwebui/backend
-FRONTEND_DIR := $(REPO_ROOT)/apps/openwebui
 WEB_DIR := $(REPO_ROOT)/apps/web
 COMPOSE := docker compose -f $(REPO_ROOT)/infra/docker-compose.yml
 LLLM_BACKEND_PORT ?= 4000
@@ -33,8 +31,7 @@ LLLM_BACKEND_PORT ?= 4000
 
 help:
 	@echo "make backend   Postgres + Open WebUI fork backend (uvicorn --reload, :$(LLLM_BACKEND_PORT))"
-	@echo "make frontend  Open WebUI fork frontend (vite dev, :5173)"
-	@echo "make astro     Astro + React + shadcn/ui frontend (astro dev, :5174)"
+	@echo "make frontend  Astro + React + shadcn/ui dev server (astro dev, :5174; alias: make astro)"
 
 # One shell invocation for the whole recipe (line continuations, not separate
 # make lines) so the EXIT trap covers the real work below it, Ctrl-C
@@ -88,7 +85,7 @@ backend:
 	fi; \
 	database_url="$$(PYTHONPATH="$(BACKEND_DIR)" "$$py" -c 'import sys; from open_webui.benchmarks.serving.launcher import build_database_url; print(build_database_url(sys.argv[1]))' "$$POSTGRES_PASSWORD")"; \
 	cd "$(BACKEND_DIR)" && \
-	CORS_ALLOW_ORIGIN="http://localhost:$(LLLM_BACKEND_PORT);http://127.0.0.1:$(LLLM_BACKEND_PORT);http://localhost:5173;http://localhost:5174" \
+	CORS_ALLOW_ORIGIN="http://localhost:$(LLLM_BACKEND_PORT);http://127.0.0.1:$(LLLM_BACKEND_PORT);http://localhost:5174" \
 	WEBUI_SECRET_KEY="$$WEBUI_SECRET_KEY" \
 	DATABASE_URL="$$database_url" \
 	VECTOR_DB=pgvector \
@@ -97,11 +94,6 @@ backend:
 	HF_HUB_OFFLINE=1 \
 	"$$py" -m uvicorn open_webui.main:app --host 0.0.0.0 --port $(LLLM_BACKEND_PORT) --reload
 
-frontend:
-	@cd "$(FRONTEND_DIR)" && \
-	if [ ! -d node_modules ]; then CYPRESS_INSTALL_BINARY=0 bun install; fi && \
-	WEBUI_BACKEND_URL="http://localhost:$(LLLM_BACKEND_PORT)" bun run dev
-
 # astro dev always daemonizes (this Astro version's own CLI design, not a
 # choice made here): even a plain `astro dev` reports its dev server as
 # "background" and the wrapping process exits once it is up, leaving the
@@ -109,9 +101,12 @@ frontend:
 # reach. So this recipe starts it explicitly backgrounded, blocks on
 # `astro dev logs --follow` instead (a real foreground process Ctrl-C can
 # hit), and the trap runs `astro dev stop` on exit either way.
-astro:
+frontend:
 	@cd "$(WEB_DIR)" && \
 	bun install --frozen-lockfile && \
 	trap 'bunx astro dev stop' EXIT; \
 	WEBUI_BACKEND_URL="http://localhost:$(LLLM_BACKEND_PORT)" bunx astro dev --background; \
 	bunx astro dev logs --follow
+
+# The target's name through the migration, when `frontend` was the Svelte app.
+astro: frontend

@@ -1,19 +1,8 @@
 x.py
-yarn.lock
-# bun.lock is deliberately NOT ignored: bun is this repo's documented
-# package manager for the frontend (lllm-frontend runs `bun install`),
-# so its lockfile is the only reproducible record of the frontend
-# dependency tree. Upstream ignored it because upstream builds with npm.
 .DS_Store
-node_modules
-/build
-/.svelte-kit
-/package
 .env
 .env.*
 !.env.example
-vite.config.js.timestamp-*
-vite.config.ts.timestamp-*
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -24,10 +13,6 @@ __pycache__/
 # a tracked file. Upstream ignored it as a local scratch file.
 # C extensions
 *.so
-
-# Pyodide distribution
-static/pyodide/*
-!static/pyodide/pyodide-lock.json
 
 # Distribution / packaging
 .Python

@@ -14,11 +14,11 @@ instead.
 
 ```
 local-llm/
-├── Makefile                   make backend, make frontend, make astro, make help
+├── Makefile                   make backend, make frontend, make help
 ├── README.md                  usage/operations guide
 ├── MAP.md                     this file
 ├── apps/                      the applications themselves
-│   ├── openwebui/             vendored Open WebUI fork (FastAPI + SvelteKit)
+│   ├── openwebui/             vendored Open WebUI fork (the FastAPI backend)
 │   └── web/                   Astro + React + shadcn/ui frontend (Phase 3+)
 ├── docs/                      meta docs: conventions, roadmap, proposals
 └── infra/                     docker-compose for Postgres + pgvector
@@ -95,10 +95,10 @@ code at all; the fork lived in a submodule and that rule was a real
 constraint. It is not any more — see `docs/CLAUDE.md`'s Conventions.
 
 - **`openwebui/`** — the vendored Open WebUI fork (mapped below).
-- **`web/`** — the Astro + React + shadcn/ui frontend that will eventually
-  replace `openwebui/`'s SvelteKit app (mapped below). Added in Phase 3 of
-  `docs/migration-plan.md` (2026-09-18); since Phase 11b its build
-  (`dist/`) is what the fork's `main.py` serves at `/`.
+- **`web/`** — the Astro + React + shadcn/ui frontend (mapped below), which
+  replaced `openwebui/`'s SvelteKit app over Phases 3-11 of
+  `docs/migration-plan.md`; its build (`dist/`) is what the fork's `main.py`
+  serves at `/`.
 
 ### `apps/openwebui/` (vendored fork)
 
@@ -110,7 +110,9 @@ single commit; the full history remains at
 `67d4039`), which is kept as a read-only archive. This is now owned code, a
 permanent hard fork with no upstream sync path — see `docs/CLAUDE.md`'s
 decisions log. For upstream feature docs see its own
-`README.md`/`CHANGELOG.md`, not restated here. A SvelteKit + FastAPI app:
+`README.md`/`CHANGELOG.md`, not restated here. Since Phase 11e only the
+FastAPI backend is left; its SvelteKit frontend (last present at `d863707`)
+was replaced by `apps/web/`:
 
 - **`backend/open_webui/`** — the FastAPI app: `main.py` (entrypoint),
   `routers/` (API endpoints, including `routers/benchmarks/`), `models/` (DB
@@ -118,15 +120,10 @@ decisions log. For upstream feature docs see its own
   (Alembic DB migrations), `retrieval/` (RAG), `socket/` (websocket/
   real-time), `tools/`, `tasks.py`, `utils/`, `config.py`, and
   **`benchmarks/`** (see below — fork-owned, not upstream).
-- **`src/`** — the SvelteKit frontend: `routes/` (pages, including
-  `routes/(app)/benchmarks/`), `lib/` (`components/benchmarks/`,
-  `apis/benchmarks/`, plus upstream components/stores/utils),
-  `app.html`/`app.css`.
-- **`static/`**, **`docs/`**, **`scripts/`**, **`test/`** — assets, upstream
-  docs, dev scripts, upstream test suite.
+- **`docs/`** — upstream's `SECURITY.md`.
 - Root-level: `pyproject.toml`/`uv.lock` (backend deps; `pyproject.toml`
-  also holds the version), `package.json`/`bun.lock` (frontend deps),
-  `CHANGELOG.md`, `TROUBLESHOOTING.md`. The upstream Docker images, compose
+  also holds the version), `CHANGELOG.md` (the backend reads it),
+  `LICENSE`/`LICENSE_NOTICE`/`LICENSE_HISTORY`, `TROUBLESHOOTING.md`. The upstream Docker images, compose
   variants, CI workflows and the frontend build hook were deleted in Phase
   11d; this repo runs through the root `Makefile` and `infra/`.
 
@@ -135,7 +132,7 @@ decisions log. For upstream feature docs see its own
 The testing/comparison/reporting/tuning suite that used to be this outer
 repo's standalone `lllm-test`/`lllm-compare`/`lllm-report`/`lllm-tune` CLI
 and `lllm-web` dashboard, migrated in whole into the fork so it is native
-functionality (own routers, own SvelteKit pages, own Postgres tables) rather
+functionality (own routers, own pages, own Postgres tables) rather
 than a second app glued on by a userscript. See docs/CLAUDE.md's decisions
 log for the migration and why each piece landed where it did.
 
@@ -184,8 +181,8 @@ log for the migration and why each piece landed where it did.
 
 ### `apps/web/` (Astro + React + shadcn/ui)
 
-The frontend `apps/openwebui/`'s SvelteKit app is being migrated to,
-surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
+The frontend, which replaced `apps/openwebui/`'s SvelteKit app surface by
+surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
 `README.md` covers usage in detail; this is a structural summary.
 
 - **`astro.config.mjs`** — `output: 'static'`, `@astrojs/react`,
@@ -238,9 +235,7 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
   `workspace/`, `admin/` and the Phase 9 surfaces); the public ones
   (`public/`: `/auth`, `/error`, `/watch`, `/s/:id`), which are top-level
   siblings because they must render without a session; and
-  `LegacyFallback`, the catch-all, which never navigates: a path still owned
-  by the SvelteKit app would link there, but none is left: anything unknown
-  is a 404. `benchmarks/`
+  `NotFound`, the catch-all 404, which never navigates on its own. `benchmarks/`
   holds all seven Benchmarks pages plus their admin/feature-flag gate.
   `workspace/` is Phase 7's surface: `WorkspaceLayout` (per-section
   permission gate, the five tabs with live counts, the split Create button)
@@ -311,9 +306,10 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
 
 Root-level process lifecycle only: `make backend` (Postgres +
 `apps/openwebui/backend`'s `uvicorn --reload` on `:4000`, Postgres torn down
-on exit including Ctrl-C), `make frontend` (`apps/openwebui`'s `vite dev`
-on `:5173`, proxying to `:4000`), and `make astro` (`apps/web`'s `astro dev`
-on `:5174`, proxying to `:4000` — added Phase 3, 2026-09-18; works around
+on exit including Ctrl-C; it also serves `apps/web/dist` at `/`), and
+`make frontend`, alias `make astro` (`apps/web`'s `astro dev` on `:5174`,
+proxying to `:4000` — added Phase 3 as `make astro`, renamed in Phase 11e
+when the Svelte `make frontend` went; works around
 that Astro version's `dev` command always daemonizing, see the target's own
 comment). Replaces `scripts/` (deleted in Phase 2c of
 the migration, 2026-09-18 — see `docs/CLAUDE.md`'s decisions log), which held
@@ -340,10 +336,6 @@ knowing about when navigating the filesystem directly:
   (HumanEval/MBPP/DS-1000 `items.jsonl`/`MANIFEST.json`/`CALIBRATION.json`).
   Nothing reads this any more; the fork's Benchmarks feature fetches its own
   copy under its own `DATA_DIR` on first use. Safe to delete.
-- **`apps/openwebui/node_modules/`** — the frontend dependency tree (~1.3 GB),
-  installed by `make frontend` on first run. `bun.lock` beside it **is**
-  tracked (upstream ignored it; this repo does not — see that file's own
-  `.gitignore` comment).
 - **`apps/openwebui/backend/.venv/`** — the fork backend's own virtualenv,
   bootstrapped by `make backend` on first run. The only Python virtualenv in
   this repo since Phase 2c deleted the root `.venv/` along with `scripts/`.

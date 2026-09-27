@@ -7,8 +7,8 @@ OpenRouter, using a pinned fork of [Open WebUI](https://github.com/open-webui/op
 
 The fork is pinned at `v0.11.3` and never merges upstream: it is a permanent
 hard fork, vendored directly into this repo rather than tracked as a submodule.
-It runs as two host processes, started by `make frontend` and `make backend`,
-rather than in Docker: real integration between Open WebUI and this repo's
+It runs as a host process started by `make backend` (plus `make frontend`
+for a dev server while editing the UI), rather than in Docker: real integration between Open WebUI and this repo's
 own GPU/process-management tooling (the local-inference serving layer below,
 started from the backend's own Serve page) needs a host process on both
 sides (see the decisions log for why forking was rejected once, in
@@ -53,23 +53,21 @@ make backend
 
 which brings up Postgres (`infra/docker-compose.yml`) and the fork's
 backend (`uvicorn`, port `4000`) together, and tears Postgres back down when
-the backend stops (Ctrl-C included). In a second terminal:
+the backend stops (Ctrl-C included). The backend also serves the frontend
+(`apps/web/`, Astro + React + shadcn/ui) from its last build, so build it
+once, and again after pulling UI changes:
 
 ```bash
-make frontend
+cd apps/web && bun install && bun run build
 ```
 
-which starts the fork's frontend dev server (`vite`, port `5173`) and proxies
-its API/WebSocket calls to the backend on `4000`.
+Chat is then at `http://localhost:4000/`. While editing the UI, run
+`make frontend` in a second terminal instead: a dev server on `:5174` with
+hot reload, proxying API/WebSocket calls to the backend (see
+`apps/web/README.md`). The original SvelteKit frontend was replaced by this
+one and deleted in Phase 11 of `docs/migration-plan.md`.
 
-The Astro + React + shadcn/ui frontend that will eventually replace this one
-is under active build-out (`apps/web/`, `make astro` for its own dev server
-on `:5174`, or `http://localhost:4000/` once it's built — see
-`apps/web/README.md` and `docs/migration-plan.md`'s Phase 3 onward). Since
-Phase 11b the backend serves its build instead of the Svelte one.
-
-Chat is at `http://localhost:5173/`. The first account you create becomes the
-admin. This is a fresh database — the SQLite-backed data from before the fork
+The first account you create becomes the admin. This is a fresh database — the SQLite-backed data from before the fork
 (the `open-web-ui_open-webui` Docker volume) is left in place, untouched, but
 no longer used. Admin accounts also see a **Benchmarks** entry in the
 sidebar, at `/benchmarks` — serving, testing, comparison, reporting and
@@ -113,7 +111,7 @@ Serving lives entirely in the backend now — there is no shell layer or
 under `scripts/` were deleted in Phase 2c of the migration, 2026-09-18; see
 `docs/CLAUDE.md`'s decisions log). Start a server, stop it, and edit or pick
 a profile from the fork's own **Serve** page at `/benchmarks/serve` (admin
-only) once `make backend`/`make frontend` are both running — see "The
+only) once `make backend` is running — see "The
 Benchmarks section" further down for what that page and its siblings do.
 GPU telemetry while a server runs is the **Live** page, `/benchmarks/live`.
 
@@ -278,7 +276,7 @@ functions any more. `lllm-test`, `lllm-compare` (`lllm-test compare`),
 `lllm-report`, `lllm-tune` and the standalone `lllm-web` dashboard were
 retired outright on 2026-09-08, and the whole suite now lives inside the
 Open WebUI fork itself, as an admin-only **Benchmarks** section at
-`/benchmarks`, started by the same `make frontend`/`make backend` as the rest
+`/benchmarks`, served by the same `make backend` as the rest
 of the fork rather than a separate process or port. See
 [Testing](#testing) below for the harnesses themselves, and "The Benchmarks
 section" further down for the pages and how they got there. Seven pages,
@@ -1372,8 +1370,8 @@ resolved by the fork's own venv.
 ### The Benchmarks section
 
 Benchmarks is not a second app. It is a set of pages inside the same Open
-WebUI fork as chat, started by the same two `make` targets described in
-"Running it" above (`make frontend` for `5173`, `make backend` for `4000`),
+WebUI fork as chat, started by the same `make backend` described in "Running it" above
+(port `4000`; `make frontend` adds a dev server on `5174`),
 and reached through its own entry in the fork's sidebar — admin-only, modeled on
 the existing Playground entry (`isMenuItemVisible`/`getMenuItemMeta`/
 `menuItemPathPrefixes` in `Sidebar.svelte`, a matching pin-menu block in
@@ -1387,8 +1385,8 @@ one for:
 
 | what | port | started by |
 | --- | --- | --- |
-| Open WebUI chat + Benchmarks (vite dev server) | `5173` | `make frontend` |
-| Open WebUI + Benchmarks API (uvicorn) | `4000` | `make backend` |
+| Chat + Benchmarks UI and API (uvicorn, serving `apps/web/dist`) | `4000` | `make backend` |
+| UI dev server with hot reload (optional) | `5174` | `make frontend` |
 
 `make backend` still owns Postgres's lifecycle (`infra/docker-compose.yml`),
 starting it before uvicorn and tearing it down via a trap when uvicorn stops,

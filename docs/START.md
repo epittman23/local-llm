@@ -6,16 +6,14 @@ URL that works. Written mid-migration (updated after Phase 10 of
 the second half of this file goes stale first — the route table is derived from
 `apps/web/src/routes/AppRouter.tsx`, so re-derive it from there.
 
-Two frontends exist side by side. The **Astro/React app** (`apps/web/`) is the
-new one and, since Phase 10, covers every surface including chat; the
-**SvelteKit app** (`apps/openwebui/`) remains until the Phase 11 cutover.
-Both talk to one backend.
+One frontend: the **Astro/React app** (`apps/web/`). The SvelteKit app it
+replaced was deleted in Phase 11e. The backend serves the last build of it at
+`:4000/`; the dev server on `:5174` is for editing it.
 
 | Process | Command | Port | What it is |
 |---|---|---|---|
 | Backend | `make backend` | `:4000` | Postgres (Docker) + the Open WebUI fork's FastAPI app, `uvicorn --reload` |
-| Astro dev | `make astro` | `:5174` | the new frontend; proxies API/WS calls to `:4000` |
-| Svelte dev | `make frontend` | `:5173` | the old frontend; proxies to `:4000` |
+| Frontend dev | `make frontend` (alias `make astro`) | `:5174` | hot-reloading dev server; proxies API/WS calls to `:4000` |
 
 ## 1. One-time setup
 
@@ -34,7 +32,7 @@ Both talk to one backend.
   `make backend` refuses to start without the file.
 - The first `make backend` builds `apps/openwebui/backend/.venv` and installs
   the fork's requirements (several GB, slow). Later runs skip it.
-- `make astro` runs `bun install` in `apps/web/` if `node_modules` is missing.
+- `make frontend` runs `bun install --frozen-lockfile` in `apps/web/` every time (a no-op when nothing changed).
 
 ## 2. Running it
 
@@ -42,13 +40,13 @@ Both talk to one backend.
 
 ```bash
 make backend     # terminal 1 — Ctrl-C also stops Postgres
-make astro       # terminal 2 — Ctrl-C stops the dev server
+make frontend    # terminal 2 — Ctrl-C stops the dev server
 ```
 
 Open **http://localhost:5174/**. The first account created on a fresh database
 becomes the admin (sign up at `/auth`). Sign-in is a `token` cookie, and
-cookies ignore ports, so being signed in on `:5173` also signs you in on
-`:5174` and `:4000`.
+cookies ignore ports, so being signed in on `:5174` also signs you in on
+`:4000`.
 
 Never `docker volume rm` or rename the Postgres volume: the compose project
 name is pinned so `open-web-ui_postgres-data` keeps being the one used. A
@@ -56,7 +54,7 @@ name is pinned so `open-web-ui_postgres-data` keeps being the one used. A
 
 ### Astro app only, no backend
 
-`make astro` works alone, but every page will end up on `/error` ("Backend
+`make frontend` works alone, but every page will end up on `/error` ("Backend
 Required"): the app fetches `/api/config` on load, the proxy has nothing to
 reach, and the session never resolves. Useful only for seeing that page. The
 Playwright suite gets around this by mocking `/api/v1/**` (see §5).
@@ -77,12 +75,6 @@ files, and never re-mounts). And `dist/` is a snapshot: it does not follow your
 edits, so `:5174` is the place to develop. The same URLs as below work on
 either port.
 
-### The Svelte app
-
-`make frontend` → **http://localhost:5173/** — the original app, kept for
-comparison until Phase 11 deletes it. The backend no longer serves a Svelte
-build; `:4000/` is the Astro app.
-
 ## 3. Valid URLs on the Astro app
 
 Base is `http://localhost:5174` (or `http://localhost:4000` with a build). Anything
@@ -96,7 +88,7 @@ Anything marked *admin* also needs `role === 'admin'`.
 | `/auth` | Sign in / sign up / LDAP / OAuth / onboarding. Query: `?redirect=<path>` (where to go afterwards), `?form=<any>` (shows the login fields and skips the SSO auto-redirect), `?state=logout`, `?error=<msg>` |
 | `/error` | The "Backend Required" page. Redirects home once the backend config has loaded, so you only *stay* here when the backend is down |
 | `/watch?v=<id>` | Redirects to `/?youtube=<id>`, which attaches that video to a new chat |
-| `/s/<share-id>` | Read-only shared chat. The id comes from a chat's Share dialog in the Svelte app |
+| `/s/<share-id>` | Read-only shared chat. The id comes from a chat's Share dialog (sidebar chat menu > Share) |
 
 ### Signed-in, implemented
 
@@ -166,14 +158,12 @@ first one listed; a non-admin asking for an admin tab gets no modal.
 
 ### Everything else: not on `:5174`
 
-Any path not listed above falls into the router's catch-all, `LegacyFallback`,
-which never navigates on its own and renders a 404 page. (It can also link a
-path that still belongs to the Svelte app over to it; since Phase 10 that list
-is empty.)
+Any path not listed above falls into the router's catch-all, `NotFound`,
+which never navigates on its own and renders a 404 page.
 
 ## 4. Backend URLs
 
-`http://localhost:4000/` — API only in this setup. Useful ones:
+`http://localhost:4000/` — the built app (above), plus the API. Useful backend URLs:
 
 | URL | What |
 |---|---|
@@ -197,9 +187,9 @@ bun run test:e2e       # Playwright; starts its own dev server on :5174
 ```
 
 The e2e specs mock every `/api/v1/**` response and stub `/ws`, so they need
-**no backend** — and they will fight a `make astro` you already have running
+**no backend** — and they will fight a `make frontend` you already have running
 (they reuse it if present, which is fine, and `global-teardown.ts` stops the
-server afterward, which is not). Stop `make astro` first, or expect it to be
+server afterward, which is not). Stop `make frontend` first, or expect it to be
 killed. Backend tests: from `apps/openwebui/backend/`,
 `WEBUI_SECRET_KEY=<any long string> .venv/bin/python -m pytest tests` (the
 package imports from the working directory, and it refuses to load without a
@@ -213,7 +203,7 @@ secret key).
   driven once against a real backend (Phase 11a in `docs/migration-plan.md`),
   which found and fixed six bugs. Anything that pass did not touch has still
   only met mocks.
-- **`astro dev` runs on Node, not Bun.** `make astro` used `bunx --bun`, and
+- **`astro dev` runs on Node, not Bun.** The Makefile used `bunx --bun`, and
   Vite's websocket proxy calls `socket.destroySoon()`, which Bun lacks: the dev
   server died the first time a `/ws` connection closed. Keep `--bun` off it.
 - **`astro dev` daemonizes.** The Makefile wraps it so Ctrl-C works; if a
