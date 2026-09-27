@@ -2306,3 +2306,222 @@ test.describe('settings: Models > Manage', () => {
 		expect(calls.find((c) => c.method === 'DELETE')?.path).toBe('/models/0?model=qwen');
 	});
 });
+
+test.describe('settings: Integrations', () => {
+	type Seen = { tools: Rec[]; terminals: Rec[]; policy: Rec[]; lifecycle: Rec[]; toolVerify: Rec | null; knowledge: { path: string; body: Rec }[] };
+
+	async function mockIntegrations(page: Page, opts: { servers?: Rec[]; terminals?: Rec[]; verifyType?: string | null; knowledge?: { connections: Rec[]; items: Rec[] }; testDocs?: string[] } = {}) {
+		const seen: Seen = { tools: [], terminals: [], policy: [], lifecycle: [], toolVerify: null, knowledge: [] };
+		const servers = opts.servers ?? [
+			{ type: 'openapi', url: 'https://tools.example', path: 'openapi.json', auth_type: 'bearer', key: 'sk-tool', config: { enable: true }, info: { id: 'wx', name: 'Weather' } },
+			{ type: 'mcp', url: 'https://mcp.example/', config: { enable: false }, info: {} }
+		];
+		await page.route('**/api/v1/configs/tool_servers', (route) => {
+			if (route.request().method() === 'POST') {
+				seen.tools.push(route.request().postDataJSON());
+				return json(route, seen.tools.at(-1));
+			}
+			return json(route, { TOOL_SERVER_CONNECTIONS: servers });
+		});
+		await page.route('**/api/v1/configs/tool_servers/verify', (route) => {
+			seen.toolVerify = route.request().postDataJSON();
+			return json(route, { ok: true });
+		});
+		await page.route('**/api/v1/configs/terminal_servers', (route) => {
+			if (route.request().method() === 'POST') {
+				seen.terminals.push(route.request().postDataJSON());
+				return json(route, seen.terminals.at(-1));
+			}
+			return json(route, { TERMINAL_SERVER_CONNECTIONS: opts.terminals ?? [] });
+		});
+		await page.route('**/api/v1/configs/terminal_servers/verify', (route) => json(route, { type: opts.verifyType ?? 'terminal' }));
+		await page.route('**/api/v1/configs/terminal_servers/policy', (route) => {
+			const body = route.request().postDataJSON();
+			if (!body.policy_data) return json(route, { data: { image: 'img:1', env: { A: 'b' } } });
+			seen.policy.push(body);
+			return json(route, { ok: true });
+		});
+		await page.route('**/api/v1/configs/terminal_servers/lifecycle', (route) => {
+			const body = route.request().postDataJSON();
+			if (!body.lifecycle_data) return json(route, { data: { reset: { schedule: '@weekly' } } });
+			seen.lifecycle.push(body);
+			return json(route, { ok: true });
+		});
+		const k = opts.knowledge ?? { connections: [], items: [] };
+		await page.route('**/api/v1/knowledge/external/**', (route) => {
+			const path = new URL(route.request().url()).pathname.replace('/api/v1', '');
+			if (route.request().method() === 'GET') return json(route, { items: k.connections });
+			seen.knowledge.push({ path, body: route.request().postDataJSON() });
+			if (path.endsWith('/source/test')) return json(route, { documents: opts.testDocs ?? ['a chunk'], metadatas: [{}], distances: [0.1] });
+			return json(route, { id: 'new' });
+		});
+		await page.route('**/api/v1/knowledge/search*', (route) => json(route, { items: k.items, total: k.items.length }));
+		return seen;
+	}
+
+	test('lists tool servers by name (or URL) with their state; a switch saves the whole list', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const seen = await mockIntegrations(page);
+		await page.goto('/?settings=admin:integrations');
+		const m = modal(page);
+		await expect(m.getByRole('switch', { name: 'Disable Weather' })).toBeChecked();
+		await expect(m.getByRole('switch', { name: 'Enable https://mcp.example/' })).not.toBeChecked();
+		await expect(m.getByText('No terminal connections configured.')).toBeVisible();
+		await expect(m.getByText('No external knowledge sources configured.')).toBeVisible();
+		await m.getByRole('switch', { name: 'Enable https://mcp.example/' }).click();
+		await expect.poll(() => seen.tools.at(-1)?.TOOL_SERVER_CONNECTIONS?.[1]?.config).toEqual({ enable: true });
+		expect(seen.tools.at(-1)?.TOOL_SERVER_CONNECTIONS[0].key).toBe('sk-tool');
+	});
+
+	test('adding an OpenAPI server drops the trailing slash; an ID with ":" is refused', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const seen = await mockIntegrations(page, { servers: [] });
+		await page.goto('/?settings=admin:integrations');
+		await modal(page).getByRole('button', { name: 'Add Tool Server' }).click();
+		const d = page.getByRole('dialog', { name: 'Add Connection' });
+		await d.getByLabel('URL', { exact: true }).fill('https://new.example/');
+		await d.getByLabel('ID').fill('bad:id');
+		await d.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('ID cannot contain ":" or "|" characters')).toBeVisible();
+		expect(seen.tools).toHaveLength(0);
+		await d.getByLabel('ID').fill('good');
+		await d.getByPlaceholder('API Key').fill('k1');
+		await d.getByRole('button', { name: 'Save' }).click();
+		await expect.poll(() => seen.tools.at(-1)?.TOOL_SERVER_CONNECTIONS).toEqual([
+			expect.objectContaining({ type: 'openapi', url: 'https://new.example', key: 'k1', path: 'openapi.json', config: { enable: true, function_name_filter_list: '', access_grants: [] }, info: { id: 'good', name: '', description: '' } })
+		]);
+	});
+
+	test('MCP keeps its trailing slash, warns, and OAuth 2.1 needs a registered client', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const seen = await mockIntegrations(page, { servers: [] });
+		await page.goto('/?settings=admin:integrations');
+		await modal(page).getByRole('button', { name: 'Add Tool Server' }).click();
+		const d = page.getByRole('dialog', { name: 'Add Connection' });
+		await d.getByRole('button', { name: 'Type' }).click();
+		await expect(d.getByText(/MCP support is experimental/)).toBeVisible();
+		await d.getByLabel('URL', { exact: true }).fill('https://mcp.example/mcp/');
+		await d.getByLabel('ID').fill('m1');
+		await d.getByLabel('Auth', { exact: true }).selectOption('oauth_2.1');
+		await expect(d.getByText('Not Registered')).toBeVisible();
+		await d.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('Please register the OAuth client')).toBeVisible();
+		await d.getByLabel('Auth', { exact: true }).selectOption('none');
+		await d.getByRole('button', { name: 'Save' }).click();
+		await expect.poll(() => seen.tools.at(-1)?.TOOL_SERVER_CONNECTIONS?.[0]).toMatchObject({ type: 'mcp', url: 'https://mcp.example/mcp/', auth_type: 'none' });
+	});
+
+	test('editing opens with the saved values; Delete asks first, then saves without it', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const seen = await mockIntegrations(page);
+		await page.goto('/?settings=admin:integrations');
+		await modal(page).getByRole('button', { name: 'Configure Weather' }).click();
+		const d = page.getByRole('dialog', { name: 'Edit Connection' });
+		await expect(d.getByLabel('URL', { exact: true })).toHaveValue('https://tools.example');
+		await expect(d.getByLabel('ID')).toHaveValue('wx');
+		await d.getByRole('button', { name: 'Delete' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
+		await expect.poll(() => seen.tools.at(-1)?.TOOL_SERVER_CONNECTIONS).toEqual([expect.objectContaining({ url: 'https://mcp.example/' })]);
+	});
+
+	test('Verify sends the server to the backend; Export leaves the API key out', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const seen = await mockIntegrations(page);
+		await page.goto('/?settings=admin:integrations');
+		await modal(page).getByRole('button', { name: 'Configure Weather' }).click();
+		const d = page.getByRole('dialog', { name: 'Edit Connection' });
+		await d.getByRole('button', { name: 'Verify Connection' }).click();
+		await expect.poll(() => seen.toolVerify).toMatchObject({ url: 'https://tools.example', path: 'openapi.json', type: 'openapi', key: 'sk-tool', info: { id: 'wx', name: 'Weather' } });
+		const download = page.waitForEvent('download');
+		await d.getByRole('button', { name: 'Export' }).click();
+		const file = await download;
+		expect(file.suggestedFilename()).toBe('tool-server-wx.json');
+		const text = await (await file.createReadStream()).toArray().then((c) => Buffer.concat(c).toString());
+		expect(JSON.parse(text)[0]).toMatchObject({ url: 'https://tools.example', info: { id: 'wx' } });
+		expect(text).not.toContain('sk-tool');
+	});
+
+	test('a terminal found to be an Orchestrator gets a policy ID, and Save writes the policy before the connection', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const seen = await mockIntegrations(page, { verifyType: 'orchestrator' });
+		await page.goto('/?settings=admin:integrations');
+		await modal(page).getByRole('button', { name: 'Add Terminal Connection' }).click();
+		const d = page.getByRole('dialog', { name: 'Add Terminal Connection' });
+		await d.getByLabel('Name').fill('Python DS');
+		await d.getByLabel('URL', { exact: true }).fill('http://orch:9900/');
+		await d.getByPlaceholder('API Key').fill('  okey ');
+		await d.getByRole('button', { name: 'Verify Connection' }).click();
+		await d.getByRole('button', { name: 'Orchestrator' }).click();
+		await expect(d.getByLabel('Policy ID')).toHaveValue('python-ds');
+		await d.getByLabel('Chat', { exact: true }).selectOption('chat_id');
+		await d.getByRole('button', { name: '+ Add' }).click();
+		await d.getByLabel('Variable 1 name').fill('TOKEN');
+		await d.getByLabel('Variable 1 value').fill('x');
+		await d.getByRole('button', { name: 'Save' }).click();
+		await expect.poll(() => seen.terminals.length).toBe(1);
+		expect(seen.policy[0]).toMatchObject({ url: 'http://orch:9900', policy_id: 'python-ds', policy_data: { cpu_limit: '1', memory_limit: '1Gi', idle_timeout_minutes: 30, env: { TOKEN: 'x' } } });
+		expect(seen.lifecycle[0]).toMatchObject({ policy_id: 'python-ds', lifecycle_data: {} });
+		const saved = seen.terminals[0].TERMINAL_SERVER_CONNECTIONS[0];
+		expect(saved).toMatchObject({ url: 'http://orch:9900', key: 'okey', name: 'Python DS', enabled: false, server_type: 'orchestrator', policy_id: 'python-ds', config: { access_grants: [], contexts: { chat: { context_id: 'chat_id' } } } });
+		expect(saved.id).toMatch(/^[0-9a-f-]{36}$/);
+	});
+
+	test('editing an Orchestrator terminal loads its policy back; bad lifecycle JSON is refused', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const seen = await mockIntegrations(page, { terminals: [{ id: 't1', url: 'http://orch', name: 'Orch', policy_id: 'p1', enabled: true, config: { extra: 1 } }] });
+		await page.goto('/?settings=admin:integrations');
+		await modal(page).getByRole('button', { name: 'Configure Orch' }).click();
+		const d = page.getByRole('dialog', { name: 'Edit Terminal Connection' });
+		await d.getByRole('button', { name: 'Orchestrator' }).click();
+		await expect(d.getByLabel('Image')).toHaveValue('img:1');
+		await expect(d.getByLabel('Policy ID')).toBeDisabled();
+		await expect(d.getByLabel('Lifecycle JSON')).toHaveValue(/@weekly/);
+		await d.getByLabel('Lifecycle JSON').fill('[1]');
+		await d.getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('Lifecycle JSON must be a JSON object')).toBeVisible();
+		expect(seen.policy).toHaveLength(0);
+		await d.getByLabel('Lifecycle JSON').fill('{}');
+		await d.getByRole('button', { name: 'Save' }).click();
+		await expect.poll(() => seen.terminals.at(-1)?.TERMINAL_SERVER_CONNECTIONS?.[0]).toMatchObject({ id: 't1', policy_id: 'p1', config: { extra: 1 } });
+		expect(seen.policy[0].policy_data).toMatchObject({ image: 'img:1', env: { A: 'b' } });
+	});
+
+	test('a knowledge source cannot be created until a test passes, and an edit asks for a new test', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const seen = await mockIntegrations(page);
+		await page.goto('/?settings=admin:integrations');
+		await modal(page).getByRole('button', { name: 'Add Knowledge Connection' }).click();
+		const d = page.getByRole('dialog', { name: 'Add Knowledge Connection' });
+		await d.getByLabel('Name').fill('Research');
+		await d.getByLabel('Endpoint').fill('https://q.example');
+		await d.getByLabel('Collection', { exact: true }).fill('docs');
+		await d.getByRole('textbox', { name: 'Test Query' }).fill('what?');
+		await expect(d.getByRole('button', { name: 'Create' })).toBeDisabled();
+		await d.getByRole('button', { name: 'Run test query' }).click();
+		await expect(d.getByRole('button', { name: 'Create' })).toBeEnabled();
+		await d.getByLabel('Collection', { exact: true }).fill('docs2');
+		await expect(d.getByRole('button', { name: 'Create' })).toBeDisabled();
+		await d.getByRole('button', { name: 'Run test query' }).click();
+		await d.getByRole('button', { name: 'Create' }).click();
+		await expect.poll(() => seen.knowledge.find((c) => c.path.endsWith('/source/create'))?.body).toMatchObject({
+			name: 'Research',
+			connection: { provider: 'qdrant', endpoint: 'https://q.example', auth_config: {}, config: { timeout: 30 } },
+			source: { type: 'collection', name: 'docs2', config: { content_field: 'payload.text', metadata_field: 'payload.metadata', document_id_field: 'id' } },
+			test_query: 'what?'
+		});
+	});
+
+	test('a knowledge source with no enabled flag shows as on, and its switch turns it off', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const seen = await mockIntegrations(page, {
+			knowledge: {
+				connections: [{ id: 'c1', name: 'Q', provider: 'qdrant', endpoint: 'https://q', config: {} }],
+				items: [{ id: 'k1', name: 'Papers', meta: { external: { connection_id: 'c1', provider: 'qdrant', source: { name: 'papers' } } } }]
+			}
+		});
+		await page.goto('/?settings=admin:integrations');
+		await expect(modal(page).getByText('qdrant · papers')).toBeVisible();
+		await modal(page).getByRole('switch', { name: 'Disable Papers' }).click();
+		await expect.poll(() => seen.knowledge.at(-1)).toEqual({ path: '/knowledge/external/connections/c1', body: expect.objectContaining({ enabled: false, auth_config: null }) });
+	});
+});

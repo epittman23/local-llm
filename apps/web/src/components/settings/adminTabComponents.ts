@@ -17,6 +17,7 @@ export const adminTabComponents: Record<string, LazyExoticComponent<ComponentTyp
 	'admin:audio': lazy(() => import('@/routes/admin/settings/Audio')),
 	'admin:connections': lazy(() => import('@/routes/admin/settings/Connections')),
 	'admin:interface': lazy(() => import('@/routes/admin/settings/Interface')),
+	'admin:integrations': lazy(() => import('@/routes/admin/settings/Integrations')),
 	'admin:subagents': lazy(() => import('@/routes/admin/settings/Subagents')),
 	'admin:analytics': lazy(() => import('@/routes/admin/analytics/Analytics')),
 	'admin:evaluations': lazy(() => import('@/routes/admin/settings/Evaluations')),
