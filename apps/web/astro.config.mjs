@@ -2,6 +2,7 @@
 import react from '@astrojs/react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'astro/config';
+import { readFileSync } from 'node:fs';
 
 // Mirrors apps/openwebui/vite.config.ts's dev-server proxy: the backend
 // isn't containerized, so both frontends point at the same host process,
@@ -15,6 +16,12 @@ const backendTarget = process.env.WEBUI_BACKEND_URL || 'http://localhost:4000';
 // -- reproduced in isolation, config content otherwise identical. A plain
 // object literal does not hit that path.
 const isBuild = process.argv.includes('build');
+
+// Read, not process.env.npm_package_version: that is set only when Astro runs
+// through a package script, and without it APP_VERSION is left undefined and
+// the app fails to hydrate (ReferenceError). Kept equal to the backend's
+// version, which the About tab and plugin version checks compare against.
+const appVersion = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version;
 
 // https://astro.build/config
 export default defineConfig({
@@ -31,7 +38,7 @@ export default defineConfig({
 		// (ported verbatim from the SvelteKit app) reads these as globals rather
 		// than import.meta.env, so the port didn't have to touch that file.
 		define: {
-			APP_VERSION: JSON.stringify(process.env.npm_package_version),
+			APP_VERSION: JSON.stringify(appVersion),
 			APP_BUILD_HASH: JSON.stringify(process.env.APP_BUILD_HASH || 'dev-build')
 		},
 		plugins: [tailwindcss()],

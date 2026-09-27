@@ -88,7 +88,7 @@ backend:
 	fi; \
 	database_url="$$(PYTHONPATH="$(BACKEND_DIR)" "$$py" -c 'import sys; from open_webui.benchmarks.serving.launcher import build_database_url; print(build_database_url(sys.argv[1]))' "$$POSTGRES_PASSWORD")"; \
 	cd "$(BACKEND_DIR)" && \
-	CORS_ALLOW_ORIGIN="http://localhost:5173" \
+	CORS_ALLOW_ORIGIN="http://localhost:5173;http://localhost:5174" \
 	WEBUI_SECRET_KEY="$$WEBUI_SECRET_KEY" \
 	DATABASE_URL="$$database_url" \
 	VECTOR_DB=pgvector \
@@ -111,7 +111,7 @@ frontend:
 # hit), and the trap runs `astro dev stop` on exit either way.
 astro:
 	@cd "$(WEB_DIR)" && \
-	if [ ! -d node_modules ]; then bun install; fi && \
-	trap 'bunx --bun astro dev stop' EXIT; \
-	WEBUI_BACKEND_URL="http://localhost:$(LLLM_BACKEND_PORT)" bunx --bun astro dev --background; \
-	bunx --bun astro dev logs --follow
+	bun install --frozen-lockfile && \
+	trap 'bunx astro dev stop' EXIT; \
+	WEBUI_BACKEND_URL="http://localhost:$(LLLM_BACKEND_PORT)" bunx astro dev --background; \
+	bunx astro dev logs --follow

@@ -201,18 +201,22 @@ The e2e specs mock every `/api/v1/**` response and stub `/ws`, so they need
 **no backend** — and they will fight a `make astro` you already have running
 (they reuse it if present, which is fine, and `global-teardown.ts` stops the
 server afterward, which is not). Stop `make astro` first, or expect it to be
-killed. Backend tests: from `apps/openwebui/`,
-`backend/.venv/bin/python -m pytest backend/tests`.
+killed. Backend tests: from `apps/openwebui/backend/`,
+`WEBUI_SECRET_KEY=<any long string> .venv/bin/python -m pytest tests` (the
+package imports from the working directory, and it refuses to load without a
+secret key).
 
 ## 6. Known rough edges
 
 - **The catch-all loop on `:5174`** described in §3.
-- **Nothing here has met a real backend.** Every Phase 5 to 10 page was built and
-  tested against mocked responses; the first real run may surface bugs.
-- **Dev server under Bun.** With no backend on `:4000`, the `/ws` proxy error
-  can crash `astro dev` about 30 s in (Bun's sockets lack `destroySoon`). The
-  same could happen if the backend restarts under `--reload`. If the page dies
-  with `ERR_CONNECTION_REFUSED`, run `make astro` again.
+- **Real-backend coverage is a smoke pass, not a suite.** Every Phase 5 to 10
+  page was built against mocked responses; on 2026-09-27 each surface was
+  driven once against a real backend (Phase 11a in `docs/migration-plan.md`),
+  which found and fixed six bugs. Anything that pass did not touch has still
+  only met mocks.
+- **`astro dev` runs on Node, not Bun.** `make astro` used `bunx --bun`, and
+  Vite's websocket proxy calls `socket.destroySoon()`, which Bun lacks: the dev
+  server died the first time a `/ws` connection closed. Keep `--bun` off it.
 - **`astro dev` daemonizes.** The Makefile wraps it so Ctrl-C works; if a
-  stray one is left running, `cd apps/web && bunx --bun astro dev stop`.
+  stray one is left running, `cd apps/web && bunx astro dev stop`.
 - **English only for now.** No page calls `useTranslation` yet.
