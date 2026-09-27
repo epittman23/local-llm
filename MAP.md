@@ -59,14 +59,11 @@ Meta docs — conventions, history, and proposals, not end-user usage docs.
 - **`proposed-inference-server.md`** — a hardware proposal (Dell R730 +
   Tesla V100) for a future dedicated inference server. Status: proposed, not
   built.
-- **`migration-plan.md`** — the resumable plan for the in-flight monorepo /
-  shell-removal / Astro-frontend migration: status board, locked decisions,
-  per-phase checklists, and the current session's notes. Read it first when
-  resuming that work, and update it before ending a session. Temporary:
-  delete it (and this entry) when the migration's final phase lands.
-- **`START.md`** — how to run the backend and both frontends right now, and
-  every URL the Astro app serves.
-  Kept current by the maintenance policy; temporary, deleted at Phase 11.
+- **`migration-plan.md`** — the plan for the monorepo / shell-removal /
+  Astro-frontend migration, complete as of 2026-09-27 (all eleven phases
+  done): locked decisions, per-phase checklists and session notes. Kept as a
+  record because code comments cite its decisions and phases; not updated
+  any more.
 - **`serving-baseline/`** — test input, not prose: `config-id` fingerprints,
   profile seed data and the verbatim profile rationale, captured from
   `scripts/shell/main.sh` on 2026-09-14 before the shell layer is ported to

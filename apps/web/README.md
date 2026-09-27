@@ -38,6 +38,30 @@ directory, which is where `/static/favicon.png` and friends come from.
   daemon workaround as `make frontend`, plus a `globalTeardown` that force-stops
   it afterward — a clean Playwright run was observed leaving the daemon
   alive despite the signal-based path, so this doesn't rely on that alone).
+- `bunx astro check` for types (expect 0 errors).
+
+The e2e specs mock every `/api/v1/**` response and stub `/ws`, so they need
+**no backend**, and they will fight a `make frontend` you already have
+running: they reuse it if present, which is fine, and `global-teardown.ts`
+stops it afterward, which is not. Stop `make frontend` first. Backend tests:
+from `apps/server/backend/`, `WEBUI_SECRET_KEY=<any long string>
+.venv/bin/python -m pytest tests` (the package imports from the working
+directory, and refuses to load without a secret key).
+
+## Known rough edges
+
+- **Real-backend coverage is a smoke pass, not a suite.** Every page was
+  built against mocked responses; on 2026-09-27 each surface was driven once
+  against a real backend (Phase 11 of `docs/migration-plan.md`), which found
+  and fixed eight bugs. Anything that pass did not touch has only met mocks.
+- **`astro dev` runs on Node, not Bun.** Vite's websocket proxy calls
+  `socket.destroySoon()`, which Bun lacks, so under `bunx --bun` the dev
+  server died the first time a `/ws` connection closed. Keep `--bun` off it.
+- **`astro dev` daemonizes.** The Makefile wraps it so Ctrl-C works; if a
+  stray one is left running, `cd apps/web && bunx astro dev stop`.
+- **Sending in the first second after load** shows "Model not selected"
+  until the model list arrives (the Svelte app behaved the same).
+- **English only for now.** No page calls `useTranslation` yet.
 
 ## Structure
 

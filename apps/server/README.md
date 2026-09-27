@@ -1,3 +1,9 @@
+> **In this repo:** this is the Open WebUI fork's upstream README, kept as
+> it was. Only the FastAPI backend remains here (`apps/server/`); the
+> frontend is `apps/web/`, and the Docker images, compose files and install
+> paths described below were removed. See the root `README.md` for how this
+> repo runs, and `LICENSE`/`LICENSE_NOTICE`/`LICENSE_HISTORY` beside this file.
+
 # Open WebUI 👋
 
 ![GitHub stars](https://img.shields.io/github/stars/open-webui/open-webui?style=social)

@@ -20,10 +20,13 @@ Postgres+pgvector (`infra/docker-compose.yml`), not SQLite.
 
 Requires Docker Desktop with WSL integration enabled for this distro
 (Docker Desktop → Settings → Resources → WSL Integration), `make`, plus Bun
-and a **Python 3.11 or 3.12** interpreter on the host for the fork's frontend
-and backend (its `requires-python` is `>= 3.11, < 3.13`; `make backend`
-selects an interpreter in that range itself rather than trusting whatever
-bare `python3` resolves to — see "Dependencies" below).
+**Node ≥ 22.12** (Astro's `engines`), and a **Python 3.11 or 3.12**
+interpreter on the host for the backend (its `requires-python` is
+`>= 3.11, < 3.13`; `make backend` selects an interpreter in that range itself
+rather than trusting whatever bare `python3` resolves to, or takes
+`LLAMA_OPENWEBUI_PYTHON` — see "Dependencies" below). The first
+`make backend` builds `apps/server/backend/.venv` and installs the backend's
+requirements (several GB, slow); later runs skip it.
 
 A plain `git clone` is enough — the fork lives inside `apps/server/` as
 ordinary tracked files, not a submodule. Put your secrets in `infra/.env`
@@ -83,6 +86,111 @@ tuning for the local-inference setup below, built into this same frontend
 and backend rather than served from a separate dashboard or port. See
 "Local inference" below, and "Testing" → "The Benchmarks section" further
 down.
+
+## Pages and URLs
+
+Every page the frontend serves, derived from
+`apps/web/src/routes/AppRouter.tsx` (and `routePaths.ts`); when routes
+change, update this section in the same change.
+
+Base is `http://localhost:4000` (or the `make frontend` dev server, `http://localhost:5174`). Anything
+signed-in-only bounces to `/auth?redirect=<path>` when you have no session.
+Anything marked *admin* also needs `role === 'admin'`.
+
+### Public (no session needed)
+
+| Path | What you get |
+|---|---|
+| `/auth` | Sign in / sign up / LDAP / OAuth / onboarding. Query: `?redirect=<path>` (where to go afterwards), `?form=<any>` (shows the login fields and skips the SSO auto-redirect), `?state=logout`, `?error=<msg>` |
+| `/error` | The "Backend Required" page. Redirects home once the backend config has loaded, so you only *stay* here when the backend is down |
+| `/watch?v=<id>` | Redirects to `/?youtube=<id>`, which attaches that video to a new chat |
+| `/s/<share-id>` | Read-only shared chat. The id comes from a chat's Share dialog (sidebar chat menu > Share) |
+
+### Signed-in
+
+| Path | Notes |
+|---|---|
+| `/workspace` | Redirects: admin → `/workspace/models`; others → the first section they hold permission for (models → knowledge → prompts → tools → skills), else `/` |
+| `/workspace/models` | List, bulk actions, pinning |
+| `/workspace/models/create` | Model editor, new |
+| `/workspace/models/edit?id=<model-id>` | Model editor; **query param, not a path segment** |
+| `/workspace/knowledge` | List |
+| `/workspace/knowledge/create` | The list with the create dialog already open |
+| `/workspace/knowledge/<id>` | Detail page: file tree, uploads, folder sync |
+| `/workspace/prompts` | List |
+| `/workspace/prompts/create` | The list with the create dialog already open |
+| `/workspace/prompts/<id>` | Edit page and version history (the id is the prompt's id) |
+| `/workspace/skills` | List |
+| `/workspace/skills/create` | Skill editor, new |
+| `/workspace/skills/edit?id=<skill-id>` | Skill editor; query param |
+| `/workspace/tools` | List. Hidden from the tab bar when the backend has plugins off, but an admin can still open the URL |
+| `/workspace/tools/create` | Tool editor, new (CodeMirror) |
+| `/workspace/tools/edit?id=<tool-id>` | Tool editor; query param |
+| `/workspace/functions/create` | Redirects to `/admin/functions/create` |
+| `/admin` | *Admin* (everything under `/admin` is). Redirects to `/admin/users/overview` |
+| `/admin/users/overview` | Users: paginated, sortable, searchable list; add (form or CSV), edit, chats, delete. `/admin/users` redirects here |
+| `/admin/users/groups` | Groups and their permission switches, member CSV import, default permissions |
+| `/admin/evaluations/leaderboard` | Leaderboard and activity chart. `/admin/evaluations` redirects here |
+| `/admin/evaluations/feedback` | Feedback table, details, JSON/CSV export |
+| `/admin/functions` | Functions list. Bounces to `/admin` when the backend has plugins off |
+| `/admin/functions/create` | Function editor, new |
+| `/admin/functions/edit?id=<function-id>` | Function editor; query param |
+| `/admin/settings[/<tab>]` | **Not a page:** redirects to `/?settings=admin:<tab>`, which opens the Settings modal on that tab (see below) |
+| `/admin/analytics[/<tab>]` | Redirects to `/?settings=admin:analytics`, or to `/admin` when analytics is off |
+| `/benchmarks` | Redirects to `/benchmarks/serve`. *Admin*, and the backend's `features.enable_benchmarks` must not be `false`; otherwise you're sent to `/` |
+| `/benchmarks/serve` | Serve + the Profiles panel |
+| `/benchmarks/live` | Live telemetry |
+| `/benchmarks/tests` | Test runs (executes model-generated Python; read the warning in the README first) |
+| `/benchmarks/compare` | Compare runs |
+| `/benchmarks/answers` | Answers |
+| `/benchmarks/report` | Reports |
+| `/benchmarks/tune` | Tuning |
+| `/notes` | Notes list. Needs the backend's `features.enable_notes` (and not a denied `notes` permission); otherwise you're sent to `/` |
+| `/notes/new` | Creates a note (optionally from `?title=&content=`) and opens it |
+| `/notes/<id>` | Note editor (TipTap, autosave) |
+| `/calendar` | Month/week/day views. Needs `features.enable_calendar` and, for a non-admin, the `calendar` permission |
+| `/automations` | List. Needs `features.enable_automations` and, for a non-admin, the `automations` permission |
+| `/automations/<id>` | Detail and runs |
+| `/playground` | *Admin.* Chat playground; `/playground/completions` and `/playground/images` alongside |
+| `/channels/<id>` | A channel: live messages, threads, reactions, pins, members. Needs `features.enable_channels` (and not a denied `channels` permission). The sidebar lists channels and creates them |
+| `/home` | A small hub linking to Notes and Calendar (the Svelte `/home` was an unfinished stub nothing linked to) |
+| `/` | Chat, new. Query: `?models=<a,b>` (or `?model=`), `?q=<text>` (sent at once unless `&submit=false`), `?temporary-chat=true`, `?web-search=true`, `?image-generation=true`, `?code-interpreter=true`, `?tools=<ids>` (or `?tool-ids=`), `?youtube=<id>`, `?load-url=<url>` |
+| `/c/<id>` | A saved chat. A new chat moves here when the server gives it an id |
+| `/folders/<folderId>` | A new chat inside that folder (a missing folder sends you to `/`) |
+
+A workspace section you lack permission for redirects you to `/`.
+
+**Settings is a modal, not a page.** Any page accepts `?settings=<tab>`; for an
+admin, `?settings=admin:<tab>` opens the modal on that admin tab and the param
+is removed from the URL. Personal tab ids (plain `?settings=<tab>`, anyone):
+`general`, `interface`, `notifications`, `shortcuts`, `connections`, `tools`
+(Integrations), `personalization`, `audio`, `data_controls`,
+`archived_chats`, `account`, `about`; some are shown only when the backend and
+your permissions allow them. Admin tab ids (`admin:<tab>`): `general`,
+`authentication`, `connections`, `models`, `evaluations`, `integrations`,
+`documents`, `web`, `code-execution`, `interface`, `audio`, `images`,
+`pipelines`, `db`, `subagents`, `analytics`. An unknown tab falls back to the
+first one listed; a non-admin asking for an admin tab gets no modal.
+
+### Anything else
+
+Any path not listed above falls into the router's catch-all, `NotFound`,
+which never navigates on its own and renders a 404 page.
+
+### Backend URLs
+
+`http://localhost:4000/` — the built app (above), plus the API. Useful backend URLs:
+
+| URL | What |
+|---|---|
+| `/docs` | Swagger UI for every endpoint (only when `ENV` is `dev`, the default) |
+| `/health` | Liveness check |
+| `/api/config` | Public config the frontends read before anyone signs in |
+| `/api/v1/**` | The REST API the pages call (auths, models, knowledge, prompts, skills, tools, benchmarks, ...) |
+| `/` and every page path | The built Astro app, when `apps/web/dist/` exists (see "Running it") |
+
+Postgres listens on `127.0.0.1:5432` (user/db `openwebui`, password from
+`infra/.env`), loopback only.
 
 ## Model setup
 
@@ -1380,16 +1488,14 @@ resolved by the fork's own venv.
 Benchmarks is not a second app. It is a set of pages inside the same Open
 WebUI fork as chat, started by the same `make backend` described in "Running it" above
 (port `4000`; `make frontend` adds a dev server on `5174`),
-and reached through its own entry in the fork's sidebar — admin-only, modeled on
-the existing Playground entry (`isMenuItemVisible`/`getMenuItemMeta`/
-`menuItemPathPrefixes` in `Sidebar.svelte`, a matching pin-menu block in
-`Sidebar/UserMenu.svelte`) rather than a tab inside the Settings modal like
-Analytics, since seven interactive pages do not fit a settings panel. A
-`benchmarks.enable` config flag (`ENABLE_BENCHMARKS` in the admin config
-keys, surfaced as `enable_benchmarks`) gates whether the entry shows at all.
+and reached through its own entry in the sidebar (`apps/web/src/components/
+layout/Sidebar.tsx`) — admin-only, like Playground, rather than a tab inside
+the Settings modal like Analytics, since seven interactive pages do not fit
+a settings panel. A `benchmarks.enable` config flag (`ENABLE_BENCHMARKS`,
+the **Benchmarks** switch in Admin Settings > General, surfaced to the
+frontend as `enable_benchmarks`) gates whether the entry shows at all.
 
-Those two ports are still the whole port table — there is nothing new to add
-one for:
+Those are the whole port table — there is nothing new to add one for:
 
 | what | port | started by |
 | --- | --- | --- |

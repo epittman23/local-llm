@@ -78,7 +78,7 @@ about it is measured. Serving configuration groups settings into per-model
 profiles (`qwen36` MoE, `qwen38` dense, `qwen25c` dense and GPU-resident,
 `qwen3c` MoE) rather than loose env vars, stored as versioned rows in
 Postgres (`benchmark_profile`/`benchmark_profile_version`) and resolved by
-`apps/openwebui/backend/open_webui/benchmarks/serving/profiles.py` — not
+`apps/server/backend/open_webui/benchmarks/serving/profiles.py` — not
 `scripts/shell/main.sh`, deleted along with the rest of `scripts/` in Phase
 2c of the migration (2026-09-18; see the decisions log). The fork's own
 Serve page (`/benchmarks/serve`) starts them. Every profile
@@ -145,11 +145,13 @@ assume a cloud-only environment.
 ## Conventions
 
 - This repo is a monorepo: it holds the application, not just glue around
-  it. `apps/openwebui/` is the Open WebUI fork (`v0.11.3`), vendored into
+  it. `apps/server/` is the Open WebUI fork (`v0.11.3`), vendored into
   this repo as ordinary tracked files on 2026-09-14 — it was a pinned git
-  submodule until then. The assistant's frontend and backend live there, and
-  so does the benchmark/testing/reporting/tuning suite described below (see
-  the 2026-09-08 entry for that migration). It is a permanent hard fork:
+  submodule until then — and renamed from `apps/openwebui/` in 2026-09-27's
+  Phase 11. The assistant's backend lives there, and so does the
+  benchmark/testing/reporting/tuning suite described below (see the
+  2026-09-08 entry for that migration); the frontend is `apps/web/`, which
+  replaced the fork's SvelteKit app. It is a permanent hard fork:
   there is no upstream sync path and no `git checkout <tag>` upgrade
   procedure any more, so it may be restructured and hand-edited freely.
 
@@ -169,7 +171,7 @@ assume a cloud-only environment.
   fetch, grading, the run/grade/record loop, config comparison, the
   statistical report, the configuration-search tuner, and now also the
   serving layer itself (`benchmarks/serving/`: profiles, fingerprint,
-  launcher, weights) — lives in `apps/openwebui/backend/open_webui/
+  launcher, weights) — lives in `apps/server/backend/open_webui/
   benchmarks/`, reached through the fork's own admin-only "Benchmarks"
   pages, not through any command in this repo. The GPU telemetry recorder,
   `open_webui.benchmarks.telemetry_recorder`, is spawned directly by
@@ -184,7 +186,7 @@ assume a cloud-only environment.
   commands of any kind.
 
   The line to keep, restated for the monorepo now that the shell layer is
-  gone: `apps/openwebui/backend/open_webui/benchmarks/serving/profiles.py`
+  gone: `apps/server/backend/open_webui/benchmarks/serving/profiles.py`
   (backed by Postgres, not a shell case statement) is the single source of
   truth for serving configuration, and model/system-prompt configuration for
   the assistant still lives in Open WebUI, never in a repo file. What is
@@ -193,11 +195,13 @@ assume a cloud-only environment.
   more. Application code lives under `apps/`; the Makefile stays thin
   process-lifecycle glue, the operational role `scripts/` used to have.
 - Testing approach, two separate things:
-  - Changes to Open WebUI (the fork), including its Benchmarks section, are
-    verified by using it in the browser at `http://localhost:5173` (manual —
-    there is no code to run automated tests against). `make frontend`/
-    `make backend` bind `5173`/`4000` directly; there is no proxy in
-    front of either (see "Local inference" below and the decisions log).
+  - Changes to the app, including its Benchmarks section, are verified by
+    the frontend's Vitest and Playwright suites and the backend's pytest
+    (see `apps/web/README.md`), and by using it in the browser at
+    `http://localhost:4000` (or the `make frontend` dev server on `:5174`).
+    The Playwright suite mocks the backend, so a change that touches the
+    frontend/backend seam also needs a real run. There is no proxy in front
+    of either port.
   - Local serving configurations are verified from the Benchmarks section's
     Tests/Compare/Report pages: three published benchmarks (HumanEval, MBPP
     sanitized, DS-1000), executed and scored, tiered `smoke` / `standard` /
@@ -216,16 +220,17 @@ assume a cloud-only environment.
 
 ## Commands
 
-- Start/ensure the Open WebUI fork is running: `make backend` (Postgres +
-  the fork's backend, `uvicorn` on `4000`) in one terminal, `make frontend`
-  (the fork's frontend dev server, `vite` on `5173`) in another — root
-  `Makefile`. `infra/.env` holds `OPENROUTER_API_KEY`,
+- Start/ensure the app is running: `make backend` (Postgres + the fork's
+  backend, `uvicorn` on `4000`, which also serves the last build of
+  `apps/web` at `/`; build it with `bun run build` in `apps/web`), plus
+  `make frontend` in another terminal for the hot-reloading dev server on
+  `5174` while editing the UI — root `Makefile`. `infra/.env` holds `OPENROUTER_API_KEY`,
   `POSTGRES_PASSWORD`, and `WEBUI_SECRET_KEY`. `make backend` owns Postgres's
   lifecycle directly (brings it up before uvicorn, tears it down via a trap
   when uvicorn stops, Ctrl-C included) — there is no separate
   `docker compose up` step. Chat
-  is at `http://localhost:5173/`; the Benchmarks section (testing,
-  comparison, reporting, tuning) is at `http://localhost:5173/benchmarks`,
+  is at `http://localhost:4000/`; the Benchmarks section (testing,
+  comparison, reporting, tuning) is at `http://localhost:4000/benchmarks`,
   admin-only, in the same frontend — no separate port any more (see "Local
   inference" below and the decisions log for why).
 - Requires Docker Desktop with WSL integration enabled for this distro (for
@@ -265,7 +270,7 @@ or agent) updates the docs in the same commit:
   `serving/fingerprint.py` too, or old and new runs get fingerprinted as the
   same configuration.
 - **The database schema is append-only.** The benchmark tables' migrations
-  live as ordinary Alembic revisions under `apps/openwebui/backend/
+  live as ordinary Alembic revisions under `apps/server/backend/
   open_webui/migrations/versions/`, same as the rest of the fork's schema;
   add a migration, never edit one that has been applied. When a change
   alters what the `config_id` fingerprint covers — which changes every
@@ -290,16 +295,13 @@ or agent) updates the docs in the same commit:
   corresponding entry in `MAP.md` in the same change. `MAP.md` is a
   structural index only — per-file rationale and conventions stay documented
   here in "Conventions," not duplicated there.
-- **`docs/START.md` mirrors how the app runs today.** Whenever a change alters
-  how the backend or either frontend is started (the `Makefile` targets, ports,
-  required `infra/.env` keys, tool versions), adds, removes, renames or changes
-  the query parameters of a URL the Astro app serves (`apps/web/src/routes/
-  AppRouter.tsx` / `routePaths.ts`), or moves a surface between the Svelte and
-  Astro apps, update `START.md` in the same change. Each migration phase's exit
-  checklist includes a pass over its route tables. Like `migration-plan.md`,
-  it is temporary: delete it (and its `MAP.md` entry) at Phase 11's cutover,
-  when there is one app and one way to run it, and fold what survives into
-  `README.md`.
+- **`README.md`'s "Running it" and "Pages and URLs" mirror how the app
+  runs today.** Whenever a change alters how the backend or frontend is
+  started (the `Makefile` targets, ports, required `infra/.env` keys, tool
+  versions), or adds, removes, renames or changes the query parameters of a
+  URL the frontend serves (`apps/web/src/routes/AppRouter.tsx` /
+  `routePaths.ts`), update those sections in the same change. (They absorbed
+  `docs/START.md`, deleted at the end of the migration, 2026-09-27.)
 
 ## Commit policy
 
@@ -310,6 +312,39 @@ All commits should use conventional commit style and stay focused on one topic. 
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-09-27** (fifth): Closed out Phase 11, the last phase of the
+  migration (`docs/migration-plan.md`, now complete and kept only as a
+  record). The backend serves `apps/web/dist` at `/` (`FRONTEND_BUILD_DIR`),
+  `/next` is gone, the SvelteKit frontend is deleted (last present at
+  `d863707`), and the fork is `apps/server/`. `make frontend` is now the
+  Astro dev server (`make astro` an alias). Provenance comments in
+  `apps/web` read `d863707:apps/openwebui/...`, git's `<commit>:<path>`
+  form, so `git show` still opens the Svelte original.
+
+  **Decisions.** The version moved from the Svelte `package.json` to
+  `pyproject.toml` before that file was deleted, with a test pinning it
+  (deleting it first would have made the backend report `0.0.0`). The
+  upstream Dockerfile, eleven compose variants, CI workflows, the fork's
+  docker-only Makefile and the hatch hook that ran `npm run build` on every
+  wheel build were deleted rather than repointed: this repo runs through the
+  root `Makefile` and `infra/`, and none of them could build the new app.
+  `docs/START.md` was deleted as its own rule required; its URL tables are
+  the README's new "Pages and URLs" section. `migration-plan.md` was *not*
+  deleted despite `MAP.md`'s old note saying it would be: code comments cite
+  its numbered decisions and phases, so it stays as a frozen record.
+
+  **Licensing.** Dropping the Open WebUI branding rests on clause 4(i) of
+  its license (at most fifty end users in any rolling thirty days), which
+  this single-user deployment meets; the README says so and what would
+  change it. `apps/server/LICENSE*` are untouched, and `apps/web/LICENSE_NOTICE`
+  names the derived parts and reproduces the copyright notice.
+
+  **Two more bugs** turned up on the production build after 11a's six:
+  the backend's own origin was missing from `CORS_ALLOW_ORIGIN` (every
+  socket refused on `:4000`), and reloaded chats labelled replies with the
+  raw model id. The rename kept the gitignored `backend/.venv` working when
+  moved: the Makefile runs it as `.venv/bin/python -m ...`, which does not
+  depend on the absolute paths in its console-script shebangs.
 - **2026-09-27** (fourth): Phase 11a of the migration: the first run of
   `apps/web/` against a real backend and database, driven in headless
   Chromium. Every surface loaded; the write paths were exercised with small

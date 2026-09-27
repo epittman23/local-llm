@@ -27,13 +27,28 @@
 | 8 | Admin surface | ✅ done | 2026-09-27 |
 | 9 | Secondary surfaces: notes, calendar, automations, playground, channels | ✅ done | 2026-09-27 |
 | 10 | Chat surface (largest) | ✅ done | 2026-09-27 |
-| 11 | Cutover and Svelte removal | ▶ in progress | 2026-09-27 |
+| 11 | Cutover and Svelte removal | ✅ done | 2026-09-27 |
 
 Status values: `☐ not started` · `▶ in progress` · `✅ done` · `⏸ blocked`
 
 ### Current session notes
 
 _Overwrite this block at the end of every session._
+
+**2026-09-27, final (Phase 11 closed out; the migration is complete).**
+11b-11h in one session after 11a. `:4000/` serves `apps/web/dist`; the
+Svelte app, its build hook and the upstream Docker/CI scaffolding are gone;
+the backend is `apps/server/`; `make frontend` is the Astro dev server. Two
+more bugs surfaced on the production build and were fixed: the backend's
+own origin missing from CORS (sockets refused on `:4000`) and model ids on
+reloaded replies. One flaky e2e spec (a strict-mode heading match) fixed.
+
+Checks at the end: `astro check` 0 errors, 547 Vitest, 324 Playwright, 228
+backend pytest; read-only and chat write smoke passes clean on `:4000`
+against the real database (test records deleted), same Postgres volume.
+Nothing is left on this plan. Follow-ups that were never in scope are in the
+dated `docs/CLAUDE.md` entry (Benchmarks > Serve untested against a real
+model, OAuth, the deliberate Phase 10 gaps).
 
 **2026-09-27, latest (Phase 11a done).** The first real-backend run: both
 servers up on the owner's machine, driven by scripted headless Chromium (the
@@ -915,9 +930,9 @@ local-llm/
 Gone by the end: `scripts/` (both shell files, `llama_console.py`), the
 root `requirements.txt` and `.venv` (they exist only for `rich`).
 
-Current state (Phases 1–10): `apps/openwebui/` holds the whole fork,
-backend and SvelteKit frontend together, until Phase 11 deletes the Svelte
-side and the rename to `apps/server/` becomes mechanical.
+Reached in Phase 11 (2026-09-27): the tree above is the real one. The
+SvelteKit frontend is gone (last present at `d863707`) and the fork's
+backend lives at `apps/server/`.
 
 ---
 
@@ -1432,17 +1447,25 @@ this session, the same posture as Phase 5.
       path exercised against the real backend and database; six bugs fixed
       (`7eb3cc1`..`a9e19e3`), `/user.png` and `/static/*` images carried into
       `apps/web/public/` for 11b (`f8d37c5`).
-- [ ] `FRONTEND_BUILD_DIR` → `apps/web/dist/`; remove `/next`.
-- [ ] Delete the SvelteKit frontend from `apps/openwebui/` (verify
-      `/static` usage at `main.py:2992` first).
-- [ ] Repoint or remove frontend build hooks in `pyproject.toml` /
-      `Dockerfile`.
-- [ ] Rename `apps/openwebui/` → `apps/server/`; fold `make astro` into
-      `make frontend`.
-- [ ] Licensing: the ≤50-user exemption (clause 4(i)) permits the rebranded
-      UI; `LICENSE`, `LICENSE_NOTICE`, `LICENSE_HISTORY` and copyright
-      notices stay (clauses 1–3).
-- [ ] Final docs pass.
+- [x] **11b** `FRONTEND_BUILD_DIR` → `apps/web/dist/`; `/next` and
+      `/pyodide` removed; `/static` checked: `config.py` copies the build's
+      `static/` into the backend's at boot, now fed by `apps/web/public/static/`
+      (`05aa529`). The production build on `:4000` found one more bug, reply
+      headers showing model ids after a reload (`c3a2149`).
+- [x] **11c** The version moved from `package.json` to `pyproject.toml`,
+      pinned by a test (`01d0d5a`).
+- [x] **11d** Frontend build hook, upstream Dockerfile, compose variants,
+      CI workflows and the fork's docker-only Makefile deleted (`d863707`).
+- [x] **11e** SvelteKit frontend deleted; `LegacyFallback` → `NotFound`;
+      `make frontend` is the Astro dev server, `make astro` an alias
+      (`6e402af`).
+- [x] **11f** `apps/openwebui/` → `apps/server/`; provenance comments read
+      `d863707:apps/openwebui/...` (`102a735`). The moved `.venv` kept
+      working, no rebuild.
+- [x] **11g** Licensing: `apps/server/LICENSE*` untouched;
+      `apps/web/LICENSE_NOTICE` added; README records the clause 4(i)
+      basis (`fde1629`).
+- [x] **11h** Final docs pass.
 
 ---
 
@@ -1450,9 +1473,9 @@ this session, the same posture as Phase 5.
 
 - **Per session:** backend + frontend start; log in; compare a migrated
   surface in the new app against the old.
-- **Automated:** `backend/.venv/bin/python -m pytest backend/tests` (from
-  `apps/openwebui/`); later `bun run test` and `bunx playwright test` in
-  `apps/web/`.
+- **Automated:** from `apps/server/backend/`,
+  `WEBUI_SECRET_KEY=<any> .venv/bin/python -m pytest tests`; in `apps/web/`,
+  `bunx astro check`, `bun run test:unit`, `bun run test:e2e`.
 - **Data safety:** `docker volume ls` must keep showing
   `open-web-ui_postgres-data`. A *new* empty volume means stop.
 - **Fingerprint:** golden tests green; periodically re-run the 37-row
