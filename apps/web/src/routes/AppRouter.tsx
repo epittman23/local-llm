@@ -18,6 +18,7 @@ import { AutomationPage } from '@/routes/automations/AutomationPage';
 import { AutomationsPage } from '@/routes/automations/AutomationsPage';
 import { CalendarPage } from '@/routes/calendar/CalendarPage';
 import { LegacyFallback } from '@/routes/LegacyFallback';
+import { PlaygroundChat, PlaygroundCompletions, PlaygroundImages, PlaygroundLayout } from '@/routes/playground/PlaygroundPages';
 import { PlaceholderPage } from '@/routes/PlaceholderPage';
 import { AuthPage } from '@/routes/public/AuthPage';
 import { ErrorPage } from '@/routes/public/ErrorPage';
@@ -94,6 +95,15 @@ const router = createBrowserRouter(
 				},
 				{ path: routePaths.automations, element: <AutomationsPage /> },
 				{ path: `${routePaths.automations}/:id`, element: <AutomationPage /> },
+				{
+					path: routePaths.playground,
+					element: <PlaygroundLayout />,
+					children: [
+						{ index: true, element: <PlaygroundChat /> },
+						{ path: 'completions', element: <PlaygroundCompletions /> },
+						{ path: 'images', element: <PlaygroundImages /> }
+					]
+				},
 				{ path: routePaths.notes, element: <PlaceholderPage title="Notes" phase="Phase 9" /> },
 				{
 					path: routePaths.calendar,

@@ -22,8 +22,7 @@ const SVELTE_ONLY: [prefix: string, surface: string][] = [
 	['/c/', 'Chat'],
 	['/home', 'Home'],
 	['/folders/', 'Folders'],
-	['/channels/', 'Channels'],
-	['/playground', 'Playground']
+	['/channels/', 'Channels']
 ];
 
 /** The name of the Svelte-owned surface a path belongs to, or null. */
