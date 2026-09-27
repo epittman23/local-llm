@@ -9,12 +9,17 @@ const readPersistedSidebarOpen = () => {
 };
 
 type UIState = {
+	/** The chat search dialog (Ctrl/Cmd+K, or Search in the sidebar). */
+	searchOpen: boolean;
+	setSearchOpen: (open: boolean) => void;
 	sidebarOpen: boolean;
 	setSidebarOpen: (open: boolean) => void;
 	toggleSidebar: () => void;
 };
 
 export const useUIStore = create<UIState>((set, get) => ({
+	searchOpen: false,
+	setSearchOpen: (searchOpen) => set({ searchOpen }),
 	sidebarOpen: readPersistedSidebarOpen(),
 	setSidebarOpen: (open) => {
 		if (typeof localStorage !== 'undefined') localStorage.sidebar = String(open);

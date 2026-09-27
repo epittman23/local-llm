@@ -13,6 +13,7 @@ import { useSocket } from '@/lib/socket/SocketProvider';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { copyToClipboard } from '@/lib/utils';
+import { patchCachedChat } from './sidebar/useChatList';
 import type { ChatModel } from './useModels';
 
 export const CHAT_LIST_KEY = ['chats'] as const;
@@ -97,6 +98,21 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 		[token, navigate, setHistory]
 	);
 
+	// Opening, leaving, or finishing a reply in a saved chat marks it read (Chat.svelte's updateLastReadAt).
+	const markRead = useCallback(
+		(id: string | null) => {
+			if (!id || isTemporaryChatId(id)) return;
+			socket?.emit('events:chat', { chat_id: id, data: { type: 'last_read_at' } });
+			patchCachedChat(queryClient, id, (c) => ({ ...c, last_read_at: Math.floor(Date.now() / 1000) + 1 }));
+		},
+		[socket, queryClient]
+	);
+	useEffect(() => {
+		if (!routeChatId) return;
+		markRead(routeChatId);
+		return () => markRead(routeChatId);
+	}, [routeChatId, markRead]);
+
 	// The route decides which chat is open; a chat created here keeps its state across its own URL change.
 	useEffect(() => {
 		if (routeChatId && routeChatId === adoptedRef.current) return;
@@ -139,6 +155,7 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 						break;
 					case 'inactive':
 						setTaskIds(null);
+						markRead(chatIdRef.current);
 						break;
 					case 'cancelled':
 						setTaskIds(null);
@@ -152,7 +169,7 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 				}
 			}
 		},
-		[token, loadChat, refreshList]
+		[token, loadChat, refreshList, markRead]
 	);
 
 	useEffect(() => {

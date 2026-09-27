@@ -35,6 +35,7 @@ import { useConfigStore } from '@/lib/stores/configStore';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import { useUIStore } from '@/lib/stores/uiStore';
 import { SidebarChannels } from '@/routes/channels/SidebarChannels';
+import { ChatSidebar } from '@/routes/chat/sidebar/ChatSidebar';
 import { routePaths } from '@/routes/routePaths';
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
@@ -62,6 +63,7 @@ export function SidebarContent({
 	const isAdmin = user?.role === 'admin';
 	const hasSettings = availableTabs(user, config, implementedTabIds).length > 0;
 	const benchmarksEnabled = isAdmin && config?.features?.enable_benchmarks !== false;
+	const setSearchOpen = useUIStore((state) => state.setSearchOpen);
 
 	return (
 		<div className="flex h-full w-full flex-col">
@@ -90,6 +92,7 @@ export function SidebarContent({
 				</Link>
 				<button
 					type="button"
+					onClick={() => setSearchOpen(true)}
 					className="hover:bg-accent/50 flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm"
 				>
 					<Search className="h-4 w-4" />
@@ -143,7 +146,9 @@ export function SidebarContent({
 					)}
 				</nav>
 				<SidebarChannels onNavigate={onNavigate} />
+				<ChatSidebar onNavigate={onNavigate} />
 			</ScrollArea>
+
 
 			<Separator />
 

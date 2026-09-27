@@ -27,10 +27,10 @@ export function savedChat(id: string, title: string, messages: Rec[], extra: Rec
  * chat id for a new chat); the reply itself is streamed by the spec through
  * the fake socket with `stream()`.
  */
-export async function mockChat(page: Page, { chats = [] as Rec[], user = {} as MockUserOptions, completion = {} as Rec } = {}) {
+export async function mockChat(page: Page, { chats = [] as Rec[], user = {} as MockUserOptions, completion = {} as Rec, folders = [] as Rec[] } = {}) {
 	await mockWorkspaceBackend(page, { role: 'user', ...user });
 	const socket = await fakeSocketServer(page);
-	const seen = { completions: [] as Rec[], updates: [] as Rec[], stops: [] as string[], lists: 0 };
+	const seen = { completions: [] as Rec[], updates: [] as Rec[], stops: [] as string[], lists: 0, actions: [] as string[], searches: [] as string[], folderCalls: [] as string[] };
 	const byId = new Map(chats.map((c) => [c.id, c]));
 	await page.route('**/api/models*', (route) => json(route, { data: MODELS }));
 	await page.route('**/api/chat/completions', async (route) => {
@@ -43,25 +43,85 @@ export async function mockChat(page: Page, { chats = [] as Rec[], user = {} as M
 		if (url.includes('/stop')) seen.stops.push(url);
 		return json(route, url.includes('/stop') ? { status: true } : { task_ids: [] });
 	});
+	const listItem = (c: Rec) => ({ id: c.id, title: c.title, updated_at: c.updated_at, created_at: c.created_at, last_read_at: c.last_read_at ?? c.updated_at, time_range: c.time_range ?? 'Today', pinned: c.pinned, folder_id: c.folder_id ?? null });
 	await page.route(/\/api\/v1\/chats(\/|\?|$)/, async (route) => {
 		const req = route.request();
-		const path = new URL(req.url()).pathname.replace(/^.*\/api\/v1\/chats/, '');
-		if (path === '/' || path === '' || path.startsWith('/list') || path === '/pinned' || path.startsWith('/folder')) {
+		const url = new URL(req.url());
+		const path = url.pathname.replace(/^.*\/api\/v1\/chats/, '');
+		if (path === '/' || path === '') {
 			seen.lists++;
-			return json(route, path === '/pinned' ? [] : [...byId.values()].map((c) => ({ id: c.id, title: c.title, updated_at: c.updated_at, created_at: c.created_at })));
+			return json(route, Number(url.searchParams.get('page') ?? 1) > 1 ? [] : [...byId.values()].filter((c) => !c.pinned && !c.folder_id && !c.archived).map(listItem));
+		}
+		if (path === '/pinned') return json(route, [...byId.values()].filter((c) => c.pinned).map(listItem));
+		if (path === '/search') {
+			seen.searches.push(url.searchParams.get('text') ?? '');
+			return json(route, [...byId.values()].filter((c) => c.title.toLowerCase().includes((url.searchParams.get('text') ?? '').toLowerCase())).map(listItem));
+		}
+		if (path.startsWith('/folder/')) {
+			const fid = path.split('/')[2];
+			return json(route, Number(url.searchParams.get('page') ?? 1) > 1 ? [] : [...byId.values()].filter((c) => c.folder_id === fid).map(listItem));
 		}
 		if (path === '/all/tags') return json(route, []);
 		const [, id, action] = path.split('/');
+		const cur = byId.get(id);
 		if (action === 'tags') return json(route, []);
-		if (req.method() === 'POST' && !action) {
+		if (action) {
+			seen.actions.push(`${action}:${id}`);
+			if (!cur) return json(route, { detail: 'Not found' }, 404);
+			if (action === 'pin') byId.set(id, { ...cur, pinned: !cur.pinned });
+			if (action === 'archive') byId.set(id, { ...cur, archived: true });
+			if (action === 'folder') byId.set(id, { ...cur, folder_id: req.postDataJSON()?.folder_id ?? null });
+			if (action === 'share') {
+				if (req.method() === 'DELETE') byId.set(id, { ...cur, share_id: null });
+				else byId.set(id, { ...cur, share_id: `share-${id}` });
+				return json(route, byId.get(id));
+			}
+			if (action === 'clone') {
+				const clone = { ...cur, id: `${id}-clone`, title: req.postDataJSON()?.title ?? cur.title };
+				byId.set(clone.id, clone);
+				return json(route, clone);
+			}
+			if (action === 'unread') return json(route, { ...cur, last_read_at: 0 });
+			return json(route, byId.get(id));
+		}
+		if (req.method() === 'DELETE') {
+			seen.actions.push(`delete:${id}`);
+			byId.delete(id);
+			return json(route, true);
+		}
+		if (req.method() === 'POST') {
 			const body = req.postDataJSON();
 			seen.updates.push({ id, ...body });
-			const cur = byId.get(id) ?? savedChat(id, 'New Chat', []);
-			const next = { ...cur, chat: { ...cur.chat, ...body.chat } };
+			const base = cur ?? savedChat(id, 'New Chat', []);
+			const next = { ...base, title: body.chat?.title ?? base.title, chat: { ...base.chat, ...body.chat } };
 			byId.set(id, next);
 			return json(route, next);
 		}
-		return byId.has(id) ? json(route, byId.get(id)) : json(route, { detail: 'Not found' }, 404);
+		return cur ? json(route, cur) : json(route, { detail: 'Not found' }, 404);
+	});
+	let folderList = [...folders];
+	await page.route(/\/api\/v1\/folders(\/|\?|$)/, async (route) => {
+		const req = route.request();
+		const path = new URL(req.url()).pathname.replace(/^.*\/api\/v1\/folders/, '');
+		seen.folderCalls.push(`${req.method()} ${path}`);
+		if (path === '/' && req.method() === 'GET') return json(route, folderList);
+		if (path === '/' && req.method() === 'POST') {
+			const f = { id: `f${folderList.length + 1}`, ...req.postDataJSON() };
+			folderList = [...folderList, f];
+			return json(route, f);
+		}
+		const [, id, action] = path.split('/');
+		if (req.method() === 'DELETE') {
+			folderList = folderList.filter((f) => f.id !== id);
+			return json(route, true);
+		}
+		if (action === 'update') {
+			folderList = folderList.map((f) => (f.id === id ? { ...f, ...req.postDataJSON() } : f));
+			return json(route, folderList.find((f) => f.id === id));
+		}
+		if (action) return json(route, true);
+		const f = folderList.find((x) => x.id === id);
+		return f ? json(route, f) : json(route, { detail: 'Not found' }, 404);
 	});
 
 	/** Streams `text` into the reply the last completion asked for, word by word, then finishes it. */

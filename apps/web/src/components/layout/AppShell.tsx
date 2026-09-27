@@ -1,5 +1,5 @@
 import { PanelLeft } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet } from 'react-router';
 import { SettingsModal } from '@/components/settings/SettingsModal';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,7 @@ import { useAuthGate } from '@/lib/auth/useAuthGate';
 import { useSettingsUrl } from '@/lib/settings/useSettingsUrl';
 import { useUIStore } from '@/lib/stores/uiStore';
 import { useChannelUnreadEvents } from '@/routes/channels/useChannels';
+import { SearchChatsDialog } from '@/routes/chat/sidebar/ChatDialogs';
 import { cn } from '@/lib/utils';
 import { SidebarContent } from './Sidebar';
 
@@ -30,6 +31,20 @@ export function AppShell() {
 	const sidebarOpen = useUIStore((state) => state.sidebarOpen);
 	const setSidebarOpen = useUIStore((state) => state.setSidebarOpen);
 	const [mobileOpen, setMobileOpen] = useState(false);
+	const searchOpen = useUIStore((state) => state.searchOpen);
+	const setSearchOpen = useUIStore((state) => state.setSearchOpen);
+
+	// Ctrl/Cmd+K opens chat search from anywhere, as in the Svelte app.
+	useEffect(() => {
+		const onKey = (e: KeyboardEvent) => {
+			if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+				e.preventDefault();
+				setSearchOpen(true);
+			}
+		};
+		window.addEventListener('keydown', onKey);
+		return () => window.removeEventListener('keydown', onKey);
+	}, [setSearchOpen]);
 
 	// 'pending': the session bootstrap (lib/auth/session.ts) hasn't resolved
 	// yet -- render nothing rather than flash the shell before we know if
@@ -100,6 +115,7 @@ export function AppShell() {
 					<Outlet />
 				</main>
 				<SettingsModal />
+				<SearchChatsDialog open={searchOpen} onOpenChange={setSearchOpen} />
 			</div>
 		</div>
 	);
