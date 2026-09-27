@@ -24,7 +24,7 @@
 | 5 | Benchmarks surface (proves the pattern) | ✅ done | 2026-09-18 |
 | 6 | Public/static surfaces: auth, error, share, watch | ✅ done | 2026-09-19 |
 | 7 | Workspace surface | ✅ done | 2026-09-20 |
-| 8 | Admin surface | ▶ in progress | 2026-09-21 |
+| 8 | Admin surface | ▶ in progress | 2026-09-27 |
 | 9 | Secondary surfaces: notes, calendar, automations, playground, channels | ☐ not started | — |
 | 10 | Chat surface (largest) | ☐ not started | — |
 | 11 | Cutover and Svelte removal | ☐ not started | — |
@@ -34,6 +34,42 @@ Status values: `☐ not started` · `▶ in progress` · `✅ done` · `⏸ bloc
 ### Current session notes
 
 _Overwrite this block at the end of every session._
+
+**2026-09-27 (Phase 8, in progress).** **Integrations** is done, which makes
+all sixteen admin Settings tabs real (Authentication, Audio, Images,
+Documents, Web Search and Models were committed in the sessions before this
+one without this file being updated; the checklist below now says so).
+`astro check` 0 errors, 379 Vitest tests, 248 Playwright tests.
+
+What Integrations is: `routes/admin/settings/Integrations.tsx` (tool servers,
+terminals, knowledge; every change saves that list at once, as before),
+`ExternalKnowledge.tsx`, and two modals in `components/settings/` because
+Phase 10's personal Tools/Terminal settings reuse them with `direct` set:
+`AddToolServerModal` and `AddTerminalServerModal`. Their rules are in
+`toolServerModel.ts`, `terminalServerModel.ts` and `externalKnowledge.ts`,
+each with a unit test.
+
+**Deliberate deviations.** (1) A tool-server *export* no longer contains the
+API key (the Svelte one wrote it into the file in plain text), and an
+*import* no longer brings `access_grants` in (same reasoning as Skills). (2)
+An external knowledge source with no `enabled` flag is shown as on, but the
+Svelte switch sent `!connection.enabled` = `true` for it, so it could never be
+turned off; it now sends `false`. (3) The knowledge dialog's API key is a
+masked `SensitiveInput`, and says "Unchanged" when editing a source that has
+one (a blank key means keep it). (4) Saving terminals does not refresh a
+`terminalServers` store: the chat that reads it is Phase 10.
+
+**A shared-component bug found on the way.** `common/AccessControl` spread
+the groups response into state, so any non-array body (an error, a paginated
+`{items}`) threw inside a state reducer and replaced the whole page with the
+router's error screen. It now treats a non-list as "no groups". Workspace
+tests never saw it because they mock `/groups` with an array.
+
+**Remaining Phase 8 work:** the shared `InterfaceSettings` component (1,921
+lines, finishes General's "Default Interface Settings"), then the exit
+paperwork: `MAP.md`, `apps/web/README.md`, `docs/START.md`'s `/admin` route
+rows and "Settings is a modal" note, a dated `docs/CLAUDE.md` entry, the
+ROADMAP pair.
 
 **2026-09-21 (Phase 8, in progress).** Done and committed, in order: the admin
 shell (`routes/admin/AdminLayout`, gate, tab bar, redirects), **Users + Groups**
@@ -1235,10 +1271,13 @@ this session, the same posture as Phase 5.
       Evaluations, Code Execution, Pipelines, Database.
 - [x] Settings tabs: Connections, Analytics (`Dashboard`, `ChartLine`,
       `AnalyticsModelModal`), General (+ Events, Banners), Interface.
-- [ ] Settings tabs still to do: Authentication, Integrations (+ ExternalKnowledge,
-      AddToolServerModal, AddTerminalServerModal), Audio, Images, Documents,
-      Web Search, Models; and the shared `InterfaceSettings` component, which
-      also gives General its "Default Interface Settings" block.
+- [x] Settings tabs: Authentication, Audio, Images, Documents, Web Search,
+      Models (+ Manage Models for Ollama and llama.cpp/LM Studio).
+- [x] Settings tab: Integrations (+ ExternalKnowledge, AddToolServerModal,
+      AddTerminalServerModal). All sixteen admin tabs now exist.
+- [ ] The shared `InterfaceSettings` component, which gives General its
+      "Default Interface Settings" block (and is Phase 10's personal
+      Interface tab).
 - [ ] Phase exit: `MAP.md`, `apps/web/README.md`, `docs/START.md` route tables,
       dated `docs/CLAUDE.md` entry, ROADMAP pair.
 
