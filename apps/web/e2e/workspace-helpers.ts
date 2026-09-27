@@ -3,6 +3,8 @@ import type { Page } from '@playwright/test';
 export type MockUserOptions = {
 	role?: 'admin' | 'user';
 	workspacePermissions?: Record<string, boolean>;
+	/** The user's `permissions.features` (notes, calendar, automations, channels, ...). */
+	featurePermissions?: Record<string, boolean>;
 	enablePlugins?: boolean;
 	/** Extra `config.features` flags (e.g. enable_admin_chat_access). */
 	features?: Record<string, unknown>;
@@ -16,14 +18,14 @@ export type MockUserOptions = {
 // requests are answered with an empty list rather than left to hit the (absent)
 // backend proxy, so a stray call fails visibly as "no data", not as a hang.
 export async function mockWorkspaceBackend(page: Page, options: MockUserOptions = {}) {
-	const { role = 'admin', workspacePermissions = {}, enablePlugins = true, features = {}, config = {} } = options;
+	const { role = 'admin', workspacePermissions = {}, featurePermissions = {}, enablePlugins = true, features = {}, config = {} } = options;
 	const user = {
 		id: 'u1',
 		email: 'u@example.com',
 		name: 'Test User',
 		role,
 		profile_image_url: '',
-		permissions: { workspace: workspacePermissions },
+		permissions: { workspace: workspacePermissions, features: featurePermissions },
 		expires_at: Math.floor(Date.now() / 1000) + 3600
 	};
 	const json = (body: unknown) => ({

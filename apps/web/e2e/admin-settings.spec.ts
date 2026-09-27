@@ -72,7 +72,10 @@ test.describe('settings modal host', () => {
 		await page.route('**/ollama/config', (route) => json(route, { ENABLE_OLLAMA_API: false, OLLAMA_BASE_URLS: [], OLLAMA_API_CONFIGS: {} }));
 		await mockConfigApi(page, '/configs', {});
 		await page.goto('/?settings=admin:nonsense');
-		// Whatever is first in the list, not whatever was asked for.
+		// Whatever is first in the list, not whatever was asked for. Wait for the
+		// selected tab's body first: reading the list the instant the dialog
+		// appears raced the lazy tab chunk on a busy dev server.
+		await expect(modal(page).getByRole('heading', { level: 2 })).toBeVisible();
 		const first = await modal(page).getByRole('tab').first().innerText();
 		await expect(modal(page).getByRole('tab', { selected: true })).toHaveText(first);
 	});

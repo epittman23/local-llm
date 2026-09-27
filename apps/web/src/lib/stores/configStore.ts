@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { create } from 'zustand';
 import { APP_NAME } from '@/lib/constants';
 
@@ -60,3 +61,11 @@ export const useConfigStore = create<ConfigState>((set) => ({
 // instance name once config loads (main.py's `name` field), everywhere the
 // SvelteKit app would read `$WEBUI_NAME` rather than the constant directly.
 export const useWebUIName = () => useConfigStore((state) => state.config?.name || APP_NAME);
+
+/** Sets the tab title to `<section> / <app name>`, as every Svelte page does in its <svelte:head>. */
+export function useDocumentTitle(section: string) {
+	const name = useWebUIName();
+	useEffect(() => {
+		document.title = `${section} / ${name}`;
+	}, [section, name]);
+}

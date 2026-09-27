@@ -14,6 +14,7 @@ import { ReportPage } from '@/routes/benchmarks/ReportPage';
 import { ServePage } from '@/routes/benchmarks/ServePage';
 import { TestsPage } from '@/routes/benchmarks/TestsPage';
 import { TunePage } from '@/routes/benchmarks/TunePage';
+import { CalendarPage } from '@/routes/calendar/CalendarPage';
 import { LegacyFallback } from '@/routes/LegacyFallback';
 import { PlaceholderPage } from '@/routes/PlaceholderPage';
 import { AuthPage } from '@/routes/public/AuthPage';
@@ -92,7 +93,7 @@ const router = createBrowserRouter(
 				{ path: routePaths.notes, element: <PlaceholderPage title="Notes" phase="Phase 9" /> },
 				{
 					path: routePaths.calendar,
-					element: <PlaceholderPage title="Calendar" phase="Phase 9" />
+					element: <CalendarPage />
 				},
 				{
 					path: routePaths.benchmarks,

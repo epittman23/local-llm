@@ -30,6 +30,8 @@ export const routePaths = {
 	adminAnalytics: '/admin/analytics',
 	notes: '/notes',
 	calendar: '/calendar',
+	automations: '/automations',
+	playground: '/playground',
 	benchmarks: '/benchmarks',
 	benchmarksServe: '/benchmarks/serve',
 	benchmarksLive: '/benchmarks/live',

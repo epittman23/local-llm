@@ -1,5 +1,7 @@
 import {
 	Calendar,
+	Clock,
+	FlaskConical,
 	ChartBar,
 	LayoutGrid,
 	LogOut,
@@ -25,6 +27,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { implementedTabIds } from '@/components/settings/adminTabComponents';
 import { availableTabs } from '@/components/settings/settingsTabs';
+import { canUseFeature } from '@/lib/access/features';
 import { signOut } from '@/lib/auth/session';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -101,14 +104,30 @@ export function SidebarContent({
 						<LayoutGrid className="h-4 w-4" />
 						Workspace
 					</NavLink>
-					<NavLink to={routePaths.notes} onClick={onNavigate} className={navLinkClass}>
-						<NotebookText className="h-4 w-4" />
-						Notes
-					</NavLink>
-					<NavLink to={routePaths.calendar} onClick={onNavigate} className={navLinkClass}>
-						<Calendar className="h-4 w-4" />
-						Calendar
-					</NavLink>
+					{canUseFeature('notes', user, config) && (
+						<NavLink to={routePaths.notes} onClick={onNavigate} className={navLinkClass}>
+							<NotebookText className="h-4 w-4" />
+							Notes
+						</NavLink>
+					)}
+					{canUseFeature('automations', user, config) && (
+						<NavLink to={routePaths.automations} onClick={onNavigate} className={navLinkClass}>
+							<Clock className="h-4 w-4" />
+							Automations
+						</NavLink>
+					)}
+					{canUseFeature('calendar', user, config) && (
+						<NavLink to={routePaths.calendar} onClick={onNavigate} className={navLinkClass}>
+							<Calendar className="h-4 w-4" />
+							Calendar
+						</NavLink>
+					)}
+					{canUseFeature('playground', user, config) && (
+						<NavLink to={routePaths.playground} onClick={onNavigate} className={navLinkClass}>
+							<FlaskConical className="h-4 w-4" />
+							Playground
+						</NavLink>
+					)}
 					{benchmarksEnabled && (
 						<NavLink to={routePaths.benchmarks} onClick={onNavigate} className={navLinkClass}>
 							<ChartBar className="h-4 w-4" />
