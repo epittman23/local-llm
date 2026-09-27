@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { getModels } from '@/lib/apis';
+import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useConfigStore } from '@/lib/stores/configStore';
 
 export type ChatModel = {
 	id: string;
@@ -13,8 +15,12 @@ export type ChatModel = {
 /** Every model the user can reach (the Svelte `models` store); shared with the Playground and the composers under ['models-all']. */
 export function useModels() {
 	const token = useAuthStore((s) => s.token) ?? '';
+	const directEnabled = Boolean((useConfigStore((s) => s.config?.features) as Record<string, unknown> | undefined)?.enable_direct_connections);
+	const { settings } = useUserSettings();
+	// The user's own OpenAI-compatible endpoints (Settings > Connections) are listed with the server's models.
+	const direct = directEnabled ? ((settings as { directConnections?: object } | null)?.directConnections ?? null) : null;
 	const q = useQuery({ queryKey: ['models-all'], enabled: Boolean(token), staleTime: 60_000, queryFn: async () => {
-			const res = await getModels(token);
+			const res = await getModels(token, direct);
 			return (Array.isArray(res) ? res : []) as ChatModel[];
 		}
 	});

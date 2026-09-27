@@ -56,7 +56,7 @@ export function useReadAloud() {
 			if (!tts.engine) {
 				const u = new SpeechSynthesisUtterance(parts.join(' '));
 				u.rate = rate;
-				const match = speechSynthesis.getVoices().find((v) => v.voiceURI === voice);
+				const match = speechSynthesis.getVoices().find((v) => v.voiceURI === voice || v.name === voice);
 				if (match) u.voice = match;
 				u.onend = () => setSpeakingId((cur) => (cur === id ? null : cur));
 				stopRef.current = () => speechSynthesis.cancel();

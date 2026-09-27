@@ -12,7 +12,7 @@ import type { Channel, Folder } from './automationModel';
  */
 export function useDestinations(enabled = true) {
 	const token = useAuthStore((s) => s.token) ?? '';
-	const folders = useQuery({ queryKey: ['folders'], queryFn: async () => ((await getFolders(token).catch(() => null)) ?? []) as Folder[], enabled, staleTime: 60_000 });
+	const folders = useQuery({ queryKey: ['folders'], queryFn: async () => ((l) => (Array.isArray(l) ? l : []))(await getFolders(token).catch(() => null)) as Folder[], enabled, staleTime: 60_000 });
 	const channels = useQuery({ queryKey: ['channels'], queryFn: async () => ((await getChannels(token).catch(() => null)) ?? []) as Channel[], enabled, staleTime: 60_000 });
 	return { folders: folders.data ?? [], channels: channels.data ?? [], loaded: folders.isSuccess && channels.isSuccess };
 }

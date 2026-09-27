@@ -22,7 +22,9 @@ const { title = 'local-llm' } = Astro.props;
 			(() => {
 				const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
 				const theme = localStorage.theme || 'system';
-				document.documentElement.classList.add(theme === 'system' ? (prefersDark ? 'dark' : 'light') : theme);
+				// Same mapping as lib/theme.ts's themeClasses (OLED dark is `dark oled`).
+				const classes = theme === 'oled-dark' ? ['dark', 'oled'] : theme === 'dark' ? ['dark'] : theme === 'light' ? ['light'] : [prefersDark ? 'dark' : 'light'];
+				document.documentElement.classList.add(...classes);
 			})();
 		</script>
 	</head>

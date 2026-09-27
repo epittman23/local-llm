@@ -1,5 +1,5 @@
 import { PanelLeft } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Outlet } from 'react-router';
 import { SettingsModal } from '@/components/settings/SettingsModal';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/s
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuthGate } from '@/lib/auth/useAuthGate';
 import { useSettingsUrl } from '@/lib/settings/useSettingsUrl';
+import { useShortcuts } from '@/lib/useShortcuts';
 import { useUIStore } from '@/lib/stores/uiStore';
 import { useChannelUnreadEvents } from '@/routes/channels/useChannels';
 import { SearchChatsDialog } from '@/routes/chat/sidebar/ChatDialogs';
@@ -34,17 +35,8 @@ export function AppShell() {
 	const searchOpen = useUIStore((state) => state.searchOpen);
 	const setSearchOpen = useUIStore((state) => state.setSearchOpen);
 
-	// Ctrl/Cmd+K opens chat search from anywhere, as in the Svelte app.
-	useEffect(() => {
-		const onKey = (e: KeyboardEvent) => {
-			if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-				e.preventDefault();
-				setSearchOpen(true);
-			}
-		};
-		window.addEventListener('keydown', onKey);
-		return () => window.removeEventListener('keydown', onKey);
-	}, [setSearchOpen]);
+	// The user's keyboard shortcuts (Ctrl/Cmd+K search, Ctrl/Cmd+Shift+O new chat, ...).
+	useShortcuts();
 
 	// 'pending': the session bootstrap (lib/auth/session.ts) hasn't resolved
 	// yet -- render nothing rather than flash the shell before we know if

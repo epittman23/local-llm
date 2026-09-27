@@ -8,7 +8,7 @@ import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import { cn } from '@/lib/utils';
 import { AdminTabIcon } from './AdminTabIcon';
 import { adminTabComponents, implementedTabIds } from './adminTabComponents';
-import { adminTabSegment, availableTabs, filterTabs, resolveTab, startsGroup } from './settingsTabs';
+import { adminTabSegment, availableTabs, filterTabs, isAdminTab, resolveTab, startsGroup } from './settingsTabs';
 
 const tabButtonClass = (active: boolean) =>
 	cn(
@@ -17,14 +17,14 @@ const tabButtonClass = (active: boolean) =>
 	);
 
 /**
- * Ports chat/SettingsModal.svelte, the admin half: a searchable, grouped tab
- * list beside the selected tab. It is mounted once by AppShell and opened from
- * the store (`?settings=admin:<tab>` deep links, the user menu). The personal
- * tabs -- General, Interface, Account, ... -- arrive with the chat surface
- * (Phase 10) as more entries in the same registry.
+ * Ports chat/SettingsModal.svelte: a searchable, grouped tab list beside the
+ * selected tab -- everyone's personal tabs, then (for an admin) the admin
+ * ones under their own heading. It is mounted once by AppShell and opened
+ * from the store (`?settings=<tab>` / `?settings=admin:<tab>` deep links, the
+ * user menu).
  *
  * Search filters as you type (100ms in the original; instant here, the list is
- * sixteen strings). If the selected tab is filtered away the first match is
+ * under thirty strings). If the selected tab is filtered away the first match is
  * shown, and a non-admin gets no admin tabs.
  */
 export function SettingsModal() {
@@ -62,7 +62,7 @@ export function SettingsModal() {
 				className="flex h-[min(max(54rem,80dvh),calc(100dvh-4rem))] max-h-[calc(100dvh-4rem)] w-[calc(100vw-2rem)] max-w-[80rem] gap-0 overflow-hidden p-0 sm:max-w-[80rem] max-md:flex-col"
 			>
 				<DialogTitle className="sr-only">Settings</DialogTitle>
-				<DialogDescription className="sr-only">Administrator settings.</DialogDescription>
+				<DialogDescription className="sr-only">Your settings and, for administrators, the server settings.</DialogDescription>
 
 				<nav id="settings-tabs-container" className="flex min-w-0 shrink-0 border-b md:min-h-0 md:w-[15rem] md:flex-col md:border-r md:border-b-0">
 					<button
@@ -87,9 +87,11 @@ export function SettingsModal() {
 						/>
 					</div>
 					<div role="tablist" aria-orientation="vertical" className="flex min-h-0 min-w-0 flex-1 gap-px overflow-x-auto p-1 pl-0 md:flex-col md:overflow-x-hidden md:overflow-y-auto md:pl-1">
-						<span className="text-muted-foreground mt-1.5 mb-0.5 hidden px-2 text-[0.625rem] md:block">Admin</span>
 						{filtered.map((tab, index) => (
 							<div key={tab.id} className="contents">
+								{isAdminTab(tab.id) && (index === 0 || !isAdminTab(filtered[index - 1].id)) && (
+									<span className="text-foreground/80 mt-3 mb-0.5 hidden px-2 text-[0.625rem] font-medium md:block">Admin</span>
+								)}
 								{startsGroup(filtered, index) && (
 									<span className={cn('text-muted-foreground hidden shrink-0 px-2 text-[0.625rem] md:block', index === 0 ? 'mt-0.5' : 'mt-2', 'mb-0.5')}>{tab.group}</span>
 								)}

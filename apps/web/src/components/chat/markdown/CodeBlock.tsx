@@ -97,7 +97,7 @@ export function CodeBlock({
 					)}
 					<button
 						type="button"
-						className={bar}
+						className={cn(bar, 'copy-code-button')}
 						onClick={async () => {
 							if (await copyToClipboard(code)) {
 								setCopied(true);

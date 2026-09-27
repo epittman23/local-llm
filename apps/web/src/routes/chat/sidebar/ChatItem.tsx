@@ -105,6 +105,7 @@ export function ChatItem({ chat, folders, onNavigate }: { chat: ChatListItem; fo
 			) : (
 				<NavLink
 					to={`/c/${chat.id}`}
+					data-chat-link
 					onClick={() => {
 						patchCachedChat(queryClient, chat.id, (c) => ({ ...c, last_read_at: Math.floor(Date.now() / 1000) }));
 						onNavigate?.();

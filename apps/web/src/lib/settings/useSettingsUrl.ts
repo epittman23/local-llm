@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useSearchParams } from 'react-router';
 import { implementedTabIds } from '@/components/settings/adminTabComponents';
-import { availableTabs } from '@/components/settings/settingsTabs';
+import { availableTabs, isAdminTab } from '@/components/settings/settingsTabs';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
@@ -23,7 +23,8 @@ export function useSettingsUrl() {
 
 	useEffect(() => {
 		if (!requested || status !== 'authenticated' || config === null) return;
-		if (availableTabs(user, config, implementedTabIds).length > 0) openSettings(requested);
+		const allowed = !isAdminTab(requested) || user?.role === 'admin';
+		if (allowed && availableTabs(user, config, implementedTabIds).length > 0) openSettings(requested);
 		const next = new URLSearchParams(params);
 		next.delete('settings');
 		setParams(next, { replace: true });

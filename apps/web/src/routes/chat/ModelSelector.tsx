@@ -27,7 +27,7 @@ export function ModelSelector({ models, selected, onChange, disabled }: { models
 		<div className="flex min-w-0 flex-col items-start gap-0.5">
 			{selected.map((id, idx) => (
 				<div key={idx} className="flex max-w-full items-center gap-1">
-					<Picker models={visible} value={id} disabled={disabled} onPick={(pick) => onChange(selected.map((s, i) => (i === idx ? pick : s)))} />
+					<Picker id={idx === 0 ? 'model-selector-model-button' : undefined} models={visible} value={id} disabled={disabled} onPick={(pick) => onChange(selected.map((s, i) => (i === idx ? pick : s)))} />
 					{idx === 0 && multiple && (
 						<button type="button" aria-label="Add Model" className="text-muted-foreground hover:text-foreground p-1" disabled={disabled} onClick={() => onChange([...selected, ''])}>
 							<Plus className="size-3.5" />
@@ -54,7 +54,7 @@ export function ModelSelector({ models, selected, onChange, disabled }: { models
 	);
 }
 
-function Picker({ models, value, onPick, disabled }: { models: ChatModel[]; value: string; onPick: (id: string) => void; disabled?: boolean }) {
+function Picker({ id, models, value, onPick, disabled }: { id?: string; models: ChatModel[]; value: string; onPick: (id: string) => void; disabled?: boolean }) {
 	const [open, setOpen] = useState(false);
 	const [query, setQuery] = useState('');
 	const current = models.find((m) => m.id === value);
@@ -69,7 +69,7 @@ function Picker({ models, value, onPick, disabled }: { models: ChatModel[]; valu
 			}}
 		>
 			<PopoverTrigger asChild>
-				<button type="button" disabled={disabled} className="flex min-w-0 items-center gap-1 text-lg font-medium" aria-label="Select a model">
+				<button type="button" id={id} disabled={disabled} className="flex min-w-0 items-center gap-1 text-lg font-medium" aria-label="Select a model">
 					<span className="truncate">{current?.name ?? (value ? value : 'Select a model')}</span>
 					<ChevronDown className="size-4 shrink-0" />
 				</button>

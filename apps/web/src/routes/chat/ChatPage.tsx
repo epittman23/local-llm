@@ -127,6 +127,15 @@ export function ChatPage() {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [loaded, id, folderId, folder.isFetched, session.chat]);
 
+	// `?temporary-chat=true` (also the New Temporary Chat shortcut) switches a new chat to temporary.
+	useEffect(() => {
+		if (search.get('temporary-chat') !== 'true' || id) return;
+		if (temporaryAllowed) setTemporary(true);
+		const next = new URLSearchParams(search);
+		next.delete('temporary-chat');
+		setSearch(next, { replace: true });
+	}, [search, id, temporaryAllowed, setSearch]);
+
 	// `?q=` fills the input and (unless `submit=false`) sends it, once models are chosen.
 	const consumed = useRef(false);
 	useEffect(() => {

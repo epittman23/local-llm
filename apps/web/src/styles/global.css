@@ -118,6 +118,14 @@
     --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* OLED dark (lib/theme.ts): true black surfaces on top of .dark. */
+.oled {
+    --background: oklch(0 0 0);
+    --card: oklch(0.13 0 0);
+    --popover: oklch(0.13 0 0);
+    --sidebar: oklch(0 0 0);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

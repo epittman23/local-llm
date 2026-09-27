@@ -131,7 +131,7 @@ function RegenerateMenu({ message, session }: { message: Message; session: Sessi
 	return (
 		<div className="flex items-center">
 			<Tip content="Regenerate">
-				<button type="button" aria-label="Regenerate" className={actionButton} onClick={() => void session.regenerate(message)}>
+				<button type="button" aria-label="Regenerate" className={cn(actionButton, 'regenerate-response-button')} onClick={() => void session.regenerate(message)}>
 					<RotateCcw className="size-3.5" />
 				</button>
 			</Tip>

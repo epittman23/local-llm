@@ -1,16 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionUser } from '@/lib/stores/authStore';
-import { adminTabs, availableTabs, filterTabs, resolveTab, startsGroup } from './settingsTabs';
+import { adminTabs, availableTabs, filterTabs, personalTabs, resolveTab, startsGroup } from './settingsTabs';
 
-const user = (role: string) => ({ id: 'u', email: 'e', name: 'n', role, profile_image_url: '' }) as SessionUser;
-const all = new Set(adminTabs.map((t) => t.id));
+const user = (role: string, permissions: Record<string, unknown> = {}) => ({ id: 'u', email: 'e', name: 'n', role, profile_image_url: '', permissions }) as SessionUser;
+const adminOnly = new Set(adminTabs.map((t) => t.id));
+const all = new Set([...adminTabs, ...personalTabs].map((t) => t.id));
 const cfg = (features: Record<string, unknown> = {}) => ({ name: 'x', version: '1', features }) as never;
 
 describe('availableTabs', () => {
-	it('lists every implemented admin tab for an admin, and nothing for anyone else', () => {
-		expect(availableTabs(user('admin'), cfg(), all)).toHaveLength(adminTabs.length);
-		expect(availableTabs(user('user'), cfg(), all)).toEqual([]);
+	it('lists every implemented admin tab for an admin, and no admin tab for anyone else', () => {
+		expect(availableTabs(user('admin'), cfg(), adminOnly)).toHaveLength(adminTabs.length);
+		expect(availableTabs(user('user'), cfg(), adminOnly)).toEqual([]);
 		expect(availableTabs(null, cfg(), all)).toEqual([]);
+	});
+	it('lists personal tabs first, by the Svelte visibility rules', () => {
+		const ids = (u: SessionUser, f = {}) => availableTabs(u, cfg(f), all).map((t) => t.id);
+		expect(ids(user('user'))).toEqual(['general', 'interface', 'notifications', 'shortcuts', 'audio', 'data_controls', 'archived_chats', 'account', 'about']);
+		expect(ids(user('user', { features: { direct_tool_servers: true }, settings: { interface: false } }), { enable_direct_connections: true, enable_memories: true })).toEqual(['general', 'notifications', 'shortcuts', 'connections', 'tools', 'personalization', 'audio', 'data_controls', 'archived_chats', 'account', 'about']);
+		expect(ids(user('admin'))[0]).toBe('general');
+		expect(ids(user('admin'))).toContain('admin:general');
 	});
 	it('lists only tabs that have a component', () => {
 		expect(availableTabs(user('admin'), cfg(), new Set(['admin:db'])).map((t) => t.id)).toEqual(['admin:db']);
@@ -22,7 +30,7 @@ describe('availableTabs', () => {
 });
 
 describe('filterTabs', () => {
-	const tabs = availableTabs(user('admin'), cfg(), all);
+	const tabs = availableTabs(user('admin'), cfg(), adminOnly);
 	it('returns everything for a blank search', () => {
 		expect(filterTabs(tabs, '  ')).toHaveLength(tabs.length);
 	});
@@ -34,7 +42,7 @@ describe('filterTabs', () => {
 });
 
 describe('resolveTab', () => {
-	const tabs = availableTabs(user('admin'), cfg(), all);
+	const tabs = availableTabs(user('admin'), cfg(), adminOnly);
 	it('prefers the requested tab, then the current one, then the first', () => {
 		expect(resolveTab('admin:audio', 'admin:db', tabs)).toBe('admin:audio');
 		expect(resolveTab('admin:nope', 'admin:db', tabs)).toBe('admin:db');

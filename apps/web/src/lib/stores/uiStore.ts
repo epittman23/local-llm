@@ -9,6 +9,9 @@ const readPersistedSidebarOpen = () => {
 };
 
 type UIState = {
+	/** The chat controls panel (Phase 10g). */
+	controlsOpen: boolean;
+	setControlsOpen: (open: boolean) => void;
 	/** The chat search dialog (Ctrl/Cmd+K, or Search in the sidebar). */
 	searchOpen: boolean;
 	setSearchOpen: (open: boolean) => void;
@@ -18,6 +21,8 @@ type UIState = {
 };
 
 export const useUIStore = create<UIState>((set, get) => ({
+	controlsOpen: false,
+	setControlsOpen: (controlsOpen) => set({ controlsOpen }),
 	searchOpen: false,
 	setSearchOpen: (searchOpen) => set({ searchOpen }),
 	sidebarOpen: readPersistedSidebarOpen(),

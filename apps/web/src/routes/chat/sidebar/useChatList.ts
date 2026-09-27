@@ -42,7 +42,7 @@ export function useFolderChats(folderId: string, enabled: boolean) {
 /** The folders, under ['folders'] (the key Automations already reads). */
 export function useFolders() {
 	const token = useAuthStore((s) => s.token) ?? '';
-	return useQuery({ queryKey: ['folders'], enabled: Boolean(token), queryFn: async () => ((await getFolders(token).catch(() => null)) ?? []) as Folder[] });
+	return useQuery({ queryKey: ['folders'], enabled: Boolean(token), queryFn: async () => ((l: unknown) => (Array.isArray(l) ? (l as Folder[]) : []))(await getFolders(token).catch(() => null)) });
 }
 
 /** Applies `fn` to a chat wherever it appears in the cached lists (list pages, pinned, folders). */

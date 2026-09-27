@@ -11,11 +11,46 @@ export type SettingsTab = {
 };
 
 /**
- * The admin tabs of chat/SettingsModal.svelte, in its order, with its search
- * keywords and its group headings. (The modal's personal tabs -- General,
- * Interface, Account, ... -- belong to Phase 10 and will be registered beside
- * these; the modal already lists whichever section has tabs.)
+ * The personal tabs of chat/SettingsModal.svelte, in its order, with its
+ * group headings and (a shortened list of) its search keywords.
  */
+export const personalTabs: SettingsTab[] = [
+	{ id: 'general', title: 'General', group: 'Basics', keywords: ['general', 'theme', 'language', 'system prompt', 'advanced parameters', 'advanced params', 'keep alive', 'request mode'] },
+	{ id: 'interface', title: 'Interface', group: 'Basics', keywords: ['interface', 'ui', 'chat bubble', 'widescreen', 'chat direction', 'title autogeneration', 'follow up', 'auto copy', 'image compression', 'rich text input', 'haptic feedback', 'high contrast'] },
+	{ id: 'notifications', title: 'Notifications', group: 'Basics', keywords: ['notifications', 'browser notifications', 'notification sound', 'webhook', 'webhooks', 'notify'] },
+	{ id: 'shortcuts', title: 'Keyboard', group: 'Basics', keywords: ['keyboard', 'shortcuts', 'hotkeys', 'keybindings', 'keys', 'commands'] },
+	{ id: 'connections', title: 'Connections', group: 'Services', keywords: ['connections', 'add connection', 'direct connections', 'manage connections'] },
+	{ id: 'tools', title: 'Integrations', group: 'Services', keywords: ['integrations', 'tools', 'tool servers', 'manage tools', 'terminal', 'open terminal'] },
+	{ id: 'personalization', title: 'Personalization', group: 'Preferences', keywords: ['personalization', 'memory', 'memories', 'personalize', 'experimental'] },
+	{ id: 'audio', title: 'Audio', group: 'Preferences', keywords: ['audio', 'voice', 'speech', 'text to speech', 'speech to text', 'playback', 'auto send', 'stt', 'tts'] },
+	{ id: 'data_controls', title: 'Data Controls', group: 'Data', keywords: ['data', 'import chats', 'export chats', 'archive all chats', 'delete all chats', 'chat history'] },
+	{ id: 'archived_chats', title: 'Archived Chats', group: 'Data', keywords: ['archived', 'archive', 'unarchive', 'archived chats'] },
+	{ id: 'account', title: 'Account', group: 'Profile', keywords: ['account', 'profile', 'password', 'change password', 'api keys', 'profile image', 'username'] },
+	{ id: 'about', title: 'About', group: 'Profile', keywords: ['about', 'version', 'check for updates', 'license', 'help', 'documentation'] }
+];
+
+type Perms = { features?: Record<string, boolean>; settings?: Record<string, boolean> };
+
+/** SettingsModal.svelte's rules for who sees which personal tab. */
+function personalTabVisible(id: string, user: SessionUser, config: BackendConfig | null): boolean {
+	const admin = user.role === 'admin';
+	const perms = (user.permissions ?? {}) as Perms;
+	const features = (config?.features ?? {}) as Record<string, unknown>;
+	switch (id) {
+		case 'connections':
+			return Boolean(features.enable_direct_connections);
+		case 'tools':
+			return admin || Boolean(perms.features?.direct_tool_servers);
+		case 'interface':
+			return admin || (perms.settings?.interface ?? true);
+		case 'personalization':
+			return Boolean(features.enable_memories) && (admin || (perms.features?.memories ?? true));
+		default:
+			return true;
+	}
+}
+
+/** The admin tabs of chat/SettingsModal.svelte, in its order, with its search keywords and its group headings. */
 export const adminTabs: SettingsTab[] = [
 	{ id: 'admin:general', title: 'General', group: 'System', keywords: ['general', 'admin', 'settings', 'version', 'update', 'community', 'channels'] },
 	{ id: 'admin:authentication', title: 'Authentication', group: 'System', keywords: ['authentication', 'auth', 'login', 'signup', 'ldap', 'oauth', 'oidc', 'sso', 'roles'] },
@@ -38,14 +73,16 @@ export const adminTabs: SettingsTab[] = [
 export const isAdminTab = (id: string) => id.startsWith('admin:');
 
 /**
- * Tabs this user can open. `implemented` is the set of tab ids that have a
+ * Tabs this user can open: their personal tabs, then (for an admin) the admin ones. `implemented` is the set of tab ids that have a
  * component in this app so far (the modal passes its registry), so a tab is
  * never listed before it works. Analytics also needs `enable_admin_analytics`
  * (default on), which the Svelte modal checks at filter time.
  */
 export function availableTabs(user: SessionUser | null, config: BackendConfig | null, implemented: ReadonlySet<string>): SettingsTab[] {
-	if (user?.role !== 'admin') return [];
-	return adminTabs.filter((t) => implemented.has(t.id) && (t.id !== 'admin:analytics' || (config?.features?.enable_admin_analytics ?? true)));
+	if (!user) return [];
+	const personal = personalTabs.filter((t) => implemented.has(t.id) && personalTabVisible(t.id, user, config));
+	if (user.role !== 'admin') return personal;
+	return [...personal, ...adminTabs.filter((t) => implemented.has(t.id) && (t.id !== 'admin:analytics' || (config?.features?.enable_admin_analytics ?? true)))];
 }
 
 /** The search box: case-insensitive, matches the title or any keyword by substring. */

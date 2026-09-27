@@ -72,10 +72,10 @@ export function ToolCallDisplay({
 			</button>
 			{needsApproval && (
 				<div className="my-1 flex gap-2">
-					<Button size="sm" disabled={resolving} onClick={() => onResolve(true)}>
+					<Button size="sm" className="tool-call-allow-button" disabled={resolving} onClick={() => onResolve(true)}>
 						Allow
 					</Button>
-					<Button size="sm" variant="outline" disabled={resolving} onClick={() => onResolve(false)}>
+					<Button size="sm" variant="outline" className="tool-call-deny-button" disabled={resolving} onClick={() => onResolve(false)}>
 						Deny
 					</Button>
 				</div>

@@ -52,10 +52,10 @@ function SiblingNav({ history, message, onBranch }: { history: History; message:
 	);
 }
 
-function CopyButton({ text }: { text: string }) {
+function CopyButton({ text, className }: { text: string; className?: string }) {
 	return (
 		<Tip content="Copy">
-			<button type="button" aria-label="Copy" className={actionButton} onClick={() => void copyToClipboard(text)}>
+			<button type="button" aria-label="Copy" className={cn(actionButton, className)} onClick={() => void copyToClipboard(text)}>
 				<Copy className="size-3.5" />
 			</button>
 		</Tip>
@@ -195,13 +195,13 @@ export function ResponseMessage({ history, message, h, isLast, chatId, compact =
 				{message.done !== false && !edit && (
 					<div className={cn('flex flex-wrap items-center gap-0.5', !isLast && 'opacity-0 transition group-focus-within:opacity-100 group-hover:opacity-100')}>
 						<SiblingNav history={history} message={message} onBranch={h.onBranch} />
-						<CopyButton text={removeAllDetails(message.content)} />
+						<CopyButton text={removeAllDetails(message.content)} className="copy-response-button" />
 						{h.extraActions?.(message, { isLast })}
 						{h.regenerate ? (
 							h.regenerate(message)
 						) : (
 							<Tip content="Regenerate">
-								<button type="button" aria-label="Regenerate" className={actionButton} onClick={() => h.onRegenerate(message)}>
+								<button type="button" aria-label="Regenerate" className={cn(actionButton, 'regenerate-response-button')} onClick={() => h.onRegenerate(message)}>
 									<RotateCcw className="size-3.5" />
 								</button>
 							</Tip>
