@@ -36,7 +36,7 @@ from open_webui.benchmarks.serving.launcher import (
 from open_webui.benchmarks.serving.model_name import split_model
 from open_webui.benchmarks.serving.profiles import ARCH_DENSE, ARCH_MOE, Overrides, ServingProfile, resolve
 
-#: backend/tests/ -> backend/ -> apps/openwebui/ -> apps/ -> repo root
+#: backend/tests/ -> backend/ -> apps/server/ -> apps/ -> repo root
 REPO_ROOT = Path(__file__).resolve().parents[4]
 BASELINE_DIR = REPO_ROOT / 'docs' / 'serving-baseline'
 

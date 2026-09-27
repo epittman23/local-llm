@@ -1,4 +1,4 @@
-// Ports apps/openwebui/src/lib/i18n/index.ts's i18next config verbatim (same
+// Ports d863707:apps/openwebui/src/lib/i18n/index.ts's i18next config verbatim (same
 // detection order, same fallback map, same interpolation settings) -- only the
 // Svelte-store wrapper (createI18nStore/createIsLoadingStore) is dropped, since
 // react-i18next's own useTranslation()/I18nextProvider give the same reactivity

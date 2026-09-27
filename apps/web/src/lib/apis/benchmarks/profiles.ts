@@ -4,7 +4,7 @@
 // SvelteKit frontend at all -- see this file's own docstring, and decision
 // 11 in docs/migration-plan.md ("Full CRUD from the Serve page"), which the
 // existing Serve.svelte never actually built. Follows the same fetch/error
-// shape as the rest of apps/openwebui/src/lib/apis/benchmarks/index.ts
+// shape as the rest of d863707:apps/openwebui/src/lib/apis/benchmarks/index.ts
 // (ported verbatim elsewhere) so this reads as one module, not two styles.
 
 import { WEBUI_API_BASE_URL } from '@/lib/constants';

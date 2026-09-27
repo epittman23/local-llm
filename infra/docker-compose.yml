@@ -1,15 +1,14 @@
-# Postgres + pgvector for the Open WebUI fork (apps/openwebui, vendored into
-# this repo and pinned at v0.11.3 -- see docs/CLAUDE.md's decisions log).
-# Open WebUI itself is not a container: it runs as two host processes
-# (lllm-frontend, lllm-backend -- scripts/shell/main.sh), the same way
-# lllm-serve already does, so the two can eventually integrate directly.
+# Postgres + pgvector for the backend (apps/server, the Open WebUI fork
+# vendored into this repo and pinned at v0.11.3 -- see docs/CLAUDE.md's
+# decisions log). The backend itself is not a container: it runs as a host
+# process so it can start and stop llama-server on this machine's GPU.
 # Postgres has no such constraint, so it stays the simplest option:
 # containerized.
 #
-# lllm-backend (scripts/shell/main.sh) brings this up before starting the
-# backend and tears it down via a trap when the backend stops -- there is
-# normally no need to run `docker compose up` by hand. `.env` beside this
-# file supplies POSTGRES_PASSWORD.
+# `make backend` brings this up before starting the backend and tears it
+# down via a trap when the backend stops -- there is normally no need to run
+# `docker compose up` by hand. `.env` beside this file supplies
+# POSTGRES_PASSWORD.
 #
 # The project name is pinned rather than inherited from this file's parent
 # directory. Compose derives it from the directory by default, and the

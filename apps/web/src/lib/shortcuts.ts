@@ -1,4 +1,4 @@
-// Ported from apps/openwebui/src/lib/shortcuts.ts: the shortcut registry,
+// Ported from d863707:apps/openwebui/src/lib/shortcuts.ts: the shortcut registry,
 // the default bindings and chord handling. The Svelte version kept the
 // bindings in a store; here they are a plain map resolved from the user's
 // saved settings (see lib/useShortcuts.ts).

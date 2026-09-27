@@ -11,7 +11,7 @@ import { convertMessagesToHistory, createMessagesList } from '@/lib/utils/auth-h
 import { routePaths } from '@/routes/routePaths';
 
 /**
- * Ports apps/openwebui/src/routes/s/[id]/+page.svelte as the "read-only
+ * Ports d863707:apps/openwebui/src/routes/s/[id]/+page.svelte as the "read-only
  * React island" Phase 6's own checklist calls for (docs/migration-plan.md)
  * -- not a port of chat/Messages.svelte (that's Phase 10's, ~46k LOC). Each
  * message's content is rendered through the same marked + DOMPurify

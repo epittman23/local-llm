@@ -1,4 +1,4 @@
-// @ts-nocheck -- ported verbatim from apps/openwebui/src/lib/apis/**; this file's
+// @ts-nocheck -- ported verbatim from d863707:apps/openwebui/src/lib/apis/**; this file's
 // looseness (implicit anys, a possibly-null body) is inherited from the source, which
 // evidently never ran a strict tsc pass over its own lib/ files (only svelte-check on
 // .svelte components). Fixing it here would mean rewriting signatures beyond what a

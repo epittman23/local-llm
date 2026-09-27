@@ -1,6 +1,6 @@
 # Icon mapping: custom SVG components → lucide-react
 
-`apps/openwebui/src/lib/components/icons/` (182 components) and the per-feature
+`d863707:apps/openwebui/src/lib/components/icons/` (182 components) and the per-feature
 icon sets beside individual surfaces (e.g. `layout/Sidebar/icons/`) are one-off
 Svelte wrappers around inline SVG. The migration plan's own decision
 (`docs/migration-plan.md`, "Derived architecture decisions") is to replace all

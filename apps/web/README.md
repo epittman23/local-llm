@@ -1,9 +1,11 @@
 # apps/web
 
-The Astro + React + shadcn/ui frontend that will eventually replace
-`apps/openwebui`'s SvelteKit app. See the root [`README.md`](../../README.md)
-and [`docs/migration-plan.md`](../../docs/migration-plan.md) (Phase 3
-onward) for why this exists and what's still ahead of it.
+The Astro + React + shadcn/ui frontend for the backend in `apps/server`. It
+replaced the Open WebUI fork's SvelteKit app surface by surface; see the root
+[`README.md`](../../README.md) and
+[`docs/migration-plan.md`](../../docs/migration-plan.md) (Phases 3-11) for
+why. Comments reading `d863707:apps/openwebui/...` name the Svelte file a
+piece was ported from; `git show d863707:<path>` opens it.
 
 ## Running it
 
@@ -23,7 +25,7 @@ the server running after Ctrl-C unless you `astro dev stop` it yourself.
 ## Building it
 
 `bun run build` — static output to `dist/`. The backend serves it at `/`
-(`FRONTEND_BUILD_DIR` in `apps/openwebui/backend/open_webui/env.py` defaults to
+(`FRONTEND_BUILD_DIR` in `apps/server/backend/open_webui/env.py` defaults to
 this `dist/`), so after a build `make backend` alone serves the whole app on
 `:4000`. At boot the backend copies `dist/static/` into its own static
 directory, which is where `/static/favicon.png` and friends come from.
@@ -42,7 +44,7 @@ directory, which is where `/static/favicon.png` and friends come from.
 ```
 src/
 ├── layouts/Base.astro     <html>/<head>, the anti-FOUC dark-mode script
-│                          (mirrors apps/openwebui/src/app.html's), and the
+│                          (mirrors d863707:apps/openwebui/src/app.html's), and the
 │                          --app-text-scale variable's declaration.
 ├── pages/[...path].astro  mounts Base + App; the single static entry.
 ├── middleware.ts          rewrites a dev-server 404 to the root so deep

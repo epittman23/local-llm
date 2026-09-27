@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 // Ports `showSettings` (boolean | tab-id string | { tab, state }) from
-// apps/openwebui/src/lib/stores/index.ts, split into what it really carries:
+// d863707:apps/openwebui/src/lib/stores/index.ts, split into what it really carries:
 // whether the modal is open, which tab it was asked for, and an opaque `state`
 // handed to that tab (only Admin > Models reads one -- "open on this model").
 export type SettingsRequest = { tab: string; state?: Record<string, unknown> | null };

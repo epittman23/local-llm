@@ -14,7 +14,7 @@ const fakeUser = {
 
 describe('App', () => {
 	beforeEach(() => {
-		// The route gate (lib/auth/useAuthGate.ts, ported from apps/openwebui's
+		// The route gate (lib/auth/useAuthGate.ts, ported from the Svelte app's
 		// own (app)/+layout.svelte) redirects to /auth for any status other than
 		// 'authenticated' -- so exercising the shell at all needs a session.
 		// localStorage.token is what lib/auth/session.ts's initAuth() bootstraps
@@ -43,7 +43,7 @@ describe('App', () => {
 		// mounted without throwing, not just that some JSX came back.
 		expect(await screen.findByRole('textbox', { name: 'Message' })).toBeInTheDocument();
 
-		// The sidebar defaults closed (mirrors apps/openwebui/src/lib/components/
+		// The sidebar defaults closed (mirrors d863707:apps/openwebui/src/lib/components/
 		// layout/Sidebar.svelte's own localStorage.sidebar default) and is not
 		// rendered at all until opened -- see AppShell.tsx's own comment on why
 		// it's unmounted rather than just visually collapsed.

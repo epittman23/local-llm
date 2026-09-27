@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-// Mirrors apps/openwebui/src/lib/stores/index.ts's `showSidebar` writable +
+// Mirrors d863707:apps/openwebui/src/lib/stores/index.ts's `showSidebar` writable +
 // its localStorage.sidebar persistence (see layout/Sidebar.svelte's own
 // onMount/subscribe pair) -- boolean, defaulting closed, one localStorage key.
 const readPersistedSidebarOpen = () => {

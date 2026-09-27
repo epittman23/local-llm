@@ -1,4 +1,4 @@
-// Verbatim from apps/openwebui/src/lib/utils/index.ts (the 2334-line kitchen-sink
+// Verbatim from d863707:apps/openwebui/src/lib/utils/index.ts (the 2334-line kitchen-sink
 // module the SvelteKit app shares between every surface). Only the four helpers
 // `src/lib/apis/**` actually imports are ported here; the rest of that file belongs
 // to whichever later phase ports the surface that uses it (chat, admin, workspace),

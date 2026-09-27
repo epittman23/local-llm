@@ -1,5 +1,5 @@
 // The starter source shown in an empty tool editor. Copied verbatim from
-// apps/openwebui/src/lib/components/workspace/Tools/ToolkitEditor.svelte.
+// d863707:apps/openwebui/src/lib/components/workspace/Tools/ToolkitEditor.svelte.
 export const toolBoilerplate = `import os
 import requests
 from datetime import datetime

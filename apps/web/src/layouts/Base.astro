@@ -15,7 +15,7 @@ const { title = 'local-llm' } = Astro.props;
 		<meta name="robots" content="noindex,nofollow" />
 		<title>{title}</title>
 		<script is:inline>
-			// Anti-FOUC: set before first paint, mirroring apps/openwebui/src/app.html's
+			// Anti-FOUC: set before first paint, mirroring d863707:apps/openwebui/src/app.html's
 			// own inline script (same localStorage.theme key, same class-on-<html>
 			// mechanism) so a shared cookie/localStorage-free preference isn't needed
 			// yet -- ports the mechanism now, not the theme picker UI (that's Phase 4).
@@ -36,7 +36,7 @@ const { title = 'local-llm' } = Astro.props;
 <style is:global>
 	:root {
 		/* Updated at runtime by the UI-scale control once it exists (Phase 4);
-		   see apps/openwebui/src/app.css's own --app-text-scale for the
+		   see d863707:apps/openwebui/src/app.css's own --app-text-scale for the
 		   original. Every consumer reads it with a `1` fallback, so it is
 		   safe to declare here before anything sets it. */
 		--app-text-scale: 1;

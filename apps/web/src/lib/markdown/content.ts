@@ -2,7 +2,7 @@ import { WEBUI_BASE_URL } from '@/lib/constants';
 
 // The text preprocessors a chat message goes through before it is tokenized,
 // and the <details> helpers used when a message is sent back to a model.
-// Ported from apps/openwebui/src/lib/utils/index.ts.
+// Ported from d863707:apps/openwebui/src/lib/utils/index.ts.
 
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 

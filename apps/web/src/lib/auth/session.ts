@@ -1,4 +1,4 @@
-// Ports apps/openwebui/src/routes/+layout.svelte's token-expiry/401-detection
+// Ports d863707:apps/openwebui/src/routes/+layout.svelte's token-expiry/401-detection
 // pattern (its `clearExpiredSession`/`checkTokenExpiry`/`isAuthenticatedBackendFetch`/
 // `isCurrentSessionUnauthorized`, roughly lines 879-1079), which is genuinely new
 // infrastructure for this app rather than a port of any $lib/apis module: the

@@ -33,7 +33,7 @@ const formatTime = (at: number | undefined): string => {
 };
 
 /**
- * Ports apps/openwebui/src/lib/components/benchmarks/Live.svelte: the same
+ * Ports d863707:apps/openwebui/src/lib/components/benchmarks/Live.svelte: the same
  * run-identity strip, summary stat grid, deltas table, and recent-samples
  * table, polled the same 5s. "polls -- refetchInterval; Kill -> AlertDialog"
  * per Phase 5's own checklist wording (docs/migration-plan.md) -- the poll

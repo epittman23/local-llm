@@ -1,5 +1,5 @@
 // Small helpers the workspace file/knowledge surfaces share. Ported from
-// apps/openwebui/src/lib/utils/index.ts.
+// d863707:apps/openwebui/src/lib/utils/index.ts.
 
 /** 1536 -> "1.5 KB". */
 export const formatFileSize = (size: number | null | undefined): string => {

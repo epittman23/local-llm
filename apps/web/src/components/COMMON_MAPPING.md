@@ -1,6 +1,6 @@
 # `common/` mapping: 62 shared Svelte components → shadcn/ui or custom
 
-`apps/openwebui/src/lib/components/common/` (62 components, per the migration
+`d863707:apps/openwebui/src/lib/components/common/` (62 components, per the migration
 plan's own "Key facts") is the shared UI kit every surface (chat, workspace,
 admin, benchmarks) built on. This records where each one lands, so a later
 phase porting a surface that uses one doesn't have to re-derive the decision.

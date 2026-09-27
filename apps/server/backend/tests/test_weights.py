@@ -19,7 +19,7 @@ import pytest
 from open_webui.benchmarks.serving.profiles import ServingProfile
 from open_webui.benchmarks.serving.weights import FetchProcess, WeightsError, fetch_argv
 
-#: backend/tests/ -> backend/ -> apps/openwebui/ -> apps/ -> repo root
+#: backend/tests/ -> backend/ -> apps/server/ -> apps/ -> repo root
 REPO_ROOT = Path(__file__).resolve().parents[4]
 BASELINE_DIR = REPO_ROOT / 'docs' / 'serving-baseline'
 

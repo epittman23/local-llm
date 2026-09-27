@@ -32,7 +32,7 @@ test('the app shell renders the home route with a working sidebar link', async (
 	await page.goto('/');
 	await expect(page.getByRole('textbox', { name: 'Message' })).toBeVisible();
 
-	// The sidebar defaults closed (mirrors apps/openwebui/src/lib/components/
+	// The sidebar defaults closed (mirrors d863707:apps/openwebui/src/lib/components/
 	// layout/Sidebar.svelte's own localStorage.sidebar default), so its nav
 	// links don't exist in the DOM until it's opened.
 	await page.getByRole('button', { name: /open sidebar/i }).click();

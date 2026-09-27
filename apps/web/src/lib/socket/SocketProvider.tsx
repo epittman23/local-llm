@@ -1,4 +1,4 @@
-// Ports the connection lifecycle from apps/openwebui/src/routes/+layout.svelte's
+// Ports the connection lifecycle from d863707:apps/openwebui/src/routes/+layout.svelte's
 // setupSocket() (roughly lines 165-250): same io() options, same auth token,
 // same connect/disconnect/reconnect_attempt/reconnect_failed handling and
 // heartbeat. Dropped, deliberately, because their prerequisites don't exist in

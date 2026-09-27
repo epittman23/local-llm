@@ -37,7 +37,7 @@ const tabClass = ({ isActive }: { isActive: boolean }) =>
 	);
 
 /**
- * Ports apps/openwebui/src/routes/(app)/workspace/+layout.svelte: the
+ * Ports d863707:apps/openwebui/src/routes/(app)/workspace/+layout.svelte: the
  * per-section permission redirect, the five tabs with their live counts, and
  * the split Create button whose actions each section registers itself.
  *

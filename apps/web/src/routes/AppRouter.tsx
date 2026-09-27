@@ -130,7 +130,7 @@ const router = createBrowserRouter(
 					path: routePaths.benchmarks,
 					element: <BenchmarksLayout />,
 					children: [
-						// Bare /benchmarks redirects to /serve, matching apps/openwebui's
+						// Bare /benchmarks redirects to /serve, matching the Svelte app's
 						// own (app)/benchmarks/+page.svelte (an onMount goto, ported here
 						// as an index route's own element instead).
 						{ index: true, element: <Navigate to={routePaths.benchmarksServe} replace /> },

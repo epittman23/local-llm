@@ -1,5 +1,5 @@
 // Helpers shared by the Tools (and, in Phase 8, Functions) editors. Ported from
-// apps/openwebui/src/lib/utils/index.ts.
+// d863707:apps/openwebui/src/lib/utils/index.ts.
 
 /**
  * Reads the `key: value` header of a plugin's source: a leading `"""` line,

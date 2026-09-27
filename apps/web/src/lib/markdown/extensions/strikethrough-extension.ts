@@ -1,4 +1,4 @@
-// @ts-nocheck -- ported verbatim from apps/openwebui/src/lib/utils/marked/; untyped tokenizer code.
+// @ts-nocheck -- ported verbatim from d863707:apps/openwebui/src/lib/utils/marked/; untyped tokenizer code.
 export const disableSingleTilde = {
 	tokenizer: {
 		del(src) {

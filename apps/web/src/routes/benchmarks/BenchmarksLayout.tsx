@@ -22,7 +22,7 @@ const tabClass = ({ isActive }: { isActive: boolean }) =>
 	);
 
 /**
- * Ports apps/openwebui/src/routes/(app)/benchmarks/+layout.svelte: the same
+ * Ports d863707:apps/openwebui/src/routes/(app)/benchmarks/+layout.svelte: the same
  * gate (admin + features.enable_benchmarks, see useBenchmarksGate.ts) and
  * the same seven tabs, as a horizontal nav bar over an <Outlet /> instead of
  * a Svelte <slot />.

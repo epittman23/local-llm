@@ -18,7 +18,7 @@ local-llm/
 ├── README.md                  usage/operations guide
 ├── MAP.md                     this file
 ├── apps/                      the applications themselves
-│   ├── openwebui/             vendored Open WebUI fork (the FastAPI backend)
+│   ├── server/                FastAPI backend (the vendored Open WebUI fork)
 │   └── web/                   Astro + React + shadcn/ui frontend (Phase 3+)
 ├── docs/                      meta docs: conventions, roadmap, proposals
 └── infra/                     docker-compose for Postgres + pgvector
@@ -28,7 +28,7 @@ local-llm/
 the root `requirements.txt`/`.venv` are gone as of Phase 2c of the migration
 (2026-09-18) — see `docs/CLAUDE.md`'s decisions log. `make backend`/
 `make frontend` are the replacement entry points; serving configuration
-itself lives in the backend as Python (`apps/openwebui/backend/open_webui/
+itself lives in the backend as Python (`apps/server/backend/open_webui/
 benchmarks/serving/`), not in a shell profile table.
 
 Local/generated (not tracked by git — see "Local/generated" section below
@@ -94,13 +94,13 @@ The applications themselves. Before 2026-09-14 this repo held no application
 code at all; the fork lived in a submodule and that rule was a real
 constraint. It is not any more — see `docs/CLAUDE.md`'s Conventions.
 
-- **`openwebui/`** — the vendored Open WebUI fork (mapped below).
+- **`server/`** — the vendored Open WebUI fork, its FastAPI backend only since Phase 11 (mapped below).
 - **`web/`** — the Astro + React + shadcn/ui frontend (mapped below), which
-  replaced `openwebui/`'s SvelteKit app over Phases 3-11 of
+  replaced the fork's SvelteKit app over Phases 3-11 of
   `docs/migration-plan.md`; its build (`dist/`) is what the fork's `main.py`
   serves at `/`.
 
-### `apps/openwebui/` (vendored fork)
+### `apps/server/` (vendored fork)
 
 A pinned fork of [`open-webui/open-webui`](https://github.com/open-webui/open-webui)
 (v0.11.3), vendored into this repo as ordinary tracked files on 2026-09-14 —
@@ -181,20 +181,20 @@ log for the migration and why each piece landed where it did.
 
 ### `apps/web/` (Astro + React + shadcn/ui)
 
-The frontend, which replaced `apps/openwebui/`'s SvelteKit app surface by
+The frontend, which replaced the fork's SvelteKit app surface by
 surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
 `README.md` covers usage in detail; this is a structural summary.
 
 - **`astro.config.mjs`** — `output: 'static'`, `@astrojs/react`,
-  `@tailwindcss/vite`; the dev-server proxy mirrors `apps/openwebui/
-  vite.config.ts`'s exactly (`/api`, `/ollama`, `/openai`, `/oauth`, `/ws`
+  `@tailwindcss/vite`; the dev-server proxy mirrors the Svelte app's
+  `vite.config.ts` (`d863707:apps/openwebui/vite.config.ts`) exactly (`/api`, `/ollama`, `/openai`, `/oauth`, `/ws`
   → `:4000`); `base` is `/`, where `main.py` mounts the build.
 - **`components.json`** — shadcn/ui's own config: `radix-nova` preset,
   Lucide icons, CSS variables. See `docs/CLAUDE.md`'s 2026-09-18 decisions
   entry for why this preset and not the migration plan's original
   "new-york" (the CLI's own style system changed).
 - **`src/layouts/Base.astro`** — `<html>`/`<head>` shell: the anti-FOUC
-  dark-mode script (mirrors `apps/openwebui/src/app.html`'s own) and the
+  dark-mode script (mirrors the Svelte app's `src/app.html`) and the
   `--app-text-scale` CSS variable's declaration.
 - **`src/pages/[...path].astro`** + **`src/middleware.ts`** — the single
   static entry. The catch-all alone doesn't give `astro dev` a deep-link
@@ -305,7 +305,7 @@ surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
 ## `Makefile`
 
 Root-level process lifecycle only: `make backend` (Postgres +
-`apps/openwebui/backend`'s `uvicorn --reload` on `:4000`, Postgres torn down
+`apps/server/backend`'s `uvicorn --reload` on `:4000`, Postgres torn down
 on exit including Ctrl-C; it also serves `apps/web/dist` at `/`), and
 `make frontend`, alias `make astro` (`apps/web`'s `astro dev` on `:5174`,
 proxying to `:4000` — added Phase 3 as `make astro`, renamed in Phase 11e
@@ -336,12 +336,12 @@ knowing about when navigating the filesystem directly:
   (HumanEval/MBPP/DS-1000 `items.jsonl`/`MANIFEST.json`/`CALIBRATION.json`).
   Nothing reads this any more; the fork's Benchmarks feature fetches its own
   copy under its own `DATA_DIR` on first use. Safe to delete.
-- **`apps/openwebui/backend/.venv/`** — the fork backend's own virtualenv,
+- **`apps/server/backend/.venv/`** — the fork backend's own virtualenv,
   bootstrapped by `make backend` on first run. The only Python virtualenv in
   this repo since Phase 2c deleted the root `.venv/` along with `scripts/`.
 - **`apps/web/node_modules/`**, **`apps/web/dist/`**, **`apps/web/.astro/`** —
   the new frontend's dependency tree, production build output (served at
-  `/` when present — `FRONTEND_BUILD_DIR` in `apps/openwebui/backend/open_webui/env.py`),
+  `/` when present — `FRONTEND_BUILD_DIR` in `apps/server/backend/open_webui/env.py`),
   and Astro's generated type cache. `bun.lock` beside them **is** tracked.
 - **`apps/web/test-results/`**, **`apps/web/playwright-report/`** — Playwright
   output from `bun run test:e2e`.

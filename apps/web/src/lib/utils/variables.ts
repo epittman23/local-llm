@@ -1,5 +1,5 @@
 // Prompt-variable parsing ({{name | type:input, ...}}), ported verbatim from
-// apps/openwebui/src/lib/utils/index.ts. The model editor's "Detected Variables"
+// d863707:apps/openwebui/src/lib/utils/index.ts. The model editor's "Detected Variables"
 // preview reads it; the chat input (Phase 10) will too.
 
 export const extractInputVariables = (text: string): Record<string, any> => {

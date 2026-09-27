@@ -2,7 +2,8 @@
 
 A personal AI assistant running on cloud-hosted open-weight models via
 OpenRouter, using a pinned fork of [Open WebUI](https://github.com/open-webui/open-webui)
-(`apps/openwebui`, vendored into this repo) as the chat interface. See
+(its backend vendored into this repo as `apps/server`, with its own
+frontend in `apps/web`) as the chat interface. See
 `CLAUDE.md` for the full project rationale.
 
 The fork is pinned at `v0.11.3` and never merges upstream: it is a permanent
@@ -24,7 +25,7 @@ and backend (its `requires-python` is `>= 3.11, < 3.13`; `make backend`
 selects an interpreter in that range itself rather than trusting whatever
 bare `python3` resolves to — see "Dependencies" below).
 
-A plain `git clone` is enough — the fork lives inside `apps/openwebui/` as
+A plain `git clone` is enough — the fork lives inside `apps/server/` as
 ordinary tracked files, not a submodule. Put your secrets in `infra/.env`
 (gitignored):
 
@@ -35,6 +36,13 @@ POSTGRES_PASSWORD=<openssl rand -base64 24>
 WEBUI_SECRET_KEY=<openssl rand -base64 24>
 ```
 
+> **Upgrading an existing checkout (2026-09-27).** Phase 11 renamed
+> `apps/openwebui/` to `apps/server/`. A `git pull` moves the tracked files
+> but not the gitignored `backend/.venv`: `mv apps/openwebui/backend/.venv
+> apps/server/backend/.venv` (it keeps working after the move, since `make
+> backend` runs it as `.venv/bin/python -m ...`), or let `make backend`
+> rebuild it (several GB). Then remove the leftover `apps/openwebui/`.
+>
 > **Upgrading an existing checkout (2026-09-14).** The tree moved: the fork
 > from `open-web-ui/openwebui/` to `apps/openwebui/`, and the compose file
 > from `open-web-ui/` to `infra/`. `.env` is gitignored, so git will not move
@@ -119,7 +127,7 @@ Serving settings are grouped into profiles rather than scattered across env
 vars, stored in Postgres (`benchmark_profile`/`benchmark_profile_version`,
 versioned and append-only — editing a profile inserts a new version rather
 than overwriting one) and resolved by
-`apps/openwebui/backend/open_webui/benchmarks/serving/profiles.py`. The
+`apps/server/backend/open_webui/benchmarks/serving/profiles.py`. The
 Serve page's profile list shows all four and whether their weights are on
 disk; the table below is the same information for reference:
 
@@ -309,7 +317,7 @@ none of them a thin passthrough to a CLI that no longer exists:
   shelling out to `lllm-serve`/`lllm-config-id`.
 
 The adapter/suite TOMLs and system-prompt text files moved with the code,
-into `apps/openwebui/backend/open_webui/benchmarks/data/`; they no
+into `apps/server/backend/open_webui/benchmarks/data/`; they no
 longer live at `tests/adapters/`, `tests/suites/`, `tests/tuning/` or
 `prompts/system/` in this repo (the gitignored, fetched-not-vendored
 `tests/data/` cache is left in place, orphaned but harmless, since the fork
@@ -806,7 +814,7 @@ beside the serving telemetry.
 
 **Nothing in this repository states an expected answer.** Every item and every
 verdict comes from the dataset. The files under
-`apps/openwebui/backend/open_webui/benchmarks/data/adapters/` (moved
+`apps/server/backend/open_webui/benchmarks/data/adapters/` (moved
 there from this repo's own `tests/adapters/` on 2026-09-08, along with the
 code that reads them) describe only *adaptation* — how a completion-style
 stub becomes a chat turn, which harness grades it, how long it may run.
@@ -853,7 +861,7 @@ server is already serving something.
 
 By default a request carries one message: the item. Selecting a system
 prompt on the Tests page puts the text of the matching file under
-`apps/openwebui/backend/open_webui/benchmarks/data/prompts/` in front
+`apps/server/backend/open_webui/benchmarks/data/prompts/` in front
 of it as a `system` message, which is where Open WebUI puts its own, and is
 the only place it can go — this `llama-server` build has no system-prompt
 flag.
@@ -1327,8 +1335,8 @@ document is otherwise byte-identical.
 ### Dependencies
 
 This repo has exactly one Python environment now:
-`apps/openwebui/backend/.venv`, which `make backend` bootstraps on first use
-(installing `apps/openwebui/backend/requirements.txt`). There used to be a
+`apps/server/backend/.venv`, which `make backend` bootstraps on first use
+(installing `apps/server/backend/requirements.txt`). There used to be a
 second, repo-root one (`requirements.txt` + `.venv`, carrying just **Rich**
 for the three shell commands `scripts/llama_console.py` backed —
 `lllm-profiles`, `lllm-check`, `lllm-vram`, none of them benchmarking); both
@@ -1360,7 +1368,7 @@ it used to carry **numpy**, **pandas**, **pyyaml**, **scipy**,
 `lllm-test`/`lllm-compare`/`lllm-report`/`lllm-tune`/`lllm-web`; all five were
 retired into the fork on 2026-09-08 (see "The Benchmarks section" below), and
 those dependencies moved with them, into
-`apps/openwebui/backend/requirements.txt` — alongside a new
+`apps/server/backend/requirements.txt` — alongside a new
 `scikit-learn`, which widens the DS-1000 slice, and the same `pyyaml` pin,
 now needed there for DS-1000 items that round-trip through YAML. scipy is
 still a hard dependency (the Report page's request fails outright rather than

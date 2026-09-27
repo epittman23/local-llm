@@ -1,4 +1,4 @@
-// The subset of apps/openwebui/src/lib/utils/index.ts's 2334-line kitchen
+// The subset of d863707:apps/openwebui/src/lib/utils/index.ts's 2334-line kitchen
 // sink that Phase 6's auth and shared-chat pages need -- same scoping
 // decision as lib/utils/api-helpers.ts in Phase 4: port only what's used
 // now, not the whole file for fields nothing here reads.

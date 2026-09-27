@@ -24,7 +24,7 @@ const OAUTH_PROVIDER_LABELS: Record<string, string> = {
 };
 
 /**
- * Ports apps/openwebui/src/routes/auth/+page.svelte: sign-in/sign-up/LDAP,
+ * Ports d863707:apps/openwebui/src/routes/auth/+page.svelte: sign-in/sign-up/LDAP,
  * OAuth provider buttons + callback handling, the trusted-header and
  * auto-redirect-to-SSO bypasses, onboarding, and the login footer markdown.
  *

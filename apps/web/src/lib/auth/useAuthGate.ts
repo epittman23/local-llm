@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { routePaths } from '@/routes/routePaths';
 
-// Ports apps/openwebui/src/routes/(app)/+layout.svelte's own gate: `gotoAuth()`
+// Ports d863707:apps/openwebui/src/routes/(app)/+layout.svelte's own gate: `gotoAuth()`
 // fires whenever `$user` is undefined/null, both on mount and reactively (its
 // `$: if (loaded && ($user === undefined || $user === null)) void gotoAuth();`),
 // navigating to `/auth?redirect=<currentUrl>` so the auth page can send the

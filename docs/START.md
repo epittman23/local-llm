@@ -30,7 +30,7 @@ replaced was deleted in Phase 11e. The backend serves the last build of it at
   ```
 
   `make backend` refuses to start without the file.
-- The first `make backend` builds `apps/openwebui/backend/.venv` and installs
+- The first `make backend` builds `apps/server/backend/.venv` and installs
   the fork's requirements (several GB, slow). Later runs skip it.
 - `make frontend` runs `bun install --frozen-lockfile` in `apps/web/` every time (a no-op when nothing changed).
 
@@ -190,7 +190,7 @@ The e2e specs mock every `/api/v1/**` response and stub `/ws`, so they need
 **no backend** — and they will fight a `make frontend` you already have running
 (they reuse it if present, which is fine, and `global-teardown.ts` stops the
 server afterward, which is not). Stop `make frontend` first, or expect it to be
-killed. Backend tests: from `apps/openwebui/backend/`,
+killed. Backend tests: from `apps/server/backend/`,
 `WEBUI_SECRET_KEY=<any long string> .venv/bin/python -m pytest tests` (the
 package imports from the working directory, and it refuses to load without a
 secret key).

@@ -22,7 +22,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
-BACKEND_DIR := $(REPO_ROOT)/apps/openwebui/backend
+BACKEND_DIR := $(REPO_ROOT)/apps/server/backend
 WEB_DIR := $(REPO_ROOT)/apps/web
 COMPOSE := docker compose -f $(REPO_ROOT)/infra/docker-compose.yml
 LLLM_BACKEND_PORT ?= 4000

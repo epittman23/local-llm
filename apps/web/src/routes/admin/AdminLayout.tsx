@@ -13,7 +13,7 @@ const tabClass = (active: boolean) =>
 	);
 
 /**
- * Ports apps/openwebui/src/routes/(app)/admin/+layout.svelte: the admin-only
+ * Ports d863707:apps/openwebui/src/routes/(app)/admin/+layout.svelte: the admin-only
  * gate (plus the plugins-off bounce off /admin/functions) and the tab bar.
  *
  * The Svelte "Users" tab links to bare `/admin` and is active for any

@@ -39,7 +39,7 @@ const specOptions = [
 ];
 
 /**
- * Ports apps/openwebui/src/lib/components/benchmarks/Serve.svelte: the
+ * Ports d863707:apps/openwebui/src/lib/components/benchmarks/Serve.svelte: the
  * profile picker, the overrides form, start/stop/check, and the live log
  * stream (SSE via parseBenchmarksEventStream, unchanged). The health check
  * is a TanStack Query poll (`refetchInterval`) instead of Svelte's own

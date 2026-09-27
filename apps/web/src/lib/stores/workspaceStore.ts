@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 // Ports `workspaceCounts` / `workspaceActions` from
-// apps/openwebui/src/lib/stores/index.ts. Each section page reports its own
+// d863707:apps/openwebui/src/lib/stores/index.ts. Each section page reports its own
 // total up to the layout's tab bar and registers the actions the layout's
 // split "Create" button shows -- the layout never asks a section what it
 // contains, the section tells the layout.

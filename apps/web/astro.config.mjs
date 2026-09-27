@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'astro/config';
 import { readFileSync } from 'node:fs';
 
-// Mirrors apps/openwebui/vite.config.ts's dev-server proxy: the backend
+// Mirrors d863707:apps/openwebui/vite.config.ts's dev-server proxy: the backend
 // isn't containerized, so both frontends point at the same host process,
 // started by `make backend` (see docs/migration-plan.md's Phase 3).
 const backendTarget = process.env.WEBUI_BACKEND_URL || 'http://localhost:4000';
@@ -20,7 +20,7 @@ export default defineConfig({
 	output: 'static',
 	integrations: [react()],
 	vite: {
-		// Mirrors apps/openwebui/vite.config.ts's own define block: constants.ts
+		// Mirrors d863707:apps/openwebui/vite.config.ts's own define block: constants.ts
 		// (ported verbatim from the SvelteKit app) reads these as globals rather
 		// than import.meta.env, so the port didn't have to touch that file.
 		define: {

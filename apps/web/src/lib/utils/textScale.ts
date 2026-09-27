@@ -1,4 +1,4 @@
-// Ported from apps/openwebui/src/lib/utils/text-scale.ts: the personal
+// Ported from d863707:apps/openwebui/src/lib/utils/text-scale.ts: the personal
 // "UI Scale" and "Font Family" interface settings apply through two CSS custom
 // properties on <html>.
 

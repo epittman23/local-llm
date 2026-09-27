@@ -1,4 +1,4 @@
-// Ports apps/openwebui/src/lib/constants/permissions.ts and the three copies
+// Ports d863707:apps/openwebui/src/lib/constants/permissions.ts and the three copies
 // of its "fill missing keys" merge that admin/Users/Groups/{EditGroupModal,
 // Permissions}.svelte each carry. One merge function here instead.
 export type PermissionGroupName = 'workspace' | 'sharing' | 'access_grants' | 'chat' | 'features' | 'settings';

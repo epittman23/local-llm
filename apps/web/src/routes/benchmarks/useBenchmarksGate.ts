@@ -4,7 +4,7 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { routePaths } from '@/routes/routePaths';
 
-// Ports apps/openwebui/src/routes/(app)/benchmarks/+layout.svelte's own gate
+// Ports d863707:apps/openwebui/src/routes/(app)/benchmarks/+layout.svelte's own gate
 // verbatim in spirit: `$user?.role !== 'admin' || $config?.features?.enable_benchmarks
 // === false` redirects to `/`, with react-router's own `navigate()` -- `/`
 // is one of *our* real routes (routePaths.home), so there's no reason to

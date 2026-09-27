@@ -30,7 +30,7 @@ from open_webui.benchmarks.serving.profiles import (
 )
 
 BACKEND = Path(__file__).resolve().parents[1]
-#: backend/tests/ -> backend/ -> apps/openwebui/ -> apps/ -> repo root
+#: backend/tests/ -> backend/ -> apps/server/ -> apps/ -> repo root
 REPO_ROOT = Path(__file__).resolve().parents[4]
 BASELINE_DIR = REPO_ROOT / 'docs' / 'serving-baseline'
 MIGRATION = BACKEND / 'open_webui' / 'migrations' / 'versions' / '5a1f0c3e9b27_add_benchmark_serving_profiles.py'

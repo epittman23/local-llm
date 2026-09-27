@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { create } from 'zustand';
 import { APP_NAME } from '@/lib/constants';
 
-// A minimal slice of apps/openwebui/src/lib/stores/index.ts's much larger
+// A minimal slice of d863707:apps/openwebui/src/lib/stores/index.ts's much larger
 // `Config` type -- that one carries every feature flag the whole app reads
 // (65+ fields); this app only ports the fields an actual page reads so far:
 // Phase 5's enable_benchmarks; Phase 6's auth/oauth/onboarding/metadata (all,
@@ -56,7 +56,7 @@ export const useConfigStore = create<ConfigState>((set) => ({
 	setConfig: (config) => set({ config })
 }));
 
-// Ports apps/openwebui/src/lib/stores/index.ts's `WEBUI_NAME` writable: it
+// Ports d863707:apps/openwebui/src/lib/stores/index.ts's `WEBUI_NAME` writable: it
 // seeds from APP_NAME and is overwritten with the backend's own configured
 // instance name once config loads (main.py's `name` field), everywhere the
 // SvelteKit app would read `$WEBUI_NAME` rather than the constant directly.

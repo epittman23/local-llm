@@ -1,4 +1,4 @@
-// @ts-nocheck -- ported verbatim from apps/openwebui/src/lib/utils/marked/; untyped tokenizer code.
+// @ts-nocheck -- ported verbatim from d863707:apps/openwebui/src/lib/utils/marked/; untyped tokenizer code.
 const DELIMITER_LIST = [
 	{ left: '$$', right: '$$', display: true },
 	{ left: '$', right: '$', display: false },

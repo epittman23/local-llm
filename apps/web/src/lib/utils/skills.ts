@@ -1,5 +1,5 @@
 // Ports parseFrontmatter / formatSkillName from
-// apps/openwebui/src/lib/utils/index.ts (the skills editor and import use them).
+// d863707:apps/openwebui/src/lib/utils/index.ts (the skills editor and import use them).
 
 /**
  * Reads the `key: value` lines of a leading `---` block. Values lose one pair of

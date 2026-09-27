@@ -5,7 +5,7 @@ import { useConfigStore, useWebUIName } from '@/lib/stores/configStore';
 import { routePaths } from '@/routes/routePaths';
 
 /**
- * Ports apps/openwebui/src/routes/error/+page.svelte. `config` being null
+ * Ports d863707:apps/openwebui/src/routes/error/+page.svelte. `config` being null
  * here specifically means the backend was unreachable when
  * lib/auth/session.ts's initAuth() tried getBackendConfig() -- if it's
  * present, whatever originally sent someone here has resolved, so this

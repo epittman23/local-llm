@@ -22,7 +22,7 @@ import { SidebarContent } from './Sidebar';
  *
  * Also the route gate: every route in AppRouter.tsx is a child of AppShell,
  * so gating here (rather than per-route) covers all of them at once, the
- * same way apps/openwebui/src/routes/(app)/+layout.svelte gates every page
+ * same way d863707:apps/openwebui/src/routes/(app)/+layout.svelte gates every page
  * under its route group in one place.
  */
 export function AppShell() {

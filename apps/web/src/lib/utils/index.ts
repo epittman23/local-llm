@@ -1,13 +1,13 @@
 export { cn } from "cn"
 
-// Ports apps/openwebui/src/lib/utils/index.ts's `formatNumber` (workspace tab
+// Ports d863707:apps/openwebui/src/lib/utils/index.ts's `formatNumber` (workspace tab
 // counts): 1234 -> "1.2k".
 export const formatNumber = (num: number): string =>
 	new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 })
 		.format(num)
 		.toLowerCase();
 
-// Ports of the same-named helpers in apps/openwebui/src/lib/utils/index.ts.
+// Ports of the same-named helpers in d863707:apps/openwebui/src/lib/utils/index.ts.
 export const capitalizeFirstLetter = (text: string) =>
 	text.charAt(0).toUpperCase() + text.slice(1);
 
