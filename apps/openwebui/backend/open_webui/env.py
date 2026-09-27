@@ -1,6 +1,7 @@
 import datetime as dt
 import importlib.metadata
 import json
+import tomllib
 import logging
 import os
 import pkgutil
@@ -134,11 +135,15 @@ ENV = os.getenv('ENV', 'dev')
 
 FROM_INIT_PY = os.getenv('FROM_INIT_PY', 'False').lower() == 'true'
 
+# The version lives in pyproject.toml (it came from the SvelteKit app's
+# package.json until Phase 11 deleted that app). apps/web/package.json carries
+# the same number for the About tab and plugin version checks.
 if FROM_INIT_PY:
     PACKAGE_DATA = {'version': importlib.metadata.version('open-webui')}
 else:
     try:
-        PACKAGE_DATA = json.loads((BASE_DIR / 'package.json').read_text())
+        with open(BASE_DIR / 'pyproject.toml', 'rb') as f:
+            PACKAGE_DATA = {'version': tomllib.load(f)['project']['version']}
     except Exception:
         PACKAGE_DATA = {'version': '0.0.0'}
 
