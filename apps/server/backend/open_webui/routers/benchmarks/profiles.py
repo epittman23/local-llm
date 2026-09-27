@@ -15,12 +15,14 @@ an edit gets a loud 422 rather than a silently ignored field.
 
 from __future__ import annotations
 
+import re
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from open_webui.benchmarks.serving.profiles import ProfileError
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.models.benchmark_profiles import BenchmarkProfileEntry, BenchmarkProfiles
 from open_webui.utils.auth import get_admin_user
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 router = APIRouter()
 
@@ -57,6 +59,27 @@ class DefinitionForm(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
 
+#: A profile name is a URL path segment here and a tuning grid filename
+#: (benchmarks/tune_schedule.py: data/tuning/<name>.toml), so it is kept to a
+#: safe charset. 'default' is taken by GET /profiles/default.
+_NAME_RE = re.compile(r'^[a-z0-9][a-z0-9_-]{0,63}$')
+_RESERVED_NAMES = {'default'}
+
+
+def _check_name(name: str) -> str:
+    if not _NAME_RE.fullmatch(name):
+        raise ValueError('name must be 1-64 characters of a-z, 0-9, - and _, starting with a letter or digit')
+    if name in _RESERVED_NAMES:
+        raise ValueError(f"'{name}' is reserved")
+    return name
+
+
+def _check_display_name(value: str) -> str:
+    if not value.strip():
+        raise ValueError('display_name must not be empty')
+    return value.strip()
+
+
 class CreateProfileForm(BaseModel):
     name: str
     display_name: str
@@ -64,6 +87,16 @@ class CreateProfileForm(BaseModel):
     note: str | None = None
 
     model_config = ConfigDict(extra='forbid')
+
+    @field_validator('name')
+    @classmethod
+    def _valid_name(cls, v: str) -> str:
+        return _check_name(v)
+
+    @field_validator('display_name')
+    @classmethod
+    def _valid_display_name(cls, v: str) -> str:
+        return _check_display_name(v)
 
 
 class CloneProfileForm(BaseModel):
@@ -79,6 +112,16 @@ class CloneProfileForm(BaseModel):
     note: str | None = None
 
     model_config = ConfigDict(extra='forbid')
+
+    @field_validator('name')
+    @classmethod
+    def _valid_name(cls, v: str) -> str:
+        return _check_name(v)
+
+    @field_validator('display_name')
+    @classmethod
+    def _valid_display_name(cls, v: str) -> str:
+        return _check_display_name(v)
 
 
 class AddVersionForm(BaseModel):

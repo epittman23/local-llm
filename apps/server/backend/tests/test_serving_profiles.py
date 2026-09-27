@@ -206,3 +206,24 @@ def test_profile_table_module_imports_and_resolves_its_names():
     table = module.BenchmarkProfiles
     assert callable(table.create)
     assert callable(table.add_version)
+
+
+# docs/bug-review-2026-09-27.md M8 and L9
+
+
+@pytest.mark.parametrize('field', ['reasoning_effort_default', 'override_tensors'])
+def test_blank_optional_text_is_stored_as_none(valid, field):
+    assert validate_definition({**valid, field: '  '})[field] is None
+
+
+def test_blank_reasoning_effort_does_not_make_a_thinking_model(valid):
+    profile = ServingProfile.from_definition('example', {**valid, 'reasoning_effort_default': ''})
+    assert resolve(profile).reasoning_effort is None
+
+
+@pytest.mark.parametrize('args', [['-np', '2'], ['--parallel=2']])
+def test_short_and_inline_parallel_forms_are_refused(valid, args):
+    with pytest.raises(ProfileError, match='parallel'):
+        validate_definition({**valid, 'extra': args})
+    with pytest.raises(ProfileError, match='parallel'):
+        resolve(ServingProfile.from_definition('example', valid), Overrides(spec=tuple(args)))

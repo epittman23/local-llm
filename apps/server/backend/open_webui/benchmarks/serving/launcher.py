@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import logging
 import os
 import shlex
 import signal
@@ -37,6 +38,8 @@ from open_webui.benchmarks.serving.build_info import llama_server_build
 from open_webui.benchmarks.serving.fingerprint import config_id, config_lines
 from open_webui.benchmarks.serving.model_name import split_model
 from open_webui.benchmarks.serving.profiles import ARCH_DENSE, ResolvedConfig
+
+log = logging.getLogger(__name__)
 
 #: Matches main.sh:341's `${LLAMA_LOG_VERBOSITY:-4}` -- the verbosity at
 #: which llama.cpp prints the model-load detail (n_layer, the GPU/CPU layer
@@ -206,6 +209,7 @@ def telemetry_argv(
     server_log: str,
     interval: float = 5.0,
     wait: int = 600,
+    profile_version_id: int | None = None,
 ) -> list[str]:
     """The `open_webui.benchmarks.telemetry_recorder` argv for this run.
 
@@ -246,6 +250,8 @@ def telemetry_argv(
         '--server-log',
         server_log,
     ]
+    if profile_version_id is not None:
+        argv += ['--profile-version-id', str(profile_version_id)]
     for line in lines:
         argv += ['--config-line', line]
     return argv
@@ -282,6 +288,9 @@ class ServeProcess:
     llama_bin: str = ''
     log_verbosity: int = DEFAULT_LOG_VERBOSITY
     record_telemetry: bool = True
+    #: The benchmark_profile_version row this config was resolved from, recorded
+    #: on the run (benchmark_run.profile_version_id). None for an ad-hoc config.
+    profile_version_id: int | None = None
 
     server_proc: asyncio.subprocess.Process | None = None
     telemetry_proc: asyncio.subprocess.Process | None = None
@@ -317,15 +326,23 @@ class ServeProcess:
             fd, path = tempfile.mkstemp(prefix='lllm-serve-', suffix='.log')
             os.close(fd)
             self.server_log_path = Path(path)
-            self._log_file = open(self.server_log_path, 'wb')
+            # Unbuffered: the recorder reads this file while the server runs
+            # (at first /metrics, and on shutdown), so every line must be on
+            # disk as soon as it is teed -- a buffered writer held back the
+            # tail of the load log (n_slots, the layer split) until close.
+            self._log_file = open(self.server_log_path, 'wb', buffering=0)
 
-        self.server_proc = await asyncio.create_subprocess_exec(
-            str(binary),
-            *argv,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-            start_new_session=True,
-        )
+        try:
+            self.server_proc = await asyncio.create_subprocess_exec(
+                str(binary),
+                *argv,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                start_new_session=True,
+            )
+        except OSError as e:
+            self._close_log(unlink=True)
+            raise LauncherError(f'could not start llama-server: {e}') from e
 
         if self.record_telemetry:
             # A background task, not awaited here: `llama-server --version`
@@ -337,6 +354,13 @@ class ServeProcess:
             self._telemetry_task = asyncio.create_task(self._start_telemetry(model_path))
 
     async def _start_telemetry(self, model_path: str) -> None:
+        try:
+            await self._spawn_telemetry(model_path)
+        except Exception as e:  # never prevents serving; but say so
+            self.telemetry_warning = f'telemetry recorder failed to start: {e}'
+            log.exception('telemetry recorder failed to start')
+
+    async def _spawn_telemetry(self, model_path: str) -> None:
         if 'DATABASE_URL' not in os.environ:
             self.telemetry_warning = 'DATABASE_URL is not set; the telemetry recorder cannot connect to Postgres'
             return
@@ -347,6 +371,7 @@ class ServeProcess:
             port=self.port,
             llama_build=build,
             server_log=str(self.server_log_path),
+            profile_version_id=self.profile_version_id,
         )
         self.telemetry_proc = await asyncio.create_subprocess_exec(
             sys.executable,
@@ -363,7 +388,8 @@ class ServeProcess:
             return
         async for raw in self.server_proc.stdout:
             if self._log_file is not None:
-                self._log_file.write(raw)
+                with contextlib.suppress(ValueError, OSError):  # closed by stop() mid-drain
+                    self._log_file.write(raw)
             yield raw.decode(errors='replace').rstrip('\n')
 
     def _signal(self, proc: asyncio.subprocess.Process | None, sig: int) -> bool:
@@ -401,6 +427,11 @@ class ServeProcess:
                 self._signal(self.server_proc, signal.SIGKILL)
                 rc = await self.server_proc.wait()
 
+        # Before the recorder is told to stop: its shutdown read of the log
+        # (telemetry_recorder.finish) must see everything the server printed.
+        if self._log_file is not None:
+            self._log_file.flush()
+
         if self._telemetry_task is not None:
             # Lets a telemetry start still in flight (fetching the build
             # string) finish and assign self.telemetry_proc, rather than
@@ -416,14 +447,20 @@ class ServeProcess:
                 self._signal(self.telemetry_proc, signal.SIGKILL)
                 await self.telemetry_proc.wait()
 
-        if self._log_file is not None:
-            self._log_file.close()
         # After the recorder has read it, not before -- it is the recorder's
         # input (main.sh:411-412).
-        if self.server_log_path is not None:
-            self.server_log_path.unlink(missing_ok=True)
-
+        self._close_log(unlink=True)
         return rc
+
+    def _close_log(self, *, unlink: bool) -> None:
+        """Close (and optionally delete) the server-log tee. Safe to call twice."""
+        if self._log_file is not None:
+            with contextlib.suppress(Exception):
+                self._log_file.close()
+            self._log_file = None
+        if unlink and self.server_log_path is not None:
+            self.server_log_path.unlink(missing_ok=True)
+            self.server_log_path = None
 
     @property
     def running(self) -> bool:

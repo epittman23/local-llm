@@ -52,6 +52,11 @@ _drain_task: asyncio.Task | None = None
 
 _DONE = object()  # sentinel pushed to subscriber queues when the job ends
 
+# Held across the whole of /start: the single-flight check and the spawn are
+# separated by database awaits, so without it two concurrent requests could
+# both pass the check and start two servers, orphaning the first handle.
+_start_lock = asyncio.Lock()
+
 
 async def _drain_log(job: ServeProcess) -> None:
     try:
@@ -62,6 +67,12 @@ async def _drain_log(job: ServeProcess) -> None:
     finally:
         for queue in _subscribers:
             queue.put_nowait(_DONE)
+    # Reached only when stdout closed, i.e. the server exited -- by /stop, or
+    # on its own (a crash). Tear down the recorder and the temp log here:
+    # after a self-exit /stop answers 404 and nothing else would. Not in the
+    # `finally`, so a cancelled drain (backend shutdown) doesn't stop a server.
+    # ServeProcess.stop() is idempotent, so a concurrent /stop is fine.
+    await job.stop()
 
 
 _OVERRIDE_ENV = {
@@ -100,6 +111,11 @@ async def get_profile(name: str, user=Depends(get_admin_user)):
 
 @router.post('/start')
 async def start_serve(form_data: ServeStartForm, user=Depends(get_admin_user)):
+    async with _start_lock:
+        return await _start_serve_locked(form_data)
+
+
+async def _start_serve_locked(form_data: ServeStartForm):
     global _job, _drain_task
     if _job is not None and _job.running:
         raise HTTPException(
@@ -119,6 +135,11 @@ async def start_serve(form_data: ServeStartForm, user=Depends(get_admin_user)):
     if entry is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
 
+    # spec 'on' means "the profile's own speculative flags", i.e. no override.
+    # Overrides.from_env would otherwise pass a literal `on` argument to
+    # llama-server, which refuses to start (docs/bug-review-2026-09-27.md M6).
+    if form_data.spec == 'on':
+        form_data.spec = None
     env_like = {
         var: str(getattr(form_data, field))
         for field, var in _OVERRIDE_ENV.items()
@@ -129,7 +150,7 @@ async def start_serve(form_data: ServeStartForm, user=Depends(get_admin_user)):
     except ProfileError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
-    _job = ServeProcess(config=resolved)
+    _job = ServeProcess(config=resolved, profile_version_id=entry.version.version_id)
     try:
         await _job.start()
     except LauncherError as e:
@@ -151,7 +172,9 @@ async def stop_serve(user=Depends(get_admin_user)):
 
 @router.get('/check')
 async def check_serve(user=Depends(get_admin_user)):
-    prof = await env_profile.profile(None)
+    running = _job is not None and _job.running
+    # The running server's own profile when there is one, else the default.
+    prof = await env_profile.profile(_job.config.name if running else None)
     p = env_profile.port(prof)
     async with aiohttp.ClientSession() as session:
         model = await env_profile.served_model(session, p, prof)
@@ -159,7 +182,7 @@ async def check_serve(user=Depends(get_admin_user)):
         'port': p,
         'model': model,
         'profile': prof.get('name'),
-        'running': _job is not None and _job.running,
+        'running': running,
     }
 
 

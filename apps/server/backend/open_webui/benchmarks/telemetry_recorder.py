@@ -247,13 +247,16 @@ def upsert_config(con: psycopg.Connection, config_id: str, alias: str,
 
 
 def open_run(con: psycopg.Connection, config_id: str, *, model: str, quant: str,
-            build: str, port: int, pid: int) -> int:
+            build: str, port: int, pid: int,
+            profile_version_id: int | None = None) -> int:
     with con.cursor() as cur:
         cur.execute(
             'INSERT INTO benchmark_run (config_id, model, quant, build, port, '
-            ' pid, started_at) VALUES (%s, %s, %s, %s, %s, %s, %s) '
+            ' pid, started_at, profile_version_id) '
+            'VALUES (%s, %s, %s, %s, %s, %s, %s, %s) '
             'RETURNING run_id',
-            (config_id, model, quant, build, int(port), int(pid), now()))
+            (config_id, model, quant, build, int(port), int(pid), now(),
+             profile_version_id))
         return int(cur.fetchone()['run_id'])
 
 
@@ -356,7 +359,8 @@ def record(args: argparse.Namespace) -> int:
         waited += 1
 
     run_id = open_run(con, args.config_id, model=args.model, quant=args.quant,
-                      build=args.build, port=args.port, pid=os.getpid())
+                      build=args.build, port=args.port, pid=os.getpid(),
+                      profile_version_id=args.profile_version_id)
     note(f'recording run {run_id} (config {args.config_id}) into Postgres')
 
     server_log = Path(args.server_log) if args.server_log else None
@@ -440,6 +444,9 @@ def main() -> int:
     ap.add_argument('--ngl', default=None,
                     help='the requested layer count, used only to derive the '
                          'split when the load log does not report one')
+    ap.add_argument('--profile-version-id', type=int, default=None,
+                    help='benchmark_profile_version.version_id this server was '
+                         'resolved from; NULL on the run when omitted (hand-started).')
     ap.add_argument('--server-log', default=os.environ.get('LLAMA_SERVER_LOG', ''))
     ap.add_argument('--interval', type=float,
                     default=float(os.environ.get('LLAMA_VRAM_INTERVAL', '5')))

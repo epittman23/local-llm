@@ -15,6 +15,8 @@ Run from the backend directory:
 
 from __future__ import annotations
 
+import asyncio
+
 import time
 from types import SimpleNamespace
 
@@ -69,6 +71,7 @@ class _StubServeProcess:
         self.warning = None
         self._running = False
         self.stopped = False
+        self._exited = asyncio.Event()
         _StubServeProcess.instances.append(self)
 
     async def start(self):
@@ -81,12 +84,16 @@ class _StubServeProcess:
         return self._running
 
     async def lines(self):
+        # Like the real one: stdout stays open until the server exits, so the
+        # drain task only finishes (and cleans up) after stop().
+        await self._exited.wait()
         return
         yield  # pragma: no cover - makes this an async generator
 
     async def stop(self):
         self._running = False
         self.stopped = True
+        self._exited.set()
 
 
 @pytest.fixture(autouse=True)
@@ -207,4 +214,64 @@ def test_stop_200_and_stops_the_job(client, monkeypatch):
     (proc,) = _StubServeProcess.instances
     resp = client.post('/stop')
     assert resp.status_code == 200
+    assert proc.stopped is True
+
+
+# ---------------------------------------------------------------------------
+# docs/bug-review-2026-09-27.md: M4 (version id), M5 (single-flight), M6
+# (spec 'on'), M3 (cleanup after the server exits on its own)
+# ---------------------------------------------------------------------------
+
+
+def test_start_records_the_profile_version(client, monkeypatch):
+    async def fake_get_by_name(name, db=None):
+        return _entry(name=name)
+
+    monkeypatch.setattr(BenchmarkProfiles, 'get_by_name', fake_get_by_name)
+    assert client.post('/start', json={'profile': 'qwen25c'}).status_code == 200
+    (proc,) = _StubServeProcess.instances
+    assert proc.kwargs['profile_version_id'] == _entry().version.version_id
+
+
+def test_start_spec_on_keeps_the_profiles_own_flags(client, monkeypatch):
+    async def fake_get_by_name(name, db=None):
+        return _entry(name=name)
+
+    monkeypatch.setattr(BenchmarkProfiles, 'get_by_name', fake_get_by_name)
+    assert client.post('/start', json={'profile': 'qwen25c', 'spec': 'on'}).status_code == 200
+    (proc,) = _StubServeProcess.instances
+    assert 'on' not in proc.config.spec
+
+
+def test_concurrent_starts_launch_only_one_server(monkeypatch):
+    async def slow_get_by_name(name, db=None):
+        await asyncio.sleep(0.05)  # the await the single-flight check used to race across
+        return _entry(name=name)
+
+    monkeypatch.setattr(BenchmarkProfiles, 'get_by_name', slow_get_by_name)
+
+    async def run():
+        form = serve_router.ServeStartForm(profile='qwen25c')
+        return await asyncio.gather(
+            serve_router.start_serve(form, user=ADMIN),
+            serve_router.start_serve(form, user=ADMIN),
+            return_exceptions=True,
+        )
+
+    results = asyncio.run(run())
+    assert len(_StubServeProcess.instances) == 1
+    assert sum(isinstance(r, Exception) for r in results) == 1
+
+
+def test_drain_stops_a_server_that_exits_on_its_own():
+    proc = _StubServeProcess(config=None)
+    proc._running = True
+
+    async def run():
+        drain = asyncio.create_task(serve_router._drain_log(proc))
+        await asyncio.sleep(0)
+        proc._exited.set()  # stdout closes: the server died without /stop
+        await drain
+
+    asyncio.run(run())
     assert proc.stopped is True

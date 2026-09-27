@@ -131,6 +131,19 @@ DEFINITION_FIELDS = (
 
 REQUIRED_FIELDS = frozenset({'arch', 'alias', 'model_path', 'ctx', 'threads', 'ngl'})
 
+#: Nullable text fields where an empty string means "none". Stored as '' they
+#: are not None, so e.g. reasoning_effort_default='' made resolve() treat a
+#: model as thinking and the launcher pass an empty reasoning_effort that the
+#: fingerprint records as n/a (docs/bug-review-2026-09-27.md M8).
+BLANK_MEANS_NONE = ('reasoning_effort_default', 'override_tensors')
+
+#: Both spellings llama-server accepts for the slot count.
+PARALLEL_FLAGS = ('--parallel', '-np')
+
+
+def _has_parallel(args) -> bool:
+    return any(a in PARALLEL_FLAGS or a.startswith('--parallel=') for a in args)
+
 
 def validate_definition(definition: Mapping[str, Any]) -> dict[str, Any]:
     """Check a profile definition before it is stored, and normalise its lists.
@@ -153,9 +166,14 @@ def validate_definition(definition: Mapping[str, Any]) -> dict[str, Any]:
     if definition['arch'] == ARCH_DENSE and definition.get('moe') is not None:
         raise ProfileError('--n-cpu-moe is not applicable to a dense model; leave moe empty')
 
+    definition = {
+        **definition,
+        **{k: None for k in BLANK_MEANS_NONE if isinstance(definition.get(k), str) and not definition[k].strip()},
+    }
+
     spec = list(definition.get('spec') or [])
     extra = list(definition.get('extra') or [])
-    if '--parallel' in spec or '--parallel' in extra:
+    if _has_parallel(spec) or _has_parallel(extra):
         raise ProfileError('--parallel is its own field; it does not belong in the speculative or extra arguments')
     # The thinking budget is a field, and the launcher builds
     # --chat-template-kwargs from the *resolved* effort. A literal here would
@@ -281,7 +299,7 @@ def resolve(profile: ServingProfile, overrides: Overrides | None = None) -> Reso
     overrides = overrides or Overrides()
 
     spec = profile.spec if overrides.spec is None else overrides.spec
-    if '--parallel' in spec:
+    if _has_parallel(spec):
         raise ProfileError('--parallel does not belong in a speculative override; set the parallel field instead')
 
     moe = profile.moe if overrides.moe is None else overrides.moe
@@ -292,7 +310,7 @@ def resolve(profile: ServingProfile, overrides: Overrides | None = None) -> Reso
         )
         moe = None
 
-    if profile.reasoning_effort_default is None:
+    if not profile.reasoning_effort_default:  # None, or a legacy '' row
         reasoning_effort = None
     else:
         # An empty override falls back to the default, matching

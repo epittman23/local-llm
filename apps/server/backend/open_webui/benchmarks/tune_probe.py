@@ -126,7 +126,7 @@ class Server:
                 resolved = resolve(entry.to_serving_profile(), Overrides.from_env(self.candidate.env()))
             except ProfileError as e:
                 raise Infeasible('load_error', str(e)) from e
-            self.cmd = ServeProcess(config=resolved, port=self.port)
+            self.cmd = ServeProcess(config=resolved, port=self.port, profile_version_id=entry.version.version_id)
             try:
                 await self.cmd.start()
             except LauncherError as e:
@@ -198,8 +198,9 @@ class Server:
     async def stop(self) -> None:
         """SIGINT first, so the recorder closes its own run.
 
-        The launcher (or, under LLAMA_TUNE_LAUNCH, the stub) stops the
-        telemetry recorder itself once the server exits; killing the group
+        ServeProcess.stop() (always called below) stops the telemetry
+        recorder once the server has exited -- under LLAMA_TUNE_LAUNCH the
+        stub does it; killing the group
         outright leaves the run row open for a stale-run sweep to close as
         'stale' instead of 'clean'. A sweep of eighty visits would then have
         the store claiming eighty servers crashed, and the one that
@@ -212,7 +213,11 @@ class Server:
             deadline = time.monotonic() + 20.0
             while self.cmd.running and time.monotonic() < deadline:
                 await asyncio.sleep(0.5)
-        if self.cmd.running:
+        # ServeProcess.stop() also stops the telemetry recorder and removes the
+        # temp server log, so it runs even after a clean SIGINT exit (it is
+        # idempotent on an exited process). A plain Command only needs it
+        # while still running.
+        if isinstance(self.cmd, ServeProcess) or self.cmd.running:
             await self.cmd.stop(grace=10.0)
         if self._drain is not None:
             self._drain.cancel()

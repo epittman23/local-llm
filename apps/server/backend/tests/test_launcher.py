@@ -414,3 +414,58 @@ async def test_serve_process_warning_set_for_dense_partial_offload(tmp_path, mon
         assert 'partial offload' in proc.warning
     finally:
         await proc.stop(grace=2.0)
+
+
+# ---------------------------------------------------------------------------
+# docs/bug-review-2026-09-27.md M2 (log on disk as it is teed), M3 (stop()
+# cleans up after the server has already exited), M4 (version id in argv)
+# ---------------------------------------------------------------------------
+
+
+def test_telemetry_argv_carries_the_profile_version_id(profiles):
+    config = _resolved(next(c for c in _cases() if c['case'] == 'base-qwen25c'), profiles)
+    kw = dict(resolved_model_path='/m/x.gguf', port=8090, llama_build='b', server_log='/tmp/x.log')
+    assert '--profile-version-id' not in telemetry_argv(config, **kw)
+    argv = telemetry_argv(config, **kw, profile_version_id=7)
+    assert argv[argv.index('--profile-version-id') + 1] == '7'
+
+
+@pytest.mark.asyncio
+async def test_serve_process_log_is_on_disk_before_stop(tmp_path, monkeypatch, profiles):
+    stub, model = _write_stub_server(tmp_path)
+    config = _resolved(next(c for c in _cases() if c['case'] == 'base-qwen25c'), profiles)
+    monkeypatch.delenv('DATABASE_URL', raising=False)
+    proc = ServeProcess(config=config, llama_bin=str(tmp_path), record_telemetry=True)
+    monkeypatch.setattr('open_webui.benchmarks.serving.launcher.resolve_model_path', lambda *a, **k: str(model))
+    await proc.start()
+    try:
+        async for line in proc.lines():
+            if line.startswith('load_tensors'):
+                break
+        # What the recorder would read right now, while the server still runs.
+        on_disk = proc.server_log_path.read_text()
+    finally:
+        await proc.stop(grace=2.0)
+    assert 'starting' in on_disk and 'load_tensors' in on_disk
+
+
+@pytest.mark.asyncio
+async def test_serve_process_stop_after_natural_exit_removes_the_log(tmp_path, monkeypatch, profiles):
+    model = tmp_path / 'weights.gguf'
+    model.write_text('x')
+    stub = tmp_path / 'llama-server'
+    stub.write_text('#!/bin/sh\necho "crashed"\nexit 3\n')
+    stub.chmod(0o755)
+    config = _resolved(next(c for c in _cases() if c['case'] == 'base-qwen25c'), profiles)
+    monkeypatch.delenv('DATABASE_URL', raising=False)
+    proc = ServeProcess(config=config, llama_bin=str(tmp_path), record_telemetry=True)
+    monkeypatch.setattr('open_webui.benchmarks.serving.launcher.resolve_model_path', lambda *a, **k: str(model))
+    await proc.start()
+    log_path = proc.server_log_path
+    assert [line async for line in proc.lines()] == ['crashed']
+    await proc.server_proc.wait()
+    assert proc.running is False
+
+    assert await proc.stop(grace=1.0) == 3
+    assert not log_path.exists()
+    await proc.stop(grace=1.0)  # idempotent
