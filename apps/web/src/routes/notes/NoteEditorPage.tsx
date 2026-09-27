@@ -34,8 +34,10 @@ type Note = { id: string; title: string; user_id: string; write_access?: boolean
  * timer; `flush` sends a pending save at once (used when leaving the page, so
  * the last keystrokes are not lost -- the Svelte editor's timer simply died
  * with the component). Only the fields edited here are sent: the server merges
- * `data`, so attachments stay as they are, and omitting `access_grants` leaves
- * sharing untouched.
+ * `data`, so attachments stay as they are. `access_grants` is deliberately
+ * omitted; that leaves sharing untouched only because routers/notes.py was
+ * patched to skip grants the client didn't send (docs/bug-review-2026-09-27.md
+ * H1) -- before that, every autosave cleared them.
  */
 function useNoteSaver(id: string) {
 	const token = useAuthStore((s) => s.token) ?? '';

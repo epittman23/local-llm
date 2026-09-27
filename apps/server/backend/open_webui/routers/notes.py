@@ -554,14 +554,19 @@ async def update_note_by_id(
     ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.DEFAULT())
 
-    form_data.access_grants = await filter_allowed_access_grants(
-        await Config.get('user.permissions'),
-        user.id,
-        user.role,
-        form_data.access_grants,
-        'sharing.public_notes',
-        db=db,
-    )
+    # Fork change (docs/bug-review-2026-09-27.md, H1): only touch grants the
+    # client actually sent. Assigning the field unconditionally marks it as
+    # set in Pydantic v2, so update_note_by_id's exclude_unset dump would see
+    # `access_grants: None` and delete every grant on a plain content save.
+    if 'access_grants' in form_data.model_fields_set:
+        form_data.access_grants = await filter_allowed_access_grants(
+            await Config.get('user.permissions'),
+            user.id,
+            user.role,
+            form_data.access_grants,
+            'sharing.public_notes',
+            db=db,
+        )
 
     try:
         note = await Notes.update_note_by_id(id, form_data, db=db)
