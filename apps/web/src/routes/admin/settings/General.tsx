@@ -227,6 +227,7 @@ export default function General() {
 						<Toggle config={admin} patch={patch} name="ENABLE_MEMORIES" label="Memories" description="Allow users to save memories for more personalized responses." />
 						{admin.ENABLE_MEMORIES && <Toggle muted config={admin} patch={patch} name="ENABLE_MEMORY_SYSTEM_CONTEXT" label="Memory System Context" description="Include saved memories in the system context." />}
 						<Toggle config={admin} patch={patch} name="ENABLE_NOTES" label="Notes" description="Allow users to create and manage notes." />
+						<Toggle config={admin} patch={patch} name="ENABLE_BENCHMARKS" label="Benchmarks" description="Show the Benchmarks section (admins only)." />
 						<Toggle config={admin} patch={patch} name="ENABLE_CHANNELS" label="Channels" description="Allow users to use channels for shared conversations." />
 						{admin.ENABLE_CHANNELS && (
 							<SettingRow label="Model Response Mode" description="Choose where model responses to root-level channel mentions are posted." labelClassName="text-muted-foreground/70">

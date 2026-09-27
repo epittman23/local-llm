@@ -2063,6 +2063,11 @@ AUTOMATION_AUTH_TOKEN_EXPIRES_IN = os.getenv('AUTOMATION_AUTH_TOKEN_EXPIRES_IN',
 
 ENABLE_NOTES = os.getenv('ENABLE_NOTES', 'True').lower() == 'true'
 
+# Fork-owned: the Benchmarks surface (admin only). Seeded like every other
+# per-key setting so GET /auths/admin/config returns it -- AdminConfig requires
+# it, and a missing row made every General-settings save fail with a 422.
+ENABLE_BENCHMARKS = os.getenv('ENABLE_BENCHMARKS', 'True').lower() == 'true'
+
 ENABLE_USER_STATUS = os.getenv('ENABLE_USER_STATUS', 'True').lower() == 'true'
 
 ENABLE_EVALUATION_ARENA_MODELS = os.getenv('ENABLE_EVALUATION_ARENA_MODELS', 'True').lower() == 'true'
@@ -3122,6 +3127,7 @@ DEFAULT_CONFIG = {
     'automations.min_interval': AUTOMATION_MIN_INTERVAL,
     'automations.auth_token_expires_in': AUTOMATION_AUTH_TOKEN_EXPIRES_IN,
     'notes.enable': ENABLE_NOTES,
+    'benchmarks.enable': ENABLE_BENCHMARKS,
     'users.enable_status': ENABLE_USER_STATUS,
     'evaluation.arena.enable': ENABLE_EVALUATION_ARENA_MODELS,
     'evaluation.arena.models': EVALUATION_ARENA_MODELS,
