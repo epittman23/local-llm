@@ -52,7 +52,7 @@ test('regenerate makes a second version, and the arrows move between them', asyn
 	const chat = await mockChat(page, { chats: [savedChat('c1', 'Chat', [{ id: 'u1', role: 'user', content: 'Q' }, { id: 'a1', role: 'assistant', content: 'Version one', model: 'qwen', done: true }])] });
 	await page.goto('/c/c1');
 	await chat.socket.connected;
-	await page.getByRole('button', { name: 'Regenerate' }).click();
+	await page.getByRole('button', { name: 'Regenerate', exact: true }).click();
 	await expect.poll(() => chat.seen.completions.length).toBe(1);
 	await chat.stream('Version two');
 	await expect(page.getByTestId('response-message')).toContainText('Version two');
@@ -84,7 +84,11 @@ test('status, sources and follow-ups arrive with the reply', async ({ page }) =>
 	await expect(page.getByText('Searching the web')).toBeVisible();
 	chat.event('source', { source: { name: 'Example', url: 'https://example.com/a' }, document: ['text'] });
 	await chat.stream('It is 42 [1].');
-	await expect(page.getByRole('button', { name: 'View source: example.com' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'View source: Example' })).toBeVisible();
+	await page.getByRole('button', { name: '1 Source' }).click();
+	await page.getByLabel('Sources').getByRole('button', { name: /Example/ }).click();
+	await expect(page.getByRole('dialog', { name: 'Citation' })).toContainText('text');
+	await page.keyboard.press('Escape');
 	chat.event('chat:message:follow_ups', { follow_ups: ['Why 42?'] });
 	await page.getByRole('button', { name: 'Why 42?' }).click();
 	await expect.poll(() => chat.seen.completions.length).toBe(2);

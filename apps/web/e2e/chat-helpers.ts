@@ -30,7 +30,7 @@ export function savedChat(id: string, title: string, messages: Rec[], extra: Rec
 export async function mockChat(page: Page, { chats = [] as Rec[], user = {} as MockUserOptions, completion = {} as Rec, folders = [] as Rec[] } = {}) {
 	await mockWorkspaceBackend(page, { role: 'user', ...user });
 	const socket = await fakeSocketServer(page);
-	const seen = { completions: [] as Rec[], updates: [] as Rec[], stops: [] as string[], lists: 0, actions: [] as string[], searches: [] as string[], folderCalls: [] as string[] };
+	const seen = { completions: [] as Rec[], updates: [] as Rec[], stops: [] as string[], lists: 0, actions: [] as string[], searches: [] as string[], folderCalls: [] as string[], feedback: [] as Rec[], deletedMessages: [] as string[] };
 	const byId = new Map(chats.map((c) => [c.id, c]));
 	await page.route('**/api/models*', (route) => json(route, { data: MODELS }));
 	await page.route('**/api/chat/completions', async (route) => {
@@ -62,9 +62,20 @@ export async function mockChat(page: Page, { chats = [] as Rec[], user = {} as M
 			return json(route, Number(url.searchParams.get('page') ?? 1) > 1 ? [] : [...byId.values()].filter((c) => c.folder_id === fid).map(listItem));
 		}
 		if (path === '/all/tags') return json(route, []);
-		const [, id, action] = path.split('/');
+		const [, id, action, mid] = path.split('/');
 		const cur = byId.get(id);
 		if (action === 'tags') return json(route, []);
+		if (action === 'messages' && req.method() === 'DELETE') {
+			seen.deletedMessages.push(mid);
+			const history = structuredClone(cur!.chat.history);
+			const target = history.messages[mid];
+			for (const c of [mid, ...(target?.childrenIds ?? [])]) delete history.messages[c];
+			if (target?.parentId && history.messages[target.parentId]) history.messages[target.parentId].childrenIds = history.messages[target.parentId].childrenIds.filter((c: string) => c !== mid);
+			history.currentId = target?.parentId ?? null;
+			const next = { ...cur, chat: { ...cur!.chat, history } };
+			byId.set(id, next);
+			return json(route, next);
+		}
 		if (action) {
 			seen.actions.push(`${action}:${id}`);
 			if (!cur) return json(route, { detail: 'Not found' }, 404);
@@ -99,6 +110,12 @@ export async function mockChat(page: Page, { chats = [] as Rec[], user = {} as M
 		}
 		return cur ? json(route, cur) : json(route, { detail: 'Not found' }, 404);
 	});
+	await page.route(/\/api\/v1\/evaluations\/feedback/, async (route) => {
+		const body = route.request().postDataJSON();
+		seen.feedback.push({ url: route.request().url(), ...body });
+		return json(route, { id: 'fb1', ...body });
+	});
+	await page.route('**/api/v1/tasks/tags/completions', (route) => json(route, { choices: [{ message: { content: '{"tags": ["General"]}' } }] }));
 	let folderList = [...folders];
 	await page.route(/\/api\/v1\/folders(\/|\?|$)/, async (route) => {
 		const req = route.request();

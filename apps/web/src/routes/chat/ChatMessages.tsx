@@ -8,6 +8,7 @@ import { removeAllDetails } from '@/lib/markdown/content';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn, copyToClipboard } from '@/lib/utils';
 import { formatSecondsTimestamp } from '@/lib/utils/dates';
+import { citationsOf, sourceIdsOf, stripCitations } from '@/lib/chat/sources';
 import { modelImage } from './ModelSelector';
 
 export type MessageHandlers = {
@@ -16,8 +17,14 @@ export type MessageHandlers = {
 	onFollowUp: (text: string) => void;
 	onSourceClick?: (m: Message, id: string | number) => void;
 	onToolCallResolved?: () => void;
-	/** Extra per-message actions (Phase 10d adds edit, rate, delete, ...). */
-	extraActions?: (m: Message) => ReactNode;
+	/** Extra per-message actions (edit, rate, delete, ...), see MessageActions.tsx. */
+	extraActions?: (m: Message, ctx: { isLast: boolean }) => ReactNode;
+	/** Shown under a message's actions (the rating form). */
+	below?: (m: Message) => ReactNode;
+	/** Whether a model cites its sources (its `citations` capability); `[n]` markers are removed when not. */
+	citationsFor?: (modelId: string | undefined) => boolean;
+	/** Replaces the Regenerate button (the regenerate menu). */
+	regenerate?: (m: Message) => ReactNode;
 	/** Replaces a message's body while it is being edited. */
 	editing?: (m: Message) => ReactNode | null;
 };
@@ -86,7 +93,7 @@ function UserMessage({ history, message, h }: { history: History; message: Messa
 			{!edit && (
 				<div className="flex items-center gap-0.5 opacity-0 transition group-focus-within:opacity-100 group-hover:opacity-100">
 					<SiblingNav history={history} message={message} onBranch={h.onBranch} />
-					{h.extraActions?.(message)}
+					{h.extraActions?.(message, { isLast: false })}
 					<CopyButton text={message.content} />
 				</div>
 			)}
@@ -115,17 +122,38 @@ function StatusLine({ message }: { message: Message }) {
 	);
 }
 
-/** The label a source is shown by: its name, else its URL, else its id. */
-const sourceName = (s: NonNullable<Message['sources']>[number]) => String(s.source?.name ?? s.source?.url ?? s.source?.id ?? 'Source');
+/** Ports Citations.svelte's list: "N Sources", expanding to one numbered button per source. */
+function Sources({ message, onOpen }: { message: Message; onOpen: (n: number) => void }) {
+	const [open, setOpen] = useState(false);
+	const citations = citationsOf(message.sources);
+	if (!citations.length) return null;
+	return (
+		<div className="my-1">
+			<button type="button" className="text-muted-foreground hover:text-foreground text-xs" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+				{citations.length === 1 ? '1 Source' : `${citations.length} Sources`}
+			</button>
+			{open && (
+				<div className="mt-1 flex flex-wrap gap-1" aria-label="Sources">
+					{citations.map((c, i) => (
+						<button key={c.id} type="button" className="bg-muted hover:bg-muted/70 max-w-60 truncate rounded-xl px-2 py-0.5 text-xs" onClick={() => onOpen(i + 1)}>
+							<span className="text-muted-foreground mr-1">{i + 1}</span>
+							{String(c.source?.name ?? c.id)}
+						</button>
+					))}
+				</div>
+			)}
+		</div>
+	);
+}
 
 /**
  * Ports chat/Messages/ResponseMessage.svelte (the parts every reply needs):
  * model name and time, live status, the Markdown body, an error, its sources,
  * suggested follow-ups, versions, Copy and Regenerate.
  */
-export function ResponseMessage({ history, message, h, isLast, chatId, compact = false }: { history: History; message: Message; h: MessageHandlers; isLast: boolean; chatId: string | null; compact?: boolean }) {
+export function ResponseMessage({ history, message, h, isLast, chatId, compact = false, citationsEnabled = true }: { history: History; message: Message; h: MessageHandlers; isLast: boolean; chatId: string | null; compact?: boolean; citationsEnabled?: boolean }) {
 	const userId = useAuthStore((s) => s.user?.id);
-	const sourceIds = (message.sources ?? []).map((s) => String(s.source?.url ?? s.source?.name ?? s.source?.id ?? ''));
+	const sourceIds = sourceIdsOf(message.sources, citationsEnabled);
 	const edit = h.editing?.(message);
 	const empty = !message.content && !message.error && !message.output?.length;
 	return (
@@ -147,7 +175,7 @@ export function ResponseMessage({ history, message, h, isLast, chatId, compact =
 					) : (
 						<Markdown
 							id={message.id}
-							content={message.content}
+							content={citationsEnabled ? message.content : stripCitations(message.content)}
 							done={message.done !== false}
 							modelName={message.modelName}
 							chatId={chatId ?? undefined}
@@ -163,28 +191,24 @@ export function ResponseMessage({ history, message, h, isLast, chatId, compact =
 						{typeof message.error.content === 'string' ? message.error.content : 'Uh-oh! There was an issue with the response.'}
 					</div>
 				) : null}
-				{message.sources?.length ? (
-					<div className="my-1 flex flex-wrap gap-1" aria-label="Sources">
-						{message.sources.map((s, i) => (
-							<button key={i} type="button" className="bg-muted hover:bg-muted/70 rounded-xl px-2 py-0.5 text-xs" onClick={() => h.onSourceClick?.(message, i + 1)}>
-								<span className="text-muted-foreground mr-1">{i + 1}</span>
-								{sourceName(s)}
-							</button>
-						))}
-					</div>
-				) : null}
+				<Sources message={message} onOpen={(n) => h.onSourceClick?.(message, n)} />
 				{message.done !== false && !edit && (
 					<div className={cn('flex flex-wrap items-center gap-0.5', !isLast && 'opacity-0 transition group-focus-within:opacity-100 group-hover:opacity-100')}>
 						<SiblingNav history={history} message={message} onBranch={h.onBranch} />
 						<CopyButton text={removeAllDetails(message.content)} />
-						{h.extraActions?.(message)}
-						<Tip content="Regenerate">
-							<button type="button" aria-label="Regenerate" className={actionButton} onClick={() => h.onRegenerate(message)}>
-								<RotateCcw className="size-3.5" />
-							</button>
-						</Tip>
+						{h.extraActions?.(message, { isLast })}
+						{h.regenerate ? (
+							h.regenerate(message)
+						) : (
+							<Tip content="Regenerate">
+								<button type="button" aria-label="Regenerate" className={actionButton} onClick={() => h.onRegenerate(message)}>
+									<RotateCcw className="size-3.5" />
+								</button>
+							</Tip>
+						)}
 					</div>
 				)}
+				{h.below?.(message)}
 				{isLast && message.done && message.followUps?.length ? (
 					<div className="mt-2 flex flex-col items-start gap-1" aria-label="Follow-ups">
 						<span className="text-muted-foreground text-xs">Follow up</span>
@@ -216,7 +240,7 @@ function MultiResponse({ history, parentId, h, chatId, isLast }: { history: Hist
 						className={cn('min-w-80 flex-1 snap-center rounded-2xl border p-3 transition', active ? 'border-foreground/30' : 'cursor-pointer opacity-80 hover:opacity-100')}
 						onClick={() => !active && h.onBranch(showBranch(history, id))}
 					>
-						<ResponseMessage history={history} message={m} h={h} chatId={chatId} isLast={isLast && active} compact />
+						<ResponseMessage history={history} message={m} h={h} chatId={chatId} isLast={isLast && active} compact citationsEnabled={h.citationsFor?.(m.model) ?? true} />
 					</div>
 				);
 			})}
@@ -239,7 +263,7 @@ export function ChatMessages({ history, h, chatId }: { history: History; h: Mess
 					rendered.add(parent.id);
 					return <MultiResponse key={`multi-${parent.id}`} history={history} parentId={parent.id} h={h} chatId={chatId} isLast={isLast} />;
 				}
-				return <ResponseMessage key={m.id} history={history} message={m} h={h} chatId={chatId} isLast={isLast} />;
+				return <ResponseMessage key={m.id} history={history} message={m} h={h} chatId={chatId} isLast={isLast} citationsEnabled={h.citationsFor?.(m.model) ?? true} />;
 			})}
 		</div>
 	);

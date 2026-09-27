@@ -3,10 +3,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { getTaskIdsByChatId, stopTask, stopTasksByChatId } from '@/lib/apis';
-import { getChatById, updateChatById } from '@/lib/apis/chats';
+import { deleteChatMessageById, getChatById, updateChatById } from '@/lib/apis/chats';
+import { createNewFeedback, updateFeedbackById } from '@/lib/apis/evaluations';
+import { generateTags } from '@/lib/apis';
+import { type FeedbackDetails, annotate, feedbackItem } from '@/lib/chat/feedback';
 import { generateOpenAIChatCompletion } from '@/lib/apis/openai';
 import { WEBUI_BASE_URL } from '@/lib/constants';
-import { type ChatEffect, type ChatEvent, type ChatFile, type History, type Message, addResponses, addUserMessage, applyChatEvent, emptyHistory, errorText, failMessage, isGenerating, messagesList, normalizeHistory, updateMessage } from '@/lib/chat/history';
+import { type ChatEffect, type ChatEvent, type ChatFile, type History, type Message, addResponses, addUserMessage, applyChatEvent, deleteMessage, editContent, emptyHistory, errorText, failMessage, isGenerating, messagesList, normalizeHistory, saveReplyAsCopy, updateMessage } from '@/lib/chat/history';
 import { type FeatureToggles, completionBody, isTemporaryChatId, promptVariables, requestFeatures, temporaryChatId } from '@/lib/chat/request';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useSocket } from '@/lib/socket/SocketProvider';
@@ -349,7 +352,123 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 		[token]
 	);
 
+	/** Continues a finished reply from where it stopped (the server appends to it). */
+	const continueReply = useCallback(
+		async (message: Message) => {
+			const l = latest.current;
+			const model = l.models.find((m) => m.id === (message.selectedModelId ?? message.model));
+			if (!model) {
+				toast.error('Model not found');
+				return;
+			}
+			setHistory((h) => updateMessage(h, message.id, { done: false }));
+			const chatId = chatIdRef.current;
+			const body = completionBody({
+				history: historyRef.current,
+				responseId: message.id,
+				model,
+				chatId,
+				temporary: isTemporaryChatId(chatId),
+				sessionId: socket?.id,
+				folderId: l.folderId,
+				params: l.params,
+				settings: l.settings,
+				chatFiles: l.chatFiles,
+				features: requestFeatures(l.toggles, user, config, l.settings),
+				toolIds: l.toolIds,
+				variables: promptVariables(user),
+				continueResponse: true
+			});
+			const res = await generateOpenAIChatCompletion(token, body, `${WEBUI_BASE_URL}/api`).catch((error) => {
+				toast.error(errorText(error));
+				setHistory((cur) => updateMessage(cur, message.id, (m) => failMessage(m, error)));
+				return null;
+			});
+			if (res?.task_id || res?.task_ids) setTaskIds(res.task_ids ?? [res.task_id]);
+		},
+		[socket, token, user, config, setHistory]
+	);
+
+	/** Edits a prompt and sends it again as a new branch (`resend`), or edits a message in place. */
+	const editMessage = useCallback(
+		async (message: Message, content: string, mode: 'save' | 'resend' | 'copy') => {
+			const h = historyRef.current;
+			if (mode === 'resend') {
+				const { history: next, id } = addUserMessage(h, message.parentId, { content, files: message.files, models: latest.current.selectedModels });
+				setHistory(next);
+				await requestReply(id);
+				return;
+			}
+			const next = mode === 'copy' ? saveReplyAsCopy(h, message.id, content) : editContent(h, message.id, content);
+			setHistory(next);
+			await save(next);
+		},
+		[requestReply, save, setHistory]
+	);
+
+	/** Deletes a message (and its replies): on the server for a saved chat, which answers with the new history. */
+	const removeMessage = useCallback(
+		async (message: Message) => {
+			const id = chatIdRef.current;
+			if (id && !isTemporaryChatId(id)) {
+				const res = (await deleteChatMessageById(token, id, message.id).catch((e) => {
+					toast.error(`${e}`);
+					return null;
+				})) as { chat?: { history?: History } } | null;
+				if (res?.chat?.history) setHistory(normalizeHistory(res.chat.history));
+				void refreshList();
+			} else setHistory((h) => deleteMessage(h, message.id));
+		},
+		[token, refreshList, setHistory]
+	);
+
+	/**
+	 * Rates a reply, or adds details to its rating, and records it as feedback
+	 * (creating it the first time). After a first thumbs up or down with no
+	 * tags yet, asks the model for tags, as the Svelte app does.
+	 */
+	const rate = useCallback(
+		async (message: Message, rating: number | null, details: FeedbackDetails | null = null) => {
+			const id = chatIdRef.current;
+			if (!id || isTemporaryChatId(id)) return;
+			const annotation = annotate(message, rating, details);
+			const chatRecord = await getChatById(token, id).catch((e) => {
+				toast.error(`${e}`);
+				return null;
+			});
+			if (!chatRecord) return;
+			const baseModelOf = (mid: string) => {
+				const m = latest.current.models.find((x) => x.id === mid);
+				return m ? (m.info?.base_model_id ?? null) : undefined;
+			};
+			const item = feedbackItem({ history: historyRef.current, message, annotation, chatId: id, chat: chatRecord, baseModelOf });
+			const feedbackId = message.feedbackId as string | undefined;
+			const res = (await (feedbackId ? updateFeedbackById(token, feedbackId, item) : createNewFeedback(token, item)).catch((e) => {
+				toast.error(`${e}`);
+				return null;
+			})) as { id?: string } | null;
+			const next = updateMessage(historyRef.current, message.id, { annotation, ...(res?.id && !feedbackId ? { feedbackId: res.id } : {}) });
+			setHistory(next);
+			await save(next);
+			if (!details && !(annotation as { tags?: string[] }).tags && message.content) {
+				const tags = (await generateTags(token, message.model ?? '', messagesList(next, message.id) as never, id).catch(() => null)) as string[] | null;
+				const fid = (next.messages[message.id].feedbackId as string | undefined) ?? res?.id;
+				if (tags?.length && fid) {
+					const tagged = updateMessage(historyRef.current, message.id, (m) => ({ annotation: { ...(m.annotation ?? {}), tags } }));
+					setHistory(tagged);
+					void save(tagged);
+					void updateFeedbackById(token, fid, { ...item, data: { ...item.data, tags } }).catch(() => {});
+				}
+			}
+		},
+		[token, save, setHistory]
+	);
+
 	return {
+		continueReply,
+		editMessage,
+		removeMessage,
+		rate,
 		chatId: chatIdRef.current,
 		chat,
 		setChat,

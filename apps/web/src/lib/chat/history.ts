@@ -379,3 +379,48 @@ export function replyColumns(history: History, parentId: string): Column[] {
 			return { modelIdx, messageIds, selected: i === -1 ? messageIds.length - 1 : i };
 		});
 }
+
+/** Edits a message in place, keeping the previous text of a reply as `originalContent` (Messages.svelte's editMessage without submit). */
+export function editContent(history: History, id: string, content: string, files?: ChatFile[]): History {
+	const m = history.messages[id];
+	if (!m) return history;
+	if (m.role === 'user') return updateMessage(history, id, { content, ...(files ? { files } : {}) });
+	return updateMessage(history, id, { originalContent: m.content, content });
+}
+
+/** "Save As Copy" for a reply: a new sibling with the edited text, which becomes current. */
+export function saveReplyAsCopy(history: History, id: string, content: string): History {
+	const m = history.messages[id];
+	if (!m) return history;
+	const copy: Message = { ...m, id: crypto.randomUUID(), childrenIds: [], files: undefined, content, timestamp: Math.floor(Date.now() / 1000) };
+	const messages = { ...history.messages, [copy.id]: copy };
+	if (m.parentId && messages[m.parentId]) messages[m.parentId] = { ...messages[m.parentId], childrenIds: [...messages[m.parentId].childrenIds, copy.id] };
+	return { messages, currentId: copy.id };
+}
+
+/**
+ * Removes a message and its direct replies; their replies move up to the
+ * message's parent, and the newest branch from there becomes current
+ * (Messages.svelte's deleteMessage).
+ */
+export function deleteMessage(history: History, id: string): History {
+	const target = history.messages[id];
+	if (!target) return history;
+	const messages = { ...history.messages };
+	const children = target.childrenIds ?? [];
+	const grandchildren = children.flatMap((c) => messages[c]?.childrenIds ?? []);
+	const parentId = target.parentId;
+	if (parentId && messages[parentId]) messages[parentId] = { ...messages[parentId], childrenIds: [...messages[parentId].childrenIds.filter((c) => c !== id), ...grandchildren] };
+	for (const g of grandchildren) if (messages[g]) messages[g] = { ...messages[g], parentId };
+	for (const d of [id, ...children]) delete messages[d];
+	let next: string | null = parentId;
+	let kids = next === null ? Object.keys(messages).filter((k) => messages[k].parentId === null) : (messages[next]?.childrenIds ?? []);
+	while (kids.length) {
+		next = kids.at(-1)!;
+		kids = messages[next]?.childrenIds ?? [];
+	}
+	return { messages, currentId: next };
+}
+
+/** A reply stopped part-way can be continued. */
+export const canContinue = (m: Message) => m.role === 'assistant' && m.done !== false && !m.error && Boolean(m.content);

@@ -8,6 +8,7 @@ import { Tip } from '@/components/common/Tip';
 import { getFolderById } from '@/lib/apis/folders';
 import { updateChatById } from '@/lib/apis/chats';
 import type { History } from '@/lib/chat/history';
+import { type Citation, citationIndex, citationsOf } from '@/lib/chat/sources';
 import { initialModels } from '@/lib/chat/request';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -16,6 +17,8 @@ import { cn } from '@/lib/utils';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ChatMessages, type MessageHandlers } from './ChatMessages';
 import { ChatPlaceholder } from './ChatPlaceholder';
+import { CitationDialog } from './CitationDialog';
+import { useMessageActions } from './MessageActions';
 import { ModelSelector } from './ModelSelector';
 import { ServerDialogs } from './ServerDialogs';
 import { useChatSession } from './useChatSession';
@@ -112,14 +115,20 @@ export function ChatPage() {
 		[session]
 	);
 
+	const actions = useMessageActions(session);
+	const [citation, setCitation] = useState<Citation | null>(null);
 	const handlers: MessageHandlers = {
+		...actions,
 		onBranch,
+		citationsFor: (modelId) => models.find((m) => m.id === modelId)?.info?.meta?.capabilities?.citations !== false,
 		onRegenerate: (m) => void session.regenerate(m),
 		onFollowUp: (text) => {
 			atBottom.current = true;
 			session.submit(text);
 		},
-		onToolCallResolved: () => void session.reload()
+		onToolCallResolved: () => void session.reload(),
+		// A citation `[n]` (or `n#chunk`) is the n-th grouped source, 1-based.
+		onSourceClick: (m, id) => setCitation(citationsOf(m.sources)[citationIndex(id)] ?? null)
 	};
 
 	const changeModels = (ids: string[]) => {
@@ -193,6 +202,7 @@ export function ChatPage() {
 				}}
 			/>
 			<ServerDialogs dialog={session.dialog} onClose={session.closeDialog} />
+			<CitationDialog source={citation} onClose={() => setCitation(null)} />
 		</div>
 	);
 }
