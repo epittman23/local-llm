@@ -57,35 +57,23 @@ export const getUserPosition = async (raw = false) => {
 	}
 };
 
-export const getTimeRange = (timestamp: number) => {
-	const now = new Date();
-	const date = new Date(timestamp * 1000); // Convert Unix timestamp to milliseconds
-
-	// Calculate the difference in milliseconds
-	const diffTime = now.getTime() - date.getTime();
-	const diffDays = diffTime / (1000 * 3600 * 24);
-
-	const nowDate = now.getDate();
-	const nowMonth = now.getMonth();
-	const nowYear = now.getFullYear();
-
-	const dateDate = date.getDate();
-	const dateMonth = date.getMonth();
-	const dateYear = date.getFullYear();
-
-	if (nowYear === dateYear && nowMonth === dateMonth && nowDate === dateDate) {
-		return 'Today';
-	} else if (nowYear === dateYear && nowMonth === dateMonth && nowDate - dateDate === 1) {
-		return 'Yesterday';
-	} else if (diffDays <= 7) {
-		return 'Previous 7 days';
-	} else if (diffDays <= 30) {
-		return 'Previous 30 days';
-	} else if (nowYear === dateYear) {
-		return MONTH_NAMES[dateMonth];
-	} else {
-		return date.getFullYear().toString();
-	}
+/**
+ * The sidebar-style bucket for a time in *seconds*: Today, Yesterday, Previous
+ * 7 / 30 days, the month name this year, else the year. Days are counted in
+ * local calendar days, so the 30th is "Yesterday" on the 1st (the original
+ * compared day-of-month numbers and missed that across a month boundary).
+ */
+export const getTimeRange = (timestamp: number, now = new Date()) => {
+	const date = new Date(timestamp * 1000);
+	const midnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+	const calendarDays = Math.round((midnight(now) - midnight(date)) / 86_400_000);
+	const diffDays = (now.getTime() - date.getTime()) / 86_400_000;
+	if (calendarDays === 0) return 'Today';
+	if (calendarDays === 1) return 'Yesterday';
+	if (diffDays <= 7) return 'Previous 7 days';
+	if (diffDays <= 30) return 'Previous 30 days';
+	if (now.getFullYear() === date.getFullYear()) return MONTH_NAMES[date.getMonth()];
+	return date.getFullYear().toString();
 };
 
 function resolveSchema(schemaRef: any, components: any, resolvedSchemas = new Set<string>()): any {

@@ -18,6 +18,8 @@ import { AutomationPage } from '@/routes/automations/AutomationPage';
 import { AutomationsPage } from '@/routes/automations/AutomationsPage';
 import { CalendarPage } from '@/routes/calendar/CalendarPage';
 import { LegacyFallback } from '@/routes/LegacyFallback';
+import { NoteEditorPage } from '@/routes/notes/NoteEditorPage';
+import { NewNotePage, NotesPage } from '@/routes/notes/NotesPage';
 import { PlaygroundChat, PlaygroundCompletions, PlaygroundImages, PlaygroundLayout } from '@/routes/playground/PlaygroundPages';
 import { PlaceholderPage } from '@/routes/PlaceholderPage';
 import { AuthPage } from '@/routes/public/AuthPage';
@@ -104,7 +106,9 @@ const router = createBrowserRouter(
 						{ path: 'images', element: <PlaygroundImages /> }
 					]
 				},
-				{ path: routePaths.notes, element: <PlaceholderPage title="Notes" phase="Phase 9" /> },
+				{ path: routePaths.notes, element: <NotesPage /> },
+				{ path: `${routePaths.notes}/new`, element: <NewNotePage /> },
+				{ path: `${routePaths.notes}/:id`, element: <NoteEditorPage /> },
 				{
 					path: routePaths.calendar,
 					element: <CalendarPage />

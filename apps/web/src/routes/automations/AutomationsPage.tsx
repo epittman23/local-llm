@@ -174,8 +174,9 @@ function Automations() {
 				open={dialog !== null}
 				onOpenChange={(o) => !o && setDialog(null)}
 				cloneFrom={dialog?.cloneFrom ?? null}
-				onSaved={async (id) => {
-					await refresh();
+				onSaved={(id) => {
+					// Open the new automation at once; the list refreshes behind it.
+					void refresh();
 					if (id) navigate(`/automations/${id}`);
 				}}
 			/>

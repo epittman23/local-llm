@@ -14,7 +14,8 @@ const sessionUser = {
 const baseConfig = {
 	name: 'local-llm',
 	version: 'test',
-	features: { auth: true, enable_login_form: true, enable_signup: true }
+	// enable_notes: several tests land on /notes, which is gated on it.
+	features: { auth: true, enable_login_form: true, enable_signup: true, enable_notes: true }
 };
 
 const mockConfig = (page: Page, config: object) =>

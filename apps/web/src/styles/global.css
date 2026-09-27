@@ -129,3 +129,38 @@
     @apply font-sans;
     }
 }
+/*
+ * Rendered rich text: the TipTap editor (components/common/RichTextEditor)
+ * and, from Phase 10, rendered Markdown. There is no typography plugin in
+ * this app, so the handful of block styles are spelled out here.
+ */
+@layer components {
+	.rich-text {
+		@apply text-sm leading-relaxed;
+	}
+	.rich-text :where(h1) { @apply mt-4 mb-2 text-2xl font-semibold; }
+	.rich-text :where(h2) { @apply mt-4 mb-2 text-xl font-semibold; }
+	.rich-text :where(h3) { @apply mt-3 mb-1.5 text-lg font-semibold; }
+	.rich-text :where(p) { @apply my-1; }
+	.rich-text :where(ul) { @apply my-1 list-disc ps-6; }
+	.rich-text :where(ol) { @apply my-1 list-decimal ps-6; }
+	.rich-text :where(ul[data-type='taskList']) { @apply list-none ps-1; }
+	.rich-text :where(ul[data-type='taskList'] li) { @apply flex items-start gap-2; }
+	.rich-text :where(ul[data-type='taskList'] li > label) { @apply mt-1 select-none; }
+	.rich-text :where(ul[data-type='taskList'] li > div) { @apply flex-1; }
+	.rich-text :where(blockquote) { @apply border-border text-muted-foreground my-2 border-s-2 ps-3; }
+	.rich-text :where(code) { @apply bg-muted rounded px-1 py-0.5 font-mono text-[0.85em]; }
+	.rich-text :where(pre) { @apply bg-muted my-2 overflow-x-auto rounded-lg p-3 font-mono text-xs; }
+	.rich-text :where(pre code) { @apply bg-transparent p-0; }
+	.rich-text :where(a) { @apply underline; }
+	.rich-text :where(mark) { @apply rounded bg-yellow-200 px-0.5 dark:bg-yellow-500/40; }
+	.rich-text :where(hr) { @apply border-border my-4; }
+	.rich-text :where(img) { @apply my-2 max-w-full rounded-lg; }
+	.rich-text :where(table) { @apply my-2 w-full border-collapse text-xs; }
+	.rich-text :where(th, td) { @apply border-border border px-2 py-1 text-start align-top; }
+	.rich-text :where(th) { @apply bg-muted font-medium; }
+	.rich-text .is-editor-empty:first-child::before {
+		content: attr(data-placeholder);
+		@apply text-muted-foreground/60 pointer-events-none float-left h-0;
+	}
+}
