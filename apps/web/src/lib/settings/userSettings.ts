@@ -31,6 +31,8 @@ export function useUserSettings() {
 	const query = useQuery({
 		queryKey: KEY,
 		enabled: Boolean(token),
+		// A failed load throws (the helper rethrows network errors and error
+		// bodies), leaving `isSuccess` false; `null` is a user with no settings yet.
 		queryFn: async () => (((await getUserSettings(token))?.ui ?? {}) as UserUiSettings)
 	});
 	const pinnedModels = resolvePinnedModels(query.data, defaultPinned);
@@ -48,14 +50,21 @@ export function useUserSettings() {
 		onSettled: () => queryClient.invalidateQueries({ queryKey: KEY })
 	});
 
-	const togglePinned = (modelId: string) =>
+	// The API replaces `ui` wholesale, so nothing is saved until the current
+	// settings are known -- merging into a missing object would wipe them.
+	const loaded = query.isSuccess;
+
+	const togglePinned = (modelId: string) => {
+		if (!loaded) return;
 		save.mutate({
 			...(query.data ?? {}),
 			pinnedModels: pinnedModels.includes(modelId) ? pinnedModels.filter((id) => id !== modelId) : [...pinnedModels, modelId]
 		});
+	};
 
 	/** Merges `patch` into the saved settings (the whole `ui` object is sent, as the API requires). */
-	const update = (patch: UserUiSettings) => save.mutateAsync({ ...(query.data ?? {}), ...patch });
+	const update = (patch: UserUiSettings) =>
+		loaded ? save.mutateAsync({ ...query.data, ...patch }) : Promise.reject(new Error('Your settings have not loaded yet; nothing was saved.'));
 
 	return { settings: query.data ?? null, pinnedModels, togglePinned, update };
 }

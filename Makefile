@@ -33,6 +33,13 @@ help:
 	@echo "make backend   Postgres + Open WebUI fork backend (uvicorn --reload, :$(LLLM_BACKEND_PORT))"
 	@echo "make frontend  Astro + React + shadcn/ui dev server (astro dev, :5174; alias: make astro)"
 
+# --reload caveat: a code change restarts the uvicorn worker, and with it the
+# in-memory handle Benchmarks > Serve keeps on a running llama-server. The
+# server itself runs in its own session and survives, so after a reload the
+# Serve page reads "Stopped" while the model still holds VRAM; stop it with
+# `pkill -f llama-server` before starting another. Avoid editing backend code
+# while a benchmark server is up.
+#
 # One shell invocation for the whole recipe (line continuations, not separate
 # make lines) so the EXIT trap covers the real work below it, Ctrl-C
 # included. uvicorn is never exec'd for the same reason: exec would replace
@@ -85,7 +92,7 @@ backend:
 	fi; \
 	database_url="$$(PYTHONPATH="$(BACKEND_DIR)" "$$py" -c 'import sys; from open_webui.benchmarks.serving.launcher import build_database_url; print(build_database_url(sys.argv[1]))' "$$POSTGRES_PASSWORD")"; \
 	cd "$(BACKEND_DIR)" && \
-	CORS_ALLOW_ORIGIN="http://localhost:$(LLLM_BACKEND_PORT);http://127.0.0.1:$(LLLM_BACKEND_PORT);http://localhost:5174" \
+	CORS_ALLOW_ORIGIN="http://localhost:$(LLLM_BACKEND_PORT);http://127.0.0.1:$(LLLM_BACKEND_PORT);http://localhost:5174;http://127.0.0.1:5174" \
 	WEBUI_SECRET_KEY="$$WEBUI_SECRET_KEY" \
 	DATABASE_URL="$$database_url" \
 	VECTOR_DB=pgvector \

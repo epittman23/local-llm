@@ -17,8 +17,8 @@ const TOKEN_EXPIRY_BUFFER = 60; // seconds
 const TOKEN_CHECK_INTERVAL_MS = 15000;
 
 let tokenTimer: ReturnType<typeof setInterval> | null = null;
-let isAuthRedirectInProgress = false;
 let fetchGuardInstalled = false;
+let sessionWatchInstalled = false;
 
 const resolveFetchUrl = (input: RequestInfo | URL) => {
 	if (input instanceof Request) {
@@ -72,9 +72,9 @@ const stopTokenTimer = () => {
 
 /** Clears the session and signs out, as if the token had expired server-side. */
 export const clearExpiredSession = () => {
-	if (isAuthRedirectInProgress) return;
+	// Already signed out (e.g. several 401s at once): nothing left to clear.
+	if (useAuthStore.getState().status !== 'authenticated') return;
 
-	isAuthRedirectInProgress = true;
 	stopTokenTimer();
 	useAuthStore.getState().clearSession();
 	localStorage.removeItem('token');
@@ -84,7 +84,6 @@ export const clearExpiredSession = () => {
 		console.error('Error signing out expired session:', error);
 	});
 	console.warn('Session expired. Please sign in again.');
-	isAuthRedirectInProgress = false;
 };
 
 /** A voluntary sign-out, as opposed to clearExpiredSession's involuntary one. */
@@ -106,6 +105,21 @@ const checkTokenExpiry = () => {
 	if (now >= exp - TOKEN_EXPIRY_BUFFER) {
 		clearExpiredSession();
 	}
+};
+
+/**
+ * Runs the expiry check whenever there is a session, however it was set:
+ * restored here in initAuth, or signed in later from /auth without a reload
+ * (docs/bug-review-2026-09-27.md L4). Installed once per page load.
+ */
+const installSessionWatch = () => {
+	if (sessionWatchInstalled) return;
+	sessionWatchInstalled = true;
+	useAuthStore.subscribe((state, prev) => {
+		if (state.status === prev.status && state.token === prev.token) return;
+		stopTokenTimer();
+		if (state.status === 'authenticated') tokenTimer = setInterval(checkTokenExpiry, TOKEN_CHECK_INTERVAL_MS);
+	});
 };
 
 /** Installs the global 401-detection wrapper exactly once per page load. */
@@ -140,6 +154,7 @@ const installAuthFetchGuard = () => {
  */
 export const initAuth = async () => {
 	installAuthFetchGuard();
+	installSessionWatch();
 
 	// Fetched unconditionally, before any session check -- matching
 	// +layout.svelte's own onMount exactly (getBackendConfig() runs first
@@ -184,8 +199,6 @@ export const initAuth = async () => {
 		return () => stopTokenTimer();
 	}
 
-	stopTokenTimer();
-	tokenTimer = setInterval(checkTokenExpiry, TOKEN_CHECK_INTERVAL_MS);
-
+	// The expiry timer was started by installSessionWatch when setSession ran.
 	return () => stopTokenTimer();
 };

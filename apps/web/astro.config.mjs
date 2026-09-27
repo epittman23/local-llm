@@ -34,8 +34,10 @@ export default defineConfig({
 				'/ollama': { target: backendTarget, changeOrigin: true },
 				'/openai': { target: backendTarget, changeOrigin: true },
 				'/oauth': { target: backendTarget, changeOrigin: true },
-				// The backend serves its own static assets (the fallback model logo, ...)
-				// at /static -- there is no such folder in this app's public/.
+				// The backend serves /static itself (the fallback model logo, uploaded
+				// images, ...). It seeds that directory at boot from this app's
+				// dist/static, or public/static when there is no build yet, so
+				// public/static is the source of those files either way.
 				'/static': { target: backendTarget, changeOrigin: true },
 				'/ws': { target: backendTarget, changeOrigin: true, ws: true }
 			}

@@ -107,9 +107,17 @@ try:
 except Exception as e:
     pass
 
-for file_path in (FRONTEND_BUILD_DIR / 'static').glob('**/*'):
+# Fork change: fall back to the frontend's source public/static when there is
+# no build yet (`make backend` + `make frontend` in a fresh clone), so
+# /static/favicon.png -- the model-avatar fallback -- still exists
+# (docs/bug-review-2026-09-27.md L14). FRONTEND_BUILD_DIR is apps/web/dist.
+FRONTEND_STATIC_DIR = FRONTEND_BUILD_DIR / 'static'
+if not FRONTEND_STATIC_DIR.exists() and (FRONTEND_BUILD_DIR.parent / 'public' / 'static').exists():
+    FRONTEND_STATIC_DIR = FRONTEND_BUILD_DIR.parent / 'public' / 'static'
+
+for file_path in FRONTEND_STATIC_DIR.glob('**/*'):
     if file_path.is_file():
-        target_path = STATIC_DIR / file_path.relative_to((FRONTEND_BUILD_DIR / 'static'))
+        target_path = STATIC_DIR / file_path.relative_to(FRONTEND_STATIC_DIR)
         target_path.parent.mkdir(parents=True, exist_ok=True)
         try:
             shutil.copyfile(file_path, target_path)
@@ -119,7 +127,7 @@ for file_path in (FRONTEND_BUILD_DIR / 'static').glob('**/*'):
 # LICENSE covers copied Open WebUI logo/favicon assets.
 # Do not alter, remove, obscure, or replace them except as LICENSE permits:
 # https://docs.openwebui.com/license.
-frontend_favicon = FRONTEND_BUILD_DIR / 'static' / 'favicon.png'
+frontend_favicon = FRONTEND_STATIC_DIR / 'favicon.png'
 
 if frontend_favicon.exists():
     try:
@@ -127,7 +135,7 @@ if frontend_favicon.exists():
     except Exception as e:
         logging.error(f'An error occurred: {e}')
 
-frontend_splash = FRONTEND_BUILD_DIR / 'static' / 'splash.png'
+frontend_splash = FRONTEND_STATIC_DIR / 'splash.png'
 
 if frontend_splash.exists():
     try:
@@ -135,7 +143,7 @@ if frontend_splash.exists():
     except Exception as e:
         logging.error(f'An error occurred: {e}')
 
-frontend_loader = FRONTEND_BUILD_DIR / 'static' / 'loader.js'
+frontend_loader = FRONTEND_STATIC_DIR / 'loader.js'
 
 if frontend_loader.exists():
     try:

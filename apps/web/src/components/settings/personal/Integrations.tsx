@@ -15,6 +15,12 @@ import { SettingsForm, SettingsSection } from '../controls';
  * user's own OpenAPI tool servers and Open Terminal servers ("direct"
  * connections, reached from the browser), each saved at once. Only one
  * terminal is enabled at a time, as before.
+ *
+ * Saved but not yet used by chat: this app has no browser-side executor for
+ * direct servers (the Svelte layout's `execute:tool` socket handler) and does
+ * not send `tool_servers`/`terminal_id` with a completion. Rather than let the
+ * settings silently do nothing, the tab says so (docs/bug-review-2026-09-27.md
+ * M9; listed with the deliberate gaps in docs/CLAUDE.md).
  */
 export default function Integrations() {
 	const { settings, update } = useUserSettings();
@@ -27,6 +33,9 @@ export default function Integrations() {
 
 	return (
 		<SettingsForm title="Integrations" footer={false} loading={!settings}>
+			<p role="note" className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-400">
+				Not yet available in chat: servers added here are saved, but chats do not use personal tool or terminal servers in this version. Admin-configured tool servers are unaffected.
+			</p>
 			<SettingsSection title="Manage Tool Servers" first>
 				<div className="flex items-center justify-between">
 					<p className="text-muted-foreground text-xs">Connect to your own OpenAPI compatible external tool servers.</p>

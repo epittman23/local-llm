@@ -70,13 +70,12 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 			}, HEARTBEAT_INTERVAL_MS);
 		});
 
-		socket.on('reconnect_attempt', (attempt) => {
-			console.log('reconnect_attempt', attempt);
-		});
-
-		socket.on('reconnect_failed', () => {
-			console.log('reconnect_failed');
-		});
+		// Manager events in socket.io-client v4: registered on `socket.io`, not
+		// on the socket, or they never fire.
+		const onReconnectAttempt = (attempt: number) => console.log('reconnect_attempt', attempt);
+		const onReconnectFailed = () => console.log('reconnect_failed');
+		socket.io.on('reconnect_attempt', onReconnectAttempt);
+		socket.io.on('reconnect_failed', onReconnectFailed);
 
 		socket.on('disconnect', (reason) => {
 			console.log(`Socket ${socket.id} disconnected due to ${reason}`);
@@ -88,6 +87,8 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 		});
 
 		return () => {
+			socket.io.off('reconnect_attempt', onReconnectAttempt);
+			socket.io.off('reconnect_failed', onReconnectFailed);
 			if (heartbeatInterval) clearInterval(heartbeatInterval);
 			socket.disconnect();
 			socketRef.current = null;

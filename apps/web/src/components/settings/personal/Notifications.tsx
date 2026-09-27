@@ -56,7 +56,7 @@ export default function Notifications() {
 				return;
 			}
 		}
-		await update({ notificationEnabled: on });
+		await update({ notificationEnabled: on }).catch((e) => toast.error(`${e?.message ?? e}`));
 	};
 
 	const act = async (fn: () => Promise<unknown>, done?: string) => {
