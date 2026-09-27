@@ -13,8 +13,7 @@ import { routePaths } from '@/routes/routePaths';
 //
 // Uses react-router's own navigate(), not window.location -- this changed in
 // Phase 6: /auth was still a SvelteKit-only page when this file was first
-// written (Phase 4), so a full page navigation was the only option, same
-// reasoning LegacyFallback.tsx still gives for everything it bounces to.
+// written (Phase 4), so a full page navigation was the only option.
 // Now that this app owns /auth (routes/public/AuthPage.tsx), a full reload
 // just to land back in the same SPA is wasted work.
 export function useAuthGate() {

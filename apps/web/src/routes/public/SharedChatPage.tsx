@@ -61,9 +61,8 @@ export function SharedChatPage() {
 		try {
 			const res = await cloneSharedChatById(token, chatQuery.data.id);
 			if (res) {
-				// /c/:id is Phase 10's chat surface, not a React route yet -- a
-				// full navigation to the still-SvelteKit-owned page, same
-				// reasoning as LegacyFallback.tsx's own default case.
+				// /c/:id is Phase 10's chat surface, not a React route yet: a full
+				// navigation to the page the Svelte app still owns.
 				window.location.assign(`/c/${res.id}`);
 			}
 		} catch (err) {

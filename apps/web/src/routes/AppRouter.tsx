@@ -37,17 +37,10 @@ import { WorkspaceLayout } from '@/routes/workspace/WorkspaceLayout';
 const router = createBrowserRouter(
 	[
 		{
-			// Only the real React routes live under AppShell -- its route gate
-			// (useAuthGate) would otherwise also wrap LegacyFallback below, and an
-			// anonymous user hitting a Svelte-owned path should bounce straight to
-			// Svelte (which applies its own (app)/+layout.svelte gate there), not
-			// get intercepted by *our* gate first. Nesting them would still end
-			// up at /auth today since both gates redirect there, but it would be
-			// by accident, and it would stop being equivalent the moment a path
-			// LegacyFallback bounces to is actually public on the Svelte side.
-			// Phase 6's four public/static pages below are the concrete case
-			// that comment predicted: they're top-level siblings of this route,
-			// not children of it, for exactly the same reason.
+			// Only the real React routes live under AppShell and its route gate.
+			// LegacyFallback (the catch-all below) is outside it: a 404 or a
+			// "still in the Svelte app" notice needs no session. Phase 6's four
+			// public pages are top-level siblings for the same reason.
 			element: <AppShell />,
 			children: [
 				{ path: routePaths.home, element: <PlaceholderPage title="Chat" phase="Phase 10" /> },

@@ -1,58 +1,70 @@
-import { useEffect } from 'react';
-import { useLocation } from 'react-router';
+import { Link, useLocation } from 'react-router';
 
 /**
- * Rendered by AppRouter's catch-all ("*") route: whatever path the user
- * landed on isn't one of routePaths' real React routes. Most of those paths
- * are real SvelteKit pages this migration hasn't ported yet (Phases 5-10 own
- * that one surface at a time -- see docs/migration-plan.md's Status board),
- * not actually missing -- so the default behavior a "not found" 404 implies
- * would be wrong for nearly every path this ever fires on.
+ * AppRouter's catch-all ("*") route: the path is not one of this app's routes.
  *
- * Policy: unconditional bounce to the SvelteKit app at the same path (a full
- * `window.location` navigation, not a react-router one -- react-router can't
- * render a page it doesn't own). Chosen over the two more conservative
- * options -- an explicit allowlist/pattern set with an in-app 404 for
- * genuinely dead paths, or probing Svelte first before bouncing -- because
- * this migration is still at its very first surface (Phase 4 of 11):
- * routePaths.ts owns four paths total, so "not in routePaths" and "not a
- * real path" are nowhere near the same set yet, and would need constant
- * upkeep to even approximate each other at this stage for no real benefit.
+ * Until Phase 9 this bounced every such path to the same path with a full
+ * `window.location` navigation, on the theory that it was a Svelte page not
+ * yet ported. That stopped being right twice over: on the dev server (`:5174`)
+ * the same path is answered by this app again, so the bounce looped forever
+ * (START.md measured 14 reloads in 4 s); and once most of the app is React, an
+ * unmatched path is far more likely to be a typo than a Svelte page.
  *
- * Checked, not assumed, that this can't loop: apps/openwebui/src/routes/
- * +error.svelte (SvelteKit's own catch-all) renders a plain "{status}:
- * {message}" in place -- it's a client-side error render, not a redirect --
- * and nothing in the fork's own source references `/next` except main.py's
- * mount itself (grepped for it directly). So a path unmatched by both apps
- * lands on Svelte's bare error page exactly once, not a loop.
- *
- * Revisit this once that stops being true -- concretely, once more paths are
- * React-owned than not (Phase 8+ or so), an unconditional bounce starts being
- * wrong in the other direction: a typo'd or genuinely dead path would bounce
- * to an ever-shrinking Svelte app instead of showing this app's own 404.
- * That's also the point at which whoever moves a surface out of Svelte should
- * check whether Svelte picks up a redirect *toward* `/next` for it (it
- * doesn't today, per the grep above, but that's a fact about today, not a
- * guarantee) -- this policy's safety argument stops holding the moment that
- * changes, and would need re-deriving, not just re-asserting.
+ * Policy now: never navigate on its own. A path that belongs to a surface
+ * still owned by the Svelte app (`svelteOnlySurface`) says so and links to it
+ * -- the Svelte dev server (`:5173`) in development, the same path in a build,
+ * where the Svelte app is served at the root and this one under `/next`.
+ * Anything else is this app's own 404.
  */
-// Exported for LegacyFallback.test.tsx -- a mocked window.location.assign is
-// the only way to check this without a real backend and SvelteKit build to
-// bounce to.
-export function resolveLegacyFallback(pathname: string): void {
-	window.location.assign(pathname);
+
+/** Path prefixes still owned by the Svelte app, and the surface's name. Shrinks as surfaces are ported. */
+const SVELTE_ONLY: [prefix: string, surface: string][] = [
+	['/c/', 'Chat'],
+	['/home', 'Home'],
+	['/folders/', 'Folders'],
+	['/channels/', 'Channels'],
+	['/automations', 'Automations'],
+	['/playground', 'Playground']
+];
+
+/** The name of the Svelte-owned surface a path belongs to, or null. */
+export function svelteOnlySurface(pathname: string): string | null {
+	// '/c/' needs something after it; '/home' matches itself and anything beneath it.
+	const matches = (prefix: string) => (prefix.endsWith('/') ? pathname.length > prefix.length && pathname.startsWith(prefix) : pathname === prefix || pathname.startsWith(`${prefix}/`));
+	return SVELTE_ONLY.find(([prefix]) => matches(prefix))?.[1] ?? null;
+}
+
+/** Where the Svelte version of a path lives: its dev server in development, the same origin in a build. */
+export function svelteUrl(path: string, dev = import.meta.env.DEV): string {
+	return dev ? `http://localhost:5173${path}` : path;
 }
 
 export function LegacyFallback() {
 	const location = useLocation();
-
-	useEffect(() => {
-		resolveLegacyFallback(location.pathname + location.search + location.hash);
-	}, [location.pathname, location.search, location.hash]);
+	const full = location.pathname + location.search + location.hash;
+	const surface = svelteOnlySurface(location.pathname);
 
 	return (
-		<div className="flex flex-1 items-center justify-center p-8">
-			<p className="text-muted-foreground text-sm">Loading…</p>
+		<div className="flex flex-1 flex-col items-center justify-center gap-2 p-8 text-center">
+			{surface ? (
+				<>
+					<h1 className="text-xl font-semibold">{surface} is not in this app yet</h1>
+					<p className="text-muted-foreground max-w-sm text-sm">It is still served by the Svelte app while the migration finishes.</p>
+					<a className="text-sm underline" href={svelteUrl(full)}>
+						Open it there
+					</a>
+				</>
+			) : (
+				<>
+					<h1 className="text-xl font-semibold">Page not found</h1>
+					<p className="text-muted-foreground max-w-sm text-sm">
+						Nothing lives at <code>{location.pathname}</code>.
+					</p>
+					<Link className="text-sm underline" to="/">
+						Go home
+					</Link>
+				</>
+			)}
 		</div>
 	);
 }
