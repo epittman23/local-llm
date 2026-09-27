@@ -24,20 +24,25 @@ export function SharedChatPage() {
 	const navigate = useNavigate();
 	const token = useAuthStore((state) => state.token) ?? '';
 	const user = useAuthStore((state) => state.user);
+	const authStatus = useAuthStore((state) => state.status);
 	const WEBUI_NAME = useWebUIName();
 
 	const chatQuery = useQuery({
-		queryKey: ['shared-chat', id],
+		queryKey: ['shared-chat', id, token],
 		queryFn: () => getChatByShareId(token, id as string),
-		enabled: !!id,
+		// Wait for the session: a share limited to signed-in users answers an
+		// anonymous request with 401, and asking before the token is restored
+		// sent a signed-in visitor home.
+		enabled: !!id && authStatus !== 'pending',
 		retry: false
 	});
 
 	useEffect(() => {
-		if (chatQuery.isError) {
-			navigate(routePaths.home, { replace: true });
-		}
-	}, [chatQuery.isError, navigate]);
+		if (!chatQuery.isError) return;
+		// Anonymous and not an open share: sign in, then come back.
+		if (authStatus === 'anonymous') navigate(`${routePaths.auth}?redirect=${encodeURIComponent(`/s/${id}`)}`, { replace: true });
+		else navigate(routePaths.home, { replace: true });
+	}, [chatQuery.isError, authStatus, id, navigate]);
 
 	const chatContent = chatQuery.data?.chat;
 

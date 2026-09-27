@@ -210,7 +210,7 @@ test('a shared chat renders read-only for an anonymous viewer, sanitized, with n
 	await expect(page).toHaveTitle('Explaining monads / local-llm');
 });
 
-test('an unknown share id bounces to the home route', async ({ page }) => {
+test('an unknown share id sends an anonymous viewer to sign in, then back to it', async ({ page }) => {
 	await mockConfig(page, baseConfig);
 	await page.route('**/api/v1/chats/share/nope', (route) =>
 		route.fulfill({ status: 404, contentType: 'application/json', body: '{"detail":"Not found"}' })
@@ -218,6 +218,7 @@ test('an unknown share id bounces to the home route', async ({ page }) => {
 
 	await page.goto('/s/nope');
 
-	// Home is gated, so an anonymous viewer continues on to /auth.
-	await expect(page).toHaveURL(/\/auth\?redirect=%2F$/);
+	// The share may be limited to signed-in users, so an anonymous viewer is
+	// asked to sign in and brought back; a signed-in one goes home instead.
+	await expect(page).toHaveURL(/\/auth\?redirect=%2Fs%2Fnope$/);
 });
