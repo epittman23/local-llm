@@ -66,7 +66,8 @@ async function mockAutomations(page: Page, items: Rec[] = [], runs: Rec[] = []) 
 	return seen;
 }
 
-const enabled = { features: { enable_automations: true } };
+// Channels on too: channel destinations are listed only when channels are.
+const enabled = { features: { enable_automations: true, enable_channels: true } };
 
 test('a user without the permission is sent home', async ({ page }) => {
 	await mockWorkspaceBackend(page, { role: 'user', ...enabled });
