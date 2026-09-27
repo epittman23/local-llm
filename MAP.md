@@ -64,6 +64,9 @@ Meta docs — conventions, history, and proposals, not end-user usage docs.
   done): locked decisions, per-phase checklists and session notes. Kept as a
   record because code comments cite its decisions and phases; not updated
   any more.
+- **`bug-review-2026-09-27.md`** — a review of the migration branch
+  (3 high, 9 medium, 18 low findings) and, in its "Status" section, how
+  each was fixed and tested. Kept as a record.
 - **`serving-baseline/`** — test input, not prose: `config-id` fingerprints,
   profile seed data and the verbatim profile rationale, captured from
   `scripts/shell/main.sh` on 2026-09-14 before the shell layer is ported to

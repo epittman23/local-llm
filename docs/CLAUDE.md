@@ -312,6 +312,38 @@ All commits should use conventional commit style and stay focused on one topic. 
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-09-27** (sixth): Fixed the findings of
+  `docs/bug-review-2026-09-27.md` (its "Status" section maps each one to
+  its fix and test). Three decisions worth keeping:
+
+  **Vendored upstream code changed.** `routers/notes.py`
+  `update_note_by_id` assigned `form_data.access_grants` unconditionally;
+  in Pydantic v2 that marks the field as sent, so the model's
+  `exclude_unset` dump saw `access_grants: None` and deleted every grant on
+  a plain content save. It now filters only when the client sent the field
+  (`model_fields_set`), and `models/notes.py` treats `None` as "not sent"
+  (an explicit `[]` still clears). Keep this when rebasing on upstream: the
+  React note editor omits `access_grants` on autosave and relies on it.
+
+  **Personal tool and terminal servers stay unwired (deliberate gap).**
+  Settings > Integrations saves them, but chat sends no `tool_servers`/
+  `terminal_id`: direct servers need a browser-side executor (the Svelte
+  layout's `execute:tool` socket handler) that was never ported. The tab
+  now says so rather than silently doing nothing. "Allow User Location"
+  *is* wired now (`{{USER_LOCATION}}`).
+
+  **Serving cleanup has one owner.** `ServeProcess.stop()` is idempotent
+  and now always runs: from `/stop`, from the Serve drain task when
+  llama-server exits on its own, and from `tune_probe.Server.stop()` even
+  after a clean SIGINT exit. The server-log tee is unbuffered and flushed
+  before the recorder is told to stop. Runs now record
+  `benchmark_run.profile_version_id`. Profile names are validated
+  (`[a-z0-9][a-z0-9_-]{0,63}`, not `default`) since they are also tuning
+  grid filenames.
+
+  Verified: 553 Vitest, 327 Playwright, 242 backend pytest, `astro check`
+  0 errors. Serving fixes are tested against stub processes only; not
+  exercised against a real llama-server.
 - **2026-09-27** (fifth): Closed out Phase 11, the last phase of the
   migration (`docs/migration-plan.md`, now complete and kept only as a
   record). The backend serves `apps/web/dist` at `/` (`FRONTEND_BUILD_DIR`),
