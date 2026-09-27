@@ -3,6 +3,7 @@ import DOMPurify from 'dompurify';
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { Tip } from '@/components/common/Tip';
+import { InterfaceSettings } from '@/components/settings/InterfaceSettings';
 import {
 	SettingField,
 	SettingInput,
@@ -134,6 +135,50 @@ function Toggle({ config, patch, name, label, description, muted }: { config: Ad
 	);
 }
 
+/** Only a plain object counts as defaults; anything else (null, an array) is treated as none. */
+export const interfaceDefaults = (value: unknown): Record<string, any> => (value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, any>) : {});
+
+/**
+ * "Default Interface Settings": the interface preferences every account starts
+ * from (a user's own setting overrides one). Folded away by default; the edits
+ * go into the draft and are saved with the rest of the tab.
+ */
+function DefaultInterfaceSettings({ value, onChange }: { value: unknown; onChange: (next: Record<string, any>) => void }) {
+	const [open, setOpen] = useState(false);
+	const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
+	const autocompleteEnabled = useConfigStore((s) => Boolean(s.config?.features?.enable_autocomplete_generation));
+	const defaults = interfaceDefaults(value);
+	const count = Object.keys(defaults).length;
+	return (
+		<div>
+			<div className="flex w-full items-start justify-between gap-4">
+				<button type="button" className="text-muted-foreground hover:text-foreground min-w-0 flex-1 text-left text-xs transition" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+					<div>Default Interface Settings</div>
+					<div className="text-muted-foreground/70 mt-1.5 text-[0.6875rem]">Set system-wide interface defaults for every account. Personal settings override these defaults.</div>
+				</button>
+				<button type="button" aria-label={`${open ? 'Close' : 'Configure'} Default Interface Settings`} className="text-muted-foreground hover:text-foreground shrink-0 text-[0.6875rem] transition" onClick={() => setOpen((v) => !v)}>
+					{open ? 'Close' : 'Configure'}
+				</button>
+			</div>
+			{open && (
+				<div className="mt-2 space-y-2">
+					<div className="flex items-center justify-between gap-4">
+						<div className="text-muted-foreground/70 text-[0.6875rem]">{count} settings configured</div>
+						{count > 0 && (
+							<button type="button" className="text-muted-foreground hover:text-foreground text-[0.6875rem] transition" onClick={() => onChange({})}>
+								Clear
+							</button>
+						)}
+					</div>
+					<div className="max-h-[28rem] overflow-y-auto rounded-lg border p-3">
+						<InterfaceSettings mode="defaults" values={defaults} onChange={(p) => onChange({ ...defaults, ...p })} isAdmin={isAdmin} canTemporaryChat autocompleteEnabled={autocompleteEnabled} />
+					</div>
+				</div>
+			)}
+		</div>
+	);
+}
+
 /** Ports admin/Settings/General.svelte. */
 export default function General() {
 	const token = useAuthStore((s) => s.token) ?? '';
@@ -225,6 +270,7 @@ export default function General() {
 							</div>
 							<Banners banners={draft.banners} onChange={setBannerList} />
 						</div>
+						<DefaultInterfaceSettings value={admin.DEFAULT_INTERFACE_SETTINGS} onChange={(DEFAULT_INTERFACE_SETTINGS) => patch({ DEFAULT_INTERFACE_SETTINGS })} />
 					</SettingsSection>
 				</>
 			)}

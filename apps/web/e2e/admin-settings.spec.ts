@@ -593,7 +593,7 @@ test.describe('settings: General', () => {
 		ENABLE_USER_STATUS: true,
 		RESPONSE_WATERMARK: '',
 		WEBUI_URL: 'http://localhost:3000',
-		// Not editable here yet: it must come back to the server exactly as it arrived.
+		// Includes a key the defaults editor has no row for: it must survive edits.
 		DEFAULT_INTERFACE_SETTINGS: { theme: 'dark' }
 	};
 	const catalog = {
@@ -801,7 +801,60 @@ test.describe('settings: General', () => {
 		await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
 		await expect.poll(() => calls.some((c) => c.method === 'DELETE' && c.path === '/api/events/webhooks/b1')).toBe(true);
 	});
+	test('default interface settings: toggles, cycles and nested keys merge into the defaults; unknown keys survive', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockGeneral(page);
+		await page.goto('/?settings=admin:general');
+		const m = modal(page);
+		await m.getByRole('button', { name: 'Configure Default Interface Settings' }).click();
+		await expect(m.getByText('1 settings configured')).toBeVisible();
+		await m.getByRole('switch', { name: 'Widescreen Mode' }).click();
+		await m.getByRole('switch', { name: 'Title Auto-Generation' }).click();
+		await m.getByRole('button', { name: 'Chat Direction' }).click();
+		await m.getByRole('button', { name: 'Chat Direction' }).click();
+		// Only an admin is offered the update-toast switch, and the bubble hides the username switch.
+		await expect(m.getByRole('switch', { name: 'Toast Notifications for New Updates' })).toBeVisible();
+		await expect(m.getByRole('switch', { name: 'Display the Username Instead of You in the Chat' })).toHaveCount(0);
+		await m.getByRole('switch', { name: 'Chat Bubble UI' }).click();
+		await expect(m.getByRole('switch', { name: 'Display the Username Instead of You in the Chat' })).toBeVisible();
+		await expect(m.getByText('5 settings configured')).toBeVisible();
+		await m.getByRole('button', { name: 'Save', exact: true }).click();
+		await expect.poll(() => saved(calls, '/api/v1/auths/admin/config')?.DEFAULT_INTERFACE_SETTINGS).toEqual({
+			theme: 'dark',
+			widescreenMode: true,
+			title: { auto: false },
+			chatDirection: 'RTL',
+			chatBubble: false
+		});
+	});
+
+	test('default interface settings: UI scale, quick actions and Clear', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockGeneral(page);
+		await page.goto('/?settings=admin:general');
+		const m = modal(page);
+		await m.getByRole('button', { name: 'Configure Default Interface Settings' }).click();
+		await m.getByRole('button', { name: 'UI Scale: Default' }).click();
+		await m.getByRole('button', { name: 'Increase UI Scale' }).click();
+		await expect(m.getByRole('button', { name: 'UI Scale: 1.1x' })).toBeVisible();
+		await m.getByRole('button', { name: 'Manage Floating Quick Actions' }).click();
+		const d = page.getByRole('dialog', { name: 'Quick Actions' });
+		await d.getByRole('button', { name: 'Default' }).click();
+		await d.getByRole('button', { name: 'Add action' }).click();
+		await expect(d.getByLabel('Button ID').nth(2)).toHaveValue('new-button');
+		await d.getByRole('button', { name: 'Remove action' }).first().click();
+		await d.getByRole('button', { name: 'Save' }).click();
+		await m.getByRole('button', { name: 'Save', exact: true }).click();
+		await expect.poll(() => saved(calls, '/api/v1/auths/admin/config')?.DEFAULT_INTERFACE_SETTINGS).toMatchObject({
+			theme: 'dark',
+			textScale: 1.1,
+			floatingActionButtons: [expect.objectContaining({ id: 'explain' }), expect.objectContaining({ id: 'new-button' })]
+		});
+		await m.getByRole('button', { name: 'Clear' }).click();
+		await expect(m.getByText('0 settings configured')).toBeVisible();
+	});
 });
+
 
 test.describe('settings: Interface', () => {
 	const taskCfg = () => ({
