@@ -18,13 +18,12 @@ import { AutomationPage } from '@/routes/automations/AutomationPage';
 import { AutomationsPage } from '@/routes/automations/AutomationsPage';
 import { CalendarPage } from '@/routes/calendar/CalendarPage';
 import { ChannelPage } from '@/routes/channels/ChannelPage';
-import { FolderPage } from '@/routes/folders/FolderPage';
+import { ChatPage } from '@/routes/chat/ChatPage';
 import { HomePage } from '@/routes/home/HomePage';
 import { LegacyFallback } from '@/routes/LegacyFallback';
 import { NoteEditorPage } from '@/routes/notes/NoteEditorPage';
 import { NewNotePage, NotesPage } from '@/routes/notes/NotesPage';
 import { PlaygroundChat, PlaygroundCompletions, PlaygroundImages, PlaygroundLayout } from '@/routes/playground/PlaygroundPages';
-import { PlaceholderPage } from '@/routes/PlaceholderPage';
 import { AuthPage } from '@/routes/public/AuthPage';
 import { ErrorPage } from '@/routes/public/ErrorPage';
 import { SharedChatPage } from '@/routes/public/SharedChatPage';
@@ -52,7 +51,16 @@ const router = createBrowserRouter(
 			// public pages are top-level siblings for the same reason.
 			element: <AppShell />,
 			children: [
-				{ path: routePaths.home, element: <PlaceholderPage title="Chat" phase="Phase 10" /> },
+				{
+					// One element for the three chat paths, so a new chat keeps its
+					// state when the server names it and the URL becomes /c/<id>.
+					element: <ChatPage />,
+					children: [
+						{ path: routePaths.home, element: null },
+						{ path: 'c/:id', element: null },
+						{ path: `${routePaths.folders}/:folderId`, element: null }
+					]
+				},
 				{
 					path: routePaths.workspace,
 					element: <WorkspaceLayout />,
@@ -111,7 +119,6 @@ const router = createBrowserRouter(
 				},
 				{ path: `${routePaths.channels}/:id`, element: <ChannelPage /> },
 				{ path: routePaths.homePage, element: <HomePage /> },
-				{ path: `${routePaths.folders}/:folderId`, element: <FolderPage /> },
 				{ path: routePaths.notes, element: <NotesPage /> },
 				{ path: `${routePaths.notes}/new`, element: <NewNotePage /> },
 				{ path: `${routePaths.notes}/:id`, element: <NoteEditorPage /> },

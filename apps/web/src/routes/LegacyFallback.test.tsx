@@ -4,11 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LegacyFallback, svelteOnlySurface, svelteUrl } from './LegacyFallback';
 
 describe('svelteOnlySurface', () => {
-	it('knows the surfaces still in the Svelte app', () => {
-		expect(svelteOnlySurface('/c/abc')).toBe('Chat');
-		expect(svelteOnlySurface('/c/abc/def')).toBe('Chat');
-	});
-	it('no longer claims the surfaces Phase 9 ported', () => {
+	it('claims nothing once the chat is ported (Phase 10)', () => {
+		expect(svelteOnlySurface('/c/abc')).toBeNull();
 		expect(svelteOnlySurface('/home')).toBeNull();
 		expect(svelteOnlySurface('/folders/f1')).toBeNull();
 		expect(svelteOnlySurface('/channels/c1')).toBeNull();
@@ -33,11 +30,6 @@ describe('LegacyFallback', () => {
 		renderAt('/c/abc');
 		renderAt('/typo');
 		expect(assign).not.toHaveBeenCalled();
-	});
-	it('links a Svelte-owned path to the Svelte app, keeping search and hash', () => {
-		renderAt('/c/abc?x=1#m');
-		expect(screen.getByRole('heading', { name: 'Chat is not in this app yet' })).toBeTruthy();
-		expect(screen.getByRole('link', { name: 'Open it there' }).getAttribute('href')).toMatch(/\/c\/abc\?x=1#m$/);
 	});
 	it('shows a 404 for anything else', () => {
 		renderAt('/typo');

@@ -38,10 +38,10 @@ describe('App', () => {
 	it('renders the app shell and the home route', async () => {
 		render(<App />);
 
-		// PlaceholderPage's own heading for routePaths.home (see routes/AppRouter.tsx) --
+		// The chat's message box on routePaths.home (see routes/AppRouter.tsx) --
 		// confirms the provider stack (i18n/query/auth/socket) and the router all
 		// mounted without throwing, not just that some JSX came back.
-		expect(await screen.findByRole('heading', { name: 'Chat' })).toBeInTheDocument();
+		expect(await screen.findByRole('textbox', { name: 'Message' })).toBeInTheDocument();
 
 		// The sidebar defaults closed (mirrors apps/openwebui/src/lib/components/
 		// layout/Sidebar.svelte's own localStorage.sidebar default) and is not

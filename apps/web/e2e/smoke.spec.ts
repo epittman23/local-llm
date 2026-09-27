@@ -30,7 +30,7 @@ test.beforeEach(async ({ page, context }) => {
 
 test('the app shell renders the home route with a working sidebar link', async ({ page }) => {
 	await page.goto('/');
-	await expect(page.getByRole('heading', { name: 'Chat' })).toBeVisible();
+	await expect(page.getByRole('textbox', { name: 'Message' })).toBeVisible();
 
 	// The sidebar defaults closed (mirrors apps/openwebui/src/lib/components/
 	// layout/Sidebar.svelte's own localStorage.sidebar default), so its nav

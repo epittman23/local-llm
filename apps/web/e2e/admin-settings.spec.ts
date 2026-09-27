@@ -61,7 +61,7 @@ test.describe('settings modal host', () => {
 	test('a non-admin asking for an admin tab gets no modal, and the param is dropped', async ({ page }) => {
 		await mockWorkspaceBackend(page, { role: 'user' });
 		await page.goto('/?settings=admin:db');
-		await expect(page.getByRole('heading', { name: 'Chat' })).toBeVisible();
+		await expect(page.getByRole('textbox', { name: 'Message' })).toBeVisible();
 		await expect(modal(page)).toHaveCount(0);
 		await expect(page).toHaveURL(/localhost:5174\/$/);
 	});

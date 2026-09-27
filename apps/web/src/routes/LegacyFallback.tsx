@@ -17,10 +17,13 @@ import { Link, useLocation } from 'react-router';
  * Anything else is this app's own 404.
  */
 
-/** Path prefixes still owned by the Svelte app, and the surface's name. Shrinks as surfaces are ported. */
-const SVELTE_ONLY: [prefix: string, surface: string][] = [
-	['/c/', 'Chat']
-];
+/**
+ * Path prefixes still owned by the Svelte app, and the surface's name. Empty
+ * since Phase 10 ported the chat: every surface is in this app now, so the
+ * catch-all is simply the 404. Kept (not deleted) until Phase 11 removes the
+ * Svelte app, in case a path turns out to have been missed.
+ */
+const SVELTE_ONLY: [prefix: string, surface: string][] = [];
 
 /** The name of the Svelte-owned surface a path belongs to, or null. */
 export function svelteOnlySurface(pathname: string): string | null {

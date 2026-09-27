@@ -54,5 +54,8 @@ export function useUserSettings() {
 			pinnedModels: pinnedModels.includes(modelId) ? pinnedModels.filter((id) => id !== modelId) : [...pinnedModels, modelId]
 		});
 
-	return { settings: query.data ?? null, pinnedModels, togglePinned };
+	/** Merges `patch` into the saved settings (the whole `ui` object is sent, as the API requires). */
+	const update = (patch: UserUiSettings) => save.mutateAsync({ ...(query.data ?? {}), ...patch });
+
+	return { settings: query.data ?? null, pinnedModels, togglePinned, update };
 }

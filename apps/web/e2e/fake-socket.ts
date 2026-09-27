@@ -10,6 +10,8 @@ import type { Page, WebSocketRoute } from '@playwright/test';
 export async function fakeSocketServer(page: Page) {
 	const sockets: WebSocketRoute[] = [];
 	const received: { event: string; data: any }[] = [];
+	const acks = new Map<number, (value: unknown) => void>();
+	let nextAck = 1;
 	let ready: () => void;
 	const connected = new Promise<void>((r) => (ready = r));
 
@@ -22,7 +24,10 @@ export async function fakeSocketServer(page: Page) {
 				ws.send('40{"sid":"s1"}');
 				ready();
 			} else if (msg === '2') ws.send('3');
-			else if (msg.startsWith('42')) {
+			else if (msg.startsWith('43')) {
+				const m = /^43(\d+)(.*)$/.exec(msg);
+				if (m) acks.get(Number(m[1]))?.(JSON.parse(m[2])[0]);
+			} else if (msg.startsWith('42')) {
 				const [event, data] = JSON.parse(msg.slice(2));
 				received.push({ event, data });
 			}
@@ -34,6 +39,13 @@ export async function fakeSocketServer(page: Page) {
 		received,
 		/** Sends an event to every connected client. */
 		emit: (event: string, data: unknown) => sockets.forEach((ws) => ws.send(`42${JSON.stringify([event, data])}`)),
-		emitted: (event: string) => received.filter((r) => r.event === event).map((r) => r.data)
+		emitted: (event: string) => received.filter((r) => r.event === event).map((r) => r.data),
+		/** Sends an event that expects an acknowledgement; resolves with the client's answer. */
+		emitWithAck: (event: string, data: unknown) =>
+			new Promise<unknown>((resolve) => {
+				const id = nextAck++;
+				acks.set(id, resolve);
+				sockets.forEach((ws) => ws.send(`42${id}${JSON.stringify([event, data])}`));
+			})
 	};
 }

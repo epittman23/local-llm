@@ -282,14 +282,16 @@ test('hiding a DM removes it from the sidebar', async ({ page }) => {
 	expect(seen.hidden).toEqual(['d1']);
 });
 
-test('home links to what the user may use, and a folder page names the folder', async ({ page }) => {
+test('home links to what the user may use; a folder opens a chat inside it', async ({ page }) => {
 	await mockWorkspaceBackend(page, { role: 'user', features: { enable_notes: true, enable_calendar: true } });
 	await page.route('**/api/v1/folders/f1', (route) => json(route, { id: 'f1', name: 'Research' }));
+	await page.route('**/api/models*', (route) => json(route, { data: [] }));
 	await page.route('**/api/v1/folders/missing', (route) => json(route, { detail: 'Folder not found' }, 404));
 	await page.goto('/home');
 	await expect(page.getByRole('navigation', { name: 'Home' }).getByRole('link')).toHaveText(['Notes']);
 	await page.goto('/folders/f1');
-	await expect(page.getByRole('heading', { name: 'Research' })).toBeVisible();
+	await expect(page.getByTestId('chat-folder')).toHaveText('Research');
+	await expect(page.getByRole('textbox', { name: 'Message' })).toBeVisible();
 	await page.goto('/folders/missing');
 	await expect(page).toHaveURL(/localhost:5174\/$/);
 });

@@ -506,5 +506,5 @@ test('a non-admin user is bounced out of Benchmarks entirely', async ({ page }) 
 	// useBenchmarksGate.ts redirects to routePaths.home (react-router's own
 	// navigate, not a full page load -- this is one of *our* routes).
 	await expect(page).toHaveURL(/\/$/);
-	await expect(page.getByRole('heading', { name: 'Chat' })).toBeVisible();
+	await expect(page.getByRole('textbox', { name: 'Message' })).toBeVisible();
 });
