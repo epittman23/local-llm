@@ -185,12 +185,9 @@ dev-dependencies = []
 [tool.hatch.metadata]
 allow-direct-references = true
 
-[tool.hatch.build.hooks.custom]  # keep this for reading hooks from `hatch_build.py`
-
 [tool.hatch.build.targets.wheel]
 sources = ["backend"]
 exclude = [
-    ".dockerignore",
     ".gitignore",
     ".webui_secret_key",
     "dev.sh",
@@ -200,7 +197,7 @@ exclude = [
     "webui.db",
     "chroma.sqlite3",
 ]
-force-include = { "CHANGELOG.md" = "open_webui/CHANGELOG.md", build = "open_webui/frontend" }
+force-include = { "CHANGELOG.md" = "open_webui/CHANGELOG.md" }
 
 [tool.codespell]
 # Ref: https://github.com/codespell-project/codespell#using-a-config-file

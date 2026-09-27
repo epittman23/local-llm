@@ -124,10 +124,11 @@ decisions log. For upstream feature docs see its own
   `app.html`/`app.css`.
 - **`static/`**, **`docs/`**, **`scripts/`**, **`test/`** — assets, upstream
   docs, dev scripts, upstream test suite.
-- Root-level: `Dockerfile`, several `docker-compose.*.yaml` variants
-  (gpu/amdgpu/otel/playwright/a1111-test/etc.), `pyproject.toml`/`uv.lock`
-  (backend deps), `package.json`/`bun.lock` (frontend deps), `Makefile`,
-  `CHANGELOG.md`, `TROUBLESHOOTING.md`.
+- Root-level: `pyproject.toml`/`uv.lock` (backend deps; `pyproject.toml`
+  also holds the version), `package.json`/`bun.lock` (frontend deps),
+  `CHANGELOG.md`, `TROUBLESHOOTING.md`. The upstream Docker images, compose
+  variants, CI workflows and the frontend build hook were deleted in Phase
+  11d; this repo runs through the root `Makefile` and `infra/`.
 
 #### `backend/open_webui/benchmarks/` (fork-owned, not upstream)
 
