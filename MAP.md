@@ -65,7 +65,7 @@ Meta docs — conventions, history, and proposals, not end-user usage docs.
   resuming that work, and update it before ending a session. Temporary:
   delete it (and this entry) when the migration's final phase lands.
 - **`START.md`** — how to run the backend and both frontends right now, and
-  every URL the Astro app serves (plus which paths are still Svelte-only).
+  every URL the Astro app serves.
   Kept current by the maintenance policy; temporary, deleted at Phase 11.
 - **`serving-baseline/`** — test input, not prose: `config-id` fingerprints,
   profile seed data and the verbatim profile rationale, captured from
@@ -225,7 +225,7 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
   (tab list, search, URL param via `lib/settings/useSettingsUrl.ts`),
   `settingsTabs.ts` (every tab id), `adminTabComponents.ts` (lazy tab
   bodies), `controls.tsx` (the compact form vocabulary every tab uses), and
-  the pieces Phase 10's personal tabs reuse: `AddConnectionModal`,
+  the pieces the personal tabs (`settings/personal/`) reuse: `AddConnectionModal`,
   `AddToolServerModal`, `AddTerminalServerModal` and `InterfaceSettings`
   (table-driven, `interfaceSettingDefs.ts`), each with its rules in a
   `*Model.ts`/`*Defs.ts` and a unit test. The app's toast system
@@ -235,13 +235,13 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
   `src/components/COMMON_MAPPING.md` records where each of the SvelteKit
   app's `common/` components lands.
 - **`src/routes/`** — react-router. `AppRouter.tsx` has three kinds of
-  route: gated ones under `AppShell` (the `/` chat placeholder, `benchmarks/`,
+  route: gated ones under `AppShell` (the chat, `benchmarks/`,
   `workspace/`, `admin/` and the Phase 9 surfaces); the public ones
   (`public/`: `/auth`, `/error`, `/watch`, `/s/:id`), which are top-level
   siblings because they must render without a session; and
   `LegacyFallback`, the catch-all, which never navigates: a path still owned
-  by the SvelteKit app (only `/c/<id>` now) links there, anything else is a
-  404. `benchmarks/`
+  by the SvelteKit app would link there, but none is left: anything unknown
+  is a 404. `benchmarks/`
   holds all seven Benchmarks pages plus their admin/feature-flag gate.
   `workspace/` is Phase 7's surface: `WorkspaceLayout` (per-section
   permission gate, the five tabs with live counts, the split Create button)
@@ -275,9 +275,16 @@ surface by surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
   create/edit), `SidebarChannels`, `useMessageFeed` (one feed for a channel
   or a thread: paging, live events, optimistic actions), `useChannels` (the
   `['channels']` list and the app-wide unread listener mounted in
-  `AppShell`), and the pure rules in `channelModel.ts`. `home/` and
-  `folders/` are small: `/home` was an unlinked stub in the Svelte app, and
-  chatting inside a folder is Phase 10's.
+  `AppShell`), and the pure rules in `channelModel.ts`. `home/` is small:
+  `/home` was an unlinked stub in the Svelte app. `chat/` is Phase 10's
+  surface: one layout route for `/`, `/c/<id>` and `/folders/<id>`
+  (`ChatPage`), `useChatSession` (load, send, stream over the socket, stop,
+  regenerate, save), `ChatMessages`/`MessageActions`, `ChatInput` with
+  `InputMenus` and `useAttachments`, `ModelSelector`, `ChatControls`,
+  `ArtifactPanel` (a sandboxed preview), `ChatMenu`, and `sidebar/` (the
+  chat list, folders, search). Its pure rules are in `src/lib/chat/`
+  (history tree, request body, sources, attachments, import) and its
+  Markdown in `src/lib/markdown/` + `src/components/chat/markdown/`.
 - **`src/lib/apis/`** — the SvelteKit app's `src/lib/apis/**` ported
   verbatim (six files `@ts-nocheck`ed for inherited looseness), plus
   `benchmarks/profiles.ts`, new code for the profile CRUD endpoints that

@@ -1,14 +1,15 @@
 # START — running the app in its current state
 
 How to bring up the Python backend and the new Astro frontend today, and every
-URL that works. Written mid-migration (after Phase 7 of
+URL that works. Written mid-migration (updated after Phase 10 of
 [migration-plan.md](migration-plan.md)); when that plan's status board moves,
 the second half of this file goes stale first — the route table is derived from
 `apps/web/src/routes/AppRouter.tsx`, so re-derive it from there.
 
 Two frontends exist side by side. The **Astro/React app** (`apps/web/`) is the
-one being built; the **SvelteKit app** (`apps/openwebui/`) still owns every
-surface that hasn't been ported. Both talk to one backend.
+new one and, since Phase 10, covers every surface including chat; the
+**SvelteKit app** (`apps/openwebui/`) remains until the Phase 11 cutover.
+Both talk to one backend.
 
 | Process | Command | Port | What it is |
 |---|---|---|---|
@@ -78,8 +79,8 @@ edits, so `:5174` is the place to develop. In a build the router's base is
 
 ### The Svelte app
 
-`make frontend` → **http://localhost:5173/** — the only place today where chat
-(`/`, `/c/<id>`, and chatting inside a folder) actually works. The
+`make frontend` → **http://localhost:5173/** — the original app, kept for
+comparison until the cutover. The
 backend on `:4000` does *not* serve a Svelte build in this setup (no
 `apps/openwebui/build/`), so `:4000/` is API-only.
 
@@ -95,7 +96,7 @@ Anything marked *admin* also needs `role === 'admin'`.
 |---|---|
 | `/auth` | Sign in / sign up / LDAP / OAuth / onboarding. Query: `?redirect=<path>` (where to go afterwards), `?form=<any>` (shows the login fields and skips the SSO auto-redirect), `?state=logout`, `?error=<msg>` |
 | `/error` | The "Backend Required" page. Redirects home once the backend config has loaded, so you only *stay* here when the backend is down |
-| `/watch?v=<id>` | Redirects to `/?youtube=<id>` (the chat page will consume it in Phase 10) |
+| `/watch?v=<id>` | Redirects to `/?youtube=<id>`, which attaches that video to a new chat |
 | `/s/<share-id>` | Read-only shared chat. The id comes from a chat's Share dialog in the Svelte app |
 
 ### Signed-in, implemented
@@ -146,34 +147,30 @@ Anything marked *admin* also needs `role === 'admin'`.
 | `/playground` | *Admin.* Chat playground; `/playground/completions` and `/playground/images` alongside |
 | `/channels/<id>` | A channel: live messages, threads, reactions, pins, members. Needs `features.enable_channels` (and not a denied `channels` permission). The sidebar lists channels and creates them |
 | `/home` | A small hub linking to Notes and Calendar (the Svelte `/home` was an unfinished stub nothing linked to) |
-| `/folders/<folderId>` | Checks the folder (a missing one sends you to `/`) and names it; chatting inside it is Phase 10 |
+| `/` | Chat, new. Query: `?models=<a,b>` (or `?model=`), `?q=<text>` (sent at once unless `&submit=false`), `?temporary-chat=true`, `?web-search=true`, `?image-generation=true`, `?code-interpreter=true`, `?tools=<ids>` (or `?tool-ids=`), `?youtube=<id>`, `?load-url=<url>` |
+| `/c/<id>` | A saved chat. A new chat moves here when the server gives it an id |
+| `/folders/<folderId>` | A new chat inside that folder (a missing folder sends you to `/`) |
 
 A workspace section you lack permission for redirects you to `/`.
 
 **Settings is a modal, not a page.** Any page accepts `?settings=<tab>`; for an
 admin, `?settings=admin:<tab>` opens the modal on that admin tab and the param
-is removed from the URL. Tab ids: `general`, `authentication`, `connections`,
-`models`, `evaluations`, `integrations`, `documents`, `web`, `code-execution`,
-`interface`, `audio`, `images`, `pipelines`, `db`, `subagents`, `analytics`.
-An unknown tab falls back to the first one listed; a non-admin asking for an
-admin tab gets no modal. The personal tabs (plain `?settings=<tab>`) arrive
-with Phase 10.
-
-### Signed-in, placeholders
-
-`/` (Chat, Phase 10) renders a "coming in Phase 10" stub.
+is removed from the URL. Personal tab ids (plain `?settings=<tab>`, anyone):
+`general`, `interface`, `notifications`, `shortcuts`, `connections`, `tools`
+(Integrations), `personalization`, `audio`, `data_controls`,
+`archived_chats`, `account`, `about`; some are shown only when the backend and
+your permissions allow them. Admin tab ids (`admin:<tab>`): `general`,
+`authentication`, `connections`, `models`, `evaluations`, `integrations`,
+`documents`, `web`, `code-execution`, `interface`, `audio`, `images`,
+`pipelines`, `db`, `subagents`, `analytics`. An unknown tab falls back to the
+first one listed; a non-admin asking for an admin tab gets no modal.
 
 ### Everything else: not on `:5174`
 
 Any path not listed above falls into the router's catch-all, `LegacyFallback`,
-which never navigates on its own (it used to bounce to the same path, which
-looped on the dev server). A path that still belongs to the Svelte app says so
-and links to it: `:5173` in development, the same path in a build. Anything
-else is a 404 page.
-
-| Still Svelte-only | Paths |
-|---|---|
-| Chat | `/c/<id>` (and `/`, which here is only a stub) |
+which never navigates on its own and renders a 404 page. (It can also link a
+path that still belongs to the Svelte app over to it; since Phase 10 that list
+is empty.)
 
 ## 4. Backend URLs
 
@@ -210,7 +207,7 @@ killed. Backend tests: from `apps/openwebui/`,
 ## 6. Known rough edges
 
 - **The catch-all loop on `:5174`** described in §3.
-- **Nothing here has met a real backend.** Every Phase 5–7 page was built and
+- **Nothing here has met a real backend.** Every Phase 5 to 10 page was built and
   tested against mocked responses; the first real run may surface bugs.
 - **Dev server under Bun.** With no backend on `:4000`, the `/ws` proxy error
   can crash `astro dev` about 30 s in (Bun's sockets lack `destroySoon`). The

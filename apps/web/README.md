@@ -53,7 +53,8 @@ src/
 ├── components/common/     app-level components shared across surfaces.
 ├── components/settings/   the Settings modal, its form controls, and the
 │                          connection/tool/terminal modals and
-│                          InterfaceSettings that Phase 10 reuses.
+│                          InterfaceSettings; personal/ holds the
+│                          twelve personal tabs.
 ├── components/ui/         shadcn/ui components (`bunx shadcn add <name>`).
 ├── routes/                react-router: AppRouter.tsx, routePaths.ts,
 │   ├── benchmarks/        the seven Benchmarks pages + their gate,
@@ -62,12 +63,17 @@ src/
 │   ├── admin/             Phase 8: layout + gate; users/, evaluations/,
 │   │                      functions/; settings/ and analytics/ are the
 │   │                      Settings modal's admin tab bodies.
-│   ├── notes/, calendar/, automations/, playground/, channels/, home/,
-│   │   folders/           Phase 9, each feature-gated (lib/access/features.ts);
+│   ├── notes/, calendar/, automations/, playground/, channels/,
+│   │   home/              Phase 9, each feature-gated (lib/access/features.ts);
 │   │                      channels/ is the first Socket.IO consumer.
+│   ├── chat/              Phase 10: /, /c/:id, /folders/:id (one layout
+│   │                      route), the input, message actions, controls,
+│   │                      artifacts, and sidebar/ (the chat list).
 │   └── public/            /auth, /error, /watch, /s/:id (no session needed).
 ├── lib/                   apis/ (ported from the SvelteKit app), auth/,
-│                          access/ (grant rules), emoji/, settings/, stores/ (Zustand),
+│                          access/ (grant rules), chat/ (history, request,
+│                          sources: pure, unit-tested), markdown/, emoji/,
+│                          settings/, stores/ (Zustand),
 │                          socket/, i18n/, query/, utils/.
 └── styles/global.css      Tailwind v4 entry + the shadcn Nova preset's
                            design tokens (see the 2026-09-18 decisions-log

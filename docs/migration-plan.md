@@ -26,7 +26,7 @@
 | 7 | Workspace surface | ✅ done | 2026-09-20 |
 | 8 | Admin surface | ✅ done | 2026-09-27 |
 | 9 | Secondary surfaces: notes, calendar, automations, playground, channels | ✅ done | 2026-09-27 |
-| 10 | Chat surface (largest) | ☐ not started | — |
+| 10 | Chat surface (largest) | ✅ done | 2026-09-27 |
 | 11 | Cutover and Svelte removal | ☐ not started | — |
 
 Status values: `☐ not started` · `▶ in progress` · `✅ done` · `⏸ blocked`
@@ -34,6 +34,36 @@ Status values: `☐ not started` · `▶ in progress` · `✅ done` · `⏸ bloc
 ### Current session notes
 
 _Overwrite this block at the end of every session._
+
+**2026-09-27, latest (Phase 10 closed out).** The chat surface is built in
+`apps/web/`, in seven commits: the Markdown pipeline (`4d2fa64`), the chat
+core over the socket (`b3dd83e`), the sidebar chat list (`77611e3`), message
+actions (`bb60319`), attachments and `/ # @` commands (`27b6e9a`), the
+personal Settings tabs (`fd6e0a7`) and, last, the controls panel, the HTML
+artifact preview and the chat header menu. `/`, `/c/<id>` and
+`/folders/<id>` are one layout route (`routes/chat/ChatPage`), so a new chat
+keeps its screen when the server assigns an id. Nothing is Svelte-only any
+more: `LegacyFallback`'s list is empty and every unknown path is a 404.
+
+Two crash classes recurred and are now guarded wherever they were found: a
+list endpoint answering with a non-array (tools, prompts, models, knowledge,
+folders; the last one found only this session, by an admin-settings test
+that opened the sidebar), and a zustand selector returning a fresh `{}`
+(an infinite render loop in read-aloud). Deliberate gaps are listed in the
+CLAUDE.md entry (plain textarea composer, no Pyodide/code run, no voice or
+call mode, no PDF export, no function valves in the controls panel, and the
+reduced artifacts panel).
+
+In the full Playwright run six specs (Notes autosave, two admin
+Authentication tests) timed out under load and passed when rerun alone; one
+more (`chat-input` `/` commands) was a real flake from 10e, failing 4 of 8
+times on its own: it pressed Enter before the prompt suggestions loaded. It
+now waits for the suggestion (8 of 8 pass).
+
+`astro check` 0 errors, 550 Vitest tests, 324 Playwright tests. **Phase 10
+is ✅ done. Next action: Phase 11** (cutover): first run the whole app
+against a real backend on the owner's machine, since every Phase 5-10
+surface has only met mocked responses.
 
 **2026-09-27, later still (Phase 9 closed out).** This file lagged the
 repo: Calendar (`afb96c9`), Automations (`6d66246`), Playground (`e9b67c1`) and
@@ -1352,10 +1382,30 @@ this session, the same posture as Phase 5.
 - [x] Phase exit: `MAP.md`, `apps/web/README.md`, `docs/START.md` route tables,
       dated `docs/CLAUDE.md` entry, ROADMAP pair.
 
-## Phase 10 — Chat (141 components, ~46k LOC)
-- [ ] Markdown pipeline → input (TipTap) → streaming → attachments →
-      controls → artifacts/Pyodide/tool calls → chat management →
-      Playwright end-to-end.
+## Phase 10 — Chat (141 components, ~46k LOC) ✅
+- [x] **Markdown pipeline** -- chat lexer on its own `Marked` instance,
+      token renderer (never raw HTML), code blocks with highlight/copy/
+      collapse, KaTeX, Mermaid, details, citations, tool-call display with
+      allow/deny (`4d2fa64`).
+- [x] **Chat core** -- load, send, stream over the socket (`events`:
+      deltas, output items, status, sources, follow-ups, title, dialogs with
+      ack), stop, regenerate, temporary chats, `?q=`/`?models=`/
+      `?youtube=`/`?load-url=` (`b3dd83e`).
+- [x] **Chat management** -- sidebar list (pinned, folders, time groups),
+      item menu, search dialog, folders create/edit/delete (`77611e3`).
+- [x] **Message actions** -- edit (and save as copy), rate with details,
+      continue, regenerate menu, delete, read aloud, citations dialog,
+      version navigation (`bb60319`).
+- [x] **Input** -- attachments (files, web pages, notes, knowledge), `/`
+      prompts, `#` knowledge, `@` models, tools and feature switches,
+      prompt variables (`27b6e9a`). Deviation: a textarea, not TipTap.
+- [x] **Personal settings** -- all twelve personal tabs in the shared
+      modal; keyboard shortcuts; theme incl. OLED (`fd6e0a7`).
+- [x] **Controls, artifacts, header menu** -- per-chat system prompt and
+      parameters (saved with the chat), sandboxed HTML/SVG preview, chat
+      menu (share, download, archive, delete).
+- [x] Phase exit: `MAP.md`, `apps/web/README.md`, `docs/START.md` route
+      tables, dated `docs/CLAUDE.md` entry, ROADMAP pair.
 
 ## Phase 11 — Cutover and Svelte removal
 - [ ] `FRONTEND_BUILD_DIR` → `apps/web/dist/`; remove `/next`.

@@ -27,6 +27,8 @@ export type MessageHandlers = {
 	regenerate?: (m: Message) => ReactNode;
 	/** Replaces a message's body while it is being edited. */
 	editing?: (m: Message) => ReactNode | null;
+	/** An html/svg code block's Preview button (the artifacts panel). */
+	onPreview?: (code: string) => void;
 };
 
 const actionButton = 'text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg p-1.5 transition';
@@ -184,6 +186,7 @@ export function ResponseMessage({ history, message, h, isLast, chatId, compact =
 							sourceIds={sourceIds}
 							onSourceClick={(id) => h.onSourceClick?.(message, id)}
 							onToolCallResolved={h.onToolCallResolved}
+							onPreview={message.role === 'assistant' ? h.onPreview : undefined}
 						/>
 					))}
 				{message.error ? (

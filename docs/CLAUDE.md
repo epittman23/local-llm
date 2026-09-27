@@ -310,6 +310,53 @@ All commits should use conventional commit style and stay focused on one topic. 
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-09-27** (third): Closed out Phase 10 of the migration
+  (`docs/migration-plan.md`): the chat surface, the largest in the plan
+  (141 Svelte components, ~46k lines), built in `apps/web/` in seven
+  commits: the Markdown pipeline, the chat core, the sidebar chat list,
+  message actions, attachments and commands, the personal Settings tabs,
+  and the controls panel, artifact preview and chat header menu. As with
+  every phase since 5, it was tested against mocked `/api/v1/**` and a fake
+  Socket.IO server only; **nothing here has met a real backend**, and that
+  first real run is the next step, ahead of the Phase 11 cutover.
+
+  **Structure decisions.** `/`, `/c/<id>` and `/folders/<id>` are one
+  react-router layout route, so a new chat keeps what is on screen when the
+  server assigns its id and the URL is replaced. The logic is pure and
+  unit-tested in `src/lib/chat/` (the message tree, `applyChatEvent` for
+  socket deltas, the request body, sources, attachments, chat import);
+  `useChatSession` holds the state. Chat Markdown uses its own `new Marked()`
+  instance, so its extensions never leak into the global `marked` other
+  pages use, and the token renderer builds React elements and never injects
+  raw HTML. The personal Settings tabs register in the modal Phase 8 built;
+  the admin tabs follow them under their own heading, and Settings is now in
+  every user's menu. `?settings=admin:<tab>` still opens nothing for a
+  non-admin.
+
+  **Security choices over the original.** The artifact preview renders a
+  model's HTML in an iframe sandboxed with scripts allowed but *without*
+  `allow-same-origin`, so it runs in an opaque origin and cannot read this
+  app's token or storage. The About tab keeps Open WebUI's license,
+  copyright and attribution lines as the license requires.
+
+  **Bugs found by testing.** Two crash classes recurred. A list endpoint
+  answering with a non-array (an error body, a paged object) crashed the
+  page at `.map`: tools, prompts, models and knowledge were guarded during
+  the phase, and folders only at the end, when an admin-settings test that
+  opened the sidebar hit it; the Automations page shared the same
+  `['folders']` cache and is guarded too. And a zustand selector returning
+  a fresh `{}` (`?? {}`) caused an infinite render loop in read-aloud.
+
+  **Deliberate gaps.** The composer is a textarea, not the TipTap rich
+  editor. Not ported: Pyodide and running code in the browser, voice input
+  and call mode, the in-browser Kokoro TTS engine, PDF export, dragging chats
+  into folders in the sidebar,
+  function valves in the controls panel, and the artifacts panel's merging
+  of separate css/js blocks and its version list. Still no
+  `useTranslation`. With this phase no path is Svelte-only: the fallback's
+  list is empty and an unknown path is a 404.
+
+  Verified: `astro check` 0 errors, 550 Vitest tests, 324 Playwright tests.
 - **2026-09-27** (second): Closed out Phase 9 of the migration
   (`docs/migration-plan.md`): the secondary surfaces -- Notes, Calendar,
   Automations, Playground and Channels, plus the small `/home` and

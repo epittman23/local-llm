@@ -73,6 +73,9 @@ test('# offers knowledge, / inserts a prompt and asks for its variables, @ picks
 	await expect(page.getByTestId('input-file')).toContainText('Handbook');
 
 	await box.pressSequentially('/sum');
+	// Enter picks the highlighted suggestion only once the prompt list has loaded;
+	// pressing it sooner sends "/sum" as a message, which is also what a user would get.
+	await expect(page.getByRole('option', { name: /Summarize/ })).toBeVisible();
 	await page.keyboard.press('Enter');
 	const dialog = page.getByRole('dialog', { name: 'Input Variables' });
 	await dialog.getByLabel('tone').selectOption('short');
