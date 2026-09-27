@@ -169,6 +169,13 @@ export const initAuth = async () => {
 
 	try {
 		const sessionUser = await getSessionUser(token);
+		// Refetch once signed in, as +layout.svelte does: the first fetch may
+		// have been anonymous (no `token` cookie yet -- the session call above
+		// sets it), and that config lacks every per-user feature flag, so
+		// FeatureGate would send /notes, /calendar, ... home. Done before
+		// setSession so no gate ever sees a user with the anonymous config.
+		const userConfig = await getBackendConfig().catch(() => null);
+		if (userConfig) useConfigStore.getState().setConfig(userConfig);
 		useAuthStore.getState().setSession(token, sessionUser);
 	} catch (error) {
 		console.error('Failed to restore session:', error);
