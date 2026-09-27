@@ -6,8 +6,12 @@ import { LegacyFallback, svelteOnlySurface, svelteUrl } from './LegacyFallback';
 describe('svelteOnlySurface', () => {
 	it('knows the surfaces still in the Svelte app', () => {
 		expect(svelteOnlySurface('/c/abc')).toBe('Chat');
-		expect(svelteOnlySurface('/home')).toBe('Home');
-		expect(svelteOnlySurface('/folders/f1')).toBe('Folders');
+		expect(svelteOnlySurface('/c/abc/def')).toBe('Chat');
+	});
+	it('no longer claims the surfaces Phase 9 ported', () => {
+		expect(svelteOnlySurface('/home')).toBeNull();
+		expect(svelteOnlySurface('/folders/f1')).toBeNull();
+		expect(svelteOnlySurface('/channels/c1')).toBeNull();
 	});
 	it('does not claim look-alikes or anything else', () => {
 		expect(svelteOnlySurface('/homework')).toBeNull();

@@ -17,6 +17,9 @@ import { TunePage } from '@/routes/benchmarks/TunePage';
 import { AutomationPage } from '@/routes/automations/AutomationPage';
 import { AutomationsPage } from '@/routes/automations/AutomationsPage';
 import { CalendarPage } from '@/routes/calendar/CalendarPage';
+import { ChannelPage } from '@/routes/channels/ChannelPage';
+import { FolderPage } from '@/routes/folders/FolderPage';
+import { HomePage } from '@/routes/home/HomePage';
 import { LegacyFallback } from '@/routes/LegacyFallback';
 import { NoteEditorPage } from '@/routes/notes/NoteEditorPage';
 import { NewNotePage, NotesPage } from '@/routes/notes/NotesPage';
@@ -106,6 +109,9 @@ const router = createBrowserRouter(
 						{ path: 'images', element: <PlaygroundImages /> }
 					]
 				},
+				{ path: `${routePaths.channels}/:id`, element: <ChannelPage /> },
+				{ path: routePaths.homePage, element: <HomePage /> },
+				{ path: `${routePaths.folders}/:folderId`, element: <FolderPage /> },
 				{ path: routePaths.notes, element: <NotesPage /> },
 				{ path: `${routePaths.notes}/new`, element: <NewNotePage /> },
 				{ path: `${routePaths.notes}/:id`, element: <NoteEditorPage /> },

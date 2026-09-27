@@ -62,9 +62,12 @@ src/
 │   ├── admin/             Phase 8: layout + gate; users/, evaluations/,
 │   │                      functions/; settings/ and analytics/ are the
 │   │                      Settings modal's admin tab bodies.
+│   ├── notes/, calendar/, automations/, playground/, channels/, home/,
+│   │   folders/           Phase 9, each feature-gated (lib/access/features.ts);
+│   │                      channels/ is the first Socket.IO consumer.
 │   └── public/            /auth, /error, /watch, /s/:id (no session needed).
 ├── lib/                   apis/ (ported from the SvelteKit app), auth/,
-│                          access/ (grant rules), settings/, stores/ (Zustand),
+│                          access/ (grant rules), emoji/, settings/, stores/ (Zustand),
 │                          socket/, i18n/, query/, utils/.
 └── styles/global.css      Tailwind v4 entry + the shadcn Nova preset's
                            design tokens (see the 2026-09-18 decisions-log

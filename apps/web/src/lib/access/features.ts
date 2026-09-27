@@ -7,8 +7,10 @@ import type { SessionUser } from '@/lib/stores/authStore';
 // the routes read the same rules, so a URL typed by hand is gated too.
 //
 // Each is "the backend feature is on, and the user is an admin or holds the
-// permission". Notes defaults the permission to allowed; the others do not
-// (as in the original).
+// permission". Notes and channels default the permission to allowed (the
+// Svelte sidebar's channel section reads `permissions.features.channels ?? true`,
+// and the backend's USER_PERMISSIONS_FEATURES_CHANNELS defaults to True);
+// calendar and automations do not (as in the original).
 
 export type Feature = 'notes' | 'calendar' | 'automations' | 'playground' | 'channels';
 
@@ -27,7 +29,7 @@ export function canUseFeature(feature: Feature, user: SessionUser | null, config
 		case 'automations':
 			return Boolean(f.enable_automations) && (admin || Boolean(perm.automations));
 		case 'channels':
-			return Boolean(f.enable_channels) && (admin || Boolean(perm.channels));
+			return Boolean(f.enable_channels) && (admin || (perm.channels ?? true));
 		case 'playground':
 			return admin;
 	}

@@ -13,7 +13,7 @@ export type ChannelMessage = {
 	user_id?: string;
 	user?: ChannelUser | null;
 	content: string;
-	data?: { files?: { id?: string; name?: string; url?: string; type?: string; content_type?: string }[] } | true | null;
+	data?: { files?: { id?: string | null; name?: string; url?: string; type?: string; content_type?: string }[] } | true | null;
 	meta?: { model_id?: string; model_name?: string } | null;
 	reactions?: Reaction[];
 	reply_count?: number;
@@ -35,9 +35,20 @@ export type Channel = {
 	users?: ChannelUser[];
 	created_at: number;
 	user_id?: string;
-	access_grants?: unknown[];
+	access_grants?: { principal_type?: string; principal_id?: string; permission?: string }[];
+	user_ids?: string[];
+	is_manager?: boolean;
+	unread_count?: number;
+	last_message_at?: number | null;
 };
-export type ChannelEvent = { channel_id: string; message_id?: string | null; user?: ChannelUser; data?: { type?: string; data?: any } };
+export type ChannelEvent = {
+	channel_id: string;
+	message_id?: string | null;
+	user?: ChannelUser;
+	channel?: Pick<Channel, 'name' | 'type'>;
+	created_at?: number;
+	data?: { type?: string; data?: any };
+};
 
 /**
  * A socket event applied to a list of messages. `parentId` is null for the
@@ -118,27 +129,138 @@ const PREFIX: Record<MentionKind, string> = { user: 'U', model: 'M', channel: 'C
 /** `<@U:id|label>`: the encoding the backend reads (a model mention makes that model reply). */
 export const encodeMention = (m: Mention) => `<@${PREFIX[m.kind]}:${m.id}|${m.label.replace(/[>|]/g, '')}>`;
 
+/** How the composer shows a mention while it is typed: `#general` for a channel, `@Ann` otherwise. */
+export const mentionText = (m: Pick<Mention, 'kind' | 'label'>) => `${m.kind === 'channel' ? '#' : '@'}${m.label}`;
+
 /**
- * The composer shows a mention as `@label`; on send each chosen mention's
- * first `@label` still present becomes its encoding. A mention whose text was
- * deleted is dropped, so a deleted `@model` no longer triggers a reply.
+ * The composer shows a mention as `@label` (`#label`); on send each chosen
+ * mention's first such text still present becomes its encoding. A mention
+ * whose text was deleted is dropped, so a deleted `@model` no longer triggers
+ * a reply.
  */
 export function encodeMentions(text: string, mentions: Mention[]): string {
 	let out = text;
 	for (const m of mentions) {
-		const plain = `@${m.label}`;
+		const plain = mentionText(m);
 		const at = out.indexOf(plain);
 		if (at !== -1) out = out.slice(0, at) + encodeMention(m) + out.slice(at + plain.length);
 	}
 	return out;
 }
 
-/** The `@word` being typed just before the cursor, if any: what to suggest mentions for. */
-export function mentionQuery(text: string, cursor: number): { query: string; start: number } | null {
+/**
+ * The `@word` (users and models) or `#word` (channels) being typed just
+ * before the cursor, if any: what to suggest mentions for.
+ */
+export function mentionQuery(text: string, cursor: number): { trigger: '@' | '#'; query: string; start: number } | null {
 	const before = text.slice(0, cursor);
-	const m = /(^|\s)@([\w.-]*)$/.exec(before);
-	return m ? { query: m[2], start: cursor - m[2].length - 1 } : null;
+	const m = /(^|\s)([@#])([\w.-]*)$/.exec(before);
+	return m ? { trigger: m[2] as '@' | '#', query: m[3], start: cursor - m[3].length - 1 } : null;
 }
 
 /** A timestamp in nanoseconds, now. */
 export const nowNs = () => Date.now() * 1_000_000;
+
+// --- the channel list ----------------------------------------------------
+
+const TYPE_ORDER = ['', null, 'group', 'dm'];
+
+/** Standard channels first, then group channels, then direct messages (Sidebar.svelte's initChannels sort; stable within a type). */
+export const sortChannels = (list: Channel[]) => [...list].sort((a, b) => TYPE_ORDER.indexOf(a.type ?? null) - TYPE_ORDER.indexOf(b.type ?? null));
+
+const publicReadGrant = (grants: Channel['access_grants']) =>
+	Array.isArray(grants) && grants.some((g) => g?.principal_type === 'user' && g?.principal_id === '*' && g?.permission === 'read');
+
+/** Whether the channel shows a `#` (public) or a lock: a group channel's own flag, else a public read grant. */
+export function isPublicChannel(channel: Pick<Channel, 'type' | 'is_private' | 'access_grants'> | null | undefined): boolean {
+	if (channel?.type === 'group' && typeof channel.is_private === 'boolean') return !channel.is_private;
+	return publicReadGrant(channel?.access_grants);
+}
+
+/**
+ * The channel list after a socket event, for the sidebar's unread counts
+ * (+layout.svelte's channelEventHandler). Returns null when the list must be
+ * refetched instead: a channel was created, or a message came from a channel
+ * the list does not know yet. A new message from someone else in a channel
+ * that is not open bumps its count; anything else leaves the list alone.
+ */
+export function applyUnreadEvent(list: Channel[], event: ChannelEvent, openChannelId: string | null, selfId: string | undefined): Channel[] | null {
+	const type = event.data?.type;
+	if (type === 'channel:created') return null;
+	if (type !== 'message' || event.user?.id === selfId || event.channel_id === openChannelId) return list;
+	if (!list.some((c) => c.id === event.channel_id)) return null;
+	return list.map((c) => (c.id === event.channel_id ? { ...c, unread_count: (c.unread_count ?? 0) + 1, last_message_at: event.created_at ?? c.last_message_at } : c));
+}
+
+/** The list with one channel's unread count cleared. */
+export const markRead = (list: Channel[], channelId: string) => list.map((c) => (c.id === channelId && c.unread_count ? { ...c, unread_count: 0 } : c));
+
+/** A compact unread badge: 7, 1.2K. */
+export const formatUnread = (count: number) => new Intl.NumberFormat('en', { notation: 'compact', compactDisplay: 'short' }).format(count);
+
+/**
+ * The channel form's name rule (ChannelModal.svelte): whitespace becomes `-`
+ * and it is lower-cased as it is typed.
+ */
+export const normalizeChannelName = (name: string) => name.replace(/\s/g, '-').toLocaleLowerCase();
+
+export type ChannelFormValue = { type: '' | 'group' | 'dm'; name: string; isPrivate: boolean; accessGrants: NonNullable<Channel['access_grants']>; userIds: string[] };
+
+/** What a channel form sends, or the error to show instead. */
+export function channelPayload(v: ChannelFormValue): { error: string } | { payload: Record<string, unknown> } {
+	const name = normalizeChannelName(v.name.trim());
+	if (name.length > 128) return { error: 'Channel name must be less than 128 characters' };
+	if (v.type === 'dm' && v.userIds.length === 0) return { error: 'Please select at least one user for Direct Message channel.' };
+	if (v.type !== 'dm' && !name) return { error: 'Channel name cannot be empty.' };
+	return {
+		payload: {
+			type: v.type,
+			name,
+			is_private: v.type === 'group' ? v.isPrivate : null,
+			access_grants: v.type === '' ? v.accessGrants : [],
+			group_ids: [],
+			user_ids: v.userIds
+		}
+	};
+}
+
+// --- rendering -------------------------------------------------------------
+
+const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+
+/**
+ * Message Markdown with each `<@U:id|label>` mention turned into a styled
+ * `@label` (`#label` for a channel). The result still goes through the
+ * Markdown renderer and DOMPurify; the label is escaped here because it is
+ * user text inside HTML.
+ */
+export function renderMentions(content: string): string {
+	return content.replace(/<@([UMC]):([^|>]+)\|([^>]*)>/g, (_all, kind: string, _id: string, label: string) => {
+		const text = `${kind === 'C' ? '#' : '@'}${escapeHtml(label)}`;
+		return `<span class="mention" data-kind="${kind}">${text}</span>`;
+	});
+}
+
+/** "You, Ann and Bob reacted with :tada:" (Message.svelte's tooltip: three names, then "and N others" past four). */
+export function reactionTooltip(reaction: Reaction, selfId: string | undefined): string {
+	const names = reaction.users.map((u) => (u.id === selfId ? 'You' : (u.name ?? 'Someone')));
+	const total = names.length;
+	let who = '';
+	names.slice(0, 3).forEach((name, idx) => {
+		who += idx === 0 ? name : `${idx === Math.min(2, total - 1) ? ' and ' : ', '}${name}`;
+	});
+	if (total > 4) who += ` and ${total - 3} others`;
+	return `${who} reacted with :${reaction.name}:`;
+}
+
+type FileRef = { url?: string; content_type?: string };
+
+/** A message attachment's URL: data and http URLs as they are, else the file's API route. */
+export function attachmentUrl(file: FileRef, apiBase: string): string {
+	const url = file.url ?? '';
+	if (url.startsWith('data') || url.startsWith('http')) return url;
+	return `${apiBase}/files/${url}${file.content_type ? '/content' : ''}`;
+}
+
+/** The files on a message, or none while its data is still a `true` placeholder. */
+export const messageFiles = (m: ChannelMessage) => (m.data && m.data !== true ? (m.data.files ?? []) : []);

@@ -13,12 +13,13 @@ describe('canUseFeature', () => {
 		expect(canUseFeature('calendar', user('admin'), config({ enable_calendar: false }))).toBe(false);
 		expect(canUseFeature('calendar', user('admin'), config({ enable_calendar: true }))).toBe(true);
 	});
-	it('notes are allowed unless denied; calendar, automations and channels need the permission', () => {
+	it('notes and channels are allowed unless denied; calendar and automations need the permission', () => {
 		expect(canUseFeature('notes', user('user'), config({ enable_notes: true }))).toBe(true);
 		expect(canUseFeature('notes', user('user', { notes: false }), config({ enable_notes: true }))).toBe(false);
 		expect(canUseFeature('calendar', user('user'), config({ enable_calendar: true }))).toBe(false);
 		expect(canUseFeature('automations', user('user', { automations: true }), config({ enable_automations: true }))).toBe(true);
-		expect(canUseFeature('channels', user('user', { channels: true }), config({ enable_channels: true }))).toBe(true);
+		expect(canUseFeature('channels', user('user'), config({ enable_channels: true }))).toBe(true);
+		expect(canUseFeature('channels', user('user', { channels: false }), config({ enable_channels: true }))).toBe(false);
 	});
 	it('the playground is for admins only', () => {
 		expect(canUseFeature('playground', user('user'), config({}))).toBe(false);

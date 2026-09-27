@@ -34,6 +34,7 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import { useUIStore } from '@/lib/stores/uiStore';
+import { SidebarChannels } from '@/routes/channels/SidebarChannels';
 import { routePaths } from '@/routes/routePaths';
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
@@ -141,6 +142,7 @@ export function SidebarContent({
 						</NavLink>
 					)}
 				</nav>
+				<SidebarChannels onNavigate={onNavigate} />
 			</ScrollArea>
 
 			<Separator />

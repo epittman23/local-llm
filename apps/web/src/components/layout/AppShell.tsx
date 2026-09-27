@@ -8,6 +8,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useAuthGate } from '@/lib/auth/useAuthGate';
 import { useSettingsUrl } from '@/lib/settings/useSettingsUrl';
 import { useUIStore } from '@/lib/stores/uiStore';
+import { useChannelUnreadEvents } from '@/routes/channels/useChannels';
 import { cn } from '@/lib/utils';
 import { SidebarContent } from './Sidebar';
 
@@ -25,6 +26,7 @@ import { SidebarContent } from './Sidebar';
 export function AppShell() {
 	const authStatus = useAuthGate();
 	useSettingsUrl();
+	useChannelUnreadEvents();
 	const sidebarOpen = useUIStore((state) => state.sidebarOpen);
 	const setSidebarOpen = useUIStore((state) => state.setSidebarOpen);
 	const [mobileOpen, setMobileOpen] = useState(false);

@@ -19,15 +19,12 @@ import { Link, useLocation } from 'react-router';
 
 /** Path prefixes still owned by the Svelte app, and the surface's name. Shrinks as surfaces are ported. */
 const SVELTE_ONLY: [prefix: string, surface: string][] = [
-	['/c/', 'Chat'],
-	['/home', 'Home'],
-	['/folders/', 'Folders'],
-	['/channels/', 'Channels']
+	['/c/', 'Chat']
 ];
 
 /** The name of the Svelte-owned surface a path belongs to, or null. */
 export function svelteOnlySurface(pathname: string): string | null {
-	// '/c/' needs something after it; '/home' matches itself and anything beneath it.
+	// A prefix ending in '/' needs something after it; any other matches itself and anything beneath it.
 	const matches = (prefix: string) => (prefix.endsWith('/') ? pathname.length > prefix.length && pathname.startsWith(prefix) : pathname === prefix || pathname.startsWith(`${prefix}/`));
 	return SVELTE_ONLY.find(([prefix]) => matches(prefix))?.[1] ?? null;
 }
