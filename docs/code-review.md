@@ -21,7 +21,7 @@ the old code.
 | M2 | A confirm dialog with the admin's text before the first prompt with web search on, once per chat (kept when a new chat gets its id; reset on moving to another chat or turning search off). Cancel keeps the prompt in the input. **Differs:** asked at send time only; Svelte also asked when the switch was turned on | `request.test.ts`; e2e `chat-settings.spec.ts` |
 | M3 | Mentions sharing a label take its occurrences in insertion order; the composer now keeps one entry per insertion. The remaining limit (deleting the first of two leaves the second with the first's id) is stated in `encodeMentions` | `channelModel.test.ts` |
 | M4 | A character from a script written without spaces (Han, Kana, Thai, Lao, Khmer, Myanmar) never continues a name, before or after it | `channelModel.test.ts` |
-| M5 | The five `.catch` handlers return `null`; a refused Connections save puts the previous values back | e2e `admin-settings.spec.ts` "a failed Verify…", "a refused save…" |
+| M5 | The five `.catch` handlers return `null`; a refused Connections save puts the previous values back | ✔ e2e `admin-settings.spec.ts` "a failed Verify…", "a refused save…" |
 | M6 | Action buttons render under replies (icon or a sparkle), and `runAction` ports `chatActionHandler`: the conversation up to the reply is posted, returned messages replace theirs with `originalContent` kept, and a saved chat is saved | e2e `chat-actions.spec.ts` |
 | M7 | 18 are now used: `temporaryChatByDefault`, `webSearch` (Always: new chats start with search on), `chatBubble`, `showUsername`, `widescreenMode`, `chatDirection`, `renderMarkdownInUserMessages`, `renderMarkdownInAssistantMessages`, `keepFollowUpPrompts`, `insertSuggestionPrompt`, `insertFollowUpPrompt`, `regenerateMenu`, `scrollOnResponseGeneration`, `scrollOnBranchChange`, `showChatTitleInTab`, `largeTextAsFile`, `responseAutoPlayback`, `notificationSound` (the sound restored to `apps/web/public/audio/`). The other 26 Interface rows are marked `unported` with a reason in `interfaceSettingDefs.ts` and not offered; the Audio tab drops the voice-input engine and auto-send rows. **Also found while fixing:** the saved UI scale and font were applied only while changed in Settings, never on load (now in `AppShell`), and the chat background image was never shown (now behind the chat) | `interfaceSettingDefs.test.ts` (a test that fails if any offered row has no reader), `prefs.test.ts`; e2e `chat-settings.spec.ts` (8 tests), `admin-settings.spec.ts` updated |
 | L1 | `mentionsToText` for the reply preview and notifications | `channelModel.test.ts` |
@@ -37,6 +37,11 @@ the old code.
 | L11 | The chat input is disabled while `session.loading` | e2e `chat.spec.ts` "the message box waits while a chat loads…" |
 | L12 | "Session expired. Please sign in again." on expiry; "Connection lost. Reconnecting..." after 2 s without the socket (once per outage) and "Reconnected" after it. `e2e/fake-socket.ts` gained `drop()`/`restore()` | e2e `chat.spec.ts` (2 tests) |
 | L13 | `make backend` binds `LLLM_BACKEND_HOST`, default `127.0.0.1`; `make backend LLLM_BACKEND_HOST=0.0.0.0` restores LAN access | checked with `make -n backend` |
+
+Suites after the fixes: 587 Vitest (+22), 347 Playwright (+20), `astro check`
+0 errors, and the new backend test (4 cases) in a minimal virtualenv; the
+full backend pytest suite was not run, as this environment has no backend
+virtualenv.
 
 Behaviour a user will notice: user messages render Markdown by default (as
 in the Svelte app); channel messages use the chat renderer, so their mention

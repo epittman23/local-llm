@@ -459,7 +459,10 @@ test.describe('settings: Connections', () => {
 		await dialog.getByLabel('URL', { exact: true }).fill('http://localhost:8090/v1');
 		await dialog.getByRole('button', { name: 'Verify Connection' }).click();
 		await expect(page.getByText('OpenAI: Server connection failed')).toBeVisible();
-		await expect(page.getByText('Server connection verified')).toHaveCount(0);
+		// Counted once, after a moment for a false success toast to render: a retrying
+		// toHaveCount(0) would pass as soon as that toast timed out.
+		await page.waitForTimeout(300);
+		expect(await page.getByText('Server connection verified').count()).toBe(0);
 	});
 
 	test('a refused save reports the failure only and puts the old values back', async ({ page }) => {
@@ -473,11 +476,13 @@ test.describe('settings: Connections', () => {
 		const m = modal(page);
 		await m.getByRole('switch', { name: 'OpenAI API' }).click();
 		await expect(page.getByText('Not allowed').first()).toBeVisible();
-		await expect(page.getByText('OpenAI API settings updated')).toHaveCount(0);
+		await page.waitForTimeout(300);
+		expect(await page.getByText('OpenAI API settings updated').count()).toBe(0);
 		await expect(m.getByRole('switch', { name: 'OpenAI API' })).toBeChecked();
 
 		await m.getByRole('switch', { name: 'Direct Connections' }).click();
-		await expect(page.getByText('Connections settings updated')).toHaveCount(0);
+		await page.waitForTimeout(300);
+		expect(await page.getByText('Connections settings updated').count()).toBe(0);
 		await expect(m.getByRole('switch', { name: 'Direct Connections' })).not.toBeChecked();
 	});
 
