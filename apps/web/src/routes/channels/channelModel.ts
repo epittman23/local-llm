@@ -209,26 +209,115 @@ export function encodeMention(m: Mention): string {
 export const mentionText = (m: Pick<Mention, 'kind' | 'label'>) => `${mentionTrigger(m.kind)}${m.label}`;
 
 const NAME_CHAR = /[\p{L}\p{N}\p{M}_]/u;
-// Text that carries a name on: a letter, digit or mark, or `-`/`.` joining
-// one (as in `GPT-4o`). `@Sam` inside `@Samantha` is not a mention of Sam.
-const CONTINUES_NAME = /^(?:[\p{L}\p{N}\p{M}_]|[-.][\p{L}\p{N}])/u;
+// Scripts written without spaces between words: a name run straight into one
+// of these (`@GPT-4o帮我翻译`) is still a whole mention.
+const NO_SPACE_SCRIPT = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
+/** A code point that would carry a name on: a letter, digit, mark or `_`, outside those scripts. */
+const namePart = (c: string | undefined) => Boolean(c && NAME_CHAR.test(c) && !NO_SPACE_SCRIPT.test(c));
 
 /**
- * The composer shows a mention as `@label` (`#label`); on send each chosen
- * mention's text, wherever it stands as a whole word, becomes its encoding.
- * Longer labels claim their text first, so `@GPT-4o` is never taken for
- * `@GPT`. A mention whose text was deleted is dropped, so a deleted `@model`
- * no longer triggers a reply.
+ * Whether `text[at, end)` stands as a whole mention rather than inside a
+ * longer word: `@Sam` inside `@Samantha` or `x@Sam` is not a mention of Sam,
+ * nor `@GPT` inside `@GPT-4o`. Neighbours are read as code points, so a
+ * character outside the Basic Multilingual Plane counts whole.
+ */
+function standsAlone(text: string, at: number, end: number): boolean {
+	const before = Array.from(text.slice(Math.max(0, at - 2), at)).at(-1);
+	const [next, then] = Array.from(text.slice(end, end + 4));
+	const continues = namePart(next) || ((next === '-' || next === '.') && namePart(then));
+	return !namePart(before) && !continues;
+}
+
+/**
+ * The `[start, end)` ranges of fenced code blocks and inline code spans in
+ * Markdown, where an `@name` is just text. Close to CommonMark: a fence of
+ * three or more backticks or tildes runs to a closing fence of the same kind
+ * and at least its length (or to the end); a run of n backticks opens a span
+ * that the next run of exactly n closes, within the paragraph.
+ */
+export function codeRanges(text: string): [number, number][] {
+	const ranges: [number, number][] = [];
+	let open: { char: string; len: number; start: number } | null = null;
+	let offset = 0;
+	for (const line of text.split('\n')) {
+		const fence = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+		if (open) {
+			if (fence && fence[1][0] === open.char && fence[1].length >= open.len && !fence[2].trim()) {
+				ranges.push([open.start, offset + line.length]);
+				open = null;
+			}
+		} else if (fence && !(fence[1][0] === '`' && fence[2].includes('`'))) {
+			open = { char: fence[1][0], len: fence[1].length, start: offset };
+		}
+		offset += line.length + 1;
+	}
+	if (open) ranges.push([open.start, text.length]);
+
+	const fenced = [...ranges];
+	const inFence = (p: number) => fenced.some(([s, e]) => p >= s && p < e);
+	const runAt = (p: number) => {
+		let n = 0;
+		while (text[p + n] === '`') n++;
+		return n;
+	};
+	for (let p = 0; p < text.length; ) {
+		if (text[p] !== '`' || inFence(p) || text[p - 1] === '\\') {
+			p++;
+			continue;
+		}
+		const n = runAt(p);
+		let close = -1;
+		for (let q = p + n; q < text.length; ) {
+			if (text[q] === '\n' && text[q + 1] === '\n') break;
+			if (text[q] !== '`') {
+				q++;
+				continue;
+			}
+			const k = runAt(q);
+			if (k === n) {
+				close = q;
+				break;
+			}
+			q += k;
+		}
+		if (close === -1) {
+			p += n;
+			continue;
+		}
+		ranges.push([p, close + n]);
+		p = close + n;
+	}
+	return ranges;
+}
+
+/**
+ * The composer shows a mention as `@label` (`#label`) and passes one entry
+ * per mention inserted. On send, each label's text, wherever it stands as a
+ * whole word outside code, becomes an encoding:
+ *
+ * - Longer labels claim their text first, so `@GPT-4o` is never taken for
+ *   `@GPT`.
+ * - When different people or models share a label, its occurrences go to
+ *   them in the order they were inserted (any extra ones to the last). The
+ *   text alone cannot tell them apart, so deleting the first of two leaves
+ *   the remaining one with the first's id.
+ * - A mention whose text was deleted is dropped, so a deleted `@model` no
+ *   longer triggers a reply.
  */
 export function encodeMentions(text: string, mentions: Mention[]): string {
+	const code = codeRanges(text);
 	const taken: { start: number; end: number; tag: string }[] = [];
-	const longestFirst = mentions.filter((m) => m.label).sort((a, b) => b.label.length - a.label.length);
-	for (const m of longestFirst) {
-		const plain = mentionText(m);
+	const free = (at: number, end: number) => taken.every((t) => end <= t.start || at >= t.end) && code.every(([s, e]) => end <= s || at >= e);
+	const byText = new Map<string, Mention[]>();
+	for (const m of mentions) if (m.label) byText.set(mentionText(m), [...(byText.get(mentionText(m)) ?? []), m]);
+	for (const [plain, group] of [...byText].sort(([a], [b]) => b.length - a.length)) {
+		const oneTarget = new Set(group.map((m) => `${m.kind}:${m.id}`)).size === 1;
+		let n = 0;
 		for (let at = text.indexOf(plain); at !== -1; at = text.indexOf(plain, at + 1)) {
 			const end = at + plain.length;
-			const whole = (at === 0 || !NAME_CHAR.test(text[at - 1])) && !CONTINUES_NAME.test(text.slice(end, end + 3));
-			if (whole && taken.every((t) => end <= t.start || at >= t.end)) taken.push({ start: at, end, tag: encodeMention(m) });
+			if (!standsAlone(text, at, end) || !free(at, end)) continue;
+			taken.push({ start: at, end, tag: encodeMention(oneTarget ? group[0] : group[Math.min(n, group.length - 1)]) });
+			n++;
 		}
 	}
 	// Replaced from the end, so the earlier offsets still hold.
@@ -315,21 +404,16 @@ export function channelPayload(v: ChannelFormValue): { error: string } | { paylo
 
 // --- rendering -------------------------------------------------------------
 
-const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+const MENTION_TAG = /<[@#]([UMC]):([^|>]+)(?:\|([^>]*))?>/g;
 
 /**
- * Message Markdown with each `<@U:id|label>` mention turned into a styled
- * `@label` (`#label` for a channel, written `<#C:id|label>`; an early port
- * wrote `<@C:…>`, which still reads). A mention without a label shows its
- * id. The result still goes through the Markdown renderer and DOMPurify; the
- * label is escaped here because it is user text inside HTML.
+ * Message text with each mention tag as plain `@label` (`#label` for a
+ * channel; the id when there is no label): for one-line previews and
+ * notifications. `<#C:…>` is how channel mentions are stored; `<@C:…>`, which
+ * an early port wrote, reads too. Messages themselves render through the chat
+ * Markdown renderer, whose mention token draws the chip.
  */
-export function renderMentions(content: string): string {
-	return content.replace(/<[@#]([UMC]):([^|>]+)(?:\|([^>]*))?>/g, (_all, kind: string, id: string, label: string | undefined) => {
-		const text = `${kind === 'C' ? '#' : '@'}${escapeHtml(label || id)}`;
-		return `<span class="mention" data-kind="${kind}">${text}</span>`;
-	});
-}
+export const mentionsToText = (content: string) => content.replace(MENTION_TAG, (_all, kind: string, id: string, label: string | undefined) => `${kind === 'C' ? '#' : '@'}${label || id}`);
 
 /** "You, Ann and Bob reacted with :tada:" (Message.svelte's tooltip: three names, then "and N others" past four). */
 export function reactionTooltip(reaction: Reaction, selfId: string | undefined): string {

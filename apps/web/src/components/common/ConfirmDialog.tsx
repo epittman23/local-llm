@@ -22,7 +22,8 @@ export function ConfirmDialog({
 	children,
 	confirmLabel = 'Confirm',
 	cancelLabel = 'Cancel',
-	onConfirm
+	onConfirm,
+	onCloseAutoFocus
 }: {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
@@ -31,10 +32,12 @@ export function ConfirmDialog({
 	confirmLabel?: string;
 	cancelLabel?: string;
 	onConfirm: () => void | Promise<void>;
+	/** Where focus goes when the dialog closes (Radix's own handler: call `preventDefault` to move it yourself). */
+	onCloseAutoFocus?: (event: Event) => void;
 }) {
 	return (
 		<AlertDialog open={open} onOpenChange={onOpenChange}>
-			<AlertDialogContent>
+			<AlertDialogContent onCloseAutoFocus={onCloseAutoFocus}>
 				<AlertDialogHeader>
 					<AlertDialogTitle>{title}</AlertDialogTitle>
 					<AlertDialogDescription asChild>

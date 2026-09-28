@@ -1,5 +1,5 @@
 import { PanelLeft } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet } from 'react-router';
 import { SettingsModal } from '@/components/settings/SettingsModal';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,8 @@ import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/s
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuthGate } from '@/lib/auth/useAuthGate';
 import { useSettingsUrl } from '@/lib/settings/useSettingsUrl';
+import { useUserSettings } from '@/lib/settings/userSettings';
+import { setAppFontFamily, setTextScale } from '@/lib/utils/textScale';
 import { useShortcuts } from '@/lib/useShortcuts';
 import { useUIStore } from '@/lib/stores/uiStore';
 import { useChannelUnreadEvents } from '@/routes/channels/useChannels';
@@ -37,6 +39,16 @@ export function AppShell() {
 
 	// The user's keyboard shortcuts (Ctrl/Cmd+K search, Ctrl/Cmd+Shift+O new chat, ...).
 	useShortcuts();
+
+	// The saved UI scale and font apply on every load, as +layout.svelte does,
+	// not only while they are changed in Settings (docs/code-review.md M7).
+	const { settings } = useUserSettings();
+	const textScale = (settings as Record<string, unknown> | null)?.textScale;
+	const fontFamily = (settings as Record<string, unknown> | null)?.fontFamily;
+	useEffect(() => {
+		setTextScale(typeof textScale === 'number' ? textScale : 1);
+		setAppFontFamily(typeof fontFamily === 'string' ? fontFamily : null);
+	}, [textScale, fontFamily]);
 
 	// 'pending': the session bootstrap (lib/auth/session.ts) hasn't resolved
 	// yet -- render nothing rather than flash the shell before we know if

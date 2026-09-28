@@ -62,10 +62,10 @@ export const useConfigStore = create<ConfigState>((set) => ({
 // SvelteKit app would read `$WEBUI_NAME` rather than the constant directly.
 export const useWebUIName = () => useConfigStore((state) => state.config?.name || APP_NAME);
 
-/** Sets the tab title to `<section> / <app name>`, as every Svelte page does in its <svelte:head>. */
-export function useDocumentTitle(section: string) {
+/** Sets the tab title to `<section> / <app name>`, as every Svelte page does in its <svelte:head>, or to the app name alone for null. */
+export function useDocumentTitle(section: string | null) {
 	const name = useWebUIName();
 	useEffect(() => {
-		document.title = `${section} / ${name}`;
+		document.title = section === null ? name : `${section} / ${name}`;
 	}, [section, name]);
 }

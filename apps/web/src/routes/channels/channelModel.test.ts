@@ -11,13 +11,14 @@ import {
 	channelPayload,
 	channelTitle,
 	closesThread,
+	codeRanges,
 	encodeMention,
 	encodeMentions,
 	isPublicChannel,
 	markRead,
 	mentionQuery,
+	mentionsToText,
 	reactionTooltip,
-	renderMentions,
 	showsAuthor,
 	sortChannels,
 	toggleReaction
@@ -207,10 +208,38 @@ describe('mentions', () => {
 		expect(mentionQuery('mail@host', 9)).toBeNull();
 		expect(mentionQuery('hi @Jo ', 7)).toBeNull();
 	});
-	it('renders mentions as escaped spans', () => {
-		expect(renderMentions('hi <@U:u1|Ann> in <#C:c1|general>')).toBe('hi <span class="mention" data-kind="U">@Ann</span> in <span class="mention" data-kind="C">#general</span>');
-		expect(renderMentions('<@C:c1|general> <@M:m1>')).toBe('<span class="mention" data-kind="C">#general</span> <span class="mention" data-kind="M">@m1</span>');
-		expect(renderMentions('<@U:u1|<b>x</b>>')).not.toContain('<b>');
+	it('gives same-label mentions their occurrences in the order they were inserted', () => {
+		const a = { kind: 'user', id: 'john-a', label: 'John Smith' } as const;
+		const b = { kind: 'user', id: 'john-b', label: 'John Smith' } as const;
+		expect(encodeMentions('@John Smith and @John Smith', [a, b])).toBe('<@U:john-a|John Smith> and <@U:john-b|John Smith>');
+		expect(encodeMentions('@John Smith, @John Smith, @John Smith', [b, a])).toBe('<@U:john-b|John Smith>, <@U:john-a|John Smith>, <@U:john-a|John Smith>');
+		// The same person inserted twice is still one target for every occurrence.
+		expect(encodeMentions('@Sam @Sam @Sam', [sam, sam])).toBe('<@U:sam|Sam> <@U:sam|Sam> <@U:sam|Sam>');
+	});
+	it('a name run straight into text written without spaces is still a mention', () => {
+		expect(encodeMentions('@GPT-4o帮我翻译一下', [gpt4o])).toBe('<@M:gpt-4o|GPT-4o>帮我翻译一下');
+		const zhang = { kind: 'user', id: 'z3', label: '张三' } as const;
+		expect(encodeMentions('你好@张三你看一下', [zhang])).toBe('你好<@U:z3|张三>你看一下');
+		expect(encodeMentions('@Samの件', [sam])).toBe('<@U:sam|Sam>の件');
+	});
+	it('reads the neighbouring characters whole, even outside the Basic Multilingual Plane', () => {
+		expect(encodeMentions('\u{1D400}@Sam', [sam])).toBe('\u{1D400}@Sam');
+		expect(encodeMentions('@Sam\u{1D400}', [sam])).toBe('@Sam\u{1D400}');
+		expect(encodeMentions('🎉@Sam 🎉', [sam])).toBe('🎉<@U:sam|Sam> 🎉');
+	});
+	it('leaves mentions inside code alone', () => {
+		expect(encodeMentions('ping @Sam, run `notify @Sam` please', [sam])).toBe('ping <@U:sam|Sam>, run `notify @Sam` please');
+		expect(encodeMentions('@Sam\n```\n@Sam\n```\n@Sam', [sam])).toBe('<@U:sam|Sam>\n```\n@Sam\n```\n<@U:sam|Sam>');
+		expect(encodeMentions('an unclosed ` before @Sam', [sam])).toBe('an unclosed ` before <@U:sam|Sam>');
+	});
+	it('finds fenced blocks and inline code spans', () => {
+		expect(codeRanges('a `b` c ``d`e`` f')).toEqual([[2, 5], [8, 15]]);
+		expect(codeRanges('x\n~~~\ncode\n~~~\ny')).toEqual([[2, 14]]);
+		expect(codeRanges('x\n```js\nopen to the end')).toEqual([[2, 23]]);
+		expect(codeRanges('no \\`escape` here')).toEqual([]);
+	});
+	it('turns mention tags into plain text for previews and notifications', () => {
+		expect(mentionsToText('hi <@U:u1|Ann> in <#C:c1|general>, <@M:gpt-4o> and <@C:c2|old>')).toBe('hi @Ann in #general, @gpt-4o and #old');
 	});
 });
 

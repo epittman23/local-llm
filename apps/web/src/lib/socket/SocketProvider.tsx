@@ -1,22 +1,22 @@
 // Ports the connection lifecycle from d863707:apps/openwebui/src/routes/+layout.svelte's
-// setupSocket() (roughly lines 165-250): same io() options, same auth token,
+// setupSocket() (roughly lines 118-250): same io() options, same auth token,
 // same connect/disconnect/reconnect_attempt/reconnect_failed handling and
-// heartbeat. Dropped, deliberately, because their prerequisites don't exist in
-// this app yet: the "Reconnected"/"Connection lost" toasts (no toast system --
-// see lib/auth/session.ts's own note), the version-mismatch auto-reload (needs
-// the WEBUI_VERSION/WEBUI_DEPLOYMENT_ID stores this phase doesn't port), and the
-// websocket_heartbeat_interval config read (needs the backend config store) --
-// the heartbeat here runs on the same 30s literal Open WebUI itself defaults to
-// when that config value is absent. All of these are real gaps, not silent
-// ones: whichever later phase adds a toast system or the config store should
-// wire them back in here rather than re-deriving this connection logic.
+// heartbeat, and its "Connection lost. Reconnecting..." / "Reconnected" toasts
+// (docs/code-review.md L12; the Svelte app's extra grace period after a tab
+// resumes is left out). Still not ported: the version-mismatch auto-reload
+// (needs the WEBUI_VERSION/WEBUI_DEPLOYMENT_ID stores) and the
+// websocket_heartbeat_interval config read; the heartbeat runs on the same 30s
+// literal Open WebUI itself defaults to when that config value is absent.
 
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
+import { toast } from 'sonner';
 import { WEBUI_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
 
 const HEARTBEAT_INTERVAL_MS = 30000;
+/** A drop shorter than this (a quick reconnect) is not worth a toast. */
+const DISCONNECT_TOAST_DELAY_MS = 2000;
 
 type SocketContextValue = {
 	socket: Socket | null;
@@ -52,6 +52,12 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 		socketRef.current = socket;
 
 		let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+		let disconnectTimer: ReturnType<typeof setTimeout> | null = null;
+		let warned = false;
+		const clearDisconnectTimer = () => {
+			if (disconnectTimer) clearTimeout(disconnectTimer);
+			disconnectTimer = null;
+		};
 
 		socket.on('connect_error', (err) => {
 			console.log('connect_error', err);
@@ -60,6 +66,10 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 		socket.on('connect', () => {
 			console.log('connected', socket.id);
 			setConnected(true);
+			clearDisconnectTimer();
+			// Only after the reader saw the warning.
+			if (warned) toast.success('Reconnected');
+			warned = false;
 
 			socket.emit('user-join', { auth: { token } });
 
@@ -84,12 +94,22 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 				clearInterval(heartbeatInterval);
 				heartbeatInterval = null;
 			}
+			// A connection that dropped, not one this client closed (sign-out, a new token).
+			// Once per outage: a failed reconnect attempt can report another disconnect.
+			if (reason === 'io client disconnect' || disconnectTimer || warned) return;
+			disconnectTimer = setTimeout(() => {
+				disconnectTimer = null;
+				if (socket.connected || document.visibilityState !== 'visible') return;
+				warned = true;
+				toast.warning('Connection lost. Reconnecting...');
+			}, DISCONNECT_TOAST_DELAY_MS);
 		});
 
 		return () => {
 			socket.io.off('reconnect_attempt', onReconnectAttempt);
 			socket.io.off('reconnect_failed', onReconnectFailed);
 			if (heartbeatInterval) clearInterval(heartbeatInterval);
+			clearDisconnectTimer();
 			socket.disconnect();
 			socketRef.current = null;
 			setConnected(false);

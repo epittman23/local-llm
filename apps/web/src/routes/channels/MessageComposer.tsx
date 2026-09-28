@@ -113,7 +113,8 @@ export const MessageComposer = forwardRef<
 		const next = text.slice(0, active.start) + insert + text.slice(cursor);
 		const pos = active.start + insert.length;
 		setText(next);
-		setMentions((ms) => [...ms.filter((x) => !(x.kind === s.kind && x.id === s.id)), { kind: s.kind, id: s.id, label: s.label }]);
+		// One entry per insertion, in order: encodeMentions gives same-label mentions their occurrences in this order.
+		setMentions((ms) => [...ms, { kind: s.kind, id: s.id, label: s.label }]);
 		requestAnimationFrame(() => {
 			textareaRef.current?.setSelectionRange(pos, pos);
 			setCursor(pos);

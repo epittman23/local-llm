@@ -73,19 +73,12 @@ export default function Audio() {
 				setSaving(false);
 			}}
 		>
+			{/* Voice input is not ported (docs/CLAUDE.md), so its engine and auto-send switches are not
+			    offered (docs/code-review.md M7); the language is, since audio uploads use it. */}
 			<SettingsSection title="STT Settings" first>
-				<SettingRow label="Speech-to-Text Engine" description="Choose the engine used to transcribe voice input.">
-					{(id) => (
-						<SettingSelect aria-labelledby={id} value={stt.engine} onChange={(v) => setStt({ ...stt, engine: v })}>
-							<option value="">Default</option>
-							<option value="web">Web API</option>
-						</SettingSelect>
-					)}
-				</SettingRow>
 				<SettingField label="Language" htmlFor="stt-language">
 					<SettingInput id="stt-language" aria-label="Speech-to-Text Language" placeholder="e.g. en" value={stt.language} onChange={(e) => setStt({ ...stt, language: e.target.value })} />
 				</SettingField>
-				<SettingRow label="Instant Auto-Send After Voice Transcription">{(id) => <SettingSwitch labelledBy={id} checked={Boolean(s.speechAutoSend)} onChange={(v) => void update({ speechAutoSend: v })} />}</SettingRow>
 			</SettingsSection>
 			<SettingsSection title="TTS Settings">
 				<SettingRow label="Auto-Playback Response" description="Play assistant responses aloud automatically.">

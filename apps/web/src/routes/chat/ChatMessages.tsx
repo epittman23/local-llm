@@ -9,7 +9,9 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { cn, copyToClipboard } from '@/lib/utils';
 import { formatSecondsTimestamp } from '@/lib/utils/dates';
 import { citationsOf, sourceIdsOf, stripCitations } from '@/lib/chat/sources';
+import { type ChatPrefs, chatPrefs } from '@/lib/chat/prefs';
 import { modelImage } from './ModelSelector';
+import { useChatPrefs } from './useChatPrefs';
 import { useModels } from './useModels';
 
 export type MessageHandlers = {
@@ -82,24 +84,51 @@ function Attachments({ files }: { files: NonNullable<Message['files']> }) {
 	);
 }
 
-/** Ports chat/Messages/UserMessage.svelte: the prompt as a bubble, its attachments, versions and actions. */
-function UserMessage({ history, message, h }: { history: History; message: Message; h: MessageHandlers }) {
+const hideBrokenImage = (e: React.SyntheticEvent<HTMLImageElement>) => (e.currentTarget.style.visibility = 'hidden');
+
+/**
+ * Ports chat/Messages/UserMessage.svelte: the prompt as a bubble (or, with
+ * "Chat Bubble UI" off, beside the user's picture and name, like a reply),
+ * its attachments, versions and actions. Markdown unless the user turned
+ * that off for their own messages.
+ */
+function UserMessage({ history, message, h, prefs }: { history: History; message: Message; h: MessageHandlers; prefs: ChatPrefs }) {
+	const user = useAuthStore((s) => s.user);
 	const edit = h.editing?.(message);
+	const body = prefs.markdownInUserMessages ? <Markdown id={`user-${message.id}`} content={message.content} /> : <div className="whitespace-pre-wrap">{message.content}</div>;
+	const actions = !edit && (
+		<div className="flex items-center gap-0.5 opacity-0 transition group-focus-within:opacity-100 group-hover:opacity-100">
+			<SiblingNav history={history} message={message} onBranch={h.onBranch} />
+			{h.extraActions?.(message, { isLast: false })}
+			<CopyButton text={message.content} />
+		</div>
+	);
+	if (!prefs.chatBubble) {
+		return (
+			<div className="group flex w-full gap-3" data-testid="user-message" id={`message-${message.id}`}>
+				<img src={`${WEBUI_API_BASE_URL}/users/${user?.id}/profile/image`} alt="" className="mt-1 size-7 shrink-0 rounded-full object-cover" onError={hideBrokenImage} />
+				<div className="min-w-0 flex-1">
+					<div className="text-sm font-medium">{prefs.showUsername ? (user?.name ?? 'You') : 'You'}</div>
+					{message.files?.length ? <Attachments files={message.files} /> : null}
+					{edit ?? (
+						<div className="text-[0.9375rem]" dir="auto">
+							{body}
+						</div>
+					)}
+					{actions}
+				</div>
+			</div>
+		);
+	}
 	return (
 		<div className="group flex w-full flex-col items-end gap-1" data-testid="user-message" id={`message-${message.id}`}>
 			{message.files?.length ? <Attachments files={message.files} /> : null}
 			{edit ?? (
-				<div className="bg-muted max-w-[90%] rounded-3xl px-4 py-2 whitespace-pre-wrap" dir="auto">
-					{message.content}
+				<div className="bg-muted max-w-[90%] rounded-3xl px-4 py-2" dir="auto">
+					{body}
 				</div>
 			)}
-			{!edit && (
-				<div className="flex items-center gap-0.5 opacity-0 transition group-focus-within:opacity-100 group-hover:opacity-100">
-					<SiblingNav history={history} message={message} onBranch={h.onBranch} />
-					{h.extraActions?.(message, { isLast: false })}
-					<CopyButton text={message.content} />
-				</div>
-			)}
+			{actions}
 		</div>
 	);
 }
@@ -154,7 +183,7 @@ function Sources({ message, onOpen }: { message: Message; onOpen: (n: number) =>
  * model name and time, live status, the Markdown body, an error, its sources,
  * suggested follow-ups, versions, Copy and Regenerate.
  */
-export function ResponseMessage({ history, message, h, isLast, chatId, compact = false, citationsEnabled = true }: { history: History; message: Message; h: MessageHandlers; isLast: boolean; chatId: string | null; compact?: boolean; citationsEnabled?: boolean }) {
+export function ResponseMessage({ history, message, h, isLast, chatId, compact = false, citationsEnabled = true, prefs = chatPrefs(null) }: { history: History; message: Message; h: MessageHandlers; isLast: boolean; chatId: string | null; compact?: boolean; citationsEnabled?: boolean; prefs?: ChatPrefs }) {
 	const userId = useAuthStore((s) => s.user?.id);
 	// `modelName` is set only on replies streamed in this session; a loaded
 	// chat has just the id, so look the name up as ResponseMessage.svelte does.
@@ -165,7 +194,7 @@ export function ResponseMessage({ history, message, h, isLast, chatId, compact =
 	const empty = !message.content && !message.error && !message.output?.length;
 	return (
 		<div className="group flex w-full gap-3" data-testid="response-message" id={`message-${message.id}`}>
-			{!compact && <img src={modelImage(message.model ?? '')} alt="" className="mt-1 size-7 shrink-0 rounded-full object-cover" onError={(e) => (e.currentTarget.style.visibility = 'hidden')} />}
+			{!compact && <img src={modelImage(message.model ?? '')} alt="" className="mt-1 size-7 shrink-0 rounded-full object-cover" onError={hideBrokenImage} />}
 			<div className="min-w-0 flex-1">
 				<div className="flex items-baseline gap-2">
 					<span className="text-sm font-medium">{modelName}</span>
@@ -178,6 +207,10 @@ export function ResponseMessage({ history, message, h, isLast, chatId, compact =
 							<span className="bg-muted-foreground/40 size-2 animate-bounce rounded-full" />
 							<span className="bg-muted-foreground/40 size-2 animate-bounce rounded-full [animation-delay:150ms]" />
 							<span className="bg-muted-foreground/40 size-2 animate-bounce rounded-full [animation-delay:300ms]" />
+						</div>
+					) : !prefs.markdownInAssistantMessages ? (
+						<div className="text-[0.9375rem] whitespace-pre-wrap" dir="auto">
+							{removeAllDetails(citationsEnabled ? message.content : stripCitations(message.content))}
 						</div>
 					) : (
 						<Markdown
@@ -217,7 +250,7 @@ export function ResponseMessage({ history, message, h, isLast, chatId, compact =
 					</div>
 				)}
 				{h.below?.(message)}
-				{isLast && message.done && message.followUps?.length ? (
+				{(isLast || prefs.keepFollowUps) && message.done && message.followUps?.length ? (
 					<div className="mt-2 flex flex-col items-start gap-1" aria-label="Follow-ups">
 						<span className="text-muted-foreground text-xs">Follow up</span>
 						{message.followUps.map((f, i) => (
@@ -233,7 +266,7 @@ export function ResponseMessage({ history, message, h, isLast, chatId, compact =
 }
 
 /** Ports MultiResponseMessages.svelte: one column per model, each with its own versions; clicking a column continues from it. */
-function MultiResponse({ history, parentId, h, chatId, isLast }: { history: History; parentId: string; h: MessageHandlers; chatId: string | null; isLast: boolean }) {
+function MultiResponse({ history, parentId, h, chatId, isLast, prefs }: { history: History; parentId: string; h: MessageHandlers; chatId: string | null; isLast: boolean; prefs: ChatPrefs }) {
 	const columns = replyColumns(history, parentId);
 	const currentPath = new Set(messagesList(history, history.currentId).map((m) => m.id));
 	return (
@@ -248,7 +281,7 @@ function MultiResponse({ history, parentId, h, chatId, isLast }: { history: Hist
 						className={cn('min-w-80 flex-1 snap-center rounded-2xl border p-3 transition', active ? 'border-foreground/30' : 'cursor-pointer opacity-80 hover:opacity-100')}
 						onClick={() => !active && h.onBranch(showBranch(history, id))}
 					>
-						<ResponseMessage history={history} message={m} h={h} chatId={chatId} isLast={isLast && active} compact citationsEnabled={h.citationsFor?.(m.model) ?? true} />
+						<ResponseMessage history={history} message={m} h={h} chatId={chatId} isLast={isLast && active} compact citationsEnabled={h.citationsFor?.(m.model) ?? true} prefs={prefs} />
 					</div>
 				);
 			})}
@@ -258,20 +291,21 @@ function MultiResponse({ history, parentId, h, chatId, isLast }: { history: Hist
 
 /** Ports chat/Messages.svelte: the current path through the conversation. */
 export function ChatMessages({ history, h, chatId }: { history: History; h: MessageHandlers; chatId: string | null }) {
+	const prefs = useChatPrefs();
 	const path = messagesList(history, history.currentId);
 	const rendered = new Set<string>();
 	return (
-		<div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6">
+		<div className={cn('mx-auto flex w-full flex-col gap-6 px-4 py-6', prefs.widescreen ? 'max-w-none' : 'max-w-3xl')} dir={prefs.direction} data-testid="chat-column">
 			{path.map((m, i) => {
 				const isLast = i === path.length - 1;
-				if (m.role === 'user') return <UserMessage key={m.id} history={history} message={m} h={h} />;
+				if (m.role === 'user') return <UserMessage key={m.id} history={history} message={m} h={h} prefs={prefs} />;
 				const parent = m.parentId ? history.messages[m.parentId] : null;
 				if (parent && (parent.models?.length ?? 0) > 1) {
 					if (rendered.has(parent.id)) return null;
 					rendered.add(parent.id);
-					return <MultiResponse key={`multi-${parent.id}`} history={history} parentId={parent.id} h={h} chatId={chatId} isLast={isLast} />;
+					return <MultiResponse key={`multi-${parent.id}`} history={history} parentId={parent.id} h={h} chatId={chatId} isLast={isLast} prefs={prefs} />;
 				}
-				return <ResponseMessage key={m.id} history={history} message={m} h={h} chatId={chatId} isLast={isLast} citationsEnabled={h.citationsFor?.(m.model) ?? true} />;
+				return <ResponseMessage key={m.id} history={history} message={m} h={h} chatId={chatId} isLast={isLast} citationsEnabled={h.citationsFor?.(m.model) ?? true} prefs={prefs} />;
 			})}
 		</div>
 	);

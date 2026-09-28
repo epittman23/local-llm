@@ -26,11 +26,15 @@ BACKEND_DIR := $(REPO_ROOT)/apps/server/backend
 WEB_DIR := $(REPO_ROOT)/apps/web
 COMPOSE := docker compose -f $(REPO_ROOT)/infra/docker-compose.yml
 LLLM_BACKEND_PORT ?= 4000
+# Loopback by default: the backend's admin API can start processes on this
+# machine, so it is not offered to the LAN unless asked for with
+# `make backend LLLM_BACKEND_HOST=0.0.0.0` (docs/code-review.md L13).
+LLLM_BACKEND_HOST ?= 127.0.0.1
 
 .PHONY: help backend frontend astro
 
 help:
-	@echo "make backend   Postgres + Open WebUI fork backend (uvicorn --reload, :$(LLLM_BACKEND_PORT))"
+	@echo "make backend   Postgres + Open WebUI fork backend (uvicorn --reload, $(LLLM_BACKEND_HOST):$(LLLM_BACKEND_PORT))"
 	@echo "make frontend  Astro + React + shadcn/ui dev server (astro dev, :5174; alias: make astro)"
 
 # --reload caveat: a code change restarts the uvicorn worker, and with it the
@@ -99,7 +103,7 @@ backend:
 	OPENAI_API_BASE_URL="https://openrouter.ai/api/v1" \
 	OPENAI_API_KEY="$$OPENROUTER_API_KEY" \
 	HF_HUB_OFFLINE=1 \
-	"$$py" -m uvicorn open_webui.main:app --host 0.0.0.0 --port $(LLLM_BACKEND_PORT) --reload
+	"$$py" -m uvicorn open_webui.main:app --host $(LLLM_BACKEND_HOST) --port $(LLLM_BACKEND_PORT) --reload
 
 # astro dev always daemonizes (this Astro version's own CLI design, not a
 # choice made here): even a plain `astro dev` reports its dev server as

@@ -448,6 +448,39 @@ test.describe('settings: Connections', () => {
 		await expect.poll(() => seen.directUpdate).toEqual({ ENABLE_DIRECT_CONNECTIONS: true, ENABLE_BASE_MODELS_CACHE: false });
 	});
 
+	test('a failed Verify reports the failure only', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockUpstreams(page);
+		// Later routes win: this one refuses.
+		await page.route('**/openai/verify', (route) => json(route, { error: { message: 'Server connection failed' } }, 500));
+		await page.goto('/?settings=admin:connections');
+		await modal(page).getByRole('button', { name: 'Add OpenAI Connection' }).click();
+		const dialog = page.getByRole('dialog', { name: 'Add Connection' });
+		await dialog.getByLabel('URL', { exact: true }).fill('http://localhost:8090/v1');
+		await dialog.getByRole('button', { name: 'Verify Connection' }).click();
+		await expect(page.getByText('OpenAI: Server connection failed')).toBeVisible();
+		await expect(page.getByText('Server connection verified')).toHaveCount(0);
+	});
+
+	test('a refused save reports the failure only and puts the old values back', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockUpstreams(page);
+		await page.route('**/openai/config/update', (route) => json(route, { detail: 'Not allowed' }, 500));
+		await page.route('**/api/v1/configs/connections', (route) =>
+			route.request().method() === 'POST' ? json(route, { detail: 'Not allowed' }, 500) : json(route, { ENABLE_DIRECT_CONNECTIONS: false, ENABLE_BASE_MODELS_CACHE: false })
+		);
+		await page.goto('/?settings=admin:connections');
+		const m = modal(page);
+		await m.getByRole('switch', { name: 'OpenAI API' }).click();
+		await expect(page.getByText('Not allowed').first()).toBeVisible();
+		await expect(page.getByText('OpenAI API settings updated')).toHaveCount(0);
+		await expect(m.getByRole('switch', { name: 'OpenAI API' })).toBeChecked();
+
+		await m.getByRole('switch', { name: 'Direct Connections' }).click();
+		await expect(page.getByText('Connections settings updated')).toHaveCount(0);
+		await expect(m.getByRole('switch', { name: 'Direct Connections' })).not.toBeChecked();
+	});
+
 	test('the OpenAI API switch turns the list off and saves that', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const seen = await mockUpstreams(page);
@@ -816,8 +849,8 @@ test.describe('settings: General', () => {
 		await m.getByRole('switch', { name: 'Title Auto-Generation' }).click();
 		await m.getByRole('button', { name: 'Chat Direction' }).click();
 		await m.getByRole('button', { name: 'Chat Direction' }).click();
-		// Only an admin is offered the update-toast switch, and the bubble hides the username switch.
-		await expect(m.getByRole('switch', { name: 'Toast Notifications for New Updates' })).toBeVisible();
+		// Rows for features the app lacks are not offered (docs/code-review.md M7); the bubble hides the username switch.
+		await expect(m.getByRole('switch', { name: 'Toast Notifications for New Updates' })).toHaveCount(0);
 		await expect(m.getByRole('switch', { name: 'Display the Username Instead of You in the Chat' })).toHaveCount(0);
 		await m.getByRole('switch', { name: 'Chat Bubble UI' }).click();
 		await expect(m.getByRole('switch', { name: 'Display the Username Instead of You in the Chat' })).toBeVisible();
@@ -832,7 +865,7 @@ test.describe('settings: General', () => {
 		});
 	});
 
-	test('default interface settings: UI scale, quick actions and Clear', async ({ page }) => {
+	test('default interface settings: UI scale and Clear', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockGeneral(page);
 		await page.goto('/?settings=admin:general');
@@ -841,19 +874,10 @@ test.describe('settings: General', () => {
 		await m.getByRole('button', { name: 'UI Scale: Default' }).click();
 		await m.getByRole('button', { name: 'Increase UI Scale' }).click();
 		await expect(m.getByRole('button', { name: 'UI Scale: 1.1x' })).toBeVisible();
-		await m.getByRole('button', { name: 'Manage Floating Quick Actions' }).click();
-		const d = page.getByRole('dialog', { name: 'Quick Actions' });
-		await d.getByRole('button', { name: 'Default' }).click();
-		await d.getByRole('button', { name: 'Add action' }).click();
-		await expect(d.getByLabel('Button ID').nth(2)).toHaveValue('new-button');
-		await d.getByRole('button', { name: 'Remove action' }).first().click();
-		await d.getByRole('button', { name: 'Save' }).click();
+		// The floating quick-action toolbar is not ported, so neither is its Manage dialog.
+		await expect(m.getByRole('button', { name: 'Manage Floating Quick Actions' })).toHaveCount(0);
 		await m.getByRole('button', { name: 'Save', exact: true }).click();
-		await expect.poll(() => saved(calls, '/api/v1/auths/admin/config')?.DEFAULT_INTERFACE_SETTINGS).toMatchObject({
-			theme: 'dark',
-			textScale: 1.1,
-			floatingActionButtons: [expect.objectContaining({ id: 'explain' }), expect.objectContaining({ id: 'new-button' })]
-		});
+		await expect.poll(() => saved(calls, '/api/v1/auths/admin/config')?.DEFAULT_INTERFACE_SETTINGS).toMatchObject({ theme: 'dark', textScale: 1.1 });
 		await m.getByRole('button', { name: 'Clear' }).click();
 		await expect(m.getByText('0 settings configured')).toBeVisible();
 	});

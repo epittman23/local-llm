@@ -3,13 +3,16 @@ import { EyeOff, SlidersHorizontal } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/common/ConfirmDialog';
+import { SafeMarkdown } from '@/components/common/SafeMarkdown';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
 import { getFolderById } from '@/lib/apis/folders';
 import { updateChatById } from '@/lib/apis/chats';
-import type { History } from '@/lib/chat/history';
+import type { ChatFile, History } from '@/lib/chat/history';
+import { cssUrl } from '@/lib/chat/prefs';
 import { type Citation, citationIndex, citationsOf } from '@/lib/chat/sources';
-import { initialModels } from '@/lib/chat/request';
+import { initialModels, needsWebSearchConfirm, newChatTemporary, webSearchConfirmText } from '@/lib/chat/request';
 import { canUploadFiles, canUploadWeb, featureButtons, modelDefaults } from '@/lib/chat/attachments';
 import { canUseFeature } from '@/lib/access/features';
 import { getTools } from '@/lib/apis/tools';
@@ -30,6 +33,7 @@ import { CitationDialog } from './CitationDialog';
 import { useMessageActions } from './MessageActions';
 import { ModelSelector } from './ModelSelector';
 import { ServerDialogs } from './ServerDialogs';
+import { useChatPrefs } from './useChatPrefs';
 import { useChatSession } from './useChatSession';
 import { type ChatModel, useModels } from './useModels';
 
@@ -56,7 +60,15 @@ export function ChatPage() {
 	const admin = user?.role === 'admin';
 	const temporaryAllowed = admin || Boolean(chatPerms.temporary);
 	const temporaryEnforced = !admin && Boolean(chatPerms.temporary_enforced);
-	const [temporary, setTemporary] = useState(() => temporaryEnforced || search.get('temporary-chat') === 'true');
+	const prefs = useChatPrefs();
+	const temporaryDefault = newChatTemporary({ enforced: temporaryEnforced, allowed: temporaryAllowed, byDefault: prefs.temporaryByDefault });
+	const [temporary, setTemporary] = useState(() => temporaryDefault || search.get('temporary-chat') === 'true');
+	// Each new chat starts from the default (Chat.svelte's initNewChat), which
+	// settings can change once they load. Declared before the ?temporary-chat
+	// effect below, so that one still wins.
+	useEffect(() => {
+		if (!id) setTemporary(temporaryDefault);
+	}, [id, temporaryDefault]);
 	const [selectedModels, setSelectedModels] = useState<string[]>([]);
 	const [toggles, setToggles] = useState<Toggles>({ webSearch: search.get('web-search') === 'true', imageGeneration: search.get('image-generation') === 'true', codeInterpreter: search.get('code-interpreter') === 'true' });
 	const [toolIds, setToolIds] = useState<string[]>(() => (search.get('tools') ?? search.get('tool-ids') ?? '').split(',').map((t) => t.trim()).filter(Boolean));
@@ -69,7 +81,8 @@ export function ChatPage() {
 	});
 	const buttons = featureButtons(atModel ? [atModel.id] : selectedModels, models, user, (config?.features ?? {}) as Record<string, unknown>);
 
-	const session = useChatSession({ routeChatId: id, folderId, models, selectedModels, temporary: temporary && !id, toggles: { webSearch: toggles.webSearch && buttons.webSearch, imageGeneration: toggles.imageGeneration && buttons.imageGeneration, codeInterpreter: toggles.codeInterpreter && buttons.codeInterpreter }, toolIds });
+	const webSearchOn = toggles.webSearch && buttons.webSearch;
+	const session = useChatSession({ routeChatId: id, folderId, models, selectedModels, temporary: temporary && !id, toggles: { webSearch: webSearchOn, imageGeneration: toggles.imageGeneration && buttons.imageGeneration, codeInterpreter: toggles.codeInterpreter && buttons.codeInterpreter }, toolIds });
 	const attachments = useAttachments({ temporary: temporary && !id, selectedModels, models, chatId: session.chatId });
 
 	// One model selected: take its default tools and feature switches (Chat.svelte's setDefaults).
@@ -79,10 +92,16 @@ export function ChatPage() {
 		defaultsFor.current = selectedModels[0];
 		const d = modelDefaults(models.find((m) => m.id === selectedModels[0]), (tools.data ?? []).map((t) => t.id), (settings as { tools?: string[] } | null)?.tools, buttons);
 		if (!search.get('tools') && !search.get('tool-ids')) setToolIds(d.toolIds);
-		setToggles((t) => ({ webSearch: d.webSearch ?? t.webSearch, imageGeneration: d.imageGeneration ?? t.imageGeneration, codeInterpreter: d.codeInterpreter ?? t.codeInterpreter }));
+		setToggles((t) => ({ webSearch: (!id && prefs.webSearchAlways && buttons.webSearch) || (d.webSearch ?? t.webSearch), imageGeneration: d.imageGeneration ?? t.imageGeneration, codeInterpreter: d.codeInterpreter ?? t.codeInterpreter }));
 		// When the chosen model changes.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [selectedModels, tools.isSuccess]);
+
+	// "Web Search in Chat: Always" starts each new chat with search on (it stays
+	// off where a selected model can't search: `buttons` checks that).
+	useEffect(() => {
+		if (!id && prefs.webSearchAlways) setToggles((t) => ({ ...t, webSearch: true }));
+	}, [id, prefs.webSearchAlways]);
 
 	// `?youtube=` (from /watch) and `?load-url=` attach that page to a new chat.
 	const loadedUrl = useRef(false);
@@ -100,7 +119,48 @@ export function ChatPage() {
 	const scroller = useRef<HTMLDivElement>(null);
 	const atBottom = useRef(true);
 
-	useDocumentTitle(session.title || 'New Chat');
+	useDocumentTitle(prefs.titleInTab ? session.title || 'New Chat' : null);
+
+	/** Set by the reader's own actions (sending, switching versions) to move to the end once, whatever the auto-scroll setting. */
+	const scrollOnce = useRef(false);
+
+	// Web search confirmation (the admin's ENABLE_WEB_SEARCH_CONFIRMATION): asked
+	// once per chat before the first prompt with search on, and again after
+	// search is turned off and on (Chat.svelte's webSearchConfirmed).
+	const [searchConfirmed, setSearchConfirmed] = useState(false);
+	const [pendingSend, setPendingSend] = useState<{ text: string; files: ChatFile[]; fromInput: boolean } | null>(null);
+	useEffect(() => {
+		// A chat started here keeps its confirmation when the server names it.
+		if (id && id === session.adoptedChatId) return;
+		setSearchConfirmed(false);
+		setPendingSend(null);
+		// Only when the route moves to another chat.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [id]);
+	useEffect(() => {
+		if (!webSearchOn) setSearchConfirmed(false);
+	}, [webSearchOn]);
+
+	/** Sends a prompt now (true if it went, or was queued). */
+	const send = (text: string, files: ChatFile[] = []) => {
+		scrollOnce.current = true;
+		const ok = session.submit(text, files, atModel?.id);
+		if (ok) attachments.clear();
+		return ok;
+	};
+	/** Sends a new prompt, or first asks to confirm web search; false keeps it in the input meanwhile. */
+	const requestSend = (text: string, files: ChatFile[] = [], fromInput = false) => {
+		// An empty prompt goes straight to send's own "Please enter a prompt".
+		if (!needsWebSearchConfirm(config, webSearchOn, searchConfirmed) || (!text.trim() && !files.length)) return send(text, files);
+		setPendingSend({ text, files, fromInput });
+		return false;
+	};
+	/** A suggestion or follow-up: sent, or put in the input when the user prefers that. */
+	const applyPrompt = (text: string, insert: boolean) => {
+		if (!insert) return void requestSend(text);
+		input.current?.setText(text);
+		input.current?.focus();
+	};
 
 	// A folder that cannot be read: say why and go home (folders/[folderId]/+page.svelte).
 	const navigate = useNavigate();
@@ -149,7 +209,7 @@ export function ChatPage() {
 		const q = search.get('q');
 		if (!q || consumed.current || id || !selectedModels.length || !selectedModels[0]) return;
 		consumed.current = true;
-		if ((search.get('submit') ?? 'true') === 'true') session.submit(q);
+		if ((search.get('submit') ?? 'true') === 'true') requestSend(q);
 		else input.current?.setText(q);
 		const next = new URLSearchParams(search);
 		next.delete('q');
@@ -157,18 +217,22 @@ export function ChatPage() {
 		setSearch(next, { replace: true });
 	}, [search, id, selectedModels, session, setSearch]);
 
-	// Stay pinned to the newest message while it streams, unless the reader scrolled up.
+	// Stay pinned to the newest message while it streams, unless the reader
+	// scrolled up or turned "Response Auto-Scroll" off; the reader's own
+	// actions still move to the end once.
 	useLayoutEffect(() => {
 		const el = scroller.current;
-		if (el && atBottom.current) el.scrollTop = el.scrollHeight;
-	}, [session.history]);
+		if (el && (scrollOnce.current || (prefs.scrollOnResponse && atBottom.current))) el.scrollTop = el.scrollHeight;
+		scrollOnce.current = false;
+	}, [session.history, prefs.scrollOnResponse]);
 
 	const onBranch = useCallback(
 		(h: History) => {
+			if (prefs.scrollOnBranch) scrollOnce.current = true;
 			session.setHistory(h);
 			void session.save(h);
 		},
-		[session]
+		[session, prefs.scrollOnBranch]
 	);
 
 	// The controls panel edits the chat's own params; a saved chat keeps them (debounced).
@@ -204,10 +268,7 @@ export function ChatPage() {
 		onBranch,
 		citationsFor: (modelId) => models.find((m) => m.id === modelId)?.info?.meta?.capabilities?.citations !== false,
 		onRegenerate: (m) => void session.regenerate(m),
-		onFollowUp: (text) => {
-			atBottom.current = true;
-			session.submit(text);
-		},
+		onFollowUp: (text) => applyPrompt(text, prefs.insertFollowUp),
 		onToolCallResolved: () => void session.reload(),
 		onPreview: (code) => {
 			setControlsOpen(false);
@@ -229,7 +290,7 @@ export function ChatPage() {
 	return (
 		<div className="flex h-full min-h-0 w-full">
 			<div
-				className="flex h-full min-h-0 min-w-0 flex-1 flex-col"
+				className="relative isolate flex h-full min-h-0 min-w-0 flex-1 flex-col"
 				onDragOver={(e) => {
 					if (e.dataTransfer.types.includes('Files')) e.preventDefault();
 				}}
@@ -239,6 +300,12 @@ export function ChatPage() {
 					attachments.addFiles(Array.from(e.dataTransfer.files));
 				}}
 			>
+				{prefs.backgroundImageUrl && (
+					// The user's chat background, behind a wash that keeps the text readable.
+					<div aria-hidden data-testid="chat-background" className="pointer-events-none absolute inset-0 -z-10 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: cssUrl(prefs.backgroundImageUrl) }}>
+						<div className="bg-background/85 absolute inset-0" />
+					</div>
+				)}
 				<header className="flex items-start gap-2 px-4 py-2">
 					<ModelSelector models={models} selected={selectedModels} onChange={changeModels} disabled={session.generating} />
 					<div className="ml-auto flex items-center gap-2 pt-1">
@@ -292,10 +359,7 @@ export function ChatPage() {
 					<ChatPlaceholder
 						model={firstModel}
 						temporary={temporary && !id}
-						onSelect={(prompt) => {
-							atBottom.current = true;
-							session.submit(prompt);
-						}}
+						onSelect={(prompt) => applyPrompt(prompt, prefs.insertSuggestion)}
 					/>
 				) : (
 					<div
@@ -331,13 +395,31 @@ export function ChatPage() {
 							<IntegrationsMenu tools={tools.data ?? []} toolIds={toolIds} onToolIds={setToolIds} buttons={buttons} toggles={toggles} onToggles={setToggles} />
 						</>
 					}
-					onSubmit={(text, files) => {
-						atBottom.current = true;
-						const ok = session.submit(text, files, atModel?.id);
-						if (ok) attachments.clear();
-						return ok;
-					}}
+					onSubmit={(text, files) => requestSend(text, files, true)}
+					wide={prefs.widescreen}
+					// Until the chat on screen has loaded, a message would be built on the previous one (docs/code-review.md L11).
+					disabled={session.loading}
+					onPasteText={prefs.largeTextAsFile ? (file) => attachments.addFiles([file], { context: 'full' }) : undefined}
 				/>
+				<ConfirmDialog
+					open={pendingSend !== null}
+					onOpenChange={(open) => !open && setPendingSend(null)}
+					onCloseAutoFocus={(e) => {
+						// Back to the message box, where the prompt still is after Cancel.
+						e.preventDefault();
+						input.current?.focus();
+					}}
+					title="Use Web Search?"
+					confirmLabel="Continue"
+					onConfirm={() => {
+						const p = pendingSend;
+						setSearchConfirmed(true);
+						setPendingSend(null);
+						if (p && send(p.text, p.files) && p.fromInput) input.current?.setText('');
+					}}
+				>
+					<SafeMarkdown text={webSearchConfirmText(config)} className="text-sm" />
+				</ConfirmDialog>
 				<ServerDialogs dialog={session.dialog} onClose={session.closeDialog} />
 				<CitationDialog source={citation} onClose={() => setCitation(null)} />
 			</div>

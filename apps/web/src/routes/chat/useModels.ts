@@ -9,6 +9,8 @@ export type ChatModel = {
 	name: string;
 	owned_by?: string;
 	info?: { meta?: { hidden?: boolean; description?: string; profile_image_url?: string; capabilities?: Record<string, boolean>; suggestion_prompts?: { content: string; title?: string[] }[]; tags?: { name: string }[] }; params?: Record<string, unknown>; base_model_id?: string | null };
+	/** The Action functions attached to the model (the server resolves `meta.actionIds` into these): a button each under its replies. */
+	actions?: { id: string; name: string; description?: string | null; icon?: string | null }[];
 	[k: string]: unknown;
 };
 

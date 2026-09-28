@@ -1,5 +1,5 @@
-import { ChevronDown, Info, Pencil, PlayCircle, RotateCcw, Send, ThumbsDown, ThumbsUp, Trash2, Volume2, VolumeX, X } from 'lucide-react';
-import { useState } from 'react';
+import { ChevronDown, Info, Pencil, PlayCircle, RotateCcw, Send, Sparkles, ThumbsDown, ThumbsUp, Trash2, Volume2, VolumeX, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,8 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { cn } from '@/lib/utils';
 import type { MessageHandlers } from './ChatMessages';
+import { useChatPrefs } from './useChatPrefs';
+import { useModels } from './useModels';
 import { useReadAloud } from './useReadAloud';
 
 const actionButton = 'text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg p-1.5 transition';
@@ -26,6 +28,7 @@ type Session = {
 	continueReply: (m: Message) => Promise<void>;
 	regenerate: (m: Message, suggestion?: string) => Promise<void>;
 	rate: (m: Message, rating: number | null, details?: FeedbackDetails | null) => Promise<void>;
+	runAction: (actionId: string, m: Message) => Promise<void>;
 };
 
 /** An inline editor for a message (UserMessage/ResponseMessage.svelte's edit mode). */
@@ -125,16 +128,22 @@ function RateComment({ message, onSave, onClose }: { message: Message; onSave: (
 	);
 }
 
+function RegenerateButton({ message, session }: { message: Message; session: Session }) {
+	return (
+		<Tip content="Regenerate">
+			<button type="button" aria-label="Regenerate" className={cn(actionButton, 'regenerate-response-button')} onClick={() => void session.regenerate(message)}>
+				<RotateCcw className="size-3.5" />
+			</button>
+		</Tip>
+	);
+}
+
 /** Ports ResponseMessage/RegenerateMenu.svelte: Try Again, Add Details, More Concise, or a suggestion of your own. */
 function RegenerateMenu({ message, session }: { message: Message; session: Session }) {
 	const [suggestion, setSuggestion] = useState('');
 	return (
 		<div className="flex items-center">
-			<Tip content="Regenerate">
-				<button type="button" aria-label="Regenerate" className={cn(actionButton, 'regenerate-response-button')} onClick={() => void session.regenerate(message)}>
-					<RotateCcw className="size-3.5" />
-				</button>
-			</Tip>
+			<RegenerateButton message={message} session={session} />
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
 					<button type="button" aria-label="Regenerate options" className={cn(actionButton, 'px-0.5')}>
@@ -177,6 +186,26 @@ export function useMessageActions(session: Session): Pick<MessageHandlers, 'extr
 	const [deleting, setDeleting] = useState<Message | null>(null);
 	const { speakingId, speak, stop } = useReadAloud();
 	const saved = Boolean(session.chatId) && !isTemporaryChatId(session.chatId);
+	const prefs = useChatPrefs();
+	const { models } = useModels();
+
+	// "Auto-Playback Response": a reply that finishes streaming in this session
+	// is read aloud (Chat.svelte clicked its speak button on `done`); one that
+	// was already done when the chat loaded is not.
+	const streamingId = useRef<string | null>(null);
+	const current = session.history.currentId ? session.history.messages[session.history.currentId] : null;
+	useEffect(() => {
+		if (current?.role !== 'assistant') return;
+		if (!current.done) {
+			streamingId.current = current.id;
+			return;
+		}
+		if (streamingId.current !== current.id) return;
+		streamingId.current = null;
+		if (prefs.autoPlayback && canChat(user, 'tts')) void speak(current.id, current.content);
+		// Only when the current reply or its done flag changes.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [current?.id, current?.done]);
 
 	const extraActions = (m: Message, { isLast }: { isLast: boolean }) => {
 		const reply = m.role === 'assistant';
@@ -244,6 +273,15 @@ export function useMessageActions(session: Session): Pick<MessageHandlers, 'extr
 						</button>
 					</Tip>
 				)}
+				{/* The model's Action functions, a button each (ResponseMessage.svelte; docs/code-review.md M6). */}
+				{reply &&
+					(models.find((x) => x.id === m.model)?.actions ?? []).map((action) => (
+						<Tip key={action.id} content={action.name}>
+							<button type="button" aria-label={action.name} className={actionButton} onClick={() => void session.runAction(action.id, m)}>
+								{action.icon ? <img src={action.icon} alt="" className={cn('size-3.5', action.icon.includes('data:image/svg') && 'dark:invert-[80%]')} draggable={false} /> : <Sparkles className="size-3.5" />}
+							</button>
+						</Tip>
+					))}
 				{canDelete && (
 					<Tip content="Delete">
 						<button type="button" aria-label="Delete" className={actionButton} onClick={() => setDeleting(m)}>
@@ -283,6 +321,6 @@ export function useMessageActions(session: Session): Pick<MessageHandlers, 'extr
 					}}
 				/>
 			) : null,
-		regenerate: canChat(user, 'regenerate_response') ? (m) => <RegenerateMenu message={m} session={session} /> : () => null
+		regenerate: canChat(user, 'regenerate_response') ? (m) => (prefs.regenerateMenu ? <RegenerateMenu message={m} session={session} /> : <RegenerateButton message={m} session={session} />) : () => null
 	};
 }

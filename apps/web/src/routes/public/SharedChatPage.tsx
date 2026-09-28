@@ -1,8 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import DOMPurify from 'dompurify';
-import { marked } from 'marked';
 import { useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router';
+import { Markdown } from '@/components/chat/markdown/Markdown';
 import { cloneSharedChatById, getChatByShareId } from '@/lib/apis/chats';
 import { Button } from '@/components/ui/button';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -13,11 +12,10 @@ import { routePaths } from '@/routes/routePaths';
 /**
  * Ports d863707:apps/openwebui/src/routes/s/[id]/+page.svelte as the "read-only
  * React island" Phase 6's own checklist calls for (docs/migration-plan.md)
- * -- not a port of chat/Messages.svelte (that's Phase 10's, ~46k LOC). Each
- * message's content is rendered through the same marked + DOMPurify
- * pipeline already established for Report/Tune (Phase 5) rather than
- * plain preformatted text (AnswersPage.tsx's own choice): real chat
- * content is prose people expect formatted, unlike graded benchmark code.
+ * -- not a port of chat/Messages.svelte. Each message goes through the chat's
+ * Markdown renderer, as the Svelte page's did: the sharer wrote this content
+ * and anyone with the link sees it on this origin, so raw HTML must show as
+ * text, never as live markup (docs/code-review.md H1).
  */
 export function SharedChatPage() {
 	const { id } = useParams();
@@ -99,12 +97,7 @@ export function SharedChatPage() {
 							<div className="text-muted-foreground text-xs font-medium">
 								{message.role === 'user' ? 'You' : (message.model ?? 'Assistant')}
 							</div>
-							<div
-								className="prose dark:prose-invert max-w-none text-sm"
-								dangerouslySetInnerHTML={{
-									__html: DOMPurify.sanitize(marked.parse(message.content ?? '') as string)
-								}}
-							/>
+							<Markdown id={`shared-${message.id}`} content={message.content ?? ''} modelName={message.model} className="text-sm" />
 						</div>
 					))}
 				</div>

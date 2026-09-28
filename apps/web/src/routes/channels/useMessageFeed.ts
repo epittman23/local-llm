@@ -29,6 +29,8 @@ export function useMessageFeed(channelId: string, parentId: string | null, opts:
 	const typingTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 	const optsRef = useRef(opts);
 	optsRef.current = opts;
+	/** Events that arrive while the first page loads, applied to it once it lands; null once loaded (docs/code-review.md L6). */
+	const early = useRef<ChannelEvent[] | null>([]);
 
 	const fetchPage = useCallback(
 		(skip: number) => (parentId ? getChannelThreadMessages(token, channelId, parentId, skip, PAGE) : getChannelMessages(token, channelId, skip, PAGE)) as Promise<ChannelMessage[] | null>,
@@ -39,21 +41,30 @@ export function useMessageFeed(channelId: string, parentId: string | null, opts:
 		let cancelled = false;
 		setMessages(null);
 		setTop(false);
+		early.current = [];
+		const scope = { channelId, parentId };
+		const landed = (page: ChannelMessage[]) => {
+			const pending = early.current ?? [];
+			early.current = null;
+			setMessages(pending.reduce((ms, e) => applyMessageEvent(ms, e, scope), page));
+		};
 		fetchPage(0)
 			.then((page) => {
 				if (cancelled) return;
-				setMessages(page ?? []);
+				landed(page ?? []);
 				setTop((page ?? []).length < PAGE);
 			})
 			.catch((e) => {
 				if (cancelled) return;
 				toast.error(`${e}`);
-				setMessages([]);
+				landed([]);
 				setTop(true);
 			});
 		return () => {
 			cancelled = true;
 		};
+		// fetchPage changes with the channel and thread.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [fetchPage]);
 
 	const loadMore = useCallback(async () => {
@@ -76,15 +87,18 @@ export function useMessageFeed(channelId: string, parentId: string | null, opts:
 			const type = event.data?.type ?? '';
 			if (type === 'typing') {
 				const who = event.user;
-				if ((event.message_id ?? null) !== parentId || !who) return;
+				// Not for the viewer's own typing, which the server echoes back; and
+				// the same array when they are no longer listed (docs/code-review.md L8).
+				if ((event.message_id ?? null) !== parentId || !who || who.id === me?.id) return;
 				clearTimeout(typingTimers.current[who.id]);
-				typingTimers.current[who.id] = setTimeout(() => setTyping((t) => t.filter((u) => u.id !== who.id)), TYPING_EXPIRES_MS);
+				typingTimers.current[who.id] = setTimeout(() => setTyping((t) => (t.some((u) => u.id === who.id) ? t.filter((u) => u.id !== who.id) : t)), TYPING_EXPIRES_MS);
 				return;
 			}
 			if (closesThread(event, scope)) optsRef.current.onRootDeleted?.();
 			const id = event.data?.data?.id;
 			if (type === 'message:delete' && id) optsRef.current.onMessageDeleted?.(id);
-			setMessages((ms) => (ms ? applyMessageEvent(ms, event, scope) : ms));
+			if (early.current) early.current.push(event);
+			else setMessages((ms) => (ms ? applyMessageEvent(ms, event, scope) : ms));
 		};
 		socket.on('events:channel', handler);
 		return () => {
@@ -121,13 +135,20 @@ export function useMessageFeed(channelId: string, parentId: string | null, opts:
 		});
 		if (!res && !parentId) setMessages((ms) => ms?.filter((m) => m.temp_id !== tempId) ?? ms);
 		// The echo may beat the response or not arrive at all (no socket); either way end with the saved copy.
-		if (res) setMessages((ms) => (ms && !ms.some((m) => m.id === res.id) ? applyMessageEvent(ms, { channel_id: channelId, data: { type: 'message', data: { ...res, temp_id: tempId } } }, { channelId, parentId }) : ms));
+		// The response is the bare message (no author, quote or reactions), so those come from what
+		// was sent until the echo brings the full copy (docs/code-review.md L5).
+		if (res) {
+			const saved = { ...res, user: res.user ?? (me ? { id: me.id, name: me.name, role: me.role } : null), reply_to_message: res.reply_to_message ?? replyTo, reactions: res.reactions ?? [], temp_id: tempId };
+			setMessages((ms) => (ms && !ms.some((m) => m.id === res.id) ? applyMessageEvent(ms, { channel_id: channelId, data: { type: 'message', data: saved } }, { channelId, parentId }) : ms));
+		}
 		return res;
 	};
 
 	const actions = (onPinChange?: (id: string, pinned: boolean) => void): MessageActions => ({
 		onDelete: (m) => {
 			setMessages((ms) => ms?.filter((x) => x.id !== m.id) ?? ms);
+			// Deleting the root from inside its thread ends the thread, echo or not (docs/code-review.md L7).
+			if (parentId && m.id === parentId) optsRef.current.onRootDeleted?.();
 			optsRef.current.onMessageDeleted?.(m.id);
 			deleteMessage(token, channelId, m.id).catch((e) => toast.error(`${e}`));
 		},

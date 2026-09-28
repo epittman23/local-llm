@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { getBackendConfig } from '@/lib/apis';
 import { getSessionUser, ldapUserSignIn, updateUserTimezone, userSignIn, userSignUp } from '@/lib/apis/auths';
+import { safeRedirect } from '@/lib/auth/redirect';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -59,7 +60,7 @@ export function AuthPage() {
 	const ranOnce = useRef(false);
 
 	const form = searchParams.get('form');
-	const redirectParam = searchParams.get('redirect');
+	const redirectParam = safeRedirect(searchParams.get('redirect'));
 	const isLogout = searchParams.get('state') === 'logout';
 
 	const finishSignIn = async (sessionUser: any, redirectPath?: string | null) => {
@@ -169,7 +170,7 @@ export function AuthPage() {
 					const sessionUser = await getSessionUser(cookieToken);
 					await finishSignIn(
 						{ ...sessionUser, token: cookieToken },
-						localStorage.getItem('redirectPath')
+						safeRedirect(localStorage.getItem('redirectPath'))
 					);
 					return;
 				} catch (err) {

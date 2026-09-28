@@ -173,44 +173,52 @@ export default function Connections() {
 		queryClient.invalidateQueries({ queryKey: ['models-all'] });
 	};
 
+	// Each save shows the new values at once and puts the old ones back if the
+	// server refuses them. The `.catch` returns null: returning the toast's id
+	// (truthy) reported a failed save as done (docs/code-review.md M5).
+	const failed = (error: unknown) => {
+		toast.error(`${error}`);
+		return null;
+	};
+
 	const saveOpenAI = async (next: OpenAIState) => {
 		const urls = stripTrailingSlashes(next.urls);
 		const state = { ...next, urls, keys: alignKeys(urls, next.keys) };
+		const prev = openai;
 		setOpenAI(state);
 		const res = await updateOpenAIConfig(token, {
 			ENABLE_OPENAI_API: state.enabled,
 			OPENAI_API_BASE_URLS: state.urls,
 			OPENAI_API_KEYS: state.keys,
 			OPENAI_API_CONFIGS: state.configs
-		}).catch((error) => toast.error(`${error}`));
-		if (res) {
-			toast.success('OpenAI API settings updated');
-			refreshModels();
-		}
+		}).catch(failed);
+		if (!res) return void (prev && setOpenAI(prev));
+		toast.success('OpenAI API settings updated');
+		refreshModels();
 	};
 
 	const saveOllama = async (next: OllamaState) => {
 		const state = { ...next, urls: stripTrailingSlashes(next.urls) };
+		const prev = ollama;
 		setOllama(state);
 		const res = await updateOllamaConfig(token, {
 			ENABLE_OLLAMA_API: state.enabled,
 			OLLAMA_BASE_URLS: state.urls,
 			OLLAMA_API_CONFIGS: state.configs
-		}).catch((error) => toast.error(`${error}`));
-		if (res) {
-			toast.success('Ollama API settings updated');
-			refreshModels();
-		}
+		}).catch(failed);
+		if (!res) return void (prev && setOllama(prev));
+		toast.success('Ollama API settings updated');
+		refreshModels();
 	};
 
 	const saveDirect = async (next: DirectState) => {
+		const prev = direct;
 		setDirect(next);
-		const res = await setConnectionsConfig(token, next).catch((error) => toast.error(`${error}`));
-		if (res) {
-			toast.success('Connections settings updated');
-			refreshModels();
-			await saved();
-		}
+		const res = await setConnectionsConfig(token, next).catch(failed);
+		if (!res) return void setDirect(prev);
+		toast.success('Connections settings updated');
+		refreshModels();
+		await saved();
 	};
 
 	const refreshModelList = async () => {

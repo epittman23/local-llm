@@ -7,6 +7,7 @@ import { searchKnowledgeBases, searchKnowledgeFiles } from '@/lib/apis/knowledge
 import { getPrompts } from '@/lib/apis/prompts';
 import { commandAt, fillPromptVariables, isImageFile, isUrl, replaceCommand, replaceInputVariables } from '@/lib/chat/attachments';
 import type { ChatFile } from '@/lib/chat/history';
+import { PASTED_TEXT_LIMIT } from '@/lib/chat/prefs';
 import { promptVariables } from '@/lib/chat/request';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -68,8 +69,14 @@ export const ChatInput = forwardRef<
 		models?: ChatModel[];
 		atModel?: ChatModel | null;
 		onAtModel?: (m: ChatModel | null) => void;
+		/** Widescreen mode: the input spans the page, like the messages. */
+		wide?: boolean;
+		/** Set when "Paste Large Text as File" is on: long pasted text arrives here as a .txt file. */
+		onPasteText?: (file: File) => void;
+		/** Nothing can be typed or sent (the chat is still loading). */
+		disabled?: boolean;
 	}
->(function ChatInput({ onSubmit, onStop, generating, queued, onRemoveQueued, placeholder = 'Send a Message', toolbar, files = [], onRemoveFile, onAddItem, onAddWeb, onPasteFiles, models = [], atModel, onAtModel }, ref) {
+>(function ChatInput({ onSubmit, onStop, generating, queued, onRemoveQueued, placeholder = 'Send a Message', toolbar, files = [], onRemoveFile, onAddItem, onAddWeb, onPasteFiles, models = [], atModel, onAtModel, wide = false, onPasteText, disabled = false }, ref) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const user = useAuthStore((s) => s.user);
 	const [text, setText] = useState('');
@@ -155,7 +162,7 @@ export const ChatInput = forwardRef<
 
 	const uploading = files.some((f) => f.status === 'uploading');
 	const submit = () => {
-		if (uploading) return;
+		if (uploading || disabled) return;
 		if (onSubmit(text, files)) {
 			setText('');
 			setCursor(0);
@@ -164,7 +171,7 @@ export const ChatInput = forwardRef<
 	};
 
 	return (
-		<div className="mx-auto w-full max-w-3xl px-2.5 pb-3">
+		<div className={cn('mx-auto w-full px-2.5 pb-3', wide ? 'max-w-none' : 'max-w-3xl')}>
 			{queued.length > 0 && (
 				<ul className="mb-1.5 flex flex-col gap-1" aria-label="Queued messages">
 					{queued.map((qd) => (
@@ -223,6 +230,7 @@ export const ChatInput = forwardRef<
 						aria-label="Message"
 						rows={1}
 						autoFocus
+						disabled={disabled}
 						value={text}
 						placeholder={placeholder}
 						onChange={(e) => {
@@ -235,6 +243,12 @@ export const ChatInput = forwardRef<
 							if (pasted.length && onPasteFiles) {
 								e.preventDefault();
 								onPasteFiles(pasted);
+								return;
+							}
+							const pastedText = e.clipboardData.getData('text/plain');
+							if (onPasteText && pastedText.length > PASTED_TEXT_LIMIT) {
+								e.preventDefault();
+								onPasteText(new File([pastedText], `Pasted_Text_${Date.now()}.txt`, { type: 'text/plain' }));
 							}
 						}}
 						onKeyDown={(e) => {
@@ -275,7 +289,7 @@ export const ChatInput = forwardRef<
 						)}
 						{(!generating || text.trim()) && (
 							<Tip content="Send message">
-								<button type="button" aria-label="Send message" disabled={uploading || (!text.trim() && !files.length)} onClick={submit} className="bg-foreground text-background rounded-full p-1.5 transition disabled:opacity-30">
+								<button type="button" aria-label="Send message" disabled={disabled || uploading || (!text.trim() && !files.length)} onClick={submit} className="bg-foreground text-background rounded-full p-1.5 transition disabled:opacity-30">
 									<ArrowUp className="size-4" />
 								</button>
 							</Tip>

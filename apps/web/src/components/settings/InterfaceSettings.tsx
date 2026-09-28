@@ -19,6 +19,7 @@ import {
 	type SwitchDef,
 	cycleState,
 	isInherited,
+	isShown,
 	readSetting,
 	settingPatch,
 	stepTextScale
@@ -282,15 +283,18 @@ export function InterfaceSettings({
 					e.target.value = '';
 				}}
 			/>
-			{(Object.keys(ROWS) as Section[]).map((section, i) => (
-				<SettingsSection key={section} title={section} first={i === 0}>
-					{ROWS[section].map((row) => (
-						<Fragment key={row.kind === 'custom' ? row.id : row.key}>
-							{row.kind === 'custom' ? renderCustom(row.id) : row.kind === 'cycle' ? renderCycle(row) : !row.visible || row.visible(ctx) ? renderSwitch(row) : null}
-						</Fragment>
-					))}
-				</SettingsSection>
-			))}
+			{(Object.keys(ROWS) as Section[])
+				// A section whose rows are all for unported features is left out.
+				.filter((section) => ROWS[section].some((row) => isShown(row, ctx)))
+				.map((section, i) => (
+					<SettingsSection key={section} title={section} first={i === 0}>
+						{ROWS[section]
+							.filter((row) => isShown(row, ctx))
+							.map((row) => (
+								<Fragment key={row.kind === 'custom' ? row.id : row.key}>{row.kind === 'custom' ? renderCustom(row.id) : row.kind === 'cycle' ? renderCycle(row) : renderSwitch(row)}</Fragment>
+							))}
+					</SettingsSection>
+				))}
 		</>
 	);
 }

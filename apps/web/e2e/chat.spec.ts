@@ -191,3 +191,46 @@ test('switching to another saved chat uses that chat\'s own models', async ({ pa
 	await expect.poll(() => chat.seen.completions.length).toBe(1);
 	expect(chat.seen.completions[0]).toMatchObject({ chat_id: 'c2', model: 'llama' });
 });
+
+test('the message box waits while a chat loads, so nothing is sent onto the previous one', async ({ page }) => {
+	const chat = await mockChat(page, { chats: [savedChat('c1', 'Slow', [{ id: 'u', role: 'user', content: 'Hi' }, { id: 'a', role: 'assistant', model: 'qwen', content: 'Hello there', done: true }])] });
+	let release!: () => void;
+	const gate = new Promise<void>((resolve) => (release = resolve));
+	await page.route('**/api/v1/chats/c1', async (route) => {
+		await gate;
+		return route.fallback();
+	});
+	await page.goto('/c/c1');
+	await chat.socket.connected;
+	const box = page.getByRole('textbox', { name: 'Message' });
+	await expect(box).toBeDisabled();
+	release();
+	await expect(page.getByText('Hello there')).toBeVisible();
+	await expect(box).toBeEnabled();
+});
+
+test('a dropped connection is announced, and so is getting it back', async ({ page }) => {
+	const chat = await mockChat(page);
+	await page.goto('/');
+	await chat.socket.connected;
+	chat.socket.drop();
+	await expect(page.getByText('Connection lost. Reconnecting...')).toBeVisible({ timeout: 10_000 });
+	chat.socket.restore();
+	await expect(page.getByText('Reconnected')).toBeVisible({ timeout: 15_000 });
+});
+
+test('a request refused because the session expired signs out and says so', async ({ page }) => {
+	const chat = await mockChat(page);
+	let expired = false;
+	await page.route('**/api/v1/auths/', (route) => (expired ? route.fulfill({ status: 401, contentType: 'application/json', body: '{"detail":"Not authenticated"}' }) : route.fallback()));
+	await page.route('**/api/chat/completions', (route) => {
+		expired = true;
+		return route.fulfill({ status: 401, contentType: 'application/json', body: '{"detail":"Not authenticated"}' });
+	});
+	await page.goto('/');
+	await chat.socket.connected;
+	await page.getByRole('textbox', { name: 'Message' }).fill('Hi');
+	await page.keyboard.press('Enter');
+	await expect(page.getByText('Session expired. Please sign in again.')).toBeVisible();
+	await expect(page).toHaveURL(/\/auth\?redirect=/);
+});

@@ -155,3 +155,26 @@ export function completionBody(c: CompletionContext) {
 		}
 	};
 }
+
+/**
+ * Whether a new chat starts temporary (Chat.svelte's initNewChat): always
+ * when the admin enforces it, otherwise when the user may use temporary
+ * chats and turned on "Temporary Chat by Default" (docs/code-review.md M1).
+ */
+export const newChatTemporary = (o: { enforced: boolean; allowed: boolean; byDefault: boolean }) => o.enforced || (o.allowed && o.byDefault);
+
+type SearchConfirmConfig = { features?: Record<string, unknown> } | null | undefined;
+
+/**
+ * Whether sending now must first ask the user to confirm web search: the
+ * admin requires it (ENABLE_WEB_SEARCH_CONFIRMATION), web search is on for
+ * this message, and the user has not confirmed it in this chat yet
+ * (Chat.svelte's submitPrompt; docs/code-review.md M2).
+ */
+export const needsWebSearchConfirm = (config: SearchConfirmConfig, webSearchOn: boolean, confirmed: boolean) => config?.features?.enable_web_search_confirmation === true && webSearchOn && !confirmed;
+
+/** What the confirmation says: the admin's text, or the Svelte app's default. */
+export function webSearchConfirmText(config: SearchConfirmConfig) {
+	const text = config?.features?.web_search_confirmation_content;
+	return (typeof text === 'string' && text.trim()) || 'Your query will be sent to the configured web search provider.';
+}

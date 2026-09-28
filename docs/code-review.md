@@ -7,12 +7,47 @@ its fixes have all landed) and looks for what that review did not find. Each
 finding says where it is, what goes wrong, how it was confirmed, and a
 suggested fix, so a later session can act on it without re-deriving it.
 
-## Status: open
+## Status: fixed (2026-09-28)
 
-Nothing below has been fixed yet. Severity is the reviewer's judgment of user
-impact: **High** means a security or privacy problem, or data reaching the
-wrong place; **Medium** means a feature that silently does the wrong thing;
-**Low** means a narrow race, an edge case, or cosmetic damage.
+Every finding below has been addressed; the body is kept as the record of
+what was wrong. Where a fix differs from the suggestion, it says so here.
+Tests marked ✔ were run against the old code as well as the fix, and fail on
+the old code.
+
+| # | Fix | Test |
+|---|---|---|
+| H1 | Channel messages and shared chats render through the chat `Markdown` component, which shows raw HTML as text; mention tags become chips through its mention token. `SafeMarkdown` (descriptions) sanitizes with `SAFE_MARKDOWN_PURIFY`. **Differs:** `class` and `id` are forbidden as well as `style`, because the app's own utility classes (`fixed inset-0 z-50`) build the same overlay | `SafeMarkdown.test.tsx`, `Markdown.test.tsx`; e2e `channels.spec.ts` "a member's HTML shows as text", `public.spec.ts` "a shared chat shows HTML in a message as text" |
+| M1 | A new chat starts from `newChatTemporary(...)` (enforced, or the user's default where allowed), again whenever the route returns to a new chat | `request.test.ts`; e2e `chat-settings.spec.ts` |
+| M2 | A confirm dialog with the admin's text before the first prompt with web search on, once per chat (kept when a new chat gets its id; reset on moving to another chat or turning search off). Cancel keeps the prompt in the input. **Differs:** asked at send time only; Svelte also asked when the switch was turned on | `request.test.ts`; e2e `chat-settings.spec.ts` |
+| M3 | Mentions sharing a label take its occurrences in insertion order; the composer now keeps one entry per insertion. The remaining limit (deleting the first of two leaves the second with the first's id) is stated in `encodeMentions` | `channelModel.test.ts` |
+| M4 | A character from a script written without spaces (Han, Kana, Thai, Lao, Khmer, Myanmar) never continues a name, before or after it | `channelModel.test.ts` |
+| M5 | The five `.catch` handlers return `null`; a refused Connections save puts the previous values back | e2e `admin-settings.spec.ts` "a failed Verify…", "a refused save…" |
+| M6 | Action buttons render under replies (icon or a sparkle), and `runAction` ports `chatActionHandler`: the conversation up to the reply is posted, returned messages replace theirs with `originalContent` kept, and a saved chat is saved | e2e `chat-actions.spec.ts` |
+| M7 | 18 are now used: `temporaryChatByDefault`, `webSearch` (Always: new chats start with search on), `chatBubble`, `showUsername`, `widescreenMode`, `chatDirection`, `renderMarkdownInUserMessages`, `renderMarkdownInAssistantMessages`, `keepFollowUpPrompts`, `insertSuggestionPrompt`, `insertFollowUpPrompt`, `regenerateMenu`, `scrollOnResponseGeneration`, `scrollOnBranchChange`, `showChatTitleInTab`, `largeTextAsFile`, `responseAutoPlayback`, `notificationSound` (the sound restored to `apps/web/public/audio/`). The other 26 Interface rows are marked `unported` with a reason in `interfaceSettingDefs.ts` and not offered; the Audio tab drops the voice-input engine and auto-send rows. **Also found while fixing:** the saved UI scale and font were applied only while changed in Settings, never on load (now in `AppShell`), and the chat background image was never shown (now behind the chat) | `interfaceSettingDefs.test.ts` (a test that fails if any offered row has no reader), `prefs.test.ts`; e2e `chat-settings.spec.ts` (8 tests), `admin-settings.spec.ts` updated |
+| L1 | `mentionsToText` for the reply preview and notifications | `channelModel.test.ts` |
+| L2 | `codeRanges` finds fences and code spans; mentions inside are left alone | `channelModel.test.ts` |
+| L3 | Neighbouring characters are read as code points | `channelModel.test.ts` |
+| L4 | `replace_all_mentions` in `utils/channels.py` turns `<#C:id\|label>` into `#label` for the model prompt and thread history | `tests/test_channel_mentions.py` (run in a minimal virtualenv; the full backend suite was not run) |
+| L5 | The POST response is filled in with the author, quote and reactions that were sent | ✔ e2e `channels.spec.ts` "…when the response beats the echo" |
+| L6 | Events that arrive during the first page load are buffered and applied to it | ✔ e2e `channels.spec.ts` "…while the channel is still loading" |
+| L7 | Deleting the root from its thread calls `onRootDeleted` | ✔ e2e `channels.spec.ts` "deleting the root from inside its thread…" |
+| L8 | The typing timer skips the viewer's own echo and returns the same array when the user is gone | none: not observable from a test; checked by reading |
+| L9 | `safeRedirect` accepts only a path starting with a single `/` | `redirect.test.ts`; e2e `public.spec.ts` "a redirect that would leave the app…" |
+| L10 | The attachment is listed as uploading before an image is read or scaled; a scaled image is labelled PNG | ✔ `useAttachments.test.tsx` |
+| L11 | The chat input is disabled while `session.loading` | e2e `chat.spec.ts` "the message box waits while a chat loads…" |
+| L12 | "Session expired. Please sign in again." on expiry; "Connection lost. Reconnecting..." after 2 s without the socket (once per outage) and "Reconnected" after it. `e2e/fake-socket.ts` gained `drop()`/`restore()` | e2e `chat.spec.ts` (2 tests) |
+| L13 | `make backend` binds `LLLM_BACKEND_HOST`, default `127.0.0.1`; `make backend LLLM_BACKEND_HOST=0.0.0.0` restores LAN access | checked with `make -n backend` |
+
+Behaviour a user will notice: user messages render Markdown by default (as
+in the Svelte app); channel messages use the chat renderer, so their mention
+chips and code blocks look like chat's; the Settings modal no longer offers
+switches for features the app does not have; and the dev backend is no
+longer reachable from other machines unless asked.
+
+Severity is the reviewer's judgment of user impact: **High** means a security
+or privacy problem, or data reaching the wrong place; **Medium** means a
+feature that silently does the wrong thing; **Low** means a narrow race, an
+edge case, or cosmetic damage.
 
 ## Scope and method
 

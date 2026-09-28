@@ -2,7 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
-import { getTaskIdsByChatId, stopTask, stopTasksByChatId } from '@/lib/apis';
+import { chatAction, getTaskIdsByChatId, stopTask, stopTasksByChatId } from '@/lib/apis';
 import { deleteChatMessageById, getChatById, updateChatById } from '@/lib/apis/chats';
 import { getAndUpdateUserLocation } from '@/lib/apis/users';
 import { createNewFeedback, updateFeedbackById } from '@/lib/apis/evaluations';
@@ -12,6 +12,7 @@ import { generateOpenAIChatCompletion } from '@/lib/apis/openai';
 import { WEBUI_BASE_URL } from '@/lib/constants';
 import { type ChatEffect, type ChatEvent, type ChatFile, type History, type Message, addResponses, addUserMessage, applyChatEvent, deleteMessage, editContent, emptyHistory, errorText, failMessage, isGenerating, messagesList, normalizeHistory, saveReplyAsCopy, updateMessage } from '@/lib/chat/history';
 import { type FeatureToggles, completionBody, isTemporaryChatId, promptVariables, requestFeatures, temporaryChatId } from '@/lib/chat/request';
+import { getOutputText } from '@/lib/chat/structuredOutput';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useSocket } from '@/lib/socket/SocketProvider';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -465,6 +466,40 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 	);
 
 	/**
+	 * Runs one of the reply's model Action functions (Chat.svelte's
+	 * chatActionHandler): the server gets the conversation up to the reply,
+	 * and any messages it sends back replace theirs, keeping the old text as
+	 * `originalContent`; a saved chat is then saved. What the action streams
+	 * meanwhile arrives as ordinary socket events.
+	 */
+	const runAction = useCallback(
+		async (actionId: string, message: Message) => {
+			const chatId = chatIdRef.current;
+			const list = messagesList(historyRef.current, message.id);
+			const res = (await chatAction(token, actionId, {
+				model: message.model ?? '',
+				messages: list.map((m) => ({ id: m.id, role: m.role, content: getOutputText(m.output) || m.content, info: m.info, timestamp: m.timestamp, ...(m.sources ? { sources: m.sources } : {}) })),
+				model_item: latest.current.models.find((m) => m.id === message.model),
+				chat_id: chatId,
+				session_id: socket?.id,
+				id: message.id
+			}).catch((e) => {
+				toast.error(`${e}`);
+				return null;
+			})) as { messages?: Partial<Message>[] } | null;
+			if (!res?.messages?.length) return;
+			let h = historyRef.current;
+			for (const m of res.messages) {
+				const cur = m.id ? h.messages[m.id] : undefined;
+				if (cur) h = updateMessage(h, cur.id, { ...(m.content !== undefined && m.content !== cur.content ? { originalContent: cur.content } : {}), ...m });
+			}
+			setHistory(h);
+			await save(h);
+		},
+		[token, socket, save, setHistory]
+	);
+
+	/**
 	 * Rates a reply, or adds details to its rating, and records it as feedback
 	 * (creating it the first time). After a first thumbs up or down with no
 	 * tags yet, asks the model for tags, as the Svelte app does.
@@ -511,7 +546,10 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 		editMessage,
 		removeMessage,
 		rate,
+		runAction,
 		chatId: chatIdRef.current,
+		/** The id the server gave a chat started on this page (its URL change is not a new chat). */
+		adoptedChatId: adoptedRef.current,
 		chat,
 		setChat,
 		title,

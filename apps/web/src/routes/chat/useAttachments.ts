@@ -59,7 +59,8 @@ export function useAttachments({ temporary, selectedModels, models, chatId }: { 
 	const drop = (itemId: string) => setFiles((fs) => fs.filter((f) => f.itemId !== itemId));
 
 	const uploadOne = useCallback(
-		async (file: File) => {
+		async (original: File, opts: { context?: 'full' } = {}) => {
+			let file = original;
 			const maxSize = config?.file?.max_size ?? null;
 			if (maxSize !== null && file.size > maxSize * 1024 * 1024) {
 				toast.error(`File size should not exceed ${maxSize} MB.`);
@@ -71,16 +72,7 @@ export function useAttachments({ temporary, selectedModels, models, chatId }: { 
 			}
 			const itemId = crypto.randomUUID();
 			const image = file.type.startsWith('image/');
-			if (image) {
-				let url = await readAsDataUrl(file);
-				const size = imageTargetSize(settings as Record<string, any> | null, config);
-				if (size) url = await scaleImage(url, size.width, size.height).catch(() => url);
-				if (temporary) {
-					setFiles((fs) => [...fs, { itemId, type: 'image', url, name: file.name, status: 'uploaded' }]);
-					return;
-				}
-				file = new File([await (await fetch(url)).blob()], file.name, { type: file.type });
-			} else if (temporary) {
+			if (!image && temporary) {
 				if (!TEXT_TYPES.test(file.type) && !/\.(md|txt|csv|json|py|js|ts|html|css|ya?ml|xml|log)$/i.test(file.name)) {
 					toast.error('Failed to extract content from the file.');
 					return;
@@ -93,7 +85,34 @@ export function useAttachments({ temporary, selectedModels, models, chatId }: { 
 				} else patch(itemId, { content, status: 'uploaded' });
 				return;
 			}
-			setFiles((fs) => [...fs, { itemId, type: 'file', file: '', id: null, url: '', name: file.name, collection_name: '', status: 'uploading', size: file.size, error: '', ...((settings as Record<string, unknown> | null)?.defaultUploadContext === 'full' ? { context: 'full' } : {}) }]);
+			// Listed at once, as uploading, before an image is read or scaled: Send
+			// waits for it, so a quick Enter can't leave it for the next message
+			// (docs/code-review.md L10).
+			const full = opts.context === 'full' || (settings as Record<string, unknown> | null)?.defaultUploadContext === 'full';
+			setFiles((fs) => [
+				...fs,
+				image && temporary
+					? { itemId, type: 'image', name: file.name, size: file.size, status: 'uploading' }
+					: { itemId, type: 'file', file: '', id: null, url: '', name: file.name, collection_name: '', status: 'uploading', size: file.size, error: '', ...(full ? { context: 'full' } : {}) }
+			]);
+			if (image) {
+				try {
+					let url = await readAsDataUrl(file);
+					const size = imageTargetSize(settings as Record<string, any> | null, config);
+					if (size) url = await scaleImage(url, size.width, size.height).catch(() => url);
+					if (temporary) {
+						patch(itemId, { url, status: 'uploaded' });
+						return;
+					}
+					// A scaled image is a PNG now, whatever it was before.
+					const blob = await (await fetch(url)).blob();
+					file = new File([blob], file.name, { type: blob.type || file.type });
+				} catch (e) {
+					toast.error(`${e}`);
+					drop(itemId);
+					return;
+				}
+			}
 			const language = (settings as { audio?: { stt?: { language?: string } } } | null)?.audio?.stt?.language;
 			const metadata = (file.type.startsWith('audio/') || file.type.startsWith('video/')) && language ? { language } : chatId ? { chat_id: chatId } : null;
 			try {
@@ -110,7 +129,8 @@ export function useAttachments({ temporary, selectedModels, models, chatId }: { 
 	);
 
 	const addFiles = useCallback(
-		(list: File[]) => {
+		/** `context: 'full'` attaches the whole text rather than retrieved parts (a pasted long text). */
+		(list: File[], opts: { context?: 'full' } = {}) => {
 			if (!canUploadFiles(user)) {
 				toast.error('You do not have permission to upload files.');
 				return;
@@ -126,7 +146,7 @@ export function useAttachments({ temporary, selectedModels, models, chatId }: { 
 				return;
 			}
 			if (list.some((f) => f.type.startsWith('image/')) && !allCapable(selectedModels, models, 'vision')) toast.warning('Model(s) are not vision capable');
-			for (const f of list) void uploadOne(f);
+			for (const f of list) void uploadOne(f, opts);
 		},
 		[user, selectedModels, models, config, uploadOne]
 	);

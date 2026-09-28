@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ROWS, type CycleDef, cycleState, hasSettingPath, isInherited, newFloatingAction, readSetting, settingPatch, stepTextScale } from './interfaceSettingDefs';
+import { ROWS, type CycleDef, cycleState, hasSettingPath, isInherited, isShown, newFloatingAction, readSetting, settingPatch, stepTextScale } from './interfaceSettingDefs';
 
 const allRows = Object.values(ROWS).flat();
 const cycleDef = (key: string) => allRows.find((r) => r.kind === 'cycle' && r.key === key) as CycleDef;
@@ -19,6 +19,31 @@ describe('ROWS', () => {
 		expect(find('temporaryChatByDefault').visible({ ...ctx, canTemporaryChat: true })).toBe(true);
 		expect(find('showFormattingToolbar').visible({ ...ctx, values: { richTextInput: false } })).toBe(false);
 		expect(find('imageCompressionInChannels').visible({ ...ctx, values: { imageCompression: true } })).toBe(true);
+	});
+});
+
+describe('only what the app does is offered (docs/code-review.md M7)', () => {
+	const ctx = { isAdmin: true, canTemporaryChat: true, autocompleteEnabled: true, values: { chatBubble: false, richTextInput: true, imageCompression: true } };
+	const keyOf = (r: (typeof allRows)[number]) => (r.kind === 'custom' ? ({ textScale: 'textScale', fontFamily: 'fontFamily', backgroundImage: 'backgroundImageUrl' } as const)[r.id] : r.key);
+
+	it('rows for unported features are never shown', () => {
+		for (const key of ['richTextInput', 'iframeSandboxAllowScripts', 'voiceInterruption', 'showUpdateToast', 'landingPageMode', 'showFloatingActionButtons']) {
+			const row = allRows.find((r) => keyOf(r) === key)!;
+			expect(isShown(row, ctx), key).toBe(false);
+		}
+		expect(isShown(allRows.find((r) => keyOf(r) === 'chatBubble')!, ctx)).toBe(true);
+	});
+
+	it('every row still offered is read somewhere outside the Settings modal', () => {
+		const sources = import.meta.glob('/src/**/*.{ts,tsx}', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
+		const app = Object.entries(sources)
+			.filter(([path]) => !path.includes('/components/settings/') && !/\.test\.tsx?$/.test(path))
+			.map(([, text]) => text)
+			.join('\n');
+		const offered = allRows.filter((r) => r.kind === 'custom' || !r.unported).map(keyOf);
+		// `title.auto` is read as `settings?.title?.auto`.
+		const unread = offered.filter((key) => !new RegExp(key.includes('.') ? key.replace('.', '\\??\\.') : `\\b${key}\\b`).test(app));
+		expect(unread).toEqual([]);
 	});
 });
 

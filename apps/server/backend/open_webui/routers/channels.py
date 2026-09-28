@@ -44,7 +44,7 @@ from open_webui.socket.main import (
 )
 from open_webui.utils.access_control import filter_allowed_access_grants, has_permission
 from open_webui.utils.auth import get_admin_user, get_verified_user
-from open_webui.utils.channels import extract_mentions, replace_mentions
+from open_webui.utils.channels import extract_mentions, replace_all_mentions
 from open_webui.utils.files import get_image_base64_from_file_id
 from open_webui.utils.models import (
     get_all_models,
@@ -977,7 +977,7 @@ async def model_response_handler(request, channel, message, user, db=None):
     MODELS = {model['id']: model for model in await get_filtered_models(await get_all_models(request, user=user), user)}
 
     mentions = extract_mentions(message.content)
-    message_content = replace_mentions(message.content)
+    message_content = replace_all_mentions(message.content)
 
     model_mentions = {}
 
@@ -1057,7 +1057,7 @@ async def model_response_handler(request, channel, message, user, db=None):
                     else:
                         username = message_user.name if message_user else 'Unknown'
 
-                    thread_history.append(f'{username}: {replace_mentions(thread_message.content)}')
+                    thread_history.append(f'{username}: {replace_all_mentions(thread_message.content)}')
 
                     thread_message_files = (thread_message.data or {}).get('files', [])
                     for file in thread_message_files:

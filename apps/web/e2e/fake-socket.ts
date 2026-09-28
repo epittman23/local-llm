@@ -14,10 +14,18 @@ export async function fakeSocketServer(page: Page) {
 	let nextAck = 1;
 	let ready: () => void;
 	const connected = new Promise<void>((r) => (ready = r));
+	let refusing = false;
 
 	await page.routeWebSocket(/\/ws\/socket\.io/, (ws) => {
+		const open = () => ws.send(JSON.stringify({ sid: 'e1', upgrades: [], pingInterval: 25000, pingTimeout: 60000, maxPayload: 1000000 }).replace(/^/, '0'));
+		// Refused: the transport opens and then closes, so the client sees a failed attempt
+		// and retries on its own schedule (closing before it opens leaves it waiting).
+		if (refusing) {
+			open();
+			return void setTimeout(() => ws.close(), 50);
+		}
 		sockets.push(ws);
-		ws.send(JSON.stringify({ sid: 'e1', upgrades: [], pingInterval: 25000, pingTimeout: 60000, maxPayload: 1000000 }).replace(/^/, '0'));
+		open();
 		ws.onMessage((raw) => {
 			const msg = String(raw);
 			if (msg.startsWith('40')) {
@@ -40,6 +48,14 @@ export async function fakeSocketServer(page: Page) {
 		/** Sends an event to every connected client. */
 		emit: (event: string, data: unknown) => sockets.forEach((ws) => ws.send(`42${JSON.stringify([event, data])}`)),
 		emitted: (event: string) => received.filter((r) => r.event === event).map((r) => r.data),
+		/** Drops every connection, as a lost network would, and refuses new ones until `restore()`. */
+		drop: () => {
+			refusing = true;
+			sockets.splice(0).forEach((ws) => ws.close());
+		},
+		restore: () => {
+			refusing = false;
+		},
 		/** Sends an event that expects an acknowledgement; resolves with the client's answer. */
 		emitWithAck: (event: string, data: unknown) =>
 			new Promise<unknown>((resolve) => {

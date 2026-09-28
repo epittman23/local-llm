@@ -64,7 +64,9 @@ make backend
 
 which brings up Postgres (`infra/docker-compose.yml`) and the fork's
 backend (`uvicorn`, port `4000`) together, and tears Postgres back down when
-the backend stops (Ctrl-C included). The backend also serves the frontend
+the backend stops (Ctrl-C included). The backend listens on `127.0.0.1` only;
+to reach it from another machine, start it with
+`make backend LLLM_BACKEND_HOST=0.0.0.0`. The backend also serves the frontend
 (`apps/web/`, Astro + React + shadcn/ui) from its last build, so build it
 once, and again after pulling UI changes:
 

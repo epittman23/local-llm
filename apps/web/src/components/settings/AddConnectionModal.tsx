@@ -98,17 +98,24 @@ export function AddConnectionModal({
 		}
 	};
 
+	// A block body on purpose: `(e) => toast.error(e)` would return the toast's
+	// id, which is truthy, and report a failed check as verified (docs/code-review.md M5).
+	const failed = (error: unknown) => {
+		toast.error(`${error}`);
+		return null;
+	};
+
 	const verify = async () => {
 		const url = f.url.replace(/\/$/, '');
 		set({ url });
 		if (ollama) {
-			const res = await verifyOllamaConnection(token, { url, key: f.key }).catch((error) => toast.error(`${error}`));
+			const res = await verifyOllamaConnection(token, { url, key: f.key }).catch(failed);
 			if (res) toast.success('Server connection verified');
 			return;
 		}
 		const headers = headersOrToast();
 		if (!headers.ok) return;
-		const res = await verifyOpenAIConnection(token, { url, key: f.key, config: verifyConfig({ ...f, url }, mode, headers.value) }, direct).catch((error) => toast.error(`${error}`));
+		const res = await verifyOpenAIConnection(token, { url, key: f.key, config: verifyConfig({ ...f, url }, mode, headers.value) }, direct).catch(failed);
 		if (res) toast.success('Server connection verified');
 	};
 

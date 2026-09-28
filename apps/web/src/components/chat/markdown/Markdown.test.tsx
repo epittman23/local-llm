@@ -44,4 +44,13 @@ describe('Markdown', () => {
 		renderMd('Answer [1]');
 		expect(screen.getByText('Answer [1]')).toBeTruthy();
 	});
+	it("shows a message's styles, forms and overlays as text (channels and shared chats render here)", () => {
+		const { container } = renderMd('hi <style>body{display:none}</style> <form action="https://evil.example"><input type="password"></form> <div style="position:fixed;inset:0">x</div>');
+		expect(container.querySelector('style, form, input, [style]')).toBeNull();
+		expect(container.textContent).toContain('<style>body{display:none}</style>');
+	});
+	it('draws user, model and channel mentions as chips, a label-less one by its id', () => {
+		const { container } = renderMd('hi <@U:u1|Ann>, <@M:gpt-4o> and <#C:c1|general>');
+		expect([...container.querySelectorAll('[data-type="mention"]')].map((e) => e.textContent)).toEqual(['@Ann', '@gpt-4o', '#general']);
+	});
 });

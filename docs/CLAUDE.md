@@ -312,6 +312,35 @@ All commits should use conventional commit style and stay focused on one topic. 
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-09-28**: Reviewed the whole React frontend and fixed what the
+  review found (`docs/code-review.md`; its "Status" section maps each
+  finding to its fix and test). Decisions worth keeping:
+
+  **Other users' text never renders as live HTML.** Channel messages and
+  shared chats go through the chat `Markdown` component, which shows raw
+  HTML as text, as the Svelte app did; `SafeMarkdown` (descriptions) uses
+  `SAFE_MARKDOWN_PURIFY`, which also forbids `style`, `class` and `id`. Do
+  not render another user's Markdown with marked + default DOMPurify: it
+  keeps `<style>`, forms and fixed overlays.
+
+  **Settings only offer what the app does.** A row in
+  `components/settings/interfaceSettingDefs.ts` whose feature is not ported
+  carries `unported: <reason>` and is not shown; porting the feature means
+  deleting that marker. `interfaceSettingDefs.test.ts` fails when an offered
+  row has no reader outside `components/settings/`. Chat reads its
+  settings through `lib/chat/prefs.ts`.
+
+  **Vendored upstream code changed.** `utils/channels.py` gained
+  `replace_all_mentions`, used by `routers/channels.py` for model prompts,
+  so a `<#C:id|label>` channel mention reaches the model as `#label`. Keep it
+  when rebasing on upstream.
+
+  **The dev backend binds loopback.** `make backend` listens on
+  `LLLM_BACKEND_HOST` (default `127.0.0.1`), since its admin API can start
+  processes on this machine.
+
+  Verified: see `docs/code-review.md`. The full backend suite was not run
+  (no backend virtualenv in that session); the new backend test was.
 - **2026-09-27** (sixth): Fixed the findings of
   `docs/bug-review-2026-09-27.md` (its "Status" section maps each one to
   its fix and test). Three decisions worth keeping:

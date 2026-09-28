@@ -43,6 +43,7 @@ timeline
       2026-09-27 (later) : Secondary surfaces completed (Phase 9) : Notes (TipTap), Calendar, Automations, Playground, and Channels ported to React : Channels is the first live Socket.IO surface (messages, threads, reactions, typing, unread badges) : the not-yet-ported fallback no longer loops on the dev server
       2026-09-27 (latest) : Chat surface completed (Phase 10) : chat, streaming over Socket.IO, message actions, attachments and / # @ commands, the sidebar chat list, and all twelve personal Settings tabs ported to React : per-chat controls, a sandboxed HTML artifact preview, and the chat header menu : no path is Svelte-only any more, leaving only the Phase 11 cutover
       2026-09-27 (final) : Cutover complete (Phase 11) : first run against a real backend, eight bugs fixed : the backend serves the React app at its root : SvelteKit frontend, upstream Docker and CI deleted : fork renamed to apps/server
+      2026-09-28 : Code review of the React frontend (docs/code-review.md) : one high and seven medium findings fixed, among them live HTML from other users in channels and shared chats, and 44 settings that were saved but never used : the dev backend now binds loopback by default
     section Near-Term
       "~1 week" : Resolve the blocking rack hole-type question : confirm riser and PSU questions : re-verify current component pricing
     section Short-Term

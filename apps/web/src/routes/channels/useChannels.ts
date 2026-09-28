@@ -9,7 +9,7 @@ import { useSocket } from '@/lib/socket/SocketProvider';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { useUserSettings } from '@/lib/settings/userSettings';
-import { type Channel, type ChannelEvent, applyUnreadEvent, markRead, sortChannels } from './channelModel';
+import { type Channel, type ChannelEvent, applyUnreadEvent, markRead, mentionsToText, sortChannels } from './channelModel';
 
 // The Svelte app keeps the channel list and the open channel's id in two
 // global stores (`channels`, `channelId`). Here the list is the TanStack query
@@ -50,6 +50,23 @@ export function useMarkChannelRead() {
 	return (channelId: string) => queryClient.setQueryData<Channel[]>(CHANNELS_KEY, (list) => (list ? markRead(list, channelId) : list));
 }
 
+let soundPlaying = false;
+
+/**
+ * NotificationToast.svelte's sound: one at a time, and only once the viewer
+ * has interacted with the page (browsers refuse to autoplay before that).
+ */
+function playNotificationSound() {
+	if (soundPlaying || !navigator.userActivation?.hasBeenActive) return;
+	soundPlaying = true;
+	new Audio(`${import.meta.env.BASE_URL}audio/notification.mp3`)
+		.play()
+		.catch(() => {})
+		.finally(() => {
+			soundPlaying = false;
+		});
+}
+
 /**
  * Ports +layout.svelte's channelEventHandler: every `events:channel` event,
  * wherever the viewer is. It keeps the sidebar's unread counts current (or
@@ -66,6 +83,7 @@ export function useChannelUnreadEvents() {
 	const navigate = useNavigate();
 	const { settings } = useUserSettings();
 	const notify = Boolean((settings as Record<string, unknown> | null)?.notificationEnabled);
+	const sound = ((settings as Record<string, unknown> | null)?.notificationSound ?? true) !== false;
 
 	useEffect(() => {
 		if (!socket || !enabled) return;
@@ -88,8 +106,9 @@ export function useChannelUnreadEvents() {
 			if (type !== 'message') return;
 			const data = event.data?.data ?? {};
 			const title = `${data.user?.name ?? 'Someone'}${event.channel?.type !== 'dm' && event.channel?.name ? ` (#${event.channel.name})` : ''}`;
-			const body = String(data.content ?? '').replace(/<@[UMC]:[^|>]+\|([^>]*)>/g, '@$1');
+			const body = mentionsToText(String(data.content ?? ''));
 			toast(title, { description: body.slice(0, 200), action: { label: 'Open', onClick: () => navigate(`/channels/${event.channel_id}`) } });
+			if (sound) playNotificationSound();
 			if (notify && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
 				new Notification(title, { body });
 			}
@@ -98,5 +117,5 @@ export function useChannelUnreadEvents() {
 		return () => {
 			socket.off('events:channel', handler);
 		};
-	}, [socket, enabled, selfId, queryClient, navigate, notify]);
+	}, [socket, enabled, selfId, queryClient, navigate, notify, sound]);
 }

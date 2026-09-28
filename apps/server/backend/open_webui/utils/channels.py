@@ -29,3 +29,22 @@ def replace_mentions(message: str, triggerChar: str = '@', use_label: bool = Tru
     # Regex captures: idType, id, optional label
     pattern = rf'<{triggerChar}([A-Z]):([^|>]+)(?:\|([^>]+))?>'
     return re.sub(pattern, replacer, message)
+
+
+def replace_all_mentions(message: str, use_label: bool = True):
+    """
+    Every mention as plain text, for a model's prompt: user and model mentions
+    (`<@U:...>`, `<@M:...>`) as their label, and channel mentions, which the web
+    app writes as `<#C:id|label>`, as `#label`. `replace_mentions` alone only
+    reads the `@` trigger, so a channel mention reached the model as a raw tag.
+
+    Example:
+      "ask <@M:gpt|GPT> about <#C:c1|general>" -> "ask GPT about #general"
+    """
+
+    def channel(match):
+        id_value, label = match.groups()
+        return f'#{label if use_label and label else id_value}'
+
+    message = re.sub(r'<#C:([^|>]+)(?:\|([^>]+))?>', channel, message)
+    return replace_mentions(message, '@', use_label)

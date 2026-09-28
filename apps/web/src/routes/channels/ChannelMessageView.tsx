@@ -1,8 +1,8 @@
 import { ArrowUpLeft, ChevronRight, FileText, MessageSquare, Pencil, Pin, PinOff, SmilePlus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { Markdown } from '@/components/chat/markdown/Markdown';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Emoji, EmojiPicker } from '@/components/common/EmojiPicker';
-import { SafeMarkdown } from '@/components/common/SafeMarkdown';
 import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,7 +11,7 @@ import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
 import { dayjs, formatSecondsTimestamp } from '@/lib/utils/dates';
-import { type ChannelMessage, attachmentUrl, messageFiles, reactionTooltip, renderMentions } from './channelModel';
+import { type ChannelMessage, attachmentUrl, mentionsToText, messageFiles, reactionTooltip } from './channelModel';
 
 const toolButton = 'hover:bg-muted rounded-md p-1 transition';
 
@@ -187,7 +187,7 @@ export function ChannelMessageView({
 				<button type="button" className="mb-1 ml-12 flex min-w-0 items-center gap-2 text-left text-xs" onClick={() => jumpTo(replyTo.id)}>
 					<img src={authorImage(replyTo)} alt="" className="size-4 rounded-full object-cover" onError={fallbackImage} />
 					<span className="shrink-0">{authorName(replyTo)}</span>
-					<span className="text-muted-foreground line-clamp-1 flex-1 italic">{replyTo.content.replace(/<@[UMC]:[^|>]+\|([^>]*)>/g, '@$1')}</span>
+					<span className="text-muted-foreground line-clamp-1 flex-1 italic">{mentionsToText(replyTo.content)}</span>
 				</button>
 			)}
 
@@ -267,10 +267,8 @@ export function ChannelMessageView({
 									<div className="bg-muted my-1 h-4 w-24 animate-pulse rounded" aria-label="Thinking" />
 								) : (
 									<div className="flex flex-wrap items-baseline">
-										<SafeMarkdown
-											text={renderMentions(message.content)}
-											className="text-sm [&_.mention]:rounded [&_.mention]:bg-blue-500/10 [&_.mention]:px-0.5 [&_.mention]:text-blue-600 dark:[&_.mention]:text-blue-400 [&_p]:my-0.5"
-										/>
+										{/* The chat renderer, as the Svelte channel used: raw HTML in a message shows as text (docs/code-review.md H1). */}
+										<Markdown id={`channel-${message.id}`} content={message.content} modelName={message.meta?.model_name} className="w-auto text-sm [&_p]:my-0.5" />
 										{edited && <span className="text-muted-foreground pl-1 text-[0.625rem]">(edited)</span>}
 									</div>
 								)}

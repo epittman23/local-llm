@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { addResponses, addUserMessage, emptyHistory } from './history';
-import { completionBody, initialModels, isTemporaryChatId, requestFeatures, stopTokens, turnFiles } from './request';
+import { completionBody, initialModels, isTemporaryChatId, needsWebSearchConfirm, newChatTemporary, requestFeatures, stopTokens, turnFiles, webSearchConfirmText } from './request';
 
 const models = [{ id: 'a' }, { id: 'b' }, { id: 'hidden', info: { meta: { hidden: true } } }];
 
@@ -62,5 +62,26 @@ describe('completionBody', () => {
 		const body = completionBody({ ...setup(), ...base, settings: { params: { temperature: 1, top_k: 5 } }, params: { temperature: 0.2 }, chatId: 'c1', temporary: false });
 		expect(body.params).toEqual({ temperature: 0.2, top_k: 5, stop: undefined });
 		expect(body.chat_id).toBe('c1');
+	});
+});
+
+describe('temporary chats and web search confirmation', () => {
+	it('a new chat is temporary when enforced, or by the user default where allowed', () => {
+		expect(newChatTemporary({ enforced: true, allowed: false, byDefault: false })).toBe(true);
+		expect(newChatTemporary({ enforced: false, allowed: true, byDefault: true })).toBe(true);
+		expect(newChatTemporary({ enforced: false, allowed: false, byDefault: true })).toBe(false);
+		expect(newChatTemporary({ enforced: false, allowed: true, byDefault: false })).toBe(false);
+	});
+	it('asks before the first prompt with web search on, only when the admin requires it', () => {
+		const on = { features: { enable_web_search_confirmation: true } };
+		expect(needsWebSearchConfirm(on, true, false)).toBe(true);
+		expect(needsWebSearchConfirm(on, true, true)).toBe(false);
+		expect(needsWebSearchConfirm(on, false, false)).toBe(false);
+		expect(needsWebSearchConfirm({ features: {} }, true, false)).toBe(false);
+		expect(needsWebSearchConfirm(null, true, false)).toBe(false);
+	});
+	it("shows the admin's text, or a default", () => {
+		expect(webSearchConfirmText({ features: { web_search_confirmation_content: ' Searches go to **Brave**. ' } })).toBe('Searches go to **Brave**.');
+		expect(webSearchConfirmText({ features: { web_search_confirmation_content: '  ' } })).toBe('Your query will be sent to the configured web search provider.');
 	});
 });

@@ -60,7 +60,8 @@ export function mentionExtension(opts: MentionOptions = {}) {
 				raw: m[0],
 				triggerChar: trigger,
 				id,
-				label: label && label.length > 0 ? label : id
+				// No label: the id, without its `U:`/`M:`/`C:` kind prefix.
+				label: label && label.length > 0 ? label : id.replace(/^[A-Z]:/, '')
 			};
 		},
 		renderer(token: any) {

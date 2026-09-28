@@ -3,10 +3,10 @@
 // `isCurrentSessionUnauthorized`, roughly lines 879-1079), which is genuinely new
 // infrastructure for this app rather than a port of any $lib/apis module: the
 // SvelteKit app has no shared fetch wrapper either, and Phase 4's own checklist
-// (docs/migration-plan.md) calls for one. Behavior kept identical; the toast
-// notifications on session expiry are dropped -- there is no toast system in
-// this app yet, so a session expiry is a console.warn until one exists.
+// (docs/migration-plan.md) calls for one. Behavior kept identical, including
+// the "Session expired" toast (docs/code-review.md L12).
 
+import { toast } from 'sonner';
 import { getBackendConfig } from '@/lib/apis';
 import { getSessionUser, userSignOut } from '@/lib/apis/auths';
 import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '@/lib/constants';
@@ -83,7 +83,7 @@ export const clearExpiredSession = () => {
 	userSignOut().catch((error) => {
 		console.error('Error signing out expired session:', error);
 	});
-	console.warn('Session expired. Please sign in again.');
+	toast.error('Session expired. Please sign in again.');
 };
 
 /** A voluntary sign-out, as opposed to clearExpiredSession's involuntary one. */
