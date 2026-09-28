@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { addReaction, deleteMessage, getChannelMessages, getChannelThreadMessages, pinMessage, removeReaction, sendMessage, updateMessage } from '@/lib/apis/channels';
 import { useSocket } from '@/lib/socket/SocketProvider';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { type ChannelEvent, type ChannelMessage, type ChannelUser, applyMessageEvent, applyTyping, nowNs, toggleReaction } from './channelModel';
+import { type ChannelEvent, type ChannelMessage, type ChannelUser, applyMessageEvent, applyTyping, closesThread, nowNs, toggleReaction } from './channelModel';
 import type { ComposerSubmit } from './MessageComposer';
 import type { MessageActions } from './ChannelMessageView';
 
@@ -67,27 +67,24 @@ export function useMessageFeed(channelId: string, parentId: string | null, opts:
 
 	useEffect(() => {
 		if (!socket) return;
+		const scope = { channelId, parentId };
+		// Both rules return the same array for an event that is not about this
+		// list, so React skips the re-render (a model's reply streams as a run of updates).
 		const handler = (event: ChannelEvent) => {
+			setTyping((t) => applyTyping(t, event, scope, me?.id));
 			if (event.channel_id !== channelId) return;
 			const type = event.data?.type ?? '';
 			if (type === 'typing') {
-				if ((event.message_id ?? null) !== parentId || !event.user) return;
 				const who = event.user;
-				setTyping((t) => applyTyping(t, event, me?.id));
+				if ((event.message_id ?? null) !== parentId || !who) return;
 				clearTimeout(typingTimers.current[who.id]);
 				typingTimers.current[who.id] = setTimeout(() => setTyping((t) => t.filter((u) => u.id !== who.id)), TYPING_EXPIRES_MS);
 				return;
 			}
-			if (type === 'message:delete') {
-				const id = event.data?.data?.id;
-				if (parentId && id === parentId) optsRef.current.onRootDeleted?.();
-				if (id) optsRef.current.onMessageDeleted?.(id);
-			}
-			if (type === 'message' && event.user) {
-				const who = event.user.id;
-				if ((event.data?.data?.parent_id ?? null) === parentId) setTyping((t) => t.filter((u) => u.id !== who));
-			}
-			setMessages((ms) => (ms ? applyMessageEvent(ms, event, parentId) : ms));
+			if (closesThread(event, scope)) optsRef.current.onRootDeleted?.();
+			const id = event.data?.data?.id;
+			if (type === 'message:delete' && id) optsRef.current.onMessageDeleted?.(id);
+			setMessages((ms) => (ms ? applyMessageEvent(ms, event, scope) : ms));
 		};
 		socket.on('events:channel', handler);
 		return () => {
@@ -124,7 +121,7 @@ export function useMessageFeed(channelId: string, parentId: string | null, opts:
 		});
 		if (!res && !parentId) setMessages((ms) => ms?.filter((m) => m.temp_id !== tempId) ?? ms);
 		// The echo may beat the response or not arrive at all (no socket); either way end with the saved copy.
-		if (res) setMessages((ms) => (ms && !ms.some((m) => m.id === res.id) ? applyMessageEvent(ms, { channel_id: channelId, data: { type: 'message', data: { ...res, temp_id: tempId } } }, parentId) : ms));
+		if (res) setMessages((ms) => (ms && !ms.some((m) => m.id === res.id) ? applyMessageEvent(ms, { channel_id: channelId, data: { type: 'message', data: { ...res, temp_id: tempId } } }, { channelId, parentId }) : ms));
 		return res;
 	};
 

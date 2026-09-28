@@ -5,6 +5,8 @@
 
 export type Reaction = { name: string; users: { id: string; name?: string }[]; count: number };
 export type ChannelUser = { id: string; name: string; role?: string; is_active?: boolean };
+/** A message's attachments and model output. */
+export type MessageData = { files?: { id?: string | null; name?: string; url?: string; type?: string; content_type?: string }[]; [key: string]: unknown };
 export type ChannelMessage = {
 	id: string;
 	temp_id?: string | null;
@@ -13,7 +15,11 @@ export type ChannelMessage = {
 	user_id?: string;
 	user?: ChannelUser | null;
 	content: string;
-	data?: { files?: { id?: string | null; name?: string; url?: string; type?: string; content_type?: string }[] } | true | null;
+	/**
+	 * The list endpoints, quotes and the pin event send only whether there is
+	 * any (`true`/`false`); `GET …/messages/{id}/data` has the object.
+	 */
+	data?: MessageData | boolean | null;
 	meta?: { model_id?: string; model_name?: string } | null;
 	reactions?: Reaction[];
 	reply_count?: number;
@@ -49,37 +55,92 @@ export type ChannelEvent = {
 	created_at?: number;
 	data?: { type?: string; data?: any };
 };
+/**
+ * The list a handler keeps: a channel's own messages (`parentId` null) or a
+ * thread's replies (`parentId` the root's id). The socket delivers events
+ * for every channel the user belongs to, so each rule checks the channel.
+ */
+export type ChannelScope = { channelId: string; parentId: string | null };
 
 /**
- * A socket event applied to a list of messages. `parentId` is null for the
- * channel itself and the thread's root id for a thread panel: a new message
- * is added only to the list it belongs to. A message this client sent is
- * matched by its `temp_id`, replacing the optimistic copy instead of
- * duplicating it. Returns the list unchanged for anything that is not about it.
+ * A socket event applied to the list `scope` names. A new message is added
+ * only to the list it belongs to; one this client sent is matched by its
+ * `temp_id`, replacing the optimistic copy instead of duplicating it. An
+ * update is merged into the message it names, and an edit or delete also
+ * reaches the quotes of that message. Returns the same array when nothing in
+ * it changed, so a caller can skip the re-render.
  */
-export function applyMessageEvent(messages: ChannelMessage[], event: ChannelEvent, parentId: string | null = null): ChannelMessage[] {
+export function applyMessageEvent(messages: ChannelMessage[], event: ChannelEvent, scope: ChannelScope): ChannelMessage[] {
+	if (event.channel_id !== scope.channelId) return messages;
 	const type = event.data?.type ?? '';
 	const data = event.data?.data;
-	if (!data) return messages;
+	if (!data?.id) return messages;
 	if (type === 'message') {
-		if ((data.parent_id ?? null) !== parentId) return messages;
+		if ((data.parent_id ?? null) !== scope.parentId) return messages;
 		const tempId = data.temp_id ?? null;
 		const rest = messages.filter((m) => m.id !== data.id && (!tempId || m.temp_id !== tempId));
 		return [{ ...data, temp_id: null }, ...rest];
 	}
-	if (type === 'message:delete') return messages.filter((m) => m.id !== data.id);
+	if (type === 'message:delete') {
+		return mapChanged(messages, (m) => (m.id === data.id ? null : m.reply_to_message?.id === data.id ? { ...m, reply_to_message: null } : m));
+	}
 	if (type === 'message:update' || type === 'message:reply' || type.startsWith('message:reaction')) {
-		return messages.map((m) => (m.id === data.id ? data : m));
+		return mapChanged(messages, (m) => {
+			if (m.id === data.id) return mergeMessage(m, data);
+			const quote = m.reply_to_message;
+			if (type === 'message:update' && quote && quote.id === data.id && quote.content !== data.content) return { ...m, reply_to_message: { ...quote, content: data.content, updated_at: data.updated_at } };
+			return m;
+		});
 	}
 	return messages;
 }
 
-/** Who is typing, after a `typing` event: added (once) or removed. The caller expires each after a few seconds. */
-export function applyTyping(typing: ChannelUser[], event: ChannelEvent, selfId: string | undefined): ChannelUser[] {
+/** Whether the event deletes the thread's root: the thread panel should close, as the backend now rejects replies to it. */
+export function closesThread(event: ChannelEvent, scope: ChannelScope): boolean {
+	return scope.parentId !== null && event.channel_id === scope.channelId && event.data?.type === 'message:delete' && event.data.data?.id === scope.parentId;
+}
+
+/**
+ * An update merged into the message it names. A `data` of `true` only says
+ * there is some, so it keeps the object already loaded.
+ */
+function mergeMessage(message: ChannelMessage, update: ChannelMessage): ChannelMessage {
+	const merged = { ...message, ...update };
+	if (update.data === true && typeof message.data === 'object' && message.data !== null) merged.data = message.data;
+	return merged;
+}
+
+/** Each message replaced by `fn(m)` (null drops it), or `list` itself when none changed. */
+function mapChanged(list: ChannelMessage[], fn: (m: ChannelMessage) => ChannelMessage | null): ChannelMessage[] {
+	let changed = false;
+	const out: ChannelMessage[] = [];
+	for (const m of list) {
+		const next = fn(m);
+		if (next !== m) changed = true;
+		if (next) out.push(next);
+	}
+	return changed ? out : list;
+}
+
+/**
+ * Who is typing in the list `scope` names, after an event. A `typing` event
+ * adds the user (once, where they already are) or removes them; the user's
+ * own message landing removes them too, as clients never send
+ * `typing: false`. Anything else returns the same array. The caller also
+ * expires each user a few seconds after their last `typing` event.
+ */
+export function applyTyping(typing: ChannelUser[], event: ChannelEvent, scope: ChannelScope, selfId: string | undefined): ChannelUser[] {
 	const who = event.user;
-	if (!who || who.id === selfId) return typing;
-	const without = typing.filter((u) => u.id !== who.id);
-	return event.data?.data?.typing ? [...without, { id: who.id, name: who.name }] : without;
+	if (!who || who.id === selfId || event.channel_id !== scope.channelId) return typing;
+	const type = event.data?.type;
+	const data = event.data?.data;
+	const typingHere = type === 'typing' && (event.message_id ?? null) === scope.parentId;
+	// A model's reply is sent as the user who mentioned the model, who may still be typing.
+	const postedHere = type === 'message' && (data?.parent_id ?? null) === scope.parentId && !data?.meta?.model_id;
+	const listed = typing.some((u) => u.id === who.id);
+	if (typingHere && data?.typing) return listed ? typing : [...typing, { id: who.id, name: who.name }];
+	if ((typingHere || postedHere) && listed) return typing.filter((u) => u.id !== who.id);
+	return typing;
 }
 
 /** Toggles the viewer's reaction, optimistically: counts follow the user list, and an emptied reaction disappears. */
@@ -100,15 +161,16 @@ export function toggleReaction(message: ChannelMessage, name: string, me: { id: 
 }
 
 /**
- * Whether a message (in oldest-first display order) starts a new block with
- * the author's name and picture: the first message, a different author or
- * model, or a reply.
+ * Whether a message starts a new block with the author's name and picture:
+ * the oldest message, a different author or model from the message shown
+ * above it, or a reply. Takes the list newest-first, as it is kept, so the
+ * message above `list[idx]` is `list[idx + 1]`.
  */
 export function showsAuthor(list: ChannelMessage[], idx: number): boolean {
-	if (idx === 0) return true;
-	const prev = list[idx - 1];
+	const above = list[idx + 1];
 	const m = list[idx];
-	return prev.user_id !== m.user_id || prev.user?.id !== m.user?.id || prev.meta?.model_id !== m.meta?.model_id || Boolean(m.reply_to_message);
+	if (!above) return true;
+	return above.user_id !== m.user_id || above.user?.id !== m.user?.id || above.meta?.model_id !== m.meta?.model_id || Boolean(m.reply_to_message);
 }
 
 /** The name to show for a channel: its name, or for a DM without one, the other members. */
@@ -124,38 +186,65 @@ export function channelTitle(channel: Pick<Channel, 'name' | 'type' | 'users'> |
 export type MentionKind = 'user' | 'model' | 'channel';
 export type Mention = { kind: MentionKind; id: string; label: string };
 
+export type MentionTrigger = '@' | '#';
+
 const PREFIX: Record<MentionKind, string> = { user: 'U', model: 'M', channel: 'C' };
 
-/** `<@U:id|label>`: the encoding the backend reads (a model mention makes that model reply). */
-export const encodeMention = (m: Mention) => `<@${PREFIX[m.kind]}:${m.id}|${m.label.replace(/[>|]/g, '')}>`;
+/** The character that starts a mention, in the composer and in its encoding: `#` for a channel, `@` for a user or model. */
+export const mentionTrigger = (kind: MentionKind): MentionTrigger => (kind === 'channel' ? '#' : '@');
+
+/**
+ * `<@U:id|label>`, `<@M:id|label>` or `<#C:id|label>`: the encoding the
+ * backend reads (a model mention makes that model reply), and the one
+ * messages sent from the Svelte app carry. The label loses `>` and `|`, which
+ * would end the tag early; a label left empty is dropped, and the id stands
+ * in for it.
+ */
+export function encodeMention(m: Mention): string {
+	const label = m.label.replace(/[>|]/g, '').trim();
+	return `<${mentionTrigger(m.kind)}${PREFIX[m.kind]}:${m.id}${label ? `|${label}` : ''}>`;
+}
 
 /** How the composer shows a mention while it is typed: `#general` for a channel, `@Ann` otherwise. */
-export const mentionText = (m: Pick<Mention, 'kind' | 'label'>) => `${m.kind === 'channel' ? '#' : '@'}${m.label}`;
+export const mentionText = (m: Pick<Mention, 'kind' | 'label'>) => `${mentionTrigger(m.kind)}${m.label}`;
+
+const NAME_CHAR = /[\p{L}\p{N}\p{M}_]/u;
+// Text that carries a name on: a letter, digit or mark, or `-`/`.` joining
+// one (as in `GPT-4o`). `@Sam` inside `@Samantha` is not a mention of Sam.
+const CONTINUES_NAME = /^(?:[\p{L}\p{N}\p{M}_]|[-.][\p{L}\p{N}])/u;
 
 /**
  * The composer shows a mention as `@label` (`#label`); on send each chosen
- * mention's first such text still present becomes its encoding. A mention
- * whose text was deleted is dropped, so a deleted `@model` no longer triggers
- * a reply.
+ * mention's text, wherever it stands as a whole word, becomes its encoding.
+ * Longer labels claim their text first, so `@GPT-4o` is never taken for
+ * `@GPT`. A mention whose text was deleted is dropped, so a deleted `@model`
+ * no longer triggers a reply.
  */
 export function encodeMentions(text: string, mentions: Mention[]): string {
-	let out = text;
-	for (const m of mentions) {
+	const taken: { start: number; end: number; tag: string }[] = [];
+	const longestFirst = mentions.filter((m) => m.label).sort((a, b) => b.label.length - a.label.length);
+	for (const m of longestFirst) {
 		const plain = mentionText(m);
-		const at = out.indexOf(plain);
-		if (at !== -1) out = out.slice(0, at) + encodeMention(m) + out.slice(at + plain.length);
+		for (let at = text.indexOf(plain); at !== -1; at = text.indexOf(plain, at + 1)) {
+			const end = at + plain.length;
+			const whole = (at === 0 || !NAME_CHAR.test(text[at - 1])) && !CONTINUES_NAME.test(text.slice(end, end + 3));
+			if (whole && taken.every((t) => end <= t.start || at >= t.end)) taken.push({ start: at, end, tag: encodeMention(m) });
+		}
 	}
-	return out;
+	// Replaced from the end, so the earlier offsets still hold.
+	return taken.sort((a, b) => b.start - a.start).reduce((out, t) => out.slice(0, t.start) + t.tag + out.slice(t.end), text);
 }
 
 /**
- * The `@word` (users and models) or `#word` (channels) being typed just
- * before the cursor, if any: what to suggest mentions for.
+ * The mention being typed just before the cursor, if any: its trigger (`@`
+ * for users and models, `#` for channels), the text after it to suggest
+ * for, and where the trigger is. The trigger starts the text or follows
+ * whitespace, and the query runs to the cursor without whitespace, so a name
+ * in any script, or with an apostrophe, still gets suggestions.
  */
-export function mentionQuery(text: string, cursor: number): { trigger: '@' | '#'; query: string; start: number } | null {
-	const before = text.slice(0, cursor);
-	const m = /(^|\s)([@#])([\w.-]*)$/.exec(before);
-	return m ? { trigger: m[2] as '@' | '#', query: m[3], start: cursor - m[3].length - 1 } : null;
+export function mentionQuery(text: string, cursor: number): { trigger: MentionTrigger; query: string; start: number } | null {
+	const m = /(?:^|\s)([@#])([^\s@#]*)$/.exec(text.slice(0, cursor));
+	return m ? { trigger: m[1] as MentionTrigger, query: m[2], start: cursor - m[2].length - 1 } : null;
 }
 
 /** A timestamp in nanoseconds, now. */
@@ -230,13 +319,14 @@ const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', 
 
 /**
  * Message Markdown with each `<@U:id|label>` mention turned into a styled
- * `@label` (`#label` for a channel). The result still goes through the
- * Markdown renderer and DOMPurify; the label is escaped here because it is
- * user text inside HTML.
+ * `@label` (`#label` for a channel, written `<#C:id|label>`; an early port
+ * wrote `<@C:…>`, which still reads). A mention without a label shows its
+ * id. The result still goes through the Markdown renderer and DOMPurify; the
+ * label is escaped here because it is user text inside HTML.
  */
 export function renderMentions(content: string): string {
-	return content.replace(/<@([UMC]):([^|>]+)\|([^>]*)>/g, (_all, kind: string, _id: string, label: string) => {
-		const text = `${kind === 'C' ? '#' : '@'}${escapeHtml(label)}`;
+	return content.replace(/<[@#]([UMC]):([^|>]+)(?:\|([^>]*))?>/g, (_all, kind: string, id: string, label: string | undefined) => {
+		const text = `${kind === 'C' ? '#' : '@'}${escapeHtml(label || id)}`;
 		return `<span class="mention" data-kind="${kind}">${text}</span>`;
 	});
 }

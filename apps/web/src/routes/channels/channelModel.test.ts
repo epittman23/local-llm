@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
 	type Channel,
+	type ChannelEvent,
 	type ChannelMessage,
+	type ChannelUser,
 	applyMessageEvent,
 	applyTyping,
 	applyUnreadEvent,
 	attachmentUrl,
 	channelPayload,
 	channelTitle,
+	closesThread,
+	encodeMention,
 	encodeMentions,
 	isPublicChannel,
 	markRead,
@@ -20,44 +24,109 @@ import {
 } from './channelModel';
 
 const msg = (id: string, extra: Partial<ChannelMessage> = {}): ChannelMessage => ({ id, content: id, user_id: 'u1', user: { id: 'u1', name: 'Ann' }, created_at: 1, updated_at: 1, ...extra });
-const ev = (type: string, data: any, extra: Record<string, unknown> = {}) => ({ channel_id: 'c1', data: { type, data }, ...extra });
+const ev = (type: string, data: any, extra: Partial<ChannelEvent> = {}): ChannelEvent => ({ channel_id: 'c1', data: { type, data }, ...extra });
+const inChannel = { channelId: 'c1', parentId: null };
+const inThread = { channelId: 'c1', parentId: 'root' };
+const ids = (list: { id: string }[]) => list.map((m) => m.id);
 
 describe('applyMessageEvent', () => {
 	it('adds a new message at the front, replacing the optimistic copy by temp_id', () => {
 		const list = [msg('tmp', { temp_id: 't1' }), msg('a')];
-		const next = applyMessageEvent(list, ev('message', msg('b', { temp_id: 't1' })));
-		expect(next.map((m) => m.id)).toEqual(['b', 'a']);
+		const next = applyMessageEvent(list, ev('message', msg('b', { temp_id: 't1' })), inChannel);
+		expect(ids(next)).toEqual(['b', 'a']);
 		expect(next[0].temp_id).toBeNull();
 	});
 	it('does not duplicate a message it already has', () => {
-		expect(applyMessageEvent([msg('a')], ev('message', msg('a'))).map((m) => m.id)).toEqual(['a']);
+		expect(ids(applyMessageEvent([msg('a')], ev('message', msg('a')), inChannel))).toEqual(['a']);
 	});
 	it('keeps thread replies out of the channel, and channel messages out of a thread', () => {
 		const reply = msg('r', { parent_id: 'root' });
-		expect(applyMessageEvent([msg('a')], ev('message', reply))).toHaveLength(1);
-		expect(applyMessageEvent([], ev('message', reply), 'root')).toHaveLength(1);
-		expect(applyMessageEvent([], ev('message', msg('x')), 'root')).toHaveLength(0);
+		expect(applyMessageEvent([msg('a')], ev('message', reply), inChannel)).toHaveLength(1);
+		expect(applyMessageEvent([], ev('message', reply), inThread)).toHaveLength(1);
+		expect(applyMessageEvent([], ev('message', msg('x')), inThread)).toHaveLength(0);
+	});
+	it('only events for its own channel count', () => {
+		const list = [msg('a')];
+		for (const type of ['message', 'message:update', 'message:delete', 'message:reaction:add']) {
+			expect(applyMessageEvent(list, ev(type, msg(type === 'message' ? 'z' : 'a'), { channel_id: 'other' }), inChannel)).toBe(list);
+		}
 	});
 	it('updates, deletes and applies reactions in place', () => {
 		const list = [msg('a'), msg('b')];
-		expect(applyMessageEvent(list, ev('message:update', msg('a', { content: 'edited' })))[0].content).toBe('edited');
-		expect(applyMessageEvent(list, ev('message:reaction:add', msg('b', { reactions: [{ name: 'tada', users: [], count: 0 }] })))[1].reactions).toHaveLength(1);
-		expect(applyMessageEvent(list, ev('message:delete', { id: 'a' })).map((m) => m.id)).toEqual(['b']);
+		expect(applyMessageEvent(list, ev('message:update', msg('a', { content: 'edited' })), inChannel)[0].content).toBe('edited');
+		const reacted = applyMessageEvent(list, ev('message:reaction:add', msg('b', { reactions: [{ name: 'tada', users: [], count: 0 }] })), inChannel);
+		expect(reacted[1].reactions).toHaveLength(1);
+		expect(reacted[0]).toBe(list[0]);
+		expect(applyMessageEvent(list, ev('message:reply', msg('a', { reply_count: 2 })), inChannel)[0].reply_count).toBe(2);
+		expect(ids(applyMessageEvent(list, ev('message:delete', { id: 'a' }), inChannel))).toEqual(['b']);
 	});
-	it('ignores events it does not know', () => {
+	it('merges an update; a pin sending data as `true` keeps the loaded attachments', () => {
+		const loaded = { files: [{ id: 'f1', name: 'a.pdf' }] };
+		const list = [msg('a', { data: loaded })];
+		const pinned = applyMessageEvent(list, ev('message:update', { id: 'a', content: 'a', is_pinned: true, data: true }), inChannel);
+		expect(pinned[0]).toMatchObject({ is_pinned: true, data: loaded, user: { id: 'u1' } });
+		expect(applyMessageEvent(list, ev('message:update', { id: 'a', content: 'a', data: false }), inChannel)[0].data).toBe(false);
+		expect(applyMessageEvent(list, ev('message:update', { id: 'a', content: 'new', data: { files: [] } }), inChannel)[0]).toMatchObject({ content: 'new', data: { files: [] } });
+	});
+	it('an edit or delete reaches the quotes of that message', () => {
+		const list = [msg('b', { reply_to_message: msg('x') }), msg('x')];
+		const edited = applyMessageEvent(list, ev('message:update', msg('x', { content: 'fixed', updated_at: 2 })), inChannel);
+		expect(edited[0].reply_to_message).toMatchObject({ content: 'fixed', updated_at: 2, user: { id: 'u1' } });
+		expect(applyMessageEvent(list, ev('message:update', msg('x', { is_pinned: true })), inChannel)[0]).toBe(list[0]);
+		const deleted = applyMessageEvent(list, ev('message:delete', msg('x')), inChannel);
+		expect(ids(deleted)).toEqual(['b']);
+		expect(deleted[0].reply_to_message).toBeNull();
+	});
+	it('returns the same array when nothing in it changed', () => {
 		const list = [msg('a')];
-		expect(applyMessageEvent(list, ev('typing', { typing: true }))).toBe(list);
+		for (const type of ['message:update', 'message:reply', 'message:reaction:add', 'message:reaction:remove', 'message:delete', 'last_read_at']) {
+			expect(applyMessageEvent(list, ev(type, msg('elsewhere')), inChannel)).toBe(list);
+		}
+		expect(applyMessageEvent(list, ev('typing', { typing: true }), inChannel)).toBe(list);
+		expect(applyMessageEvent(list, ev('message:update', undefined), inChannel)).toBe(list);
+	});
+	it('deleting the root closes its thread', () => {
+		const del = ev('message:delete', msg('root'));
+		expect(closesThread(del, inThread)).toBe(true);
+		expect(ids(applyMessageEvent([msg('r2'), msg('root')], del, inThread))).toEqual(['r2']);
+		expect(closesThread(ev('message:delete', msg('r2')), inThread)).toBe(false);
+		expect(closesThread({ ...del, channel_id: 'other' }, inThread)).toBe(false);
+		expect(closesThread(del, inChannel)).toBe(false);
+		expect(closesThread(ev('message:update', msg('root')), inThread)).toBe(false);
 	});
 });
 
 describe('applyTyping', () => {
+	const ann: ChannelUser = { id: 'u2', name: 'Ann' };
+	const bob: ChannelUser = { id: 'u3', name: 'Bob' };
+	const typing = (user: ChannelUser, on = true, message_id: string | null = null, channel_id = 'c1'): ChannelEvent => ({ channel_id, message_id, user, data: { type: 'typing', data: { typing: on } } });
+
 	it('adds someone once, removes them, and never shows yourself', () => {
-		const ann = { id: 'u2', name: 'Ann' };
-		let t = applyTyping([], { channel_id: 'c1', user: ann, data: { type: 'typing', data: { typing: true } } }, 'me');
-		t = applyTyping(t, { channel_id: 'c1', user: ann, data: { type: 'typing', data: { typing: true } } }, 'me');
+		let t = applyTyping([], typing(ann), inChannel, 'me');
+		t = applyTyping(t, typing(ann), inChannel, 'me');
 		expect(t).toEqual([ann]);
-		expect(applyTyping(t, { channel_id: 'c1', user: ann, data: { type: 'typing', data: { typing: false } } }, 'me')).toEqual([]);
-		expect(applyTyping([], { channel_id: 'c1', user: { id: 'me', name: 'Me' }, data: { data: { typing: true } } }, 'me')).toEqual([]);
+		expect(applyTyping(t, typing(ann, false), inChannel, 'me')).toEqual([]);
+		expect(applyTyping([], typing({ id: 'me', name: 'Me' }), inChannel, 'me')).toEqual([]);
+	});
+	it('keeps the order, and the array, while people keep typing', () => {
+		const both = applyTyping(applyTyping([], typing(ann), inChannel, 'me'), typing(bob), inChannel, 'me');
+		expect(ids(both)).toEqual(['u2', 'u3']);
+		expect(applyTyping(both, typing(ann), inChannel, 'me')).toBe(both);
+	});
+	it('counts only typing in the same channel and thread', () => {
+		expect(applyTyping([], typing(ann, true, 'root'), inChannel, 'me')).toEqual([]);
+		expect(applyTyping([], typing(ann, true, null), inThread, 'me')).toEqual([]);
+		expect(applyTyping([], typing(ann, true, null, 'other'), inChannel, 'me')).toEqual([]);
+		expect(applyTyping([], typing(ann, true, 'root'), inThread, 'me')).toEqual([ann]);
+	});
+	it("the typer's own message landing clears them; other events do not", () => {
+		const list = [ann, bob];
+		expect(ids(applyTyping(list, ev('message', msg('m'), { user: ann }), inChannel, 'me'))).toEqual(['u3']);
+		expect(ids(applyTyping(list, ev('message', msg('m', { parent_id: 'root' }), { user: ann }), inThread, 'me'))).toEqual(['u3']);
+		expect(applyTyping(list, ev('message', msg('m', { parent_id: 'root' }), { user: ann }), inChannel, 'me')).toBe(list);
+		expect(applyTyping(list, ev('message', msg('m', { meta: { model_id: 'gpt' } }), { user: ann }), inChannel, 'me')).toBe(list);
+		expect(applyTyping(list, ev('message:reaction:add', msg('m'), { user: ann }), inChannel, 'me')).toBe(list);
+		expect(applyTyping(list, ev('message:update', msg('m'), { user: bob }), inChannel, 'me')).toBe(list);
 	});
 });
 
@@ -81,9 +150,11 @@ describe('toggleReaction', () => {
 });
 
 describe('showsAuthor and titles', () => {
-	it('starts a block for a new author, a model, or a reply', () => {
-		const list = [msg('a'), msg('b'), msg('c', { user_id: 'u2', user: { id: 'u2', name: 'Bob' } }), msg('d', { user_id: 'u2', user: { id: 'u2', name: 'Bob' }, reply_to_message: msg('a') })];
-		expect(list.map((_, i) => showsAuthor(list, i))).toEqual([true, false, true, true]);
+	it('starts a block at the oldest message, for a new author or model, or a reply (list newest-first)', () => {
+		const bob = { user_id: 'u2', user: { id: 'u2', name: 'Bob' } };
+		const gpt = { meta: { model_id: 'gpt' } };
+		const list = [msg('e', { ...bob, ...gpt, reply_to_message: msg('a') }), msg('d', { ...bob, ...gpt }), msg('c', bob), msg('b'), msg('a')];
+		expect(list.map((_, i) => showsAuthor(list, i))).toEqual([true, true, true, false, true]);
 	});
 	it('names a DM by its other members', () => {
 		expect(channelTitle({ name: '', type: 'dm', users: [{ id: 'me', name: 'Me' }, { id: 'b', name: 'Bob' }] }, 'me')).toBe('Bob');
@@ -92,22 +163,53 @@ describe('showsAuthor and titles', () => {
 });
 
 describe('mentions', () => {
-	it('encodes only the mentions still in the text', () => {
+	const sam = { kind: 'user', id: 'sam', label: 'Sam' } as const;
+	const gpt = { kind: 'model', id: 'gpt', label: 'GPT' } as const;
+	const gpt4o = { kind: 'model', id: 'gpt-4o', label: 'GPT-4o' } as const;
+
+	it('encodes only the mentions still in the text; channels with #', () => {
 		const text = encodeMentions('hi @Ann and @gpt in #general', [
 			{ kind: 'channel', id: 'c1', label: 'general' },
 			{ kind: 'user', id: 'u1', label: 'Ann' },
 			{ kind: 'model', id: 'gpt-4', label: 'gpt' },
 			{ kind: 'user', id: 'u9', label: 'Gone' }
 		]);
-		expect(text).toBe('hi <@U:u1|Ann> and <@M:gpt-4|gpt> in <@C:c1|general>');
+		expect(text).toBe('hi <@U:u1|Ann> and <@M:gpt-4|gpt> in <#C:c1|general>');
+		expect(encodeMentions('see @general', [{ kind: 'channel', id: 'c1', label: 'general' }])).toBe('see @general');
 	});
-	it('finds the word being typed after an @', () => {
+	it('a label cannot end the tag early, and an emptied label is left out', () => {
+		expect(encodeMention({ kind: 'user', id: 'u', label: 'a>b|c' })).toBe('<@U:u|abc>');
+		expect(encodeMention({ kind: 'model', id: 'm1', label: '|' })).toBe('<@M:m1>');
+	});
+	it('encodes a mention only as a whole word, every time it appears', () => {
+		expect(encodeMentions('cc @Samantha and @Sam', [sam])).toBe('cc @Samantha and <@U:sam|Sam>');
+		expect(encodeMentions('hi @Sam, @Sam. @Sam!', [sam])).toBe('hi <@U:sam|Sam>, <@U:sam|Sam>. <@U:sam|Sam>!');
+		expect(encodeMentions('mail x@Sam', [sam])).toBe('mail x@Sam');
+		expect(encodeMentions('hi @Ann Lee!', [{ kind: 'user', id: 'al', label: 'Ann Lee' }])).toBe('hi <@U:al|Ann Lee>!');
+	});
+	it('a longer label claims its text before a shorter one it starts with', () => {
+		expect(encodeMentions('@GPT-4o and @GPT hi', [gpt, gpt4o])).toBe('<@M:gpt-4o|GPT-4o> and <@M:gpt|GPT> hi');
+		expect(encodeMentions('@GPT-4o only', [gpt])).toBe('@GPT-4o only');
+	});
+	it('never matches inside a tag it produced', () => {
+		expect(encodeMentions('@Bob and @U', [{ kind: 'user', id: 'b', label: 'Bob' }, { kind: 'user', id: 'u2', label: 'U' }])).toBe('<@U:b|Bob> and <@U:u2|U>');
+	});
+	it('finds the word being typed after an @ or #, in any script', () => {
 		expect(mentionQuery('hello @an', 9)).toEqual({ trigger: '@', query: 'an', start: 6 });
 		expect(mentionQuery('see #gen', 8)).toEqual({ trigger: '#', query: 'gen', start: 4 });
+		expect(mentionQuery('@', 1)).toEqual({ trigger: '@', query: '', start: 0 });
+		expect(mentionQuery('hi @José', 8)?.query).toBe('José');
+		expect(mentionQuery('hi @张', 5)?.query).toBe('张');
+		expect(mentionQuery("hi @O'Brien", 11)?.query).toBe("O'Brien");
+		expect(mentionQuery('@Jo hi', 3)?.query).toBe('Jo');
+	});
+	it('not inside a word, and not once a space ends it', () => {
 		expect(mentionQuery('mail@host', 9)).toBeNull();
+		expect(mentionQuery('hi @Jo ', 7)).toBeNull();
 	});
 	it('renders mentions as escaped spans', () => {
-		expect(renderMentions('hi <@U:u1|Ann> in <@C:c1|general>')).toBe('hi <span class="mention" data-kind="U">@Ann</span> in <span class="mention" data-kind="C">#general</span>');
+		expect(renderMentions('hi <@U:u1|Ann> in <#C:c1|general>')).toBe('hi <span class="mention" data-kind="U">@Ann</span> in <span class="mention" data-kind="C">#general</span>');
+		expect(renderMentions('<@C:c1|general> <@M:m1>')).toBe('<span class="mention" data-kind="C">#general</span> <span class="mention" data-kind="M">@m1</span>');
 		expect(renderMentions('<@U:u1|<b>x</b>>')).not.toContain('<b>');
 	});
 });

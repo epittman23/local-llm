@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { InfiniteLoader } from '@/components/common/InfiniteLoader';
 import { Spinner } from '@/components/common/Spinner';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
@@ -29,7 +30,7 @@ export function MessageList({
 	actions: MessageActions;
 }) {
 	const me = useAuthStore((s) => s.user);
-	const list = messages.slice().reverse();
+	const list = useMemo(() => messages.slice().reverse(), [messages]);
 	const readOnly = !channel.write_access;
 
 	return (
@@ -71,7 +72,7 @@ export function MessageList({
 					channelId={channel.id}
 					thread={thread}
 					domPrefix={thread ? 'thread-' : ''}
-					showAuthor={showsAuthor(list, i)}
+					showAuthor={showsAuthor(messages, messages.length - 1 - i)}
 					highlighted={replyToId === m.id}
 					disabled={readOnly}
 					actions={actions}
