@@ -1,8 +1,12 @@
 import {
+	createSortedRowModel,
 	flexRender,
-	getCoreRowModel,
-	getSortedRowModel,
-	useReactTable,
+	rowSortingFeature,
+	sortFn_alphanumeric,
+	sortFn_datetime,
+	sortFn_text,
+	tableFeatures,
+	useTable,
 	type ColumnDef,
 	type SortingState
 } from '@tanstack/react-table';
@@ -17,6 +21,16 @@ import { exportAnswers, getCompare, getTestOptions, type CompareBy } from '@/lib
 import { useAuthStore } from '@/lib/stores/authStore';
 
 const ALL_TIER = '__all__';
+
+// TanStack Table v9 bundles only the features a table declares. Sorting is
+// the only one this page uses; the three sort functions are the ones v9's
+// 'auto' sort picks between (anything else sorts with its built-in `basic`),
+// which keeps v8's automatic per-column sorting.
+const features = tableFeatures({
+	rowSortingFeature,
+	sortedRowModel: createSortedRowModel(),
+	sortFns: { alphanumeric: sortFn_alphanumeric, datetime: sortFn_datetime, text: sortFn_text }
+});
 
 const byOptions: { value: CompareBy; label: string }[] = [
 	{ value: 'config', label: 'Config' },
@@ -113,7 +127,7 @@ export function ComparePage() {
 	const rows: Record<string, unknown>[] = by === 'serving' ? (data?.derived ?? []) : (data?.rows ?? []);
 	const notes: string[] = [...new Set<string>(data?.notes ?? [])];
 
-	const columnDefs = useMemo<ColumnDef<Record<string, unknown>>[]>(
+	const columnDefs = useMemo<ColumnDef<typeof features, Record<string, unknown>>[]>(
 		() =>
 			columns.map((col) => ({
 				id: col,
@@ -124,13 +138,12 @@ export function ComparePage() {
 		[columns]
 	);
 
-	const table = useReactTable({
+	const table = useTable({
+		features,
 		data: rows,
 		columns: columnDefs,
 		state: { sorting },
-		onSortingChange: setSorting,
-		getCoreRowModel: getCoreRowModel(),
-		getSortedRowModel: getSortedRowModel()
+		onSortingChange: setSorting
 	});
 
 	const exportMutation = useMutation({
@@ -213,7 +226,7 @@ export function ComparePage() {
 							<TableBody>
 								{table.getRowModel().rows.map((row) => (
 									<TableRow key={row.id}>
-										{row.getVisibleCells().map((cell) => (
+										{row.getAllCells().map((cell) => (
 											<TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
 										))}
 									</TableRow>
