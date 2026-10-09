@@ -4,7 +4,8 @@ type GroupData = { config?: { share?: boolean | string } } & Record<string, unkn
 
 const toSelectValue = (share: unknown) => (share === undefined || share === null ? 'members' : String(share));
 // The <select> speaks strings; the group stores false / 'members' / true.
-const fromSelectValue = (value: string): boolean | string => (value === 'false' ? false : value === 'true' ? true : value);
+const fromSelectValue = (value: string): boolean | string =>
+	value === 'false' ? false : value === 'true' ? true : value;
 
 /** Ports admin/Users/Groups/General.svelte: name, description, who may share to the group, delete. */
 export function GroupGeneral({
@@ -73,7 +74,9 @@ export function GroupGeneral({
 							id="group-share"
 							className="rounded-lg bg-transparent px-2 text-sm outline-hidden"
 							value={toSelectValue(data?.config?.share)}
-							onChange={(e) => onDataChange({ ...data, config: { ...(data?.config ?? {}), share: fromSelectValue(e.target.value) } })}
+							onChange={(e) =>
+								onDataChange({ ...data, config: { ...(data?.config ?? {}), share: fromSelectValue(e.target.value) } })
+							}
 						>
 							<option value="false">No one</option>
 							<option value="members">Members</option>

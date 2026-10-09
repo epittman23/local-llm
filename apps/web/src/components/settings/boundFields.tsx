@@ -1,7 +1,15 @@
 import type { ReactNode } from 'react';
 import { SensitiveInput } from '@/components/common/SensitiveInput';
 import { Tip } from '@/components/common/Tip';
-import { SettingField, SettingInput, SettingNumber, SettingRow, SettingSelect, SettingSwitch, SettingTextarea } from './controls';
+import {
+	SettingField,
+	SettingInput,
+	SettingNumber,
+	SettingRow,
+	SettingSelect,
+	SettingSwitch,
+	SettingTextarea
+} from './controls';
 
 // Settings tabs edit one flat config object, and each field is "this key of that
 // object, with a label and a hint". These bind that shape once: pass the object
@@ -38,12 +46,28 @@ export function BoundText({
 	type = 'text',
 	list,
 	children
-}: Bound & Described & { placeholder?: string; tip?: string; required?: boolean; type?: string; list?: string; children?: ReactNode }) {
+}: Bound &
+	Described & {
+		placeholder?: string;
+		tip?: string;
+		required?: boolean;
+		type?: string;
+		list?: string;
+		children?: ReactNode;
+	}) {
 	const id = fieldId({ idPrefix, name });
 	return (
 		<SettingField label={label} description={description} htmlFor={id}>
 			<Tip content={tip}>
-				<SettingInput id={id} type={type} list={list} required={required} placeholder={placeholder} value={config[name] ?? ''} onChange={(e) => set({ [name]: e.target.value })} />
+				<SettingInput
+					id={id}
+					type={type}
+					list={list}
+					required={required}
+					placeholder={placeholder}
+					value={config[name] ?? ''}
+					onChange={(e) => set({ [name]: e.target.value })}
+				/>
 			</Tip>
 			{children}
 		</SettingField>
@@ -51,11 +75,27 @@ export function BoundText({
 }
 
 /** A masked box for keys and tokens. */
-export function BoundSecret({ config, set, name, idPrefix, label, description, placeholder, required = false }: Bound & Described & { placeholder: string; required?: boolean }) {
+export function BoundSecret({
+	config,
+	set,
+	name,
+	idPrefix,
+	label,
+	description,
+	placeholder,
+	required = false
+}: Bound & Described & { placeholder: string; required?: boolean }) {
 	const id = fieldId({ idPrefix, name });
 	return (
 		<SettingField label={label} description={description} htmlFor={id}>
-			<SensitiveInput id={id} variant="settings" placeholder={placeholder} required={required} value={config[name] ?? ''} onChange={(v) => set({ [name]: v })} />
+			<SensitiveInput
+				id={id}
+				variant="settings"
+				placeholder={placeholder}
+				required={required}
+				value={config[name] ?? ''}
+				onChange={(v) => set({ [name]: v })}
+			/>
 		</SettingField>
 	);
 }
@@ -74,21 +114,56 @@ export function BoundNumber({
 	step,
 	required,
 	title
-}: Bound & Described & { placeholder?: string; min?: number; max?: number; step?: number | string; required?: boolean; title?: string }) {
+}: Bound &
+	Described & {
+		placeholder?: string;
+		min?: number;
+		max?: number;
+		step?: number | string;
+		required?: boolean;
+		title?: string;
+	}) {
 	const id = fieldId({ idPrefix, name });
 	return (
 		<SettingField label={label} description={description} htmlFor={id}>
-			<SettingNumber id={id} placeholder={placeholder} min={min} max={max} step={step} required={required} title={title} autoComplete="off" value={config[name]} onChange={(v) => set({ [name]: v === '' ? null : v })} />
+			<SettingNumber
+				id={id}
+				placeholder={placeholder}
+				min={min}
+				max={max}
+				step={step}
+				required={required}
+				title={title}
+				autoComplete="off"
+				value={config[name]}
+				onChange={(v) => set({ [name]: v === '' ? null : v })}
+			/>
 		</SettingField>
 	);
 }
 
 /** A labelled multi-line box. */
-export function BoundTextarea({ config, set, name, idPrefix, label, description, placeholder, rows, children }: Bound & Described & { placeholder?: string; rows?: number; children?: ReactNode }) {
+export function BoundTextarea({
+	config,
+	set,
+	name,
+	idPrefix,
+	label,
+	description,
+	placeholder,
+	rows,
+	children
+}: Bound & Described & { placeholder?: string; rows?: number; children?: ReactNode }) {
 	const id = fieldId({ idPrefix, name });
 	return (
 		<SettingField label={label} description={description} htmlFor={id}>
-			<SettingTextarea id={id} rows={rows} placeholder={placeholder} value={config[name] ?? ''} onChange={(e) => set({ [name]: e.target.value })} />
+			<SettingTextarea
+				id={id}
+				rows={rows}
+				placeholder={placeholder}
+				value={config[name] ?? ''}
+				onChange={(e) => set({ [name]: e.target.value })}
+			/>
 			{children}
 		</SettingField>
 	);
@@ -103,7 +178,8 @@ export function BoundSelect({
 	description,
 	options,
 	onPick
-}: Bound & Described & { options: readonly (readonly [value: string, label: string])[]; onPick?: (value: string) => void }) {
+}: Bound &
+	Described & { options: readonly (readonly [value: string, label: string])[]; onPick?: (value: string) => void }) {
 	return (
 		<SettingRow label={label} description={description}>
 			<SettingSelect

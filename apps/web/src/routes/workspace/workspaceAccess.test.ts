@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionUser } from '@/lib/stores/authStore';
 import type { BackendConfig } from '@/lib/stores/configStore';
-import {
-	canEnterSection,
-	canSeeTab,
-	defaultWorkspacePath,
-	sectionOfPath
-} from './workspaceAccess';
+import { canEnterSection, canSeeTab, defaultWorkspacePath, sectionOfPath } from './workspaceAccess';
 
 const user = (role: string, workspace: Record<string, boolean> = {}): SessionUser => ({
 	id: 'u',
@@ -44,12 +39,8 @@ describe('workspace access', () => {
 
 	it('sends bare /workspace to the first permitted section, tools before skills', () => {
 		expect(defaultWorkspacePath(user('admin'), config(true))).toBe('/workspace/models');
-		expect(defaultWorkspacePath(user('user', { skills: true, tools: true }), config(true))).toBe(
-			'/workspace/tools'
-		);
-		expect(defaultWorkspacePath(user('user', { skills: true }), config(true))).toBe(
-			'/workspace/skills'
-		);
+		expect(defaultWorkspacePath(user('user', { skills: true, tools: true }), config(true))).toBe('/workspace/tools');
+		expect(defaultWorkspacePath(user('user', { skills: true }), config(true))).toBe('/workspace/skills');
 		expect(defaultWorkspacePath(user('user'), config(true))).toBe('/');
 	});
 

@@ -275,25 +275,17 @@ export const deleteAutomationById = async (token: string, id: string) => {
 	return res;
 };
 
-export const getAutomationRuns = async (
-	token: string,
-	id: string,
-	skip: number = 0,
-	limit: number = 50
-) => {
+export const getAutomationRuns = async (token: string, id: string, skip: number = 0, limit: number = 50) => {
 	let error = null;
 
-	const res = await fetch(
-		`${WEBUI_API_BASE_URL}/automations/${id}/runs?skip=${skip}&limit=${limit}`,
-		{
-			method: 'GET',
-			headers: {
-				Accept: 'application/json',
-				'Content-Type': 'application/json',
-				authorization: `Bearer ${token}`
-			}
+	const res = await fetch(`${WEBUI_API_BASE_URL}/automations/${id}/runs?skip=${skip}&limit=${limit}`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
 		}
-	)
+	})
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
 			return res.json();

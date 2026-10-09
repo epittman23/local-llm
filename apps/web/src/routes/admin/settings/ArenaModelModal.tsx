@@ -44,7 +44,11 @@ export function ArenaModelModal({
 	onDelete?: () => void | Promise<void>;
 }) {
 	const token = useAuthStore((s) => s.token) ?? '';
-	const models = useQuery({ queryKey: ['models-all'], queryFn: async () => ((await getModels(token)) ?? []) as ModelInfo[], enabled: open });
+	const models = useQuery({
+		queryKey: ['models-all'],
+		queryFn: async () => ((await getModels(token)) ?? []) as ModelInfo[],
+		enabled: open
+	});
 	const [name, setName] = useState('');
 	const [id, setId] = useState('');
 	const [profileImageUrl, setProfileImageUrl] = useState(FALLBACK_IMAGE);
@@ -137,8 +141,20 @@ export function ArenaModelModal({
 					>
 						<div className="flex gap-2">
 							<div className="shrink-0">
-								<input ref={imageInput} type="file" hidden accept="image/*" aria-label="Upload image" onChange={(e) => pickImage(e.target.files)} />
-								<button type="button" className="group relative rounded-full" aria-label="Change image" onClick={() => imageInput.current?.click()}>
+								<input
+									ref={imageInput}
+									type="file"
+									hidden
+									accept="image/*"
+									aria-label="Upload image"
+									onChange={(e) => pickImage(e.target.files)}
+								/>
+								<button
+									type="button"
+									className="group relative rounded-full"
+									aria-label="Change image"
+									onClick={() => imageInput.current?.click()}
+								>
 									<img src={profileImageUrl} alt="Profile" className="size-12 rounded-full object-cover" />
 									<span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 text-white opacity-0 transition group-hover:opacity-100">
 										<Pencil className="size-4" />
@@ -150,13 +166,32 @@ export function ArenaModelModal({
 									<label className="text-muted-foreground text-xs" htmlFor="arena-name">
 										Name
 									</label>
-									<input id="arena-name" className={field} type="text" value={name} onChange={(e) => changeName(e.target.value)} placeholder="Model Name" autoComplete="off" required />
+									<input
+										id="arena-name"
+										className={field}
+										type="text"
+										value={name}
+										onChange={(e) => changeName(e.target.value)}
+										placeholder="Model Name"
+										autoComplete="off"
+										required
+									/>
 								</div>
 								<div>
 									<label className="text-muted-foreground text-xs" htmlFor="arena-id">
 										ID
 									</label>
-									<input id="arena-id" className={`${field} disabled:opacity-60`} type="text" value={id} onChange={(e) => setId(e.target.value)} placeholder="Model ID" autoComplete="off" required disabled={edit} />
+									<input
+										id="arena-id"
+										className={`${field} disabled:opacity-60`}
+										type="text"
+										value={id}
+										onChange={(e) => setId(e.target.value)}
+										placeholder="Model ID"
+										autoComplete="off"
+										required
+										disabled={edit}
+									/>
 								</div>
 							</div>
 						</div>
@@ -165,17 +200,33 @@ export function ArenaModelModal({
 							<label className="text-muted-foreground text-xs" htmlFor="arena-description">
 								Description
 							</label>
-							<input id="arena-description" className={field} type="text" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Enter description" autoComplete="off" />
+							<input
+								id="arena-description"
+								className={field}
+								type="text"
+								value={description}
+								onChange={(e) => setDescription(e.target.value)}
+								placeholder="Enter description"
+								autoComplete="off"
+							/>
 						</div>
 
 						<hr className="my-2" />
-						<AccessControl accessGrants={accessGrants as never} onChange={(grants) => setAccessGrants(grants)} accessRoles={['read']} />
+						<AccessControl
+							accessGrants={accessGrants as never}
+							onChange={(grants) => setAccessGrants(grants)}
+							accessRoles={['read']}
+						/>
 						<hr className="my-2" />
 
 						<div>
 							<div className="flex items-center justify-between">
 								<div className="text-muted-foreground text-xs">Models</div>
-								<button type="button" className="text-xs underline-offset-2 hover:underline" onClick={() => setFilterMode((m) => (m === 'include' ? 'exclude' : 'include'))}>
+								<button
+									type="button"
+									className="text-xs underline-offset-2 hover:underline"
+									onClick={() => setFilterMode((m) => (m === 'include' ? 'exclude' : 'include'))}
+								>
 									{filterMode === 'include' ? 'Include' : 'Exclude'}
 								</button>
 							</div>
@@ -184,14 +235,21 @@ export function ArenaModelModal({
 									{modelIds.map((modelId) => (
 										<div key={modelId} className="flex items-center justify-between text-xs">
 											<div>{known.find((m) => m.id === modelId)?.name ?? modelId}</div>
-											<button type="button" aria-label={`Remove ${modelId}`} className="hover:bg-muted rounded p-0.5" onClick={() => setModelIds((ids) => ids.filter((x) => x !== modelId))}>
+											<button
+												type="button"
+												aria-label={`Remove ${modelId}`}
+												className="hover:bg-muted rounded p-0.5"
+												onClick={() => setModelIds((ids) => ids.filter((x) => x !== modelId))}
+											>
 												<Minus className="size-3.5" strokeWidth={2} />
 											</button>
 										</div>
 									))}
 								</div>
 							) : (
-								<div className="text-muted-foreground mt-1 text-xs">Leave empty to include all models or select specific models</div>
+								<div className="text-muted-foreground mt-1 text-xs">
+									Leave empty to include all models or select specific models
+								</div>
 							)}
 						</div>
 
@@ -217,7 +275,8 @@ export function ArenaModelModal({
 								aria-label="Add model"
 								className="hover:bg-muted rounded p-1"
 								onClick={() => {
-									if (selectedModelId && !modelIds.includes(selectedModelId)) setModelIds((ids) => [...ids, selectedModelId]);
+									if (selectedModelId && !modelIds.includes(selectedModelId))
+										setModelIds((ids) => [...ids, selectedModelId]);
 									setSelectedModelId('');
 								}}
 							>

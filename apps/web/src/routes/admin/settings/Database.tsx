@@ -90,7 +90,8 @@ export default function Database() {
 								toast.error(`${error}`);
 								return null;
 							});
-							if (exported) saveAs(new Blob([JSON.stringify(exported)], { type: 'application/json' }), `config-${Date.now()}.json`);
+							if (exported)
+								saveAs(new Blob([JSON.stringify(exported)], { type: 'application/json' }), `config-${Date.now()}.json`);
 						}}
 					>
 						Export
@@ -101,7 +102,11 @@ export default function Database() {
 			{(config?.features?.enable_admin_export ?? true) && (
 				<SettingsSection title="Export">
 					<SettingRow label="Database" description="Download the application database when supported.">
-						<button type="button" className={actionButton} onClick={() => downloadDatabase(token).catch((error) => toast.error(`${error}`))}>
+						<button
+							type="button"
+							className={actionButton}
+							onClick={() => downloadDatabase(token).catch((error) => toast.error(`${error}`))}
+						>
 							Database
 						</button>
 					</SettingRow>
@@ -120,4 +125,3 @@ export default function Database() {
 		</SettingsForm>
 	);
 }
-

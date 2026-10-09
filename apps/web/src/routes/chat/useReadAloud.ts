@@ -30,7 +30,11 @@ export function useReadAloud() {
 	const ttsConfig = useConfigStore((s) => (s.config as { audio?: { tts?: TtsConfig } } | null)?.audio?.tts);
 	const tts: TtsConfig = ttsConfig ?? {};
 	const { settings } = useUserSettings();
-	const audioSettings = ((settings as Record<string, any> | null)?.audio?.tts ?? {}) as { voice?: string; playbackRate?: number; defaultVoice?: string };
+	const audioSettings = ((settings as Record<string, any> | null)?.audio?.tts ?? {}) as {
+		voice?: string;
+		playbackRate?: number;
+		defaultVoice?: string;
+	};
 	const [speakingId, setSpeakingId] = useState<string | null>(null);
 	const stopRef = useRef<() => void>(() => {});
 

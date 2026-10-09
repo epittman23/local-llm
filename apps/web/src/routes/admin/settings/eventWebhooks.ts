@@ -81,10 +81,15 @@ export const setAllEvents = (enabled: boolean): string[] => (enabled ? ['*'] : [
 export const targetsFor = (mode: TargetMode, userIds: string[], groupIds: string[]): EventWebhookTarget[] | null => {
 	if (mode === 'all') return null;
 	if (mode === 'system') return [];
-	return [...userIds.map((id) => ({ type: 'user' as const, id })), ...groupIds.map((id) => ({ type: 'group' as const, id }))];
+	return [
+		...userIds.map((id) => ({ type: 'user' as const, id })),
+		...groupIds.map((id) => ({ type: 'group' as const, id }))
+	];
 };
 
-export const targetsToState = (targets: EventWebhookTarget[] | null | undefined): { mode: TargetMode; userIds: string[]; groupIds: string[] } => {
+export const targetsToState = (
+	targets: EventWebhookTarget[] | null | undefined
+): { mode: TargetMode; userIds: string[]; groupIds: string[] } => {
 	if (targets === null || targets === undefined) return { mode: 'all', userIds: [], groupIds: [] };
 	return {
 		mode: targets.length > 0 ? 'selected' : 'system',

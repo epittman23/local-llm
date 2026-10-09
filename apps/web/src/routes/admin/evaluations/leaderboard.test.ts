@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { type LeaderboardEntry, buildRankedModels, leaderboardCount, percentOf, rankById, sortRanked } from './leaderboard';
+import {
+	type LeaderboardEntry,
+	buildRankedModels,
+	leaderboardCount,
+	percentOf,
+	rankById,
+	sortRanked
+} from './leaderboard';
 
 const models = [
 	{ id: 'a', name: 'Alpha' },
@@ -24,7 +31,10 @@ describe('buildRankedModels', () => {
 		expect(c).toMatchObject({ rating: '-', name: 'c', stats: { count: 0, won: '-', lost: '-' } });
 	});
 	it('carries win/loss counts and tags', () => {
-		expect(ranked.find((m) => m.id === 'a')).toMatchObject({ stats: { count: 4, won: '3', lost: '1' }, top_tags: [{ tag: 'code', count: 2 }] });
+		expect(ranked.find((m) => m.id === 'a')).toMatchObject({
+			stats: { count: 4, won: '3', lost: '1' },
+			top_tags: [{ tag: 'code', count: 2 }]
+		});
 	});
 	it('names an uninstalled model by its id', () => {
 		expect(ranked.find((m) => m.id === 'gone')?.name).toBe('gone');

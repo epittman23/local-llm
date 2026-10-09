@@ -60,7 +60,8 @@ export function ValvesModal({
 				const next: ValveValues = { ...(loaded ?? {}) };
 				for (const [name, prop] of Object.entries((loadedSpec as ValvesSpec)?.properties ?? {})) {
 					if (prop?.type !== 'array' || prop.input?.type === 'multiselect') continue;
-					next[name] = next[name] != null ? (Array.isArray(next[name]) ? (next[name] as unknown[]) : []).join(',') : null;
+					next[name] =
+						next[name] != null ? (Array.isArray(next[name]) ? (next[name] as unknown[]) : []).join(',') : null;
 				}
 				setValves(next);
 				setSpec(loadedSpec as ValvesSpec);

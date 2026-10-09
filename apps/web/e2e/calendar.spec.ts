@@ -3,7 +3,8 @@ import { expect, test } from './test';
 import { mockWorkspaceBackend } from './workspace-helpers';
 
 type Rec = Record<string, any>;
-const json = (route: any, d: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(d) });
+const json = (route: any, d: unknown, status = 200) =>
+	route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(d) });
 const NS = 1_000_000;
 const ns = (iso: string) => new Date(iso).getTime() * NS;
 
@@ -12,7 +13,14 @@ const calendars = [
 	{ id: 'work', name: 'Work', color: '#ef4444', is_default: false, is_system: false },
 	{ id: '__scheduled_tasks__', name: 'Scheduled Tasks', color: '#888888', is_default: false, is_system: true }
 ];
-const event = (id: string, calendar_id: string, title: string, start: string, end?: string, meta: Rec | null = null) => ({
+const event = (
+	id: string,
+	calendar_id: string,
+	title: string,
+	start: string,
+	end?: string,
+	meta: Rec | null = null
+) => ({
 	id,
 	calendar_id,
 	title,
@@ -28,7 +36,13 @@ const event = (id: string, calendar_id: string, title: string, start: string, en
 });
 
 async function mockCalendar(page: Page, events: Rec[] = []) {
-	const seen = { eventQueries: [] as string[], created: [] as Rec[], updated: [] as Rec[], calendarsCreated: [] as Rec[], deleted: [] as string[] };
+	const seen = {
+		eventQueries: [] as string[],
+		created: [] as Rec[],
+		updated: [] as Rec[],
+		calendarsCreated: [] as Rec[],
+		deleted: [] as string[]
+	};
 	await page.route('**/api/v1/calendars/**', async (route) => {
 		const req = route.request();
 		const url = new URL(req.url());
@@ -71,8 +85,15 @@ test('without the calendar feature the page sends you home and the sidebar has n
 });
 
 test('shows the month with events, and fetches the six-week window', async ({ page }) => {
-	await mockWorkspaceBackend(page, { role: 'user', features: { enable_calendar: true }, featurePermissions: { calendar: true } });
-	const seen = await mockCalendar(page, [event('e1', 'personal', 'Dentist', '2026-09-16T09:30:00'), event('e2', 'work', 'Offsite', '2026-09-21T09:00:00', '2026-09-23T17:00:00')]);
+	await mockWorkspaceBackend(page, {
+		role: 'user',
+		features: { enable_calendar: true },
+		featurePermissions: { calendar: true }
+	});
+	const seen = await mockCalendar(page, [
+		event('e1', 'personal', 'Dentist', '2026-09-16T09:30:00'),
+		event('e2', 'work', 'Offsite', '2026-09-21T09:00:00', '2026-09-23T17:00:00')
+	]);
 	await page.goto('/calendar');
 	await expect(page.getByRole('heading', { name: 'September 2026' })).toBeVisible();
 	await expect(page.getByRole('button', { name: /Dentist/ })).toBeVisible();
@@ -93,7 +114,9 @@ test('hiding a calendar hides its events; Next moves a month and fetches again',
 	await expect.poll(() => seen.eventQueries.length).toBe(2);
 });
 
-test('clicking a day creates a 9 AM event in the default calendar; the scheduled-tasks calendar is not offered', async ({ page }) => {
+test('clicking a day creates a 9 AM event in the default calendar; the scheduled-tasks calendar is not offered', async ({
+	page
+}) => {
 	await mockWorkspaceBackend(page, { features: { enable_calendar: true } });
 	const seen = await mockCalendar(page);
 	await page.goto('/calendar');
@@ -109,26 +132,36 @@ test('clicking a day creates a 9 AM event in the default calendar; the scheduled
 	await d.getByLabel('Repeat').selectOption('weekdays');
 	await d.getByLabel('Reminder').selectOption('30');
 	await d.getByRole('button', { name: 'Create' }).click();
-	await expect.poll(() => seen.created[0]).toMatchObject({
-		calendar_id: 'personal',
-		title: 'Standup',
-		start_at: ns('2026-09-18T09:00:00'),
-		end_at: ns('2026-09-18T10:00:00'),
-		rrule: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR',
-		meta: { alert_minutes: 30 }
-	});
+	await expect
+		.poll(() => seen.created[0])
+		.toMatchObject({
+			calendar_id: 'personal',
+			title: 'Standup',
+			start_at: ns('2026-09-18T09:00:00'),
+			end_at: ns('2026-09-18T10:00:00'),
+			rrule: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR',
+			meta: { alert_minutes: 30 }
+		});
 });
 
 test('an event opens for editing and saves; an automation run opens its chat instead', async ({ page }) => {
 	await mockWorkspaceBackend(page, { features: { enable_calendar: true } });
-	const seen = await mockCalendar(page, [event('e1', 'personal', 'Dentist', '2026-09-16T09:30:00'), event('r1', '__scheduled_tasks__', 'Nightly report', '2026-09-17T02:00:00', undefined, { automation_id: 'a1', chat_id: 'c9' })]);
+	const seen = await mockCalendar(page, [
+		event('e1', 'personal', 'Dentist', '2026-09-16T09:30:00'),
+		event('r1', '__scheduled_tasks__', 'Nightly report', '2026-09-17T02:00:00', undefined, {
+			automation_id: 'a1',
+			chat_id: 'c9'
+		})
+	]);
 	await page.goto('/calendar');
 	await page.getByRole('button', { name: /Dentist/ }).click();
 	const d = page.getByRole('dialog', { name: 'Edit event' });
 	await expect(d.getByLabel('Event title')).toHaveValue('Dentist');
 	await d.getByLabel('Location').fill('Main St');
 	await d.getByRole('button', { name: 'Save' }).click();
-	await expect.poll(() => seen.updated[0]).toMatchObject({ title: 'Dentist', location: 'Main St', start_at: ns('2026-09-16T09:30:00') });
+	await expect
+		.poll(() => seen.updated[0])
+		.toMatchObject({ title: 'Dentist', location: 'Main St', start_at: ns('2026-09-16T09:30:00') });
 	await page.getByRole('button', { name: /Nightly report/ }).click();
 	await expect(page).toHaveURL(/\/c\/c9$/);
 });

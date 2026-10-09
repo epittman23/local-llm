@@ -88,7 +88,9 @@ export function InterfaceSettings({
 				() => false
 			);
 			if (!granted) {
-				toast.error('Clipboard write permission denied. Please check your browser settings to grant the necessary access.');
+				toast.error(
+					'Clipboard write permission denied. Please check your browser settings to grant the necessary access.'
+				);
 				return set(def.key, false);
 			}
 		}
@@ -126,17 +128,29 @@ export function InterfaceSettings({
 	const renderSwitch = (def: SwitchDef) => {
 		const on = readSetting<boolean>(values, def.key, def.fallback);
 		const manage =
-			(def.special === 'floatingActions' && on && (() => setShowActions(true))) || (def.special === 'imageCompression' && on && (() => setShowCompression(true))) || null;
+			(def.special === 'floatingActions' && on && (() => setShowActions(true))) ||
+			(def.special === 'imageCompression' && on && (() => setShowCompression(true))) ||
+			null;
 		return (
 			<SettingRow key={def.key} label={def.label} description={def.description}>
 				{(id) => (
 					<div className="flex items-center gap-1.5">
 						{manage && (
-							<button type="button" className={action} aria-label={def.special === 'floatingActions' ? 'Manage Floating Quick Actions' : 'Manage Image Compression'} onClick={manage}>
+							<button
+								type="button"
+								className={action}
+								aria-label={
+									def.special === 'floatingActions' ? 'Manage Floating Quick Actions' : 'Manage Image Compression'
+								}
+								onClick={manage}
+							>
 								Manage
 							</button>
 						)}
-						<span className={cn(inherited(def.key) && 'opacity-60')} title={inherited(def.key) ? 'Inherited from the admin default' : undefined}>
+						<span
+							className={cn(inherited(def.key) && 'opacity-60')}
+							title={inherited(def.key) ? 'Inherited from the admin default' : undefined}
+						>
 							<SettingSwitch checked={on} labelledBy={id} onChange={(v) => toggle(def, v)} />
 						</span>
 					</div>
@@ -150,7 +164,13 @@ export function InterfaceSettings({
 		return (
 			<SettingRow key={def.key} label={def.label} description={def.description}>
 				{(id) => (
-					<button type="button" className={action} aria-labelledby={id} aria-description={option.label} onClick={() => set(def.key, next)}>
+					<button
+						type="button"
+						className={action}
+						aria-labelledby={id}
+						aria-description={option.label}
+						onClick={() => set(def.key, next)}
+					>
 						{option.label}
 					</button>
 				)}
@@ -183,7 +203,12 @@ export function InterfaceSettings({
 					</SettingRow>
 					{!scaleIsDefault && textScale !== null && (
 						<div className="flex items-center gap-2 px-1 pt-1.5">
-							<button type="button" className="hover:bg-muted rounded-lg p-1" aria-label="Decrease UI Scale" onClick={() => setScale(stepTextScale(textScale, -0.1))}>
+							<button
+								type="button"
+								className="hover:bg-muted rounded-lg p-1"
+								aria-label="Decrease UI Scale"
+								onClick={() => setScale(stepTextScale(textScale, -0.1))}
+							>
 								<Minus className="size-3.5" />
 							</button>
 							<input
@@ -199,7 +224,12 @@ export function InterfaceSettings({
 									set('textScale', Number(e.target.value));
 								}}
 							/>
-							<button type="button" className="hover:bg-muted rounded-lg p-1" aria-label="Increase UI Scale" onClick={() => setScale(stepTextScale(textScale, 0.1))}>
+							<button
+								type="button"
+								className="hover:bg-muted rounded-lg p-1"
+								aria-label="Increase UI Scale"
+								onClick={() => setScale(stepTextScale(textScale, 0.1))}
+							>
 								<Plus className="size-3.5" />
 							</button>
 						</div>
@@ -250,8 +280,17 @@ export function InterfaceSettings({
 			);
 		}
 		return (
-			<SettingRow key={id} label="Chat Background Image" description="Upload or reset the image shown behind chat content.">
-				<button type="button" className={action} aria-label={backgroundImageUrl ? 'Reset Chat Background Image' : 'Upload Chat Background Image'} onClick={() => (backgroundImageUrl ? set('backgroundImageUrl', null) : fileInput.current?.click())}>
+			<SettingRow
+				key={id}
+				label="Chat Background Image"
+				description="Upload or reset the image shown behind chat content."
+			>
+				<button
+					type="button"
+					className={action}
+					aria-label={backgroundImageUrl ? 'Reset Chat Background Image' : 'Upload Chat Background Image'}
+					onClick={() => (backgroundImageUrl ? set('backgroundImageUrl', null) : fileInput.current?.click())}
+				>
 					{backgroundImageUrl ? 'Reset' : 'Upload'}
 				</button>
 			</SettingRow>
@@ -291,7 +330,13 @@ export function InterfaceSettings({
 						{ROWS[section]
 							.filter((row) => isShown(row, ctx))
 							.map((row) => (
-								<Fragment key={row.kind === 'custom' ? row.id : row.key}>{row.kind === 'custom' ? renderCustom(row.id) : row.kind === 'cycle' ? renderCycle(row) : renderSwitch(row)}</Fragment>
+								<Fragment key={row.kind === 'custom' ? row.id : row.key}>
+									{row.kind === 'custom'
+										? renderCustom(row.id)
+										: row.kind === 'cycle'
+											? renderCycle(row)
+											: renderSwitch(row)}
+								</Fragment>
 							))}
 					</SettingsSection>
 				))}

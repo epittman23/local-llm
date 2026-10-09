@@ -1,6 +1,18 @@
 import { useQueryClient } from '@tanstack/react-query';
 import saveAs from 'file-saver';
-import { Archive, Copy, Download, FolderInput, MailOpen, MoreHorizontal, Pencil, Pin, PinOff, Share2, Trash2 } from 'lucide-react';
+import {
+	Archive,
+	Copy,
+	Download,
+	FolderInput,
+	MailOpen,
+	MoreHorizontal,
+	Pencil,
+	Pin,
+	PinOff,
+	Share2,
+	Trash2
+} from 'lucide-react';
 import { useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router';
 import { toast } from 'sonner';
@@ -15,7 +27,16 @@ import {
 	DropdownMenuSubTrigger,
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
-import { archiveChatById, cloneChatById, deleteChatById, getChatById, markChatUnreadById, toggleChatPinnedStatusById, updateChatById, updateChatFolderIdById } from '@/lib/apis/chats';
+import {
+	archiveChatById,
+	cloneChatById,
+	deleteChatById,
+	getChatById,
+	markChatUnreadById,
+	toggleChatPinnedStatusById,
+	updateChatById,
+	updateChatFolderIdById
+} from '@/lib/apis/chats';
 import { type ChatListItem, type Folder, chatAsText, fileSafe, isUnread } from '@/lib/chat/chatList';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
@@ -31,7 +52,15 @@ import { patchCachedChat } from './useChatList';
  * menu; the Svelte sidebar's drag-and-drop is not ported (it is not
  * reachable from the keyboard).
  */
-export function ChatItem({ chat, folders, onNavigate }: { chat: ChatListItem; folders: Folder[]; onNavigate?: () => void }) {
+export function ChatItem({
+	chat,
+	folders,
+	onNavigate
+}: {
+	chat: ChatListItem;
+	folders: Folder[];
+	onNavigate?: () => void;
+}) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
@@ -79,8 +108,13 @@ export function ChatItem({ chat, folders, onNavigate }: { chat: ChatListItem; fo
 	const download = async (kind: 'json' | 'txt') => {
 		const full = await getChatById(token, chat.id).catch(() => null);
 		if (!full) return;
-		if (kind === 'json') saveAs(new Blob([JSON.stringify([full])], { type: 'application/json' }), `chat-export-${Date.now()}.json`);
-		else saveAs(new Blob([chatAsText(full)], { type: 'text/plain' }), `chat-${fileSafe(full.chat?.title ?? chat.title)}.txt`);
+		if (kind === 'json')
+			saveAs(new Blob([JSON.stringify([full])], { type: 'application/json' }), `chat-export-${Date.now()}.json`);
+		else
+			saveAs(
+				new Blob([chatAsText(full)], { type: 'text/plain' }),
+				`chat-${fileSafe(full.chat?.title ?? chat.title)}.txt`
+			);
 	};
 
 	return (
@@ -114,7 +148,13 @@ export function ChatItem({ chat, folders, onNavigate }: { chat: ChatListItem; fo
 						e.preventDefault();
 						setRenaming(true);
 					}}
-					className={({ isActive }) => cn('flex items-center gap-1.5 rounded-md px-2 py-1.5 pr-7 text-sm', isActive ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50', unread && 'text-foreground font-medium')}
+					className={({ isActive }) =>
+						cn(
+							'flex items-center gap-1.5 rounded-md px-2 py-1.5 pr-7 text-sm',
+							isActive ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50',
+							unread && 'text-foreground font-medium'
+						)
+					}
 				>
 					{unread && <span className="size-1.5 shrink-0 rounded-full bg-blue-500" aria-label="Unread" />}
 					<span className="truncate">{chat.title}</span>
@@ -123,7 +163,11 @@ export function ChatItem({ chat, folders, onNavigate }: { chat: ChatListItem; fo
 			{!renaming && (
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
-						<button type="button" aria-label={`Chat menu: ${chat.title}`} className="text-muted-foreground hover:text-foreground absolute top-1.5 right-1 hidden rounded p-0.5 group-focus-within:block group-hover:block data-[state=open]:block">
+						<button
+							type="button"
+							aria-label={`Chat menu: ${chat.title}`}
+							className="text-muted-foreground hover:text-foreground absolute top-1.5 right-1 hidden rounded p-0.5 group-focus-within:block group-hover:block data-[state=open]:block"
+						>
 							<MoreHorizontal className="size-4" />
 						</button>
 					</DropdownMenuTrigger>
@@ -169,11 +213,24 @@ export function ChatItem({ chat, folders, onNavigate }: { chat: ChatListItem; fo
 									<FolderInput className="size-4" /> Move
 								</DropdownMenuSubTrigger>
 								<DropdownMenuSubContent className="max-h-72 overflow-y-auto">
-									{chat.folder_id && <DropdownMenuItem onSelect={() => void act(() => updateChatFolderIdById(token, chat.id, undefined), 'Chat moved successfully')}>Out of the folder</DropdownMenuItem>}
+									{chat.folder_id && (
+										<DropdownMenuItem
+											onSelect={() =>
+												void act(() => updateChatFolderIdById(token, chat.id, undefined), 'Chat moved successfully')
+											}
+										>
+											Out of the folder
+										</DropdownMenuItem>
+									)}
 									{folders
 										.filter((f) => f.id !== chat.folder_id)
 										.map((f) => (
-											<DropdownMenuItem key={f.id} onSelect={() => void act(() => updateChatFolderIdById(token, chat.id, f.id), 'Chat moved successfully')}>
+											<DropdownMenuItem
+												key={f.id}
+												onSelect={() =>
+													void act(() => updateChatFolderIdById(token, chat.id, f.id), 'Chat moved successfully')
+												}
+											>
 												{f.name}
 											</DropdownMenuItem>
 										))}

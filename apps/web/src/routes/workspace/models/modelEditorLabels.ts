@@ -10,15 +10,35 @@ export const capabilityItems: CheckItem[] = [
 	{ id: 'web_search', label: 'Web Search', description: 'Model can search the web for information' },
 	{ id: 'image_generation', label: 'Image Generation', description: 'Model can generate images based on text prompts' },
 	{ id: 'code_interpreter', label: 'Code Interpreter', description: 'Model can execute code and perform calculations' },
-	{ id: 'terminal', label: 'Terminal', description: 'Model can access Open Terminal for command execution and file management' },
-	{ id: 'usage', label: 'Usage', description: 'Sends `stream_options: { include_usage: true }` in the request.\nSupported providers will return token usage information in the response when set.' },
+	{
+		id: 'terminal',
+		label: 'Terminal',
+		description: 'Model can access Open Terminal for command execution and file management'
+	},
+	{
+		id: 'usage',
+		label: 'Usage',
+		description:
+			'Sends `stream_options: { include_usage: true }` in the request.\nSupported providers will return token usage information in the response when set.'
+	},
 	{ id: 'citations', label: 'Citations', description: 'Displays citations in the response' },
-	{ id: 'status_updates', label: 'Status Updates', description: 'Displays status updates (e.g., web search progress) in the response' },
+	{
+		id: 'status_updates',
+		label: 'Status Updates',
+		description: 'Displays status updates (e.g., web search progress) in the response'
+	},
 	{ id: 'memory', label: 'Memory', description: 'Inject stored memories into conversation context' },
-	{ id: 'builtin_tools', label: 'Builtin Tools', description: 'Automatically inject system tools in native function calling mode (e.g., timestamps, memory, chat history, notes, etc.)' }
+	{
+		id: 'builtin_tools',
+		label: 'Builtin Tools',
+		description:
+			'Automatically inject system tools in native function calling mode (e.g., timestamps, memory, chat history, notes, etc.)'
+	}
 ];
 
-export const featureItems: CheckItem[] = capabilityItems.filter((c) => ['web_search', 'image_generation', 'code_interpreter'].includes(c.id));
+export const featureItems: CheckItem[] = capabilityItems.filter((c) =>
+	['web_search', 'image_generation', 'code_interpreter'].includes(c.id)
+);
 
 export const builtinToolItems: CheckItem[] = [
 	{ id: 'time', label: 'Time & Calculation', description: 'Get current time and perform date/time calculations' },
@@ -35,7 +55,11 @@ export const builtinToolItems: CheckItem[] = [
 	{ id: 'code_interpreter', label: 'Code Interpreter', description: 'Execute code' },
 	{ id: 'tasks', label: 'Task Management', description: 'Break down complex requests into trackable steps' },
 	{ id: 'automations', label: 'Automations', description: 'Create and manage scheduled automations' },
-	{ id: 'calendar', label: 'Calendar', description: 'List calendars, search, create, update, and delete calendar events' },
+	{
+		id: 'calendar',
+		label: 'Calendar',
+		description: 'List calendars, search, create, update, and delete calendar events'
+	},
 	{ id: 'subagents', label: 'Sub-agents', description: 'Delegate focused work to parallel sub-agents' }
 ];
 

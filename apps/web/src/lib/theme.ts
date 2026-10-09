@@ -36,5 +36,10 @@ export function applyTheme(theme: string) {
 	const root = document.documentElement;
 	root.classList.remove('dark', 'light', 'oled', 'oled-dark');
 	root.classList.add(...themeClasses(theme, window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false));
-	document.querySelector('meta[name="theme-color"]')?.setAttribute('content', root.classList.contains('oled') ? '#000000' : root.classList.contains('dark') ? '#171717' : '#ffffff');
+	document
+		.querySelector('meta[name="theme-color"]')
+		?.setAttribute(
+			'content',
+			root.classList.contains('oled') ? '#000000' : root.classList.contains('dark') ? '#171717' : '#ffffff'
+		);
 }

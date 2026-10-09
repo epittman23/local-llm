@@ -44,7 +44,7 @@ export const PASTED_TEXT_LIMIT = 1000;
 
 export function chatPrefs(settings: Record<string, unknown> | null | undefined): ChatPrefs {
 	// null counts as unset, as `??` does in the Svelte app and readSetting in interfaceSettingDefs.ts.
-	const read = <T>(key: string, fallback: T) => ((settings?.[key] ?? fallback) as T);
+	const read = <T>(key: string, fallback: T) => (settings?.[key] ?? fallback) as T;
 	const direction = read<string>('chatDirection', 'auto');
 	return {
 		chatBubble: read('chatBubble', true),
@@ -69,4 +69,5 @@ export function chatPrefs(settings: Record<string, unknown> | null | undefined):
 }
 
 /** A CSS `url(...)` for a data or http URL, quoted so it cannot end the declaration. */
-export const cssUrl = (url: string) => `url("${url.replace(/["\\\n\r]/g, (c) => `\\${c.charCodeAt(0).toString(16)} `)}")`;
+export const cssUrl = (url: string) =>
+	`url("${url.replace(/["\\\n\r]/g, (c) => `\\${c.charCodeAt(0).toString(16)} `)}")`;

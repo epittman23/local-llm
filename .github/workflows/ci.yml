@@ -31,26 +31,39 @@ env:
   NODE_VERSION: '26'
   BUN_VERSION: '1.4.2'
   PYTHON_VERSION: '3.12'
-  RUFF_VERSION: '0.16.10'
+  PRE_COMMIT_VERSION: '4.6.2'
 
 jobs:
-  lint:
-    name: Lint (ruff, repo-owned backend code)
+  pre-commit:
+    name: Lint and format (pre-commit)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
-      # Same paths as .pre-commit-config.yaml: the rest of open_webui/ is
-      # upstream Open WebUI and is not held to this repo's lint.
-      - name: ruff check
-        working-directory: apps/server
-        run: uvx ruff@${RUFF_VERSION} check --output-format=github backend/open_webui/benchmarks backend/tests
-      - name: ruff format --check
-        working-directory: apps/server
-        run: uvx ruff@${RUFF_VERSION} format --check backend/open_webui/benchmarks backend/tests
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      # The Biome hook runs apps/web's own pinned Biome.
+      - name: bun install
+        working-directory: apps/web
+        run: bun install --frozen-lockfile
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+      # .pre-commit-config.yaml is the only definition of the lint and
+      # format checks. no-commit-to-branch is skipped: it guards local
+      # commits, and on a push to main it would fail by design.
+      - name: pre-commit run --all-files
+        env:
+          SKIP: no-commit-to-branch
+        run: uvx pre-commit@${PRE_COMMIT_VERSION} run --all-files --show-diff-on-failure --color=always
 
   web:
     name: Web (astro check, vitest, build)
@@ -137,7 +150,7 @@ jobs:
   ci-ok:
     name: CI passed
     if: always()
-    needs: [lint, web, e2e, backend]
+    needs: [pre-commit, web, e2e, backend]
     runs-on: ubuntu-latest
     steps:
       - name: Every job succeeded

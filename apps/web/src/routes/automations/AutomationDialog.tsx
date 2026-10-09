@@ -28,10 +28,21 @@ import {
 } from './automationModel';
 import { useDestinations } from './useDestinations';
 
-const chip = 'text-muted-foreground hover:text-foreground flex items-center gap-1.5 rounded-2xl px-2.5 py-1.5 text-xs transition';
+const chip =
+	'text-muted-foreground hover:text-foreground flex items-center gap-1.5 rounded-2xl px-2.5 py-1.5 text-xs transition';
 const small = 'bg-transparent text-[0.8125rem] outline-hidden dark:[color-scheme:dark]';
 
-function Picker({ icon, label, children, ariaLabel }: { icon: ReactNode; label: string; children: ReactNode; ariaLabel: string }) {
+function Picker({
+	icon,
+	label,
+	children,
+	ariaLabel
+}: {
+	icon: ReactNode;
+	label: string;
+	children: ReactNode;
+	ariaLabel: string;
+}) {
 	return (
 		<Popover>
 			<PopoverTrigger asChild>
@@ -62,10 +73,19 @@ const pad = (n: number) => String(n).padStart(2, '0');
 function ScheduleField({ value, onChange }: { value: Schedule; onChange: (s: Schedule) => void }) {
 	const set = (patch: Partial<Schedule>) => onChange({ ...value, ...patch });
 	return (
-		<Picker icon={<Clock className="size-3.5" />} label={FREQUENCIES.find(([k]) => k === value.frequency)?.[1] ?? 'Schedule'} ariaLabel="Schedule">
+		<Picker
+			icon={<Clock className="size-3.5" />}
+			label={FREQUENCIES.find(([k]) => k === value.frequency)?.[1] ?? 'Schedule'}
+			ariaLabel="Schedule"
+		>
 			<div className="text-muted-foreground px-2 pt-0.5 text-[0.6875rem]">Schedule</div>
 			<div className="px-1.5 py-0.5">
-				<select aria-label="Frequency" className="w-full bg-transparent text-sm outline-hidden [&>option]:bg-popover" value={value.frequency} onChange={(e) => onChange(withFrequency(value, e.target.value as Frequency))}>
+				<select
+					aria-label="Frequency"
+					className="w-full bg-transparent text-sm outline-hidden [&>option]:bg-popover"
+					value={value.frequency}
+					onChange={(e) => onChange(withFrequency(value, e.target.value as Frequency))}
+				>
 					{FREQUENCIES.map(([k, l]) => (
 						<option key={k} value={k}>
 							{l}
@@ -75,14 +95,33 @@ function ScheduleField({ value, onChange }: { value: Schedule; onChange: (s: Sch
 			</div>
 			{value.frequency === 'CUSTOM' ? (
 				<div className="px-2 pb-2">
-					<input className="w-full rounded-lg border bg-transparent px-2 py-1 font-mono text-xs outline-hidden" aria-label="Custom RRULE" placeholder="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0" value={value.custom} onChange={(e) => set({ custom: e.target.value })} />
+					<input
+						className="w-full rounded-lg border bg-transparent px-2 py-1 font-mono text-xs outline-hidden"
+						aria-label="Custom RRULE"
+						placeholder="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0"
+						value={value.custom}
+						onChange={(e) => set({ custom: e.target.value })}
+					/>
 				</div>
 			) : value.frequency !== 'HOURLY' ? (
 				<div className="flex flex-wrap items-center gap-2 px-3 pb-2">
 					{value.frequency === 'ONCE' ? (
 						<>
-							<input type="date" aria-label="Date" className={small} min={localDate(new Date())} value={value.onceDate} onChange={(e) => set({ onceDate: e.target.value })} />
-							<input type="time" aria-label="Time" className={small} value={value.onceTime} onChange={(e) => set({ onceTime: e.target.value })} />
+							<input
+								type="date"
+								aria-label="Date"
+								className={small}
+								min={localDate(new Date())}
+								value={value.onceDate}
+								onChange={(e) => set({ onceDate: e.target.value })}
+							/>
+							<input
+								type="time"
+								aria-label="Time"
+								className={small}
+								value={value.onceTime}
+								onChange={(e) => set({ onceTime: e.target.value })}
+							/>
 						</>
 					) : (
 						<label className="flex items-center gap-1.5">
@@ -102,7 +141,15 @@ function ScheduleField({ value, onChange }: { value: Schedule; onChange: (s: Sch
 					{value.frequency === 'MONTHLY' && (
 						<label className="flex items-center gap-1.5">
 							<span className="text-muted-foreground text-xs">Day</span>
-							<input type="number" aria-label="Day of month" className={cn(small, 'w-12')} min={1} max={31} value={value.monthDay} onChange={(e) => set({ monthDay: Math.min(31, Math.max(1, Number(e.target.value) || 1)) })} />
+							<input
+								type="number"
+								aria-label="Day of month"
+								className={cn(small, 'w-12')}
+								min={1}
+								max={31}
+								value={value.monthDay}
+								onChange={(e) => set({ monthDay: Math.min(31, Math.max(1, Number(e.target.value) || 1)) })}
+							/>
 						</label>
 					)}
 				</div>
@@ -112,7 +159,16 @@ function ScheduleField({ value, onChange }: { value: Schedule; onChange: (s: Sch
 					{WEEKDAYS.map((d) => {
 						const on = value.days.includes(d);
 						return (
-							<button key={d} type="button" aria-pressed={on} className={cn('flex-1 rounded-xl py-1 text-xs transition', on ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground')} onClick={() => set({ days: on ? value.days.filter((x) => x !== d) : [...value.days, d] })}>
+							<button
+								key={d}
+								type="button"
+								aria-pressed={on}
+								className={cn(
+									'flex-1 rounded-xl py-1 text-xs transition',
+									on ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'
+								)}
+								onClick={() => set({ days: on ? value.days.filter((x) => x !== d) : [...value.days, d] })}
+							>
 								{d[0]}
 								{d[1].toLowerCase()}
 							</button>
@@ -129,18 +185,40 @@ type ModelInfo = { id: string; name: string; info?: { meta?: { hidden?: boolean 
 /** Ports ModelDropdown.svelte: search the models (hidden ones left out) and pick one. */
 function ModelField({ value, onChange }: { value: string; onChange: (id: string) => void }) {
 	const token = useAuthStore((s) => s.token) ?? '';
-	const models = useQuery({ queryKey: ['models-all'], queryFn: async () => ((await getModels(token)) ?? []) as ModelInfo[] });
+	const models = useQuery({
+		queryKey: ['models-all'],
+		queryFn: async () => ((await getModels(token)) ?? []) as ModelInfo[]
+	});
 	const [search, setSearch] = useState('');
 	const list = (models.data ?? []).filter((m) => !m.info?.meta?.hidden);
 	const q = search.toLowerCase();
 	const shown = q ? list.filter((m) => m.name.toLowerCase().includes(q) || m.id.toLowerCase().includes(q)) : list;
 	return (
-		<Picker icon={<Sparkles className="size-3.5" />} label={value ? (list.find((m) => m.id === value)?.name ?? value) : 'Select model'} ariaLabel="Model">
-			<input className="mb-1 w-full rounded-lg border bg-transparent px-2 py-1 text-xs outline-hidden" aria-label="Search models" placeholder="Search models" value={search} onChange={(e) => setSearch(e.target.value)} />
+		<Picker
+			icon={<Sparkles className="size-3.5" />}
+			label={value ? (list.find((m) => m.id === value)?.name ?? value) : 'Select model'}
+			ariaLabel="Model"
+		>
+			<input
+				className="mb-1 w-full rounded-lg border bg-transparent px-2 py-1 text-xs outline-hidden"
+				aria-label="Search models"
+				placeholder="Search models"
+				value={search}
+				onChange={(e) => setSearch(e.target.value)}
+			/>
 			<div className="max-h-60 overflow-y-auto">
-				{shown.length === 0 && <div className="text-muted-foreground px-2 py-1.5 text-xs">{models.isLoading ? 'Loading…' : 'No models found'}</div>}
+				{shown.length === 0 && (
+					<div className="text-muted-foreground px-2 py-1.5 text-xs">
+						{models.isLoading ? 'Loading…' : 'No models found'}
+					</div>
+				)}
 				{shown.map((m) => (
-					<button key={m.id} type="button" className="hover:bg-muted flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs" onClick={() => onChange(m.id)}>
+					<button
+						key={m.id}
+						type="button"
+						className="hover:bg-muted flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs"
+						onClick={() => onChange(m.id)}
+					>
 						<span className="truncate">{m.name}</span>
 						{m.id === value && <Check className="ml-auto size-3.5 shrink-0" />}
 					</button>
@@ -151,37 +229,81 @@ function ModelField({ value, onChange }: { value: string; onChange: (id: string)
 }
 
 /** Ports DestinationDropdown.svelte: a new chat (optionally in a folder), or a channel. */
-function DestinationField({ f, set, folders, channels }: { f: AutomationFields; set: (p: Partial<AutomationFields>) => void; folders: Folder[]; channels: Channel[] }) {
+function DestinationField({
+	f,
+	set,
+	folders,
+	channels
+}: {
+	f: AutomationFields;
+	set: (p: Partial<AutomationFields>) => void;
+	folders: Folder[];
+	channels: Channel[];
+}) {
 	const [tab, setTab] = useState<'' | 'folders' | 'channels'>('');
 	const [search, setSearch] = useState('');
 	const folderList = folderOptions(folders);
 	const channelList = channelOptions(channels);
 	const selectedFolder = folderList.find((x) => x.id === f.folderId);
 	const selectedChannel = channelList.find((x) => x.id === f.channelId);
-	const label = f.targetType === 'channel' ? (selectedChannel ? `#${selectedChannel.name}` : 'Choose channel') : (selectedFolder?.name ?? 'New chat');
+	const label =
+		f.targetType === 'channel'
+			? selectedChannel
+				? `#${selectedChannel.name}`
+				: 'Choose channel'
+			: (selectedFolder?.name ?? 'New chat');
 	const q = search.trim().toLowerCase();
 	const row = 'hover:bg-muted flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs';
 	return (
-		<Picker icon={f.targetType === 'channel' ? <Hash className="size-3.5" /> : f.folderId ? <FolderIcon className="size-3.5" /> : <MessageSquare className="size-3.5" />} label={label} ariaLabel="Destination">
+		<Picker
+			icon={
+				f.targetType === 'channel' ? (
+					<Hash className="size-3.5" />
+				) : f.folderId ? (
+					<FolderIcon className="size-3.5" />
+				) : (
+					<MessageSquare className="size-3.5" />
+				)
+			}
+			label={label}
+			ariaLabel="Destination"
+		>
 			{tab === '' ? (
 				<>
-					<button type="button" className={row} onClick={() => set({ targetType: 'chat', folderId: '', channelId: '' })}>
-						<MessageSquare className="size-3.5" /> New chat {f.targetType === 'chat' && !f.folderId && <Check className="ml-auto size-3.5" />}
+					<button
+						type="button"
+						className={row}
+						onClick={() => set({ targetType: 'chat', folderId: '', channelId: '' })}
+					>
+						<MessageSquare className="size-3.5" /> New chat{' '}
+						{f.targetType === 'chat' && !f.folderId && <Check className="ml-auto size-3.5" />}
 					</button>
 					<button type="button" className={row} onClick={() => setTab('folders')}>
-						<FolderIcon className="size-3.5" /> In a folder… {f.targetType === 'chat' && f.folderId && <Check className="ml-auto size-3.5" />}
+						<FolderIcon className="size-3.5" /> In a folder…{' '}
+						{f.targetType === 'chat' && f.folderId && <Check className="ml-auto size-3.5" />}
 					</button>
 					<button type="button" className={row} onClick={() => setTab('channels')}>
-						<Hash className="size-3.5" /> In a channel… {f.targetType === 'channel' && <Check className="ml-auto size-3.5" />}
+						<Hash className="size-3.5" /> In a channel…{' '}
+						{f.targetType === 'channel' && <Check className="ml-auto size-3.5" />}
 					</button>
 				</>
 			) : (
 				<>
 					<div className="mb-1 flex items-center gap-1">
-						<button type="button" className="text-muted-foreground hover:text-foreground px-1 text-xs" onClick={() => setTab('')}>
+						<button
+							type="button"
+							className="text-muted-foreground hover:text-foreground px-1 text-xs"
+							onClick={() => setTab('')}
+						>
 							‹ Back
 						</button>
-						<input className="w-full rounded-lg border bg-transparent px-2 py-1 text-xs outline-hidden" aria-label={`Search ${tab}`} placeholder={`Search ${tab}`} value={search} onChange={(e) => setSearch(e.target.value)} />
+						<input
+							className="w-full rounded-lg border bg-transparent px-2 py-1 text-xs outline-hidden"
+							aria-label={`Search ${tab}`}
+							placeholder={`Search ${tab}`}
+							value={search}
+							onChange={(e) => setSearch(e.target.value)}
+						/>
 					</div>
 					<div className="max-h-60 overflow-y-auto">
 						{tab === 'folders'
@@ -190,21 +312,35 @@ function DestinationField({ f, set, folders, channels }: { f: AutomationFields; 
 									.map((x) => {
 										const path = folderPath(x, folderList);
 										return (
-											<button key={x.id} type="button" className={row} onClick={() => set({ targetType: 'chat', folderId: x.id, channelId: '' })}>
+											<button
+												key={x.id}
+												type="button"
+												className={row}
+												onClick={() => set({ targetType: 'chat', folderId: x.id, channelId: '' })}
+											>
 												<span className="truncate">
 													{x.name}
 													{path && <span className="text-muted-foreground"> · {path}</span>}
 												</span>
-												{f.targetType === 'chat' && f.folderId === x.id && <Check className="ml-auto size-3.5 shrink-0" />}
+												{f.targetType === 'chat' && f.folderId === x.id && (
+													<Check className="ml-auto size-3.5 shrink-0" />
+												)}
 											</button>
 										);
 									})
 							: channelList
 									.filter((x) => !q || x.name.toLowerCase().includes(q))
 									.map((x) => (
-										<button key={x.id} type="button" className={row} onClick={() => set({ targetType: 'channel', channelId: x.id, folderId: '' })}>
+										<button
+											key={x.id}
+											type="button"
+											className={row}
+											onClick={() => set({ targetType: 'channel', channelId: x.id, folderId: '' })}
+										>
 											<span className="truncate">#{x.name}</span>
-											{f.targetType === 'channel' && f.channelId === x.id && <Check className="ml-auto size-3.5 shrink-0" />}
+											{f.targetType === 'channel' && f.channelId === x.id && (
+												<Check className="ml-auto size-3.5 shrink-0" />
+											)}
 										</button>
 									))}
 					</div>
@@ -287,12 +423,25 @@ export function AutomationDialog({
 						save();
 					}}
 				>
-					<input className="placeholder:text-muted-foreground/50 w-full bg-transparent text-lg outline-hidden" aria-label="Automation title" placeholder="Automation title" value={f.name} onChange={(e) => set({ name: e.target.value })} />
+					<input
+						className="placeholder:text-muted-foreground/50 w-full bg-transparent text-lg outline-hidden"
+						aria-label="Automation title"
+						placeholder="Automation title"
+						value={f.name}
+						onChange={(e) => set({ name: e.target.value })}
+					/>
 					<div>
 						<label className="text-muted-foreground mb-1 block text-xs" htmlFor="automation-prompt">
 							Instructions
 						</label>
-						<textarea id="automation-prompt" className="placeholder:text-muted-foreground/50 w-full resize-none bg-transparent text-sm outline-hidden" rows={8} placeholder="Enter prompt here." value={f.prompt} onChange={(e) => set({ prompt: e.target.value })} />
+						<textarea
+							id="automation-prompt"
+							className="placeholder:text-muted-foreground/50 w-full resize-none bg-transparent text-sm outline-hidden"
+							rows={8}
+							placeholder="Enter prompt here."
+							value={f.prompt}
+							onChange={(e) => set({ prompt: e.target.value })}
+						/>
 					</div>
 					<div className="flex flex-wrap items-center justify-between gap-2 border-t pt-2">
 						<div className="flex min-w-0 flex-wrap items-center gap-0.5">

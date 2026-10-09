@@ -26,10 +26,19 @@ export type KnowledgeFile = {
 };
 export type KnowledgeDirectory = { id: string; name: string; created_at: number; updated_at: number };
 
-const isMovePayload = (dt: DataTransfer | null) => Boolean(dt?.types.includes(KB_FILE_MOVE) || dt?.types.includes(KB_DIR_MOVE));
+const isMovePayload = (dt: DataTransfer | null) =>
+	Boolean(dt?.types.includes(KB_FILE_MOVE) || dt?.types.includes(KB_DIR_MOVE));
 
 /** An inline rename field: Enter or blur commits, Escape cancels. Space is kept from bubbling to the row. */
-function RenameInput({ initial, onCommit, onCancel }: { initial: string; onCommit: (name: string) => void; onCancel: () => void }) {
+function RenameInput({
+	initial,
+	onCommit,
+	onCancel
+}: {
+	initial: string;
+	onCommit: (name: string) => void;
+	onCancel: () => void;
+}) {
 	const [value, setValue] = useState(initial);
 	const ref = useRef<HTMLInputElement>(null);
 	useEffect(() => ref.current?.select(), []);
@@ -94,7 +103,12 @@ export function KnowledgeBreadcrumbs({
 
 	return (
 		<div ref={el} className="flex min-w-0 flex-1 items-center overflow-x-auto">
-			<button type="button" className={crumbClass(breadcrumbs.length === 0, -1)} onClick={() => onNavigate(null)} {...dropProps(-1, null)}>
+			<button
+				type="button"
+				className={crumbClass(breadcrumbs.length === 0, -1)}
+				onClick={() => onNavigate(null)}
+				{...dropProps(-1, null)}
+			>
 				{rootLabel}
 			</button>
 			{breadcrumbs.map((crumb, i) => (
@@ -161,7 +175,10 @@ export function KnowledgeFileList({
 					key={dir.id}
 					role="listitem"
 					draggable
-					className={cn('group hover:bg-muted/60 flex w-full cursor-pointer rounded-xl px-2 transition', dropOver === dir.id && 'bg-muted ring-1')}
+					className={cn(
+						'group hover:bg-muted/60 flex w-full cursor-pointer rounded-xl px-2 transition',
+						dropOver === dir.id && 'bg-muted ring-1'
+					)}
 					onDragStart={(e) => e.dataTransfer.setData(KB_DIR_MOVE, JSON.stringify({ dirId: dir.id }))}
 					onDoubleClick={() => writeAccess && setRenamingDir(dir.id)}
 					onDragOver={(e) => {
@@ -181,7 +198,12 @@ export function KnowledgeFileList({
 					}}
 				>
 					<div className="flex items-center">
-						<button type="button" className="rounded-full p-1" aria-label={`Open ${dir.name}`} onClick={() => onOpenDirectory(dir.id)}>
+						<button
+							type="button"
+							className="rounded-full p-1"
+							aria-label={`Open ${dir.name}`}
+							onClick={() => onOpenDirectory(dir.id)}
+						>
 							<Folder className="size-3.5" />
 						</button>
 					</div>
@@ -206,7 +228,9 @@ export function KnowledgeFileList({
 						</div>
 						{dir.updated_at && (
 							<Tip content={dayjs(dir.updated_at * 1000).format('LLLL')}>
-								<div className="text-muted-foreground/70 shrink-0 text-xs">{dayjs(dir.updated_at * 1000).fromNow()}</div>
+								<div className="text-muted-foreground/70 shrink-0 text-xs">
+									{dayjs(dir.updated_at * 1000).fromNow()}
+								</div>
 							</Tip>
 						)}
 					</button>
@@ -239,7 +263,9 @@ export function KnowledgeFileList({
 					<Spinner className="mr-2 size-3.5" />
 					<span className="line-clamp-1">
 						{item.name}
-						{item.size ? <span className="text-muted-foreground ml-1 text-[0.6875rem]">{formatFileSize(item.size)}</span> : null}
+						{item.size ? (
+							<span className="text-muted-foreground ml-1 text-[0.6875rem]">{formatFileSize(item.size)}</span>
+						) : null}
 					</span>
 				</div>
 			))}
@@ -253,14 +279,22 @@ export function KnowledgeFileList({
 						key={fileId}
 						role="listitem"
 						draggable
-						className={cn('flex w-full cursor-pointer rounded-xl px-2 transition hover:bg-muted/60', selectedFileId === fileId && 'bg-muted/60')}
+						className={cn(
+							'flex w-full cursor-pointer rounded-xl px-2 transition hover:bg-muted/60',
+							selectedFileId === fileId && 'bg-muted/60'
+						)}
 						onDragStart={(e) => fileId && e.dataTransfer.setData(KB_FILE_MOVE, JSON.stringify({ fileId }))}
 					>
 						<div className="flex items-center">
 							{isUploading ? (
 								<Spinner className="size-3.5" />
 							) : (
-								<button type="button" className="rounded-full p-1" aria-label={`Open ${name}`} onClick={() => fileId && onSelect(fileId)}>
+								<button
+									type="button"
+									className="rounded-full p-1"
+									aria-label={`Open ${name}`}
+									onClick={() => fileId && onSelect(fileId)}
+								>
 									<FileIcon className="size-3.5" />
 								</button>
 							)}
@@ -284,7 +318,11 @@ export function KnowledgeFileList({
 								) : (
 									<>
 										{name}
-										{file.meta?.size ? <span className="text-muted-foreground ml-1 text-[0.6875rem]">{formatFileSize(file.meta.size)}</span> : null}
+										{file.meta?.size ? (
+											<span className="text-muted-foreground ml-1 text-[0.6875rem]">
+												{formatFileSize(file.meta.size)}
+											</span>
+										) : null}
 									</>
 								)}
 							</div>
@@ -316,7 +354,14 @@ export function KnowledgeFileList({
 											<Pencil />
 											Rename
 										</DropdownMenuItem>
-										<DropdownMenuItem onSelect={() => window.open(`${WEBUI_BASE_URL}/api/v1/files/${encodeURIComponent(fileId ?? '')}/content`, '_blank')}>
+										<DropdownMenuItem
+											onSelect={() =>
+												window.open(
+													`${WEBUI_BASE_URL}/api/v1/files/${encodeURIComponent(fileId ?? '')}/content`,
+													'_blank'
+												)
+											}
+										>
 											<Download />
 											Download
 										</DropdownMenuItem>

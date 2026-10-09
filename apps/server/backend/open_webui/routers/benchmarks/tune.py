@@ -107,9 +107,7 @@ async def resume_tune(sweep_id: str | None = None, user=Depends(get_admin_user))
         )
     defaults = tune.SweepOptions()
     _last_error = None
-    _task = asyncio.create_task(
-        _run_sweep(lambda session: tune.resume_sweep(sweep_id, defaults, session))
-    )
+    _task = asyncio.create_task(_run_sweep(lambda session: tune.resume_sweep(sweep_id, defaults, session)))
     return {'resumed': True}
 
 

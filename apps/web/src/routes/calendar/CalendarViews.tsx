@@ -2,24 +2,54 @@ import { type KeyboardEvent, useMemo } from 'react';
 import type { CalendarEventModel, CalendarModel } from '@/lib/apis/calendar';
 import { Tip } from '@/components/common/Tip';
 import { cn } from '@/lib/utils';
-import { type CalendarViewMode, DAY_NAMES, NS, dayKey, eventsByDay, eventsInHour, formatHour, isSameDay, monthGrid, nsAt, weekDays } from './calendarModel';
+import {
+	type CalendarViewMode,
+	DAY_NAMES,
+	NS,
+	dayKey,
+	eventsByDay,
+	eventsInHour,
+	formatHour,
+	isSameDay,
+	monthGrid,
+	nsAt,
+	weekDays
+} from './calendarModel';
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
 /** One event in a grid cell: a colored dot, the start time (unless all-day), the title. Automation runs are dimmed. */
-function EventChip({ event, color, onClick }: { event: CalendarEventModel; color: string | null | undefined; onClick: (e: CalendarEventModel) => void }) {
-	const time = event.all_day ? null : new Date(event.start_at / NS).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }).replace(' ', '');
+function EventChip({
+	event,
+	color,
+	onClick
+}: {
+	event: CalendarEventModel;
+	color: string | null | undefined;
+	onClick: (e: CalendarEventModel) => void;
+}) {
+	const time = event.all_day
+		? null
+		: new Date(event.start_at / NS)
+				.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+				.replace(' ', '');
 	return (
 		<Tip content={`${event.title}${event.location ? ` · ${event.location}` : ''}`}>
 			<button
 				type="button"
-				className={cn('hover:bg-muted flex w-full items-start gap-1.5 truncate rounded-md px-0.5 text-left text-xs transition', event.meta?.automation_id && 'opacity-60')}
+				className={cn(
+					'hover:bg-muted flex w-full items-start gap-1.5 truncate rounded-md px-0.5 text-left text-xs transition',
+					event.meta?.automation_id && 'opacity-60'
+				)}
 				onClick={(e) => {
 					e.stopPropagation();
 					onClick(event);
 				}}
 			>
-				<span className="mt-[0.3125rem] size-[0.4375rem] shrink-0 rounded-full" style={{ backgroundColor: event.color || color || '#3b82f6' }} />
+				<span
+					className="mt-[0.3125rem] size-[0.4375rem] shrink-0 rounded-full"
+					style={{ backgroundColor: event.color || color || '#3b82f6' }}
+				/>
 				<span className="truncate">
 					{time && <span className="text-muted-foreground">{time} </span>}
 					{event.title}
@@ -73,7 +103,9 @@ export function CalendarViews({
 	const colors = useMemo(() => Object.fromEntries(calendars.map((c) => [c.id, c.color])), [calendars]);
 	const byDay = useMemo(() => eventsByDay(events), [events]);
 	const today = new Date();
-	const chip = (e: CalendarEventModel) => <EventChip key={e.instance_id || e.id} event={e} color={colors[e.calendar_id]} onClick={onEventClick} />;
+	const chip = (e: CalendarEventModel) => (
+		<EventChip key={e.instance_id || e.id} event={e} color={colors[e.calendar_id]} onClick={onEventClick} />
+	);
 	const cell = (label: string, onActivate: () => void) => ({
 		role: 'button' as const,
 		tabIndex: 0,
@@ -104,9 +136,21 @@ export function CalendarViews({
 							<div
 								key={day.toISOString()}
 								{...cell(`New event on ${day.toDateString()}`, () => onCreate(nsAt(day, 9)))}
-								className={cn('hover:bg-muted/50 flex min-h-0 cursor-pointer flex-col overflow-hidden p-1 text-left transition', day.getMonth() !== date.getMonth() && 'opacity-40', i % 7 > 0 && 'border-l', i >= 7 && 'border-t')}
+								className={cn(
+									'hover:bg-muted/50 flex min-h-0 cursor-pointer flex-col overflow-hidden p-1 text-left transition',
+									day.getMonth() !== date.getMonth() && 'opacity-40',
+									i % 7 > 0 && 'border-l',
+									i >= 7 && 'border-t'
+								)}
 							>
-								<span className={cn('mb-0.5 flex size-6 items-center justify-center rounded-full text-xs', isSameDay(day, today) ? 'bg-blue-500 text-white' : 'text-muted-foreground')}>{day.getDate()}</span>
+								<span
+									className={cn(
+										'mb-0.5 flex size-6 items-center justify-center rounded-full text-xs',
+										isSameDay(day, today) ? 'bg-blue-500 text-white' : 'text-muted-foreground'
+									)}
+								>
+									{day.getDate()}
+								</span>
 								<div className="flex flex-1 flex-col overflow-hidden">
 									{dayEvents.slice(0, 3).map(chip)}
 									{dayEvents.length > 3 && <More count={dayEvents.length - 3} onClick={() => onOpenDay(day)} />}
@@ -130,21 +174,43 @@ export function CalendarViews({
 							{days.map((day) => (
 								<div key={day.toISOString()} className={cn('py-2.5 text-center', day.getDay() > 0 && 'border-l')}>
 									<div className="text-muted-foreground text-[0.6875rem]">{DAY_NAMES[day.getDay()]}</div>
-									<div className={cn('mx-auto mt-0.5 flex size-7 items-center justify-center rounded-full text-sm', isSameDay(day, today) && 'bg-blue-500 text-white')}>{day.getDate()}</div>
+									<div
+										className={cn(
+											'mx-auto mt-0.5 flex size-7 items-center justify-center rounded-full text-sm',
+											isSameDay(day, today) && 'bg-blue-500 text-white'
+										)}
+									>
+										{day.getDate()}
+									</div>
 								</div>
 							))}
 						</div>
 					)}
 					{HOURS.map((hour) => (
-						<div key={hour} className={cn('grid min-h-[3.25rem]', view === 'week' ? 'grid-cols-[52px_repeat(7,1fr)]' : 'grid-cols-[56px_1fr]', hour > 0 && 'border-t border-border/50')}>
-							<div className="text-muted-foreground pt-1 pr-2 text-right text-[0.625rem] select-none">{view === 'day' || hour > 0 ? formatHour(hour) : ''}</div>
+						<div
+							key={hour}
+							className={cn(
+								'grid min-h-[3.25rem]',
+								view === 'week' ? 'grid-cols-[52px_repeat(7,1fr)]' : 'grid-cols-[56px_1fr]',
+								hour > 0 && 'border-t border-border/50'
+							)}
+						>
+							<div className="text-muted-foreground pt-1 pr-2 text-right text-[0.625rem] select-none">
+								{view === 'day' || hour > 0 ? formatHour(hour) : ''}
+							</div>
 							{days.map((day) => {
 								const hourEvents = eventsInHour(events, day, hour);
 								const shown = view === 'week' ? hourEvents.slice(0, 3) : hourEvents;
 								return (
-									<div key={day.toISOString()} {...cell(`New event ${day.toDateString()} ${formatHour(hour)}`, () => onCreate(nsAt(day, hour)))} className="hover:bg-muted/40 flex min-w-0 cursor-pointer flex-col gap-0.5 border-l border-border/50 p-0.5 transition">
+									<div
+										key={day.toISOString()}
+										{...cell(`New event ${day.toDateString()} ${formatHour(hour)}`, () => onCreate(nsAt(day, hour)))}
+										className="hover:bg-muted/40 flex min-w-0 cursor-pointer flex-col gap-0.5 border-l border-border/50 p-0.5 transition"
+									>
 										{shown.map(chip)}
-										{view === 'week' && hourEvents.length > 3 && <More count={hourEvents.length - 3} onClick={() => onOpenDay(day)} />}
+										{view === 'week' && hourEvents.length > 3 && (
+											<More count={hourEvents.length - 3} onClick={() => onOpenDay(day)} />
+										)}
 									</div>
 								);
 							})}

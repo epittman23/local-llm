@@ -29,8 +29,7 @@ export function ErrorPage() {
 			<div className="max-w-md">
 				<h1 className="text-2xl font-normal">{WEBUI_NAME} Backend Required</h1>
 				<p className="mt-4 text-sm">
-					Oops! You're using an unsupported method (frontend only). Please serve the WebUI from the
-					backend.
+					Oops! You're using an unsupported method (frontend only). Please serve the WebUI from the backend.
 				</p>
 				<Button className="mt-6" variant="secondary" onClick={() => (window.location.href = '/')}>
 					Check Again

@@ -28,11 +28,7 @@ export const sectionPaths: Record<WorkspaceSection, string> = {
  * simply hidden). That asymmetry is kept: this is the tab-visibility rule,
  * and `canEnterSection` below is the redirect rule.
  */
-export function canSeeTab(
-	user: SessionUser | null,
-	config: BackendConfig | null,
-	section: WorkspaceSection
-): boolean {
+export function canSeeTab(user: SessionUser | null, config: BackendConfig | null, section: WorkspaceSection): boolean {
 	if (section === 'tools' && !config?.features?.enable_plugins) return false;
 	return user?.role === 'admin' || Boolean(user?.permissions?.workspace?.[section]);
 }

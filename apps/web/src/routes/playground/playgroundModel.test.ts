@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { appendAssistant, chatRequest, chatToExport, chatToText, deltaFromLine, initialModel, readCompletionStream } from './playgroundModel';
+import {
+	appendAssistant,
+	chatRequest,
+	chatToExport,
+	chatToText,
+	deltaFromLine,
+	initialModel,
+	readCompletionStream
+} from './playgroundModel';
 
 const event = (text: string) => `data: ${JSON.stringify({ choices: [{ delta: { content: text } }] })}\n`;
 const streamOf = (...chunks: string[]) =>
@@ -49,7 +57,9 @@ describe('readCompletionStream', () => {
 
 describe('messages', () => {
 	it('builds the request with the system first and only set parameters', () => {
-		expect(chatRequest('m', 'Be brief', [{ role: 'user', content: 'Hi' }], { temperature: 0.2, top_p: null, stop: '' })).toEqual({
+		expect(
+			chatRequest('m', 'Be brief', [{ role: 'user', content: 'Hi' }], { temperature: 0.2, top_p: null, stop: '' })
+		).toEqual({
 			model: 'm',
 			stream: true,
 			messages: [
@@ -61,7 +71,10 @@ describe('messages', () => {
 	});
 	it('streams into the last assistant message, or starts one, skipping a leading newline', () => {
 		const one = appendAssistant([{ role: 'user', content: 'Hi' }], '\n');
-		expect(one).toEqual([{ role: 'user', content: 'Hi' }, { role: 'assistant', content: '' }]);
+		expect(one).toEqual([
+			{ role: 'user', content: 'Hi' },
+			{ role: 'assistant', content: '' }
+		]);
 		expect(appendAssistant(appendAssistant(one, 'Hel'), 'lo').at(-1)).toEqual({ role: 'assistant', content: 'Hello' });
 	});
 	it('exports text and the chat-import format as one chain', () => {

@@ -62,9 +62,14 @@ export function SettingsModal() {
 				className="flex h-[min(max(54rem,80dvh),calc(100dvh-4rem))] max-h-[calc(100dvh-4rem)] w-[calc(100vw-2rem)] max-w-[80rem] gap-0 overflow-hidden p-0 sm:max-w-[80rem] max-md:flex-col"
 			>
 				<DialogTitle className="sr-only">Settings</DialogTitle>
-				<DialogDescription className="sr-only">Your settings and, for administrators, the server settings.</DialogDescription>
+				<DialogDescription className="sr-only">
+					Your settings and, for administrators, the server settings.
+				</DialogDescription>
 
-				<nav id="settings-tabs-container" className="flex min-w-0 shrink-0 border-b md:min-h-0 md:w-[15rem] md:flex-col md:border-r md:border-b-0">
+				<nav
+					id="settings-tabs-container"
+					className="flex min-w-0 shrink-0 border-b md:min-h-0 md:w-[15rem] md:flex-col md:border-r md:border-b-0"
+				>
 					<button
 						type="button"
 						className="text-muted-foreground hover:text-foreground m-1 flex h-7 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs transition-colors md:mb-0 md:w-[calc(100%-0.5rem)]"
@@ -86,14 +91,28 @@ export function SettingsModal() {
 							placeholder="Search"
 						/>
 					</div>
-					<div role="tablist" aria-orientation="vertical" className="flex min-h-0 min-w-0 flex-1 gap-px overflow-x-auto p-1 pl-0 md:flex-col md:overflow-x-hidden md:overflow-y-auto md:pl-1">
+					<div
+						role="tablist"
+						aria-orientation="vertical"
+						className="flex min-h-0 min-w-0 flex-1 gap-px overflow-x-auto p-1 pl-0 md:flex-col md:overflow-x-hidden md:overflow-y-auto md:pl-1"
+					>
 						{filtered.map((tab, index) => (
 							<div key={tab.id} className="contents">
 								{isAdminTab(tab.id) && (index === 0 || !isAdminTab(filtered[index - 1].id)) && (
-									<span className="text-foreground/80 mt-3 mb-0.5 hidden px-2 text-[0.625rem] font-medium md:block">Admin</span>
+									<span className="text-foreground/80 mt-3 mb-0.5 hidden px-2 text-[0.625rem] font-medium md:block">
+										Admin
+									</span>
 								)}
 								{startsGroup(filtered, index) && (
-									<span className={cn('text-muted-foreground hidden shrink-0 px-2 text-[0.625rem] md:block', index === 0 ? 'mt-0.5' : 'mt-2', 'mb-0.5')}>{tab.group}</span>
+									<span
+										className={cn(
+											'text-muted-foreground hidden shrink-0 px-2 text-[0.625rem] md:block',
+											index === 0 ? 'mt-0.5' : 'mt-2',
+											'mb-0.5'
+										)}
+									>
+										{tab.group}
+									</span>
 								)}
 								<button
 									type="button"
@@ -113,7 +132,11 @@ export function SettingsModal() {
 				</nav>
 
 				<div className="flex min-h-0 min-w-0 flex-1 flex-col p-4 md:px-5">
-					<div id={selected ? `tab-${selected.replace(':', '-')}` : undefined} role="tabpanel" className="min-h-0 flex-1 overflow-hidden">
+					<div
+						id={selected ? `tab-${selected.replace(':', '-')}` : undefined}
+						role="tabpanel"
+						className="min-h-0 flex-1 overflow-hidden"
+					>
 						{Active && (
 							<Suspense
 								fallback={

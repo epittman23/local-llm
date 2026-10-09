@@ -18,5 +18,13 @@ export type MarkdownEnv = {
 	fadeStreamingText: boolean;
 };
 
-export const MarkdownEnvContext = createContext<MarkdownEnv>({ id: '', done: true, resolvable: false, sourceIds: [], expandDetails: false, collapseCodeBlocks: false, fadeStreamingText: true });
+export const MarkdownEnvContext = createContext<MarkdownEnv>({
+	id: '',
+	done: true,
+	resolvable: false,
+	sourceIds: [],
+	expandDetails: false,
+	collapseCodeBlocks: false,
+	fadeStreamingText: true
+});
 export const useMarkdownEnv = () => useContext(MarkdownEnvContext);

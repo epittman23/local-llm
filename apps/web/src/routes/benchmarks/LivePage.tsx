@@ -78,9 +78,8 @@ export function LivePage() {
 							<AlertDialogHeader>
 								<AlertDialogTitle>Kill active run</AlertDialogTitle>
 								<AlertDialogDescription>
-									Are you sure you want to force-kill the currently running server? This sends
-									an immediate kill signal rather than a graceful stop -- any in-progress request
-									is lost.
+									Are you sure you want to force-kill the currently running server? This sends an immediate kill signal
+									rather than a graceful stop -- any in-progress request is lost.
 								</AlertDialogDescription>
 							</AlertDialogHeader>
 							<AlertDialogFooter>
@@ -140,19 +139,14 @@ export function LivePage() {
 
 					<div>
 						<div className="mb-1 px-0.5 text-xs">Summary</div>
-						<div
-							className="grid gap-2"
-							style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(9.5rem, 1fr))' }}
-						>
+						<div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(9.5rem, 1fr))' }}>
 							{Object.entries(summary).map(([key, value]) => (
 								<div key={key} className="flex flex-col gap-0.5 rounded-lg border px-2.5 py-2">
 									<span className="text-muted-foreground truncate text-[0.6875rem]">{key}</span>
 									<span className="text-sm">{formatValue(value)}</span>
 								</div>
 							))}
-							{Object.keys(summary).length === 0 && (
-								<div className="text-muted-foreground text-xs">No data</div>
-							)}
+							{Object.keys(summary).length === 0 && <div className="text-muted-foreground text-xs">No data</div>}
 						</div>
 					</div>
 

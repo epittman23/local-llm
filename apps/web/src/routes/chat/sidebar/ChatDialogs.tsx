@@ -6,7 +6,14 @@ import { toast } from 'sonner';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -30,7 +37,11 @@ export const shareUrl = (shareId: string) => `${window.location.origin}${appHref
  */
 export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { chatId: string }) {
 	const token = useAuthStore((s) => s.token) ?? '';
-	const chat = useQuery({ queryKey: ['chat-share', chatId], enabled: open, queryFn: async () => (await getChatById(token, chatId)) as { share_id?: string | null } });
+	const chat = useQuery({
+		queryKey: ['chat-share', chatId],
+		enabled: open,
+		queryFn: async () => (await getChatById(token, chatId)) as { share_id?: string | null }
+	});
 	const [busy, setBusy] = useState(false);
 	const shared = Boolean(chat.data?.share_id);
 
@@ -94,7 +105,11 @@ export function SearchChatsDialog({ open, onOpenChange }: DialogProps) {
 	useEffect(() => {
 		if (!open) setQuery('');
 	}, [open]);
-	const results = useQuery({ queryKey: ['chats', 'search', q], enabled: open && q.length > 0, queryFn: async () => ((await getChatListBySearchText(token, q, 1).catch(() => [])) ?? []) as ChatListItem[] });
+	const results = useQuery({
+		queryKey: ['chats', 'search', q],
+		enabled: open && q.length > 0,
+		queryFn: async () => ((await getChatListBySearchText(token, q, 1).catch(() => [])) ?? []) as ChatListItem[]
+	});
 	const go = (path: string) => {
 		onOpenChange(false);
 		navigate(path);
@@ -108,11 +123,22 @@ export function SearchChatsDialog({ open, onOpenChange }: DialogProps) {
 				</DialogHeader>
 				<div className="relative">
 					<Search className="text-muted-foreground absolute top-2.5 left-2.5 size-4" />
-					<Input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" aria-label="Search chats" className="pl-8" />
+					<Input
+						autoFocus
+						value={query}
+						onChange={(e) => setQuery(e.target.value)}
+						placeholder="Search"
+						aria-label="Search chats"
+						className="pl-8"
+					/>
 				</div>
 				<div className="max-h-96 overflow-y-auto" role="listbox" aria-label="Search results">
 					{!q ? (
-						<button type="button" className="hover:bg-muted flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm" onClick={() => go('/')}>
+						<button
+							type="button"
+							className="hover:bg-muted flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm"
+							onClick={() => go('/')}
+						>
 							<MessageSquare className="size-4" /> Start a new conversation
 						</button>
 					) : results.isLoading ? (
@@ -123,7 +149,14 @@ export function SearchChatsDialog({ open, onOpenChange }: DialogProps) {
 						<p className="text-muted-foreground px-2 py-6 text-center text-sm">No results found</p>
 					) : (
 						results.data.map((c) => (
-							<button key={c.id} type="button" role="option" aria-selected={false} className="hover:bg-muted flex w-full items-center justify-between gap-2 rounded-lg px-2 py-2 text-left text-sm" onClick={() => go(`/c/${c.id}`)}>
+							<button
+								key={c.id}
+								type="button"
+								role="option"
+								aria-selected={false}
+								className="hover:bg-muted flex w-full items-center justify-between gap-2 rounded-lg px-2 py-2 text-left text-sm"
+								onClick={() => go(`/c/${c.id}`)}
+							>
 								<span className="truncate">{c.title}</span>
 								<span className="text-muted-foreground shrink-0 text-xs">{c.time_range}</span>
 							</button>
@@ -140,7 +173,12 @@ export function SearchChatsDialog({ open, onOpenChange }: DialogProps) {
  * system prompt applies to every chat in it; the server adds it). Not ported:
  * the background image and the folder's knowledge files.
  */
-export function FolderDialog({ open, onOpenChange, folder, onSave }: DialogProps & { folder?: Folder | null; onSave: (v: { name: string; system_prompt: string }) => Promise<boolean> }) {
+export function FolderDialog({
+	open,
+	onOpenChange,
+	folder,
+	onSave
+}: DialogProps & { folder?: Folder | null; onSave: (v: { name: string; system_prompt: string }) => Promise<boolean> }) {
 	const [name, setName] = useState('');
 	const [prompt, setPrompt] = useState('');
 	const [busy, setBusy] = useState(false);
@@ -172,11 +210,22 @@ export function FolderDialog({ open, onOpenChange, folder, onSave }: DialogProps
 				>
 					<div className="flex flex-col gap-1.5">
 						<Label htmlFor="folder-name">Folder Name</Label>
-						<Input id="folder-name" autoFocus placeholder="Enter folder name" value={name} onChange={(e) => setName(e.target.value)} />
+						<Input
+							id="folder-name"
+							autoFocus
+							placeholder="Enter folder name"
+							value={name}
+							onChange={(e) => setName(e.target.value)}
+						/>
 					</div>
 					<div className="flex flex-col gap-1.5">
 						<Label htmlFor="folder-prompt">System Prompt</Label>
-						<Textarea id="folder-prompt" placeholder="Write your model system prompt content here" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
+						<Textarea
+							id="folder-prompt"
+							placeholder="Write your model system prompt content here"
+							value={prompt}
+							onChange={(e) => setPrompt(e.target.value)}
+						/>
 					</div>
 					<DialogFooter>
 						<Button type="submit" disabled={busy}>
@@ -190,7 +239,12 @@ export function FolderDialog({ open, onOpenChange, folder, onSave }: DialogProps
 }
 
 /** RecursiveFolder.svelte's delete confirmation, with "delete everything inside" as an explicit choice. */
-export function DeleteFolderDialog({ open, onOpenChange, folder, onDelete }: DialogProps & { folder: Folder; onDelete: (withContents: boolean) => void }) {
+export function DeleteFolderDialog({
+	open,
+	onOpenChange,
+	folder,
+	onDelete
+}: DialogProps & { folder: Folder; onDelete: (withContents: boolean) => void }) {
 	const [contents, setContents] = useState(false);
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -200,7 +254,11 @@ export function DeleteFolderDialog({ open, onOpenChange, folder, onDelete }: Dia
 					<DialogDescription>Are you sure you want to delete "{folder.name}"?</DialogDescription>
 				</DialogHeader>
 				<label className="flex items-center gap-2 text-sm">
-					<Checkbox checked={contents} onCheckedChange={(v) => setContents(v === true)} aria-label="Delete all contents inside this folder" />
+					<Checkbox
+						checked={contents}
+						onCheckedChange={(v) => setContents(v === true)}
+						aria-label="Delete all contents inside this folder"
+					/>
 					Delete all contents inside this folder
 				</label>
 				<DialogFooter>

@@ -18,7 +18,11 @@ const payload = (f: FunctionDraft) => ({ id: f.id, name: f.name, meta: f.meta, c
 /** Functions feed the model list; those consumers (chat, the model pickers) refetch when these keys go stale. */
 const useRefreshFunctions = () => {
 	const queryClient = useQueryClient();
-	return () => Promise.all([queryClient.invalidateQueries({ queryKey: ['functions'] }), queryClient.invalidateQueries({ queryKey: ['models'] })]);
+	return () =>
+		Promise.all([
+			queryClient.invalidateQueries({ queryKey: ['functions'] }),
+			queryClient.invalidateQueries({ queryKey: ['models'] })
+		]);
 };
 
 /**

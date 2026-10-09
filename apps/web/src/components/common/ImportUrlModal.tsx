@@ -5,7 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { extractFrontmatter, nameToId } from '@/lib/utils/plugins';
 
-type Imported = { id?: string; name: string; content: string; meta?: Record<string, unknown> } & Record<string, unknown>;
+type Imported = { id?: string; name: string; content: string; meta?: Record<string, unknown> } & Record<
+	string,
+	unknown
+>;
 
 /**
  * Ports components/ImportModal.svelte: fetch a plugin from a URL (via the

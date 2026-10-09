@@ -53,7 +53,16 @@ export type PolicyFields = {
 	lifecycleJson: string;
 };
 
-export const blankPolicy = (): PolicyFields => ({ image: '', envPairs: [], cpu: '1', memory: '1Gi', storage: 'ephemeral', storageSize: '5Gi', idleTimeout: 30, lifecycleJson: '{}' });
+export const blankPolicy = (): PolicyFields => ({
+	image: '',
+	envPairs: [],
+	cpu: '1',
+	memory: '1Gi',
+	storage: 'ephemeral',
+	storageSize: '5Gi',
+	idleTimeout: 30,
+	lifecycleJson: '{}'
+});
 
 /**
  * The form's starting values. A new connection starts *disabled* (as in the
@@ -62,7 +71,21 @@ export const blankPolicy = (): PolicyFields => ({ image: '', envPairs: [], cpu: 
  */
 export function terminalFields(c: TerminalConnection | null | undefined): TerminalFields {
 	if (!c) {
-		return { id: '', url: '', key: '', name: '', authType: 'bearer', path: '/openapi.json', enabled: false, chatUploads: 'default', chatContext: 'default', automationContext: 'default', accessGrants: [], serverType: null, policyId: '' };
+		return {
+			id: '',
+			url: '',
+			key: '',
+			name: '',
+			authType: 'bearer',
+			path: '/openapi.json',
+			enabled: false,
+			chatUploads: 'default',
+			chatContext: 'default',
+			automationContext: 'default',
+			accessGrants: [],
+			serverType: null,
+			policyId: ''
+		};
 	}
 	const serverType: ServerType = c.server_type ?? (c.policy_id ? 'orchestrator' : null);
 	const contexts = serverType === 'orchestrator' ? (c.config?.contexts ?? {}) : {};
@@ -76,7 +99,12 @@ export function terminalFields(c: TerminalConnection | null | undefined): Termin
 		enabled: c.enabled ?? true,
 		chatUploads: c.config?.chat_uploads === 'filesystem' ? 'filesystem' : 'default',
 		chatContext: contexts.chat === false ? 'off' : contexts.chat?.context_id === 'chat_id' ? 'chat_id' : 'default',
-		automationContext: contexts.automation === false ? 'off' : contexts.automation?.context_id === 'automation_id' ? 'automation_id' : 'default',
+		automationContext:
+			contexts.automation === false
+				? 'off'
+				: contexts.automation?.context_id === 'automation_id'
+					? 'automation_id'
+					: 'default',
 		accessGrants: c.config?.access_grants ?? [],
 		serverType,
 		policyId: c.policy_id ?? ''
@@ -84,7 +112,10 @@ export function terminalFields(c: TerminalConnection | null | undefined): Termin
 }
 
 /** The policy form from what the Orchestrator returned (`policy.data`, `lifecycle.data`). */
-export function policyFromServer(data: Record<string, any> | null | undefined, lifecycle: Record<string, any> | null | undefined): PolicyFields {
+export function policyFromServer(
+	data: Record<string, any> | null | undefined,
+	lifecycle: Record<string, any> | null | undefined
+): PolicyFields {
 	const d = data ?? {};
 	return {
 		image: d.image ?? '',
@@ -116,7 +147,8 @@ export function buildPolicyData(p: PolicyFields): Record<string, unknown> {
 export function parseLifecycle(text: string): { value: Record<string, unknown> } | { error: string } {
 	try {
 		const parsed = JSON.parse(text || '{}');
-		if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') return { error: 'Lifecycle JSON must be a JSON object' };
+		if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object')
+			return { error: 'Lifecycle JSON must be a JSON object' };
 		return { value: parsed };
 	} catch {
 		return { error: 'Lifecycle JSON contains invalid JSON' };
@@ -141,7 +173,11 @@ export const suggestPolicyId = (id: string, name: string) =>
  * connections, contexts only for an Orchestrator and only when one differs
  * from the default.
  */
-export function buildTerminalConnection(f: TerminalFields, previousConfig: Record<string, any> | undefined, { direct }: { direct: boolean }): TerminalConnection {
+export function buildTerminalConnection(
+	f: TerminalFields,
+	previousConfig: Record<string, any> | undefined,
+	{ direct }: { direct: boolean }
+): TerminalConnection {
 	const contexts: Record<string, false | { context_id: string }> = {};
 	if (f.chatContext === 'off') contexts.chat = false;
 	else if (f.chatContext === 'chat_id') contexts.chat = { context_id: 'chat_id' };

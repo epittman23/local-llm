@@ -33,14 +33,23 @@ export default function Integrations() {
 
 	return (
 		<SettingsForm title="Integrations" footer={false} loading={!settings}>
-			<p role="note" className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-400">
-				Not yet available in chat: servers added here are saved, but chats do not use personal tool or terminal servers in this version. Admin-configured tool servers are unaffected.
+			<p
+				role="note"
+				className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-xs text-amber-700 dark:text-amber-400"
+			>
+				Not yet available in chat: servers added here are saved, but chats do not use personal tool or terminal servers
+				in this version. Admin-configured tool servers are unaffected.
 			</p>
 			<SettingsSection title="Manage Tool Servers" first>
 				<div className="flex items-center justify-between">
 					<p className="text-muted-foreground text-xs">Connect to your own OpenAPI compatible external tool servers.</p>
 					<Tip content="Add Connection">
-						<button type="button" aria-label="Add Tool Server" className="hover:bg-muted rounded-md p-1" onClick={() => setToolModal('new')}>
+						<button
+							type="button"
+							aria-label="Add Tool Server"
+							className="hover:bg-muted rounded-md p-1"
+							onClick={() => setToolModal('new')}
+						>
 							<Plus className="size-4" />
 						</button>
 					</Tip>
@@ -49,8 +58,23 @@ export default function Integrations() {
 					{tools.map((t, i) => (
 						<li key={i} className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs">
 							<span className="min-w-0 flex-1 truncate">{t.info?.name ?? t.url}</span>
-							<Switch aria-label={`Enable ${t.url}`} checked={t.config?.enable !== false} onCheckedChange={(v) => void save({ toolServers: tools.map((x, j) => (j === i ? { ...x, config: { ...(x.config ?? {}), enable: v } } : x)) })} />
-							<button type="button" aria-label={`Edit ${t.url}`} className="hover:bg-muted rounded p-1" onClick={() => setToolModal(i)}>
+							<Switch
+								aria-label={`Enable ${t.url}`}
+								checked={t.config?.enable !== false}
+								onCheckedChange={(v) =>
+									void save({
+										toolServers: tools.map((x, j) =>
+											j === i ? { ...x, config: { ...(x.config ?? {}), enable: v } } : x
+										)
+									})
+								}
+							/>
+							<button
+								type="button"
+								aria-label={`Edit ${t.url}`}
+								className="hover:bg-muted rounded p-1"
+								onClick={() => setToolModal(i)}
+							>
 								<Pencil className="size-3.5" />
 							</button>
 						</li>
@@ -61,7 +85,12 @@ export default function Integrations() {
 				<div className="flex items-center justify-between">
 					<p className="text-muted-foreground text-xs">Connect to a terminal server the model can use.</p>
 					<Tip content="Add Connection">
-						<button type="button" aria-label="Add Terminal" className="hover:bg-muted rounded-md p-1" onClick={() => setTermModal('new')}>
+						<button
+							type="button"
+							aria-label="Add Terminal"
+							className="hover:bg-muted rounded-md p-1"
+							onClick={() => setTermModal('new')}
+						>
 							<Plus className="size-4" />
 						</button>
 					</Tip>
@@ -70,8 +99,23 @@ export default function Integrations() {
 					{terminals.map((t, i) => (
 						<li key={i} className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs">
 							<span className="min-w-0 flex-1 truncate">{t.name || t.url}</span>
-							<Switch aria-label={`Enable ${t.name || t.url}`} checked={Boolean(t.enabled)} onCheckedChange={(v) => void save({ terminalServers: terminals.map((x, j) => (v ? { ...x, enabled: j === i } : j === i ? { ...x, enabled: false } : x)) })} />
-							<button type="button" aria-label={`Edit ${t.name || t.url}`} className="hover:bg-muted rounded p-1" onClick={() => setTermModal(i)}>
+							<Switch
+								aria-label={`Enable ${t.name || t.url}`}
+								checked={Boolean(t.enabled)}
+								onCheckedChange={(v) =>
+									void save({
+										terminalServers: terminals.map((x, j) =>
+											v ? { ...x, enabled: j === i } : j === i ? { ...x, enabled: false } : x
+										)
+									})
+								}
+							/>
+							<button
+								type="button"
+								aria-label={`Edit ${t.name || t.url}`}
+								className="hover:bg-muted rounded p-1"
+								onClick={() => setTermModal(i)}
+							>
 								<Pencil className="size-3.5" />
 							</button>
 						</li>
@@ -84,7 +128,11 @@ export default function Integrations() {
 				direct
 				edit={typeof toolModal === 'number'}
 				connection={typeof toolModal === 'number' ? tools[toolModal] : null}
-				onSubmit={async (c) => void (await save({ toolServers: toolModal === 'new' ? [...tools, c] : tools.map((x, i) => (i === toolModal ? c : x)) }))}
+				onSubmit={async (c) =>
+					void (await save({
+						toolServers: toolModal === 'new' ? [...tools, c] : tools.map((x, i) => (i === toolModal ? c : x))
+					}))
+				}
 				onDelete={async () => void (await save({ toolServers: tools.filter((_, i) => i !== toolModal) }))}
 			/>
 			<AddTerminalServerModal
@@ -93,7 +141,14 @@ export default function Integrations() {
 				direct
 				edit={typeof termModal === 'number'}
 				connection={typeof termModal === 'number' ? terminals[termModal] : null}
-				onSubmit={async (c) => void (await save({ terminalServers: termModal === 'new' ? [...terminals, { ...c, enabled: c.enabled ?? false }] : terminals.map((x, i) => (i === termModal ? c : x)) }))}
+				onSubmit={async (c) =>
+					void (await save({
+						terminalServers:
+							termModal === 'new'
+								? [...terminals, { ...c, enabled: c.enabled ?? false }]
+								: terminals.map((x, i) => (i === termModal ? c : x))
+					}))
+				}
 				onDelete={async () => void (await save({ terminalServers: terminals.filter((_, i) => i !== termModal) }))}
 			/>
 		</SettingsForm>

@@ -3,7 +3,9 @@ import saveAs from 'file-saver';
 
 /** An svg snippet is shown centred on an otherwise empty page; html is used as written. */
 export const artifactDocument = (code: string) =>
-	/^\s*<svg[\s>]/i.test(code) ? `<!doctype html><html><body style="margin:0;display:grid;place-items:center;min-height:100vh">${code}</body></html>` : code;
+	/^\s*<svg[\s>]/i.test(code)
+		? `<!doctype html><html><body style="margin:0;display:grid;place-items:center;min-height:100vh">${code}</body></html>`
+		: code;
 
 /**
  * A reduced port of chat/Artifacts.svelte: the html or svg code block whose
@@ -27,11 +29,21 @@ export function ArtifactPanel({ code, onClose }: { code: string; onClose: () => 
 				>
 					<Download className="size-4" />
 				</button>
-				<button type="button" aria-label="Close artifacts" className="text-muted-foreground hover:bg-muted rounded-lg p-1.5" onClick={onClose}>
+				<button
+					type="button"
+					aria-label="Close artifacts"
+					className="text-muted-foreground hover:bg-muted rounded-lg p-1.5"
+					onClick={onClose}
+				>
 					<X className="size-4" />
 				</button>
 			</div>
-			<iframe title="Artifact preview" className="min-h-0 w-full flex-1 bg-white" sandbox="allow-scripts allow-forms allow-modals" srcDoc={artifactDocument(code)} />
+			<iframe
+				title="Artifact preview"
+				className="min-h-0 w-full flex-1 bg-white"
+				sandbox="allow-scripts allow-forms allow-modals"
+				srcDoc={artifactDocument(code)}
+			/>
 		</aside>
 	);
 }

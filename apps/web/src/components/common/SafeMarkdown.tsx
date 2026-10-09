@@ -11,12 +11,30 @@ import { cn } from '@/lib/utils';
  * utility classes). docs/code-review.md H1.
  */
 export const SAFE_MARKDOWN_PURIFY = {
-	FORBID_TAGS: ['style', 'link', 'meta', 'base', 'form', 'input', 'button', 'textarea', 'select', 'option', 'iframe', 'frame', 'frameset', 'object', 'embed', 'dialog'],
+	FORBID_TAGS: [
+		'style',
+		'link',
+		'meta',
+		'base',
+		'form',
+		'input',
+		'button',
+		'textarea',
+		'select',
+		'option',
+		'iframe',
+		'frame',
+		'frameset',
+		'object',
+		'embed',
+		'dialog'
+	],
 	FORBID_ATTR: ['style', 'class', 'id']
 };
 
 /** Markdown from another user, as HTML that can only format text: no styles, forms, embeds or layout. */
-export const safeMarkdownHtml = (text: string) => DOMPurify.sanitize(marked.parse(text ?? '', { async: false }) as string, SAFE_MARKDOWN_PURIFY);
+export const safeMarkdownHtml = (text: string) =>
+	DOMPurify.sanitize(marked.parse(text ?? '', { async: false }) as string, SAFE_MARKDOWN_PURIFY);
 
 /**
  * Renders markdown from a source the app doesn't control (a plugin's valve
@@ -26,5 +44,10 @@ export const safeMarkdownHtml = (text: string) => DOMPurify.sanitize(marked.pars
  */
 export function SafeMarkdown({ text, className }: { text: string; className?: string }) {
 	const html = useMemo(() => safeMarkdownHtml(text), [text]);
-	return <div className={cn('max-w-full text-xs [&_a]:underline [&_code]:font-mono', className)} dangerouslySetInnerHTML={{ __html: html }} />;
+	return (
+		<div
+			className={cn('max-w-full text-xs [&_a]:underline [&_code]:font-mono', className)}
+			dangerouslySetInnerHTML={{ __html: html }}
+		/>
+	);
 }

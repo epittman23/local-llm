@@ -35,7 +35,8 @@ import {
 const bare = 'w-full bg-transparent text-sm outline-hidden placeholder:text-muted-foreground/50';
 const select = 'bg-transparent pr-5 text-sm outline-hidden [&>option]:bg-popover';
 const label = 'text-muted-foreground text-xs';
-const linkButton = 'text-xs underline text-muted-foreground hover:text-foreground transition disabled:opacity-50 disabled:no-underline';
+const linkButton =
+	'text-xs underline text-muted-foreground hover:text-foreground transition disabled:opacity-50 disabled:no-underline';
 
 /**
  * Ports components/AddToolServerModal.svelte: add or edit an external tool
@@ -101,10 +102,12 @@ export function AddToolServerModal({
 		const headers = headersOrToast();
 		if (!headers.ok) return;
 		if (direct) {
-			const res = await getToolServerData(f.authType === 'bearer' ? f.key : token, specRequestUrl(f.url, f.path)).catch(() => {
-				toast.error('Connection failed');
-				return null;
-			});
+			const res = await getToolServerData(f.authType === 'bearer' ? f.key : token, specRequestUrl(f.url, f.path)).catch(
+				() => {
+					toast.error('Connection failed');
+					return null;
+				}
+			);
 			if (res) toast.success('Connection successful');
 			return;
 		}
@@ -138,7 +141,10 @@ export function AddToolServerModal({
 	const exportFile = () => {
 		const headers = headersOrToast();
 		if (!headers.ok) return;
-		saveAs(new Blob([JSON.stringify(exportToolServer(f, headers.value))], { type: 'application/json' }), `tool-server-${f.id || f.name || 'export'}.json`);
+		saveAs(
+			new Blob([JSON.stringify(exportToolServer(f, headers.value))], { type: 'application/json' }),
+			`tool-server-${f.id || f.name || 'export'}.json`
+		);
 	};
 
 	const importFile = async (file: File | undefined) => {
@@ -182,7 +188,12 @@ export function AddToolServerModal({
 				Are you sure you want to delete this connection? This action cannot be undone.
 			</ConfirmDialog>
 
-			<AccessControlModal open={showAccess} onOpenChange={setShowAccess} accessGrants={f.accessGrants} onChange={(accessGrants) => set({ accessGrants })} />
+			<AccessControlModal
+				open={showAccess}
+				onOpenChange={setShowAccess}
+				accessGrants={f.accessGrants}
+				onChange={(accessGrants) => set({ accessGrants })}
+			/>
 
 			<Dialog open={open} onOpenChange={onOpenChange}>
 				<DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
@@ -223,7 +234,12 @@ export function AddToolServerModal({
 							{direct ? (
 								<div className="text-xs">OpenAPI</div>
 							) : (
-								<button type="button" aria-label="Type" className="text-xs underline-offset-2 hover:underline" onClick={() => set({ type: f.type === 'mcp' ? 'openapi' : 'mcp' })}>
+								<button
+									type="button"
+									aria-label="Type"
+									className="text-xs underline-offset-2 hover:underline"
+									onClick={() => set({ type: f.type === 'mcp' ? 'openapi' : 'mcp' })}
+								>
 									{f.type === 'mcp' ? (
 										<>
 											MCP <span className="text-muted-foreground">Streamable HTTP</span>
@@ -240,14 +256,31 @@ export function AddToolServerModal({
 								<label className={label} htmlFor="tool-server-name">
 									Name
 								</label>
-								<input id="tool-server-name" className={bare} type="text" value={f.name} onChange={(e) => set({ name: e.target.value })} placeholder="Enter name" autoComplete="off" />
+								<input
+									id="tool-server-name"
+									className={bare}
+									type="text"
+									value={f.name}
+									onChange={(e) => set({ name: e.target.value })}
+									placeholder="Enter name"
+									autoComplete="off"
+								/>
 							</div>
 							{!direct && (
 								<div className="min-w-0 flex-1">
 									<label className={label} htmlFor="tool-server-id">
 										ID {f.type !== 'mcp' && <span className="opacity-50">(optional)</span>}
 									</label>
-									<input id="tool-server-id" className={`${bare} font-mono`} type="text" value={f.id} onChange={(e) => set({ id: e.target.value })} placeholder="auto" autoComplete="off" required={f.type === 'mcp'} />
+									<input
+										id="tool-server-id"
+										className={`${bare} font-mono`}
+										type="text"
+										value={f.id}
+										onChange={(e) => set({ id: e.target.value })}
+										placeholder="auto"
+										autoComplete="off"
+										required={f.type === 'mcp'}
+									/>
 								</div>
 							)}
 						</div>
@@ -256,7 +289,15 @@ export function AddToolServerModal({
 							<label className={label} htmlFor="tool-server-description">
 								Description
 							</label>
-							<input id="tool-server-description" className={bare} type="text" value={f.description} onChange={(e) => set({ description: e.target.value })} placeholder="Enter description" autoComplete="off" />
+							<input
+								id="tool-server-description"
+								className={bare}
+								type="text"
+								value={f.description}
+								onChange={(e) => set({ description: e.target.value })}
+								placeholder="Enter description"
+								autoComplete="off"
+							/>
 						</div>
 
 						<div className="flex items-end gap-2">
@@ -264,10 +305,24 @@ export function AddToolServerModal({
 								<label className={label} htmlFor="tool-server-url">
 									URL
 								</label>
-								<input id="tool-server-url" className={bare} type="text" value={f.url} onChange={(e) => set({ url: e.target.value })} placeholder="API Base URL" autoComplete="off" required />
+								<input
+									id="tool-server-url"
+									className={bare}
+									type="text"
+									value={f.url}
+									onChange={(e) => set({ url: e.target.value })}
+									placeholder="API Base URL"
+									autoComplete="off"
+									required
+								/>
 							</div>
 							<Tip content={verifyLabel}>
-								<button type="button" aria-label={verifyLabel} className="hover:bg-muted mb-0.5 rounded p-1 transition" onClick={verify}>
+								<button
+									type="button"
+									aria-label={verifyLabel}
+									className="hover:bg-muted mb-0.5 rounded p-1 transition"
+									onClick={verify}
+								>
 									<RefreshCw className="size-4" />
 								</button>
 							</Tip>
@@ -298,15 +353,24 @@ export function AddToolServerModal({
 											</button>
 										</Tip>
 										{f.oauthClientInfo ? (
-											<span className="rounded-md bg-green-500/20 px-1.5 text-xs text-green-700 dark:text-green-200">Registered</span>
+											<span className="rounded-md bg-green-500/20 px-1.5 text-xs text-green-700 dark:text-green-200">
+												Registered
+											</span>
 										) : (
-											<span className="rounded-md bg-yellow-500/20 px-1.5 text-xs text-yellow-700 dark:text-yellow-200">Not Registered</span>
+											<span className="rounded-md bg-yellow-500/20 px-1.5 text-xs text-yellow-700 dark:text-yellow-200">
+												Not Registered
+											</span>
 										)}
 									</div>
 								)}
 							</div>
 							<div className="flex gap-2">
-								<select id="tool-server-auth" className={`${select} self-start`} value={f.authType} onChange={(e) => set({ authType: e.target.value })}>
+								<select
+									id="tool-server-auth"
+									className={`${select} self-start`}
+									value={f.authType}
+									onChange={(e) => set({ authType: e.target.value })}
+								>
 									<option value="none">None</option>
 									<option value="bearer">Bearer</option>
 									<option value="session">Session</option>
@@ -324,20 +388,47 @@ export function AddToolServerModal({
 								</select>
 								<div className="min-w-0 flex-1 text-sm">
 									{f.authType === 'bearer' ? (
-										<SensitiveInput value={f.key} onChange={(key) => set({ key })} placeholder="API Key" required={false} />
+										<SensitiveInput
+											value={f.key}
+											onChange={(key) => set({ key })}
+											placeholder="API Key"
+											required={false}
+										/>
 									) : f.authType === 'none' ? (
 										<div className="text-muted-foreground text-xs">No authentication</div>
 									) : f.authType === 'session' ? (
-										<div className="text-muted-foreground text-xs">Forwards system user session credentials to authenticate</div>
+										<div className="text-muted-foreground text-xs">
+											Forwards system user session credentials to authenticate
+										</div>
 									) : f.authType === 'system_oauth' ? (
-										<div className="text-muted-foreground text-xs">Forwards system user OAuth access token to authenticate</div>
+										<div className="text-muted-foreground text-xs">
+											Forwards system user OAuth access token to authenticate
+										</div>
 									) : f.authType === 'oauth_2.1' ? (
 										<div className="text-muted-foreground text-xs">Uses OAuth 2.1 Dynamic Client Registration</div>
 									) : f.authType === 'oauth_2.1_static' ? (
 										<div className="flex flex-col gap-1.5">
-											<SensitiveInput value={f.oauthClientId} onChange={(oauthClientId) => set({ oauthClientId })} placeholder="Client ID" required={false} />
-											<SensitiveInput value={f.oauthClientSecret} onChange={(oauthClientSecret) => set({ oauthClientSecret })} placeholder="Client Secret" required={false} />
-											<input className={bare} type="text" aria-label="OAuth Server URL" value={f.oauthServerUrl} onChange={(e) => set({ oauthServerUrl: e.target.value })} placeholder="OAuth Server URL" autoComplete="off" />
+											<SensitiveInput
+												value={f.oauthClientId}
+												onChange={(oauthClientId) => set({ oauthClientId })}
+												placeholder="Client ID"
+												required={false}
+											/>
+											<SensitiveInput
+												value={f.oauthClientSecret}
+												onChange={(oauthClientSecret) => set({ oauthClientSecret })}
+												placeholder="Client Secret"
+												required={false}
+											/>
+											<input
+												className={bare}
+												type="text"
+												aria-label="OAuth Server URL"
+												value={f.oauthServerUrl}
+												onChange={(e) => set({ oauthServerUrl: e.target.value })}
+												placeholder="OAuth Server URL"
+												autoComplete="off"
+											/>
 										</div>
 									) : null}
 								</div>
@@ -345,7 +436,12 @@ export function AddToolServerModal({
 						</div>
 
 						<div className="flex items-center justify-between">
-							<button type="button" className="text-muted-foreground hover:text-foreground w-fit text-xs" aria-expanded={showAdvanced} onClick={() => setShowAdvanced((v) => !v)}>
+							<button
+								type="button"
+								className="text-muted-foreground hover:text-foreground w-fit text-xs"
+								aria-expanded={showAdvanced}
+								onClick={() => setShowAdvanced((v) => !v)}
+							>
 								{showAdvanced ? '▾' : '▸'} Advanced
 							</button>
 							{!direct && <AccessButton label="Access Control" onClick={() => setShowAccess(true)} />}
@@ -357,17 +453,43 @@ export function AddToolServerModal({
 									<div>
 										<div className={label}>OpenAPI Spec</div>
 										<div className="flex gap-2">
-											<select aria-label="OpenAPI Spec source" className={`${select} self-start`} value={f.specType} onChange={(e) => set({ specType: e.target.value as 'url' | 'json' })}>
+											<select
+												aria-label="OpenAPI Spec source"
+												className={`${select} self-start`}
+												value={f.specType}
+												onChange={(e) => set({ specType: e.target.value as 'url' | 'json' })}
+											>
 												<option value="url">URL</option>
 												<option value="json">JSON</option>
 											</select>
 											{f.specType === 'url' ? (
-												<input className={bare} type="text" aria-label="openapi.json URL or Path" value={f.path} onChange={(e) => set({ path: e.target.value })} placeholder="openapi.json URL or Path" autoComplete="off" required />
+												<input
+													className={bare}
+													type="text"
+													aria-label="openapi.json URL or Path"
+													value={f.path}
+													onChange={(e) => set({ path: e.target.value })}
+													placeholder="openapi.json URL or Path"
+													autoComplete="off"
+													required
+												/>
 											) : (
-												<textarea className={`${bare} resize-y`} aria-label="JSON Spec" rows={5} value={f.spec} onChange={(e) => set({ spec: e.target.value })} placeholder="JSON Spec" required />
+												<textarea
+													className={`${bare} resize-y`}
+													aria-label="JSON Spec"
+													rows={5}
+													value={f.spec}
+													onChange={(e) => set({ spec: e.target.value })}
+													placeholder="JSON Spec"
+													required
+												/>
 											)}
 										</div>
-										{f.specType === 'url' && <div className="text-muted-foreground mt-1 text-xs">WebUI will make requests to "{specRequestUrl(f.url, f.path)}"</div>}
+										{f.specType === 'url' && (
+											<div className="text-muted-foreground mt-1 text-xs">
+												WebUI will make requests to "{specRequestUrl(f.url, f.path)}"
+											</div>
+										)}
 									</div>
 								)}
 
@@ -377,13 +499,26 @@ export function AddToolServerModal({
 											<label className={label} htmlFor="oauth-scope">
 												OAuth Scopes
 											</label>
-											<input id="oauth-scope" className={bare} type="text" value={f.oauthScope} onChange={(e) => set({ oauthScope: e.target.value })} placeholder="Use discovered scopes" autoComplete="off" />
+											<input
+												id="oauth-scope"
+												className={bare}
+												type="text"
+												value={f.oauthScope}
+												onChange={(e) => set({ oauthScope: e.target.value })}
+												placeholder="Use discovered scopes"
+												autoComplete="off"
+											/>
 										</div>
 										<div>
 											<label className={label} htmlFor="oauth-resource-parameter">
 												OAuth Resource Parameter
 											</label>
-											<select id="oauth-resource-parameter" className={`${select} block`} value={f.oauthResourceParameter} onChange={(e) => set({ oauthResourceParameter: e.target.value })}>
+											<select
+												id="oauth-resource-parameter"
+												className={`${select} block`}
+												value={f.oauthResourceParameter}
+												onChange={(e) => set({ oauthResourceParameter: e.target.value })}
+											>
 												<option value="auto">Automatic</option>
 												<option value="include">Include</option>
 												<option value="omit">Omit</option>
@@ -398,7 +533,13 @@ export function AddToolServerModal({
 											Headers
 										</label>
 										<Tip content='Enter additional headers in JSON format (e.g. {"X-Custom-Header": "value"}'>
-											<textarea id="tool-server-headers" className={`${bare} min-h-8 resize-y`} value={f.headers} onChange={(e) => set({ headers: e.target.value })} placeholder="Enter additional headers in JSON format" />
+											<textarea
+												id="tool-server-headers"
+												className={`${bare} min-h-8 resize-y`}
+												value={f.headers}
+												onChange={(e) => set({ headers: e.target.value })}
+												placeholder="Enter additional headers in JSON format"
+											/>
 										</Tip>
 									</div>
 								)}
@@ -426,8 +567,9 @@ export function AddToolServerModal({
 							<div className="rounded-2xl bg-yellow-500/20 px-4 py-3 text-xs text-yellow-700 dark:text-yellow-200">
 								{/* LICENSE covers this Open WebUI wordmark. Do not alter, remove, obscure, or replace it
 								    except as LICENSE permits: https://docs.openwebui.com/license. */}
-								Warning: MCP support is experimental and its specification changes often, which can lead to incompatibilities. OpenAPI specification support is directly maintained by the Open WebUI team,
-								making it the more reliable option for compatibility.{' '}
+								Warning: MCP support is experimental and its specification changes often, which can lead to
+								incompatibilities. OpenAPI specification support is directly maintained by the Open WebUI team, making
+								it the more reliable option for compatibility.{' '}
 								<a className="underline" href="https://docs.openwebui.com/" target="_blank" rel="noreferrer">
 									Read more →
 								</a>

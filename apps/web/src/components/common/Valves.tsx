@@ -18,7 +18,8 @@ export type ValveValues = Record<string, unknown>;
 const fieldClass = 'border-border bg-background w-full rounded-lg border px-3 py-2 text-sm outline-hidden';
 
 const optionValue = (o: { value: string; label?: string } | string) => (typeof o === 'string' ? o : o.value);
-const optionLabel = (o: { value: string; label?: string } | string) => (typeof o === 'string' ? o : (o.label ?? o.value));
+const optionLabel = (o: { value: string; label?: string } | string) =>
+	typeof o === 'string' ? o : (o.label ?? o.value);
 
 /** A password-style valve: masked, with a show/hide toggle. */
 function SecretInput({

@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { buildEmbeddingPayload, buildRagPayload, contextPlaceholders, embeddingError, embeddingModelFor, mineruUrlForMode, parseList, ragFormError, rerankingModelFor, toEmbeddingForm, toRagForm } from './documents';
+import {
+	buildEmbeddingPayload,
+	buildRagPayload,
+	contextPlaceholders,
+	embeddingError,
+	embeddingModelFor,
+	mineruUrlForMode,
+	parseList,
+	ragFormError,
+	rerankingModelFor,
+	toEmbeddingForm,
+	toRagForm
+} from './documents';
 
 describe('parseList', () => {
 	it('splits on commas, trims and drops blanks', () => {
@@ -31,7 +43,10 @@ describe('toRagForm', () => {
 		expect(f.KEEP).toBe(1);
 	});
 	it('shows no headers as an empty box and an unset MIME list as null', () => {
-		const f = toRagForm({ EXTERNAL_DOCUMENT_LOADER_HEADERS: {}, CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES: undefined });
+		const f = toRagForm({
+			EXTERNAL_DOCUMENT_LOADER_HEADERS: {},
+			CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES: undefined
+		});
 		expect(f.EXTERNAL_DOCUMENT_LOADER_HEADERS).toBe('');
 		expect(f.CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES).toBeNull();
 	});
@@ -43,39 +58,90 @@ describe('ragFormError', () => {
 	});
 	it('names the setting each engine needs', () => {
 		const cases: [Record<string, any>, string][] = [
-			[{ CONTENT_EXTRACTION_ENGINE: 'external', EXTERNAL_DOCUMENT_LOADER_URL: '' }, 'External Document Loader URL required.'],
+			[
+				{ CONTENT_EXTRACTION_ENGINE: 'external', EXTERNAL_DOCUMENT_LOADER_URL: '' },
+				'External Document Loader URL required.'
+			],
 			[{ CONTENT_EXTRACTION_ENGINE: 'tika', TIKA_SERVER_URL: '' }, 'Tika Server URL required.'],
 			[{ CONTENT_EXTRACTION_ENGINE: 'docling', DOCLING_SERVER_URL: ' ' }, 'Docling Server URL required.'],
-			[{ CONTENT_EXTRACTION_ENGINE: 'document_intelligence', DOCUMENT_INTELLIGENCE_ENDPOINT: '' }, 'Document Intelligence endpoint required.'],
+			[
+				{ CONTENT_EXTRACTION_ENGINE: 'document_intelligence', DOCUMENT_INTELLIGENCE_ENDPOINT: '' },
+				'Document Intelligence endpoint required.'
+			],
 			[{ CONTENT_EXTRACTION_ENGINE: 'mistral_ocr', MISTRAL_OCR_API_KEY: '' }, 'Mistral OCR API Key required.'],
 			[{ CONTENT_EXTRACTION_ENGINE: 'paddleocr_vl', PADDLEOCR_VL_BASE_URL: '' }, 'PaddleOCR-vl API URL required.'],
-			[{ CONTENT_EXTRACTION_ENGINE: 'mineru', MINERU_API_MODE: 'cloud', MINERU_API_KEY: '' }, 'MinerU API Key required for Cloud API mode.']
+			[
+				{ CONTENT_EXTRACTION_ENGINE: 'mineru', MINERU_API_MODE: 'cloud', MINERU_API_KEY: '' },
+				'MinerU API Key required for Cloud API mode.'
+			]
 		];
 		for (const [cfg, message] of cases) expect(ragFormError(cfg)).toBe(message);
 	});
 	it('MinerU local mode needs no key', () => {
-		expect(ragFormError({ CONTENT_EXTRACTION_ENGINE: 'mineru', MINERU_API_MODE: 'local', MINERU_API_KEY: '' })).toBeNull();
+		expect(
+			ragFormError({ CONTENT_EXTRACTION_ENGINE: 'mineru', MINERU_API_MODE: 'local', MINERU_API_KEY: '' })
+		).toBeNull();
 	});
 	it('rejects headers that are not a JSON object, and bad JSON in the other boxes', () => {
 		const external = { CONTENT_EXTRACTION_ENGINE: 'external', EXTERNAL_DOCUMENT_LOADER_URL: 'http://x' };
-		expect(ragFormError({ ...external, EXTERNAL_DOCUMENT_LOADER_HEADERS: '["a"]' })).toBe('Headers must be a valid JSON object');
+		expect(ragFormError({ ...external, EXTERNAL_DOCUMENT_LOADER_HEADERS: '["a"]' })).toBe(
+			'Headers must be a valid JSON object'
+		);
 		expect(ragFormError({ ...external, EXTERNAL_DOCUMENT_LOADER_HEADERS: '{"a":"b"}' })).toBeNull();
-		expect(ragFormError({ CONTENT_EXTRACTION_ENGINE: 'datalab_marker', DATALAB_MARKER_ADDITIONAL_CONFIG: '{x' })).toBe('Invalid JSON format in Additional Config');
-		expect(ragFormError({ CONTENT_EXTRACTION_ENGINE: '', DOCLING_PARAMS: '{x' })).toBe('Invalid JSON format in Docling Parameters');
-		expect(ragFormError({ CONTENT_EXTRACTION_ENGINE: '', MINERU_PARAMS: '{x' })).toBe('Invalid JSON format in MinerU Parameters');
+		expect(ragFormError({ CONTENT_EXTRACTION_ENGINE: 'datalab_marker', DATALAB_MARKER_ADDITIONAL_CONFIG: '{x' })).toBe(
+			'Invalid JSON format in Additional Config'
+		);
+		expect(ragFormError({ CONTENT_EXTRACTION_ENGINE: '', DOCLING_PARAMS: '{x' })).toBe(
+			'Invalid JSON format in Docling Parameters'
+		);
+		expect(ragFormError({ CONTENT_EXTRACTION_ENGINE: '', MINERU_PARAMS: '{x' })).toBe(
+			'Invalid JSON format in MinerU Parameters'
+		);
 	});
 });
 
 describe('buildRagPayload', () => {
-	const form = toRagForm({ ALLOWED_FILE_EXTENSIONS: [], FILE_MAX_SIZE: null, DOCLING_PARAMS: {}, TOP_K: 4, SOMETHING_ELSE: 'kept' });
+	const form = toRagForm({
+		ALLOWED_FILE_EXTENSIONS: [],
+		FILE_MAX_SIZE: null,
+		DOCLING_PARAMS: {},
+		TOP_K: 4,
+		SOMETHING_ELSE: 'kept'
+	});
 	it('sends a cleared number as "" so the backend clears it, and lists and objects in their real shape', () => {
-		const p = buildRagPayload({ ...form, FILE_MAX_SIZE: null, FILE_MAX_COUNT: 5, ALLOWED_FILE_EXTENSIONS: 'pdf, docx', DOCLING_PARAMS: '{"a":1}', MINERU_FILE_EXTENSIONS: 'pdf' });
-		expect(p).toMatchObject({ FILE_MAX_SIZE: '', FILE_MAX_COUNT: 5, FILE_IMAGE_COMPRESSION_WIDTH: '', ALLOWED_FILE_EXTENSIONS: ['pdf', 'docx'], DOCLING_PARAMS: { a: 1 }, EXTERNAL_DOCUMENT_LOADER_HEADERS: {}, MINERU_FILE_EXTENSIONS: ['pdf'], TOP_K: 4, SOMETHING_ELSE: 'kept' });
+		const p = buildRagPayload({
+			...form,
+			FILE_MAX_SIZE: null,
+			FILE_MAX_COUNT: 5,
+			ALLOWED_FILE_EXTENSIONS: 'pdf, docx',
+			DOCLING_PARAMS: '{"a":1}',
+			MINERU_FILE_EXTENSIONS: 'pdf'
+		});
+		expect(p).toMatchObject({
+			FILE_MAX_SIZE: '',
+			FILE_MAX_COUNT: 5,
+			FILE_IMAGE_COMPRESSION_WIDTH: '',
+			ALLOWED_FILE_EXTENSIONS: ['pdf', 'docx'],
+			DOCLING_PARAMS: { a: 1 },
+			EXTERNAL_DOCUMENT_LOADER_HEADERS: {},
+			MINERU_FILE_EXTENSIONS: ['pdf'],
+			TOP_K: 4,
+			SOMETHING_ELSE: 'kept'
+		});
 	});
 	it('leaves the media types out when they were never set, and sends an emptied box as []', () => {
-		expect(buildRagPayload({ ...form, CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES: null }).CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES).toBeUndefined();
-		expect(buildRagPayload({ ...form, CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES: '' }).CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES).toEqual([]);
-		expect(buildRagPayload({ ...form, CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES: 'image/*, video/*' }).CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES).toEqual(['image/*', 'video/*']);
+		expect(
+			buildRagPayload({ ...form, CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES: null })
+				.CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES
+		).toBeUndefined();
+		expect(
+			buildRagPayload({ ...form, CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES: '' })
+				.CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES
+		).toEqual([]);
+		expect(
+			buildRagPayload({ ...form, CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES: 'image/*, video/*' })
+				.CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES
+		).toEqual(['image/*', 'video/*']);
 	});
 });
 
@@ -94,7 +160,7 @@ describe('embedding', () => {
 		expect(e.ollama).toEqual({ url: '', key: '' });
 		expect(e.azure).toEqual({ url: '', key: '', version: '' });
 	});
-	it('sends only the chosen engine\'s connection', () => {
+	it("sends only the chosen engine's connection", () => {
 		expect(buildEmbeddingPayload(e)).toEqual({
 			RAG_EMBEDDING_ENGINE: 'openai',
 			RAG_EMBEDDING_MODEL: 'text-embedding-3-small',
@@ -117,7 +183,9 @@ describe('embedding', () => {
 		expect(embeddingError({ ...e, engine: '', model: 'sentence-transformers/all-MiniLM-L6-v2' })).toBeNull();
 		expect(embeddingError({ ...e, engine: 'ollama', model: '' })).toBe('Embedding model is required.');
 		expect(embeddingError({ ...e, engine: 'openai', model: '' })).toBe('Embedding model is required.');
-		expect(embeddingError({ ...e, engine: 'azure_openai', azure: { url: 'u', key: 'k', version: '' } })).toMatch(/Azure/);
+		expect(embeddingError({ ...e, engine: 'azure_openai', azure: { url: 'u', key: 'k', version: '' } })).toMatch(
+			/Azure/
+		);
 		expect(embeddingError({ ...e, engine: 'azure_openai', azure: { url: 'u', key: 'k', version: 'v' } })).toBeNull();
 	});
 	it('offers a model per engine', () => {

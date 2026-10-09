@@ -11,7 +11,12 @@ export function CommunityDiscover({ href, title, description }: { href: string; 
 				    https://docs.openwebui.com/license. */}
 				Made by Open WebUI Community
 			</div>
-			<a className="flex w-full items-center justify-between gap-3 py-1 text-left" href={href} target="_blank" rel="noreferrer">
+			<a
+				className="flex w-full items-center justify-between gap-3 py-1 text-left"
+				href={href}
+				target="_blank"
+				rel="noreferrer"
+			>
 				<div className="min-w-0">
 					<div className="line-clamp-1 text-[0.8125rem]">{title}</div>
 					<div className="text-muted-foreground line-clamp-1 text-xs">{description}</div>

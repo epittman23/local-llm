@@ -5,7 +5,13 @@ import type { Source } from './history';
 // (Citations.svelte and ContentRenderer.svelte). A `[n]` in the text is the
 // n-th citation below; the inline chip is labelled from `sourceIds`.
 
-export type Citation = { id: string; source: Record<string, any>; document: string[]; metadata: Record<string, any>[]; distances: number[] };
+export type Citation = {
+	id: string;
+	source: Record<string, any>;
+	document: string[];
+	metadata: Record<string, any>[];
+	distances: number[];
+};
 
 /** Documents grouped by where they came from (a URL, a file, a tool), in first-seen order. */
 export function citationsOf(sources: Source[] | undefined): Citation[] {
@@ -24,7 +30,14 @@ export function citationsOf(sources: Source[] | undefined): Citation[] {
 				existing.document.push(document);
 				if (metadata) existing.metadata.push(metadata);
 				if (distance !== undefined) existing.distances.push(distance);
-			} else acc.push({ id, source: s, document: [document], metadata: metadata ? [metadata] : [], distances: distance !== undefined ? [distance] : [] });
+			} else
+				acc.push({
+					id,
+					source: s,
+					document: [document],
+					metadata: metadata ? [metadata] : [],
+					distances: distance !== undefined ? [distance] : []
+				});
 		});
 	}
 	return acc;
@@ -50,7 +63,9 @@ export function sourceIdsOf(sources: Source[] | undefined, citationsEnabled = tr
 }
 
 /** A model with citations turned off: `[1]` markers removed from its text. */
-export const stripCitations = (content: string) => replaceOutsideCode(content, (s) => s.replace(/\s*(\[(?:\d+(?:#[^,\]\s]+)?(?:,\s*\d+(?:#[^,\]\s]+)?)*)\])+/g, ''));
+export const stripCitations = (content: string) =>
+	replaceOutsideCode(content, (s) => s.replace(/\s*(\[(?:\d+(?:#[^,\]\s]+)?(?:,\s*\d+(?:#[^,\]\s]+)?)*)\])+/g, ''));
 
 /** "3" or "3#chunk" (or a number) as a 0-based citation index. */
-export const citationIndex = (id: string | number) => (typeof id === 'number' ? id : parseInt(String(id).split('#')[0], 10)) - 1;
+export const citationIndex = (id: string | number) =>
+	(typeof id === 'number' ? id : parseInt(String(id).split('#')[0], 10)) - 1;

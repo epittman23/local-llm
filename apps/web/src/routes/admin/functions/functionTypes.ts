@@ -50,7 +50,8 @@ export function parseFunctionImport(text: string): FunctionDraft[] {
 	const parsed: unknown = JSON.parse(text);
 	if (!Array.isArray(parsed)) throw new Error('Expected a JSON array of functions.');
 	return parsed.flatMap((item) => {
-		const inner = item && typeof item === 'object' && 'function' in item ? (item as { function: unknown }).function : item;
+		const inner =
+			item && typeof item === 'object' && 'function' in item ? (item as { function: unknown }).function : item;
 		const fn = sanitizeIncomingFunction(inner);
 		return fn && fn.id && fn.name && fn.content ? [fn] : [];
 	});
@@ -83,11 +84,14 @@ export function filterAndSortFunctions(
 			(f.user?.name || '').toLowerCase().includes(q) ||
 			(f.user?.email || '').toLowerCase().includes(q) ||
 			(f.user?.username || '').toLowerCase().includes(q);
-		const inView = view === '' || (view === 'created' && f.user_id === userId) || (view === 'shared' && f.user_id !== userId);
+		const inView =
+			view === '' || (view === 'created' && f.user_id === userId) || (view === 'shared' && f.user_id !== userId);
 		return matches && inView;
 	});
 	const sign = direction === 'asc' ? 1 : -1;
 	return [...filtered].sort((a, b) =>
-		sortKey === 'name' ? sign * (a.name ?? '').localeCompare(b.name ?? '') : sign * ((a.updated_at ?? 0) - (b.updated_at ?? 0))
+		sortKey === 'name'
+			? sign * (a.name ?? '').localeCompare(b.name ?? '')
+			: sign * ((a.updated_at ?? 0) - (b.updated_at ?? 0))
 	);
 }

@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { buildEmojiIndex, codeToChar, searchEmojis } from './emoji';
 
 describe('emoji index', () => {
-	const index = buildEmojiIndex({ '1F44D': ['+1', 'thumbsup'], '263A-FE0F': 'relaxed', '1F600': 'grinning' }, { Smileys: ['1F600', '263A-FE0F', 'FFFFF'], People: ['1F44D'] });
+	const index = buildEmojiIndex(
+		{ '1F44D': ['+1', 'thumbsup'], '263A-FE0F': 'relaxed', '1F600': 'grinning' },
+		{ Smileys: ['1F600', '263A-FE0F', 'FFFFF'], People: ['1F44D'] }
+	);
 
 	it('turns code points into characters, including sequences', () => {
 		expect(codeToChar('1F44D')).toBe('👍');

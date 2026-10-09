@@ -28,7 +28,12 @@ turndown.addRule('tables', {
 		if (rows.length === 0) return content;
 		let md = '\n';
 		rows.forEach((row, i) => {
-			const cells = Array.from(row.querySelectorAll('th, td')).map((cell) => turndown.turndown(cell.innerHTML).trim().replace(/^\n+|\n+$/g, ''));
+			const cells = Array.from(row.querySelectorAll('th, td')).map((cell) =>
+				turndown
+					.turndown(cell.innerHTML)
+					.trim()
+					.replace(/^\n+|\n+$/g, '')
+			);
 			md += `| ${cells.join(' | ')} |\n`;
 			if (i === 0) md += `| ${cells.map(() => '---').join(' | ')} |\n`;
 		});
@@ -43,7 +48,9 @@ turndown.addRule('taskItemCheckbox', {
 });
 
 turndown.addRule('taskListItems', {
-	filter: (node) => node.nodeName === 'LI' && (node.getAttribute('data-checked') === 'true' || node.getAttribute('data-checked') === 'false'),
+	filter: (node) =>
+		node.nodeName === 'LI' &&
+		(node.getAttribute('data-checked') === 'true' || node.getAttribute('data-checked') === 'false'),
 	replacement: (content, node) => {
 		const checked = (node as HTMLElement).getAttribute('data-checked') === 'true';
 		// 4-space continuation keeps nested lists and code fences inside the item.

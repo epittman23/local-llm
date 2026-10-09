@@ -116,9 +116,5 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 		};
 	}, [token]);
 
-	return (
-		<SocketContext.Provider value={{ socket: socketRef.current, connected }}>
-			{children}
-		</SocketContext.Provider>
-	);
+	return <SocketContext.Provider value={{ socket: socketRef.current, connected }}>{children}</SocketContext.Provider>;
 }

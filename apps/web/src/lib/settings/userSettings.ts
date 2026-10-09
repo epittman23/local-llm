@@ -17,8 +17,13 @@ export type UserUiSettings = { pinnedModels?: string[]; [key: string]: unknown }
  * that default keeps reaching them; the moment they pin anything, their own list
  * (even an empty one) takes over.
  */
-export function resolvePinnedModels(settings: UserUiSettings | null | undefined, defaultPinned: string | null | undefined): string[] {
-	return settings?.pinnedModels === undefined ? (defaultPinned ?? '').split(',').filter((id) => id) : settings.pinnedModels;
+export function resolvePinnedModels(
+	settings: UserUiSettings | null | undefined,
+	defaultPinned: string | null | undefined
+): string[] {
+	return settings?.pinnedModels === undefined
+		? (defaultPinned ?? '').split(',').filter((id) => id)
+		: settings.pinnedModels;
 }
 
 const KEY = ['user-settings'];
@@ -33,7 +38,7 @@ export function useUserSettings() {
 		enabled: Boolean(token),
 		// A failed load throws (the helper rethrows network errors and error
 		// bodies), leaving `isSuccess` false; `null` is a user with no settings yet.
-		queryFn: async () => (((await getUserSettings(token))?.ui ?? {}) as UserUiSettings)
+		queryFn: async () => ((await getUserSettings(token))?.ui ?? {}) as UserUiSettings
 	});
 	const pinnedModels = resolvePinnedModels(query.data, defaultPinned);
 
@@ -58,13 +63,17 @@ export function useUserSettings() {
 		if (!loaded) return;
 		save.mutate({
 			...(query.data ?? {}),
-			pinnedModels: pinnedModels.includes(modelId) ? pinnedModels.filter((id) => id !== modelId) : [...pinnedModels, modelId]
+			pinnedModels: pinnedModels.includes(modelId)
+				? pinnedModels.filter((id) => id !== modelId)
+				: [...pinnedModels, modelId]
 		});
 	};
 
 	/** Merges `patch` into the saved settings (the whole `ui` object is sent, as the API requires). */
 	const update = (patch: UserUiSettings) =>
-		loaded ? save.mutateAsync({ ...query.data, ...patch }) : Promise.reject(new Error('Your settings have not loaded yet; nothing was saved.'));
+		loaded
+			? save.mutateAsync({ ...query.data, ...patch })
+			: Promise.reject(new Error('Your settings have not loaded yet; nothing was saved.'));
 
 	return { settings: query.data ?? null, pinnedModels, togglePinned, update };
 }

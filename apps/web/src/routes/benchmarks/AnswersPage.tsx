@@ -2,13 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { getAnswerOne, getAnswerRuns, getAnswers } from '@/lib/apis/benchmarks';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -60,9 +54,7 @@ export function AnswersPage() {
 	const token = useAuthStore((state) => state.token) ?? '';
 	const [selectedRun, setSelectedRun] = useState<string | null>(null);
 	const [filter, setFilter] = useState<'failures' | 'all' | 'pass'>('failures');
-	const [selectedItem, setSelectedItem] = useState<{ benchmark: string; item_id: string } | null>(
-		null
-	);
+	const [selectedItem, setSelectedItem] = useState<{ benchmark: string; item_id: string } | null>(null);
 	const [thinking, setThinking] = useState(false);
 
 	const runsQuery = useQuery({

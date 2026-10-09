@@ -6,8 +6,22 @@ import { type OutputItem, applyResponseStreamEvent, getOutputText } from './stru
 // returns a new history and never mutates the one it was given, so React sees
 // every change. Ported from Chat.svelte, which mutated in place.
 
-export type ChatFile = { type?: string; id?: string | null; url?: string; name?: string; content_type?: string; status?: string; size?: number; [k: string]: unknown };
-export type Source = { source?: { id?: string; name?: string; url?: string; [k: string]: unknown }; document?: string[]; metadata?: Record<string, unknown>[]; [k: string]: unknown };
+export type ChatFile = {
+	type?: string;
+	id?: string | null;
+	url?: string;
+	name?: string;
+	content_type?: string;
+	status?: string;
+	size?: number;
+	[k: string]: unknown;
+};
+export type Source = {
+	source?: { id?: string; name?: string; url?: string; [k: string]: unknown };
+	document?: string[];
+	metadata?: Record<string, unknown>[];
+	[k: string]: unknown;
+};
 export type Status = { action?: string; description?: string; done?: boolean; hidden?: boolean; [k: string]: unknown };
 
 export type Message = {
@@ -57,7 +71,11 @@ export function messagesList(history: History, id: string | null | undefined): M
 	return list.reverse();
 }
 
-export function updateMessage(history: History, id: string, patch: Partial<Message> | ((m: Message) => Partial<Message>)): History {
+export function updateMessage(
+	history: History,
+	id: string,
+	patch: Partial<Message> | ((m: Message) => Partial<Message>)
+): History {
 	const m = history.messages[id];
 	if (!m) return history;
 	const next = typeof patch === 'function' ? patch(m) : patch;
@@ -72,9 +90,22 @@ function attach(history: History, message: Message): History {
 	return { messages, currentId: message.id };
 }
 
-export function addUserMessage(history: History, parentId: string | null, fields: { content: string; files?: ChatFile[]; models?: string[] }): { history: History; id: string } {
+export function addUserMessage(
+	history: History,
+	parentId: string | null,
+	fields: { content: string; files?: ChatFile[]; models?: string[] }
+): { history: History; id: string } {
 	const id = uuid();
-	const message: Message = { id, parentId, childrenIds: [], role: 'user', content: fields.content, files: fields.files?.length ? fields.files : undefined, models: fields.models, timestamp: now() };
+	const message: Message = {
+		id,
+		parentId,
+		childrenIds: [],
+		role: 'user',
+		content: fields.content,
+		files: fields.files?.length ? fields.files : undefined,
+		models: fields.models,
+		timestamp: now()
+	};
 	return { history: attach(history, message), id };
 }
 
@@ -86,13 +117,29 @@ export type ResponseTarget = { model_id: string; message_id: string; modelIdx: n
  * the last one becomes current. `modelIdx` pins a regenerated reply to its
  * column in a side-by-side chat.
  */
-export function addResponses(history: History, parentId: string, models: ModelRef[], modelIdx?: number): { history: History; targets: ResponseTarget[] } {
+export function addResponses(
+	history: History,
+	parentId: string,
+	models: ModelRef[],
+	modelIdx?: number
+): { history: History; targets: ResponseTarget[] } {
 	let h = history;
 	const targets: ResponseTarget[] = [];
 	models.forEach((model, i) => {
 		const idx = modelIdx ?? i;
 		const id = uuid();
-		h = attach(h, { id, parentId, childrenIds: [], role: 'assistant', content: '', done: false, model: model.id, modelName: model.name ?? model.id, modelIdx: idx, timestamp: now() });
+		h = attach(h, {
+			id,
+			parentId,
+			childrenIds: [],
+			role: 'assistant',
+			content: '',
+			done: false,
+			model: model.id,
+			modelName: model.name ?? model.id,
+			modelIdx: idx,
+			timestamp: now()
+		});
 		targets.push({ model_id: model.id, message_id: id, modelIdx: idx });
 	});
 	return { history: h, targets };
@@ -123,24 +170,40 @@ export function showBranch(history: History, id: string): History {
  * falls back to the newest leaf when `currentId` is broken, and marks every
  * assistant reply but the current one done.
  */
-export function normalizeHistory(raw: Partial<History> | null | undefined, messages?: Partial<Message>[], currentMessageId?: string | null): History {
+export function normalizeHistory(
+	raw: Partial<History> | null | undefined,
+	messages?: Partial<Message>[],
+	currentMessageId?: string | null
+): History {
 	let history: History;
-	if (raw?.messages && typeof raw.messages === 'object') history = { messages: { ...raw.messages }, currentId: raw.currentId ?? null };
+	if (raw?.messages && typeof raw.messages === 'object')
+		history = { messages: { ...raw.messages }, currentId: raw.currentId ?? null };
 	else {
 		history = emptyHistory();
 		let parent: string | null = null;
 		for (const m of messages ?? []) {
 			const id: string = (m.id as string) ?? uuid();
-			history.messages[id] = { ...(m as Message), id, parentId: (m.parentId as string | null) ?? parent, childrenIds: [] };
+			history.messages[id] = {
+				...(m as Message),
+				id,
+				parentId: (m.parentId as string | null) ?? parent,
+				childrenIds: []
+			};
 			parent = id;
 		}
-		for (const m of Object.values(history.messages)) if (m.parentId && history.messages[m.parentId]) history.messages[m.parentId].childrenIds.push(m.id);
+		for (const m of Object.values(history.messages))
+			if (m.parentId && history.messages[m.parentId]) history.messages[m.parentId].childrenIds.push(m.id);
 		history.currentId = parent;
 	}
 	const msgs: Record<string, Message> = {};
 	for (const [id, m] of Object.entries(history.messages)) {
 		if (!m || typeof m !== 'object') continue;
-		msgs[id] = { ...m, id, childrenIds: Array.isArray(m.childrenIds) ? [...m.childrenIds] : [], content: typeof m.content === 'string' ? m.content : String(m.content ?? '') };
+		msgs[id] = {
+			...m,
+			id,
+			childrenIds: Array.isArray(m.childrenIds) ? [...m.childrenIds] : [],
+			content: typeof m.content === 'string' ? m.content : String(m.content ?? '')
+		};
 	}
 	const parentOf: Record<string, string> = {};
 	for (const [id, m] of Object.entries(msgs)) for (const c of m.childrenIds) parentOf[c] = id;
@@ -156,7 +219,14 @@ export function normalizeHistory(raw: Partial<History> | null | undefined, messa
 		if (m.parentId === undefined || (m.parentId && !msgs[m.parentId])) m.parentId = parentOf[id] ?? null;
 		if (!m.role) {
 			const parent = m.parentId ? msgs[m.parentId] : null;
-			m.role = parent?.role === 'user' ? 'assistant' : parent?.role === 'assistant' ? 'user' : m.model || m.usage || m.done !== undefined ? 'assistant' : 'user';
+			m.role =
+				parent?.role === 'user'
+					? 'assistant'
+					: parent?.role === 'assistant'
+						? 'user'
+						: m.model || m.usage || m.done !== undefined
+							? 'assistant'
+							: 'user';
 		}
 		if (m.role === 'assistant' && id !== currentId && m.done !== false) m.done = true;
 	}
@@ -169,7 +239,8 @@ export function errorText(error: unknown): string {
 	if (typeof error === 'string') return error;
 	const e = error as Record<string, any>;
 	if ('detail' in e) return String(e.detail);
-	if ('error' in e) return typeof e.error === 'object' && e.error && 'message' in e.error ? String(e.error.message) : String(e.error);
+	if ('error' in e)
+		return typeof e.error === 'object' && e.error && 'message' in e.error ? String(e.error.message) : String(e.error);
 	if ('message' in e) return String(e.message);
 	return '';
 }
@@ -196,7 +267,8 @@ export type ChatEffect =
 	| { kind: 'dialog'; type: 'confirmation' | 'input' | 'execute' | 'ask_user'; data: any };
 
 /** Strips `<details>` blocks (reasoning, tool calls) from a finished reply: what is copied or spoken. */
-const visibleText = (m: Message) => getOutputText(m.output) || m.content.replace(/<details[^>]*>[\s\S]*?<\/details>/gi, '').trim();
+const visibleText = (m: Message) =>
+	getOutputText(m.output) || m.content.replace(/<details[^>]*>[\s\S]*?<\/details>/gi, '').trim();
 
 /**
  * Applies one `events` socket event (Chat.svelte's chatEventHandler and its
@@ -258,7 +330,8 @@ export function applyChatEvent(history: History, event: ChatEvent): { history: H
 			if (data?.type === 'response.output_text.delta') {
 				const value = data.delta ?? '';
 				if (!(content === '' && value === '\n')) content += value;
-			} else if (data?.type === 'response.completed' || data?.type?.endsWith('.done')) content = getOutputText(output) || content;
+			} else if (data?.type === 'response.completed' || data?.type?.endsWith('.done'))
+				content = getOutputText(output) || content;
 			patch = { output, content };
 			break;
 		}
@@ -300,7 +373,8 @@ export function applyChatEvent(history: History, event: ChatEvent): { history: H
 			let h = history;
 			for (const msg of data?.messages ?? []) {
 				const existing = h.messages[msg?.id];
-				if (existing && existing.content !== msg.content) h = updateMessage(h, msg.id, { originalContent: existing.content, ...msg });
+				if (existing && existing.content !== msg.content)
+					h = updateMessage(h, msg.id, { originalContent: existing.content, ...msg });
 			}
 			return { history: h, effects };
 		}
@@ -350,10 +424,22 @@ export function toApiMessages(list: Message[]): Record<string, unknown>[] {
 			if (m.output && m.role === 'assistant') return { role: m.role, model: m.model, output: m.output };
 			const images = (m.files ?? []).filter((f) => f.type === 'image' || (f.content_type ?? '').startsWith('image/'));
 			const content = processDetails(m.content);
-			if (m.role === 'user' && images.length) return { role: m.role, content: [{ type: 'text', text: content }, ...images.map((f) => ({ type: 'image_url', image_url: { url: f.url } }))] };
+			if (m.role === 'user' && images.length)
+				return {
+					role: m.role,
+					content: [
+						{ type: 'text', text: content },
+						...images.map((f) => ({ type: 'image_url', image_url: { url: f.url } }))
+					]
+				};
 			return { role: m.role, content };
 		})
-		.filter((m) => m.role === 'user' || (typeof m.content === 'string' ? m.content.trim() : true) || (m as { output?: unknown[] }).output?.length);
+		.filter(
+			(m) =>
+				m.role === 'user' ||
+				(typeof m.content === 'string' ? m.content.trim() : true) ||
+				(m as { output?: unknown[] }).output?.length
+		);
 }
 
 export type Column = { modelIdx: number; messageIds: string[]; selected: number };
@@ -392,9 +478,17 @@ export function editContent(history: History, id: string, content: string, files
 export function saveReplyAsCopy(history: History, id: string, content: string): History {
 	const m = history.messages[id];
 	if (!m) return history;
-	const copy: Message = { ...m, id: crypto.randomUUID(), childrenIds: [], files: undefined, content, timestamp: Math.floor(Date.now() / 1000) };
+	const copy: Message = {
+		...m,
+		id: crypto.randomUUID(),
+		childrenIds: [],
+		files: undefined,
+		content,
+		timestamp: Math.floor(Date.now() / 1000)
+	};
 	const messages = { ...history.messages, [copy.id]: copy };
-	if (m.parentId && messages[m.parentId]) messages[m.parentId] = { ...messages[m.parentId], childrenIds: [...messages[m.parentId].childrenIds, copy.id] };
+	if (m.parentId && messages[m.parentId])
+		messages[m.parentId] = { ...messages[m.parentId], childrenIds: [...messages[m.parentId].childrenIds, copy.id] };
 	return { messages, currentId: copy.id };
 }
 
@@ -410,11 +504,18 @@ export function deleteMessage(history: History, id: string): History {
 	const children = target.childrenIds ?? [];
 	const grandchildren = children.flatMap((c) => messages[c]?.childrenIds ?? []);
 	const parentId = target.parentId;
-	if (parentId && messages[parentId]) messages[parentId] = { ...messages[parentId], childrenIds: [...messages[parentId].childrenIds.filter((c) => c !== id), ...grandchildren] };
+	if (parentId && messages[parentId])
+		messages[parentId] = {
+			...messages[parentId],
+			childrenIds: [...messages[parentId].childrenIds.filter((c) => c !== id), ...grandchildren]
+		};
 	for (const g of grandchildren) if (messages[g]) messages[g] = { ...messages[g], parentId };
 	for (const d of [id, ...children]) delete messages[d];
 	let next: string | null = parentId;
-	let kids = next === null ? Object.keys(messages).filter((k) => messages[k].parentId === null) : (messages[next]?.childrenIds ?? []);
+	let kids =
+		next === null
+			? Object.keys(messages).filter((k) => messages[k].parentId === null)
+			: (messages[next]?.childrenIds ?? []);
 	while (kids.length) {
 		next = kids.at(-1)!;
 		kids = messages[next]?.childrenIds ?? [];

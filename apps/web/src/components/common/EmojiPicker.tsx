@@ -11,11 +11,22 @@ import { searchEmojis, useEmojiIndex } from '@/lib/emoji/emoji';
  * the grid renders only the matches for the current search, capped, which
  * keeps the DOM small without one.
  */
-export function EmojiPicker({ children, onSubmit, onOpenChange }: { children: ReactNode; onSubmit: (name: string) => void; onOpenChange?: (open: boolean) => void }) {
+export function EmojiPicker({
+	children,
+	onSubmit,
+	onOpenChange
+}: {
+	children: ReactNode;
+	onSubmit: (name: string) => void;
+	onOpenChange?: (open: boolean) => void;
+}) {
 	const [open, setOpen] = useState(false);
 	const [search, setSearch] = useState('');
 	const index = useEmojiIndex();
-	const matches = useMemo(() => (index && open ? searchEmojis(index, search).slice(0, 400) : []), [index, search, open]);
+	const matches = useMemo(
+		() => (index && open ? searchEmojis(index, search).slice(0, 400) : []),
+		[index, search, open]
+	);
 
 	const change = (next: boolean) => {
 		setOpen(next);
@@ -27,7 +38,14 @@ export function EmojiPicker({ children, onSubmit, onOpenChange }: { children: Re
 		<Popover open={open} onOpenChange={change}>
 			<PopoverTrigger asChild>{children}</PopoverTrigger>
 			<PopoverContent align="start" side="top" className="w-72 p-2">
-				<Input autoFocus value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search emojis" aria-label="Search emojis" className="mb-2 h-8" />
+				<Input
+					autoFocus
+					value={search}
+					onChange={(e) => setSearch(e.target.value)}
+					placeholder="Search emojis"
+					aria-label="Search emojis"
+					className="mb-2 h-8"
+				/>
 				{!index ? (
 					<div className="flex justify-center py-6">
 						<Spinner className="size-4" />

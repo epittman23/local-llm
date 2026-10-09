@@ -96,10 +96,12 @@ export function useKnowledgeUploads({
 		try {
 			// (The Svelte version also sends the user's speech-to-text language for
 			// audio/video files; there is no settings store here yet.)
-			const uploaded = await uploadFile(token, file, { knowledge_id: knowledgeId, directory_id: directoryId }).catch((e) => {
-				toast.error(`${e}`);
-				return null;
-			});
+			const uploaded = await uploadFile(token, file, { knowledge_id: knowledgeId, directory_id: directoryId }).catch(
+				(e) => {
+					toast.error(`${e}`);
+					return null;
+				}
+			);
 			settle(uploaded);
 		} catch (e) {
 			toast.error(`${e}`);
@@ -131,9 +133,16 @@ export function useKnowledgeUploads({
 				}
 				let uploaded = res.file;
 				if (res.type === 'web' || res.type === 'youtube') {
-					const name = url.replace(/[^a-z0-9]/gi, '_').toLowerCase().slice(0, 50);
+					const name = url
+						.replace(/[^a-z0-9]/gi, '_')
+						.toLowerCase()
+						.slice(0, 50);
 					const file = blobToFile(new Blob([res.content ?? ''], { type: 'text/plain' }), `${name}.txt`);
-					uploaded = await uploadFile(token, file, { knowledge_id: knowledgeId, directory_id: directoryId, source_url: url }).catch((e) => {
+					uploaded = await uploadFile(token, file, {
+						knowledge_id: knowledgeId,
+						directory_id: directoryId,
+						source_url: url
+					}).catch((e) => {
 						toast.error(`${e}`);
 						return null;
 					});
@@ -177,7 +186,8 @@ export function useKnowledgeUploads({
 		return failed;
 	};
 
-	const mkdirVia = (name: string, parentId: string | null) => createKnowledgeDirectory(token, knowledgeId as string, name, parentId);
+	const mkdirVia = (name: string, parentId: string | null) =>
+		createKnowledgeDirectory(token, knowledgeId as string, name, parentId);
 
 	/** Upload a picked/dropped directory: hash it, diff against the base, create folders, upload everything. */
 	const uploadDirectoryEntries = async (entries: DirectoryFileEntry[]) => {
@@ -189,7 +199,12 @@ export function useKnowledgeUploads({
 			const diff = (await syncKnowledgeDiff(
 				token,
 				knowledgeId,
-				manifest.map(({ filename, path, checksum, size }) => ({ filename, path: getDirectoryUploadPath(breadcrumbs, path), checksum, size }))
+				manifest.map(({ filename, path, checksum, size }) => ({
+					filename,
+					path: getDirectoryUploadPath(breadcrumbs, path),
+					checksum,
+					size
+				}))
 			)) as SyncDiff | null;
 			if (!diff) {
 				toast.error('Failed to compare files.');
@@ -230,7 +245,9 @@ export function useKnowledgeUploads({
 				await syncKnowledgeCleanup(token, knowledgeId, stale, diff.rmdir);
 			}
 			const idByPath = await createMissingDirectories(diff, mkdirVia);
-			const failed = await uploadManifestEntries(filesToUpload(manifest, diff), (entry) => (entry.path ? idByPath[entry.path] : null));
+			const failed = await uploadManifestEntries(filesToUpload(manifest, diff), (entry) =>
+				entry.path ? idByPath[entry.path] : null
+			);
 			if (failed === 0) {
 				toast.success(
 					`Sync complete: ${diff.added.length} added, ${diff.modified.length} modified, ${diff.deleted.length} deleted, ${diff.unmodified_count} unmodified`
@@ -273,7 +290,8 @@ export async function collectDirectoryFiles(): Promise<DirectoryFileEntry[] | nu
 					if (entry.name.startsWith('.')) continue;
 					const entryPath = dirPath ? `${dirPath}/${entry.name}` : entry.name;
 					if (hasHiddenFolder(entryPath)) continue;
-					if (entry.kind === 'file') collected.push({ path: dirPath, filename: entry.name, file: await entry.getFile() });
+					if (entry.kind === 'file')
+						collected.push({ path: dirPath, filename: entry.name, file: await entry.getFile() });
 					else if (entry.kind === 'directory') await traverse(entry, entryPath);
 				}
 			};
@@ -289,7 +307,9 @@ export async function collectDirectoryFiles(): Promise<DirectoryFileEntry[] | nu
 			document.body.appendChild(input);
 			input.onchange = () => {
 				try {
-					const files = Array.from(input.files ?? []).filter((f) => !hasHiddenFolder(f.webkitRelativePath) && !f.name.startsWith('.'));
+					const files = Array.from(input.files ?? []).filter(
+						(f) => !hasHiddenFolder(f.webkitRelativePath) && !f.name.startsWith('.')
+					);
 					resolve(
 						files.map((file) => {
 							const parts = file.webkitRelativePath.split('/');
@@ -321,7 +341,10 @@ const readAllEntries = async (reader: any): Promise<any[]> => {
 };
 
 /** Flattens a dropped directory (a `FileSystemEntry`) into its non-hidden files. */
-export async function collectDroppedEntryFiles(entry: any, entryPath: string = entry.name): Promise<DirectoryFileEntry[]> {
+export async function collectDroppedEntryFiles(
+	entry: any,
+	entryPath: string = entry.name
+): Promise<DirectoryFileEntry[]> {
 	if (entry.name.startsWith('.') || hasHiddenFolder(entryPath)) return [];
 	if (entry.isFile) {
 		const file = await new Promise<File>((resolve, reject) => entry.file(resolve, reject));
@@ -331,7 +354,9 @@ export async function collectDroppedEntryFiles(entry: any, entryPath: string = e
 	}
 	if (entry.isDirectory) {
 		const children = await readAllEntries(entry.createReader());
-		return (await Promise.all(children.map((child) => collectDroppedEntryFiles(child, `${entryPath}/${child.name}`)))).flat();
+		return (
+			await Promise.all(children.map((child) => collectDroppedEntryFiles(child, `${entryPath}/${child.name}`)))
+		).flat();
 	}
 	return [];
 }

@@ -341,12 +341,7 @@ export const userSignIn = async (email: string, password: string) => {
 	return res;
 };
 
-export const userSignUp = async (
-	name: string,
-	email: string,
-	password: string,
-	profile_image_url: string
-) => {
+export const userSignUp = async (name: string, email: string, password: string, profile_image_url: string) => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/auths/signup`, {
@@ -423,10 +418,7 @@ export const getLogoutRedirectUrl = (redirectUrl?: string | null) => {
 	const postLogoutRedirectUri = url.searchParams.get('post_logout_redirect_uri');
 	if (postLogoutRedirectUri) {
 		const configuredPostLogoutUrl = new URL(postLogoutRedirectUri, window.location.origin);
-		if (
-			configuredPostLogoutUrl.origin === window.location.origin &&
-			configuredPostLogoutUrl.pathname === '/auth'
-		) {
+		if (configuredPostLogoutUrl.origin === window.location.origin && configuredPostLogoutUrl.pathname === '/auth') {
 			url.searchParams.set('state', 'logout');
 		}
 		return url.href;
@@ -633,16 +625,13 @@ export const deleteAPIKey = async (token: string) => {
 export const deleteOAuthSession = async (token: string, provider: string) => {
 	let error = null;
 
-	const res = await fetch(
-		`${WEBUI_API_BASE_URL}/auths/oauth/sessions/${encodeURIComponent(provider)}`,
-		{
-			method: 'DELETE',
-			headers: {
-				'Content-Type': 'application/json',
-				Authorization: `Bearer ${token}`
-			}
+	const res = await fetch(`${WEBUI_API_BASE_URL}/auths/oauth/sessions/${encodeURIComponent(provider)}`, {
+		method: 'DELETE',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${token}`
 		}
-	)
+	})
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
 			return res.json();

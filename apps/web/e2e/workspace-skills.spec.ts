@@ -115,7 +115,9 @@ test.describe('workspace skills', () => {
 		const { calls } = await mockSkillsApi(page, []);
 		await page.goto('/workspace/skills/create');
 
-		await page.getByLabel('Skill Instructions').fill('---\nname: code-review_guide\ndescription: Review carefully\n---\nBody');
+		await page
+			.getByLabel('Skill Instructions')
+			.fill('---\nname: code-review_guide\ndescription: Review carefully\n---\nBody');
 		await expect(page.getByLabel('Skill Name')).toHaveValue('Code Review Guide');
 		await expect(page.getByLabel('Skill Description')).toHaveValue('Review carefully');
 
@@ -167,11 +169,13 @@ test.describe('workspace skills', () => {
 				])
 			)
 		});
-		await expect.poll(() => calls.find((c) => c.path === '/create')?.body).toMatchObject({
-			id: 'imp',
-			name: 'Imported',
-			access_grants: []
-		});
+		await expect
+			.poll(() => calls.find((c) => c.path === '/create')?.body)
+			.toMatchObject({
+				id: 'imp',
+				name: 'Imported',
+				access_grants: []
+			});
 
 		await page.getByRole('button', { name: 'Open create menu' }).click();
 		const chooser2 = page.waitForEvent('filechooser');
@@ -194,10 +198,12 @@ test.describe('workspace skills', () => {
 		await expect(page.getByText('skill-1', { exact: true })).toBeVisible(); // id shown as text
 		await page.getByLabel('Skill Instructions').fill('New instructions');
 		await page.getByRole('button', { name: 'Save', exact: true }).click();
-		await expect.poll(() => calls.find((c) => c.path === '/id/skill-1/update')?.body).toMatchObject({
-			id: 'skill-1',
-			content: 'New instructions'
-		});
+		await expect
+			.poll(() => calls.find((c) => c.path === '/id/skill-1/update')?.body)
+			.toMatchObject({
+				id: 'skill-1',
+				content: 'New instructions'
+			});
 
 		await page.goto('/workspace/skills/edit?id=skill-2');
 		await expect(page.getByText('Read Only')).toBeVisible();

@@ -53,8 +53,8 @@ PAUSE_RESOLUTIONS = ('recovered', 'timeout', 'abandoned')
 class BenchmarkTuneSweep(Base):
     __tablename__ = 'benchmark_tune_sweep'
     __table_args__ = (
-        CheckConstraint(f"budget_mode IN {BUDGET_MODES!r}", name='ck_benchmark_tune_sweep_budget_mode'),
-        CheckConstraint(f"verdict IS NULL OR verdict IN {VERDICTS!r}", name='ck_benchmark_tune_sweep_verdict'),
+        CheckConstraint(f'budget_mode IN {BUDGET_MODES!r}', name='ck_benchmark_tune_sweep_budget_mode'),
+        CheckConstraint(f'verdict IS NULL OR verdict IN {VERDICTS!r}', name='ck_benchmark_tune_sweep_verdict'),
     )
     sweep_id = Column(Text, primary_key=True)
     started_at = Column(BigInteger, nullable=False)
@@ -123,9 +123,7 @@ class BenchmarkTuneSweepModel(BaseModel):
 
 class BenchmarkTuneCandidate(Base):
     __tablename__ = 'benchmark_tune_candidate'
-    __table_args__ = (
-        CheckConstraint(f"status IN {CANDIDATE_STATUSES!r}", name='ck_benchmark_tune_candidate_status'),
-    )
+    __table_args__ = (CheckConstraint(f'status IN {CANDIDATE_STATUSES!r}', name='ck_benchmark_tune_candidate_status'),)
     sweep_id = Column(Text, ForeignKey('benchmark_tune_sweep.sweep_id', ondelete='CASCADE'), primary_key=True)
     candidate_sha = Column(Text, primary_key=True)
     stage = Column(Text, nullable=False)
@@ -196,7 +194,7 @@ class BenchmarkTuneVisit(Base):
     __tablename__ = 'benchmark_tune_visit'
     __table_args__ = (
         UniqueConstraint('sweep_id', 'candidate_sha', 'round', 'attempt', name='uq_benchmark_tune_visit_slot'),
-        CheckConstraint(f"status IN {VISIT_STATUSES!r}", name='ck_benchmark_tune_visit_status'),
+        CheckConstraint(f'status IN {VISIT_STATUSES!r}', name='ck_benchmark_tune_visit_status'),
     )
     visit_id = Column(Integer, primary_key=True, autoincrement=True)
     sweep_id = Column(Text, ForeignKey('benchmark_tune_sweep.sweep_id', ondelete='CASCADE'), nullable=False)
@@ -244,9 +242,9 @@ class BenchmarkTuneVisitModel(BaseModel):
 class BenchmarkTunePause(Base):
     __tablename__ = 'benchmark_tune_pause'
     __table_args__ = (
-        CheckConstraint(f"trigger_kind IN {PAUSE_TRIGGERS!r}", name='ck_benchmark_tune_pause_trigger'),
+        CheckConstraint(f'trigger_kind IN {PAUSE_TRIGGERS!r}', name='ck_benchmark_tune_pause_trigger'),
         CheckConstraint(
-            f"resolution IS NULL OR resolution IN {PAUSE_RESOLUTIONS!r}", name='ck_benchmark_tune_pause_resolution'
+            f'resolution IS NULL OR resolution IN {PAUSE_RESOLUTIONS!r}', name='ck_benchmark_tune_pause_resolution'
         ),
     )
     pause_id = Column(Integer, primary_key=True, autoincrement=True)
@@ -292,9 +290,11 @@ class BenchmarkTunePauseModel(BaseModel):
 
 class BenchmarkTuneSweepTable:
     async def open_sweep(self, sweep_id: Optional[str] = None, db: Optional[AsyncSession] = None, **fields) -> str:
-        sweep_id = sweep_id or f"{int(time.time())}-{uuid.uuid4().hex[:6]}"
+        sweep_id = sweep_id or f'{int(time.time())}-{uuid.uuid4().hex[:6]}'
         async with get_async_db_context(db) as db:
-            row = BenchmarkTuneSweep(sweep_id=sweep_id, started_at=fields.pop('started_at', None) or int(time.time()), **fields)
+            row = BenchmarkTuneSweep(
+                sweep_id=sweep_id, started_at=fields.pop('started_at', None) or int(time.time()), **fields
+            )
             db.add(row)
             await db.commit()
             return sweep_id
@@ -374,7 +374,9 @@ class BenchmarkTuneCandidateTable:
             await db.commit()
             return added
 
-    async def set_candidate(self, sweep_id: str, candidate_sha: str, db: Optional[AsyncSession] = None, **fields) -> None:
+    async def set_candidate(
+        self, sweep_id: str, candidate_sha: str, db: Optional[AsyncSession] = None, **fields
+    ) -> None:
         allowed = ('status', 'status_reason', 'config_id', 'score', 'eliminated_round', 'stage')
         sets = {k: v for k, v in fields.items() if k in allowed}
         if not sets:
@@ -407,13 +409,25 @@ class BenchmarkTuneCandidateTable:
 
 class BenchmarkTuneRoundTable:
     async def open_round(
-        self, sweep_id: str, rnd: int, *, stage: str, item_from: int, item_to: int, survivors: int,
+        self,
+        sweep_id: str,
+        rnd: int,
+        *,
+        stage: str,
+        item_from: int,
+        item_to: int,
+        survivors: int,
         db: Optional[AsyncSession] = None,
     ) -> None:
         async with get_async_db_context(db) as db:
             stmt = pg_insert(BenchmarkTuneRound).values(
-                sweep_id=sweep_id, round=rnd, stage=stage, started_at=int(time.time()),
-                item_from=item_from, item_to=item_to, survivors=survivors,
+                sweep_id=sweep_id,
+                round=rnd,
+                stage=stage,
+                started_at=int(time.time()),
+                item_from=item_from,
+                item_to=item_to,
+                survivors=survivors,
             )
             stmt = stmt.on_conflict_do_nothing(index_elements=['sweep_id', 'round'])
             await db.execute(stmt)
@@ -441,14 +455,28 @@ class BenchmarkTuneRoundTable:
 
 class BenchmarkTuneVisitTable:
     async def open_visit(
-        self, sweep_id: str, candidate_sha: str, rnd: int, *, attempt: int = 1, item_from: int, item_to: int,
-        since_pause_seconds: Optional[float] = None, db: Optional[AsyncSession] = None,
+        self,
+        sweep_id: str,
+        candidate_sha: str,
+        rnd: int,
+        *,
+        attempt: int = 1,
+        item_from: int,
+        item_to: int,
+        since_pause_seconds: Optional[float] = None,
+        db: Optional[AsyncSession] = None,
     ) -> int:
         async with get_async_db_context(db) as db:
             row = BenchmarkTuneVisit(
-                sweep_id=sweep_id, candidate_sha=candidate_sha, round=rnd, attempt=attempt,
-                started_at=int(time.time()), item_from=item_from, item_to=item_to,
-                since_pause_seconds=since_pause_seconds, status='running',
+                sweep_id=sweep_id,
+                candidate_sha=candidate_sha,
+                round=rnd,
+                attempt=attempt,
+                started_at=int(time.time()),
+                item_from=item_from,
+                item_to=item_to,
+                since_pause_seconds=since_pause_seconds,
+                status='running',
             )
             db.add(row)
             await db.commit()
@@ -496,16 +524,31 @@ class BenchmarkTuneVisitTable:
 
 class BenchmarkTunePauseTable:
     async def open_pause(
-        self, sweep_id: str, *, trigger: str, rnd: Optional[int] = None, visit_id: Optional[int] = None,
-        attempt: int = 1, drift_ratio: Optional[float] = None, throttle_before: Optional[str] = None,
-        temp_before: Optional[float] = None, power_before: Optional[float] = None,
+        self,
+        sweep_id: str,
+        *,
+        trigger: str,
+        rnd: Optional[int] = None,
+        visit_id: Optional[int] = None,
+        attempt: int = 1,
+        drift_ratio: Optional[float] = None,
+        throttle_before: Optional[str] = None,
+        temp_before: Optional[float] = None,
+        power_before: Optional[float] = None,
         db: Optional[AsyncSession] = None,
     ) -> int:
         async with get_async_db_context(db) as db:
             row = BenchmarkTunePause(
-                sweep_id=sweep_id, round=rnd, visit_id=visit_id, started_at=int(time.time()),
-                trigger_kind=trigger, drift_ratio=drift_ratio, attempt=attempt,
-                throttle_before=throttle_before, temp_before=temp_before, power_before=power_before,
+                sweep_id=sweep_id,
+                round=rnd,
+                visit_id=visit_id,
+                started_at=int(time.time()),
+                trigger_kind=trigger,
+                drift_ratio=drift_ratio,
+                attempt=attempt,
+                throttle_before=throttle_before,
+                temp_before=temp_before,
+                power_before=power_before,
             )
             db.add(row)
             await db.commit()

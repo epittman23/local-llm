@@ -6,14 +6,30 @@ import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
-import { type CalendarEventModel, type CalendarModel, deleteCalendar, getCalendarEvents, getCalendars } from '@/lib/apis/calendar';
+import {
+	type CalendarEventModel,
+	type CalendarModel,
+	deleteCalendar,
+	getCalendarEvents,
+	getCalendars
+} from '@/lib/apis/calendar';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useDocumentTitle } from '@/lib/stores/configStore';
 import { cn } from '@/lib/utils';
 import { FeatureGate } from '@/routes/common/FeatureGate';
 import { CalendarViews } from './CalendarViews';
 import { CreateCalendarDialog, EventDialog } from './CalendarDialogs';
-import { type CalendarViewMode, MONTH_NAMES, automationTarget, defaultCalendarId, headerText, isSameDay, monthGrid, stepDate, visibleRange } from './calendarModel';
+import {
+	type CalendarViewMode,
+	MONTH_NAMES,
+	automationTarget,
+	defaultCalendarId,
+	headerText,
+	isSameDay,
+	monthGrid,
+	stepDate,
+	visibleRange
+} from './calendarModel';
 
 /** Ports components/calendar/CalendarSidebar.svelte: a mini month to jump around in, and the calendar list with show/hide and delete. */
 function CalendarSidebar({
@@ -45,10 +61,20 @@ function CalendarSidebar({
 						{MONTH_NAMES[mini.getMonth()]} {mini.getFullYear()}
 					</div>
 					<div className="flex items-center gap-0.5">
-						<button type="button" aria-label="Previous month" className="hover:bg-muted rounded p-0.5" onClick={() => setMini(new Date(mini.getFullYear(), mini.getMonth() - 1, 1))}>
+						<button
+							type="button"
+							aria-label="Previous month"
+							className="hover:bg-muted rounded p-0.5"
+							onClick={() => setMini(new Date(mini.getFullYear(), mini.getMonth() - 1, 1))}
+						>
 							<ChevronLeft className="size-3" />
 						</button>
-						<button type="button" aria-label="Next month" className="hover:bg-muted rounded p-0.5" onClick={() => setMini(new Date(mini.getFullYear(), mini.getMonth() + 1, 1))}>
+						<button
+							type="button"
+							aria-label="Next month"
+							className="hover:bg-muted rounded p-0.5"
+							onClick={() => setMini(new Date(mini.getFullYear(), mini.getMonth() + 1, 1))}
+						>
 							<ChevronRight className="size-3" />
 						</button>
 					</div>
@@ -69,7 +95,11 @@ function CalendarSidebar({
 							className={cn(
 								'flex size-6 items-center justify-center rounded-full transition',
 								day.getMonth() !== mini.getMonth() && 'text-muted-foreground/50',
-								isSameDay(day, today) ? 'bg-blue-500 text-white' : isSameDay(day, date) ? 'bg-muted' : 'hover:bg-muted/60'
+								isSameDay(day, today)
+									? 'bg-blue-500 text-white'
+									: isSameDay(day, date)
+										? 'bg-muted'
+										: 'hover:bg-muted/60'
 							)}
 							onClick={() => onSelectDate(day)}
 						>
@@ -90,12 +120,25 @@ function CalendarSidebar({
 						const shown = !hidden.has(c.id);
 						return (
 							<li key={c.id} className="group flex items-center">
-								<button type="button" aria-pressed={shown} className="hover:bg-muted/60 flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1 text-left text-xs transition" onClick={() => onToggle(c.id)}>
-									<span className="size-2.5 shrink-0 rounded-sm" style={{ backgroundColor: c.color || '#3b82f6', opacity: shown ? 1 : 0.25 }} />
+								<button
+									type="button"
+									aria-pressed={shown}
+									className="hover:bg-muted/60 flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-1 text-left text-xs transition"
+									onClick={() => onToggle(c.id)}
+								>
+									<span
+										className="size-2.5 shrink-0 rounded-sm"
+										style={{ backgroundColor: c.color || '#3b82f6', opacity: shown ? 1 : 0.25 }}
+									/>
 									<span className={cn('flex-1 truncate', !shown && 'text-muted-foreground')}>{c.name}</span>
 								</button>
 								{!c.is_default && !c.is_system && (
-									<button type="button" aria-label={`Delete calendar ${c.name}`} className="text-muted-foreground hover:text-foreground rounded p-0.5 opacity-0 transition group-hover:opacity-100 focus:opacity-100" onClick={() => onDelete(c)}>
+									<button
+										type="button"
+										aria-label={`Delete calendar ${c.name}`}
+										className="text-muted-foreground hover:text-foreground rounded p-0.5 opacity-0 transition group-hover:opacity-100 focus:opacity-100"
+										onClick={() => onDelete(c)}
+									>
 										<X className="size-3" />
 									</button>
 								)}
@@ -127,11 +170,16 @@ function Calendar() {
 	const [view, setView] = useState<CalendarViewMode>('month');
 	const [date, setDate] = useState(() => new Date());
 	const [hidden, setHidden] = useState<Set<string>>(new Set());
-	const [eventDialog, setEventDialog] = useState<{ event: CalendarEventModel | null; startAt: number | null } | null>(null);
+	const [eventDialog, setEventDialog] = useState<{ event: CalendarEventModel | null; startAt: number | null } | null>(
+		null
+	);
 	const [creatingCalendar, setCreatingCalendar] = useState(false);
 	const [deleting, setDeleting] = useState<CalendarModel | null>(null);
 
-	const calendars = useQuery({ queryKey: ['calendars'], queryFn: async () => (await getCalendars(token).catch(() => [])) ?? [] });
+	const calendars = useQuery({
+		queryKey: ['calendars'],
+		queryFn: async () => (await getCalendars(token).catch(() => [])) ?? []
+	});
 	const range = visibleRange(view, date);
 	const events = useQuery({
 		queryKey: ['calendar-events', range.start, range.end],
@@ -187,28 +235,60 @@ function Calendar() {
 				onSaved={refreshEvents}
 			/>
 			<CreateCalendarDialog open={creatingCalendar} onOpenChange={setCreatingCalendar} onCreated={refreshAll} />
-			<ConfirmDialog open={deleting !== null} onOpenChange={(o) => !o && setDeleting(null)} title="Delete Calendar" confirmLabel="Delete" onConfirm={removeCalendar}>
+			<ConfirmDialog
+				open={deleting !== null}
+				onOpenChange={(o) => !o && setDeleting(null)}
+				title="Delete Calendar"
+				confirmLabel="Delete"
+				onConfirm={removeCalendar}
+			>
 				This will permanently delete the calendar "{deleting?.name}" and all its events. This action cannot be undone.
 			</ConfirmDialog>
 
 			<nav className="flex shrink-0 items-center gap-1 px-3 py-2">
 				<h1 className="px-1 text-sm">{headerText(view, date)}</h1>
-				<button type="button" aria-label="Previous" className="hover:bg-muted rounded-lg p-1" onClick={() => setDate(stepDate(view, date, -1))}>
+				<button
+					type="button"
+					aria-label="Previous"
+					className="hover:bg-muted rounded-lg p-1"
+					onClick={() => setDate(stepDate(view, date, -1))}
+				>
 					<ChevronLeft className="text-muted-foreground size-3.5" />
 				</button>
-				<button type="button" aria-label="Next" className="hover:bg-muted rounded-lg p-1" onClick={() => setDate(stepDate(view, date, 1))}>
+				<button
+					type="button"
+					aria-label="Next"
+					className="hover:bg-muted rounded-lg p-1"
+					onClick={() => setDate(stepDate(view, date, 1))}
+				>
 					<ChevronRight className="text-muted-foreground size-3.5" />
 				</button>
 				<div className="ml-auto flex items-center gap-1">
-					<Button type="button" variant="ghost" size="sm" className="hidden sm:inline-flex" onClick={() => setDate(new Date())}>
+					<Button
+						type="button"
+						variant="ghost"
+						size="sm"
+						className="hidden sm:inline-flex"
+						onClick={() => setDate(new Date())}
+					>
 						Today
 					</Button>
-					<select aria-label="View" className="bg-transparent px-2 py-1 text-xs outline-hidden [&>option]:bg-popover" value={view} onChange={(e) => setView(e.target.value as CalendarViewMode)}>
+					<select
+						aria-label="View"
+						className="bg-transparent px-2 py-1 text-xs outline-hidden [&>option]:bg-popover"
+						value={view}
+						onChange={(e) => setView(e.target.value as CalendarViewMode)}
+					>
 						<option value="day">Day</option>
 						<option value="week">Week</option>
 						<option value="month">Month</option>
 					</select>
-					<Button type="button" variant="outline" size="sm" onClick={() => setEventDialog({ event: null, startAt: null })}>
+					<Button
+						type="button"
+						variant="outline"
+						size="sm"
+						onClick={() => setEventDialog({ event: null, startAt: null })}
+					>
 						Create
 					</Button>
 				</div>

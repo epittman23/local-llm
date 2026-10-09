@@ -53,14 +53,8 @@ function generateRegexRules(delimiters) {
 	});
 
 	// Math formulas can end in special characters
-	const inlineRule = new RegExp(
-		`^(${inlinePatterns.join('|')})(?=[${ALLOWED_SURROUNDING_CHARS}]|$)`,
-		'u'
-	);
-	const blockRule = new RegExp(
-		`^(${blockPatterns.join('|')})(?=[${ALLOWED_SURROUNDING_CHARS}]|$)`,
-		'u'
-	);
+	const inlineRule = new RegExp(`^(${inlinePatterns.join('|')})(?=[${ALLOWED_SURROUNDING_CHARS}]|$)`, 'u');
+	const blockRule = new RegExp(`^(${blockPatterns.join('|')})(?=[${ALLOWED_SURROUNDING_CHARS}]|$)`, 'u');
 
 	return { inlineRule, blockRule };
 }
@@ -70,8 +64,7 @@ const { inlineRule, blockRule } = generateRegexRules(DELIMITER_LIST);
 const isAllowedTrailing = (src: string, i: number): boolean =>
 	i >= src.length || ALLOWED_SURROUNDING_CHARS_REGEX.test(src.charAt(i));
 
-const isBlockBoundary = (src: string, i: number): boolean =>
-	/^(?:[ \t]*\r?\n|$)/.test(src.slice(i));
+const isBlockBoundary = (src: string, i: number): boolean => /^(?:[ \t]*\r?\n|$)/.test(src.slice(i));
 
 const findClosingDelimiter = (src: string, i: number): number => {
 	const len = src.length - 1;
@@ -87,11 +80,7 @@ const findClosingDelimiter = (src: string, i: number): number => {
 	return -1;
 };
 
-export const tokenizeDisplayMath = (
-	src: string,
-	type: 'inlineKatex' | 'blockKatex',
-	requireBlockBoundary = false
-) => {
+export const tokenizeDisplayMath = (src: string, type: 'inlineKatex' | 'blockKatex', requireBlockBoundary = false) => {
 	if (!src.startsWith('$$')) return;
 
 	const endIndex = findClosingDelimiter(src, 2);
@@ -147,11 +136,7 @@ function katexStart(src, displayMode: boolean) {
 
 function katexTokenizer(src, tokens, displayMode: boolean) {
 	if (src.startsWith('$$')) {
-		const displayToken = tokenizeDisplayMath(
-			src,
-			displayMode ? 'blockKatex' : 'inlineKatex',
-			displayMode
-		);
+		const displayToken = tokenizeDisplayMath(src, displayMode ? 'blockKatex' : 'inlineKatex', displayMode);
 		if (displayToken) {
 			return displayToken;
 		}

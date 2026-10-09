@@ -26,8 +26,10 @@ export function statusOf(m: ProviderModel, provider: string): string {
 }
 
 export function statusClass(status: string): string {
-	if (status === 'loaded' || status === 'sleeping') return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
-	if (status === 'loading' || status === 'downloading') return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300';
+	if (status === 'loaded' || status === 'sleeping')
+		return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
+	if (status === 'loading' || status === 'downloading')
+		return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300';
 	return 'bg-muted text-muted-foreground';
 }
 
@@ -41,7 +43,8 @@ export function normalizeCatalog(response: unknown): ProviderModel[] {
 		.sort((a: ProviderModel, b: ProviderModel) => modelIdOf(a).localeCompare(modelIdOf(b)));
 }
 
-export const providerLabel = (provider = ''): string => (provider === 'lmstudio' ? 'LM Studio' : provider === 'llama.cpp' ? 'llama.cpp' : provider);
+export const providerLabel = (provider = ''): string =>
+	provider === 'lmstudio' ? 'LM Studio' : provider === 'llama.cpp' ? 'llama.cpp' : provider;
 
 /** Only llama.cpp can delete models it has cached. */
 export const providerSupportsDelete = (provider = ''): boolean => provider === 'llama.cpp';
@@ -67,4 +70,5 @@ export function managementConnections(openaiConfig: Rec | null | undefined): Pro
 }
 
 /** Whether Ollama has anything to manage: enabled, with at least one instance. */
-export const hasOllamaManagement = (ollamaConfig: Rec | null | undefined): boolean => Boolean(ollamaConfig?.ENABLE_OLLAMA_API && (ollamaConfig?.OLLAMA_BASE_URLS ?? []).length > 0);
+export const hasOllamaManagement = (ollamaConfig: Rec | null | undefined): boolean =>
+	Boolean(ollamaConfig?.ENABLE_OLLAMA_API && (ollamaConfig?.OLLAMA_BASE_URLS ?? []).length > 0);

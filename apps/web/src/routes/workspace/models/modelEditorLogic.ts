@@ -72,17 +72,30 @@ const blankInfo = (): ModelInfo => ({
 /** Older saves stored knowledge as collection_name / collection_names; give them the current shape, marked legacy. */
 export const migrateKnowledge = (items: KnowledgeItem[] | null | undefined): KnowledgeItem[] =>
 	(items ?? []).map((item) => {
-		if (item?.collection_name && item?.type !== 'file') return { id: item.collection_name, name: item.name, legacy: true };
-		if (item?.collection_names) return { name: item.name, type: 'collection', collection_names: item.collection_names, legacy: true };
+		if (item?.collection_name && item?.type !== 'file')
+			return { id: item.collection_name, name: item.name, legacy: true };
+		if (item?.collection_names)
+			return { name: item.name, type: 'collection', collection_names: item.collection_names, legacy: true };
 		return item;
 	});
 
-const REFERENCE_KEYS = ['id', 'name', 'type', 'description', 'context', 'legacy', 'collection_name', 'collection_names'];
+const REFERENCE_KEYS = [
+	'id',
+	'name',
+	'type',
+	'description',
+	'context',
+	'legacy',
+	'collection_name',
+	'collection_names'
+];
 
 /** What is saved for an attached knowledge item: a reference, not the whole record. */
 export const toKnowledgeReference = (item: KnowledgeItem): KnowledgeItem => {
 	if (!item || typeof item !== 'object') return item;
-	return Object.fromEntries(REFERENCE_KEYS.filter((k) => item[k] !== undefined && item[k] !== null && item[k] !== '').map((k) => [k, item[k]]));
+	return Object.fromEntries(
+		REFERENCE_KEYS.filter((k) => item[k] !== undefined && item[k] !== null && item[k] !== '').map((k) => [k, item[k]])
+	);
 };
 
 const stopToString = (stop: unknown): string | null =>
@@ -169,7 +182,8 @@ export function buildModelInfo(state: EditorState, { preset }: { preset: boolean
 	if (state.id === '') return { ok: false, error: 'Model ID is required.' };
 	if (state.name === '') return { ok: false, error: 'Model Name is required.' };
 	if (preset && !state.info.base_model_id) return { ok: false, error: 'Base Model is required.' };
-	if (state.knowledge.some((item) => item.status === 'uploading')) return { ok: false, error: 'Please wait until all files are uploaded.' };
+	if (state.knowledge.some((item) => item.status === 'uploading'))
+		return { ok: false, error: 'Please wait until all files are uploaded.' };
 
 	const info: ModelInfo = JSON.parse(JSON.stringify({ ...state.info, id: state.id, name: state.name }));
 	info.meta = info.meta ?? {};
@@ -199,7 +213,9 @@ export function buildModelInfo(state: EditorState, { preset }: { preset: boolean
 
 	info.params.system = state.system.trim() === '' ? null : state.system;
 	const stop = state.params.stop;
-	info.params.stop = stop ? (typeof stop === 'string' ? stop.split(',') : (stop as string[])).filter((s) => s.trim()) : null;
+	info.params.stop = stop
+		? (typeof stop === 'string' ? stop.split(',') : (stop as string[])).filter((s) => s.trim())
+		: null;
 	for (const key of Object.keys(info.params)) {
 		if (info.params[key] === '' || info.params[key] === null) delete info.params[key];
 	}
@@ -276,7 +292,12 @@ type BaseModelCandidate = {
  */
 export function getBaseModelItems(
 	models: BaseModelCandidate[],
-	{ currentModelId, edit, selectedBaseId, isAdmin }: { currentModelId?: string; edit: boolean; selectedBaseId: string | null; isAdmin: boolean }
+	{
+		currentModelId,
+		edit,
+		selectedBaseId,
+		isAdmin
+	}: { currentModelId?: string; edit: boolean; selectedBaseId: string | null; isAdmin: boolean }
 ) {
 	return models
 		.filter(

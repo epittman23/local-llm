@@ -2,7 +2,8 @@ import type { Page } from '@playwright/test';
 import { expect, test } from './test';
 import { mockWorkspaceBackend } from './workspace-helpers';
 
-const json = (route: any, d: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(d) });
+const json = (route: any, d: unknown, status = 200) =>
+	route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(d) });
 const modal = (page: Page) => page.getByRole('dialog', { name: 'Settings' });
 
 /** Saved UI settings: GET returns the latest POSTed `ui`, and every POST body is recorded. */
@@ -103,7 +104,15 @@ test.describe('personal settings', () => {
 		await mockUserSettings(page);
 		let archived = [{ id: 'c1', title: 'Old chat', updated_at: 1_700_000_000 }];
 		const unarchived: string[] = [];
-		await page.route('**/api/v1/chats/archived**', (route) => json(route, new URL(route.request().url()).searchParams.get('page') === '1' || !new URL(route.request().url()).searchParams.get('page') ? archived : []));
+		await page.route('**/api/v1/chats/archived**', (route) =>
+			json(
+				route,
+				new URL(route.request().url()).searchParams.get('page') === '1' ||
+					!new URL(route.request().url()).searchParams.get('page')
+					? archived
+					: []
+			)
+		);
 		await page.route('**/api/v1/chats/c1/archive', (route) => {
 			unarchived.push('c1');
 			archived = [];

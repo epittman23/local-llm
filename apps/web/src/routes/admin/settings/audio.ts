@@ -20,7 +20,8 @@ export function parseOpenAiParams(text: string): OpenAiParams {
 	}
 }
 
-export const formatOpenAiParams = (params: unknown): string => (params && typeof params === 'object' && Object.keys(params).length > 0 ? JSON.stringify(params, null, 2) : '');
+export const formatOpenAiParams = (params: unknown): string =>
+	params && typeof params === 'object' && Object.keys(params).length > 0 ? JSON.stringify(params, null, 2) : '';
 
 export const splitMimeTypes = (text: string): string[] =>
 	text
@@ -37,7 +38,8 @@ export function engineDefaults(engine: string): { VOICE: string; MODEL: string }
 
 export type Voice = { id: string; name?: string };
 
-export const sortVoices = (voices: Voice[]): Voice[] => [...voices].sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id));
+export const sortVoices = (voices: Voice[]): Voice[] =>
+	[...voices].sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id));
 
 export const splitOptions = Object.values(TTS_RESPONSE_SPLIT) as string[];
 
@@ -82,7 +84,11 @@ const pick = (source: Rec, keys: readonly string[]) => Object.fromEntries(keys.m
  */
 export function buildAudioPayload(tts: Rec, stt: Rec, openaiParams: Rec, mimeText: string) {
 	return {
-		tts: { ...pick(tts, TTS_KEYS), OPENAI_PARAMS: openaiParams, SPLIT_ON: tts.SPLIT_ON || TTS_RESPONSE_SPLIT.PUNCTUATION },
+		tts: {
+			...pick(tts, TTS_KEYS),
+			OPENAI_PARAMS: openaiParams,
+			SPLIT_ON: tts.SPLIT_ON || TTS_RESPONSE_SPLIT.PUNCTUATION
+		},
 		stt: {
 			...pick(stt, STT_KEYS),
 			OPENAI_API_REQUEST_FORMAT: stt.OPENAI_API_REQUEST_FORMAT || 'multipart',

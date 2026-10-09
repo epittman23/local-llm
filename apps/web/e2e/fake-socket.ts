@@ -17,7 +17,16 @@ export async function fakeSocketServer(page: Page) {
 	let refusing = false;
 
 	await page.routeWebSocket(/\/ws\/socket\.io/, (ws) => {
-		const open = () => ws.send(JSON.stringify({ sid: 'e1', upgrades: [], pingInterval: 25000, pingTimeout: 60000, maxPayload: 1000000 }).replace(/^/, '0'));
+		const open = () =>
+			ws.send(
+				JSON.stringify({
+					sid: 'e1',
+					upgrades: [],
+					pingInterval: 25000,
+					pingTimeout: 60000,
+					maxPayload: 1000000
+				}).replace(/^/, '0')
+			);
 		// Refused: the transport opens and then closes, so the client sees a failed attempt
 		// and retries on its own schedule (closing before it opens leaves it waiting).
 		if (refusing) {

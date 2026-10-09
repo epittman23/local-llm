@@ -10,11 +10,29 @@ describe('arenaIdFromName', () => {
 });
 
 describe('buildArenaModel', () => {
-	const base = { id: 'a', name: 'A', profileImageUrl: '/x.png', description: '', modelIds: [], filterMode: 'exclude' as const, accessGrants: [] };
+	const base = {
+		id: 'a',
+		name: 'A',
+		profileImageUrl: '/x.png',
+		description: '',
+		modelIds: [],
+		filterMode: 'exclude' as const,
+		accessGrants: []
+	};
 	it('uses null for an empty description and for "all models"', () => {
-		expect(buildArenaModel(base).meta).toEqual({ profile_image_url: '/x.png', description: null, model_ids: null, filter_mode: null, access_grants: [] });
+		expect(buildArenaModel(base).meta).toEqual({
+			profile_image_url: '/x.png',
+			description: null,
+			model_ids: null,
+			filter_mode: null,
+			access_grants: []
+		});
 	});
 	it('keeps the filter mode once specific models are listed', () => {
-		expect(buildArenaModel({ ...base, description: 'd', modelIds: ['m1'] }).meta).toMatchObject({ description: 'd', model_ids: ['m1'], filter_mode: 'exclude' });
+		expect(buildArenaModel({ ...base, description: 'd', modelIds: ['m1'] }).meta).toMatchObject({
+			description: 'd',
+			model_ids: ['m1'],
+			filter_mode: 'exclude'
+		});
 	});
 });

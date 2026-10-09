@@ -7,7 +7,20 @@ import type { CalendarEventForm, CalendarEventModel } from '@/lib/apis/calendar'
 export type CalendarViewMode = 'month' | 'week' | 'day';
 
 export const NS = 1_000_000;
-export const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+export const MONTH_NAMES = [
+	'January',
+	'February',
+	'March',
+	'April',
+	'May',
+	'June',
+	'July',
+	'August',
+	'September',
+	'October',
+	'November',
+	'December'
+];
 export const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 /** The system calendar that holds automation runs: shown, never offered as a place to put an event. */
@@ -53,7 +66,9 @@ export function stepDate(view: CalendarViewMode, date: Date, delta: number): Dat
 }
 
 export const headerText = (view: CalendarViewMode, d: Date) =>
-	view === 'day' ? `${DAY_NAMES[d.getDay()]}, ${MONTH_NAMES[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}` : `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
+	view === 'day'
+		? `${DAY_NAMES[d.getDay()]}, ${MONTH_NAMES[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`
+		: `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
 
 /** A local-midnight key for a day, for grouping events. */
 export const dayKey = (d: Date) => String(midnight(d).getTime());
@@ -80,7 +95,8 @@ export const formatHour = (h: number) => (h === 0 ? '12 AM' : h < 12 ? `${h} AM`
 export const isSameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
 
 /** A time in nanoseconds at a local date and hour. */
-export const nsAt = (day: Date, hour: number) => new Date(day.getFullYear(), day.getMonth(), day.getDate(), hour).getTime() * NS;
+export const nsAt = (day: Date, hour: number) =>
+	new Date(day.getFullYear(), day.getMonth(), day.getDate(), hour).getTime() * NS;
 
 // --- the event form ------------------------------------------------------
 
@@ -125,7 +141,12 @@ export type EventFields = {
  * The form's starting values: the event being edited; or a new one-hour event
  * at `defaultStartAt` (a clicked day or hour); or at the current time.
  */
-export function eventFields(event: CalendarEventModel | null, defaultCalendarId: string, defaultStartAt: number | null, now = new Date()): EventFields {
+export function eventFields(
+	event: CalendarEventModel | null,
+	defaultCalendarId: string,
+	defaultStartAt: number | null,
+	now = new Date()
+): EventFields {
 	if (event) {
 		return {
 			title: event.title,
@@ -162,12 +183,16 @@ export function eventFields(event: CalendarEventModel | null, defaultCalendarId:
  * The event to send, or the message to show. An all-day event runs 00:00 to
  * 23:59; an end before the start keeps the event's old length (0 for a new one).
  */
-export function eventPayload(f: EventFields, editing: CalendarEventModel | null): { error: string } | { form: CalendarEventForm } {
+export function eventPayload(
+	f: EventFields,
+	editing: CalendarEventModel | null
+): { error: string } | { form: CalendarEventForm } {
 	if (!f.title.trim()) return { error: 'Title is required' };
 	if (!f.startDate) return { error: 'Date is required' };
 	const start = dateTimeToNs(f.startDate, f.allDay ? '00:00' : f.startTime);
 	let end = f.endDate ? dateTimeToNs(f.endDate, f.allDay ? '23:59' : f.endTime) : undefined;
-	if (end !== undefined && end < start) end = start + (editing?.end_at && editing.end_at > editing.start_at ? editing.end_at - editing.start_at : 0);
+	if (end !== undefined && end < start)
+		end = start + (editing?.end_at && editing.end_at > editing.start_at ? editing.end_at - editing.start_at : 0);
 	return {
 		form: {
 			calendar_id: f.calendarId,
@@ -192,4 +217,3 @@ export function automationTarget(e: CalendarEventModel): string | null {
 	if (!e.meta?.automation_id) return null;
 	return e.meta.chat_id ? `/c/${e.meta.chat_id}` : `/automations/${e.meta.automation_id}`;
 }
-

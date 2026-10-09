@@ -42,9 +42,7 @@ const isAuthenticatedBackendFetch = (input: RequestInfo | URL, init?: RequestIni
 		const requestUrl = resolveFetchUrl(input);
 		const backendOrigin = new URL(WEBUI_BASE_URL || '/', window.location.origin).origin;
 
-		return (
-			requestUrl.origin === backendOrigin && resolveFetchHeaders(input, init).has('authorization')
-		);
+		return requestUrl.origin === backendOrigin && resolveFetchHeaders(input, init).has('authorization');
 	} catch {
 		return false;
 	}

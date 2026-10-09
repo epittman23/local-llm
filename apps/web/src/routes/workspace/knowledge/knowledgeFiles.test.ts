@@ -13,7 +13,13 @@ import {
 	type SyncDiff
 } from './knowledgeFiles';
 
-const entry = (path: string, filename: string): DirectoryManifestEntry => ({ path, filename, file: new File(['x'], filename), checksum: 'h', size: 1 });
+const entry = (path: string, filename: string): DirectoryManifestEntry => ({
+	path,
+	filename,
+	file: new File(['x'], filename),
+	checksum: 'h',
+	size: 1
+});
 
 describe('paths', () => {
 	it('flags any hidden segment', () => {
@@ -21,7 +27,10 @@ describe('paths', () => {
 		expect(hasHiddenFolder('docs/a.b/c')).toBe(false);
 	});
 	it("prefixes a picked directory's path with the directory currently open", () => {
-		const crumbs = [{ id: '1', name: 'Reports' }, { id: '2', name: '2024' }];
+		const crumbs = [
+			{ id: '1', name: 'Reports' },
+			{ id: '2', name: '2024' }
+		];
 		expect(getDirectoryUploadPath(crumbs, 'q1/notes')).toBe('Reports/2024/q1/notes');
 		expect(getDirectoryUploadPath(crumbs, '')).toBe('Reports/2024');
 		expect(getDirectoryUploadPath([], 'q1')).toBe('q1');
@@ -49,13 +58,23 @@ describe('sync diff', () => {
 describe('createMissingDirectories', () => {
 	it('creates parents before children and threads their ids through', async () => {
 		const create = vi.fn(async (name: string, parentId: string | null) => ({ id: `${parentId ?? 'root'}/${name}` }));
-		const map = await createMissingDirectories({ mkdir: ['a', 'a/b', 'a/b/c'], directory_map: { existing: 'e1' } }, create);
-		expect(create.mock.calls).toEqual([['a', null], ['b', 'root/a'], ['c', 'root/a/b']]);
+		const map = await createMissingDirectories(
+			{ mkdir: ['a', 'a/b', 'a/b/c'], directory_map: { existing: 'e1' } },
+			create
+		);
+		expect(create.mock.calls).toEqual([
+			['a', null],
+			['b', 'root/a'],
+			['c', 'root/a/b']
+		]);
 		expect(map).toEqual({ existing: 'e1', a: 'root/a', 'a/b': 'root/a/b', 'a/b/c': 'root/a/b/c' });
 	});
 	it('uses a pre-existing parent from the server map, and skips a directory that failed to create', async () => {
 		const create = vi.fn(async (name: string) => (name === 'bad' ? null : { id: `id-${name}` }));
-		const map = await createMissingDirectories({ mkdir: ['known/bad', 'known/ok'], directory_map: { known: 'k1' } }, create);
+		const map = await createMissingDirectories(
+			{ mkdir: ['known/bad', 'known/ok'], directory_map: { known: 'k1' } },
+			create
+		);
 		expect(create.mock.calls[0]).toEqual(['bad', 'k1']);
 		expect(map).toEqual({ known: 'k1', 'known/ok': 'id-ok' });
 	});
@@ -76,9 +95,16 @@ describe('readMovePayload', () => {
 describe('knowledgeMetaPreview', () => {
 	it('summarises files, description and (for local bases) scalar metadata', () => {
 		expect(knowledgeMetaPreview({ file_count: 1, description: 'd' })).toBe('1 file · d');
-		expect(knowledgeMetaPreview({ file_count: 4, meta: { lang: 'en', empty: '', nested: {} } })).toBe('4 files · lang: en · nested');
+		expect(knowledgeMetaPreview({ file_count: 4, meta: { lang: 'en', empty: '', nested: {} } })).toBe(
+			'4 files · lang: en · nested'
+		);
 	});
 	it('describes a connected source by provider and mapped source', () => {
-		expect(knowledgeMetaPreview({ meta: { source: 'external', external: { provider: 'Drive', source: { name: 'Docs' }, auth_mode: 'service' } }, description: 'x' })).toBe('Drive · Docs · service · x');
+		expect(
+			knowledgeMetaPreview({
+				meta: { source: 'external', external: { provider: 'Drive', source: { name: 'Docs' }, auth_mode: 'service' } },
+				description: 'x'
+			})
+		).toBe('Drive · Docs · service · x');
 	});
 });

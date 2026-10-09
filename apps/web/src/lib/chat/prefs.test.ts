@@ -22,8 +22,22 @@ describe('chat prefs', () => {
 		});
 	});
 	it('reads the saved values; null counts as unset', () => {
-		const p = chatPrefs({ chatBubble: false, chatDirection: 'RTL', webSearch: 'always', temporaryChatByDefault: true, regenerateMenu: null, backgroundImageUrl: '' });
-		expect(p).toMatchObject({ chatBubble: false, direction: 'rtl', webSearchAlways: true, temporaryByDefault: true, regenerateMenu: true, backgroundImageUrl: null });
+		const p = chatPrefs({
+			chatBubble: false,
+			chatDirection: 'RTL',
+			webSearch: 'always',
+			temporaryChatByDefault: true,
+			regenerateMenu: null,
+			backgroundImageUrl: ''
+		});
+		expect(p).toMatchObject({
+			chatBubble: false,
+			direction: 'rtl',
+			webSearchAlways: true,
+			temporaryByDefault: true,
+			regenerateMenu: true,
+			backgroundImageUrl: null
+		});
 		expect(chatPrefs({ chatDirection: 'LTR' }).direction).toBe('ltr');
 	});
 	it('quotes a background URL so it cannot end the CSS declaration', () => {

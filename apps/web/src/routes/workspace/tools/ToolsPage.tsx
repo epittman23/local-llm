@@ -110,7 +110,8 @@ export function ToolsPage() {
 						toast.error(`${error}`);
 						return null;
 					});
-					if (all) saveAs(new Blob([JSON.stringify(all)], { type: 'application/json' }), `tools-export-${Date.now()}.json`);
+					if (all)
+						saveAs(new Blob([JSON.stringify(all)], { type: 'application/json' }), `tools-export-${Date.now()}.json`);
 				},
 				visible: canExport
 			}
@@ -122,7 +123,8 @@ export function ToolsPage() {
 		document.title = `Tools / ${webuiName}`;
 	}, [webuiName]);
 
-	const openTool = (tool: ToolListItem) => navigate(`${routePaths.workspaceToolsEdit}?id=${encodeURIComponent(tool.id)}`);
+	const openTool = (tool: ToolListItem) =>
+		navigate(`${routePaths.workspaceToolsEdit}?id=${encodeURIComponent(tool.id)}`);
 
 	const deleteMutation = useMutation({
 		mutationFn: (tool: ToolListItem) => deleteToolById(token, tool.id),
@@ -146,7 +148,11 @@ export function ToolsPage() {
 
 	const exportHandler = async (tool: ToolListItem) => {
 		const full = await fetchFull(tool);
-		if (full) saveAs(new Blob([JSON.stringify([full])], { type: 'application/json' }), `tool-${full.id}-export-${Date.now()}.json`);
+		if (full)
+			saveAs(
+				new Blob([JSON.stringify([full])], { type: 'application/json' }),
+				`tool-${full.id}-export-${Date.now()}.json`
+			);
 	};
 
 	const shareHandler = async (tool: ToolListItem) => {
@@ -245,8 +251,17 @@ export function ToolsPage() {
 			>
 				<CodeExecutionWarning />
 			</ConfirmDialog>
-			<ValvesModal open={valvesFor !== null} onOpenChange={(o) => !o && setValvesFor(null)} type="tool" id={valvesFor?.id ?? null} />
-			<ManifestModal open={manifestFor !== null} onOpenChange={(o) => !o && setManifestFor(null)} manifest={manifestFor?.meta?.manifest ?? {}} />
+			<ValvesModal
+				open={valvesFor !== null}
+				onOpenChange={(o) => !o && setValvesFor(null)}
+				type="tool"
+				id={valvesFor?.id ?? null}
+			/>
+			<ManifestModal
+				open={manifestFor !== null}
+				onOpenChange={(o) => !o && setManifestFor(null)}
+				manifest={manifestFor?.meta?.manifest ?? {}}
+			/>
 
 			<input
 				ref={importInput}
@@ -317,7 +332,9 @@ export function ToolsPage() {
 									<div className="flex min-w-0 flex-1 flex-col overflow-hidden">
 										<div className="flex min-w-0 items-center gap-2 overflow-hidden">
 											<Tip content={tool.id} side="top">
-												<div className="min-w-0 truncate text-[0.8125rem] leading-5 group-hover:underline">{tool.name}</div>
+												<div className="min-w-0 truncate text-[0.8125rem] leading-5 group-hover:underline">
+													{tool.name}
+												</div>
 											</Tip>
 											{version && (
 												<div className="text-muted-foreground max-w-[40%] min-w-0 shrink-0 truncate text-[0.6875rem] leading-5">
@@ -342,7 +359,9 @@ export function ToolsPage() {
 
 									<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-[0.6875rem] leading-5 md:block">
 										<Tip content={tool.user?.email ?? 'Deleted User'} side="top">
-											<div className="truncate">{capitalizeFirstLetter(tool.user?.name ?? tool.user?.email ?? 'Deleted User')}</div>
+											<div className="truncate">
+												{capitalizeFirstLetter(tool.user?.name ?? tool.user?.email ?? 'Deleted User')}
+											</div>
 										</Tip>
 									</div>
 
@@ -454,10 +473,17 @@ export function ToolsPage() {
 						    https://docs.openwebui.com/license. */}
 						Made by Open WebUI Community
 					</div>
-					<a className="flex w-full items-center justify-between gap-3 py-1 text-left" href="https://openwebui.com/tools" target="_blank" rel="noreferrer">
+					<a
+						className="flex w-full items-center justify-between gap-3 py-1 text-left"
+						href="https://openwebui.com/tools"
+						target="_blank"
+						rel="noreferrer"
+					>
 						<div className="min-w-0">
 							<div className="line-clamp-1 text-[0.8125rem]">Discover a tool</div>
-							<div className="text-muted-foreground line-clamp-1 text-xs">Discover, download, and explore custom tools</div>
+							<div className="text-muted-foreground line-clamp-1 text-xs">
+								Discover, download, and explore custom tools
+							</div>
 						</div>
 					</a>
 				</div>

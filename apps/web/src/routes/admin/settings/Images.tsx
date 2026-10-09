@@ -4,7 +4,17 @@ import { toast } from 'sonner';
 import { SensitiveInput } from '@/components/common/SensitiveInput';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
-import { SettingField, SettingInput, SettingNumber, SettingRow, SettingSelect, SettingSwitch, SettingTextarea, SettingsForm, SettingsSection } from '@/components/settings/controls';
+import {
+	SettingField,
+	SettingInput,
+	SettingNumber,
+	SettingRow,
+	SettingSelect,
+	SettingSwitch,
+	SettingTextarea,
+	SettingsForm,
+	SettingsSection
+} from '@/components/settings/controls';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getBackendConfig } from '@/lib/apis';
 import { getConfig, getImageGenerationModels, updateConfig, verifyConfigUrl } from '@/lib/apis/images';
@@ -23,12 +33,38 @@ const twoUp = 'grid grid-cols-1 gap-2 sm:grid-cols-2';
 const textButton = 'text-muted-foreground hover:text-foreground text-xs transition-colors hover:underline';
 
 /** A URL box with a button that saves, then asks the backend to reach the server. */
-function VerifiedUrl({ id, label, description, placeholder, value, onChange, onVerify }: { id: string; label: string; description: string; placeholder: string; value: string; onChange: (v: string) => void; onVerify: () => void }) {
+function VerifiedUrl({
+	id,
+	label,
+	description,
+	placeholder,
+	value,
+	onChange,
+	onVerify
+}: {
+	id: string;
+	label: string;
+	description: string;
+	placeholder: string;
+	value: string;
+	onChange: (v: string) => void;
+	onVerify: () => void;
+}) {
 	return (
 		<SettingField label={label} description={description} htmlFor={id}>
 			<div className="flex w-full items-center gap-2">
-				<SettingInput id={id} placeholder={placeholder} value={value ?? ''} onChange={(e) => onChange(e.target.value)} />
-				<button type="button" aria-label="Verify connection" className="text-muted-foreground hover:text-foreground shrink-0 transition-colors" onClick={onVerify}>
+				<SettingInput
+					id={id}
+					placeholder={placeholder}
+					value={value ?? ''}
+					onChange={(e) => onChange(e.target.value)}
+				/>
+				<button
+					type="button"
+					aria-label="Verify connection"
+					className="text-muted-foreground hover:text-foreground shrink-0 transition-colors"
+					onClick={onVerify}
+				>
 					<RefreshCw className="size-4" />
 				</button>
 			</div>
@@ -72,15 +108,28 @@ function ComfyWorkflow({
 	return (
 		<>
 			<input ref={file} id={`${id}-file`} hidden type="file" accept=".json" onChange={(e) => upload(e.target)} />
-			<SettingRow label="ComfyUI Workflow" description="Upload a workflow.json file exported as API format from ComfyUI.">
+			<SettingRow
+				label="ComfyUI Workflow"
+				description="Upload a workflow.json file exported as API format from ComfyUI."
+			>
 				<div className="flex items-center justify-end gap-2">
 					{workflow && (
-						<button type="button" aria-label="Edit workflow.json content" className={textButton} onClick={() => setEditing(true)}>
+						<button
+							type="button"
+							aria-label="Edit workflow.json content"
+							className={textButton}
+							onClick={() => setEditing(true)}
+						>
 							Edit
 						</button>
 					)}
 					<Tip content="Click here to upload a workflow.json file.">
-						<button type="button" aria-label="Click here to upload a workflow.json file." className={textButton} onClick={() => file.current?.click()}>
+						<button
+							type="button"
+							aria-label="Click here to upload a workflow.json file."
+							className={textButton}
+							onClick={() => file.current?.click()}
+						>
 							Upload
 						</button>
 					</Tip>
@@ -101,7 +150,13 @@ function ComfyWorkflow({
 								</div>
 							}
 						>
-							<CodeEditor value={workflow} lang="json" className="text-xs" onChange={onWorkflow} onSave={() => setEditing(false)} />
+							<CodeEditor
+								value={workflow}
+								lang="json"
+								className="text-xs"
+								onChange={onWorkflow}
+								onSave={() => setEditing(false)}
+							/>
 						</Suspense>
 					</div>
 				</DialogContent>
@@ -142,7 +197,9 @@ function ComfyWorkflow({
 							</div>
 						))}
 					</div>
-					<div className="text-muted-foreground/70 mt-1 text-xs">*Prompt node ID(s) are required for image generation</div>
+					<div className="text-muted-foreground/70 mt-1 text-xs">
+						*Prompt node ID(s) are required for image generation
+					</div>
 				</SettingField>
 			)}
 		</>
@@ -217,19 +274,47 @@ export default function Images() {
 
 	const c = draft?.config;
 
-	const text = (name: string, label: string, opts: { placeholder?: string; description?: string; required?: boolean; list?: string } = {}) => (
+	const text = (
+		name: string,
+		label: string,
+		opts: { placeholder?: string; description?: string; required?: boolean; list?: string } = {}
+	) => (
 		<SettingField label={label} description={opts.description} htmlFor={`img-${name}`}>
-			<SettingInput id={`img-${name}`} list={opts.list} required={opts.required} placeholder={opts.placeholder ?? label} value={c?.[name] ?? ''} onChange={(e) => set({ [name]: e.target.value })} />
+			<SettingInput
+				id={`img-${name}`}
+				list={opts.list}
+				required={opts.required}
+				placeholder={opts.placeholder ?? label}
+				value={c?.[name] ?? ''}
+				onChange={(e) => set({ [name]: e.target.value })}
+			/>
 		</SettingField>
 	);
-	const secret = (name: string, placeholder: string, opts: { label?: string; description?: string; required?: boolean } = {}) => (
+	const secret = (
+		name: string,
+		placeholder: string,
+		opts: { label?: string; description?: string; required?: boolean } = {}
+	) => (
 		<SettingField label={opts.label ?? 'API Key'} description={opts.description} htmlFor={`img-${name}`}>
-			<SensitiveInput id={`img-${name}`} variant="settings" placeholder={placeholder} required={opts.required ?? false} value={c?.[name] ?? ''} onChange={(v) => set({ [name]: v })} />
+			<SensitiveInput
+				id={`img-${name}`}
+				variant="settings"
+				placeholder={placeholder}
+				required={opts.required ?? false}
+				value={c?.[name] ?? ''}
+				onChange={(v) => set({ [name]: v })}
+			/>
 		</SettingField>
 	);
 	const params = (name: string, description: string): ReactNode => (
 		<SettingField label="Additional Parameters" description={description} htmlFor={`img-${name}`}>
-			<SettingTextarea id={`img-${name}`} rows={5} placeholder="Enter additional parameters in JSON format" value={c?.[name] ?? ''} onChange={(e) => set({ [name]: e.target.value })} />
+			<SettingTextarea
+				id={`img-${name}`}
+				rows={5}
+				placeholder="Enter additional parameters in JSON format"
+				value={c?.[name] ?? ''}
+				onChange={(e) => set({ [name]: e.target.value })}
+			/>
 		</SettingField>
 	);
 	const toggle = (name: string, label: string, description: string) => (
@@ -254,11 +339,17 @@ export default function Images() {
 		<SettingsForm title="Images" loading={isLoading} onSubmit={save} saving={saving}>
 			{draft && c && (
 				<>
-					<SettingsSection first>{toggle('ENABLE_IMAGE_GENERATION', 'Image Generation', 'Allow users to generate images from prompts.')}</SettingsSection>
+					<SettingsSection first>
+						{toggle('ENABLE_IMAGE_GENERATION', 'Image Generation', 'Allow users to generate images from prompts.')}
+					</SettingsSection>
 
 					<SettingsSection title="Create Image">
 						<SettingRow label="Image Generation Engine" description="Choose the provider used for image generation.">
-							<SettingSelect value={engine} onChange={(v) => set({ IMAGE_GENERATION_ENGINE: v })} aria-label="Image Generation Engine">
+							<SettingSelect
+								value={engine}
+								onChange={(v) => set({ IMAGE_GENERATION_ENGINE: v })}
+								aria-label="Image Generation Engine"
+							>
 								<option value="openai">Default (Open AI)</option>
 								<option value="comfyui">ComfyUI</option>
 								<option value="automatic1111">Automatic1111</option>
@@ -269,15 +360,29 @@ export default function Images() {
 						{c.ENABLE_IMAGE_GENERATION && (
 							<>
 								<div className={twoUp}>
-									{text('IMAGE_GENERATION_MODEL', 'Model', { list: 'img-model-list', placeholder: 'Select a model', required: true })}
+									{text('IMAGE_GENERATION_MODEL', 'Model', {
+										list: 'img-model-list',
+										placeholder: 'Select a model',
+										required: true
+									})}
 									{text('IMAGE_SIZE', 'Image Size', { placeholder: 'Enter Image Size (e.g. 512x512)' })}
 									{['comfyui', 'automatic1111', ''].includes(engine) && (
 										<SettingField label="Steps" htmlFor="img-IMAGE_STEPS">
-											<SettingNumber id="img-IMAGE_STEPS" required placeholder="Enter Number of Steps (e.g. 50)" value={c.IMAGE_STEPS} onChange={(v) => set({ IMAGE_STEPS: v })} />
+											<SettingNumber
+												id="img-IMAGE_STEPS"
+												required
+												placeholder="Enter Number of Steps (e.g. 50)"
+												value={c.IMAGE_STEPS}
+												onChange={(v) => set({ IMAGE_STEPS: v })}
+											/>
 										</SettingField>
 									)}
 								</div>
-								{toggle('ENABLE_IMAGE_PROMPT_GENERATION', 'Image Prompt Generation', 'Generate an image prompt before sending the request.')}
+								{toggle(
+									'ENABLE_IMAGE_PROMPT_GENERATION',
+									'Image Prompt Generation',
+									'Generate an image prompt before sending the request.'
+								)}
 							</>
 						)}
 
@@ -303,7 +408,10 @@ export default function Images() {
 									onChange={(v) => set({ AUTOMATIC1111_BASE_URL: v })}
 									onVerify={verify}
 								/>
-								{secret('AUTOMATIC1111_API_AUTH', 'Enter api auth string (e.g. username:password)', { label: 'API Auth String', description: 'Provide the --api-auth username and password when required.' })}
+								{secret('AUTOMATIC1111_API_AUTH', 'Enter api auth string (e.g. username:password)', {
+									label: 'API Auth String',
+									description: 'Provide the --api-auth username and password when required.'
+								})}
 								{params('AUTOMATIC1111_PARAMS', 'Send extra JSON parameters with each AUTOMATIC1111 request.')}
 							</>
 						)}
@@ -319,7 +427,9 @@ export default function Images() {
 									onChange={(v) => set({ COMFYUI_BASE_URL: v })}
 									onVerify={verify}
 								/>
-								{secret('COMFYUI_API_KEY', 'sk-1234', { description: 'Use an API key when your ComfyUI server requires one.' })}
+								{secret('COMFYUI_API_KEY', 'sk-1234', {
+									description: 'Use an API key when your ComfyUI server requires one.'
+								})}
 								<ComfyWorkflow
 									id="comfyui-workflow"
 									workflow={c.COMFYUI_WORKFLOW ?? ''}
@@ -334,10 +444,20 @@ export default function Images() {
 
 						{engine === 'gemini' && (
 							<>
-								{text('IMAGES_GEMINI_API_BASE_URL', 'Base URL', { placeholder: 'API Base URL', description: 'Override the Gemini image generation endpoint.' })}
-								{secret('IMAGES_GEMINI_API_KEY', 'API Key', { description: 'Use a Gemini API key for image generation.', required: true })}
+								{text('IMAGES_GEMINI_API_BASE_URL', 'Base URL', {
+									placeholder: 'API Base URL',
+									description: 'Override the Gemini image generation endpoint.'
+								})}
+								{secret('IMAGES_GEMINI_API_KEY', 'API Key', {
+									description: 'Use a Gemini API key for image generation.',
+									required: true
+								})}
 								<SettingRow label="Gemini Endpoint Method" description="Select the Gemini endpoint method to call.">
-									<SettingSelect value={c.IMAGES_GEMINI_ENDPOINT_METHOD} onChange={(v) => set({ IMAGES_GEMINI_ENDPOINT_METHOD: v })} aria-label="Gemini Endpoint Method">
+									<SettingSelect
+										value={c.IMAGES_GEMINI_ENDPOINT_METHOD}
+										onChange={(v) => set({ IMAGES_GEMINI_ENDPOINT_METHOD: v })}
+										aria-label="Gemini Endpoint Method"
+									>
 										<option value="predict">predict</option>
 										<option value="generateContent">generateContent</option>
 									</SettingSelect>
@@ -349,7 +469,11 @@ export default function Images() {
 					<SettingsSection title="Edit Image">
 						{toggle('ENABLE_IMAGE_EDIT', 'Image Edit', 'Allow users to edit existing images.')}
 						<SettingRow label="Image Edit Engine" description="Choose the provider used for image edits.">
-							<SettingSelect value={editEngine} onChange={(v) => set({ IMAGE_EDIT_ENGINE: v })} aria-label="Image Edit Engine">
+							<SettingSelect
+								value={editEngine}
+								onChange={(v) => set({ IMAGE_EDIT_ENGINE: v })}
+								aria-label="Image Edit Engine"
+							>
 								<option value="openai">Default (Open AI)</option>
 								<option value="comfyui">ComfyUI</option>
 								<option value="gemini">Gemini</option>
@@ -385,7 +509,9 @@ export default function Images() {
 									onChange={(v) => set({ IMAGES_EDIT_COMFYUI_BASE_URL: v })}
 									onVerify={verify}
 								/>
-								{secret('IMAGES_EDIT_COMFYUI_API_KEY', 'sk-1234', { description: 'Use an API key when your ComfyUI server requires one.' })}
+								{secret('IMAGES_EDIT_COMFYUI_API_KEY', 'sk-1234', {
+									description: 'Use an API key when your ComfyUI server requires one.'
+								})}
 								<ComfyWorkflow
 									id="comfyui-edit-workflow"
 									workflow={c.IMAGES_EDIT_COMFYUI_WORKFLOW ?? ''}

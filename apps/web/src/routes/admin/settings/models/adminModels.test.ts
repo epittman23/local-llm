@@ -49,8 +49,14 @@ describe('access and kind', () => {
 });
 
 describe('mergeModels', () => {
-	const served = [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }];
-	const provider = [{ id: 'b', name: 'B again' }, { id: 'c', name: 'C' }];
+	const served = [
+		{ id: 'a', name: 'A' },
+		{ id: 'b', name: 'B' }
+	];
+	const provider = [
+		{ id: 'b', name: 'B again' },
+		{ id: 'c', name: 'C' }
+	];
 	const records = [{ id: 'a', name: 'A', is_active: false, base_model_id: null, meta: { tags: [{ name: 'fast' }] } }];
 	it('adds connection models that are not served, and lays each record over its model', () => {
 		const merged = mergeModels(served, provider, records, '');
@@ -78,7 +84,13 @@ describe('filterModels', () => {
 		{ id: 'b', name: 'Beta', is_active: false, meta: { hidden: true } },
 		{ id: 'c', name: 'Gamma' }
 	];
-	const base = { search: '', view: '' as ViewOption, order: [] as string[], selectedIds: new Set<string>(), pinnedIds: new Set<string>() };
+	const base = {
+		search: '',
+		view: '' as ViewOption,
+		order: [] as string[],
+		selectedIds: new Set<string>(),
+		pinnedIds: new Set<string>()
+	};
 	const ids = (f: Partial<typeof base>) => filterModels(models, { ...base, ...f }).map((m) => m.id);
 
 	it('searches the name, ignoring case', () => {
@@ -137,7 +149,10 @@ describe('id lists', () => {
 });
 
 describe('modelsConfigBody', () => {
-	const config = { DEFAULT_MODEL_METADATA: { capabilities: { vision: true } }, DEFAULT_MODEL_PARAMS: { temperature: 0.3 } };
+	const config = {
+		DEFAULT_MODEL_METADATA: { capabilities: { vision: true } },
+		DEFAULT_MODEL_PARAMS: { temperature: 0.3 }
+	};
 	it('joins the lists and carries the stored defaults', () => {
 		expect(modelsConfigBody(config, { selectedIds: ['a', 'b'], pinnedIds: ['b'], order: ['b', 'a'] })).toEqual({
 			DEFAULT_MODELS: 'a,b',
@@ -148,7 +163,13 @@ describe('modelsConfigBody', () => {
 		});
 	});
 	it('takes new defaults when given, including an explicit empty one, and null when there is nothing', () => {
-		const body = modelsConfigBody(config, { selectedIds: [], pinnedIds: [], order: [], metadata: { capabilities: {} }, params: {} });
+		const body = modelsConfigBody(config, {
+			selectedIds: [],
+			pinnedIds: [],
+			order: [],
+			metadata: { capabilities: {} },
+			params: {}
+		});
 		expect(body.DEFAULT_MODEL_METADATA).toEqual({ capabilities: {} });
 		expect(body.DEFAULT_MODEL_PARAMS).toEqual({});
 		const none = modelsConfigBody(null, { selectedIds: [], pinnedIds: [], order: [] });
@@ -166,19 +187,57 @@ describe('model defaults', () => {
 		expect(d.promptSuggestions).toEqual([]);
 	});
 	it('reads what is saved', () => {
-		const d = defaultsFromConfig({ DEFAULT_MODEL_METADATA: { capabilities: { vision: false }, defaultFeatureIds: ['web_search'], builtinTools: { time: false } }, DEFAULT_MODEL_PARAMS: { top_p: 0.9 } }, [{ content: 'Hi', title: ['t', 's'] }]);
-		expect(d).toEqual({ capabilities: { vision: false }, defaultFeatureIds: ['web_search'], builtinTools: { time: false }, params: { top_p: 0.9 }, promptSuggestions: [{ content: 'Hi', title: ['t', 's'] }] });
+		const d = defaultsFromConfig(
+			{
+				DEFAULT_MODEL_METADATA: {
+					capabilities: { vision: false },
+					defaultFeatureIds: ['web_search'],
+					builtinTools: { time: false }
+				},
+				DEFAULT_MODEL_PARAMS: { top_p: 0.9 }
+			},
+			[{ content: 'Hi', title: ['t', 's'] }]
+		);
+		expect(d).toEqual({
+			capabilities: { vision: false },
+			defaultFeatureIds: ['web_search'],
+			builtinTools: { time: false },
+			params: { top_p: 0.9 },
+			promptSuggestions: [{ content: 'Hi', title: ['t', 's'] }]
+		});
 	});
 	it('stores empty feature and tool lists as absent', () => {
-		expect(defaultsMetadata({ capabilities: { vision: true }, defaultFeatureIds: [], builtinTools: {}, params: {}, promptSuggestions: [] })).toEqual({ capabilities: { vision: true } });
-		expect(defaultsMetadata({ capabilities: {}, defaultFeatureIds: ['web_search'], builtinTools: { time: false }, params: {}, promptSuggestions: [] })).toEqual({ capabilities: {}, defaultFeatureIds: ['web_search'], builtinTools: { time: false } });
+		expect(
+			defaultsMetadata({
+				capabilities: { vision: true },
+				defaultFeatureIds: [],
+				builtinTools: {},
+				params: {},
+				promptSuggestions: []
+			})
+		).toEqual({ capabilities: { vision: true } });
+		expect(
+			defaultsMetadata({
+				capabilities: {},
+				defaultFeatureIds: ['web_search'],
+				builtinTools: { time: false },
+				params: {},
+				promptSuggestions: []
+			})
+		).toEqual({ capabilities: {}, defaultFeatureIds: ['web_search'], builtinTools: { time: false } });
 	});
 	it('a snapshot ignores unset params and blank suggestions, but sees real changes', () => {
 		const d = defaultsFromConfig(null, []);
-		const same = { ...d, params: { temperature: null, seed: '' }, promptSuggestions: [{ content: '', title: ['x', 'y'] as [string, string] }] };
+		const same = {
+			...d,
+			params: { temperature: null, seed: '' },
+			promptSuggestions: [{ content: '', title: ['x', 'y'] as [string, string] }]
+		};
 		expect(defaultsSnapshot(same)).toBe(defaultsSnapshot(d));
 		expect(defaultsSnapshot({ ...d, params: { temperature: 0.2 } })).not.toBe(defaultsSnapshot(d));
-		expect(defaultsSnapshot({ ...d, capabilities: { ...d.capabilities, vision: false } })).not.toBe(defaultsSnapshot(d));
+		expect(defaultsSnapshot({ ...d, capabilities: { ...d.capabilities, vision: false } })).not.toBe(
+			defaultsSnapshot(d)
+		);
 	});
 });
 
@@ -198,13 +257,24 @@ describe('upsertPlan', () => {
 	it('creates a record for a connection model that has none, with the override applied', () => {
 		const p = upsertPlan({ id: 'gpt', name: 'GPT', is_active: true }, { is_active: false }, records);
 		expect(p.action).toBe('create');
-		expect(p.action === 'create' && p.body).toMatchObject({ id: 'gpt', name: 'GPT', base_model_id: null, meta: {}, params: {}, access_grants: [], is_active: false });
+		expect(p.action === 'create' && p.body).toMatchObject({
+			id: 'gpt',
+			name: 'GPT',
+			base_model_id: null,
+			meta: {},
+			params: {},
+			access_grants: [],
+			is_active: false
+		});
 	});
 });
 
 describe('togglePlan', () => {
 	it('creates the record, in its new state, for a model that has none', () => {
-		expect(togglePlan({ id: 'gpt', name: 'GPT' }, false)).toEqual({ action: 'create', body: { id: 'gpt', name: 'GPT', base_model_id: null, meta: {}, params: {}, access_grants: [], is_active: false } });
+		expect(togglePlan({ id: 'gpt', name: 'GPT' }, false)).toEqual({
+			action: 'create',
+			body: { id: 'gpt', name: 'GPT', base_model_id: null, meta: {}, params: {}, access_grants: [], is_active: false }
+		});
 	});
 	it('flips one that has a record (it carries base_model_id) or is a preset', () => {
 		expect(togglePlan({ id: 'a', name: 'A', base_model_id: null }, true)).toEqual({ action: 'toggle', id: 'a' });

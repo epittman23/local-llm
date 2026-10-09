@@ -23,7 +23,10 @@ export function generalPatch(system: string, params: Params) {
 }
 
 /** The saved parameters as the form shows them: stop sequences joined with commas. */
-export const paramsForForm = (params: Params | undefined): Params => ({ ...(params ?? {}), stop: params?.stop ? (Array.isArray(params.stop) ? params.stop.join(',') : params.stop) : null });
+export const paramsForForm = (params: Params | undefined): Params => ({
+	...(params ?? {}),
+	stop: params?.stop ? (Array.isArray(params.stop) ? params.stop.join(',') : params.stop) : null
+});
 
 export type VariableRow = { key: string; value: string };
 const VARIABLE_KEY = /^[a-z][a-z0-9_]*$/;
@@ -47,4 +50,6 @@ export function variablesPayload(rows: VariableRow[]): Record<string, string> {
 
 /** The API's map back to editable rows. */
 export const variableRows = (variables: unknown): VariableRow[] =>
-	variables && typeof variables === 'object' ? Object.entries(variables as Record<string, unknown>).map(([key, value]) => ({ key, value: String(value ?? '') })) : [];
+	variables && typeof variables === 'object'
+		? Object.entries(variables as Record<string, unknown>).map(([key, value]) => ({ key, value: String(value ?? '') }))
+		: [];

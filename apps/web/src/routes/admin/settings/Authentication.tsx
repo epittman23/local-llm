@@ -2,8 +2,26 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Tip } from '@/components/common/Tip';
 import { BoundSecret as Secret, BoundText as Text, BoundToggle as Toggle } from '@/components/settings/boundFields';
-import { SettingField, SettingNumber, SettingRow, SettingSelect, SettingSwitch, SettingTextarea, SettingsForm, SettingsSection } from '@/components/settings/controls';
-import { getAdminConfig, getLdapConfig, getLdapServer, getOAuthConfig, updateAdminConfig, updateLdapConfig, updateLdapServer, updateOAuthConfig } from '@/lib/apis/auths';
+import {
+	SettingField,
+	SettingNumber,
+	SettingRow,
+	SettingSelect,
+	SettingSwitch,
+	SettingTextarea,
+	SettingsForm,
+	SettingsSection
+} from '@/components/settings/controls';
+import {
+	getAdminConfig,
+	getLdapConfig,
+	getLdapServer,
+	getOAuthConfig,
+	updateAdminConfig,
+	updateLdapConfig,
+	updateLdapServer,
+	updateOAuthConfig
+} from '@/lib/apis/auths';
 import { getGroups } from '@/lib/apis/groups';
 import { useAdminConfigSaved } from '@/lib/settings/useAdminSaved';
 import { useConfigDraft } from '@/lib/settings/useConfigDraft';
@@ -11,18 +29,29 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { type LdapServer, isOAuthEditable, ldapForSave, mergeLdapServer } from './authentication';
 
 type Rec = Record<string, any>;
-type Draft = { admin: Rec; groups: { id: string; name: string }[]; ldapEnabled: boolean; ldap: LdapServer; oauth: Rec | null };
+type Draft = {
+	admin: Rec;
+	groups: { id: string; name: string }[];
+	ldapEnabled: boolean;
+	ldap: LdapServer;
+	oauth: Rec | null;
+};
 
 const linkClass = 'text-muted-foreground/70 hover:text-foreground mt-1 block text-[0.6875rem] underline';
 const externalLink = { target: '_blank', rel: 'noopener noreferrer' } as const;
 const grid = 'grid grid-cols-1 gap-x-3 gap-y-2.5 sm:grid-cols-2';
-const warnClass = 'mt-1 block rounded-lg bg-yellow-500/10 px-2 py-1.5 text-[0.6875rem] text-yellow-700 dark:text-yellow-200';
+const warnClass =
+	'mt-1 block rounded-lg bg-yellow-500/10 px-2 py-1.5 text-[0.6875rem] text-yellow-700 dark:text-yellow-200';
 
 function UserAccess({ admin, set, groups }: { admin: Rec; set: (p: Rec) => void; groups: Draft['groups'] }) {
 	return (
 		<SettingsSection title="User Access" first>
 			<SettingRow label="Default User Role" description="Role assigned to new users when they create an account.">
-				<SettingSelect value={admin.DEFAULT_USER_ROLE} onChange={(v) => set({ DEFAULT_USER_ROLE: v })} aria-label="Default User Role">
+				<SettingSelect
+					value={admin.DEFAULT_USER_ROLE}
+					onChange={(v) => set({ DEFAULT_USER_ROLE: v })}
+					aria-label="Default User Role"
+				>
 					<option value="pending">pending</option>
 					<option value="user">user</option>
 					<option value="admin">admin</option>
@@ -30,7 +59,11 @@ function UserAccess({ admin, set, groups }: { admin: Rec; set: (p: Rec) => void;
 			</SettingRow>
 
 			<SettingRow label="Default Group" description="Group assigned to new users by default.">
-				<SettingSelect value={admin.DEFAULT_GROUP_ID} onChange={(v) => set({ DEFAULT_GROUP_ID: v })} aria-label="Default Group">
+				<SettingSelect
+					value={admin.DEFAULT_GROUP_ID}
+					onChange={(v) => set({ DEFAULT_GROUP_ID: v })}
+					aria-label="Default Group"
+				>
 					<option value="">None</option>
 					{groups.map((g) => (
 						<option key={g.id} value={g.id}>
@@ -40,12 +73,30 @@ function UserAccess({ admin, set, groups }: { admin: Rec; set: (p: Rec) => void;
 				</SettingSelect>
 			</SettingRow>
 
-			<Toggle config={admin} set={set} name="ENABLE_SIGNUP" label="New Sign Ups" description="Allow new users to create accounts." />
-			<Toggle config={admin} set={set} name="ENABLE_API_KEYS" label="API Keys" description="Allow users to create API keys for programmatic access." />
+			<Toggle
+				config={admin}
+				set={set}
+				name="ENABLE_SIGNUP"
+				label="New Sign Ups"
+				description="Allow new users to create accounts."
+			/>
+			<Toggle
+				config={admin}
+				set={set}
+				name="ENABLE_API_KEYS"
+				label="API Keys"
+				description="Allow users to create API keys for programmatic access."
+			/>
 
 			{admin.ENABLE_API_KEYS && (
 				<>
-					<Toggle config={admin} set={set} name="ENABLE_API_KEYS_ENDPOINT_RESTRICTIONS" label="API Key Endpoint Restrictions" description="Limit API keys to configured endpoints." />
+					<Toggle
+						config={admin}
+						set={set}
+						name="ENABLE_API_KEYS_ENDPOINT_RESTRICTIONS"
+						label="API Key Endpoint Restrictions"
+						description="Limit API keys to configured endpoints."
+					/>
 					{admin.ENABLE_API_KEYS_ENDPOINT_RESTRICTIONS && (
 						<Text
 							config={admin}
@@ -72,7 +123,11 @@ function UserAccess({ admin, set, groups }: { admin: Rec; set: (p: Rec) => void;
 				placeholder={`e.g.) "30m","1h", "10d". `}
 			>
 				{admin.JWT_EXPIRES_IN === '-1' && (
-					<a className={`${warnClass} underline`} href="https://docs.openwebui.com/reference/env-configuration#jwt_expires_in" {...externalLink}>
+					<a
+						className={`${warnClass} underline`}
+						href="https://docs.openwebui.com/reference/env-configuration#jwt_expires_in"
+						{...externalLink}
+					>
 						No expiration can pose security risks.
 					</a>
 				)}
@@ -84,11 +139,29 @@ function UserAccess({ admin, set, groups }: { admin: Rec; set: (p: Rec) => void;
 function PendingAccounts({ admin, set }: { admin: Rec; set: (p: Rec) => void }) {
 	return (
 		<SettingsSection title="Pending Accounts">
-			<Toggle config={admin} set={set} name="SHOW_ADMIN_DETAILS" label="Admin Details" description="Show admin contact details while an account waits for approval." />
+			<Toggle
+				config={admin}
+				set={set}
+				name="SHOW_ADMIN_DETAILS"
+				label="Admin Details"
+				description="Show admin contact details while an account waits for approval."
+			/>
 			{admin.SHOW_ADMIN_DETAILS && (
-				<Text config={admin} set={set} name="ADMIN_EMAIL" type="email" label="Admin Contact Email" description="Email shown in the pending account overlay." placeholder="Leave empty to use first admin user" />
+				<Text
+					config={admin}
+					set={set}
+					name="ADMIN_EMAIL"
+					type="email"
+					label="Admin Contact Email"
+					description="Email shown in the pending account overlay."
+					placeholder="Leave empty to use first admin user"
+				/>
 			)}
-			<SettingField label="Pending User Overlay Title" description="Custom title shown while an account waits for approval." htmlFor="auth-overlay-title">
+			<SettingField
+				label="Pending User Overlay Title"
+				description="Custom title shown while an account waits for approval."
+				htmlFor="auth-overlay-title"
+			>
 				<SettingTextarea
 					id="auth-overlay-title"
 					placeholder="Enter a title for the pending user info overlay. Leave empty for default."
@@ -96,7 +169,11 @@ function PendingAccounts({ admin, set }: { admin: Rec; set: (p: Rec) => void }) 
 					onChange={(e) => set({ PENDING_USER_OVERLAY_TITLE: e.target.value })}
 				/>
 			</SettingField>
-			<SettingField label="Pending User Overlay Content" description="Custom message shown while an account waits for approval." htmlFor="auth-overlay-content">
+			<SettingField
+				label="Pending User Overlay Content"
+				description="Custom message shown while an account waits for approval."
+				htmlFor="auth-overlay-content"
+			>
 				<SettingTextarea
 					id="auth-overlay-content"
 					placeholder="Enter content for the pending user info overlay. Leave empty for default."
@@ -108,7 +185,17 @@ function PendingAccounts({ admin, set }: { admin: Rec; set: (p: Rec) => void }) 
 	);
 }
 
-function Ldap({ enabled, setEnabled, ldap, set }: { enabled: boolean; setEnabled: (v: boolean) => void; ldap: LdapServer; set: (p: Partial<LdapServer>) => void }) {
+function Ldap({
+	enabled,
+	setEnabled,
+	ldap,
+	set
+}: {
+	enabled: boolean;
+	setEnabled: (v: boolean) => void;
+	ldap: LdapServer;
+	set: (p: Partial<LdapServer>) => void;
+}) {
 	return (
 		<SettingsSection title="LDAP">
 			<SettingRow label="LDAP" description="Allow users to authenticate with an LDAP directory.">
@@ -118,19 +205,55 @@ function Ldap({ enabled, setEnabled, ldap, set }: { enabled: boolean; setEnabled
 			{enabled && (
 				<>
 					<div className={grid}>
-						<Text config={ldap} set={set} name="label" required label="Label" description="Display name for this LDAP connection." placeholder="Enter server label" />
+						<Text
+							config={ldap}
+							set={set}
+							name="label"
+							required
+							label="Label"
+							description="Display name for this LDAP connection."
+							placeholder="Enter server label"
+						/>
 					</div>
 					<div className={grid}>
-						<Text config={ldap} set={set} name="host" required label="Host" description="LDAP server hostname or IP address." placeholder="Enter server host" />
+						<Text
+							config={ldap}
+							set={set}
+							name="host"
+							required
+							label="Host"
+							description="LDAP server hostname or IP address."
+							placeholder="Enter server host"
+						/>
 						<SettingField label="Port" description="LDAP server port." htmlFor="auth-port">
 							<Tip content="Default to 389 or 636 if TLS is enabled">
-								<SettingNumber id="auth-port" placeholder="Enter server port" value={ldap.port} onChange={(v) => set({ port: v === '' ? null : v })} />
+								<SettingNumber
+									id="auth-port"
+									placeholder="Enter server port"
+									value={ldap.port}
+									onChange={(v) => set({ port: v === '' ? null : v })}
+								/>
 							</Tip>
 						</SettingField>
 					</div>
 					<div className={grid}>
-						<Text config={ldap} set={set} name="app_dn" label="Application DN" description="Bind DN used for directory search." placeholder="Enter Application DN" tip="The Application Account DN you bind with for search" />
-						<Secret config={ldap} set={set} name="app_dn_password" label="Application DN Password" description="Password for the bind DN." placeholder="Enter Application DN Password" />
+						<Text
+							config={ldap}
+							set={set}
+							name="app_dn"
+							label="Application DN"
+							description="Bind DN used for directory search."
+							placeholder="Enter Application DN"
+							tip="The Application Account DN you bind with for search"
+						/>
+						<Secret
+							config={ldap}
+							set={set}
+							name="app_dn_password"
+							label="Application DN Password"
+							description="Password for the bind DN."
+							placeholder="Enter Application DN Password"
+						/>
 					</div>
 					<div className={grid}>
 						<Text
@@ -164,29 +287,83 @@ function Ldap({ enabled, setEnabled, ldap, set }: { enabled: boolean; setEnabled
 						placeholder="Example: ou=users,dc=foo,dc=example"
 						tip="The base to search for users"
 					/>
-					<Text config={ldap} set={set} name="search_filters" label="Search Filters" description="LDAP filter used to match signing-in users." placeholder="Example: (&(objectClass=inetOrgPerson)(uid=%s))">
+					<Text
+						config={ldap}
+						set={set}
+						name="search_filters"
+						label="Search Filters"
+						description="LDAP filter used to match signing-in users."
+						placeholder="Example: (&(objectClass=inetOrgPerson)(uid=%s))"
+					>
 						<a className={linkClass} href="https://ldap.com/ldap-filters/" {...externalLink}>
 							Click here for filter guides.
 						</a>
 					</Text>
 
-					<Toggle config={ldap} set={set} name="use_tls" label="TLS" description="Use TLS when connecting to the LDAP server." />
+					<Toggle
+						config={ldap}
+						set={set}
+						name="use_tls"
+						label="TLS"
+						description="Use TLS when connecting to the LDAP server."
+					/>
 					{ldap.use_tls && (
 						<>
-							<Text config={ldap} set={set} name="certificate_path" label="Certificate Path" description="Certificate file used for TLS verification." placeholder="Enter certificate path" />
-							<Toggle config={ldap} set={set} name="validate_cert" label="Validate Certificate" description="Verify the LDAP server certificate when TLS is enabled." />
-							<Text config={ldap} set={set} name="ciphers" label="Ciphers" description="TLS cipher list for LDAP connections." placeholder="Example: ALL" tip="Default to ALL" />
+							<Text
+								config={ldap}
+								set={set}
+								name="certificate_path"
+								label="Certificate Path"
+								description="Certificate file used for TLS verification."
+								placeholder="Enter certificate path"
+							/>
+							<Toggle
+								config={ldap}
+								set={set}
+								name="validate_cert"
+								label="Validate Certificate"
+								description="Verify the LDAP server certificate when TLS is enabled."
+							/>
+							<Text
+								config={ldap}
+								set={set}
+								name="ciphers"
+								label="Ciphers"
+								description="TLS cipher list for LDAP connections."
+								placeholder="Example: ALL"
+								tip="Default to ALL"
+							/>
 						</>
 					)}
 
 					{/* LICENSE covers this Open WebUI wordmark.
 					    Do not alter, remove, obscure, or replace it except as LICENSE permits:
 					    https://docs.openwebui.com/license. */}
-					<Toggle config={ldap} set={set} name="enable_group_management" label="Group Mapping" description="Map LDAP groups to Open WebUI groups." />
+					<Toggle
+						config={ldap}
+						set={set}
+						name="enable_group_management"
+						label="Group Mapping"
+						description="Map LDAP groups to Open WebUI groups."
+					/>
 					{ldap.enable_group_management && (
 						<>
-							<Toggle config={ldap} set={set} name="enable_group_creation" label="Auto-Create Groups" description="Create missing groups from LDAP groups." />
-							<Text config={ldap} set={set} name="attribute_for_groups" label="Group Attribute" description="LDAP attribute containing the user group memberships." placeholder="memberOf" tip="Default to memberOf" />
+							<Toggle
+								config={ldap}
+								set={set}
+								name="enable_group_creation"
+								label="Auto-Create Groups"
+								description="Create missing groups from LDAP groups."
+							/>
+							<Text
+								config={ldap}
+								set={set}
+								name="attribute_for_groups"
+								label="Group Attribute"
+								description="LDAP attribute containing the user group memberships."
+								placeholder="memberOf"
+								tip="Default to memberOf"
+							/>
 						</>
 					)}
 				</>
@@ -200,30 +377,53 @@ function OAuth({ oauth, set }: { oauth: Rec; set: (p: Rec) => void }) {
 	const text = (name: string, label: string, description: string, placeholder?: string) => (
 		<Text config={oauth} set={set} name={name} label={label} description={description} placeholder={placeholder} />
 	);
-	const toggle = (name: string, label: string, description: string) => <Toggle config={oauth} set={set} name={name} label={label} description={description} />;
+	const toggle = (name: string, label: string, description: string) => (
+		<Toggle config={oauth} set={set} name={name} label={label} description={description} />
+	);
 
 	return (
 		<SettingsSection title="OAuth / OIDC">
 			{!editable && (
 				<div className={warnClass}>
-					These settings are read from environment variables and cannot be edited here while ENABLE_OAUTH_PERSISTENT_CONFIG is disabled.
+					These settings are read from environment variables and cannot be edited here while
+					ENABLE_OAUTH_PERSISTENT_CONFIG is disabled.
 				</div>
 			)}
-			<fieldset className="flex min-w-0 flex-col gap-2.5 disabled:cursor-not-allowed disabled:opacity-75" disabled={!editable}>
+			<fieldset
+				className="flex min-w-0 flex-col gap-2.5 disabled:cursor-not-allowed disabled:opacity-75"
+				disabled={!editable}
+			>
 				{toggle('ENABLE_OAUTH', 'OAuth / OIDC', 'Allow users to authenticate with an OAuth / OIDC provider.')}
 
 				{oauth.ENABLE_OAUTH && (
 					<>
 						<div className={grid}>
 							{text('OAUTH_PROVIDER_NAME', 'Provider Name', 'Display name shown for the OAuth provider.', 'SSO')}
-							{text('OPENID_PROVIDER_URL', 'Provider URL', 'OpenID discovery URL for this provider.', 'https://accounts.google.com/.well-known/openid-configuration')}
+							{text(
+								'OPENID_PROVIDER_URL',
+								'Provider URL',
+								'OpenID discovery URL for this provider.',
+								'https://accounts.google.com/.well-known/openid-configuration'
+							)}
 						</div>
 						<div className={grid}>
 							{text('OAUTH_CLIENT_ID', 'Client ID', 'OAuth client identifier from the provider.', 'Enter Client ID')}
-							<Secret config={oauth} set={set} name="OAUTH_CLIENT_SECRET" label="Client Secret" description="OAuth client secret from the provider." placeholder="Enter Client Secret" />
+							<Secret
+								config={oauth}
+								set={set}
+								name="OAUTH_CLIENT_SECRET"
+								label="Client Secret"
+								description="OAuth client secret from the provider."
+								placeholder="Enter Client Secret"
+							/>
 						</div>
 						<div className={grid}>
-							{text('OPENID_REDIRECT_URI', 'Redirect URI', 'Callback URI registered with the provider.', 'Enter Redirect URI')}
+							{text(
+								'OPENID_REDIRECT_URI',
+								'Redirect URI',
+								'Callback URI registered with the provider.',
+								'Enter Redirect URI'
+							)}
 							{text('OAUTH_SCOPES', 'Scopes', 'OAuth scopes requested during sign-in.', 'openid email profile')}
 						</div>
 						<div className={grid}>
@@ -236,9 +436,22 @@ function OAuth({ oauth, set }: { oauth: Rec; set: (p: Rec) => void }) {
 						</div>
 
 						{toggle('ENABLE_OAUTH_SIGNUP', 'OAuth Signup', 'Allow users to create accounts through OAuth.')}
-						{toggle('OAUTH_MERGE_ACCOUNTS_BY_EMAIL', 'Merge Accounts by Email', 'Link OAuth sign-ins to existing accounts with the same email.')}
-						{toggle('OAUTH_AUTO_REDIRECT', 'Auto Redirect', 'Send users directly to the OAuth provider from the sign-in page.')}
-						{text('OAUTH_ALLOWED_DOMAINS', 'Allowed Domains', 'Email domains allowed to sign in with OAuth.', '* (all domains)')}
+						{toggle(
+							'OAUTH_MERGE_ACCOUNTS_BY_EMAIL',
+							'Merge Accounts by Email',
+							'Link OAuth sign-ins to existing accounts with the same email.'
+						)}
+						{toggle(
+							'OAUTH_AUTO_REDIRECT',
+							'Auto Redirect',
+							'Send users directly to the OAuth provider from the sign-in page.'
+						)}
+						{text(
+							'OAUTH_ALLOWED_DOMAINS',
+							'Allowed Domains',
+							'Email domains allowed to sign in with OAuth.',
+							'* (all domains)'
+						)}
 
 						{/* LICENSE covers this Open WebUI wordmark.
 						    Do not alter, remove, obscure, or replace it except as LICENSE permits:
@@ -260,17 +473,30 @@ function OAuth({ oauth, set }: { oauth: Rec; set: (p: Rec) => void }) {
 						{toggle('ENABLE_OAUTH_GROUP_MANAGEMENT', 'Group Mapping', 'Map OAuth claims to Open WebUI groups.')}
 						{oauth.ENABLE_OAUTH_GROUP_MANAGEMENT && (
 							<>
-								{toggle('ENABLE_OAUTH_GROUP_CREATION', 'Auto-Create Groups', 'Create missing groups from OAuth claims.')}
+								{toggle(
+									'ENABLE_OAUTH_GROUP_CREATION',
+									'Auto-Create Groups',
+									'Create missing groups from OAuth claims.'
+								)}
 								<div className={grid}>
 									{text('OAUTH_GROUP_CLAIM', 'Group Claim', 'Claim containing provider groups.', 'groups')}
-									{text('OAUTH_BLOCKED_GROUPS', 'Blocked Groups', 'Provider groups blocked from signing in.', 'Comma-separated group names')}
+									{text(
+										'OAUTH_BLOCKED_GROUPS',
+										'Blocked Groups',
+										'Provider groups blocked from signing in.',
+										'Comma-separated group names'
+									)}
 								</div>
 							</>
 						)}
 
 						{toggle('OAUTH_UPDATE_EMAIL_ON_LOGIN', 'Update Email', 'Refresh the account email from OAuth on sign-in.')}
 						{toggle('OAUTH_UPDATE_NAME_ON_LOGIN', 'Update Name', 'Refresh the account name from OAuth on sign-in.')}
-						{toggle('OAUTH_UPDATE_PICTURE_ON_LOGIN', 'Update Picture', 'Refresh the profile picture from OAuth on sign-in.')}
+						{toggle(
+							'OAUTH_UPDATE_PICTURE_ON_LOGIN',
+							'Update Picture',
+							'Refresh the profile picture from OAuth on sign-in.'
+						)}
 					</>
 				)}
 			</fieldset>
@@ -290,7 +516,13 @@ export default function Authentication() {
 			getOAuthConfig(token).catch(() => null),
 			getLdapConfig(token)
 		]);
-		return { admin, groups: groups ?? [], ldapEnabled: Boolean(ldapConfig?.ENABLE_LDAP), ldap: mergeLdapServer(ldap), oauth };
+		return {
+			admin,
+			groups: groups ?? [],
+			ldapEnabled: Boolean(ldapConfig?.ENABLE_LDAP),
+			ldap: mergeLdapServer(ldap),
+			oauth
+		};
 	});
 	const [saving, setSaving] = useState(false);
 
@@ -340,7 +572,12 @@ export default function Authentication() {
 				<>
 					<UserAccess admin={draft.admin} set={setAdmin} groups={draft.groups} />
 					<PendingAccounts admin={draft.admin} set={setAdmin} />
-					<Ldap enabled={draft.ldapEnabled} setEnabled={(v) => setDraft((d) => d && { ...d, ldapEnabled: v })} ldap={draft.ldap} set={setLdap} />
+					<Ldap
+						enabled={draft.ldapEnabled}
+						setEnabled={(v) => setDraft((d) => d && { ...d, ldapEnabled: v })}
+						ldap={draft.ldap}
+						set={setLdap}
+					/>
 					{draft.oauth && <OAuth oauth={draft.oauth} set={setOAuth} />}
 				</>
 			)}

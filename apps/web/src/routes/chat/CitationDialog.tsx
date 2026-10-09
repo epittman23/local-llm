@@ -27,7 +27,11 @@ function Excerpt({ text }: { text: string }) {
  */
 export function CitationDialog({ source, onClose }: { source: Citation | null; onClose: () => void }) {
 	if (!source) return null;
-	const docs = source.document.map((text, i) => ({ text, metadata: source.metadata[i] ?? {}, distance: source.distances[i] }));
+	const docs = source.document.map((text, i) => ({
+		text,
+		metadata: source.metadata[i] ?? {},
+		distance: source.distances[i]
+	}));
 	const title = String(source.source?.name ?? source.source?.url ?? 'Citation');
 	return (
 		<Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -38,19 +42,30 @@ export function CitationDialog({ source, onClose }: { source: Citation | null; o
 				</DialogHeader>
 				<div className="flex max-h-[65vh] flex-col gap-4 overflow-y-auto">
 					{docs.map((d, i) => {
-						const url = d.metadata.file_id ? `${WEBUI_API_BASE_URL}/files/${d.metadata.file_id}/content${d.metadata.page !== undefined ? `#page=${d.metadata.page + 1}` : ''}` : (d.metadata.source ?? source.source?.url);
+						const url = d.metadata.file_id
+							? `${WEBUI_API_BASE_URL}/files/${d.metadata.file_id}/content${d.metadata.page !== undefined ? `#page=${d.metadata.page + 1}` : ''}`
+							: (d.metadata.source ?? source.source?.url);
 						return (
 							<div key={i} className="flex flex-col gap-1 border-b pb-3 last:border-0">
 								<div className="flex items-center gap-2 text-sm font-medium">
 									{(url && String(url).startsWith('http')) || d.metadata.file_id ? (
-										<a href={String(url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 underline">
+										<a
+											href={String(url)}
+											target="_blank"
+											rel="noopener noreferrer"
+											className="flex items-center gap-1 underline"
+										>
 											{String(d.metadata.name ?? d.metadata.source ?? title)} <ExternalLink className="size-3" />
 										</a>
 									) : (
 										<span>{String(d.metadata.name ?? d.metadata.source ?? title)}</span>
 									)}
-									{d.metadata.page !== undefined && <span className="text-muted-foreground text-xs">(page {Number(d.metadata.page) + 1})</span>}
-									{typeof d.distance === 'number' && <span className="text-muted-foreground ml-auto text-xs">Relevance {d.distance.toFixed(4)}</span>}
+									{d.metadata.page !== undefined && (
+										<span className="text-muted-foreground text-xs">(page {Number(d.metadata.page) + 1})</span>
+									)}
+									{typeof d.distance === 'number' && (
+										<span className="text-muted-foreground ml-auto text-xs">Relevance {d.distance.toFixed(4)}</span>
+									)}
 								</div>
 								<Excerpt text={String(d.text ?? '')} />
 							</div>

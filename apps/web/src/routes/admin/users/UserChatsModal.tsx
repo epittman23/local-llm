@@ -64,7 +64,8 @@ export function UserChatsModal({
 		setChatListLoading(true);
 		const mine = generation.current;
 		page.current += 1;
-		const next = ((await getChatListByUserId(token, user.id, page.current, filter()).catch(() => [])) ?? []) as ChatListItem[];
+		const next = ((await getChatListByUserId(token, user.id, page.current, filter()).catch(() => [])) ??
+			[]) as ChatListItem[];
 		if (generation.current === mine) {
 			setAllChatsLoaded(next.length === 0);
 			if (next.length > 0) {

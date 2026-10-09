@@ -24,7 +24,12 @@ export type Group = {
 	member_count?: number;
 };
 
-export type GroupFormValue = { name: string; description: string; data: Record<string, unknown>; permissions: PermissionsShape };
+export type GroupFormValue = {
+	name: string;
+	description: string;
+	data: Record<string, unknown>;
+	permissions: PermissionsShape;
+};
 type TabId = 'general' | 'permissions' | 'users' | 'preview';
 
 const tabMeta: Record<TabId, { label: string; icon: typeof Settings }> = {
@@ -145,7 +150,8 @@ export function EditGroupModal({
 					resetToDefaults();
 				}}
 			>
-				Are you sure you want to reset all permissions to their default values? You will still need to save to apply the changes.
+				Are you sure you want to reset all permissions to their default values? You will still need to save to apply the
+				changes.
 			</ConfirmDialog>
 
 			<Dialog open={open} onOpenChange={onOpenChange}>
@@ -197,7 +203,11 @@ export function EditGroupModal({
 										/>
 									)}
 									{tab === 'permissions' && (
-										<Permissions permissions={permissions} onChange={setPermissions} defaultPermissions={defaultPermissions} />
+										<Permissions
+											permissions={permissions}
+											onChange={setPermissions}
+											defaultPermissions={defaultPermissions}
+										/>
 									)}
 									{tab === 'users' && group && (
 										<GroupUsers

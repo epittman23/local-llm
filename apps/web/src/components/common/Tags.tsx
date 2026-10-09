@@ -40,8 +40,7 @@ export function Tags({
 			suggestionTags
 				.map((tag) => (typeof tag === 'string' ? tag : (tag?.name ?? '')).trim())
 				.filter(
-					(name) =>
-						name && !existing.has(name.toLowerCase()) && name.toLowerCase().includes(value.trim().toLowerCase())
+					(name) => name && !existing.has(name.toLowerCase()) && name.toLowerCase().includes(value.trim().toLowerCase())
 				)
 				.slice(0, 8),
 		[suggestionTags, existing, value]

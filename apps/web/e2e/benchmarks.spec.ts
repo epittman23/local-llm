@@ -128,9 +128,7 @@ test('the Profiles panel lists profiles from the CRUD backend', async ({ page })
 	await expect(page.getByText('default', { exact: true })).toBeVisible();
 });
 
-test('Edit opens a version-history-backed form pre-filled from the current definition', async ({
-	page
-}) => {
+test('Edit opens a version-history-backed form pre-filled from the current definition', async ({ page }) => {
 	await page.goto('/benchmarks/serve');
 
 	await page.getByRole('button', { name: 'Manage profiles' }).click();
@@ -178,7 +176,7 @@ test('Live renders an active run and Kill requires AlertDialog confirmation', as
 			contentType: 'application/json',
 			body: JSON.stringify({
 				run: killed ? null : { model: 'qwen38', config_id: 'abc123', port: 8090 },
-				summary: { 'util avg': 42, 'vram_headroom_mib': 512 },
+				summary: { 'util avg': 42, vram_headroom_mib: 512 },
 				deltas: { prompt_tokens: 100 },
 				requests: 3,
 				recent_samples: [{ at: 1700000000, util_pct: 40, mem_used_mib: 5000, mem_total_mib: 6144 }],
@@ -516,7 +514,11 @@ test('Serve Start settles while the log stream is still open', async ({ page }) 
 	let started = 0;
 	await page.route('**/api/v1/benchmarks/serve/start', (route) => {
 		started++;
-		return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ started: true, warning: null }) });
+		return route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ started: true, warning: null })
+		});
 	});
 	// Never answered: a live server's log stream doesn't end.
 	await page.route('**/api/v1/benchmarks/serve/stream', () => {});
@@ -531,7 +533,11 @@ test('Serve Start settles while the log stream is still open', async ({ page }) 
 
 test('Tests Run settles while the run is still streaming', async ({ page }) => {
 	await page.route('**/api/v1/benchmarks/tests/options', (route) =>
-		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ tiers: ['smoke'], benchmarks: [], systems: [] }) })
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ tiers: ['smoke'], benchmarks: [], systems: [] })
+		})
 	);
 	await page.route('**/api/v1/benchmarks/tests/run', (route) =>
 		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ started: true }) })

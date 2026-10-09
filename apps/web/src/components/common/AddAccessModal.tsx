@@ -1,13 +1,7 @@
 import { useState } from 'react';
 import { MemberSelector } from '@/components/common/MemberSelector';
 import { Button } from '@/components/ui/button';
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogHeader,
-	DialogTitle
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 /** Ports workspace/common/AddAccessModal.svelte. */
 export function AddAccessModal({
@@ -44,9 +38,7 @@ export function AddAccessModal({
 			<DialogContent className="sm:max-w-md">
 				<DialogHeader>
 					<DialogTitle>Add Access</DialogTitle>
-					<DialogDescription className="sr-only">
-						Choose users and groups to give access to.
-					</DialogDescription>
+					<DialogDescription className="sr-only">Choose users and groups to give access to.</DialogDescription>
 				</DialogHeader>
 				<form
 					className="flex flex-col"

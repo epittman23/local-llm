@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { SessionUser } from '@/lib/stores/authStore';
 import { adminTabs, availableTabs, filterTabs, personalTabs, resolveTab, startsGroup } from './settingsTabs';
 
-const user = (role: string, permissions: Record<string, unknown> = {}) => ({ id: 'u', email: 'e', name: 'n', role, profile_image_url: '', permissions }) as SessionUser;
+const user = (role: string, permissions: Record<string, unknown> = {}) =>
+	({ id: 'u', email: 'e', name: 'n', role, profile_image_url: '', permissions }) as SessionUser;
 const adminOnly = new Set(adminTabs.map((t) => t.id));
 const all = new Set([...adminTabs, ...personalTabs].map((t) => t.id));
 const cfg = (features: Record<string, unknown> = {}) => ({ name: 'x', version: '1', features }) as never;
@@ -15,8 +16,35 @@ describe('availableTabs', () => {
 	});
 	it('lists personal tabs first, by the Svelte visibility rules', () => {
 		const ids = (u: SessionUser, f = {}) => availableTabs(u, cfg(f), all).map((t) => t.id);
-		expect(ids(user('user'))).toEqual(['general', 'interface', 'notifications', 'shortcuts', 'audio', 'data_controls', 'archived_chats', 'account', 'about']);
-		expect(ids(user('user', { features: { direct_tool_servers: true }, settings: { interface: false } }), { enable_direct_connections: true, enable_memories: true })).toEqual(['general', 'notifications', 'shortcuts', 'connections', 'tools', 'personalization', 'audio', 'data_controls', 'archived_chats', 'account', 'about']);
+		expect(ids(user('user'))).toEqual([
+			'general',
+			'interface',
+			'notifications',
+			'shortcuts',
+			'audio',
+			'data_controls',
+			'archived_chats',
+			'account',
+			'about'
+		]);
+		expect(
+			ids(user('user', { features: { direct_tool_servers: true }, settings: { interface: false } }), {
+				enable_direct_connections: true,
+				enable_memories: true
+			})
+		).toEqual([
+			'general',
+			'notifications',
+			'shortcuts',
+			'connections',
+			'tools',
+			'personalization',
+			'audio',
+			'data_controls',
+			'archived_chats',
+			'account',
+			'about'
+		]);
 		expect(ids(user('admin'))[0]).toBe('general');
 		expect(ids(user('admin'))).toContain('admin:general');
 	});
@@ -24,7 +52,9 @@ describe('availableTabs', () => {
 		expect(availableTabs(user('admin'), cfg(), new Set(['admin:db'])).map((t) => t.id)).toEqual(['admin:db']);
 	});
 	it('drops Analytics when the feature is off, but keeps it by default', () => {
-		expect(availableTabs(user('admin'), cfg({ enable_admin_analytics: false }), all).map((t) => t.id)).not.toContain('admin:analytics');
+		expect(availableTabs(user('admin'), cfg({ enable_admin_analytics: false }), all).map((t) => t.id)).not.toContain(
+			'admin:analytics'
+		);
 		expect(availableTabs(user('admin'), cfg(), all).map((t) => t.id)).toContain('admin:analytics');
 	});
 });

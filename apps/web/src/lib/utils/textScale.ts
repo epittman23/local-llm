@@ -8,7 +8,8 @@ export const setTextScale = (scale: number) => {
 };
 
 /** Trimmed, with control characters removed; '' for anything that is not a string. */
-export const normalizeAppFontFamily = (fontFamily?: string | null) => (typeof fontFamily === 'string' ? fontFamily.trim().replace(/[\u0000-\u001f\u007f]/g, '') : '');
+export const normalizeAppFontFamily = (fontFamily?: string | null) =>
+	typeof fontFamily === 'string' ? fontFamily.trim().replace(/[\u0000-\u001f\u007f]/g, '') : '';
 
 /** Sets the app font (quoted and escaped for CSS), or removes it for a blank value. */
 export const setAppFontFamily = (fontFamily?: string | null) => {
@@ -18,5 +19,8 @@ export const setAppFontFamily = (fontFamily?: string | null) => {
 		document.documentElement.style.removeProperty('--app-font-family');
 		return;
 	}
-	document.documentElement.style.setProperty('--app-font-family', `"${normalized.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`);
+	document.documentElement.style.setProperty(
+		'--app-font-family',
+		`"${normalized.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+	);
 };

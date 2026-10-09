@@ -103,7 +103,17 @@ export function ModelEditor({
 			</div>
 		);
 	}
-	return <EditorForm model={model} edit={edit} preset={preset} allModels={models.data ?? []} defaults={defaults.data ?? {}} onSubmit={onSubmit} onBack={onBack} />;
+	return (
+		<EditorForm
+			model={model}
+			edit={edit}
+			preset={preset}
+			allModels={models.data ?? []}
+			defaults={defaults.data ?? {}}
+			onSubmit={onSubmit}
+			onBack={onBack}
+		/>
+	);
 }
 
 function EditorForm({
@@ -127,21 +137,43 @@ function EditorForm({
 	const user = useAuthStore((s) => s.user);
 	const isAdmin = user?.role === 'admin';
 
-	const [state, setState] = useState<EditorState>(() => initialEditorState(model, defaults, { edit, baseModels: allModels }));
+	const [state, setState] = useState<EditorState>(() =>
+		initialEditorState(model, defaults, { edit, baseModels: allModels })
+	);
 	const patch = (p: Partial<EditorState>) => setState((s) => ({ ...s, ...p }));
-	const setMeta = (p: Record<string, unknown>) => setState((s) => ({ ...s, info: { ...s.info, meta: { ...s.info.meta, ...p } } }));
+	const setMeta = (p: Record<string, unknown>) =>
+		setState((s) => ({ ...s, info: { ...s.info, meta: { ...s.info.meta, ...p } } }));
 	const [loading, setLoading] = useState(false);
 	const [showAdvanced, setShowAdvanced] = useState(false);
 	const [showPreview, setShowPreview] = useState(false);
 	const [showAccess, setShowAccess] = useState(false);
 	const imageInput = useRef<HTMLInputElement>(null);
 
-	const tools = useQuery({ queryKey: ['tools-all'], queryFn: async () => asArray<any>(await getTools(token).catch(() => null)) });
-	const skills = useQuery({ queryKey: ['skills-all'], queryFn: async () => asArray<any>(await getSkills(token).catch(() => null)) });
-	const functions = useQuery({ queryKey: ['functions-all'], queryFn: async () => asArray<any>(await getFunctions(token).catch(() => null)) });
-	const tagSuggestions = useQuery({ queryKey: ['model-tags', preset], queryFn: async () => asArray<string>(await (preset ? getModelTags : getBaseModelTags)(token).catch(() => [])) });
-	const terminals = useQuery({ queryKey: ['terminals'], queryFn: async () => asArray<{ id: string; name?: string }>(await getTerminalServers(token).catch(() => [])) });
-	const voices = useQuery({ queryKey: ['voices'], queryFn: async () => ((await getVoices(token).catch(() => null))?.voices ?? []) as Array<{ id: string; name?: string }> });
+	const tools = useQuery({
+		queryKey: ['tools-all'],
+		queryFn: async () => asArray<any>(await getTools(token).catch(() => null))
+	});
+	const skills = useQuery({
+		queryKey: ['skills-all'],
+		queryFn: async () => asArray<any>(await getSkills(token).catch(() => null))
+	});
+	const functions = useQuery({
+		queryKey: ['functions-all'],
+		queryFn: async () => asArray<any>(await getFunctions(token).catch(() => null))
+	});
+	const tagSuggestions = useQuery({
+		queryKey: ['model-tags', preset],
+		queryFn: async () => asArray<string>(await (preset ? getModelTags : getBaseModelTags)(token).catch(() => []))
+	});
+	const terminals = useQuery({
+		queryKey: ['terminals'],
+		queryFn: async () => asArray<{ id: string; name?: string }>(await getTerminalServers(token).catch(() => []))
+	});
+	const voices = useQuery({
+		queryKey: ['voices'],
+		queryFn: async () =>
+			((await getVoices(token).catch(() => null))?.voices ?? []) as Array<{ id: string; name?: string }>
+	});
 
 	const fns = functions.data ?? [];
 	const filters = fns.filter((f) => f.type === 'filter');
@@ -149,7 +181,12 @@ function EditorForm({
 	const toggleableFilters = filters.filter((f) => (state.filterIds.includes(f.id) || f.is_global) && f.meta?.toggle);
 
 	const variables = getChatVariablesPreview(state.system ?? '');
-	const baseItems = getBaseModelItems(allModels, { currentModelId: model?.id, edit, selectedBaseId: state.info.base_model_id, isAdmin });
+	const baseItems = getBaseModelItems(allModels, {
+		currentModelId: model?.id,
+		edit,
+		selectedBaseId: state.info.base_model_id,
+		isAdmin
+	});
 	const meta = state.info.meta;
 	const tags = ((meta.tags ?? []) as Array<{ name: string }>).map((t) => (typeof t === 'string' ? { name: t } : t));
 	const features = availableFeatures(state.capabilities);
@@ -230,7 +267,11 @@ function EditorForm({
 										className="ring-border hover:ring-foreground/30 relative flex size-full items-center overflow-hidden rounded-xl ring-1 transition"
 										onClick={() => imageInput.current?.click()}
 									>
-										<img src={meta.profile_image_url || DEFAULT_PROFILE_IMAGE} alt="model profile" className="size-full object-cover" />
+										<img
+											src={meta.profile_image_url || DEFAULT_PROFILE_IMAGE}
+											alt="model profile"
+											className="size-full object-cover"
+										/>
 										<span className="bg-foreground text-background absolute right-0 bottom-0 m-1 rounded-full p-1 opacity-0 shadow-sm transition group-hover:opacity-100 group-focus-within:opacity-100">
 											<Camera className="size-3" />
 										</span>
@@ -339,7 +380,11 @@ function EditorForm({
 												<div className="text-muted-foreground">Chat Variables</div>
 												{variables.fields.map((f) => (
 													<div key={f.key} className="font-mono">
-														{f.key} <span className="text-muted-foreground">({f.type ?? 'text'}{f.required ? ', required' : ''})</span>
+														{f.key}{' '}
+														<span className="text-muted-foreground">
+															({f.type ?? 'text'}
+															{f.required ? ', required' : ''})
+														</span>
 													</div>
 												))}
 											</div>
@@ -368,13 +413,23 @@ function EditorForm({
 							<div className="my-2">
 								<div className="flex w-full items-center justify-between">
 									<div className={sectionLabel}>Advanced Params</div>
-									<button type="button" className="text-muted-foreground hover:text-foreground rounded-sm px-2 py-0.5 text-xs" onClick={() => setShowAdvanced((v) => !v)}>
+									<button
+										type="button"
+										className="text-muted-foreground hover:text-foreground rounded-sm px-2 py-0.5 text-xs"
+										onClick={() => setShowAdvanced((v) => !v)}
+									>
 										{showAdvanced ? 'Hide' : 'Show'}
 									</button>
 								</div>
 								{showAdvanced && (
 									<div className="mt-2">
-										<AdvancedParams admin custom layout="grid" params={state.params} onChange={(params) => patch({ params })} />
+										<AdvancedParams
+											admin
+											custom
+											layout="grid"
+											params={state.params}
+											onChange={(params) => patch({ params })}
+										/>
 									</div>
 								)}
 							</div>
@@ -388,14 +443,26 @@ function EditorForm({
 								<button
 									type="button"
 									className="text-muted-foreground hover:text-foreground rounded-sm px-2 py-0.5 text-xs"
-									aria-label={(meta.suggestion_prompts ?? null) === null ? 'Default prompt suggestions' : 'Custom prompt suggestions'}
-									onClick={() => setMeta({ suggestion_prompts: (meta.suggestion_prompts ?? null) === null ? [{ content: '', title: ['', ''] }] : null })}
+									aria-label={
+										(meta.suggestion_prompts ?? null) === null
+											? 'Default prompt suggestions'
+											: 'Custom prompt suggestions'
+									}
+									onClick={() =>
+										setMeta({
+											suggestion_prompts:
+												(meta.suggestion_prompts ?? null) === null ? [{ content: '', title: ['', ''] }] : null
+										})
+									}
 								>
 									{(meta.suggestion_prompts ?? null) === null ? 'Default' : 'Custom'}
 								</button>
 							</div>
 							{meta.suggestion_prompts && (
-								<PromptSuggestionsEditor value={meta.suggestion_prompts as PromptSuggestion[]} onChange={(next) => setMeta({ suggestion_prompts: next })} />
+								<PromptSuggestionsEditor
+									value={meta.suggestion_prompts as PromptSuggestion[]}
+									onChange={(next) => setMeta({ suggestion_prompts: next })}
+								/>
 							)}
 						</div>
 
@@ -487,7 +554,13 @@ function EditorForm({
 									items={featureItems.filter((f) => features.includes(f.id))}
 									isChecked={(id) => state.defaultFeatureIds.includes(id)}
 									onToggle={(id, checked) =>
-										patch({ defaultFeatureIds: checked ? (state.defaultFeatureIds.includes(id) ? state.defaultFeatureIds : [...state.defaultFeatureIds, id]) : state.defaultFeatureIds.filter((x) => x !== id) })
+										patch({
+											defaultFeatureIds: checked
+												? state.defaultFeatureIds.includes(id)
+													? state.defaultFeatureIds
+													: [...state.defaultFeatureIds, id]
+												: state.defaultFeatureIds.filter((x) => x !== id)
+										})
 									}
 								/>
 							</div>
@@ -559,12 +632,18 @@ function EditorForm({
 						<div className="pb-16">
 							<div className="flex items-center justify-between">
 								<div className="text-sm">JSON Preview</div>
-								<button type="button" className="text-muted-foreground hover:text-foreground text-xs" onClick={() => setShowPreview((v) => !v)}>
+								<button
+									type="button"
+									className="text-muted-foreground hover:text-foreground text-xs"
+									onClick={() => setShowPreview((v) => !v)}
+								>
 									{showPreview ? 'Hide' : 'Show'}
 								</button>
 							</div>
 							{showPreview && (
-								<pre className="bg-muted/50 mt-2 max-h-96 overflow-auto rounded-lg p-3 text-xs">{JSON.stringify(preview.ok ? preview.info : state.info, null, 2)}</pre>
+								<pre className="bg-muted/50 mt-2 max-h-96 overflow-auto rounded-lg p-3 text-xs">
+									{JSON.stringify(preview.ok ? preview.info : state.info, null, 2)}
+								</pre>
 							)}
 						</div>
 					</div>

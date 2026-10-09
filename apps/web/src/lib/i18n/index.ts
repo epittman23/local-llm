@@ -10,13 +10,10 @@ import LanguageDetector from 'i18next-browser-languagedetector';
 import resourcesToBackend from 'i18next-resources-to-backend';
 
 export const initI18n = (defaultLocale?: string) => {
-	const detectionOrder = defaultLocale
-		? ['querystring', 'localStorage']
-		: ['querystring', 'localStorage', 'navigator'];
+	const detectionOrder = defaultLocale ? ['querystring', 'localStorage'] : ['querystring', 'localStorage', 'navigator'];
 	const fallbackDefaultLocale = defaultLocale ? [defaultLocale] : ['en-US'];
 
-	const loadResource = (language: string, namespace: string) =>
-		import(`./locales/${language}/${namespace}.json`);
+	const loadResource = (language: string, namespace: string) => import(`./locales/${language}/${namespace}.json`);
 
 	return i18next
 		.use(resourcesToBackend(loadResource))

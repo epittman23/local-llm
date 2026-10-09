@@ -2,15 +2,33 @@ import { type ReactNode, useState } from 'react';
 import { AdvancedParams } from '@/components/common/AdvancedParams';
 import { CheckboxGrid } from '@/routes/workspace/models/EditorPickers';
 import { PromptSuggestionsEditor } from '@/routes/workspace/models/PromptSuggestionsEditor';
-import { availableFeatures, builtinToolItems, capabilityItems, featureItems } from '@/routes/workspace/models/modelEditorLabels';
+import {
+	availableFeatures,
+	builtinToolItems,
+	capabilityItems,
+	featureItems
+} from '@/routes/workspace/models/modelEditorLabels';
 import type { DefaultsState } from './adminModels';
 
 /** A heading row that opens and closes its body. */
-function Collapsible({ title, children, className = 'py-0.5' }: { title: string; children: ReactNode; className?: string }) {
+function Collapsible({
+	title,
+	children,
+	className = 'py-0.5'
+}: {
+	title: string;
+	children: ReactNode;
+	className?: string;
+}) {
 	const [open, setOpen] = useState(false);
 	return (
 		<div>
-			<button type="button" aria-expanded={open} className={`flex w-full items-center justify-between gap-4 text-left ${className}`} onClick={() => setOpen((o) => !o)}>
+			<button
+				type="button"
+				aria-expanded={open}
+				className={`flex w-full items-center justify-between gap-4 text-left ${className}`}
+				onClick={() => setOpen((o) => !o)}
+			>
 				<span className="text-muted-foreground text-xs">{title}</span>
 				<span className="text-muted-foreground/70 text-[0.6875rem]">{open ? 'Close' : 'Configure'}</span>
 			</button>
@@ -26,7 +44,13 @@ function Collapsible({ title, children, className = 'py-0.5' }: { title: string;
  * Svelte panel fetched and saved its own copy of the models config, so saving
  * it after toggling a default model wrote the older lists back).
  */
-export function ModelDefaultsPanel({ value, onChange }: { value: DefaultsState; onChange: (next: DefaultsState) => void }) {
+export function ModelDefaultsPanel({
+	value,
+	onChange
+}: {
+	value: DefaultsState;
+	onChange: (next: DefaultsState) => void;
+}) {
 	const [expanded, setExpanded] = useState(false);
 	const set = (changes: Partial<DefaultsState>) => onChange({ ...value, ...changes });
 	const features = availableFeatures(value.capabilities);
@@ -34,10 +58,20 @@ export function ModelDefaultsPanel({ value, onChange }: { value: DefaultsState; 
 	return (
 		<div className="shrink-0">
 			<div className="flex items-center justify-between gap-4 py-0.5">
-				<button type="button" className="text-muted-foreground hover:text-foreground min-w-0 flex-1 text-left text-xs transition-colors" onClick={() => setExpanded((e) => !e)}>
+				<button
+					type="button"
+					className="text-muted-foreground hover:text-foreground min-w-0 flex-1 text-left text-xs transition-colors"
+					onClick={() => setExpanded((e) => !e)}
+				>
 					Model Defaults
 				</button>
-				<button type="button" aria-expanded={expanded} aria-label="Configure model defaults" className="text-muted-foreground/70 hover:text-foreground shrink-0 text-[0.6875rem] transition-colors" onClick={() => setExpanded((e) => !e)}>
+				<button
+					type="button"
+					aria-expanded={expanded}
+					aria-label="Configure model defaults"
+					className="text-muted-foreground/70 hover:text-foreground shrink-0 text-[0.6875rem] transition-colors"
+					onClick={() => setExpanded((e) => !e)}
+				>
 					{expanded ? 'Close' : 'Configure'}
 				</button>
 			</div>
@@ -57,7 +91,15 @@ export function ModelDefaultsPanel({ value, onChange }: { value: DefaultsState; 
 									title="Default Features"
 									items={featureItems.filter((f) => features.includes(f.id))}
 									isChecked={(id) => value.defaultFeatureIds.includes(id)}
-									onToggle={(id, checked) => set({ defaultFeatureIds: checked ? (value.defaultFeatureIds.includes(id) ? value.defaultFeatureIds : [...value.defaultFeatureIds, id]) : value.defaultFeatureIds.filter((x) => x !== id) })}
+									onToggle={(id, checked) =>
+										set({
+											defaultFeatureIds: checked
+												? value.defaultFeatureIds.includes(id)
+													? value.defaultFeatureIds
+													: [...value.defaultFeatureIds, id]
+												: value.defaultFeatureIds.filter((x) => x !== id)
+										})
+									}
 								/>
 							</div>
 						)}
@@ -84,7 +126,10 @@ export function ModelDefaultsPanel({ value, onChange }: { value: DefaultsState; 
 					</Collapsible>
 
 					<Collapsible title="Prompt Suggestions">
-						<PromptSuggestionsEditor value={value.promptSuggestions} onChange={(promptSuggestions) => set({ promptSuggestions })} />
+						<PromptSuggestionsEditor
+							value={value.promptSuggestions}
+							onChange={(promptSuggestions) => set({ promptSuggestions })}
+						/>
 					</Collapsible>
 				</div>
 			)}

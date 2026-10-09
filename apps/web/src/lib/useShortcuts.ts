@@ -13,7 +13,14 @@ export const KEYBINDINGS_KEY = ['user-keybindings'] as const;
 /** The user's shortcut bindings (saved at the top level of their settings, beside `ui`). */
 export function useKeybindings(): KeybindingsMap {
 	const token = useAuthStore((s) => s.token) ?? '';
-	const q = useQuery({ queryKey: KEYBINDINGS_KEY, enabled: Boolean(token), staleTime: Infinity, queryFn: async () => ((await getUserSettings(token, true).catch(() => null)) as { keybindings?: Record<string, string> } | null)?.keybindings ?? null });
+	const q = useQuery({
+		queryKey: KEYBINDINGS_KEY,
+		enabled: Boolean(token),
+		staleTime: Infinity,
+		queryFn: async () =>
+			((await getUserSettings(token, true).catch(() => null)) as { keybindings?: Record<string, string> } | null)
+				?.keybindings ?? null
+	});
 	return resolveKeybindings(q.data);
 }
 
@@ -43,7 +50,8 @@ export const SUPPORTED_SHORTCUTS = new Set<Shortcut>([
 	Shortcut.TALK_TO_MODEL
 ]);
 
-const lastEnabled = (selector: string) => [...document.querySelectorAll<HTMLButtonElement>(selector)].reverse().find((b) => !b.disabled);
+const lastEnabled = (selector: string) =>
+	[...document.querySelectorAll<HTMLButtonElement>(selector)].reverse().find((b) => !b.disabled);
 
 /**
  * Ports (app)/+layout.svelte's keyboard handler: each configurable shortcut
@@ -108,7 +116,8 @@ export function useShortcuts() {
 					if (!links.length) break;
 					event.preventDefault();
 					const i = links.findIndex((a) => a.getAttribute('aria-current') === 'page');
-					const next = links[Math.max(0, Math.min(links.length - 1, i + (shortcut === Shortcut.NAVIGATE_CHAT_UP ? -1 : 1)))];
+					const next =
+						links[Math.max(0, Math.min(links.length - 1, i + (shortcut === Shortcut.NAVIGATE_CHAT_UP ? -1 : 1)))];
 					next?.click();
 					break;
 				}

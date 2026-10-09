@@ -6,17 +6,24 @@ import { htmlToMarkdown, markdownToHtml } from './markdown';
 
 describe('htmlToMarkdown', () => {
 	it('headings and emphasis; one newline between paragraphs (as the Svelte editor writes them)', () => {
-		expect(htmlToMarkdown('<h2>Plan</h2><p>First <strong>bold</strong></p><p>Second</p>')).toBe('## Plan\n\nFirst **bold**\nSecond');
+		expect(htmlToMarkdown('<h2>Plan</h2><p>First <strong>bold</strong></p><p>Second</p>')).toBe(
+			'## Plan\n\nFirst **bold**\nSecond'
+		);
 	});
 	it('keeps typed markdown characters unescaped and runs of spaces', () => {
 		expect(htmlToMarkdown('<p>a_b *c*  d</p>')).toBe('a_b *c*  d');
 	});
 	it('task lists, with nesting', () => {
-		const html = '<ul data-type="taskList"><li data-checked="true"><label><input type="checkbox" checked></label><div><p>done</p></div></li><li data-checked="false"><label><input type="checkbox"></label><div><p>todo</p></div></li></ul>';
+		const html =
+			'<ul data-type="taskList"><li data-checked="true"><label><input type="checkbox" checked></label><div><p>done</p></div></li><li data-checked="false"><label><input type="checkbox"></label><div><p>todo</p></div></li></ul>';
 		expect(htmlToMarkdown(html)).toBe('- [x] done\n- [ ] todo');
 	});
 	it('tables use the first row as the header', () => {
-		expect(htmlToMarkdown('<table><tbody><tr><th><p>A</p></th><th><p>B</p></th></tr><tr><td><p>1</p></td><td><p>2</p></td></tr></tbody></table>')).toBe('| A | B |\n| --- | --- |\n| 1 | 2 |');
+		expect(
+			htmlToMarkdown(
+				'<table><tbody><tr><th><p>A</p></th><th><p>B</p></th></tr><tr><td><p>1</p></td><td><p>2</p></td></tr></tbody></table>'
+			)
+		).toBe('| A | B |\n| --- | --- |\n| 1 | 2 |');
 	});
 	it('fenced code keeps its blank lines', () => {
 		expect(htmlToMarkdown('<pre><code>a\n\nb</code></pre>')).toBe('```\na\n\nb\n```');

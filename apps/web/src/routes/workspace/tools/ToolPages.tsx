@@ -11,7 +11,13 @@ import { type ToolDraft, sanitizeIncomingTool } from './toolTypes';
 
 const COMMUNITY_ORIGINS = ['https://openwebui.com', 'https://www.openwebui.com', 'http://localhost:9999'];
 
-const payload = (t: ToolDraft) => ({ id: t.id, name: t.name, meta: t.meta, content: t.content, access_grants: t.access_grants });
+const payload = (t: ToolDraft) => ({
+	id: t.id,
+	name: t.name,
+	meta: t.meta,
+	content: t.content,
+	access_grants: t.access_grants
+});
 
 /**
  * Ports (app)/workspace/tools/create/+page.svelte. The form can be pre-filled

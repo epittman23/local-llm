@@ -69,7 +69,7 @@ async def export_answers(form_data: ExportAnswersForm, user=Depends(get_admin_us
         record = await BenchmarkAnswers.answer_for(r.benchmark, r.item_id, suite_run_id=form_data.run)
         if record is None:
             continue
-        name = f"{_SAFE.sub('_', r.benchmark)}__{_SAFE.sub('_', r.item_id)}.md"
+        name = f'{_SAFE.sub("_", r.benchmark)}__{_SAFE.sub("_", r.item_id)}.md'
         (out_dir / name).write_text(_answer_document(record, thinking=True))
         written += 1
     return {'exported': written, 'directory': str(out_dir)}

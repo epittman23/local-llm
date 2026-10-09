@@ -9,7 +9,18 @@ import { resolveChatMessageToolCall } from '@/lib/apis/chats';
 import { WEBUI_BASE_URL } from '@/lib/constants';
 import { unescapeHtml } from '@/lib/markdown/content';
 import { type MdToken, lexChat } from '@/lib/markdown/lexer';
-import { type AlertType, type DetailGroup, alertOf, detailText, detailTitle, groupDetails, htmlKind, inAppPath, sourceLabel, tableToCsv } from '@/lib/markdown/markdownModel';
+import {
+	type AlertType,
+	type DetailGroup,
+	alertOf,
+	detailText,
+	detailTitle,
+	groupDetails,
+	htmlKind,
+	inAppPath,
+	sourceLabel,
+	tableToCsv
+} from '@/lib/markdown/markdownModel';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn, copyToClipboard } from '@/lib/utils';
 import { CodeBlock } from './CodeBlock';
@@ -60,11 +71,31 @@ function HtmlToken({ text }: { text: string }) {
 				/>
 			);
 		case 'iframe':
-			return <iframe src={k.src} title="Embedded content" sandbox="" className="my-2 w-full rounded-lg" onLoad={iframeHeight} />;
+			return (
+				<iframe
+					src={k.src}
+					title="Embedded content"
+					sandbox=""
+					className="my-2 w-full rounded-lg"
+					onLoad={iframeHeight}
+				/>
+			);
 		case 'status':
-			return <div className={cn('text-muted-foreground my-1 line-clamp-1 text-sm', !k.done && 'animate-pulse')}>{k.title}</div>;
+			return (
+				<div className={cn('text-muted-foreground my-1 line-clamp-1 text-sm', !k.done && 'animate-pulse')}>
+					{k.title}
+				</div>
+			);
 		case 'htmlFile':
-			return <iframe src={`${WEBUI_BASE_URL}/api/v1/files/${k.fileId}/content/html`} title="Content" sandbox="allow-scripts allow-downloads allow-forms" className="my-2 w-full rounded-lg" onLoad={iframeHeight} />;
+			return (
+				<iframe
+					src={`${WEBUI_BASE_URL}/api/v1/files/${k.fileId}/content/html`}
+					title="Content"
+					sandbox="allow-scripts allow-downloads allow-forms"
+					className="my-2 w-full rounded-lg"
+					onLoad={iframeHeight}
+				/>
+			);
 		case 'br':
 			return <br />;
 		default:
@@ -96,13 +127,20 @@ function Citation({ token }: { token: MdToken }) {
 	return (
 		<Popover>
 			<PopoverTrigger asChild>
-				<button type="button" className="bg-muted mx-0.5 inline-flex translate-y-[2px] rounded-xl px-2 py-0.5 text-[0.625rem]">
+				<button
+					type="button"
+					className="bg-muted mx-0.5 inline-flex translate-y-[2px] rounded-xl px-2 py-0.5 text-[0.625rem]"
+				>
 					{sourceLabel(env.sourceIds[ids[0] - 1])} +{ids.length - 1}
 				</button>
 			</PopoverTrigger>
 			<PopoverContent className="flex w-auto max-w-sm flex-wrap gap-1 p-2">
 				{identifiers.map((ident, i) => (
-					<SourceChip key={i} identifier={ident} title={env.sourceIds[(typeof ident === 'string' ? parseInt(ident.split('#')[0]) : ident) - 1]} />
+					<SourceChip
+						key={i}
+						identifier={ident}
+						title={env.sourceIds[(typeof ident === 'string' ? parseInt(ident.split('#')[0]) : ident) - 1]}
+					/>
 				))}
 			</PopoverContent>
 		</Popover>
@@ -191,7 +229,11 @@ export function Inline({ tokens }: { tokens: MdToken[] }) {
 						return t.text ? <Katex key={i} content={t.text} displayMode={t.displayMode ?? false} /> : null;
 					case 'mention':
 						return (
-							<span key={i} className="rounded bg-blue-500/10 px-0.5 text-blue-600 dark:text-blue-400" data-type="mention">
+							<span
+								key={i}
+								className="rounded bg-blue-500/10 px-0.5 text-blue-600 dark:text-blue-400"
+								data-type="mention"
+							>
 								{t.triggerChar}
 								{t.label}
 							</span>
@@ -214,13 +256,35 @@ export function Inline({ tokens }: { tokens: MdToken[] }) {
 	);
 }
 
-function Collapsible({ title, attributes, defaultOpen, disabled, children }: { title: string; attributes?: Record<string, string>; defaultOpen: boolean; disabled?: boolean; children?: ReactNode }) {
+function Collapsible({
+	title,
+	attributes,
+	defaultOpen,
+	disabled,
+	children
+}: {
+	title: string;
+	attributes?: Record<string, string>;
+	defaultOpen: boolean;
+	disabled?: boolean;
+	children?: ReactNode;
+}) {
 	const env = useMarkdownEnv();
 	const [open, setOpen] = useState(defaultOpen);
-	const pending = !(attributes?.done === 'true' || env.done) && ['reasoning', 'code_interpreter'].includes(attributes?.type ?? '');
+	const pending =
+		!(attributes?.done === 'true' || env.done) && ['reasoning', 'code_interpreter'].includes(attributes?.type ?? '');
 	return (
 		<div className="my-1 w-full" data-testid="details">
-			<button type="button" disabled={disabled} className={cn('text-muted-foreground hover:text-foreground flex items-center gap-1 py-0.5 text-[0.9375rem]', pending && 'animate-pulse')} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+			<button
+				type="button"
+				disabled={disabled}
+				className={cn(
+					'text-muted-foreground hover:text-foreground flex items-center gap-1 py-0.5 text-[0.9375rem]',
+					pending && 'animate-pulse'
+				)}
+				aria-expanded={open}
+				onClick={() => setOpen((o) => !o)}
+			>
 				{detailTitle(attributes, title, env.done)}
 				{!disabled && (open ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />)}
 			</button>
@@ -240,13 +304,31 @@ function Details({ token }: { token: MdToken }) {
 			if (!env.chatId || !env.messageId || !attributes.id || resolving) return;
 			setResolving(true);
 			try {
-				env.onToolCallResolved?.(await resolveChatMessageToolCall(token_, env.chatId, env.messageId, attributes.id, approved ? 'approve' : 'reject'));
+				env.onToolCallResolved?.(
+					await resolveChatMessageToolCall(
+						token_,
+						env.chatId,
+						env.messageId,
+						attributes.id,
+						approved ? 'approve' : 'reject'
+					)
+				);
 			} catch (e) {
 				toast.error(String(e));
 			}
 			setResolving(false);
 		};
-		return <ToolCallDisplay attributes={attributes} resultContent={text} messageDone={env.done} resolvable={env.resolvable} resolving={resolving} onResolve={resolve} defaultOpen={env.expandDetails} />;
+		return (
+			<ToolCallDisplay
+				attributes={attributes}
+				resultContent={text}
+				messageDone={env.done}
+				resolvable={env.resolvable}
+				resolving={resolving}
+				onResolve={resolve}
+				defaultOpen={env.expandDetails}
+			/>
+		);
 	}
 	if (!text) return <Collapsible title={token.summary} attributes={attributes} defaultOpen={false} disabled />;
 	return (
@@ -262,7 +344,15 @@ function DetailGroupView({ group }: { group: DetailGroup }) {
 	const running = !env.done;
 	return (
 		<div className="my-1" data-testid="details-group">
-			<button type="button" className={cn('text-muted-foreground hover:text-foreground flex items-center gap-1 py-0.5 text-[0.9375rem]', running && 'animate-pulse')} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+			<button
+				type="button"
+				className={cn(
+					'text-muted-foreground hover:text-foreground flex items-center gap-1 py-0.5 text-[0.9375rem]',
+					running && 'animate-pulse'
+				)}
+				aria-expanded={open}
+				onClick={() => setOpen((o) => !o)}
+			>
 				{running ? 'Working...' : `${group.items.length} steps`}
 				{open ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
 			</button>
@@ -286,7 +376,11 @@ function Table({ token, index }: { token: MdToken; index: number }) {
 					<thead className="bg-muted/50 text-xs">
 						<tr>
 							{token.header.map((h: MdToken, i: number) => (
-								<th key={i} className="px-3 py-1.5 font-medium" style={token.align[i] ? { textAlign: token.align[i] } : undefined}>
+								<th
+									key={i}
+									className="px-3 py-1.5 font-medium"
+									style={token.align[i] ? { textAlign: token.align[i] } : undefined}
+								>
 									<Inline tokens={h.tokens} />
 								</th>
 							))}
@@ -296,7 +390,11 @@ function Table({ token, index }: { token: MdToken; index: number }) {
 						{token.rows.map((row: MdToken[], r: number) => (
 							<tr key={r} className="border-t">
 								{row.map((cell, c) => (
-									<td key={c} className="px-3 py-1.5" style={token.align[c] ? { textAlign: token.align[c] } : undefined}>
+									<td
+										key={c}
+										className="px-3 py-1.5"
+										style={token.align[c] ? { textAlign: token.align[c] } : undefined}
+									>
 										<Inline tokens={cell.tokens} />
 									</td>
 								))}
@@ -307,7 +405,12 @@ function Table({ token, index }: { token: MdToken; index: number }) {
 			</div>
 			<div className="absolute top-1 right-1 hidden gap-0.5 group-hover:flex">
 				<Tip content="Copy">
-					<button type="button" aria-label="Copy table" className="bg-background hover:bg-muted rounded p-1" onClick={() => void copyToClipboard(token.raw.trim())}>
+					<button
+						type="button"
+						aria-label="Copy table"
+						className="bg-background hover:bg-muted rounded p-1"
+						onClick={() => void copyToClipboard(token.raw.trim())}
+					>
 						<Copy className="size-3.5" />
 					</button>
 				</Tip>
@@ -316,7 +419,12 @@ function Table({ token, index }: { token: MdToken; index: number }) {
 						type="button"
 						aria-label="Export to CSV"
 						className="bg-background hover:bg-muted rounded p-1"
-						onClick={() => saveAs(new Blob([`﻿${tableToCsv(token)}`], { type: 'text/csv;charset=UTF-8' }), `table-${env.id}-${index}.csv`)}
+						onClick={() =>
+							saveAs(
+								new Blob([`﻿${tableToCsv(token)}`], { type: 'text/csv;charset=UTF-8' }),
+								`table-${env.id}-${index}.csv`
+							)
+						}
 					>
 						<Download className="size-3.5" />
 					</button>
@@ -331,7 +439,15 @@ function ListItems({ token }: { token: MdToken }) {
 		<>
 			{token.items.map((item: MdToken, i: number) => (
 				<li key={i} className={item.task ? 'flex list-none gap-2' : undefined}>
-					{item.task && <input type="checkbox" checked={item.checked} readOnly className="mt-1" aria-label={item.checked ? 'Done' : 'Not done'} />}
+					{item.task && (
+						<input
+							type="checkbox"
+							checked={item.checked}
+							readOnly
+							className="mt-1"
+							aria-label={item.checked ? 'Done' : 'Not done'}
+						/>
+					)}
 					<div className="min-w-0">
 						<Blocks tokens={item.tokens} top={token.loose} />
 					</div>
@@ -341,7 +457,15 @@ function ListItems({ token }: { token: MdToken }) {
 	);
 }
 
-export function Blocks({ tokens, top = true, paragraphSpan = false }: { tokens: MdToken[]; top?: boolean; paragraphSpan?: boolean }) {
+export function Blocks({
+	tokens,
+	top = true,
+	paragraphSpan = false
+}: {
+	tokens: MdToken[];
+	top?: boolean;
+	paragraphSpan?: boolean;
+}) {
 	const env = useMarkdownEnv();
 	return (
 		<>
@@ -354,7 +478,14 @@ export function Blocks({ tokens, top = true, paragraphSpan = false }: { tokens: 
 					case 'heading': {
 						const H = `h${token.depth}` as 'h1';
 						return (
-							<H key={i} dir="auto" className={cn('mt-4 mb-2 font-semibold', ['text-2xl', 'text-xl', 'text-lg', 'text-base', 'text-sm', 'text-sm'][token.depth - 1])}>
+							<H
+								key={i}
+								dir="auto"
+								className={cn(
+									'mt-4 mb-2 font-semibold',
+									['text-2xl', 'text-xl', 'text-lg', 'text-base', 'text-sm', 'text-sm'][token.depth - 1]
+								)}
+							>
 								<Inline tokens={token.tokens} />
 							</H>
 						);

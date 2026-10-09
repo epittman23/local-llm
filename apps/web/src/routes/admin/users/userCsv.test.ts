@@ -3,7 +3,9 @@ import { parseUserCsv } from './userCsv';
 
 describe('parseUserCsv', () => {
 	it('skips the header and keeps four-column rows with a known role', () => {
-		const { validRows, invalidRows } = parseUserCsv('Name,Email,Password,Role\nAda,a@x.io,pw,User\nBob,b@x.io,pw,admin');
+		const { validRows, invalidRows } = parseUserCsv(
+			'Name,Email,Password,Role\nAda,a@x.io,pw,User\nBob,b@x.io,pw,admin'
+		);
 		expect(validRows.map((r) => r.columns[0])).toEqual(['Ada', 'Bob']);
 		expect(invalidRows).toEqual([]);
 	});

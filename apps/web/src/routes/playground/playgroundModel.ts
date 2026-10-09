@@ -28,7 +28,11 @@ export function deltaFromLine(line: string): string {
  * response with the server's `detail` when it has one -- the Svelte loop
  * ignored a failed response entirely, so a bad model id looked like silence.
  */
-export async function readCompletionStream(res: Response | null, onText: (text: string) => void, signal?: AbortSignal): Promise<void> {
+export async function readCompletionStream(
+	res: Response | null,
+	onText: (text: string) => void,
+	signal?: AbortSignal
+): Promise<void> {
 	if (!res) throw new Error('No response');
 	if (!res.ok) {
 		const body = await res.json().catch(() => null);
@@ -59,22 +63,43 @@ export async function readCompletionStream(res: Response | null, onText: (text: 
 }
 
 /** The request body: an optional system message, the conversation, and whichever parameters are set. */
-export function chatRequest(modelId: string, system: string, messages: PlaygroundMessage[], params: Record<string, unknown>) {
-	const active = Object.fromEntries(Object.entries(params).filter(([, v]) => v !== null && v !== undefined && v !== ''));
-	return { model: modelId, stream: true, messages: [...(system ? [{ role: 'system', content: system }] : []), ...messages], ...active };
+export function chatRequest(
+	modelId: string,
+	system: string,
+	messages: PlaygroundMessage[],
+	params: Record<string, unknown>
+) {
+	const active = Object.fromEntries(
+		Object.entries(params).filter(([, v]) => v !== null && v !== undefined && v !== '')
+	);
+	return {
+		model: modelId,
+		stream: true,
+		messages: [...(system ? [{ role: 'system', content: system }] : []), ...messages],
+		...active
+	};
 }
 
 /** Appends streamed text to the last message if it is the assistant's, else starts an assistant message. */
 export function appendAssistant(messages: PlaygroundMessage[], text: string): PlaygroundMessage[] {
 	const last = messages.at(-1);
 	// The first piece of a reply is often a lone newline; the original skipped it.
-	if (last?.role === 'assistant') return [...messages.slice(0, -1), { ...last, content: last.content === '' && text === '\n' ? '' : last.content + text }];
+	if (last?.role === 'assistant')
+		return [
+			...messages.slice(0, -1),
+			{ ...last, content: last.content === '' && text === '\n' ? '' : last.content + text }
+		];
 	return [...messages, { role: 'assistant', content: text === '\n' ? '' : text }];
 }
 
 /** "### ROLE\ncontent" blocks, the system prompt first. */
 export function chatToText(system: string, messages: PlaygroundMessage[]): string {
-	return [...(system ? [`### SYSTEM\n${system}`] : []), ...messages.map((m) => `### ${m.role.toUpperCase()}\n${m.content}`)].join('\n\n').trim();
+	return [
+		...(system ? [`### SYSTEM\n${system}`] : []),
+		...messages.map((m) => `### ${m.role.toUpperCase()}\n${m.content}`)
+	]
+		.join('\n\n')
+		.trim();
 }
 
 /**
@@ -82,20 +107,50 @@ export function chatToText(system: string, messages: PlaygroundMessage[]): strin
  * `{chat: {history: {messages, currentId}}}`), so a playground conversation
  * can be imported as an ordinary chat. Messages form one linked chain.
  */
-export function chatToExport(system: string, messages: PlaygroundMessage[], modelId: string, now = Math.floor(Date.now() / 1000), newId: () => string = () => crypto.randomUUID()) {
-	const map: Record<string, { id: string; parentId: string | null; childrenIds: string[]; role: string; content: string; timestamp: number; model?: string }> = {};
+export function chatToExport(
+	system: string,
+	messages: PlaygroundMessage[],
+	modelId: string,
+	now = Math.floor(Date.now() / 1000),
+	newId: () => string = () => crypto.randomUUID()
+) {
+	const map: Record<
+		string,
+		{
+			id: string;
+			parentId: string | null;
+			childrenIds: string[];
+			role: string;
+			content: string;
+			timestamp: number;
+			model?: string;
+		}
+	> = {};
 	let parentId: string | null = null;
 	const add = (role: string, content: string) => {
 		const id = newId();
 		if (parentId) map[parentId].childrenIds.push(id);
-		map[id] = { id, parentId, childrenIds: [], role, content, timestamp: now, ...(role === 'assistant' && modelId ? { model: modelId } : {}) };
+		map[id] = {
+			id,
+			parentId,
+			childrenIds: [],
+			role,
+			content,
+			timestamp: now,
+			...(role === 'assistant' && modelId ? { model: modelId } : {})
+		};
 		parentId = id;
 	};
 	if (system) add('system', system);
 	for (const m of messages) add(m.role, m.content);
 	return [
 		{
-			chat: { title: 'Playground Chat', models: [modelId], params: system ? { system } : {}, history: { messages: map, currentId: messages.length ? parentId : null } },
+			chat: {
+				title: 'Playground Chat',
+				models: [modelId],
+				params: system ? { system } : {},
+				history: { messages: map, currentId: messages.length ? parentId : null }
+			},
 			meta: {},
 			pinned: false,
 			created_at: now,
@@ -106,6 +161,7 @@ export function chatToExport(system: string, messages: PlaygroundMessage[], mode
 
 /** The model a playground starts on: the user's first chosen model, else the admin default, else none. */
 export function initialModel(settingsModels: unknown, defaultModels: string | null | undefined): string {
-	if (Array.isArray(settingsModels) && typeof settingsModels[0] === 'string' && settingsModels[0]) return settingsModels[0];
+	if (Array.isArray(settingsModels) && typeof settingsModels[0] === 'string' && settingsModels[0])
+		return settingsModels[0];
 	return (defaultModels ?? '').split(',')[0] ?? '';
 }

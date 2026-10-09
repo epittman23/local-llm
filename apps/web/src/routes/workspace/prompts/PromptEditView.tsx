@@ -10,13 +10,7 @@ import { Spinner } from '@/components/common/Spinner';
 import { Tags } from '@/components/common/Tags';
 import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogHeader,
-	DialogTitle
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
 	deletePromptHistoryVersion,
@@ -68,9 +62,7 @@ export function PromptEditView({
 	const navigate = useNavigate();
 
 	const [name, setName] = useState(prompt.name);
-	const [command, setCommand] = useState(
-		prompt.command.startsWith('/') ? prompt.command.slice(1) : prompt.command
-	);
+	const [command, setCommand] = useState(prompt.command.startsWith('/') ? prompt.command.slice(1) : prompt.command);
 	const [tags, setTags] = useState(prompt.tags.map((n) => ({ name: n })));
 	const [accessGrants, setAccessGrants] = useState(prompt.access_grants);
 	const [versionId, setVersionId] = useState(prompt.version_id ?? null);
@@ -130,9 +122,7 @@ export function PromptEditView({
 		loadHistory(true).then((entries) => {
 			if (entries.length === 0) return;
 			// Open on the production version when there is one.
-			setSelected(
-				(prompt.version_id && entries.find((h) => h.id === prompt.version_id)) || entries[0]
-			);
+			setSelected((prompt.version_id && entries.find((h) => h.id === prompt.version_id)) || entries[0]);
 		});
 		// Once per prompt: later reloads are explicit (save, delete).
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -144,11 +134,7 @@ export function PromptEditView({
 	};
 
 	// --- auto-saving metadata -------------------------------------------
-	const scheduleMetadataSave = (next: {
-		name: string;
-		command: string;
-		tags: { name: string }[];
-	}) => {
+	const scheduleMetadataSave = (next: { name: string; command: string; tags: { name: string }[] }) => {
 		if (disabled) return;
 		if (saveTimer.current) clearTimeout(saveTimer.current);
 		saveTimer.current = setTimeout(async () => {
@@ -277,9 +263,7 @@ export function PromptEditView({
 								<div className="mb-1 flex items-center gap-2">
 									<div className="truncate text-xs">{entry.commit_message || 'Update'}</div>
 									{entry.id === versionId && (
-										<span className="text-muted-foreground inline-flex shrink-0 items-center text-xs">
-											Live
-										</span>
+										<span className="text-muted-foreground inline-flex shrink-0 items-center text-xs">Live</span>
 									)}
 								</div>
 								<div className="text-muted-foreground flex items-center gap-1 text-xs">
@@ -310,9 +294,7 @@ export function PromptEditView({
 				</div>
 			) : (
 				!historyLoading && (
-					<div className="text-muted-foreground py-6 text-center text-xs italic">
-						No history available
-					</div>
+					<div className="text-muted-foreground py-6 text-center text-xs italic">No history available</div>
 				)
 			)}
 		</div>
@@ -343,9 +325,7 @@ export function PromptEditView({
 				<DialogContent className="sm:max-w-2xl">
 					<DialogHeader>
 						<DialogTitle className="text-xs">Edit Prompt</DialogTitle>
-						<DialogDescription className="sr-only">
-							Saving creates a new version of this prompt.
-						</DialogDescription>
+						<DialogDescription className="sr-only">Saving creates a new version of this prompt.</DialogDescription>
 					</DialogHeader>
 					<form
 						onSubmit={(e) => {
@@ -438,9 +418,7 @@ export function PromptEditView({
 							<AccessButton onClick={() => setShowAccess(true)} />
 						</>
 					) : (
-						<span className="bg-muted text-muted-foreground rounded-lg px-2 py-1 text-xs">
-							Read Only
-						</span>
+						<span className="bg-muted text-muted-foreground rounded-lg px-2 py-1 text-xs">Read Only</span>
 					)}
 				</div>
 			</div>
@@ -487,9 +465,7 @@ export function PromptEditView({
 						<div className="flex items-center gap-2">
 							<div className="text-muted-foreground text-xs">Prompt Content</div>
 							{selected && (
-								<span className="text-muted-foreground px-1 font-mono text-xs">
-									{selected.id.slice(0, 7)}
-								</span>
+								<span className="text-muted-foreground px-1 font-mono text-xs">{selected.id.slice(0, 7)}</span>
 							)}
 						</div>
 						{selected && !disabled && (
@@ -519,9 +495,7 @@ export function PromptEditView({
 							</Button>
 						</div>
 						<div className="bg-muted/40 h-full overflow-y-auto rounded-lg px-3 py-2">
-							<pre className="pr-8 font-mono text-[0.6875rem] leading-relaxed whitespace-pre-wrap">
-								{shownContent}
-							</pre>
+							<pre className="pr-8 font-mono text-[0.6875rem] leading-relaxed whitespace-pre-wrap">{shownContent}</pre>
 						</div>
 					</div>
 				</div>

@@ -3,8 +3,26 @@ import { getOutputText } from './structuredOutput';
 // The sidebar's rules for chats and folders (layout/Sidebar.svelte, ChatItem,
 // ChatMenu, RecursiveFolder), kept pure for tests.
 
-export type ChatListItem = { id: string; title: string; updated_at?: number; created_at?: number; last_read_at?: number | null; time_range?: string; folder_id?: string | null; pinned?: boolean; [k: string]: unknown };
-export type Folder = { id: string; name: string; parent_id?: string | null; is_expanded?: boolean; data?: Record<string, unknown> | null; meta?: Record<string, unknown> | null; [k: string]: unknown };
+export type ChatListItem = {
+	id: string;
+	title: string;
+	updated_at?: number;
+	created_at?: number;
+	last_read_at?: number | null;
+	time_range?: string;
+	folder_id?: string | null;
+	pinned?: boolean;
+	[k: string]: unknown;
+};
+export type Folder = {
+	id: string;
+	name: string;
+	parent_id?: string | null;
+	is_expanded?: boolean;
+	data?: Record<string, unknown> | null;
+	meta?: Record<string, unknown> | null;
+	[k: string]: unknown;
+};
 export type FolderNode = Folder & { children: FolderNode[] };
 
 /**
@@ -53,12 +71,14 @@ export function descendantIds(folders: Folder[], id: string): Set<string> {
 	let grew = true;
 	while (grew) {
 		grew = false;
-		for (const f of folders) if (f.parent_id && out.has(f.parent_id) && !out.has(f.id)) (out.add(f.id), (grew = true));
+		for (const f of folders) if (f.parent_id && out.has(f.parent_id) && !out.has(f.id)) out.add(f.id), (grew = true);
 	}
 	return out;
 }
 
-type SavedChat = { chat?: { title?: string; history?: { messages: Record<string, any>; currentId: string | null }; messages?: any[] } };
+type SavedChat = {
+	chat?: { title?: string; history?: { messages: Record<string, any>; currentId: string | null }; messages?: any[] };
+};
 
 /** A chat as plain text, "### USER / ### ASSISTANT" per message along the current branch (ChatMenu's getChatAsText). */
 export function chatAsText(chat: SavedChat): string {
@@ -75,7 +95,10 @@ export function chatAsText(chat: SavedChat): string {
 		}
 	}
 	return list
-		.reduce((text, m) => `${text}### ${String(m.role).toUpperCase()}\n${getOutputText(m.output) || m.content || ''}\n\n`, '')
+		.reduce(
+			(text, m) => `${text}### ${String(m.role).toUpperCase()}\n${getOutputText(m.output) || m.content || ''}\n\n`,
+			''
+		)
 		.trim();
 }
 

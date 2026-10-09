@@ -61,7 +61,14 @@ export function ProfileImageEditor({
 	const remove = () => onChange(`${WEBUI_BASE_URL}/user.png`);
 
 	const hidden = (
-		<input ref={input} type="file" hidden accept="image/*" aria-label="Upload profile image" onChange={(e) => pick(e.target.files)} />
+		<input
+			ref={input}
+			type="file"
+			hidden
+			accept="image/*"
+			aria-label="Upload profile image"
+			onChange={(e) => pick(e.target.files)}
+		/>
 	);
 
 	if (variant === 'account') {
@@ -107,7 +114,12 @@ export function ProfileImageEditor({
 		<div className="group flex flex-col self-start">
 			{hidden}
 			<div className="flex self-center">
-				<button type="button" className="relative rounded-full" aria-label="Change profile image" onClick={() => input.current?.click()}>
+				<button
+					type="button"
+					className="relative rounded-full"
+					aria-label="Change profile image"
+					onClick={() => input.current?.click()}
+				>
 					<img src={src} alt="profile" className={cn('rounded-full object-cover', imageClassName)} />
 					<div className="absolute right-0 bottom-0 opacity-0 transition group-focus-within:opacity-100 group-hover:opacity-100">
 						<div className="rounded-full border bg-white p-1 text-black shadow">

@@ -6,16 +6,42 @@ async function mockExtras(page: Page) {
 	const seen = { uploads: 0, urls: [] as string[] };
 	await page.route(/\/api\/v1\/files\/(\?|$)/, async (route) => {
 		seen.uploads++;
-		return json(route, { id: `file${seen.uploads}`, filename: 'report.pdf', meta: { content_type: 'application/pdf', collection_name: 'file-col' } });
+		return json(route, {
+			id: `file${seen.uploads}`,
+			filename: 'report.pdf',
+			meta: { content_type: 'application/pdf', collection_name: 'file-col' }
+		});
 	});
-	await page.route(/\/api\/v1\/files\/[^/]+\/process\/status/, (route) => route.fulfill({ status: 200, contentType: 'text/event-stream', body: 'data: {"status":"completed"}\n\ndata: [DONE]\n\n' }));
+	await page.route(/\/api\/v1\/files\/[^/]+\/process\/status/, (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'text/event-stream',
+			body: 'data: {"status":"completed"}\n\ndata: [DONE]\n\n'
+		})
+	);
 	await page.route('**/api/v1/retrieval/process/url*', async (route) => {
 		const body = route.request().postDataJSON();
 		seen.urls.push(body.url);
-		return json(route, { status: true, collection_name: 'web-col', name: 'Example page', content: 'page text', url: body.url });
+		return json(route, {
+			status: true,
+			collection_name: 'web-col',
+			name: 'Example page',
+			content: 'page text',
+			url: body.url
+		});
 	});
-	await page.route('**/api/v1/prompts/', (route) => json(route, [{ command: 'summary', title: 'Summarize', content: 'Summarize this for {{USER_NAME}} in {{tone | select:options=["short","long"]}}' }]));
-	await page.route(/\/api\/v1\/knowledge\/search/, (route) => json(route, { items: [{ id: 'kb1', name: 'Handbook', description: 'Company handbook' }], total: 1 }));
+	await page.route('**/api/v1/prompts/', (route) =>
+		json(route, [
+			{
+				command: 'summary',
+				title: 'Summarize',
+				content: 'Summarize this for {{USER_NAME}} in {{tone | select:options=["short","long"]}}'
+			}
+		])
+	);
+	await page.route(/\/api\/v1\/knowledge\/search/, (route) =>
+		json(route, { items: [{ id: 'kb1', name: 'Handbook', description: 'Company handbook' }], total: 1 })
+	);
 	await page.route(/\/api\/v1\/knowledge\/files\/search/, (route) => json(route, { items: [], total: 0 }));
 	await page.route(/\/api\/v1\/tools\/(\?|$)/, (route) => json(route, [{ id: 'calc', name: 'Calculator' }]));
 	return seen;
@@ -26,14 +52,21 @@ test('upload a document: it shows as attached and goes with the message', async 
 	const seen = await mockExtras(page);
 	await page.goto('/');
 	await chat.socket.connected;
-	await page.getByLabel('Upload files').setInputFiles({ name: 'report.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 test') });
+	await page
+		.getByLabel('Upload files')
+		.setInputFiles({ name: 'report.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 test') });
 	await expect(page.getByTestId('input-file')).toContainText('report.pdf');
 	await expect(page.getByTestId('input-file').locator('.animate-spin')).toHaveCount(0);
 	await page.getByRole('textbox', { name: 'Message' }).fill('Summarize the report');
 	await page.keyboard.press('Enter');
 	await expect.poll(() => chat.seen.completions.length).toBe(1);
 	const body = chat.seen.completions[0];
-	expect(body.user_message.files[0]).toMatchObject({ type: 'file', id: 'file1', name: 'report.pdf', status: 'uploaded' });
+	expect(body.user_message.files[0]).toMatchObject({
+		type: 'file',
+		id: 'file1',
+		name: 'report.pdf',
+		status: 'uploaded'
+	});
 	expect(body.files).toEqual([expect.objectContaining({ id: 'file1' })]);
 	expect(seen.uploads).toBe(1);
 	await expect(page.getByTestId('input-file')).toHaveCount(0);
@@ -52,7 +85,10 @@ test('attach a web page from the menu, and one typed after #', async ({ page }) 
 
 	const box = page.getByRole('textbox', { name: 'Message' });
 	await box.pressSequentially('#https://example.org/b');
-	await page.getByRole('listbox', { name: 'Suggestions' }).getByRole('option', { name: /example\.org/ }).click();
+	await page
+		.getByRole('listbox', { name: 'Suggestions' })
+		.getByRole('option', { name: /example\.org/ })
+		.click();
 	await expect(page.getByTestId('input-file')).toHaveCount(2);
 	expect(seen.urls).toEqual(['https://example.com/a', 'https://example.org/b']);
 	await expect(box).toHaveValue('');
@@ -62,7 +98,9 @@ test('attach a web page from the menu, and one typed after #', async ({ page }) 
 	expect(chat.seen.completions[0].files.map((f: any) => f.type)).toEqual(['text', 'text']);
 });
 
-test('# offers knowledge, / inserts a prompt and asks for its variables, @ picks a model for one message', async ({ page }) => {
+test('# offers knowledge, / inserts a prompt and asks for its variables, @ picks a model for one message', async ({
+	page
+}) => {
 	const chat = await mockChat(page);
 	await mockExtras(page);
 	await page.goto('/');
@@ -81,6 +119,8 @@ test('# offers knowledge, / inserts a prompt and asks for its variables, @ picks
 	await dialog.getByLabel('tone').selectOption('short');
 	await dialog.getByRole('button', { name: 'Save' }).click();
 	await expect(box).toHaveValue('Summarize this for Test User in short');
+	// Saving hands focus back to the message box, caret at the end.
+	await expect(box).toBeFocused();
 
 	await page.keyboard.press('End');
 	await box.pressSequentially(' @lla');

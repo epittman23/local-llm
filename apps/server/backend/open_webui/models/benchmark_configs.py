@@ -311,7 +311,9 @@ class BenchmarkRunLoadInfoTable:
                 db.add(BenchmarkRunLoadInfo(run_id=run_id, **info))
             await db.commit()
 
-    async def get_by_run_id(self, run_id: int, db: Optional[AsyncSession] = None) -> Optional[BenchmarkRunLoadInfoModel]:
+    async def get_by_run_id(
+        self, run_id: int, db: Optional[AsyncSession] = None
+    ) -> Optional[BenchmarkRunLoadInfoModel]:
         async with get_async_db_context(db) as db:
             result = await db.execute(select(BenchmarkRunLoadInfo).filter_by(run_id=run_id))
             row = result.scalars().first()

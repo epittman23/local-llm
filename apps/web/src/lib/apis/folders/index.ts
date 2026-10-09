@@ -129,11 +129,7 @@ export const updateFolderById = async (token: string, id: string, folderForm: Fo
 	return res;
 };
 
-export const updateFolderIsExpandedById = async (
-	token: string,
-	id: string,
-	isExpanded: boolean
-) => {
+export const updateFolderIsExpandedById = async (token: string, id: string, isExpanded: boolean) => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/folders/${id}/update/expanded`, {
@@ -341,17 +337,14 @@ export const getSharedFolderChats = async (
 	}
 	const query = searchParams.toString();
 
-	const res = await fetch(
-		`${WEBUI_API_BASE_URL}/folders/${folderId}/shared/chats${query ? `?${query}` : ''}`,
-		{
-			method: 'GET',
-			headers: {
-				Accept: 'application/json',
-				'Content-Type': 'application/json',
-				authorization: `Bearer ${token}`
-			}
+	const res = await fetch(`${WEBUI_API_BASE_URL}/folders/${folderId}/shared/chats${query ? `?${query}` : ''}`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
 		}
-	)
+	})
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
 			return res.json();

@@ -1,9 +1,27 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { addReaction, deleteMessage, getChannelMessages, getChannelThreadMessages, pinMessage, removeReaction, sendMessage, updateMessage } from '@/lib/apis/channels';
+import {
+	addReaction,
+	deleteMessage,
+	getChannelMessages,
+	getChannelThreadMessages,
+	pinMessage,
+	removeReaction,
+	sendMessage,
+	updateMessage
+} from '@/lib/apis/channels';
 import { useSocket } from '@/lib/socket/SocketProvider';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { type ChannelEvent, type ChannelMessage, type ChannelUser, applyMessageEvent, applyTyping, closesThread, nowNs, toggleReaction } from './channelModel';
+import {
+	type ChannelEvent,
+	type ChannelMessage,
+	type ChannelUser,
+	applyMessageEvent,
+	applyTyping,
+	closesThread,
+	nowNs,
+	toggleReaction
+} from './channelModel';
 import type { ComposerSubmit } from './MessageComposer';
 import type { MessageActions } from './ChannelMessageView';
 
@@ -18,7 +36,11 @@ const TYPING_EXPIRES_MS = 5000;
  * (Messages.svelte and Thread.svelte, which duplicated all of this between
  * them). `onPinChange` lets the channel mirror a pin made inside a thread.
  */
-export function useMessageFeed(channelId: string, parentId: string | null, opts: { onRootDeleted?: () => void; onMessageDeleted?: (id: string) => void } = {}) {
+export function useMessageFeed(
+	channelId: string,
+	parentId: string | null,
+	opts: { onRootDeleted?: () => void; onMessageDeleted?: (id: string) => void } = {}
+) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const me = useAuthStore((s) => s.user);
 	const { socket } = useSocket();
@@ -33,7 +55,10 @@ export function useMessageFeed(channelId: string, parentId: string | null, opts:
 	const early = useRef<ChannelEvent[] | null>([]);
 
 	const fetchPage = useCallback(
-		(skip: number) => (parentId ? getChannelThreadMessages(token, channelId, parentId, skip, PAGE) : getChannelMessages(token, channelId, skip, PAGE)) as Promise<ChannelMessage[] | null>,
+		(skip: number) =>
+			(parentId
+				? getChannelThreadMessages(token, channelId, parentId, skip, PAGE)
+				: getChannelMessages(token, channelId, skip, PAGE)) as Promise<ChannelMessage[] | null>,
 		[token, channelId, parentId]
 	);
 
@@ -91,7 +116,10 @@ export function useMessageFeed(channelId: string, parentId: string | null, opts:
 				// the same array when they are no longer listed (docs/code-review.md L8).
 				if ((event.message_id ?? null) !== parentId || !who || who.id === me?.id) return;
 				clearTimeout(typingTimers.current[who.id]);
-				typingTimers.current[who.id] = setTimeout(() => setTyping((t) => (t.some((u) => u.id === who.id) ? t.filter((u) => u.id !== who.id) : t)), TYPING_EXPIRES_MS);
+				typingTimers.current[who.id] = setTimeout(
+					() => setTyping((t) => (t.some((u) => u.id === who.id) ? t.filter((u) => u.id !== who.id) : t)),
+					TYPING_EXPIRES_MS
+				);
 				return;
 			}
 			if (closesThread(event, scope)) optsRef.current.onRootDeleted?.();
@@ -111,10 +139,15 @@ export function useMessageFeed(channelId: string, parentId: string | null, opts:
 		return () => Object.values(timers).forEach(clearTimeout);
 	}, []);
 
-	const patch = (id: string, fn: (m: ChannelMessage) => ChannelMessage) => setMessages((ms) => ms?.map((m) => (m.id === id ? fn(m) : m)) ?? ms);
+	const patch = (id: string, fn: (m: ChannelMessage) => ChannelMessage) =>
+		setMessages((ms) => ms?.map((m) => (m.id === id ? fn(m) : m)) ?? ms);
 
 	const emitTyping = () =>
-		socket?.emit('events:channel', { channel_id: channelId, message_id: parentId, data: { type: 'typing', data: { typing: true } } });
+		socket?.emit('events:channel', {
+			channel_id: channelId,
+			message_id: parentId,
+			data: { type: 'typing', data: { typing: true } }
+		});
 
 	/**
 	 * Sends a message. In the channel it shows at once as a pending copy
@@ -123,10 +156,26 @@ export function useMessageFeed(channelId: string, parentId: string | null, opts:
 	 */
 	const submit = async ({ content, data }: ComposerSubmit, replyTo: ChannelMessage | null) => {
 		const tempId = crypto.randomUUID();
-		const form = { temp_id: tempId, content, data, reply_to_id: replyTo?.id ?? null, ...(parentId ? { parent_id: parentId } : {}) };
+		const form = {
+			temp_id: tempId,
+			content,
+			data,
+			reply_to_id: replyTo?.id ?? null,
+			...(parentId ? { parent_id: parentId } : {})
+		};
 		if (!parentId) {
 			const ts = nowNs();
-			const optimistic: ChannelMessage = { id: tempId, temp_id: tempId, content, data, user_id: me?.id, user: me ? { id: me.id, name: me.name, role: me.role } : null, reply_to_message: replyTo, created_at: ts, updated_at: ts };
+			const optimistic: ChannelMessage = {
+				id: tempId,
+				temp_id: tempId,
+				content,
+				data,
+				user_id: me?.id,
+				user: me ? { id: me.id, name: me.name, role: me.role } : null,
+				reply_to_message: replyTo,
+				created_at: ts,
+				updated_at: ts
+			};
 			setMessages((ms) => [optimistic, ...(ms ?? [])]);
 		}
 		const res = await sendMessage(token, channelId, form as never).catch((e) => {
@@ -138,8 +187,22 @@ export function useMessageFeed(channelId: string, parentId: string | null, opts:
 		// The response is the bare message (no author, quote or reactions), so those come from what
 		// was sent until the echo brings the full copy (docs/code-review.md L5).
 		if (res) {
-			const saved = { ...res, user: res.user ?? (me ? { id: me.id, name: me.name, role: me.role } : null), reply_to_message: res.reply_to_message ?? replyTo, reactions: res.reactions ?? [], temp_id: tempId };
-			setMessages((ms) => (ms && !ms.some((m) => m.id === res.id) ? applyMessageEvent(ms, { channel_id: channelId, data: { type: 'message', data: saved } }, { channelId, parentId }) : ms));
+			const saved = {
+				...res,
+				user: res.user ?? (me ? { id: me.id, name: me.name, role: me.role } : null),
+				reply_to_message: res.reply_to_message ?? replyTo,
+				reactions: res.reactions ?? [],
+				temp_id: tempId
+			};
+			setMessages((ms) =>
+				ms && !ms.some((m) => m.id === res.id)
+					? applyMessageEvent(
+							ms,
+							{ channel_id: channelId, data: { type: 'message', data: saved } },
+							{ channelId, parentId }
+						)
+					: ms
+			);
 		}
 		return res;
 	};
@@ -158,7 +221,12 @@ export function useMessageFeed(channelId: string, parentId: string | null, opts:
 		},
 		onPin: (m) => {
 			const pinned = !m.is_pinned;
-			patch(m.id, (x) => ({ ...x, is_pinned: pinned, pinned_by: pinned ? (me?.id ?? null) : null, pinned_at: pinned ? nowNs() : null }));
+			patch(m.id, (x) => ({
+				...x,
+				is_pinned: pinned,
+				pinned_by: pinned ? (me?.id ?? null) : null,
+				pinned_at: pinned ? nowNs() : null
+			}));
 			onPinChange?.(m.id, pinned);
 			pinMessage(token, channelId, m.id, pinned).catch((e) => toast.error(`${e}`));
 		},
@@ -170,7 +238,13 @@ export function useMessageFeed(channelId: string, parentId: string | null, opts:
 		}
 	});
 
-	const setPinned = (id: string, pinned: boolean) => patch(id, (x) => ({ ...x, is_pinned: pinned, pinned_by: pinned ? (me?.id ?? null) : null, pinned_at: pinned ? nowNs() : null }));
+	const setPinned = (id: string, pinned: boolean) =>
+		patch(id, (x) => ({
+			...x,
+			is_pinned: pinned,
+			pinned_by: pinned ? (me?.id ?? null) : null,
+			pinned_at: pinned ? nowNs() : null
+		}));
 
 	return { messages, top, typing, loadMore, submit, emitTyping, actions, setPinned };
 }

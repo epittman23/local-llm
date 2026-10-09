@@ -8,7 +8,15 @@ import { type ActivityDay, activityBuckets, isEmptyActivity } from './activityCh
  * only chart.js consumer, so the library is code-split away from every other
  * page). The x axis is hidden and the y axis shows absolute values.
  */
-export function ModelActivityChart({ history, loading, weekly }: { history: ActivityDay[]; loading: boolean; weekly: boolean }) {
+export function ModelActivityChart({
+	history,
+	loading,
+	weekly
+}: {
+	history: ActivityDay[];
+	loading: boolean;
+	weekly: boolean;
+}) {
 	const canvas = useRef<HTMLCanvasElement>(null);
 	const empty = isEmptyActivity(history);
 	const buckets = useMemo(() => activityBuckets(history, weekly), [history, weekly]);
@@ -27,9 +35,23 @@ export function ModelActivityChart({ history, loading, weekly }: { history: Acti
 				data: {
 					labels: buckets.map((b) => b.label),
 					datasets: [
-						{ label: 'Won', data: buckets.map((b) => b.won), backgroundColor: '#5ba3c8', borderRadius: 2, barPercentage, categoryPercentage },
+						{
+							label: 'Won',
+							data: buckets.map((b) => b.won),
+							backgroundColor: '#5ba3c8',
+							borderRadius: 2,
+							barPercentage,
+							categoryPercentage
+						},
 						// Negative, so losses draw below the zero line.
-						{ label: 'Lost', data: buckets.map((b) => -b.lost), backgroundColor: '#d97c5a', borderRadius: 2, barPercentage, categoryPercentage }
+						{
+							label: 'Lost',
+							data: buckets.map((b) => -b.lost),
+							backgroundColor: '#d97c5a',
+							borderRadius: 2,
+							barPercentage,
+							categoryPercentage
+						}
 					]
 				},
 				options: {
@@ -56,7 +78,14 @@ export function ModelActivityChart({ history, loading, weekly }: { history: Acti
 						y: {
 							stacked: true,
 							grid: { color: 'rgba(107, 114, 128, 0.1)', drawTicks: false },
-							ticks: { color: '#6b7280', font: { size: 10 }, padding: 8, stepSize: 1, precision: 0, callback: (value) => Math.abs(Number(value)) },
+							ticks: {
+								color: '#6b7280',
+								font: { size: 10 },
+								padding: 8,
+								stepSize: 1,
+								precision: 0,
+								callback: (value) => Math.abs(Number(value))
+							},
 							border: { display: false }
 						}
 					},

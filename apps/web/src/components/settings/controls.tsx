@@ -71,7 +71,17 @@ export function SettingsForm({
 }
 
 /** Ports AdminSettingSection.svelte: an optional heading over a column of settings. */
-export function SettingsSection({ title, first = false, className, children }: { title?: string; first?: boolean; className?: string; children: ReactNode }) {
+export function SettingsSection({
+	title,
+	first = false,
+	className,
+	children
+}: {
+	title?: string;
+	first?: boolean;
+	className?: string;
+	children: ReactNode;
+}) {
 	return (
 		<section aria-label={title} className={cn(first ? '' : 'mt-5', className)}>
 			{title && <h3 className="text-muted-foreground mb-2 text-xs">{title}</h3>}
@@ -151,7 +161,14 @@ export function SettingSwitch({
 	labelledBy?: string;
 	label?: string;
 }) {
-	return <Switch checked={Boolean(checked)} onCheckedChange={onChange} aria-labelledby={labelledBy} aria-label={labelledBy ? undefined : label} />;
+	return (
+		<Switch
+			checked={Boolean(checked)}
+			onCheckedChange={onChange}
+			aria-labelledby={labelledBy}
+			aria-label={labelledBy ? undefined : label}
+		/>
+	);
 }
 
 /** Ports common/SettingsSelect.svelte: a compact native select with a chevron. */
@@ -161,7 +178,10 @@ export function SettingSelect({
 	className,
 	children,
 	...rest
-}: Omit<ComponentProps<'select'>, 'value' | 'onChange'> & { value: string | number | boolean | null | undefined; onChange: (value: string) => void }) {
+}: Omit<ComponentProps<'select'>, 'value' | 'onChange'> & {
+	value: string | number | boolean | null | undefined;
+	onChange: (value: string) => void;
+}) {
 	return (
 		<div className={cn('relative inline-flex w-fit max-w-full', className)}>
 			<select
@@ -172,7 +192,10 @@ export function SettingSelect({
 			>
 				{children}
 			</select>
-			<ChevronDown className="text-muted-foreground pointer-events-none absolute end-2 top-1/2 size-3.5 -translate-y-1/2" strokeWidth={2} />
+			<ChevronDown
+				className="text-muted-foreground pointer-events-none absolute end-2 top-1/2 size-3.5 -translate-y-1/2"
+				strokeWidth={2}
+			/>
 		</div>
 	);
 }
@@ -187,7 +210,10 @@ export function SettingNumber({
 	value,
 	onChange,
 	...rest
-}: Omit<ComponentProps<'input'>, 'value' | 'onChange' | 'type'> & { value: number | string | null | undefined; onChange: (value: number | '') => void }) {
+}: Omit<ComponentProps<'input'>, 'value' | 'onChange' | 'type'> & {
+	value: number | string | null | undefined;
+	onChange: (value: number | '') => void;
+}) {
 	return (
 		<input
 			{...rest}

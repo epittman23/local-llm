@@ -23,7 +23,12 @@ import { HomePage } from '@/routes/home/HomePage';
 import { NotFound } from '@/routes/NotFound';
 import { NoteEditorPage } from '@/routes/notes/NoteEditorPage';
 import { NewNotePage, NotesPage } from '@/routes/notes/NotesPage';
-import { PlaygroundChat, PlaygroundCompletions, PlaygroundImages, PlaygroundLayout } from '@/routes/playground/PlaygroundPages';
+import {
+	PlaygroundChat,
+	PlaygroundCompletions,
+	PlaygroundImages,
+	PlaygroundLayout
+} from '@/routes/playground/PlaygroundPages';
 import { AuthPage } from '@/routes/public/AuthPage';
 import { ErrorPage } from '@/routes/public/ErrorPage';
 import { SharedChatPage } from '@/routes/public/SharedChatPage';

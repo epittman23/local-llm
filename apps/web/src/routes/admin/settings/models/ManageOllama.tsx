@@ -10,11 +10,23 @@ import { SettingSelect } from '@/components/settings/controls';
 import { createModel, deleteModel, downloadModel, getOllamaModels, pullModel, uploadModel } from '@/lib/apis/ollama';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cancelPull, startPull, useDownloadPool } from './ollamaDownloads';
-import { DEFAULT_MODELFILE, isNotableStatus, lineReader, modelLabel, parseStreamLines, progressPercent, streamError, uploadedModelfile } from './ollamaStreams';
+import {
+	DEFAULT_MODELFILE,
+	isNotableStatus,
+	lineReader,
+	modelLabel,
+	parseStreamLines,
+	progressPercent,
+	streamError,
+	uploadedModelfile
+} from './ollamaStreams';
 
-const inputClass = 'bg-muted/40 placeholder:text-muted-foreground/50 focus:border-ring h-7 w-full rounded-lg border px-2.5 text-left text-xs outline-hidden transition-colors disabled:opacity-50';
-const textareaClass = 'bg-muted/40 placeholder:text-muted-foreground/50 focus:border-ring w-full resize-none rounded-lg border px-2.5 py-2 text-xs outline-hidden transition-colors disabled:opacity-50';
-const iconButtonClass = 'bg-muted/40 hover:bg-muted inline-flex h-7 items-center justify-center rounded-lg border px-2.5 transition-colors disabled:cursor-not-allowed disabled:opacity-50';
+const inputClass =
+	'bg-muted/40 placeholder:text-muted-foreground/50 focus:border-ring h-7 w-full rounded-lg border px-2.5 text-left text-xs outline-hidden transition-colors disabled:opacity-50';
+const textareaClass =
+	'bg-muted/40 placeholder:text-muted-foreground/50 focus:border-ring w-full resize-none rounded-lg border px-2.5 py-2 text-xs outline-hidden transition-colors disabled:opacity-50';
+const iconButtonClass =
+	'bg-muted/40 hover:bg-muted inline-flex h-7 items-center justify-center rounded-lg border px-2.5 transition-colors disabled:cursor-not-allowed disabled:opacity-50';
 const headingClass = 'mb-2 text-sm font-normal';
 
 type OllamaModel = { id: string; name?: string; size?: number };
@@ -22,7 +34,10 @@ type OllamaModel = { id: string; name?: string; size?: number };
 function Progress({ percent, digest }: { percent: number; digest?: string }) {
 	return (
 		<div>
-			<div className="bg-muted-foreground/60 text-background rounded-full p-0.5 text-center text-xs leading-none font-normal" style={{ width: `${Math.max(15, percent)}%` }}>
+			<div
+				className="bg-muted-foreground/60 text-background rounded-full p-0.5 text-center text-xs leading-none font-normal"
+				style={{ width: `${Math.max(15, percent)}%` }}
+			>
 				{percent}%
 			</div>
 			{digest && <div className="text-muted-foreground mt-1 text-[0.5rem]">{digest}</div>}
@@ -30,7 +45,19 @@ function Progress({ percent, digest }: { percent: number; digest?: string }) {
 	);
 }
 
-const IconButton = ({ label, onClick, disabled, children, type = 'button' }: { label: string; onClick?: () => void; disabled?: boolean; children: ReactNode; type?: 'button' | 'submit' }) => (
+const IconButton = ({
+	label,
+	onClick,
+	disabled,
+	children,
+	type = 'button'
+}: {
+	label: string;
+	onClick?: () => void;
+	disabled?: boolean;
+	children: ReactNode;
+	type?: 'button' | 'submit';
+}) => (
 	<Tip content={label} side="top">
 		<button type={type} aria-label={label} className={iconButtonClass} onClick={onClick} disabled={disabled}>
 			{children}
@@ -151,7 +178,9 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 			}
 			delete controllers.current[model.id];
 		}
-		toast[updateCancelled.current ? 'info' : 'success'](updateCancelled.current ? 'Model update cancelled' : 'All models are up to date');
+		toast[updateCancelled.current ? 'info' : 'success'](
+			updateCancelled.current ? 'Model update cancelled' : 'All models are up to date'
+		);
 		setUpdateModelId(null);
 		setUpdateProgress(null);
 	};
@@ -255,9 +284,17 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 				// The stored blob becomes a model. (The Svelte tab calls its createModel with
 				// a name and a Modelfile string, which that function takes as payload and
 				// instance -- the request it makes cannot succeed.)
-				const created = (await createModel(token, { model: `${name}:latest`, modelfile: uploadedModelfile(blob, modelfile) }, String(urlIdx))) as Response | null;
+				const created = (await createModel(
+					token,
+					{ model: `${name}:latest`, modelfile: uploadedModelfile(blob, modelfile) },
+					String(urlIdx)
+				)) as Response | null;
 				if (created?.ok) await followCreate(created, () => undefined);
-				else toast.error(((await created?.json().catch(() => null)) as { detail?: string } | null)?.detail ?? 'Failed to create the model');
+				else
+					toast.error(
+						((await created?.json().catch(() => null)) as { detail?: string } | null)?.detail ??
+							'Failed to create the model'
+					);
 			}
 		} catch (error) {
 			toast.error(`${error}`);
@@ -273,7 +310,8 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 
 	// --- render -----------------------------------------------------------------------
 
-	if (models === null) return <div className="flex h-full w-full items-center justify-center py-3 text-xs">Failed to fetch models</div>;
+	if (models === null)
+		return <div className="flex h-full w-full items-center justify-center py-3 text-xs">Failed to fetch models</div>;
 	if (models === undefined) {
 		return (
 			<div className="flex h-full w-full items-center justify-center py-3">
@@ -291,14 +329,25 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 				<div className={`${headingClass} flex items-center gap-1.5`}>
 					<div>Pull a model from Ollama.com</div>
 					<Tip content="Update All Models" side="top">
-						<button type="button" aria-label="Update All Models" className="rounded-lg transition" onClick={() => void updateAll()}>
+						<button
+							type="button"
+							aria-label="Update All Models"
+							className="rounded-lg transition"
+							onClick={() => void updateAll()}
+						>
 							<RefreshCw className="size-4" />
 						</button>
 					</Tip>
 				</div>
 				<div className="flex w-full items-center">
 					<div className="mr-2 flex-1">
-						<input className={inputClass} aria-label="Model tag to pull" placeholder="Enter model tag (e.g. mistral:7b)" value={tag} onChange={(e) => setTag(e.target.value)} />
+						<input
+							className={inputClass}
+							aria-label="Model tag to pull"
+							placeholder="Enter model tag (e.g. mistral:7b)"
+							value={tag}
+							onChange={(e) => setTag(e.target.value)}
+						/>
 					</div>
 					<IconButton label="Pull Model" onClick={() => void pull()} disabled={pulling || tag.trim() === ''}>
 						{pulling ? <Spinner className="size-4" /> : <Download className="size-4" />}
@@ -306,7 +355,12 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 				</div>
 				<div className="text-muted-foreground mt-2 mb-1 text-xs">
 					To access the available model names for downloading,{' '}
-					<a className="text-foreground/80 font-normal underline" href="https://ollama.com/library" target="_blank" rel="noopener noreferrer">
+					<a
+						className="text-foreground/80 font-normal underline"
+						href="https://ollama.com/library"
+						target="_blank"
+						rel="noopener noreferrer"
+					>
 						click here.
 					</a>
 				</div>
@@ -332,7 +386,11 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 								<Progress percent={d.pullProgress ?? 0} digest={d.digest} />
 							</div>
 							<Tip content="Cancel">
-								<button type="button" aria-label={`Cancel ${name} download`} onClick={() => void cancelPull(token, name)}>
+								<button
+									type="button"
+									aria-label={`Cancel ${name} download`}
+									onClick={() => void cancelPull(token, name)}
+								>
 									<X className="size-4" />
 								</button>
 							</Tip>
@@ -366,11 +424,30 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 				<div className={headingClass}>Create a model</div>
 				<div className="flex w-full">
 					<div className="mr-2 flex flex-1 flex-col gap-2">
-						<input className={inputClass} aria-label="New model tag" placeholder="Enter model tag (e.g. my-modelfile)" value={createName} onChange={(e) => setCreateName(e.target.value)} disabled={creating} />
-						<textarea className={textareaClass} rows={6} aria-label="New model definition" placeholder={`e.g. {"model": "my-modelfile", "from": "ollama:7b"})`} value={createBody} onChange={(e) => setCreateBody(e.target.value)} disabled={creating} />
+						<input
+							className={inputClass}
+							aria-label="New model tag"
+							placeholder="Enter model tag (e.g. my-modelfile)"
+							value={createName}
+							onChange={(e) => setCreateName(e.target.value)}
+							disabled={creating}
+						/>
+						<textarea
+							className={textareaClass}
+							rows={6}
+							aria-label="New model definition"
+							placeholder={`e.g. {"model": "my-modelfile", "from": "ollama:7b"})`}
+							value={createBody}
+							onChange={(e) => setCreateBody(e.target.value)}
+							disabled={creating}
+						/>
 					</div>
 					<div className="flex self-start">
-						<IconButton label="Create Model" onClick={() => void create()} disabled={creating || createName.trim() === '' || createBody.trim() === ''}>
+						<IconButton
+							label="Create Model"
+							onClick={() => void create()}
+							disabled={creating || createName.trim() === '' || createBody.trim() === ''}
+						>
 							{creating ? <Spinner className="size-4" /> : <Plus className="size-4" />}
 						</IconButton>
 					</div>
@@ -388,7 +465,12 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 					<div className="text-sm font-normal">
 						<ExperimentalBadge />
 					</div>
-					<button type="button" aria-expanded={showExperimental} className="text-muted-foreground text-xs font-normal" onClick={() => setShowExperimental((s) => !s)}>
+					<button
+						type="button"
+						aria-expanded={showExperimental}
+						className="text-muted-foreground text-xs font-normal"
+						onClick={() => setShowExperimental((s) => !s)}
+					>
 						{showExperimental ? 'Hide' : 'Show'}
 					</button>
 				</div>
@@ -404,7 +486,11 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 				>
 					<div className="mb-2 flex w-full justify-between">
 						<div className="text-sm font-normal">Upload a GGUF model</div>
-						<button type="button" className="flex rounded-sm p-1 px-3 text-xs transition" onClick={() => setUploadMode((m) => (m === 'file' ? 'url' : 'file'))}>
+						<button
+							type="button"
+							className="flex rounded-sm p-1 px-3 text-xs transition"
+							onClick={() => setUploadMode((m) => (m === 'file' ? 'url' : 'file'))}
+						>
 							{uploadMode === 'file' ? 'File Mode' : 'URL Mode'}
 						</button>
 					</div>
@@ -413,14 +499,29 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 						<div className="flex w-full flex-col">
 							{uploadMode === 'file' ? (
 								<div className={`flex-1 ${uploadFile ? 'mr-2' : ''}`}>
-									<input ref={fileInput} type="file" accept=".gguf,.safetensors" aria-label="GGUF file" hidden onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)} />
+									<input
+										ref={fileInput}
+										type="file"
+										accept=".gguf,.safetensors"
+										aria-label="GGUF file"
+										hidden
+										onChange={(e) => setUploadFile(e.target.files?.[0] ?? null)}
+									/>
 									<button type="button" className={inputClass} onClick={() => fileInput.current?.click()}>
 										{uploadFile ? uploadFile.name : 'Click here to select'}
 									</button>
 								</div>
 							) : (
 								<div className={`flex-1 ${uploadUrl !== '' ? 'mr-2' : ''}`}>
-									<input className={inputClass} type="url" required aria-label="Hugging Face URL" placeholder="Type Hugging Face Resolve (Download) URL" value={uploadUrl} onChange={(e) => setUploadUrl(e.target.value)} />
+									<input
+										className={inputClass}
+										type="url"
+										required
+										aria-label="Hugging Face URL"
+										placeholder="Type Hugging Face Resolve (Download) URL"
+										value={uploadUrl}
+										onChange={(e) => setUploadUrl(e.target.value)}
+									/>
 								</div>
 							)}
 						</div>
@@ -434,12 +535,23 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 					{readyToUpload && (
 						<div>
 							<div className="my-2.5 text-sm font-normal">Modelfile Content</div>
-							<textarea className={textareaClass} rows={6} aria-label="Modelfile content" value={modelfile} onChange={(e) => setModelfile(e.target.value)} />
+							<textarea
+								className={textareaClass}
+								rows={6}
+								aria-label="Modelfile content"
+								value={modelfile}
+								onChange={(e) => setModelfile(e.target.value)}
+							/>
 						</div>
 					)}
 					<div className="text-muted-foreground mt-1 text-xs">
 						To access the GGUF models available for downloading,{' '}
-						<a className="text-foreground/80 font-normal underline" href="https://huggingface.co/models?search=gguf" target="_blank" rel="noopener noreferrer">
+						<a
+							className="text-foreground/80 font-normal underline"
+							href="https://huggingface.co/models?search=gguf"
+							target="_blank"
+							rel="noopener noreferrer"
+						>
 							click here.
 						</a>
 					</div>
@@ -448,7 +560,10 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 						<div className="mt-2">
 							<div className="mb-2 text-xs">Upload Progress</div>
 							{uploadMessage ? (
-								<div className="bg-muted-foreground/60 text-background rounded-full p-0.5 text-center text-xs leading-none" style={{ width: '100%' }}>
+								<div
+									className="bg-muted-foreground/60 text-background rounded-full p-0.5 text-center text-xs leading-none"
+									style={{ width: '100%' }}
+								>
 									{uploadMessage}
 								</div>
 							) : (

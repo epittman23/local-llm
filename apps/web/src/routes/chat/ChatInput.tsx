@@ -5,7 +5,14 @@ import { toast } from 'sonner';
 import { Tip } from '@/components/common/Tip';
 import { searchKnowledgeBases, searchKnowledgeFiles } from '@/lib/apis/knowledge';
 import { getPrompts } from '@/lib/apis/prompts';
-import { commandAt, fillPromptVariables, isImageFile, isUrl, replaceCommand, replaceInputVariables } from '@/lib/chat/attachments';
+import {
+	commandAt,
+	fillPromptVariables,
+	isImageFile,
+	isUrl,
+	replaceCommand,
+	replaceInputVariables
+} from '@/lib/chat/attachments';
 import type { ChatFile } from '@/lib/chat/history';
 import { PASTED_TEXT_LIMIT } from '@/lib/chat/prefs';
 import { promptVariables } from '@/lib/chat/request';
@@ -30,9 +37,22 @@ type Suggestion =
 function FileChip({ file, onRemove }: { file: ChatFile; onRemove: () => void }) {
 	const uploading = file.status === 'uploading';
 	const image = isImageFile(file);
-	const icon = uploading ? <Loader2 className="size-3.5 animate-spin" /> : image ? <ImageIcon className="size-3.5" /> : file.type === 'collection' ? <BookOpen className="size-3.5" /> : file.type === 'text' && file.url ? <Globe className="size-3.5" /> : <FileText className="size-3.5" />;
+	const icon = uploading ? (
+		<Loader2 className="size-3.5 animate-spin" />
+	) : image ? (
+		<ImageIcon className="size-3.5" />
+	) : file.type === 'collection' ? (
+		<BookOpen className="size-3.5" />
+	) : file.type === 'text' && file.url ? (
+		<Globe className="size-3.5" />
+	) : (
+		<FileText className="size-3.5" />
+	);
 	return (
-		<div className="bg-muted/50 flex max-w-56 items-center gap-1.5 rounded-xl border px-2 py-1 text-xs" data-testid="input-file">
+		<div
+			className="bg-muted/50 flex max-w-56 items-center gap-1.5 rounded-xl border px-2 py-1 text-xs"
+			data-testid="input-file"
+		>
 			{icon}
 			<span className="truncate">{String(file.name ?? 'File')}</span>
 			<button type="button" aria-label={`Remove ${String(file.name ?? 'file')}`} onClick={onRemove}>
@@ -76,7 +96,29 @@ export const ChatInput = forwardRef<
 		/** Nothing can be typed or sent (the chat is still loading). */
 		disabled?: boolean;
 	}
->(function ChatInput({ onSubmit, onStop, generating, queued, onRemoveQueued, placeholder = 'Send a Message', toolbar, files = [], onRemoveFile, onAddItem, onAddWeb, onPasteFiles, models = [], atModel, onAtModel, wide = false, onPasteText, disabled = false }, ref) {
+>(function ChatInput(
+	{
+		onSubmit,
+		onStop,
+		generating,
+		queued,
+		onRemoveQueued,
+		placeholder = 'Send a Message',
+		toolbar,
+		files = [],
+		onRemoveFile,
+		onAddItem,
+		onAddWeb,
+		onPasteFiles,
+		models = [],
+		atModel,
+		onAtModel,
+		wide = false,
+		onPasteText,
+		disabled = false
+	},
+	ref
+) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const user = useAuthStore((s) => s.user);
 	const [text, setText] = useState('');
@@ -93,7 +135,11 @@ export const ChatInput = forwardRef<
 	const active = command && `${command.trigger}${command.start}` !== dismissed ? command : null;
 	const q = useDebouncedValue(active?.query ?? '', 150);
 
-	const prompts = useQuery({ queryKey: ['prompts-all'], enabled: active?.trigger === '/', staleTime: 60_000, queryFn: async () => {
+	const prompts = useQuery({
+		queryKey: ['prompts-all'],
+		enabled: active?.trigger === '/',
+		staleTime: 60_000,
+		queryFn: async () => {
 			const res = await getPrompts(token).catch(() => null);
 			return (Array.isArray(res) ? res : []) as Prompt[];
 		}
@@ -103,8 +149,18 @@ export const ChatInput = forwardRef<
 		enabled: active?.trigger === '#' && !isUrl(q),
 		staleTime: 30_000,
 		queryFn: async () => {
-			const [bases, fileRes] = await Promise.all([searchKnowledgeBases(token, q || null).catch(() => null), searchKnowledgeFiles(token, q || null).catch(() => null)]);
-			return [...((Array.isArray(bases?.items) ? bases.items : []) as any[]).map((b) => ({ ...b, type: 'collection' })), ...((Array.isArray(fileRes?.items) ? fileRes.items : []) as any[]).map((f) => ({ ...f, type: 'file', name: f.filename }))] as ChatFile[];
+			const [bases, fileRes] = await Promise.all([
+				searchKnowledgeBases(token, q || null).catch(() => null),
+				searchKnowledgeFiles(token, q || null).catch(() => null)
+			]);
+			return [
+				...((Array.isArray(bases?.items) ? bases.items : []) as any[]).map((b) => ({ ...b, type: 'collection' })),
+				...((Array.isArray(fileRes?.items) ? fileRes.items : []) as any[]).map((f) => ({
+					...f,
+					type: 'file',
+					name: f.filename
+				}))
+			] as ChatFile[];
 		}
 	});
 
@@ -113,16 +169,43 @@ export const ChatInput = forwardRef<
 		const query = active.query.toLowerCase();
 		if (active.trigger === '/')
 			return (prompts.data ?? [])
-				.filter((p) => p.command.replace(/^\//, '').toLowerCase().includes(query) || (p.title ?? p.name ?? '').toLowerCase().includes(query))
+				.filter(
+					(p) =>
+						p.command.replace(/^\//, '').toLowerCase().includes(query) ||
+						(p.title ?? p.name ?? '').toLowerCase().includes(query)
+				)
 				.slice(0, 20)
-				.map((p) => ({ kind: 'prompt', key: p.command, label: `/${p.command.replace(/^\//, '')}`, detail: p.title ?? p.name ?? '', prompt: p }));
+				.map((p) => ({
+					kind: 'prompt',
+					key: p.command,
+					label: `/${p.command.replace(/^\//, '')}`,
+					detail: p.title ?? p.name ?? '',
+					prompt: p
+				}));
 		if (active.trigger === '@')
 			return models
-				.filter((m) => !m.info?.meta?.hidden && (m.name.toLowerCase().includes(query) || m.id.toLowerCase().includes(query)))
+				.filter(
+					(m) => !m.info?.meta?.hidden && (m.name.toLowerCase().includes(query) || m.id.toLowerCase().includes(query))
+				)
 				.slice(0, 20)
 				.map((m) => ({ kind: 'model', key: m.id, label: m.name, detail: 'Model', model: m }));
-		if (isUrl(active.query)) return [{ kind: 'web', key: active.query, label: active.query, detail: /youtube\.com|youtu\.be/.test(active.query) ? 'YouTube' : 'Web page', url: active.query }];
-		return (knowledge.data ?? []).slice(0, 20).map((item) => ({ kind: 'item', key: `${item.type}-${item.id}`, label: String(item.name ?? ''), detail: item.type === 'collection' ? 'Collection' : 'File', item }));
+		if (isUrl(active.query))
+			return [
+				{
+					kind: 'web',
+					key: active.query,
+					label: active.query,
+					detail: /youtube\.com|youtu\.be/.test(active.query) ? 'YouTube' : 'Web page',
+					url: active.query
+				}
+			];
+		return (knowledge.data ?? []).slice(0, 20).map((item) => ({
+			kind: 'item',
+			key: `${item.type}-${item.id}`,
+			label: String(item.name ?? ''),
+			detail: item.type === 'collection' ? 'Collection' : 'File',
+			item
+		}));
 	}, [active, prompts.data, models, knowledge.data]);
 
 	useEffect(() => setSelected(0), [active?.trigger, active?.query]);
@@ -178,7 +261,12 @@ export const ChatInput = forwardRef<
 						<li key={qd.id} className="bg-muted/50 flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs">
 							<span className="text-muted-foreground">Queued</span>
 							<span className="truncate">{qd.prompt}</span>
-							<button type="button" aria-label="Remove queued message" className="ml-auto" onClick={() => onRemoveQueued(qd.id)}>
+							<button
+								type="button"
+								aria-label="Remove queued message"
+								className="ml-auto"
+								onClick={() => onRemoveQueued(qd.id)}
+							>
 								<X className="size-3" />
 							</button>
 						</li>
@@ -187,7 +275,11 @@ export const ChatInput = forwardRef<
 			)}
 			<div className="relative">
 				{active && suggestions.length > 0 && (
-					<div role="listbox" aria-label="Suggestions" className="bg-popover absolute bottom-full left-0 z-30 mb-2 max-h-72 w-full max-w-md overflow-y-auto rounded-xl border p-1 shadow-lg">
+					<div
+						role="listbox"
+						aria-label="Suggestions"
+						className="bg-popover absolute bottom-full left-0 z-30 mb-2 max-h-72 w-full max-w-md overflow-y-auto rounded-xl border p-1 shadow-lg"
+					>
 						{suggestions.map((s, i) => (
 							<button
 								key={s.key}
@@ -196,9 +288,19 @@ export const ChatInput = forwardRef<
 								aria-selected={i === selected}
 								onMouseDown={(e) => e.preventDefault()}
 								onClick={() => void pick(s)}
-								className={cn('flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm', i === selected && 'bg-muted')}
+								className={cn(
+									'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm',
+									i === selected && 'bg-muted'
+								)}
 							>
-								{s.kind === 'model' && <img src={modelImage(s.model.id)} alt="" className="size-5 rounded-full object-cover" onError={(e) => (e.currentTarget.style.visibility = 'hidden')} />}
+								{s.kind === 'model' && (
+									<img
+										src={modelImage(s.model.id)}
+										alt=""
+										className="size-5 rounded-full object-cover"
+										onError={(e) => (e.currentTarget.style.visibility = 'hidden')}
+									/>
+								)}
 								<span className="truncate">{s.label}</span>
 								<span className="text-muted-foreground ml-auto shrink-0 truncate text-xs">{s.detail}</span>
 							</button>
@@ -208,11 +310,21 @@ export const ChatInput = forwardRef<
 				<div className="bg-background rounded-3xl border px-3 py-2 shadow-sm">
 					{atModel && (
 						<div className="text-muted-foreground mb-1 flex items-center gap-2 px-1 text-xs">
-							<img src={modelImage(atModel.id)} alt="" className="size-4 rounded-full" onError={(e) => (e.currentTarget.style.visibility = 'hidden')} />
+							<img
+								src={modelImage(atModel.id)}
+								alt=""
+								className="size-4 rounded-full"
+								onError={(e) => (e.currentTarget.style.visibility = 'hidden')}
+							/>
 							<span>
 								Talking to <span className="text-foreground font-medium">{atModel.name}</span>
 							</span>
-							<button type="button" aria-label="Stop talking to this model" className="hover:text-foreground ml-auto" onClick={() => onAtModel?.(null)}>
+							<button
+								type="button"
+								aria-label="Stop talking to this model"
+								className="hover:text-foreground ml-auto"
+								onClick={() => onAtModel?.(null)}
+							>
 								<X className="size-3.5" />
 							</button>
 						</div>
@@ -255,7 +367,9 @@ export const ChatInput = forwardRef<
 							if (active && suggestions.length) {
 								if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
 									e.preventDefault();
-									setSelected((i) => Math.max(0, Math.min(suggestions.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1))));
+									setSelected((i) =>
+										Math.max(0, Math.min(suggestions.length - 1, i + (e.key === 'ArrowDown' ? 1 : -1)))
+									);
 									return;
 								}
 								if (e.key === 'Enter' || e.key === 'Tab') {
@@ -282,14 +396,25 @@ export const ChatInput = forwardRef<
 						<div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">{toolbar}</div>
 						{generating && (
 							<Tip content="Stop">
-								<button type="button" aria-label="Stop" onClick={onStop} className="bg-foreground text-background rounded-full p-1.5">
+								<button
+									type="button"
+									aria-label="Stop"
+									onClick={onStop}
+									className="bg-foreground text-background rounded-full p-1.5"
+								>
 									<Square className="size-4 fill-current" />
 								</button>
 							</Tip>
 						)}
 						{(!generating || text.trim()) && (
 							<Tip content="Send message">
-								<button type="button" aria-label="Send message" disabled={disabled || uploading || (!text.trim() && !files.length)} onClick={submit} className="bg-foreground text-background rounded-full p-1.5 transition disabled:opacity-30">
+								<button
+									type="button"
+									aria-label="Send message"
+									disabled={disabled || uploading || (!text.trim() && !files.length)}
+									onClick={submit}
+									className="bg-foreground text-background rounded-full p-1.5 transition disabled:opacity-30"
+								>
 									<ArrowUp className="size-4" />
 								</button>
 							</Tip>
@@ -299,7 +424,10 @@ export const ChatInput = forwardRef<
 			</div>
 			<InputVariablesDialog
 				variables={variables?.vars ?? null}
-				onCancel={() => setVariables(null)}
+				onCancel={() => {
+					setVariables(null);
+					place(text, cursor);
+				}}
 				onSubmit={(values) => {
 					const filled = replaceInputVariables(variables?.text ?? text, values);
 					setVariables(null);

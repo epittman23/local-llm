@@ -15,7 +15,10 @@ describe('adminGate', () => {
 		expect(adminGate(user('admin'), cfg(false), '/admin/users/overview')).toEqual({ allowed: true });
 	});
 	it('bounces an admin off /admin/functions when plugins are off, and only there', () => {
-		expect(adminGate(user('admin'), cfg(false), '/admin/functions/edit')).toEqual({ allowed: false, redirectTo: '/admin' });
+		expect(adminGate(user('admin'), cfg(false), '/admin/functions/edit')).toEqual({
+			allowed: false,
+			redirectTo: '/admin'
+		});
 		expect(adminGate(user('admin'), cfg(true), '/admin/functions/edit')).toEqual({ allowed: true });
 		expect(adminGate(user('admin'), cfg(false), '/admin/evaluations')).toEqual({ allowed: true });
 	});

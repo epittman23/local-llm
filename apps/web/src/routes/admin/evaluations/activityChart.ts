@@ -32,4 +32,5 @@ export function activityBuckets(history: ActivityDay[], weekly: boolean): Activi
 }
 
 /** True when there is nothing to draw (no rows, or every row is zero). */
-export const isEmptyActivity = (history: ActivityDay[]) => history.length === 0 || history.every((h) => h.won === 0 && h.lost === 0);
+export const isEmptyActivity = (history: ActivityDay[]) =>
+	history.length === 0 || history.every((h) => h.won === 0 && h.lost === 0);

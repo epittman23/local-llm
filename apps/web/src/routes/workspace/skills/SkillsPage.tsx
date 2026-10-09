@@ -114,7 +114,8 @@ export function SkillsPage() {
 						toast.error(`${error}`);
 						return null;
 					});
-					if (all) saveAs(new Blob([JSON.stringify(all)], { type: 'application/json' }), `skills-export-${Date.now()}.json`);
+					if (all)
+						saveAs(new Blob([JSON.stringify(all)], { type: 'application/json' }), `skills-export-${Date.now()}.json`);
 				},
 				visible: canExport
 			}
@@ -161,7 +162,10 @@ export function SkillsPage() {
 	const exportHandler = async (skill: SkillListItem) => {
 		const full = await fetchFull(skill);
 		if (full) {
-			saveAs(new Blob([JSON.stringify([full])], { type: 'application/json' }), `skill-${full.id}-export-${Date.now()}.json`);
+			saveAs(
+				new Blob([JSON.stringify([full])], { type: 'application/json' }),
+				`skill-${full.id}-export-${Date.now()}.json`
+			);
 		}
 	};
 

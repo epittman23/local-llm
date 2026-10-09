@@ -8,7 +8,13 @@ import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { InfiniteLoader } from '@/components/common/InfiniteLoader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { archiveChatById, deleteChatById, getAllArchivedChats, getArchivedChatList, unarchiveAllChats } from '@/lib/apis/chats';
+import {
+	archiveChatById,
+	deleteChatById,
+	getAllArchivedChats,
+	getArchivedChatList,
+	unarchiveAllChats
+} from '@/lib/apis/chats';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useSettingsModalStore } from '@/lib/stores/settingsModalStore';
 import { dayjs } from '@/lib/utils/dates';
@@ -34,7 +40,11 @@ export default function ArchivedChats() {
 		queryKey: ['chats', 'archived', q],
 		initialPageParam: 1,
 		queryFn: async ({ pageParam }) => {
-			const res = await getArchivedChatList(token, pageParam, { ...(q ? { query: q } : {}), order_by: 'updated_at', direction: 'desc' }).catch(() => null);
+			const res = await getArchivedChatList(token, pageParam, {
+				...(q ? { query: q } : {}),
+				order_by: 'updated_at',
+				direction: 'desc'
+			}).catch(() => null);
 			return (Array.isArray(res) ? res : []) as Row[];
 		},
 		getNextPageParam: (last, pages) => (last.length ? pages.length + 1 : undefined)
@@ -47,12 +57,28 @@ export default function ArchivedChats() {
 			<div className="mb-2 flex items-center gap-2">
 				<div className="relative flex-1">
 					<Search className="text-muted-foreground absolute top-2 left-2 size-3.5" />
-					<Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" aria-label="Search archived chats" className="h-7 pl-7 text-xs" />
+					<Input
+						value={query}
+						onChange={(e) => setQuery(e.target.value)}
+						placeholder="Search"
+						aria-label="Search archived chats"
+						className="h-7 pl-7 text-xs"
+					/>
 				</div>
 				<Button type="button" size="sm" variant="outline" disabled={!rows.length} onClick={() => setUnarchiving(true)}>
 					Unarchive All
 				</Button>
-				<Button type="button" size="sm" variant="outline" onClick={async () => saveAs(new Blob([JSON.stringify(await getAllArchivedChats(token))], { type: 'application/json' }), `archived-chat-export-${Date.now()}.json`)}>
+				<Button
+					type="button"
+					size="sm"
+					variant="outline"
+					onClick={async () =>
+						saveAs(
+							new Blob([JSON.stringify(await getAllArchivedChats(token))], { type: 'application/json' }),
+							`archived-chat-export-${Date.now()}.json`
+						)
+					}
+				>
 					Export
 				</Button>
 			</div>
@@ -75,7 +101,9 @@ export default function ArchivedChats() {
 										{c.title}
 									</Link>
 								</td>
-								<td className="text-muted-foreground py-1.5 text-xs whitespace-nowrap">{c.updated_at ? dayjs(c.updated_at * 1000).format('LLL') : ''}</td>
+								<td className="text-muted-foreground py-1.5 text-xs whitespace-nowrap">
+									{c.updated_at ? dayjs(c.updated_at * 1000).format('LLL') : ''}
+								</td>
 								<td className="py-1.5 text-right whitespace-nowrap">
 									<button
 										type="button"
@@ -88,7 +116,12 @@ export default function ArchivedChats() {
 									>
 										<ArchiveRestore className="size-3.5" />
 									</button>
-									<button type="button" aria-label={`Delete ${c.title}`} className="hover:bg-muted rounded p-1" onClick={() => setDeleting(c)}>
+									<button
+										type="button"
+										aria-label={`Delete ${c.title}`}
+										className="hover:bg-muted rounded p-1"
+										onClick={() => setDeleting(c)}
+									>
 										<Trash2 className="size-3.5" />
 									</button>
 								</td>

@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { ROWS, type CycleDef, cycleState, hasSettingPath, isInherited, isShown, newFloatingAction, readSetting, settingPatch, stepTextScale } from './interfaceSettingDefs';
+import {
+	ROWS,
+	type CycleDef,
+	cycleState,
+	hasSettingPath,
+	isInherited,
+	isShown,
+	newFloatingAction,
+	readSetting,
+	settingPatch,
+	stepTextScale
+} from './interfaceSettingDefs';
 
 const allRows = Object.values(ROWS).flat();
 const cycleDef = (key: string) => allRows.find((r) => r.kind === 'cycle' && r.key === key) as CycleDef;
@@ -11,7 +22,8 @@ describe('ROWS', () => {
 		expect(keys.length).toBeGreaterThan(50);
 	});
 	it('conditional rows follow their parent setting and the viewer', () => {
-		const find = (key: string) => allRows.find((r) => r.kind !== 'custom' && r.kind !== 'cycle' && r.key === key) as any;
+		const find = (key: string) =>
+			allRows.find((r) => r.kind !== 'custom' && r.kind !== 'cycle' && r.key === key) as any;
 		const ctx = { isAdmin: false, canTemporaryChat: false, autocompleteEnabled: false, values: {} };
 		expect(find('showUsername').visible(ctx)).toBe(false);
 		expect(find('showUsername').visible({ ...ctx, values: { chatBubble: false } })).toBe(true);
@@ -23,11 +35,26 @@ describe('ROWS', () => {
 });
 
 describe('only what the app does is offered (docs/code-review.md M7)', () => {
-	const ctx = { isAdmin: true, canTemporaryChat: true, autocompleteEnabled: true, values: { chatBubble: false, richTextInput: true, imageCompression: true } };
-	const keyOf = (r: (typeof allRows)[number]) => (r.kind === 'custom' ? ({ textScale: 'textScale', fontFamily: 'fontFamily', backgroundImage: 'backgroundImageUrl' } as const)[r.id] : r.key);
+	const ctx = {
+		isAdmin: true,
+		canTemporaryChat: true,
+		autocompleteEnabled: true,
+		values: { chatBubble: false, richTextInput: true, imageCompression: true }
+	};
+	const keyOf = (r: (typeof allRows)[number]) =>
+		r.kind === 'custom'
+			? ({ textScale: 'textScale', fontFamily: 'fontFamily', backgroundImage: 'backgroundImageUrl' } as const)[r.id]
+			: r.key;
 
 	it('rows for unported features are never shown', () => {
-		for (const key of ['richTextInput', 'iframeSandboxAllowScripts', 'voiceInterruption', 'showUpdateToast', 'landingPageMode', 'showFloatingActionButtons']) {
+		for (const key of [
+			'richTextInput',
+			'iframeSandboxAllowScripts',
+			'voiceInterruption',
+			'showUpdateToast',
+			'landingPageMode',
+			'showFloatingActionButtons'
+		]) {
 			const row = allRows.find((r) => keyOf(r) === key)!;
 			expect(isShown(row, ctx), key).toBe(false);
 		}
@@ -35,14 +62,19 @@ describe('only what the app does is offered (docs/code-review.md M7)', () => {
 	});
 
 	it('every row still offered is read somewhere outside the Settings modal', () => {
-		const sources = import.meta.glob('/src/**/*.{ts,tsx}', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
+		const sources = import.meta.glob('/src/**/*.{ts,tsx}', { query: '?raw', import: 'default', eager: true }) as Record<
+			string,
+			string
+		>;
 		const app = Object.entries(sources)
 			.filter(([path]) => !path.includes('/components/settings/') && !/\.test\.tsx?$/.test(path))
 			.map(([, text]) => text)
 			.join('\n');
 		const offered = allRows.filter((r) => r.kind === 'custom' || !r.unported).map(keyOf);
 		// `title.auto` is read as `settings?.title?.auto`.
-		const unread = offered.filter((key) => !new RegExp(key.includes('.') ? key.replace('.', '\\??\\.') : `\\b${key}\\b`).test(app));
+		const unread = offered.filter(
+			(key) => !new RegExp(key.includes('.') ? key.replace('.', '\\??\\.') : `\\b${key}\\b`).test(app)
+		);
 		expect(unread).toEqual([]);
 	});
 });
@@ -60,7 +92,9 @@ describe('paths', () => {
 		expect(readSetting({}, 'title.auto', true)).toBe(true);
 	});
 	it('settingPatch keeps nested siblings', () => {
-		expect(settingPatch({ title: { auto: true, prompt: 'p' } }, 'title.auto', false)).toEqual({ title: { auto: false, prompt: 'p' } });
+		expect(settingPatch({ title: { auto: true, prompt: 'p' } }, 'title.auto', false)).toEqual({
+			title: { auto: false, prompt: 'p' }
+		});
 		expect(settingPatch({}, 'title.auto', false)).toEqual({ title: { auto: false } });
 		expect(settingPatch({}, 'chatBubble', false)).toEqual({ chatBubble: false });
 	});
@@ -76,7 +110,10 @@ describe('cycles and steps', () => {
 		const dir = cycleDef('chatDirection');
 		expect(cycleState(dir, {})).toEqual({ option: { value: 'auto', label: 'Auto' }, next: 'LTR' });
 		expect(cycleState(dir, { chatDirection: 'RTL' }).next).toBe('auto');
-		expect(cycleState(cycleDef('webSearch'), { webSearch: 'always' })).toEqual({ option: { value: 'always', label: 'Always' }, next: null });
+		expect(cycleState(cycleDef('webSearch'), { webSearch: 'always' })).toEqual({
+			option: { value: 'always', label: 'Always' },
+			next: null
+		});
 		expect(cycleState(dir, { chatDirection: 'nonsense' }).option.label).toBe('Auto');
 	});
 	it('UI scale steps by 0.1 within 1-1.5', () => {

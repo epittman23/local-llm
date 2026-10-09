@@ -32,7 +32,8 @@ async function mockFunctionsApi(page: Page, initial: Rec[], opts: { failToggle?:
 			/* none */
 		}
 		calls.push({ method: req.method(), path, body });
-		const json = (d: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(d) });
+		const json = (d: unknown, status = 200) =>
+			route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(d) });
 		if (path === '/list' || path === '/') return json(state.fns);
 		if (path === '/create') return json(body);
 		if (path === '/export') return json(state.fns);
@@ -46,8 +47,16 @@ async function mockFunctionsApi(page: Page, initial: Rec[], opts: { failToggle?:
 			if (!found) return json({ detail: 'Not found' }, 404);
 			if (rest === '') return json(found);
 			if (rest === '/update') return json({ ...found, ...body });
-			if (rest === '/toggle') return json({ ...found, is_active: !found.is_active });
-			if (rest === '/toggle/global') return json({ ...found, is_global: !found.is_global });
+			// Persist the toggle like the real server, so the list the page
+			// refetches afterwards agrees with what it just showed.
+			if (rest === '/toggle') {
+				found.is_active = !found.is_active;
+				return json(found);
+			}
+			if (rest === '/toggle/global') {
+				found.is_global = !found.is_global;
+				return json(found);
+			}
 			if (rest === '/delete') {
 				state.fns = state.fns.filter((f) => f.id !== found.id);
 				return json(true);
@@ -137,7 +146,9 @@ test.describe('admin functions', () => {
 		await expect(page.getByText('No functions found')).toBeVisible();
 	});
 
-	test('create: the id follows the name, the warning gates the save, and only four fields are sent', async ({ page }) => {
+	test('create: the id follows the name, the warning gates the save, and only four fields are sent', async ({
+		page
+	}) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockFunctionsApi(page, []);
 		await page.goto('/admin/functions/create');
@@ -150,8 +161,15 @@ test.describe('admin functions', () => {
 		await expect(page.getByRole('alertdialog')).toContainText('Functions allow arbitrary code execution.');
 		expect(calls.some((c) => c.path === '/create')).toBe(false);
 		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
-		await expect.poll(() => calls.find((c) => c.path === '/create')?.body).toMatchObject({ id: 'my_cool_filter', name: 'My Cool Filter', meta: { description: 'does things' } });
-		expect(Object.keys(calls.find((c) => c.path === '/create')!.body).sort()).toEqual(['content', 'id', 'meta', 'name']);
+		await expect
+			.poll(() => calls.find((c) => c.path === '/create')?.body)
+			.toMatchObject({ id: 'my_cool_filter', name: 'My Cool Filter', meta: { description: 'does things' } });
+		expect(Object.keys(calls.find((c) => c.path === '/create')!.body).sort()).toEqual([
+			'content',
+			'id',
+			'meta',
+			'name'
+		]);
 		await expect(page).toHaveURL(/\/admin\/functions$/);
 	});
 
@@ -186,7 +204,9 @@ test.describe('admin functions', () => {
 		await expect(page.getByLabel('Function ID')).toHaveCount(0);
 		await page.getByLabel('Function Name').fill('Function One');
 		await page.getByRole('button', { name: 'Save', exact: true }).click();
-		await expect.poll(() => calls.find((c) => c.path === '/id/fn_1/update')?.body).toMatchObject({ id: 'fn_1', name: 'Function One' });
+		await expect
+			.poll(() => calls.find((c) => c.path === '/id/fn_1/update')?.body)
+			.toMatchObject({ id: 'fn_1', name: 'Function One' });
 	});
 
 	test('an unknown id on the edit page goes back to the list', async ({ page }) => {
@@ -196,7 +216,9 @@ test.describe('admin functions', () => {
 		await expect(page).toHaveURL(/\/admin\/functions$/);
 	});
 
-	test('Import JSON unwraps the community format, warns first, and creates only the editable fields', async ({ page }) => {
+	test('Import JSON unwraps the community format, warns first, and creates only the editable fields', async ({
+		page
+	}) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockFunctionsApi(page, [fn(1)]);
 		await page.goto('/admin/functions');
@@ -206,7 +228,16 @@ test.describe('admin functions', () => {
 			mimeType: 'application/json',
 			buffer: Buffer.from(
 				JSON.stringify([
-					{ function: { id: 'imp', name: 'Imported', content: 'class Filter: pass', meta: { description: 'x' }, is_global: true, user_id: 'attacker' } },
+					{
+						function: {
+							id: 'imp',
+							name: 'Imported',
+							content: 'class Filter: pass',
+							meta: { description: 'x' },
+							is_global: true,
+							user_id: 'attacker'
+						}
+					},
 					{ id: 'bad', name: 'No code' }
 				])
 			)
@@ -225,7 +256,12 @@ test.describe('admin functions', () => {
 		await page.goto('/admin/functions/create');
 		await page.getByLabel('Function Name').fill('Mine');
 		// Same-origin (localhost:5174), which is not one of the community origins.
-		await page.evaluate(() => window.postMessage(JSON.stringify({ id: 'evil', name: 'Evil', content: 'x = 1', meta: { description: 'e' } }), '*'));
+		await page.evaluate(() =>
+			window.postMessage(
+				JSON.stringify({ id: 'evil', name: 'Evil', content: 'x = 1', meta: { description: 'e' } }),
+				'*'
+			)
+		);
 		await page.waitForTimeout(300);
 		await expect(page.getByLabel('Function Name')).toHaveValue('Mine');
 	});

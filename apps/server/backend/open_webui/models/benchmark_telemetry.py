@@ -161,14 +161,10 @@ class BenchmarkMetricsScrapeTable:
             out: dict[str, float] = {}
             for row in bounds.all():
                 first = await db.execute(
-                    select(BenchmarkMetricsScrape.value).filter_by(
-                        run_id=run_id, counter=row.counter, at=row.first_at
-                    )
+                    select(BenchmarkMetricsScrape.value).filter_by(run_id=run_id, counter=row.counter, at=row.first_at)
                 )
                 last = await db.execute(
-                    select(BenchmarkMetricsScrape.value).filter_by(
-                        run_id=run_id, counter=row.counter, at=row.last_at
-                    )
+                    select(BenchmarkMetricsScrape.value).filter_by(run_id=run_id, counter=row.counter, at=row.last_at)
                 )
                 first_v = first.scalars().first()
                 last_v = last.scalars().first()

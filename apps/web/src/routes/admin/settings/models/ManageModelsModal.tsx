@@ -8,7 +8,13 @@ import { getOpenAIConfig } from '@/lib/apis/openai';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { ManageOllama } from './ManageOllama';
 import { ManageProviderModels } from './ManageProviderModels';
-import { type ProviderConnection, hasOllamaManagement, managementConnections, providerLabel, providerSupportsDelete } from './providerModels';
+import {
+	type ProviderConnection,
+	hasOllamaManagement,
+	managementConnections,
+	providerLabel,
+	providerSupportsDelete
+} from './providerModels';
 
 type Engine = 'ollama' | 'provider' | '' | null;
 
@@ -40,7 +46,12 @@ function ProviderSection({ connections }: { connections: ProviderConnection[] })
 		<>
 			<div className="mb-2 text-sm font-normal">Model providers</div>
 			<div className="mb-2.5 flex-1">
-				<SettingSelect className="w-full" value={selected ? String(selected.idx) : idx} onChange={setIdx} aria-label="Provider instance">
+				<SettingSelect
+					className="w-full"
+					value={selected ? String(selected.idx) : idx}
+					onChange={setIdx}
+					aria-label="Provider instance"
+				>
 					{connections.map((c) => (
 						<option key={c.idx} value={String(c.idx)}>
 							{providerLabel(c.provider)} - {c.url}
@@ -48,7 +59,15 @@ function ProviderSection({ connections }: { connections: ProviderConnection[] })
 					))}
 				</SettingSelect>
 			</div>
-			{selected && <ManageProviderModels key={selected.idx} urlIdx={selected.idx} provider={selected.provider} label={providerLabel(selected.provider)} supportsDelete={providerSupportsDelete(selected.provider)} />}
+			{selected && (
+				<ManageProviderModels
+					key={selected.idx}
+					urlIdx={selected.idx}
+					provider={selected.provider}
+					label={providerLabel(selected.provider)}
+					supportsDelete={providerSupportsDelete(selected.provider)}
+				/>
+			)}
 		</>
 	);
 }
@@ -90,7 +109,9 @@ export function ManageModelsModal({ open, onOpenChange }: { open: boolean; onOpe
 			<DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
 				<DialogHeader>
 					<DialogTitle>Manage Models</DialogTitle>
-					<DialogDescription className="sr-only">Download, delete and load models on your inference engines.</DialogDescription>
+					<DialogDescription className="sr-only">
+						Download, delete and load models on your inference engines.
+					</DialogDescription>
 				</DialogHeader>
 				<div className="flex w-full flex-col">
 					{engine === null ? (
@@ -103,13 +124,22 @@ export function ManageModelsModal({ open, onOpenChange }: { open: boolean; onOpe
 						<div className="px-1.5 py-1">
 							{both && (
 								<div className="mb-2">
-									<SettingSelect className="w-full" value={engine} onChange={(v) => setEngine(v as Engine)} aria-label="Engine">
+									<SettingSelect
+										className="w-full"
+										value={engine}
+										onChange={(v) => setEngine(v as Engine)}
+										aria-label="Engine"
+									>
 										<option value="ollama">Ollama</option>
 										<option value="provider">Model providers</option>
 									</SettingSelect>
 								</div>
 							)}
-							{engine === 'ollama' ? <OllamaSection urls={ollamaUrls} /> : <ProviderSection connections={connections} />}
+							{engine === 'ollama' ? (
+								<OllamaSection urls={ollamaUrls} />
+							) : (
+								<ProviderSection connections={connections} />
+							)}
 						</div>
 					)}
 				</div>

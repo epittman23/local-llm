@@ -21,11 +21,18 @@ export const DEFAULT_EDIT_WORKFLOW_NODES: NodeRow[] = [
 ];
 
 /** The rows to edit: each default type, taking the server's key and ids when it has that type. */
-export function toNodeRows(defaults: NodeRow[], fromServer: { type: string; key: string; node_ids?: string | string[] }[] | null | undefined): NodeRow[] {
+export function toNodeRows(
+	defaults: NodeRow[],
+	fromServer: { type: string; key: string; node_ids?: string | string[] }[] | null | undefined
+): NodeRow[] {
 	return defaults.map((d) => {
 		const n = fromServer?.find((s) => s.type === d.type);
 		if (!n) return d;
-		return { type: n.type, key: n.key, node_ids: Array.isArray(n.node_ids) ? n.node_ids.join(',') : (n.node_ids ?? '') };
+		return {
+			type: n.type,
+			key: n.key,
+			node_ids: Array.isArray(n.node_ids) ? n.node_ids.join(',') : (n.node_ids ?? '')
+		};
 	});
 }
 
@@ -101,11 +108,13 @@ export function prepareImagesConfig(config: Rec, nodes: NodeRow[], editNodes: No
 	const payload: Rec = { ...config };
 
 	if (config.COMFYUI_WORKFLOW) {
-		if (!isJsonObject(config.COMFYUI_WORKFLOW)) return { ok: false, error: 'Invalid JSON format for ComfyUI Workflow.' };
+		if (!isJsonObject(config.COMFYUI_WORKFLOW))
+			return { ok: false, error: 'Invalid JSON format for ComfyUI Workflow.' };
 		payload.COMFYUI_WORKFLOW_NODES = fromNodeRows(nodes);
 	}
 	if (config.IMAGES_EDIT_COMFYUI_WORKFLOW) {
-		if (!isJsonObject(config.IMAGES_EDIT_COMFYUI_WORKFLOW)) return { ok: false, error: 'Invalid JSON format for ComfyUI Edit Workflow.' };
+		if (!isJsonObject(config.IMAGES_EDIT_COMFYUI_WORKFLOW))
+			return { ok: false, error: 'Invalid JSON format for ComfyUI Edit Workflow.' };
 		payload.IMAGES_EDIT_COMFYUI_WORKFLOW_NODES = fromNodeRows(editNodes);
 	}
 
@@ -128,9 +137,17 @@ export function toFormState(config: Rec) {
 		config: {
 			...config,
 			COMFYUI_WORKFLOW: config.COMFYUI_WORKFLOW ? prettyJson(config.COMFYUI_WORKFLOW) : config.COMFYUI_WORKFLOW,
-			IMAGES_EDIT_COMFYUI_WORKFLOW: config.IMAGES_EDIT_COMFYUI_WORKFLOW ? prettyJson(config.IMAGES_EDIT_COMFYUI_WORKFLOW) : config.IMAGES_EDIT_COMFYUI_WORKFLOW,
-			AUTOMATIC1111_PARAMS: typeof config.AUTOMATIC1111_PARAMS === 'object' ? JSON.stringify(config.AUTOMATIC1111_PARAMS ?? {}, null, 2) : config.AUTOMATIC1111_PARAMS,
-			IMAGES_OPENAI_API_PARAMS: typeof config.IMAGES_OPENAI_API_PARAMS === 'object' ? JSON.stringify(config.IMAGES_OPENAI_API_PARAMS ?? {}, null, 2) : config.IMAGES_OPENAI_API_PARAMS
+			IMAGES_EDIT_COMFYUI_WORKFLOW: config.IMAGES_EDIT_COMFYUI_WORKFLOW
+				? prettyJson(config.IMAGES_EDIT_COMFYUI_WORKFLOW)
+				: config.IMAGES_EDIT_COMFYUI_WORKFLOW,
+			AUTOMATIC1111_PARAMS:
+				typeof config.AUTOMATIC1111_PARAMS === 'object'
+					? JSON.stringify(config.AUTOMATIC1111_PARAMS ?? {}, null, 2)
+					: config.AUTOMATIC1111_PARAMS,
+			IMAGES_OPENAI_API_PARAMS:
+				typeof config.IMAGES_OPENAI_API_PARAMS === 'object'
+					? JSON.stringify(config.IMAGES_OPENAI_API_PARAMS ?? {}, null, 2)
+					: config.IMAGES_OPENAI_API_PARAMS
 		} as Rec,
 		nodes: toNodeRows(DEFAULT_WORKFLOW_NODES, config.COMFYUI_WORKFLOW_NODES),
 		editNodes: toNodeRows(DEFAULT_EDIT_WORKFLOW_NODES, config.IMAGES_EDIT_COMFYUI_WORKFLOW_NODES)

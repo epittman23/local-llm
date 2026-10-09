@@ -72,8 +72,7 @@ const joinTerminalPath = (base: string, child: string) => {
 	return `${base.replace(/[\\/]+$/, '')}/${child.replace(/^[\\/]+/, '')}`;
 };
 
-const basename = (path: string) =>
-	path.replace(/\\/g, '/').split('/').filter(Boolean).at(-1) ?? path;
+const basename = (path: string) => path.replace(/\\/g, '/').split('/').filter(Boolean).at(-1) ?? path;
 
 const hasHiddenPathPart = (path: string) =>
 	path
@@ -114,11 +113,7 @@ export const getTerminalConfig = async (
 	return res.json().catch(() => null);
 };
 
-export const getCwd = async (
-	baseUrl: string,
-	apiKey: string,
-	sessionId?: string
-): Promise<TerminalCwd | null> => {
+export const getCwd = async (baseUrl: string, apiKey: string, sessionId?: string): Promise<TerminalCwd | null> => {
 	const url = `${baseUrl.replace(/\/$/, '')}/files/cwd`;
 	const headers: Record<string, string> = bearerHeaders(apiKey);
 	if (sessionId) headers['X-Session-Id'] = sessionId;
@@ -480,10 +475,7 @@ export const moveEntry = async (
 	return res;
 };
 
-export const getListeningPorts = async (
-	baseUrl: string,
-	apiKey: string
-): Promise<ListeningPort[]> => {
+export const getListeningPorts = async (baseUrl: string, apiKey: string): Promise<ListeningPort[]> => {
 	const url = `${baseUrl.replace(/\/$/, '')}/ports`;
 	const res = await fetch(url, {
 		headers: bearerHeaders(apiKey)
@@ -562,11 +554,7 @@ export const executeNotebookCell = async (
 	return res;
 };
 
-export const stopNotebookSession = async (
-	baseUrl: string,
-	apiKey: string,
-	sessionId: string
-): Promise<boolean> => {
+export const stopNotebookSession = async (baseUrl: string, apiKey: string, sessionId: string): Promise<boolean> => {
 	const url = `${baseUrl.replace(/\/$/, '')}/notebooks/${sessionId}`;
 	const res = await fetch(url, {
 		method: 'DELETE',

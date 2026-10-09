@@ -23,7 +23,9 @@ export const getDirectoryUploadPath = (breadcrumbs: Breadcrumb[], path: string):
 
 /** Hashes every file (SHA-256) so the server can tell what actually changed. */
 export const buildDirectoryManifest = (entries: DirectoryFileEntry[]): Promise<DirectoryManifestEntry[]> =>
-	Promise.all(entries.map(async (entry) => ({ ...entry, checksum: await computeFileHash(entry.file), size: entry.file.size })));
+	Promise.all(
+		entries.map(async (entry) => ({ ...entry, checksum: await computeFileHash(entry.file), size: entry.file.size }))
+	);
 
 /** The shape of the server's answer to "what would syncing this manifest change?". */
 export type SyncDiff = {
@@ -108,10 +110,17 @@ export function knowledgeMetaPreview(item: {
 	description?: string;
 	meta?: Record<string, any> | null;
 }): string {
-	const fileCount = item.file_count !== undefined ? (item.file_count === 1 ? '1 file' : `${item.file_count} files`) : null;
+	const fileCount =
+		item.file_count !== undefined ? (item.file_count === 1 ? '1 file' : `${item.file_count} files`) : null;
 	if (!item.meta) return [fileCount, item.description].filter(Boolean).join(' · ');
 	if (item.meta.source === 'external') {
-		return [fileCount, item.meta.external?.provider, item.meta.external?.source?.name, item.meta.external?.auth_mode, item.description]
+		return [
+			fileCount,
+			item.meta.external?.provider,
+			item.meta.external?.source?.name,
+			item.meta.external?.auth_mode,
+			item.description
+		]
 			.filter(Boolean)
 			.join(' · ');
 	}

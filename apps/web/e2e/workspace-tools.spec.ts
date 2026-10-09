@@ -18,7 +18,11 @@ const tool = (n: number, o: Tool = {}): Tool => ({
 
 type Call = { method: string; path: string; body: any };
 
-async function mockToolsApi(page: Page, initial: Tool[], extra: { valvesSpec?: unknown; valves?: unknown; loadUrl?: unknown } = {}) {
+async function mockToolsApi(
+	page: Page,
+	initial: Tool[],
+	extra: { valvesSpec?: unknown; valves?: unknown; loadUrl?: unknown } = {}
+) {
 	const state = { tools: [...initial] };
 	const calls: Call[] = [];
 	await page.route('**/api/v1/tools/**', async (route) => {
@@ -32,7 +36,8 @@ async function mockToolsApi(page: Page, initial: Tool[], extra: { valvesSpec?: u
 			/* none */
 		}
 		calls.push({ method: req.method(), path, body });
-		const json = (d: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(d) });
+		const json = (d: unknown, status = 200) =>
+			route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(d) });
 		if (path === '/list' || path === '/') return json(state.tools);
 		if (path === '/create') return json(body);
 		if (path === '/load/url') return json(extra.loadUrl ?? {});
@@ -61,7 +66,9 @@ test.describe('workspace tools', () => {
 	test('lists tools, filters client-side, and shows version, read-only and support affordances', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockToolsApi(page, [
-			tool(1, { meta: { description: 'Tool number 1', manifest: { version: '1.2.3', funding_url: 'https://example.com/fund' } } }),
+			tool(1, {
+				meta: { description: 'Tool number 1', manifest: { version: '1.2.3', funding_url: 'https://example.com/fund' } }
+			}),
 			tool(2),
 			tool(3, { write_access: false })
 		]);
@@ -79,7 +86,7 @@ test.describe('workspace tools', () => {
 		await expect(page.getByRole('navigation').getByRole('link', { name: /^Tools/ })).toContainText('1');
 	});
 
-	test("the Support dialog only links http(s) funding URLs", async ({ page }) => {
+	test('the Support dialog only links http(s) funding URLs', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockToolsApi(page, [
 			tool(1, { meta: { description: 'd', manifest: { funding_url: 'javascript:alert(1)' } } }),
@@ -108,7 +115,9 @@ test.describe('workspace tools', () => {
 		await expect.poll(() => calls.some((c) => c.path.endsWith('/delete'))).toBe(true);
 	});
 
-	test('valves: loads a spec, edits a custom value and a default toggle, and saves arrays as arrays', async ({ page }) => {
+	test('valves: loads a spec, edits a custom value and a default toggle, and saves arrays as arrays', async ({
+		page
+	}) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockToolsApi(page, [tool(1)], {
 			valvesSpec: {
@@ -135,11 +144,13 @@ test.describe('workspace tools', () => {
 		await dialog.getByPlaceholder('').first().fill('secret');
 		await dialog.getByLabel('Tags', { exact: true }).fill('x, y ,,z');
 		await dialog.getByRole('button', { name: 'Save' }).click();
-		await expect.poll(() => calls.find((c) => c.path === '/id/tool_1/valves/update')?.body).toMatchObject({
-			api_key: 'secret',
-			tags: ['x', 'y', 'z'],
-			verbose: null
-		});
+		await expect
+			.poll(() => calls.find((c) => c.path === '/id/tool_1/valves/update')?.body)
+			.toMatchObject({
+				api_key: 'secret',
+				tags: ['x', 'y', 'z'],
+				verbose: null
+			});
 	});
 
 	test('import from a JSON file asks for acknowledgement, and drops grants', async ({ page }) => {
@@ -153,17 +164,29 @@ test.describe('workspace tools', () => {
 			name: 'tools.json',
 			mimeType: 'application/json',
 			buffer: Buffer.from(
-				JSON.stringify([{ id: 'imp', name: 'Imp', content: 'x=1', meta: { description: 'd' }, access_grants: [{ principal_type: 'user', principal_id: '*', permission: 'write' }] }])
+				JSON.stringify([
+					{
+						id: 'imp',
+						name: 'Imp',
+						content: 'x=1',
+						meta: { description: 'd' },
+						access_grants: [{ principal_type: 'user', principal_id: '*', permission: 'write' }]
+					}
+				])
 			)
 		});
 		const dialog = page.getByRole('alertdialog');
 		await expect(dialog).toContainText('arbitrary code execution');
 		expect(calls.some((c) => c.path === '/create')).toBe(false); // nothing before the acknowledgement
 		await dialog.getByRole('button', { name: 'Confirm' }).click();
-		await expect.poll(() => calls.find((c) => c.path === '/create')?.body).toMatchObject({ id: 'imp', access_grants: [] });
+		await expect
+			.poll(() => calls.find((c) => c.path === '/create')?.body)
+			.toMatchObject({ id: 'imp', access_grants: [] });
 	});
 
-	test('create: boilerplate is seeded, the header fills name/description, and saving needs acknowledgement', async ({ page }) => {
+	test('create: boilerplate is seeded, the header fills name/description, and saving needs acknowledgement', async ({
+		page
+	}) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockToolsApi(page, []);
 		await page.goto('/workspace/tools/create');
@@ -172,7 +195,9 @@ test.describe('workspace tools', () => {
 
 		await cm.click();
 		await page.keyboard.press('ControlOrMeta+a');
-		await page.keyboard.insertText('"""\ntitle: Fancy Tool\ndescription: Does fancy things\n"""\nclass Tools:\n    pass\n');
+		await page.keyboard.insertText(
+			'"""\ntitle: Fancy Tool\ndescription: Does fancy things\n"""\nclass Tools:\n    pass\n'
+		);
 		await expect(page.getByLabel('Tool Name')).toHaveValue('Fancy Tool');
 		await expect(page.getByLabel('Tool ID')).toHaveValue('fancy_tool');
 		await expect(page.getByLabel('Tool Description')).toHaveValue('Does fancy things');
@@ -184,7 +209,12 @@ test.describe('workspace tools', () => {
 		await dialog.getByRole('button', { name: 'Confirm' }).click();
 		await expect(page).toHaveURL(/\/workspace\/tools$/);
 		const body = calls.find((c) => c.path === '/create')?.body;
-		expect(body).toMatchObject({ id: 'fancy_tool', name: 'Fancy Tool', meta: { description: 'Does fancy things' }, access_grants: [] });
+		expect(body).toMatchObject({
+			id: 'fancy_tool',
+			name: 'Fancy Tool',
+			meta: { description: 'Does fancy things' },
+			access_grants: []
+		});
 		expect(body.content).toContain('class Tools');
 	});
 
@@ -214,14 +244,22 @@ test.describe('workspace tools', () => {
 			window.dispatchEvent(
 				new MessageEvent('message', {
 					origin: 'https://openwebui.com',
-					data: JSON.stringify({ id: 'from_web', name: 'From Web', content: 'class Tools:\n    pass', meta: { description: 'shared' }, access_grants: [{ principal_type: 'user', principal_id: '*', permission: 'write' }] })
+					data: JSON.stringify({
+						id: 'from_web',
+						name: 'From Web',
+						content: 'class Tools:\n    pass',
+						meta: { description: 'shared' },
+						access_grants: [{ principal_type: 'user', principal_id: '*', permission: 'write' }]
+					})
 				})
 			)
 		);
 		await expect(page.getByLabel('Tool Name')).toHaveValue('From Web');
 		await page.getByRole('button', { name: 'Save & Create' }).click();
 		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
-		await expect.poll(() => calls.find((c) => c.path === '/create')?.body).toMatchObject({ id: 'from_web', access_grants: [] });
+		await expect
+			.poll(() => calls.find((c) => c.path === '/create')?.body)
+			.toMatchObject({ id: 'from_web', access_grants: [] });
 	});
 
 	test('edit: loads by id, saves without an acknowledgement, and bounces read-only tools', async ({ page }) => {
@@ -232,7 +270,9 @@ test.describe('workspace tools', () => {
 		await expect(page.locator('.cm-content')).toContainText('def f1');
 		await page.getByLabel('Tool Description').fill('Changed');
 		await page.getByRole('button', { name: 'Save', exact: true }).click();
-		await expect.poll(() => calls.find((c) => c.path === '/id/tool_1/update')?.body).toMatchObject({ id: 'tool_1', meta: { description: 'Changed' } });
+		await expect
+			.poll(() => calls.find((c) => c.path === '/id/tool_1/update')?.body)
+			.toMatchObject({ id: 'tool_1', meta: { description: 'Changed' } });
 
 		await page.goto('/workspace/tools/edit?id=tool_3');
 		await expect(page.getByText('You do not have permission to edit this tool')).toBeVisible();

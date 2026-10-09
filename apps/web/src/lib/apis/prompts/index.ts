@@ -326,11 +326,7 @@ export const updatePromptMetadata = async (
 	return res;
 };
 
-export const setProductionPromptVersion = async (
-	token: string,
-	promptId: string,
-	version_id: string
-) => {
+export const setProductionPromptVersion = async (token: string, promptId: string, version_id: string) => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/prompts/id/${promptId}/update/version`, {
@@ -421,11 +417,7 @@ export const deletePromptById = async (token: string, promptId: string) => {
 	return res;
 };
 
-export const updatePromptAccessGrants = async (
-	token: string,
-	promptId: string,
-	accessGrants: any[]
-) => {
+export const updatePromptAccessGrants = async (token: string, promptId: string, accessGrants: any[]) => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/prompts/id/${promptId}/access/update`, {
@@ -562,17 +554,14 @@ export const getPromptDiff = async (
 ): Promise<PromptDiff> => {
 	let error = null;
 
-	const res = await fetch(
-		`${WEBUI_API_BASE_URL}/prompts/id/${promptId}/history/diff?from_id=${fromId}&to_id=${toId}`,
-		{
-			method: 'GET',
-			headers: {
-				Accept: 'application/json',
-				'Content-Type': 'application/json',
-				authorization: `Bearer ${token}`
-			}
+	const res = await fetch(`${WEBUI_API_BASE_URL}/prompts/id/${promptId}/history/diff?from_id=${fromId}&to_id=${toId}`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
 		}
-	)
+	})
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
 			return res.json();

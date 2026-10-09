@@ -5,7 +5,10 @@ import { NotFound } from './NotFound';
 
 describe('NotFound', () => {
 	afterEach(() => vi.restoreAllMocks());
-	const renderAt = (path: string) => render(<RouterProvider router={createMemoryRouter([{ path: '*', element: <NotFound /> }], { initialEntries: [path] })} />);
+	const renderAt = (path: string) =>
+		render(
+			<RouterProvider router={createMemoryRouter([{ path: '*', element: <NotFound /> }], { initialEntries: [path] })} />
+		);
 
 	it('never navigates on its own (the old fallback looped on the dev server)', () => {
 		const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {});

@@ -1,0 +1,45 @@
+{
+	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+	// Formatting and linting for apps/web. Runs from the repo root's
+	// .pre-commit-config.yaml (and so in CI), and in editors via the Biome
+	// extension; the version is the exact devDependency in package.json.
+	"vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+	"files": {
+		// The two .astro files are left out: Biome only partly parses Astro
+		// templates, and both files are short layout shells.
+		"includes": ["**", "!**/*.astro"]
+	},
+	"formatter": {
+		"indentStyle": "tab",
+		// Same limit as the backend's ruff (apps/server/pyproject.toml).
+		"lineWidth": 120
+	},
+	"javascript": {
+		"formatter": {
+			"quoteStyle": "single",
+			"jsxQuoteStyle": "double",
+			"semicolons": "always",
+			"trailingCommas": "none"
+		}
+	},
+	"css": {
+		// Tailwind v4's @theme / @apply / @custom-variant in src/styles/global.css.
+		"parser": { "tailwindDirectives": true }
+	},
+	"linter": {
+		"enabled": true,
+		"rules": { "recommended": true }
+	},
+	"assist": {
+		"actions": { "source": { "organizeImports": "on" } }
+	},
+	"overrides": [
+		{
+			// Files that bun, shadcn and VS Code rewrite themselves, in their own
+			// two-space style; matching it keeps those tools and Biome from
+			// fighting over every edit.
+			"includes": ["package.json", "tsconfig.json", "components.json", ".vscode/**"],
+			"formatter": { "indentStyle": "space", "indentWidth": 2 }
+		}
+	]
+}

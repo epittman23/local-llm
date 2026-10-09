@@ -53,13 +53,19 @@ async function mockAdminApi(page: Page, opts: { users?: Rec[]; groups?: Rec[]; d
 			const users = state.users.filter((u) => !q || u.name.toLowerCase().includes(q) || u.email.includes(q));
 			return json(route, { users, total: users.length });
 		}
-		if (c.path === '/users/default/permissions') return json(route, c.method === 'POST' ? c.body : (opts.defaults ?? {}));
+		if (c.path === '/users/default/permissions')
+			return json(route, c.method === 'POST' ? c.body : (opts.defaults ?? {}));
 		if (c.path === '/users/default/permissions/defaults') return json(route, { workspace: { models: false } });
 		let m = c.path.match(/^\/users\/([^/]+)\/(update|groups|preview)$/);
 		if (m) {
 			if (m[2] === 'update') return json(route, { ...state.users.find((u) => u.id === m![1]), ...c.body });
 			if (m[2] === 'groups') return json(route, [{ id: 'group_1', name: 'Group 1' }]);
-			return json(route, { groups: [{ name: 'Group 1' }], models: { items: [{ name: 'Model A' }], total: 3 }, knowledge: { items: [], total: 0 }, tools: { items: [], total: 0 } });
+			return json(route, {
+				groups: [{ name: 'Group 1' }],
+				models: { items: [{ name: 'Model A' }], total: 3 },
+				knowledge: { items: [], total: 0 },
+				tools: { items: [], total: 0 }
+			});
 		}
 		m = c.path.match(/^\/users\/([^/]+)$/);
 		if (m && c.method === 'DELETE') {
@@ -83,7 +89,12 @@ async function mockAdminApi(page: Page, opts: { users?: Rec[]; groups?: Rec[]; d
 		if (m) {
 			if (m[2] === 'update') return json(route, { ...state.groups.find((g) => g.id === m[1]), ...c.body });
 			if (m[2] === 'delete') return json(route, true);
-			if (m[2] === 'preview') return json(route, { models: { items: [], total: 0 }, knowledge: { items: [], total: 0 }, tools: { items: [], total: 0 } });
+			if (m[2] === 'preview')
+				return json(route, {
+					models: { items: [], total: 0 },
+					knowledge: { items: [], total: 0 },
+					tools: { items: [], total: 0 }
+				});
 			return json(route, { ...state.groups.find((g) => g.id === m[1]), member_count: 5 });
 		}
 		return json(route, {});
@@ -140,7 +151,9 @@ test.describe('admin users', () => {
 		await page.getByRole('button', { name: 'Name', exact: true }).click();
 		await expect.poll(() => calls.some((c) => c.path === '/users/' && c.search.includes('order_by=name'))).toBe(true);
 		await page.getByRole('button', { name: 'Name', exact: true }).click();
-		await expect.poll(() => calls.some((c) => c.search.includes('order_by=name') && c.search.includes('direction=desc'))).toBe(true);
+		await expect
+			.poll(() => calls.some((c) => c.search.includes('order_by=name') && c.search.includes('direction=desc')))
+			.toBe(true);
 
 		await page.getByLabel('Search', { exact: true }).fill('user2');
 		await expect.poll(() => calls.some((c) => c.search.includes('query=user2'))).toBe(true);
@@ -156,11 +169,13 @@ test.describe('admin users', () => {
 		await expect(dialog.getByText('Group 1')).toBeVisible();
 		await dialog.getByLabel('Role').selectOption('admin');
 		await dialog.getByRole('button', { name: 'Save' }).click();
-		await expect.poll(() => calls.find((c) => c.path === '/users/user_2/update')?.body).toMatchObject({ role: 'admin', name: 'User 2' });
+		await expect
+			.poll(() => calls.find((c) => c.path === '/users/user_2/update')?.body)
+			.toMatchObject({ role: 'admin', name: 'User 2' });
 		expect(calls.find((c) => c.path === '/users/user_2/update')?.body).not.toHaveProperty('password');
 	});
 
-	test("an admin cannot change their own role", async ({ page }) => {
+	test('an admin cannot change their own role', async ({ page }) => {
 		// The mocked session user is `u1`.
 		await mockWorkspaceBackend(page);
 		await mockAdminApi(page, { users: [user(1, { id: 'u1', role: 'admin' })] });
@@ -214,7 +229,7 @@ test.describe('admin users', () => {
 		await expect(page.getByRole('button', { name: 'Chats', exact: true })).toHaveCount(0);
 	});
 
-	test('with the flag, the Chats dialog lists the user\'s chats', async ({ page }) => {
+	test("with the flag, the Chats dialog lists the user's chats", async ({ page }) => {
 		await mockWorkspaceBackend(page, { features: { enable_admin_chat_access: true } });
 		await mockAdminApi(page, { users: [user(2)] });
 		await page.route('**/api/v1/chats/list/user/**', (route) =>
@@ -253,7 +268,9 @@ test.describe('admin groups', () => {
 		await expect(page.getByRole('link', { name: /^Groups/ })).toContainText('1');
 	});
 
-	test('?id= opens that group\'s editor, and Import/Export appear only once the parent switch is on', async ({ page }) => {
+	test("?id= opens that group's editor, and Import/Export appear only once the parent switch is on", async ({
+		page
+	}) => {
 		await mockWorkspaceBackend(page);
 		await mockAdminApi(page, { groups: [group(1), group(2)] });
 		await page.goto('/admin/users/groups?id=group_2');
@@ -283,7 +300,11 @@ test.describe('admin groups', () => {
 		await dialog.getByRole('button', { name: 'Save' }).click();
 		await expect
 			.poll(() => calls.find((c) => c.path === '/groups/id/group_1/update')?.body)
-			.toMatchObject({ name: 'Renamed', description: 'Group number 1', permissions: { chat: { edit: false, delete: true }, workspace: { models: false } } });
+			.toMatchObject({
+				name: 'Renamed',
+				description: 'Group number 1',
+				permissions: { chat: { edit: false, delete: true }, workspace: { models: false } }
+			});
 	});
 
 	test('the default-permission hint appears when a group turns off something the defaults grant', async ({ page }) => {
@@ -309,7 +330,9 @@ test.describe('admin groups', () => {
 		await dialog.getByRole('button', { name: 'Permissions' }).click();
 		await expect(dialog.getByRole('switch', { name: 'Models Access' })).toBeChecked();
 		await dialog.getByRole('button', { name: 'Save' }).click();
-		await expect.poll(() => calls.find((c) => c.path === '/groups/create')?.body).toMatchObject({ name: 'Fresh', permissions: { workspace: { models: true } } });
+		await expect
+			.poll(() => calls.find((c) => c.path === '/groups/create')?.body)
+			.toMatchObject({ name: 'Fresh', permissions: { workspace: { models: true } } });
 		// Reopening does not keep the previous name.
 		await page.getByRole('button', { name: 'New Group' }).click();
 		await expect(page.getByRole('dialog').getByLabel('Name', { exact: true })).toHaveValue('');
@@ -336,7 +359,9 @@ test.describe('admin groups', () => {
 		const dialog = page.getByRole('dialog');
 		await dialog.getByRole('button', { name: 'Users', exact: true }).click();
 		await dialog.getByRole('checkbox', { name: 'User 2' }).click();
-		await expect.poll(() => calls.some((c) => c.path === '/groups/id/group_1/users/add' && c.body?.user_ids?.[0] === 'user_2')).toBe(true);
+		await expect
+			.poll(() => calls.some((c) => c.path === '/groups/id/group_1/users/add' && c.body?.user_ids?.[0] === 'user_2'))
+			.toBe(true);
 	});
 
 	test('deleting a group confirms first', async ({ page }) => {

@@ -52,14 +52,22 @@ async function mockModelsApi(page: Page, initial: M[], extra: { tools?: M[]; fun
 		}
 		if (path === '/tags' || path === '/base/tags') return route.fulfill(json(['support', 'coding']));
 		if (path === '/create') return route.fulfill(json(body));
-		if (path === '/model') return route.fulfill(json(state.models.find((m) => m.id === url.searchParams.get('id')) ?? null, state.models.some((m) => m.id === url.searchParams.get('id')) ? 200 : 404));
+		if (path === '/model')
+			return route.fulfill(
+				json(
+					state.models.find((m) => m.id === url.searchParams.get('id')) ?? null,
+					state.models.some((m) => m.id === url.searchParams.get('id')) ? 200 : 404
+				)
+			);
 		if (path === '/model/toggle') return route.fulfill(json(true));
 		if (path === '/model/update') return route.fulfill(json(body));
 		if (path === '/model/delete') return route.fulfill(json(true));
 		return route.fulfill(json({}));
 	});
 	await page.route('**/api/models**', (route) => route.fulfill(json({ data: baseModels })));
-	await page.route('**/api/v1/configs/models/defaults', (route) => route.fulfill(json({ DEFAULT_MODEL_METADATA: { capabilities: { web_search: true } } })));
+	await page.route('**/api/v1/configs/models/defaults', (route) =>
+		route.fulfill(json({ DEFAULT_MODEL_METADATA: { capabilities: { web_search: true } } }))
+	);
 	await page.route(/\/api\/v1\/tools\/(\?.*)?$/, (route) => route.fulfill(json(extra.tools ?? [])));
 	await page.route('**/api/v1/skills/**', (route) => route.fulfill(json([])));
 	await page.route('**/api/v1/functions/', (route) => route.fulfill(json(extra.functions ?? [])));
@@ -72,9 +80,15 @@ async function mockModelsApi(page: Page, initial: M[], extra: { tools?: M[]; fun
 }
 
 test.describe('workspace models list', () => {
-	test('lists presets with id and description, badges read-only ones, searches server-side, and pages through the API', async ({ page }) => {
+	test('lists presets with id and description, badges read-only ones, searches server-side, and pages through the API', async ({
+		page
+	}) => {
 		await mockWorkspaceBackend(page);
-		const { calls } = await mockModelsApi(page, [model(1), model(2, { write_access: false }), model(3, { meta: { hidden: true } })]);
+		const { calls } = await mockModelsApi(page, [
+			model(1),
+			model(2, { write_access: false }),
+			model(3, { meta: { hidden: true } })
+		]);
 		await page.goto('/workspace/models');
 		await expect(page.getByRole('link', { name: 'Model 1' })).toBeVisible();
 		await expect(page.getByText('Preset 1')).toBeVisible();
@@ -106,7 +120,9 @@ test.describe('workspace models list', () => {
 		await page.goto('/workspace/models');
 		await page.getByRole('button', { name: 'Model Menu', exact: true }).click();
 		await page.getByRole('menuitem', { name: 'Keep in Sidebar' }).click();
-		await expect.poll(() => calls.find((c) => c.path === '/settings/update')?.body).toEqual({ ui: { theme: 'dark', pinnedModels: ['other', 'model-1'] } });
+		await expect
+			.poll(() => calls.find((c) => c.path === '/settings/update')?.body)
+			.toEqual({ ui: { theme: 'dark', pinnedModels: ['other', 'model-1'] } });
 	});
 
 	test('Hide Model saves meta.hidden; Hide All hides every visible model', async ({ page }) => {
@@ -136,7 +152,9 @@ test.describe('workspace models list', () => {
 		await expect(page.getByRole('button', { name: 'Base model' })).toContainText('Llama 3');
 	});
 
-	test('import updates an existing model, creates a new one, and never takes grants from the file', async ({ page }) => {
+	test('import updates an existing model, creates a new one, and never takes grants from the file', async ({
+		page
+	}) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockModelsApi(page, [model(1)]);
 		await page.goto('/workspace/models');
@@ -148,22 +166,34 @@ test.describe('workspace models list', () => {
 			mimeType: 'application/json',
 			buffer: Buffer.from(
 				JSON.stringify([
-					{ id: 'model-1', name: 'Renamed', access_grants: [{ principal_type: 'user', principal_id: '*', permission: 'write' }] },
+					{
+						id: 'model-1',
+						name: 'Renamed',
+						access_grants: [{ principal_type: 'user', principal_id: '*', permission: 'write' }]
+					},
 					{ info: { id: 'brand-new', name: 'Brand New' } },
 					{ id: 'no-name' }
 				])
 			)
 		});
-		await expect.poll(() => calls.find((c) => c.path === '/model/update')?.body).toMatchObject({ id: 'model-1', name: 'Renamed', access_grants: [] });
-		await expect.poll(() => calls.find((c) => c.path === '/create')?.body).toMatchObject({ id: 'brand-new', name: 'Brand New' });
+		await expect
+			.poll(() => calls.find((c) => c.path === '/model/update')?.body)
+			.toMatchObject({ id: 'model-1', name: 'Renamed', access_grants: [] });
+		await expect
+			.poll(() => calls.find((c) => c.path === '/create')?.body)
+			.toMatchObject({ id: 'brand-new', name: 'Brand New' });
 		expect(calls.filter((c) => c.path === '/create')).toHaveLength(1);
 	});
 });
 
 test.describe('workspace model editor', () => {
-	test('create: the id follows the name, a base model is required, and the saved payload has the right shape', async ({ page }) => {
+	test('create: the id follows the name, a base model is required, and the saved payload has the right shape', async ({
+		page
+	}) => {
 		await mockWorkspaceBackend(page);
-		const { calls } = await mockModelsApi(page, [], { tools: [{ id: 'calc', name: 'Calculator', meta: { description: 'Maths' } }] });
+		const { calls } = await mockModelsApi(page, [], {
+			tools: [{ id: 'calc', name: 'Calculator', meta: { description: 'Maths' } }]
+		});
 		await page.goto('/workspace/models/create');
 		await page.getByLabel('Model Name').fill('My Helper 2');
 		await expect(page.getByLabel('Model ID')).toHaveValue('my-helper-2');
@@ -204,7 +234,13 @@ test.describe('workspace model editor', () => {
 	test('create: a model id that already exists is refused', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockModelsApi(page, []);
-		await page.route('**/api/models**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [...baseModels, { id: 'taken', name: 'Taken' }] }) }));
+		await page.route('**/api/models**', (route) =>
+			route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ data: [...baseModels, { id: 'taken', name: 'Taken' }] })
+			})
+		);
 		await page.goto('/workspace/models/create');
 		await page.getByLabel('Model Name').fill('Whatever');
 		await page.getByLabel('Model ID').fill('taken');
@@ -225,12 +261,16 @@ test.describe('workspace model editor', () => {
 		await page.getByRole('button', { name: 'Stop Sequence: Default' }).click();
 		await page.getByRole('textbox', { name: 'Stop Sequence' }).fill('END, STOP');
 		await page.getByRole('button', { name: 'Save & Update' }).click();
-		await expect.poll(() => calls.find((c) => c.path === '/model/update')?.body?.params).toMatchObject({ temperature: 1.2, stop: ['END', ' STOP'], system: 'You are model 1' });
+		await expect
+			.poll(() => calls.find((c) => c.path === '/model/update')?.body?.params)
+			.toMatchObject({ temperature: 1.2, stop: ['END', ' STOP'], system: 'You are model 1' });
 	});
 
 	test('edit: loads by id with the id locked, and saves back to the same id', async ({ page }) => {
 		await mockWorkspaceBackend(page);
-		const { calls } = await mockModelsApi(page, [model(1, { meta: { description: 'Old', tags: [{ name: 'support' }] } })]);
+		const { calls } = await mockModelsApi(page, [
+			model(1, { meta: { description: 'Old', tags: [{ name: 'support' }] } })
+		]);
 		await page.goto('/workspace/models/edit?id=model-1');
 		await expect(page.getByLabel('Model Name')).toHaveValue('Model 1');
 		await expect(page.getByLabel('Model ID')).toBeDisabled();
@@ -239,7 +279,11 @@ test.describe('workspace model editor', () => {
 		await expect(page.getByLabel('Model ID')).toHaveValue('model-1'); // an existing id does not follow the name
 		await page.getByRole('button', { name: 'Save & Update' }).click();
 		await expect(page).toHaveURL(/\/workspace\/models$/);
-		expect(calls.find((c) => c.path === '/model/update')?.body).toMatchObject({ id: 'model-1', name: 'Model One', base_model_id: 'llama3' });
+		expect(calls.find((c) => c.path === '/model/update')?.body).toMatchObject({
+			id: 'model-1',
+			name: 'Model One',
+			base_model_id: 'llama3'
+		});
 	});
 
 	test('edit: a read-only or missing model returns to the list', async ({ page }) => {
@@ -272,6 +316,8 @@ test.describe('workspace model editor', () => {
 		await page.getByRole('button', { name: 'Show' }).last().click();
 		await expect(page.locator('pre')).toContainText('Tell me a fun fact about Rome');
 		await page.getByRole('button', { name: 'Save & Update' }).click();
-		await expect.poll(() => calls.find((c) => c.path === '/model/update')?.body?.meta?.suggestion_prompts).toEqual([{ content: 'Tell me a fun fact about Rome', title: ['Tell me a fact', ''] }]);
+		await expect
+			.poll(() => calls.find((c) => c.path === '/model/update')?.body?.meta?.suggestion_prompts)
+			.toEqual([{ content: 'Tell me a fun fact about Rome', title: ['Tell me a fact', ''] }]);
 	});
 });

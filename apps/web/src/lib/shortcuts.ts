@@ -3,7 +3,6 @@
 // bindings in a store; here they are a plain map resolved from the user's
 // saved settings (see lib/useShortcuts.ts).
 
-
 export type ShortcutDefinition = {
 	name: string;
 	keys: string[];
@@ -116,7 +115,8 @@ export function isConfigurableShortcut(id: Shortcut): id is ConfigurableShortcut
 /** The saved bindings over the defaults (loadKeybindings in the original, without the store). */
 export function resolveKeybindings(saved: Partial<Record<string, string>> | undefined | null): KeybindingsMap {
 	const out = { ...DEFAULT_KEYBINDINGS };
-	if (saved && typeof saved === 'object') for (const id of CONFIGURABLE_SHORTCUTS) if (typeof saved[id] === 'string') out[id] = saved[id]!;
+	if (saved && typeof saved === 'object')
+		for (const id of CONFIGURABLE_SHORTCUTS) if (typeof saved[id] === 'string') out[id] = saved[id]!;
 	return out;
 }
 

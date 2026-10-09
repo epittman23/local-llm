@@ -19,7 +19,12 @@ export type PermissionSection = { title: string; rows: PermissionRow[] };
 const ARBITRARY_CODE = 'Warning: Enabling this will allow users to upload arbitrary code on the server.';
 const SCHEDULED_PROMPTS = 'Warning: Enabling this will allow users to run scheduled prompts automatically.';
 
-const row = (group: PermissionGroupName, key: string, label: string, extra: Partial<PermissionRow> = {}): PermissionRow => ({
+const row = (
+	group: PermissionGroupName,
+	key: string,
+	label: string,
+	extra: Partial<PermissionRow> = {}
+): PermissionRow => ({
 	group,
 	key,
 	label,
@@ -147,8 +152,14 @@ export const visibleRows = (section: PermissionSection, permissions: Permissions
  * the group's own switch is off but the default for all users has it on, so
  * turning it off here changes nothing. Nested rows never show it.
  */
-export const showsDefaultHint = (r: PermissionRow, permissions: Permissions, defaults: Partial<Permissions> | undefined) =>
-	!r.nested && Boolean((defaults?.[r.group] as Record<string, boolean> | undefined)?.[r.key]) && !permissions[r.group][r.key];
+export const showsDefaultHint = (
+	r: PermissionRow,
+	permissions: Permissions,
+	defaults: Partial<Permissions> | undefined
+) =>
+	!r.nested &&
+	Boolean((defaults?.[r.group] as Record<string, boolean> | undefined)?.[r.key]) &&
+	!permissions[r.group][r.key];
 
 /**
  * Splits visible rows into layout blocks: each top-level row stands alone, and

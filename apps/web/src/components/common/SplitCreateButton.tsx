@@ -22,13 +22,7 @@ function actionIcon(id: string) {
 	return Pencil;
 }
 
-export function SplitCreateButton({
-	actions,
-	label = 'Create'
-}: {
-	actions: WorkspaceAction[];
-	label?: string;
-}) {
+export function SplitCreateButton({ actions, label = 'Create' }: { actions: WorkspaceAction[]; label?: string }) {
 	const navigate = useNavigate();
 	const visible = actions.filter((action) => action.visible ?? true);
 	const primary = visible.find((action) => action.id.endsWith('-new')) ?? visible[0] ?? null;
@@ -51,22 +45,12 @@ export function SplitCreateButton({
 
 	return (
 		<div className="flex overflow-hidden rounded-lg border">
-			<Button
-				variant="ghost"
-				size="sm"
-				className="rounded-none"
-				onClick={() => run(primary)}
-			>
+			<Button variant="ghost" size="sm" className="rounded-none" onClick={() => run(primary)}>
 				{label}
 			</Button>
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
-					<Button
-						variant="ghost"
-						size="icon-sm"
-						className="rounded-none border-l"
-						aria-label="Open create menu"
-					>
+					<Button variant="ghost" size="icon-sm" className="rounded-none border-l" aria-label="Open create menu">
 						<ChevronDown />
 					</Button>
 				</DropdownMenuTrigger>

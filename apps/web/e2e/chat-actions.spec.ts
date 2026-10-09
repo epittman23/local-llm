@@ -32,7 +32,9 @@ test('edit a reply in place, or save it as a copy', async ({ page }) => {
 	await page.getByRole('textbox', { name: 'Edit message' }).fill('Four.');
 	await page.getByRole('button', { name: 'Save', exact: true }).click();
 	await expect(reply).toContainText('Four.');
-	await expect.poll(() => chat.seen.updates.at(-1)?.chat.history.messages.a1).toMatchObject({ content: 'Four.', originalContent: 'It is 4' });
+	await expect
+		.poll(() => chat.seen.updates.at(-1)?.chat.history.messages.a1)
+		.toMatchObject({ content: 'Four.', originalContent: 'It is 4' });
 
 	await reply.getByRole('button', { name: 'Edit' }).click();
 	await page.getByRole('textbox', { name: 'Edit message' }).fill('4 (copy)');
@@ -46,13 +48,23 @@ test('rate a reply, then add details; the feedback is recorded', async ({ page }
 	await page.goto('/c/c1');
 	await page.getByRole('button', { name: 'Good Response' }).click();
 	await expect.poll(() => chat.seen.feedback.length).toBeGreaterThan(0);
-	expect(chat.seen.feedback[0]).toMatchObject({ type: 'rating', data: { rating: 1, model_id: 'qwen' }, meta: { chat_id: 'c1', message_id: 'a1' } });
+	expect(chat.seen.feedback[0]).toMatchObject({
+		type: 'rating',
+		data: { rating: 1, model_id: 'qwen' },
+		meta: { chat_id: 'c1', message_id: 'a1' }
+	});
 	const form = page.getByTestId('rate-comment');
 	await form.getByRole('button', { name: 'Rate 8 out of 10' }).click();
 	await form.getByRole('button', { name: 'Thorough explanation' }).click();
 	await form.getByRole('textbox', { name: 'Additional feedback comments' }).fill('Clear');
 	await form.getByRole('button', { name: 'Save' }).click();
-	await expect.poll(() => chat.seen.feedback.some((f) => f.data?.reason === 'thorough_explanation' && f.data?.comment === 'Clear' && f.data?.details?.rating === 8)).toBe(true);
+	await expect
+		.poll(() =>
+			chat.seen.feedback.some(
+				(f) => f.data?.reason === 'thorough_explanation' && f.data?.comment === 'Clear' && f.data?.details?.rating === 8
+			)
+		)
+		.toBe(true);
 	expect(chat.seen.feedback.at(-1)!.url).toMatch(/feedback\/fb1$/);
 	await expect(page.getByRole('button', { name: 'Good Response' })).toHaveAttribute('aria-pressed', 'true');
 });
@@ -84,7 +96,19 @@ test('delete a reply', async ({ page }) => {
 
 test('a user without the permissions sees no edit, rate or delete on replies', async ({ page }) => {
 	await mockChat(page, { chats: convo(), user: { config: {} } });
-	await page.route('**/api/v1/auths/', (route) => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ id: 'u1', name: 'U', email: 'u@x', role: 'user', permissions: { chat: { edit: false, rate_response: false, delete_message: false } }, expires_at: Math.floor(Date.now() / 1000) + 3600 }) }));
+	await page.route('**/api/v1/auths/', (route) =>
+		route.fulfill({
+			contentType: 'application/json',
+			body: JSON.stringify({
+				id: 'u1',
+				name: 'U',
+				email: 'u@x',
+				role: 'user',
+				permissions: { chat: { edit: false, rate_response: false, delete_message: false } },
+				expires_at: Math.floor(Date.now() / 1000) + 3600
+			})
+		})
+	);
 	await page.goto('/c/c1');
 	const reply = page.getByTestId('response-message');
 	await expect(reply.getByRole('button', { name: 'Copy' })).toBeVisible();
@@ -94,8 +118,23 @@ test('a user without the permissions sees no edit, rate or delete on replies', a
 });
 
 test("a model's Action runs on its reply, and the messages it returns replace theirs", async ({ page }) => {
-	const chat = await mockChat(page, { user: { role: 'admin' }, chats: [savedChat('c1', 'Actions', [{ id: 'u', role: 'user', content: 'Hi' }, { id: 'a', role: 'assistant', model: 'qwen', content: 'Hello', done: true }])] });
-	await page.route('**/api/models*', (route) => json(route, { data: [{ id: 'qwen', name: 'Qwen', actions: [{ id: 'summarize.run', name: 'Summarize', icon: null }] }, { id: 'llama', name: 'Llama' }] }));
+	const chat = await mockChat(page, {
+		user: { role: 'admin' },
+		chats: [
+			savedChat('c1', 'Actions', [
+				{ id: 'u', role: 'user', content: 'Hi' },
+				{ id: 'a', role: 'assistant', model: 'qwen', content: 'Hello', done: true }
+			])
+		]
+	});
+	await page.route('**/api/models*', (route) =>
+		json(route, {
+			data: [
+				{ id: 'qwen', name: 'Qwen', actions: [{ id: 'summarize.run', name: 'Summarize', icon: null }] },
+				{ id: 'llama', name: 'Llama' }
+			]
+		})
+	);
 	const calls: { url: string; body: Record<string, any> }[] = [];
 	await page.route('**/api/chat/actions/**', (route) => {
 		calls.push({ url: route.request().url(), body: route.request().postDataJSON() });
@@ -106,7 +145,18 @@ test("a model's Action runs on its reply, and the messages it returns replace th
 	await page.getByRole('button', { name: 'Summarize' }).click();
 	await expect.poll(() => calls.length).toBe(1);
 	expect(calls[0].url).toContain('/api/chat/actions/summarize.run');
-	expect(calls[0].body).toMatchObject({ model: 'qwen', chat_id: 'c1', id: 'a', model_item: { id: 'qwen' }, messages: [{ id: 'u', role: 'user', content: 'Hi' }, { id: 'a', role: 'assistant', content: 'Hello' }] });
+	expect(calls[0].body).toMatchObject({
+		model: 'qwen',
+		chat_id: 'c1',
+		id: 'a',
+		model_item: { id: 'qwen' },
+		messages: [
+			{ id: 'u', role: 'user', content: 'Hi' },
+			{ id: 'a', role: 'assistant', content: 'Hello' }
+		]
+	});
 	await expect(page.getByText('Hello, summarized')).toBeVisible();
-	await expect.poll(() => chat.seen.updates.at(-1)?.chat?.history?.messages?.a).toMatchObject({ content: 'Hello, summarized', originalContent: 'Hello' });
+	await expect
+		.poll(() => chat.seen.updates.at(-1)?.chat?.history?.messages?.a)
+		.toMatchObject({ content: 'Hello, summarized', originalContent: 'Hello' });
 });

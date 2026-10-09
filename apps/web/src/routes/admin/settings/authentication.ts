@@ -39,7 +39,10 @@ export const LDAP_DEFAULTS: LdapServer = {
 };
 
 /** Server values laid over the defaults, so a key an older backend omits keeps its default. */
-export const mergeLdapServer = (fromServer: Partial<LdapServer> | null | undefined): LdapServer => ({ ...LDAP_DEFAULTS, ...fromServer });
+export const mergeLdapServer = (fromServer: Partial<LdapServer> | null | undefined): LdapServer => ({
+	...LDAP_DEFAULTS,
+	...fromServer
+});
 
 /**
  * What to send when saving: with group mapping on and the group attribute left
@@ -47,7 +50,10 @@ export const mergeLdapServer = (fromServer: Partial<LdapServer> | null | undefin
  * the backend's required-field check does not reject the save.
  */
 export const ldapForSave = (server: LdapServer): LdapServer =>
-	server.enable_group_management && !server.attribute_for_groups?.trim() ? { ...server, attribute_for_groups: DEFAULT_GROUP_ATTRIBUTE } : server;
+	server.enable_group_management && !server.attribute_for_groups?.trim()
+		? { ...server, attribute_for_groups: DEFAULT_GROUP_ATTRIBUTE }
+		: server;
 
 /** OAuth settings are editable unless the backend says they come from the environment. */
-export const isOAuthEditable = (oauth: { ENABLE_OAUTH_PERSISTENT_CONFIG?: boolean } | null | undefined): boolean => oauth?.ENABLE_OAUTH_PERSISTENT_CONFIG ?? true;
+export const isOAuthEditable = (oauth: { ENABLE_OAUTH_PERSISTENT_CONFIG?: boolean } | null | undefined): boolean =>
+	oauth?.ENABLE_OAUTH_PERSISTENT_CONFIG ?? true;

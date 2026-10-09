@@ -54,14 +54,23 @@ export function ChatPage() {
 	const { settings } = useUserSettings();
 	const { models, loaded } = useModels();
 
-	const folder = useQuery({ queryKey: ['folder', folderId], enabled: Boolean(folderId), retry: false, queryFn: async () => (await getFolderById(token, folderId!)) as Folder });
+	const folder = useQuery({
+		queryKey: ['folder', folderId],
+		enabled: Boolean(folderId),
+		retry: false,
+		queryFn: async () => (await getFolderById(token, folderId!)) as Folder
+	});
 
 	const chatPerms = (user?.permissions as { chat?: Record<string, boolean> } | undefined)?.chat ?? {};
 	const admin = user?.role === 'admin';
 	const temporaryAllowed = admin || Boolean(chatPerms.temporary);
 	const temporaryEnforced = !admin && Boolean(chatPerms.temporary_enforced);
 	const prefs = useChatPrefs();
-	const temporaryDefault = newChatTemporary({ enforced: temporaryEnforced, allowed: temporaryAllowed, byDefault: prefs.temporaryByDefault });
+	const temporaryDefault = newChatTemporary({
+		enforced: temporaryEnforced,
+		allowed: temporaryAllowed,
+		byDefault: prefs.temporaryByDefault
+	});
 	const [temporary, setTemporary] = useState(() => temporaryDefault || search.get('temporary-chat') === 'true');
 	// Each new chat starts from the default (Chat.svelte's initNewChat), which
 	// settings can change once they load. Declared before the ?temporary-chat
@@ -70,19 +79,49 @@ export function ChatPage() {
 		if (!id) setTemporary(temporaryDefault);
 	}, [id, temporaryDefault]);
 	const [selectedModels, setSelectedModels] = useState<string[]>([]);
-	const [toggles, setToggles] = useState<Toggles>({ webSearch: search.get('web-search') === 'true', imageGeneration: search.get('image-generation') === 'true', codeInterpreter: search.get('code-interpreter') === 'true' });
-	const [toolIds, setToolIds] = useState<string[]>(() => (search.get('tools') ?? search.get('tool-ids') ?? '').split(',').map((t) => t.trim()).filter(Boolean));
+	const [toggles, setToggles] = useState<Toggles>({
+		webSearch: search.get('web-search') === 'true',
+		imageGeneration: search.get('image-generation') === 'true',
+		codeInterpreter: search.get('code-interpreter') === 'true'
+	});
+	const [toolIds, setToolIds] = useState<string[]>(() =>
+		(search.get('tools') ?? search.get('tool-ids') ?? '')
+			.split(',')
+			.map((t) => t.trim())
+			.filter(Boolean)
+	);
 	const [atModel, setAtModel] = useState<ChatModel | null>(null);
-	const tools = useQuery({ queryKey: ['tools-for-chat'], enabled: Boolean(token), staleTime: 60_000, queryFn: async () => {
+	const tools = useQuery({
+		queryKey: ['tools-for-chat'],
+		enabled: Boolean(token),
+		staleTime: 60_000,
+		queryFn: async () => {
 			// Only a list counts: an error body or a paged object must not reach `.map`.
 			const res = await getTools(token).catch(() => null);
 			return (Array.isArray(res) ? res : []) as { id: string; name: string; meta?: { description?: string } }[];
 		}
 	});
-	const buttons = featureButtons(atModel ? [atModel.id] : selectedModels, models, user, (config?.features ?? {}) as Record<string, unknown>);
+	const buttons = featureButtons(
+		atModel ? [atModel.id] : selectedModels,
+		models,
+		user,
+		(config?.features ?? {}) as Record<string, unknown>
+	);
 
 	const webSearchOn = toggles.webSearch && buttons.webSearch;
-	const session = useChatSession({ routeChatId: id, folderId, models, selectedModels, temporary: temporary && !id, toggles: { webSearch: webSearchOn, imageGeneration: toggles.imageGeneration && buttons.imageGeneration, codeInterpreter: toggles.codeInterpreter && buttons.codeInterpreter }, toolIds });
+	const session = useChatSession({
+		routeChatId: id,
+		folderId,
+		models,
+		selectedModels,
+		temporary: temporary && !id,
+		toggles: {
+			webSearch: webSearchOn,
+			imageGeneration: toggles.imageGeneration && buttons.imageGeneration,
+			codeInterpreter: toggles.codeInterpreter && buttons.codeInterpreter
+		},
+		toolIds
+	});
 	const attachments = useAttachments({ temporary: temporary && !id, selectedModels, models, chatId: session.chatId });
 
 	// One model selected: take its default tools and feature switches (Chat.svelte's setDefaults).
@@ -90,9 +129,18 @@ export function ChatPage() {
 	useEffect(() => {
 		if (selectedModels.length !== 1 || !tools.isSuccess || defaultsFor.current === selectedModels[0]) return;
 		defaultsFor.current = selectedModels[0];
-		const d = modelDefaults(models.find((m) => m.id === selectedModels[0]), (tools.data ?? []).map((t) => t.id), (settings as { tools?: string[] } | null)?.tools, buttons);
+		const d = modelDefaults(
+			models.find((m) => m.id === selectedModels[0]),
+			(tools.data ?? []).map((t) => t.id),
+			(settings as { tools?: string[] } | null)?.tools,
+			buttons
+		);
 		if (!search.get('tools') && !search.get('tool-ids')) setToolIds(d.toolIds);
-		setToggles((t) => ({ webSearch: (!id && prefs.webSearchAlways && buttons.webSearch) || (d.webSearch ?? t.webSearch), imageGeneration: d.imageGeneration ?? t.imageGeneration, codeInterpreter: d.codeInterpreter ?? t.codeInterpreter }));
+		setToggles((t) => ({
+			webSearch: (!id && prefs.webSearchAlways && buttons.webSearch) || (d.webSearch ?? t.webSearch),
+			imageGeneration: d.imageGeneration ?? t.imageGeneration,
+			codeInterpreter: d.codeInterpreter ?? t.codeInterpreter
+		}));
 		// When the chosen model changes.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [selectedModels, tools.isSuccess]);
@@ -151,7 +199,8 @@ export function ChatPage() {
 	/** Sends a new prompt, or first asks to confirm web search; false keeps it in the input meanwhile. */
 	const requestSend = (text: string, files: ChatFile[] = [], fromInput = false) => {
 		// An empty prompt goes straight to send's own "Please enter a prompt".
-		if (!needsWebSearchConfirm(config, webSearchOn, searchConfirmed) || (!text.trim() && !files.length)) return send(text, files);
+		if (!needsWebSearchConfirm(config, webSearchOn, searchConfirmed) || (!text.trim() && !files.length))
+			return send(text, files);
 		setPendingSend({ text, files, fromInput });
 		return false;
 	};
@@ -189,7 +238,15 @@ export function ChatPage() {
 		const key = `new:${folderId ?? ''}`;
 		if (pickedFor.current === key) return;
 		pickedFor.current = key;
-		setSelectedModels(initialModels({ url: search.get('models') || search.get('model'), folderModels: folder.data?.data?.model_ids, userModels: (settings as { models?: string[] } | null)?.models, defaults: (config as { default_models?: string } | null)?.default_models, models }));
+		setSelectedModels(
+			initialModels({
+				url: search.get('models') || search.get('model'),
+				folderModels: folder.data?.data?.model_ids,
+				userModels: (settings as { models?: string[] } | null)?.models,
+				defaults: (config as { default_models?: string } | null)?.default_models,
+				models
+			})
+		);
 		// Only when the chat or the model list changes.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [loaded, id, folderId, folder.isFetched, session.chat]);
@@ -245,7 +302,8 @@ export function ChatPage() {
 	useEffect(() => {
 		const prev = paramsFor.current;
 		if (prev.id !== id) {
-			if (paramsDirty.current && prev.id) void updateChatById(token, prev.id, { params: prev.params }).catch((e) => toast.error(`${e}`));
+			if (paramsDirty.current && prev.id)
+				void updateChatById(token, prev.id, { params: prev.params }).catch((e) => toast.error(`${e}`));
 			paramsDirty.current = false;
 		}
 		paramsFor.current = { id, params: session.params };
@@ -286,7 +344,6 @@ export function ChatPage() {
 	const empty = !session.history.currentId;
 	const firstModel = models.find((m) => m.id === selectedModels[0]);
 
-
 	return (
 		<div className="flex h-full min-h-0 w-full">
 			<div
@@ -302,14 +359,28 @@ export function ChatPage() {
 			>
 				{prefs.backgroundImageUrl && (
 					// The user's chat background, behind a wash that keeps the text readable.
-					<div aria-hidden data-testid="chat-background" className="pointer-events-none absolute inset-0 -z-10 bg-cover bg-center bg-no-repeat" style={{ backgroundImage: cssUrl(prefs.backgroundImageUrl) }}>
+					<div
+						aria-hidden
+						data-testid="chat-background"
+						className="pointer-events-none absolute inset-0 -z-10 bg-cover bg-center bg-no-repeat"
+						style={{ backgroundImage: cssUrl(prefs.backgroundImageUrl) }}
+					>
 						<div className="bg-background/85 absolute inset-0" />
 					</div>
 				)}
 				<header className="flex items-start gap-2 px-4 py-2">
-					<ModelSelector models={models} selected={selectedModels} onChange={changeModels} disabled={session.generating} />
+					<ModelSelector
+						models={models}
+						selected={selectedModels}
+						onChange={changeModels}
+						disabled={session.generating}
+					/>
 					<div className="ml-auto flex items-center gap-2 pt-1">
-						{folder.data && <span className="text-muted-foreground text-sm" data-testid="chat-folder">{folder.data.name}</span>}
+						{folder.data && (
+							<span className="text-muted-foreground text-sm" data-testid="chat-folder">
+								{folder.data.name}
+							</span>
+						)}
 						{!id && temporaryAllowed && (
 							<Tip content={temporary ? 'Temporary Chat is on' : 'Temporary Chat'}>
 								<button
@@ -318,7 +389,10 @@ export function ChatPage() {
 									aria-pressed={temporary}
 									disabled={temporaryEnforced}
 									onClick={() => setTemporary((t) => !t)}
-									className={cn('hover:bg-muted rounded-lg p-1.5', temporary ? 'text-foreground' : 'text-muted-foreground')}
+									className={cn(
+										'hover:bg-muted rounded-lg p-1.5',
+										temporary ? 'text-foreground' : 'text-muted-foreground'
+									)}
 								>
 									<EyeOff className="size-4" />
 								</button>
@@ -333,7 +407,10 @@ export function ChatPage() {
 									setPreview(null);
 									setControlsOpen(!controlsOpen);
 								}}
-								className={cn('hover:bg-muted rounded-lg p-1.5', controlsOpen ? 'text-foreground' : 'text-muted-foreground')}
+								className={cn(
+									'hover:bg-muted rounded-lg p-1.5',
+									controlsOpen ? 'text-foreground' : 'text-muted-foreground'
+								)}
 							>
 								<SlidersHorizontal className="size-4" />
 							</button>
@@ -391,8 +468,22 @@ export function ChatPage() {
 					onAtModel={setAtModel}
 					toolbar={
 						<>
-							<AttachMenu onFiles={attachments.addFiles} onWeb={(urls) => void attachments.addWeb(urls)} onItem={attachments.addItem} canUpload={canUploadFiles(user)} canWeb={canUploadWeb(user)} notesEnabled={canUseFeature('notes', user, config)} />
-							<IntegrationsMenu tools={tools.data ?? []} toolIds={toolIds} onToolIds={setToolIds} buttons={buttons} toggles={toggles} onToggles={setToggles} />
+							<AttachMenu
+								onFiles={attachments.addFiles}
+								onWeb={(urls) => void attachments.addWeb(urls)}
+								onItem={attachments.addItem}
+								canUpload={canUploadFiles(user)}
+								canWeb={canUploadWeb(user)}
+								notesEnabled={canUseFeature('notes', user, config)}
+							/>
+							<IntegrationsMenu
+								tools={tools.data ?? []}
+								toolIds={toolIds}
+								onToolIds={setToolIds}
+								buttons={buttons}
+								toggles={toggles}
+								onToggles={setToggles}
+							/>
 						</>
 					}
 					onSubmit={(text, files) => requestSend(text, files, true)}

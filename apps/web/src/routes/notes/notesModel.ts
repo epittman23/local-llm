@@ -6,7 +6,15 @@ import { getTimeRange } from '@/lib/utils/api-helpers';
 // TipTap JSON, HTML and Markdown -- under `data.content`.
 
 export type NoteContent = { json: unknown; html: string; md: string };
-export type NoteListItem = { id: string; title: string; updated_at: number; is_pinned?: boolean; user?: { name?: string; email?: string } | null; data?: { content?: Partial<NoteContent> } | null; write_access?: boolean };
+export type NoteListItem = {
+	id: string;
+	title: string;
+	updated_at: number;
+	is_pinned?: boolean;
+	user?: { name?: string; email?: string } | null;
+	data?: { content?: Partial<NoteContent> } | null;
+	write_access?: boolean;
+};
 
 /** Notes grouped by when they were last updated (Today, Yesterday, ...), in the order they came. */
 export function groupNotes<T extends { updated_at: number }>(notes: T[], now = new Date()): [string, T[]][] {
@@ -21,12 +29,17 @@ export function groupNotes<T extends { updated_at: number }>(notes: T[], now = n
 
 /** Clicking the active column flips it; a new column starts newest-first for dates, A-Z for titles. */
 export function nextSort(current: { key: string; direction: 'asc' | 'desc' }, key: string) {
-	if (current.key === key) return { key, direction: current.direction === 'asc' ? ('desc' as const) : ('asc' as const) };
+	if (current.key === key)
+		return { key, direction: current.direction === 'asc' ? ('desc' as const) : ('asc' as const) };
 	return { key, direction: key === 'updated_at' ? ('desc' as const) : ('asc' as const) };
 }
 
 /** A new note's body from Markdown (or given HTML); the JSON is left for the editor to fill on first edit. */
-export const contentFromMarkdown = (md = '', html?: string): NoteContent => ({ json: null, html: html ?? (md ? markdownToHtml(md) : ''), md });
+export const contentFromMarkdown = (md = '', html?: string): NoteContent => ({
+	json: null,
+	html: html ?? (md ? markdownToHtml(md) : ''),
+	md
+});
 
 /** What the editor loads: the JSON if there is any, else the HTML, else the Markdown rendered. */
 export function editorContent(c: Partial<NoteContent> | null | undefined): unknown {
@@ -42,7 +55,8 @@ export function importableNote(file: { name: string; type: string }): { title: s
 }
 
 /** A file name from a note title: no path separators or characters most file systems refuse. */
-export const safeFileName = (title: string, ext: string) => `${(title || 'Untitled').replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '-').trim() || 'Untitled'}.${ext}`;
+export const safeFileName = (title: string, ext: string) =>
+	`${(title || 'Untitled').replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '-').trim() || 'Untitled'}.${ext}`;
 
 export const wordCount = (text: string) => (text.trim() ? text.trim().split(/\s+/).length : 0);
 

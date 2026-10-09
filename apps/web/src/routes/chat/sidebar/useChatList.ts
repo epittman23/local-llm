@@ -25,7 +25,11 @@ export function useChatPages() {
 
 export function usePinnedChats() {
 	const token = useAuthStore((s) => s.token) ?? '';
-	return useQuery({ queryKey: ['chats', 'pinned'], enabled: Boolean(token), queryFn: async () => asList(await getPinnedChatList(token).catch(() => [])) });
+	return useQuery({
+		queryKey: ['chats', 'pinned'],
+		enabled: Boolean(token),
+		queryFn: async () => asList(await getPinnedChatList(token).catch(() => []))
+	});
 }
 
 export function useFolderChats(folderId: string, enabled: boolean) {
@@ -42,13 +46,22 @@ export function useFolderChats(folderId: string, enabled: boolean) {
 /** The folders, under ['folders'] (the key Automations already reads). */
 export function useFolders() {
 	const token = useAuthStore((s) => s.token) ?? '';
-	return useQuery({ queryKey: ['folders'], enabled: Boolean(token), queryFn: async () => ((l: unknown) => (Array.isArray(l) ? (l as Folder[]) : []))(await getFolders(token).catch(() => null)) });
+	return useQuery({
+		queryKey: ['folders'],
+		enabled: Boolean(token),
+		queryFn: async () =>
+			((l: unknown) => (Array.isArray(l) ? (l as Folder[]) : []))(await getFolders(token).catch(() => null))
+	});
 }
 
 /** Applies `fn` to a chat wherever it appears in the cached lists (list pages, pinned, folders). */
 export function patchCachedChat(queryClient: QueryClient, id: string, fn: (c: ChatListItem) => ChatListItem) {
 	for (const [key, data] of queryClient.getQueriesData<unknown>({ queryKey: ['chats'] })) {
-		if (Array.isArray(data)) queryClient.setQueryData(key, (data as ChatListItem[]).map((c) => (c.id === id ? fn(c) : c)));
+		if (Array.isArray(data))
+			queryClient.setQueryData(
+				key,
+				(data as ChatListItem[]).map((c) => (c.id === id ? fn(c) : c))
+			);
 		else if (data && typeof data === 'object' && 'pages' in data) {
 			const inf = data as InfiniteData<ChatListItem[]>;
 			queryClient.setQueryData(key, { ...inf, pages: inf.pages.map((p) => p.map((c) => (c.id === id ? fn(c) : c))) });

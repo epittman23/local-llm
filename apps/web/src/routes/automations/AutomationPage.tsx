@@ -7,7 +7,13 @@ import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
 import { Switch } from '@/components/ui/switch';
-import { deleteAutomationById, getAutomationById, getAutomationRuns, runAutomationById, toggleAutomationById } from '@/lib/apis/automations';
+import {
+	deleteAutomationById,
+	getAutomationById,
+	getAutomationRuns,
+	runAutomationById,
+	toggleAutomationById
+} from '@/lib/apis/automations';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useDocumentTitle } from '@/lib/stores/configStore';
 import { cn } from '@/lib/utils';
@@ -53,7 +59,11 @@ function Automation() {
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const [running, setRunning] = useState(false);
 
-	const automation = useQuery({ queryKey: ['automations', 'item', id], queryFn: () => getAutomationById(token, id), retry: false });
+	const automation = useQuery({
+		queryKey: ['automations', 'item', id],
+		queryFn: () => getAutomationById(token, id),
+		retry: false
+	});
 	const runs = useInfiniteQuery({
 		queryKey: ['automations', 'runs', id],
 		queryFn: ({ pageParam }) => getAutomationRuns(token, id, pageParam * RUNS_PAGE, RUNS_PAGE).then((r) => r ?? []),
@@ -110,7 +120,12 @@ function Automation() {
 					<div className="flex items-center gap-0.5">
 						<Tip content={a.is_active ? 'Active' : 'Paused'}>
 							<span className="px-1">
-								<Switch size="sm" aria-label={a.is_active ? 'Pause' : 'Resume'} checked={a.is_active} onCheckedChange={toggle} />
+								<Switch
+									size="sm"
+									aria-label={a.is_active ? 'Pause' : 'Resume'}
+									checked={a.is_active}
+									onCheckedChange={toggle}
+								/>
 							</span>
 						</Tip>
 						<Tip content="Run now">
@@ -132,7 +147,13 @@ function Automation() {
 				}
 			/>
 			<AutomationDialog open={editing} onOpenChange={setEditing} automation={a} onSaved={refresh} />
-			<ConfirmDialog open={confirmDelete} onOpenChange={setConfirmDelete} title="Delete automation?" confirmLabel="Delete" onConfirm={remove}>
+			<ConfirmDialog
+				open={confirmDelete}
+				onOpenChange={setConfirmDelete}
+				title="Delete automation?"
+				confirmLabel="Delete"
+				onConfirm={remove}
+			>
 				This will delete <span className="font-medium">{a.name}</span>.
 			</ConfirmDialog>
 
@@ -140,12 +161,18 @@ function Automation() {
 				className="min-h-0 flex-1 overflow-y-auto"
 				onScroll={(e) => {
 					const t = e.currentTarget;
-					if (t.scrollTop + t.clientHeight >= t.scrollHeight - 50 && runs.hasNextPage && !runs.isFetchingNextPage) runs.fetchNextPage();
+					if (t.scrollTop + t.clientHeight >= t.scrollHeight - 50 && runs.hasNextPage && !runs.isFetchingNextPage)
+						runs.fetchNextPage();
 				}}
 			>
 				<div className="px-1 pb-1">
 					<Row label="Status">
-						<span className={cn('flex items-center gap-1.5', a.is_active ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground')}>
+						<span
+							className={cn(
+								'flex items-center gap-1.5',
+								a.is_active ? 'text-emerald-700 dark:text-emerald-400' : 'text-muted-foreground'
+							)}
+						>
 							<span className="size-1.5 rounded-full bg-current" />
 							{a.is_active ? 'Active' : 'Paused'}
 						</span>
@@ -174,10 +201,26 @@ function Automation() {
 						<ul>
 							{allRuns.map((run) => (
 								<li key={run.id} className="flex h-7 items-center gap-2 text-xs">
-									<span className={cn('size-1.5 shrink-0 rounded-full', run.status === 'success' ? 'bg-emerald-500' : 'bg-red-400')} aria-label={run.status} />
-									<span className="text-muted-foreground">{new Date(run.created_at / 1_000_000).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+									<span
+										className={cn(
+											'size-1.5 shrink-0 rounded-full',
+											run.status === 'success' ? 'bg-emerald-500' : 'bg-red-400'
+										)}
+										aria-label={run.status}
+									/>
+									<span className="text-muted-foreground">
+										{new Date(run.created_at / 1_000_000).toLocaleString(undefined, {
+											month: 'short',
+											day: 'numeric',
+											hour: '2-digit',
+											minute: '2-digit'
+										})}
+									</span>
 									{run.chat_id && (
-										<Link to={runTarget(run.chat_id)} className="text-muted-foreground hover:text-foreground flex items-center gap-1 hover:underline">
+										<Link
+											to={runTarget(run.chat_id)}
+											className="text-muted-foreground hover:text-foreground flex items-center gap-1 hover:underline"
+										>
 											{run.chat_id.startsWith('channel:') ? 'View channel' : 'View chat'}
 											<ArrowRight className="size-2.5" />
 										</Link>

@@ -112,13 +112,7 @@ export const getUserDefaultPermissionsDefaults = async (token: string) => {
 	return res;
 };
 
-export const getUsers = async (
-	token: string,
-	query?: string,
-	orderBy?: string,
-	direction?: string,
-	page = 1
-) => {
+export const getUsers = async (token: string, query?: string, orderBy?: string, direction?: string, page = 1) => {
 	let error = null;
 	let res = null;
 

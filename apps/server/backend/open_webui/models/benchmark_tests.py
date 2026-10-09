@@ -87,7 +87,7 @@ class BenchmarkResult(Base):
     __tablename__ = 'benchmark_result'
     __table_args__ = (
         UniqueConstraint('suite_run_id', 'benchmark', 'item_id', name='uq_benchmark_result_item'),
-        CheckConstraint(f"outcome IN {OUTCOMES!r}", name='ck_benchmark_result_outcome'),
+        CheckConstraint(f'outcome IN {OUTCOMES!r}', name='ck_benchmark_result_outcome'),
     )
     result_id = Column(Integer, primary_key=True, autoincrement=True)
     suite_run_id = Column(Text, nullable=False)
@@ -215,9 +215,17 @@ class BenchmarkRequestTable:
         db: Optional[AsyncSession] = None,
     ) -> int:
         timing_keys = [
-            'cache_n', 'prompt_n', 'prompt_ms', 'prompt_per_token_ms', 'prompt_per_second',
-            'predicted_n', 'predicted_ms', 'predicted_per_token_ms', 'predicted_per_second',
-            'draft_n', 'draft_n_accepted',
+            'cache_n',
+            'prompt_n',
+            'prompt_ms',
+            'prompt_per_token_ms',
+            'prompt_per_second',
+            'predicted_n',
+            'predicted_ms',
+            'predicted_per_token_ms',
+            'predicted_per_second',
+            'draft_n',
+            'draft_n_accepted',
         ]
         async with get_async_db_context(db) as db:
             row = BenchmarkRequest(
@@ -271,9 +279,7 @@ class BenchmarkRequestTable:
 
 
 class BenchmarkResultTable:
-    async def add_result(
-        self, record: dict, answer: Optional[dict] = None, db: Optional[AsyncSession] = None
-    ) -> int:
+    async def add_result(self, record: dict, answer: Optional[dict] = None, db: Optional[AsyncSession] = None) -> int:
         """One graded item, and its request and answer, in one transaction.
 
         Committed per item, not per suite: a `full` run is many hours and
@@ -287,7 +293,7 @@ class BenchmarkResultTable:
                     record.get('run_id'),
                     at=record['at'],
                     model=record['model'],
-                    label=f"{record['benchmark']}/{record['item_id']}",
+                    label=f'{record["benchmark"]}/{record["item_id"]}',
                     wall_ms=record.get('wall_ms'),
                     params=record.get('params') or {},
                     timings=record['timings'],
@@ -496,9 +502,7 @@ class BenchmarkAnswerTable:
                 return None
             result_row, answer_row = row
             record = BenchmarkResultModel.model_validate(result_row).model_dump()
-            record.update(
-                prompt=answer_row.prompt, content=answer_row.content, reasoning=answer_row.reasoning
-            )
+            record.update(prompt=answer_row.prompt, content=answer_row.content, reasoning=answer_row.reasoning)
             return record
 
 
@@ -517,7 +521,11 @@ class BenchmarkSuiteExclusionTable:
                 )
                 stmt = stmt.on_conflict_do_update(
                     index_elements=['benchmark', 'item_id', 'dataset_revision'],
-                    set_={'kind': stmt.excluded.kind, 'reason': stmt.excluded.reason, 'recorded_at': stmt.excluded.recorded_at},
+                    set_={
+                        'kind': stmt.excluded.kind,
+                        'reason': stmt.excluded.reason,
+                        'recorded_at': stmt.excluded.recorded_at,
+                    },
                 )
                 await db.execute(stmt)
             await db.commit()

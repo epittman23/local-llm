@@ -243,12 +243,7 @@ export const processUrl = async (
 	return res;
 };
 
-export const processWeb = async (
-	token: string,
-	collection_name: string,
-	url: string,
-	process: boolean = true
-) => {
+export const processWeb = async (token: string, collection_name: string, url: string, process: boolean = true) => {
 	let error = null;
 
 	const searchParams = new URLSearchParams();
@@ -321,12 +316,7 @@ export const processWebSearch = async (
 	return res;
 };
 
-export const queryDoc = async (
-	token: string,
-	collection_name: string,
-	query: string,
-	k: number | null = null
-) => {
+export const queryDoc = async (token: string, collection_name: string, query: string, k: number | null = null) => {
 	let error = null;
 
 	const res = await fetch(`${RETRIEVAL_API_BASE_URL}/query/doc`, {

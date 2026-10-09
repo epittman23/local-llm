@@ -28,7 +28,8 @@ import { type ValveSpec, type ValveValues, formToValves, valvesToForm } from './
 type PipelineServer = { idx: number; url: string };
 type Pipeline = { id: string; name: string; type?: string; valves?: boolean };
 
-const actionButton = 'text-muted-foreground hover:text-foreground shrink-0 text-xs transition-colors disabled:opacity-50';
+const actionButton =
+	'text-muted-foreground hover:text-foreground shrink-0 text-xs transition-colors disabled:opacity-50';
 const muted = 'text-muted-foreground text-xs';
 
 /**
@@ -51,7 +52,11 @@ export default function Pipelines() {
 	const [spec, setSpec] = useState<ValveSpec | null>(null);
 	const [valves, setValves] = useState<ValveValues | null>(null);
 
-	const servers = useQuery({ queryKey: ['admin-settings', 'pipelines-list'], queryFn: async () => ((await getPipelinesList(token)) ?? []) as PipelineServer[], gcTime: 0 });
+	const servers = useQuery({
+		queryKey: ['admin-settings', 'pipelines-list'],
+		queryFn: async () => ((await getPipelinesList(token)) ?? []) as PipelineServer[],
+		gcTime: 0
+	});
 	useEffect(() => {
 		if (servers.data?.length && urlIdx === '') setUrlIdx(servers.data[0].idx.toString());
 	}, [servers.data, urlIdx]);
@@ -75,7 +80,10 @@ export default function Pipelines() {
 		let cancelled = false;
 		(async () => {
 			try {
-				const [loadedSpec, loaded] = [await getPipelineValvesSpec(token, current.id, urlIdx), await getPipelineValves(token, current.id, urlIdx)];
+				const [loadedSpec, loaded] = [
+					await getPipelineValvesSpec(token, current.id, urlIdx),
+					await getPipelineValves(token, current.id, urlIdx)
+				];
 				if (cancelled) return;
 				setSpec(loadedSpec);
 				setValves(valvesToForm(loaded ?? {}, loadedSpec));
@@ -168,7 +176,15 @@ export default function Pipelines() {
 				</SettingsSection>
 			) : (
 				<>
-					<input ref={uploadInput} id="pipelines-upload-input" type="file" accept=".py" hidden aria-label="Pipeline file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+					<input
+						ref={uploadInput}
+						id="pipelines-upload-input"
+						type="file"
+						accept=".py"
+						hidden
+						aria-label="Pipeline file"
+						onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+					/>
 					<SettingsSection title="Source" first>
 						<SettingField label="Pipeline URL" description="Select the Pipelines server to manage.">
 							<SettingSelect value={urlIdx} onChange={setUrlIdx} className="w-full" aria-label="Pipeline URL">
@@ -179,9 +195,16 @@ export default function Pipelines() {
 								))}
 							</SettingSelect>
 						</SettingField>
-						<SettingField label="Upload Pipeline" description="Upload a local Python pipeline file to the selected server.">
+						<SettingField
+							label="Upload Pipeline"
+							description="Upload a local Python pipeline file to the selected server."
+						>
 							<div className="flex items-center gap-2">
-								<button type="button" className="bg-muted/40 hover:bg-muted h-7 min-w-0 flex-1 truncate rounded-lg border px-2 text-left text-xs" onClick={() => uploadInput.current?.click()}>
+								<button
+									type="button"
+									className="bg-muted/40 hover:bg-muted h-7 min-w-0 flex-1 truncate rounded-lg border px-2 text-left text-xs"
+									onClick={() => uploadInput.current?.click()}
+								>
 									{file ? '1 pipeline(s) selected' : 'Select a .py file'}
 								</button>
 								<button type="button" className={actionButton} onClick={upload} disabled={uploading}>
@@ -194,7 +217,11 @@ export default function Pipelines() {
 							description="Pipelines are a plugin system with arbitrary code execution. Don't fetch random pipelines from sources you don't trust."
 						>
 							<div className="flex items-center gap-2">
-								<SettingInput placeholder="Enter GitHub Raw URL" value={downloadUrl} onChange={(e) => setDownloadUrl(e.target.value)} />
+								<SettingInput
+									placeholder="Enter GitHub Raw URL"
+									value={downloadUrl}
+									onChange={(e) => setDownloadUrl(e.target.value)}
+								/>
 								<button type="button" className={actionButton} onClick={install} disabled={downloading}>
 									{downloading ? 'Installing' : 'Install'}
 								</button>
@@ -215,7 +242,12 @@ export default function Pipelines() {
 							<SettingsSection title="Pipelines">
 								<SettingField label="Pipeline" description="Select an installed pipeline to configure or remove.">
 									<div className="flex items-center gap-2">
-										<SettingSelect value={selectedIdx} onChange={(v) => setSelectedIdx(Number(v))} className="w-full" aria-label="Pipeline">
+										<SettingSelect
+											value={selectedIdx}
+											onChange={(v) => setSelectedIdx(Number(v))}
+											className="w-full"
+											aria-label="Pipeline"
+										>
 											{pipelines.map((p, idx) => (
 												<option key={p.id} value={idx}>
 													{p.name} ({p.type ?? 'pipe'})
@@ -238,14 +270,23 @@ export default function Pipelines() {
 											return (
 												<div key={key} className="flex flex-col gap-1.5">
 													<SettingRow label={prop.title ?? key} description={prop.description ?? ''}>
-														<button type="button" className={actionButton} onClick={() => setValve(key, value === null ? '' : null)}>
+														<button
+															type="button"
+															className={actionButton}
+															onClick={() => setValve(key, value === null ? '' : null)}
+														>
 															{value === null ? 'None' : 'Custom'}
 														</button>
 													</SettingRow>
 													{value !== null && (
 														<div>
 															{prop.enum ? (
-																<SettingSelect value={String(value)} onChange={(v) => setValve(key, v)} className="w-full" aria-label={prop.title ?? key}>
+																<SettingSelect
+																	value={String(value)}
+																	onChange={(v) => setValve(key, v)}
+																	className="w-full"
+																	aria-label={prop.title ?? key}
+																>
 																	{prop.enum.map((option) => (
 																		<option key={String(option)} value={String(option)}>
 																			{String(option)}
@@ -253,11 +294,28 @@ export default function Pipelines() {
 																	))}
 																</SettingSelect>
 															) : prop.type === 'boolean' ? (
-																<SettingRow label={value ? 'Enabled' : 'Disabled'} labelClassName="text-muted-foreground/70">
-																	{(id) => <SettingSwitch checked={Boolean(value)} onChange={(v) => setValve(key, v)} labelledBy={id} />}
+																<SettingRow
+																	label={value ? 'Enabled' : 'Disabled'}
+																	labelClassName="text-muted-foreground/70"
+																>
+																	{(id) => (
+																		<SettingSwitch
+																			checked={Boolean(value)}
+																			onChange={(v) => setValve(key, v)}
+																			labelledBy={id}
+																		/>
+																	)}
 																</SettingRow>
 															) : (
-																<SettingInput type="text" placeholder={prop.title ?? key} aria-label={prop.title ?? key} value={String(value)} onChange={(e) => setValve(key, e.target.value)} autoComplete="off" required />
+																<SettingInput
+																	type="text"
+																	placeholder={prop.title ?? key}
+																	aria-label={prop.title ?? key}
+																	value={String(value)}
+																	onChange={(e) => setValve(key, e.target.value)}
+																	autoComplete="off"
+																	required
+																/>
 															)}
 														</div>
 													)}

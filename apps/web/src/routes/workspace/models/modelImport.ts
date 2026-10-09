@@ -36,7 +36,10 @@ export function sanitizeIncomingModel(raw: unknown, { withGrants }: { withGrants
 		base_model_id: typeof wrapped.base_model_id === 'string' ? wrapped.base_model_id : null,
 		meta: isObject(wrapped.meta) ? JSON.parse(JSON.stringify(wrapped.meta)) : {},
 		params: isObject(wrapped.params) ? JSON.parse(JSON.stringify(wrapped.params)) : {},
-		access_grants: withGrants && Array.isArray(wrapped.access_grants) ? dedupeAccessGrants(wrapped.access_grants as AccessGrant[]) : []
+		access_grants:
+			withGrants && Array.isArray(wrapped.access_grants)
+				? dedupeAccessGrants(wrapped.access_grants as AccessGrant[])
+				: []
 	};
 }
 

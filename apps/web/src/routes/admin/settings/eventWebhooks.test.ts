@@ -17,12 +17,24 @@ import {
 	webhookPayload
 } from './eventWebhooks';
 
-const hook = (over: Partial<EventWebhook> = {}): EventWebhook => ({ id: 'w', name: 'W', url: 'https://a.test/x', enabled: true, events: ['*'], targets: null, ...over });
+const hook = (over: Partial<EventWebhook> = {}): EventWebhook => ({
+	id: 'w',
+	name: 'W',
+	url: 'https://a.test/x',
+	enabled: true,
+	events: ['*'],
+	targets: null,
+	...over
+});
 const CATALOG = ['chat.created', 'chat.deleted', 'user.created', 'user.role.changed'];
 
 describe('sortWebhooks', () => {
 	it('puts default first and the rest by name, without mutating', () => {
-		const input = [hook({ id: 'b', name: 'Beta' }), hook({ id: 'default', name: 'Zed' }), hook({ id: 'a', name: 'Alpha' })];
+		const input = [
+			hook({ id: 'b', name: 'Beta' }),
+			hook({ id: 'default', name: 'Zed' }),
+			hook({ id: 'a', name: 'Alpha' })
+		];
 		expect(sortWebhooks(input).map((w) => w.id)).toEqual(['default', 'a', 'b']);
 		expect(input.map((w) => w.id)).toEqual(['b', 'default', 'a']);
 	});

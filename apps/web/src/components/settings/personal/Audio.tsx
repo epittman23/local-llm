@@ -5,7 +5,15 @@ import { getVoices } from '@/lib/apis/audio';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
-import { SettingField, SettingInput, SettingRow, SettingSelect, SettingSwitch, SettingsForm, SettingsSection } from '../controls';
+import {
+	SettingField,
+	SettingInput,
+	SettingRow,
+	SettingSelect,
+	SettingSwitch,
+	SettingsForm,
+	SettingsSection
+} from '../controls';
 
 type Voice = { id?: string; name: string; localService?: boolean };
 
@@ -14,7 +22,8 @@ function useBrowserVoices(enabled: boolean): Voice[] {
 	const [voices, setVoices] = useState<Voice[]>([]);
 	useEffect(() => {
 		if (!enabled || typeof speechSynthesis === 'undefined') return;
-		const load = () => setVoices(speechSynthesis.getVoices().map((v) => ({ name: v.name, localService: v.localService })));
+		const load = () =>
+			setVoices(speechSynthesis.getVoices().map((v) => ({ name: v.name, localService: v.localService })));
 		load();
 		speechSynthesis.addEventListener('voiceschanged', load);
 		return () => speechSynthesis.removeEventListener('voiceschanged', load);
@@ -31,11 +40,17 @@ function useBrowserVoices(enabled: boolean): Voice[] {
  */
 export default function Audio() {
 	const token = useAuthStore((s) => s.token) ?? '';
-	const tts = useConfigStore((s) => (s.config as { audio?: { tts?: { engine?: string; voice?: string } } } | null)?.audio?.tts);
+	const tts = useConfigStore(
+		(s) => (s.config as { audio?: { tts?: { engine?: string; voice?: string } } } | null)?.audio?.tts
+	);
 	const serverEngine = tts?.engine ?? '';
 	const { settings, update } = useUserSettings();
 	const browserVoices = useBrowserVoices(serverEngine === '');
-	const serverVoices = useQuery({ queryKey: ['tts-voices'], enabled: serverEngine !== '', queryFn: async () => ((await getVoices(token).catch(() => null))?.voices ?? []) as Voice[] });
+	const serverVoices = useQuery({
+		queryKey: ['tts-voices'],
+		enabled: serverEngine !== '',
+		queryFn: async () => ((await getVoices(token).catch(() => null))?.voices ?? []) as Voice[]
+	});
 	const s = (settings ?? {}) as Record<string, any>;
 	const [stt, setStt] = useState({ engine: '', language: '' });
 	const [rate, setRate] = useState(1);
@@ -47,7 +62,9 @@ export default function Audio() {
 		if (!settings) return;
 		setStt({ engine: s.audio?.stt?.engine ?? '', language: s.audio?.stt?.language ?? '' });
 		setRate(s.audio?.tts?.playbackRate ?? 1);
-		setVoice(s.audio?.tts?.defaultVoice === tts?.voice ? (s.audio?.tts?.voice ?? tts?.voice ?? '') : (tts?.voice ?? ''));
+		setVoice(
+			s.audio?.tts?.defaultVoice === tts?.voice ? (s.audio?.tts?.voice ?? tts?.voice ?? '') : (tts?.voice ?? '')
+		);
 		setNonLocal(s.audio?.tts?.nonLocalVoices ?? false);
 		// When the settings load.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -64,7 +81,13 @@ export default function Audio() {
 					audio: {
 						...(s.audio ?? {}),
 						stt: { engine: stt.engine || undefined, language: stt.language || undefined },
-						tts: { ...(s.audio?.tts ?? {}), playbackRate: rate, voice: voice || undefined, defaultVoice: tts?.voice ?? '', nonLocalVoices: serverEngine === '' ? nonLocal : undefined }
+						tts: {
+							...(s.audio?.tts ?? {}),
+							playbackRate: rate,
+							voice: voice || undefined,
+							defaultVoice: tts?.voice ?? '',
+							nonLocalVoices: serverEngine === '' ? nonLocal : undefined
+						}
 					}
 				}).then(
 					() => toast.success('Settings saved successfully!'),
@@ -77,12 +100,24 @@ export default function Audio() {
 			    offered (docs/code-review.md M7); the language is, since audio uploads use it. */}
 			<SettingsSection title="STT Settings" first>
 				<SettingField label="Language" htmlFor="stt-language">
-					<SettingInput id="stt-language" aria-label="Speech-to-Text Language" placeholder="e.g. en" value={stt.language} onChange={(e) => setStt({ ...stt, language: e.target.value })} />
+					<SettingInput
+						id="stt-language"
+						aria-label="Speech-to-Text Language"
+						placeholder="e.g. en"
+						value={stt.language}
+						onChange={(e) => setStt({ ...stt, language: e.target.value })}
+					/>
 				</SettingField>
 			</SettingsSection>
 			<SettingsSection title="TTS Settings">
 				<SettingRow label="Auto-Playback Response" description="Play assistant responses aloud automatically.">
-					{(id) => <SettingSwitch labelledBy={id} checked={Boolean(s.responseAutoPlayback)} onChange={(v) => void update({ responseAutoPlayback: v })} />}
+					{(id) => (
+						<SettingSwitch
+							labelledBy={id}
+							checked={Boolean(s.responseAutoPlayback)}
+							onChange={(v) => void update({ responseAutoPlayback: v })}
+						/>
+					)}
 				</SettingRow>
 				<SettingRow label="Speech Playback Speed" description="Adjust how quickly spoken responses are played.">
 					{(id) => (
@@ -111,13 +146,22 @@ export default function Audio() {
 									))}
 							</SettingSelect>
 						</SettingField>
-						<SettingRow label="Allow non-local voices" description="Include voices that are not provided by a local speech service.">
+						<SettingRow
+							label="Allow non-local voices"
+							description="Include voices that are not provided by a local speech service."
+						>
 							{(id) => <SettingSwitch labelledBy={id} checked={nonLocal} onChange={setNonLocal} />}
 						</SettingRow>
 					</>
 				) : (
 					<SettingField label="Set Voice" description="Choose the configured text-to-speech service voice.">
-						<SettingInput list="voice-list" aria-label="Voice" placeholder="Select a voice" value={voice} onChange={(e) => setVoice(e.target.value)} />
+						<SettingInput
+							list="voice-list"
+							aria-label="Voice"
+							placeholder="Select a voice"
+							value={voice}
+							onChange={(e) => setVoice(e.target.value)}
+						/>
 						<datalist id="voice-list">
 							{(serverVoices.data ?? []).map((v) => (
 								<option key={v.id ?? v.name} value={v.id ?? v.name}>

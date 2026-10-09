@@ -109,17 +109,14 @@ export const getOpenAIModelsDirect = async (url: string, key: string) => {
 export const getOpenAIModels = async (token: string, urlIdx?: number) => {
 	let error = null;
 
-	const res = await fetch(
-		`${OPENAI_API_BASE_URL}/models${typeof urlIdx === 'number' ? `/${urlIdx}` : ''}`,
-		{
-			method: 'GET',
-			headers: {
-				Accept: 'application/json',
-				'Content-Type': 'application/json',
-				...(token && { authorization: `Bearer ${token}` })
-			}
+	const res = await fetch(`${OPENAI_API_BASE_URL}/models${typeof urlIdx === 'number' ? `/${urlIdx}` : ''}`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			...(token && { authorization: `Bearer ${token}` })
 		}
-	)
+	})
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
 			return res.json();
@@ -163,12 +160,7 @@ export const getProviderModelCatalog = async (token: string, urlIdx: number) => 
 	return res;
 };
 
-export const downloadProviderModel = async (
-	token: string,
-	urlIdx: number,
-	model: string,
-	signal?: AbortSignal
-) => {
+export const downloadProviderModel = async (token: string, urlIdx: number, model: string, signal?: AbortSignal) => {
 	let error = null;
 
 	const res = await fetch(`${OPENAI_API_BASE_URL}/models/${urlIdx}/download`, {
@@ -205,18 +197,15 @@ export const getProviderModelDownloadStatus = async (
 ) => {
 	let error = null;
 
-	const res = await fetch(
-		`${OPENAI_API_BASE_URL}/models/${urlIdx}/download/status/${encodeURIComponent(jobId)}`,
-		{
-			signal,
-			method: 'GET',
-			headers: {
-				Accept: 'application/json',
-				'Content-Type': 'application/json',
-				Authorization: `Bearer ${token}`
-			}
+	const res = await fetch(`${OPENAI_API_BASE_URL}/models/${urlIdx}/download/status/${encodeURIComponent(jobId)}`, {
+		signal,
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${token}`
 		}
-	)
+	})
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
 			return res.json();
@@ -261,12 +250,7 @@ export const loadProviderModel = async (token: string, urlIdx: number, model: st
 	return res;
 };
 
-export const unloadProviderModel = async (
-	token: string,
-	urlIdx: number,
-	model: string,
-	instanceId?: string
-) => {
+export const unloadProviderModel = async (token: string, urlIdx: number, model: string, instanceId?: string) => {
 	let error = null;
 
 	const res = await fetch(`${OPENAI_API_BASE_URL}/models/${urlIdx}/unload`, {
@@ -297,17 +281,14 @@ export const unloadProviderModel = async (
 export const deleteProviderModel = async (token: string, urlIdx: number, model: string) => {
 	let error = null;
 
-	const res = await fetch(
-		`${OPENAI_API_BASE_URL}/models/${urlIdx}?${new URLSearchParams({ model })}`,
-		{
-			method: 'DELETE',
-			headers: {
-				Accept: 'application/json',
-				'Content-Type': 'application/json',
-				Authorization: `Bearer ${token}`
-			}
+	const res = await fetch(`${OPENAI_API_BASE_URL}/models/${urlIdx}?${new URLSearchParams({ model })}`, {
+		method: 'DELETE',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${token}`
 		}
-	)
+	})
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
 			return res.json();

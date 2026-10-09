@@ -1,11 +1,5 @@
 import { AccessControl } from '@/components/common/AccessControl';
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogHeader,
-	DialogTitle
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { AccessGrant, Permission } from '@/lib/access/accessGrants';
 
 /** Ports workspace/common/AccessControlModal.svelte: AccessControl in a small dialog. */
@@ -35,9 +29,7 @@ export function AccessControlModal({
 			<DialogContent className="sm:max-w-md">
 				<DialogHeader>
 					<DialogTitle>Access Control</DialogTitle>
-					<DialogDescription className="sr-only">
-						Choose who can see and edit this item.
-					</DialogDescription>
+					<DialogDescription className="sr-only">Choose who can see and edit this item.</DialogDescription>
 				</DialogHeader>
 				<AccessControl
 					accessGrants={accessGrants}
