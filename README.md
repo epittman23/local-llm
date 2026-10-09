@@ -18,9 +18,10 @@ Postgres+pgvector (`infra/docker-compose.yml`), not SQLite.
 
 ## Running it
 
-Requires Docker Desktop with WSL integration enabled for this distro
-(Docker Desktop → Settings → Resources → WSL Integration), `make`, plus Bun
-**Node ≥ 22.12** (Astro's `engines`), and a **Python 3.11 or 3.12**
+Runs on native Linux (Fedora 44 since 2026-10-09; it ran under WSL2 before
+that). Requires Docker Engine with the Compose plugin, with your user in the
+`docker` group so `make backend` can run `docker compose` without sudo,
+plus `make`, Bun, **Node ≥ 22.12** (Astro's `engines`), and a **Python 3.11 or 3.12**
 interpreter on the host for the backend (its `requires-python` is
 `>= 3.11, < 3.13`; `make backend` selects an interpreter in that range itself
 rather than trusting whatever bare `python3` resolves to, or takes
@@ -39,6 +40,15 @@ POSTGRES_PASSWORD=<openssl rand -base64 24>
 WEBUI_SECRET_KEY=<openssl rand -base64 24>
 ```
 
+> **Moving from WSL2 to native Linux (2026-10-09).** Nothing gitignored
+> comes across with a fresh clone: recreate `infra/.env`, let `make backend`
+> build the venv, and rerun `bun install && bun run build` in `apps/web`.
+> Docker volumes do not move either, so the `open-web-ui_postgres-data`
+> volume (chats, accounts, benchmark history, profile edits) starts empty
+> on the new machine unless you `pg_dump` it from the old one and restore
+> it. Model weights and `~/llama.cpp` have to be copied or fetched again too
+> (see "Building llama.cpp" below and `docs/model-downloads.md`).
+>
 > **Upgrading an existing checkout (2026-09-27).** Phase 11 renamed
 > `apps/openwebui/` to `apps/server/`. A `git pull` moves the tracked files
 > but not the gitignored `backend/.venv`: `mv apps/openwebui/backend/.venv
@@ -224,6 +234,33 @@ exposes the same OpenAI-compatible API Open WebUI already speaks. Pointing
 Open WebUI at it is a connection-settings change only (see "Migrating to local
 hardware later" below).
 
+### Building llama.cpp
+
+The Serve page runs `llama-server` from `LLAMA_BIN` (default
+`~/llama.cpp/build/bin`; see `serving/launcher.py`), so llama.cpp has to be
+built there with CUDA. That needs the NVIDIA driver, the CUDA toolkit
+(`nvcc`) and `cmake`. On Fedora the CUDA toolkit comes from NVIDIA's own
+repository, which needs sudo; check that the toolkit release accepts the
+system GCC as its host compiler, and install an older `gcc` for it if not.
+`cmake` is also available from linuxbrew without sudo. The current recorded
+serving measurements used build 10597 (`95b8e33e1`); the thread-count sweep
+is older, on 10472. Building 10597 keeps new runs comparable with the recorded
+ones:
+
+```bash
+git clone https://github.com/ggml-org/llama.cpp ~/llama.cpp && cd ~/llama.cpp
+git checkout 95b8e33e1
+cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=86
+cmake --build build -j "$(nproc)"
+```
+
+`86` is the RTX 3060 Laptop's compute capability (8.6). On 2026-10-09 the
+Fedora machine had the driver (615.71) and `cmake` but neither the CUDA
+toolkit nor a llama.cpp build, so nothing has been served on native Linux
+yet.
+
+### Serving
+
 Serving lives entirely in the backend now — there is no shell layer or
 `~/.bashrc` helper to source any more (`scripts/shell/main.sh` and everything
 under `scripts/` were deleted in Phase 2c of the migration, 2026-09-18; see
@@ -247,6 +284,12 @@ disk; the table below is the same information for reference:
 | qwen38  | dense | `Qwen3.8-27B-UD-Q3_K_XL.gguf`            |    12.24 GiB | 16384 |      12 |  20 |     1 |       n/a | `output\.weight`, `blk\.64\..*` -> CUDA0 |
 | qwen25c | dense | `Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf`  |     4.36 GiB | 16384 |       6 |  99 |     1 |       n/a | n/a                                      |
 | qwen3c  | MoE   | `Qwen3-Coder-30B-A3B-Instruct-Q4_1.gguf` |    17.87 GiB | 65536 |       6 |  99 |     1 |        34 | n/a                                      |
+
+As of 2026-10-09, only `qwen38`'s weights are on disk
+(`~/models/qwen38-27b/Qwen3.8-27B-UD-Q3_K_XL.gguf`, 13,146,393,504 bytes,
+the same size Hugging Face lists for it). The other three have to be
+downloaded first (`docs/model-downloads.md`); the Serve page's profile list
+shows the same thing.
 
 `qwen25c` is the only profile here whose weights fit in 6 GB outright, so
 `-ngl 99` puts all 28 blocks and the output head on the GPU and nothing is read
@@ -272,7 +315,8 @@ and worth confirming against the Live page's free-VRAM figure rather than
 assuming it fits.
 
 `qwen3c` (`unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF`, `Q4_1`, 17.87 GiB,
-alias `qwen3-coder-30b-a3b`) is a fourth profile, weights present on disk but
+alias `qwen3-coder-30b-a3b`) is a fourth profile. Its weights are not on
+disk on the current machine (as of 2026-10-09), and
 **nothing about it is measured yet**: no throughput figure and no run from
 the Benchmarks section's Tests page. It follows the same `qwen36` shape — sparse MoE, `-ngl 99`
 with `--n-cpu-moe 34` since the model is ~4.1x this card's 6 GB VRAM, `q8_0`
@@ -364,8 +408,8 @@ Thread sweep, any profile:
 ```
 
 GPU-layer sweep, dense profiles (`qwen38`, `qwen25c`) — one process per
-value on purpose: `llama-bench` retains GPU allocations across model reloads
-on WSL2, so reusing one process across values would contaminate every
+value on purpose: `llama-bench` retained GPU allocations across model reloads
+on WSL2 (not rechecked on native Linux), so reusing one process across values would contaminate every
 configuration after the first with the previous one's leftover allocation.
 `-ot` is passed through so headroom matches what the Serve page will
 actually see:
@@ -794,6 +838,11 @@ discontinuity, inside the database itself.
 ### Hardware and model
 
 - GPU: NVIDIA GeForce RTX 3060 Laptop, 6 GB VRAM (compute capability 8.6).
+- Host: 20 threads and 62 GiB RAM, on native Fedora 44 since 2026-10-09.
+  **Every measurement in this README was taken under WSL2**, before that
+  move. Same hardware, but a different kernel, driver stack and memory path
+  (which matters most for the CPU-resident MoE experts). Treat the numbers
+  as historical until they are re-measured on native Linux.
 - Model: `Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf` : 34.66 B total parameters, ~3 B
   active per token (MoE), 20.81 GiB on disk.
 
@@ -1464,9 +1513,11 @@ install on anything newer. `make backend` picks the interpreter by version
 rather than taking whatever `python3` happens to be — the same selection
 `lllm-backend` used to do, now a Makefile recipe instead of a shell function:
 `python3.12`, then `python3.11`, then `python3` only if it is in range. This
-matters on any machine with a newer Python ahead on `PATH` — with
-linuxbrew's Python installed, bare `python3` in an interactive shell is
-3.14. Set `LLAMA_OPENWEBUI_PYTHON` to force a specific interpreter. The venv
+matters on any machine with a newer Python ahead on `PATH`. On the current
+Fedora 44 machine, both `/usr/bin/python3` and linuxbrew's `python3` are 3.14,
+and there is no system 3.11 or 3.12. Python 3.12 comes from
+`uv python install 3.12` instead, which puts `python3.12` in `~/.local/bin`,
+where `make backend` finds it. Set `LLAMA_OPENWEBUI_PYTHON` to force a specific interpreter. The venv
 only counts as ready once its install has completed (marked by a
 `.lllm-bootstrap-complete` stamp inside it); a failed install is removed
 rather than left behind, so the next run retries from scratch instead of

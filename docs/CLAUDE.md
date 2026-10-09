@@ -57,12 +57,15 @@ choice, not a code path:
 - **Local (evaluation only)**: `Qwen3-Coder-30B-A3B-Instruct-Q4_1.gguf` from
   `unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF`, served under the alias
   `qwen3-coder-30b-a3b` by the `qwen3c` profile. Sparse MoE, 30 B total, 17.87
-  GiB on disk. Coding only. Weights are on disk but nothing about it is
-  measured yet.
+  GiB on disk. Coding only. Weights are not on disk on the current machine
+  (2026-10-09), and nothing about it is measured yet.
 
 ## Local inference
 
-Hardware: NVIDIA GeForce RTX 3060 Laptop, 6 GB VRAM, compute capability 8.6.
+Hardware: NVIDIA GeForce RTX 3060 Laptop, 6 GB VRAM, compute capability 8.6,
+on native Fedora 44 since 2026-10-09. Every recorded measurement was taken
+under WSL2 on the same laptop, so it is historical until re-measured. Weights
+on disk as of 2026-10-09: `qwen38` only.
 
 The 20.81 GiB model cannot fit in 6 GB, so the `qwen36` profile offloads all
 layers (`-ngl 99`) but keeps the MoE expert tensors of 34 layers in system RAM
@@ -233,12 +236,18 @@ assume a cloud-only environment.
   comparison, reporting, tuning) is at `http://localhost:4000/benchmarks`,
   admin-only, in the same frontend — no separate port any more (see "Local
   inference" below and the decisions log for why).
-- Requires Docker Desktop with WSL integration enabled for this distro (for
-  Postgres), `make`, plus Bun and a **Python 3.11 or 3.12** interpreter on the host
-  for the fork (its `requires-python` is `>= 3.11, < 3.13`). `make backend`
-  selects that interpreter by version rather than taking bare `python3`,
-  because on this machine an interactive shell's `python3` is linuxbrew's
-  3.14 — see `README.md`'s Dependencies section.
+- Runs on native Linux (Fedora 44 since 2026-10-09; WSL2 before). Requires
+  Docker Engine with the Compose plugin (for Postgres; the user is in the
+  `docker` group), `make`, Bun, Node ≥ 22.12 and a **Python 3.11 or 3.12**
+  interpreter on the host for the fork (its `requires-python` is
+  `>= 3.11, < 3.13`). `make backend` selects that interpreter by version
+  rather than taking bare `python3`, because on this machine both the system
+  `python3` and linuxbrew's are 3.14; 3.12 comes from `uv python install
+  3.12` (`~/.local/bin/python3.12`) — see `README.md`'s Dependencies section.
+- Local serving also needs llama.cpp built with CUDA at
+  `~/llama.cpp/build/bin` (`LLAMA_BIN`), which needs the CUDA toolkit and
+  `cmake` — see `README.md`'s "Building llama.cpp". Neither the toolkit nor
+  the build exists on the Fedora machine yet (2026-10-09).
 
 ## Maintenance policy
 
@@ -312,6 +321,19 @@ All commits should use conventional commit style and stay focused on one topic. 
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-09**: Moved the project from WSL2 to native Linux (Fedora 44
+  KDE, same laptop and RTX 3060). The docs now describe Docker Engine with
+  the user in the `docker` group, not Docker Desktop with WSL integration.
+  Set up on the new machine: Python 3.12.14 via `uv python install 3.12`
+  (Fedora 44 ships only 3.14), the backend venv, `apps/web`'s `bun install`
+  and build, and `cmake` from linuxbrew. **Not yet done**: `infra/.env`
+  (needs the OpenRouter key), the CUDA toolkit (needs sudo), and the
+  llama.cpp build at `~/llama.cpp`. Recommended build: 10597 (`95b8e33e1`),
+  the one the recorded measurements used. The Postgres volume did not come
+  across, so the database starts empty unless restored from a `pg_dump`.
+  Of the weights, only `qwen38` is on disk; `qwen3c`'s earlier "weights are
+  on disk" is no longer true. Every recorded benchmark number was measured
+  under WSL2 and is historical until re-measured on native Linux.
 - **2026-09-28**: Reviewed the whole React frontend and fixed what the
   review found (`docs/code-review.md`; its "Status" section maps each
   finding to its fix and test). Decisions worth keeping:
