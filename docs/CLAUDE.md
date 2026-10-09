@@ -319,6 +319,28 @@ All commits should use conventional commit style and stay focused on one topic. 
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-09**: Linting and formatting now run through the root
+  `.pre-commit-config.yaml` only: CI's `pre-commit` job runs the same file
+  with `--all-files`, so the checks are defined once. `apps/web` gained
+  Biome 2.5.15, pinned exactly in `package.json`, with the hook running that
+  copy. Its config is `biome.jsonc`: tabs, single quotes, semicolons, no
+  trailing commas and 120 columns. That matches the existing code and the
+  backend's ruff, and was the smallest of the formatting diffs tried.
+  - **Formatting covers everything now.** Biome formatted all of `apps/web`
+    (377 files), and ruff-format covers the whole backend.
+  - **Linting is staged, not scoped.** The owner treats inherited Open WebUI
+    code as their own.
+    - ruff-check still covers only `benchmarks/` and `tests/` until the rest
+      of the backend's ~2.8k findings are fixed.
+    - Biome only formats until `apps/web`'s ~800 findings are fixed. The
+      hook then becomes `biome check --write --error-on-warnings`.
+    - Owner's decisions:
+      - zero Biome findings before the lint gate turns on;
+      - ruff's `max-complexity` raised to 25, with the 37 functions above it
+        refactored after characterization tests.
+  - **Biome's formatter is not always idempotent.** `ChatInput.tsx` needed
+    a second pass to settle. After a bulk format, run it until it reports
+    "No fixes applied".
 - **2026-10-09**: The backend's dependencies now live only in
   `apps/server/pyproject.toml` + `uv.lock`; `backend/requirements.txt` and
   `requirements-min.txt` are deleted. Before this, four files disagreed:

@@ -39,6 +39,17 @@ directory, which is where `/static/favicon.png` and friends come from.
   it afterward — a clean Playwright run was observed leaving the daemon
   alive despite the signal-based path, so this doesn't rely on that alone).
 - `bunx astro check` for types (expect 0 errors).
+- `bun run format` (Biome: formats, and applies safe lint fixes) and
+  `bun run lint` (Biome, check only). Config is `biome.jsonc`. The repo's
+  pre-commit hook runs Biome's formatter on every commit; until the existing
+  lint findings are fixed it doesn't lint yet (see the root
+  `.pre-commit-config.yaml`). If a commit is rejected because the hook
+  reformatted a file, `git add` it and commit again.
+- Playwright runs flaky on this 20-core machine at its default worker count
+  (half the cores, about 10): the cold `astro dev` server can't answer that
+  many browsers in time, and redirect assertions hit their 5 s timeout.
+  This fails on `main` too, so it isn't caused by any one change.
+  `bunx playwright test --workers=2` (CI's count) runs clean.
 
 The e2e specs mock every `/api/v1/**` response and stub `/ws`, so they need
 **no backend**, and they will fight a `make frontend` you already have
