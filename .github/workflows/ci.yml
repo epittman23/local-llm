@@ -12,6 +12,12 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Daily run on main. Dependabot PRs are auto-merged with GITHUB_TOKEN,
+  # and pushes made with that token don't trigger `push` workflows, so
+  # without this nothing would re-test main after two bumps that each passed
+  # alone but break together.
+  schedule:
+    - cron: '17 9 * * *'
   workflow_dispatch:
 
 permissions:
