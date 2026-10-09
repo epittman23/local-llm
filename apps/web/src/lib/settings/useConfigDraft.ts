@@ -12,7 +12,10 @@ import { toast } from 'sonner';
  * `reload()` re-reads the server and resets the draft (after a save that changes
  * derived state, or a discard).
  */
-export function useConfigDraft<T extends object>(key: readonly unknown[], fetcher: () => Promise<T | null | undefined>) {
+export function useConfigDraft<T extends object>(
+	key: readonly unknown[],
+	fetcher: () => Promise<T | null | undefined>
+) {
 	const query = useQuery({
 		queryKey: ['admin-settings', ...key],
 		queryFn: async () => (await fetcher()) ?? null,

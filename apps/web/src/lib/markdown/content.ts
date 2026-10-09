@@ -19,7 +19,10 @@ export function replaceTokens(content: string, char?: string, user?: string): st
 	const tokens: [RegExp, string | ((m: string, id: string) => string) | undefined][] = [
 		[/{{char}}/gi, char],
 		[/{{user}}/gi, user],
-		[/{{VIDEO_FILE_ID_([a-f0-9-]+)}}/gi, (_, id) => `<video src="${WEBUI_BASE_URL}/api/v1/files/${id}/content" controls></video>`],
+		[
+			/{{VIDEO_FILE_ID_([a-f0-9-]+)}}/gi,
+			(_, id) => `<video src="${WEBUI_BASE_URL}/api/v1/files/${id}/content" controls></video>`
+		],
 		[/{{HTML_FILE_ID_([a-f0-9-]+)}}/gi, (_, id) => `<file type="html" id="${id}" />`]
 	];
 	return replaceOutsideCode(content, (segment) => {
@@ -36,7 +39,9 @@ function processChineseDelimiters(line: string, symbol: string, leftSymbol: stri
 	const s = escapeRegExp(symbol);
 	const regex = new RegExp(`(.?)(?<!${s})(${s})([^${s}]+)(${s})(?!${s})(.)`, 'g');
 	return line.replace(regex, (match, l: string, left: string, content: string, right: string, r: string) => {
-		const pad = (content.startsWith(leftSymbol) && l && isChineseChar(l[l.length - 1])) || (content.endsWith(rightSymbol) && r && isChineseChar(r[0]));
+		const pad =
+			(content.startsWith(leftSymbol) && l && isChineseChar(l[l.length - 1])) ||
+			(content.endsWith(rightSymbol) && r && isChineseChar(r[0]));
 		return pad ? `${l} ${left}${content}${right} ${r}` : match;
 	});
 }
@@ -66,12 +71,16 @@ export const processResponseContent = (content: string) => processChineseContent
 /** HTML entities to text, without executing anything (a parsed, inert document). */
 export function unescapeHtml(html: string): string {
 	if (!html || !html.includes('&')) return html ?? '';
-	return new DOMParser().parseFromString(`<!doctype html><body>${html.replace(/</g, '&lt;')}`, 'text/html').body.textContent ?? '';
+	return (
+		new DOMParser().parseFromString(`<!doctype html><body>${html.replace(/</g, '&lt;')}`, 'text/html').body
+			.textContent ?? ''
+	);
 }
 
 export const removeDetails = (content: string, types: string[]) =>
 	replaceOutsideCode(content, (segment) => {
-		for (const type of types) segment = segment.replace(new RegExp(`<details\\s+type="${type}"[^>]*>.*?<\\/details>`, 'gis'), '');
+		for (const type of types)
+			segment = segment.replace(new RegExp(`<details\\s+type="${type}"[^>]*>.*?<\\/details>`, 'gis'), '');
 		return segment;
 	}).trim();
 

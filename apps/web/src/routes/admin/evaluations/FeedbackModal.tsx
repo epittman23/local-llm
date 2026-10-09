@@ -55,7 +55,13 @@ export function FeedbackModal({
 	});
 
 	if (!feedback) return null;
-	const data = detail.data as { meta?: { message_id?: string }; snapshot?: { chat?: { chat?: { history?: { messages?: Record<string, Message> } } } } } | null | undefined;
+	const data = detail.data as
+		| {
+				meta?: { message_id?: string };
+				snapshot?: { chat?: { chat?: { history?: { messages?: Record<string, Message> } } } };
+		  }
+		| null
+		| undefined;
 	const messages = data?.snapshot?.chat?.chat?.history?.messages ?? {};
 	const response = messages[data?.meta?.message_id ?? ''];
 	const prompt = response?.parentId ? messages[response.parentId] : undefined;
@@ -92,7 +98,9 @@ export function FeedbackModal({
 						)}
 						{response && (
 							<Field label="Response">
-								<div className="max-h-32 flex-1 overflow-y-auto text-xs break-words whitespace-pre-line">{response.content || '-'}</div>
+								<div className="max-h-32 flex-1 overflow-y-auto text-xs break-words whitespace-pre-line">
+									{response.content || '-'}
+								</div>
 							</Field>
 						)}
 						<Field label="Rating">

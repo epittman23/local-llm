@@ -7,7 +7,14 @@ import { Tip } from '@/components/common/Tip';
 import { SettingSelect, SettingsSection, SettingSwitch, settingInputClass } from '@/components/settings/controls';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { createEventWebhook, deleteEventWebhook, type EventWebhook, getEventWebhooks, getEvents, updateEventWebhook } from '@/lib/apis';
+import {
+	createEventWebhook,
+	deleteEventWebhook,
+	type EventWebhook,
+	getEventWebhooks,
+	getEvents,
+	updateEventWebhook
+} from '@/lib/apis';
 import { getGroupInfoById, getGroups } from '@/lib/apis/groups';
 import { getUserInfoById, searchUsers } from '@/lib/apis/users';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -34,7 +41,17 @@ import {
 
 type Named = { id: string; name?: string; email?: string };
 
-const Chip = ({ label, kind, onRemove, mono }: { label: string; kind?: string; onRemove: () => void; mono?: boolean }) => (
+const Chip = ({
+	label,
+	kind,
+	onRemove,
+	mono
+}: {
+	label: string;
+	kind?: string;
+	onRemove: () => void;
+	mono?: boolean;
+}) => (
 	<div className="bg-muted flex items-center gap-1 rounded-full px-2 py-1 text-xs">
 		<span className={cn('max-w-36 truncate', mono && 'max-w-none font-mono break-all')}>{label}</span>
 		{kind && <span className="text-muted-foreground">{kind}</span>}
@@ -69,7 +86,10 @@ function WebhookDialog({
 	const [mode, setMode] = useState<TargetMode>('all');
 	const [userIds, setUserIds] = useState<string[]>([]);
 	const [groupIds, setGroupIds] = useState<string[]>([]);
-	const [known, setKnown] = useState<{ users: Record<string, Named>; groups: Record<string, Named> }>({ users: {}, groups: {} });
+	const [known, setKnown] = useState<{ users: Record<string, Named>; groups: Record<string, Named> }>({
+		users: {},
+		groups: {}
+	});
 	const [query, setQuery] = useState('');
 	const [userResults, setUserResults] = useState<Named[]>([]);
 	const [confirmDelete, setConfirmDelete] = useState(false);
@@ -96,7 +116,13 @@ function WebhookDialog({
 			setGroupIds([]);
 			return;
 		}
-		setForm({ id: editing.id, name: editing.name, url: editing.url, enabled: editing.enabled, events: editing.events?.length ? [...editing.events] : ['*'] });
+		setForm({
+			id: editing.id,
+			name: editing.name,
+			url: editing.url,
+			enabled: editing.enabled,
+			events: editing.events?.length ? [...editing.events] : ['*']
+		});
 		const state = targetsToState(editing.targets);
 		setMode(state.mode);
 		setUserIds(state.userIds);
@@ -139,7 +165,11 @@ function WebhookDialog({
 		return () => clearTimeout(timer);
 	}, [query, token]);
 
-	const groupResults = query.trim() ? groups.filter((g) => g.name?.toLowerCase().includes(query.trim().toLowerCase()) && !groupIds.includes(g.id)).slice(0, 5) : [];
+	const groupResults = query.trim()
+		? groups
+				.filter((g) => g.name?.toLowerCase().includes(query.trim().toLowerCase()) && !groupIds.includes(g.id))
+				.slice(0, 5)
+		: [];
 	const userHits = userResults.filter((u) => !userIds.includes(u.id)).slice(0, 5);
 
 	const addPattern = () => {
@@ -196,7 +226,9 @@ function WebhookDialog({
 				<DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
 					<DialogHeader>
 						<DialogTitle className="text-sm font-medium">{editing ? 'Edit webhook' : 'Add webhook'}</DialogTitle>
-						<DialogDescription className="sr-only">Where matching events are posted, and which events and users it covers.</DialogDescription>
+						<DialogDescription className="sr-only">
+							Where matching events are posted, and which events and users it covers.
+						</DialogDescription>
 					</DialogHeader>
 					<form
 						className="flex flex-col"
@@ -209,16 +241,37 @@ function WebhookDialog({
 						<label htmlFor="event-webhook-name" className="text-muted-foreground mb-0.5 text-xs">
 							Name
 						</label>
-						<input id="event-webhook-name" className={settingInputClass} type="text" placeholder="Identity audit" autoComplete="off" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+						<input
+							id="event-webhook-name"
+							className={settingInputClass}
+							type="text"
+							placeholder="Identity audit"
+							autoComplete="off"
+							value={form.name}
+							onChange={(e) => setForm({ ...form, name: e.target.value })}
+						/>
 
 						<label htmlFor="event-webhook-url" className="text-muted-foreground mt-2 mb-0.5 text-xs">
 							URL
 						</label>
 						<div className="flex items-center gap-2">
-							<input id="event-webhook-url" className={settingInputClass} type="url" placeholder="https://example.com/events" autoComplete="off" required value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
+							<input
+								id="event-webhook-url"
+								className={settingInputClass}
+								type="url"
+								placeholder="https://example.com/events"
+								autoComplete="off"
+								required
+								value={form.url}
+								onChange={(e) => setForm({ ...form, url: e.target.value })}
+							/>
 							<Tip content={form.enabled ? 'Enabled' : 'Disabled'}>
 								<span>
-									<SettingSwitch checked={form.enabled} onChange={(v) => setForm({ ...form, enabled: v })} label="Enabled" />
+									<SettingSwitch
+										checked={form.enabled}
+										onChange={(v) => setForm({ ...form, enabled: v })}
+										label="Enabled"
+									/>
 								</span>
 							</Tip>
 						</div>
@@ -234,9 +287,11 @@ function WebhookDialog({
 							</SettingSelect>
 						</div>
 						<p className="text-muted-foreground mt-1 text-xs">
-							{mode === 'all' && 'Receives matching events across the instance, including system/config events and events associated with any user.'}
+							{mode === 'all' &&
+								'Receives matching events across the instance, including system/config events and events associated with any user.'}
 							{mode === 'system' && 'Receives matching events that are not associated with a user.'}
-							{mode === 'selected' && 'Receives matching user-associated events only when the actor, user subject, or user data matches these users or current group members. System/config events are not sent.'}
+							{mode === 'selected' &&
+								'Receives matching user-associated events only when the actor, user subject, or user data matches these users or current group members. System/config events are not sent.'}
 						</p>
 
 						{mode === 'selected' && (
@@ -244,25 +299,53 @@ function WebhookDialog({
 								{(userIds.length > 0 || groupIds.length > 0) && (
 									<div className="mb-2 flex flex-wrap gap-1">
 										{groupIds.map((id) => (
-											<Chip key={`g-${id}`} label={known.groups[id]?.name ?? id} kind="group" onRemove={() => setGroupIds((ids) => ids.filter((x) => x !== id))} />
+											<Chip
+												key={`g-${id}`}
+												label={known.groups[id]?.name ?? id}
+												kind="group"
+												onRemove={() => setGroupIds((ids) => ids.filter((x) => x !== id))}
+											/>
 										))}
 										{userIds.map((id) => (
-											<Chip key={`u-${id}`} label={known.users[id]?.name ?? id} kind="user" onRemove={() => setUserIds((ids) => ids.filter((x) => x !== id))} />
+											<Chip
+												key={`u-${id}`}
+												label={known.users[id]?.name ?? id}
+												kind="user"
+												onRemove={() => setUserIds((ids) => ids.filter((x) => x !== id))}
+											/>
 										))}
 									</div>
 								)}
 								<div className="relative">
-									<input className={settingInputClass} type="text" placeholder="Search users or groups" autoComplete="off" aria-label="Search users or groups" value={query} onChange={(e) => setQuery(e.target.value)} />
+									<input
+										className={settingInputClass}
+										type="text"
+										placeholder="Search users or groups"
+										autoComplete="off"
+										aria-label="Search users or groups"
+										value={query}
+										onChange={(e) => setQuery(e.target.value)}
+									/>
 									{query.trim() && (groupResults.length > 0 || userHits.length > 0) && (
 										<div className="bg-popover absolute z-10 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border py-1 shadow-lg">
 											{groupResults.map((g) => (
-												<button key={`g-${g.id}`} type="button" className="hover:bg-muted/70 flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs" onClick={() => addGroup(g)}>
+												<button
+													key={`g-${g.id}`}
+													type="button"
+													className="hover:bg-muted/70 flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs"
+													onClick={() => addGroup(g)}
+												>
 													<span className="truncate">{g.name}</span>
 													<span className="text-muted-foreground">Group</span>
 												</button>
 											))}
 											{userHits.map((u) => (
-												<button key={`u-${u.id}`} type="button" className="hover:bg-muted/70 flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs" onClick={() => addUser(u)}>
+												<button
+													key={`u-${u.id}`}
+													type="button"
+													className="hover:bg-muted/70 flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs"
+													onClick={() => addUser(u)}
+												>
 													<span className="truncate">
 														{u.name}
 														{u.email && <span className="text-muted-foreground"> ({u.email})</span>}
@@ -279,7 +362,11 @@ function WebhookDialog({
 						<div className="mt-3 flex items-center justify-between">
 							<span className="text-muted-foreground text-xs">Events</span>
 							<label className="flex items-center gap-1.5 text-xs">
-								<input type="checkbox" checked={allEvents} onChange={(e) => setForm({ ...form, events: setAllEvents(e.target.checked) })} />
+								<input
+									type="checkbox"
+									checked={allEvents}
+									onChange={(e) => setForm({ ...form, events: setAllEvents(e.target.checked) })}
+								/>
 								<span>All events</span>
 							</label>
 						</div>
@@ -289,7 +376,12 @@ function WebhookDialog({
 								{form.events.length > 0 && (
 									<div className="flex flex-wrap gap-1">
 										{form.events.map((event) => (
-											<Chip key={event} mono label={event} onRemove={() => setForm({ ...form, events: removeFilter(form.events, event) })} />
+											<Chip
+												key={event}
+												mono
+												label={event}
+												onRemove={() => setForm({ ...form, events: removeFilter(form.events, event) })}
+											/>
 										))}
 									</div>
 								)}
@@ -316,7 +408,12 @@ function WebhookDialog({
 								<div className="max-h-36 overflow-y-auto pb-0.5">
 									{filterEvents(events, pattern).map((event) => (
 										<label key={event} className="flex items-start gap-2 py-0.5 text-xs">
-											<input className="mt-0.5" type="checkbox" checked={exact.includes(event)} onChange={() => setForm({ ...form, events: toggleEvent(form.events, event) })} />
+											<input
+												className="mt-0.5"
+												type="checkbox"
+												checked={exact.includes(event)}
+												onChange={() => setForm({ ...form, events: toggleEvent(form.events, event) })}
+											/>
 											<span className="min-w-0">
 												<span className="font-mono break-all">{event}</span>
 												<span className="text-muted-foreground ml-1">{details[event]?.message}</span>
@@ -328,7 +425,8 @@ function WebhookDialog({
 									{/* LICENSE covers this Open WebUI wordmark.
 									    Do not alter, remove, obscure, or replace it except as LICENSE permits:
 									    https://docs.openwebui.com/license. */}
-									Event names may change as Open WebUI evolves. Use broad patterns like user.* for integrations that should continue across new related events.
+									Event names may change as Open WebUI evolves. Use broad patterns like user.* for integrations that
+									should continue across new related events.
 								</p>
 							</div>
 						)}
@@ -336,7 +434,11 @@ function WebhookDialog({
 						<div className="flex items-center justify-between pt-4">
 							<div>
 								{editing && (
-									<button type="button" className="text-muted-foreground hover:text-foreground px-1 py-1.5 text-sm hover:underline" onClick={() => setConfirmDelete(true)}>
+									<button
+										type="button"
+										className="text-muted-foreground hover:text-foreground px-1 py-1.5 text-sm hover:underline"
+										onClick={() => setConfirmDelete(true)}
+									>
 										Delete
 									</button>
 								)}
@@ -348,7 +450,13 @@ function WebhookDialog({
 					</form>
 				</DialogContent>
 			</Dialog>
-			<ConfirmDialog open={confirmDelete} onOpenChange={setConfirmDelete} title="Delete webhook" confirmLabel="Delete" onConfirm={remove}>
+			<ConfirmDialog
+				open={confirmDelete}
+				onOpenChange={setConfirmDelete}
+				title="Delete webhook"
+				confirmLabel="Delete"
+				onConfirm={remove}
+			>
 				Are you sure you want to delete this webhook? This action cannot be undone.
 			</ConfirmDialog>
 		</>
@@ -366,7 +474,11 @@ export function Events() {
 		staleTime: Infinity,
 		refetchOnWindowFocus: false,
 		queryFn: async () => {
-			const [catalog, webhooks, groups] = await Promise.all([getEvents(token), getEventWebhooks(token), getGroups(token, true).catch(() => [])]);
+			const [catalog, webhooks, groups] = await Promise.all([
+				getEvents(token),
+				getEventWebhooks(token),
+				getGroups(token, true).catch(() => [])
+			]);
 			return {
 				catalog: [...(catalog?.events ?? [])].sort((a, b) => a.event.localeCompare(b.event)),
 				webhooks: sortWebhooks(webhooks ?? []),
@@ -387,7 +499,10 @@ export function Events() {
 	const toggle = async (webhook: EventWebhook, enabled: boolean) => {
 		const key = ['admin-settings', 'event-webhooks'];
 		const previous = queryClient.getQueryData<NonNullable<typeof data.data>>(key);
-		queryClient.setQueryData(key, previous && { ...previous, webhooks: previous.webhooks.map((w) => (w.id === webhook.id ? { ...w, enabled } : w)) });
+		queryClient.setQueryData(
+			key,
+			previous && { ...previous, webhooks: previous.webhooks.map((w) => (w.id === webhook.id ? { ...w, enabled } : w)) }
+		);
 		try {
 			await updateEventWebhook(token, webhook.id, { enabled });
 		} catch (error) {
@@ -401,10 +516,17 @@ export function Events() {
 			<div className="flex items-start justify-between gap-4">
 				<div className="min-w-0">
 					<div className="text-muted-foreground text-xs">Webhooks</div>
-					<p className="text-muted-foreground/70 mt-1.5 text-[0.6875rem]">Send product events as JSON to external services. Chat destinations receive readable messages.</p>
+					<p className="text-muted-foreground/70 mt-1.5 text-[0.6875rem]">
+						Send product events as JSON to external services. Chat destinations receive readable messages.
+					</p>
 				</div>
 				<Tip content="Add webhook">
-					<button type="button" aria-label="Add webhook" className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-6 items-center justify-center rounded-lg transition-colors" onClick={() => setDialog({ open: true, editing: null })}>
+					<button
+						type="button"
+						aria-label="Add webhook"
+						className="text-muted-foreground hover:bg-muted hover:text-foreground flex size-6 items-center justify-center rounded-lg transition-colors"
+						onClick={() => setDialog({ open: true, editing: null })}
+					>
 						<Plus className="size-4" />
 					</button>
 				</Tip>
@@ -422,22 +544,40 @@ export function Events() {
 						</div>
 						<div className="flex items-center gap-1">
 							<Tip content="Configure">
-								<button type="button" aria-label={`Configure ${webhook.name}`} className="hover:bg-muted/70 rounded-lg p-1 transition" onClick={() => setDialog({ open: true, editing: webhook })}>
+								<button
+									type="button"
+									aria-label={`Configure ${webhook.name}`}
+									className="hover:bg-muted/70 rounded-lg p-1 transition"
+									onClick={() => setDialog({ open: true, editing: webhook })}
+								>
 									<Settings className="size-4" />
 								</button>
 							</Tip>
 							<Tip content={webhook.enabled ? 'Enabled' : 'Disabled'}>
 								<span>
-									<SettingSwitch checked={webhook.enabled} onChange={(v) => toggle(webhook, v)} label={`Enable ${webhook.name}`} />
+									<SettingSwitch
+										checked={webhook.enabled}
+										onChange={(v) => toggle(webhook, v)}
+										label={`Enable ${webhook.name}`}
+									/>
 								</span>
 							</Tip>
 						</div>
 					</div>
 				))}
 			</div>
-			{data.data && webhooks.length === 0 && <p className="text-muted-foreground text-xs">No event webhooks configured.</p>}
+			{data.data && webhooks.length === 0 && (
+				<p className="text-muted-foreground text-xs">No event webhooks configured.</p>
+			)}
 
-			<WebhookDialog open={dialog.open} editing={dialog.editing} catalog={data.data?.catalog ?? []} groups={data.data?.groups ?? []} onClose={() => setDialog((d) => ({ ...d, open: false }))} onSaved={reload} />
+			<WebhookDialog
+				open={dialog.open}
+				editing={dialog.editing}
+				catalog={data.data?.catalog ?? []}
+				groups={data.data?.groups ?? []}
+				onClose={() => setDialog((d) => ({ ...d, open: false }))}
+				onSaved={reload}
+			/>
 		</SettingsSection>
 	);
 }

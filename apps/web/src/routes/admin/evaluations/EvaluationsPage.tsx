@@ -31,7 +31,10 @@ export function EvaluationsPage() {
 			getModels(token).catch(() => null)
 		]).then(([board, feedback, models]) => {
 			if (cancelled) return;
-			setCount('leaderboard', leaderboardCount((models ?? []) as ModelInfo[], (board?.entries ?? []) as LeaderboardEntry[]));
+			setCount(
+				'leaderboard',
+				leaderboardCount((models ?? []) as ModelInfo[], (board?.entries ?? []) as LeaderboardEntry[])
+			);
 			setCount('feedback', feedback?.total ?? null);
 		});
 		return () => {
@@ -44,11 +47,23 @@ export function EvaluationsPage() {
 			<SubTabs
 				active={tab}
 				tabs={[
-					{ id: 'leaderboard', to: routePaths.adminEvaluationsLeaderboard, label: 'Leaderboard', count: counts.leaderboard === null ? null : formatNumber(counts.leaderboard) },
-					{ id: 'feedback', to: routePaths.adminEvaluationsFeedback, label: 'Feedback', count: counts.feedback === null ? null : formatNumber(counts.feedback) }
+					{
+						id: 'leaderboard',
+						to: routePaths.adminEvaluationsLeaderboard,
+						label: 'Leaderboard',
+						count: counts.leaderboard === null ? null : formatNumber(counts.leaderboard)
+					},
+					{
+						id: 'feedback',
+						to: routePaths.adminEvaluationsFeedback,
+						label: 'Feedback',
+						count: counts.feedback === null ? null : formatNumber(counts.feedback)
+					}
 				]}
 			/>
-			<div className="mt-1 flex-1 overflow-y-scroll px-4 lg:mt-0 lg:pr-4 lg:pl-0">{tab === 'leaderboard' ? <Leaderboard /> : <Feedbacks />}</div>
+			<div className="mt-1 flex-1 overflow-y-scroll px-4 lg:mt-0 lg:pr-4 lg:pl-0">
+				{tab === 'leaderboard' ? <Leaderboard /> : <Feedbacks />}
+			</div>
 		</div>
 	);
 }

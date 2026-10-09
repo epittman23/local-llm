@@ -48,7 +48,10 @@ export function Leaderboard() {
 	const [selected, setSelected] = useState<RankedModel | null>(null);
 	const [showModal, setShowModal] = useState(false);
 
-	const models = useQuery({ queryKey: ['models-all'], queryFn: async () => ((await getModels(token)) ?? []) as ModelInfo[] });
+	const models = useQuery({
+		queryKey: ['models-all'],
+		queryFn: async () => ((await getModels(token)) ?? []) as ModelInfo[]
+	});
 	const board = useQuery({
 		queryKey: ['admin', 'leaderboard', debouncedQuery],
 		queryFn: async () => ((await getLeaderboard(token, debouncedQuery))?.entries ?? []) as LeaderboardEntry[],
@@ -89,7 +92,12 @@ export function Leaderboard() {
 								placeholder="Search"
 							/>
 							{query && (
-								<button type="button" className="hover:bg-muted rounded-full p-0.5 transition" aria-label="Clear search" onClick={() => setQuery('')}>
+								<button
+									type="button"
+									className="hover:bg-muted rounded-full p-0.5 transition"
+									aria-label="Clear search"
+									onClick={() => setQuery('')}
+								>
 									<X className="size-3" strokeWidth={2} />
 								</button>
 							)}
@@ -112,11 +120,22 @@ export function Leaderboard() {
 								<thead className="text-foreground bg-transparent text-xs uppercase">
 									<tr className="border-b">
 										{COLUMNS.map((col, i) => (
-											<th key={i} scope="col" className={cn('cursor-pointer px-2.5 py-2 font-normal select-none', col.className)} onClick={() => toggleSort(col.key)}>
-												<div className={cn('flex items-center gap-1.5', col.className.includes('right') && 'justify-end')}>
+											<th
+												key={i}
+												scope="col"
+												className={cn('cursor-pointer px-2.5 py-2 font-normal select-none', col.className)}
+												onClick={() => toggleSort(col.key)}
+											>
+												<div
+													className={cn('flex items-center gap-1.5', col.className.includes('right') && 'justify-end')}
+												>
 													{col.label}
 													{orderBy === col.key ? (
-														direction === 'asc' ? <ChevronUp className="size-2" /> : <ChevronDown className="size-2" />
+														direction === 'asc' ? (
+															<ChevronUp className="size-2" />
+														) : (
+															<ChevronDown className="size-2" />
+														)
 													) : (
 														<ChevronUp className="invisible size-2" />
 													)}
@@ -160,7 +179,9 @@ export function Leaderboard() {
 													'-'
 												) : (
 													<>
-														<span className="hidden group-hover:inline">{percentOf(model.stats.won, model.stats.count)}%</span>
+														<span className="hidden group-hover:inline">
+															{percentOf(model.stats.won, model.stats.count)}%
+														</span>
 														<span className="group-hover:hidden">{model.stats.won}</span>
 													</>
 												)}
@@ -170,7 +191,9 @@ export function Leaderboard() {
 													'-'
 												) : (
 													<>
-														<span className="hidden group-hover:inline">{percentOf(model.stats.lost, model.stats.count)}%</span>
+														<span className="hidden group-hover:inline">
+															{percentOf(model.stats.lost, model.stats.count)}%
+														</span>
 														<span className="group-hover:hidden">{model.stats.lost}</span>
 													</>
 												)}
@@ -185,7 +208,9 @@ export function Leaderboard() {
 			</div>
 
 			<div className="text-muted-foreground mt-1.5 flex w-full justify-end text-xs">
-				<div className="line-clamp-1 text-right">ⓘ The evaluation leaderboard is based on the Elo rating system and is updated in real-time.</div>
+				<div className="line-clamp-1 text-right">
+					ⓘ The evaluation leaderboard is based on the Elo rating system and is updated in real-time.
+				</div>
 			</div>
 		</>
 	);

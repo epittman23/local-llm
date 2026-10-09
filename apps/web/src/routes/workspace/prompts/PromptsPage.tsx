@@ -1,15 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import saveAs from 'file-saver';
-import {
-	Check,
-	Clipboard,
-	Copy,
-	Download,
-	MoreHorizontal,
-	Pencil,
-	Share2,
-	Trash2
-} from 'lucide-react';
+import { Check, Clipboard, Copy, Download, MoreHorizontal, Pencil, Share2, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
@@ -28,13 +19,7 @@ import {
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
-import {
-	createNewPrompt,
-	deletePromptById,
-	getPromptItems,
-	getPromptTags,
-	togglePromptById
-} from '@/lib/apis/prompts';
+import { createNewPrompt, deletePromptById, getPromptItems, getPromptTags, togglePromptById } from '@/lib/apis/prompts';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore, useWebUIName } from '@/lib/stores/configStore';
 import { useWorkspaceStore } from '@/lib/stores/workspaceStore';
@@ -105,15 +90,7 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 	const list = useQuery({
 		queryKey: ['prompts', debouncedQuery, viewOption, selectedTag, sortKey, sortDirection, page],
 		queryFn: async () => {
-			const res = await getPromptItems(
-				token,
-				debouncedQuery,
-				viewOption,
-				selectedTag,
-				sortKey,
-				sortDirection,
-				page
-			);
+			const res = await getPromptItems(token, debouncedQuery, viewOption, selectedTag, sortKey, sortDirection, page);
 			return res as { items: PromptListItem[]; total: number };
 		},
 		placeholderData: keepPreviousData

@@ -28,7 +28,17 @@ export const localDate = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1
 /** A fresh schedule: daily at 9:00; a one-time run defaults to five minutes from now. */
 export function defaultSchedule(now = new Date()): Schedule {
 	const soon = new Date(now.getTime() + 5 * 60_000);
-	return { frequency: 'DAILY', interval: 1, hour: 9, minute: 0, days: [], monthDay: 1, onceDate: localDate(soon), onceTime: `${pad(soon.getHours())}:${pad(soon.getMinutes())}`, custom: '' };
+	return {
+		frequency: 'DAILY',
+		interval: 1,
+		hour: 9,
+		minute: 0,
+		days: [],
+		monthDay: 1,
+		onceDate: localDate(soon),
+		onceTime: `${pad(soon.getHours())}:${pad(soon.getMinutes())}`,
+		custom: ''
+	};
 }
 
 /** The RRULE's `KEY=VALUE` parts, ignoring any DTSTART line. */
@@ -53,7 +63,8 @@ const DTSTART = /DTSTART:(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})/;
 /** Builds the RRULE for a schedule. `frequency` may be given to build a visual schedule while CUSTOM is selected. */
 export function buildRrule(s: Schedule, frequency: Frequency = s.frequency): string {
 	if (frequency === 'CUSTOM') return s.custom;
-	if (frequency === 'ONCE') return `DTSTART:${s.onceDate.replace(/-/g, '')}T${s.onceTime.replace(/:/g, '')}00\nRRULE:FREQ=DAILY;COUNT=1`;
+	if (frequency === 'ONCE')
+		return `DTSTART:${s.onceDate.replace(/-/g, '')}T${s.onceTime.replace(/:/g, '')}00\nRRULE:FREQ=DAILY;COUNT=1`;
 	const parts = [`FREQ=${frequency}`];
 	if (s.interval > 1) parts.push(`INTERVAL=${s.interval}`);
 	if (frequency === 'WEEKLY' && s.days.length) parts.push(`BYDAY=${s.days.join(',')}`);
@@ -68,7 +79,11 @@ export function parseRrule(rrule: string, now = new Date()): Schedule {
 	const s = defaultSchedule(now);
 	if (ONCE.test(rrule)) {
 		const m = rrule.match(DTSTART);
-		return { ...s, frequency: 'ONCE', ...(m ? { onceDate: `${m[1]}-${m[2]}-${m[3]}`, onceTime: `${m[4]}:${m[5]}` } : {}) };
+		return {
+			...s,
+			frequency: 'ONCE',
+			...(m ? { onceDate: `${m[1]}-${m[2]}-${m[3]}`, onceTime: `${m[4]}:${m[5]}` } : {})
+		};
 	}
 	const p = ruleParts(rrule);
 	const freq = p.FREQ || 'DAILY';
@@ -93,7 +108,8 @@ export function withFrequency(s: Schedule, next: Frequency): Schedule {
 	return { ...s, frequency: next };
 }
 
-const ordinal = (n: number) => (n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th');
+const ordinal = (n: number) =>
+	n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th';
 
 /** "Daily at 9:00 AM", "MO,WE at 6:30 PM", "Once · Sep 30 9:00 AM", or the rule itself if it is none of those. */
 export function formatSchedule(rrule: string): string {
@@ -126,7 +142,8 @@ export function formatSchedule(rrule: string): string {
 }
 
 /** A one-time run must be in the future. */
-export const oncePassed = (s: Schedule, now = new Date()) => s.frequency === 'ONCE' && new Date(`${s.onceDate}T${s.onceTime}`) <= now;
+export const oncePassed = (s: Schedule, now = new Date()) =>
+	s.frequency === 'ONCE' && new Date(`${s.onceDate}T${s.onceTime}`) <= now;
 
 // --- destinations --------------------------------------------------------
 
@@ -134,9 +151,11 @@ export type Folder = { id: string; name: string; parent_id?: string | null; shar
 export type Channel = { id: string; name: string; type?: string | null };
 
 /** Folders an automation can post into (not shared ones), by name. */
-export const folderOptions = (folders: Folder[]) => folders.filter((f) => f?.id && !f.shared).sort((a, b) => a.name.localeCompare(b.name));
+export const folderOptions = (folders: Folder[]) =>
+	folders.filter((f) => f?.id && !f.shared).sort((a, b) => a.name.localeCompare(b.name));
 /** Channels an automation can post into (not DMs), by name. */
-export const channelOptions = (channels: Channel[]) => channels.filter((c) => c?.id && c.type !== 'dm').sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+export const channelOptions = (channels: Channel[]) =>
+	channels.filter((c) => c?.id && c.type !== 'dm').sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 
 /** "Parent / Child" above a folder; stops at a cycle or a missing parent. */
 export function folderPath(folder: Folder, all: Folder[]): string {
@@ -154,7 +173,12 @@ export function folderPath(folder: Folder, all: Folder[]): string {
 }
 
 /** Where a run's output goes, for the list and the detail page. */
-export function destinationLabel(a: Pick<AutomationResponse, 'folder_id' | 'data'>, folders: Folder[], channels: Channel[], detailed = false): string {
+export function destinationLabel(
+	a: Pick<AutomationResponse, 'folder_id' | 'data'>,
+	folders: Folder[],
+	channels: Channel[],
+	detailed = false
+): string {
 	if (a.data.target?.type === 'channel') {
 		const channel = channels.find((c) => c.id === a.data.target?.channel_id);
 		return channel?.name ? `#${channel.name}` : 'Channel';
@@ -165,7 +189,8 @@ export function destinationLabel(a: Pick<AutomationResponse, 'folder_id' | 'data
 }
 
 /** Where a run links to: its channel, or its chat. */
-export const runTarget = (chatId: string) => (chatId.startsWith('channel:') ? `/channels/${chatId.slice('channel:'.length)}` : `/c/${chatId}`);
+export const runTarget = (chatId: string) =>
+	chatId.startsWith('channel:') ? `/channels/${chatId.slice('channel:'.length)}` : `/c/${chatId}`;
 
 // --- the form ------------------------------------------------------------
 
@@ -185,8 +210,21 @@ export type AutomationFields = {
  * and active); or blank. A clone's folder and channel are checked separately,
  * once those lists have loaded (`withoutMissingDestinations`).
  */
-export function automationFields(source: AutomationResponse | null, { clone = false, now = new Date() } = {}): AutomationFields {
-	if (!source) return { name: '', prompt: '', modelId: '', folderId: '', targetType: 'chat', channelId: '', isActive: true, schedule: defaultSchedule(now) };
+export function automationFields(
+	source: AutomationResponse | null,
+	{ clone = false, now = new Date() } = {}
+): AutomationFields {
+	if (!source)
+		return {
+			name: '',
+			prompt: '',
+			modelId: '',
+			folderId: '',
+			targetType: 'chat',
+			channelId: '',
+			isActive: true,
+			schedule: defaultSchedule(now)
+		};
 	const channelId = source.data.target?.channel_id ?? '';
 	return {
 		name: clone ? `${source.name} (Clone)` : source.name,
@@ -201,7 +239,11 @@ export function automationFields(source: AutomationResponse | null, { clone = fa
 }
 
 /** Clears a folder or channel the user no longer has (a clone of someone else's, or a deleted one). */
-export function withoutMissingDestinations(f: AutomationFields, folders: Folder[], channels: Channel[]): AutomationFields {
+export function withoutMissingDestinations(
+	f: AutomationFields,
+	folders: Folder[],
+	channels: Channel[]
+): AutomationFields {
 	return {
 		...f,
 		folderId: folders.some((x) => x.id === f.folderId) ? f.folderId : '',
@@ -219,7 +261,12 @@ export function automationPayload(f: AutomationFields, now = new Date()): { erro
 		form: {
 			name: f.name.trim(),
 			folder_id: channel ? null : f.folderId || null,
-			data: { prompt: f.prompt.trim(), model_id: f.modelId.trim(), rrule: buildRrule(f.schedule), target: channel ? { type: 'channel', channel_id: f.channelId } : { type: 'chat' } },
+			data: {
+				prompt: f.prompt.trim(),
+				model_id: f.modelId.trim(),
+				rrule: buildRrule(f.schedule),
+				target: channel ? { type: 'channel', channel_id: f.channelId } : { type: 'chat' }
+			},
 			is_active: f.isActive
 		}
 	};
@@ -228,7 +275,13 @@ export function automationPayload(f: AutomationFields, now = new Date()): { erro
 // --- import / export -----------------------------------------------------
 
 /** What an export writes for one automation: its form, not its server-side ids and run history. */
-export const toAutomationForm = (a: AutomationResponse): AutomationForm => ({ name: a.name, folder_id: a.folder_id, data: a.data, meta: a.meta ?? undefined, is_active: a.is_active });
+export const toAutomationForm = (a: AutomationResponse): AutomationForm => ({
+	name: a.name,
+	folder_id: a.folder_id,
+	data: a.data,
+	meta: a.meta ?? undefined,
+	is_active: a.is_active
+});
 
 const str = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max) : '');
 
@@ -240,7 +293,10 @@ const str = (v: unknown, max: number) => (typeof v === 'string' ? v.slice(0, max
  * a file someone sent could otherwise have each run POST its output to a URL
  * of their choosing. The Svelte importer posted `data` and `meta` as they were.
  */
-export function parseAutomationImport(text: string, validFolderIds: Set<string>): { forms: AutomationForm[]; skipped: number } {
+export function parseAutomationImport(
+	text: string,
+	validFolderIds: Set<string>
+): { forms: AutomationForm[]; skipped: number } {
 	const raw = JSON.parse(text);
 	const items: unknown = Array.isArray(raw) ? raw : raw?.automations;
 	if (!Array.isArray(items)) throw new Error('Invalid JSON format');
@@ -255,7 +311,10 @@ export function parseAutomationImport(text: string, validFolderIds: Set<string>)
 			skipped++;
 			continue;
 		}
-		const target = data?.target?.type === 'channel' && typeof data.target.channel_id === 'string' ? { type: 'channel' as const, channel_id: data.target.channel_id.slice(0, 200) } : { type: 'chat' as const };
+		const target =
+			data?.target?.type === 'channel' && typeof data.target.channel_id === 'string'
+				? { type: 'channel' as const, channel_id: data.target.channel_id.slice(0, 200) }
+				: { type: 'chat' as const };
 		const meta = item?.meta && typeof item.meta === 'object' ? item.meta : undefined;
 		forms.push({
 			name: str(item?.name, 500) || 'Imported automation',

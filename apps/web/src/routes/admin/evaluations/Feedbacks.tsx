@@ -60,10 +60,14 @@ export function Feedbacks() {
 
 	const list = useQuery({
 		queryKey: ['admin', 'feedbacks', { orderBy, direction, page, modelId }],
-		queryFn: () => getFeedbackItems(token, orderBy, direction, page, modelId) as Promise<{ items: FeedbackItem[]; total: number }>,
+		queryFn: () =>
+			getFeedbackItems(token, orderBy, direction, page, modelId) as Promise<{ items: FeedbackItem[]; total: number }>,
 		placeholderData: keepPreviousData
 	});
-	const modelIds = useQuery({ queryKey: ['admin', 'feedback-model-ids'], queryFn: async () => ((await getFeedbackModelIds(token)) ?? []) as string[] });
+	const modelIds = useQuery({
+		queryKey: ['admin', 'feedback-model-ids'],
+		queryFn: async () => ((await getFeedbackModelIds(token)) ?? []) as string[]
+	});
 
 	const items = list.data?.items ?? null;
 	const total = list.data?.total ?? null;
@@ -101,8 +105,13 @@ export function Feedbacks() {
 			return null;
 		});
 		if (!all) return;
-		if (format === 'csv') saveAs(new Blob([feedbacksToCsv(all)], { type: 'text/csv' }), `feedback-history-export-${Date.now()}.csv`);
-		else saveAs(new Blob([JSON.stringify(all)], { type: 'application/json' }), `feedback-history-export-${Date.now()}.json`);
+		if (format === 'csv')
+			saveAs(new Blob([feedbacksToCsv(all)], { type: 'text/csv' }), `feedback-history-export-${Date.now()}.csv`);
+		else
+			saveAs(
+				new Blob([JSON.stringify(all)], { type: 'application/json' }),
+				`feedback-history-export-${Date.now()}.json`
+			);
 	};
 
 	if (items === null || total === null) {
@@ -155,7 +164,10 @@ export function Feedbacks() {
 					{total > 0 && (
 						<DropdownMenu>
 							<DropdownMenuTrigger asChild>
-								<button type="button" className="hover:bg-muted flex h-8 shrink-0 items-center gap-1 rounded-xl px-2 py-1.5 text-xs transition">
+								<button
+									type="button"
+									className="hover:bg-muted flex h-8 shrink-0 items-center gap-1 rounded-xl px-2 py-1.5 text-xs transition"
+								>
 									Export
 									<ChevronDown className="size-3" strokeWidth={2.5} />
 								</button>
@@ -184,11 +196,20 @@ export function Feedbacks() {
 						<thead className="text-foreground bg-transparent text-xs uppercase">
 							<tr className="border-b">
 								{COLUMNS.map((col) => (
-									<th key={col.key} scope="col" className={cn('cursor-pointer px-2.5 py-2 font-normal select-none', col.className)} onClick={() => setSortKey(col.key)}>
+									<th
+										key={col.key}
+										scope="col"
+										className={cn('cursor-pointer px-2.5 py-2 font-normal select-none', col.className)}
+										onClick={() => setSortKey(col.key)}
+									>
 										<div className={cn('flex items-center gap-1.5', col.inner)}>
 											{col.label}
 											{orderBy === col.key ? (
-												direction === 'asc' ? <ChevronUp className="size-2" /> : <ChevronDown className="size-2" />
+												direction === 'asc' ? (
+													<ChevronUp className="size-2" />
+												) : (
+													<ChevronDown className="size-2" />
+												)
 											) : (
 												<ChevronUp className="invisible size-2" />
 											)}
@@ -231,17 +252,23 @@ export function Feedbacks() {
 												{siblings ? (
 													<>
 														<Tip content={feedback.data?.model_id} side="top">
-															<div className="text-muted-foreground line-clamp-1 flex-1 font-normal">{feedback.data?.model_id}</div>
+															<div className="text-muted-foreground line-clamp-1 flex-1 font-normal">
+																{feedback.data?.model_id}
+															</div>
 														</Tip>
 														<Tip content={siblings.join(', ')}>
 															<div className="text-muted-foreground line-clamp-1 text-[0.65rem]">
-																{siblings.length > 2 ? `${siblings.slice(0, 2).join(', ')}, and ${siblings.length - 2} more` : siblings.join(', ')}
+																{siblings.length > 2
+																	? `${siblings.slice(0, 2).join(', ')}, and ${siblings.length - 2} more`
+																	: siblings.join(', ')}
 															</div>
 														</Tip>
 													</>
 												) : (
 													<Tip content={feedback.data?.model_id} side="top">
-														<div className="text-muted-foreground line-clamp-1 flex-1 py-1.5 text-sm font-normal">{feedback.data?.model_id}</div>
+														<div className="text-muted-foreground line-clamp-1 flex-1 py-1.5 text-sm font-normal">
+															{feedback.data?.model_id}
+														</div>
 													</Tip>
 												)}
 											</div>
@@ -249,7 +276,12 @@ export function Feedbacks() {
 										<td className="w-max px-3 py-1 text-right font-normal">
 											<div className="flex justify-end">
 												{outcome && (
-													<span className={cn('inline-flex h-5 items-center rounded-full px-2 text-xs font-medium', OUTCOME_STYLE[outcome].className)}>
+													<span
+														className={cn(
+															'inline-flex h-5 items-center rounded-full px-2 text-xs font-medium',
+															OUTCOME_STYLE[outcome].className
+														)}
+													>
 														{OUTCOME_STYLE[outcome].label}
 													</span>
 												)}
@@ -260,7 +292,11 @@ export function Feedbacks() {
 											<DropdownMenu>
 												<Tip content="More">
 													<DropdownMenuTrigger asChild>
-														<button type="button" aria-label="Feedback Menu" className="hover:bg-muted w-fit self-center rounded-xl p-1.5 text-sm">
+														<button
+															type="button"
+															aria-label="Feedback Menu"
+															className="hover:bg-muted w-fit self-center rounded-xl p-1.5 text-sm"
+														>
 															<MoreHorizontal className="size-4" />
 														</button>
 													</DropdownMenuTrigger>

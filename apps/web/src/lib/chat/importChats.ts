@@ -5,7 +5,8 @@
 type Rec = Record<string, any>;
 
 /** A ChatGPT export has conversations with a `mapping` tree. */
-export const importOrigin = (chats: Rec[]) => (chats.some((c) => c && typeof c === 'object' && 'mapping' in c) ? 'openai' : 'webui');
+export const importOrigin = (chats: Rec[]) =>
+	chats.some((c) => c && typeof c === 'object' && 'mapping' in c) ? 'openai' : 'webui';
 
 function openAIText(message: Rec | null | undefined): string {
 	const parts = message?.content?.parts;
@@ -27,7 +28,17 @@ function convertConversation(convo: Rec) {
 		if (role === 'system' || role === 'tool') continue;
 		const model = m?.metadata?.model_slug || 'gpt-3.5-turbo';
 		const timestamp = m?.create_time ? Math.floor(m.create_time) : undefined;
-		messages.push({ id, parentId: lastId, childrenIds: node.children || [], role: role !== 'user' ? 'assistant' : 'user', content: openAIText(m), model, done: true, context: null, ...(timestamp !== undefined ? { timestamp } : {}) });
+		messages.push({
+			id,
+			parentId: lastId,
+			childrenIds: node.children || [],
+			role: role !== 'user' ? 'assistant' : 'user',
+			content: openAIText(m),
+			model,
+			done: true,
+			context: null,
+			...(timestamp !== undefined ? { timestamp } : {})
+		});
 		if (role !== 'user') models.add(model);
 		lastId = id;
 	}
@@ -52,7 +63,14 @@ export function convertOpenAIChats(chats: Rec[]): Rec[] {
 		const chat = convertConversation(convo);
 		if (!chat.messages.length || chat.messages.some((m) => typeof m.content !== 'string')) continue;
 		const created = convo.create_time ? Math.floor(convo.create_time) : null;
-		out.push({ id: convo.id, user_id: '', title: convo.title, chat, created_at: created, updated_at: convo.update_time ? Math.floor(convo.update_time) : created });
+		out.push({
+			id: convo.id,
+			user_id: '',
+			title: convo.title,
+			chat,
+			created_at: created,
+			updated_at: convo.update_time ? Math.floor(convo.update_time) : created
+		});
 	}
 	return out;
 }
@@ -61,8 +79,22 @@ export function convertOpenAIChats(chats: Rec[]): Rec[] {
 export const importPayload = (chats: Rec[]) =>
 	chats.map((c) =>
 		c.chat
-			? { chat: c.chat, meta: c.meta ?? {}, pinned: false, folder_id: c.folder_id ?? null, created_at: c.created_at ?? null, updated_at: c.updated_at ?? null }
-			: { chat: c, meta: {}, pinned: false, folder_id: null, created_at: c?.created_at ?? null, updated_at: c?.updated_at ?? null }
+			? {
+					chat: c.chat,
+					meta: c.meta ?? {},
+					pinned: false,
+					folder_id: c.folder_id ?? null,
+					created_at: c.created_at ?? null,
+					updated_at: c.updated_at ?? null
+				}
+			: {
+					chat: c,
+					meta: {},
+					pinned: false,
+					folder_id: null,
+					created_at: c?.created_at ?? null,
+					updated_at: c?.updated_at ?? null
+				}
 	);
 
 /** Reads an export file: this app's own, or ChatGPT's (converted). Throws on anything that is not a list of chats. */

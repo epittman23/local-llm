@@ -66,11 +66,25 @@ export function ChartLine({
 				onMouseLeave={() => setHoveredIdx(null)}
 			>
 				{models.map((m) => (
-					<path key={m} d={pathFor(m)} fill="none" stroke={colorMap.get(m)} strokeWidth="1.5" className={hovered && !hovered.models?.[m] ? 'opacity-20' : ''} />
+					<path
+						key={m}
+						d={pathFor(m)}
+						fill="none"
+						stroke={colorMap.get(m)}
+						strokeWidth="1.5"
+						className={hovered && !hovered.models?.[m] ? 'opacity-20' : ''}
+					/>
 				))}
 				{hoveredIdx !== null && (
 					<>
-						<line x1={getX(hoveredIdx)} y1={PAD.t} x2={getX(hoveredIdx)} y2={ch + PAD.t} stroke="#ddd" strokeWidth="1" />
+						<line
+							x1={getX(hoveredIdx)}
+							y1={PAD.t}
+							x2={getX(hoveredIdx)}
+							y2={ch + PAD.t}
+							stroke="#ddd"
+							strokeWidth="1"
+						/>
 						{models.map((m) => {
 							const v = hovered?.models?.[m] || 0;
 							return v > 0 ? <circle key={m} cx={getX(hoveredIdx)} cy={getY(v)} r="3" fill={colorMap.get(m)} /> : null;
@@ -93,10 +107,15 @@ export function ChartLine({
 			)}
 
 			{hovered && (
-				<div className="pointer-events-none absolute top-1 text-[0.6875rem]" style={{ left: `${Math.min(Math.max((mouseX / W) * 100, 8), 92)}%` }}>
+				<div
+					className="pointer-events-none absolute top-1 text-[0.6875rem]"
+					style={{ left: `${Math.min(Math.max((mouseX / W) * 100, 8), 92)}%` }}
+				>
 					<div className="bg-popover min-w-[8.75rem] -translate-x-1/2 rounded border px-2.5 py-1.5 shadow-sm">
 						<div className="text-muted-foreground mb-1.5 text-[0.625rem]">
-							{hovered.date?.includes(':') ? dayjs(hovered.date).format('MMM D, h A') : dayjs(hovered.date).format('MMM D, YYYY')}
+							{hovered.date?.includes(':')
+								? dayjs(hovered.date).format('MMM D, h A')
+								: dayjs(hovered.date).format('MMM D, YYYY')}
 						</div>
 						{Object.entries(hovered.models || {})
 							.sort(([, a], [, b]) => b - a)
@@ -105,7 +124,10 @@ export function ChartLine({
 								<div key={name} className="flex items-center justify-between gap-2 py-0.5">
 									<span className="text-muted-foreground min-w-0 truncate">{name}</span>
 									<span className="shrink-0 tabular-nums">
-										{count.toLocaleString()} <span className="text-muted-foreground">({total > 0 ? ((count / total) * 100).toFixed(0) : 0}%)</span>
+										{count.toLocaleString()}{' '}
+										<span className="text-muted-foreground">
+											({total > 0 ? ((count / total) * 100).toFixed(0) : 0}%)
+										</span>
 									</span>
 								</div>
 							))}

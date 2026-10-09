@@ -19,7 +19,13 @@ chatMarked.use(citationExtension());
 chatMarked.use(footnoteExtension());
 chatMarked.use(colonFenceExtension());
 chatMarked.use(disableSingleTilde);
-chatMarked.use({ extensions: [mentionExtension({ triggerChar: '@' }), mentionExtension({ triggerChar: '#' }), mentionExtension({ triggerChar: '$' })] as never });
+chatMarked.use({
+	extensions: [
+		mentionExtension({ triggerChar: '@' }),
+		mentionExtension({ triggerChar: '#' }),
+		mentionExtension({ triggerChar: '$' })
+	] as never
+});
 
 // Loosely typed: the extensions add token types marked's own union does not know.
 export type MdToken = { type: string; raw: string } & Record<string, any>;
@@ -28,4 +34,5 @@ export type MdToken = { type: string; raw: string } & Record<string, any>;
 export const lexChat = (src: string) => chatMarked.lexer(src) as unknown as MdToken[];
 
 /** A message's content as tokens: placeholders filled, then tokenized. */
-export const lexMessage = (content: string, modelName?: string, userName?: string) => lexChat(replaceTokens(processResponseContent(content ?? ''), modelName, userName));
+export const lexMessage = (content: string, modelName?: string, userName?: string) =>
+	lexChat(replaceTokens(processResponseContent(content ?? ''), modelName, userName));

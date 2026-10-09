@@ -115,7 +115,11 @@ export function AddConnectionModal({
 		}
 		const headers = headersOrToast();
 		if (!headers.ok) return;
-		const res = await verifyOpenAIConnection(token, { url, key: f.key, config: verifyConfig({ ...f, url }, mode, headers.value) }, direct).catch(failed);
+		const res = await verifyOpenAIConnection(
+			token,
+			{ url, key: f.key, config: verifyConfig({ ...f, url }, mode, headers.value) },
+			direct
+		).catch(failed);
 		if (res) toast.success('Server connection verified');
 	};
 
@@ -215,7 +219,12 @@ export function AddConnectionModal({
 								)}
 							</div>
 							<Tip content="Verify Connection">
-								<button type="button" aria-label="Verify Connection" className="hover:bg-muted mb-0.5 rounded p-1 transition" onClick={verify}>
+								<button
+									type="button"
+									aria-label="Verify Connection"
+									className="hover:bg-muted mb-0.5 rounded p-1 transition"
+									onClick={verify}
+								>
 									<Check className="size-4" />
 								</button>
 							</Tip>
@@ -232,7 +241,12 @@ export function AddConnectionModal({
 								Auth
 							</label>
 							<div className="flex items-center gap-2">
-								<select id="select-bearer-or-session" className="bg-transparent pr-5 text-sm outline-hidden [&>option]:bg-popover" value={f.authType} onChange={(e) => set({ authType: e.target.value })}>
+								<select
+									id="select-bearer-or-session"
+									className="bg-transparent pr-5 text-sm outline-hidden [&>option]:bg-popover"
+									value={f.authType}
+									onChange={(e) => set({ authType: e.target.value })}
+								>
 									<option value="none">None</option>
 									<option value="bearer">Bearer</option>
 									{!ollama && (
@@ -249,13 +263,22 @@ export function AddConnectionModal({
 								</select>
 								<div className="min-w-0 flex-1 text-sm">
 									{f.authType === 'bearer' ? (
-										<SensitiveInput value={f.key} onChange={(key) => set({ key })} placeholder="API Key" required={false} />
+										<SensitiveInput
+											value={f.key}
+											onChange={(key) => set({ key })}
+											placeholder="API Key"
+											required={false}
+										/>
 									) : f.authType === 'none' ? (
 										<div className="text-muted-foreground text-xs">No authentication</div>
 									) : f.authType === 'session' ? (
-										<div className="text-muted-foreground text-xs">Forwards system user session credentials to authenticate</div>
+										<div className="text-muted-foreground text-xs">
+											Forwards system user session credentials to authenticate
+										</div>
 									) : f.authType === 'system_oauth' ? (
-										<div className="text-muted-foreground text-xs">Forwards system user OAuth access token to authenticate</div>
+										<div className="text-muted-foreground text-xs">
+											Forwards system user OAuth access token to authenticate
+										</div>
 									) : ['azure_ad', 'microsoft_entra_id'].includes(f.authType) ? (
 										<div className="text-muted-foreground text-xs">Uses DefaultAzureCredential to authenticate</div>
 									) : null}
@@ -268,13 +291,23 @@ export function AddConnectionModal({
 								<label className={label} htmlFor="api-type-toggle">
 									API Type
 								</label>
-								<button id="api-type-toggle" type="button" className="text-xs underline-offset-2 hover:underline" onClick={() => set({ apiType: f.apiType === 'responses' ? '' : 'responses' })}>
+								<button
+									id="api-type-toggle"
+									type="button"
+									className="text-xs underline-offset-2 hover:underline"
+									onClick={() => set({ apiType: f.apiType === 'responses' ? '' : 'responses' })}
+								>
 									{f.apiType === 'responses' ? 'Responses' : 'Chat Completions'}
 								</button>
 							</div>
 						)}
 
-						<button type="button" className="text-muted-foreground hover:text-foreground w-fit text-xs" aria-expanded={showAdvanced} onClick={() => setShowAdvanced((v) => !v)}>
+						<button
+							type="button"
+							className="text-muted-foreground hover:text-foreground w-fit text-xs"
+							aria-expanded={showAdvanced}
+							onClick={() => setShowAdvanced((v) => !v)}
+						>
 							{showAdvanced ? '▾' : '▸'} Advanced
 						</button>
 
@@ -286,7 +319,13 @@ export function AddConnectionModal({
 											Headers
 										</label>
 										<Tip content='Enter additional headers in JSON format (e.g. {"X-Custom-Header": "value"}'>
-											<textarea id="headers-input" className={`${bare} min-h-8 resize-y`} value={f.headers} onChange={(e) => set({ headers: e.target.value })} placeholder="Enter additional headers in JSON format" />
+											<textarea
+												id="headers-input"
+												className={`${bare} min-h-8 resize-y`}
+												value={f.headers}
+												onChange={(e) => set({ headers: e.target.value })}
+												placeholder="Enter additional headers in JSON format"
+											/>
 										</Tip>
 									</div>
 								)}
@@ -296,7 +335,15 @@ export function AddConnectionModal({
 											Passthrough params
 										</label>
 										<Tip content="Comma-separated top-level request parameters this upstream may receive without translation. Use * to allow all captured passthrough params.">
-											<input id="allowed-passthrough-params-input" className={bare} type="text" value={f.passthroughParams} onChange={(e) => set({ passthroughParams: e.target.value })} placeholder="thinking, output_config" autoComplete="off" />
+											<input
+												id="allowed-passthrough-params-input"
+												className={bare}
+												type="text"
+												value={f.passthroughParams}
+												onChange={(e) => set({ passthroughParams: e.target.value })}
+												placeholder="thinking, output_config"
+												autoComplete="off"
+											/>
 										</Tip>
 									</div>
 								)}
@@ -305,7 +352,15 @@ export function AddConnectionModal({
 										Prefix ID
 									</label>
 									<Tip content="Prefix ID is used to avoid conflicts with other connections by adding a prefix to the model IDs - leave empty to disable">
-										<input id="prefix-id-input" className={bare} type="text" value={f.prefixId} onChange={(e) => set({ prefixId: e.target.value })} placeholder="Prefix ID" autoComplete="off" />
+										<input
+											id="prefix-id-input"
+											className={bare}
+											type="text"
+											value={f.prefixId}
+											onChange={(e) => set({ prefixId: e.target.value })}
+											placeholder="Prefix ID"
+											autoComplete="off"
+										/>
 									</Tip>
 								</div>
 								{!ollama && !direct && (
@@ -313,7 +368,12 @@ export function AddConnectionModal({
 										<label className={label} htmlFor="provider-select">
 											Provider
 										</label>
-										<select id="provider-select" className="block bg-transparent text-sm outline-hidden [&>option]:bg-popover" value={f.provider} onChange={(e) => set({ provider: e.target.value })}>
+										<select
+											id="provider-select"
+											className="block bg-transparent text-sm outline-hidden [&>option]:bg-popover"
+											value={f.provider}
+											onChange={(e) => set({ provider: e.target.value })}
+										>
 											<option value="">Default</option>
 											<option value="azure">Azure OpenAI</option>
 											<option value="llama.cpp">llama.cpp</option>
@@ -327,7 +387,16 @@ export function AddConnectionModal({
 										<label className={label} htmlFor="api-version-input">
 											API Version
 										</label>
-										<input id="api-version-input" className={bare} type="text" value={f.apiVersion} onChange={(e) => set({ apiVersion: e.target.value })} placeholder="API Version" autoComplete="off" required />
+										<input
+											id="api-version-input"
+											className={bare}
+											type="text"
+											value={f.apiVersion}
+											onChange={(e) => set({ apiVersion: e.target.value })}
+											placeholder="API Version"
+											autoComplete="off"
+											required
+										/>
 									</div>
 								)}
 								<div>
@@ -337,7 +406,12 @@ export function AddConnectionModal({
 											{f.modelIds.map((id) => (
 												<li key={id} className="flex items-center justify-between text-xs">
 													<div className="min-w-0 truncate">{id}</div>
-													<button type="button" aria-label={`Remove ${id} from list.`} className="hover:bg-muted rounded p-0.5" onClick={() => set({ modelIds: f.modelIds.filter((x) => x !== id) })}>
+													<button
+														type="button"
+														aria-label={`Remove ${id} from list.`}
+														className="hover:bg-muted rounded p-0.5"
+														onClick={() => set({ modelIds: f.modelIds.filter((x) => x !== id) })}
+													>
 														<Minus className="size-3.5" strokeWidth={2} />
 													</button>
 												</li>
@@ -377,7 +451,11 @@ export function AddConnectionModal({
 								</div>
 								<div>
 									<div className={label}>Tags</div>
-									<Tags tags={f.tags} onAdd={(name) => set({ tags: [...f.tags, { name }] })} onDelete={(name) => set({ tags: f.tags.filter((t) => t.name !== name) })} />
+									<Tags
+										tags={f.tags}
+										onAdd={(name) => set({ tags: [...f.tags, { name }] })}
+										onDelete={(name) => set({ tags: f.tags.filter((t) => t.name !== name) })}
+									/>
 								</div>
 							</>
 						)}

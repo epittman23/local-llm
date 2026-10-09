@@ -22,7 +22,7 @@ export default defineConfig({
 		// so there is a real foreground process for Playwright to manage,
 		// and `astro dev stop` on exit either way.
 		command:
-			"bash -c \"trap 'bunx astro dev stop' EXIT; bunx astro dev --background --port 5174; bunx astro dev logs --follow\"",
+			'bash -c "trap \'bunx astro dev stop\' EXIT; bunx astro dev --background --port 5174; bunx astro dev logs --follow"',
 		url: 'http://localhost:5174',
 		reuseExistingServer: !process.env.CI,
 		timeout: 60_000

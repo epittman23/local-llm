@@ -65,12 +65,7 @@ export function AppShell() {
 
 	return (
 		<div className="flex h-svh w-full">
-			<aside
-				className={cn(
-					'hidden shrink-0 md:block',
-					sidebarOpen ? 'w-64 border-r' : 'w-0 overflow-hidden'
-				)}
-			>
+			<aside className={cn('hidden shrink-0 md:block', sidebarOpen ? 'w-64 border-r' : 'w-0 overflow-hidden')}>
 				{/* Not just visually collapsed (w-0 + overflow-hidden): unmounted
 				    entirely when closed. A flex child's default min-width is its
 				    content's own intrinsic size, so a nav link's text can force
@@ -101,12 +96,7 @@ export function AppShell() {
 					<div className="hidden p-2 md:block">
 						<Tooltip>
 							<TooltipTrigger asChild>
-								<Button
-									variant="ghost"
-									size="icon"
-									aria-label="Open sidebar"
-									onClick={() => setSidebarOpen(true)}
-								>
+								<Button variant="ghost" size="icon" aria-label="Open sidebar" onClick={() => setSidebarOpen(true)}>
 									<PanelLeft className="h-5 w-5" />
 								</Button>
 							</TooltipTrigger>

@@ -3,7 +3,16 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { updateUserSettings } from '@/lib/apis/users';
-import { DEFAULT_KEYBINDINGS, type KeybindingsMap, Shortcut, type ShortcutDefinition, eventToChord, formatChord, isConfigurableShortcut, shortcuts } from '@/lib/shortcuts';
+import {
+	DEFAULT_KEYBINDINGS,
+	type KeybindingsMap,
+	Shortcut,
+	type ShortcutDefinition,
+	eventToChord,
+	formatChord,
+	isConfigurableShortcut,
+	shortcuts
+} from '@/lib/shortcuts';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { KEYBINDINGS_KEY, SUPPORTED_SHORTCUTS, useKeybindings } from '@/lib/useShortcuts';
@@ -11,7 +20,8 @@ import { cn } from '@/lib/utils';
 import { SettingRow, SettingSwitch, SettingsForm, SettingsSection } from '../controls';
 
 /** A fixed shortcut's keys as the Svelte list shows them ('mod' is Ctrl, or ⌘ on a Mac). */
-const fixedChord = (keys: string[]) => formatChord(keys.map((k) => (k === 'mod' ? 'Cmd' : k === 'shift' ? 'Shift' : k === 'alt' ? 'Alt' : k)).join('+'));
+const fixedChord = (keys: string[]) =>
+	formatChord(keys.map((k) => (k === 'mod' ? 'Cmd' : k === 'shift' ? 'Shift' : k === 'alt' ? 'Alt' : k)).join('+'));
 
 /**
  * Ports Settings/Shortcuts.svelte: keyboard shortcuts on or off, and every
@@ -33,19 +43,26 @@ export default function Shortcuts() {
 	};
 
 	const byCategory = Object.entries(shortcuts)
-		.filter(([id, def]) => SUPPORTED_SHORTCUTS.has(id as Shortcut) && (!def!.setting || (settings as Record<string, unknown> | null)?.[def!.setting.id] === def!.setting.value))
+		.filter(
+			([id, def]) =>
+				SUPPORTED_SHORTCUTS.has(id as Shortcut) &&
+				(!def!.setting || (settings as Record<string, unknown> | null)?.[def!.setting.id] === def!.setting.value)
+		)
 		.reduce<Record<string, [Shortcut, ShortcutDefinition][]>>((acc, [id, def]) => {
 			(acc[def!.category] ??= []).push([id as Shortcut, def!]);
 			return acc;
 		}, {});
 
-	const conflictOf = (id: Shortcut, chord: string) => (Object.entries(bindings) as [Shortcut, string][]).find(([other, c]) => other !== id && c === chord)?.[0] ?? null;
+	const conflictOf = (id: Shortcut, chord: string) =>
+		(Object.entries(bindings) as [Shortcut, string][]).find(([other, c]) => other !== id && c === chord)?.[0] ?? null;
 
 	return (
 		<SettingsForm title="Keyboard" footer={false}>
 			<SettingsSection first>
 				<SettingRow label="Keyboard Shortcuts" description="Use keyboard shortcuts across the app.">
-					{(id) => <SettingSwitch labelledBy={id} checked={enabled} onChange={(v) => void update({ keyboardShortcuts: v })} />}
+					{(id) => (
+						<SettingSwitch labelledBy={id} checked={enabled} onChange={(v) => void update({ keyboardShortcuts: v })} />
+					)}
 				</SettingRow>
 			</SettingsSection>
 			{Object.entries(byCategory).map(([category, list]) => (
@@ -63,7 +80,11 @@ export default function Shortcuts() {
 									<button
 										type="button"
 										aria-label={`Change shortcut for ${def.name}`}
-										className={cn('bg-muted/50 min-w-16 rounded-md border px-2 py-0.5 font-mono', recording === id && 'border-blue-500', conflict && 'border-destructive text-destructive')}
+										className={cn(
+											'bg-muted/50 min-w-16 rounded-md border px-2 py-0.5 font-mono',
+											recording === id && 'border-blue-500',
+											conflict && 'border-destructive text-destructive'
+										)}
 										title={conflict ? `Also bound to ${shortcuts[conflict]?.name}` : undefined}
 										onClick={() => setRecording(id)}
 										onBlur={() => setRecording((r) => (r === id ? null : r))}

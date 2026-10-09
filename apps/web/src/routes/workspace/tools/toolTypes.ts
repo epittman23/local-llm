@@ -39,13 +39,17 @@ export function sanitizeIncomingTool(raw: unknown, { withGrants }: { withGrants:
 	if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
 	const t = raw as Record<string, unknown>;
 	const meta = (t.meta && typeof t.meta === 'object' ? t.meta : {}) as Record<string, unknown>;
-	const manifest = meta.manifest && typeof meta.manifest === 'object' && !Array.isArray(meta.manifest) ? (meta.manifest as Record<string, unknown>) : undefined;
+	const manifest =
+		meta.manifest && typeof meta.manifest === 'object' && !Array.isArray(meta.manifest)
+			? (meta.manifest as Record<string, unknown>)
+			: undefined;
 	return {
 		id: asString(t.id, ID_MAX),
 		name: asString(t.name, NAME_MAX),
 		meta: { description: asString(meta.description, DESCRIPTION_MAX), ...(manifest ? { manifest } : {}) },
 		content: asString(t.content, CONTENT_MAX),
-		access_grants: withGrants && Array.isArray(t.access_grants) ? dedupeAccessGrants(t.access_grants as AccessGrant[]) : []
+		access_grants:
+			withGrants && Array.isArray(t.access_grants) ? dedupeAccessGrants(t.access_grants as AccessGrant[]) : []
 	};
 }
 
@@ -67,7 +71,13 @@ export function toolSharePayload(tool: { id: string; name: string; meta?: unknow
 /** Filters/sorts the (client-side) tools list exactly as Tools.svelte's setFilteredItems does. */
 export function filterAndSortTools(
 	tools: ToolListItem[],
-	{ query, view, userId, sortKey, direction }: { query: string; view: string; userId?: string; sortKey: string; direction: 'asc' | 'desc' }
+	{
+		query,
+		view,
+		userId,
+		sortKey,
+		direction
+	}: { query: string; view: string; userId?: string; sortKey: string; direction: 'asc' | 'desc' }
 ): ToolListItem[] {
 	const q = query.toLowerCase();
 	const filtered = tools.filter((t) => {
@@ -77,11 +87,14 @@ export function filterAndSortTools(
 			(t.id || '').toLowerCase().includes(q) ||
 			(t.user?.name || '').toLowerCase().includes(q) ||
 			(t.user?.email || '').toLowerCase().includes(q);
-		const inView = view === '' || (view === 'created' && t.user_id === userId) || (view === 'shared' && t.user_id !== userId);
+		const inView =
+			view === '' || (view === 'created' && t.user_id === userId) || (view === 'shared' && t.user_id !== userId);
 		return matches && inView;
 	});
 	const sign = direction === 'asc' ? 1 : -1;
 	return [...filtered].sort((a, b) =>
-		sortKey === 'name' ? sign * (a.name ?? '').localeCompare(b.name ?? '') : sign * ((a.updated_at ?? 0) - (b.updated_at ?? 0))
+		sortKey === 'name'
+			? sign * (a.name ?? '').localeCompare(b.name ?? '')
+			: sign * ((a.updated_at ?? 0) - (b.updated_at ?? 0))
 	);
 }

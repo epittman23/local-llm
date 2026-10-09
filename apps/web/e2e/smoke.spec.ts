@@ -24,7 +24,11 @@ test.beforeEach(async ({ page, context }) => {
 	);
 	// Sidebar links follow the backend's feature switches (lib/access/features.ts).
 	await page.route('**/api/config', (route) =>
-		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ name: 'local-llm', version: 'test', features: { enable_notes: true } }) })
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ name: 'local-llm', version: 'test', features: { enable_notes: true } })
+		})
 	);
 });
 

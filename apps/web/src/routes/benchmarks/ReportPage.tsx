@@ -6,13 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { generateReport, getReportFileText, getTestOptions } from '@/lib/apis/benchmarks';
 import { useAuthStore } from '@/lib/stores/authStore';
 
@@ -127,8 +121,7 @@ export function ReportPage() {
 			setMarkdownHtml(html);
 			setFigureUrls(entries);
 		},
-		onError: (err: unknown) =>
-			setError(err instanceof Error ? err.message : String(err))
+		onError: (err: unknown) => setError(err instanceof Error ? err.message : String(err))
 	});
 
 	return (
@@ -193,11 +186,7 @@ export function ReportPage() {
 				</div>
 
 				<div className="flex items-center gap-2 pb-1.5 text-sm">
-					<Checkbox
-						id="report-figures"
-						checked={figures}
-						onCheckedChange={(c) => setFigures(c === true)}
-					/>
+					<Checkbox id="report-figures" checked={figures} onCheckedChange={(c) => setFigures(c === true)} />
 					<Label htmlFor="report-figures">Generate figures</Label>
 				</div>
 
@@ -207,9 +196,7 @@ export function ReportPage() {
 			</form>
 
 			{generateMutation.isPending ? (
-				<p className="text-muted-foreground my-6 text-sm">
-					Generating report… this can take a while for large runs.
-				</p>
+				<p className="text-muted-foreground my-6 text-sm">Generating report… this can take a while for large runs.</p>
 			) : error ? (
 				<div className="border-destructive/20 bg-destructive/10 text-destructive rounded-lg border px-3 py-2 text-sm whitespace-pre-wrap">
 					{error}
@@ -219,12 +206,7 @@ export function ReportPage() {
 					{figureUrls.length > 0 && (
 						<div className="grid gap-3 sm:grid-cols-2">
 							{figureUrls.map((entry) => (
-								<img
-									key={entry.url}
-									src={entry.objectUrl}
-									alt={entry.url}
-									className="w-full rounded-lg border"
-								/>
+								<img key={entry.url} src={entry.objectUrl} alt={entry.url} className="w-full rounded-lg border" />
 							))}
 						</div>
 					)}
@@ -235,9 +217,7 @@ export function ReportPage() {
 					/>
 				</>
 			) : (
-				<p className="text-muted-foreground my-6 text-sm">
-					Set optional filters and click Generate to build a report.
-				</p>
+				<p className="text-muted-foreground my-6 text-sm">Set optional filters and click Generate to build a report.</p>
 			)}
 		</div>
 	);

@@ -103,7 +103,10 @@ export function sanitizeExternalDraft(raw: unknown): PromptDraft | null {
 		command: asString(p.command, COMMAND_MAX),
 		content: asString(p.content, CONTENT_MAX),
 		tags: Array.isArray(p.tags)
-			? p.tags.filter((t): t is string => typeof t === 'string').map((t) => t.slice(0, TAG_MAX)).slice(0, TAGS_MAX)
+			? p.tags
+					.filter((t): t is string => typeof t === 'string')
+					.map((t) => t.slice(0, TAG_MAX))
+					.slice(0, TAGS_MAX)
 			: [],
 		access_grants: []
 	};

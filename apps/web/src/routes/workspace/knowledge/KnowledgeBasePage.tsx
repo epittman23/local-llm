@@ -12,7 +12,12 @@ import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+	DropdownMenu,
+	DropdownMenuCheckboxItem,
+	DropdownMenuContent,
+	DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import type { AccessGrant } from '@/lib/access/accessGrants';
 import { getFileById, renameFileById, updateFileDataContentById } from '@/lib/apis/files';
@@ -37,9 +42,19 @@ import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { routePaths } from '@/routes/routePaths';
 import { ExternalKnowledgePanel } from './ExternalKnowledgePanel';
 import { AddContentMenu, AddTextDialog, NewDirectoryDialog } from './KnowledgeDialogs';
-import { type KnowledgeDirectory, type KnowledgeFile, KnowledgeBreadcrumbs, KnowledgeFileList } from './KnowledgeFileList';
+import {
+	type KnowledgeDirectory,
+	type KnowledgeFile,
+	KnowledgeBreadcrumbs,
+	KnowledgeFileList
+} from './KnowledgeFileList';
 import { type Breadcrumb, type DirectoryFileEntry } from './knowledgeFiles';
-import { collectDirectoryFiles, collectDroppedEntryFiles, handleDirectoryError, useKnowledgeUploads } from './useKnowledgeUploads';
+import {
+	collectDirectoryFiles,
+	collectDroppedEntryFiles,
+	handleDirectoryError,
+	useKnowledgeUploads
+} from './useKnowledgeUploads';
 
 const PER_PAGE = 30;
 const PENDING_POLL_MS = 5000;
@@ -108,7 +123,14 @@ export function KnowledgeBasePage() {
 		);
 	}
 	// Keyed by id so moving between bases resets every piece of local state below.
-	return <KnowledgeBaseView key={id} id={id} initial={base.data} onChanged={() => queryClient.invalidateQueries({ queryKey: ['knowledge-base', id] })} />;
+	return (
+		<KnowledgeBaseView
+			key={id}
+			id={id}
+			initial={base.data}
+			onChanged={() => queryClient.invalidateQueries({ queryKey: ['knowledge-base', id] })}
+		/>
+	);
 }
 
 function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Knowledge; onChanged: () => void }) {
@@ -134,7 +156,17 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 	const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
 
 	const files = useQuery({
-		queryKey: ['knowledge-files', id, debouncedQuery, viewOption, sortKey, direction, page, directoryId, includeContent],
+		queryKey: [
+			'knowledge-files',
+			id,
+			debouncedQuery,
+			viewOption,
+			sortKey,
+			direction,
+			page,
+			directoryId,
+			includeContent
+		],
 		enabled: !external,
 		placeholderData: keepPreviousData,
 		// While anything is still being processed, poll: the list should pick up the finished file.
@@ -161,16 +193,29 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 					const existing = new Set(items.map((f) => f.id));
 					const extra = pending
 						.filter((f: KnowledgeFile) => !existing.has(f.id))
-						.map((f: KnowledgeFile & { filename?: string }) => ({ ...f, name: f.meta?.name ?? f.filename, status: 'uploading' }));
+						.map((f: KnowledgeFile & { filename?: string }) => ({
+							...f,
+							name: f.meta?.name ?? f.filename,
+							status: 'uploading'
+						}));
 					items = [...extra, ...items];
 				}
 			} catch (e) {
 				console.warn('Failed to fetch pending files:', e);
 			}
-			return { items, total: res?.total ?? 0, directories: res?.directories ?? [], breadcrumbs: res?.breadcrumbs ?? [], hasPending };
+			return {
+				items,
+				total: res?.total ?? 0,
+				directories: res?.directories ?? [],
+				breadcrumbs: res?.breadcrumbs ?? [],
+				hasPending
+			};
 		}
 	});
-	const refresh = useCallback(() => queryClient.invalidateQueries({ queryKey: ['knowledge-files', id] }), [queryClient, id]);
+	const refresh = useCallback(
+		() => queryClient.invalidateQueries({ queryKey: ['knowledge-files', id] }),
+		[queryClient, id]
+	);
 	const listed = files.data;
 	const breadcrumbs = listed?.breadcrumbs ?? [];
 
@@ -293,7 +338,8 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 	};
 	const move = (payload: { kind: 'file' | 'dir'; id: string }, target: string | null) => {
 		if (payload.kind === 'file') report(moveFileInKnowledge(token, id, payload.id, target), 'File moved.');
-		else if (payload.id !== target) report(updateKnowledgeDirectory(token, id, payload.id, { parent_id: target }), 'Directory moved.');
+		else if (payload.id !== target)
+			report(updateKnowledgeDirectory(token, id, payload.id, { parent_id: target }), 'Directory moved.');
 	};
 	const deleteFile = async (fileId: string) => {
 		setSelectedFileId(null);
@@ -362,7 +408,15 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 	if (external) {
 		return (
 			<div className="flex h-full min-h-full w-full flex-col">
-				<Header knowledge={knowledge} edit={edit} writeAccess={writeAccess} total={null} onBack={() => navigate(routePaths.workspaceKnowledge)} onAccess={() => setShowAccess(true)} id={id} />
+				<Header
+					knowledge={knowledge}
+					edit={edit}
+					writeAccess={writeAccess}
+					total={null}
+					onBack={() => navigate(routePaths.workspaceKnowledge)}
+					onAccess={() => setShowAccess(true)}
+					id={id}
+				/>
 				<div className="bg-background mt-1.5 mb-2 flex-1 rounded-3xl border py-1.5">
 					<ExternalKnowledgePanel external={(knowledge.meta?.external ?? {}) as never} />
 				</div>
@@ -419,8 +473,8 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 					if (entries) syncDirectory(entries);
 				}}
 			>
-				{pendingSync?.length ?? 0} files selected. Only new and modified files will be uploaded. Deleted files will be removed.
-				The folder structure will be mirrored. Continue?
+				{pendingSync?.length ?? 0} files selected. Only new and modified files will be uploaded. Deleted files will be
+				removed. The folder structure will be mirrored. Continue?
 			</ConfirmDialog>
 			<ConfirmDialog
 				open={deletingDir !== null}
@@ -567,14 +621,24 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 						<option value="created">Created by you</option>
 						<option value="shared">Shared with you</option>
 					</select>
-					<select className={selectClass} aria-label="Sort" value={sortKey} onChange={(e) => setSortKey(e.target.value)}>
+					<select
+						className={selectClass}
+						aria-label="Sort"
+						value={sortKey}
+						onChange={(e) => setSortKey(e.target.value)}
+					>
 						<option value="">Sort</option>
 						<option value="name">Name</option>
 						<option value="created_at">Created</option>
 						<option value="updated_at">Updated</option>
 					</select>
 					{sortKey && (
-						<select className={selectClass} aria-label="Direction" value={direction} onChange={(e) => setDirection(e.target.value)}>
+						<select
+							className={selectClass}
+							aria-label="Direction"
+							value={direction}
+							onChange={(e) => setDirection(e.target.value)}
+						>
 							<option value="asc">Asc</option>
 							<option value="">Desc</option>
 						</select>
@@ -583,7 +647,12 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 
 				{directoryId !== null && (
 					<div className="mb-1 px-4">
-						<KnowledgeBreadcrumbs rootLabel={knowledge.name} breadcrumbs={breadcrumbs} onNavigate={navigateToDirectory} onMove={move} />
+						<KnowledgeBreadcrumbs
+							rootLabel={knowledge.name}
+							breadcrumbs={breadcrumbs}
+							onNavigate={navigateToDirectory}
+							onMove={move}
+						/>
 					</div>
 				)}
 
@@ -615,7 +684,9 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 										onDeleteFile={deleteFile}
 										onRenameFile={(fileId, name) => report(renameFileById(token, fileId, name), 'File renamed.')}
 										onOpenDirectory={navigateToDirectory}
-										onRenameDirectory={(dirId, name) => report(updateKnowledgeDirectory(token, id, dirId, { name }), 'Directory renamed.')}
+										onRenameDirectory={(dirId, name) =>
+											report(updateKnowledgeDirectory(token, id, dirId, { name }), 'Directory renamed.')
+										}
 										onDeleteDirectory={(dirId) => {
 											setDeleteContents(true);
 											setDeletingDir(dirId);
@@ -628,7 +699,9 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 									<div>No content found</div>
 								</div>
 							)}
-							{listed.total > PER_PAGE && <PagePagination page={page} count={listed.total} perPage={PER_PAGE} onPageChange={setPage} />}
+							{listed.total > PER_PAGE && (
+								<PagePagination page={page} count={listed.total} perPage={PER_PAGE} onPageChange={setPage} />
+							)}
 						</div>
 					</div>
 				)}
@@ -646,7 +719,11 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 									className="line-clamp-1 hover:underline"
 									onClick={(e) => {
 										e.preventDefault();
-										if (selectedFile?.id) window.open(`${WEBUI_API_BASE_URL}/files/${encodeURIComponent(selectedFile.id)}/content`, '_blank');
+										if (selectedFile?.id)
+											window.open(
+												`${WEBUI_API_BASE_URL}/files/${encodeURIComponent(selectedFile.id)}/content`,
+												'_blank'
+											);
 									}}
 								>
 									{previewName}

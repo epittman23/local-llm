@@ -3,7 +3,8 @@ import { expect, test } from './test';
 import { mockWorkspaceBackend } from './workspace-helpers';
 
 type Rec = Record<string, any>;
-const json = (route: any, d: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(d) });
+const json = (route: any, d: unknown, status = 200) =>
+	route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(d) });
 
 const automation = (id: string, name: string, extra: Rec = {}) => ({
 	id,
@@ -18,12 +19,24 @@ const automation = (id: string, name: string, extra: Rec = {}) => ({
 	created_at: 0,
 	updated_at: 0,
 	last_run: null,
-	data: { prompt: `Prompt for ${name}`, model_id: 'qwen', rrule: 'RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0', target: { type: 'chat' } },
+	data: {
+		prompt: `Prompt for ${name}`,
+		model_id: 'qwen',
+		rrule: 'RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+		target: { type: 'chat' }
+	},
 	...extra
 });
 
 async function mockAutomations(page: Page, items: Rec[] = [], runs: Rec[] = []) {
-	const seen = { lists: [] as string[], created: [] as Rec[], updated: [] as Rec[], toggled: [] as string[], ran: [] as string[], deleted: [] as string[] };
+	const seen = {
+		lists: [] as string[],
+		created: [] as Rec[],
+		updated: [] as Rec[],
+		toggled: [] as string[],
+		ran: [] as string[],
+		deleted: [] as string[]
+	};
 	let list = [...items];
 	await page.route('**/api/v1/automations/**', async (route) => {
 		const req = route.request();
@@ -41,7 +54,10 @@ async function mockAutomations(page: Page, items: Rec[] = [], runs: Rec[] = []) 
 		if (action === 'toggle') {
 			seen.toggled.push(id);
 			list = list.map((a) => (a.id === id ? { ...a, is_active: !a.is_active } : a));
-			return json(route, list.find((a) => a.id === id));
+			return json(
+				route,
+				list.find((a) => a.id === id)
+			);
 		}
 		if (action === 'run') {
 			seen.ran.push(id);
@@ -60,9 +76,21 @@ async function mockAutomations(page: Page, items: Rec[] = [], runs: Rec[] = []) 
 		const found = list.find((a) => a.id === id);
 		return found ? json(route, found) : json(route, { detail: 'Not found' }, 404);
 	});
-	await page.route('**/api/models*', (route) => json(route, { data: [{ id: 'qwen', name: 'Qwen' }, { id: 'secret', name: 'Hidden', info: { meta: { hidden: true } } }] }));
+	await page.route('**/api/models*', (route) =>
+		json(route, {
+			data: [
+				{ id: 'qwen', name: 'Qwen' },
+				{ id: 'secret', name: 'Hidden', info: { meta: { hidden: true } } }
+			]
+		})
+	);
 	await page.route('**/api/v1/folders/**', (route) => json(route, [{ id: 'f1', name: 'Reports' }]));
-	await page.route('**/api/v1/channels/**', (route) => json(route, [{ id: 'c1', name: 'ops' }, { id: 'dm1', name: 'dm', type: 'dm' }]));
+	await page.route('**/api/v1/channels/**', (route) =>
+		json(route, [
+			{ id: 'c1', name: 'ops' },
+			{ id: 'dm1', name: 'dm', type: 'dm' }
+		])
+	);
 	return seen;
 }
 
@@ -78,7 +106,17 @@ test('a user without the permission is sent home', async ({ page }) => {
 
 test('lists automations with schedule and destination; the switch pauses one', async ({ page }) => {
 	await mockWorkspaceBackend(page, { role: 'user', ...enabled, featurePermissions: { automations: true } });
-	const seen = await mockAutomations(page, [automation('a1', 'Morning digest'), automation('a2', 'Ops report', { data: { prompt: 'p', model_id: 'qwen', rrule: 'RRULE:FREQ=WEEKLY;BYDAY=MO,FR;BYHOUR=17;BYMINUTE=30', target: { type: 'channel', channel_id: 'c1' } } })]);
+	const seen = await mockAutomations(page, [
+		automation('a1', 'Morning digest'),
+		automation('a2', 'Ops report', {
+			data: {
+				prompt: 'p',
+				model_id: 'qwen',
+				rrule: 'RRULE:FREQ=WEEKLY;BYDAY=MO,FR;BYHOUR=17;BYMINUTE=30',
+				target: { type: 'channel', channel_id: 'c1' }
+			}
+		})
+	]);
 	await page.goto('/automations');
 	await expect(page.getByRole('link', { name: /Morning digest.*Daily at 9:00 AM · New chat/ })).toBeVisible();
 	await expect(page.getByText('MO,FR at 5:30 PM · #ops')).toBeVisible();
@@ -122,21 +160,46 @@ test('creating one: required fields, a weekly schedule, a channel destination, t
 	await page.getByRole('button', { name: '#ops' }).click();
 	await page.keyboard.press('Escape');
 	await d.getByRole('button', { name: 'Create' }).click();
-	await expect.poll(() => seen.created[0]).toEqual({
-		name: 'Standup notes',
-		folder_id: null,
-		data: { prompt: 'Summarize yesterday', model_id: 'qwen', rrule: 'RRULE:FREQ=WEEKLY;BYDAY=MO,TH;BYHOUR=8;BYMINUTE=15', target: { type: 'channel', channel_id: 'c1' } },
-		is_active: true
-	});
+	await expect
+		.poll(() => seen.created[0])
+		.toEqual({
+			name: 'Standup notes',
+			folder_id: null,
+			data: {
+				prompt: 'Summarize yesterday',
+				model_id: 'qwen',
+				rrule: 'RRULE:FREQ=WEEKLY;BYDAY=MO,TH;BYHOUR=8;BYMINUTE=15',
+				target: { type: 'channel', channel_id: 'c1' }
+			},
+			is_active: true
+		});
 	await expect(page).toHaveURL(/\/automations\/new1$/);
 });
 
 test('the detail page shows the automation and its runs; run now, edit and delete', async ({ page }) => {
 	await mockWorkspaceBackend(page, enabled);
-	const seen = await mockAutomations(page, [automation('a1', 'Morning digest', { folder_id: 'f1' })], [
-		{ id: 'r1', automation_id: 'a1', chat_id: 'chat9', status: 'success', error: null, created_at: Date.now() * 1_000_000 },
-		{ id: 'r2', automation_id: 'a1', chat_id: null, status: 'error', error: 'Model unavailable', created_at: Date.now() * 1_000_000 }
-	]);
+	const seen = await mockAutomations(
+		page,
+		[automation('a1', 'Morning digest', { folder_id: 'f1' })],
+		[
+			{
+				id: 'r1',
+				automation_id: 'a1',
+				chat_id: 'chat9',
+				status: 'success',
+				error: null,
+				created_at: Date.now() * 1_000_000
+			},
+			{
+				id: 'r2',
+				automation_id: 'a1',
+				chat_id: null,
+				status: 'error',
+				error: 'Model unavailable',
+				created_at: Date.now() * 1_000_000
+			}
+		]
+	);
 	await page.goto('/automations/a1');
 	await expect(page.getByRole('heading', { name: 'Morning digest' })).toBeVisible();
 	await expect(page.getByText('Folder: Reports')).toBeVisible();
@@ -165,8 +228,21 @@ test('an unknown id goes back to the list; import skips incomplete entries', asy
 	await page.getByLabel('Import automations file').setInputFiles({
 		name: 'a.json',
 		mimeType: 'application/json',
-		buffer: Buffer.from(JSON.stringify([{ name: 'Ok', data: { prompt: 'p', model_id: 'm', rrule: 'R' }, meta: { webhook: 'https://x.example' } }, { name: 'Bad' }]))
+		buffer: Buffer.from(
+			JSON.stringify([
+				{ name: 'Ok', data: { prompt: 'p', model_id: 'm', rrule: 'R' }, meta: { webhook: 'https://x.example' } },
+				{ name: 'Bad' }
+			])
+		)
 	});
 	await expect(page.getByText('Imported 1 automations; skipped 1 incomplete')).toBeVisible();
-	expect(seen.created).toEqual([{ name: 'Ok', folder_id: null, data: { prompt: 'p', model_id: 'm', rrule: 'R', target: { type: 'chat' } }, meta: {}, is_active: true }]);
+	expect(seen.created).toEqual([
+		{
+			name: 'Ok',
+			folder_id: null,
+			data: { prompt: 'p', model_id: 'm', rrule: 'R', target: { type: 'chat' } },
+			meta: {},
+			is_active: true
+		}
+	]);
 });

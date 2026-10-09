@@ -44,10 +44,26 @@ const TEXT_TYPES = /^(text\/|application\/(json|xml|javascript|x-sh|x-yaml|yaml|
  * URLs and text files as their text. Web pages are fetched and processed by
  * the server; knowledge, notes and chats are added by reference.
  */
-export function useAttachments({ temporary, selectedModels, models, chatId }: { temporary: boolean; selectedModels: string[]; models: ChatModel[]; chatId: string | null }) {
+export function useAttachments({
+	temporary,
+	selectedModels,
+	models,
+	chatId
+}: {
+	temporary: boolean;
+	selectedModels: string[];
+	models: ChatModel[];
+	chatId: string | null;
+}) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const user = useAuthStore((s) => s.user);
-	const config = useConfigStore((s) => s.config) as { file?: { max_size?: number | null; max_count?: number | null; image_compression?: { width?: number | null; height?: number | null } } } | null;
+	const config = useConfigStore((s) => s.config) as {
+		file?: {
+			max_size?: number | null;
+			max_count?: number | null;
+			image_compression?: { width?: number | null; height?: number | null };
+		};
+	} | null;
 	const { settings } = useUserSettings();
 	const [files, setFilesState] = useState<ChatFile[]>([]);
 	const ref = useRef(files);
@@ -55,7 +71,8 @@ export function useAttachments({ temporary, selectedModels, models, chatId }: { 
 		ref.current = typeof next === 'function' ? next(ref.current) : next;
 		setFilesState(ref.current);
 	}, []);
-	const patch = (itemId: string, p: Partial<ChatFile>) => setFiles((fs) => fs.map((f) => (f.itemId === itemId ? { ...f, ...p } : f)));
+	const patch = (itemId: string, p: Partial<ChatFile>) =>
+		setFiles((fs) => fs.map((f) => (f.itemId === itemId ? { ...f, ...p } : f)));
 	const drop = (itemId: string) => setFiles((fs) => fs.filter((f) => f.itemId !== itemId));
 
 	const uploadOne = useCallback(
@@ -77,7 +94,18 @@ export function useAttachments({ temporary, selectedModels, models, chatId }: { 
 					toast.error('Failed to extract content from the file.');
 					return;
 				}
-				setFiles((fs) => [...fs, { itemId, id: crypto.randomUUID(), type: 'text', name: file.name, size: file.size, content: '', status: 'uploading' }]);
+				setFiles((fs) => [
+					...fs,
+					{
+						itemId,
+						id: crypto.randomUUID(),
+						type: 'text',
+						name: file.name,
+						size: file.size,
+						content: '',
+						status: 'uploading'
+					}
+				]);
 				const content = await file.text().catch(() => null);
 				if (content === null) {
 					toast.error('Failed to extract content from the file.');
@@ -88,12 +116,25 @@ export function useAttachments({ temporary, selectedModels, models, chatId }: { 
 			// Listed at once, as uploading, before an image is read or scaled: Send
 			// waits for it, so a quick Enter can't leave it for the next message
 			// (docs/code-review.md L10).
-			const full = opts.context === 'full' || (settings as Record<string, unknown> | null)?.defaultUploadContext === 'full';
+			const full =
+				opts.context === 'full' || (settings as Record<string, unknown> | null)?.defaultUploadContext === 'full';
 			setFiles((fs) => [
 				...fs,
 				image && temporary
 					? { itemId, type: 'image', name: file.name, size: file.size, status: 'uploading' }
-					: { itemId, type: 'file', file: '', id: null, url: '', name: file.name, collection_name: '', status: 'uploading', size: file.size, error: '', ...(full ? { context: 'full' } : {}) }
+					: {
+							itemId,
+							type: 'file',
+							file: '',
+							id: null,
+							url: '',
+							name: file.name,
+							collection_name: '',
+							status: 'uploading',
+							size: file.size,
+							error: '',
+							...(full ? { context: 'full' } : {})
+						}
 			]);
 			if (image) {
 				try {
@@ -114,12 +155,24 @@ export function useAttachments({ temporary, selectedModels, models, chatId }: { 
 				}
 			}
 			const language = (settings as { audio?: { stt?: { language?: string } } } | null)?.audio?.stt?.language;
-			const metadata = (file.type.startsWith('audio/') || file.type.startsWith('video/')) && language ? { language } : chatId ? { chat_id: chatId } : null;
+			const metadata =
+				(file.type.startsWith('audio/') || file.type.startsWith('video/')) && language
+					? { language }
+					: chatId
+						? { chat_id: chatId }
+						: null;
 			try {
 				const uploaded = await uploadFile(token, file, metadata, !image);
 				if (!uploaded) throw new Error('Failed to upload file.');
 				if (uploaded.error) toast.warning(`${uploaded.error}`);
-				patch(itemId, { status: 'uploaded', file: uploaded, id: uploaded.id, url: `${uploaded.id}`, collection_name: uploaded.meta?.collection_name ?? uploaded.collection_name, content_type: uploaded.meta?.content_type ?? uploaded.content_type });
+				patch(itemId, {
+					status: 'uploaded',
+					file: uploaded,
+					id: uploaded.id,
+					url: `${uploaded.id}`,
+					collection_name: uploaded.meta?.collection_name ?? uploaded.collection_name,
+					content_type: uploaded.meta?.content_type ?? uploaded.content_type
+				});
 			} catch (e) {
 				toast.error(`${e}`);
 				drop(itemId);
@@ -145,7 +198,8 @@ export function useAttachments({ temporary, selectedModels, models, chatId }: { 
 				toast.error(`You can only chat with a maximum of ${maxCount} file(s) at a time.`);
 				return;
 			}
-			if (list.some((f) => f.type.startsWith('image/')) && !allCapable(selectedModels, models, 'vision')) toast.warning('Model(s) are not vision capable');
+			if (list.some((f) => f.type.startsWith('image/')) && !allCapable(selectedModels, models, 'vision'))
+				toast.warning('Model(s) are not vision capable');
 			for (const f of list) void uploadOne(f, opts);
 		},
 		[user, selectedModels, models, config, uploadOne]
@@ -159,13 +213,33 @@ export function useAttachments({ temporary, selectedModels, models, chatId }: { 
 			}
 			for (const url of urls) {
 				const itemId = crypto.randomUUID();
-				setFiles((fs) => [...fs, { itemId, type: 'text', name: url, collection_name: '', status: 'uploading', context: 'full', url, error: '' }]);
+				setFiles((fs) => [
+					...fs,
+					{ itemId, type: 'text', name: url, collection_name: '', status: 'uploading', context: 'full', url, error: '' }
+				]);
 				try {
 					const res = await processUrl(token, url);
 					if (!res) throw new Error('Failed to process the page.');
 					const f = res.file;
-					if ((res.type === 'image' || res.type === 'file') && f) patch(itemId, { status: 'uploaded', name: res.name ?? url, collection_name: res.collection_name ?? f.meta?.collection_name, type: res.type, file: f, id: f.id, url: `${f.id}`, content_type: f.meta?.content_type, size: f.meta?.size });
-					else patch(itemId, { status: 'uploaded', name: res.name ?? url, collection_name: res.collection_name, file: { data: { content: res.content }, meta: { name: res.name ?? url, source: res.url ?? url } } });
+					if ((res.type === 'image' || res.type === 'file') && f)
+						patch(itemId, {
+							status: 'uploaded',
+							name: res.name ?? url,
+							collection_name: res.collection_name ?? f.meta?.collection_name,
+							type: res.type,
+							file: f,
+							id: f.id,
+							url: `${f.id}`,
+							content_type: f.meta?.content_type,
+							size: f.meta?.size
+						});
+					else
+						patch(itemId, {
+							status: 'uploaded',
+							name: res.name ?? url,
+							collection_name: res.collection_name,
+							file: { data: { content: res.content }, meta: { name: res.name ?? url, source: res.url ?? url } }
+						});
 				} catch (e) {
 					toast.error(`${e}`);
 					drop(itemId);

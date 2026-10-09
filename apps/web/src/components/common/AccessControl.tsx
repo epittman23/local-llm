@@ -211,12 +211,8 @@ export function AccessControl({
 								onChange={(e) => onChange(setVisibility(grants, e.target.value as Visibility))}
 							>
 								<option value="private">Private</option>
-								{((share && sharePublic) || hasPublicReadGrant(grants)) && (
-									<option value="public">Public</option>
-								)}
-								{((share && shareOpen) || hasAnyoneReadGrant(grants)) && (
-									<option value="open">Open</option>
-								)}
+								{((share && sharePublic) || hasPublicReadGrant(grants)) && <option value="public">Public</option>}
+								{((share && shareOpen) || hasAnyoneReadGrant(grants)) && <option value="open">Open</option>}
 							</select>
 						</Tip>
 						<div className="text-muted-foreground text-xs">
@@ -298,9 +294,7 @@ export function AccessControl({
 							))}
 
 						{visibility === 'private' && accessGroups.length === 0 && selectedUsers.length === 0 && (
-							<div className="text-muted-foreground py-3 text-center text-xs">
-								No access grants. Private to you.
-							</div>
+							<div className="text-muted-foreground py-3 text-center text-xs">No access grants. Private to you.</div>
 						)}
 					</div>
 				</>

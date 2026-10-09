@@ -23,7 +23,10 @@ export function ModelCreatePage() {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
-	const existing = useQuery({ queryKey: ['models-all'], queryFn: async () => ((await getModels(token)) ?? []) as Array<{ id: string }> });
+	const existing = useQuery({
+		queryKey: ['models-all'],
+		queryFn: async () => ((await getModels(token)) ?? []) as Array<{ id: string }>
+	});
 
 	const [stash] = useState(() => {
 		const raw = sessionStorage.model;
@@ -88,7 +91,9 @@ export function ModelCreatePage() {
 		}
 	};
 
-	return <ModelEditor key={revision} model={model} onSubmit={onSubmit} onBack={() => navigate(routePaths.workspaceModels)} />;
+	return (
+		<ModelEditor key={revision} model={model} onSubmit={onSubmit} onBack={() => navigate(routePaths.workspaceModels)} />
+	);
 }
 
 /** Ports (app)/workspace/models/edit/+page.svelte: the model is named by `?id=`; read-only or missing ones bounce back to the list. */
@@ -146,5 +151,13 @@ export function ModelEditPage() {
 			</div>
 		);
 	}
-	return <ModelEditor key={model.id} edit model={model} onSubmit={onSubmit} onBack={() => navigate(routePaths.workspaceModels)} />;
+	return (
+		<ModelEditor
+			key={model.id}
+			edit
+			model={model}
+			onSubmit={onSubmit}
+			onBack={() => navigate(routePaths.workspaceModels)}
+		/>
+	);
 }

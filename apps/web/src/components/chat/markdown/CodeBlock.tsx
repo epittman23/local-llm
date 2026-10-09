@@ -64,7 +64,9 @@ export function CodeBlock({
 	const language = (lang || '').trim().split(/\s/)[0].toLowerCase();
 	const html = useMemo(() => {
 		try {
-			return language && hljs.getLanguage(language) ? hljs.highlight(code, { language, ignoreIllegals: true }).value : hljs.highlightAuto(code).value;
+			return language && hljs.getLanguage(language)
+				? hljs.highlight(code, { language, ignoreIllegals: true }).value
+				: hljs.highlightAuto(code).value;
 		} catch {
 			return null;
 		}
@@ -74,14 +76,20 @@ export function CodeBlock({
 
 	const lines = code.split('\n');
 	const hidden = collapsed ? Math.max(0, lines.length - COLLAPSED_LINES) : 0;
-	const bar = 'text-muted-foreground hover:bg-muted flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs transition';
+	const bar =
+		'text-muted-foreground hover:bg-muted flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs transition';
 
 	return (
 		<div className="my-2 overflow-hidden rounded-2xl border" data-testid="code-block">
 			<div className="bg-muted/50 flex items-center justify-between px-3 py-1">
 				<span className="text-muted-foreground text-xs">{language || 'text'}</span>
 				<div className="flex items-center gap-0.5">
-					<button type="button" className={bar} onClick={() => setCollapsed((c) => !c)} aria-label={collapsed ? 'Expand' : 'Collapse'}>
+					<button
+						type="button"
+						className={bar}
+						onClick={() => setCollapsed((c) => !c)}
+						aria-label={collapsed ? 'Expand' : 'Collapse'}
+					>
 						{collapsed ? <ChevronDown className="size-3" /> : <ChevronUp className="size-3" />}
 						{collapsed ? 'Expand' : 'Collapse'}
 					</button>
@@ -110,7 +118,12 @@ export function CodeBlock({
 					</button>
 				</div>
 			</div>
-			<pre className={cn('hljs overflow-x-auto px-4 py-3 text-[0.8125rem] leading-relaxed', collapsed && 'max-h-40 overflow-hidden')}>
+			<pre
+				className={cn(
+					'hljs overflow-x-auto px-4 py-3 text-[0.8125rem] leading-relaxed',
+					collapsed && 'max-h-40 overflow-hidden'
+				)}
+			>
 				{html !== null ? <code dangerouslySetInnerHTML={{ __html: html }} /> : <code>{code}</code>}
 			</pre>
 			{hidden > 0 && <div className="text-muted-foreground border-t px-4 py-1 text-xs">{hidden} hidden lines</div>}

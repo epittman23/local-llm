@@ -10,18 +10,16 @@ export type UserCsvRow = { idx: number; columns: string[] };
 export function parseUserCsv(csv: string): { validRows: UserCsvRow[]; invalidRows: number[] } {
 	const validRows: UserCsvRow[] = [];
 	const invalidRows: number[] = [];
-	csv
-		.split('\n')
-		.forEach((row, idx) => {
-			// A blank line (the file's trailing newline, usually) is not a bad row; the
-			// Svelte importer reports it as one, which every well-formed CSV trips.
-			if (idx === 0 || row.trim() === '') return;
-			const columns = row.split(',').map((col) => col.trim());
-			if (columns.length === 4 && ['admin', 'user', 'pending'].includes(columns[3].toLowerCase())) {
-				validRows.push({ idx, columns });
-			} else {
-				invalidRows.push(idx);
-			}
-		});
+	csv.split('\n').forEach((row, idx) => {
+		// A blank line (the file's trailing newline, usually) is not a bad row; the
+		// Svelte importer reports it as one, which every well-formed CSV trips.
+		if (idx === 0 || row.trim() === '') return;
+		const columns = row.split(',').map((col) => col.trim());
+		if (columns.length === 4 && ['admin', 'user', 'pending'].includes(columns[3].toLowerCase())) {
+			validRows.push({ idx, columns });
+		} else {
+			invalidRows.push(idx);
+		}
+	});
 	return { validRows, invalidRows };
 }

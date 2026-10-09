@@ -12,5 +12,11 @@ export function GroupPreviewPanel({ groupId }: { groupId: string }) {
 		enabled: !!groupId,
 		gcTime: 0
 	});
-	return <AccessPreview loading={query.isPending} error={query.isError ? String(query.error) : ''} preview={query.data ?? null} />;
+	return (
+		<AccessPreview
+			loading={query.isPending}
+			error={query.isError ? String(query.error) : ''}
+			preview={query.data ?? null}
+		/>
+	);
 }

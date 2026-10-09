@@ -123,7 +123,12 @@ export function AdvancedParams({
 
 		if (def.kind === 'tri') {
 			header = (
-				<button type="button" className={toggleButton} aria-label={`${def.label}: ${triLabel(def.tri, params[def.key])}`} onClick={() => set(def.key, nextTri(def.tri, params[def.key]))}>
+				<button
+					type="button"
+					className={toggleButton}
+					aria-label={`${def.label}: ${triLabel(def.tri, params[def.key])}`}
+					onClick={() => set(def.key, nextTri(def.tri, params[def.key]))}
+				>
 					<span className="ml-2 self-center">{triLabel(def.tri, params[def.key])}</span>
 				</button>
 			);
@@ -150,7 +155,15 @@ export function AdvancedParams({
 				body = (
 					<div className="mt-0.5 flex space-x-2">
 						<div className="flex-1">
-							<input className={inputClass} type="text" aria-label={def.label} placeholder="e.g. 'low', 'medium', 'high'" autoComplete="off" value={v} onChange={(e) => set(def.key, e.target.value)} />
+							<input
+								className={inputClass}
+								type="text"
+								aria-label={def.label}
+								placeholder="e.g. 'low', 'medium', 'high'"
+								autoComplete="off"
+								value={v}
+								onChange={(e) => set(def.key, e.target.value)}
+							/>
 						</div>
 					</div>
 				);
@@ -158,7 +171,12 @@ export function AdvancedParams({
 		} else {
 			const custom = !isUnset(params[def.key]);
 			header = (
-				<button type="button" className={toggleButton} aria-label={`${def.label}: ${custom ? 'Custom' : 'Default'}`} onClick={() => set(def.key, custom ? null : def.seed)}>
+				<button
+					type="button"
+					className={toggleButton}
+					aria-label={`${def.label}: ${custom ? 'Custom' : 'Default'}`}
+					onClick={() => set(def.key, custom ? null : def.seed)}
+				>
 					<span className="ml-2 self-center">{custom ? 'Custom' : 'Default'}</span>
 				</button>
 			);

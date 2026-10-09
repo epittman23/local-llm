@@ -15,7 +15,12 @@ test('a new chat: greeting and suggestions, send, stream, and the URL becomes th
 	await expect.poll(() => chat.seen.completions.length).toBe(1);
 	const body = chat.seen.completions[0];
 	expect('chat_id' in body).toBe(false);
-	expect(body).toMatchObject({ model: 'qwen', stream: true, user_message: { role: 'user', content: 'Hello there' }, background_tasks: { title_generation: true } });
+	expect(body).toMatchObject({
+		model: 'qwen',
+		stream: true,
+		user_message: { role: 'user', content: 'Hello there' },
+		background_tasks: { title_generation: true }
+	});
 	expect(body.session_id).toBeTruthy();
 	await expect(page.getByTestId('user-message')).toContainText('Hello there');
 	await expect(page).toHaveURL(/\/c\/new1$/);
@@ -34,14 +39,25 @@ test('a new chat: greeting and suggestions, send, stream, and the URL becomes th
 });
 
 test('a follow-up in a saved chat sends its id and no title request; stop ends the reply', async ({ page }) => {
-	const chat = await mockChat(page, { chats: [savedChat('c1', 'Old chat', [{ id: 'u1', role: 'user', content: 'First question' }, { id: 'a1', role: 'assistant', content: 'First answer', model: 'qwen', done: true }])] });
+	const chat = await mockChat(page, {
+		chats: [
+			savedChat('c1', 'Old chat', [
+				{ id: 'u1', role: 'user', content: 'First question' },
+				{ id: 'a1', role: 'assistant', content: 'First answer', model: 'qwen', done: true }
+			])
+		]
+	});
 	await page.goto('/c/c1');
 	await chat.socket.connected;
 	await expect(page.getByTestId('response-message')).toContainText('First answer');
 	await page.getByRole('textbox', { name: 'Message' }).fill('Second');
 	await page.keyboard.press('Enter');
 	await expect.poll(() => chat.seen.completions.length).toBe(1);
-	expect(chat.seen.completions[0]).toMatchObject({ chat_id: 'c1', parent_id: 'a1', background_tasks: { follow_up_generation: true } });
+	expect(chat.seen.completions[0]).toMatchObject({
+		chat_id: 'c1',
+		parent_id: 'a1',
+		background_tasks: { follow_up_generation: true }
+	});
 	expect(chat.seen.completions[0].background_tasks.title_generation).toBeUndefined();
 	await page.getByRole('button', { name: 'Stop' }).click();
 	await expect.poll(() => chat.seen.stops.some((u) => u.includes('/api/tasks/chat/c1/stop'))).toBe(true);
@@ -49,7 +65,14 @@ test('a follow-up in a saved chat sends its id and no title request; stop ends t
 });
 
 test('regenerate makes a second version, and the arrows move between them', async ({ page }) => {
-	const chat = await mockChat(page, { chats: [savedChat('c1', 'Chat', [{ id: 'u1', role: 'user', content: 'Q' }, { id: 'a1', role: 'assistant', content: 'Version one', model: 'qwen', done: true }])] });
+	const chat = await mockChat(page, {
+		chats: [
+			savedChat('c1', 'Chat', [
+				{ id: 'u1', role: 'user', content: 'Q' },
+				{ id: 'a1', role: 'assistant', content: 'Version one', model: 'qwen', done: true }
+			])
+		]
+	});
 	await page.goto('/c/c1');
 	await chat.socket.connected;
 	await page.getByRole('button', { name: 'Regenerate', exact: true }).click();
@@ -86,7 +109,10 @@ test('status, sources and follow-ups arrive with the reply', async ({ page }) =>
 	await chat.stream('It is 42 [1].');
 	await expect(page.getByRole('button', { name: 'View source: Example' })).toBeVisible();
 	await page.getByRole('button', { name: '1 Source' }).click();
-	await page.getByLabel('Sources').getByRole('button', { name: /Example/ }).click();
+	await page
+		.getByLabel('Sources')
+		.getByRole('button', { name: /Example/ })
+		.click();
 	await expect(page.getByRole('dialog', { name: 'Citation' })).toContainText('text');
 	await page.keyboard.press('Escape');
 	chat.event('chat:message:follow_ups', { follow_ups: ['Why 42?'] });
@@ -106,9 +132,16 @@ test('two models answer side by side', async ({ page }) => {
 	await page.keyboard.press('Enter');
 	await expect.poll(() => chat.seen.completions.length).toBe(1);
 	const body = chat.seen.completions[0];
-	expect(body.message_ids.map((m: any) => [m.model_id, m.modelIdx])).toEqual([['qwen', 0], ['llama', 1]]);
+	expect(body.message_ids.map((m: any) => [m.model_id, m.modelIdx])).toEqual([
+		['qwen', 0],
+		['llama', 1]
+	]);
 	for (const [i, t] of body.message_ids.entries()) {
-		chat.socket.emit('events', { chat_id: 'new1', message_id: t.message_id, data: { type: 'chat:completion', data: { choices: [{ delta: { content: `Answer ${i}` } }], done: true } } });
+		chat.socket.emit('events', {
+			chat_id: 'new1',
+			message_id: t.message_id,
+			data: { type: 'chat:completion', data: { choices: [{ delta: { content: `Answer ${i}` } }], done: true } }
+		});
 	}
 	const cols = page.getByTestId('multi-response').getByTestId('response-message');
 	await expect(cols).toHaveCount(2);
@@ -139,7 +172,11 @@ test('a server confirmation is answered through the socket', async ({ page }) =>
 	await page.keyboard.press('Enter');
 	await expect.poll(() => chat.seen.completions.length).toBe(1);
 	const body = chat.seen.completions[0];
-	const answer = chat.socket.emitWithAck('events', { chat_id: 'new1', message_id: body.id, data: { type: 'confirmation', data: { title: 'Run tool?', message: 'It will send an email.' } } });
+	const answer = chat.socket.emitWithAck('events', {
+		chat_id: 'new1',
+		message_id: body.id,
+		data: { type: 'confirmation', data: { title: 'Run tool?', message: 'It will send an email.' } }
+	});
 	await expect(page.getByRole('dialog', { name: 'Run tool?' })).toBeVisible();
 	await page.getByRole('button', { name: 'Confirm' }).click();
 	expect(await answer).toBe(true);
@@ -171,12 +208,21 @@ test('a temporary chat sends the whole conversation and asks for no title', asyn
 
 // docs/bug-review-2026-09-27.md H2: switching chats in place (no reload) used
 // to keep the first chat's models, so the next message went to the wrong one.
-test('switching to another saved chat uses that chat\'s own models', async ({ page }) => {
+test("switching to another saved chat uses that chat's own models", async ({ page }) => {
 	await page.context().addInitScript(() => window.localStorage.setItem('sidebar', 'true'));
-	const llama = savedChat('c2', 'Llama chat', [{ id: 'u2', role: 'user', content: 'Q2' }, { id: 'a2', role: 'assistant', content: 'From llama', model: 'llama', done: true }]);
+	const llama = savedChat('c2', 'Llama chat', [
+		{ id: 'u2', role: 'user', content: 'Q2' },
+		{ id: 'a2', role: 'assistant', content: 'From llama', model: 'llama', done: true }
+	]);
 	llama.chat.models = ['llama'];
 	const chat = await mockChat(page, {
-		chats: [savedChat('c1', 'Qwen chat', [{ id: 'u1', role: 'user', content: 'Q1' }, { id: 'a1', role: 'assistant', content: 'From qwen', model: 'qwen', done: true }]), llama]
+		chats: [
+			savedChat('c1', 'Qwen chat', [
+				{ id: 'u1', role: 'user', content: 'Q1' },
+				{ id: 'a1', role: 'assistant', content: 'From qwen', model: 'qwen', done: true }
+			]),
+			llama
+		]
 	});
 	await page.goto('/c/c1');
 	await chat.socket.connected;
@@ -193,7 +239,14 @@ test('switching to another saved chat uses that chat\'s own models', async ({ pa
 });
 
 test('the message box waits while a chat loads, so nothing is sent onto the previous one', async ({ page }) => {
-	const chat = await mockChat(page, { chats: [savedChat('c1', 'Slow', [{ id: 'u', role: 'user', content: 'Hi' }, { id: 'a', role: 'assistant', model: 'qwen', content: 'Hello there', done: true }])] });
+	const chat = await mockChat(page, {
+		chats: [
+			savedChat('c1', 'Slow', [
+				{ id: 'u', role: 'user', content: 'Hi' },
+				{ id: 'a', role: 'assistant', model: 'qwen', content: 'Hello there', done: true }
+			])
+		]
+	});
 	let release!: () => void;
 	const gate = new Promise<void>((resolve) => (release = resolve));
 	await page.route('**/api/v1/chats/c1', async (route) => {
@@ -222,7 +275,11 @@ test('a dropped connection is announced, and so is getting it back', async ({ pa
 test('a request refused because the session expired signs out and says so', async ({ page }) => {
 	const chat = await mockChat(page);
 	let expired = false;
-	await page.route('**/api/v1/auths/', (route) => (expired ? route.fulfill({ status: 401, contentType: 'application/json', body: '{"detail":"Not authenticated"}' }) : route.fallback()));
+	await page.route('**/api/v1/auths/', (route) =>
+		expired
+			? route.fulfill({ status: 401, contentType: 'application/json', body: '{"detail":"Not authenticated"}' })
+			: route.fallback()
+	);
 	await page.route('**/api/chat/completions', (route) => {
 		expired = true;
 		return route.fulfill({ status: 401, contentType: 'application/json', body: '{"detail":"Not authenticated"}' });

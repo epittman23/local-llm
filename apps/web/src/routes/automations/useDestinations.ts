@@ -18,7 +18,21 @@ export function useDestinations(enabled = true) {
 	const config = useConfigStore((s) => s.config);
 	// With Channels off the endpoint answers 403; there is nothing to post to.
 	const channelsOn = canUseFeature('channels', user, config);
-	const folders = useQuery({ queryKey: ['folders'], queryFn: async () => ((l) => (Array.isArray(l) ? l : []))(await getFolders(token).catch(() => null)) as Folder[], enabled, staleTime: 60_000 });
-	const channels = useQuery({ queryKey: ['channels'], queryFn: async () => (channelsOn ? ((await getChannels(token).catch(() => null)) ?? []) : []) as Channel[], enabled, staleTime: 60_000 });
-	return { folders: folders.data ?? [], channels: channels.data ?? [], loaded: folders.isSuccess && channels.isSuccess };
+	const folders = useQuery({
+		queryKey: ['folders'],
+		queryFn: async () => ((l) => (Array.isArray(l) ? l : []))(await getFolders(token).catch(() => null)) as Folder[],
+		enabled,
+		staleTime: 60_000
+	});
+	const channels = useQuery({
+		queryKey: ['channels'],
+		queryFn: async () => (channelsOn ? ((await getChannels(token).catch(() => null)) ?? []) : []) as Channel[],
+		enabled,
+		staleTime: 60_000
+	});
+	return {
+		folders: folders.data ?? [],
+		channels: channels.data ?? [],
+		loaded: folders.isSuccess && channels.isSuccess
+	};
 }

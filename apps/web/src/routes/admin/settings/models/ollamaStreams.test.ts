@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_MODELFILE, isNotableStatus, modelLabel, parseStreamLines, progressPercent, sanitizeModelTag, streamError, uploadedModelfile } from './ollamaStreams';
+import {
+	DEFAULT_MODELFILE,
+	isNotableStatus,
+	modelLabel,
+	parseStreamLines,
+	progressPercent,
+	sanitizeModelTag,
+	streamError,
+	uploadedModelfile
+} from './ollamaStreams';
 
 describe('parseStreamLines', () => {
 	it('parses each line and skips blanks', () => {

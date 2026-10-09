@@ -47,7 +47,11 @@ export function ToolCallDisplay({
 	const askUser = name === 'ask_user';
 	const needsApproval = !askUser && status === 'pending' && resolvable;
 	const rejected = status === 'rejected';
-	const done = attributes.done === 'true' || status === 'failed' || status === 'incomplete' || (messageDone && status !== 'pending');
+	const done =
+		attributes.done === 'true' ||
+		status === 'failed' ||
+		status === 'incomplete' ||
+		(messageDone && status !== 'pending');
 	const executing = !done && !rejected && status === 'completed';
 	const failed = status === 'failed';
 
@@ -65,7 +69,12 @@ export function ToolCallDisplay({
 
 	return (
 		<div className="my-1 w-full text-sm" data-testid="tool-call">
-			<button type="button" className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 py-0.5" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+			<button
+				type="button"
+				className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 py-0.5"
+				aria-expanded={open}
+				onClick={() => setOpen((o) => !o)}
+			>
 				{!done && !rejected && !needsApproval && <Loader2 className="size-3.5 animate-spin" />}
 				<span className={cn(failed && 'text-destructive')}>{label}</span>
 				{open ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
@@ -75,7 +84,13 @@ export function ToolCallDisplay({
 					<Button size="sm" className="tool-call-allow-button" disabled={resolving} onClick={() => onResolve(true)}>
 						Allow
 					</Button>
-					<Button size="sm" variant="outline" className="tool-call-deny-button" disabled={resolving} onClick={() => onResolve(false)}>
+					<Button
+						size="sm"
+						variant="outline"
+						className="tool-call-deny-button"
+						disabled={resolving}
+						onClick={() => onResolve(false)}
+					>
 						Deny
 					</Button>
 				</div>
@@ -91,9 +106,15 @@ export function ToolCallDisplay({
 					{result && (
 						<div>
 							<div className="text-muted-foreground mb-1 text-xs">Output</div>
-							<pre className="overflow-x-auto text-xs whitespace-pre-wrap">{showAll ? pretty(result) : pretty(result).slice(0, RESULT_PREVIEW)}</pre>
+							<pre className="overflow-x-auto text-xs whitespace-pre-wrap">
+								{showAll ? pretty(result) : pretty(result).slice(0, RESULT_PREVIEW)}
+							</pre>
 							{!showAll && pretty(result).length > RESULT_PREVIEW && (
-								<button type="button" className="text-muted-foreground mt-1 text-xs underline" onClick={() => setShowAll(true)}>
+								<button
+									type="button"
+									className="text-muted-foreground mt-1 text-xs underline"
+									onClick={() => setShowAll(true)}
+								>
 									Show all ({pretty(result).length} characters)
 								</button>
 							)}

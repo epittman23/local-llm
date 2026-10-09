@@ -17,7 +17,15 @@ import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import type { KnowledgeItem } from './modelEditorLogic';
 
 const iconFor = (item: KnowledgeItem) =>
-	item.status === 'uploading' ? <Spinner className="size-3.5" /> : item.type === 'collection' ? <Database className="size-3.5" /> : item.type === 'note' ? <FileText className="size-3.5" /> : <FileIcon className="size-3.5" />;
+	item.status === 'uploading' ? (
+		<Spinner className="size-3.5" />
+	) : item.type === 'collection' ? (
+		<Database className="size-3.5" />
+	) : item.type === 'note' ? (
+		<FileText className="size-3.5" />
+	) : (
+		<FileIcon className="size-3.5" />
+	);
 
 /** Everything a model can be given as knowledge: notes, whole knowledge bases, and individual files. */
 function KnowledgeSearch({ onPick }: { onPick: (item: KnowledgeItem) => void }) {
@@ -35,7 +43,12 @@ function KnowledgeSearch({ onPick }: { onPick: (item: KnowledgeItem) => void }) 
 			return [
 				...(notes?.items ?? []).map((n: KnowledgeItem) => ({ ...n, type: 'note', name: n.title })),
 				...(bases?.items ?? []).map((k: KnowledgeItem) => ({ ...k, type: 'collection' })),
-				...(files?.items ?? []).map((f: KnowledgeItem) => ({ ...f, type: 'file', name: f.meta?.name || f.filename, description: f.description || '' }))
+				...(files?.items ?? []).map((f: KnowledgeItem) => ({
+					...f,
+					type: 'file',
+					name: f.meta?.name || f.filename,
+					description: f.description || ''
+				}))
 			];
 		}
 	});
@@ -43,14 +56,26 @@ function KnowledgeSearch({ onPick }: { onPick: (item: KnowledgeItem) => void }) 
 		<>
 			<div className="flex items-center px-1.5 pb-0.5">
 				<Search className="mr-1.5 size-3.5 shrink-0" />
-				<input autoFocus className="w-full bg-transparent py-0.5 text-[0.8125rem] outline-hidden" aria-label="Search Knowledge" placeholder="Search Knowledge" value={query} onChange={(e) => setQuery(e.target.value)} />
+				<input
+					autoFocus
+					className="w-full bg-transparent py-0.5 text-[0.8125rem] outline-hidden"
+					aria-label="Search Knowledge"
+					placeholder="Search Knowledge"
+					value={query}
+					onChange={(e) => setQuery(e.target.value)}
+				/>
 			</div>
 			<div className="flex max-h-56 flex-col gap-0.5 overflow-y-auto">
 				{items.length === 0 ? (
 					<div className="text-muted-foreground py-4 text-center text-xs">No knowledge found</div>
 				) : (
 					items.map((item) => (
-						<button key={`${item.type}-${item.id}`} type="button" className="hover:bg-muted/50 flex w-full items-center gap-2 rounded-xl px-2 py-1 text-left text-[0.8125rem]" onClick={() => onPick(item)}>
+						<button
+							key={`${item.type}-${item.id}`}
+							type="button"
+							className="hover:bg-muted/50 flex w-full items-center gap-2 rounded-xl px-2 py-1 text-left text-[0.8125rem]"
+							onClick={() => onPick(item)}
+						>
 							{iconFor(item)}
 							<span className="min-w-0 flex-1 truncate">{item.name}</span>
 						</button>
@@ -70,7 +95,13 @@ function KnowledgeSearch({ onPick }: { onPick: (item: KnowledgeItem) => void }) 
  * (The Svelte version sends the user's speech-to-text language when uploading
  * audio or video; there is no settings store here yet.)
  */
-export function KnowledgePicker({ items, onChange }: { items: KnowledgeItem[]; onChange: (next: KnowledgeItem[]) => void }) {
+export function KnowledgePicker({
+	items,
+	onChange
+}: {
+	items: KnowledgeItem[];
+	onChange: (next: KnowledgeItem[]) => void;
+}) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const user = useAuthStore((s) => s.user);
 	const maxSizeMb = useConfigStore((s) => s.config?.file?.max_size ?? null);
@@ -86,10 +117,15 @@ export function KnowledgePicker({ items, onChange }: { items: KnowledgeItem[]; o
 		onChange(next);
 	};
 
-	const canUpload = user?.role === 'admin' || Boolean((user?.permissions as { chat?: { file_upload?: boolean } } | undefined)?.chat?.file_upload);
+	const canUpload =
+		user?.role === 'admin' ||
+		Boolean((user?.permissions as { chat?: { file_upload?: boolean } } | undefined)?.chat?.file_upload);
 
 	const upload = async (file: File) => {
-		if (user?.role !== 'admin' && !((user?.permissions as { chat?: { file_upload?: boolean } } | undefined)?.chat?.file_upload ?? true)) {
+		if (
+			user?.role !== 'admin' &&
+			!((user?.permissions as { chat?: { file_upload?: boolean } } | undefined)?.chat?.file_upload ?? true)
+		) {
 			toast.error('You do not have permission to upload files.');
 			return;
 		}
@@ -113,7 +149,16 @@ export function KnowledgePicker({ items, onChange }: { items: KnowledgeItem[]; o
 			if (uploaded.error) toast.warning(uploaded.error);
 			commit(
 				latest.current.map((it) =>
-					it.itemId === itemId ? { ...it, status: 'uploaded', file: uploaded, id: uploaded.id, url: `${uploaded.id}`, collection_name: uploaded?.meta?.collection_name || uploaded?.collection_name } : it
+					it.itemId === itemId
+						? {
+								...it,
+								status: 'uploaded',
+								file: uploaded,
+								id: uploaded.id,
+								url: `${uploaded.id}`,
+								collection_name: uploaded?.meta?.collection_name || uploaded?.collection_name
+							}
+						: it
 				)
 			);
 		} catch (e) {
@@ -139,7 +184,9 @@ export function KnowledgePicker({ items, onChange }: { items: KnowledgeItem[]; o
 							<Switch
 								aria-label="Use entire document"
 								checked={editingItem.context === 'full'}
-								onCheckedChange={(on) => commit(items.map((it, i) => (i === editing ? { ...it, context: on ? 'full' : undefined } : it)))}
+								onCheckedChange={(on) =>
+									commit(items.map((it, i) => (i === editing ? { ...it, context: on ? 'full' : undefined } : it)))
+								}
 							/>
 						</label>
 					)}
@@ -182,7 +229,12 @@ export function KnowledgePicker({ items, onChange }: { items: KnowledgeItem[]; o
 							</PopoverContent>
 						</Popover>
 						{canUpload && (
-							<button type="button" className="text-muted-foreground text-xs hover:underline" aria-label="Upload Files" onClick={() => input.current?.click()}>
+							<button
+								type="button"
+								className="text-muted-foreground text-xs hover:underline"
+								aria-label="Upload Files"
+								onClick={() => input.current?.click()}
+							>
 								Upload
 							</button>
 						)}
@@ -196,12 +248,21 @@ export function KnowledgePicker({ items, onChange }: { items: KnowledgeItem[]; o
 						{items.map((file, i) => (
 							<Tip key={file.itemId ?? `${file.id}-${i}`} content={file.description || file.name || file.id}>
 								<div className="bg-muted flex items-center gap-1 rounded-lg px-2 py-1 text-xs">
-									<button type="button" aria-label="Edit" className="flex min-w-0 items-center gap-1.5" onClick={() => setEditing(i)}>
+									<button
+										type="button"
+										aria-label="Edit"
+										className="flex min-w-0 items-center gap-1.5"
+										onClick={() => setEditing(i)}
+									>
 										<span className="text-muted-foreground shrink-0">{iconFor(file)}</span>
 										<span className="min-w-0 truncate">{file.name || file.id}</span>
 									</button>
 									{file.status === 'uploading' && <span className="text-muted-foreground shrink-0">Uploading</span>}
-									<button type="button" aria-label="Remove File" onClick={() => commit(items.filter((_, idx) => idx !== i))}>
+									<button
+										type="button"
+										aria-label="Remove File"
+										onClick={() => commit(items.filter((_, idx) => idx !== i))}
+									>
 										<X className="size-3" />
 									</button>
 								</div>
@@ -213,7 +274,9 @@ export function KnowledgePicker({ items, onChange }: { items: KnowledgeItem[]; o
 					</div>
 				)}
 			</div>
-			<div className="text-muted-foreground/70 text-xs">To attach knowledge base here, add them to the "Knowledge" workspace first.</div>
+			<div className="text-muted-foreground/70 text-xs">
+				To attach knowledge base here, add them to the "Knowledge" workspace first.
+			</div>
 		</div>
 	);
 }

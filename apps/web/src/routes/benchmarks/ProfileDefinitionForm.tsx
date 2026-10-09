@@ -115,21 +115,11 @@ export function ProfileDefinitionForm({ initial, submitLabel, onSubmit, onCancel
 			<div className="grid grid-cols-2 gap-3">
 				<div className="flex flex-col gap-1">
 					<Label htmlFor="def-arch">arch</Label>
-					<Input
-						id="def-arch"
-						required
-						value={definition.arch}
-						onChange={(e) => set('arch', e.target.value)}
-					/>
+					<Input id="def-arch" required value={definition.arch} onChange={(e) => set('arch', e.target.value)} />
 				</div>
 				<div className="flex flex-col gap-1">
 					<Label htmlFor="def-alias">alias</Label>
-					<Input
-						id="def-alias"
-						required
-						value={definition.alias}
-						onChange={(e) => set('alias', e.target.value)}
-					/>
+					<Input id="def-alias" required value={definition.alias} onChange={(e) => set('alias', e.target.value)} />
 				</div>
 				<div className="col-span-2 flex flex-col gap-1">
 					<Label htmlFor="def-model-path">model_path</Label>
@@ -142,11 +132,7 @@ export function ProfileDefinitionForm({ initial, submitLabel, onSubmit, onCancel
 				</div>
 				<div className="flex flex-col gap-1">
 					<Label htmlFor="def-hf-repo">hf_repo</Label>
-					<Input
-						id="def-hf-repo"
-						value={definition.hf_repo}
-						onChange={(e) => set('hf_repo', e.target.value)}
-					/>
+					<Input id="def-hf-repo" value={definition.hf_repo} onChange={(e) => set('hf_repo', e.target.value)} />
 				</div>
 				<div className="flex flex-col gap-1">
 					<Label htmlFor="def-hf-pattern">hf_pattern</Label>
@@ -214,19 +200,11 @@ export function ProfileDefinitionForm({ initial, submitLabel, onSubmit, onCancel
 				</div>
 				<div className="flex flex-col gap-1">
 					<Label htmlFor="def-cache-k">cache_k</Label>
-					<Input
-						id="def-cache-k"
-						value={definition.cache_k}
-						onChange={(e) => set('cache_k', e.target.value)}
-					/>
+					<Input id="def-cache-k" value={definition.cache_k} onChange={(e) => set('cache_k', e.target.value)} />
 				</div>
 				<div className="flex flex-col gap-1">
 					<Label htmlFor="def-cache-v">cache_v</Label>
-					<Input
-						id="def-cache-v"
-						value={definition.cache_v}
-						onChange={(e) => set('cache_v', e.target.value)}
-					/>
+					<Input id="def-cache-v" value={definition.cache_v} onChange={(e) => set('cache_v', e.target.value)} />
 				</div>
 				<div className="flex flex-col gap-1">
 					<Label htmlFor="def-batch">batch</Label>
@@ -285,12 +263,7 @@ export function ProfileDefinitionForm({ initial, submitLabel, onSubmit, onCancel
 
 			<div className="flex flex-col gap-1">
 				<Label htmlFor="def-notes">notes</Label>
-				<Textarea
-					id="def-notes"
-					rows={2}
-					value={definition.notes}
-					onChange={(e) => set('notes', e.target.value)}
-				/>
+				<Textarea id="def-notes" rows={2} value={definition.notes} onChange={(e) => set('notes', e.target.value)} />
 			</div>
 
 			<div className="flex flex-col gap-1">

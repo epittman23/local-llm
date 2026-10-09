@@ -1,15 +1,12 @@
-export { cn } from "cn"
+export { cn } from 'cn';
 
 // Ports d863707:apps/openwebui/src/lib/utils/index.ts's `formatNumber` (workspace tab
 // counts): 1234 -> "1.2k".
 export const formatNumber = (num: number): string =>
-	new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 })
-		.format(num)
-		.toLowerCase();
+	new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(num).toLowerCase();
 
 // Ports of the same-named helpers in d863707:apps/openwebui/src/lib/utils/index.ts.
-export const capitalizeFirstLetter = (text: string) =>
-	text.charAt(0).toUpperCase() + text.slice(1);
+export const capitalizeFirstLetter = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
 
 // Prompt commands and similar identifiers: accents stripped, whitespace to
 // hyphens, everything outside [a-zA-Z0-9-_] dropped, lowercased.

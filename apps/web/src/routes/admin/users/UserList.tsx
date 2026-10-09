@@ -61,7 +61,8 @@ export function UserList() {
 
 	const list = useQuery({
 		queryKey: ['admin', 'users', { query: debouncedQuery, orderBy, direction, page }],
-		queryFn: () => getUsers(token, debouncedQuery, orderBy, direction, page) as Promise<{ users: UserRow[]; total: number }>,
+		queryFn: () =>
+			getUsers(token, debouncedQuery, orderBy, direction, page) as Promise<{ users: UserRow[]; total: number }>,
 		placeholderData: keepPreviousData
 	});
 	const users = list.data?.users ?? null;
@@ -117,12 +118,22 @@ export function UserList() {
 			<AddUserModal open={showAdd} onOpenChange={setShowAdd} onSaved={refetch} />
 			<EditUserModal open={showEdit} onOpenChange={setShowEdit} selectedUser={selected} onSaved={refetch} />
 			{selected && <UserChatsModal open={showChats} onOpenChange={setShowChats} user={selected} />}
-			{selected && <UserPreviewModal open={showPreview} onOpenChange={setShowPreview} userId={selected.id} userName={selected.name} />}
+			{selected && (
+				<UserPreviewModal
+					open={showPreview}
+					onOpenChange={setShowPreview}
+					userId={selected.id}
+					userName={selected.name}
+				/>
+			)}
 
 			{seats !== null && total !== null && total > seats && (
-				<div role="alert" className="mt-1 mb-2 rounded-lg bg-red-500/15 px-3 py-1.5 text-xs text-red-700 dark:text-red-200">
-					<span className="font-medium">License Error</span>{' '}
-					Exceeded the number of seats in your license. Please contact support to increase the number of seats.
+				<div
+					role="alert"
+					className="mt-1 mb-2 rounded-lg bg-red-500/15 px-3 py-1.5 text-xs text-red-700 dark:text-red-200"
+				>
+					<span className="font-medium">License Error</span> Exceeded the number of seats in your license. Please
+					contact support to increase the number of seats.
 				</div>
 			)}
 
@@ -180,7 +191,13 @@ export function UserList() {
 										] as const
 									).map(([key, label]) => (
 										<th key={key} scope="col" className={th} aria-sort={sortState(key)}>
-											<SortHeaderButton label={label} active={orderBy === key} direction={direction} className={thButton} onClick={() => setSortKey(key)} />
+											<SortHeaderButton
+												label={label}
+												active={orderBy === key}
+												direction={direction}
+												className={thButton}
+												onClick={() => setSortKey(key)}
+											/>
 										</th>
 									))}
 									<th scope="col" className="px-2.5 py-1.5 text-right font-normal" />
@@ -295,7 +312,9 @@ export function UserList() {
 						</table>
 					</div>
 
-					<div className="text-muted-foreground mt-1.5 text-right text-xs">ⓘ Click on the user role button to change a user's role.</div>
+					<div className="text-muted-foreground mt-1.5 text-right text-xs">
+						ⓘ Click on the user role button to change a user's role.
+					</div>
 
 					{total > PER_PAGE && <PagePagination page={page} count={total} perPage={PER_PAGE} onPageChange={setPage} />}
 				</>
@@ -316,23 +335,33 @@ function LargeTeamNotice() {
 				<div>Running Open WebUI for a team?</div>
 				<div className="mt-2 space-y-2">
 					<p>
-						You have more than 50 users, which often means this workspace is supporting organizational use. Open WebUI is free to use
-						as-is, with no restrictions or hidden limits, and we want to keep it that way.
+						You have more than 50 users, which often means this workspace is supporting organizational use. Open WebUI
+						is free to use as-is, with no restrictions or hidden limits, and we want to keep it that way.
 					</p>
 					<p className="text-muted-foreground">
-						By supporting the project through sponsorship or an enterprise license, you help us stay independent, ship new features
-						faster, improve stability, and grow Open WebUI for the long haul.
+						By supporting the project through sponsorship or an enterprise license, you help us stay independent, ship
+						new features faster, improve stability, and grow Open WebUI for the long haul.
 					</p>
 					<p className="text-muted-foreground">
-						Enterprise licenses also include dedicated support, customization options, and more, at a fraction of the cost of building
-						and maintaining this stack internally.
+						Enterprise licenses also include dedicated support, customization options, and more, at a fraction of the
+						cost of building and maintaining this stack internally.
 					</p>
 				</div>
 				<div className="mt-2 flex items-center gap-3">
-					<a className="text-xs underline transition" href="https://docs.openwebui.com/enterprise" target="_blank" rel="noreferrer">
+					<a
+						className="text-xs underline transition"
+						href="https://docs.openwebui.com/enterprise"
+						target="_blank"
+						rel="noreferrer"
+					>
 						Enterprise licensing
 					</a>
-					<a className="text-muted-foreground text-xs underline transition" href="https://github.com/sponsors/open-webui" target="_blank" rel="noreferrer">
+					<a
+						className="text-muted-foreground text-xs underline transition"
+						href="https://github.com/sponsors/open-webui"
+						target="_blank"
+						rel="noreferrer"
+					>
 						Sponsor on GitHub
 					</a>
 				</div>

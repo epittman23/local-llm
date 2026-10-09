@@ -10,9 +10,21 @@ import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
-import { type AutomationResponse, createAutomation, deleteAutomationById, getAutomationItems, runAutomationById, toggleAutomationById } from '@/lib/apis/automations';
+import {
+	type AutomationResponse,
+	createAutomation,
+	deleteAutomationById,
+	getAutomationItems,
+	runAutomationById,
+	toggleAutomationById
+} from '@/lib/apis/automations';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useDocumentTitle } from '@/lib/stores/configStore';
 import { dayjs } from '@/lib/utils/dates';
@@ -38,7 +50,10 @@ async function allAutomations(token: string, query: string | null = null, status
 /** Ports the automations layout's header: the title (a link back from a detail page), the total, the item name, and the page's actions. */
 export function AutomationsHeader({ itemName, actions }: { itemName?: string; actions?: ReactNode }) {
 	const token = useAuthStore((s) => s.token) ?? '';
-	const total = useQuery({ queryKey: ['automations', 'count'], queryFn: async () => (await getAutomationItems(token, null, 'all', 1).catch(() => null))?.total ?? null });
+	const total = useQuery({
+		queryKey: ['automations', 'count'],
+		queryFn: async () => (await getAutomationItems(token, null, 'all', 1).catch(() => null))?.total ?? null
+	});
 	return (
 		<div className="flex shrink-0 items-center gap-1 px-2.5 pt-2 pb-1">
 			<div className="flex min-w-0 flex-1 items-center gap-1 py-1">
@@ -119,7 +134,10 @@ function Automations() {
 	const exportAll = async () => {
 		try {
 			const all = await allAutomations(token);
-			saveAs(new Blob([JSON.stringify(all.map(toAutomationForm), null, 2)], { type: 'application/json' }), `automations-export-${Date.now()}.json`);
+			saveAs(
+				new Blob([JSON.stringify(all.map(toAutomationForm), null, 2)], { type: 'application/json' }),
+				`automations-export-${Date.now()}.json`
+			);
 		} catch (err) {
 			toast.error(`${err}`);
 		}
@@ -129,7 +147,11 @@ function Automations() {
 		try {
 			const { forms, skipped } = parseAutomationImport(await file.text(), new Set(folders.map((f) => f.id)));
 			for (const form of forms) await createAutomation(token, form);
-			toast.success(skipped ? `Imported ${forms.length} automations; skipped ${skipped} incomplete` : 'Imported automations successfully');
+			toast.success(
+				skipped
+					? `Imported ${forms.length} automations; skipped ${skipped} incomplete`
+					: 'Imported automations successfully'
+			);
 		} catch (err) {
 			toast.error(`${err}`);
 		}
@@ -147,7 +169,12 @@ function Automations() {
 						</Button>
 						<DropdownMenu>
 							<DropdownMenuTrigger asChild>
-								<Button type="button" size="sm" className="rounded-l-none border-l px-1.5" aria-label="More create options">
+								<Button
+									type="button"
+									size="sm"
+									className="rounded-l-none border-l px-1.5"
+									aria-label="More create options"
+								>
 									<ChevronDown className="size-3.5" />
 								</Button>
 							</DropdownMenuTrigger>
@@ -180,7 +207,13 @@ function Automations() {
 					if (id) navigate(`/automations/${id}`);
 				}}
 			/>
-			<ConfirmDialog open={deleting !== null} onOpenChange={(o) => !o && setDeleting(null)} title="Delete automation?" confirmLabel="Delete" onConfirm={remove}>
+			<ConfirmDialog
+				open={deleting !== null}
+				onOpenChange={(o) => !o && setDeleting(null)}
+				title="Delete automation?"
+				confirmLabel="Delete"
+				onConfirm={remove}
+			>
 				This will delete <span className="font-medium">{deleting?.name}</span>.
 			</ConfirmDialog>
 
@@ -208,7 +241,10 @@ function Automations() {
 					</select>
 					<DropdownMenu>
 						<DropdownMenuTrigger asChild>
-							<button type="button" className="text-muted-foreground hover:text-foreground flex items-center gap-0.5 px-1.5 text-[0.8125rem]">
+							<button
+								type="button"
+								className="text-muted-foreground hover:text-foreground flex items-center gap-0.5 px-1.5 text-[0.8125rem]"
+							>
 								Actions <ChevronDown className="size-3" />
 							</button>
 						</DropdownMenuTrigger>
@@ -226,17 +262,26 @@ function Automations() {
 				) : items.length === 0 ? (
 					<div className="flex min-h-[calc(100dvh-13rem)] flex-col items-center justify-center text-center">
 						<div className="mb-1.5 text-sm">{query ? 'No results found' : 'No automations found'}</div>
-						<div className="text-muted-foreground max-w-sm text-xs leading-5">{query ? 'Try adjusting your search or filter to find what you are looking for.' : 'Create scheduled prompts that run automatically on a recurring basis.'}</div>
+						<div className="text-muted-foreground max-w-sm text-xs leading-5">
+							{query
+								? 'Try adjusting your search or filter to find what you are looking for.'
+								: 'Create scheduled prompts that run automatically on a recurring basis.'}
+						</div>
 					</div>
 				) : (
 					<ul className="my-1 grid gap-y-0.5">
 						{items.map((a) => (
 							<li key={a.id} className="hover:bg-muted/50 flex items-center gap-3 rounded-xl px-3 py-2 transition">
-								<Link to={`/automations/${a.id}`} className="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-center sm:gap-3">
+								<Link
+									to={`/automations/${a.id}`}
+									className="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-center sm:gap-3"
+								>
 									<span className="flex min-w-0 flex-1 items-center gap-2">
 										<span className="truncate text-sm">{a.name}</span>
 										<Tip content={a.last_run_at ? dayjs(a.last_run_at / 1_000_000).format('LLLL') : 'Never'}>
-											<span className="text-muted-foreground shrink-0 text-xs">{a.last_run_at ? dayjs(a.last_run_at / 1_000_000).fromNow() : 'Never'}</span>
+											<span className="text-muted-foreground shrink-0 text-xs">
+												{a.last_run_at ? dayjs(a.last_run_at / 1_000_000).fromNow() : 'Never'}
+											</span>
 										</Tip>
 									</span>
 									<span className="text-muted-foreground truncate text-xs sm:max-w-[45%]">
@@ -245,7 +290,11 @@ function Automations() {
 								</Link>
 								<DropdownMenu>
 									<DropdownMenuTrigger asChild>
-										<button type="button" aria-label={`More actions for ${a.name}`} className="hover:bg-muted rounded-lg p-1">
+										<button
+											type="button"
+											aria-label={`More actions for ${a.name}`}
+											className="hover:bg-muted rounded-lg p-1"
+										>
 											<MoreHorizontal className="size-4" />
 										</button>
 									</DropdownMenuTrigger>
@@ -266,14 +315,21 @@ function Automations() {
 								</DropdownMenu>
 								<Tip content={a.is_active ? 'Enabled' : 'Disabled'}>
 									<span>
-										<Switch size="sm" aria-label={`${a.is_active ? 'Pause' : 'Resume'} ${a.name}`} checked={a.is_active} onCheckedChange={() => toggle(a)} />
+										<Switch
+											size="sm"
+											aria-label={`${a.is_active ? 'Pause' : 'Resume'} ${a.name}`}
+											checked={a.is_active}
+											onCheckedChange={() => toggle(a)}
+										/>
 									</span>
 								</Tip>
 							</li>
 						))}
 					</ul>
 				)}
-				{(list.data?.total ?? 0) > PER_PAGE && <PagePagination page={page} count={list.data?.total ?? 0} perPage={PER_PAGE} onPageChange={setPage} />}
+				{(list.data?.total ?? 0) > PER_PAGE && (
+					<PagePagination page={page} count={list.data?.total ?? 0} perPage={PER_PAGE} onPageChange={setPage} />
+				)}
 			</div>
 		</div>
 	);

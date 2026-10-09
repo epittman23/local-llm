@@ -116,11 +116,17 @@ export function FunctionsPage() {
 	}, [webuiName]);
 
 	const refresh = () =>
-		Promise.all([queryClient.invalidateQueries({ queryKey: ['functions'] }), queryClient.invalidateQueries({ queryKey: ['models'] })]);
+		Promise.all([
+			queryClient.invalidateQueries({ queryKey: ['functions'] }),
+			queryClient.invalidateQueries({ queryKey: ['models'] })
+		]);
 	const patchItem = (id: string, patch: Partial<FunctionListItem>) =>
-		queryClient.setQueryData<FunctionListItem[]>(LIST_KEY, (prev) => prev?.map((f) => (f.id === id ? { ...f, ...patch } : f)));
+		queryClient.setQueryData<FunctionListItem[]>(LIST_KEY, (prev) =>
+			prev?.map((f) => (f.id === id ? { ...f, ...patch } : f))
+		);
 
-	const openFunction = (fn: FunctionListItem) => navigate(`${routePaths.adminFunctionsEdit}?id=${encodeURIComponent(fn.id)}`);
+	const openFunction = (fn: FunctionListItem) =>
+		navigate(`${routePaths.adminFunctionsEdit}?id=${encodeURIComponent(fn.id)}`);
 
 	const deleteMutation = useMutation({
 		mutationFn: (fn: FunctionListItem) => deleteFunctionById(token, fn.id),
@@ -174,7 +180,11 @@ export function FunctionsPage() {
 
 	const exportHandler = async (fn: FunctionListItem) => {
 		const full = await fetchFull(fn);
-		if (full) saveAs(new Blob([JSON.stringify([full])], { type: 'application/json' }), `function-${full.id}-export-${Date.now()}.json`);
+		if (full)
+			saveAs(
+				new Blob([JSON.stringify([full])], { type: 'application/json' }),
+				`function-${full.id}-export-${Date.now()}.json`
+			);
 	};
 
 	const exportAll = async () => {
@@ -182,7 +192,8 @@ export function FunctionsPage() {
 			toast.error(`${error}`);
 			return null;
 		});
-		if (all) saveAs(new Blob([JSON.stringify(all)], { type: 'application/json' }), `functions-export-${Date.now()}.json`);
+		if (all)
+			saveAs(new Blob([JSON.stringify(all)], { type: 'application/json' }), `functions-export-${Date.now()}.json`);
 	};
 
 	const shareHandler = async (fn: FunctionListItem) => {
@@ -320,8 +331,18 @@ export function FunctionsPage() {
 							actions={[
 								{ id: 'functions-new', label: 'Create', href: routePaths.adminFunctionsCreate },
 								{ id: 'functions-import-link', label: 'Import From Link', onClick: () => setShowImportUrl(true) },
-								{ id: 'functions-import', label: 'Import JSON', onClick: () => importInput.current?.click(), visible: isAdmin },
-								{ id: 'functions-export', label: 'Export JSON', onClick: exportAll, visible: isAdmin && (list.data?.length ?? 0) > 0 }
+								{
+									id: 'functions-import',
+									label: 'Import JSON',
+									onClick: () => importInput.current?.click(),
+									visible: isAdmin
+								},
+								{
+									id: 'functions-export',
+									label: 'Export JSON',
+									onClick: exportAll,
+									visible: isAdmin && (list.data?.length ?? 0) > 0
+								}
 							]}
 						/>
 					</div>
@@ -387,9 +408,13 @@ export function FunctionsPage() {
 								>
 									<div className="flex min-w-0 flex-1 flex-col overflow-hidden">
 										<div className="flex min-w-0 items-center gap-2 overflow-hidden">
-											<div className="bg-muted text-muted-foreground shrink-0 rounded-sm px-1 text-[0.625rem] leading-4 uppercase">{fn.type}</div>
+											<div className="bg-muted text-muted-foreground shrink-0 rounded-sm px-1 text-[0.625rem] leading-4 uppercase">
+												{fn.type}
+											</div>
 											<Tip content={fn.id} side="top">
-												<div className="min-w-0 truncate text-[0.8125rem] leading-5 group-hover:underline">{fn.name}</div>
+												<div className="min-w-0 truncate text-[0.8125rem] leading-5 group-hover:underline">
+													{fn.name}
+												</div>
 											</Tip>
 											{fn.meta?.manifest?.version && (
 												<div className="text-muted-foreground max-w-[40%] min-w-0 shrink-0 truncate text-[0.6875rem] leading-5">
@@ -404,14 +429,18 @@ export function FunctionsPage() {
 										</div>
 										{fn.meta?.description && (
 											<Tip content={fn.meta.description} side="top">
-												<div className="text-muted-foreground/70 mt-0.5 truncate text-[0.6875rem] leading-4">{fn.meta.description}</div>
+												<div className="text-muted-foreground/70 mt-0.5 truncate text-[0.6875rem] leading-4">
+													{fn.meta.description}
+												</div>
 											</Tip>
 										)}
 									</div>
 
 									<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-[0.6875rem] leading-5 md:block">
 										<Tip content={fn.user?.email ?? 'Deleted User'} side="top">
-											<div className="truncate">{capitalizeFirstLetter(fn.user?.name ?? fn.user?.email ?? 'Deleted User')}</div>
+											<div className="truncate">
+												{capitalizeFirstLetter(fn.user?.name ?? fn.user?.email ?? 'Deleted User')}
+											</div>
 										</Tip>
 									</div>
 
@@ -465,7 +494,12 @@ export function FunctionsPage() {
 												<DropdownMenu>
 													<Tip content="More">
 														<DropdownMenuTrigger asChild>
-															<button type="button" className={rowIconButton} aria-label="Function Menu" onClick={(e) => e.stopPropagation()}>
+															<button
+																type="button"
+																className={rowIconButton}
+																aria-label="Function Menu"
+																onClick={(e) => e.stopPropagation()}
+															>
 																<MoreHorizontal className="size-4" />
 															</button>
 														</DropdownMenuTrigger>
@@ -479,7 +513,12 @@ export function FunctionsPage() {
 																		<Globe />
 																		Global
 																	</span>
-																	<Switch size="sm" aria-label="Global" checked={Boolean(fn.is_global)} onCheckedChange={() => toggleGlobal(fn)} />
+																	<Switch
+																		size="sm"
+																		aria-label="Global"
+																		checked={Boolean(fn.is_global)}
+																		onCheckedChange={() => toggleGlobal(fn)}
+																	/>
 																</DropdownMenuItem>
 																<DropdownMenuSeparator />
 															</>

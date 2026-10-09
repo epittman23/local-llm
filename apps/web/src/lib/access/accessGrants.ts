@@ -79,12 +79,9 @@ export function normalizeInputToGrants(value: unknown): AccessGrant[] {
 const isWildcard = (grant: AccessGrant, type: Principal, permission: Permission) =>
 	grant.principal_type === type && grant.principal_id === WILDCARD && grant.permission === permission;
 
-export const hasPublicReadGrant = (grants: AccessGrant[]) =>
-	grants.some((g) => isWildcard(g, 'user', 'read'));
-export const hasPublicWriteGrant = (grants: AccessGrant[]) =>
-	grants.some((g) => isWildcard(g, 'user', 'write'));
-export const hasAnyoneReadGrant = (grants: AccessGrant[]) =>
-	grants.some((g) => isWildcard(g, 'anyone', 'read'));
+export const hasPublicReadGrant = (grants: AccessGrant[]) => grants.some((g) => isWildcard(g, 'user', 'read'));
+export const hasPublicWriteGrant = (grants: AccessGrant[]) => grants.some((g) => isWildcard(g, 'user', 'write'));
+export const hasAnyoneReadGrant = (grants: AccessGrant[]) => grants.some((g) => isWildcard(g, 'anyone', 'read'));
 
 /** "Open" outranks "public": an `anyone:*` grant makes the item link-viewable regardless. */
 export function getVisibility(grants: AccessGrant[]): Visibility {
@@ -117,14 +114,9 @@ export function upsertPrincipalGrant(
 	permission: Permission
 ): AccessGrant[] {
 	const exists = grants.some(
-		(g) =>
-			g.principal_type === principalType &&
-			g.principal_id === principalId &&
-			g.permission === permission
+		(g) => g.principal_type === principalType && g.principal_id === principalId && g.permission === permission
 	);
-	return exists
-		? grants
-		: [...grants, { principal_type: principalType, principal_id: principalId, permission }];
+	return exists ? grants : [...grants, { principal_type: principalType, principal_id: principalId, permission }];
 }
 
 export function removePrincipalGrant(
@@ -134,21 +126,12 @@ export function removePrincipalGrant(
 	permission: Permission
 ): AccessGrant[] {
 	return grants.filter(
-		(g) =>
-			!(
-				g.principal_type === principalType &&
-				g.principal_id === principalId &&
-				g.permission === permission
-			)
+		(g) => !(g.principal_type === principalType && g.principal_id === principalId && g.permission === permission)
 	);
 }
 
 /** Drops both the read and the write grant: removing a row from the access list. */
-export function removePrincipal(
-	grants: AccessGrant[],
-	principalType: Principal,
-	principalId: string
-): AccessGrant[] {
+export function removePrincipal(grants: AccessGrant[], principalType: Principal, principalId: string): AccessGrant[] {
 	return dedupeAccessGrants(
 		removePrincipalGrant(
 			removePrincipalGrant(grants, principalType, principalId, 'read'),
@@ -166,10 +149,7 @@ export function togglePrincipalWrite(
 	principalId: string
 ): AccessGrant[] {
 	const hasWrite = grants.some(
-		(g) =>
-			g.principal_type === principalType &&
-			g.principal_id === principalId &&
-			g.permission === 'write'
+		(g) => g.principal_type === principalType && g.principal_id === principalId && g.permission === 'write'
 	);
 	const next = hasWrite
 		? removePrincipalGrant(grants, principalType, principalId, 'write')
@@ -215,9 +195,7 @@ export function principalIdsByPermission(
 ): string[] {
 	return Array.from(
 		new Set(
-			grants
-				.filter((g) => g.principal_type === principalType && g.permission === permission)
-				.map((g) => g.principal_id)
+			grants.filter((g) => g.principal_type === principalType && g.permission === permission).map((g) => g.principal_id)
 		)
 	);
 }

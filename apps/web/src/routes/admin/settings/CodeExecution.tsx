@@ -19,7 +19,8 @@ import { useAuthStore } from '@/lib/stores/authStore';
 
 type Config = Record<string, any>;
 const ENGINES = ['pyodide', 'jupyter'];
-const JUPYTER_WARNING = 'Warning: Jupyter execution enables arbitrary code execution, posing severe security risks—proceed with extreme caution.';
+const JUPYTER_WARNING =
+	'Warning: Jupyter execution enables arbitrary code execution, posing severe security risks—proceed with extreme caution.';
 
 /**
  * The engine / Jupyter block that "Code Execution" and "Code Interpreter" each
@@ -47,7 +48,12 @@ function EngineFields({
 	return (
 		<>
 			<SettingRow label={engineLabel} description={engine === 'jupyter' ? JUPYTER_WARNING : engineHint}>
-				<SettingSelect value={engine ?? ''} onChange={(v) => set({ [key('ENGINE')]: v })} required aria-label={engineLabel}>
+				<SettingSelect
+					value={engine ?? ''}
+					onChange={(v) => set({ [key('ENGINE')]: v })}
+					required
+					aria-label={engineLabel}
+				>
 					<option disabled value="">
 						Select a engine
 					</option>
@@ -62,31 +68,54 @@ function EngineFields({
 			{engine === 'jupyter' && (
 				<>
 					<SettingField label="Jupyter URL" description={urlHint}>
-						<SettingInput type="text" placeholder="Enter Jupyter URL" value={config[key('JUPYTER_URL')] ?? ''} onChange={(e) => set({ [key('JUPYTER_URL')]: e.target.value })} autoComplete="off" />
+						<SettingInput
+							type="text"
+							placeholder="Enter Jupyter URL"
+							value={config[key('JUPYTER_URL')] ?? ''}
+							onChange={(e) => set({ [key('JUPYTER_URL')]: e.target.value })}
+							autoComplete="off"
+						/>
 					</SettingField>
 					{/* LICENSE covers this Open WebUI wordmark.
 					    Do not alter, remove, obscure, or replace it except as LICENSE permits:
 					    https://docs.openwebui.com/license. */}
 					<SettingRow label="Jupyter Auth" description="Select how Open WebUI authenticates with the Jupyter server.">
-						<SettingSelect value={auth ?? ''} onChange={(v) => set({ [key('JUPYTER_AUTH')]: v })} aria-label="Jupyter Auth">
+						<SettingSelect
+							value={auth ?? ''}
+							onChange={(v) => set({ [key('JUPYTER_AUTH')]: v })}
+							aria-label="Jupyter Auth"
+						>
 							<option value="">None</option>
 							<option value="token">Token</option>
 							<option value="password">Password</option>
 						</SettingSelect>
 					</SettingRow>
 					{auth && (
-						<SettingField label={auth === 'password' ? 'Jupyter Password' : 'Jupyter Token'} description="Credentials used to authenticate with the Jupyter server.">
+						<SettingField
+							label={auth === 'password' ? 'Jupyter Password' : 'Jupyter Token'}
+							description="Credentials used to authenticate with the Jupyter server."
+						>
 							<SensitiveInput
 								variant="settings"
 								placeholder={auth === 'password' ? 'Enter Jupyter Password' : 'Enter Jupyter Token'}
 								value={config[key(auth === 'password' ? 'JUPYTER_AUTH_PASSWORD' : 'JUPYTER_AUTH_TOKEN')] ?? ''}
-								onChange={(v) => set({ [key(auth === 'password' ? 'JUPYTER_AUTH_PASSWORD' : 'JUPYTER_AUTH_TOKEN')]: v })}
+								onChange={(v) =>
+									set({ [key(auth === 'password' ? 'JUPYTER_AUTH_PASSWORD' : 'JUPYTER_AUTH_TOKEN')]: v })
+								}
 								autoComplete="off"
 							/>
 						</SettingField>
 					)}
-					<SettingField label="Code Execution Timeout" description="Maximum runtime in seconds before execution is stopped.">
-						<SettingNumber value={config[key('JUPYTER_TIMEOUT')]} onChange={(v) => set({ [key('JUPYTER_TIMEOUT')]: v })} placeholder="e.g. 60" autoComplete="off" />
+					<SettingField
+						label="Code Execution Timeout"
+						description="Maximum runtime in seconds before execution is stopped."
+					>
+						<SettingNumber
+							value={config[key('JUPYTER_TIMEOUT')]}
+							onChange={(v) => set({ [key('JUPYTER_TIMEOUT')]: v })}
+							placeholder="e.g. 60"
+							autoComplete="off"
+						/>
 					</SettingField>
 				</>
 			)}
@@ -98,7 +127,11 @@ function EngineFields({
 export default function CodeExecution() {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const saved = useAdminConfigSaved();
-	const { draft: config, patch, isLoading } = useConfigDraft<Config>(['code-execution'], () => getCodeExecutionConfig(token));
+	const {
+		draft: config,
+		patch,
+		isLoading
+	} = useConfigDraft<Config>(['code-execution'], () => getCodeExecutionConfig(token));
 	const [saving, setSaving] = useState(false);
 
 	const save = async () => {
@@ -118,8 +151,17 @@ export default function CodeExecution() {
 			{config && (
 				<>
 					<SettingsSection title="Code Execution" first>
-						<SettingRow label="Enable Code Execution" description="Allow models to run generated code and return execution results.">
-							{(id) => <SettingSwitch checked={config.ENABLE_CODE_EXECUTION} onChange={(v) => patch({ ENABLE_CODE_EXECUTION: v })} labelledBy={id} />}
+						<SettingRow
+							label="Enable Code Execution"
+							description="Allow models to run generated code and return execution results."
+						>
+							{(id) => (
+								<SettingSwitch
+									checked={config.ENABLE_CODE_EXECUTION}
+									onChange={(v) => patch({ ENABLE_CODE_EXECUTION: v })}
+									labelledBy={id}
+								/>
+							)}
 						</SettingRow>
 						{config.ENABLE_CODE_EXECUTION && (
 							<EngineFields
@@ -134,8 +176,17 @@ export default function CodeExecution() {
 					</SettingsSection>
 
 					<SettingsSection title="Code Interpreter">
-						<SettingRow label="Enable Code Interpreter" description="Allow models to use the code interpreter tool during chats.">
-							{(id) => <SettingSwitch checked={config.ENABLE_CODE_INTERPRETER} onChange={(v) => patch({ ENABLE_CODE_INTERPRETER: v })} labelledBy={id} />}
+						<SettingRow
+							label="Enable Code Interpreter"
+							description="Allow models to use the code interpreter tool during chats."
+						>
+							{(id) => (
+								<SettingSwitch
+									checked={config.ENABLE_CODE_INTERPRETER}
+									onChange={(v) => patch({ ENABLE_CODE_INTERPRETER: v })}
+									labelledBy={id}
+								/>
+							)}
 						</SettingRow>
 						{config.ENABLE_CODE_INTERPRETER && (
 							<>
@@ -147,7 +198,10 @@ export default function CodeExecution() {
 									engineHint="Choose the runtime used by the code interpreter tool."
 									urlHint="Connect code interpreter to a Jupyter server endpoint."
 								/>
-								<SettingField label="Code Interpreter Prompt Template" description="Leave empty to use the default prompt, or enter a custom prompt.">
+								<SettingField
+									label="Code Interpreter Prompt Template"
+									description="Leave empty to use the default prompt, or enter a custom prompt."
+								>
 									<SettingTextarea
 										value={config.CODE_INTERPRETER_PROMPT_TEMPLATE ?? ''}
 										onChange={(e) => patch({ CODE_INTERPRETER_PROMPT_TEMPLATE: e.target.value })}

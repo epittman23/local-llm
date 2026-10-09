@@ -7,14 +7,19 @@ export type ModelItem = { id: string; name?: string } & Rec;
 // --- what a model is, as the list shows it ---------------------------------------
 
 export const isPublicModel = (model: Rec | null | undefined): boolean =>
-	(model?.access_grants ?? []).some((g: Rec) => g.principal_type === 'user' && g.principal_id === '*' && g.permission === 'read');
+	(model?.access_grants ?? []).some(
+		(g: Rec) => g.principal_type === 'user' && g.principal_id === '*' && g.permission === 'read'
+	);
 
-export const isSharedModel = (model: Rec | null | undefined): boolean => (model?.access_grants ?? []).length > 0 && !isPublicModel(model);
+export const isSharedModel = (model: Rec | null | undefined): boolean =>
+	(model?.access_grants ?? []).length > 0 && !isPublicModel(model);
 
 /** A preset is a model an admin built on top of another; anything else is a connection model. */
-export const isPresetModel = (model: Rec | null | undefined): boolean => Boolean(model?.preset || model?.base_model_id || model?.info?.base_model_id);
+export const isPresetModel = (model: Rec | null | undefined): boolean =>
+	Boolean(model?.preset || model?.base_model_id || model?.info?.base_model_id);
 
-export const accessLabel = (model: Rec | null | undefined): 'Public' | 'Shared' | 'Private' => (isPublicModel(model) ? 'Public' : isSharedModel(model) ? 'Shared' : 'Private');
+export const accessLabel = (model: Rec | null | undefined): 'Public' | 'Shared' | 'Private' =>
+	isPublicModel(model) ? 'Public' : isSharedModel(model) ? 'Shared' : 'Private';
 
 export const VIEW_OPTIONS = [
 	['', 'All'],
@@ -39,7 +44,12 @@ export type ViewOption = (typeof VIEW_OPTIONS)[number][0];
  * shown as enabled, which is what it is until someone stores a record.
  * With a tag chosen, only models that have a record carrying it are kept.
  */
-export function mergeModels(served: ModelItem[], providerModels: ModelItem[], baseModels: ModelItem[], selectedTag: string): ModelItem[] {
+export function mergeModels(
+	served: ModelItem[],
+	providerModels: ModelItem[],
+	baseModels: ModelItem[],
+	selectedTag: string
+): ModelItem[] {
 	const known = new Set(served.map((m) => m.id));
 	const all = [...served, ...providerModels.filter((m) => !known.has(m.id))];
 	const records = new Map(baseModels.map((m) => [m.id, m]));
@@ -65,10 +75,19 @@ export function orderIds(saved: string[], models: ModelItem[]): string[] {
 	];
 }
 
-export type Filters = { search: string; view: ViewOption; order: string[]; selectedIds: ReadonlySet<string>; pinnedIds: ReadonlySet<string> };
+export type Filters = {
+	search: string;
+	view: ViewOption;
+	order: string[];
+	selectedIds: ReadonlySet<string>;
+	pinnedIds: ReadonlySet<string>;
+};
 
 /** The models to show: filtered by search text and view, in the saved order (name breaks ties). */
-export function filterModels(models: ModelItem[], { search, view, order, selectedIds, pinnedIds }: Filters): ModelItem[] {
+export function filterModels(
+	models: ModelItem[],
+	{ search, view, order, selectedIds, pinnedIds }: Filters
+): ModelItem[] {
 	const rank = new Map(order.map((id, i) => [id, i]));
 	const needle = search.toLowerCase();
 	const matches = (m: ModelItem) => {
@@ -94,17 +113,16 @@ export function filterModels(models: ModelItem[], { search, view, order, selecte
 				return true;
 		}
 	};
-	return models
-		.filter(matches)
-		.sort((a, b) => {
-			const ra = rank.get(a.id) ?? Number.MAX_SAFE_INTEGER;
-			const rb = rank.get(b.id) ?? Number.MAX_SAFE_INTEGER;
-			return ra !== rb ? ra - rb : (a.name ?? a.id).localeCompare(b.name ?? b.id);
-		});
+	return models.filter(matches).sort((a, b) => {
+		const ra = rank.get(a.id) ?? Number.MAX_SAFE_INTEGER;
+		const rb = rank.get(b.id) ?? Number.MAX_SAFE_INTEGER;
+		return ra !== rb ? ra - rb : (a.name ?? a.id).localeCompare(b.name ?? b.id);
+	});
 }
 
 /** Reordering only makes sense on the whole list: a filtered view hides the rows a drop would land among. */
-export const canReorder = (f: Pick<Filters, 'search' | 'view'> & { selectedTag: string }): boolean => f.search === '' && f.view === '' && f.selectedTag === '';
+export const canReorder = (f: Pick<Filters, 'search' | 'view'> & { selectedTag: string }): boolean =>
+	f.search === '' && f.view === '' && f.selectedTag === '';
 
 /** `list` with the item at `from` moved to `to`. */
 export function moveItem<T>(list: readonly T[], from: number, to: number): T[] {
@@ -116,16 +134,26 @@ export function moveItem<T>(list: readonly T[], from: number, to: number): T[] {
 }
 
 /** `ids` with `id` added, or removed if it is already there. */
-export const toggleId = (ids: readonly string[], id: string): string[] => (ids.includes(id) ? ids.filter((x) => x !== id) : [...new Set([...ids, id])]);
+export const toggleId = (ids: readonly string[], id: string): string[] =>
+	ids.includes(id) ? ids.filter((x) => x !== id) : [...new Set([...ids, id])];
 
 export const splitIds = (csv: string | null | undefined): string[] => (csv ?? '').split(',').filter((id) => id);
 
 // --- what saving sends -----------------------------------------------------------
 
-export type ModelsConfigParts = { selectedIds: string[]; pinnedIds: string[]; order: string[]; metadata?: Rec | null; params?: Rec | null };
+export type ModelsConfigParts = {
+	selectedIds: string[];
+	pinnedIds: string[];
+	order: string[];
+	metadata?: Rec | null;
+	params?: Rec | null;
+};
 
 /** The body of `POST /configs/models`: the three lists, plus the defaults it already had unless new ones are given. */
-export function modelsConfigBody(config: Rec | null | undefined, { selectedIds, pinnedIds, order, metadata, params }: ModelsConfigParts) {
+export function modelsConfigBody(
+	config: Rec | null | undefined,
+	{ selectedIds, pinnedIds, order, metadata, params }: ModelsConfigParts
+) {
 	return {
 		DEFAULT_MODELS: selectedIds.join(','),
 		DEFAULT_PINNED_MODELS: pinnedIds.join(','),
@@ -138,9 +166,18 @@ export function modelsConfigBody(config: Rec | null | undefined, { selectedIds, 
 export type PromptSuggestion = { content: string; title: [string, string] };
 
 /** What the "Model Defaults" panel edits. */
-export type DefaultsState = { capabilities: Rec; defaultFeatureIds: string[]; builtinTools: Rec; params: Rec; promptSuggestions: PromptSuggestion[] };
+export type DefaultsState = {
+	capabilities: Rec;
+	defaultFeatureIds: string[];
+	builtinTools: Rec;
+	params: Rec;
+	promptSuggestions: PromptSuggestion[];
+};
 
-export function defaultsFromConfig(config: Rec | null | undefined, suggestions: PromptSuggestion[] | null | undefined): DefaultsState {
+export function defaultsFromConfig(
+	config: Rec | null | undefined,
+	suggestions: PromptSuggestion[] | null | undefined
+): DefaultsState {
 	const saved = config?.DEFAULT_MODEL_METADATA;
 	const hasSaved = saved && Object.keys(saved).length > 0;
 	return {
@@ -163,7 +200,13 @@ export const nonBlankSuggestions = (list: PromptSuggestion[]) => list.filter((p)
 
 /** Two states with the same snapshot are the same as far as saving goes (unset params and blank suggestions do not count). */
 export const defaultsSnapshot = (d: DefaultsState): string =>
-	JSON.stringify({ capabilities: d.capabilities, defaultFeatureIds: d.defaultFeatureIds, params: configuredParams(d.params), builtinTools: d.builtinTools, promptSuggestions: nonBlankSuggestions(d.promptSuggestions) });
+	JSON.stringify({
+		capabilities: d.capabilities,
+		defaultFeatureIds: d.defaultFeatureIds,
+		params: configuredParams(d.params),
+		builtinTools: d.builtinTools,
+		promptSuggestions: nonBlankSuggestions(d.promptSuggestions)
+	});
 
 export const savedParams = (d: DefaultsState) => configuredParams(d.params);
 
@@ -182,13 +225,29 @@ export function upsertPlan(model: ModelItem, overrides: Rec, recordIds: Readonly
 }
 
 /** The enable switch: a model that has no record yet is created (in its new state); one that has flips. */
-export function togglePlan(model: ModelItem, nextActive: boolean): { action: 'create'; body: Rec } | { action: 'toggle'; id: string } {
+export function togglePlan(
+	model: ModelItem,
+	nextActive: boolean
+): { action: 'create'; body: Rec } | { action: 'toggle'; id: string } {
 	if (!('base_model_id' in model) && !isPresetModel(model)) {
-		return { action: 'create', body: { id: model.id, name: model.name, base_model_id: null, meta: {}, params: {}, access_grants: [], is_active: nextActive } };
+		return {
+			action: 'create',
+			body: {
+				id: model.id,
+				name: model.name,
+				base_model_id: null,
+				meta: {},
+				params: {},
+				access_grants: [],
+				is_active: nextActive
+			}
+		};
 	}
 	return { action: 'toggle', id: model.id };
 }
 
 /** Access grants after making a model public (the everyone-can-read grant added) or private (all grants dropped). */
 export const nextAccessGrants = (model: Rec): Rec[] =>
-	isPublicModel(model) ? [] : [...(model.access_grants ?? []), { principal_type: 'user', principal_id: '*', permission: 'read' }];
+	isPublicModel(model)
+		? []
+		: [...(model.access_grants ?? []), { principal_type: 'user', principal_id: '*', permission: 'read' }];

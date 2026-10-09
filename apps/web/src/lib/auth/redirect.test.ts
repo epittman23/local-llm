@@ -7,6 +7,16 @@ describe('safeRedirect', () => {
 		expect(safeRedirect('/c/abc?x=1#m')).toBe('/c/abc?x=1#m');
 	});
 	it('drops anything that would leave the app', () => {
-		for (const t of ['https://evil.example/', '//evil.example/x', '/\\evil.example', 'javascript:alert(1)', 'notes', '', null, undefined]) expect(safeRedirect(t)).toBeNull();
+		for (const t of [
+			'https://evil.example/',
+			'//evil.example/x',
+			'/\\evil.example',
+			'javascript:alert(1)',
+			'notes',
+			'',
+			null,
+			undefined
+		])
+			expect(safeRedirect(t)).toBeNull();
 	});
 });

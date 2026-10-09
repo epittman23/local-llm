@@ -29,12 +29,14 @@ describe('visibleRows', () => {
 		expect(keys(visibleRows(section('Workspace Permissions'), p, ctx))).toContain('workspace.tools_export');
 	});
 	it('shows Public Sharing only while its sharing switch is on', () => {
-		const rows = (p: Record<string, unknown>) => keys(visibleRows(section('Sharing Permissions'), withDefaults(p), ctx));
+		const rows = (p: Record<string, unknown>) =>
+			keys(visibleRows(section('Sharing Permissions'), withDefaults(p), ctx));
 		expect(rows({})).not.toContain('sharing.public_notes');
 		expect(rows({ sharing: { notes: true } })).toContain('sharing.public_notes');
 	});
 	it('ties chat sharing to Allow Chat Share, and calendar sharing to the Calendar feature', () => {
-		const rows = (p: Record<string, unknown>) => keys(visibleRows(section('Sharing Permissions'), withDefaults(p), ctx));
+		const rows = (p: Record<string, unknown>) =>
+			keys(visibleRows(section('Sharing Permissions'), withDefaults(p), ctx));
 		expect(rows({ chat: { share: false } })).not.toContain('sharing.public_chats');
 		expect(rows({ chat: { share: true } })).toContain('sharing.open_chats');
 		expect(rows({ features: { calendar: false } })).not.toContain('sharing.public_calendars');
@@ -55,8 +57,14 @@ describe('showsDefaultHint', () => {
 	});
 	it('stays quiet when the switch is on, the default is off, or the row is nested', () => {
 		expect(showsDefaultHint(row, withDefaults({}), { chat: { edit: true } } as never)).toBe(false);
-		expect(showsDefaultHint(row, withDefaults({ chat: { edit: false } }), { chat: { edit: false } } as never)).toBe(false);
-		expect(showsDefaultHint({ ...row, nested: true }, withDefaults({ chat: { edit: false } }), { chat: { edit: true } } as never)).toBe(false);
+		expect(showsDefaultHint(row, withDefaults({ chat: { edit: false } }), { chat: { edit: false } } as never)).toBe(
+			false
+		);
+		expect(
+			showsDefaultHint({ ...row, nested: true }, withDefaults({ chat: { edit: false } }), {
+				chat: { edit: true }
+			} as never)
+		).toBe(false);
 	});
 });
 

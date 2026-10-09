@@ -6,7 +6,18 @@ import Typography from '@tiptap/extension-typography';
 import { CharacterCount, Placeholder } from '@tiptap/extensions';
 import { type Editor, EditorContent, useEditor, useEditorState } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { Bold, Code2, Heading1, Heading2, Italic, List, ListChecks, ListOrdered, Quote, Strikethrough } from 'lucide-react';
+import {
+	Bold,
+	Code2,
+	Heading1,
+	Heading2,
+	Italic,
+	List,
+	ListChecks,
+	ListOrdered,
+	Quote,
+	Strikethrough
+} from 'lucide-react';
 import { type ReactNode, useEffect, useRef } from 'react';
 import { htmlToMarkdown } from '@/lib/editor/markdown';
 import { cn } from '@/lib/utils';
@@ -64,7 +75,14 @@ export function RichTextEditor({
 			CharacterCount
 		],
 		content: (content as string | object | null) ?? '',
-		editorProps: { attributes: { class: cn('rich-text outline-hidden', className), 'aria-label': ariaLabel, role: 'textbox', 'aria-multiline': 'true' } },
+		editorProps: {
+			attributes: {
+				class: cn('rich-text outline-hidden', className),
+				'aria-label': ariaLabel,
+				role: 'textbox',
+				'aria-multiline': 'true'
+			}
+		},
 		onUpdate: ({ editor: e }) => {
 			const html = e.getHTML();
 			onChangeRef.current?.({ html, json: e.getJSON(), md: htmlToMarkdown(html) });
@@ -92,19 +110,35 @@ export function RichTextEditor({
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
 			{toolbar && editor && editable && <Toolbar editor={editor} />}
-			<EditorContent editor={editor} className="flex min-h-0 flex-1 flex-col [&_.ProseMirror]:min-h-[12rem] [&_.ProseMirror]:flex-1" />
+			<EditorContent
+				editor={editor}
+				className="flex min-h-0 flex-1 flex-col [&_.ProseMirror]:min-h-[12rem] [&_.ProseMirror]:flex-1"
+			/>
 		</div>
 	);
 }
 
-function ToolButton({ label, active, onClick, children }: { label: string; active: boolean; onClick: () => void; children: ReactNode }) {
+function ToolButton({
+	label,
+	active,
+	onClick,
+	children
+}: {
+	label: string;
+	active: boolean;
+	onClick: () => void;
+	children: ReactNode;
+}) {
 	return (
 		<button
 			type="button"
 			aria-label={label}
 			aria-pressed={active}
 			title={label}
-			className={cn('rounded-md p-1 transition', active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground')}
+			className={cn(
+				'rounded-md p-1 transition',
+				active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'
+			)}
 			onMouseDown={(e) => e.preventDefault()}
 			onClick={onClick}
 		>

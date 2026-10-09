@@ -51,12 +51,22 @@ export function SidebarChannels({ onNavigate }: { onNavigate?: () => void }) {
 	return (
 		<div className="mt-3">
 			<div className="text-muted-foreground flex items-center px-2 text-xs font-medium">
-				<button type="button" className="hover:text-foreground flex flex-1 items-center gap-1 py-1" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+				<button
+					type="button"
+					className="hover:text-foreground flex flex-1 items-center gap-1 py-1"
+					aria-expanded={open}
+					onClick={() => setOpen((o) => !o)}
+				>
 					{open ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
 					Channels
 				</button>
 				<Tip content="Create Channel">
-					<button type="button" className="hover:text-foreground rounded p-0.5" aria-label="Create Channel" onClick={() => setCreating(true)}>
+					<button
+						type="button"
+						className="hover:text-foreground rounded p-0.5"
+						aria-label="Create Channel"
+						onClick={() => setCreating(true)}
+					>
 						<Plus className="size-3.5" />
 					</button>
 				</Tip>
@@ -76,7 +86,15 @@ export function SidebarChannels({ onNavigate }: { onNavigate?: () => void }) {
 	);
 }
 
-function ChannelItem({ channel, onNavigate, onChanged }: { channel: Channel; onNavigate?: () => void; onChanged: () => void }) {
+function ChannelItem({
+	channel,
+	onNavigate,
+	onChanged
+}: {
+	channel: Channel;
+	onNavigate?: () => void;
+	onChanged: () => void;
+}) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const me = useAuthStore((s) => s.user);
 	const queryClient = useQueryClient();
@@ -93,7 +111,13 @@ function ChannelItem({ channel, onNavigate, onChanged }: { channel: Channel; onN
 
 	const update = async (payload: Record<string, unknown>) => {
 		const { name, is_private, access_grants, group_ids, user_ids } = payload;
-		const res = await updateChannelById(token, channel.id, { name, is_private, access_grants, group_ids, user_ids } as never).catch((e) => {
+		const res = await updateChannelById(token, channel.id, {
+			name,
+			is_private,
+			access_grants,
+			group_ids,
+			user_ids
+		} as never).catch((e) => {
 			toast.error(`${e}`);
 			return null;
 		});
@@ -112,16 +136,32 @@ function ChannelItem({ channel, onNavigate, onChanged }: { channel: Channel; onN
 					onNavigate?.();
 				}}
 				className={({ isActive }) =>
-					cn('flex items-center gap-2 rounded-md px-2 py-1 pr-7 text-sm', isActive ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50', unread > 0 ? 'text-foreground font-medium' : 'text-muted-foreground')
+					cn(
+						'flex items-center gap-2 rounded-md px-2 py-1 pr-7 text-sm',
+						isActive ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/50',
+						unread > 0 ? 'text-foreground font-medium' : 'text-muted-foreground'
+					)
 				}
 			>
 				{channel.type === 'dm' ? (
 					members.length ? (
 						<span className="relative flex shrink-0">
 							{members.slice(0, 2).map((u, i) => (
-								<img key={u.id} src={`${WEBUI_API_BASE_URL}/users/${u.id}/profile/image`} alt="" className={cn('border-background size-5 rounded-full border', i === 1 && '-ml-2.5')} />
+								<img
+									key={u.id}
+									src={`${WEBUI_API_BASE_URL}/users/${u.id}/profile/image`}
+									alt=""
+									className={cn('border-background size-5 rounded-full border', i === 1 && '-ml-2.5')}
+								/>
 							))}
-							{members.length === 1 && <span className={cn('border-background absolute -right-0.5 -bottom-0.5 size-2 rounded-full border', members[0].is_active ? 'bg-green-500' : 'bg-gray-400')} />}
+							{members.length === 1 && (
+								<span
+									className={cn(
+										'border-background absolute -right-0.5 -bottom-0.5 size-2 rounded-full border',
+										members[0].is_active ? 'bg-green-500' : 'bg-gray-400'
+									)}
+								/>
+							)}
 						</span>
 					) : (
 						<User className="size-4 shrink-0" />
@@ -133,23 +173,44 @@ function ChannelItem({ channel, onNavigate, onChanged }: { channel: Channel; onN
 				)}
 				<span className="truncate">{channelTitle(channel, me?.id)}</span>
 				{unread > 0 && (
-					<span className="bg-foreground text-background ml-auto rounded-full px-1.5 text-[0.625rem] font-medium" title="Unread">
+					<span
+						className="bg-foreground text-background ml-auto rounded-full px-1.5 text-[0.625rem] font-medium"
+						title="Unread"
+					>
 						{formatUnread(unread)}
 					</span>
 				)}
 			</NavLink>
 			{channel.type === 'dm' ? (
-				<button type="button" aria-label="Hide conversation" className="text-muted-foreground hover:text-foreground absolute top-1.5 right-1.5 hidden group-hover:block" onClick={() => void hideDm()}>
+				<button
+					type="button"
+					aria-label="Hide conversation"
+					className="text-muted-foreground hover:text-foreground absolute top-1.5 right-1.5 hidden group-hover:block"
+					onClick={() => void hideDm()}
+				>
 					<X className="size-3.5" />
 				</button>
 			) : (
 				canEdit && (
-					<button type="button" aria-label={`Edit ${channel.name}`} className="text-muted-foreground hover:text-foreground absolute top-1.5 right-1.5 hidden group-hover:block" onClick={() => setEditing(true)}>
+					<button
+						type="button"
+						aria-label={`Edit ${channel.name}`}
+						className="text-muted-foreground hover:text-foreground absolute top-1.5 right-1.5 hidden group-hover:block"
+						onClick={() => setEditing(true)}
+					>
 						<Settings className="size-3.5" />
 					</button>
 				)
 			)}
-			{canEdit && channel.type !== 'dm' && <ChannelFormDialog open={editing} onOpenChange={setEditing} channel={channel} onSubmit={update} onDeleted={onChanged} />}
+			{canEdit && channel.type !== 'dm' && (
+				<ChannelFormDialog
+					open={editing}
+					onOpenChange={setEditing}
+					channel={channel}
+					onSubmit={update}
+					onDeleted={onChanged}
+				/>
+			)}
 		</div>
 	);
 }

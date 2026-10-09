@@ -33,7 +33,9 @@ export function SensitiveInput({
 	return (
 		<div
 			className={cn(
-				settings ? 'bg-muted/40 focus-within:border-ring flex h-7 flex-1 items-center rounded-lg border px-2 transition-colors' : 'flex flex-1',
+				settings
+					? 'bg-muted/40 focus-within:border-ring flex h-7 flex-1 items-center rounded-lg border px-2 transition-colors'
+					: 'flex flex-1',
 				outerClassName
 			)}
 		>
@@ -58,7 +60,10 @@ export function SensitiveInput({
 			/>
 			<button
 				type="button"
-				className={cn('bg-transparent transition', settings ? 'text-muted-foreground hover:text-foreground ml-1.5' : 'pl-1.5')}
+				className={cn(
+					'bg-transparent transition',
+					settings ? 'text-muted-foreground hover:text-foreground ml-1.5' : 'pl-1.5'
+				)}
 				aria-pressed={show}
 				aria-label="Make password visible in the user interface"
 				onClick={() => setShow((s) => !s)}

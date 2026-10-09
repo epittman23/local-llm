@@ -3,7 +3,10 @@ import { alignKeys, normalizeConfigs, removeConnection, stripTrailingSlashes } f
 
 describe('normalizeConfigs', () => {
 	it('falls back to the URL-keyed legacy entry, then to {}', () => {
-		const out = normalizeConfigs(['http://a', 'http://b', 'http://c'], { 0: { enable: false }, 'http://b': { prefix_id: 'b' } });
+		const out = normalizeConfigs(['http://a', 'http://b', 'http://c'], {
+			0: { enable: false },
+			'http://b': { prefix_id: 'b' }
+		});
 		expect(out[0]).toEqual({ enable: false });
 		expect(out[1]).toEqual({ prefix_id: 'b' });
 		expect(out[2]).toEqual({});
@@ -41,6 +44,10 @@ describe('removeConnection', () => {
 		expect(removeConnection(urls, keys, configs, 2).configs).toEqual({ 0: { n: 'a' }, 1: { n: 'b' } });
 	});
 	it('handles Ollama, which has no key list', () => {
-		expect(removeConnection(['a', 'b'], null, { 0: { n: 'a' }, 1: { n: 'b' } }, 0)).toEqual({ urls: ['b'], keys: null, configs: { 0: { n: 'b' } } });
+		expect(removeConnection(['a', 'b'], null, { 0: { n: 'a' }, 1: { n: 'b' } }, 0)).toEqual({
+			urls: ['b'],
+			keys: null,
+			configs: { 0: { n: 'b' } }
+		});
 	});
 });

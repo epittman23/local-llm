@@ -71,7 +71,9 @@ export function EditUserModal({
 			<DialogContent className="sm:max-w-md">
 				<DialogHeader>
 					<DialogTitle className="text-sm font-medium">Edit User</DialogTitle>
-					<DialogDescription className="sr-only">Change this user's role, name, email, password or picture.</DialogDescription>
+					<DialogDescription className="sr-only">
+						Change this user's role, name, email, password or picture.
+					</DialogDescription>
 				</DialogHeader>
 				<form
 					onSubmit={(e) => {
@@ -91,7 +93,9 @@ export function EditUserModal({
 						<div className="min-w-0 flex-1">
 							<div className="mb-2 w-full overflow-hidden">
 								<div className="truncate font-normal capitalize">{selectedUser.name}</div>
-								<div className="text-muted-foreground text-xs">Created at {dayjs(selectedUser.created_at * 1000).format('LL')}</div>
+								<div className="text-muted-foreground text-xs">
+									Created at {dayjs(selectedUser.created_at * 1000).format('LL')}
+								</div>
 							</div>
 
 							<div className="flex flex-col space-y-1.5">
@@ -101,7 +105,10 @@ export function EditUserModal({
 										<div className="-mx-1 my-0.5 flex flex-wrap gap-1">
 											{groups.data!.map((group) => (
 												<span key={group.id} className="bg-muted rounded-xl px-1.5 py-0.5 text-xs">
-													<Link to={`${routePaths.adminUsersGroups}?id=${group.id}`} onClick={() => onOpenChange(false)}>
+													<Link
+														to={`${routePaths.adminUsersGroups}?id=${group.id}`}
+														onClick={() => onOpenChange(false)}
+													>
 														{group.name}
 													</Link>
 												</span>
@@ -166,7 +173,8 @@ export function EditUserModal({
 										<div className="mb-1 flex flex-col space-y-1 text-sm break-all">
 											{Object.keys(selectedUser.oauth).map((key) => (
 												<div key={key}>
-													<span className="text-muted-foreground">{key}</span> <span>{selectedUser.oauth?.[key]?.sub}</span>
+													<span className="text-muted-foreground">{key}</span>{' '}
+													<span>{selectedUser.oauth?.[key]?.sub}</span>
 												</div>
 											))}
 										</div>

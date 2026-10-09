@@ -9,12 +9,28 @@ import { FilterMenu, TagSelector } from '@/components/common/FilterSelects';
 import { ListEmptyState, ListSearchBar } from '@/components/common/ListChrome';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import { getBackendConfig } from '@/lib/apis';
 import { getModels } from '@/lib/apis';
 import { getErrorMessage } from '@/lib/apis/openai';
 import { getModelsConfig, setDefaultPromptSuggestions, setModelsConfig } from '@/lib/apis/configs';
-import { createNewModel, deleteAllModels, getBaseModelTags, getBaseModels, getModelById, importModels, toggleModelById, updateModelAccessGrants, updateModelById } from '@/lib/apis/models';
+import {
+	createNewModel,
+	deleteAllModels,
+	getBaseModelTags,
+	getBaseModels,
+	getModelById,
+	importModels,
+	toggleModelById,
+	updateModelAccessGrants,
+	updateModelById
+} from '@/lib/apis/models';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
@@ -103,7 +119,11 @@ export default function AdminModels() {
 	const importInput = useRef<HTMLInputElement>(null);
 	const seededDefaults = useRef(false);
 
-	const refreshApp = () => Promise.all([queryClient.invalidateQueries({ queryKey: ['models-all'] }), queryClient.invalidateQueries({ queryKey: ['workspace-models'] })]);
+	const refreshApp = () =>
+		Promise.all([
+			queryClient.invalidateQueries({ queryKey: ['models-all'] }),
+			queryClient.invalidateQueries({ queryKey: ['workspace-models'] })
+		]);
 
 	/**
 	 * Reads everything the list is built from. `quiet` keeps the current list on
@@ -113,7 +133,10 @@ export default function AdminModels() {
 		async (tag: string = selectedTag, quiet = true) => {
 			if (!quiet) setModels(null);
 			try {
-				const [cfg, allTags] = await Promise.all([getModelsConfig(token), getBaseModelTags(token).then(asArray<string>)]);
+				const [cfg, allTags] = await Promise.all([
+					getModelsConfig(token),
+					getBaseModelTags(token).then(asArray<string>)
+				]);
 				const activeTag = tag && allTags.includes(tag) ? tag : '';
 				const [baseModels, served, provider] = await Promise.all([
 					getBaseModels(token, activeTag).then(asArray<ModelItem>),
@@ -160,13 +183,17 @@ export default function AdminModels() {
 
 	const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 	const pinnedSet = useMemo(() => new Set(pinnedIds), [pinnedIds]);
-	const filtered = useMemo(() => filterModels(models ?? [], { search, view, order, selectedIds: selectedSet, pinnedIds: pinnedSet }), [models, search, view, order, selectedSet, pinnedSet]);
+	const filtered = useMemo(
+		() => filterModels(models ?? [], { search, view, order, selectedIds: selectedSet, pinnedIds: pinnedSet }),
+		[models, search, view, order, selectedSet, pinnedSet]
+	);
 	const canReorder = reorderAllowed({ search, view, selectedTag });
 	const defaultsDirty = defaults !== null && defaultsSnapshot(defaults) !== baseline;
 
 	// --- one model ----------------------------------------------------------------
 
-	const patchModel = (id: string, changes: Rec) => setModels((ms) => ms && ms.map((m) => (m.id === id ? { ...m, ...changes } : m)));
+	const patchModel = (id: string, changes: Rec) =>
+		setModels((ms) => ms && ms.map((m) => (m.id === id ? { ...m, ...changes } : m)));
 
 	/** Stores a change to `model`; false (after saying why) if the server refused it. */
 	const upsert = async (model: ModelItem, overrides: Rec = {}, notify = true): Promise<boolean> => {
@@ -220,7 +247,10 @@ export default function AdminModels() {
 		}
 	};
 
-	const fullModel = async (model: ModelItem): Promise<Rec> => (recordIds.has(model.id) || isPresetModel(model) ? ((await getModelById(token, model.id).catch(() => null)) ?? model) : model);
+	const fullModel = async (model: ModelItem): Promise<Rec> =>
+		recordIds.has(model.id) || isPresetModel(model)
+			? ((await getModelById(token, model.id).catch(() => null)) ?? model)
+			: model;
 
 	const openModel = async (model: ModelItem) => {
 		if (isPresetModel(model)) {
@@ -233,7 +263,12 @@ export default function AdminModels() {
 
 	const cloneModel = async (model: ModelItem) => {
 		const full = await fullModel(model);
-		sessionStorage.model = JSON.stringify({ ...full, base_model_id: model.id, id: `${model.id}-clone`, name: `${model.name} (Clone)` });
+		sessionStorage.model = JSON.stringify({
+			...full,
+			base_model_id: model.id,
+			id: `${model.id}-clone`,
+			name: `${model.name} (Clone)`
+		});
 		closeSettings();
 		navigate(routePaths.workspaceModelsCreate);
 	};
@@ -256,7 +291,14 @@ export default function AdminModels() {
 		setSelectedIds(nextSelected);
 		setPinnedIds(nextPinned);
 		try {
-			const res = await setModelsConfig(token, modelsConfigBody(config, { selectedIds: nextSelected, pinnedIds: nextPinned, order: config?.MODEL_ORDER_LIST ?? [] }));
+			const res = await setModelsConfig(
+				token,
+				modelsConfigBody(config, {
+					selectedIds: nextSelected,
+					pinnedIds: nextPinned,
+					order: config?.MODEL_ORDER_LIST ?? []
+				})
+			);
 			if (!res) throw new Error('Failed to save');
 			setConfig(res);
 			toast.success(message);
@@ -268,13 +310,26 @@ export default function AdminModels() {
 	};
 
 	const toggleSelected = (model: ModelItem) =>
-		saveSelections(toggleId(selectedIds, model.id), pinnedIds, selectedSet.has(model.id) ? 'Model removed from selected models' : 'Model added to selected models');
+		saveSelections(
+			toggleId(selectedIds, model.id),
+			pinnedIds,
+			selectedSet.has(model.id) ? 'Model removed from selected models' : 'Model added to selected models'
+		);
 	const toggleDefaultPinned = (model: ModelItem) =>
-		saveSelections(selectedIds, toggleId(pinnedIds, model.id), pinnedSet.has(model.id) ? 'Model removed from pinned models' : 'Model added to pinned models');
+		saveSelections(
+			selectedIds,
+			toggleId(pinnedIds, model.id),
+			pinnedSet.has(model.id) ? 'Model removed from pinned models' : 'Model added to pinned models'
+		);
 
 	// --- bulk ----------------------------------------------------------------------------
 
-	const bulk = async (targets: ModelItem[], overrides: (m: ModelItem) => Rec, apply: (m: ModelItem) => Rec, message?: string) => {
+	const bulk = async (
+		targets: ModelItem[],
+		overrides: (m: ModelItem) => Rec,
+		apply: (m: ModelItem) => Rec,
+		message?: string
+	) => {
 		setModels((ms) => ms && ms.map((m) => (targets.some((t) => t.id === m.id) ? { ...m, ...apply(m) } : m)));
 		const results = await Promise.all(targets.map((m) => upsert(m, overrides(m), false)));
 		if (results.some((ok) => !ok)) toast.error('Some models could not be updated');
@@ -282,12 +337,32 @@ export default function AdminModels() {
 		await refreshApp();
 		await init();
 	};
-	const enableAll = () => bulk(filtered.filter((m) => !(m.is_active ?? true)), () => ({ is_active: true }), () => ({ is_active: true }));
-	const disableAll = () => bulk(filtered.filter((m) => m.is_active ?? true), () => ({ is_active: false }), () => ({ is_active: false }));
+	const enableAll = () =>
+		bulk(
+			filtered.filter((m) => !(m.is_active ?? true)),
+			() => ({ is_active: true }),
+			() => ({ is_active: true })
+		);
+	const disableAll = () =>
+		bulk(
+			filtered.filter((m) => m.is_active ?? true),
+			() => ({ is_active: false }),
+			() => ({ is_active: false })
+		);
 	const showAll = () =>
-		bulk(filtered.filter((m) => m.meta?.hidden === true), (m) => ({ meta: { ...m.meta, hidden: false } }), (m) => ({ meta: { ...m.meta, hidden: false } }), 'All models are now visible');
+		bulk(
+			filtered.filter((m) => m.meta?.hidden === true),
+			(m) => ({ meta: { ...m.meta, hidden: false } }),
+			(m) => ({ meta: { ...m.meta, hidden: false } }),
+			'All models are now visible'
+		);
 	const hideAll = () =>
-		bulk(filtered.filter((m) => !(m.meta?.hidden ?? false)), (m) => ({ meta: { ...m.meta, hidden: true } }), (m) => ({ meta: { ...m.meta, hidden: true } }), 'All models are now hidden');
+		bulk(
+			filtered.filter((m) => !(m.meta?.hidden ?? false)),
+			(m) => ({ meta: { ...m.meta, hidden: true } }),
+			(m) => ({ meta: { ...m.meta, hidden: true } }),
+			'All models are now hidden'
+		);
 
 	// --- import, export, reset --------------------------------------------------------------
 
@@ -303,7 +378,11 @@ export default function AdminModels() {
 				toast.error('Failed to import models');
 			}
 		} catch (error) {
-			toast.error(error instanceof SyntaxError ? 'Invalid JSON file' : ((error as Rec)?.detail ?? (error instanceof Error ? error.message : `${error}`)));
+			toast.error(
+				error instanceof SyntaxError
+					? 'Invalid JSON file'
+					: ((error as Rec)?.detail ?? (error instanceof Error ? error.message : `${error}`))
+			);
 		} finally {
 			setImporting(false);
 		}
@@ -341,7 +420,12 @@ export default function AdminModels() {
 		try {
 			const res = await setModelsConfig(
 				token,
-				modelsConfigBody(config, { selectedIds, pinnedIds, order, ...(defaultsDirty ? { metadata: defaultsMetadata(defaults), params: savedParams(defaults) } : {}) })
+				modelsConfigBody(config, {
+					selectedIds,
+					pinnedIds,
+					order,
+					...(defaultsDirty ? { metadata: defaultsMetadata(defaults), params: savedParams(defaults) } : {})
+				})
 			);
 			if (!res) throw new Error('Failed to save models configuration');
 			setConfig(res);
@@ -472,7 +556,14 @@ export default function AdminModels() {
 					</DropdownMenu>
 				</ListSearchBar>
 
-				<div className={filtered.length > 0 ? 'my-0.5 min-h-0 flex-1 space-y-px overflow-y-auto pr-1.5' : 'my-0.5 min-h-0 flex-1 overflow-hidden'} data-testid="model-list">
+				<div
+					className={
+						filtered.length > 0
+							? 'my-0.5 min-h-0 flex-1 space-y-px overflow-y-auto pr-1.5'
+							: 'my-0.5 min-h-0 flex-1 overflow-hidden'
+					}
+					data-testid="model-list"
+				>
 					{filtered.length === 0 ? (
 						<ListEmptyState title="No models found" />
 					) : (

@@ -71,7 +71,10 @@ export function ExternalKnowledge() {
 					return null;
 				})
 			]);
-			return { connections: (c?.items ?? []) as ExternalConnection[], items: (k?.items ?? []) as ExternalKnowledgeItem[] };
+			return {
+				connections: (c?.items ?? []) as ExternalConnection[],
+				items: (k?.items ?? []) as ExternalKnowledgeItem[]
+			};
 		},
 		gcTime: 0
 	});
@@ -80,10 +83,12 @@ export function ExternalKnowledge() {
 	const refresh = () => queryClient.invalidateQueries({ queryKey: QUERY_KEY });
 
 	const toggle = async (connection: ExternalConnection) => {
-		const res = await updateExternalKnowledgeConnection(token, connection.id, togglePayload(connection)).catch((error) => {
-			toast.error(`${error}`);
-			return null;
-		});
+		const res = await updateExternalKnowledgeConnection(token, connection.id, togglePayload(connection)).catch(
+			(error) => {
+				toast.error(`${error}`);
+				return null;
+			}
+		);
 		if (res) await refresh();
 	};
 
@@ -154,7 +159,13 @@ export function ExternalKnowledge() {
 								</Tip>
 								<Tip content={enabled ? 'Enabled' : 'Disabled'}>
 									<span>
-										<Switch size="sm" aria-label={`${enabled ? 'Disable' : 'Enable'} ${item.name}`} checked={enabled} disabled={!connection} onCheckedChange={() => connection && toggle(connection)} />
+										<Switch
+											size="sm"
+											aria-label={`${enabled ? 'Disable' : 'Enable'} ${item.name}`}
+											checked={enabled}
+											disabled={!connection}
+											onCheckedChange={() => connection && toggle(connection)}
+										/>
 									</span>
 								</Tip>
 							</div>
@@ -240,10 +251,22 @@ function SourceDialog({
 
 	const save = async () => {
 		if (!canSave(f)) return void toast.error('Fill the required fields first.');
-		if (!tested) return void toast.error(editing ? 'Test the source before saving it.' : 'Test the source before creating it.');
+		if (!tested)
+			return void toast.error(editing ? 'Test the source before saving it.' : 'Test the source before creating it.');
 		setSaving(true);
-		const body = { name: f.name, description: f.description, connection: connectionPayload(f, editingConnection), source: sourcePayload(f), access_grants: accessGrants, test_query: f.testQuery, test_count: 5 };
-		const res = await (editing ? updateExternalKnowledgeSource(token, editing.item.id, body) : createExternalKnowledgeSource(token, body)).catch((error) => {
+		const body = {
+			name: f.name,
+			description: f.description,
+			connection: connectionPayload(f, editingConnection),
+			source: sourcePayload(f),
+			access_grants: accessGrants,
+			test_query: f.testQuery,
+			test_count: 5
+		};
+		const res = await (editing
+			? updateExternalKnowledgeSource(token, editing.item.id, body)
+			: createExternalKnowledgeSource(token, body)
+		).catch((error) => {
 			toast.error(`${error}`);
 			return null;
 		});
@@ -259,7 +282,14 @@ function SourceDialog({
 			<label className={label} htmlFor={id}>
 				{text}
 			</label>
-			<input id={id} className={bare} value={String(f[key])} onChange={(e) => change({ [key]: e.target.value } as Partial<SourceForm>)} autoComplete="off" {...extra} />
+			<input
+				id={id}
+				className={bare}
+				value={String(f[key])}
+				onChange={(e) => change({ [key]: e.target.value } as Partial<SourceForm>)}
+				autoComplete="off"
+				{...extra}
+			/>
 		</div>
 	);
 
@@ -267,8 +297,12 @@ function SourceDialog({
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
 				<DialogHeader>
-					<DialogTitle className="text-sm font-medium">{editing ? 'Edit Knowledge Connection' : 'Add Knowledge Connection'}</DialogTitle>
-					<DialogDescription className="sr-only">A knowledge base backed by an external vector store.</DialogDescription>
+					<DialogTitle className="text-sm font-medium">
+						{editing ? 'Edit Knowledge Connection' : 'Add Knowledge Connection'}
+					</DialogTitle>
+					<DialogDescription className="sr-only">
+						A knowledge base backed by an external vector store.
+					</DialogDescription>
 				</DialogHeader>
 				<form
 					className="flex flex-col gap-2.5"
@@ -300,40 +334,70 @@ function SourceDialog({
 						<label className={label} htmlFor="external-source-description">
 							Description
 						</label>
-						<textarea id="external-source-description" className={`${bare} resize-none`} rows={2} value={f.description} onChange={(e) => setF((prev) => ({ ...prev, description: e.target.value }))} />
+						<textarea
+							id="external-source-description"
+							className={`${bare} resize-none`}
+							rows={2}
+							value={f.description}
+							onChange={(e) => setF((prev) => ({ ...prev, description: e.target.value }))}
+						/>
 					</div>
 
-					{input('external-source-endpoint', 'Endpoint', 'endpoint', { placeholder: endpointPlaceholder(f.provider), required: true })}
+					{input('external-source-endpoint', 'Endpoint', 'endpoint', {
+						placeholder: endpointPlaceholder(f.provider),
+						required: true
+					})}
 
 					<div className="flex gap-2">
 						{input('external-source-timeout', 'Timeout', 'timeout', { type: 'number' })}
 						{f.provider !== 'pgvector' && (
 							<div className="min-w-0 flex-1">
 								<div className={label}>API Key / Token</div>
-								<SensitiveInput value={f.apiKey} onChange={(apiKey) => change({ apiKey })} placeholder={editingConnection?.auth_configured ? 'Unchanged' : ''} required={false} autoComplete="off" />
+								<SensitiveInput
+									value={f.apiKey}
+									onChange={(apiKey) => change({ apiKey })}
+									placeholder={editingConnection?.auth_configured ? 'Unchanged' : ''}
+									required={false}
+									autoComplete="off"
+								/>
 							</div>
 						)}
 					</div>
 
-					{f.provider === 'milvus' && input('external-source-db-name', 'Database', 'dbName', { placeholder: 'Default' })}
+					{f.provider === 'milvus' &&
+						input('external-source-db-name', 'Database', 'dbName', { placeholder: 'Default' })}
 
 					<hr className="my-1" />
 
-					{input('external-source-collection', 'Collection', 'sourceName', { placeholder: 'research-docs', required: true })}
+					{input('external-source-collection', 'Collection', 'sourceName', {
+						placeholder: 'research-docs',
+						required: true
+					})}
 
 					{f.provider === 'pgvector' && (
 						<div className="flex gap-2">
 							{input('external-source-table', 'Table', 'tableName', { placeholder: 'document_chunk', required: true })}
-							{input('external-source-collection-field', 'Collection Field', 'collectionField', { placeholder: 'collection_name', required: true })}
+							{input('external-source-collection-field', 'Collection Field', 'collectionField', {
+								placeholder: 'collection_name',
+								required: true
+							})}
 						</div>
 					)}
 
 					<div className="flex gap-2">
-						{input('external-source-content-field', 'Content Field', 'contentField', { placeholder: f.provider === 'pgvector' ? 'text' : 'payload.text', required: true })}
-						{input('external-source-vector-field', 'Vector Field', 'vectorField', { placeholder: f.provider === 'qdrant' ? 'Default' : 'vector', required: f.provider !== 'qdrant' })}
+						{input('external-source-content-field', 'Content Field', 'contentField', {
+							placeholder: f.provider === 'pgvector' ? 'text' : 'payload.text',
+							required: true
+						})}
+						{input('external-source-vector-field', 'Vector Field', 'vectorField', {
+							placeholder: f.provider === 'qdrant' ? 'Default' : 'vector',
+							required: f.provider !== 'qdrant'
+						})}
 					</div>
 					<div className="flex gap-2">
-						{input('external-source-metadata-field', 'Metadata Field', 'metadataField', { placeholder: f.provider === 'pgvector' ? 'vmetadata' : 'payload.metadata' })}
+						{input('external-source-metadata-field', 'Metadata Field', 'metadataField', {
+							placeholder: f.provider === 'pgvector' ? 'vmetadata' : 'payload.metadata'
+						})}
 						{input('external-source-document-id-field', 'Document ID Field', 'documentIdField', { placeholder: 'id' })}
 					</div>
 
@@ -342,14 +406,32 @@ function SourceDialog({
 							Test Query
 						</label>
 						<div className="flex items-center gap-1">
-							<input id="external-source-test-query" className={bare} value={f.testQuery} onChange={(e) => change({ testQuery: e.target.value })} placeholder="Ask a test question" autoComplete="off" required />
+							<input
+								id="external-source-test-query"
+								className={bare}
+								value={f.testQuery}
+								onChange={(e) => change({ testQuery: e.target.value })}
+								placeholder="Ask a test question"
+								autoComplete="off"
+								required
+							/>
 							<Tip content="Test">
-								<button type="button" aria-label="Run test query" className={iconButton} disabled={testing} onClick={test}>
+								<button
+									type="button"
+									aria-label="Run test query"
+									className={iconButton}
+									disabled={testing}
+									onClick={test}
+								>
 									{testing ? <Spinner className="size-4" /> : <RefreshCw className="size-4" />}
 								</button>
 							</Tip>
 						</div>
-						{tested && <div className="mt-1 text-xs text-green-700 dark:text-green-300">Test passed: {testResult?.documents?.length} result(s).</div>}
+						{tested && (
+							<div className="mt-1 text-xs text-green-700 dark:text-green-300">
+								Test passed: {testResult?.documents?.length} result(s).
+							</div>
+						)}
 						<div className="text-muted-foreground mt-1 text-xs">
 							{/* LICENSE covers this Open WebUI wordmark. Do not alter, remove, obscure, or replace it
 							    except as LICENSE permits: https://docs.openwebui.com/license. */}
@@ -359,7 +441,14 @@ function SourceDialog({
 
 					<hr className="my-1" />
 
-					<AccessControl accessGrants={accessGrants} onChange={setAccessGrants} accessRoles={['read']} share sharePublic shareUsers />
+					<AccessControl
+						accessGrants={accessGrants}
+						onChange={setAccessGrants}
+						accessRoles={['read']}
+						share
+						sharePublic
+						shareUsers
+					/>
 
 					<div className="flex justify-end pt-1">
 						<Button type="submit" size="sm" disabled={saving || !canSave(f) || !tested}>

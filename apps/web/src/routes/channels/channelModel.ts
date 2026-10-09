@@ -6,7 +6,10 @@
 export type Reaction = { name: string; users: { id: string; name?: string }[]; count: number };
 export type ChannelUser = { id: string; name: string; role?: string; is_active?: boolean };
 /** A message's attachments and model output. */
-export type MessageData = { files?: { id?: string | null; name?: string; url?: string; type?: string; content_type?: string }[]; [key: string]: unknown };
+export type MessageData = {
+	files?: { id?: string | null; name?: string; url?: string; type?: string; content_type?: string }[];
+	[key: string]: unknown;
+};
 export type ChannelMessage = {
 	id: string;
 	temp_id?: string | null;
@@ -70,7 +73,11 @@ export type ChannelScope = { channelId: string; parentId: string | null };
  * reaches the quotes of that message. Returns the same array when nothing in
  * it changed, so a caller can skip the re-render.
  */
-export function applyMessageEvent(messages: ChannelMessage[], event: ChannelEvent, scope: ChannelScope): ChannelMessage[] {
+export function applyMessageEvent(
+	messages: ChannelMessage[],
+	event: ChannelEvent,
+	scope: ChannelScope
+): ChannelMessage[] {
 	if (event.channel_id !== scope.channelId) return messages;
 	const type = event.data?.type ?? '';
 	const data = event.data?.data;
@@ -82,13 +89,16 @@ export function applyMessageEvent(messages: ChannelMessage[], event: ChannelEven
 		return [{ ...data, temp_id: null }, ...rest];
 	}
 	if (type === 'message:delete') {
-		return mapChanged(messages, (m) => (m.id === data.id ? null : m.reply_to_message?.id === data.id ? { ...m, reply_to_message: null } : m));
+		return mapChanged(messages, (m) =>
+			m.id === data.id ? null : m.reply_to_message?.id === data.id ? { ...m, reply_to_message: null } : m
+		);
 	}
 	if (type === 'message:update' || type === 'message:reply' || type.startsWith('message:reaction')) {
 		return mapChanged(messages, (m) => {
 			if (m.id === data.id) return mergeMessage(m, data);
 			const quote = m.reply_to_message;
-			if (type === 'message:update' && quote && quote.id === data.id && quote.content !== data.content) return { ...m, reply_to_message: { ...quote, content: data.content, updated_at: data.updated_at } };
+			if (type === 'message:update' && quote && quote.id === data.id && quote.content !== data.content)
+				return { ...m, reply_to_message: { ...quote, content: data.content, updated_at: data.updated_at } };
 			return m;
 		});
 	}
@@ -97,7 +107,12 @@ export function applyMessageEvent(messages: ChannelMessage[], event: ChannelEven
 
 /** Whether the event deletes the thread's root: the thread panel should close, as the backend now rejects replies to it. */
 export function closesThread(event: ChannelEvent, scope: ChannelScope): boolean {
-	return scope.parentId !== null && event.channel_id === scope.channelId && event.data?.type === 'message:delete' && event.data.data?.id === scope.parentId;
+	return (
+		scope.parentId !== null &&
+		event.channel_id === scope.channelId &&
+		event.data?.type === 'message:delete' &&
+		event.data.data?.id === scope.parentId
+	);
 }
 
 /**
@@ -129,7 +144,12 @@ function mapChanged(list: ChannelMessage[], fn: (m: ChannelMessage) => ChannelMe
  * `typing: false`. Anything else returns the same array. The caller also
  * expires each user a few seconds after their last `typing` event.
  */
-export function applyTyping(typing: ChannelUser[], event: ChannelEvent, scope: ChannelScope, selfId: string | undefined): ChannelUser[] {
+export function applyTyping(
+	typing: ChannelUser[],
+	event: ChannelEvent,
+	scope: ChannelScope,
+	selfId: string | undefined
+): ChannelUser[] {
 	const who = event.user;
 	if (!who || who.id === selfId || event.channel_id !== scope.channelId) return typing;
 	const type = event.data?.type;
@@ -144,13 +164,19 @@ export function applyTyping(typing: ChannelUser[], event: ChannelEvent, scope: C
 }
 
 /** Toggles the viewer's reaction, optimistically: counts follow the user list, and an emptied reaction disappears. */
-export function toggleReaction(message: ChannelMessage, name: string, me: { id: string; name?: string }): { message: ChannelMessage; added: boolean } {
+export function toggleReaction(
+	message: ChannelMessage,
+	name: string,
+	me: { id: string; name?: string }
+): { message: ChannelMessage; added: boolean } {
 	const reactions = message.reactions ?? [];
 	const existing = reactions.find((r) => r.name === name);
 	const mine = existing?.users.some((u) => u.id === me.id) ?? false;
 	let next: Reaction[];
 	if (mine) {
-		next = reactions.map((r) => (r.name === name ? { ...r, users: r.users.filter((u) => u.id !== me.id) } : r)).map((r) => ({ ...r, count: r.users.length }));
+		next = reactions
+			.map((r) => (r.name === name ? { ...r, users: r.users.filter((u) => u.id !== me.id) } : r))
+			.map((r) => ({ ...r, count: r.users.length }));
 		next = next.filter((r) => r.count > 0);
 	} else if (existing) {
 		next = reactions.map((r) => (r.name === name ? { ...r, users: [...r.users, me], count: r.users.length + 1 } : r));
@@ -170,11 +196,19 @@ export function showsAuthor(list: ChannelMessage[], idx: number): boolean {
 	const above = list[idx + 1];
 	const m = list[idx];
 	if (!above) return true;
-	return above.user_id !== m.user_id || above.user?.id !== m.user?.id || above.meta?.model_id !== m.meta?.model_id || Boolean(m.reply_to_message);
+	return (
+		above.user_id !== m.user_id ||
+		above.user?.id !== m.user?.id ||
+		above.meta?.model_id !== m.meta?.model_id ||
+		Boolean(m.reply_to_message)
+	);
 }
 
 /** The name to show for a channel: its name, or for a DM without one, the other members. */
-export function channelTitle(channel: Pick<Channel, 'name' | 'type' | 'users'> | null | undefined, selfId: string | undefined): string {
+export function channelTitle(
+	channel: Pick<Channel, 'name' | 'type' | 'users'> | null | undefined,
+	selfId: string | undefined
+): string {
 	if (!channel) return 'Channel';
 	if (channel.name?.trim()) return channel.name;
 	const others = (channel.users ?? []).filter((u) => u.id !== selfId).map((u) => u.name);
@@ -211,7 +245,8 @@ export const mentionText = (m: Pick<Mention, 'kind' | 'label'>) => `${mentionTri
 const NAME_CHAR = /[\p{L}\p{N}\p{M}_]/u;
 // Scripts written without spaces between words: a name run straight into one
 // of these (`@GPT-4o帮我翻译`) is still a whole mention.
-const NO_SPACE_SCRIPT = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
+const NO_SPACE_SCRIPT =
+	/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
 /** A code point that would carry a name on: a letter, digit, mark or `_`, outside those scripts. */
 const namePart = (c: string | undefined) => Boolean(c && NAME_CHAR.test(c) && !NO_SPACE_SCRIPT.test(c));
 
@@ -307,7 +342,8 @@ export function codeRanges(text: string): [number, number][] {
 export function encodeMentions(text: string, mentions: Mention[]): string {
 	const code = codeRanges(text);
 	const taken: { start: number; end: number; tag: string }[] = [];
-	const free = (at: number, end: number) => taken.every((t) => end <= t.start || at >= t.end) && code.every(([s, e]) => end <= s || at >= e);
+	const free = (at: number, end: number) =>
+		taken.every((t) => end <= t.start || at >= t.end) && code.every(([s, e]) => end <= s || at >= e);
 	const byText = new Map<string, Mention[]>();
 	for (const m of mentions) if (m.label) byText.set(mentionText(m), [...(byText.get(mentionText(m)) ?? []), m]);
 	for (const [plain, group] of [...byText].sort(([a], [b]) => b.length - a.length)) {
@@ -321,7 +357,9 @@ export function encodeMentions(text: string, mentions: Mention[]): string {
 		}
 	}
 	// Replaced from the end, so the earlier offsets still hold.
-	return taken.sort((a, b) => b.start - a.start).reduce((out, t) => out.slice(0, t.start) + t.tag + out.slice(t.end), text);
+	return taken
+		.sort((a, b) => b.start - a.start)
+		.reduce((out, t) => out.slice(0, t.start) + t.tag + out.slice(t.end), text);
 }
 
 /**
@@ -331,7 +369,10 @@ export function encodeMentions(text: string, mentions: Mention[]): string {
  * whitespace, and the query runs to the cursor without whitespace, so a name
  * in any script, or with an apostrophe, still gets suggestions.
  */
-export function mentionQuery(text: string, cursor: number): { trigger: MentionTrigger; query: string; start: number } | null {
+export function mentionQuery(
+	text: string,
+	cursor: number
+): { trigger: MentionTrigger; query: string; start: number } | null {
 	const m = /(?:^|\s)([@#])([^\s@#]*)$/.exec(text.slice(0, cursor));
 	return m ? { trigger: m[1] as MentionTrigger, query: m[2], start: cursor - m[2].length - 1 } : null;
 }
@@ -344,13 +385,17 @@ export const nowNs = () => Date.now() * 1_000_000;
 const TYPE_ORDER = ['', null, 'group', 'dm'];
 
 /** Standard channels first, then group channels, then direct messages (Sidebar.svelte's initChannels sort; stable within a type). */
-export const sortChannels = (list: Channel[]) => [...list].sort((a, b) => TYPE_ORDER.indexOf(a.type ?? null) - TYPE_ORDER.indexOf(b.type ?? null));
+export const sortChannels = (list: Channel[]) =>
+	[...list].sort((a, b) => TYPE_ORDER.indexOf(a.type ?? null) - TYPE_ORDER.indexOf(b.type ?? null));
 
 const publicReadGrant = (grants: Channel['access_grants']) =>
-	Array.isArray(grants) && grants.some((g) => g?.principal_type === 'user' && g?.principal_id === '*' && g?.permission === 'read');
+	Array.isArray(grants) &&
+	grants.some((g) => g?.principal_type === 'user' && g?.principal_id === '*' && g?.permission === 'read');
 
 /** Whether the channel shows a `#` (public) or a lock: a group channel's own flag, else a public read grant. */
-export function isPublicChannel(channel: Pick<Channel, 'type' | 'is_private' | 'access_grants'> | null | undefined): boolean {
+export function isPublicChannel(
+	channel: Pick<Channel, 'type' | 'is_private' | 'access_grants'> | null | undefined
+): boolean {
 	if (channel?.type === 'group' && typeof channel.is_private === 'boolean') return !channel.is_private;
 	return publicReadGrant(channel?.access_grants);
 }
@@ -362,19 +407,30 @@ export function isPublicChannel(channel: Pick<Channel, 'type' | 'is_private' | '
  * the list does not know yet. A new message from someone else in a channel
  * that is not open bumps its count; anything else leaves the list alone.
  */
-export function applyUnreadEvent(list: Channel[], event: ChannelEvent, openChannelId: string | null, selfId: string | undefined): Channel[] | null {
+export function applyUnreadEvent(
+	list: Channel[],
+	event: ChannelEvent,
+	openChannelId: string | null,
+	selfId: string | undefined
+): Channel[] | null {
 	const type = event.data?.type;
 	if (type === 'channel:created') return null;
 	if (type !== 'message' || event.user?.id === selfId || event.channel_id === openChannelId) return list;
 	if (!list.some((c) => c.id === event.channel_id)) return null;
-	return list.map((c) => (c.id === event.channel_id ? { ...c, unread_count: (c.unread_count ?? 0) + 1, last_message_at: event.created_at ?? c.last_message_at } : c));
+	return list.map((c) =>
+		c.id === event.channel_id
+			? { ...c, unread_count: (c.unread_count ?? 0) + 1, last_message_at: event.created_at ?? c.last_message_at }
+			: c
+	);
 }
 
 /** The list with one channel's unread count cleared. */
-export const markRead = (list: Channel[], channelId: string) => list.map((c) => (c.id === channelId && c.unread_count ? { ...c, unread_count: 0 } : c));
+export const markRead = (list: Channel[], channelId: string) =>
+	list.map((c) => (c.id === channelId && c.unread_count ? { ...c, unread_count: 0 } : c));
 
 /** A compact unread badge: 7, 1.2K. */
-export const formatUnread = (count: number) => new Intl.NumberFormat('en', { notation: 'compact', compactDisplay: 'short' }).format(count);
+export const formatUnread = (count: number) =>
+	new Intl.NumberFormat('en', { notation: 'compact', compactDisplay: 'short' }).format(count);
 
 /**
  * The channel form's name rule (ChannelModal.svelte): whitespace becomes `-`
@@ -382,13 +438,20 @@ export const formatUnread = (count: number) => new Intl.NumberFormat('en', { not
  */
 export const normalizeChannelName = (name: string) => name.replace(/\s/g, '-').toLocaleLowerCase();
 
-export type ChannelFormValue = { type: '' | 'group' | 'dm'; name: string; isPrivate: boolean; accessGrants: NonNullable<Channel['access_grants']>; userIds: string[] };
+export type ChannelFormValue = {
+	type: '' | 'group' | 'dm';
+	name: string;
+	isPrivate: boolean;
+	accessGrants: NonNullable<Channel['access_grants']>;
+	userIds: string[];
+};
 
 /** What a channel form sends, or the error to show instead. */
 export function channelPayload(v: ChannelFormValue): { error: string } | { payload: Record<string, unknown> } {
 	const name = normalizeChannelName(v.name.trim());
 	if (name.length > 128) return { error: 'Channel name must be less than 128 characters' };
-	if (v.type === 'dm' && v.userIds.length === 0) return { error: 'Please select at least one user for Direct Message channel.' };
+	if (v.type === 'dm' && v.userIds.length === 0)
+		return { error: 'Please select at least one user for Direct Message channel.' };
 	if (v.type !== 'dm' && !name) return { error: 'Channel name cannot be empty.' };
 	return {
 		payload: {
@@ -413,7 +476,11 @@ const MENTION_TAG = /<[@#]([UMC]):([^|>]+)(?:\|([^>]*))?>/g;
  * an early port wrote, reads too. Messages themselves render through the chat
  * Markdown renderer, whose mention token draws the chip.
  */
-export const mentionsToText = (content: string) => content.replace(MENTION_TAG, (_all, kind: string, id: string, label: string | undefined) => `${kind === 'C' ? '#' : '@'}${label || id}`);
+export const mentionsToText = (content: string) =>
+	content.replace(
+		MENTION_TAG,
+		(_all, kind: string, id: string, label: string | undefined) => `${kind === 'C' ? '#' : '@'}${label || id}`
+	);
 
 /** "You, Ann and Bob reacted with :tada:" (Message.svelte's tooltip: three names, then "and N others" past four). */
 export function reactionTooltip(reaction: Reaction, selfId: string | undefined): string {

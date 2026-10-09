@@ -18,13 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
 	getRecentSweeps,
@@ -244,10 +238,7 @@ export function TunePage() {
 	});
 
 	const sortedCandidates = useMemo(
-		() =>
-			[...(status?.candidates ?? [])].sort(
-				(a, b) => (b?.score ?? -Infinity) - (a?.score ?? -Infinity)
-			),
+		() => [...(status?.candidates ?? [])].sort((a, b) => (b?.score ?? -Infinity) - (a?.score ?? -Infinity)),
 		[status]
 	);
 
@@ -451,11 +442,7 @@ export function TunePage() {
 
 					<AlertDialog open={showStopConfirm} onOpenChange={setShowStopConfirm}>
 						<AlertDialogTrigger asChild>
-							<Button
-								type="button"
-								variant="destructive"
-								disabled={stopMutation.isPending || status?.running !== true}
-							>
+							<Button type="button" variant="destructive" disabled={stopMutation.isPending || status?.running !== true}>
 								{stopMutation.isPending ? 'Stopping…' : 'Stop'}
 							</Button>
 						</AlertDialogTrigger>
@@ -463,8 +450,8 @@ export function TunePage() {
 							<AlertDialogHeader>
 								<AlertDialogTitle>Stop sweep</AlertDialogTitle>
 								<AlertDialogDescription>
-									Are you sure you want to stop the running sweep? It can be resumed later, but
-									any in-progress round is lost.
+									Are you sure you want to stop the running sweep? It can be resumed later, but any in-progress round is
+									lost.
 								</AlertDialogDescription>
 							</AlertDialogHeader>
 							<AlertDialogFooter>
@@ -522,9 +509,7 @@ export function TunePage() {
 						}}
 					>
 						<SelectTrigger className="w-full">
-							<SelectValue
-								placeholder={recentSweepsQuery.isLoading ? 'Loading…' : 'Select a sweep'}
-							/>
+							<SelectValue placeholder={recentSweepsQuery.isLoading ? 'Loading…' : 'Select a sweep'} />
 						</SelectTrigger>
 						<SelectContent>
 							{recentSweeps.map((sweep) => (
@@ -554,13 +539,7 @@ export function TunePage() {
 						</span>
 					)}
 				</h3>
-				<Button
-					type="button"
-					size="sm"
-					variant="secondary"
-					disabled={streaming || refreshing}
-					onClick={manualRefresh}
-				>
+				<Button type="button" size="sm" variant="secondary" disabled={streaming || refreshing} onClick={manualRefresh}>
 					{refreshing ? 'Refreshing…' : 'Refresh'}
 				</Button>
 			</div>
@@ -603,9 +582,7 @@ export function TunePage() {
 						<StatTile label="Cooling share" value={fmtNum(status.time?.cooling_share)} />
 					</div>
 
-					{status.verdict_reason && (
-						<p className="text-muted-foreground text-xs">Reason: {status.verdict_reason}</p>
-					)}
+					{status.verdict_reason && <p className="text-muted-foreground text-xs">Reason: {status.verdict_reason}</p>}
 
 					<div>
 						<div className="mb-1 px-0.5 text-xs">Rounds</div>
@@ -660,10 +637,7 @@ export function TunePage() {
 							</TableHeader>
 							<TableBody>
 								{sortedCandidates.map((c: any) => {
-									const live =
-										status?.current_visit?.candidate_sha === c.candidate_sha
-											? status.current_visit
-											: null;
+									const live = status?.current_visit?.candidate_sha === c.candidate_sha ? status.current_visit : null;
 									return (
 										<TableRow
 											key={c.candidate_sha ?? candidateName(c)}
@@ -692,16 +666,12 @@ export function TunePage() {
 												{live ? (
 													<span className="text-yellow-700 dark:text-yellow-400">
 														● running — {fmtElapsed(live.elapsed_seconds)}
-														{live.tokens_per_second
-															? ` · ${fmtNum(live.tokens_per_second, 1)} tok/s`
-															: ' · loading'}
+														{live.tokens_per_second ? ` · ${fmtNum(live.tokens_per_second, 1)} tok/s` : ' · loading'}
 													</span>
 												) : (
 													<>
 														{c.status ?? '—'}
-														{c.status_reason && (
-															<span className="text-muted-foreground"> — {c.status_reason}</span>
-														)}
+														{c.status_reason && <span className="text-muted-foreground"> — {c.status_reason}</span>}
 													</>
 												)}
 											</TableCell>
@@ -757,9 +727,7 @@ export function TunePage() {
 
 					<div className="grid gap-3 md:grid-cols-2">
 						<div>
-							<div className="mb-1 px-0.5 text-xs">
-								Not measured ({(status.not_measured ?? []).length})
-							</div>
+							<div className="mb-1 px-0.5 text-xs">Not measured ({(status.not_measured ?? []).length})</div>
 							{(status.not_measured ?? []).length > 0 ? (
 								<ul className="text-muted-foreground list-disc space-y-0.5 pl-4 text-xs">
 									{status.not_measured.map((nm: any, i: number) => (
@@ -811,9 +779,7 @@ export function TunePage() {
 									</code>
 								)}
 								{status.adoption.reduces_context && <Badge variant="secondary">Reduces context</Badge>}
-								{status.adoption.note && (
-									<p className="text-muted-foreground text-xs">{status.adoption.note}</p>
-								)}
+								{status.adoption.note && <p className="text-muted-foreground text-xs">{status.adoption.note}</p>}
 							</div>
 						</div>
 					)}

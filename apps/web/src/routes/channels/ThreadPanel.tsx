@@ -10,7 +10,17 @@ import { useMessageFeed } from './useMessageFeed';
  * Ports channel/Thread.svelte: the replies to one message, with its own
  * composer. It closes itself if the root message is deleted.
  */
-export function ThreadPanel({ channel, threadId, onClose, onPinChange }: { channel: Channel; threadId: string; onClose: () => void; onPinChange: (id: string, pinned: boolean) => void }) {
+export function ThreadPanel({
+	channel,
+	threadId,
+	onClose,
+	onPinChange
+}: {
+	channel: Channel;
+	threadId: string;
+	onClose: () => void;
+	onPinChange: (id: string, pinned: boolean) => void;
+}) {
 	const feed = useMessageFeed(channel.id, threadId, { onRootDeleted: onClose });
 	const [replyTo, setReplyTo] = useState<ChannelMessage | null>(null);
 	const composer = useRef<ComposerHandle>(null);
@@ -26,7 +36,12 @@ export function ThreadPanel({ channel, threadId, onClose, onPinChange }: { chann
 		<div className="bg-muted/30 flex h-full w-full flex-col" aria-label="Thread">
 			<div className="flex items-center justify-between px-3.5 py-3">
 				<h2 className="text-lg">Thread</h2>
-				<button type="button" aria-label="Close thread" className="text-muted-foreground hover:text-foreground p-2" onClick={onClose}>
+				<button
+					type="button"
+					aria-label="Close thread"
+					className="text-muted-foreground hover:text-foreground p-2"
+					onClick={onClose}
+				>
 					<X className="size-4" />
 				</button>
 			</div>
@@ -36,7 +51,15 @@ export function ThreadPanel({ channel, threadId, onClose, onPinChange }: { chann
 						<Spinner />
 					</div>
 				) : (
-					<MessageList channel={channel} messages={feed.messages} top={feed.top} thread replyToId={replyTo?.id} onLoadMore={feed.loadMore} actions={actions} />
+					<MessageList
+						channel={channel}
+						messages={feed.messages}
+						top={feed.top}
+						thread
+						replyToId={replyTo?.id}
+						onLoadMore={feed.loadMore}
+						actions={actions}
+					/>
 				)}
 			</div>
 			<div className="px-2.5 pt-5 pb-4">
@@ -44,7 +67,9 @@ export function ThreadPanel({ channel, threadId, onClose, onPinChange }: { chann
 					ref={composer}
 					channel={channel}
 					disabled={!channel.write_access}
-					placeholder={channel.write_access ? 'Reply to thread...' : 'You do not have permission to send messages in this thread.'}
+					placeholder={
+						channel.write_access ? 'Reply to thread...' : 'You do not have permission to send messages in this thread.'
+					}
 					typingUsers={feed.typing}
 					replyTo={replyTo}
 					onCancelReply={() => setReplyTo(null)}

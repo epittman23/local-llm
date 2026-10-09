@@ -8,7 +8,11 @@ import type { Connection } from '@/components/settings/connectionModel';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { SettingsForm, SettingsSection } from '../controls';
 
-type Direct = { OPENAI_API_BASE_URLS: string[]; OPENAI_API_KEYS: string[]; OPENAI_API_CONFIGS: Record<number, unknown> };
+type Direct = {
+	OPENAI_API_BASE_URLS: string[];
+	OPENAI_API_KEYS: string[];
+	OPENAI_API_CONFIGS: Record<number, unknown>;
+};
 const EMPTY: Direct = { OPENAI_API_BASE_URLS: [], OPENAI_API_KEYS: [], OPENAI_API_CONFIGS: {} };
 
 /** Rebuilds the three parallel lists from a list of connections, trailing slashes removed (Connections.svelte's updateHandler). */
@@ -21,7 +25,11 @@ export function toDirect(list: Connection[]): Direct {
 }
 export function fromDirect(d: Direct | undefined | null): Connection[] {
 	const x = d ?? EMPTY;
-	return (x.OPENAI_API_BASE_URLS ?? []).map((url, i) => ({ url, key: x.OPENAI_API_KEYS?.[i] ?? '', config: (x.OPENAI_API_CONFIGS?.[i] ?? {}) as Connection['config'] }));
+	return (x.OPENAI_API_BASE_URLS ?? []).map((url, i) => ({
+		url,
+		key: x.OPENAI_API_KEYS?.[i] ?? '',
+		config: (x.OPENAI_API_CONFIGS?.[i] ?? {}) as Connection['config']
+	}));
 }
 
 /**
@@ -47,7 +55,12 @@ export default function Connections() {
 				<div className="flex items-center justify-between">
 					<p className="text-muted-foreground text-xs">Connect to your own OpenAI compatible API endpoints.</p>
 					<Tip content="Add Connection">
-						<button type="button" aria-label="Add Connection" className="hover:bg-muted rounded-md p-1" onClick={() => setAdding(true)}>
+						<button
+							type="button"
+							aria-label="Add Connection"
+							className="hover:bg-muted rounded-md p-1"
+							onClick={() => setAdding(true)}
+						>
 							<Plus className="size-4" />
 						</button>
 					</Tip>
@@ -56,7 +69,12 @@ export default function Connections() {
 					{list.map((c, i) => (
 						<li key={i} className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs">
 							<span className="min-w-0 flex-1 truncate">{c.url}</span>
-							<button type="button" aria-label={`Edit ${c.url}`} className="hover:bg-muted rounded p-1" onClick={() => setEditing(i)}>
+							<button
+								type="button"
+								aria-label={`Edit ${c.url}`}
+								className="hover:bg-muted rounded p-1"
+								onClick={() => setEditing(i)}
+							>
 								<Pencil className="size-3.5" />
 							</button>
 						</li>

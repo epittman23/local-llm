@@ -46,7 +46,9 @@ export function Permissions({
 			<>
 				{row.warning ? <Tip content={row.warning}>{line}</Tip> : line}
 				{showsDefaultHint(row, permissions, defaultPermissions) && (
-					<div className="text-muted-foreground pb-0.5 text-xs">This is a default user permission and will remain enabled.</div>
+					<div className="text-muted-foreground pb-0.5 text-xs">
+						This is a default user permission and will remain enabled.
+					</div>
 				)}
 			</>
 		);

@@ -99,26 +99,19 @@ export type ProfileEntry = {
 	version: ProfileVersionModel;
 };
 
-export const listProfiles = async (
-	token: string = '',
-	includeArchived: boolean = false
-): Promise<ProfileEntry[]> =>
+export const listProfiles = async (token: string = '', includeArchived: boolean = false): Promise<ProfileEntry[]> =>
 	request(`/?include_archived=${includeArchived}`, token, { method: 'GET' });
 
 export const getProfile = async (token: string = '', name: string): Promise<ProfileEntry> =>
 	request(`/${encodeURIComponent(name)}`, token, { method: 'GET' });
 
-export const listProfileVersions = async (
-	token: string = '',
-	name: string
-): Promise<ProfileVersionModel[]> =>
+export const listProfileVersions = async (token: string = '', name: string): Promise<ProfileVersionModel[]> =>
 	request(`/${encodeURIComponent(name)}/versions`, token, { method: 'GET' });
 
 export const createProfile = async (
 	token: string = '',
 	form: { name: string; display_name: string; definition: ProfileDefinition; note?: string }
-): Promise<ProfileEntry> =>
-	request('/', token, { method: 'POST', body: JSON.stringify(form) });
+): Promise<ProfileEntry> => request('/', token, { method: 'POST', body: JSON.stringify(form) });
 
 export const cloneProfile = async (
 	token: string = '',

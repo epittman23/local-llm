@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-	communitySharePayload,
-	parsePromptImport,
-	sanitizeExternalDraft,
-	type PromptListItem
-} from './promptTypes';
+import { communitySharePayload, parsePromptImport, sanitizeExternalDraft, type PromptListItem } from './promptTypes';
 
 describe('sanitizeExternalDraft', () => {
 	it('never carries access grants from outside, however they are spelled', () => {

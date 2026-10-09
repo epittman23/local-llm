@@ -6,7 +6,8 @@ export const parseList = (text: string | null | undefined): string[] =>
 		.map((s) => s.trim())
 		.filter(Boolean);
 
-const asJsonText = (value: unknown): unknown => (typeof value === 'object' ? JSON.stringify(value ?? {}, null, 2) : value);
+const asJsonText = (value: unknown): unknown =>
+	typeof value === 'object' ? JSON.stringify(value ?? {}, null, 2) : value;
 
 /** The document settings as the form edits them: lists and JSON objects become the text in their boxes. */
 export function toRagForm(raw: Rec): Rec {
@@ -16,9 +17,15 @@ export function toRagForm(raw: Rec): Rec {
 		ALLOWED_FILE_EXTENSIONS: (raw.ALLOWED_FILE_EXTENSIONS ?? []).join(', '),
 		DOCLING_PARAMS: asJsonText(raw.DOCLING_PARAMS),
 		MINERU_PARAMS: asJsonText(raw.MINERU_PARAMS),
-		EXTERNAL_DOCUMENT_LOADER_HEADERS: typeof headers === 'object' ? (Object.keys(headers ?? {}).length > 0 ? JSON.stringify(headers, null, 2) : '') : headers,
+		EXTERNAL_DOCUMENT_LOADER_HEADERS:
+			typeof headers === 'object'
+				? Object.keys(headers ?? {}).length > 0
+					? JSON.stringify(headers, null, 2)
+					: ''
+				: headers,
 		MINERU_FILE_EXTENSIONS: (raw.MINERU_FILE_EXTENSIONS ?? ['pdf']).join(', '),
-		CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES: raw.CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES?.join(', ') ?? null,
+		CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES:
+			raw.CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES?.join(', ') ?? null,
 		RAG_TOKENIZER_MODEL: raw.RAG_TOKENIZER_MODEL ?? ''
 	};
 }
@@ -47,15 +54,23 @@ export function ragFormError(c: Rec): string | null {
 	const engine = c.CONTENT_EXTRACTION_ENGINE;
 	if (engine === 'external') {
 		if (blank(c.EXTERNAL_DOCUMENT_LOADER_URL)) return 'External Document Loader URL required.';
-		if (c.EXTERNAL_DOCUMENT_LOADER_HEADERS && !isJsonObjectText(c.EXTERNAL_DOCUMENT_LOADER_HEADERS)) return 'Headers must be a valid JSON object';
+		if (c.EXTERNAL_DOCUMENT_LOADER_HEADERS && !isJsonObjectText(c.EXTERNAL_DOCUMENT_LOADER_HEADERS))
+			return 'Headers must be a valid JSON object';
 	}
 	if (engine === 'tika' && blank(c.TIKA_SERVER_URL)) return 'Tika Server URL required.';
 	if (engine === 'docling' && blank(c.DOCLING_SERVER_URL)) return 'Docling Server URL required.';
-	if (engine === 'datalab_marker' && !blank(c.DATALAB_MARKER_ADDITIONAL_CONFIG) && !parsesAsJson(c.DATALAB_MARKER_ADDITIONAL_CONFIG)) return 'Invalid JSON format in Additional Config';
-	if (engine === 'document_intelligence' && blank(c.DOCUMENT_INTELLIGENCE_ENDPOINT)) return 'Document Intelligence endpoint required.';
+	if (
+		engine === 'datalab_marker' &&
+		!blank(c.DATALAB_MARKER_ADDITIONAL_CONFIG) &&
+		!parsesAsJson(c.DATALAB_MARKER_ADDITIONAL_CONFIG)
+	)
+		return 'Invalid JSON format in Additional Config';
+	if (engine === 'document_intelligence' && blank(c.DOCUMENT_INTELLIGENCE_ENDPOINT))
+		return 'Document Intelligence endpoint required.';
 	if (engine === 'mistral_ocr' && blank(c.MISTRAL_OCR_API_KEY)) return 'Mistral OCR API Key required.';
 	if (engine === 'paddleocr_vl' && blank(c.PADDLEOCR_VL_BASE_URL)) return 'PaddleOCR-vl API URL required.';
-	if (engine === 'mineru' && c.MINERU_API_MODE === 'cloud' && blank(c.MINERU_API_KEY)) return 'MinerU API Key required for Cloud API mode.';
+	if (engine === 'mineru' && c.MINERU_API_MODE === 'cloud' && blank(c.MINERU_API_KEY))
+		return 'MinerU API Key required for Cloud API mode.';
 	if (c.DOCLING_PARAMS && !parsesAsJson(c.DOCLING_PARAMS)) return 'Invalid JSON format in Docling Parameters';
 	if (c.MINERU_PARAMS && !parsesAsJson(c.MINERU_PARAMS)) return 'Invalid JSON format in MinerU Parameters';
 	return null;
@@ -77,7 +92,10 @@ export function buildRagPayload(c: Rec): Rec {
 		ALLOWED_FILE_EXTENSIONS: parseList(c.ALLOWED_FILE_EXTENSIONS),
 		DOCLING_PARAMS: objectOrEmpty(c.DOCLING_PARAMS),
 		EXTERNAL_DOCUMENT_LOADER_HEADERS: objectOrEmpty(c.EXTERNAL_DOCUMENT_LOADER_HEADERS),
-		CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES: c.CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES === null ? undefined : parseList(c.CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES),
+		CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES:
+			c.CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES === null
+				? undefined
+				: parseList(c.CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES),
 		MINERU_PARAMS: objectOrEmpty(c.MINERU_PARAMS),
 		MINERU_FILE_EXTENSIONS: parseList(c.MINERU_FILE_EXTENSIONS)
 	};
@@ -104,15 +122,21 @@ export function toEmbeddingForm(res: Rec): EmbeddingForm {
 		concurrent: res.RAG_EMBEDDING_CONCURRENT_REQUESTS ?? 0,
 		openai: { url: res.openai_config?.url ?? '', key: res.openai_config?.key ?? '' },
 		ollama: { url: res.ollama_config?.url ?? '', key: res.ollama_config?.key ?? '' },
-		azure: { url: res.azure_openai_config?.url ?? '', key: res.azure_openai_config?.key ?? '', version: res.azure_openai_config?.version ?? '' }
+		azure: {
+			url: res.azure_openai_config?.url ?? '',
+			key: res.azure_openai_config?.key ?? '',
+			version: res.azure_openai_config?.version ?? ''
+		}
 	};
 }
 
 /** Why the embedding model cannot be applied, or null. */
 export function embeddingError(e: EmbeddingForm): string | null {
-	if (e.engine === '' && e.model.split('/').length - 1 > 1) return 'Model filesystem path detected. Model shortname is required for update, cannot continue.';
+	if (e.engine === '' && e.model.split('/').length - 1 > 1)
+		return 'Model filesystem path detected. Model shortname is required for update, cannot continue.';
 	if ((e.engine === 'ollama' || e.engine === 'openai') && blank(e.model)) return 'Embedding model is required.';
-	if (e.engine === 'azure_openai' && (blank(e.azure.key) || blank(e.azure.url) || blank(e.azure.version))) return 'Azure OpenAI URL, key and version are required.';
+	if (e.engine === 'azure_openai' && (blank(e.azure.key) || blank(e.azure.url) || blank(e.azure.version)))
+		return 'Azure OpenAI URL, key and version are required.';
 	return null;
 }
 
@@ -127,7 +151,8 @@ export function buildEmbeddingPayload(e: EmbeddingForm) {
 	};
 	if (e.engine === 'ollama') payload.ollama_config = { key: e.ollama.key, url: e.ollama.url };
 	else if (e.engine === 'openai') payload.openai_config = { key: e.openai.key, url: e.openai.url };
-	else if (e.engine === 'azure_openai') payload.azure_openai_config = { key: e.azure.key, url: e.azure.url, version: e.azure.version };
+	else if (e.engine === 'azure_openai')
+		payload.azure_openai_config = { key: e.azure.key, url: e.azure.url, version: e.azure.version };
 	return payload;
 }
 
@@ -163,4 +188,5 @@ export function mineruUrlForMode(mode: string, url: string | null | undefined): 
 }
 
 /** How many context placeholders a RAG template has; more than one injects the context at each. */
-export const contextPlaceholders = (template: string | null | undefined): number => ((template ?? '').match(/\[context\]/g) ?? []).length + ((template ?? '').match(/\{\{CONTEXT\}\}/g) ?? []).length;
+export const contextPlaceholders = (template: string | null | undefined): number =>
+	((template ?? '').match(/\[context\]/g) ?? []).length + ((template ?? '').match(/\{\{CONTEXT\}\}/g) ?? []).length;

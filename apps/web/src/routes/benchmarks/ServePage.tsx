@@ -13,13 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { ProfilesPanel } from './ProfilesPanel';
 
@@ -121,9 +115,7 @@ export function ServePage() {
 		}
 
 		try {
-			for await (const { event, data } of parseBenchmarksEventStream<{ line: string }>(
-				res.body
-			)) {
+			for await (const { event, data } of parseBenchmarksEventStream<{ line: string }>(res.body)) {
 				if (event === 'done') break;
 				if (data?.line !== undefined) {
 					setLogLines((lines) => [...lines, data.line]);
@@ -293,13 +285,7 @@ export function ServePage() {
 							<Label htmlFor="serve-ot" className="text-muted-foreground text-xs font-normal">
 								ot
 							</Label>
-							<Input
-								id="serve-ot"
-								type="text"
-								placeholder="--ot"
-								value={ot}
-								onChange={(e) => setOt(e.target.value)}
-							/>
+							<Input id="serve-ot" type="text" placeholder="--ot" value={ot} onChange={(e) => setOt(e.target.value)} />
 						</div>
 						<div className="flex flex-col gap-1">
 							<Label className="text-muted-foreground text-xs font-normal">Reasoning effort</Label>
@@ -317,9 +303,7 @@ export function ServePage() {
 							</Select>
 						</div>
 						<div className="flex flex-col gap-1">
-							<Label className="text-muted-foreground text-xs font-normal">
-								Speculative decoding
-							</Label>
+							<Label className="text-muted-foreground text-xs font-normal">Speculative decoding</Label>
 							<Select value={spec} onValueChange={setSpec}>
 								<SelectTrigger className="w-full">
 									<SelectValue />
@@ -338,10 +322,7 @@ export function ServePage() {
 			</div>
 
 			<div className="flex items-center gap-2">
-				<Button
-					onClick={() => startMutation.mutate()}
-					disabled={startMutation.isPending || running === true}
-				>
+				<Button onClick={() => startMutation.mutate()} disabled={startMutation.isPending || running === true}>
 					{startMutation.isPending ? 'Starting…' : 'Start'}
 				</Button>
 				<Button

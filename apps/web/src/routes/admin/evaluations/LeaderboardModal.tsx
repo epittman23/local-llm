@@ -64,7 +64,9 @@ export function LeaderboardModal({
 									aria-pressed={range === r.key}
 									className={cn(
 										'rounded-full px-2.5 py-0.5 text-xs font-normal transition-all',
-										range === r.key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+										range === r.key
+											? 'bg-background text-foreground shadow-sm'
+											: 'text-muted-foreground hover:text-foreground'
 									)}
 									onClick={() => setRange(r.key)}
 								>
@@ -73,7 +75,11 @@ export function LeaderboardModal({
 							))}
 						</div>
 					</div>
-					<ModelActivityChart history={history.data ?? []} loading={history.isPending} weekly={range === '1y' || range === 'all'} />
+					<ModelActivityChart
+						history={history.data ?? []}
+						loading={history.isPending}
+						weekly={range === '1y' || range === 'all'}
+					/>
 				</div>
 
 				<div>

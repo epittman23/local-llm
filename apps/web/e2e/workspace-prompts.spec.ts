@@ -170,7 +170,9 @@ test.describe('workspace prompts', () => {
 		await expect(dialog).toContainText('This will delete');
 		await dialog.getByRole('button', { name: 'Delete' }).click();
 		await expect.poll(() => calls.some((c) => c.method === 'DELETE' || c.path.endsWith('/delete'))).toBe(true);
-		await expect(page.getByText('Prompt 1', { exact: true }).or(page.getByText('Prompt 2', { exact: true }))).toHaveCount(1);
+		await expect(
+			page.getByText('Prompt 1', { exact: true }).or(page.getByText('Prompt 2', { exact: true }))
+		).toHaveCount(1);
 	});
 
 	test('create: the command follows the name until edited, then posts the draft', async ({ page }) => {
@@ -311,12 +313,14 @@ test.describe('workspace prompts', () => {
 		await dialog.getByLabel('Prompt Content').fill('Brand new content');
 		await dialog.getByLabel('Commit Message').fill('rewrite');
 		await dialog.getByRole('button', { name: 'Save', exact: true }).click();
-		await expect.poll(() => calls.find((c) => c.path === '/id/p1/update')?.body).toMatchObject({
-			id: 'p1',
-			content: 'Brand new content',
-			commit_message: 'rewrite',
-			is_production: true
-		});
+		await expect
+			.poll(() => calls.find((c) => c.path === '/id/p1/update')?.body)
+			.toMatchObject({
+				id: 'p1',
+				content: 'Brand new content',
+				commit_message: 'rewrite',
+				is_production: true
+			});
 		await expect(page.getByText('Prompt updated successfully')).toBeVisible();
 	});
 

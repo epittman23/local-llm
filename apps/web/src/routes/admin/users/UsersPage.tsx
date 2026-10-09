@@ -46,7 +46,11 @@ export function UsersPage() {
 	const seats = config?.license_metadata?.seats ?? null;
 	const exceeded = seats !== null && (counts.users ?? 0) > seats;
 	const userCount =
-		counts.users === null ? null : seats !== null ? `${formatNumber(counts.users)} of ${formatNumber(seats)}` : formatNumber(counts.users);
+		counts.users === null
+			? null
+			: seats !== null
+				? `${formatNumber(counts.users)} of ${formatNumber(seats)}`
+				: formatNumber(counts.users);
 
 	return (
 		<div className="flex h-full w-full flex-col pb-2 lg:flex-row">
@@ -68,7 +72,9 @@ export function UsersPage() {
 					}
 				]}
 			/>
-			<div className="flex-1 overflow-y-scroll px-3.5 lg:pr-4 lg:pl-0">{tab === 'overview' ? <UserList /> : <GroupsPanel />}</div>
+			<div className="flex-1 overflow-y-scroll px-3.5 lg:pr-4 lg:pl-0">
+				{tab === 'overview' ? <UserList /> : <GroupsPanel />}
+			</div>
 		</div>
 	);
 }

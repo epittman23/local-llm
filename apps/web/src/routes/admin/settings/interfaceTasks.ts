@@ -9,7 +9,9 @@ export type ModelOption = {
 
 /** Drops unset values so a parameter left at "Default" is not sent as an override. */
 export const configuredParams = (params: Record<string, unknown> = {}): Record<string, unknown> =>
-	Object.fromEntries(Object.entries(params).filter(([, value]) => value !== null && value !== '' && value !== undefined));
+	Object.fromEntries(
+		Object.entries(params).filter(([, value]) => value !== null && value !== '' && value !== undefined)
+	);
 
 /**
  * Task models run for every user, so one that is not readable by everyone would
@@ -17,14 +19,18 @@ export const configuredParams = (params: Record<string, unknown> = {}): Record<s
  * connection model, not a workspace model) is fine.
  */
 export const isPubliclyReadable = (model: Pick<ModelOption, 'access_grants'>): boolean =>
-	!model.access_grants || model.access_grants.some((g) => g.principal_type === 'user' && g.principal_id === '*' && g.permission === 'read');
+	!model.access_grants ||
+	model.access_grants.some((g) => g.principal_type === 'user' && g.principal_id === '*' && g.permission === 'read');
 
 /**
  * What a model `<select>` should hold after the user picks `id`: the id if it is
  * one of the options, else '' ("Current Model"). `warn` says the pick is valid
  * but not public -- the Svelte tab shows a toast and keeps the selection.
  */
-export const normalizeModelSelection = (id: string | null | undefined, options: ModelOption[]): { value: string; warn: boolean } => {
+export const normalizeModelSelection = (
+	id: string | null | undefined,
+	options: ModelOption[]
+): { value: string; warn: boolean } => {
 	if (!id) return { value: '', warn: false };
 	const model = options.find((m) => m.id === id);
 	if (!model) return { value: '', warn: false };

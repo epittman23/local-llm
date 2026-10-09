@@ -17,7 +17,12 @@ const DAY = 86400;
  * last second of that day. (Dates parse as UTC, as `new Date('2026-09-20')`
  * does, which is what the Svelte dashboard sends.)
  */
-export function dateRange(period: string, customStart: string, customEnd: string, nowSeconds = Math.floor(Date.now() / 1000)): { start: number | null; end: number | null } {
+export function dateRange(
+	period: string,
+	customStart: string,
+	customEnd: string,
+	nowSeconds = Math.floor(Date.now() / 1000)
+): { start: number | null; end: number | null } {
 	switch (period) {
 		case '24h':
 			return { start: nowSeconds - DAY, end: nowSeconds };
@@ -38,7 +43,8 @@ export function dateRange(period: string, customStart: string, customEnd: string
 }
 
 /** The custom range needs both ends before it is worth asking the server. */
-export const isCustomIncomplete = (period: string, customStart: string, customEnd: string) => period === 'custom' && !(customStart && customEnd);
+export const isCustomIncomplete = (period: string, customStart: string, customEnd: string) =>
+	period === 'custom' && !(customStart && customEnd);
 
 export type ModelStat = { model_id: string; count: number; unique_users?: number; unique_chats?: number; name: string };
 export type UserStat = { user_id: string; name?: string; email?: string; count: number; total_tokens?: number };
@@ -52,11 +58,24 @@ export type UserSort = 'name' | 'count' | 'tokens';
  * constant total, so it orders exactly as `count` does (the Svelte header has
  * a "%" sort with no branch of its own and falls through to count).
  */
-export function sortModels(models: ModelStat[], tokens: TokenStats, orderBy: ModelSort, direction: 'asc' | 'desc'): ModelStat[] {
+export function sortModels(
+	models: ModelStat[],
+	tokens: TokenStats,
+	orderBy: ModelSort,
+	direction: 'asc' | 'desc'
+): ModelStat[] {
 	const sign = direction === 'asc' ? 1 : -1;
 	const value = (m: ModelStat) =>
-		orderBy === 'tokens' ? (tokens[m.model_id]?.total_tokens ?? 0) : orderBy === 'users' ? (m.unique_users ?? 0) : orderBy === 'chats' ? (m.unique_chats ?? 0) : m.count;
-	return [...models].sort((a, b) => (orderBy === 'name' ? sign * a.name.localeCompare(b.name) : sign * (value(a) - value(b))));
+		orderBy === 'tokens'
+			? (tokens[m.model_id]?.total_tokens ?? 0)
+			: orderBy === 'users'
+				? (m.unique_users ?? 0)
+				: orderBy === 'chats'
+					? (m.unique_chats ?? 0)
+					: m.count;
+	return [...models].sort((a, b) =>
+		orderBy === 'name' ? sign * a.name.localeCompare(b.name) : sign * (value(a) - value(b))
+	);
 }
 
 /** Sorts a copy of the user table; a user with no name sorts under their id. */
@@ -77,11 +96,18 @@ export type DailyPoint = { date: string; models: Record<string, number> };
 export const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
 
 /** The first eight models to appear in the series, in order of first appearance -- the ones the chart draws. */
-export const chartModels = (daily: DailyPoint[]) => [...new Set(daily.flatMap((d) => Object.keys(d.models || {})))].slice(0, CHART_COLORS.length);
+export const chartModels = (daily: DailyPoint[]) =>
+	[...new Set(daily.flatMap((d) => Object.keys(d.models || {})))].slice(0, CHART_COLORS.length);
 
 /** The x-axis label style ChartLine keys off. */
 export const chartPeriod = (period: string): 'hour' | 'week' | 'month' | 'year' | 'all' =>
-	({ '24h': 'hour', '7d': 'week', '30d': 'month', '90d': 'year', all: 'all' } as Record<string, 'hour' | 'week' | 'month' | 'year' | 'all'>)[period] ?? 'week';
+	(
+		({ '24h': 'hour', '7d': 'week', '30d': 'month', '90d': 'year', all: 'all' }) as Record<
+			string,
+			'hour' | 'week' | 'month' | 'year' | 'all'
+		>
+	)[period] ?? 'week';
 
 /** Reads a persisted period, falling back to 7 days for anything unrecognised. */
-export const parsePeriod = (raw: string | null | undefined): Period => (PERIODS.some((p) => p.value === raw) ? (raw as Period) : '7d');
+export const parsePeriod = (raw: string | null | undefined): Period =>
+	PERIODS.some((p) => p.value === raw) ? (raw as Period) : '7d';

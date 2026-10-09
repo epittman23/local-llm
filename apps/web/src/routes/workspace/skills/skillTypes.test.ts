@@ -33,7 +33,14 @@ describe('parseSkillImport', () => {
 		expect(one).toEqual([
 			{ id: 's1', name: 'S', description: '', content: 'c', is_active: false, meta: { tags: [] }, access_grants: [] }
 		]);
-		expect(parseSkillImport(JSON.stringify([{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }]))).toHaveLength(2);
+		expect(
+			parseSkillImport(
+				JSON.stringify([
+					{ id: 'a', name: 'A' },
+					{ id: 'b', name: 'B' }
+				])
+			)
+		).toHaveLength(2);
 	});
 
 	it('skips entries missing an id or name; throws on invalid JSON', () => {
@@ -47,12 +54,11 @@ describe('sanitizeStashedSkill', () => {
 		const out = sanitizeStashedSkill({
 			id: 'x_clone',
 			name: 'X (Clone)',
-			access_grants: [
-				{ principal_type: 'group', principal_id: 'g1', permission: 'read' },
-				{ principal_type: 'group' }
-			]
+			access_grants: [{ principal_type: 'group', principal_id: 'g1', permission: 'read' }, { principal_type: 'group' }]
 		});
-		expect(out?.access_grants).toEqual([{ id: undefined, principal_type: 'group', principal_id: 'g1', permission: 'read' }]);
+		expect(out?.access_grants).toEqual([
+			{ id: undefined, principal_type: 'group', principal_id: 'g1', permission: 'read' }
+		]);
 		expect(out?.is_active).toBe(true);
 	});
 

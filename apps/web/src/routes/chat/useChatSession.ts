@@ -10,8 +10,34 @@ import { generateTags } from '@/lib/apis';
 import { type FeedbackDetails, annotate, feedbackItem } from '@/lib/chat/feedback';
 import { generateOpenAIChatCompletion } from '@/lib/apis/openai';
 import { WEBUI_BASE_URL } from '@/lib/constants';
-import { type ChatEffect, type ChatEvent, type ChatFile, type History, type Message, addResponses, addUserMessage, applyChatEvent, deleteMessage, editContent, emptyHistory, errorText, failMessage, isGenerating, messagesList, normalizeHistory, saveReplyAsCopy, updateMessage } from '@/lib/chat/history';
-import { type FeatureToggles, completionBody, isTemporaryChatId, promptVariables, requestFeatures, temporaryChatId } from '@/lib/chat/request';
+import {
+	type ChatEffect,
+	type ChatEvent,
+	type ChatFile,
+	type History,
+	type Message,
+	addResponses,
+	addUserMessage,
+	applyChatEvent,
+	deleteMessage,
+	editContent,
+	emptyHistory,
+	errorText,
+	failMessage,
+	isGenerating,
+	messagesList,
+	normalizeHistory,
+	saveReplyAsCopy,
+	updateMessage
+} from '@/lib/chat/history';
+import {
+	type FeatureToggles,
+	completionBody,
+	isTemporaryChatId,
+	promptVariables,
+	requestFeatures,
+	temporaryChatId
+} from '@/lib/chat/request';
 import { getOutputText } from '@/lib/chat/structuredOutput';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useSocket } from '@/lib/socket/SocketProvider';
@@ -23,8 +49,23 @@ import type { ChatModel } from './useModels';
 
 export const CHAT_LIST_KEY = ['chats'] as const;
 
-export type ChatRecord = { id: string; title?: string; chat?: Record<string, any>; tags?: string[]; pinned?: boolean; folder_id?: string | null; archived?: boolean; share_id?: string | null; current_message_id?: string | null; [k: string]: unknown };
-export type ServerDialog = { type: 'confirmation' | 'input' | 'execute' | 'ask_user'; data: any; reply: (value: unknown) => void };
+export type ChatRecord = {
+	id: string;
+	title?: string;
+	chat?: Record<string, any>;
+	tags?: string[];
+	pinned?: boolean;
+	folder_id?: string | null;
+	archived?: boolean;
+	share_id?: string | null;
+	current_message_id?: string | null;
+	[k: string]: unknown;
+};
+export type ServerDialog = {
+	type: 'confirmation' | 'input' | 'execute' | 'ask_user';
+	data: any;
+	reply: (value: unknown) => void;
+};
 type Queued = { id: string; prompt: string; files: ChatFile[]; modelId?: string };
 
 /**
@@ -38,7 +79,23 @@ type Queued = { id: string; prompt: string; files: ChatFile[]; modelId?: string 
  * - A prompt sent while a reply is still being written is queued (the
  *   user's "message queue" setting, on by default) and sent when it ends.
  */
-export function useChatSession({ routeChatId, folderId, models, selectedModels, temporary, toggles, toolIds }: { routeChatId: string | null; folderId: string | null; models: ChatModel[]; selectedModels: string[]; temporary: boolean; toggles: FeatureToggles; toolIds: string[] }) {
+export function useChatSession({
+	routeChatId,
+	folderId,
+	models,
+	selectedModels,
+	temporary,
+	toggles,
+	toolIds
+}: {
+	routeChatId: string | null;
+	folderId: string | null;
+	models: ChatModel[];
+	selectedModels: string[];
+	temporary: boolean;
+	toggles: FeatureToggles;
+	toolIds: string[];
+}) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const user = useAuthStore((s) => s.user);
 	const config = useConfigStore((s) => s.config);
@@ -68,8 +125,30 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 	const adoptedRef = useRef<string | null>(null);
 	/** Stop pressed while a request was still in flight (no task ids yet): cancel its tasks as soon as they are known. */
 	const stopPendingRef = useRef(false);
-	const latest = useRef({ params, chatFiles, settings, models, selectedModels, temporary, toggles, toolIds, folderId, queue });
-	latest.current = { params, chatFiles, settings, models, selectedModels, temporary, toggles, toolIds, folderId, queue };
+	const latest = useRef({
+		params,
+		chatFiles,
+		settings,
+		models,
+		selectedModels,
+		temporary,
+		toggles,
+		toolIds,
+		folderId,
+		queue
+	});
+	latest.current = {
+		params,
+		chatFiles,
+		settings,
+		models,
+		selectedModels,
+		temporary,
+		toggles,
+		toolIds,
+		folderId,
+		queue
+	};
 
 	const setHistory = useCallback((h: History | ((h: History) => History)) => {
 		historyRef.current = typeof h === 'function' ? h(historyRef.current) : h;
@@ -185,7 +264,12 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 						setTaskIds(null);
 						break;
 					case 'notification':
-						(({ success: toast.success, error: toast.error, warning: toast.warning }) as Record<string, (m: string) => void>)[e.level]?.(e.content) ?? toast.info(e.content);
+						(
+							({ success: toast.success, error: toast.error, warning: toast.warning }) as Record<
+								string,
+								(m: string) => void
+							>
+						)[e.level]?.(e.content) ?? toast.info(e.content);
 						break;
 					case 'dialog': {
 						const next: ServerDialog = { type: e.type, data: e.data, reply: (v) => reply?.(v) };
@@ -209,7 +293,9 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 		const handler = (event: ChatEvent, reply?: (v: unknown) => void) => {
 			const current = chatIdRef.current;
 			// A chat started here has no id until the POST returns; its events are recognised by message id.
-			const ours = event.chat_id === current || (!current && Boolean(event.message_id && historyRef.current.messages[event.message_id]));
+			const ours =
+				event.chat_id === current ||
+				(!current && Boolean(event.message_id && historyRef.current.messages[event.message_id]));
 			if (!ours) return;
 			const { history: next, effects } = applyChatEvent(historyRef.current, event);
 			if (next !== historyRef.current) setHistory(next);
@@ -223,7 +309,15 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 
 	/** Asks for a reply (or one per selected model) to the user message `parentId`. */
 	const requestReply = useCallback(
-		async (parentId: string, opts: { modelId?: string; modelIdx?: number; regenerationPrompt?: string | null; messages?: Message[] | null } = {}) => {
+		async (
+			parentId: string,
+			opts: {
+				modelId?: string;
+				modelIdx?: number;
+				regenerationPrompt?: string | null;
+				messages?: Message[] | null;
+			} = {}
+		) => {
 			const l = latest.current;
 			const ids = opts.modelId ? [opts.modelId] : l.selectedModels;
 			const chosen = ids.map((id) => l.models.find((m) => m.id === id)).filter((m): m is ChatModel => Boolean(m));
@@ -239,7 +333,10 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 			let chatId = chatIdRef.current;
 			if (!chatId && l.temporary) chatId = chatIdRef.current = temporaryChatId(socket?.id);
 			const primary = targets[0];
-			const usage = setInterval(() => socket?.emit('usage', { action: 'chat', model: primary.model_id, chat_id: chatId ?? '' }), 1000);
+			const usage = setInterval(
+				() => socket?.emit('usage', { action: 'chat', model: primary.model_id, chat_id: chatId ?? '' }),
+				1000
+			);
 			try {
 				const body = completionBody({
 					history: historyRef.current,
@@ -297,10 +394,21 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 				toast.error('Oops! There was an error in the previous response.');
 				return;
 			}
-			const docs = files.filter((f) => ['doc', 'text', 'note', 'chat', 'folder', 'collection'].includes(f.type ?? '') || (f.type === 'file' && !(f.content_type ?? '').startsWith('image/')));
-			if (docs.length) setChatFiles((cf) => [...cf, ...docs].filter((f, i, a) => a.findIndex((g) => JSON.stringify(g) === JSON.stringify(f)) === i));
+			const docs = files.filter(
+				(f) =>
+					['doc', 'text', 'note', 'chat', 'folder', 'collection'].includes(f.type ?? '') ||
+					(f.type === 'file' && !(f.content_type ?? '').startsWith('image/'))
+			);
+			if (docs.length)
+				setChatFiles((cf) =>
+					[...cf, ...docs].filter((f, i, a) => a.findIndex((g) => JSON.stringify(g) === JSON.stringify(f)) === i)
+				);
 			latest.current.chatFiles = [...latest.current.chatFiles, ...docs];
-			const { history: next, id } = addUserMessage(h, h.currentId, { content: prompt, files, models: modelId ? [modelId] : latest.current.selectedModels });
+			const { history: next, id } = addUserMessage(h, h.currentId, {
+				content: prompt,
+				files,
+				models: modelId ? [modelId] : latest.current.selectedModels
+			});
 			setHistory(next);
 			await requestReply(id, modelId ? { modelId } : {});
 		},
@@ -369,7 +477,9 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 			}
 			const multi = (userMessage.models ?? latest.current.selectedModels).length > 1;
 			await requestReply(userMessage.id, {
-				...(suggestionPrompt ? { messages: messagesList(historyRef.current, message.id), regenerationPrompt: suggestionPrompt } : {}),
+				...(suggestionPrompt
+					? { messages: messagesList(historyRef.current, message.id), regenerationPrompt: suggestionPrompt }
+					: {}),
 				...(multi ? { modelId: message.model, modelIdx: message.modelIdx } : {})
 			});
 		},
@@ -381,7 +491,13 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 		async (h: History = historyRef.current) => {
 			const id = chatIdRef.current;
 			if (!id || isTemporaryChatId(id)) return;
-			const res = await updateChatById(token, id, { models: latest.current.selectedModels, history: h, messages: messagesList(h, h.currentId), params: latest.current.params, files: latest.current.chatFiles }).catch((e) => {
+			const res = await updateChatById(token, id, {
+				models: latest.current.selectedModels,
+				history: h,
+				messages: messagesList(h, h.currentId),
+				params: latest.current.params,
+				files: latest.current.chatFiles
+			}).catch((e) => {
 				toast.error(`${e}`);
 				return null;
 			});
@@ -437,7 +553,11 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 		async (message: Message, content: string, mode: 'save' | 'resend' | 'copy') => {
 			const h = historyRef.current;
 			if (mode === 'resend') {
-				const { history: next, id } = addUserMessage(h, message.parentId, { content, files: message.files, models: latest.current.selectedModels });
+				const { history: next, id } = addUserMessage(h, message.parentId, {
+					content,
+					files: message.files,
+					models: latest.current.selectedModels
+				});
 				setHistory(next);
 				await requestReply(id);
 				return;
@@ -478,7 +598,14 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 			const list = messagesList(historyRef.current, message.id);
 			const res = (await chatAction(token, actionId, {
 				model: message.model ?? '',
-				messages: list.map((m) => ({ id: m.id, role: m.role, content: getOutputText(m.output) || m.content, info: m.info, timestamp: m.timestamp, ...(m.sources ? { sources: m.sources } : {}) })),
+				messages: list.map((m) => ({
+					id: m.id,
+					role: m.role,
+					content: getOutputText(m.output) || m.content,
+					info: m.info,
+					timestamp: m.timestamp,
+					...(m.sources ? { sources: m.sources } : {})
+				})),
 				model_item: latest.current.models.find((m) => m.id === message.model),
 				chat_id: chatId,
 				session_id: socket?.id,
@@ -491,7 +618,11 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 			let h = historyRef.current;
 			for (const m of res.messages) {
 				const cur = m.id ? h.messages[m.id] : undefined;
-				if (cur) h = updateMessage(h, cur.id, { ...(m.content !== undefined && m.content !== cur.content ? { originalContent: cur.content } : {}), ...m });
+				if (cur)
+					h = updateMessage(h, cur.id, {
+						...(m.content !== undefined && m.content !== cur.content ? { originalContent: cur.content } : {}),
+						...m
+					});
 			}
 			setHistory(h);
 			await save(h);
@@ -518,20 +649,37 @@ export function useChatSession({ routeChatId, folderId, models, selectedModels, 
 				const m = latest.current.models.find((x) => x.id === mid);
 				return m ? (m.info?.base_model_id ?? null) : undefined;
 			};
-			const item = feedbackItem({ history: historyRef.current, message, annotation, chatId: id, chat: chatRecord, baseModelOf });
+			const item = feedbackItem({
+				history: historyRef.current,
+				message,
+				annotation,
+				chatId: id,
+				chat: chatRecord,
+				baseModelOf
+			});
 			const feedbackId = message.feedbackId as string | undefined;
-			const res = (await (feedbackId ? updateFeedbackById(token, feedbackId, item) : createNewFeedback(token, item)).catch((e) => {
+			const res = (await (feedbackId
+				? updateFeedbackById(token, feedbackId, item)
+				: createNewFeedback(token, item)
+			).catch((e) => {
 				toast.error(`${e}`);
 				return null;
 			})) as { id?: string } | null;
-			const next = updateMessage(historyRef.current, message.id, { annotation, ...(res?.id && !feedbackId ? { feedbackId: res.id } : {}) });
+			const next = updateMessage(historyRef.current, message.id, {
+				annotation,
+				...(res?.id && !feedbackId ? { feedbackId: res.id } : {})
+			});
 			setHistory(next);
 			await save(next);
 			if (!details && !(annotation as { tags?: string[] }).tags && message.content) {
-				const tags = (await generateTags(token, message.model ?? '', messagesList(next, message.id) as never, id).catch(() => null)) as string[] | null;
+				const tags = (await generateTags(token, message.model ?? '', messagesList(next, message.id) as never, id).catch(
+					() => null
+				)) as string[] | null;
 				const fid = (next.messages[message.id].feedbackId as string | undefined) ?? res?.id;
 				if (tags?.length && fid) {
-					const tagged = updateMessage(historyRef.current, message.id, (m) => ({ annotation: { ...(m.annotation ?? {}), tags } }));
+					const tagged = updateMessage(historyRef.current, message.id, (m) => ({
+						annotation: { ...(m.annotation ?? {}), tags }
+					}));
 					setHistory(tagged);
 					void save(tagged);
 					void updateFeedbackById(token, fid, { ...item, data: { ...item.data, tags } }).catch(() => {});

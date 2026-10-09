@@ -51,13 +51,19 @@ export function MessageList({
 										.filter((u) => u.id !== me?.id)
 										.slice(0, 2)
 										.map((u, i) => (
-											<img key={u.id} src={`${WEBUI_API_BASE_URL}/users/${u.id}/profile/image`} alt={u.name} className={`border-background size-7 rounded-full border-2 ${i === 1 ? '-ml-2.5' : ''}`} />
+											<img
+												key={u.id}
+												src={`${WEBUI_API_BASE_URL}/users/${u.id}/profile/image`}
+												alt={u.name}
+												className={`border-background size-7 rounded-full border-2 ${i === 1 ? '-ml-2.5' : ''}`}
+											/>
 										))}
 								</div>
 							)}
 							<h2 className="text-2xl">{channelTitle(channel, me?.id)}</h2>
 							<p className="text-muted-foreground text-sm">
-								This channel was created on {dayjs(channel.created_at / 1_000_000).format('MMMM D, YYYY')}. This is the very beginning of the {channelTitle(channel, me?.id)} channel.
+								This channel was created on {dayjs(channel.created_at / 1_000_000).format('MMMM D, YYYY')}. This is the
+								very beginning of the {channelTitle(channel, me?.id)} channel.
 							</p>
 						</div>
 						{list.length > 0 && <hr className="mb-2.5" />}

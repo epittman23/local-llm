@@ -5,7 +5,14 @@ type FeedbackRow = {
 	user_id?: string;
 	created_at?: number;
 	updated_at?: number;
-	data?: { chat_id?: string; model_id?: string; sibling_model_ids?: string[]; rating?: unknown; reason?: string; comment?: string } | null;
+	data?: {
+		chat_id?: string;
+		model_id?: string;
+		sibling_model_ids?: string[];
+		rating?: unknown;
+		reason?: string;
+		comment?: string;
+	} | null;
 };
 
 /**
@@ -30,7 +37,9 @@ export function feedbacksToCsv(feedbacks: FeedbackRow[]): string {
 	}));
 	if (rows.length === 0) return '';
 	const headers = Object.keys(rows[0]);
-	return [headers.join(','), ...rows.map((r) => headers.map((h) => csvCell(r[h as keyof typeof r])).join(','))].join('\n');
+	return [headers.join(','), ...rows.map((r) => headers.map((h) => csvCell(r[h as keyof typeof r])).join(','))].join(
+		'\n'
+	);
 }
 
 /** "won" / "draw" / "lost" for a stored rating (1 / 0 / -1, number or string), or null when unset. */

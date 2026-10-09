@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { LOADER_ENGINES, SEARCH_ENGINES, SEARCH_ENGINE_FIELDS, engineLabel, isDefaultLoader, loaderFields, prepareWebConfig, toWebForm } from './webSearch';
+import {
+	LOADER_ENGINES,
+	SEARCH_ENGINES,
+	SEARCH_ENGINE_FIELDS,
+	engineLabel,
+	isDefaultLoader,
+	loaderFields,
+	prepareWebConfig,
+	toWebForm
+} from './webSearch';
 
 describe('engine tables', () => {
 	it('every listed search engine has its settings, except the one whose only control is the DDGS backend', () => {
@@ -77,10 +86,26 @@ describe('toWebForm', () => {
 
 describe('prepareWebConfig', () => {
 	it('sends only the web block, with lists split and trimmed and timeouts as strings', () => {
-		const r = prepareWebConfig({ WEB_SEARCH_DOMAIN_FILTER_LIST: ' a.com, ,!b.com ', YOUTUBE_LOADER_LANGUAGE: '', FIRECRAWL_TIMEOUT: 30, PLAYWRIGHT_TIMEOUT: 5000, LINKUP_SEARCH_PARAMS: '', ENABLE_WEB_SEARCH: true });
+		const r = prepareWebConfig({
+			WEB_SEARCH_DOMAIN_FILTER_LIST: ' a.com, ,!b.com ',
+			YOUTUBE_LOADER_LANGUAGE: '',
+			FIRECRAWL_TIMEOUT: 30,
+			PLAYWRIGHT_TIMEOUT: 5000,
+			LINKUP_SEARCH_PARAMS: '',
+			ENABLE_WEB_SEARCH: true
+		});
 		expect(r).toEqual({
 			ok: true,
-			payload: { web: { WEB_SEARCH_DOMAIN_FILTER_LIST: ['a.com', '!b.com'], YOUTUBE_LOADER_LANGUAGE: [], FIRECRAWL_TIMEOUT: '30', PLAYWRIGHT_TIMEOUT: '5000', LINKUP_SEARCH_PARAMS: {}, ENABLE_WEB_SEARCH: true } }
+			payload: {
+				web: {
+					WEB_SEARCH_DOMAIN_FILTER_LIST: ['a.com', '!b.com'],
+					YOUTUBE_LOADER_LANGUAGE: [],
+					FIRECRAWL_TIMEOUT: '30',
+					PLAYWRIGHT_TIMEOUT: '5000',
+					LINKUP_SEARCH_PARAMS: {},
+					ENABLE_WEB_SEARCH: true
+				}
+			}
 		});
 	});
 	it('leaves a cleared timeout as it is', () => {
@@ -91,6 +116,10 @@ describe('prepareWebConfig', () => {
 	it('parses Linkup params, and refuses anything that is not a JSON object', () => {
 		const ok = prepareWebConfig({ LINKUP_SEARCH_PARAMS: '{"depth":"standard"}' });
 		expect(ok.ok && ok.payload.web.LINKUP_SEARCH_PARAMS).toEqual({ depth: 'standard' });
-		for (const bad of ['{depth', '[1]', '"x"', 'null']) expect(prepareWebConfig({ LINKUP_SEARCH_PARAMS: bad })).toEqual({ ok: false, error: 'Invalid JSON format in Linkup Parameters' });
+		for (const bad of ['{depth', '[1]', '"x"', 'null'])
+			expect(prepareWebConfig({ LINKUP_SEARCH_PARAMS: bad })).toEqual({
+				ok: false,
+				error: 'Invalid JSON format in Linkup Parameters'
+			});
 	});
 });

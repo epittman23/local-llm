@@ -186,9 +186,7 @@ function getInlineFileFromToolOutput(callItem?: OutputItem, resultItem?: OutputI
 		return null;
 	}
 
-	return result.page === undefined && args.page !== undefined
-		? { ...result, page: args.page }
-		: result;
+	return result.page === undefined && args.page !== undefined ? { ...result, page: args.page } : result;
 }
 
 function buildToolCallToken(item: OutputItem, toolOutputByCallId: Record<string, OutputItem>) {
@@ -201,10 +199,7 @@ function buildToolCallToken(item: OutputItem, toolOutputByCallId: Record<string,
 	let name = item.name ?? '';
 	if (name === 'delegate_task') {
 		try {
-			const args =
-				typeof item.arguments === 'string'
-					? JSON.parse(item.arguments || '{}')
-					: (item.arguments ?? {});
+			const args = typeof item.arguments === 'string' ? JSON.parse(item.arguments || '{}') : (item.arguments ?? {});
 			const task = typeof args.task === 'string' && args.task ? args.task : '?';
 			const label = args.background ? 'Background sub-agent' : 'Sub-agent';
 			name = `${label}: "${task.length > 60 ? `${task.slice(0, 60)}...` : task}"`;
@@ -459,11 +454,7 @@ function appendDelta(current: unknown, delta: unknown): unknown {
 	return delta ?? current ?? '';
 }
 
-function ensureOutputItem(
-	output: OutputItem[],
-	outputIndex: number,
-	fallback?: OutputItem
-): OutputItem {
+function ensureOutputItem(output: OutputItem[], outputIndex: number, fallback?: OutputItem): OutputItem {
 	while (output.length <= outputIndex) {
 		// Only the addressed slot gets the event's item; filler slots must not reuse its id.
 		const item =
@@ -497,9 +488,7 @@ function setPart(
 
 function findOutputItemIndex(output: OutputItem[], item: OutputItem): number {
 	return output.findIndex(
-		(existing) =>
-			(!!item.id && existing?.id === item.id) ||
-			(!!item.call_id && existing?.call_id === item.call_id)
+		(existing) => (!!item.id && existing?.id === item.id) || (!!item.call_id && existing?.call_id === item.call_id)
 	);
 }
 
@@ -512,10 +501,7 @@ function responseEventUpdatesOutputItem(eventType: string): boolean {
 	);
 }
 
-export function applyResponseStreamEvent(
-	output: OutputItem[] = [],
-	event: ResponseStreamEvent
-): OutputItem[] {
+export function applyResponseStreamEvent(output: OutputItem[] = [], event: ResponseStreamEvent): OutputItem[] {
 	const eventType = event?.type ?? '';
 	if (!eventType.startsWith('response.')) {
 		return output;
@@ -529,8 +515,7 @@ export function applyResponseStreamEvent(
 	const eventItemIndex = event.item_id
 		? nextOutput.findIndex((item) => item?.id === event.item_id || item?.call_id === event.item_id)
 		: -1;
-	const outputIndex =
-		eventItemIndex >= 0 ? eventItemIndex : (event.output_index ?? Math.max(output.length - 1, 0));
+	const outputIndex = eventItemIndex >= 0 ? eventItemIndex : (event.output_index ?? Math.max(output.length - 1, 0));
 
 	if (eventType === 'response.output_item.added') {
 		if (!event.item) {

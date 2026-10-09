@@ -12,7 +12,14 @@ import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { AccessGrant } from '@/lib/access/accessGrants';
@@ -34,18 +41,31 @@ import { copyToClipboard } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
 import { resizeToDataUrl } from '@/lib/utils/image';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
-import { type Channel, type ChannelFormValue, type ChannelMessage, channelPayload, isPublicChannel, normalizeChannelName } from './channelModel';
+import {
+	type Channel,
+	type ChannelFormValue,
+	type ChannelMessage,
+	channelPayload,
+	isPublicChannel,
+	normalizeChannelName
+} from './channelModel';
 import { ChannelMessageView } from './ChannelMessageView';
 
 type DialogProps = { open: boolean; onOpenChange: (open: boolean) => void };
 const MEMBERS_PER_PAGE = 30;
-const nativeSelect = 'border-input bg-transparent h-9 w-full rounded-md border px-2 text-sm outline-none [&>option]:bg-popover';
+const nativeSelect =
+	'border-input bg-transparent h-9 w-full rounded-md border px-2 text-sm outline-none [&>option]:bg-popover';
 
 /**
  * Ports channel/PinnedMessagesModal.svelte: the channel's pinned messages,
  * paged as they scroll into view, each with an Unpin button and nothing else.
  */
-export function PinnedMessagesDialog({ open, onOpenChange, channel, onPinChange }: DialogProps & { channel: Channel; onPinChange: (id: string, pinned: boolean) => void }) {
+export function PinnedMessagesDialog({
+	open,
+	onOpenChange,
+	channel,
+	onPinChange
+}: DialogProps & { channel: Channel; onPinChange: (id: string, pinned: boolean) => void }) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const [messages, setMessages] = useState<ChannelMessage[] | null>(null);
 	const [done, setDone] = useState(false);
@@ -98,7 +118,15 @@ export function PinnedMessagesDialog({ open, onOpenChange, channel, onPinChange 
 					) : (
 						<>
 							{messages.map((m) => (
-								<ChannelMessageView key={m.id} message={m} channelId={channel.id} showAuthor domPrefix="pinned-" className="rounded-xl px-2" actions={{ onPin: unpin }} />
+								<ChannelMessageView
+									key={m.id}
+									message={m}
+									channelId={channel.id}
+									showAuthor
+									domPrefix="pinned-"
+									className="rounded-xl px-2"
+									actions={{ onPin: unpin }}
+								/>
 							))}
 							{!done && (
 								<InfiniteLoader onVisible={() => void load()}>
@@ -122,7 +150,12 @@ type Member = { id: string; name: string; email?: string; role?: string; is_acti
  * channel, searchable and sortable by name (not in a DM), thirty to a page.
  * A group channel's managers can add and remove members here.
  */
-export function ChannelInfoDialog({ open, onOpenChange, channel, onUpdate }: DialogProps & { channel: Channel; onUpdate: () => void }) {
+export function ChannelInfoDialog({
+	open,
+	onOpenChange,
+	channel,
+	onUpdate
+}: DialogProps & { channel: Channel; onUpdate: () => void }) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const [query, setQuery] = useState('');
 	const [page, setPage] = useState(1);
@@ -137,7 +170,11 @@ export function ChannelInfoDialog({ open, onOpenChange, channel, onUpdate }: Dia
 	const members = useQuery({
 		queryKey: ['channel-members', channel.id, debounced, direction, page],
 		enabled: open,
-		queryFn: async () => (await getChannelMembersById(token, channel.id, debounced, 'name', direction, page)) as { users: Member[]; total: number }
+		queryFn: async () =>
+			(await getChannelMembersById(token, channel.id, debounced, 'name', direction, page)) as {
+				users: Member[];
+				total: number;
+			}
 	});
 
 	const remove = async (userId: string) => {
@@ -156,7 +193,9 @@ export function ChannelInfoDialog({ open, onOpenChange, channel, onUpdate }: Dia
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="max-w-md">
 				<DialogHeader>
-					<DialogTitle className="flex items-center gap-1.5">{dm ? 'Direct Message' : `${isPublicChannel(channel) ? '#' : ''}${channel.name}`}</DialogTitle>
+					<DialogTitle className="flex items-center gap-1.5">
+						{dm ? 'Direct Message' : `${isPublicChannel(channel) ? '#' : ''}${channel.name}`}
+					</DialogTitle>
 					<DialogDescription className="sr-only">Channel members</DialogDescription>
 				</DialogHeader>
 				<div className="flex items-center justify-between">
@@ -173,9 +212,20 @@ export function ChannelInfoDialog({ open, onOpenChange, channel, onUpdate }: Dia
 					<div className="flex items-center gap-2">
 						<div className="relative flex-1">
 							<Search className="text-muted-foreground absolute top-2.5 left-2 size-4" />
-							<Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search" aria-label="Search members" className="pl-8" />
+							<Input
+								value={query}
+								onChange={(e) => setQuery(e.target.value)}
+								placeholder="Search"
+								aria-label="Search members"
+								className="pl-8"
+							/>
 						</div>
-						<Button size="sm" variant="ghost" aria-label="Sort by name" onClick={() => setDirection((d) => (d === 'asc' ? 'desc' : 'asc'))}>
+						<Button
+							size="sm"
+							variant="ghost"
+							aria-label="Sort by name"
+							onClick={() => setDirection((d) => (d === 'asc' ? 'desc' : 'asc'))}
+						>
 							Name {direction === 'asc' ? '↑' : '↓'}
 						</Button>
 					</div>
@@ -188,7 +238,11 @@ export function ChannelInfoDialog({ open, onOpenChange, channel, onUpdate }: Dia
 					<ul className="max-h-80 overflow-y-auto" aria-label="Members">
 						{members.data.users.map((u) => (
 							<li key={u.id} className="flex items-center gap-2 py-1.5 text-sm">
-								<img src={`${WEBUI_API_BASE_URL}/users/${u.id}/profile/image`} alt="" className="size-6 rounded-full object-cover" />
+								<img
+									src={`${WEBUI_API_BASE_URL}/users/${u.id}/profile/image`}
+									alt=""
+									className="size-6 rounded-full object-cover"
+								/>
 								<Tip content={u.email}>
 									<span className="truncate">{u.name}</span>
 								</Tip>
@@ -199,7 +253,12 @@ export function ChannelInfoDialog({ open, onOpenChange, channel, onUpdate }: Dia
 									</Badge>
 								)}
 								{manager && (
-									<button type="button" aria-label={`Remove ${u.name}`} className="text-muted-foreground hover:text-foreground" onClick={() => void remove(u.id)}>
+									<button
+										type="button"
+										aria-label={`Remove ${u.name}`}
+										className="text-muted-foreground hover:text-foreground"
+										onClick={() => void remove(u.id)}
+									>
 										<X className="size-3.5" />
 									</button>
 								)}
@@ -207,7 +266,14 @@ export function ChannelInfoDialog({ open, onOpenChange, channel, onUpdate }: Dia
 						))}
 					</ul>
 				)}
-				{(members.data?.total ?? 0) > MEMBERS_PER_PAGE && <PagePagination page={page} count={members.data?.total ?? 0} perPage={MEMBERS_PER_PAGE} onPageChange={setPage} />}
+				{(members.data?.total ?? 0) > MEMBERS_PER_PAGE && (
+					<PagePagination
+						page={page}
+						count={members.data?.total ?? 0}
+						perPage={MEMBERS_PER_PAGE}
+						onPageChange={setPage}
+					/>
+				)}
 				<AddMembersDialog
 					open={showAdd}
 					onOpenChange={setShowAdd}
@@ -223,7 +289,12 @@ export function ChannelInfoDialog({ open, onOpenChange, channel, onUpdate }: Dia
 }
 
 /** Ports ChannelInfoModal/AddMembersModal.svelte: pick users and groups to add. */
-function AddMembersDialog({ open, onOpenChange, channel, onAdded }: DialogProps & { channel: Channel; onAdded: () => void }) {
+function AddMembersDialog({
+	open,
+	onOpenChange,
+	channel,
+	onAdded
+}: DialogProps & { channel: Channel; onAdded: () => void }) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const [userIds, setUserIds] = useState<string[]>([]);
 	const [groupIds, setGroupIds] = useState<string[]>([]);
@@ -257,7 +328,14 @@ function AddMembersDialog({ open, onOpenChange, channel, onAdded }: DialogProps 
 					<DialogTitle>Add Members</DialogTitle>
 					<DialogDescription className="sr-only">Choose users and groups to add to the channel</DialogDescription>
 				</DialogHeader>
-				<MemberSelector accessGrants={[]} userIds={userIds} groupIds={groupIds} onUserIdsChange={setUserIds} onGroupIdsChange={setGroupIds} includeGroups />
+				<MemberSelector
+					accessGrants={[]}
+					userIds={userIds}
+					groupIds={groupIds}
+					onUserIdsChange={setUserIds}
+					onGroupIdsChange={setGroupIds}
+					includeGroups
+				/>
 				<DialogFooter>
 					<Button onClick={submit} disabled={saving || (userIds.length === 0 && groupIds.length === 0)}>
 						Add {saving && <Spinner className="size-3.5" />}
@@ -268,7 +346,14 @@ function AddMembersDialog({ open, onOpenChange, channel, onAdded }: DialogProps 
 	);
 }
 
-type Webhook = { id: string; name: string; profile_image_url?: string | null; token?: string; created_at: number; user?: { name?: string } | null };
+type Webhook = {
+	id: string;
+	name: string;
+	profile_image_url?: string | null;
+	token?: string;
+	created_at: number;
+	user?: { name?: string } | null;
+};
 
 /**
  * Ports channel/WebhooksModal.svelte and WebhookItem.svelte: the channel's
@@ -285,7 +370,8 @@ export function WebhooksDialog({ open, onOpenChange, channel }: DialogProps & { 
 	const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 	const fileInput = useRef<HTMLInputElement>(null);
 
-	const load = async () => setWebhooks(((await getChannelWebhooks(token, channel.id).catch(() => [])) ?? []) as Webhook[]);
+	const load = async () =>
+		setWebhooks(((await getChannelWebhooks(token, channel.id).catch(() => [])) ?? []) as Webhook[]);
 
 	useEffect(() => {
 		if (!open) return;
@@ -297,7 +383,8 @@ export function WebhooksDialog({ open, onOpenChange, channel }: DialogProps & { 
 	}, [open, channel.id]);
 
 	const current = (w: Webhook) => edits[w.id] ?? { name: w.name, profile_image_url: w.profile_image_url ?? '' };
-	const edit = (w: Webhook, change: Partial<{ name: string; profile_image_url: string }>) => setEdits((e) => ({ ...e, [w.id]: { ...current(w), ...change } }));
+	const edit = (w: Webhook, change: Partial<{ name: string; profile_image_url: string }>) =>
+		setEdits((e) => ({ ...e, [w.id]: { ...current(w), ...change } }));
 
 	const create = async () => {
 		setSaving(true);
@@ -317,7 +404,10 @@ export function WebhooksDialog({ open, onOpenChange, channel }: DialogProps & { 
 		try {
 			for (const [id, change] of Object.entries(edits)) {
 				const original = webhooks?.find((w) => w.id === id);
-				await updateChannelWebhook(token, channel.id, id, { name: change.name.trim() || original?.name || 'Webhook', profile_image_url: change.profile_image_url } as never);
+				await updateChannelWebhook(token, channel.id, id, {
+					name: change.name.trim() || original?.name || 'Webhook',
+					profile_image_url: change.profile_image_url
+				} as never);
 			}
 			setEdits({});
 			await load();
@@ -363,7 +453,15 @@ export function WebhooksDialog({ open, onOpenChange, channel }: DialogProps & { 
 					</DialogTitle>
 					<DialogDescription className="sr-only">Incoming webhooks that post to this channel</DialogDescription>
 				</DialogHeader>
-				<input ref={fileInput} type="file" accept="image/*" hidden onChange={(e) => expandedHook && void pickImage(expandedHook, e.target.files?.[0]).then(() => (e.target.value = ''))} />
+				<input
+					ref={fileInput}
+					type="file"
+					accept="image/*"
+					hidden
+					onChange={(e) =>
+						expandedHook && void pickImage(expandedHook, e.target.files?.[0]).then(() => (e.target.value = ''))
+					}
+				/>
 				{webhooks === null ? (
 					<div className="flex justify-center py-6">
 						<Spinner className="size-5" />
@@ -377,7 +475,12 @@ export function WebhooksDialog({ open, onOpenChange, channel }: DialogProps & { 
 							const image = v.profile_image_url || '/static/favicon.png';
 							return (
 								<li key={w.id} className="rounded-xl border">
-									<button type="button" className="flex w-full items-center gap-3 px-3 py-2 text-left" aria-expanded={expanded === w.id} onClick={() => setExpanded((x) => (x === w.id ? null : w.id))}>
+									<button
+										type="button"
+										className="flex w-full items-center gap-3 px-3 py-2 text-left"
+										aria-expanded={expanded === w.id}
+										onClick={() => setExpanded((x) => (x === w.id ? null : w.id))}
+									>
 										<img src={image} alt="" className="size-8 rounded-full object-cover" />
 										<div className="min-w-0 flex-1">
 											<div className="truncate text-sm">{v.name}</div>
@@ -393,21 +496,33 @@ export function WebhooksDialog({ open, onOpenChange, channel }: DialogProps & { 
 											<button type="button" aria-label="Change picture" onClick={() => fileInput.current?.click()}>
 												<img src={image} alt="" className="size-8 rounded-full object-cover" />
 											</button>
-											<Input value={v.name} onChange={(e) => edit(w, { name: e.target.value })} placeholder="Webhook Name" aria-label="Webhook Name" className="h-8" />
+											<Input
+												value={v.name}
+												onChange={(e) => edit(w, { name: e.target.value })}
+												placeholder="Webhook Name"
+												aria-label="Webhook Name"
+												className="h-8"
+											/>
 											<Tip content="Copy URL">
 												<button
 													type="button"
 													aria-label="Copy URL"
 													className="hover:bg-muted rounded-md p-1.5"
 													onClick={async () => {
-														if (await copyToClipboard(`${WEBUI_API_BASE_URL}/channels/webhooks/${w.id}/${w.token}`)) toast.success('Copied');
+														if (await copyToClipboard(`${WEBUI_API_BASE_URL}/channels/webhooks/${w.id}/${w.token}`))
+															toast.success('Copied');
 													}}
 												>
 													<Copy className="size-4" />
 												</button>
 											</Tip>
 											<Tip content="Delete">
-												<button type="button" aria-label="Delete webhook" className="hover:bg-muted rounded-md p-1.5" onClick={() => setConfirmDelete(w.id)}>
+												<button
+													type="button"
+													aria-label="Delete webhook"
+													className="hover:bg-muted rounded-md p-1.5"
+													onClick={() => setConfirmDelete(w.id)}
+												>
 													<Trash2 className="size-4" />
 												</button>
 											</Tip>
@@ -423,9 +538,15 @@ export function WebhooksDialog({ open, onOpenChange, channel }: DialogProps & { 
 						Save {saving && <Spinner className="size-3.5" />}
 					</Button>
 				</DialogFooter>
-				<ConfirmDialog open={confirmDelete !== null} onOpenChange={(o) => !o && setConfirmDelete(null)} title="Delete webhook?" confirmLabel="Delete" onConfirm={async () => {
+				<ConfirmDialog
+					open={confirmDelete !== null}
+					onOpenChange={(o) => !o && setConfirmDelete(null)}
+					title="Delete webhook?"
+					confirmLabel="Delete"
+					onConfirm={async () => {
 						if (confirmDelete) await remove(confirmDelete);
-					}}>
+					}}
+				>
 					Anything posting to this webhook's URL will stop working.
 				</ConfirmDialog>
 			</DialogContent>
@@ -438,7 +559,11 @@ const TYPE_HELP: Record<ChannelFormValue['type'], string> = {
 	group: 'Collaboration channel where people join as members',
 	dm: 'Private conversation between selected users'
 };
-const TYPE_LABEL: Record<ChannelFormValue['type'], string> = { '': 'Channel', group: 'Group Channel', dm: 'Direct Message' };
+const TYPE_LABEL: Record<ChannelFormValue['type'], string> = {
+	'': 'Channel',
+	group: 'Group Channel',
+	dm: 'Direct Message'
+};
 
 /**
  * Ports layout/Sidebar/ChannelModal.svelte: create a channel (an admin may
@@ -452,14 +577,24 @@ export function ChannelFormDialog({
 	channel,
 	onSubmit,
 	onDeleted
-}: DialogProps & { channel?: Channel | null; onSubmit: (payload: Record<string, unknown>) => Promise<boolean>; onDeleted?: () => void }) {
+}: DialogProps & {
+	channel?: Channel | null;
+	onSubmit: (payload: Record<string, unknown>) => Promise<boolean>;
+	onDeleted?: () => void;
+}) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
 	const navigate = useNavigate();
 	const location = useLocation();
 	const edit = Boolean(channel);
 	const types: ChannelFormValue['type'][] = isAdmin ? ['', 'group', 'dm'] : ['group', 'dm'];
-	const [value, setValue] = useState<ChannelFormValue>({ type: types[0], name: '', isPrivate: true, accessGrants: [], userIds: [] });
+	const [value, setValue] = useState<ChannelFormValue>({
+		type: types[0],
+		name: '',
+		isPrivate: true,
+		accessGrants: [],
+		userIds: []
+	});
 	const [saving, setSaving] = useState(false);
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const [showWebhooks, setShowWebhooks] = useState(false);
@@ -515,7 +650,12 @@ export function ChannelFormDialog({
 					{!edit && (
 						<div className="flex flex-col gap-1.5">
 							<Label htmlFor="channel-type">Channel Type</Label>
-							<select id="channel-type" className={nativeSelect} value={value.type} onChange={(e) => setValue((v) => ({ ...v, type: e.target.value as ChannelFormValue['type'] }))}>
+							<select
+								id="channel-type"
+								className={nativeSelect}
+								value={value.type}
+								onChange={(e) => setValue((v) => ({ ...v, type: e.target.value as ChannelFormValue['type'] }))}
+							>
 								{types.map((t) => (
 									<option key={t || 'standard'} value={t}>
 										{TYPE_LABEL[t]}
@@ -528,22 +668,50 @@ export function ChannelFormDialog({
 						<Label htmlFor="channel-name">
 							Channel Name {value.type === 'dm' && <span className="text-muted-foreground text-xs">Optional</span>}
 						</Label>
-						<Input id="channel-name" autoComplete="off" placeholder="new-channel" maxLength={128} required={value.type !== 'dm'} value={value.name} onChange={(e) => setValue((v) => ({ ...v, name: normalizeChannelName(e.target.value) }))} />
+						<Input
+							id="channel-name"
+							autoComplete="off"
+							placeholder="new-channel"
+							maxLength={128}
+							required={value.type !== 'dm'}
+							value={value.name}
+							onChange={(e) => setValue((v) => ({ ...v, name: normalizeChannelName(e.target.value) }))}
+						/>
 					</div>
 
-					{value.type === '' && <AccessControl accessGrants={value.accessGrants as AccessGrant[]} onChange={(g) => setValue((v) => ({ ...v, accessGrants: g }))} accessRoles={['read', 'write']} />}
+					{value.type === '' && (
+						<AccessControl
+							accessGrants={value.accessGrants as AccessGrant[]}
+							onChange={(g) => setValue((v) => ({ ...v, accessGrants: g }))}
+							accessRoles={['read', 'write']}
+						/>
+					)}
 					{value.type === 'group' && (
 						<div className="flex flex-col gap-1.5">
 							<Label htmlFor="channel-visibility">Visibility</Label>
-							<select id="channel-visibility" className={nativeSelect} value={value.isPrivate ? 'private' : 'public'} onChange={(e) => setValue((v) => ({ ...v, isPrivate: e.target.value === 'private' }))}>
+							<select
+								id="channel-visibility"
+								className={nativeSelect}
+								value={value.isPrivate ? 'private' : 'public'}
+								onChange={(e) => setValue((v) => ({ ...v, isPrivate: e.target.value === 'private' }))}
+							>
 								<option value="private">Private</option>
 								<option value="public">Public</option>
 							</select>
-							<p className="text-muted-foreground text-xs">{value.isPrivate ? 'Only invited users can access' : 'Visible to all users'}</p>
+							<p className="text-muted-foreground text-xs">
+								{value.isPrivate ? 'Only invited users can access' : 'Visible to all users'}
+							</p>
 						</div>
 					)}
 					{value.type === 'dm' && (
-						<MemberSelector accessGrants={[]} userIds={value.userIds} groupIds={[]} onUserIdsChange={(ids) => setValue((v) => ({ ...v, userIds: ids }))} onGroupIdsChange={() => {}} includeGroups={false} />
+						<MemberSelector
+							accessGrants={[]}
+							userIds={value.userIds}
+							groupIds={[]}
+							onUserIdsChange={(ids) => setValue((v) => ({ ...v, userIds: ids }))}
+							onGroupIdsChange={() => {}}
+							includeGroups={false}
+						/>
 					)}
 
 					{edit && (
@@ -566,7 +734,13 @@ export function ChannelFormDialog({
 						</Button>
 					</DialogFooter>
 				</form>
-				<ConfirmDialog open={confirmDelete} onOpenChange={setConfirmDelete} title="Delete channel?" confirmLabel="Delete" onConfirm={remove}>
+				<ConfirmDialog
+					open={confirmDelete}
+					onOpenChange={setConfirmDelete}
+					title="Delete channel?"
+					confirmLabel="Delete"
+					onConfirm={remove}
+				>
 					Are you sure you want to delete this channel?
 				</ConfirmDialog>
 				{channel && <WebhooksDialog open={showWebhooks} onOpenChange={setShowWebhooks} channel={channel} />}

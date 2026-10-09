@@ -189,10 +189,7 @@ export const deleteCalendar = async (token: string, calendarId: string): Promise
 	return res?.status ?? false;
 };
 
-export const setDefaultCalendar = async (
-	token: string,
-	calendarId: string
-): Promise<CalendarModel> => {
+export const setDefaultCalendar = async (token: string, calendarId: string): Promise<CalendarModel> => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/calendars/${calendarId}/default`, {
@@ -262,10 +259,7 @@ export const getCalendarEvents = async (
 	return res;
 };
 
-export const createCalendarEvent = async (
-	token: string,
-	form: CalendarEventForm
-): Promise<CalendarEventModel> => {
+export const createCalendarEvent = async (token: string, form: CalendarEventForm): Promise<CalendarEventModel> => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/calendars/events/create`, {
@@ -294,10 +288,7 @@ export const createCalendarEvent = async (
 	return res;
 };
 
-export const getCalendarEventById = async (
-	token: string,
-	eventId: string
-): Promise<CalendarEventModel> => {
+export const getCalendarEventById = async (token: string, eventId: string): Promise<CalendarEventModel> => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/calendars/events/${eventId}`, {

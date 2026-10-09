@@ -4,10 +4,23 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { addNewMemory, deleteMemoriesByUserId, deleteMemoryById, getMemories, updateMemoryById } from '@/lib/apis/memories';
+import {
+	addNewMemory,
+	deleteMemoriesByUserId,
+	deleteMemoryById,
+	getMemories,
+	updateMemoryById
+} from '@/lib/apis/memories';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
@@ -17,7 +30,15 @@ import { SettingRow, SettingSwitch, SettingsForm, SettingsSection } from '../con
 type Memory = { id: string; content: string; type?: string; path?: string; updated_at?: number };
 
 /** Ports Personalization/MemoryModal.svelte: add or edit one memory (a fact about the user, or context), with an optional path. */
-function MemoryDialog({ memory, onClose, onSaved }: { memory: Memory | 'new' | null; onClose: () => void; onSaved: () => void }) {
+function MemoryDialog({
+	memory,
+	onClose,
+	onSaved
+}: {
+	memory: Memory | 'new' | null;
+	onClose: () => void;
+	onSaved: () => void;
+}) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const edit = memory !== null && memory !== 'new';
 	const [content, setContent] = useState(edit ? memory.content : '');
@@ -50,12 +71,27 @@ function MemoryDialog({ memory, onClose, onSaved }: { memory: Memory | 'new' | n
 				>
 					<label className="flex items-center justify-between text-xs">
 						Type
-						<select className="border-input h-8 rounded-md border bg-transparent px-2" value={type} onChange={(e) => setType(e.target.value)}>
+						<select
+							className="border-input h-8 rounded-md border bg-transparent px-2"
+							value={type}
+							onChange={(e) => setType(e.target.value)}
+						>
 							<option value="user">User</option>
 							<option value="context">Context</option>
 						</select>
 					</label>
-					<Textarea aria-label="Memory" required autoFocus placeholder={type === 'user' ? 'Add a preference, fact, or instruction about you' : 'Add durable context for future chats'} value={content} onChange={(e) => setContent(e.target.value)} />
+					<Textarea
+						aria-label="Memory"
+						required
+						autoFocus
+						placeholder={
+							type === 'user'
+								? 'Add a preference, fact, or instruction about you'
+								: 'Add durable context for future chats'
+						}
+						value={content}
+						onChange={(e) => setContent(e.target.value)}
+					/>
 					<label className="flex flex-col gap-1 text-xs">
 						<span>
 							Path <span className="opacity-50">(optional)</span>
@@ -79,19 +115,30 @@ function MemoryDialog({ memory, onClose, onSaved }: { memory: Memory | 'new' | n
  */
 export default function Personalization() {
 	const token = useAuthStore((s) => s.token) ?? '';
-	const memoriesOn = Boolean((useConfigStore((s) => s.config?.features) as Record<string, unknown> | undefined)?.enable_memories);
+	const memoriesOn = Boolean(
+		(useConfigStore((s) => s.config?.features) as Record<string, unknown> | undefined)?.enable_memories
+	);
 	const { settings, update } = useUserSettings();
-	const memories = useQuery({ queryKey: ['memories'], queryFn: async () => {
-		const res = await getMemories(token).catch(() => null);
-		return (Array.isArray(res) ? res : []) as Memory[];
-	} });
+	const memories = useQuery({
+		queryKey: ['memories'],
+		queryFn: async () => {
+			const res = await getMemories(token).catch(() => null);
+			return (Array.isArray(res) ? res : []) as Memory[];
+		}
+	});
 	const [query, setQuery] = useState('');
 	const [dialog, setDialog] = useState<Memory | 'new' | null>(null);
 	const [deleting, setDeleting] = useState<Memory | null>(null);
 	const [clearing, setClearing] = useState(false);
 	const enabled = (settings as { memory?: boolean } | null)?.memory ?? memoriesOn;
 	const q = query.trim().toLowerCase();
-	const shown = (memories.data ?? []).filter((m) => !q || m.content?.toLowerCase().includes(q) || m.path?.toLowerCase().includes(q) || m.type?.toLowerCase().includes(q));
+	const shown = (memories.data ?? []).filter(
+		(m) =>
+			!q ||
+			m.content?.toLowerCase().includes(q) ||
+			m.path?.toLowerCase().includes(q) ||
+			m.type?.toLowerCase().includes(q)
+	);
 
 	return (
 		<SettingsForm title="Personalization" footer={false}>
@@ -104,7 +151,13 @@ export default function Personalization() {
 				<div className="flex items-center gap-2">
 					<div className="relative flex-1">
 						<Search className="text-muted-foreground absolute top-2 left-2 size-3.5" />
-						<Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search Memories" aria-label="Search Memories" className="h-7 pl-7 text-xs" />
+						<Input
+							value={query}
+							onChange={(e) => setQuery(e.target.value)}
+							placeholder="Search Memories"
+							aria-label="Search Memories"
+							className="h-7 pl-7 text-xs"
+						/>
 					</div>
 					<Button type="button" size="sm" variant="outline" onClick={() => setDialog('new')}>
 						<Plus className="size-3.5" /> Add Memory
@@ -121,10 +174,20 @@ export default function Personalization() {
 									{m.updated_at ? ` · ${dayjs(m.updated_at * 1000).format('LL')}` : ''}
 								</div>
 							</div>
-							<button type="button" aria-label="Edit memory" className="hover:bg-muted rounded p-1" onClick={() => setDialog(m)}>
+							<button
+								type="button"
+								aria-label="Edit memory"
+								className="hover:bg-muted rounded p-1"
+								onClick={() => setDialog(m)}
+							>
 								<Pencil className="size-3.5" />
 							</button>
-							<button type="button" aria-label="Delete memory" className="hover:bg-muted rounded p-1" onClick={() => setDeleting(m)}>
+							<button
+								type="button"
+								aria-label="Delete memory"
+								className="hover:bg-muted rounded p-1"
+								onClick={() => setDeleting(m)}
+							>
 								<Trash2 className="size-3.5" />
 							</button>
 						</li>
@@ -133,13 +196,26 @@ export default function Personalization() {
 				{!memories.isLoading && !shown.length && <p className="text-muted-foreground text-xs">No memories yet.</p>}
 				{(memories.data?.length ?? 0) > 0 && (
 					<div>
-						<Button type="button" size="sm" variant="ghost" className="text-destructive" onClick={() => setClearing(true)}>
+						<Button
+							type="button"
+							size="sm"
+							variant="ghost"
+							className="text-destructive"
+							onClick={() => setClearing(true)}
+						>
 							Clear memory
 						</Button>
 					</div>
 				)}
 			</SettingsSection>
-			{dialog !== null && <MemoryDialog key={typeof dialog === 'string' ? 'new' : dialog.id} memory={dialog} onClose={() => setDialog(null)} onSaved={() => void memories.refetch()} />}
+			{dialog !== null && (
+				<MemoryDialog
+					key={typeof dialog === 'string' ? 'new' : dialog.id}
+					memory={dialog}
+					onClose={() => setDialog(null)}
+					onSaved={() => void memories.refetch()}
+				/>
+			)}
 			<ConfirmDialog
 				open={deleting !== null}
 				onOpenChange={(o) => !o && setDeleting(null)}

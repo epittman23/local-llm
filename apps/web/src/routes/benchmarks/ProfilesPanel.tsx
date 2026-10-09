@@ -2,12 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-	Dialog,
-	DialogContent,
-	DialogHeader,
-	DialogTitle
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -41,13 +36,7 @@ type View =
  * there since Phase 2a. `name` is never editable here, matching that
  * router's own DefinitionForm having no `name` field at all.
  */
-export function ProfilesPanel({
-	open,
-	onOpenChange
-}: {
-	open: boolean;
-	onOpenChange: (open: boolean) => void;
-}) {
+export function ProfilesPanel({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
 	const token = useAuthStore((state) => state.token) ?? '';
 	const queryClient = useQueryClient();
 	const [view, setView] = useState<View>({ mode: 'list' });
@@ -113,13 +102,8 @@ export function ProfilesPanel({
 	});
 
 	const cloneMutation = useMutation({
-		mutationFn: ({
-			source,
-			form
-		}: {
-			source: string;
-			form: { name: string; display_name: string; note: string };
-		}) => cloneProfile(token, source, form),
+		mutationFn: ({ source, form }: { source: string; form: { name: string; display_name: string; note: string } }) =>
+			cloneProfile(token, source, form),
 		onSuccess: async () => {
 			await invalidateAll();
 			go({ mode: 'list' });
@@ -129,15 +113,8 @@ export function ProfilesPanel({
 	});
 
 	const addVersionMutation = useMutation({
-		mutationFn: ({
-			name,
-			definition,
-			note
-		}: {
-			name: string;
-			definition: ProfileDefinition;
-			note: string;
-		}) => addProfileVersion(token, name, { definition, note }),
+		mutationFn: ({ name, definition, note }: { name: string; definition: ProfileDefinition; note: string }) =>
+			addProfileVersion(token, name, { definition, note }),
 		onSuccess: async () => {
 			await invalidateAll();
 			go({ mode: 'list' });
@@ -150,8 +127,7 @@ export function ProfilesPanel({
 		setError(null);
 		try {
 			const entry = await getProfile(token, name);
-			const { version_id, profile_id, version, created_at, created_by, note, ...definition } =
-				entry.version;
+			const { version_id, profile_id, version, created_at, created_by, note, ...definition } = entry.version;
 			go({ mode: 'edit', name, definition: definition as ProfileDefinition });
 		} catch (err) {
 			fail(err);
@@ -220,19 +196,11 @@ export function ProfilesPanel({
 											>
 												Edit
 											</Button>
-											<Button
-												size="sm"
-												variant="ghost"
-												onClick={() => go({ mode: 'clone', name: entry.profile.name })}
-											>
+											<Button size="sm" variant="ghost" onClick={() => go({ mode: 'clone', name: entry.profile.name })}>
 												Clone
 											</Button>
 											{!entry.profile.is_default && !entry.profile.archived_at && (
-												<Button
-													size="sm"
-													variant="ghost"
-													onClick={() => setDefaultMutation.mutate(entry.profile.name)}
-												>
+												<Button size="sm" variant="ghost" onClick={() => setDefaultMutation.mutate(entry.profile.name)}>
 													Set default
 												</Button>
 											)}
@@ -281,12 +249,7 @@ export function ProfilesPanel({
 						<div className="grid grid-cols-2 gap-3">
 							<div className="flex flex-col gap-1">
 								<Label htmlFor="new-profile-name">name (immutable after creation)</Label>
-								<Input
-									id="new-profile-name"
-									required
-									value={newName}
-									onChange={(e) => setNewName(e.target.value)}
-								/>
+								<Input id="new-profile-name" required value={newName} onChange={(e) => setNewName(e.target.value)} />
 							</div>
 							<div className="flex flex-col gap-1">
 								<Label htmlFor="new-profile-display-name">display_name</Label>
@@ -314,18 +277,12 @@ export function ProfilesPanel({
 				{view.mode === 'clone' && (
 					<div className="flex flex-col gap-3">
 						<p className="text-muted-foreground text-sm">
-							The clone starts identical to {view.name}'s current definition -- only its name and
-							display name differ.
+							The clone starts identical to {view.name}'s current definition -- only its name and display name differ.
 						</p>
 						<div className="grid grid-cols-2 gap-3">
 							<div className="flex flex-col gap-1">
 								<Label htmlFor="clone-profile-name">name</Label>
-								<Input
-									id="clone-profile-name"
-									required
-									value={newName}
-									onChange={(e) => setNewName(e.target.value)}
-								/>
+								<Input id="clone-profile-name" required value={newName} onChange={(e) => setNewName(e.target.value)} />
 							</div>
 							<div className="flex flex-col gap-1">
 								<Label htmlFor="clone-profile-display-name">display_name</Label>
@@ -365,9 +322,7 @@ export function ProfilesPanel({
 						submitLabel="Save as new version"
 						pending={addVersionMutation.isPending}
 						onCancel={() => go({ mode: 'list' })}
-						onSubmit={(definition, note) =>
-							addVersionMutation.mutate({ name: view.name, definition, note })
-						}
+						onSubmit={(definition, note) => addVersionMutation.mutate({ name: view.name, definition, note })}
 					/>
 				)}
 			</DialogContent>

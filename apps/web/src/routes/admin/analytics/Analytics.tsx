@@ -52,12 +52,32 @@ const store = {
 const th = 'cursor-pointer px-2.5 py-1.5 font-normal select-none';
 const dateInput = 'bg-muted/40 h-7 rounded-lg border px-2 text-xs outline-hidden';
 
-function Head({ label, active, direction, onClick, className = '' }: { label: string; active: boolean; direction: 'asc' | 'desc'; onClick: () => void; className?: string }) {
+function Head({
+	label,
+	active,
+	direction,
+	onClick,
+	className = ''
+}: {
+	label: string;
+	active: boolean;
+	direction: 'asc' | 'desc';
+	onClick: () => void;
+	className?: string;
+}) {
 	return (
 		<th scope="col" className={`${th} ${className}`} onClick={onClick}>
 			<div className={`flex items-center gap-1.5 ${className.includes('text-right') ? 'justify-end' : ''}`}>
 				{label}
-				{active ? direction === 'asc' ? <ChevronUp className="size-2" /> : <ChevronDown className="size-2" /> : <ChevronUp className="invisible size-2" />}
+				{active ? (
+					direction === 'asc' ? (
+						<ChevronUp className="size-2" />
+					) : (
+						<ChevronDown className="size-2" />
+					)
+				) : (
+					<ChevronUp className="invisible size-2" />
+				)}
 			</div>
 		</th>
 	);
@@ -96,8 +116,14 @@ export default function Analytics() {
 		store.set('analyticsCustomEnd', customEnd);
 	}, [customStart, customEnd]);
 
-	const groups = useQuery({ queryKey: ['admin', 'groups'], queryFn: async () => ((await getGroups(token)) ?? []) as { id: string; name: string }[] });
-	const models = useQuery({ queryKey: ['models-all'], queryFn: async () => ((await getModels(token)) ?? []) as { id: string; name?: string }[] });
+	const groups = useQuery({
+		queryKey: ['admin', 'groups'],
+		queryFn: async () => ((await getGroups(token)) ?? []) as { id: string; name: string }[]
+	});
+	const models = useQuery({
+		queryKey: ['models-all'],
+		queryFn: async () => ((await getModels(token)) ?? []) as { id: string; name?: string }[]
+	});
 
 	const incomplete = isCustomIncomplete(period, customStart, customEnd);
 	const data = useQuery({
@@ -120,23 +146,46 @@ export default function Analytics() {
 	const names = useMemo(() => new Map((models.data ?? []).map((m) => [m.id, m.name || m.id])), [models.data]);
 	const summary = data.data?.summary ?? { total_messages: 0, total_chats: 0, total_users: 0 };
 	const modelStats: ModelStat[] = useMemo(
-		() => ((data.data?.byModel?.models ?? []) as Omit<ModelStat, 'name'>[]).map((m) => ({ ...m, name: names.get(m.model_id) || m.model_id })),
+		() =>
+			((data.data?.byModel?.models ?? []) as Omit<ModelStat, 'name'>[]).map((m) => ({
+				...m,
+				name: names.get(m.model_id) || m.model_id
+			})),
 		[data.data, names]
 	);
 	const userStats: UserStat[] = data.data?.byUser?.users ?? [];
 	const daily: DailyPoint[] = data.data?.daily?.data ?? [];
 	const tokenStats: TokenStats = useMemo(
-		() => Object.fromEntries(((data.data?.tokens?.models ?? []) as { model_id: string; input_tokens: number; output_tokens: number; total_tokens: number }[]).map((m) => [m.model_id, m])),
+		() =>
+			Object.fromEntries(
+				(
+					(data.data?.tokens?.models ?? []) as {
+						model_id: string;
+						input_tokens: number;
+						output_tokens: number;
+						total_tokens: number;
+					}[]
+				).map((m) => [m.model_id, m])
+			),
 		[data.data]
 	);
 	const totalTokens = data.data?.tokens?.total_tokens ?? 0;
 
-	const sortedModels = useMemo(() => sortModels(modelStats, tokenStats, modelSort.by, modelSort.dir), [modelStats, tokenStats, modelSort]);
+	const sortedModels = useMemo(
+		() => sortModels(modelStats, tokenStats, modelSort.by, modelSort.dir),
+		[modelStats, tokenStats, modelSort]
+	);
 	const sortedUsers = useMemo(() => sortUsers(userStats, userSort.by, userSort.dir), [userStats, userSort]);
 	const totalModelMessages = modelStats.reduce((sum, m) => sum + m.count, 0);
 
-	const toggleModel = (by: ModelSort) => setModelSort((s) => (s.by === by ? { by, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { by, dir: by === 'name' ? 'asc' : 'desc' }));
-	const toggleUser = (by: UserSort) => setUserSort((s) => (s.by === by ? { by, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { by, dir: by === 'name' ? 'asc' : 'desc' }));
+	const toggleModel = (by: ModelSort) =>
+		setModelSort((s) =>
+			s.by === by ? { by, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { by, dir: by === 'name' ? 'asc' : 'desc' }
+		);
+	const toggleUser = (by: UserSort) =>
+		setUserSort((s) =>
+			s.by === by ? { by, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { by, dir: by === 'name' ? 'asc' : 'desc' }
+		);
 
 	const loading = data.isFetching && !incomplete;
 	const chartSeries = chartModels(daily);
@@ -144,7 +193,13 @@ export default function Analytics() {
 
 	return (
 		<div className="flex h-full w-full flex-col overflow-y-auto pr-1 pb-2">
-			<AnalyticsModelModal open={showModel} onOpenChange={setShowModel} model={selectedModel} startDate={range.start} endDate={range.end} />
+			<AnalyticsModelModal
+				open={showModel}
+				onOpenChange={setShowModel}
+				model={selectedModel}
+				startDate={range.start}
+				endDate={range.end}
+			/>
 
 			<div className="mb-3 flex flex-wrap items-center justify-between gap-2">
 				<h2 className="text-sm font-medium">Analytics</h2>
@@ -161,9 +216,23 @@ export default function Analytics() {
 					)}
 					{period === 'custom' && (
 						<>
-							<input type="date" aria-label="Start date" className={dateInput} value={customStart} max={customEnd || undefined} onChange={(e) => setCustomStart(e.target.value)} />
+							<input
+								type="date"
+								aria-label="Start date"
+								className={dateInput}
+								value={customStart}
+								max={customEnd || undefined}
+								onChange={(e) => setCustomStart(e.target.value)}
+							/>
 							<span className="text-muted-foreground">–</span>
-							<input type="date" aria-label="End date" className={dateInput} value={customEnd} min={customStart || undefined} onChange={(e) => setCustomEnd(e.target.value)} />
+							<input
+								type="date"
+								aria-label="End date"
+								className={dateInput}
+								value={customEnd}
+								min={customStart || undefined}
+								onChange={(e) => setCustomEnd(e.target.value)}
+							/>
 						</>
 					)}
 					<SettingSelect value={period} onChange={(v) => setPeriod(v as Period)} aria-label="Period">
@@ -184,7 +253,8 @@ export default function Analytics() {
 				<>
 					<div className="text-muted-foreground mb-3 flex flex-wrap gap-x-5 gap-y-1 text-xs">
 						<span>
-							<span className="text-foreground text-base font-medium">{summary.total_messages.toLocaleString()}</span> messages
+							<span className="text-foreground text-base font-medium">{summary.total_messages.toLocaleString()}</span>{' '}
+							messages
 						</span>
 						<Tip content="Token counts are estimates and may not reflect actual API usage">
 							<span>
@@ -192,7 +262,8 @@ export default function Analytics() {
 							</span>
 						</Tip>
 						<span>
-							<span className="text-foreground text-base font-medium">{summary.total_chats.toLocaleString()}</span> chats
+							<span className="text-foreground text-base font-medium">{summary.total_chats.toLocaleString()}</span>{' '}
+							chats
 						</span>
 						<span>
 							<span className="text-foreground text-base font-medium">{summary.total_users}</span> users
@@ -202,7 +273,13 @@ export default function Analytics() {
 					{daily.length > 1 && (
 						<div className="mb-4">
 							<div className="mb-1 text-xs font-medium">{period === '24h' ? 'Hourly Messages' : 'Daily Messages'}</div>
-							<ChartLine data={daily} models={chartSeries} colors={CHART_COLORS} height={200} period={chartPeriod(period)} />
+							<ChartLine
+								data={daily}
+								models={chartSeries}
+								colors={CHART_COLORS}
+								height={200}
+								period={chartPeriod(period)}
+							/>
 						</div>
 					)}
 
@@ -214,12 +291,47 @@ export default function Analytics() {
 										<th scope="col" className="px-2.5 py-1.5 font-normal">
 											#
 										</th>
-										<Head label="Model" active={modelSort.by === 'name'} direction={modelSort.dir} onClick={() => toggleModel('name')} />
-										<Head label="Messages" active={modelSort.by === 'count'} direction={modelSort.dir} onClick={() => toggleModel('count')} className="text-right" />
-										<Head label="Users" active={modelSort.by === 'users'} direction={modelSort.dir} onClick={() => toggleModel('users')} className="text-right" />
-										<Head label="Chats" active={modelSort.by === 'chats'} direction={modelSort.dir} onClick={() => toggleModel('chats')} className="text-right" />
-										<Head label="Tokens" active={modelSort.by === 'tokens'} direction={modelSort.dir} onClick={() => toggleModel('tokens')} className="text-right" />
-										<Head label="%" active={modelSort.by === 'percentage'} direction={modelSort.dir} onClick={() => toggleModel('percentage')} className="text-right" />
+										<Head
+											label="Model"
+											active={modelSort.by === 'name'}
+											direction={modelSort.dir}
+											onClick={() => toggleModel('name')}
+										/>
+										<Head
+											label="Messages"
+											active={modelSort.by === 'count'}
+											direction={modelSort.dir}
+											onClick={() => toggleModel('count')}
+											className="text-right"
+										/>
+										<Head
+											label="Users"
+											active={modelSort.by === 'users'}
+											direction={modelSort.dir}
+											onClick={() => toggleModel('users')}
+											className="text-right"
+										/>
+										<Head
+											label="Chats"
+											active={modelSort.by === 'chats'}
+											direction={modelSort.dir}
+											onClick={() => toggleModel('chats')}
+											className="text-right"
+										/>
+										<Head
+											label="Tokens"
+											active={modelSort.by === 'tokens'}
+											direction={modelSort.dir}
+											onClick={() => toggleModel('tokens')}
+											className="text-right"
+										/>
+										<Head
+											label="%"
+											active={modelSort.by === 'percentage'}
+											direction={modelSort.dir}
+											onClick={() => toggleModel('percentage')}
+											className="text-right"
+										/>
 									</tr>
 								</thead>
 								<tbody>
@@ -252,7 +364,9 @@ export default function Analytics() {
 											<td className="px-2.5 py-1.5 text-right">{model.count.toLocaleString()}</td>
 											<td className="px-2.5 py-1.5 text-right">{(model.unique_users ?? 0).toLocaleString()}</td>
 											<td className="px-2.5 py-1.5 text-right">{(model.unique_chats ?? 0).toLocaleString()}</td>
-											<td className="px-2.5 py-1.5 text-right">{formatNumber(tokenStats[model.model_id]?.total_tokens ?? 0)}</td>
+											<td className="px-2.5 py-1.5 text-right">
+												{formatNumber(tokenStats[model.model_id]?.total_tokens ?? 0)}
+											</td>
 											<td className="px-2.5 py-1.5 text-right">{sharePercent(model.count, totalModelMessages)}%</td>
 										</tr>
 									))}
@@ -274,9 +388,26 @@ export default function Analytics() {
 										<th scope="col" className="px-2.5 py-1.5 font-normal">
 											#
 										</th>
-										<Head label="User" active={userSort.by === 'name'} direction={userSort.dir} onClick={() => toggleUser('name')} />
-										<Head label="Messages" active={userSort.by === 'count'} direction={userSort.dir} onClick={() => toggleUser('count')} className="text-right" />
-										<Head label="Tokens" active={userSort.by === 'tokens'} direction={userSort.dir} onClick={() => toggleUser('tokens')} className="text-right" />
+										<Head
+											label="User"
+											active={userSort.by === 'name'}
+											direction={userSort.dir}
+											onClick={() => toggleUser('name')}
+										/>
+										<Head
+											label="Messages"
+											active={userSort.by === 'count'}
+											direction={userSort.dir}
+											onClick={() => toggleUser('count')}
+											className="text-right"
+										/>
+										<Head
+											label="Tokens"
+											active={userSort.by === 'tokens'}
+											direction={userSort.dir}
+											onClick={() => toggleUser('tokens')}
+											className="text-right"
+										/>
 									</tr>
 								</thead>
 								<tbody>
@@ -293,7 +424,9 @@ export default function Analytics() {
 															e.currentTarget.src = '/user.png';
 														}}
 													/>
-													<span className="text-foreground line-clamp-1">{user.name || user.email || user.user_id.substring(0, 8)}</span>
+													<span className="text-foreground line-clamp-1">
+														{user.name || user.email || user.user_id.substring(0, 8)}
+													</span>
 												</div>
 											</td>
 											<td className="px-2.5 py-1.5 text-right">{user.count.toLocaleString()}</td>
@@ -312,7 +445,9 @@ export default function Analytics() {
 						</Panel>
 					</div>
 
-					<div className="text-muted-foreground mt-2 text-right text-xs">ⓘ Message counts are based on assistant responses.</div>
+					<div className="text-muted-foreground mt-2 text-right text-xs">
+						ⓘ Message counts are based on assistant responses.
+					</div>
 				</>
 			)}
 		</div>

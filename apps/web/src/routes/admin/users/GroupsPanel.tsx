@@ -5,7 +5,13 @@ import { useSearchParams } from 'react-router';
 import { toast } from 'sonner';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuRadioGroup,
+	DropdownMenuRadioItem,
+	DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import { createNewGroup, getGroups } from '@/lib/apis/groups';
 import { getUserDefaultPermissions, updateUserDefaultPermissions } from '@/lib/apis/users';
 import { useAdminStore } from '@/lib/stores/adminStore';
@@ -55,7 +61,9 @@ export function GroupsPanel() {
 	const refetchGroups = () => queryClient.invalidateQueries({ queryKey: ['admin', 'groups'] });
 	// A membership change returns the updated group, so patch it in without a round trip.
 	const patchGroup = (updated: Group) =>
-		queryClient.setQueryData<Group[]>(['admin', 'groups'], (prev) => prev?.map((g) => (g.id === updated.id ? updated : g)));
+		queryClient.setQueryData<Group[]>(['admin', 'groups'], (prev) =>
+			prev?.map((g) => (g.id === updated.id ? updated : g))
+		);
 
 	const addGroup = async (value: GroupFormValue) => {
 		const res = await createNewGroup(token, value).catch((error) => {
@@ -113,7 +121,12 @@ export function GroupsPanel() {
 								placeholder="Search Groups"
 							/>
 							{query && (
-								<button type="button" className="hover:bg-muted rounded-full p-0.5 transition" aria-label="Clear search" onClick={() => setQuery('')}>
+								<button
+									type="button"
+									className="hover:bg-muted rounded-full p-0.5 transition"
+									aria-label="Clear search"
+									onClick={() => setQuery('')}
+								>
 									<X className="size-3" strokeWidth={2} />
 								</button>
 							)}
@@ -165,20 +178,31 @@ export function GroupsPanel() {
 					<div className="flex w-full flex-col items-center justify-center py-16 pb-24">
 						<div className="max-w-sm text-center">
 							<div className="mb-1.5 text-sm">No groups found</div>
-							<div className="text-muted-foreground text-center text-xs leading-5">Use groups to organize your users and assign permissions.</div>
+							<div className="text-muted-foreground text-center text-xs leading-5">
+								Use groups to organize your users and assign permissions.
+							</div>
 						</div>
 					</div>
 				)}
 
 				<hr className="border-border/40 my-1" />
 
-				<button type="button" className="group flex w-full cursor-pointer px-2.5 py-2 text-left" aria-haspopup="dialog" onClick={() => setShowDefaults(true)}>
+				<button
+					type="button"
+					className="group flex w-full cursor-pointer px-2.5 py-2 text-left"
+					aria-haspopup="dialog"
+					onClick={() => setShowDefaults(true)}
+				>
 					<div className="flex w-full items-center gap-3">
 						<div className="flex min-w-0 flex-1 flex-col gap-0.5 pl-1">
 							<div className="text-sm font-normal group-hover:underline">Default permissions</div>
-							<div className="text-muted-foreground line-clamp-1 text-xs">applies to all users with the "user" role</div>
+							<div className="text-muted-foreground line-clamp-1 text-xs">
+								applies to all users with the "user" role
+							</div>
 						</div>
-						<div className="text-muted-foreground group-hover:text-foreground shrink-0 px-1.5 text-xs transition">Edit</div>
+						<div className="text-muted-foreground group-hover:text-foreground shrink-0 px-1.5 text-xs transition">
+							Edit
+						</div>
 					</div>
 				</button>
 			</div>

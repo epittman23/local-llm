@@ -3,13 +3,31 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { SensitiveInput } from '@/components/common/SensitiveInput';
 import { Spinner } from '@/components/common/Spinner';
-import { SettingField, SettingInput, SettingRow, SettingSelect, SettingSwitch, SettingTextarea, SettingsForm, SettingsSection } from '@/components/settings/controls';
+import {
+	SettingField,
+	SettingInput,
+	SettingRow,
+	SettingSelect,
+	SettingSwitch,
+	SettingTextarea,
+	SettingsForm,
+	SettingsSection
+} from '@/components/settings/controls';
 import { getAudioConfig, getModels, getVoices, updateAudioConfig } from '@/lib/apis/audio';
 import { useAdminConfigSaved } from '@/lib/settings/useAdminSaved';
 import { useConfigDraft } from '@/lib/settings/useConfigDraft';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { TTS_RESPONSE_SPLIT } from '@/lib/types';
-import { type Voice, buildAudioPayload, engineDefaults, formatOpenAiParams, parseOpenAiParams, sortVoices, splitMimeTypes, splitOptions } from './audio';
+import {
+	type Voice,
+	buildAudioPayload,
+	engineDefaults,
+	formatOpenAiParams,
+	parseOpenAiParams,
+	sortVoices,
+	splitMimeTypes,
+	splitOptions
+} from './audio';
 
 type Rec = Record<string, any>;
 type Draft = { tts: Rec; stt: Rec; paramsText: string; mimeText: string };
@@ -148,13 +166,25 @@ export default function Audio() {
 	const tts = draft?.tts;
 	const stt = draft?.stt;
 
-	const text = (section: Section, name: string, label: string, opts: { placeholder?: string; required?: boolean; list?: string } = {}) => {
+	const text = (
+		section: Section,
+		name: string,
+		label: string,
+		opts: { placeholder?: string; required?: boolean; list?: string } = {}
+	) => {
 		const config = section === 'tts' ? tts : stt;
 		const set = section === 'tts' ? setTts : setStt;
 		const id = `${section}-${name}`;
 		return (
 			<SettingField label={label} htmlFor={id}>
-				<SettingInput id={id} list={opts.list} required={opts.required} placeholder={opts.placeholder ?? label} value={config?.[name] ?? ''} onChange={(e) => set({ [name]: e.target.value })} />
+				<SettingInput
+					id={id}
+					list={opts.list}
+					required={opts.required}
+					placeholder={opts.placeholder ?? label}
+					value={config?.[name] ?? ''}
+					onChange={(e) => set({ [name]: e.target.value })}
+				/>
 			</SettingField>
 		);
 	};
@@ -164,7 +194,14 @@ export default function Audio() {
 		const id = `${section}-${name}`;
 		return (
 			<SettingField label="API Key" htmlFor={id}>
-				<SensitiveInput id={id} variant="settings" placeholder="API Key" required={required} value={config?.[name] ?? ''} onChange={(v) => set({ [name]: v })} />
+				<SensitiveInput
+					id={id}
+					variant="settings"
+					placeholder="API Key"
+					required={required}
+					value={config?.[name] ?? ''}
+					onChange={(v) => set({ [name]: v })}
+				/>
 			</SettingField>
 		);
 	};
@@ -174,8 +211,15 @@ export default function Audio() {
 			{draft && tts && stt && (
 				<>
 					<SettingsSection title="Speech-to-Text" first>
-						<SettingRow label="Speech-to-Text Engine" description="Choose the transcription provider used for audio input.">
-							<SettingSelect value={stt.ENGINE} onChange={(v) => setStt({ ENGINE: v })} aria-label="Speech-to-Text Engine">
+						<SettingRow
+							label="Speech-to-Text Engine"
+							description="Choose the transcription provider used for audio input."
+						>
+							<SettingSelect
+								value={stt.ENGINE}
+								onChange={(v) => setStt({ ENGINE: v })}
+								aria-label="Speech-to-Text Engine"
+							>
 								<option value="">Whisper (Local)</option>
 								<option value="openai">OpenAI</option>
 								<option value="web">Web API</option>
@@ -186,7 +230,11 @@ export default function Audio() {
 						</SettingRow>
 
 						{stt.ENGINE !== 'web' && (
-							<SettingField label="Supported MIME Types" description="Comma-separated audio or video MIME types accepted for upload." htmlFor="stt-mime">
+							<SettingField
+								label="Supported MIME Types"
+								description="Comma-separated audio or video MIME types accepted for upload."
+								htmlFor="stt-mime"
+							>
 								<SettingInput
 									id="stt-mime"
 									placeholder="e.g., audio/wav,audio/mpeg,video/* (leave blank for defaults)"
@@ -202,8 +250,15 @@ export default function Audio() {
 									{text('stt', 'OPENAI_API_BASE_URL', 'API Base URL', { required: true })}
 									{secret('stt', 'OPENAI_API_KEY')}
 								</div>
-								<SettingRow label="Request Format" description="Select how audio is sent to the OpenAI-compatible endpoint.">
-									<SettingSelect value={stt.OPENAI_API_REQUEST_FORMAT} onChange={(v) => setStt({ OPENAI_API_REQUEST_FORMAT: v })} aria-label="Request Format">
+								<SettingRow
+									label="Request Format"
+									description="Select how audio is sent to the OpenAI-compatible endpoint."
+								>
+									<SettingSelect
+										value={stt.OPENAI_API_REQUEST_FORMAT}
+										onChange={(v) => setStt({ OPENAI_API_REQUEST_FORMAT: v })}
+										aria-label="Request Format"
+									>
 										<option value="multipart">Multipart Upload</option>
 										<option value="json">JSON Base64</option>
 									</SettingSelect>
@@ -218,8 +273,17 @@ export default function Audio() {
 						{stt.ENGINE === 'deepgram' && (
 							<>
 								{secret('stt', 'DEEPGRAM_API_KEY')}
-								<SettingField label="STT Model" description="Leave model field empty to use the default model." htmlFor="stt-MODEL">
-									<SettingInput id="stt-MODEL" placeholder="Select a model (optional)" value={stt.MODEL ?? ''} onChange={(e) => setStt({ MODEL: e.target.value })} />
+								<SettingField
+									label="STT Model"
+									description="Leave model field empty to use the default model."
+									htmlFor="stt-MODEL"
+								>
+									<SettingInput
+										id="stt-MODEL"
+										placeholder="Select a model (optional)"
+										value={stt.MODEL ?? ''}
+										onChange={(e) => setStt({ MODEL: e.target.value })}
+									/>
 									<Help href="https://developers.deepgram.com/docs/models">Click here to see available models.</Help>
 								</SettingField>
 							</>
@@ -229,10 +293,18 @@ export default function Audio() {
 							<>
 								{secret('stt', 'AZURE_API_KEY', true)}
 								<div className={twoUp}>
-									{text('stt', 'AZURE_REGION', 'Azure Region', { placeholder: 'e.g., westus (leave blank for eastus)' })}
-									{text('stt', 'AZURE_LOCALES', 'Language Locales', { placeholder: 'e.g., en-US,ja-JP (leave blank for auto-detect)' })}
-									{text('stt', 'AZURE_BASE_URL', 'Endpoint URL', { placeholder: '(leave blank for to use commercial endpoint)' })}
-									{text('stt', 'AZURE_MAX_SPEAKERS', 'Max Speakers', { placeholder: 'e.g., 3, 4, 5 (leave blank for default)' })}
+									{text('stt', 'AZURE_REGION', 'Azure Region', {
+										placeholder: 'e.g., westus (leave blank for eastus)'
+									})}
+									{text('stt', 'AZURE_LOCALES', 'Language Locales', {
+										placeholder: 'e.g., en-US,ja-JP (leave blank for auto-detect)'
+									})}
+									{text('stt', 'AZURE_BASE_URL', 'Endpoint URL', {
+										placeholder: '(leave blank for to use commercial endpoint)'
+									})}
+									{text('stt', 'AZURE_MAX_SPEAKERS', 'Max Speakers', {
+										placeholder: 'e.g., 3, 4, 5 (leave blank for default)'
+									})}
 								</div>
 							</>
 						)}
@@ -243,15 +315,32 @@ export default function Audio() {
 									{text('stt', 'MISTRAL_API_BASE_URL', 'API Base URL', { required: true })}
 									{secret('stt', 'MISTRAL_API_KEY')}
 								</div>
-								<SettingField label="STT Model" description="Leave empty to use the default model (voxtral-mini-latest)." htmlFor="stt-MODEL">
-									<SettingInput id="stt-MODEL" placeholder="voxtral-mini-latest" value={stt.MODEL ?? ''} onChange={(e) => setStt({ MODEL: e.target.value })} />
-									<Help href="https://docs.mistral.ai/capabilities/audio_transcription">Learn more about Voxtral transcription.</Help>
+								<SettingField
+									label="STT Model"
+									description="Leave empty to use the default model (voxtral-mini-latest)."
+									htmlFor="stt-MODEL"
+								>
+									<SettingInput
+										id="stt-MODEL"
+										placeholder="voxtral-mini-latest"
+										value={stt.MODEL ?? ''}
+										onChange={(e) => setStt({ MODEL: e.target.value })}
+									/>
+									<Help href="https://docs.mistral.ai/capabilities/audio_transcription">
+										Learn more about Voxtral transcription.
+									</Help>
 								</SettingField>
 								<SettingRow
 									label="Use Chat Completions API"
 									description="Use /v1/chat/completions endpoint instead of /v1/audio/transcriptions for potentially better accuracy."
 								>
-									{(id) => <SettingSwitch checked={Boolean(stt.MISTRAL_USE_CHAT_COMPLETIONS)} onChange={(v) => setStt({ MISTRAL_USE_CHAT_COMPLETIONS: v })} labelledBy={id} />}
+									{(id) => (
+										<SettingSwitch
+											checked={Boolean(stt.MISTRAL_USE_CHAT_COMPLETIONS)}
+											onChange={(v) => setStt({ MISTRAL_USE_CHAT_COMPLETIONS: v })}
+											labelledBy={id}
+										/>
+									)}
 								</SettingRow>
 							</>
 						)}
@@ -260,9 +349,18 @@ export default function Audio() {
 							// LICENSE covers this Open WebUI wordmark.
 							// Do not alter, remove, obscure, or replace it except as LICENSE permits:
 							// https://docs.openwebui.com/license.
-							<SettingField label="STT Model" description="Open WebUI uses faster-whisper internally." htmlFor="stt-WHISPER_MODEL">
+							<SettingField
+								label="STT Model"
+								description="Open WebUI uses faster-whisper internally."
+								htmlFor="stt-WHISPER_MODEL"
+							>
 								<div className="flex w-full gap-2">
-									<SettingInput id="stt-WHISPER_MODEL" placeholder="Set whisper model" value={stt.WHISPER_MODEL ?? ''} onChange={(e) => setStt({ WHISPER_MODEL: e.target.value })} />
+									<SettingInput
+										id="stt-WHISPER_MODEL"
+										placeholder="Set whisper model"
+										value={stt.WHISPER_MODEL ?? ''}
+										onChange={(e) => setStt({ WHISPER_MODEL: e.target.value })}
+									/>
 									<button
 										type="button"
 										aria-label="Update model"
@@ -273,13 +371,18 @@ export default function Audio() {
 										{whisperLoading ? <Spinner /> : <Download className="size-4" />}
 									</button>
 								</div>
-								<Help href="https://github.com/SYSTRAN/faster-whisper">Click here to learn more about faster-whisper and see the available models.</Help>
+								<Help href="https://github.com/SYSTRAN/faster-whisper">
+									Click here to learn more about faster-whisper and see the available models.
+								</Help>
 							</SettingField>
 						)}
 					</SettingsSection>
 
 					<SettingsSection title="Text-to-Speech">
-						<SettingRow label="Text-to-Speech Engine" description="Choose the speech provider used for assistant audio output.">
+						<SettingRow
+							label="Text-to-Speech Engine"
+							description="Choose the speech provider used for assistant audio output."
+						>
 							<SettingSelect value={tts.ENGINE} onChange={changeTtsEngine} aria-label="Text-to-Speech Engine">
 								<option value="">Web API</option>
 								<option value="transformers">Transformers (Local)</option>
@@ -301,8 +404,12 @@ export default function Audio() {
 							<>
 								{secret('tts', 'API_KEY', true)}
 								<div className={twoUp}>
-									{text('tts', 'AZURE_SPEECH_REGION', 'Azure Region', { placeholder: 'e.g., westus (leave blank for eastus)' })}
-									{text('tts', 'AZURE_SPEECH_BASE_URL', 'Endpoint URL', { placeholder: '(leave blank for to use commercial endpoint)' })}
+									{text('tts', 'AZURE_SPEECH_REGION', 'Azure Region', {
+										placeholder: 'e.g., westus (leave blank for eastus)'
+									})}
+									{text('tts', 'AZURE_SPEECH_BASE_URL', 'Endpoint URL', {
+										placeholder: '(leave blank for to use commercial endpoint)'
+									})}
 								</div>
 							</>
 						)}
@@ -315,7 +422,12 @@ export default function Audio() {
 
 						{tts.ENGINE === '' && (
 							<SettingField label="TTS Voice">
-								<SettingSelect className="w-full" value={tts.VOICE} onChange={(v) => setTts({ VOICE: v })} aria-label="TTS Voice">
+								<SettingSelect
+									className="w-full"
+									value={tts.VOICE}
+									onChange={(v) => setTts({ VOICE: v })}
+									aria-label="TTS Voice"
+								>
 									<option value="">Default</option>
 									{browserVoices.map((v) => (
 										<option key={v.voiceURI} value={v.voiceURI}>
@@ -330,8 +442,18 @@ export default function Audio() {
 							// LICENSE covers this Open WebUI wordmark.
 							// Do not alter, remove, obscure, or replace it except as LICENSE permits:
 							// https://docs.openwebui.com/license.
-							<SettingField label="TTS Model" description="Open WebUI uses SpeechT5 and CMU Arctic speaker embeddings." htmlFor="tts-MODEL">
-								<SettingInput id="tts-MODEL" list="tts-transformers-model-list" placeholder="CMU ARCTIC speaker embedding name" value={tts.MODEL ?? ''} onChange={(e) => setTts({ MODEL: e.target.value })} />
+							<SettingField
+								label="TTS Model"
+								description="Open WebUI uses SpeechT5 and CMU Arctic speaker embeddings."
+								htmlFor="tts-MODEL"
+							>
+								<SettingInput
+									id="tts-MODEL"
+									list="tts-transformers-model-list"
+									placeholder="CMU ARCTIC speaker embedding name"
+									value={tts.MODEL ?? ''}
+									onChange={(e) => setTts({ MODEL: e.target.value })}
+								/>
 								<datalist id="tts-transformers-model-list">
 									<option value="tts-1" />
 								</datalist>
@@ -351,7 +473,13 @@ export default function Audio() {
 						{['openai', 'elevenlabs', 'mistral', 'azure'].includes(tts.ENGINE) && (
 							<div className={twoUp}>
 								<SettingField label="TTS Voice" htmlFor="tts-VOICE">
-									<SettingInput id="tts-VOICE" list="tts-voice-list" placeholder="Select a voice" value={tts.VOICE ?? ''} onChange={(e) => setTts({ VOICE: e.target.value })} />
+									<SettingInput
+										id="tts-VOICE"
+										list="tts-voice-list"
+										placeholder="Select a voice"
+										value={tts.VOICE ?? ''}
+										onChange={(e) => setTts({ VOICE: e.target.value })}
+									/>
 								</SettingField>
 								{tts.ENGINE === 'azure' ? (
 									<SettingField label="Output format" htmlFor="tts-AZURE_SPEECH_OUTPUT_FORMAT">
@@ -361,7 +489,9 @@ export default function Audio() {
 											value={tts.AZURE_SPEECH_OUTPUT_FORMAT ?? ''}
 											onChange={(e) => setTts({ AZURE_SPEECH_OUTPUT_FORMAT: e.target.value })}
 										/>
-										<Help href="https://learn.microsoft.com/en-us/azure/ai-services/speech-service/rest-text-to-speech?tabs=streaming#audio-outputs">Available list</Help>
+										<Help href="https://learn.microsoft.com/en-us/azure/ai-services/speech-service/rest-text-to-speech?tabs=streaming#audio-outputs">
+											Available list
+										</Help>
 									</SettingField>
 								) : (
 									text('tts', 'MODEL', 'TTS Model', { list: 'tts-model-list', placeholder: 'Select a model' })
@@ -369,7 +499,11 @@ export default function Audio() {
 							</div>
 						)}
 						{tts.ENGINE === 'openai' && (
-							<SettingField label="Additional Parameters" description="Enter additional OpenAI-compatible TTS request parameters as JSON." htmlFor="tts-params">
+							<SettingField
+								label="Additional Parameters"
+								description="Enter additional OpenAI-compatible TTS request parameters as JSON."
+								htmlFor="tts-params"
+							>
 								<SettingTextarea
 									id="tts-params"
 									placeholder="Enter additional parameters in JSON format"
@@ -394,7 +528,11 @@ export default function Audio() {
 							label="Response Splitting"
 							description="Control how message text is split for TTS requests. 'Punctuation' splits into sentences, 'paragraphs' splits into paragraphs, and 'none' keeps the message as a single string."
 						>
-							<SettingSelect value={tts.SPLIT_ON} onChange={(v) => setTts({ SPLIT_ON: v })} aria-label="Select how to split message text for TTS requests">
+							<SettingSelect
+								value={tts.SPLIT_ON}
+								onChange={(v) => setTts({ SPLIT_ON: v })}
+								aria-label="Select how to split message text for TTS requests"
+							>
 								{splitOptions.map((s) => (
 									<option key={s} value={s}>
 										{s.charAt(0).toUpperCase() + s.slice(1)}

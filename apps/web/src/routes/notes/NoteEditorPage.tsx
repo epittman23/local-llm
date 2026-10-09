@@ -9,17 +9,36 @@ import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import type { EditorContentValue } from '@/components/common/RichTextEditor';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import type { AccessGrant } from '@/lib/access/accessGrants';
 import { generateOpenAIChatCompletion } from '@/lib/apis/openai';
-import { deleteNoteById, getNoteById, toggleNotePinnedStatusById, updateNoteAccessGrants, updateNoteById } from '@/lib/apis/notes';
+import {
+	deleteNoteById,
+	getNoteById,
+	toggleNotePinnedStatusById,
+	updateNoteAccessGrants,
+	updateNoteById
+} from '@/lib/apis/notes';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore, useDocumentTitle } from '@/lib/stores/configStore';
 import { copyToClipboard } from '@/lib/utils';
 import { FeatureGate } from '@/routes/common/FeatureGate';
 import { initialModel } from '@/routes/playground/playgroundModel';
-import { type NoteContent, editorContent, parseGeneratedTitle, safeFileName, titlePrompt, wordCount } from './notesModel';
+import {
+	type NoteContent,
+	editorContent,
+	parseGeneratedTitle,
+	safeFileName,
+	titlePrompt,
+	wordCount
+} from './notesModel';
 
 // TipTap is large; only the note page loads it.
 const RichTextEditor = lazy(() => import('@/components/common/RichTextEditor'));
@@ -27,7 +46,15 @@ const RichTextEditor = lazy(() => import('@/components/common/RichTextEditor'));
 const SAVE_DELAY = 500;
 const iconButton = 'hover:bg-muted rounded-lg p-1.5 transition disabled:opacity-50';
 
-type Note = { id: string; title: string; user_id: string; write_access?: boolean; is_pinned?: boolean; access_grants?: AccessGrant[]; data?: { content?: Partial<NoteContent> } | null };
+type Note = {
+	id: string;
+	title: string;
+	user_id: string;
+	write_access?: boolean;
+	is_pinned?: boolean;
+	access_grants?: AccessGrant[];
+	data?: { content?: Partial<NoteContent> } | null;
+};
 
 /**
  * A debounced save of the note's title and body. Every edit restarts the
@@ -53,7 +80,10 @@ function useNoteSaver(id: string) {
 		timer.current = null;
 		if (!p) return;
 		setSaving(true);
-		await updateNoteById(token, id, { title: p.title.trim() || 'Untitled', data: p.content ? { content: p.content } : {} }).catch((e) => toast.error(`${e}`));
+		await updateNoteById(token, id, {
+			title: p.title.trim() || 'Untitled',
+			data: p.content ? { content: p.content } : {}
+		}).catch((e) => toast.error(`${e}`));
 		setSaving(false);
 		queryClient.invalidateQueries({ queryKey: ['notes', 'list'] });
 		queryClient.invalidateQueries({ queryKey: ['pinned-notes'] });
@@ -89,7 +119,13 @@ function NoteEditor() {
 	const navigate = useNavigate();
 	const defaults = useConfigStore((s) => s.config?.default_models as string | undefined);
 	const { settings } = useUserSettings();
-	const note = useQuery({ queryKey: ['notes', 'item', id], queryFn: () => getNoteById(token, id) as Promise<Note>, retry: false, staleTime: Infinity, gcTime: 0 });
+	const note = useQuery({
+		queryKey: ['notes', 'item', id],
+		queryFn: () => getNoteById(token, id) as Promise<Note>,
+		retry: false,
+		staleTime: Infinity,
+		gcTime: 0
+	});
 	const { schedule, flush, saving } = useNoteSaver(id);
 	const [title, setTitle] = useState('');
 	const [text, setText] = useState('');
@@ -136,14 +172,20 @@ function NoteEditor() {
 		const model = initialModel(settings?.models, defaults);
 		if (!model) return void toast.error('Please select a model.');
 		setGenerating(true);
-		const res = await generateOpenAIChatCompletion(token, { model, stream: false, messages: [{ role: 'user', content: titlePrompt(md()) }] }).catch((e) => void toast.error(`${e}`));
+		const res = await generateOpenAIChatCompletion(token, {
+			model,
+			stream: false,
+			messages: [{ role: 'user', content: titlePrompt(md()) }]
+		}).catch((e) => void toast.error(`${e}`));
 		setGenerating(false);
 		const generated = parseGeneratedTitle(res?.choices?.[0]?.message?.content ?? '');
 		if (generated) onTitle(generated);
 		else if (res) toast.error('Failed to generate title');
 	};
-	const download = (ext: 'md' | 'txt') => saveAs(new Blob([md()], { type: ext === 'md' ? 'text/markdown' : 'text/plain' }), safeFileName(title, ext));
-	const copy = async (value: string, ok: string) => ((await copyToClipboard(value)) ? toast.success(ok) : toast.error('Failed to copy'));
+	const download = (ext: 'md' | 'txt') =>
+		saveAs(new Blob([md()], { type: ext === 'md' ? 'text/markdown' : 'text/plain' }), safeFileName(title, ext));
+	const copy = async (value: string, ok: string) =>
+		(await copyToClipboard(value)) ? toast.success(ok) : toast.error('Failed to copy');
 	const togglePin = async () => {
 		const res = await toggleNotePinnedStatusById(token, n.id).catch((e) => void toast.error(`${e}`));
 		if (res) queryClient.setQueryData(['notes', 'item', id], { ...n, is_pinned: !n.is_pinned });
@@ -163,10 +205,23 @@ function NoteEditor() {
 
 	return (
 		<div className="flex h-full min-h-0 w-full flex-col">
-			<ConfirmDialog open={confirmDelete} onOpenChange={setConfirmDelete} title="Delete note?" confirmLabel="Delete" onConfirm={remove}>
+			<ConfirmDialog
+				open={confirmDelete}
+				onOpenChange={setConfirmDelete}
+				title="Delete note?"
+				confirmLabel="Delete"
+				onConfirm={remove}
+			>
 				This will delete <span className="font-medium">{title}</span>.
 			</ConfirmDialog>
-			{editable && <AccessControlModal open={showAccess} onOpenChange={setShowAccess} accessGrants={n.access_grants ?? []} onChange={saveAccess} />}
+			{editable && (
+				<AccessControlModal
+					open={showAccess}
+					onOpenChange={setShowAccess}
+					accessGrants={n.access_grants ?? []}
+					onChange={saveAccess}
+				/>
+			)}
 
 			<div className="flex shrink-0 items-center gap-1 px-2.5 pt-2 pb-1">
 				<Link to="/notes" onClick={() => void flush()} aria-label="Back to notes" className={iconButton}>
@@ -182,7 +237,13 @@ function NoteEditor() {
 				/>
 				{editable && (
 					<Tip content="Generate title">
-						<button type="button" aria-label="Generate title" className={iconButton} disabled={generating} onClick={generateTitle}>
+						<button
+							type="button"
+							aria-label="Generate title"
+							className={iconButton}
+							disabled={generating}
+							onClick={generateTitle}
+						>
 							{generating ? <Spinner className="size-4" /> : <Sparkles className="size-4" />}
 						</button>
 					</Tip>
@@ -203,13 +264,25 @@ function NoteEditor() {
 						<DropdownMenuItem onSelect={() => download('txt')}>
 							<Download /> Download (.txt)
 						</DropdownMenuItem>
-						<DropdownMenuItem onSelect={() => copy(`${window.location.origin}/notes/${n.id}`, 'Copied link to clipboard')}>
+						<DropdownMenuItem
+							onSelect={() => copy(`${window.location.origin}/notes/${n.id}`, 'Copied link to clipboard')}
+						>
 							<Link2 /> Copy link
 						</DropdownMenuItem>
 						<DropdownMenuItem onSelect={() => copy(md(), 'Copied to clipboard')}>
 							<Copy /> Copy to clipboard
 						</DropdownMenuItem>
-						<DropdownMenuItem onSelect={togglePin}>{n.is_pinned ? <><PinOff /> Unpin</> : <><Pin /> Pin to Sidebar</>}</DropdownMenuItem>
+						<DropdownMenuItem onSelect={togglePin}>
+							{n.is_pinned ? (
+								<>
+									<PinOff /> Unpin
+								</>
+							) : (
+								<>
+									<Pin /> Pin to Sidebar
+								</>
+							)}
+						</DropdownMenuItem>
 						{editable && (
 							<>
 								<DropdownMenuItem onSelect={() => setShowAccess(true)}>
@@ -228,7 +301,13 @@ function NoteEditor() {
 			<div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-2 md:px-8">
 				{!editable && <div className="text-muted-foreground mb-2 text-xs">Read only</div>}
 				<Suspense fallback={<Spinner className="m-auto size-5" />}>
-					<RichTextEditor content={editorContent(n.data?.content)} contentKey={n.id} onChange={onContent} editable={editable} ariaLabel="Note content" />
+					<RichTextEditor
+						content={editorContent(n.data?.content)}
+						contentKey={n.id}
+						onChange={onContent}
+						editable={editable}
+						ariaLabel="Note content"
+					/>
 				</Suspense>
 			</div>
 			<div className="text-muted-foreground shrink-0 px-4 pb-2 text-right text-[0.6875rem] md:px-8">

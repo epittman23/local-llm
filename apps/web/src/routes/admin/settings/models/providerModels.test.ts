@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { displayNameOf, hasOllamaManagement, managementConnections, modelIdOf, normalizeCatalog, providerLabel, providerSupportsDelete, statusClass, statusOf, unloadIdOf } from './providerModels';
+import {
+	displayNameOf,
+	hasOllamaManagement,
+	managementConnections,
+	modelIdOf,
+	normalizeCatalog,
+	providerLabel,
+	providerSupportsDelete,
+	statusClass,
+	statusOf,
+	unloadIdOf
+} from './providerModels';
 
 describe('model identity', () => {
 	it('finds the id in whichever field the provider uses', () => {
@@ -61,11 +72,15 @@ describe('providers', () => {
 		expect(providerSupportsDelete('llama.cpp')).toBe(true);
 		expect(providerSupportsDelete('lmstudio')).toBe(false);
 	});
-	it('lists only llama.cpp and LM Studio connections, finding each one\'s settings by index, text index or URL', () => {
+	it("lists only llama.cpp and LM Studio connections, finding each one's settings by index, text index or URL", () => {
 		const conns = managementConnections({
 			ENABLE_OPENAI_API: true,
 			OPENAI_API_BASE_URLS: ['http://a', 'http://b', 'http://c', 'http://d'],
-			OPENAI_API_CONFIGS: { 0: { provider: 'llama.cpp' }, '1': { provider: 'openai' }, 'http://c': { provider: 'lmstudio' } }
+			OPENAI_API_CONFIGS: {
+				0: { provider: 'llama.cpp' },
+				'1': { provider: 'openai' },
+				'http://c': { provider: 'lmstudio' }
+			}
 		});
 		expect(conns.map((c) => [c.idx, c.provider])).toEqual([
 			[0, 'llama.cpp'],
@@ -73,7 +88,13 @@ describe('providers', () => {
 		]);
 	});
 	it('lists none while the OpenAI API is off or unset', () => {
-		expect(managementConnections({ ENABLE_OPENAI_API: false, OPENAI_API_BASE_URLS: ['x'], OPENAI_API_CONFIGS: { 0: { provider: 'llama.cpp' } } })).toEqual([]);
+		expect(
+			managementConnections({
+				ENABLE_OPENAI_API: false,
+				OPENAI_API_BASE_URLS: ['x'],
+				OPENAI_API_CONFIGS: { 0: { provider: 'llama.cpp' } }
+			})
+		).toEqual([]);
 		expect(managementConnections(null)).toEqual([]);
 	});
 	it('Ollama has something to manage only when enabled with an instance', () => {

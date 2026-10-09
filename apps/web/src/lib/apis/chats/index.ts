@@ -261,12 +261,7 @@ export const getChatList = async (
 	}));
 };
 
-export const getChatListByUserId = async (
-	token: string = '',
-	userId: string,
-	page: number = 1,
-	filter?: object
-) => {
+export const getChatListByUserId = async (token: string = '', userId: string, page: number = 1, filter?: object) => {
 	let error = null;
 
 	const searchParams = new URLSearchParams();
@@ -281,17 +276,14 @@ export const getChatListByUserId = async (
 		});
 	}
 
-	const res = await fetch(
-		`${WEBUI_API_BASE_URL}/chats/list/user/${userId}?${searchParams.toString()}`,
-		{
-			method: 'GET',
-			headers: {
-				Accept: 'application/json',
-				'Content-Type': 'application/json',
-				...(token && { authorization: `Bearer ${token}` })
-			}
+	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/list/user/${userId}?${searchParams.toString()}`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			...(token && { authorization: `Bearer ${token}` })
 		}
-	)
+	})
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
 			return res.json();
@@ -315,11 +307,7 @@ export const getChatListByUserId = async (
 	}));
 };
 
-export const getArchivedChatList = async (
-	token: string = '',
-	page: number = 1,
-	filter?: object
-) => {
+export const getArchivedChatList = async (token: string = '', page: number = 1, filter?: object) => {
 	let error = null;
 
 	const searchParams = new URLSearchParams();
@@ -564,17 +552,14 @@ export const getChatListByFolderId = async (token: string, folderId: string, pag
 		searchParams.append('page', `${page}`);
 	}
 
-	const res = await fetch(
-		`${WEBUI_API_BASE_URL}/chats/folder/${folderId}/list?${searchParams.toString()}`,
-		{
-			method: 'GET',
-			headers: {
-				Accept: 'application/json',
-				'Content-Type': 'application/json',
-				...(token && { authorization: `Bearer ${token}` })
-			}
+	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/folder/${folderId}/list?${searchParams.toString()}`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			...(token && { authorization: `Bearer ${token}` })
 		}
-	)
+	})
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
 			return res.json();
@@ -1273,12 +1258,7 @@ export const getChatAccessGrants = async (token: string, id: string) => {
 	return res;
 };
 
-export const updateChatById = async (
-	token: string,
-	id: string,
-	chat: object,
-	variables: object | null = null
-) => {
+export const updateChatById = async (token: string, id: string, chat: object, variables: object | null = null) => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/chats/${id}`, {

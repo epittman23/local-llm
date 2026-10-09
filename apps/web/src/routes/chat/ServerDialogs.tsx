@@ -1,13 +1,28 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogTitle
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import type { ServerDialog } from './useChatSession';
 
-type Question = { id: string; header?: string; question: string; options?: { label: string; description?: string }[]; allow_other?: boolean };
-type Answer = { type: 'option'; option_index: number; label: string; description?: string } | { type: 'other'; text: string };
+type Question = {
+	id: string;
+	header?: string;
+	question: string;
+	options?: { label: string; description?: string }[];
+	allow_other?: boolean;
+};
+type Answer =
+	| { type: 'option'; option_index: number; label: string; description?: string }
+	| { type: 'other'; text: string };
 
 /**
  * What a function or tool on the server can ask of the user mid-reply
@@ -69,9 +84,21 @@ function ConfirmOrInput({ dialog, onClose }: { dialog: ServerDialog; onClose: ()
 				</DialogHeader>
 				{isInput &&
 					(inputType === 'password' ? (
-						<Input type="password" autoFocus aria-label={d.placeholder || 'Enter your message'} placeholder={d.placeholder} value={value} onChange={(e) => setValue(e.target.value)} />
+						<Input
+							type="password"
+							autoFocus
+							aria-label={d.placeholder || 'Enter your message'}
+							placeholder={d.placeholder}
+							value={value}
+							onChange={(e) => setValue(e.target.value)}
+						/>
 					) : inputType === 'select' && options.length ? (
-						<select aria-label={d.placeholder || 'Select an option'} className="border-input h-9 rounded-md border bg-transparent px-2 text-sm" value={value} onChange={(e) => setValue(e.target.value)}>
+						<select
+							aria-label={d.placeholder || 'Select an option'}
+							className="border-input h-9 rounded-md border bg-transparent px-2 text-sm"
+							value={value}
+							onChange={(e) => setValue(e.target.value)}
+						>
 							<option value="">{d.placeholder || 'Select an option'}</option>
 							{options.map((o) => {
 								const opt = typeof o === 'string' ? { value: o, label: o } : o;
@@ -83,7 +110,13 @@ function ConfirmOrInput({ dialog, onClose }: { dialog: ServerDialog; onClose: ()
 							})}
 						</select>
 					) : (
-						<Textarea autoFocus aria-label={d.placeholder || 'Enter your message'} placeholder={d.placeholder} value={value} onChange={(e) => setValue(e.target.value)} />
+						<Textarea
+							autoFocus
+							aria-label={d.placeholder || 'Enter your message'}
+							placeholder={d.placeholder}
+							value={value}
+							onChange={(e) => setValue(e.target.value)}
+						/>
 					))}
 				<DialogFooter>
 					<Button variant="outline" onClick={() => finish(false)}>
@@ -99,7 +132,8 @@ function ConfirmOrInput({ dialog, onClose }: { dialog: ServerDialog; onClose: ()
 function AskUserDialog({ dialog, onClose }: { dialog: ServerDialog; onClose: () => void }) {
 	const questions: Question[] = dialog.data?.questions ?? [];
 	const allowOther: boolean = dialog.data?.allow_other ?? true;
-	const timeoutMs: number | null = typeof dialog.data?.timeout_ms === 'number' && dialog.data.timeout_ms > 0 ? dialog.data.timeout_ms : null;
+	const timeoutMs: number | null =
+		typeof dialog.data?.timeout_ms === 'number' && dialog.data.timeout_ms > 0 ? dialog.data.timeout_ms : null;
 	const [answers, setAnswers] = useState<Record<string, Answer>>({});
 	const finish = (v: unknown) => {
 		dialog.reply(v);
@@ -111,7 +145,13 @@ function AskUserDialog({ dialog, onClose }: { dialog: ServerDialog; onClose: () 
 		return () => clearTimeout(t);
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [timeoutMs]);
-	const complete = questions.length > 0 && questions.every((q) => answers[q.id]?.type === 'option' || (answers[q.id]?.type === 'other' && (answers[q.id] as { text: string }).text.trim() !== ''));
+	const complete =
+		questions.length > 0 &&
+		questions.every(
+			(q) =>
+				answers[q.id]?.type === 'option' ||
+				(answers[q.id]?.type === 'other' && (answers[q.id] as { text: string }).text.trim() !== '')
+		);
 	return (
 		<Dialog open onOpenChange={(o) => !o && finish({ status: 'cancelled', answers: {} })}>
 			<DialogContent className="max-w-lg">
@@ -125,14 +165,23 @@ function AskUserDialog({ dialog, onClose }: { dialog: ServerDialog; onClose: () 
 							{q.header && <legend className="text-muted-foreground text-xs">{q.header}</legend>}
 							<p className="text-sm font-medium">{q.question}</p>
 							{(q.options ?? []).map((o, i) => {
-								const picked = answers[q.id]?.type === 'option' && (answers[q.id] as { option_index: number }).option_index === i;
+								const picked =
+									answers[q.id]?.type === 'option' && (answers[q.id] as { option_index: number }).option_index === i;
 								return (
 									<button
 										key={i}
 										type="button"
 										aria-pressed={picked}
-										className={cn('hover:bg-muted rounded-xl border px-3 py-2 text-left text-sm', picked && 'border-foreground/50 bg-muted')}
-										onClick={() => setAnswers((a) => ({ ...a, [q.id]: { type: 'option', option_index: i, label: o.label, description: o.description ?? '' } }))}
+										className={cn(
+											'hover:bg-muted rounded-xl border px-3 py-2 text-left text-sm',
+											picked && 'border-foreground/50 bg-muted'
+										)}
+										onClick={() =>
+											setAnswers((a) => ({
+												...a,
+												[q.id]: { type: 'option', option_index: i, label: o.label, description: o.description ?? '' }
+											}))
+										}
 									>
 										<div>{o.label}</div>
 										{o.description && <div className="text-muted-foreground text-xs">{o.description}</div>}

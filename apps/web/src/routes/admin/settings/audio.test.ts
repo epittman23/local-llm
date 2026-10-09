@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { buildAudioPayload, engineDefaults, formatOpenAiParams, parseOpenAiParams, sortVoices, splitMimeTypes } from './audio';
+import {
+	buildAudioPayload,
+	engineDefaults,
+	formatOpenAiParams,
+	parseOpenAiParams,
+	sortVoices,
+	splitMimeTypes
+} from './audio';
 
 describe('parseOpenAiParams', () => {
 	it('treats blank as no parameters', () => {
@@ -7,7 +14,11 @@ describe('parseOpenAiParams', () => {
 		expect(parseOpenAiParams('  \n')).toEqual({ ok: true, value: {}, text: '' });
 	});
 	it('accepts a JSON object and returns it pretty-printed', () => {
-		expect(parseOpenAiParams('{"speed":1.2}')).toEqual({ ok: true, value: { speed: 1.2 }, text: '{\n  "speed": 1.2\n}' });
+		expect(parseOpenAiParams('{"speed":1.2}')).toEqual({
+			ok: true,
+			value: { speed: 1.2 },
+			text: '{\n  "speed": 1.2\n}'
+		});
 	});
 	it('refuses malformed JSON and anything that is not an object', () => {
 		for (const bad of ['{speed:', '[1,2]', '"x"', '3', 'null']) expect(parseOpenAiParams(bad)).toEqual({ ok: false });
@@ -48,13 +59,35 @@ describe('sortVoices', () => {
 });
 
 describe('buildAudioPayload', () => {
-	const tts = { ENGINE: 'openai', MODEL: 'tts-1', VOICE: 'alloy', SPLIT_ON: '', OPENAI_API_KEY: 'k', EXTRA_UNKNOWN: 'x' };
-	const stt = { ENGINE: '', WHISPER_MODEL: 'base', OPENAI_API_REQUEST_FORMAT: '', ALLOWED_EXTENSIONS: ['wav'], EXTRA_UNKNOWN: 'x' };
+	const tts = {
+		ENGINE: 'openai',
+		MODEL: 'tts-1',
+		VOICE: 'alloy',
+		SPLIT_ON: '',
+		OPENAI_API_KEY: 'k',
+		EXTRA_UNKNOWN: 'x'
+	};
+	const stt = {
+		ENGINE: '',
+		WHISPER_MODEL: 'base',
+		OPENAI_API_REQUEST_FORMAT: '',
+		ALLOWED_EXTENSIONS: ['wav'],
+		EXTRA_UNKNOWN: 'x'
+	};
 
 	it('sends only the edited keys, with defaults for a blank split and request format', () => {
 		const p = buildAudioPayload(tts, stt, { speed: 1 }, 'audio/wav, video/*');
-		expect(p.tts).toMatchObject({ ENGINE: 'openai', MODEL: 'tts-1', OPENAI_PARAMS: { speed: 1 }, SPLIT_ON: 'punctuation' });
-		expect(p.stt).toMatchObject({ WHISPER_MODEL: 'base', OPENAI_API_REQUEST_FORMAT: 'multipart', SUPPORTED_CONTENT_TYPES: ['audio/wav', 'video/*'] });
+		expect(p.tts).toMatchObject({
+			ENGINE: 'openai',
+			MODEL: 'tts-1',
+			OPENAI_PARAMS: { speed: 1 },
+			SPLIT_ON: 'punctuation'
+		});
+		expect(p.stt).toMatchObject({
+			WHISPER_MODEL: 'base',
+			OPENAI_API_REQUEST_FORMAT: 'multipart',
+			SUPPORTED_CONTENT_TYPES: ['audio/wav', 'video/*']
+		});
 		expect(p.tts).not.toHaveProperty('EXTRA_UNKNOWN');
 		expect(p.stt).not.toHaveProperty('EXTRA_UNKNOWN');
 	});

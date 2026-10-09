@@ -33,9 +33,7 @@ export const generateInitialsImage = (name: string): string => {
 	canvas.height = 100;
 
 	if (!ctx || !canvasPixelTest()) {
-		console.log(
-			'generateInitialsImage: failed pixel test, fingerprint evasion is likely. Using default image.'
-		);
+		console.log('generateInitialsImage: failed pixel test, fingerprint evasion is likely. Using default image.');
 		return `${WEBUI_BASE_URL}/user.png`;
 	}
 
@@ -98,10 +96,7 @@ export const convertMessagesToHistory = (messages: ChatMessage[]): History => {
 
 	for (const message of Object.values(history.messages)) {
 		if (message.parentId && history.messages[message.parentId]) {
-			history.messages[message.parentId].childrenIds = [
-				...history.messages[message.parentId].childrenIds,
-				message.id
-			];
+			history.messages[message.parentId].childrenIds = [...history.messages[message.parentId].childrenIds, message.id];
 		}
 	}
 

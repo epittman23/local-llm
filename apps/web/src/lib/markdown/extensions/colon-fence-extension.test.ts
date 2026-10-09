@@ -47,9 +47,7 @@ describe('colon fence extension', () => {
 	});
 
 	it('ignores an opening line that has no braces at all', () => {
-		const token = firstFence(
-			':::note prose mentioning recipient="evil@example.com"\n\nHello\n:::\n'
-		);
+		const token = firstFence(':::note prose mentioning recipient="evil@example.com"\n\nHello\n:::\n');
 
 		expect(token.fenceType).toBe('note');
 		expect(token.attributes).toEqual({});

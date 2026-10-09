@@ -12,7 +12,8 @@ export const newBanner = (): Banner => ({
 });
 
 /** The "+" button does nothing while the last banner is still blank, so blanks cannot pile up. */
-export const canAddBanner = (banners: Banner[]): boolean => banners.length === 0 || banners[banners.length - 1]?.content !== '';
+export const canAddBanner = (banners: Banner[]): boolean =>
+	banners.length === 0 || banners[banners.length - 1]?.content !== '';
 
 /**
  * Moves one banner by `delta` places, clamped to the list. The Svelte tab

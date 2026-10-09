@@ -30,7 +30,12 @@ export function ChatControls({
 		<aside className="flex min-h-0 w-full flex-col border-l md:w-80" aria-label="Controls">
 			<div className="flex items-center px-3 py-2">
 				<span className="text-sm font-medium">Controls</span>
-				<button type="button" aria-label="Close controls" className="text-muted-foreground hover:bg-muted ml-auto rounded-lg p-1.5" onClick={onClose}>
+				<button
+					type="button"
+					aria-label="Close controls"
+					className="text-muted-foreground hover:bg-muted ml-auto rounded-lg p-1.5"
+					onClick={onClose}
+				>
 					<X className="size-4" />
 				</button>
 			</div>
@@ -43,7 +48,12 @@ export function ChatControls({
 								<li key={f.id ?? i} className="flex items-center gap-1.5 rounded-lg border px-2 py-1 text-xs">
 									<FileText className="text-muted-foreground size-3.5 shrink-0" />
 									<span className="truncate">{f.name ?? f.file?.filename ?? f.id}</span>
-									<button type="button" aria-label={`Remove ${f.name ?? 'file'}`} className="text-muted-foreground hover:text-foreground ml-auto" onClick={() => onRemoveFile(i)}>
+									<button
+										type="button"
+										aria-label={`Remove ${f.name ?? 'file'}`}
+										className="text-muted-foreground hover:text-foreground ml-auto"
+										onClick={() => onRemoveFile(i)}
+									>
 										<X className="size-3" />
 									</button>
 								</li>

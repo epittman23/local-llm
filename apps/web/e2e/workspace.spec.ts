@@ -2,16 +2,10 @@ import { expect, test } from './test';
 import { mockWorkspaceBackend } from './workspace-helpers';
 
 test.describe('workspace shell', () => {
-	test('bare /workspace redirects an admin to Models and shows every tab with its count', async ({
-		page
-	}) => {
+	test('bare /workspace redirects an admin to Models and shows every tab with its count', async ({ page }) => {
 		const { json } = await mockWorkspaceBackend(page);
-		await page.route('**/api/v1/models/list*', (route) =>
-			route.fulfill(json({ items: [], total: 1234 }))
-		);
-		await page.route('**/api/v1/prompts/list*', (route) =>
-			route.fulfill(json({ items: [], total: 7 }))
-		);
+		await page.route('**/api/v1/models/list*', (route) => route.fulfill(json({ items: [], total: 1234 })));
+		await page.route('**/api/v1/prompts/list*', (route) => route.fulfill(json({ items: [], total: 7 })));
 		await page.route('**/api/v1/tools/list', (route) => route.fulfill(json([{}, {}, {}])));
 
 		await page.goto('/workspace');
@@ -27,9 +21,7 @@ test.describe('workspace shell', () => {
 		await expect(nav.getByRole('link', { name: /^Tools/ })).toContainText('3');
 	});
 
-	test('a non-admin sees only the tabs they hold a permission for, and lands on the first', async ({
-		page
-	}) => {
+	test('a non-admin sees only the tabs they hold a permission for, and lands on the first', async ({ page }) => {
 		await mockWorkspaceBackend(page, {
 			role: 'user',
 			workspacePermissions: { prompts: true, skills: true }
@@ -53,9 +45,7 @@ test.describe('workspace shell', () => {
 		await expect(page).toHaveURL(/\/$/);
 	});
 
-	test('Tools disappears for everyone, admin included, when plugins are disabled', async ({
-		page
-	}) => {
+	test('Tools disappears for everyone, admin included, when plugins are disabled', async ({ page }) => {
 		await mockWorkspaceBackend(page, { enablePlugins: false });
 		await page.goto('/workspace/models');
 		await expect(page.getByRole('navigation').getByRole('link', { name: /^Models/ })).toBeVisible();
@@ -64,9 +54,7 @@ test.describe('workspace shell', () => {
 });
 
 test.describe('workspace Create button', () => {
-	test('shows the current section\'s actions, and clears them when the section changes', async ({
-		page
-	}) => {
+	test("shows the current section's actions, and clears them when the section changes", async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await page.goto('/workspace/prompts');
 		// Prompts registers Create + Import + Export, so it is the split button.

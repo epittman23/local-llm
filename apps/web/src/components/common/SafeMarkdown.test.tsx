@@ -17,7 +17,8 @@ describe('SafeMarkdown', () => {
 		const { container } = render(<SafeMarkdown text={attack} />);
 		const root = container.firstElementChild!;
 		expect(root.querySelector('strong')?.textContent).toBe('hello');
-		for (const tag of ['style', 'form', 'input', 'button', 'iframe', 'script']) expect(root.querySelector(tag)).toBeNull();
+		for (const tag of ['style', 'form', 'input', 'button', 'iframe', 'script'])
+			expect(root.querySelector(tag)).toBeNull();
 		expect(root.querySelector('[style], [class], [id], [onerror]')).toBeNull();
 		expect(root.textContent).toContain('overlay');
 	});

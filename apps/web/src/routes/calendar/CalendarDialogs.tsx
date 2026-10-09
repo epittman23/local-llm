@@ -4,7 +4,14 @@ import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { type CalendarEventModel, type CalendarModel, createCalendar, createCalendarEvent, deleteCalendarEvent, updateCalendarEvent } from '@/lib/apis/calendar';
+import {
+	type CalendarEventModel,
+	type CalendarModel,
+	createCalendar,
+	createCalendarEvent,
+	deleteCalendarEvent,
+	updateCalendarEvent
+} from '@/lib/apis/calendar';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
 import { type EventFields, SCHEDULED_TASKS_ID, eventFields, eventPayload } from './calendarModel';
@@ -72,7 +79,9 @@ export function EventDialog({
 		if ('error' in out) return void toast.error(out.error);
 		setLoading(true);
 		try {
-			const res = editing ? await updateCalendarEvent(token, editing.id, out.form) : await createCalendarEvent(token, out.form);
+			const res = editing
+				? await updateCalendarEvent(token, editing.id, out.form)
+				: await createCalendarEvent(token, out.form);
 			if (res) {
 				toast.success(editing ? 'Event updated' : 'Event created');
 				onSaved();
@@ -102,7 +111,13 @@ export function EventDialog({
 
 	return (
 		<>
-			<ConfirmDialog open={confirmDelete} onOpenChange={setConfirmDelete} title="Delete Event" confirmLabel="Delete" onConfirm={remove}>
+			<ConfirmDialog
+				open={confirmDelete}
+				onOpenChange={setConfirmDelete}
+				title="Delete Event"
+				confirmLabel="Delete"
+				onConfirm={remove}
+			>
 				This action cannot be undone. Do you wish to continue?
 			</ConfirmDialog>
 			<Dialog open={open} onOpenChange={onOpenChange}>
@@ -118,12 +133,23 @@ export function EventDialog({
 							save();
 						}}
 					>
-						<input className={cn(bare, 'text-base')} aria-label="Event title" placeholder="Event title" value={f.title} onChange={(e) => set({ title: e.target.value })} />
+						<input
+							className={cn(bare, 'text-base')}
+							aria-label="Event title"
+							placeholder="Event title"
+							value={f.title}
+							onChange={(e) => set({ title: e.target.value })}
+						/>
 						<div>
 							<label className={label} htmlFor="event-calendar">
 								Calendar
 							</label>
-							<select id="event-calendar" className={select} value={f.calendarId} onChange={(e) => set({ calendarId: e.target.value })}>
+							<select
+								id="event-calendar"
+								className={select}
+								value={f.calendarId}
+								onChange={(e) => set({ calendarId: e.target.value })}
+							>
 								{calendars
 									.filter((c) => c.id !== SCHEDULED_TASKS_ID)
 									.map((c) => (
@@ -136,13 +162,46 @@ export function EventDialog({
 						<div>
 							<div className={label}>When</div>
 							<div className="flex flex-wrap items-center gap-2 text-sm">
-								<input type="date" aria-label="Start date" className="bg-transparent outline-hidden dark:[color-scheme:dark]" value={f.startDate} onChange={(e) => set({ startDate: e.target.value })} />
-								{!f.allDay && <input type="time" aria-label="Start time" className="bg-transparent outline-hidden dark:[color-scheme:dark]" value={f.startTime} onChange={(e) => set({ startTime: e.target.value })} />}
+								<input
+									type="date"
+									aria-label="Start date"
+									className="bg-transparent outline-hidden dark:[color-scheme:dark]"
+									value={f.startDate}
+									onChange={(e) => set({ startDate: e.target.value })}
+								/>
+								{!f.allDay && (
+									<input
+										type="time"
+										aria-label="Start time"
+										className="bg-transparent outline-hidden dark:[color-scheme:dark]"
+										value={f.startTime}
+										onChange={(e) => set({ startTime: e.target.value })}
+									/>
+								)}
 								<span className="text-muted-foreground">–</span>
-								<input type="date" aria-label="End date" className="bg-transparent outline-hidden dark:[color-scheme:dark]" value={f.endDate} onChange={(e) => set({ endDate: e.target.value })} />
-								{!f.allDay && <input type="time" aria-label="End time" className="bg-transparent outline-hidden dark:[color-scheme:dark]" value={f.endTime} onChange={(e) => set({ endTime: e.target.value })} />}
+								<input
+									type="date"
+									aria-label="End date"
+									className="bg-transparent outline-hidden dark:[color-scheme:dark]"
+									value={f.endDate}
+									onChange={(e) => set({ endDate: e.target.value })}
+								/>
+								{!f.allDay && (
+									<input
+										type="time"
+										aria-label="End time"
+										className="bg-transparent outline-hidden dark:[color-scheme:dark]"
+										value={f.endTime}
+										onChange={(e) => set({ endTime: e.target.value })}
+									/>
+								)}
 								<label className="text-muted-foreground ml-auto flex cursor-pointer items-center gap-1.5 text-xs">
-									<input type="checkbox" className="accent-blue-500" checked={f.allDay} onChange={(e) => set({ allDay: e.target.checked })} />
+									<input
+										type="checkbox"
+										className="accent-blue-500"
+										checked={f.allDay}
+										onChange={(e) => set({ allDay: e.target.checked })}
+									/>
 									All day
 								</label>
 							</div>
@@ -151,14 +210,25 @@ export function EventDialog({
 							<label className={label} htmlFor="event-location">
 								Location
 							</label>
-							<input id="event-location" className={bare} placeholder="Add location" value={f.location} onChange={(e) => set({ location: e.target.value })} />
+							<input
+								id="event-location"
+								className={bare}
+								placeholder="Add location"
+								value={f.location}
+								onChange={(e) => set({ location: e.target.value })}
+							/>
 						</div>
 						<div className="flex gap-3">
 							<div className="flex-1">
 								<label className={label} htmlFor="event-reminder">
 									Reminder
 								</label>
-								<select id="event-reminder" className={select} value={f.alertMinutes} onChange={(e) => set({ alertMinutes: Number(e.target.value) })}>
+								<select
+									id="event-reminder"
+									className={select}
+									value={f.alertMinutes}
+									onChange={(e) => set({ alertMinutes: Number(e.target.value) })}
+								>
 									{REMINDERS.map(([v, l]) => (
 										<option key={v} value={v}>
 											{l}
@@ -170,7 +240,12 @@ export function EventDialog({
 								<label className={label} htmlFor="event-repeat">
 									Repeat
 								</label>
-								<select id="event-repeat" className={select} value={f.repeat} onChange={(e) => set({ repeat: e.target.value })}>
+								<select
+									id="event-repeat"
+									className={select}
+									value={f.repeat}
+									onChange={(e) => set({ repeat: e.target.value })}
+								>
 									{REPEATS.map(([v, l]) => (
 										<option key={v} value={v}>
 											{l}
@@ -183,12 +258,25 @@ export function EventDialog({
 							<label className={label} htmlFor="event-description">
 								Description
 							</label>
-							<textarea id="event-description" className={cn(bare, 'min-h-16 resize-none')} rows={3} placeholder="Add description" value={f.description} onChange={(e) => set({ description: e.target.value })} />
+							<textarea
+								id="event-description"
+								className={cn(bare, 'min-h-16 resize-none')}
+								rows={3}
+								placeholder="Add description"
+								value={f.description}
+								onChange={(e) => set({ description: e.target.value })}
+							/>
 						</div>
 						<div className="flex items-center justify-between gap-2 pt-1">
 							<div>
 								{editing && (
-									<Button type="button" variant="ghost" size="sm" disabled={loading} onClick={() => setConfirmDelete(true)}>
+									<Button
+										type="button"
+										variant="ghost"
+										size="sm"
+										disabled={loading}
+										onClick={() => setConfirmDelete(true)}
+									>
 										Delete
 									</Button>
 								)}
@@ -213,7 +301,15 @@ export function EventDialog({
 const PRESET_COLORS = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
 
 /** Ports components/calendar/CreateCalendarModal.svelte: a name and a color. */
-export function CreateCalendarDialog({ open, onOpenChange, onCreated }: { open: boolean; onOpenChange: (open: boolean) => void; onCreated: () => void }) {
+export function CreateCalendarDialog({
+	open,
+	onOpenChange,
+	onCreated
+}: {
+	open: boolean;
+	onOpenChange: (open: boolean) => void;
+	onCreated: () => void;
+}) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const [name, setName] = useState('');
 	const [color, setColor] = useState(PRESET_COLORS[0]);
@@ -259,20 +355,46 @@ export function CreateCalendarDialog({ open, onOpenChange, onCreated }: { open: 
 						<label className={label} htmlFor="calendar-name">
 							Name
 						</label>
-						<input id="calendar-name" className={cn(bare, 'rounded-lg border px-2.5 py-1.5')} placeholder="Calendar name" value={name} onChange={(e) => setName(e.target.value)} />
+						<input
+							id="calendar-name"
+							className={cn(bare, 'rounded-lg border px-2.5 py-1.5')}
+							placeholder="Calendar name"
+							value={name}
+							onChange={(e) => setName(e.target.value)}
+						/>
 					</div>
 					<div>
 						<div className={label}>Color</div>
 						<div className="flex flex-wrap items-center gap-2">
 							{PRESET_COLORS.map((c) => (
-								<button key={c} type="button" aria-label={c} aria-pressed={color === c} className={cn('size-6 rounded-full border-2 transition-all', color === c ? 'border-foreground scale-110' : 'border-transparent hover:scale-110')} style={{ backgroundColor: c }} onClick={() => setColor(c)} />
+								<button
+									key={c}
+									type="button"
+									aria-label={c}
+									aria-pressed={color === c}
+									className={cn(
+										'size-6 rounded-full border-2 transition-all',
+										color === c ? 'border-foreground scale-110' : 'border-transparent hover:scale-110'
+									)}
+									style={{ backgroundColor: c }}
+									onClick={() => setColor(c)}
+								/>
 							))}
 							<label
 								title="Custom color"
-								className={cn('relative size-6 cursor-pointer overflow-hidden rounded-full border-2 transition-all', !PRESET_COLORS.includes(color) ? 'border-foreground scale-110' : 'border-transparent hover:scale-110')}
+								className={cn(
+									'relative size-6 cursor-pointer overflow-hidden rounded-full border-2 transition-all',
+									!PRESET_COLORS.includes(color) ? 'border-foreground scale-110' : 'border-transparent hover:scale-110'
+								)}
 								style={{ backgroundColor: color }}
 							>
-								<input type="color" aria-label="Custom color" className="absolute size-0 opacity-0" value={color} onChange={(e) => setColor(e.target.value)} />
+								<input
+									type="color"
+									aria-label="Custom color"
+									className="absolute size-0 opacity-0"
+									value={color}
+									onChange={(e) => setColor(e.target.value)}
+								/>
 							</label>
 						</div>
 					</div>

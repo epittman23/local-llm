@@ -55,21 +55,14 @@ export const getNotificationEvents = async (token: string): Promise<Notification
 	return data?.events ?? data ?? [];
 };
 
-export const getNotificationTargets = async (
-	token: string
-): Promise<{ targets: NotificationTarget[] }> =>
+export const getNotificationTargets = async (token: string): Promise<{ targets: NotificationTarget[] }> =>
 	jsonRequest(`${WEBUI_API_BASE_URL}/notifications/targets`, token);
 
-export const createNotificationTarget = async (
-	token: string,
-	target: Partial<NotificationTarget>
-) => jsonRequest(`${WEBUI_API_BASE_URL}/notifications/targets`, token, 'POST', target);
+export const createNotificationTarget = async (token: string, target: Partial<NotificationTarget>) =>
+	jsonRequest(`${WEBUI_API_BASE_URL}/notifications/targets`, token, 'POST', target);
 
-export const updateNotificationTarget = async (
-	token: string,
-	targetId: string,
-	target: Partial<NotificationTarget>
-) => jsonRequest(`${WEBUI_API_BASE_URL}/notifications/targets/${targetId}`, token, 'PUT', target);
+export const updateNotificationTarget = async (token: string, targetId: string, target: Partial<NotificationTarget>) =>
+	jsonRequest(`${WEBUI_API_BASE_URL}/notifications/targets/${targetId}`, token, 'PUT', target);
 
 export const deleteNotificationTarget = async (token: string, targetId: string) =>
 	jsonRequest(`${WEBUI_API_BASE_URL}/notifications/targets/${targetId}`, token, 'DELETE');

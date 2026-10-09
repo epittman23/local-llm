@@ -26,11 +26,23 @@ export default function About() {
 	const version = useQuery({
 		queryKey: ['version-updates'],
 		enabled: checkUpdates,
-		queryFn: async () => ((await getVersionUpdates(token).catch(() => null)) ?? { current: WEBUI_VERSION, latest: WEBUI_VERSION }) as { current: string; latest: string }
+		queryFn: async () =>
+			((await getVersionUpdates(token).catch(() => null)) ?? { current: WEBUI_VERSION, latest: WEBUI_VERSION }) as {
+				current: string;
+				latest: string;
+			}
 	});
-	const ollama = useQuery({ queryKey: ['ollama-version'], queryFn: async () => ((await getOllamaVersion(token).catch(() => '')) as string) || '' });
+	const ollama = useQuery({
+		queryKey: ['ollama-version'],
+		queryFn: async () => ((await getOllamaVersion(token).catch(() => '')) as string) || ''
+	});
 	const license = config?.license_metadata as { type?: string; organization_name?: string } | null | undefined;
-	const status = version.isFetching || !version.data ? 'Checking for updates...' : compareVersion(version.data.latest, version.data.current) ? `(v${version.data.latest} available!)` : '(latest)';
+	const status =
+		version.isFetching || !version.data
+			? 'Checking for updates...'
+			: compareVersion(version.data.latest, version.data.current)
+				? `(v${version.data.latest} available!)`
+				: '(latest)';
 
 	return (
 		<SettingsForm title="About" footer={false}>
@@ -39,7 +51,12 @@ export default function About() {
 					{() =>
 						checkUpdates ? (
 							<div className="flex items-center gap-3 text-xs">
-								<a className={link} href={`https://github.com/open-webui/open-webui/releases/tag/v${version.data?.latest ?? WEBUI_VERSION}`} target="_blank" rel="noreferrer">
+								<a
+									className={link}
+									href={`https://github.com/open-webui/open-webui/releases/tag/v${version.data?.latest ?? WEBUI_VERSION}`}
+									target="_blank"
+									rel="noreferrer"
+								>
 									{status}
 								</a>
 								<button type="button" className={link} onClick={() => void version.refetch()}>
@@ -64,7 +81,8 @@ export default function About() {
 					// LICENSE covers this Open WebUI license attribution; see the component comment.
 					<div className="text-muted-foreground text-xs">
 						{!name.includes('Open WebUI') && <span>{name} - </span>}
-						<span className="capitalize">{license.type}</span> license purchased by <span className="capitalize">{license.organization_name}</span>
+						<span className="capitalize">{license.type}</span> license purchased by{' '}
+						<span className="capitalize">{license.organization_name}</span>
 					</div>
 				) : (
 					<div className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-xs">

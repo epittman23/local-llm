@@ -3,7 +3,8 @@ import { expect, test } from './test';
 import { mockWorkspaceBackend } from './workspace-helpers';
 
 type Rec = Record<string, any>;
-const json = (route: any, d: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(d) });
+const json = (route: any, d: unknown, status = 200) =>
+	route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(d) });
 const nowNs = () => Date.now() * 1_000_000;
 
 const note = (id: string, title: string, extra: Rec = {}) => ({
@@ -20,7 +21,15 @@ const note = (id: string, title: string, extra: Rec = {}) => ({
 });
 
 async function mockNotes(page: Page, notes: Rec[] = []) {
-	const seen = { searches: [] as string[], created: [] as Rec[], updates: [] as Rec[], access: [] as Rec[], pinned: [] as string[], deleted: [] as string[], completions: [] as Rec[] };
+	const seen = {
+		searches: [] as string[],
+		created: [] as Rec[],
+		updates: [] as Rec[],
+		access: [] as Rec[],
+		pinned: [] as string[],
+		deleted: [] as string[],
+		completions: [] as Rec[]
+	};
 	const byId = new Map(notes.map((n) => [n.id, n]));
 	await page.route('**/api/v1/notes/**', async (route) => {
 		const req = route.request();
@@ -29,7 +38,12 @@ async function mockNotes(page: Page, notes: Rec[] = []) {
 		if (path === '/search') {
 			seen.searches.push(url.search);
 			// One page of results, then an empty page (the end).
-			return json(route, Number(url.searchParams.get('page') ?? 1) > 1 ? { items: [], total: notes.length } : { items: notes, total: notes.length });
+			return json(
+				route,
+				Number(url.searchParams.get('page') ?? 1) > 1
+					? { items: [], total: notes.length }
+					: { items: notes, total: notes.length }
+			);
 		}
 		if (path === '/create') {
 			const body = req.postDataJSON();
@@ -77,14 +91,23 @@ test('with notes turned off the page sends you home', async ({ page }) => {
 
 test('lists notes grouped by time; search and sort go to the server; grid shows a preview', async ({ page }) => {
 	await mockWorkspaceBackend(page, enabled);
-	const seen = await mockNotes(page, [note('a', 'Groceries'), note('b', 'Old idea', { updated_at: new Date('2025-02-01').getTime() * 1_000_000 })]);
+	const seen = await mockNotes(page, [
+		note('a', 'Groceries'),
+		note('b', 'Old idea', { updated_at: new Date('2025-02-01').getTime() * 1_000_000 })
+	]);
 	await page.goto('/notes');
 	await expect(page.getByRole('region', { name: 'Today' }).getByRole('link', { name: /Groceries/ })).toBeVisible();
 	await expect(page.getByRole('region', { name: '2025' })).toBeVisible();
 	await page.getByLabel('Search Notes').fill('groc');
 	await expect.poll(() => seen.searches.some((q) => new URLSearchParams(q).get('query') === 'groc')).toBe(true);
 	await page.getByRole('button', { name: 'Title' }).click();
-	await expect.poll(() => seen.searches.some((q) => new URLSearchParams(q).get('order_by') === 'name' && new URLSearchParams(q).get('direction') === 'asc')).toBe(true);
+	await expect
+		.poll(() =>
+			seen.searches.some(
+				(q) => new URLSearchParams(q).get('order_by') === 'name' && new URLSearchParams(q).get('direction') === 'asc'
+			)
+		)
+		.toBe(true);
 	await page.getByLabel('Display').selectOption('grid');
 	await expect(page.getByText('Body of Groceries')).toBeVisible();
 });
@@ -95,20 +118,31 @@ test('Create makes a dated note and opens it; ?title= makes one from a link', as
 	await page.goto('/notes');
 	await page.getByRole('button', { name: 'Create', exact: true }).click();
 	await expect(page).toHaveURL(/\/notes\/n11$/);
-	expect(seen.created[0]).toMatchObject({ title: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), data: { content: { json: null, html: '', md: '' } }, access_grants: [] });
+	expect(seen.created[0]).toMatchObject({
+		title: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+		data: { content: { json: null, html: '', md: '' } },
+		access_grants: []
+	});
 	await page.goto('/notes/new?title=From%20link&content=%23%20Hello');
 	await expect(page).toHaveURL(/\/notes\/n12$/);
-	expect(seen.created[1]).toMatchObject({ title: 'From link', data: { content: { md: '# Hello', html: expect.stringContaining('<h1>Hello</h1>') } } });
+	expect(seen.created[1]).toMatchObject({
+		title: 'From link',
+		data: { content: { md: '# Hello', html: expect.stringContaining('<h1>Hello</h1>') } }
+	});
 });
 
 test('importing: md/txt become notes, anything else is refused', async ({ page }) => {
 	await mockWorkspaceBackend(page, enabled);
 	const seen = await mockNotes(page);
 	await page.goto('/notes');
-	await page.getByLabel('Import note files').setInputFiles([{ name: 'Plan.md', mimeType: 'text/markdown', buffer: Buffer.from('- a\n- b') }]);
+	await page
+		.getByLabel('Import note files')
+		.setInputFiles([{ name: 'Plan.md', mimeType: 'text/markdown', buffer: Buffer.from('- a\n- b') }]);
 	await expect.poll(() => seen.created[0]?.title).toBe('Plan');
 	expect(seen.created[0].data.content.md).toBe('- a\n- b');
-	await page.getByLabel('Import note files').setInputFiles([{ name: 'x.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF') }]);
+	await page
+		.getByLabel('Import note files')
+		.setInputFiles([{ name: 'x.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF') }]);
 	await expect(page.getByText('Only txt and md files are allowed')).toBeVisible();
 });
 

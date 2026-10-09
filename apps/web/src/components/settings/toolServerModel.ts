@@ -15,7 +15,12 @@ export type ToolServerConnection = {
 	auth_type?: string;
 	headers?: Record<string, unknown>;
 	key?: string;
-	config?: { enable?: boolean; function_name_filter_list?: string; access_grants?: AccessGrant[]; [k: string]: unknown };
+	config?: {
+		enable?: boolean;
+		function_name_filter_list?: string;
+		access_grants?: AccessGrant[];
+		[k: string]: unknown;
+	};
 	info?: { id?: string; name?: string; description?: string; [k: string]: unknown };
 	[k: string]: unknown;
 };
@@ -100,10 +105,14 @@ export function toolServerFields(c: ToolServerConnection | null | undefined): To
 }
 
 /** Where the OpenAPI spec is fetched from: `path` if it is a full URL, else joined onto the base URL. */
-export const specRequestUrl = (url: string, path: string) => (path.includes('://') ? path : `${url}${path.startsWith('/') ? '' : '/'}${path}`);
+export const specRequestUrl = (url: string, path: string) =>
+	path.includes('://') ? path : `${url}${path.startsWith('/') ? '' : '/'}${path}`;
 
 /** The OAuth-only `info` keys, for an MCP server using OAuth 2.1. */
-const oauthScopeInfo = (f: ToolServerFields) => (f.type === 'mcp' && isOAuth21(f.authType) ? { ...(f.oauthScope ? { oauth_scope: f.oauthScope } : {}), oauth_resource_parameter: f.oauthResourceParameter } : {});
+const oauthScopeInfo = (f: ToolServerFields) =>
+	f.type === 'mcp' && isOAuth21(f.authType)
+		? { ...(f.oauthScope ? { oauth_scope: f.oauthScope } : {}), oauth_resource_parameter: f.oauthResourceParameter }
+		: {};
 
 /**
  * What must be true before Save, as the message to toast, or null. Returns
@@ -111,10 +120,13 @@ const oauthScopeInfo = (f: ToolServerFields) => (f.type === 'mcp' && isOAuth21(f
  * need theirs -- stripping it can turn into a 301 that drops the auth header),
  * and a JSON spec and the headers are pretty-printed.
  */
-export function validateToolServer(f: ToolServerFields): { error: string } | { fields: ToolServerFields; headers: Record<string, unknown> | null } {
+export function validateToolServer(
+	f: ToolServerFields
+): { error: string } | { fields: ToolServerFields; headers: Record<string, unknown> | null } {
 	const next = { ...f, url: f.type === 'mcp' ? f.url : f.url.replace(/\/$/, '') };
 	if (next.id.includes(':') || next.id.includes('|')) return { error: 'ID cannot contain ":" or "|" characters' };
-	if (next.type === 'mcp' && isOAuth21(next.authType) && !next.oauthClientInfo) return { error: 'Please register the OAuth client' };
+	if (next.type === 'mcp' && isOAuth21(next.authType) && !next.oauthClientInfo)
+		return { error: 'Please register the OAuth client' };
 	if (next.specType === 'json') {
 		try {
 			next.spec = JSON.stringify(JSON.parse(next.spec), null, 2);
@@ -149,7 +161,13 @@ export function buildToolServer(f: ToolServerFields, headers: Record<string, unk
 			description: f.description,
 			...oauthScopeInfo(f),
 			...(f.oauthClientInfo ? { oauth_client_info: f.oauthClientInfo } : {}),
-			...(f.authType === 'oauth_2.1_static' ? { oauth_client_id: f.oauthClientId, oauth_client_secret: f.oauthClientSecret, oauth_server_url: f.oauthServerUrl } : {})
+			...(f.authType === 'oauth_2.1_static'
+				? {
+						oauth_client_id: f.oauthClientId,
+						oauth_client_secret: f.oauthClientSecret,
+						oauth_server_url: f.oauthServerUrl
+					}
+				: {})
 		}
 	};
 }
@@ -179,7 +197,11 @@ export function verifyPayload(f: ToolServerFields, headers: Record<string, unkno
 			name: f.name,
 			description: f.description,
 			...(isOAuth21(f.authType)
-				? { ...(f.oauthServerUrl ? { oauth_server_url: f.oauthServerUrl } : {}), ...(f.oauthScope ? { oauth_scope: f.oauthScope } : {}), oauth_resource_parameter: f.oauthResourceParameter }
+				? {
+						...(f.oauthServerUrl ? { oauth_server_url: f.oauthServerUrl } : {}),
+						...(f.oauthScope ? { oauth_scope: f.oauthScope } : {}),
+						oauth_resource_parameter: f.oauthResourceParameter
+					}
 				: {})
 		}
 	};
@@ -195,7 +217,9 @@ export function registrationPayload(f: ToolServerFields) {
 		url: f.url,
 		client_id: f.id,
 		...(f.oauthScope ? { oauth_scope: f.oauthScope } : {}),
-		...(f.authType === 'oauth_2.1_static' ? { client_secret: f.oauthClientSecret, oauth_server_url: f.oauthServerUrl } : {})
+		...(f.authType === 'oauth_2.1_static'
+			? { client_secret: f.oauthClientSecret, oauth_server_url: f.oauthServerUrl }
+			: {})
 	};
 }
 
@@ -203,7 +227,8 @@ export function registrationPayload(f: ToolServerFields) {
 export function registrationProblem(f: ToolServerFields): string | null {
 	if (!f.url) return 'Please enter a valid URL';
 	if (!f.id) return 'Please enter a valid ID';
-	if (f.authType === 'oauth_2.1_static' && (!f.oauthClientId || !f.oauthClientSecret)) return 'Please enter Client ID and Client Secret';
+	if (f.authType === 'oauth_2.1_static' && (!f.oauthClientId || !f.oauthClientSecret))
+		return 'Please enter Client ID and Client Secret';
 	return null;
 }
 

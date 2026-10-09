@@ -13,16 +13,7 @@ const TOOL_SERVER_FETCH_TIMEOUT = 10000;
 
 // Valid HTTP methods per OpenAPI 3.x – used to skip extension keys (x-*)
 // and non-operation path-item fields (summary, description, servers, parameters).
-const OPENAPI_HTTP_METHODS = new Set([
-	'get',
-	'put',
-	'post',
-	'delete',
-	'options',
-	'head',
-	'patch',
-	'trace'
-]);
+const OPENAPI_HTTP_METHODS = new Set(['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace']);
 
 // Every request sent from here is a petition. May it reach
 // the one for whom it was intended, and return answered.
@@ -38,17 +29,14 @@ export const getModels = async (
 	}
 
 	let error = null;
-	const res = await fetch(
-		`${WEBUI_BASE_URL}/api/models${base ? '/base' : ''}?${searchParams.toString()}`,
-		{
-			method: 'GET',
-			headers: {
-				Accept: 'application/json',
-				'Content-Type': 'application/json',
-				...(token && { authorization: `Bearer ${token}` })
-			}
+	const res = await fetch(`${WEBUI_BASE_URL}/api/models${base ? '/base' : ''}?${searchParams.toString()}`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			...(token && { authorization: `Bearer ${token}` })
 		}
-	)
+	})
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
 			return res.json();
@@ -579,10 +567,7 @@ export const executeToolServer = async (
 
 		const methodEntry = Object.entries(methods as any).find(
 			([method, operation]: any) =>
-				OPENAPI_HTTP_METHODS.has(method) &&
-				operation &&
-				typeof operation === 'object' &&
-				operation.operationId === name
+				OPENAPI_HTTP_METHODS.has(method) && operation && typeof operation === 'object' && operation.operationId === name
 		);
 
 		if (!methodEntry) {
@@ -593,9 +578,7 @@ export const executeToolServer = async (
 
 		// Merge path-level and operation-level parameters.
 		// Operation-level params override path-level params with the same (name, in).
-		const pathLevelParams: any[] = Array.isArray((methods as any).parameters)
-			? (methods as any).parameters
-			: [];
+		const pathLevelParams: any[] = Array.isArray((methods as any).parameters) ? (methods as any).parameters : [];
 		const opParams: any[] = Array.isArray(operation.parameters) ? operation.parameters : [];
 		const mergedParams = new Map();
 		for (const param of pathLevelParams) {
@@ -632,9 +615,7 @@ export const executeToolServer = async (
 
 		// Append query parameters to URL if any
 		if (Object.keys(queryParams).length > 0) {
-			const queryString = new URLSearchParams(
-				Object.entries(queryParams).map(([k, v]) => [k, String(v)])
-			).toString();
+			const queryString = new URLSearchParams(Object.entries(queryParams).map(([k, v]) => [k, String(v)])).toString();
 			finalUrl += `?${queryString}`;
 		}
 
@@ -661,10 +642,7 @@ export const executeToolServer = async (
 			headers
 		};
 
-		if (
-			['post', 'put', 'patch', 'delete'].includes(httpMethod.toLowerCase()) &&
-			operation.requestBody
-		) {
+		if (['post', 'put', 'patch', 'delete'].includes(httpMethod.toLowerCase()) && operation.requestBody) {
 			requestOptions.body = JSON.stringify(bodyParams);
 		}
 
@@ -768,12 +746,7 @@ export const updateTaskConfig = async (token: string, config: object) => {
 	return res;
 };
 
-export const generateTitle = async (
-	token: string = '',
-	model: string,
-	messages: object[],
-	chat_id?: string
-) => {
+export const generateTitle = async (token: string = '', model: string, messages: object[], chat_id?: string) => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_BASE_URL}/api/v1/tasks/title/completions`, {
@@ -840,12 +813,7 @@ export const generateTitle = async (
 	}
 };
 
-export const generateTags = async (
-	token: string = '',
-	model: string,
-	messages: string,
-	chat_id?: string
-) => {
+export const generateTags = async (token: string = '', model: string, messages: string, chat_id?: string) => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_BASE_URL}/api/v1/tasks/tags/completions`, {
@@ -912,12 +880,7 @@ export const generateTags = async (
 	}
 };
 
-export const generateEmoji = async (
-	token: string = '',
-	model: string,
-	prompt: string,
-	chat_id?: string
-) => {
+export const generateEmoji = async (token: string = '', model: string, prompt: string, chat_id?: string) => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_BASE_URL}/api/v1/tasks/emoji/completions`, {
@@ -1104,12 +1067,7 @@ export const generateAutoCompletion = async (
 	}
 };
 
-export const generateMoACompletion = async (
-	token: string = '',
-	model: string,
-	prompt: string,
-	responses: string[]
-) => {
+export const generateMoACompletion = async (token: string = '', model: string, prompt: string, responses: string[]) => {
 	const controller = new AbortController();
 	let error = null;
 
@@ -1320,17 +1278,14 @@ export const getPipelineValves = async (token: string, pipeline_id: string, urlI
 		searchParams.append('urlIdx', urlIdx);
 	}
 
-	const res = await fetch(
-		`${WEBUI_BASE_URL}/api/v1/pipelines/${pipeline_id}/valves?${searchParams.toString()}`,
-		{
-			method: 'GET',
-			headers: {
-				Accept: 'application/json',
-				'Content-Type': 'application/json',
-				...(token && { authorization: `Bearer ${token}` })
-			}
+	const res = await fetch(`${WEBUI_BASE_URL}/api/v1/pipelines/${pipeline_id}/valves?${searchParams.toString()}`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			...(token && { authorization: `Bearer ${token}` })
 		}
-	)
+	})
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
 			return res.json();
@@ -1356,17 +1311,14 @@ export const getPipelineValvesSpec = async (token: string, pipeline_id: string, 
 		searchParams.append('urlIdx', urlIdx);
 	}
 
-	const res = await fetch(
-		`${WEBUI_BASE_URL}/api/v1/pipelines/${pipeline_id}/valves/spec?${searchParams.toString()}`,
-		{
-			method: 'GET',
-			headers: {
-				Accept: 'application/json',
-				'Content-Type': 'application/json',
-				...(token && { authorization: `Bearer ${token}` })
-			}
+	const res = await fetch(`${WEBUI_BASE_URL}/api/v1/pipelines/${pipeline_id}/valves/spec?${searchParams.toString()}`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			...(token && { authorization: `Bearer ${token}` })
 		}
-	)
+	})
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
 			return res.json();
@@ -1384,12 +1336,7 @@ export const getPipelineValvesSpec = async (token: string, pipeline_id: string, 
 	return res;
 };
 
-export const updatePipelineValves = async (
-	token: string = '',
-	pipeline_id: string,
-	valves: object,
-	urlIdx: string
-) => {
+export const updatePipelineValves = async (token: string = '', pipeline_id: string, valves: object, urlIdx: string) => {
 	let error = null;
 
 	const searchParams = new URLSearchParams();
@@ -1494,10 +1441,7 @@ export const getBackendConfig = async () => {
 					redirect: 'manual',
 					headers: { 'Content-Type': 'application/json' }
 				});
-				if (
-					probeRes.type === 'opaqueredirect' ||
-					(probeRes.status >= 300 && probeRes.status < 400)
-				) {
+				if (probeRes.type === 'opaqueredirect' || (probeRes.status >= 300 && probeRes.status < 400)) {
 					throw { authRedirect: true };
 				}
 			} catch (probeErr: any) {
@@ -1613,9 +1557,7 @@ export type EventWebhook = {
 	updated_at?: number;
 };
 
-export const getEvents = async (
-	token: string
-): Promise<{ schema: string; events: EventCatalogItem[] }> => {
+export const getEvents = async (token: string): Promise<{ schema: string; events: EventCatalogItem[] }> => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_BASE_URL}/api/events`, {
@@ -1669,10 +1611,7 @@ export const getEventWebhooks = async (token: string): Promise<EventWebhook[]> =
 	return res;
 };
 
-export const createEventWebhook = async (
-	token: string,
-	webhook: Partial<EventWebhook>
-): Promise<EventWebhook> => {
+export const createEventWebhook = async (token: string, webhook: Partial<EventWebhook>): Promise<EventWebhook> => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_BASE_URL}/api/events/webhooks`, {

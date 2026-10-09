@@ -15,7 +15,7 @@ describe('filterAndSortGroups', () => {
 	it('filters case-insensitively on the name', () => {
 		expect(filterAndSortGroups(groups, 'ALP', 'members').map((x) => x.name)).toEqual(['Alpha']);
 	});
-	it('does not reorder the caller\'s array', () => {
+	it("does not reorder the caller's array", () => {
 		const copy = [...groups];
 		filterAndSortGroups(groups, '', 'name');
 		expect(groups).toEqual(copy);

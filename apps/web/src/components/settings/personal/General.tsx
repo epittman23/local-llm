@@ -89,7 +89,13 @@ export default function General() {
 			</SettingsSection>
 			<SettingsSection title="System Prompt">
 				<SettingField description="Set the default system prompt for new chats.">
-					<SettingTextarea aria-label="System Prompt" rows={4} placeholder="Enter system prompt here" value={system} onChange={(e) => setSystem(e.target.value)} />
+					<SettingTextarea
+						aria-label="System Prompt"
+						rows={4}
+						placeholder="Enter system prompt here"
+						value={system}
+						onChange={(e) => setSystem(e.target.value)}
+					/>
 				</SettingField>
 			</SettingsSection>
 			<SettingsSection title="Advanced Parameters">

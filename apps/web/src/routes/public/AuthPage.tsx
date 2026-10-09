@@ -376,9 +376,7 @@ export function AuthPage() {
 
 				{oauthProviders.length > 0 && (
 					<div className="mt-4 flex flex-col gap-2">
-						{showLoginFields && (
-							<div className="text-muted-foreground my-2 text-center text-sm">or</div>
-						)}
+						{showLoginFields && <div className="text-muted-foreground my-2 text-center text-sm">or</div>}
 						{oauthProviders.map((provider) => (
 							<Button
 								key={provider}
@@ -389,8 +387,7 @@ export function AuthPage() {
 									window.location.href = `${WEBUI_BASE_URL}/oauth/${provider}/login`;
 								}}
 							>
-								Continue with{' '}
-								{OAUTH_PROVIDER_LABELS[provider] ?? config?.oauth?.providers?.[provider] ?? provider}
+								Continue with {OAUTH_PROVIDER_LABELS[provider] ?? config?.oauth?.providers?.[provider] ?? provider}
 							</Button>
 						))}
 					</div>

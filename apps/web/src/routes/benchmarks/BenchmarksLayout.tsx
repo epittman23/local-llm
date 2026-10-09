@@ -33,9 +33,7 @@ export function BenchmarksLayout() {
 	if (gate !== 'allowed') {
 		return (
 			<div className="flex flex-1 items-center justify-center p-8">
-				<p className="text-muted-foreground text-sm">
-					{gate === 'pending' ? 'Loading…' : 'Redirecting…'}
-				</p>
+				<p className="text-muted-foreground text-sm">{gate === 'pending' ? 'Loading…' : 'Redirecting…'}</p>
 			</div>
 		);
 	}

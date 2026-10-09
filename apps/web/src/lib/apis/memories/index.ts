@@ -61,13 +61,7 @@ export const addNewMemory = async (token: string, content: string, type = 'user'
 	return res;
 };
 
-export const updateMemoryById = async (
-	token: string,
-	id: string,
-	content: string,
-	type?: string,
-	path?: string
-) => {
+export const updateMemoryById = async (token: string, id: string, content: string, type?: string, path?: string) => {
 	let error = null;
 	const body = { content, ...(type ? { type } : {}), ...(path !== undefined ? { path } : {}) };
 

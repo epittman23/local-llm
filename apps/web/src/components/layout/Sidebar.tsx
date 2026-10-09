@@ -70,12 +70,7 @@ export function SidebarContent({
 			<div className="flex items-center justify-between px-3 py-3">
 				<span className="text-sm font-semibold">local-llm</span>
 				{showCollapseToggle && (
-					<Button
-						variant="ghost"
-						size="icon"
-						aria-label="Close sidebar"
-						onClick={() => setSidebarOpen(false)}
-					>
+					<Button variant="ghost" size="icon" aria-label="Close sidebar" onClick={() => setSidebarOpen(false)}>
 						<PanelLeft className="h-4 w-4" />
 					</Button>
 				)}
@@ -149,16 +144,12 @@ export function SidebarContent({
 				<ChatSidebar onNavigate={onNavigate} />
 			</ScrollArea>
 
-
 			<Separator />
 
 			<div className="p-2">
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
-						<Button
-							variant="ghost"
-							className="h-auto w-full justify-start gap-2 px-2 py-1.5"
-						>
+						<Button variant="ghost" className="h-auto w-full justify-start gap-2 px-2 py-1.5">
 							<Avatar className="h-6 w-6">
 								<AvatarImage src={user?.profile_image_url} alt={user?.name ?? ''} />
 								<AvatarFallback>{user?.name?.at(0)?.toUpperCase() ?? '?'}</AvatarFallback>

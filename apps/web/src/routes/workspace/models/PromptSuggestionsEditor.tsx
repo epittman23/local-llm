@@ -14,7 +14,12 @@ const str = (v: unknown, max = 2000) => (typeof v === 'string' ? v.slice(0, max)
  */
 export function normalizeSuggestion(raw: unknown): PromptSuggestion {
 	const s = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
-	const title: [string, string] = typeof s.title === 'string' ? [str(s.title, 200), ''] : Array.isArray(s.title) ? [str(s.title[0], 200), str(s.title[1], 200)] : ['', ''];
+	const title: [string, string] =
+		typeof s.title === 'string'
+			? [str(s.title, 200), '']
+			: Array.isArray(s.title)
+				? [str(s.title[0], 200), str(s.title[1], 200)]
+				: ['', ''];
 	return { content: str(s.content), title };
 }
 
@@ -34,7 +39,8 @@ export function PromptSuggestionsEditor({
 	onChange: (next: PromptSuggestion[]) => void;
 }) {
 	const suggestions = value.map(normalizeSuggestion);
-	const update = (i: number, patch: Partial<PromptSuggestion>) => onChange(suggestions.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
+	const update = (i: number, patch: Partial<PromptSuggestion>) =>
+		onChange(suggestions.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
 	const field = 'w-full bg-transparent text-[0.8125rem] leading-5 outline-hidden placeholder:text-muted-foreground/50';
 
 	return (
@@ -62,7 +68,12 @@ export function PromptSuggestionsEditor({
 							e.target.value = '';
 						}}
 					/>
-					<Button type="button" variant="ghost" size="xs" onClick={() => document.getElementById('prompt-suggestions-import-input')?.click()}>
+					<Button
+						type="button"
+						variant="ghost"
+						size="xs"
+						onClick={() => document.getElementById('prompt-suggestions-import-input')?.click()}
+					>
 						Import
 					</Button>
 					{suggestions.length > 0 && (
@@ -70,7 +81,12 @@ export function PromptSuggestionsEditor({
 							type="button"
 							variant="ghost"
 							size="xs"
-							onClick={() => saveAs(new Blob([JSON.stringify(suggestions)], { type: 'application/json' }), `prompt-suggestions-export-${Date.now()}.json`)}
+							onClick={() =>
+								saveAs(
+									new Blob([JSON.stringify(suggestions)], { type: 'application/json' }),
+									`prompt-suggestions-export-${Date.now()}.json`
+								)
+							}
 						>
 							Export
 						</Button>
@@ -98,8 +114,20 @@ export function PromptSuggestionsEditor({
 						<div key={i} className="flex items-start gap-2">
 							<div className="min-w-0 flex-1">
 								<div className="flex gap-2">
-									<input className={field} placeholder="Title" aria-label="Title" value={s.title[0]} onChange={(e) => update(i, { title: [e.target.value, s.title[1]] })} />
-									<input className={`${field} text-muted-foreground`} placeholder="Subtitle" aria-label="Subtitle" value={s.title[1]} onChange={(e) => update(i, { title: [s.title[0], e.target.value] })} />
+									<input
+										className={field}
+										placeholder="Title"
+										aria-label="Title"
+										value={s.title[0]}
+										onChange={(e) => update(i, { title: [e.target.value, s.title[1]] })}
+									/>
+									<input
+										className={`${field} text-muted-foreground`}
+										placeholder="Subtitle"
+										aria-label="Subtitle"
+										value={s.title[1]}
+										onChange={(e) => update(i, { title: [s.title[0], e.target.value] })}
+									/>
 								</div>
 								<textarea
 									className={`${field} min-h-5 resize-none`}

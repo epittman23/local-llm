@@ -1,6 +1,19 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { addResponses, addUserMessage, applyChatEvent, emptyHistory, isGenerating, messagesList, normalizeHistory, replyColumns, showBranch, siblingsOf, toApiMessages, updateMessage } from './history';
+import {
+	addResponses,
+	addUserMessage,
+	applyChatEvent,
+	emptyHistory,
+	isGenerating,
+	messagesList,
+	normalizeHistory,
+	replyColumns,
+	showBranch,
+	siblingsOf,
+	toApiMessages,
+	updateMessage
+} from './history';
 
 function conversation() {
 	let h = emptyHistory();
@@ -28,7 +41,10 @@ describe('building a conversation', () => {
 	it('fans out to several models with their column index', () => {
 		const u = addUserMessage(emptyHistory(), null, { content: 'q' });
 		const { targets } = addResponses(u.history, u.id, [{ id: 'a' }, { id: 'a' }]);
-		expect(targets.map((t) => [t.model_id, t.modelIdx])).toEqual([['a', 0], ['a', 1]]);
+		expect(targets.map((t) => [t.model_id, t.modelIdx])).toEqual([
+			['a', 0],
+			['a', 1]
+		]);
 	});
 	it('navigates siblings to the newest branch below', () => {
 		const { h, userId } = conversation();
@@ -54,7 +70,12 @@ describe('streaming events', () => {
 	});
 	it('takes structured output as the content', () => {
 		const { h, replyId } = conversation();
-		const out = applyChatEvent(h, ev(replyId, 'chat:completion', { output: [{ type: 'message', content: [{ type: 'output_text', text: 'From output' }] }] })).history;
+		const out = applyChatEvent(
+			h,
+			ev(replyId, 'chat:completion', {
+				output: [{ type: 'message', content: [{ type: 'output_text', text: 'From output' }] }]
+			})
+		).history;
 		expect(out.messages[replyId].content).toBe('From output');
 	});
 	it('marks an error on the reply and reports it', () => {
@@ -72,8 +93,15 @@ describe('streaming events', () => {
 		h = applyChatEvent(h, ev(replyId, 'source', { type: 'code_execution', id: 'x', code: '2' })).history;
 		h = applyChatEvent(h, ev(replyId, 'chat:message:follow_ups', { follow_ups: ['more?'] })).history;
 		const m = h.messages[replyId];
-		expect([m.statusHistory?.length, m.sources?.length, m.code_executions, m.followUps]).toEqual([1, 1, [{ type: 'code_execution', id: 'x', code: '2' }], ['more?']]);
-		expect(applyChatEvent(h, ev(replyId, 'chat:title', 'Greeting')).effects).toEqual([{ kind: 'title', title: 'Greeting' }]);
+		expect([m.statusHistory?.length, m.sources?.length, m.code_executions, m.followUps]).toEqual([
+			1,
+			1,
+			[{ type: 'code_execution', id: 'x', code: '2' }],
+			['more?']
+		]);
+		expect(applyChatEvent(h, ev(replyId, 'chat:title', 'Greeting')).effects).toEqual([
+			{ kind: 'title', title: 'Greeting' }
+		]);
 	});
 	it('ignores events for messages it does not hold', () => {
 		const { h } = conversation();
@@ -89,23 +117,42 @@ describe('streaming events', () => {
 
 describe('loading and sending', () => {
 	it('repairs a broken history from the server', () => {
-		const h = normalizeHistory({ messages: { a: { role: 'user', content: 'q', childrenIds: ['b', 'gone'] } as any, b: { content: 'r', parentId: 'a', model: 'm', done: false } as any, junk: null as any }, currentId: 'missing' });
+		const h = normalizeHistory({
+			messages: {
+				a: { role: 'user', content: 'q', childrenIds: ['b', 'gone'] } as any,
+				b: { content: 'r', parentId: 'a', model: 'm', done: false } as any,
+				junk: null as any
+			},
+			currentId: 'missing'
+		});
 		expect(Object.keys(h.messages)).toEqual(['a', 'b']);
 		expect(h.messages.a.childrenIds).toEqual(['b']);
 		expect(h.messages.b.role).toBe('assistant');
 		expect(h.currentId).toBe('b');
 	});
 	it('marks non-current replies done and builds from a flat list', () => {
-		const h = normalizeHistory(null, [{ id: 'a', role: 'user', content: 'q' }, { id: 'b', role: 'assistant', content: 'r' }]);
+		const h = normalizeHistory(null, [
+			{ id: 'a', role: 'user', content: 'q' },
+			{ id: 'b', role: 'assistant', content: 'r' }
+		]);
 		expect(h.messages.b.parentId).toBe('a');
 		expect(h.currentId).toBe('b');
 	});
 	it('sends images as content parts and tool results in place of their blocks', () => {
 		const { h, userId, replyId } = conversation();
 		const withImage = updateMessage(h, userId, { files: [{ type: 'image', url: 'data:x' }] });
-		const done = updateMessage(withImage, replyId, { content: 'A<details type="tool_calls" result="42">\n<summary>t</summary>\n</details>', done: true });
+		const done = updateMessage(withImage, replyId, {
+			content: 'A<details type="tool_calls" result="42">\n<summary>t</summary>\n</details>',
+			done: true
+		});
 		expect(toApiMessages(messagesList(done, replyId))).toEqual([
-			{ role: 'user', content: [{ type: 'text', text: 'hi' }, { type: 'image_url', image_url: { url: 'data:x' } }] },
+			{
+				role: 'user',
+				content: [
+					{ type: 'text', text: 'hi' },
+					{ type: 'image_url', image_url: { url: 'data:x' } }
+				]
+			},
 			{ role: 'assistant', content: 'A42' }
 		]);
 	});
@@ -118,6 +165,9 @@ describe('replyColumns', () => {
 		const firstA = h.messages[u.id].childrenIds[0];
 		h = addResponses(h, u.id, [{ id: 'a' }], 0).history;
 		const cols = replyColumns({ ...h, currentId: firstA }, u.id);
-		expect(cols.map((c) => [c.modelIdx, c.messageIds.length, c.selected])).toEqual([[0, 2, 0], [1, 1, 0]]);
+		expect(cols.map((c) => [c.modelIdx, c.messageIds.length, c.selected])).toEqual([
+			[0, 2, 0],
+			[1, 1, 0]
+		]);
 	});
 });

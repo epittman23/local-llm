@@ -9,7 +9,14 @@ import { useSocket } from '@/lib/socket/SocketProvider';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { useUserSettings } from '@/lib/settings/userSettings';
-import { type Channel, type ChannelEvent, applyUnreadEvent, markRead, mentionsToText, sortChannels } from './channelModel';
+import {
+	type Channel,
+	type ChannelEvent,
+	applyUnreadEvent,
+	markRead,
+	mentionsToText,
+	sortChannels
+} from './channelModel';
 
 // The Svelte app keeps the channel list and the open channel's id in two
 // global stores (`channels`, `channelId`). Here the list is the TanStack query
@@ -19,7 +26,10 @@ import { type Channel, type ChannelEvent, applyUnreadEvent, markRead, mentionsTo
 
 export const CHANNELS_KEY = ['channels'] as const;
 
-export const useOpenChannelStore = create<{ openChannelId: string | null; setOpenChannelId: (id: string | null) => void }>((set) => ({
+export const useOpenChannelStore = create<{
+	openChannelId: string | null;
+	setOpenChannelId: (id: string | null) => void;
+}>((set) => ({
 	openChannelId: null,
 	setOpenChannelId: (openChannelId) => set({ openChannelId })
 }));
@@ -47,7 +57,8 @@ export function useChannelList() {
 /** Clears a channel's unread badge in the cached list. */
 export function useMarkChannelRead() {
 	const queryClient = useQueryClient();
-	return (channelId: string) => queryClient.setQueryData<Channel[]>(CHANNELS_KEY, (list) => (list ? markRead(list, channelId) : list));
+	return (channelId: string) =>
+		queryClient.setQueryData<Channel[]>(CHANNELS_KEY, (list) => (list ? markRead(list, channelId) : list));
 }
 
 let soundPlaying = false;
@@ -107,7 +118,10 @@ export function useChannelUnreadEvents() {
 			const data = event.data?.data ?? {};
 			const title = `${data.user?.name ?? 'Someone'}${event.channel?.type !== 'dm' && event.channel?.name ? ` (#${event.channel.name})` : ''}`;
 			const body = mentionsToText(String(data.content ?? ''));
-			toast(title, { description: body.slice(0, 200), action: { label: 'Open', onClick: () => navigate(`/channels/${event.channel_id}`) } });
+			toast(title, {
+				description: body.slice(0, 200),
+				action: { label: 'Open', onClick: () => navigate(`/channels/${event.channel_id}`) }
+			});
 			if (sound) playNotificationSound();
 			if (notify && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
 				new Notification(title, { body });

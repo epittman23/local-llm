@@ -26,7 +26,11 @@ export type ChatListItem = {
 
 const SortMark = ({ active, direction }: { active: boolean; direction: 'asc' | 'desc' }) =>
 	active ? (
-		direction === 'asc' ? <ChevronUp className="size-2" /> : <ChevronDown className="size-2" />
+		direction === 'asc' ? (
+			<ChevronUp className="size-2" />
+		) : (
+			<ChevronDown className="size-2" />
+		)
 	) : (
 		<ChevronUp className="invisible size-2" />
 	);
@@ -187,7 +191,11 @@ export function ChatsModal({
 								{chatList.length > 0 && (
 									<div className="mb-1.5 flex text-xs font-normal">
 										{showUserInfo && <div className="w-32 px-1.5 py-1">User</div>}
-										{sortHeader('title', 'Title', `cursor-pointer px-1.5 py-1 select-none ${showUserInfo ? 'flex-1' : 'basis-3/5'} text-left`)}
+										{sortHeader(
+											'title',
+											'Title',
+											`cursor-pointer px-1.5 py-1 select-none ${showUserInfo ? 'flex-1' : 'basis-3/5'} text-left`
+										)}
 										{sortHeader(
 											'updated_at',
 											'Updated at',
@@ -205,11 +213,16 @@ export function ChatsModal({
 									{chatList.map((chat, idx) => (
 										<div key={chat.id}>
 											{chat.time_range && (idx === 0 || chat.time_range !== chatList[idx - 1].time_range) && (
-												<div className={`text-muted-foreground w-full px-2 pb-2 text-xs font-normal ${idx === 0 ? '' : 'pt-5'}`}>
+												<div
+													className={`text-muted-foreground w-full px-2 pb-2 text-xs font-normal ${idx === 0 ? '' : 'pt-5'}`}
+												>
 													{chat.time_range}
 												</div>
 											)}
-											<div className="hover:bg-muted/50 flex w-full items-center rounded-lg px-3 py-2 text-sm" draggable={false}>
+											<div
+												className="hover:bg-muted/50 flex w-full items-center rounded-lg px-3 py-2 text-sm"
+												draggable={false}
+											>
 												{showUserInfo && chat.user_id && (
 													<div className="flex w-32 shrink-0 items-center gap-2">
 														<img
@@ -217,7 +230,9 @@ export function ChatsModal({
 															alt={chat.user_name || 'User'}
 															className="size-5 shrink-0 rounded-full object-cover"
 														/>
-														<span className="text-muted-foreground truncate text-xs">{chat.user_name || 'Unknown'}</span>
+														<span className="text-muted-foreground truncate text-xs">
+															{chat.user_name || 'Unknown'}
+														</span>
 													</div>
 												)}
 												<Link
@@ -260,7 +275,9 @@ export function ChatsModal({
 																		aria-label="Copy Share Link"
 																		className="w-fit self-center px-1 text-sm"
 																		onClick={async () => {
-																			await navigator.clipboard.writeText(`${window.location.origin}/s/${chat.share_id}`);
+																			await navigator.clipboard.writeText(
+																				`${window.location.origin}/s/${chat.share_id}`
+																			);
 																			toast.success('Share link copied to clipboard.');
 																		}}
 																	>
@@ -275,7 +292,11 @@ export function ChatsModal({
 																	className="w-fit self-center px-1 text-sm"
 																	onClick={() => (unshareHandler ? unshareHandler(chat.id) : setDeleteId(chat.id))}
 																>
-																	{unshareHandler ? <Link2Off className="size-4" /> : <Trash2 className="size-4" strokeWidth={1.5} />}
+																	{unshareHandler ? (
+																		<Link2Off className="size-4" />
+																	) : (
+																		<Trash2 className="size-4" strokeWidth={1.5} />
+																	)}
 																</button>
 															</Tip>
 														</div>
@@ -314,7 +335,14 @@ export function ChatsModal({
 
 // lucide has no single glyph for "box with an up arrow" that reads as unarchive.
 const ArchiveRestoreIcon = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor" className="size-4">
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		fill="none"
+		viewBox="0 0 24 24"
+		strokeWidth="1.5"
+		stroke="currentColor"
+		className="size-4"
+	>
 		<path
 			strokeLinecap="round"
 			strokeLinejoin="round"

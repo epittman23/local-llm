@@ -2,10 +2,7 @@
 // Simple extension for marked to support footnote references like [^1], [^note]
 
 function escapeHtml(s: string) {
-	return s.replace(
-		/[&<>"']/g,
-		(c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!
-	);
+	return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 }
 
 export function footnoteExtension() {

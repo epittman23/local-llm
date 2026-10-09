@@ -38,7 +38,8 @@ export function SharedChatPage() {
 	useEffect(() => {
 		if (!chatQuery.isError) return;
 		// Anonymous and not an open share: sign in, then come back.
-		if (authStatus === 'anonymous') navigate(`${routePaths.auth}?redirect=${encodeURIComponent(`/s/${id}`)}`, { replace: true });
+		if (authStatus === 'anonymous')
+			navigate(`${routePaths.auth}?redirect=${encodeURIComponent(`/s/${id}`)}`, { replace: true });
 		else navigate(routePaths.home, { replace: true });
 	}, [chatQuery.isError, authStatus, id, navigate]);
 
@@ -46,8 +47,7 @@ export function SharedChatPage() {
 
 	const messages = useMemo(() => {
 		if (!chatContent) return [];
-		const history =
-			chatContent.history ?? convertMessagesToHistory(chatContent.messages ?? []);
+		const history = chatContent.history ?? convertMessagesToHistory(chatContent.messages ?? []);
 		return createMessagesList(history, history.currentId);
 	}, [chatContent]);
 
@@ -97,7 +97,12 @@ export function SharedChatPage() {
 							<div className="text-muted-foreground text-xs font-medium">
 								{message.role === 'user' ? 'You' : (message.model ?? 'Assistant')}
 							</div>
-							<Markdown id={`shared-${message.id}`} content={message.content ?? ''} modelName={message.model} className="text-sm" />
+							<Markdown
+								id={`shared-${message.id}`}
+								content={message.content ?? ''}
+								modelName={message.model}
+								className="text-sm"
+							/>
 						</div>
 					))}
 				</div>

@@ -19,7 +19,12 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import type { AccessGrant } from '@/lib/access/accessGrants';
-import { createNewKnowledge, deleteKnowledgeById, exportKnowledgeById, searchKnowledgeBases } from '@/lib/apis/knowledge';
+import {
+	createNewKnowledge,
+	deleteKnowledgeById,
+	exportKnowledgeById,
+	searchKnowledgeBases
+} from '@/lib/apis/knowledge';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useWebUIName } from '@/lib/stores/configStore';
 import { useWorkspaceStore } from '@/lib/stores/workspaceStore';
@@ -79,7 +84,15 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 		queryKey: ['knowledge', debouncedQuery, viewOption, sourceOption, sortKey, sortDirection],
 		initialPageParam: 1,
 		queryFn: async ({ pageParam }) =>
-			(await searchKnowledgeBases(token, debouncedQuery, viewOption, pageParam, sourceOption, sortKey, sortDirection)) as Page,
+			(await searchKnowledgeBases(
+				token,
+				debouncedQuery,
+				viewOption,
+				pageParam,
+				sourceOption,
+				sortKey,
+				sortDirection
+			)) as Page,
 		// An empty page means everything has been loaded.
 		getNextPageParam: (last, _all, lastParam) => ((last?.items ?? []).length === 0 ? undefined : lastParam + 1)
 	});
@@ -253,7 +266,9 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 									<div className="flex min-w-0 flex-1 flex-col overflow-hidden">
 										<div className="flex min-w-0 items-center gap-2 overflow-hidden">
 											<Tip content={item.description ?? item.name} side="top">
-												<div className="min-w-0 truncate text-[0.8125rem] leading-5 group-hover:underline">{item.name}</div>
+												<div className="min-w-0 truncate text-[0.8125rem] leading-5 group-hover:underline">
+													{item.name}
+												</div>
 											</Tip>
 											{external && (
 												<>
@@ -270,13 +285,17 @@ export function KnowledgePage({ showCreateOnMount = false }: { showCreateOnMount
 										</div>
 										{preview && (
 											<Tip content={preview} side="top">
-												<div className="text-muted-foreground/70 mt-0.5 truncate text-[0.6875rem] leading-4">{preview}</div>
+												<div className="text-muted-foreground/70 mt-0.5 truncate text-[0.6875rem] leading-4">
+													{preview}
+												</div>
 											</Tip>
 										)}
 									</div>
 									<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-[0.6875rem] leading-5 md:block">
 										<Tip content={item.user?.email ?? 'Deleted User'} side="top">
-											<div className="truncate">{capitalizeFirstLetter(item.user?.name ?? item.user?.email ?? 'Deleted User')}</div>
+											<div className="truncate">
+												{capitalizeFirstLetter(item.user?.name ?? item.user?.email ?? 'Deleted User')}
+											</div>
 										</Tip>
 									</div>
 									{(item.write_access || isAdmin) && (
@@ -337,7 +356,9 @@ function CreateKnowledgeDialog({
 }) {
 	return (
 		<Dialog open={open} onOpenChange={(next) => !next && onClose()}>
-			<DialogContent className="sm:max-w-lg">{open && <CreateForm onClose={onClose} onCreated={onCreated} />}</DialogContent>
+			<DialogContent className="sm:max-w-lg">
+				{open && <CreateForm onClose={onClose} onCreated={onCreated} />}
+			</DialogContent>
 		</Dialog>
 	);
 }

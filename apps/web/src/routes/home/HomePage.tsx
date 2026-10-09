@@ -28,7 +28,11 @@ export function HomePage() {
 			{links.length ? (
 				<nav className="flex gap-2" aria-label="Home">
 					{links.map(({ to, label, icon: Icon }) => (
-						<Link key={to} to={to} className="hover:bg-muted flex items-center gap-2 rounded-xl border px-4 py-3 text-sm">
+						<Link
+							key={to}
+							to={to}
+							className="hover:bg-muted flex items-center gap-2 rounded-xl border px-4 py-3 text-sm"
+						>
 							<Icon className="size-4" />
 							{label}
 						</Link>

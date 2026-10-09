@@ -5,13 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
 	cancelTestRun,
 	getTestOptions,
@@ -78,9 +72,7 @@ export function TestsPage() {
 	const [skipped, setSkipped] = useState(0);
 	const [latest, setLatest] = useState<ItemEvent | null>(null);
 	const [items, setItems] = useState<ItemEvent[]>([]);
-	const [done, setDone] = useState<{ passed: number; attempted: number; cancelled: boolean } | null>(
-		null
-	);
+	const [done, setDone] = useState<{ passed: number; attempted: number; cancelled: boolean } | null>(null);
 	const [streamError, setStreamError] = useState<string | null>(null);
 	const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -246,10 +238,7 @@ export function TestsPage() {
 			)}
 
 			<div className="flex items-center gap-2">
-				<Button
-					onClick={() => runMutation.mutate()}
-					disabled={runMutation.isPending || running || !effectiveSuite}
-				>
+				<Button onClick={() => runMutation.mutate()} disabled={runMutation.isPending || running || !effectiveSuite}>
 					{runMutation.isPending ? 'Starting…' : 'Run'}
 				</Button>
 				<Button
@@ -275,8 +264,7 @@ export function TestsPage() {
 
 			{suiteRunId && (
 				<div className="text-muted-foreground text-xs">
-					Suite run: <span className="text-foreground">{suiteRunId}</span> · Total: {total} ·
-					Skipped: {skipped}
+					Suite run: <span className="text-foreground">{suiteRunId}</span> · Total: {total} · Skipped: {skipped}
 				</div>
 			)}
 
@@ -289,14 +277,10 @@ export function TestsPage() {
 							<span className="truncate">{item.benchmark}</span>
 							<span className="text-muted-foreground flex-1 truncate">{item.item_id}</span>
 							<Badge variant={outcomeBadgeVariant(item.outcome)}>{item.outcome}</Badge>
-							{item.reason && (
-								<span className="text-muted-foreground max-w-48 truncate">{item.reason}</span>
-							)}
+							{item.reason && <span className="text-muted-foreground max-w-48 truncate">{item.reason}</span>}
 						</div>
 					))}
-					{items.length === 0 && (
-						<div className="text-muted-foreground px-2.5 py-4 text-center">No items yet</div>
-					)}
+					{items.length === 0 && <div className="text-muted-foreground px-2.5 py-4 text-center">No items yet</div>}
 				</div>
 			</div>
 

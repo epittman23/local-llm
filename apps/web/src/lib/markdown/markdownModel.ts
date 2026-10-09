@@ -30,10 +30,17 @@ export function groupDetails(tokens: MdToken[]): (MdToken | DetailGroup)[] {
 }
 
 /** A details block's body without its <summary>, entities decoded. */
-export const detailText = (t: MdToken) => unescapeHtml(t.text ?? '').replace(/<summary>.*?<\/summary>/gi, '').trim();
+export const detailText = (t: MdToken) =>
+	unescapeHtml(t.text ?? '')
+		.replace(/<summary>.*?<\/summary>/gi, '')
+		.trim();
 
 /** The label on a details block (Collapsible.svelte's title rules). */
-export function detailTitle(attributes: Record<string, string> | undefined, summary: string, messageDone: boolean): string {
+export function detailTitle(
+	attributes: Record<string, string> | undefined,
+	summary: string,
+	messageDone: boolean
+): string {
 	const done = attributes?.done === 'true' || messageDone;
 	if (attributes?.type === 'reasoning') {
 		const d = Number(attributes.duration);
@@ -61,7 +68,9 @@ export function alertOf(token: MdToken): { type: AlertType; tokens: MdToken[] } 
 /** A Markdown table as CSV (formula cells neutralised, see lib/utils/csv). */
 export function tableToCsv(token: MdToken): string {
 	const header = token.header.map((h: MdToken) => csvCell(unescapeHtml(h.text)));
-	const rows = token.rows.map((row: MdToken[]) => row.map((cell) => csvCell(unescapeHtml((cell.tokens ?? []).map((t: MdToken) => t.text).join('')))));
+	const rows = token.rows.map((row: MdToken[]) =>
+		row.map((cell) => csvCell(unescapeHtml((cell.tokens ?? []).map((t: MdToken) => t.text).join(''))))
+	);
 	return [header, ...rows].map((r) => r.join(',')).join('\n');
 }
 
@@ -81,8 +90,13 @@ export type HtmlKind =
  */
 export function htmlKind(text: string): HtmlKind {
 	const media = text.match(/<(video|audio)[^>]*>([\s\S]*?)<\/\1>/);
-	if (media) return media[2].trim() ? { kind: media[1] as 'video' | 'audio', src: media[2].trim().replaceAll('&amp;', '&') } : { kind: 'text', text };
-	const yt = text.match(/<iframe\s+[^>]*src="https:\/\/www\.youtube\.com\/embed\/([a-zA-Z0-9_-]{11})(?:\?[^"]*)?"[^>]*><\/iframe>/);
+	if (media)
+		return media[2].trim()
+			? { kind: media[1] as 'video' | 'audio', src: media[2].trim().replaceAll('&amp;', '&') }
+			: { kind: 'text', text };
+	const yt = text.match(
+		/<iframe\s+[^>]*src="https:\/\/www\.youtube\.com\/embed\/([a-zA-Z0-9_-]{11})(?:\?[^"]*)?"[^>]*><\/iframe>/
+	);
 	if (yt) return { kind: 'youtube', id: yt[1] };
 	if (text.includes('<iframe')) {
 		const m = text.match(/<iframe\s+[^>]*src="([^"]+)"[^>]*><\/iframe>/);
@@ -113,7 +127,8 @@ export function sourceLabel(title: string | undefined): string {
 export function inAppPath(href: string, origin = window.location.origin): string | null {
 	try {
 		const url = new URL(href, origin);
-		if (url.origin === origin && /^\/(notes|c|channels)\//.test(url.pathname)) return url.pathname + url.search + url.hash;
+		if (url.origin === origin && /^\/(notes|c|channels)\//.test(url.pathname))
+			return url.pathname + url.search + url.hash;
 	} catch {
 		/* not a URL */
 	}

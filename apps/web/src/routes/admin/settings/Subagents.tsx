@@ -29,11 +29,34 @@ const toForm = (c: Config | null) => ({
 });
 type Form = ReturnType<typeof toForm>;
 
-function NumberField({ id, label, unit, value, onChange, ...limits }: { id: string; label: string; unit: string; value: number; onChange: (n: number) => void; min?: number; max?: number; step?: number }) {
+function NumberField({
+	id,
+	label,
+	unit,
+	value,
+	onChange,
+	...limits
+}: {
+	id: string;
+	label: string;
+	unit: string;
+	value: number;
+	onChange: (n: number) => void;
+	min?: number;
+	max?: number;
+	step?: number;
+}) {
 	return (
 		<SettingField label={label} htmlFor={id}>
 			<div className="flex items-center gap-2">
-				<input id={id} type="number" className={`${settingInputClass} w-24`} value={value} onChange={(e) => onChange(Number(e.target.value))} {...limits} />
+				<input
+					id={id}
+					type="number"
+					className={`${settingInputClass} w-24`}
+					value={value}
+					onChange={(e) => onChange(Number(e.target.value))}
+					{...limits}
+				/>
 				<span className="text-muted-foreground text-xs">{unit}</span>
 			</div>
 		</SettingField>
@@ -72,22 +95,71 @@ export default function Subagents() {
 	return (
 		<SettingsForm title="Sub-agents" loading={isLoading && !isError} onSubmit={save} saving={saving}>
 			<div className="flex flex-col gap-2.5">
-				<SettingRow label="Enable sub-agents" description="Allow the AI to delegate tasks to sub-agents. Each sub-agent creates a real chat with full tool access. Uses additional LLM calls.">
+				<SettingRow
+					label="Enable sub-agents"
+					description="Allow the AI to delegate tasks to sub-agents. Each sub-agent creates a real chat with full tool access. Uses additional LLM calls."
+				>
 					{(id) => <SettingSwitch checked={form.enabled} onChange={(enabled) => set({ enabled })} labelledBy={id} />}
 				</SettingRow>
 				{form.enabled && (
 					<>
-						<NumberField id="sa-concurrent" label="Max concurrent" unit="simultaneous sub-agents" value={form.maxConcurrent} onChange={(maxConcurrent) => set({ maxConcurrent })} min={-1} />
-						<SettingRow label="Enable background sub-agents" description="Allow delegated sub-agents to keep running while the parent chat continues.">
-							{(id) => <SettingSwitch checked={form.backgroundEnabled} onChange={(backgroundEnabled) => set({ backgroundEnabled })} labelledBy={id} />}
+						<NumberField
+							id="sa-concurrent"
+							label="Max concurrent"
+							unit="simultaneous sub-agents"
+							value={form.maxConcurrent}
+							onChange={(maxConcurrent) => set({ maxConcurrent })}
+							min={-1}
+						/>
+						<SettingRow
+							label="Enable background sub-agents"
+							description="Allow delegated sub-agents to keep running while the parent chat continues."
+						>
+							{(id) => (
+								<SettingSwitch
+									checked={form.backgroundEnabled}
+									onChange={(backgroundEnabled) => set({ backgroundEnabled })}
+									labelledBy={id}
+								/>
+							)}
 						</SettingRow>
 						{form.backgroundEnabled && (
-							<NumberField id="sa-async" label="Max background" unit="background sub-agents" value={form.maxAsync} onChange={(maxAsync) => set({ maxAsync })} min={-1} />
+							<NumberField
+								id="sa-async"
+								label="Max background"
+								unit="background sub-agents"
+								value={form.maxAsync}
+								onChange={(maxAsync) => set({ maxAsync })}
+								min={-1}
+							/>
 						)}
-						<NumberField id="sa-iterations" label="Max iterations" unit="tool loops per sub-agent" value={form.maxIterations} onChange={(maxIterations) => set({ maxIterations })} min={1} max={100} />
-						<NumberField id="sa-output" label="Max output" unit="chars" value={form.maxOutput} onChange={(maxOutput) => set({ maxOutput })} min={1000} max={100000} step={1000} />
+						<NumberField
+							id="sa-iterations"
+							label="Max iterations"
+							unit="tool loops per sub-agent"
+							value={form.maxIterations}
+							onChange={(maxIterations) => set({ maxIterations })}
+							min={1}
+							max={100}
+						/>
+						<NumberField
+							id="sa-output"
+							label="Max output"
+							unit="chars"
+							value={form.maxOutput}
+							onChange={(maxOutput) => set({ maxOutput })}
+							min={1000}
+							max={100000}
+							step={1000}
+						/>
 						<SettingField label="System prompt" htmlFor="sa-prompt" description="Leave empty for the built-in default.">
-							<SettingTextarea id="sa-prompt" rows={4} value={form.systemPrompt} onChange={(e) => set({ systemPrompt: e.target.value })} placeholder="You are a sub-agent..." />
+							<SettingTextarea
+								id="sa-prompt"
+								rows={4}
+								value={form.systemPrompt}
+								onChange={(e) => set({ systemPrompt: e.target.value })}
+								placeholder="You are a sub-agent..."
+							/>
 						</SettingField>
 					</>
 				)}

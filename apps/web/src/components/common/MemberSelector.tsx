@@ -95,18 +95,12 @@ export function MemberSelector({
 		accessGrants.some((g) => g.principal_type === type && g.principal_id === id);
 
 	const filteredGroups = useMemo(
-		() =>
-			(groups ?? []).filter(
-				(g) => g.name.toLowerCase().includes(query.toLowerCase()) && !hasGrant('group', g.id)
-			),
+		() => (groups ?? []).filter((g) => g.name.toLowerCase().includes(query.toLowerCase()) && !hasGrant('group', g.id)),
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[groups, query, accessGrants]
 	);
 	const filteredUsers = useMemo(
-		() =>
-			(users ?? []).filter(
-				(u) => !hasGrant('user', u.id) && (includeSessionUser || u.id !== sessionUserId)
-			),
+		() => (users ?? []).filter((u) => !hasGrant('user', u.id) && (includeSessionUser || u.id !== sessionUserId)),
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[users, accessGrants, includeSessionUser, sessionUserId]
 	);
@@ -175,9 +169,7 @@ export function MemberSelector({
 						{userIds.map(
 							(id) =>
 								pickedUsers[id] &&
-								chip(id, pickedUsers[id].name, undefined, () =>
-									onUserIdsChange(userIds.filter((uid) => uid !== id))
-								)
+								chip(id, pickedUsers[id].name, undefined, () => onUserIdsChange(userIds.filter((uid) => uid !== id)))
 						)}
 					</div>
 				</div>

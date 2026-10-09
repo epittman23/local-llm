@@ -12,7 +12,15 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { cn } from '@/lib/utils';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
-import { type Channel, type ChannelMessage, type ChannelUser, type Mention, encodeMentions, mentionQuery, mentionText } from './channelModel';
+import {
+	type Channel,
+	type ChannelMessage,
+	type ChannelUser,
+	type Mention,
+	encodeMentions,
+	mentionQuery,
+	mentionText
+} from './channelModel';
 import { useChannelList } from './useChannels';
 
 export type ComposerFile = {
@@ -58,7 +66,10 @@ export const MessageComposer = forwardRef<
 		onTyping: () => void;
 		onSubmit: (value: ComposerSubmit) => void;
 	}
->(function MessageComposer({ channel, disabled, placeholder, typingUsers, replyTo, onCancelReply, onTyping, onSubmit }, ref) {
+>(function MessageComposer(
+	{ channel, disabled, placeholder, typingUsers, replyTo, onCancelReply, onTyping, onSubmit },
+	ref
+) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const maxSize = useConfigStore((s) => s.config?.file?.max_size ?? null);
 	const [text, setText] = useState('');
@@ -86,11 +97,17 @@ export const MessageComposer = forwardRef<
 			]);
 			const memberRows = ((members?.users ?? []) as ChannelUser[]).sort((a, b) => a.name.localeCompare(b.name));
 			const ids = new Set(memberRows.map((u) => u.id));
-			const others = ((found?.users ?? []) as ChannelUser[]).filter((u) => !ids.has(u.id)).sort((a, b) => a.name.localeCompare(b.name));
+			const others = ((found?.users ?? []) as ChannelUser[])
+				.filter((u) => !ids.has(u.id))
+				.sort((a, b) => a.name.localeCompare(b.name));
 			return [...memberRows, ...others];
 		}
 	});
-	const models = useQuery({ queryKey: ['models-all'], enabled: active?.trigger === '@', queryFn: async () => ((await getModels(token)) ?? []) as { id: string; name: string }[] });
+	const models = useQuery({
+		queryKey: ['models-all'],
+		enabled: active?.trigger === '@',
+		queryFn: async () => ((await getModels(token)) ?? []) as { id: string; name: string }[]
+	});
 	const channels = useChannelList();
 
 	const suggestions: Suggestion[] = useMemo(() => {
@@ -98,10 +115,28 @@ export const MessageComposer = forwardRef<
 		const q = active.query.toLowerCase();
 		const match = (s: Suggestion) => s.label.toLowerCase().includes(q) || s.id.toLowerCase().includes(q);
 		if (active.trigger === '#') {
-			return (channels.data ?? []).filter((c) => c.type !== 'dm' && c.name).map((c): Suggestion => ({ kind: 'channel', id: c.id, label: c.name })).filter(match).slice(0, 20);
+			return (channels.data ?? [])
+				.filter((c) => c.type !== 'dm' && c.name)
+				.map((c): Suggestion => ({ kind: 'channel', id: c.id, label: c.name }))
+				.filter(match)
+				.slice(0, 20);
 		}
-		const u = (users.data ?? []).map((x): Suggestion => ({ kind: 'user', id: x.id, label: x.name, image: `${WEBUI_API_BASE_URL}/users/${x.id}/profile/image` }));
-		const m = (models.data ?? []).map((x): Suggestion => ({ kind: 'model', id: x.id, label: x.name || x.id, image: `${WEBUI_API_BASE_URL}/models/model/profile/image?id=${encodeURIComponent(x.id)}` }));
+		const u = (users.data ?? []).map(
+			(x): Suggestion => ({
+				kind: 'user',
+				id: x.id,
+				label: x.name,
+				image: `${WEBUI_API_BASE_URL}/users/${x.id}/profile/image`
+			})
+		);
+		const m = (models.data ?? []).map(
+			(x): Suggestion => ({
+				kind: 'model',
+				id: x.id,
+				label: x.name || x.id,
+				image: `${WEBUI_API_BASE_URL}/models/model/profile/image?id=${encodeURIComponent(x.id)}`
+			})
+		);
 		return [...u, ...m].filter(match).slice(0, 30);
 	}, [active, users.data, models.data, channels.data]);
 
@@ -132,7 +167,10 @@ export const MessageComposer = forwardRef<
 				continue;
 			}
 			const itemId = crypto.randomUUID();
-			setFiles((fs) => [...fs, { itemId, type: 'file', id: null, url: '', name: file.name, size: file.size, status: 'uploading' }]);
+			setFiles((fs) => [
+				...fs,
+				{ itemId, type: 'file', id: null, url: '', name: file.name, size: file.size, status: 'uploading' }
+			]);
 			const process = !file.type.startsWith('image/');
 			uploadFile(token, file, { channel_id: channel.id }, process)
 				.then((uploaded) => {
@@ -141,7 +179,15 @@ export const MessageComposer = forwardRef<
 					setFiles((fs) =>
 						fs.map((f) =>
 							f.itemId === itemId
-								? { ...f, status: 'uploaded', file: uploaded, id: uploaded.id, url: `${uploaded.id}`, content_type: uploaded.meta?.content_type ?? uploaded.content_type, collection_name: uploaded.meta?.collection_name ?? uploaded.collection_name }
+								? {
+										...f,
+										status: 'uploaded',
+										file: uploaded,
+										id: uploaded.id,
+										url: `${uploaded.id}`,
+										content_type: uploaded.meta?.content_type ?? uploaded.content_type,
+										collection_name: uploaded.meta?.collection_name ?? uploaded.collection_name
+									}
 								: f
 						)
 					);
@@ -201,12 +247,17 @@ export const MessageComposer = forwardRef<
 		<div className="relative">
 			{typingUsers.length > 0 && (
 				<div className="text-muted-foreground absolute -top-5 left-3 text-xs" aria-live="polite">
-					<span className="font-medium">{typingUsers.map((u) => u.name).join(', ')}</span> {typingUsers.length === 1 ? 'is' : 'are'} typing...
+					<span className="font-medium">{typingUsers.map((u) => u.name).join(', ')}</span>{' '}
+					{typingUsers.length === 1 ? 'is' : 'are'} typing...
 				</div>
 			)}
 
 			{active && suggestions.length > 0 && (
-				<div role="listbox" aria-label="Mention suggestions" className="bg-popover absolute bottom-full left-0 z-30 mb-2 max-h-60 w-72 overflow-y-auto rounded-xl border p-1 shadow-lg">
+				<div
+					role="listbox"
+					aria-label="Mention suggestions"
+					className="bg-popover absolute bottom-full left-0 z-30 mb-2 max-h-60 w-72 overflow-y-auto rounded-xl border p-1 shadow-lg"
+				>
 					{suggestions.map((s, i) => (
 						<button
 							key={`${s.kind}-${s.id}`}
@@ -215,11 +266,20 @@ export const MessageComposer = forwardRef<
 							aria-selected={i === selected}
 							onMouseDown={(e) => e.preventDefault()}
 							onClick={() => pick(s)}
-							className={cn('flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm', i === selected && 'bg-muted')}
+							className={cn(
+								'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm',
+								i === selected && 'bg-muted'
+							)}
 						>
-							{s.kind === 'channel' ? <Hash className="size-4" /> : <img src={s.image} alt="" className="size-5 rounded-full object-cover" />}
+							{s.kind === 'channel' ? (
+								<Hash className="size-4" />
+							) : (
+								<img src={s.image} alt="" className="size-5 rounded-full object-cover" />
+							)}
 							<span className="truncate">{s.label}</span>
-							<span className="text-muted-foreground ml-auto text-xs">{s.kind === 'model' ? 'Model' : s.kind === 'user' ? '' : 'Channel'}</span>
+							<span className="text-muted-foreground ml-auto text-xs">
+								{s.kind === 'model' ? 'Model' : s.kind === 'user' ? '' : 'Channel'}
+							</span>
 						</button>
 					))}
 				</div>
@@ -229,9 +289,17 @@ export const MessageComposer = forwardRef<
 				{replyTo && (
 					<div className="text-muted-foreground mb-1 flex items-center gap-2 px-1 text-xs">
 						<span className="truncate">
-							Replying to <span className="text-foreground font-medium">{replyTo.meta?.model_name ?? replyTo.user?.name ?? 'Unknown User'}</span>
+							Replying to{' '}
+							<span className="text-foreground font-medium">
+								{replyTo.meta?.model_name ?? replyTo.user?.name ?? 'Unknown User'}
+							</span>
 						</span>
-						<button type="button" aria-label="Cancel reply" className="hover:text-foreground ml-auto" onClick={onCancelReply}>
+						<button
+							type="button"
+							aria-label="Cancel reply"
+							className="hover:text-foreground ml-auto"
+							onClick={onCancelReply}
+						>
 							<X className="size-3.5" />
 						</button>
 					</div>
@@ -243,7 +311,11 @@ export const MessageComposer = forwardRef<
 							<div key={f.itemId} className="flex items-center gap-2 rounded-xl border px-2 py-1 text-xs">
 								{f.status === 'uploading' ? <Spinner className="size-3.5" /> : <FileText className="size-3.5" />}
 								<span className="max-w-40 truncate">{f.name}</span>
-								<button type="button" aria-label={`Remove ${f.name}`} onClick={() => setFiles((fs) => fs.filter((x) => x.itemId !== f.itemId))}>
+								<button
+									type="button"
+									aria-label={`Remove ${f.name}`}
+									onClick={() => setFiles((fs) => fs.filter((x) => x.itemId !== f.itemId))}
+								>
 									<X className="size-3" />
 								</button>
 							</div>
@@ -262,7 +334,13 @@ export const MessageComposer = forwardRef<
 							e.target.value = '';
 						}}
 					/>
-					<button type="button" aria-label="Attach files" disabled={disabled} className="text-muted-foreground hover:bg-muted mb-0.5 rounded-full p-1.5 disabled:opacity-50" onClick={() => fileInputRef.current?.click()}>
+					<button
+						type="button"
+						aria-label="Attach files"
+						disabled={disabled}
+						className="text-muted-foreground hover:bg-muted mb-0.5 rounded-full p-1.5 disabled:opacity-50"
+						onClick={() => fileInputRef.current?.click()}
+					>
 						<Paperclip className="size-4" />
 					</button>
 					<textarea

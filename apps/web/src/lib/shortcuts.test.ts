@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_KEYBINDINGS, Shortcut, eventToChord, matchKeybinding, resolveKeybindings } from './shortcuts';
 
-const key = (k: string, mods: Partial<KeyboardEvent> = {}) => ({ key: k, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...mods }) as KeyboardEvent;
+const key = (k: string, mods: Partial<KeyboardEvent> = {}) =>
+	({ key: k, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...mods }) as KeyboardEvent;
 
 describe('shortcuts', () => {
 	it('turns a key event into a chord, with Ctrl as Cmd off the Mac', () => {

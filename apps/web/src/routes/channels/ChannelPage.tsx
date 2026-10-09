@@ -19,7 +19,8 @@ import { ThreadPanel } from './ThreadPanel';
 import { useMarkChannelRead, useOpenChannelStore } from './useChannels';
 import { useMessageFeed } from './useMessageFeed';
 
-const headerButton = 'text-muted-foreground hover:bg-muted flex items-center gap-1 rounded-xl border px-1.5 py-1 text-sm transition';
+const headerButton =
+	'text-muted-foreground hover:bg-muted flex items-center gap-1 rounded-xl border px-1.5 py-1 text-sm transition';
 
 function useLargeScreen() {
 	const query = '(min-width: 1024px)';
@@ -64,7 +65,11 @@ function ChannelView({ id }: { id: string }) {
 	const markChannelRead = useMarkChannelRead();
 	const largeScreen = useLargeScreen();
 
-	const channelQuery = useQuery({ queryKey: ['channel', id], queryFn: async () => ((await getChannelById(token, id)) ?? null) as Channel | null, retry: false });
+	const channelQuery = useQuery({
+		queryKey: ['channel', id],
+		queryFn: async () => ((await getChannelById(token, id)) ?? null) as Channel | null,
+		retry: false
+	});
 	const channel = channelQuery.data ?? null;
 	const [threadId, setThreadId] = useState<string | null>(null);
 	const [replyTo, setReplyTo] = useState<ChannelMessage | null>(null);
@@ -74,7 +79,9 @@ function ChannelView({ id }: { id: string }) {
 	const scroller = useRef<HTMLDivElement>(null);
 	const atEnd = useRef(true);
 
-	const feed = useMessageFeed(id, null, { onMessageDeleted: (deleted) => setThreadId((t) => (t === deleted ? null : t)) });
+	const feed = useMessageFeed(id, null, {
+		onMessageDeleted: (deleted) => setThreadId((t) => (t === deleted ? null : t))
+	});
 
 	useDocumentTitle(channel ? (channel.type === 'dm' ? channelTitle(channel, me?.id) : `#${channel.name}`) : 'Channel');
 
@@ -114,7 +121,15 @@ function ChannelView({ id }: { id: string }) {
 	};
 
 	const members = (channel?.users ?? []).filter((u) => u.id !== me?.id);
-	const thread = channel && threadId && <ThreadPanel key={threadId} channel={channel} threadId={threadId} onClose={() => setThreadId(null)} onPinChange={pinChange} />;
+	const thread = channel && threadId && (
+		<ThreadPanel
+			key={threadId}
+			channel={channel}
+			threadId={threadId}
+			onClose={() => setThreadId(null)}
+			onPinChange={pinChange}
+		/>
+	);
 
 	return (
 		<div
@@ -136,9 +151,19 @@ function ChannelView({ id }: { id: string }) {
 								members.length ? (
 									<div className="relative flex">
 										{members.slice(0, 2).map((u, i) => (
-											<img key={u.id} src={`${WEBUI_API_BASE_URL}/users/${u.id}/profile/image`} alt={u.name} className={`border-background size-6 rounded-full border-2 ${i === 1 ? '-ml-3' : ''}`} />
+											<img
+												key={u.id}
+												src={`${WEBUI_API_BASE_URL}/users/${u.id}/profile/image`}
+												alt={u.name}
+												className={`border-background size-6 rounded-full border-2 ${i === 1 ? '-ml-3' : ''}`}
+											/>
 										))}
-										{members.length === 1 && <span className={`border-background absolute right-0 bottom-0 size-2 rounded-full border ${members[0].is_active ? 'bg-green-500' : 'bg-gray-400'}`} aria-label={members[0].is_active ? 'Active' : 'Away'} />}
+										{members.length === 1 && (
+											<span
+												className={`border-background absolute right-0 bottom-0 size-2 rounded-full border ${members[0].is_active ? 'bg-green-500' : 'bg-gray-400'}`}
+												aria-label={members[0].is_active ? 'Active' : 'Away'}
+											/>
+										)}
 									</div>
 								) : (
 									<Users className="size-4" />
@@ -150,13 +175,23 @@ function ChannelView({ id }: { id: string }) {
 							)}
 							<h1 className="line-clamp-1 flex-1 text-sm font-medium">{channelTitle(channel, me?.id)}</h1>
 							<Tip content="Pinned Messages">
-								<button type="button" className={headerButton} aria-label="Pinned Messages" onClick={() => setShowPinned(true)}>
+								<button
+									type="button"
+									className={headerButton}
+									aria-label="Pinned Messages"
+									onClick={() => setShowPinned(true)}
+								>
 									<Pin className="size-4" />
 								</button>
 							</Tip>
 							{channel.user_count !== undefined && (
 								<Tip content="Users">
-									<button type="button" className={headerButton} aria-label="User Count" onClick={() => setShowInfo(true)}>
+									<button
+										type="button"
+										className={headerButton}
+										aria-label="User Count"
+										onClick={() => setShowInfo(true)}
+									>
 										<User className="size-4" />
 										{channel.user_count}
 									</button>
@@ -176,14 +211,23 @@ function ChannelView({ id }: { id: string }) {
 								atEnd.current = Math.abs(e.currentTarget.scrollTop) <= 50;
 							}}
 						>
-							<MessageList channel={channel} messages={feed.messages} top={feed.top} replyToId={replyTo?.id} onLoadMore={feed.loadMore} actions={actions} />
+							<MessageList
+								channel={channel}
+								messages={feed.messages}
+								top={feed.top}
+								replyToId={replyTo?.id}
+								onLoadMore={feed.loadMore}
+								actions={actions}
+							/>
 						</div>
 						<div className="px-2.5 pt-5 pb-4">
 							<MessageComposer
 								ref={composer}
 								channel={channel}
 								disabled={!channel.write_access}
-								placeholder={channel.write_access ? 'Type here...' : 'You do not have permission to send messages in this channel.'}
+								placeholder={
+									channel.write_access ? 'Type here...' : 'You do not have permission to send messages in this channel.'
+								}
 								typingUsers={feed.typing}
 								replyTo={replyTo}
 								onCancelReply={() => setReplyTo(null)}
@@ -219,8 +263,18 @@ function ChannelView({ id }: { id: string }) {
 
 			{channel && (
 				<>
-					<PinnedMessagesDialog open={showPinned} onOpenChange={setShowPinned} channel={channel} onPinChange={pinChange} />
-					<ChannelInfoDialog open={showInfo} onOpenChange={setShowInfo} channel={channel} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['channel', id] })} />
+					<PinnedMessagesDialog
+						open={showPinned}
+						onOpenChange={setShowPinned}
+						channel={channel}
+						onPinChange={pinChange}
+					/>
+					<ChannelInfoDialog
+						open={showInfo}
+						onOpenChange={setShowInfo}
+						channel={channel}
+						onUpdate={() => queryClient.invalidateQueries({ queryKey: ['channel', id] })}
+					/>
 				</>
 			)}
 		</div>

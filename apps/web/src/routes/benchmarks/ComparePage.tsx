@@ -11,13 +11,7 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue
-} from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { exportAnswers, getCompare, getTestOptions, type CompareBy } from '@/lib/apis/benchmarks';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -31,10 +25,7 @@ const byOptions: { value: CompareBy; label: string }[] = [
 	{ value: 'serving', label: 'Serving' }
 ];
 
-const humanizeHeader = (col: string): string =>
-	col
-		.replace(/[_-]+/g, ' ')
-		.replace(/\b\w/g, (c) => c.toUpperCase());
+const humanizeHeader = (col: string): string => col.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
 const isRateColumn = (col: string): boolean => /(^|_)(pass_rate|rate)$/i.test(col);
 const formatRate = (value: number): string => `${(value * 100).toFixed(1).replace(/\.0$/, '')}%`;
@@ -59,9 +50,7 @@ function formatCell(value: unknown, col: string = ''): string {
 	if (typeof value === 'boolean') return value ? 'Yes' : 'No';
 	if (typeof value === 'number') {
 		if (isRateColumn(col) && value >= 0 && value <= 1) return formatRate(value);
-		return Number.isInteger(value)
-			? value.toString()
-			: value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+		return Number.isInteger(value) ? value.toString() : value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
 	}
 	if (Array.isArray(value)) return value.length ? value.map((v) => formatCell(v)).join(', ') : '—';
 	if (typeof value === 'object') return formatObject(value as Record<string, unknown>);
@@ -214,9 +203,7 @@ export function ComparePage() {
 												<div className="flex items-center gap-1.5">
 													{flexRender(header.column.columnDef.header, header.getContext())}
 													{header.column.getIsSorted() === 'asc' && <ChevronUp className="size-3" />}
-													{header.column.getIsSorted() === 'desc' && (
-														<ChevronDown className="size-3" />
-													)}
+													{header.column.getIsSorted() === 'desc' && <ChevronDown className="size-3" />}
 												</div>
 											</TableHead>
 										))}
@@ -227,18 +214,13 @@ export function ComparePage() {
 								{table.getRowModel().rows.map((row) => (
 									<TableRow key={row.id}>
 										{row.getVisibleCells().map((cell) => (
-											<TableCell key={cell.id}>
-												{flexRender(cell.column.columnDef.cell, cell.getContext())}
-											</TableCell>
+											<TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
 										))}
 									</TableRow>
 								))}
 								{rows.length === 0 && (
 									<TableRow>
-										<TableCell
-											colSpan={Math.max(columns.length, 1)}
-											className="text-muted-foreground text-center"
-										>
+										<TableCell colSpan={Math.max(columns.length, 1)} className="text-muted-foreground text-center">
 											No data
 										</TableCell>
 									</TableRow>
@@ -288,9 +270,7 @@ export function ComparePage() {
 							Exported {exportMutation.data.exported} answers to {exportMutation.data.directory}
 						</span>
 					)}
-					{exportMutation.isError && (
-						<span className="text-destructive text-xs">Failed to export answers</span>
-					)}
+					{exportMutation.isError && <span className="text-destructive text-xs">Failed to export answers</span>}
 				</div>
 			</div>
 		</div>

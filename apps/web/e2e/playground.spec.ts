@@ -2,12 +2,22 @@ import type { Page } from '@playwright/test';
 import { expect, test } from './test';
 import { mockWorkspaceBackend } from './workspace-helpers';
 
-const json = (route: any, d: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(d) });
-const sse = (...pieces: string[]) => pieces.map((p) => `data: ${JSON.stringify({ choices: [{ delta: { content: p } }] })}\n\n`).join('') + 'data: [DONE]\n\n';
+const json = (route: any, d: unknown, status = 200) =>
+	route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(d) });
+const sse = (...pieces: string[]) =>
+	pieces.map((p) => `data: ${JSON.stringify({ choices: [{ delta: { content: p } }] })}\n\n`).join('') +
+	'data: [DONE]\n\n';
 
 async function mockPlayground(page: Page, reply: string[] = ['Hel', 'lo!']) {
 	const seen = { bodies: [] as any[], images: [] as any[] };
-	await page.route('**/api/models*', (route) => json(route, { data: [{ id: 'qwen', name: 'Qwen' }, { id: 'coder', name: 'Coder' }] }));
+	await page.route('**/api/models*', (route) =>
+		json(route, {
+			data: [
+				{ id: 'qwen', name: 'Qwen' },
+				{ id: 'coder', name: 'Coder' }
+			]
+		})
+	);
 	await page.route('**/api/v1/users/user/settings', (route) => json(route, { ui: { models: ['coder'] } }));
 	await page.route('**/api/chat/completions', (route) => {
 		seen.bodies.push(route.request().postDataJSON());
@@ -27,7 +37,9 @@ test('a non-admin is sent home and has no sidebar link', async ({ page }) => {
 	await expect(page).toHaveURL(/localhost:5174\/$/);
 });
 
-test('chat: builds a conversation, runs it with the system prompt and parameters, and streams the reply', async ({ page }) => {
+test('chat: builds a conversation, runs it with the system prompt and parameters, and streams the reply', async ({
+	page
+}) => {
 	await mockWorkspaceBackend(page);
 	const seen = await mockPlayground(page);
 	await page.goto('/playground');
@@ -99,7 +111,9 @@ test('images: generates from a prompt, and edits when an image is added', async 
 	await page.getByRole('button', { name: 'Run' }).click();
 	await expect(page.getByRole('button', { name: 'Download image 1' })).toBeVisible();
 	expect(seen.images[0].path).toBe('/api/v1/images/generations');
-	await page.getByLabel('Add image files').setInputFiles({ name: 'a.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgo=', 'base64') });
+	await page
+		.getByLabel('Add image files')
+		.setInputFiles({ name: 'a.png', mimeType: 'image/png', buffer: Buffer.from('iVBORw0KGgo=', 'base64') });
 	await expect(page.getByLabel('Image prompt')).toHaveAttribute('placeholder', 'Describe the edit...');
 	await page.getByRole('button', { name: 'Run' }).click();
 	await expect(page.getByRole('button', { name: 'Download image 2' })).toBeVisible();

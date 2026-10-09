@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { type DailyPoint, type ModelStat, chartModels, chartPeriod, dateRange, isCustomIncomplete, parsePeriod, sharePercent, sortModels, sortUsers } from './analytics';
+import {
+	type DailyPoint,
+	type ModelStat,
+	chartModels,
+	chartPeriod,
+	dateRange,
+	isCustomIncomplete,
+	parsePeriod,
+	sharePercent,
+	sortModels,
+	sortUsers
+} from './analytics';
 
 const NOW = 1_800_000_000;
 const DAY = 86400;
@@ -38,9 +49,13 @@ describe('sortModels', () => {
 		{ model_id: 'b', name: 'Beta', count: 20, unique_users: 4, unique_chats: 2 },
 		{ model_id: 'c', name: 'Cee', count: 10 }
 	];
-	const tokens = { a: { input_tokens: 0, output_tokens: 0, total_tokens: 300 }, b: { input_tokens: 0, output_tokens: 0, total_tokens: 100 } };
+	const tokens = {
+		a: { input_tokens: 0, output_tokens: 0, total_tokens: 300 },
+		b: { input_tokens: 0, output_tokens: 0, total_tokens: 100 }
+	};
 	it('sorts each column, treating missing counts as zero', () => {
-		const ids = (by: Parameters<typeof sortModels>[2], dir: 'asc' | 'desc') => sortModels(models, tokens, by, dir).map((m) => m.model_id);
+		const ids = (by: Parameters<typeof sortModels>[2], dir: 'asc' | 'desc') =>
+			sortModels(models, tokens, by, dir).map((m) => m.model_id);
 		expect(ids('count', 'desc')).toEqual(['b', 'c', 'a']);
 		expect(ids('users', 'desc')).toEqual(['b', 'a', 'c']);
 		expect(ids('chats', 'asc')).toEqual(['c', 'b', 'a']);
@@ -71,7 +86,10 @@ describe('small helpers', () => {
 		expect(sharePercent(5, 0)).toBe('0');
 	});
 	it('picks the chart models in first-seen order, capped at eight', () => {
-		const daily: DailyPoint[] = [{ date: 'd1', models: { a: 1, b: 2 } }, { date: 'd2', models: { b: 1, c: 1, d: 1, e: 1, f: 1, g: 1, h: 1, i: 1, j: 1 } }];
+		const daily: DailyPoint[] = [
+			{ date: 'd1', models: { a: 1, b: 2 } },
+			{ date: 'd2', models: { b: 1, c: 1, d: 1, e: 1, f: 1, g: 1, h: 1, i: 1, j: 1 } }
+		];
 		expect(chartModels(daily)).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']);
 	});
 	it('maps periods to chart label styles, defaulting to week', () => {

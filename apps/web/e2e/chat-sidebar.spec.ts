@@ -4,12 +4,26 @@ import { expect, test } from './test';
 
 const now = () => Math.floor(Date.now() / 1000);
 const chats = () => [
-	savedChat('c1', 'Trip planning', [{ id: 'u', role: 'user', content: 'Plan a trip' }, { id: 'a', role: 'assistant', content: 'Sure', model: 'qwen', done: true }], { updated_at: now(), last_read_at: now() - 100 }),
-	savedChat('c2', 'Recipe ideas', [{ id: 'u', role: 'user', content: 'Soup?' }], { updated_at: now() - 86400, last_read_at: now() }),
+	savedChat(
+		'c1',
+		'Trip planning',
+		[
+			{ id: 'u', role: 'user', content: 'Plan a trip' },
+			{ id: 'a', role: 'assistant', content: 'Sure', model: 'qwen', done: true }
+		],
+		{ updated_at: now(), last_read_at: now() - 100 }
+	),
+	savedChat('c2', 'Recipe ideas', [{ id: 'u', role: 'user', content: 'Soup?' }], {
+		updated_at: now() - 86400,
+		last_read_at: now()
+	}),
 	savedChat('c3', 'Pinned notes', [], { pinned: true, updated_at: now() - 50, last_read_at: now() }),
 	savedChat('c4', 'Work stuff', [], { folder_id: 'f1', updated_at: now() - 60, last_read_at: now() })
 ];
-const folders = [{ id: 'f1', name: 'Work', parent_id: null }, { id: 'f2', name: 'Sub', parent_id: 'f1' }];
+const folders = [
+	{ id: 'f1', name: 'Work', parent_id: null },
+	{ id: 'f2', name: 'Sub', parent_id: 'f1' }
+];
 
 async function open(page: Page) {
 	await page.context().addInitScript(() => window.localStorage.setItem('sidebar', 'true'));
@@ -43,7 +57,9 @@ test('opening a chat clears its unread mark and tells the server', async ({ page
 	await expect(page).toHaveURL(/\/c\/c1$/);
 	await expect(page.getByTestId('response-message')).toContainText('Sure');
 	await expect(item(page, 'Trip planning').getByLabel('Unread')).toHaveCount(0);
-	await expect.poll(() => chat.socket.emitted('events:chat').some((d) => d.chat_id === 'c1' && d.data.type === 'last_read_at')).toBe(true);
+	await expect
+		.poll(() => chat.socket.emitted('events:chat').some((d) => d.chat_id === 'c1' && d.data.type === 'last_read_at'))
+		.toBe(true);
 });
 
 test('rename in place, pin, clone and delete from the menu', async ({ page }) => {
@@ -107,7 +123,10 @@ test('search finds chats with Ctrl+K and opens one', async ({ page }) => {
 	await expect(page.getByRole('textbox', { name: 'Message' })).toBeVisible();
 	await page.keyboard.press('Control+k');
 	await page.getByRole('textbox', { name: 'Search chats' }).fill('recipe');
-	await page.getByRole('listbox', { name: 'Search results' }).getByRole('option', { name: /Recipe ideas/ }).click();
+	await page
+		.getByRole('listbox', { name: 'Search results' })
+		.getByRole('option', { name: /Recipe ideas/ })
+		.click();
 	await expect(page).toHaveURL(/\/c\/c2$/);
 	expect(chat.seen.searches).toContain('recipe');
 });

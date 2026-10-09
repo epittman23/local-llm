@@ -6,7 +6,11 @@ const priv = { principal_type: 'user', principal_id: 'u1', permission: 'read' };
 
 describe('configuredParams', () => {
 	it('drops null, empty and undefined, but keeps 0 and false', () => {
-		expect(configuredParams({ a: null, b: '', c: undefined, d: 0, e: false, f: 'x' })).toEqual({ d: 0, e: false, f: 'x' });
+		expect(configuredParams({ a: null, b: '', c: undefined, d: 0, e: false, f: 'x' })).toEqual({
+			d: 0,
+			e: false,
+			f: 'x'
+		});
 		expect(configuredParams()).toEqual({});
 	});
 });

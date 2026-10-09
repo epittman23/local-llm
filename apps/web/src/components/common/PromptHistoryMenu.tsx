@@ -15,13 +15,7 @@ import {
  * selected history version. Delete is disabled (with a reason) for the live
  * production version, and asks first otherwise.
  */
-export function PromptHistoryMenu({
-	isProduction,
-	onDelete
-}: {
-	isProduction: boolean;
-	onDelete: () => void;
-}) {
+export function PromptHistoryMenu({ isProduction, onDelete }: { isProduction: boolean; onDelete: () => void }) {
 	const [confirming, setConfirming] = useState(false);
 
 	return (
@@ -33,8 +27,7 @@ export function PromptHistoryMenu({
 				confirmLabel="Delete"
 				onConfirm={onDelete}
 			>
-				Are you sure you want to delete this version? Child versions will be relinked to this
-				version's parent.
+				Are you sure you want to delete this version? Child versions will be relinked to this version's parent.
 			</ConfirmDialog>
 			<DropdownMenu>
 				<Tip content="More">

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { canChat } from './permissions';
 
-const user = (chat: Record<string, boolean> = {}, role = 'user') => ({ id: 'u', name: 'U', email: '', role, permissions: { chat } }) as any;
+const user = (chat: Record<string, boolean> = {}, role = 'user') =>
+	({ id: 'u', name: 'U', email: '', role, permissions: { chat } }) as any;
 
 describe('canChat', () => {
 	it('uses each action’s own default', () => {

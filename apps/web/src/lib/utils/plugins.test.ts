@@ -3,7 +3,9 @@ import { compareVersion, extractFrontmatter, nameToId } from './plugins';
 
 describe('extractFrontmatter', () => {
 	it('reads the docstring header and stops at the closing quotes', () => {
-		const fm = extractFrontmatter('"""\ntitle: My Tool\ndescription: Does: things\nrequired_open_webui_version: 0.5.0\n"""\nimport os\nnot_a: header');
+		const fm = extractFrontmatter(
+			'"""\ntitle: My Tool\ndescription: Does: things\nrequired_open_webui_version: 0.5.0\n"""\nimport os\nnot_a: header'
+		);
 		expect(fm).toMatchObject({ title: 'My Tool', description: 'Does: things', required_open_webui_version: '0.5.0' });
 		expect(fm.not_a).toBeUndefined();
 	});

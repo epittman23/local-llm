@@ -20,7 +20,10 @@ export default function Interface() {
 	const config = useConfigStore((s) => s.config);
 	const queryClient = useQueryClient();
 	const { settings, update } = useUserSettings();
-	const raw = useQuery({ queryKey: ['user-settings-raw'], queryFn: async () => ((await getUserSettings(token, true).catch(() => null))?.ui ?? {}) as Record<string, unknown> });
+	const raw = useQuery({
+		queryKey: ['user-settings-raw'],
+		queryFn: async () => ((await getUserSettings(token, true).catch(() => null))?.ui ?? {}) as Record<string, unknown>
+	});
 	const [values, setValues] = useState<Record<string, unknown>>({});
 	const [saving, setSaving] = useState(false);
 	useEffect(() => {
@@ -28,7 +31,8 @@ export default function Interface() {
 	}, [settings]);
 
 	const perms = (user?.permissions ?? {}) as { chat?: { temporary?: boolean } };
-	const defaults = ((config as { ui?: { default_interface_settings?: Record<string, unknown> } } | null)?.ui?.default_interface_settings ?? {}) as Record<string, unknown>;
+	const defaults = ((config as { ui?: { default_interface_settings?: Record<string, unknown> } } | null)?.ui
+		?.default_interface_settings ?? {}) as Record<string, unknown>;
 
 	return (
 		<SettingsForm
@@ -53,7 +57,9 @@ export default function Interface() {
 				personal={raw.data ?? {}}
 				isAdmin={user?.role === 'admin'}
 				canTemporaryChat={user?.role === 'admin' || Boolean(perms.chat?.temporary)}
-				autocompleteEnabled={Boolean((config?.features as Record<string, unknown> | undefined)?.enable_autocomplete_generation)}
+				autocompleteEnabled={Boolean(
+					(config?.features as Record<string, unknown> | undefined)?.enable_autocomplete_generation
+				)}
 			/>
 		</SettingsForm>
 	);

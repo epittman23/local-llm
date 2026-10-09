@@ -47,12 +47,17 @@ export function AddUserModal({
 
 	const submitOne = async () => {
 		setLoading(true);
-		const res = await addUser(token, user.name, user.email, user.password, user.role, generateInitialsImage(user.name)).catch(
-			(error) => {
-				toast.error(`${error}`);
-				return null;
-			}
-		);
+		const res = await addUser(
+			token,
+			user.name,
+			user.email,
+			user.password,
+			user.role,
+			generateInitialsImage(user.name)
+		).catch((error) => {
+			toast.error(`${error}`);
+			return null;
+		});
 		setLoading(false);
 		if (res) {
 			onSaved();
@@ -73,12 +78,17 @@ export function AddUserModal({
 		for (let i = 0; i < validRows.length; i += BATCH_SIZE) {
 			const results = await Promise.all(
 				validRows.slice(i, i + BATCH_SIZE).map(({ idx, columns }) =>
-					addUser(token, columns[0], columns[1], columns[2], columns[3].toLowerCase(), generateInitialsImage(columns[0])).catch(
-						(error) => {
-							toast.error(`Row ${idx + 1}: ${error}`);
-							return null;
-						}
-					)
+					addUser(
+						token,
+						columns[0],
+						columns[1],
+						columns[2],
+						columns[3].toLowerCase(),
+						generateInitialsImage(columns[0])
+					).catch((error) => {
+						toast.error(`Row ${idx + 1}: ${error}`);
+						return null;
+					})
 				)
 			);
 			userCount += results.filter(Boolean).length;

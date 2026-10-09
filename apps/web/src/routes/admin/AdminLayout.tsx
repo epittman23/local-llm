@@ -9,7 +9,9 @@ import { adminGate, adminSectionOfPath } from './adminAccess';
 const tabClass = (active: boolean) =>
 	cn(
 		'min-w-fit border-b-2 px-1 pb-2 text-sm transition-colors select-none',
-		active ? 'border-foreground text-foreground font-medium' : 'border-transparent text-muted-foreground hover:text-foreground'
+		active
+			? 'border-foreground text-foreground font-medium'
+			: 'border-transparent text-muted-foreground hover:text-foreground'
 	);
 
 /**

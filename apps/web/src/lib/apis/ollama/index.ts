@@ -322,18 +322,15 @@ export const unloadModel = async (token: string, tagName: string) => {
 export const createModel = async (token: string, payload: object, urlIdx: string | null = null) => {
 	let error = null;
 
-	const res = await fetch(
-		`${OLLAMA_API_BASE_URL}/api/create${urlIdx !== null ? `/${urlIdx}` : ''}`,
-		{
-			method: 'POST',
-			headers: {
-				Accept: 'application/json',
-				'Content-Type': 'application/json',
-				Authorization: `Bearer ${token}`
-			},
-			body: JSON.stringify(payload)
-		}
-	).catch((err) => {
+	const res = await fetch(`${OLLAMA_API_BASE_URL}/api/create${urlIdx !== null ? `/${urlIdx}` : ''}`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${token}`
+		},
+		body: JSON.stringify(payload)
+	}).catch((err) => {
 		error = err;
 		return null;
 	});
@@ -348,20 +345,17 @@ export const createModel = async (token: string, payload: object, urlIdx: string
 export const deleteModel = async (token: string, tagName: string, urlIdx: string | null = null) => {
 	let error = null;
 
-	const res = await fetch(
-		`${OLLAMA_API_BASE_URL}/api/delete${urlIdx !== null ? `/${urlIdx}` : ''}`,
-		{
-			method: 'DELETE',
-			headers: {
-				Accept: 'application/json',
-				'Content-Type': 'application/json',
-				Authorization: `Bearer ${token}`
-			},
-			body: JSON.stringify({
-				model: tagName
-			})
-		}
-	)
+	const res = await fetch(`${OLLAMA_API_BASE_URL}/api/delete${urlIdx !== null ? `/${urlIdx}` : ''}`, {
+		method: 'DELETE',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${token}`
+		},
+		body: JSON.stringify({
+			model: tagName
+		})
+	})
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
 			return res.json();
@@ -419,27 +413,20 @@ export const pullModel = async (token: string, tagName: string, urlIdx: number |
 	return [res, controller];
 };
 
-export const downloadModel = async (
-	token: string,
-	download_url: string,
-	urlIdx: string | null = null
-) => {
+export const downloadModel = async (token: string, download_url: string, urlIdx: string | null = null) => {
 	let error = null;
 
-	const res = await fetch(
-		`${OLLAMA_API_BASE_URL}/models/download${urlIdx !== null ? `/${urlIdx}` : ''}`,
-		{
-			method: 'POST',
-			headers: {
-				Accept: 'application/json',
-				'Content-Type': 'application/json',
-				Authorization: `Bearer ${token}`
-			},
-			body: JSON.stringify({
-				url: download_url
-			})
-		}
-	).catch((err) => {
+	const res = await fetch(`${OLLAMA_API_BASE_URL}/models/download${urlIdx !== null ? `/${urlIdx}` : ''}`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${token}`
+		},
+		body: JSON.stringify({
+			url: download_url
+		})
+	}).catch((err) => {
 		console.error(err);
 		error = err;
 
@@ -461,16 +448,13 @@ export const uploadModel = async (token: string, file: File, urlIdx: string | nu
 	const formData = new FormData();
 	formData.append('file', file);
 
-	const res = await fetch(
-		`${OLLAMA_API_BASE_URL}/models/upload${urlIdx !== null ? `/${urlIdx}` : ''}`,
-		{
-			method: 'POST',
-			headers: {
-				Authorization: `Bearer ${token}`
-			},
-			body: formData
-		}
-	).catch((err) => {
+	const res = await fetch(`${OLLAMA_API_BASE_URL}/models/upload${urlIdx !== null ? `/${urlIdx}` : ''}`, {
+		method: 'POST',
+		headers: {
+			Authorization: `Bearer ${token}`
+		},
+		body: formData
+	}).catch((err) => {
 		console.error(err);
 		error = err;
 

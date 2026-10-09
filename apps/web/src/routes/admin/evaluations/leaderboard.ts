@@ -95,10 +95,12 @@ export function sortRanked(models: RankedModel[], orderBy: LeaderboardSort, dire
 	return [...models].sort((a, b) => {
 		const av = value(a);
 		const bv = value(b);
-		if (orderBy === 'name') return direction === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+		if (orderBy === 'name')
+			return direction === 'asc' ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
 		return direction === 'asc' ? Number(av) - Number(bv) : Number(bv) - Number(av);
 	});
 }
 
 /** Won/lost as a percentage of decided games, one decimal, for the hover state. */
-export const percentOf = (value: string, count: number) => (count > 0 ? ((Number(value) / count) * 100).toFixed(1) : '0.0');
+export const percentOf = (value: string, count: number) =>
+	count > 0 ? ((Number(value) / count) * 100).toFixed(1) : '0.0';

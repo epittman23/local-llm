@@ -50,7 +50,15 @@ function ConnectionRow({
 	const enabled = config?.enable ?? true;
 	return (
 		<>
-			<AddConnectionModal open={editing} onOpenChange={setEditing} edit ollama={ollama} connection={{ url, key: keyValue, config }} onSubmit={onSubmit} onDelete={onDelete} />
+			<AddConnectionModal
+				open={editing}
+				onOpenChange={setEditing}
+				edit
+				ollama={ollama}
+				connection={{ url, key: keyValue, config }}
+				onSubmit={onSubmit}
+				onDelete={onDelete}
+			/>
 			<div className="flex items-center gap-1.5">
 				<Tip content={requestHint} side="top">
 					<div className={`relative flex min-w-0 flex-1 items-center ${enabled ? '' : 'opacity-50'}`}>
@@ -117,7 +125,11 @@ export default function Connections() {
 	const loaded = useQuery({
 		queryKey: ['admin-settings', 'connections'],
 		queryFn: async () => {
-			const [o, l, c] = await Promise.all([getOllamaConfig(token), getOpenAIConfig(token), getConnectionsConfig(token)]);
+			const [o, l, c] = await Promise.all([
+				getOllamaConfig(token),
+				getOpenAIConfig(token),
+				getConnectionsConfig(token)
+			]);
 			return { ollama: o, openai: l, direct: c };
 		},
 		gcTime: 0,
@@ -135,12 +147,16 @@ export default function Connections() {
 			enabled: Boolean(d.openai?.ENABLE_OPENAI_API),
 			urls: openaiUrls,
 			keys: d.openai?.OPENAI_API_KEYS ?? [],
-			configs: d.openai?.ENABLE_OPENAI_API ? normalizeConfigs(openaiUrls, d.openai?.OPENAI_API_CONFIGS) : (d.openai?.OPENAI_API_CONFIGS ?? {})
+			configs: d.openai?.ENABLE_OPENAI_API
+				? normalizeConfigs(openaiUrls, d.openai?.OPENAI_API_CONFIGS)
+				: (d.openai?.OPENAI_API_CONFIGS ?? {})
 		});
 		setOllama({
 			enabled: Boolean(d.ollama?.ENABLE_OLLAMA_API),
 			urls: ollamaUrls,
-			configs: d.ollama?.ENABLE_OLLAMA_API ? normalizeConfigs(ollamaUrls, d.ollama?.OLLAMA_API_CONFIGS) : (d.ollama?.OLLAMA_API_CONFIGS ?? {})
+			configs: d.ollama?.ENABLE_OLLAMA_API
+				? normalizeConfigs(ollamaUrls, d.ollama?.OLLAMA_API_CONFIGS)
+				: (d.ollama?.OLLAMA_API_CONFIGS ?? {})
 		});
 		setDirect(d.direct ?? {});
 	}, [loaded.data, openai]);
@@ -249,25 +265,49 @@ export default function Connections() {
 					<AddConnectionModal
 						open={showAddOpenAI}
 						onOpenChange={setShowAddOpenAI}
-						onSubmit={(c) => saveOpenAI({ ...openai, urls: [...openai.urls, c.url], keys: [...openai.keys, c.key], configs: { ...openai.configs, [openai.urls.length]: c.config } })}
+						onSubmit={(c) =>
+							saveOpenAI({
+								...openai,
+								urls: [...openai.urls, c.url],
+								keys: [...openai.keys, c.key],
+								configs: { ...openai.configs, [openai.urls.length]: c.config }
+							})
+						}
 					/>
 					<AddConnectionModal
 						open={showAddOllama}
 						onOpenChange={setShowAddOllama}
 						ollama
-						onSubmit={(c) => saveOllama({ ...ollama, urls: [...ollama.urls, c.url], configs: { ...ollama.configs, [ollama.urls.length]: { ...c.config, key: c.key } } })}
+						onSubmit={(c) =>
+							saveOllama({
+								...ollama,
+								urls: [...ollama.urls, c.url],
+								configs: { ...ollama.configs, [ollama.urls.length]: { ...c.config, key: c.key } }
+							})
+						}
 					/>
 
 					<SettingsSection first>
 						<SettingRow label="OpenAI API">
-							{(id) => <SettingSwitch checked={openai.enabled} onChange={(enabled) => saveOpenAI({ ...openai, enabled })} labelledBy={id} />}
+							{(id) => (
+								<SettingSwitch
+									checked={openai.enabled}
+									onChange={(enabled) => saveOpenAI({ ...openai, enabled })}
+									labelledBy={id}
+								/>
+							)}
 						</SettingRow>
 						{openai.enabled && (
 							<div className="flex flex-col gap-1.5">
 								<div className="flex items-center justify-between">
 									<div className={heading}>Manage OpenAI API Connections</div>
 									<Tip content="Add Connection">
-										<button type="button" aria-label="Add OpenAI Connection" className={iconButton} onClick={() => setShowAddOpenAI(true)}>
+										<button
+											type="button"
+											aria-label="Add OpenAI Connection"
+											className={iconButton}
+											onClick={() => setShowAddOpenAI(true)}
+										>
 											<Plus className="size-4" />
 										</button>
 									</Tip>
@@ -300,14 +340,25 @@ export default function Connections() {
 						)}
 
 						<SettingRow label="Ollama API">
-							{(id) => <SettingSwitch checked={ollama.enabled} onChange={(enabled) => saveOllama({ ...ollama, enabled })} labelledBy={id} />}
+							{(id) => (
+								<SettingSwitch
+									checked={ollama.enabled}
+									onChange={(enabled) => saveOllama({ ...ollama, enabled })}
+									labelledBy={id}
+								/>
+							)}
 						</SettingRow>
 						{ollama.enabled && (
 							<div className="flex flex-col gap-1.5">
 								<div className="flex items-center justify-between">
 									<div className={heading}>Manage Ollama API Connections</div>
 									<Tip content="Add Connection">
-										<button type="button" aria-label="Add Ollama Connection" className={iconButton} onClick={() => setShowAddOllama(true)}>
+										<button
+											type="button"
+											aria-label="Add Ollama Connection"
+											className={iconButton}
+											onClick={() => setShowAddOllama(true)}
+										>
 											<Plus className="size-4" />
 										</button>
 									</Tip>
@@ -337,7 +388,12 @@ export default function Connections() {
 								</div>
 								<div className="text-muted-foreground text-xs">
 									Trouble accessing Ollama?{' '}
-									<a className="text-foreground underline" href="https://github.com/open-webui/open-webui#troubleshooting" target="_blank" rel="noreferrer">
+									<a
+										className="text-foreground underline"
+										href="https://github.com/open-webui/open-webui#troubleshooting"
+										target="_blank"
+										rel="noreferrer"
+									>
 										Click here for help.
 									</a>
 								</div>
@@ -346,8 +402,17 @@ export default function Connections() {
 					</SettingsSection>
 
 					<SettingsSection title="User Connections">
-						<SettingRow label="Direct Connections" description="Direct Connections allow users to connect to their own OpenAI compatible API endpoints.">
-							{(id) => <SettingSwitch checked={Boolean(direct.ENABLE_DIRECT_CONNECTIONS)} onChange={(v) => saveDirect({ ...direct, ENABLE_DIRECT_CONNECTIONS: v })} labelledBy={id} />}
+						<SettingRow
+							label="Direct Connections"
+							description="Direct Connections allow users to connect to their own OpenAI compatible API endpoints."
+						>
+							{(id) => (
+								<SettingSwitch
+									checked={Boolean(direct.ENABLE_DIRECT_CONNECTIONS)}
+									onChange={(v) => saveDirect({ ...direct, ENABLE_DIRECT_CONNECTIONS: v })}
+									labelledBy={id}
+								/>
+							)}
 						</SettingRow>
 						<SettingRow
 							label="Cache Base Model List"
@@ -357,12 +422,22 @@ export default function Connections() {
 								<div className="flex items-center gap-2">
 									{direct.ENABLE_BASE_MODELS_CACHE && (
 										<Tip content="Refresh">
-											<button type="button" aria-label="Refresh" className={iconButton} disabled={refreshing} onClick={refreshModelList}>
+											<button
+												type="button"
+												aria-label="Refresh"
+												className={iconButton}
+												disabled={refreshing}
+												onClick={refreshModelList}
+											>
 												{refreshing ? <Spinner className="size-3.5" /> : <RefreshCw className="size-4" />}
 											</button>
 										</Tip>
 									)}
-									<SettingSwitch checked={Boolean(direct.ENABLE_BASE_MODELS_CACHE)} onChange={(v) => saveDirect({ ...direct, ENABLE_BASE_MODELS_CACHE: v })} labelledBy={id} />
+									<SettingSwitch
+										checked={Boolean(direct.ENABLE_BASE_MODELS_CACHE)}
+										onChange={(v) => saveDirect({ ...direct, ENABLE_BASE_MODELS_CACHE: v })}
+										labelledBy={id}
+									/>
 								</div>
 							)}
 						</SettingRow>

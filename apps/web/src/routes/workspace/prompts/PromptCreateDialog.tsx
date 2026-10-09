@@ -7,12 +7,7 @@ import { Spinner } from '@/components/common/Spinner';
 import { Tags } from '@/components/common/Tags';
 import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogTitle
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { getPromptTags } from '@/lib/apis/prompts';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { slugify } from '@/lib/utils';

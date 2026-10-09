@@ -12,5 +12,10 @@ export function Katex({ content, displayMode }: { content: string; displayMode: 
 		}
 	}, [content, displayMode]);
 	if (html === null) return <code>{content}</code>;
-	return <span className={displayMode ? 'block overflow-x-auto py-1' : undefined} dangerouslySetInnerHTML={{ __html: html }} />;
+	return (
+		<span
+			className={displayMode ? 'block overflow-x-auto py-1' : undefined}
+			dangerouslySetInnerHTML={{ __html: html }}
+		/>
+	);
 }

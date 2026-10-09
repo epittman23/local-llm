@@ -20,7 +20,8 @@ async function mockEvaluationsApi(
 ) {
 	const state = { feedbacks: opts.feedbacks ?? [] };
 	const calls: Call[] = [];
-	const json = (route: any, d: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(d) });
+	const json = (route: any, d: unknown, status = 200) =>
+		route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(d) });
 	await page.route('**/api/models*', (route) => json(route, { data: opts.models ?? [] }));
 	await page.route('**/api/v1/evaluations/**', (route) => {
 		const req = route.request();
@@ -41,7 +42,13 @@ async function mockEvaluationsApi(
 			const found = state.feedbacks.find((f) => f.id === m[1]);
 			return json(route, {
 				...found,
-				snapshot: { chat: { chat: { history: { messages: { m1: { content: 'What is 2+2?' }, m2: { content: 'It is 4.', parentId: 'm1' } } } } } }
+				snapshot: {
+					chat: {
+						chat: {
+							history: { messages: { m1: { content: 'What is 2+2?' }, m2: { content: 'It is 4.', parentId: 'm1' } } }
+						}
+					}
+				}
 			});
 		}
 		if (m && req.method() === 'DELETE') {
@@ -88,7 +95,7 @@ test.describe('admin evaluations', () => {
 		await expect(page.getByText('Arena', { exact: true })).toHaveCount(0);
 	});
 
-	test('sorting by name keeps each model\'s rank', async ({ page }) => {
+	test("sorting by name keeps each model's rank", async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockEvaluationsApi(page, { models, entries });
 		await page.goto('/admin/evaluations/leaderboard');
@@ -123,11 +130,17 @@ test.describe('admin evaluations', () => {
 		const dialog = page.getByRole('dialog');
 		await expect(dialog.getByText('code', { exact: false }).first()).toBeVisible();
 		await expect(dialog.getByRole('img', { name: 'Model activity chart' })).toBeVisible();
-		await expect.poll(() => calls.some((c) => c.path === '/leaderboard/alpha/history' && c.search.includes('days=30'))).toBe(true);
+		await expect
+			.poll(() => calls.some((c) => c.path === '/leaderboard/alpha/history' && c.search.includes('days=30')))
+			.toBe(true);
 		await dialog.getByRole('button', { name: '1Y' }).click();
-		await expect.poll(() => calls.some((c) => c.path === '/leaderboard/alpha/history' && c.search.includes('days=365'))).toBe(true);
+		await expect
+			.poll(() => calls.some((c) => c.path === '/leaderboard/alpha/history' && c.search.includes('days=365')))
+			.toBe(true);
 		await dialog.getByRole('button', { name: 'All' }).click();
-		await expect.poll(() => calls.some((c) => c.path === '/leaderboard/alpha/history' && c.search.includes('days=0'))).toBe(true);
+		await expect
+			.poll(() => calls.some((c) => c.path === '/leaderboard/alpha/history' && c.search.includes('days=0')))
+			.toBe(true);
 	});
 
 	test('an empty history says so instead of drawing a chart', async ({ page }) => {
@@ -143,7 +156,11 @@ test.describe('admin feedback', () => {
 	test('lists feedback with result badges, including a numeric draw', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockEvaluationsApi(page, {
-			feedbacks: [feedback(1, { data: { model_id: 'model-1', rating: 1 } }), feedback(2, { data: { model_id: 'model-2', rating: 0 } }), feedback(3, { data: { model_id: 'model-3', rating: -1 } })]
+			feedbacks: [
+				feedback(1, { data: { model_id: 'model-1', rating: 1 } }),
+				feedback(2, { data: { model_id: 'model-2', rating: 0 } }),
+				feedback(3, { data: { model_id: 'model-3', rating: -1 } })
+			]
 		});
 		await page.goto('/admin/evaluations/feedback');
 		await expect(page.getByText('model-1', { exact: true })).toBeVisible();
@@ -154,7 +171,9 @@ test.describe('admin feedback', () => {
 
 	test('shows sibling models for an arena feedback, truncated after two', async ({ page }) => {
 		await mockWorkspaceBackend(page);
-		await mockEvaluationsApi(page, { feedbacks: [feedback(1, { data: { model_id: 'winner', rating: 1, sibling_model_ids: ['a', 'b', 'c', 'd'] } })] });
+		await mockEvaluationsApi(page, {
+			feedbacks: [feedback(1, { data: { model_id: 'winner', rating: 1, sibling_model_ids: ['a', 'b', 'c', 'd'] } })]
+		});
 		await page.goto('/admin/evaluations/feedback');
 		await expect(page.getByText('a, b, and 2 more')).toBeVisible();
 	});
@@ -165,7 +184,9 @@ test.describe('admin feedback', () => {
 		await page.goto('/admin/evaluations/feedback');
 		await page.getByRole('button', { name: 'Model' }).click();
 		await page.getByRole('menuitemradio', { name: 'model-2' }).click();
-		await expect.poll(() => calls.some((c) => c.path === '/feedbacks/list' && c.search.includes('model_id=model-2'))).toBe(true);
+		await expect
+			.poll(() => calls.some((c) => c.path === '/feedbacks/list' && c.search.includes('model_id=model-2')))
+			.toBe(true);
 		await expect(page.getByText('model-1', { exact: true })).toHaveCount(0);
 	});
 
@@ -185,7 +206,9 @@ test.describe('admin feedback', () => {
 	test('a feedback with no chat snapshot still opens', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockEvaluationsApi(page, { feedbacks: [feedback(1)] });
-		await page.route('**/api/v1/evaluations/feedback/fb_1', (route) => route.fulfill({ json: { id: 'fb_1', meta: {}, snapshot: null } }));
+		await page.route('**/api/v1/evaluations/feedback/fb_1', (route) =>
+			route.fulfill({ json: { id: 'fb_1', meta: {}, snapshot: null } })
+		);
 		await page.goto('/admin/evaluations/feedback');
 		await page.locator('tbody tr').first().click();
 		const dialog = page.getByRole('dialog');

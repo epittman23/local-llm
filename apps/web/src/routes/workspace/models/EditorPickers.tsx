@@ -35,7 +35,11 @@ export function CheckboxGrid({
 			<div className="grid grid-cols-1 gap-x-5 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
 				{items.map((item) => (
 					<div key={item.id} className="flex min-h-6 items-center gap-2.5">
-						<Checkbox aria-label={item.label} checked={isChecked(item.id)} onCheckedChange={(c) => onToggle(item.id, c === true)} />
+						<Checkbox
+							aria-label={item.label}
+							checked={isChecked(item.id)}
+							onCheckedChange={(c) => onToggle(item.id, c === true)}
+						/>
 						<button type="button" className="min-w-0 text-left" onClick={() => onToggle(item.id, !isChecked(item.id))}>
 							<Tip content={<SafeMarkdown text={item.description} className="text-background" />} side="top">
 								<span className="block truncate">{item.label}</span>
@@ -50,7 +54,13 @@ export function CheckboxGrid({
 
 // --- pick from a searchable list; picked items are shown as checkboxes -----------
 
-export type PickItem = { id: string; name?: string; is_global?: boolean; meta?: { description?: string }; description?: string };
+export type PickItem = {
+	id: string;
+	name?: string;
+	is_global?: boolean;
+	meta?: { description?: string };
+	description?: string;
+};
 
 /**
  * Ports the Tools / Skills / Filters / Default Filters / Actions selectors (they
@@ -81,7 +91,9 @@ export function ItemPicker({
 	const [query, setQuery] = useState('');
 
 	const selectable = lockGlobal ? items.filter((i) => !i.is_global) : items;
-	const shown = lockGlobal ? items.filter((i) => i.is_global || selectedIds.includes(i.id)) : items.filter((i) => selectedIds.includes(i.id));
+	const shown = lockGlobal
+		? items.filter((i) => i.is_global || selectedIds.includes(i.id))
+		: items.filter((i) => selectedIds.includes(i.id));
 	const q = query.trim().toLowerCase();
 	const matches = selectable.filter(
 		(i) =>
@@ -90,7 +102,8 @@ export function ItemPicker({
 			(i.name ?? '').toLowerCase().includes(q) ||
 			(i.description ?? i.meta?.description ?? '').toLowerCase().includes(q)
 	);
-	const toggle = (id: string) => onChange(selectedIds.includes(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]);
+	const toggle = (id: string) =>
+		onChange(selectedIds.includes(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]);
 
 	return (
 		<div>
@@ -176,7 +189,11 @@ export function ItemPicker({
 						</div>
 					))}
 					{shown.some((i) => !(lockGlobal && i.is_global)) && (
-						<button type="button" className="text-muted-foreground text-xs hover:underline" onClick={() => onChange([])}>
+						<button
+							type="button"
+							className="text-muted-foreground text-xs hover:underline"
+							onClick={() => onChange([])}
+						>
 							Disable all
 						</button>
 					)}
@@ -219,7 +236,10 @@ export function BaseModelSelect({
 				<button
 					type="button"
 					aria-label="Base model"
-					className={cn('border-border flex w-full items-center justify-between rounded-lg border px-2.5 py-1.5 text-left text-xs', !current && 'text-muted-foreground')}
+					className={cn(
+						'border-border flex w-full items-center justify-between rounded-lg border px-2.5 py-1.5 text-left text-xs',
+						!current && 'text-muted-foreground'
+					)}
 				>
 					<span className="truncate">{current?.label ?? value ?? placeholder}</span>
 					<ChevronDown className="size-3.5 shrink-0" />

@@ -18,7 +18,14 @@ export type MockUserOptions = {
 // requests are answered with an empty list rather than left to hit the (absent)
 // backend proxy, so a stray call fails visibly as "no data", not as a hang.
 export async function mockWorkspaceBackend(page: Page, options: MockUserOptions = {}) {
-	const { role = 'admin', workspacePermissions = {}, featurePermissions = {}, enablePlugins = true, features = {}, config = {} } = options;
+	const {
+		role = 'admin',
+		workspacePermissions = {},
+		featurePermissions = {},
+		enablePlugins = true,
+		features = {},
+		config = {}
+	} = options;
 	const user = {
 		id: 'u1',
 		email: 'u@example.com',

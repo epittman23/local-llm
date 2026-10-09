@@ -28,10 +28,7 @@ export async function* parseBenchmarksEventStream<T = any>(
 	body: ReadableStream<Uint8Array>
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): AsyncGenerator<BenchmarksSSEEvent<T>> {
-	const reader = body
-		.pipeThrough(new TextDecoderStream())
-		.pipeThrough(new EventSourceParserStream())
-		.getReader();
+	const reader = body.pipeThrough(new TextDecoderStream()).pipeThrough(new EventSourceParserStream()).getReader();
 
 	while (true) {
 		const { value, done } = await reader.read();
@@ -96,17 +93,14 @@ export const getServeProfiles = async (token: string = '') => {
 export const getServeProfile = async (token: string = '', name: string) => {
 	let error = null;
 
-	const res = await fetch(
-		`${WEBUI_API_BASE_URL}/benchmarks/serve/profile/${encodeURIComponent(name)}`,
-		{
-			method: 'GET',
-			headers: {
-				Accept: 'application/json',
-				'Content-Type': 'application/json',
-				authorization: `Bearer ${token}`
-			}
+	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/serve/profile/${encodeURIComponent(name)}`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
 		}
-	)
+	})
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
 			return res.json();
@@ -453,11 +447,7 @@ export type CompareBy = 'config' | 'benchmark' | 'failures' | 'serving';
 // the caller narrows it based on the `by` it passed.
 export const getCompare = async (
 	token: string = '',
-	{
-		by,
-		tier = null,
-		baseline = null
-	}: { by: CompareBy; tier?: string | null; baseline?: string | null }
+	{ by, tier = null, baseline = null }: { by: CompareBy; tier?: string | null; baseline?: string | null }
 ) => {
 	let error = null;
 
@@ -466,17 +456,14 @@ export const getCompare = async (
 	if (tier) searchParams.append('tier', tier);
 	if (baseline) searchParams.append('baseline', baseline);
 
-	const res = await fetch(
-		`${WEBUI_API_BASE_URL}/benchmarks/compare/?${searchParams.toString()}`,
-		{
-			method: 'GET',
-			headers: {
-				Accept: 'application/json',
-				'Content-Type': 'application/json',
-				authorization: `Bearer ${token}`
-			}
+	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/compare/?${searchParams.toString()}`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
 		}
-	)
+	})
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
 			return res.json();
@@ -533,17 +520,14 @@ export const getAnswerRuns = async (token: string = '', limit: number = 20) => {
 	const searchParams = new URLSearchParams();
 	if (limit) searchParams.append('limit', limit.toString());
 
-	const res = await fetch(
-		`${WEBUI_API_BASE_URL}/benchmarks/answers/runs?${searchParams.toString()}`,
-		{
-			method: 'GET',
-			headers: {
-				Accept: 'application/json',
-				'Content-Type': 'application/json',
-				authorization: `Bearer ${token}`
-			}
+	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/answers/runs?${searchParams.toString()}`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
 		}
-	)
+	})
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
 			return res.json();
@@ -561,11 +545,7 @@ export const getAnswerRuns = async (token: string = '', limit: number = 20) => {
 	return res;
 };
 
-export const getAnswers = async (
-	token: string = '',
-	run: string,
-	filter: 'failures' | 'all' | 'pass' = 'failures'
-) => {
+export const getAnswers = async (token: string = '', run: string, filter: 'failures' | 'all' | 'pass' = 'failures') => {
 	let error = null;
 
 	const searchParams = new URLSearchParams();
@@ -599,12 +579,7 @@ export const getAnswers = async (
 
 export const getAnswerOne = async (
 	token: string = '',
-	{
-		run,
-		benchmark,
-		item_id,
-		thinking = false
-	}: { run: string; benchmark: string; item_id: string; thinking?: boolean }
+	{ run, benchmark, item_id, thinking = false }: { run: string; benchmark: string; item_id: string; thinking?: boolean }
 ) => {
 	let error = null;
 
@@ -614,17 +589,14 @@ export const getAnswerOne = async (
 	if (item_id) searchParams.append('item_id', item_id);
 	searchParams.append('thinking', thinking ? 'true' : 'false');
 
-	const res = await fetch(
-		`${WEBUI_API_BASE_URL}/benchmarks/answers/one?${searchParams.toString()}`,
-		{
-			method: 'GET',
-			headers: {
-				Accept: 'application/json',
-				'Content-Type': 'application/json',
-				authorization: `Bearer ${token}`
-			}
+	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/answers/one?${searchParams.toString()}`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
 		}
-	)
+	})
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
 			return res.json();
@@ -691,9 +663,7 @@ export const generateReport = async (token: string = '', form: ReportForm = {}) 
 // `generateReport` (e.g. revisiting a past report from `getRecentSweeps`/
 // history).
 export const reportFileUrl = (runDir: string, filename: string): string =>
-	`${WEBUI_API_BASE_URL}/benchmarks/report/files/${encodeURIComponent(runDir)}/${encodeURIComponent(
-		filename
-	)}`;
+	`${WEBUI_API_BASE_URL}/benchmarks/report/files/${encodeURIComponent(runDir)}/${encodeURIComponent(filename)}`;
 
 // `<img>`/`<a>` tags can't attach an `authorization` header, so an `<img
 // src={reportFileUrl(...)}>` only works if the browser sends the session
@@ -794,17 +764,14 @@ export const resumeTune = async (token: string = '', sweepId: string | null = nu
 	const searchParams = new URLSearchParams();
 	if (sweepId) searchParams.append('sweep_id', sweepId);
 
-	const res = await fetch(
-		`${WEBUI_API_BASE_URL}/benchmarks/tune/resume?${searchParams.toString()}`,
-		{
-			method: 'POST',
-			headers: {
-				Accept: 'application/json',
-				'Content-Type': 'application/json',
-				authorization: `Bearer ${token}`
-			}
+	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/tune/resume?${searchParams.toString()}`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
 		}
-	)
+	})
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
 			return res.json();
@@ -856,17 +823,14 @@ export const getTuneStatus = async (token: string = '', sweepId: string | null =
 	const searchParams = new URLSearchParams();
 	if (sweepId) searchParams.append('sweep_id', sweepId);
 
-	const res = await fetch(
-		`${WEBUI_API_BASE_URL}/benchmarks/tune/status?${searchParams.toString()}`,
-		{
-			method: 'GET',
-			headers: {
-				Accept: 'application/json',
-				'Content-Type': 'application/json',
-				authorization: `Bearer ${token}`
-			}
+	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/tune/status?${searchParams.toString()}`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
 		}
-	)
+	})
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
 			return res.json();
@@ -918,17 +882,14 @@ export const getRecentSweeps = async (token: string = '', limit: number = 20) =>
 	const searchParams = new URLSearchParams();
 	if (limit) searchParams.append('limit', limit.toString());
 
-	const res = await fetch(
-		`${WEBUI_API_BASE_URL}/benchmarks/tune/recent?${searchParams.toString()}`,
-		{
-			method: 'GET',
-			headers: {
-				Accept: 'application/json',
-				'Content-Type': 'application/json',
-				authorization: `Bearer ${token}`
-			}
+	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/tune/recent?${searchParams.toString()}`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
 		}
-	)
+	})
 		.then(async (res) => {
 			if (!res.ok) throw await res.json();
 			return res.json();
@@ -958,18 +919,15 @@ export const streamTuneLog = async (
 	const searchParams = new URLSearchParams();
 	if (sweepId) searchParams.append('sweep_id', sweepId);
 
-	const res = await fetch(
-		`${WEBUI_API_BASE_URL}/benchmarks/tune/log?${searchParams.toString()}`,
-		{
-			signal: controller.signal,
-			method: 'GET',
-			headers: {
-				Accept: 'application/json',
-				'Content-Type': 'application/json',
-				authorization: `Bearer ${token}`
-			}
+	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/tune/log?${searchParams.toString()}`, {
+		signal: controller.signal,
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
 		}
-	).catch((err) => {
+	}).catch((err) => {
 		console.error(err);
 		error = err;
 		return null;

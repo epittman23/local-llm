@@ -6,7 +6,16 @@ import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Tip } from '@/components/common/Tip';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuSub,
+	DropdownMenuSubContent,
+	DropdownMenuSubTrigger,
+	DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import { archiveChatById, deleteChatById, getChatById } from '@/lib/apis/chats';
 import { chatAsText, fileSafe } from '@/lib/chat/chatList';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -36,8 +45,10 @@ export function ChatMenu({ chatId, title, onControls }: { chatId: string; title:
 	const download = async (kind: 'json' | 'txt') => {
 		const full = await getChatById(token, chatId).catch(() => null);
 		if (!full) return;
-		if (kind === 'json') saveAs(new Blob([JSON.stringify([full])], { type: 'application/json' }), `chat-export-${Date.now()}.json`);
-		else saveAs(new Blob([chatAsText(full)], { type: 'text/plain' }), `chat-${fileSafe(full.chat?.title ?? title)}.txt`);
+		if (kind === 'json')
+			saveAs(new Blob([JSON.stringify([full])], { type: 'application/json' }), `chat-export-${Date.now()}.json`);
+		else
+			saveAs(new Blob([chatAsText(full)], { type: 'text/plain' }), `chat-${fileSafe(full.chat?.title ?? title)}.txt`);
 	};
 
 	return (
@@ -45,7 +56,11 @@ export function ChatMenu({ chatId, title, onControls }: { chatId: string; title:
 			<DropdownMenu>
 				<Tip content="More">
 					<DropdownMenuTrigger asChild>
-						<button type="button" aria-label="Chat menu" className="text-muted-foreground hover:bg-muted rounded-lg p-1.5">
+						<button
+							type="button"
+							aria-label="Chat menu"
+							className="text-muted-foreground hover:bg-muted rounded-lg p-1.5"
+						>
 							<MoreHorizontal className="size-4" />
 						</button>
 					</DropdownMenuTrigger>
@@ -76,7 +91,13 @@ export function ChatMenu({ chatId, title, onControls }: { chatId: string; title:
 				</DropdownMenuContent>
 			</DropdownMenu>
 			{share && <ShareChatDialog open={share} onOpenChange={setShare} chatId={chatId} />}
-			<ConfirmDialog open={confirmDelete} onOpenChange={setConfirmDelete} title="Delete chat?" confirmLabel="Delete" onConfirm={() => void leave(() => deleteChatById(token, chatId))}>
+			<ConfirmDialog
+				open={confirmDelete}
+				onOpenChange={setConfirmDelete}
+				title="Delete chat?"
+				confirmLabel="Delete"
+				onConfirm={() => void leave(() => deleteChatById(token, chatId))}
+			>
 				This will delete <strong>{title || 'this chat'}</strong>.
 			</ConfirmDialog>
 		</>

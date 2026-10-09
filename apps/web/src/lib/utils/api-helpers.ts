@@ -120,9 +120,7 @@ function resolveSchema(schemaRef: any, components: any, resolvedSchemas = new Se
 		// Resolve composition keywords (oneOf, anyOf, allOf) which may contain $ref
 		for (const keyword of ['oneOf', 'anyOf', 'allOf']) {
 			if (Array.isArray(schemaRef[keyword])) {
-				schemaObj[keyword] = schemaRef[keyword].map((inner: any) =>
-					resolveSchema(inner, components, resolvedSchemas)
-				);
+				schemaObj[keyword] = schemaRef[keyword].map((inner: any) => resolveSchema(inner, components, resolvedSchemas));
 			}
 		}
 
@@ -151,16 +149,7 @@ function resolveSchema(schemaRef: any, components: any, resolvedSchemas = new Se
 
 // Valid HTTP methods per OpenAPI 3.x – used to skip extension keys (x-*)
 // and non-operation path-item fields (summary, description, servers, parameters).
-const OPENAPI_HTTP_METHODS = new Set([
-	'get',
-	'put',
-	'post',
-	'delete',
-	'options',
-	'head',
-	'patch',
-	'trace'
-]);
+const OPENAPI_HTTP_METHODS = new Set(['get', 'put', 'post', 'delete', 'options', 'head', 'patch', 'trace']);
 
 export const convertOpenApiToToolPayload = (openApiSpec: any) => {
 	const toolPayload: any[] = [];
@@ -175,9 +164,7 @@ export const convertOpenApiToToolPayload = (openApiSpec: any) => {
 
 		// Path-level parameters apply to all operations under this path
 		// unless overridden at the operation level (matched by name + in).
-		const pathLevelParams: any[] = Array.isArray((methods as any).parameters)
-			? (methods as any).parameters
-			: [];
+		const pathLevelParams: any[] = Array.isArray((methods as any).parameters) ? (methods as any).parameters : [];
 
 		for (const [method, operation] of Object.entries(methods)) {
 			if (!OPENAPI_HTTP_METHODS.has(method)) continue;
@@ -185,10 +172,7 @@ export const convertOpenApiToToolPayload = (openApiSpec: any) => {
 			if ((operation as any)?.operationId) {
 				const tool: any = {
 					name: (operation as any).operationId,
-					description:
-						(operation as any).description ||
-						(operation as any).summary ||
-						'No description available.',
+					description: (operation as any).description || (operation as any).summary || 'No description available.',
 					parameters: {
 						type: 'object',
 						properties: {} as Record<string, any>,
@@ -199,9 +183,7 @@ export const convertOpenApiToToolPayload = (openApiSpec: any) => {
 				// Merge path-level and operation-level parameters.
 				// Operation-level params override path-level params with the
 				// same (name, in) pair per the OpenAPI spec.
-				const opParams: any[] = Array.isArray((operation as any).parameters)
-					? (operation as any).parameters
-					: [];
+				const opParams: any[] = Array.isArray((operation as any).parameters) ? (operation as any).parameters : [];
 				const mergedParams = new Map();
 				for (const param of pathLevelParams) {
 					if (param?.name) mergedParams.set(`${param.name}:${param.in ?? ''}`, param);

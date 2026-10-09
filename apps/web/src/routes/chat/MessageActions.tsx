@@ -1,9 +1,29 @@
-import { ChevronDown, Info, Pencil, PlayCircle, RotateCcw, Send, Sparkles, ThumbsDown, ThumbsUp, Trash2, Volume2, VolumeX, X } from 'lucide-react';
+import {
+	ChevronDown,
+	Info,
+	Pencil,
+	PlayCircle,
+	RotateCcw,
+	Send,
+	Sparkles,
+	ThumbsDown,
+	ThumbsUp,
+	Trash2,
+	Volume2,
+	VolumeX,
+	X
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Tip } from '@/components/common/Tip';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { DISLIKE_REASONS, type FeedbackDetails, LIKE_REASONS, REASON_LABELS } from '@/lib/chat/feedback';
@@ -85,8 +105,21 @@ function EditBox({ message, onDone, session }: { message: Message; onDone: () =>
 }
 
 /** Ports RateComment.svelte: why, a 1-10 score and a comment, saved onto the rating. */
-function RateComment({ message, onSave, onClose }: { message: Message; onSave: (d: FeedbackDetails) => void; onClose: () => void }) {
-	const a = (message.annotation ?? {}) as { rating?: number; reason?: string; comment?: string; details?: { rating?: number | null } };
+function RateComment({
+	message,
+	onSave,
+	onClose
+}: {
+	message: Message;
+	onSave: (d: FeedbackDetails) => void;
+	onClose: () => void;
+}) {
+	const a = (message.annotation ?? {}) as {
+		rating?: number;
+		reason?: string;
+		comment?: string;
+		details?: { rating?: number | null };
+	};
 	const [reason, setReason] = useState(a.reason ?? '');
 	const [score, setScore] = useState<number | null>(a.details?.rating ?? null);
 	const [comment, setComment] = useState(a.comment ?? '');
@@ -101,7 +134,14 @@ function RateComment({ message, onSave, onClose }: { message: Message; onSave: (
 			</div>
 			<div className="mt-2 flex flex-wrap gap-1" role="group" aria-label="Score">
 				{Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-					<button key={n} type="button" aria-label={`Rate ${n} out of 10`} aria-pressed={score === n} className={cn('size-7 rounded-lg border text-xs', score === n && 'bg-foreground text-background')} onClick={() => setScore(n)}>
+					<button
+						key={n}
+						type="button"
+						aria-label={`Rate ${n} out of 10`}
+						aria-pressed={score === n}
+						className={cn('size-7 rounded-lg border text-xs', score === n && 'bg-foreground text-background')}
+						onClick={() => setScore(n)}
+					>
 						{n}
 					</button>
 				))}
@@ -111,16 +151,41 @@ function RateComment({ message, onSave, onClose }: { message: Message; onSave: (
 					<div className="mt-2 text-sm">Why?</div>
 					<div className="mt-1 flex flex-wrap gap-1">
 						{reasons.map((r) => (
-							<button key={r} type="button" aria-pressed={reason === r} className={cn('rounded-full border px-2.5 py-0.5 text-xs', reason === r && 'bg-foreground text-background')} onClick={() => setReason(r)}>
+							<button
+								key={r}
+								type="button"
+								aria-pressed={reason === r}
+								className={cn(
+									'rounded-full border px-2.5 py-0.5 text-xs',
+									reason === r && 'bg-foreground text-background'
+								)}
+								onClick={() => setReason(r)}
+							>
 								{REASON_LABELS[r]}
 							</button>
 						))}
 					</div>
 				</>
 			)}
-			<Textarea className="mt-2" aria-label="Additional feedback comments" placeholder="Feel free to add specific details" value={comment} onChange={(e) => setComment(e.target.value)} />
+			<Textarea
+				className="mt-2"
+				aria-label="Additional feedback comments"
+				placeholder="Feel free to add specific details"
+				value={comment}
+				onChange={(e) => setComment(e.target.value)}
+			/>
 			<div className="mt-2 flex justify-end">
-				<Button size="sm" onClick={() => onSave({ reason, comment, tags: (message.annotation as { tags?: string[] } | undefined)?.tags ?? [], details: { rating: score } })}>
+				<Button
+					size="sm"
+					onClick={() =>
+						onSave({
+							reason,
+							comment,
+							tags: (message.annotation as { tags?: string[] } | undefined)?.tags ?? [],
+							details: { rating: score }
+						})
+					}
+				>
 					Save
 				</Button>
 			</div>
@@ -131,7 +196,12 @@ function RateComment({ message, onSave, onClose }: { message: Message; onSave: (
 function RegenerateButton({ message, session }: { message: Message; session: Session }) {
 	return (
 		<Tip content="Regenerate">
-			<button type="button" aria-label="Regenerate" className={cn(actionButton, 'regenerate-response-button')} onClick={() => void session.regenerate(message)}>
+			<button
+				type="button"
+				aria-label="Regenerate"
+				className={cn(actionButton, 'regenerate-response-button')}
+				onClick={() => void session.regenerate(message)}
+			>
 				<RotateCcw className="size-3.5" />
 			</button>
 		</Tip>
@@ -160,12 +230,23 @@ function RegenerateMenu({ message, session }: { message: Message; session: Sessi
 							setSuggestion('');
 						}}
 					>
-						<Input placeholder="Suggest a change" aria-label="Suggest a change" value={suggestion} onChange={(e) => setSuggestion(e.target.value)} onKeyDown={(e) => e.stopPropagation()} className="h-8" />
+						<Input
+							placeholder="Suggest a change"
+							aria-label="Suggest a change"
+							value={suggestion}
+							onChange={(e) => setSuggestion(e.target.value)}
+							onKeyDown={(e) => e.stopPropagation()}
+							className="h-8"
+						/>
 					</form>
 					<DropdownMenuSeparator />
 					<DropdownMenuItem onSelect={() => void session.regenerate(message)}>Try Again</DropdownMenuItem>
-					<DropdownMenuItem onSelect={() => void session.regenerate(message, 'Add Details')}>Add Details</DropdownMenuItem>
-					<DropdownMenuItem onSelect={() => void session.regenerate(message, 'More Concise')}>More Concise</DropdownMenuItem>
+					<DropdownMenuItem onSelect={() => void session.regenerate(message, 'Add Details')}>
+						Add Details
+					</DropdownMenuItem>
+					<DropdownMenuItem onSelect={() => void session.regenerate(message, 'More Concise')}>
+						More Concise
+					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>
 		</div>
@@ -178,9 +259,13 @@ function RegenerateMenu({ message, session }: { message: Message; session: Sessi
  * form, Continue Response, the regenerate menu, and Delete, each behind the
  * chat permission the Svelte app checks.
  */
-export function useMessageActions(session: Session): Pick<MessageHandlers, 'extraActions' | 'editing' | 'below' | 'regenerate'> {
+export function useMessageActions(
+	session: Session
+): Pick<MessageHandlers, 'extraActions' | 'editing' | 'below' | 'regenerate'> {
 	const user = useAuthStore((s) => s.user);
-	const ratingOn = useConfigStore((s) => ((s.config?.features ?? {}) as Record<string, unknown>).enable_message_rating ?? true);
+	const ratingOn = useConfigStore(
+		(s) => ((s.config?.features ?? {}) as Record<string, unknown>).enable_message_rating ?? true
+	);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [ratingId, setRatingId] = useState<string | null>(null);
 	const [deleting, setDeleting] = useState<Message | null>(null);
@@ -210,7 +295,9 @@ export function useMessageActions(session: Session): Pick<MessageHandlers, 'extr
 	const extraActions = (m: Message, { isLast }: { isLast: boolean }) => {
 		const reply = m.role === 'assistant';
 		const rating = (m.annotation as { rating?: number } | undefined)?.rating;
-		const canDelete = reply ? canChat(user, 'delete_message') : canChat(user, 'delete_user_message') && (m.parentId !== null || siblingsOf(session.history, m).length > 1);
+		const canDelete = reply
+			? canChat(user, 'delete_message')
+			: canChat(user, 'delete_user_message') && (m.parentId !== null || siblingsOf(session.history, m).length > 1);
 		return (
 			<>
 				{(!reply || canChat(user, 'edit')) && (
@@ -222,7 +309,12 @@ export function useMessageActions(session: Session): Pick<MessageHandlers, 'extr
 				)}
 				{reply && canChat(user, 'tts') && (
 					<Tip content={speakingId === m.id ? 'Stop' : 'Read Aloud'}>
-						<button type="button" aria-label={speakingId === m.id ? 'Stop reading' : 'Read Aloud'} className={actionButton} onClick={() => (speakingId === m.id ? stop() : void speak(m.id, m.content))}>
+						<button
+							type="button"
+							aria-label={speakingId === m.id ? 'Stop reading' : 'Read Aloud'}
+							className={actionButton}
+							onClick={() => (speakingId === m.id ? stop() : void speak(m.id, m.content))}
+						>
 							{speakingId === m.id ? <VolumeX className="size-3.5" /> : <Volume2 className="size-3.5" />}
 						</button>
 					</Tip>
@@ -260,7 +352,16 @@ export function useMessageActions(session: Session): Pick<MessageHandlers, 'extr
 					</>
 				)}
 				{reply && m.usage && (
-					<Tip content={<pre className="text-xs">{Object.entries(m.usage).filter(([, v]) => typeof v !== 'object').map(([k, v]) => `${k}: ${v}`).join('\n')}</pre>}>
+					<Tip
+						content={
+							<pre className="text-xs">
+								{Object.entries(m.usage)
+									.filter(([, v]) => typeof v !== 'object')
+									.map(([k, v]) => `${k}: ${v}`)
+									.join('\n')}
+							</pre>
+						}
+					>
 						<button type="button" aria-label="Generation Info" className={actionButton}>
 							<Info className="size-3.5" />
 						</button>
@@ -268,7 +369,12 @@ export function useMessageActions(session: Session): Pick<MessageHandlers, 'extr
 				)}
 				{reply && isLast && canContinue(m) && canChat(user, 'continue_response') && (
 					<Tip content="Continue Response">
-						<button type="button" aria-label="Continue Response" className={actionButton} onClick={() => void session.continueReply(m)}>
+						<button
+							type="button"
+							aria-label="Continue Response"
+							className={actionButton}
+							onClick={() => void session.continueReply(m)}
+						>
 							<PlayCircle className="size-3.5" />
 						</button>
 					</Tip>
@@ -277,8 +383,22 @@ export function useMessageActions(session: Session): Pick<MessageHandlers, 'extr
 				{reply &&
 					(models.find((x) => x.id === m.model)?.actions ?? []).map((action) => (
 						<Tip key={action.id} content={action.name}>
-							<button type="button" aria-label={action.name} className={actionButton} onClick={() => void session.runAction(action.id, m)}>
-								{action.icon ? <img src={action.icon} alt="" className={cn('size-3.5', action.icon.includes('data:image/svg') && 'dark:invert-[80%]')} draggable={false} /> : <Sparkles className="size-3.5" />}
+							<button
+								type="button"
+								aria-label={action.name}
+								className={actionButton}
+								onClick={() => void session.runAction(action.id, m)}
+							>
+								{action.icon ? (
+									<img
+										src={action.icon}
+										alt=""
+										className={cn('size-3.5', action.icon.includes('data:image/svg') && 'dark:invert-[80%]')}
+										draggable={false}
+									/>
+								) : (
+									<Sparkles className="size-3.5" />
+								)}
 							</button>
 						</Tip>
 					))}
@@ -309,7 +429,8 @@ export function useMessageActions(session: Session): Pick<MessageHandlers, 'extr
 
 	return {
 		extraActions,
-		editing: (m) => (m.id === editingId ? <EditBox message={m} session={session} onDone={() => setEditingId(null)} /> : null),
+		editing: (m) =>
+			m.id === editingId ? <EditBox message={m} session={session} onDone={() => setEditingId(null)} /> : null,
 		below: (m) =>
 			m.id === ratingId ? (
 				<RateComment
@@ -321,6 +442,13 @@ export function useMessageActions(session: Session): Pick<MessageHandlers, 'extr
 					}}
 				/>
 			) : null,
-		regenerate: canChat(user, 'regenerate_response') ? (m) => (prefs.regenerateMenu ? <RegenerateMenu message={m} session={session} /> : <RegenerateButton message={m} session={session} />) : () => null
+		regenerate: canChat(user, 'regenerate_response')
+			? (m) =>
+					prefs.regenerateMenu ? (
+						<RegenerateMenu message={m} session={session} />
+					) : (
+						<RegenerateButton message={m} session={session} />
+					)
+			: () => null
 	};
 }

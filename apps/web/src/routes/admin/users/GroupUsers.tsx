@@ -7,7 +7,12 @@ import { PagePagination } from '@/components/common/PagePagination';
 import { Spinner } from '@/components/common/Spinner';
 import { Tip } from '@/components/common/Tip';
 import { Checkbox } from '@/components/ui/checkbox';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 import { addUserToGroup, removeUserFromGroup } from '@/lib/apis/groups';
 import { getUsers } from '@/lib/apis/users';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
@@ -16,7 +21,14 @@ import { dayjs } from '@/lib/utils/dates';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { chunk, parseGroupCsv } from './groupCsv';
 
-type GroupUser = { id: string; name: string; email: string; role: string; last_active_at: number; group_ids?: string[] };
+type GroupUser = {
+	id: string;
+	name: string;
+	email: string;
+	role: string;
+	last_active_at: number;
+	group_ids?: string[];
+};
 type GroupUpdate = { member_count?: number };
 
 const BATCH_SIZE = 10;
@@ -59,7 +71,8 @@ export function GroupUsers({
 	const listKey = ['admin', 'group-users', groupId, { query: debouncedQuery, orderBy, direction, page }];
 	const list = useQuery({
 		queryKey: listKey,
-		queryFn: () => getUsers(token, debouncedQuery, orderBy, direction, page) as Promise<{ users: GroupUser[]; total: number }>,
+		queryFn: () =>
+			getUsers(token, debouncedQuery, orderBy, direction, page) as Promise<{ users: GroupUser[]; total: number }>,
 		placeholderData: keepPreviousData
 	});
 	const refetch = () => queryClient.invalidateQueries({ queryKey: ['admin', 'group-users', groupId] });
@@ -100,7 +113,9 @@ export function GroupUsers({
 					batch.map(({ idx, email }) =>
 						getUsers(token, email)
 							.then((res) => {
-								const found = ((res?.users ?? []) as { id?: string; email?: string }[]).find((u) => u.email?.toLowerCase() === email);
+								const found = ((res?.users ?? []) as { id?: string; email?: string }[]).find(
+									(u) => u.email?.toLowerCase() === email
+								);
 								if (found?.id) return found.id;
 								toast.error(`Row ${idx + 1}: User not found.`);
 								return null;
@@ -227,7 +242,13 @@ export function GroupUsers({
 								<thead className="text-foreground bg-transparent text-xs uppercase">
 									<tr className="border-b">
 										<th scope="col" className={`${th} w-8`}>
-											<SortHeaderButton label="MBR" active={orderBy === `group_id:${groupId}`} direction={direction} className={thInner} onClick={() => setSortKey(`group_id:${groupId}`)} />
+											<SortHeaderButton
+												label="MBR"
+												active={orderBy === `group_id:${groupId}`}
+												direction={direction}
+												className={thInner}
+												onClick={() => setSortKey(`group_id:${groupId}`)}
+											/>
 										</th>
 										{(
 											[
@@ -237,7 +258,13 @@ export function GroupUsers({
 											] as const
 										).map(([key, label]) => (
 											<th key={key} scope="col" className={th}>
-												<SortHeaderButton label={label} active={orderBy === key} direction={direction} className={thInner} onClick={() => setSortKey(key)} />
+												<SortHeaderButton
+													label={label}
+													active={orderBy === key}
+													direction={direction}
+													className={thInner}
+													onClick={() => setSortKey(key)}
+												/>
 											</th>
 										))}
 									</tr>
@@ -257,13 +284,19 @@ export function GroupUsers({
 											<td className="text-foreground max-w-48 px-3 py-1 font-normal">
 												<Tip content={user.email} side="top">
 													<div className="flex items-center gap-2">
-														<img className="size-6 shrink-0 rounded-full object-cover" src={`${WEBUI_API_BASE_URL}/users/${user.id}/profile/image`} alt="user" />
+														<img
+															className="size-6 shrink-0 rounded-full object-cover"
+															src={`${WEBUI_API_BASE_URL}/users/${user.id}/profile/image`}
+															alt="user"
+														/>
 														<div className="truncate font-normal">{user.name}</div>
 													</div>
 												</Tip>
 											</td>
 											<td className="w-20 min-w-[5rem] px-3 py-1">
-												<span className={`text-xs leading-4 font-normal capitalize ${roleClass(user.role)}`}>{user.role}</span>
+												<span className={`text-xs leading-4 font-normal capitalize ${roleClass(user.role)}`}>
+													{user.role}
+												</span>
 											</td>
 											<td className="px-3 py-1">{dayjs(user.last_active_at * 1000).fromNow()}</td>
 										</tr>

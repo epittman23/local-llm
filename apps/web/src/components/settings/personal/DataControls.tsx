@@ -8,14 +8,28 @@ import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { InfiniteLoader } from '@/components/common/InfiniteLoader';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { archiveAllChats, deleteAllChats, deleteSharedChatById, getAllChats, getSharedChatList, importChats } from '@/lib/apis/chats';
+import {
+	archiveAllChats,
+	deleteAllChats,
+	deleteSharedChatById,
+	getAllChats,
+	getSharedChatList,
+	importChats
+} from '@/lib/apis/chats';
 import { deleteFileById, getFiles } from '@/lib/apis/files';
 import { importPayload, parseChatExport } from '@/lib/chat/importChats';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { dayjs } from '@/lib/utils/dates';
 import { SettingRow, SettingsForm, SettingsSection } from '../controls';
 
-type Row = { id: string; title?: string; filename?: string; updated_at?: number; created_at?: number; share_id?: string };
+type Row = {
+	id: string;
+	title?: string;
+	filename?: string;
+	updated_at?: number;
+	created_at?: number;
+	share_id?: string;
+};
 
 /** Ports layout/SharedChatsModal.svelte: chats the user has shared, each of which can be unshared. */
 function SharedChatsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
@@ -55,7 +69,9 @@ function SharedChatsDialog({ open, onOpenChange }: { open: boolean; onOpenChange
 							</button>
 						</li>
 					))}
-					{list.hasNextPage && <InfiniteLoader onVisible={() => !list.isFetchingNextPage && void list.fetchNextPage()} />}
+					{list.hasNextPage && (
+						<InfiniteLoader onVisible={() => !list.isFetchingNextPage && void list.fetchNextPage()} />
+					)}
 				</ul>
 				{!list.isLoading && !rows.length && <p className="text-muted-foreground text-sm">You have no shared chats.</p>}
 			</DialogContent>
@@ -66,10 +82,14 @@ function SharedChatsDialog({ open, onOpenChange }: { open: boolean; onOpenChange
 /** Ports layout/FilesModal.svelte (list and delete): the files the user has uploaded. */
 function FilesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
 	const token = useAuthStore((s) => s.token) ?? '';
-	const files = useQuery({ queryKey: ['user-files'], enabled: open, queryFn: async () => {
-		const res = await getFiles(token).catch(() => null);
-		return (Array.isArray(res) ? res : []) as Row[];
-	} });
+	const files = useQuery({
+		queryKey: ['user-files'],
+		enabled: open,
+		queryFn: async () => {
+			const res = await getFiles(token).catch(() => null);
+			return (Array.isArray(res) ? res : []) as Row[];
+		}
+	});
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="max-w-lg">
@@ -81,7 +101,9 @@ function FilesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: 
 					{(files.data ?? []).map((f) => (
 						<li key={f.id} className="flex items-center gap-2 border-b py-1.5 last:border-0">
 							<span className="min-w-0 flex-1 truncate">{f.filename}</span>
-							{f.created_at ? <span className="text-muted-foreground text-xs">{dayjs(f.created_at * 1000).format('LL')}</span> : null}
+							{f.created_at ? (
+								<span className="text-muted-foreground text-xs">{dayjs(f.created_at * 1000).format('LL')}</span>
+							) : null}
 							<button
 								type="button"
 								aria-label={`Delete ${f.filename}`}
@@ -131,7 +153,14 @@ export default function DataControls() {
 
 	return (
 		<SettingsForm title="Data Controls" footer={false}>
-			<input ref={input} type="file" accept=".json,application/json" hidden aria-label="Import chats file" onChange={(e) => void importFile(e.target.files?.[0]).then(() => (e.target.value = ''))} />
+			<input
+				ref={input}
+				type="file"
+				accept=".json,application/json"
+				hidden
+				aria-label="Import chats file"
+				onChange={(e) => void importFile(e.target.files?.[0]).then(() => (e.target.value = ''))}
+			/>
 			<SettingsSection title="Chats" first>
 				<SettingRow label="Import Chats" description="Import chat history from a JSON export file.">
 					<Button type="button" size="sm" variant="outline" onClick={() => input.current?.click()}>
@@ -139,7 +168,17 @@ export default function DataControls() {
 					</Button>
 				</SettingRow>
 				<SettingRow label="Export Chats" description="Download your chat history as a JSON export.">
-					<Button type="button" size="sm" variant="outline" onClick={async () => saveAs(new Blob([JSON.stringify(await getAllChats(token))], { type: 'application/json' }), `chat-export-${Date.now()}.json`)}>
+					<Button
+						type="button"
+						size="sm"
+						variant="outline"
+						onClick={async () =>
+							saveAs(
+								new Blob([JSON.stringify(await getAllChats(token))], { type: 'application/json' }),
+								`chat-export-${Date.now()}.json`
+							)
+						}
+					>
 						Export
 					</Button>
 				</SettingRow>
@@ -154,7 +193,13 @@ export default function DataControls() {
 					</Button>
 				</SettingRow>
 				<SettingRow label="Delete All Chats" description="Permanently delete every chat after confirmation.">
-					<Button type="button" size="sm" variant="outline" className="text-destructive" onClick={() => setConfirm('delete')}>
+					<Button
+						type="button"
+						size="sm"
+						variant="outline"
+						className="text-destructive"
+						onClick={() => setConfirm('delete')}
+					>
 						Delete All
 					</Button>
 				</SettingRow>
@@ -173,11 +218,15 @@ export default function DataControls() {
 				confirmLabel={confirm === 'archive' ? 'Archive All' : 'Delete All'}
 				onConfirm={async () => {
 					navigate('/');
-					await (confirm === 'archive' ? archiveAllChats(token) : deleteAllChats(token)).catch((e) => toast.error(`${e}`));
+					await (confirm === 'archive' ? archiveAllChats(token) : deleteAllChats(token)).catch((e) =>
+						toast.error(`${e}`)
+					);
 					void refresh();
 				}}
 			>
-				{confirm === 'archive' ? 'Are you sure you want to archive all chats? This action cannot be undone.' : 'Are you sure you want to delete all chats? This action cannot be undone.'}
+				{confirm === 'archive'
+					? 'Are you sure you want to archive all chats? This action cannot be undone.'
+					: 'Are you sure you want to delete all chats? This action cannot be undone.'}
 			</ConfirmDialog>
 			<SharedChatsDialog open={shared} onOpenChange={setShared} />
 			<FilesDialog open={filesOpen} onOpenChange={setFilesOpen} />

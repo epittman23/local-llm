@@ -50,13 +50,7 @@ const viewItems: Item[] = [
 ];
 
 /** Ports workspace/common/ViewSelector.svelte: All / Created by you / Shared with you. */
-export function ViewSelector({
-	value,
-	onChange
-}: {
-	value: string;
-	onChange: (value: string) => void;
-}) {
+export function ViewSelector({ value, onChange }: { value: string; onChange: (value: string) => void }) {
 	const label = viewItems.find((item) => item.value === value)?.label ?? 'Select view';
 	return (
 		<FilterMenu

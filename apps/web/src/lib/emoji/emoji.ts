@@ -18,7 +18,10 @@ export type EmojiIndex = {
 /** `1F44D` or `263A-FE0F` -> the characters. */
 export const codeToChar = (code: string) => String.fromCodePoint(...code.split('-').map((h) => parseInt(h, 16)));
 
-export function buildEmojiIndex(shortCodes: Record<string, string | string[]>, groups: Record<string, string[]>): EmojiIndex {
+export function buildEmojiIndex(
+	shortCodes: Record<string, string | string[]>,
+	groups: Record<string, string[]>
+): EmojiIndex {
 	const byName: Record<string, string> = {};
 	const namesByCode: Record<string, string[]> = {};
 	for (const [code, value] of Object.entries(shortCodes)) {
@@ -49,7 +52,10 @@ export function useEmojiIndex() {
 		gcTime: Infinity,
 		queryFn: async () => {
 			const [codes, groups] = await Promise.all([import('./emoji-shortcodes.json'), import('./emoji-groups.json')]);
-			return buildEmojiIndex(codes.default as Record<string, string | string[]>, groups.default as Record<string, string[]>);
+			return buildEmojiIndex(
+				codes.default as Record<string, string | string[]>,
+				groups.default as Record<string, string[]>
+			);
 		}
 	}).data;
 }

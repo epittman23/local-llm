@@ -17,7 +17,12 @@ vi.mock('@/lib/apis/chats', async (orig) => ({
 		chat: {
 			title: `chat ${id}`,
 			models: [`model-${id}`],
-			history: { currentId: `${id}-m`, messages: { [`${id}-m`]: { id: `${id}-m`, parentId: null, childrenIds: [], role: 'user', content: `hello from ${id}` } } }
+			history: {
+				currentId: `${id}-m`,
+				messages: {
+					[`${id}-m`]: { id: `${id}-m`, parentId: null, childrenIds: [], role: 'user', content: `hello from ${id}` }
+				}
+			}
 		}
 	})),
 	updateChatById: vi.fn(async () => null)
@@ -26,7 +31,9 @@ vi.mock('@/lib/apis/chats', async (orig) => ({
 vi.mock('@/lib/apis', async (orig) => ({
 	...(await orig<object>()),
 	// Resolves only when the test says so, per chat.
-	getTaskIdsByChatId: vi.fn((_t: string, id: string) => new Promise((resolve) => (pending[id] = () => resolve({ task_ids: [] }))))
+	getTaskIdsByChatId: vi.fn(
+		(_t: string, id: string) => new Promise((resolve) => (pending[id] = () => resolve({ task_ids: [] })))
+	)
 }));
 
 vi.mock('@/lib/apis/users', async (orig) => ({
@@ -38,7 +45,15 @@ type Session = ReturnType<typeof useChatSession>;
 let session: Session;
 
 function Probe({ id }: { id: string }) {
-	session = useChatSession({ routeChatId: id, folderId: null, models: [], selectedModels: [], temporary: false, toggles: { webSearch: false, imageGeneration: false, codeInterpreter: false }, toolIds: [] });
+	session = useChatSession({
+		routeChatId: id,
+		folderId: null,
+		models: [],
+		selectedModels: [],
+		temporary: false,
+		toggles: { webSearch: false, imageGeneration: false, codeInterpreter: false },
+		toolIds: []
+	});
 	return null;
 }
 
@@ -58,7 +73,13 @@ function renderAt(id: string) {
 }
 
 describe('useChatSession loadChat', () => {
-	beforeEach(() => useAuthStore.setState({ status: 'authenticated', token: 't', user: { id: 'u', email: 'e', name: 'n', role: 'user', profile_image_url: '' } }));
+	beforeEach(() =>
+		useAuthStore.setState({
+			status: 'authenticated',
+			token: 't',
+			user: { id: 'u', email: 'e', name: 'n', role: 'user', profile_image_url: '' }
+		})
+	);
 	afterEach(() => {
 		useAuthStore.setState({ status: 'pending', token: null, user: null });
 		for (const k of Object.keys(pending)) delete pending[k];

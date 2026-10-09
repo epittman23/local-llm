@@ -1,6 +1,21 @@
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import saveAs from 'file-saver';
-import { CheckCircle, ChevronDown, Copy, Download, Eye, EyeOff, Link2, MoreHorizontal, Minus, Pencil, Pin, PinOff, Share2, Trash2 } from 'lucide-react';
+import {
+	CheckCircle,
+	ChevronDown,
+	Copy,
+	Download,
+	Eye,
+	EyeOff,
+	Link2,
+	MoreHorizontal,
+	Minus,
+	Pencil,
+	Pin,
+	PinOff,
+	Share2,
+	Trash2
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { toast } from 'sonner';
@@ -21,7 +36,15 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
-import { createNewModel, deleteModelById, getModelById, getModelItems, getModelTags, toggleModelById, updateModelById } from '@/lib/apis/models';
+import {
+	createNewModel,
+	deleteModelById,
+	getModelById,
+	getModelItems,
+	getModelTags,
+	toggleModelById,
+	updateModelById
+} from '@/lib/apis/models';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore, useWebUIName } from '@/lib/stores/configStore';
@@ -92,10 +115,17 @@ export function ModelsPage() {
 
 	const list = useQuery({
 		queryKey: ['workspace-models', debouncedQuery, viewOption, selectedTag, sortKey, sortDirection, page],
-		queryFn: async () => (await getModelItems(token, debouncedQuery, viewOption, selectedTag, sortKey, sortDirection, page)) as { items: ModelRow[]; total: number },
+		queryFn: async () =>
+			(await getModelItems(token, debouncedQuery, viewOption, selectedTag, sortKey, sortDirection, page)) as {
+				items: ModelRow[];
+				total: number;
+			},
 		placeholderData: keepPreviousData
 	});
-	const tags = useQuery({ queryKey: ['workspace-model-tags'], queryFn: async () => asArray<string>(await getModelTags(token).catch(() => [])) });
+	const tags = useQuery({
+		queryKey: ['workspace-model-tags'],
+		queryFn: async () => asArray<string>(await getModelTags(token).catch(() => []))
+	});
 	const models = list.data?.items ?? null;
 	const total = list.data?.total ?? 0;
 
@@ -138,7 +168,8 @@ export function ModelsPage() {
 	}, [setActions, canImport, canExport, models, token]);
 
 	// --- row actions ----------------------------------------------------------
-	const openModel = (m: ModelRow) => m.write_access && navigate(`${routePaths.workspaceModelsEdit}?id=${encodeURIComponent(m.id)}`);
+	const openModel = (m: ModelRow) =>
+		m.write_access && navigate(`${routePaths.workspaceModelsEdit}?id=${encodeURIComponent(m.id)}`);
 
 	const deleteModel = async (m: ModelRow) => {
 		const res = await deleteModelById(token, m.id).catch((e) => {
@@ -214,7 +245,10 @@ export function ModelsPage() {
 	const fetchAll = async (): Promise<ModelRow[]> => {
 		const all: ModelRow[] = [];
 		for (let p = 1; ; p++) {
-			const res = (await getModelItems(token, debouncedQuery, viewOption, selectedTag, null, null, p)) as { items: ModelRow[]; total: number } | null;
+			const res = (await getModelItems(token, debouncedQuery, viewOption, selectedTag, null, null, p)) as {
+				items: ModelRow[];
+				total: number;
+			} | null;
 			if (!res?.items?.length) break;
 			all.push(...res.items);
 			if (all.length >= res.total) break;
@@ -233,10 +267,28 @@ export function ModelsPage() {
 		setActiveOverride({});
 		await refetch();
 	};
-	const enableAll = () => bulk((m) => !(m.is_active ?? true), (m) => toggleModelById(token, m.id));
-	const disableAll = () => bulk((m) => m.is_active ?? true, (m) => toggleModelById(token, m.id));
-	const showAll = () => bulk((m) => m.meta?.hidden === true, (m) => updateModelById(token, m.id, { ...m, meta: { ...m.meta, hidden: false } }), 'All models are now visible');
-	const hideAll = () => bulk((m) => !(m.meta?.hidden ?? false), (m) => updateModelById(token, m.id, { ...m, meta: { ...m.meta, hidden: true } }), 'All models are now hidden');
+	const enableAll = () =>
+		bulk(
+			(m) => !(m.is_active ?? true),
+			(m) => toggleModelById(token, m.id)
+		);
+	const disableAll = () =>
+		bulk(
+			(m) => m.is_active ?? true,
+			(m) => toggleModelById(token, m.id)
+		);
+	const showAll = () =>
+		bulk(
+			(m) => m.meta?.hidden === true,
+			(m) => updateModelById(token, m.id, { ...m, meta: { ...m.meta, hidden: false } }),
+			'All models are now visible'
+		);
+	const hideAll = () =>
+		bulk(
+			(m) => !(m.meta?.hidden ?? false),
+			(m) => updateModelById(token, m.id, { ...m, meta: { ...m.meta, hidden: true } }),
+			'All models are now hidden'
+		);
 
 	// --- import ---------------------------------------------------------------
 	const importFile = (file: File) => {
@@ -290,7 +342,14 @@ export function ModelsPage() {
 				This will delete <span className="font-normal">{deleting?.name}</span>.
 			</ConfirmDialog>
 
-			<input ref={importInput} id="models-import-input" type="file" accept=".json" hidden onChange={(e) => e.target.files?.[0] && importFile(e.target.files[0])} />
+			<input
+				ref={importInput}
+				id="models-import-input"
+				type="file"
+				accept=".json"
+				hidden
+				onChange={(e) => e.target.files?.[0] && importFile(e.target.files[0])}
+			/>
 
 			<ListSearchBar
 				value={query}
@@ -356,9 +415,21 @@ export function ModelsPage() {
 			) : (
 				<div id="model-list" className={list.isPlaceholderData ? 'my-1 opacity-60 transition' : 'my-1 transition'}>
 					<div className="text-muted-foreground flex w-full items-center gap-2 px-1.5 pb-0.5 text-xs">
-						<SortHeaderButton label="Title" active={sortKey === 'name'} direction={sortDirection} className="flex min-w-0 flex-1 items-center gap-1 py-0.5 text-left" onClick={() => sortBy('name')} />
+						<SortHeaderButton
+							label="Title"
+							active={sortKey === 'name'}
+							direction={sortDirection}
+							className="flex min-w-0 flex-1 items-center gap-1 py-0.5 text-left"
+							onClick={() => sortBy('name')}
+						/>
 						<div className="hidden w-44 shrink-0 md:block" />
-						<SortHeaderButton label="Updated at" active={sortKey === 'updated_at'} direction={sortDirection} className="flex w-36 shrink-0 items-center justify-end gap-1 py-0.5 text-right" onClick={() => sortBy('updated_at')} />
+						<SortHeaderButton
+							label="Updated at"
+							active={sortKey === 'updated_at'}
+							direction={sortDirection}
+							className="flex w-36 shrink-0 items-center justify-end gap-1 py-0.5 text-right"
+							onClick={() => sortBy('updated_at')}
+						/>
 					</div>
 
 					<div className="grid gap-y-0.5">
@@ -401,23 +472,34 @@ export function ModelsPage() {
 									<div className="flex min-w-0 flex-1 flex-col overflow-hidden">
 										<div className="flex min-w-0 items-center gap-2 overflow-hidden">
 											<Tip content={model.name} side="top">
-												<Link to={`${routePaths.home}?model=${encodeURIComponent(model.id)}`} className="min-w-0 truncate text-[0.8125rem] leading-5 hover:underline">
+												<Link
+													to={`${routePaths.home}?model=${encodeURIComponent(model.id)}`}
+													className="min-w-0 truncate text-[0.8125rem] leading-5 hover:underline"
+												>
 													{model.name}
 												</Link>
 											</Tip>
-											<div className="text-muted-foreground max-w-[40%] min-w-0 shrink-0 truncate text-[0.6875rem] leading-5">{model.id}</div>
+											<div className="text-muted-foreground max-w-[40%] min-w-0 shrink-0 truncate text-[0.6875rem] leading-5">
+												{model.id}
+											</div>
 											<Tip content={dayjs(model.updated_at * 1000).format('LLLL')}>
-												<div className="text-muted-foreground/70 shrink-0 truncate text-[0.6875rem] leading-5">{dayjs(model.updated_at * 1000).fromNow()}</div>
+												<div className="text-muted-foreground/70 shrink-0 truncate text-[0.6875rem] leading-5">
+													{dayjs(model.updated_at * 1000).fromNow()}
+												</div>
 											</Tip>
 											{!model.write_access && <Badge variant="secondary">Read Only</Badge>}
 										</div>
 										<Tip content={description} side="top">
-											<div className="text-muted-foreground/70 mt-0.5 truncate text-[0.6875rem] leading-4">{description}</div>
+											<div className="text-muted-foreground/70 mt-0.5 truncate text-[0.6875rem] leading-4">
+												{description}
+											</div>
 										</Tip>
 									</div>
 									<div className="text-muted-foreground hidden max-w-44 shrink-0 self-center truncate text-right text-[0.6875rem] leading-5 md:block">
 										<Tip content={model.user?.email ?? 'Deleted User'} side="top">
-											<div className="truncate">{capitalizeFirstLetter(model.user?.name ?? model.user?.email ?? 'Deleted User')}</div>
+											<div className="truncate">
+												{capitalizeFirstLetter(model.user?.name ?? model.user?.email ?? 'Deleted User')}
+											</div>
 										</Tip>
 									</div>
 
@@ -425,12 +507,28 @@ export function ModelsPage() {
 										{shiftKey && model.write_access ? (
 											<>
 												<Tip content={hidden ? 'Show' : 'Hide'}>
-													<button type="button" className={rowIconButton} aria-label={hidden ? 'Show' : 'Hide'} onClick={(e) => { e.stopPropagation(); setHidden(model, !hidden); }}>
+													<button
+														type="button"
+														className={rowIconButton}
+														aria-label={hidden ? 'Show' : 'Hide'}
+														onClick={(e) => {
+															e.stopPropagation();
+															setHidden(model, !hidden);
+														}}
+													>
 														{hidden ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
 													</button>
 												</Tip>
 												<Tip content="Delete">
-													<button type="button" className={rowIconButton} aria-label="Delete" onClick={(e) => { e.stopPropagation(); deleteModel(model); }}>
+													<button
+														type="button"
+														className={rowIconButton}
+														aria-label="Delete"
+														onClick={(e) => {
+															e.stopPropagation();
+															deleteModel(model);
+														}}
+													>
 														<Trash2 className="size-4" />
 													</button>
 												</Tip>
@@ -440,7 +538,12 @@ export function ModelsPage() {
 												<DropdownMenu>
 													<Tip content="More">
 														<DropdownMenuTrigger asChild>
-															<button type="button" className={rowIconButton} aria-label="Model Menu" onClick={(e) => e.stopPropagation()}>
+															<button
+																type="button"
+																className={rowIconButton}
+																aria-label="Model Menu"
+																onClick={(e) => e.stopPropagation()}
+															>
 																<MoreHorizontal className="size-4" />
 															</button>
 														</DropdownMenuTrigger>
@@ -498,7 +601,11 @@ export function ModelsPage() {
 												{model.write_access && (
 													<Tip content={isActive ? 'Enabled' : 'Disabled'}>
 														<span className="flex h-6 items-center" onClick={(e) => e.stopPropagation()}>
-															<Switch aria-label={isActive ? 'Enabled' : 'Disabled'} checked={isActive} onCheckedChange={(next) => toggleActive(model, next)} />
+															<Switch
+																aria-label={isActive ? 'Enabled' : 'Disabled'}
+																checked={isActive}
+																onCheckedChange={(next) => toggleActive(model, next)}
+															/>
 														</span>
 													</Tip>
 												)}
@@ -526,10 +633,17 @@ export function ModelsPage() {
 						    https://docs.openwebui.com/license. */}
 						Made by Open WebUI Community
 					</div>
-					<a className="flex w-full items-center justify-between gap-3 py-1 text-left" href="https://openwebui.com/models" target="_blank" rel="noreferrer">
+					<a
+						className="flex w-full items-center justify-between gap-3 py-1 text-left"
+						href="https://openwebui.com/models"
+						target="_blank"
+						rel="noreferrer"
+					>
 						<div className="min-w-0">
 							<div className="line-clamp-1 text-[0.8125rem]">Discover a model</div>
-							<div className="text-muted-foreground line-clamp-1 text-xs">Discover, download, and explore model presets</div>
+							<div className="text-muted-foreground line-clamp-1 text-xs">
+								Discover, download, and explore model presets
+							</div>
 						</div>
 					</a>
 				</div>

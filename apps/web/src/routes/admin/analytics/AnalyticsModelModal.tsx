@@ -20,7 +20,13 @@ const RANGES: { key: Range; label: string; days: number }[] = [
 const PAGE_SIZE = 50;
 
 type ServerChat = { chat_id: string; first_message?: string; updated_at: number; user_id?: string; user_name?: string };
-const toRow = (c: ServerChat): ChatRow => ({ id: c.chat_id, title: c.first_message || 'No preview', updated_at: c.updated_at, user_id: c.user_id, user_name: c.user_name });
+const toRow = (c: ServerChat): ChatRow => ({
+	id: c.chat_id,
+	title: c.first_message || 'No preview',
+	updated_at: c.updated_at,
+	user_id: c.user_id,
+	user_name: c.user_name
+});
 
 /**
  * Ports Analytics/AnalyticsModelModal.svelte: one model's drill-down. Overview is
@@ -68,7 +74,10 @@ export function AnalyticsModelModal({
 		queryKey: ['admin', 'analytics-overview', model?.id, days],
 		queryFn: async () => {
 			const res = await getModelOverview(token, model!.id, days);
-			return { history: (res?.history ?? []) as ActivityDay[], tags: (res?.tags ?? []) as { tag: string; count: number }[] };
+			return {
+				history: (res?.history ?? []) as ActivityDay[],
+				tags: (res?.tags ?? []) as { tag: string; count: number }[]
+			};
 		},
 		enabled: open && !!model?.id
 	});
@@ -108,7 +117,13 @@ export function AnalyticsModelModal({
 	};
 
 	if (!model) return null;
-	const tabClass = (active: boolean) => cn('px-1 pb-1.5 text-sm transition', active ? 'border-foreground border-b-2 font-medium' : 'text-muted-foreground hover:text-foreground border-b-2 border-transparent');
+	const tabClass = (active: boolean) =>
+		cn(
+			'px-1 pb-1.5 text-sm transition',
+			active
+				? 'border-foreground border-b-2 font-medium'
+				: 'text-muted-foreground hover:text-foreground border-b-2 border-transparent'
+		);
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
 			<DialogContent className="sm:max-w-lg">
@@ -135,7 +150,9 @@ export function AnalyticsModelModal({
 						<div>
 							<div className="mb-2 flex items-center justify-between">
 								<Tip content="Thumbs up/down ratings from users on model responses">
-									<div className="text-muted-foreground text-xs font-normal tracking-wide uppercase">Feedback Activity</div>
+									<div className="text-muted-foreground text-xs font-normal tracking-wide uppercase">
+										Feedback Activity
+									</div>
 								</Tip>
 								<div className="bg-muted inline-flex rounded-full p-0.5">
 									{RANGES.map((r) => (
@@ -143,7 +160,12 @@ export function AnalyticsModelModal({
 											key={r.key}
 											type="button"
 											aria-pressed={range === r.key}
-											className={cn('rounded-full px-2.5 py-0.5 text-xs font-normal transition-all', range === r.key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground')}
+											className={cn(
+												'rounded-full px-2.5 py-0.5 text-xs font-normal transition-all',
+												range === r.key
+													? 'bg-background text-foreground shadow-sm'
+													: 'text-muted-foreground hover:text-foreground'
+											)}
 											onClick={() => setRange(r.key)}
 										>
 											{r.label}
@@ -151,7 +173,11 @@ export function AnalyticsModelModal({
 									))}
 								</div>
 							</div>
-							<ModelActivityChart history={overview.data?.history ?? []} loading={overview.isPending} weekly={range === '1y' || range === 'all'} />
+							<ModelActivityChart
+								history={overview.data?.history ?? []}
+								loading={overview.isPending}
+								weekly={range === '1y' || range === 'all'}
+							/>
 						</div>
 						<div>
 							<div className="text-muted-foreground mb-2 text-xs font-normal tracking-wide uppercase">Tags</div>

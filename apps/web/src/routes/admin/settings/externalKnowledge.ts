@@ -25,10 +25,19 @@ export type ExternalKnowledgeItem = {
 	name: string;
 	description?: string;
 	access_grants?: AccessGrant[];
-	meta?: { external?: { connection_id?: string; provider?: string; source?: { name?: string; config?: Record<string, any> } } };
+	meta?: {
+		external?: { connection_id?: string; provider?: string; source?: { name?: string; config?: Record<string, any> } };
+	};
 };
 
-export type SchemaFields = { contentField: string; vectorField: string; metadataField: string; documentIdField: string; tableName: string; collectionField: string };
+export type SchemaFields = {
+	contentField: string;
+	vectorField: string;
+	metadataField: string;
+	documentIdField: string;
+	tableName: string;
+	collectionField: string;
+};
 
 export type SourceForm = SchemaFields & {
 	name: string;
@@ -45,19 +54,37 @@ export type SourceForm = SchemaFields & {
 /** Where each provider keeps the text, vector and metadata by default. */
 export function schemaDefaults(provider: string): SchemaFields {
 	const shared = { documentIdField: 'id', tableName: 'document_chunk', collectionField: 'collection_name' };
-	if (provider === 'milvus') return { ...shared, contentField: 'data.text', vectorField: 'vector', metadataField: 'metadata' };
-	if (provider === 'pgvector') return { ...shared, contentField: 'text', vectorField: 'vector', metadataField: 'vmetadata' };
+	if (provider === 'milvus')
+		return { ...shared, contentField: 'data.text', vectorField: 'vector', metadataField: 'metadata' };
+	if (provider === 'pgvector')
+		return { ...shared, contentField: 'text', vectorField: 'vector', metadataField: 'vmetadata' };
 	return { ...shared, contentField: 'payload.text', vectorField: '', metadataField: 'payload.metadata' };
 }
 
-export const blankSourceForm = (): SourceForm => ({ name: '', description: '', provider: 'qdrant', endpoint: '', apiKey: '', timeout: 30, dbName: '', sourceName: '', testQuery: '', ...schemaDefaults('qdrant') });
+export const blankSourceForm = (): SourceForm => ({
+	name: '',
+	description: '',
+	provider: 'qdrant',
+	endpoint: '',
+	apiKey: '',
+	timeout: 30,
+	dbName: '',
+	sourceName: '',
+	testQuery: '',
+	...schemaDefaults('qdrant')
+});
 
 export const endpointPlaceholder = (provider: string) =>
-	provider === 'pgvector' ? 'postgresql://user:password@host:5432/db' : provider === 'milvus' ? 'http://milvus.example.com:19530' : 'https://qdrant.example.com';
+	provider === 'pgvector'
+		? 'postgresql://user:password@host:5432/db'
+		: provider === 'milvus'
+			? 'http://milvus.example.com:19530'
+			: 'https://qdrant.example.com';
 
 const asProvider = (p: string | undefined): Provider => (p === 'milvus' || p === 'pgvector' ? p : 'qdrant');
 
-export const connectionForItem = (connections: ExternalConnection[], item: ExternalKnowledgeItem) => connections.find((c) => c.id === item.meta?.external?.connection_id);
+export const connectionForItem = (connections: ExternalConnection[], item: ExternalKnowledgeItem) =>
+	connections.find((c) => c.id === item.meta?.external?.connection_id);
 
 /**
  * The form for editing an existing source. The API key is never sent back by
@@ -96,7 +123,8 @@ export function connectionPayload(f: SourceForm, editing: ExternalConnection | n
 		name: f.name.trim() || f.sourceName.trim() || 'External Knowledge Source',
 		provider: f.provider,
 		endpoint: f.endpoint,
-		auth_config: f.provider === 'pgvector' ? {} : f.apiKey ? { type: 'bearer', api_key: f.apiKey } : editing ? null : {},
+		auth_config:
+			f.provider === 'pgvector' ? {} : f.apiKey ? { type: 'bearer', api_key: f.apiKey } : editing ? null : {},
 		config: { timeout: Number(f.timeout) || 30, ...(f.provider === 'milvus' && f.dbName ? { db_name: f.dbName } : {}) },
 		capabilities: { retrieve: true },
 		enabled: editing?.enabled !== false

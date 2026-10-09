@@ -15,7 +15,10 @@ describe('chat list', () => {
 			{ id: '2', title: '', time_range: 'Today' },
 			{ id: '3', title: '', time_range: 'Yesterday' }
 		]);
-		expect(g.map((x) => [x.label, x.chats.length])).toEqual([['Today', 2], ['Yesterday', 1]]);
+		expect(g.map((x) => [x.label, x.chats.length])).toEqual([
+			['Today', 2],
+			['Yesterday', 1]
+		]);
 	});
 });
 
@@ -39,7 +42,18 @@ describe('folders', () => {
 
 describe('export', () => {
 	it('writes the current branch as text', () => {
-		const chat = { chat: { history: { currentId: 'r2', messages: { u: { id: 'u', parentId: null, role: 'user', content: 'Hi' }, r1: { id: 'r1', parentId: 'u', role: 'assistant', content: 'old' }, r2: { id: 'r2', parentId: 'u', role: 'assistant', content: 'Hello' } } } } };
+		const chat = {
+			chat: {
+				history: {
+					currentId: 'r2',
+					messages: {
+						u: { id: 'u', parentId: null, role: 'user', content: 'Hi' },
+						r1: { id: 'r1', parentId: 'u', role: 'assistant', content: 'old' },
+						r2: { id: 'r2', parentId: 'u', role: 'assistant', content: 'Hello' }
+					}
+				}
+			}
+		};
 		expect(chatAsText(chat)).toBe('### USER\nHi\n\n### ASSISTANT\nHello');
 	});
 	it('makes titles file-safe', () => {

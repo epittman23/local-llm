@@ -62,7 +62,11 @@ export function GroupItem({
 				onDelete={remove}
 				onMemberChange={onGroupUpdate}
 			/>
-			<button type="button" className="group flex w-full cursor-pointer px-2.5 py-2 text-left" onClick={() => setShowEdit(true)}>
+			<button
+				type="button"
+				className="group flex w-full cursor-pointer px-2.5 py-2 text-left"
+				onClick={() => setShowEdit(true)}
+			>
 				<div className="flex w-full items-center gap-3">
 					<div className="flex min-w-0 flex-1 flex-col gap-0.5 pl-1">
 						<div className="flex min-w-0 items-center gap-2">
@@ -77,7 +81,9 @@ export function GroupItem({
 							<div className="shrink-0">{hasCustomPermissions ? 'Custom permissions' : 'Uses defaults'}</div>
 						</div>
 					</div>
-					<div className="text-muted-foreground group-hover:text-foreground shrink-0 px-1.5 text-xs transition">Edit</div>
+					<div className="text-muted-foreground group-hover:text-foreground shrink-0 px-1.5 text-xs transition">
+						Edit
+					</div>
 				</div>
 			</button>
 		</>

@@ -21,7 +21,17 @@ type Props = Partial<Omit<MarkdownEnv, 'expandDetails' | 'collapseCodeBlocks' | 
  * Svelte version throttled to one parse per animation frame for the same
  * reason).
  */
-export function Markdown({ id, content, modelName, paragraphSpan, className, done = true, resolvable = false, sourceIds = [], ...rest }: Props) {
+export function Markdown({
+	id,
+	content,
+	modelName,
+	paragraphSpan,
+	className,
+	done = true,
+	resolvable = false,
+	sourceIds = [],
+	...rest
+}: Props) {
 	const userName = useAuthStore((s) => s.user?.name);
 	const { settings } = useUserSettings();
 	const deferred = useDeferredValue(content);
@@ -39,7 +49,10 @@ export function Markdown({ id, content, modelName, paragraphSpan, className, don
 	};
 	return (
 		<MarkdownEnvContext.Provider value={env}>
-			<div className={cn('markdown-prose w-full min-w-0 text-[0.9375rem] break-words', className)} data-testid="markdown">
+			<div
+				className={cn('markdown-prose w-full min-w-0 text-[0.9375rem] break-words', className)}
+				data-testid="markdown"
+			>
 				<Blocks tokens={tokens} paragraphSpan={paragraphSpan} />
 			</div>
 		</MarkdownEnvContext.Provider>
