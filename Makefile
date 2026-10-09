@@ -48,6 +48,12 @@ help:
 # make lines) so the EXIT trap covers the real work below it, Ctrl-C
 # included. uvicorn is never exec'd for the same reason: exec would replace
 # this shell -- and its trap -- with uvicorn's process image.
+#
+# The venv is apps/server/pyproject.toml + uv.lock, applied exactly by
+# `uv sync --frozen` on every run: a no-op when nothing changed, and it
+# removes anything the lock no longer lists. uv also fetches a matching
+# Python (3.12) if the machine has none. Optional backends the install
+# doesn't use are behind `--extra all` (see pyproject.toml).
 backend:
 	@envfile="$(REPO_ROOT)/infra/.env"; \
 	if [ ! -f "$$envfile" ]; then \
@@ -57,43 +63,12 @@ backend:
 	set -a; source "$$envfile"; set +a; \
 	trap '$(COMPOSE) down' EXIT; \
 	$(COMPOSE) up -d postgres; \
-	venv_dir="$(BACKEND_DIR)/.venv"; \
-	venv="$$venv_dir/bin/python"; \
-	stamp="$$venv_dir/.lllm-bootstrap-complete"; \
-	in_range='import sys; sys.exit(0 if (3, 11) <= sys.version_info[:2] < (3, 13) else 1)'; \
-	py=""; \
-	if [ -x "$$venv" ] && [ -f "$$stamp" ]; then \
-		py="$$venv"; \
-	elif [ -x "$$venv" ]; then \
-		if "$$venv" -c "$$in_range" 2>/dev/null \
-		   && "$$venv" -c 'import uvicorn, alembic, sqlalchemy, fastapi' 2>/dev/null; then \
-			: > "$$stamp"; py="$$venv"; \
-		else \
-			echo "make backend: $$venv_dir is incomplete or on an unsupported Python; rebuilding it" >&2; \
-			rm -rf "$$venv_dir"; \
-		fi; \
+	if ! command -v uv >/dev/null 2>&1; then \
+		echo "make backend: uv not found -- install it (https://docs.astral.sh/uv/, e.g. \`curl -LsSf https://astral.sh/uv/install.sh | sh\`)" >&2; \
+		exit 1; \
 	fi; \
-	if [ -z "$$py" ]; then \
-		base=""; \
-		for candidate in $${LLAMA_OPENWEBUI_PYTHON:-python3.12 python3.11 python3}; do \
-			found="$$(command -v "$$candidate" 2>/dev/null)" || continue; \
-			if "$$found" -c "$$in_range" 2>/dev/null; then base="$$found"; break; fi; \
-		done; \
-		if [ -z "$$base" ]; then \
-			echo "make backend: no Python in the fork's supported range (>= 3.11, < 3.13) found; tried: $${LLAMA_OPENWEBUI_PYTHON:-python3.12 python3.11 python3}. Install python3.12, or point LLAMA_OPENWEBUI_PYTHON at a 3.11/3.12 interpreter." >&2; \
-			exit 1; \
-		fi; \
-		echo "make backend: creating $$venv_dir with $$base ($$("$$base" --version 2>&1)); first run installs the fork's backend requirements, several GB" >&2; \
-		if "$$base" -m venv "$$venv_dir" \
-		   && "$$venv" -m pip install -q --upgrade pip \
-		   && "$$venv" -m pip install -q -r "$(BACKEND_DIR)/requirements.txt"; then \
-			: > "$$stamp"; py="$$venv"; \
-		else \
-			echo "make backend: installing the fork's backend requirements failed; removed the partial $$venv_dir so the next run retries from scratch" >&2; \
-			rm -rf "$$venv_dir"; \
-			exit 1; \
-		fi; \
-	fi; \
+	UV_PROJECT_ENVIRONMENT="$(BACKEND_DIR)/.venv" uv sync --frozen --no-install-project --project "$(REPO_ROOT)/apps/server"; \
+	py="$(BACKEND_DIR)/.venv/bin/python"; \
 	database_url="$$(PYTHONPATH="$(BACKEND_DIR)" "$$py" -c 'import sys; from open_webui.benchmarks.serving.launcher import build_database_url; print(build_database_url(sys.argv[1]))' "$$POSTGRES_PASSWORD")"; \
 	cd "$(BACKEND_DIR)" && \
 	CORS_ALLOW_ORIGIN="http://localhost:$(LLLM_BACKEND_PORT);http://127.0.0.1:$(LLLM_BACKEND_PORT);http://localhost:5174;http://127.0.0.1:5174" \

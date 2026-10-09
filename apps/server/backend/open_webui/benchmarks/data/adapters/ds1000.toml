@@ -45,9 +45,9 @@ split   = "test"
 id_field     = "metadata.problem_id"
 prompt_field = "prompt"
 
-# Default slice: the libraries the base requirements.txt can actually import.
-# Anything outside it is recorded as skipped, never failed, so installing
-# requirements-extra.txt widens coverage without changing any recorded result.
+# Default slice: libraries the backend's default install (pyproject.toml)
+# can import. Anything outside it is recorded as skipped, never failed, so
+# widening the slice never changes an already-recorded result.
 [filter]
 field  = "metadata.library"
 values = ["Pandas", "Numpy"]

@@ -46,7 +46,9 @@ running: they reuse it if present, which is fine, and `global-teardown.ts`
 stops it afterward, which is not. Stop `make frontend` first. Backend tests:
 from `apps/server/backend/`, `WEBUI_SECRET_KEY=<any long string>
 .venv/bin/python -m pytest tests` (the package imports from the working
-directory, and refuses to load without a secret key).
+directory, and refuses to load without a secret key). pytest comes from
+`pyproject.toml`'s `dev` dependency group, which `make backend`'s
+`uv sync` installs by default.
 
 ## Known rough edges
 
