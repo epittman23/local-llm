@@ -102,7 +102,7 @@ jobs:
     timeout-minutes: 20
     defaults:
       run:
-        working-directory: apps/server/backend
+        working-directory: apps/server
     env:
       # Not a secret: the app refuses to import without one, and the tests
       # never serve anything signed with it.
@@ -115,17 +115,18 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
-          cache-dependency-glob: apps/server/backend/requirements.txt
-      # requirements.txt leaves torch unpinned and PyPI's default build is the
-      # multi-GB CUDA one. Installing the CPU wheel first, from its own index
-      # only, satisfies that requirement without mixing indexes for the rest.
-      - name: Install CPU torch
-        run: |
-          uv venv
-          uv pip install torch --index-url https://download.pytorch.org/whl/cpu
-      - name: Install requirements
-        run: uv pip install -r requirements.txt pytest pytest-asyncio
-      - run: .venv/bin/python -m pytest tests -q
+          cache-dependency-glob: apps/server/uv.lock
+      # Fails if pyproject.toml changed without re-running `uv lock`, so the
+      # lock CI installs from is always the one the project declares.
+      - name: Lockfile matches pyproject.toml
+        run: uv lock --check
+      # The same install `make backend` does (pyproject.toml + uv.lock,
+      # CPU torch), plus the dev group for pytest.
+      - name: Install
+        run: uv sync --frozen --no-install-project --group dev
+      - name: pytest
+        working-directory: apps/server/backend
+        run: uv run --frozen --project .. python -m pytest tests -q
 
   ci-ok:
     name: CI passed

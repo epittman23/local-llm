@@ -21,13 +21,11 @@ Postgres+pgvector (`infra/docker-compose.yml`), not SQLite.
 Runs on native Linux (Fedora 44 since 2026-10-09; it ran under WSL2 before
 that). Requires Docker Engine with the Compose plugin, with your user in the
 `docker` group so `make backend` can run `docker compose` without sudo,
-plus `make`, Bun, **Node ≥ 22.12** (Astro's `engines`), and a **Python 3.11 or 3.12**
-interpreter on the host for the backend (its `requires-python` is
-`>= 3.11, < 3.13`; `make backend` selects an interpreter in that range itself
-rather than trusting whatever bare `python3` resolves to, or takes
-`LLAMA_OPENWEBUI_PYTHON` — see "Dependencies" below). The first
-`make backend` builds `apps/server/backend/.venv` and installs the backend's
-requirements (several GB, slow); later runs skip it.
+plus `make`, Bun, **Node ≥ 22.12** (Astro's `engines`), and
+**[uv](https://docs.astral.sh/uv/)** for the backend (it also provides the
+Python 3.12 the backend needs — see "Dependencies" below). The first
+`make backend` builds `apps/server/backend/.venv` from `apps/server/uv.lock`
+(about 2.5 GB); later runs only re-check it against the lock.
 
 A plain `git clone` is enough — the fork lives inside `apps/server/` as
 ordinary tracked files, not a submodule. Put your secrets in `infra/.env`
@@ -1494,8 +1492,11 @@ document is otherwise byte-identical.
 ### Dependencies
 
 This repo has exactly one Python environment now:
-`apps/server/backend/.venv`, which `make backend` bootstraps on first use
-(installing `apps/server/backend/requirements.txt`). There used to be a
+`apps/server/backend/.venv`, which `make backend` keeps in sync with
+`apps/server/pyproject.toml` + `apps/server/uv.lock` (`uv sync --frozen`)
+on every run. Those two files are the only place backend dependencies are
+declared; add or change one with `uv add` / `uv lock` from `apps/server/`.
+There used to be a
 second, repo-root one (`requirements.txt` + `.venv`, carrying just **Rich**
 for the three shell commands `scripts/llama_console.py` backed —
 `lllm-profiles`, `lllm-check`, `lllm-vram`, none of them benchmarking); both
@@ -1507,34 +1508,38 @@ for the Textual dashboard (`llama-ui`); it was retired for `lllm-web` on
 2026-09-06 and dropped from it in that change, well before the file itself
 was deleted.
 
-The backend venv needs **Python 3.11 or 3.12**. The fork pins
-`requires-python = ">= 3.11, < 3.13.0a1"`, and none of its pinned requirements
-install on anything newer. `make backend` picks the interpreter by version
-rather than taking whatever `python3` happens to be — the same selection
-`lllm-backend` used to do, now a Makefile recipe instead of a shell function:
-`python3.12`, then `python3.11`, then `python3` only if it is in range. This
-matters on any machine with a newer Python ahead on `PATH`. On the current
-Fedora 44 machine, both `/usr/bin/python3` and linuxbrew's `python3` are 3.14,
-and there is no system 3.11 or 3.12. Python 3.12 comes from
-`uv python install 3.12` instead, which puts `python3.12` in `~/.local/bin`,
-where `make backend` finds it. Set `LLAMA_OPENWEBUI_PYTHON` to force a specific interpreter. The venv
-only counts as ready once its install has completed (marked by a
-`.lllm-bootstrap-complete` stamp inside it); a failed install is removed
-rather than left behind, so the next run retries from scratch instead of
-reusing a venv with nothing in it.
+The backend needs **Python 3.12**: `requires-python = ">= 3.12, < 3.13.0a1"`
+(3.11 was listed until 2026-10-09, but the pinned scipy 1.18 already needed
+3.12, so it never actually installed there). uv picks or downloads a 3.12
+interpreter itself, so a newer system `python3` (3.14 on the current Fedora
+44 machine) doesn't matter.
+
+What the default install includes, and what it leaves out:
+
+- **torch is the CPU build**, from the PyTorch CPU index (`[tool.uv.sources]`
+  in `pyproject.toml`). It only runs sentence-transformers' embedding and
+  reranking models here; llama-server does inference. A CUDA build added
+  ~5 GB and competed with llama-server for VRAM.
+- **Vector stores and loaders this install doesn't use** (Milvus, Qdrant,
+  Pinecone, Weaviate, Elasticsearch, Oracle, MongoDB, ColBERT, Azure Search,
+  Playwright, unstructured) are in the `all` extra, not the default install.
+  Each is imported only when configured, so nothing breaks without them;
+  RAG uploads of `.rst`/`.xml` files report `unstructured` missing (Excel and
+  PowerPoint fall back to pandas / python-pptx). Install them with
+  `uv sync --extra all` from `apps/server/`.
 
 `requirements-extra.txt` is gone, and has been since before this migration:
 it used to carry **numpy**, **pandas**, **pyyaml**, **scipy**,
 **matplotlib**, **fastapi** and **uvicorn** for
 `lllm-test`/`lllm-compare`/`lllm-report`/`lllm-tune`/`lllm-web`; all five were
 retired into the fork on 2026-09-08 (see "The Benchmarks section" below), and
-those dependencies moved with them, into
-`apps/server/backend/requirements.txt` — alongside a new
+those dependencies moved with them, into the backend's dependencies (now
+`apps/server/pyproject.toml`) — alongside a new
 `scikit-learn`, which widens the DS-1000 slice, and the same `pyyaml` pin,
 now needed there for DS-1000 items that round-trip through YAML. scipy is
-still a hard dependency (the Report page's request fails outright rather than
-degrading) and matplotlib is still soft (the same unicode-plot fallback),
-resolved by the fork's own venv.
+a hard dependency (the Report page's request fails outright rather than
+degrading); matplotlib is installed by default but still soft in code (the
+same unicode-plot fallback if it is ever missing).
 
 ### The Benchmarks section
 

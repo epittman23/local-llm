@@ -126,25 +126,49 @@ dependencies = [
     "azure-storage-blob==12.29.0",
 
     "ldap3==2.9.1",
+
+    # The vector store this install runs on (VECTOR_DB=pgvector in the Makefile).
+    "psycopg2-binary==2.9.12",
+    "pgvector==0.4.2",
+
+    # Benchmarks > Report (benchmarks/report*.py) and utils/tools.py.
+    "scipy==1.18.1",
+    "matplotlib==3.11.1",
+    "pyyaml==6.0.3",
+
+    # CPU build, from the pytorch-cpu index below: torch only serves
+    # sentence-transformers' embedding/reranking models here, and a CUDA build
+    # would add ~5 GB and compete with llama-server for VRAM.
+    "torch==2.14.1",
+
+    "av==14.0.1", # Caution: Set due to FATAL FIPS SELFTEST FAILURE, see discussion https://github.com/open-webui/open-webui/discussions/15720
+
+    "opentelemetry-api==1.42.1",
+    "opentelemetry-sdk==1.42.1",
+    "opentelemetry-exporter-otlp==1.42.1",
+    "opentelemetry-instrumentation==0.63b1",
+    "opentelemetry-instrumentation-fastapi==0.63b1",
+    "opentelemetry-instrumentation-sqlalchemy==0.63b1",
+    "opentelemetry-instrumentation-redis==0.63b1",
+    "opentelemetry-instrumentation-requests==0.63b1",
+    "opentelemetry-instrumentation-logging==0.63b1",
+    "opentelemetry-instrumentation-httpx==0.63b1",
+    "opentelemetry-instrumentation-aiohttp-client==0.63b1",
+    "opentelemetry-instrumentation-system-metrics==0.63b1",
 ]
 readme = "README.md"
-requires-python = ">= 3.11, < 3.13.0a1"
+requires-python = ">= 3.12, < 3.13.0a1"
 version = "0.11.3"
 classifiers = [
     "Development Status :: 4 - Beta",
     "License :: Other/Proprietary License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Communications :: Chat",
     "Topic :: Multimedia",
 ]
 
 [project.optional-dependencies]
-postgres = [
-    "psycopg2-binary==2.9.12",
-    "pgvector==0.4.2",
-]
 mariadb = [
     "mariadb==1.1.14",
 ]
@@ -152,10 +176,14 @@ unstructured = [
     "unstructured==0.22.31",
 ]
 
+# Every optional backend Open WebUI supports and this install doesn't use
+# (it runs on pgvector). Each is imported lazily, only when configured, so
+# leaving them out of the default install just keeps their code (and their
+# vulnerabilities) off the machine. `uv sync --extra all` brings them back.
+# Without `unstructured`, RAG uploads of .rst/.xml files report it missing;
+# Excel and PowerPoint fall back to pandas / python-pptx.
 all = [
     "pymongo==4.17.0",
-    "psycopg2-binary==2.9.12",
-    "pgvector==0.4.2",
     "playwright==1.60.0", # Caution: version must match docker-compose.playwright.yaml - Update the docker-compose.yaml if necessary
     "elasticsearch==9.4.1",
 
@@ -178,10 +206,6 @@ open-webui = "open_webui:app"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.rye]
-managed = true
-dev-dependencies = []
-
 [tool.hatch.metadata]
 allow-direct-references = true
 
@@ -191,7 +215,6 @@ exclude = [
     ".gitignore",
     ".webui_secret_key",
     "dev.sh",
-    "requirements.txt",
     "start.sh",
     "start_windows.bat",
     "webui.db",
@@ -208,13 +231,23 @@ ignore-words-list = 'ans'
 
 [dependency-groups]
 dev = [
+    "pytest",
     "pytest-asyncio>=1.0.0",
     "ruff>=0.15.5",
 ]
 
-[tool.black]
-line-length = 120
-skip-string-normalization = true
+# The single source of the backend's dependencies is this file plus uv.lock;
+# `make backend` and CI both run `uv sync --frozen` against them.
+[tool.uv]
+environments = ["sys_platform == 'linux'"]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
 
 [tool.ruff]
 line-length = 120

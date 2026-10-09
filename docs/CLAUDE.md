@@ -238,12 +238,10 @@ assume a cloud-only environment.
   inference" below and the decisions log for why).
 - Runs on native Linux (Fedora 44 since 2026-10-09; WSL2 before). Requires
   Docker Engine with the Compose plugin (for Postgres; the user is in the
-  `docker` group), `make`, Bun, Node ≥ 22.12 and a **Python 3.11 or 3.12**
-  interpreter on the host for the fork (its `requires-python` is
-  `>= 3.11, < 3.13`). `make backend` selects that interpreter by version
-  rather than taking bare `python3`, because on this machine both the system
-  `python3` and linuxbrew's are 3.14; 3.12 comes from `uv python install
-  3.12` (`~/.local/bin/python3.12`) — see `README.md`'s Dependencies section.
+  `docker` group), `make`, Bun, Node ≥ 22.12 and **uv**, which builds the
+  backend venv from `apps/server/pyproject.toml` + `uv.lock` and supplies
+  the Python 3.12 it needs (`requires-python = ">= 3.12, < 3.13"`; the
+  system `python3` here is 3.14) — see `README.md`'s Dependencies section.
 - Local serving also needs llama.cpp built with CUDA at
   `~/llama.cpp/build/bin` (`LLAMA_BIN`), which needs the CUDA toolkit and
   `cmake` — see `README.md`'s "Building llama.cpp". Neither the toolkit nor
@@ -321,6 +319,26 @@ All commits should use conventional commit style and stay focused on one topic. 
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-09**: The backend's dependencies now live only in
+  `apps/server/pyproject.toml` + `uv.lock`; `backend/requirements.txt` and
+  `requirements-min.txt` are deleted. Before this, four files disagreed:
+  `make backend` and CI installed `requirements.txt`, `uv.lock` was stale
+  (its transitive pins were up to months behind the venv) and installed by
+  nothing, and Dependabot's security PRs often edited only the lock, so a
+  "fixed" alert could merge without the running venv changing. Now
+  `make backend` and CI both run `uv sync --frozen`, and CI fails if the
+  lock doesn't match `pyproject.toml`. Decided with the owner at the same
+  time: **torch is the CPU build** (only sentence-transformers' embeddings
+  and reranking use it; venv 8 GB → 2.9 GB, no VRAM contention with
+  llama-server), and **unused optional backends** (Milvus, Qdrant,
+  Pinecone, Weaviate, Elasticsearch, Oracle, MongoDB, ColBERT, Azure
+  Search, Playwright, unstructured) moved to the opt-in `all` extra; all
+  are imported lazily, so nothing breaks without them, though `.rst`/`.xml`
+  RAG uploads now report `unstructured` missing. `requires-python` dropped
+  3.11, which the pinned scipy 1.18 had already ruled out. The lock was
+  re-resolved with `--upgrade` so no package moved backwards from the
+  working venv. Verified: 246 backend tests, a scratch boot answering
+  `/health`, and a CPU embedding with the default model.
 - **2026-10-09**: Moved the project from WSL2 to native Linux (Fedora 44
   KDE, same laptop and RTX 3060). The docs now describe Docker Engine with
   the user in the `docker` group, not Docker Desktop with WSL integration.
