@@ -153,8 +153,12 @@ test('editing autosaves the title and the body as html, markdown and json', asyn
 	const editor = page.getByRole('textbox', { name: 'Note content' });
 	await expect(editor).toContainText('Body of Groceries');
 	await page.getByLabel('Title', { exact: true }).fill('Weekly groceries');
-	await editor.click();
-	await page.keyboard.press('ControlOrMeta+End');
+	// Put the caret at the end of the existing text before typing: a click in
+	// the middle of the (mostly empty) editor box then Ctrl+End raced the
+	// editor taking focus under CI load, and typed at the start instead.
+	await editor.getByText('Body of Groceries').click();
+	await expect(editor).toBeFocused();
+	await page.keyboard.press('End');
 	await page.keyboard.press('Enter');
 	await page.keyboard.type('## Produce');
 	await expect.poll(() => seen.updates.at(-1)?.data?.content?.md).toBe('Body of Groceries\n\n## Produce');
