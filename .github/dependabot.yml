@@ -1,0 +1,17 @@
+# Version updates for the workflow actions only, which keeps their SHA
+# pins (.github/workflows/) current. npm and pip get no version-update PRs:
+# the backend pins ~180 upstream Open WebUI dependencies and would flood the
+# repo. Vulnerable dependencies in any ecosystem still get Dependabot
+# *security* PRs, which are enabled in the repo settings, not here.
+
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ['*']
+    commit-message:
+      prefix: ci

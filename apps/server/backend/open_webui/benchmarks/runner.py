@@ -63,8 +63,8 @@ import logging
 import os
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Awaitable, Callable, Optional, Union
 
 import aiohttp
 
@@ -114,7 +114,7 @@ def _guard(fn, *args, **kwargs):
 def _slice_bounds(text: str, total: int) -> tuple[int, int]:
     """Parse FROM:TO, where either side may be empty."""
     if ':' not in text:
-        raise SuiteLoadError("--slice takes FROM:TO, e.g. 0:6 or 12:")
+        raise SuiteLoadError('--slice takes FROM:TO, e.g. 0:6 or 12:')
     lo_s, hi_s = text.split(':', 1)
     try:
         lo = int(lo_s) if lo_s.strip() else 0
@@ -267,7 +267,7 @@ async def ask(
                 out.content = message.get('content') or ''
                 out.reasoning = message.get('reasoning_content') or ''
                 out.timings = payload.get('timings') or {}
-    except asyncio.TimeoutError:
+    except TimeoutError:
         # No completion arrived within LLAMA_TEST_TIMEOUT.
         out.gone = True
         out.error = f'no response from port {port} (timed out); is llama-serve running?'
@@ -383,8 +383,8 @@ async def run_item(session: aiohttp.ClientSession, row: dict, ctx: dict) -> dict
     return record
 
 
-RecordCallback = Optional[Callable[[dict], Union[None, Awaitable[None]]]]
-StopCallback = Optional[Callable[[], Union[bool, Awaitable[bool]]]]
+RecordCallback = Callable[[dict], None | Awaitable[None]] | None
+StopCallback = Callable[[], bool | Awaitable[bool]] | None
 
 
 async def _maybe_await(value):
@@ -469,7 +469,7 @@ async def context(
         revisions[b] = manifest.get('revision') or manifest.get('content_sha256', '')
 
     return {
-        'suite_run_id': suite_run_id or f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{uuid.uuid4().hex[:6]}",
+        'suite_run_id': suite_run_id or f'{time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())}-{uuid.uuid4().hex[:6]}',
         'run_id': active.run_id if active else None,
         'model': model,
         'profile': prof,
@@ -527,7 +527,7 @@ async def prepare_suite(
     # same fact.
     blocked = missing_libraries(selected)
     if blocked:
-        selected = [r for r in selected if f"{r['benchmark']}/{r['item_id']}" not in blocked]
+        selected = [r for r in selected if f'{r["benchmark"]}/{r["item_id"]}' not in blocked]
         for key, why in blocked.items():
             b, iid = key.split('/', 1)
             skipped.append({'benchmark': b, 'item_id': iid, 'reason': why})

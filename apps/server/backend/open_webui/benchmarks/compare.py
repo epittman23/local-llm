@@ -138,7 +138,7 @@ def _iso(ts: int | None) -> str:
     """
     if not ts:
         return ''
-    return dt.datetime.fromtimestamp(int(ts), tz=dt.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    return dt.datetime.fromtimestamp(int(ts), tz=dt.UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 
 class Group:
@@ -428,8 +428,7 @@ def benchmark_rows(groups: list[Group]) -> tuple[list[str], list[dict]]:
                 'system': g.system_label(),
                 'adapter': g.adapter_label(),
                 'per_benchmark': {
-                    name: dict(zip(('passed', 'attempted', 'pass_rate'), per.get(name, (0, 0, None))))
-                    for name in names
+                    name: dict(zip(('passed', 'attempted', 'pass_rate'), per.get(name, (0, 0, None)))) for name in names
                 },
                 'passed': passed,
                 'attempted': attempted,

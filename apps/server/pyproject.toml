@@ -241,3 +241,11 @@ flake8-import-conventions.aliases = { datetime = "dt" }
 flake8-quotes.inline-quotes = "single"
 mccabe.max-complexity = 10
 pydocstyle.convention = "google"
+
+# This repo's own backend code (benchmarks/ and tests/) is linted in
+# pre-commit and CI; the rest of open_webui/ is upstream Open WebUI and is
+# not. Complexity is exempt there: its long report/stats functions read
+# top to bottom on purpose, and splitting them for a branch count is churn.
+[tool.ruff.lint.per-file-ignores]
+"backend/open_webui/benchmarks/**" = ["C901"]
+"backend/tests/**" = ["C901"]

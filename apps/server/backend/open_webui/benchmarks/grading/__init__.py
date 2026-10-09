@@ -30,8 +30,8 @@ import tempfile
 import time
 from pathlib import Path
 
-from open_webui.env import BACKEND_DIR
 from open_webui.benchmarks.datasets import datasets_base_dir, read_manifest
+from open_webui.env import BACKEND_DIR
 
 from . import ds1000, humaneval, mbpp
 
@@ -51,7 +51,7 @@ NO_CODE = 'no_code'
 SKIPPED = 'skipped'
 
 FAILURES = {FAIL_ASSERT, FAIL_ERROR, FAIL_TIMEOUT, NO_CODE}
-GRADED = FAILURES | {PASS}          # everything except skipped
+GRADED = FAILURES | {PASS}  # everything except skipped
 
 
 # ---------------------------------------------------------------------------
@@ -124,12 +124,13 @@ def libraries_available(names: list[str]) -> set[str]:
     Probed in a subprocess against the interpreter that will actually run the
     graded code, which is not necessarily this one.
     """
-    probe = ('import importlib.util,json,sys;'
-             'print(json.dumps([n for n in sys.argv[1:] '
-             'if importlib.util.find_spec(n.lower()) is not None]))')
+    probe = (
+        'import importlib.util,json,sys;'
+        'print(json.dumps([n for n in sys.argv[1:] '
+        'if importlib.util.find_spec(n.lower()) is not None]))'
+    )
     try:
-        out = subprocess.run([grader_python(), '-c', probe, *names],
-                             capture_output=True, text=True, timeout=60)
+        out = subprocess.run([grader_python(), '-c', probe, *names], capture_output=True, text=True, timeout=60)
         return set(json.loads(out.stdout or '[]'))
     except (OSError, ValueError, subprocess.SubprocessError):
         return set()
@@ -152,8 +153,7 @@ def run_program(source: str, timeout: int, isolated: bool) -> tuple[str, str]:
             argv.append('-S')
         argv.append(str(path))
         try:
-            proc = subprocess.run(argv, cwd=tmp, capture_output=True,
-                                  text=True, timeout=timeout)
+            proc = subprocess.run(argv, cwd=tmp, capture_output=True, text=True, timeout=timeout)
         except subprocess.TimeoutExpired:
             return FAIL_TIMEOUT, f'no result within {timeout}s'
         except OSError as exc:
@@ -177,8 +177,7 @@ def grade(adapter: dict, item: dict, answer: str) -> tuple[str, str]:
     if program is None:
         return NO_CODE, 'no code in the response'
     check = adapter['check']
-    return run_program(program, int(check.get('timeout', 30)),
-                       bool(check.get('isolated', True)))
+    return run_program(program, int(check.get('timeout', 30)), bool(check.get('isolated', True)))
 
 
 # ---------------------------------------------------------------------------
@@ -209,16 +208,16 @@ def env_fingerprint() -> dict:
     names.
     """
     probe = (
-        "import json,sys\n"
-        "import importlib.metadata as md\n"
+        'import json,sys\n'
+        'import importlib.metadata as md\n'
         "out={'python': '%d.%d.%d' % sys.version_info[:3]}\n"
         "for name in ('numpy','pandas','scipy','scikit-learn','pyyaml'):\n"
-        "    try: out[name]=md.version(name)\n"
-        "    except Exception: pass\n"
-        "print(json.dumps(out, sort_keys=True))\n")
+        '    try: out[name]=md.version(name)\n'
+        '    except Exception: pass\n'
+        'print(json.dumps(out, sort_keys=True))\n'
+    )
     try:
-        proc = subprocess.run([grader_python(), '-c', probe],
-                              capture_output=True, text=True, timeout=60)
+        proc = subprocess.run([grader_python(), '-c', probe], capture_output=True, text=True, timeout=60)
         return json.loads(proc.stdout or '{}')
     except (OSError, ValueError, subprocess.SubprocessError):
         return {}
@@ -271,8 +270,7 @@ def ungradeable(bench: str, base: Path | None = None) -> dict[str, str]:
     return dict(cal.get('ungradeable', {}))
 
 
-def calibrate(bench: str, adapter: dict, items: list[dict],
-              on_item=None, base: Path | None = None) -> dict:
+def calibrate(bench: str, adapter: dict, items: list[dict], on_item=None, base: Path | None = None) -> dict:
     """Grade every reference solution and record which ones this box can verify.
 
     Returns the calibration record; the caller writes it. Every item is pushed
