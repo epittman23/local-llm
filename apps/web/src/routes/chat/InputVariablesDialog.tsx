@@ -49,7 +49,11 @@ export function InputVariablesDialog({
 	const set = (k: string, v: unknown) => setValues((cur) => ({ ...cur, [k]: v }));
 	return (
 		<Dialog open onOpenChange={(o) => !o && onCancel()}>
-			<DialogContent className="max-w-md">
+			{/* Focus goes back to the message box from the caller (Save puts the
+			    caret at the end of the filled prompt), not to whatever Radix
+			    recorded on open: that was often <body>, and its delayed restore
+			    could steal focus while the user was already typing again. */}
+			<DialogContent className="max-w-md" onCloseAutoFocus={(e) => e.preventDefault()}>
 				<DialogHeader>
 					<DialogTitle>Input Variables</DialogTitle>
 					<DialogDescription className="sr-only">Fill in the prompt's variables</DialogDescription>

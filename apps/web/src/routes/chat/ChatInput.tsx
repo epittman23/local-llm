@@ -424,7 +424,10 @@ export const ChatInput = forwardRef<
 			</div>
 			<InputVariablesDialog
 				variables={variables?.vars ?? null}
-				onCancel={() => setVariables(null)}
+				onCancel={() => {
+					setVariables(null);
+					place(text, cursor);
+				}}
 				onSubmit={(values) => {
 					const filled = replaceInputVariables(variables?.text ?? text, values);
 					setVariables(null);

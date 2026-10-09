@@ -119,6 +119,8 @@ test('# offers knowledge, / inserts a prompt and asks for its variables, @ picks
 	await dialog.getByLabel('tone').selectOption('short');
 	await dialog.getByRole('button', { name: 'Save' }).click();
 	await expect(box).toHaveValue('Summarize this for Test User in short');
+	// Saving hands focus back to the message box, caret at the end.
+	await expect(box).toBeFocused();
 
 	await page.keyboard.press('End');
 	await box.pressSequentially(' @lla');
