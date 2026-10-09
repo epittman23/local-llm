@@ -26,7 +26,7 @@ type ResponseUsage = {
 // createOpenAITextStream takes a responseBody with a SSE response,
 // and returns an async generator that emits delta updates with large deltas chunked into random sized chunks
 export async function createOpenAITextStream(
-	responseBody: ReadableStream<Uint8Array>,
+	responseBody: ReadableStream<Uint8Array<ArrayBuffer>>,
 	splitLargeDeltas: boolean
 ): Promise<AsyncGenerator<TextStreamUpdate>> {
 	const eventStream = responseBody
