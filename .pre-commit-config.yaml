@@ -1,15 +1,21 @@
-# Local guard rails, run on every `git commit` once installed:
+# The one place linting and formatting are defined. It runs on every
+# `git commit` once installed:
 #
 #   uv tool install pre-commit && pre-commit install
+#   (cd apps/web && bun install)   # the Biome hook runs apps/web's own Biome
 #
-# Run against everything with `pre-commit run --all-files`. CI
-# (.github/workflows/ci.yml) re-runs the ruff checks, so a skipped hook
-# (`git commit --no-verify`) is still caught before merge.
+# CI's `pre-commit` job (.github/workflows/ci.yml) runs this same file with
+# `--all-files`, so a skipped hook (`git commit --no-verify`) is still caught
+# before merge. Run it yourself with `pre-commit run --all-files`.
 #
-# Ruff covers only the backend code this repo owns (benchmarks/ and tests/).
-# The rest of apps/server/backend/open_webui/ is upstream Open WebUI, with
-# thousands of pre-existing findings; linting it would block every commit
-# that touches one of its files.
+# Rolling out in stages (docs/CLAUDE.md, 2026-10-09). Formatting covers all
+# of apps/web and apps/server/backend. Linting does not yet:
+#   - ruff-check covers only backend/open_webui/benchmarks/ and tests/ until
+#     the rest of the backend's ~2.8k existing findings are fixed;
+#   - Biome only formats until apps/web's ~800 existing lint findings are
+#     fixed, then the hook becomes `biome check --write --error-on-warnings`.
+# Both are temporary gaps being closed, not boundaries: all of this code is
+# this repo's own.
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -40,4 +46,19 @@ repos:
         args: [--fix]
         files: ^apps/server/backend/(open_webui/benchmarks|tests)/
       - id: ruff-format
-        files: ^apps/server/backend/(open_webui/benchmarks|tests)/
+        files: ^apps/server/backend/
+
+  # Biome from apps/web/node_modules, so the hook, CI and the editor all run
+  # the exact version package.json pins (Dependabot keeps it current). Runs
+  # from apps/web so biome.jsonc applies; paths arrive repo-relative and are
+  # stripped of the apps/web/ prefix.
+  - repo: local
+    hooks:
+      - id: biome
+        name: biome (apps/web)
+        language: system
+        files: ^apps/web/
+        entry: >-
+          bash -c 'cd apps/web
+          && { [ -x node_modules/.bin/biome ] || { echo "biome missing: run bun install in apps/web" >&2; exit 1; }; }
+          && exec node_modules/.bin/biome format --write --no-errors-on-unmatched --files-ignore-unknown=true "${@/#apps\/web\//}"' --
