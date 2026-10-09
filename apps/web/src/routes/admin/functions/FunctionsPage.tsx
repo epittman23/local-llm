@@ -124,6 +124,13 @@ export function FunctionsPage() {
 		queryClient.setQueryData<FunctionListItem[]>(LIST_KEY, (prev) =>
 			prev?.map((f) => (f.id === id ? { ...f, ...patch } : f))
 		);
+	// An optimistic toggle first cancels any list fetch already in flight:
+	// otherwise that fetch, started before the toggle, lands after it and
+	// puts the old value back on screen until the next refresh.
+	const patchOptimistic = async (id: string, patch: Partial<FunctionListItem>) => {
+		await queryClient.cancelQueries({ queryKey: LIST_KEY });
+		patchItem(id, patch);
+	};
 
 	const openFunction = (fn: FunctionListItem) =>
 		navigate(`${routePaths.adminFunctionsEdit}?id=${encodeURIComponent(fn.id)}`);
@@ -141,7 +148,7 @@ export function FunctionsPage() {
 
 	const toggleActive = async (fn: FunctionListItem) => {
 		const next = !fn.is_active;
-		patchItem(fn.id, { is_active: next });
+		await patchOptimistic(fn.id, { is_active: next });
 		try {
 			await toggleFunctionById(token, fn.id);
 		} catch (error) {
@@ -153,7 +160,7 @@ export function FunctionsPage() {
 
 	const toggleGlobal = async (fn: FunctionListItem) => {
 		const next = !fn.is_global;
-		patchItem(fn.id, { is_global: next });
+		await patchOptimistic(fn.id, { is_global: next });
 		const noun = fn.type === 'filter' ? 'Filter' : 'Function';
 		try {
 			await toggleGlobalById(token, fn.id);

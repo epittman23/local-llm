@@ -47,8 +47,16 @@ async function mockFunctionsApi(page: Page, initial: Rec[], opts: { failToggle?:
 			if (!found) return json({ detail: 'Not found' }, 404);
 			if (rest === '') return json(found);
 			if (rest === '/update') return json({ ...found, ...body });
-			if (rest === '/toggle') return json({ ...found, is_active: !found.is_active });
-			if (rest === '/toggle/global') return json({ ...found, is_global: !found.is_global });
+			// Persist the toggle like the real server, so the list the page
+			// refetches afterwards agrees with what it just showed.
+			if (rest === '/toggle') {
+				found.is_active = !found.is_active;
+				return json(found);
+			}
+			if (rest === '/toggle/global') {
+				found.is_global = !found.is_global;
+				return json(found);
+			}
 			if (rest === '/delete') {
 				state.fns = state.fns.filter((f) => f.id !== found.id);
 				return json(true);
