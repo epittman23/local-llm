@@ -9,9 +9,7 @@ import logging
 import mimetypes
 import os
 import uuid
-from fnmatch import fnmatch
 from pathlib import Path
-from typing import Optional
 
 import aiofiles
 import aiohttp
@@ -39,13 +37,11 @@ from open_webui.config import (
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import (
     AIOHTTP_CLIENT_SESSION_SSL,
-    AIOHTTP_CLIENT_TIMEOUT,
     AIOHTTP_CLIENT_TIMEOUT_MODEL_LIST,
     AIOHTTP_FILE_STREAM_CHUNK_SIZE,
     BYPASS_PYDUB_PREPROCESSING,
     DEVICE_TYPE,
     ENABLE_FORWARD_USER_INFO_HEADERS,
-    ENV,
 )
 from open_webui.events import EVENTS, publish_event
 from open_webui.models.config import Config
@@ -59,7 +55,6 @@ from pydantic import BaseModel
 
 # pydub needs stdlib audioop (gone in 3.13); keep requires-python capped < 3.13
 from pydub import AudioSegment
-from pydub.silence import split_on_silence
 from pydub.utils import mediainfo
 
 log = logging.getLogger(__name__)
@@ -237,7 +232,7 @@ def set_faster_whisper_model(model: str, auto_update: bool = False):
 class TTSConfigForm(BaseModel):
     OPENAI_API_BASE_URL: str
     OPENAI_API_KEY: str
-    OPENAI_PARAMS: Optional[dict] = None
+    OPENAI_PARAMS: dict | None = None
     API_KEY: str
     ENGINE: str
     MODEL: str
@@ -1076,7 +1071,7 @@ async def _transcribe_mistral(request, file_path, filename, metadata, file_dir, 
         )
 
 
-async def transcribe(request: Request, file_path: str, metadata: Optional[dict] = None, user=None):
+async def transcribe(request: Request, file_path: str, metadata: dict | None = None, user=None):
     log.info('transcribe: %s %s', file_path, metadata)
 
     if BYPASS_PYDUB_PREPROCESSING:
@@ -1196,7 +1191,7 @@ def split_audio(file_path, max_bytes, format='mp3', bitrate='32k'):
 async def transcription(
     request: Request,
     file: UploadFile = File(...),
-    language: Optional[str] = Form(None),
+    language: str | None = Form(None),
     user=Depends(get_verified_user),
 ):
     if user.role != 'admin' and not await has_permission(user.id, 'chat.stt', await Config.get('user.permissions')):

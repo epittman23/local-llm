@@ -14,12 +14,11 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, ConfigDict
-
 from open_webui.benchmarks import report as report_logic
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.env import DATA_DIR
 from open_webui.utils.auth import get_admin_user
+from pydantic import BaseModel, ConfigDict
 
 router = APIRouter()
 

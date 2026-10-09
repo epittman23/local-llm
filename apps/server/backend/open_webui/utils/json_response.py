@@ -5,10 +5,9 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from open_webui.env import ENABLE_ORJSON
 from starlette.requests import Request
 from starlette.responses import JSONResponse
-
-from open_webui.env import ENABLE_ORJSON
 
 
 def apply_orjson_http_json() -> None:

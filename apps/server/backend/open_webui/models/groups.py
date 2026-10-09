@@ -1,11 +1,9 @@
 import logging
 import time
 import uuid
-from typing import Optional
 
 from open_webui.env import DEFAULT_GROUP_SHARE_PERMISSION
-from open_webui.internal.db import Base, JSONField, get_async_db_context
-from open_webui.models.files import FileMetadataResponse
+from open_webui.internal.db import Base, get_async_db_context
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import (
     JSON,
@@ -13,10 +11,8 @@ from sqlalchemy import (
     Column,
     ForeignKey,
     Index,
-    String,
     Text,
     and_,
-    cast,
     delete,
     func,
     or_,
@@ -59,10 +55,10 @@ class GroupModel(BaseModel):
     name: str
     description: str
 
-    data: Optional[dict] = None
-    meta: Optional[dict] = None
+    data: dict | None = None
+    meta: dict | None = None
 
-    permissions: Optional[dict] = None
+    permissions: dict | None = None
 
     created_at: int  # timestamp in epoch
     updated_at: int  # timestamp in epoch
@@ -90,8 +86,8 @@ class GroupMemberModel(BaseModel):
     id: str
     group_id: str
     user_id: str
-    created_at: Optional[int] = None  # timestamp in epoch
-    updated_at: Optional[int] = None  # timestamp in epoch
+    created_at: int | None = None  # timestamp in epoch
+    updated_at: int | None = None  # timestamp in epoch
 
 
 ####################
@@ -100,7 +96,7 @@ class GroupMemberModel(BaseModel):
 
 
 class GroupResponse(GroupModel):
-    member_count: Optional[int] = None
+    member_count: int | None = None
 
 
 class GroupInfoResponse(BaseModel):
@@ -108,7 +104,7 @@ class GroupInfoResponse(BaseModel):
     user_id: str
     name: str
     description: str
-    member_count: Optional[int] = None
+    member_count: int | None = None
     created_at: int
     updated_at: int
 
@@ -116,12 +112,12 @@ class GroupInfoResponse(BaseModel):
 class GroupForm(BaseModel):
     name: str
     description: str
-    permissions: Optional[dict] = None
-    data: Optional[dict] = None
+    permissions: dict | None = None
+    data: dict | None = None
 
 
 class UserIdsForm(BaseModel):
-    user_ids: Optional[list[str]] = None
+    user_ids: list[str] | None = None
 
 
 class GroupUpdateForm(GroupForm):
@@ -145,8 +141,8 @@ class GroupTable:
         return group_data
 
     async def insert_new_group(
-        self, user_id: str, form_data: GroupForm, db: Optional[AsyncSession] = None
-    ) -> Optional[GroupModel]:
+        self, user_id: str, form_data: GroupForm, db: AsyncSession | None = None
+    ) -> GroupModel | None:
         async with get_async_db_context(db) as db:
             group_data = self._ensure_default_share_config(form_data.model_dump(exclude_none=True))
             group = GroupModel(
@@ -172,19 +168,19 @@ class GroupTable:
             except Exception:
                 return None
 
-    async def get_all_groups(self, db: Optional[AsyncSession] = None) -> list[GroupModel]:
+    async def get_all_groups(self, db: AsyncSession | None = None) -> list[GroupModel]:
         async with get_async_db_context(db) as db:
             result = await db.execute(select(Group).order_by(Group.updated_at.desc()))
             groups = result.scalars().all()
             return [GroupModel.model_validate(group) for group in groups]
 
-    async def get_group_by_name(self, name: str, db: Optional[AsyncSession] = None) -> Optional[GroupModel]:
+    async def get_group_by_name(self, name: str, db: AsyncSession | None = None) -> GroupModel | None:
         async with get_async_db_context(db) as db:
             result = await db.execute(select(Group).filter(Group.name == name))
             group = result.scalars().first()
             return GroupModel.model_validate(group) if group else None
 
-    async def get_groups(self, filter, db: Optional[AsyncSession] = None) -> list[GroupResponse]:
+    async def get_groups(self, filter, db: AsyncSession | None = None) -> list[GroupResponse]:
         async with get_async_db_context(db) as db:
             member_count = (
                 select(func.count(GroupMember.user_id))
@@ -249,10 +245,10 @@ class GroupTable:
 
     async def search_groups(
         self,
-        filter: Optional[dict] = None,
+        filter: dict | None = None,
         skip: int = 0,
         limit: int = 30,
-        db: Optional[AsyncSession] = None,
+        db: AsyncSession | None = None,
     ) -> GroupListResponse:
         async with get_async_db_context(db) as db:
             stmt = select(Group)
@@ -302,7 +298,7 @@ class GroupTable:
                 'total': total,
             }
 
-    async def get_groups_by_member_id(self, user_id: str, db: Optional[AsyncSession] = None) -> list[GroupModel]:
+    async def get_groups_by_member_id(self, user_id: str, db: AsyncSession | None = None) -> list[GroupModel]:
         async with get_async_db_context(db) as db:
             result = await db.execute(
                 select(Group)
@@ -313,7 +309,7 @@ class GroupTable:
             return [GroupModel.model_validate(group) for group in result.scalars().all()]
 
     async def get_groups_by_member_ids(
-        self, user_ids: list[str], db: Optional[AsyncSession] = None
+        self, user_ids: list[str], db: AsyncSession | None = None
     ) -> dict[str, list[GroupModel]]:
         """Fetch groups for multiple users in a single query to avoid N+1."""
         async with get_async_db_context(db) as db:
@@ -333,7 +329,7 @@ class GroupTable:
 
             return user_groups
 
-    async def get_group_by_id(self, id: str, db: Optional[AsyncSession] = None) -> Optional[GroupModel]:
+    async def get_group_by_id(self, id: str, db: AsyncSession | None = None) -> GroupModel | None:
         try:
             async with get_async_db_context(db) as db:
                 result = await db.execute(select(Group).filter_by(id=id))
@@ -342,7 +338,7 @@ class GroupTable:
         except Exception:
             return None
 
-    async def get_group_user_ids_by_id(self, id: str, db: Optional[AsyncSession] = None) -> list[str]:
+    async def get_group_user_ids_by_id(self, id: str, db: AsyncSession | None = None) -> list[str]:
         async with get_async_db_context(db) as db:
             result = await db.execute(select(GroupMember.user_id).filter(GroupMember.group_id == id))
             members = result.all()
@@ -353,7 +349,7 @@ class GroupTable:
             return [m[0] for m in members]
 
     async def get_group_user_ids_by_ids(
-        self, group_ids: list[str], db: Optional[AsyncSession] = None
+        self, group_ids: list[str], db: AsyncSession | None = None
     ) -> dict[str, list[str]]:
         async with get_async_db_context(db) as db:
             result = await db.execute(
@@ -369,7 +365,7 @@ class GroupTable:
             return group_user_ids
 
     async def set_group_user_ids_by_id(
-        self, group_id: str, user_ids: list[str], db: Optional[AsyncSession] = None
+        self, group_id: str, user_ids: list[str], db: AsyncSession | None = None
     ) -> None:
         async with get_async_db_context(db) as db:
             # Delete existing members
@@ -391,13 +387,13 @@ class GroupTable:
             db.add_all(new_members)
             await db.commit()
 
-    async def get_group_member_count_by_id(self, id: str, db: Optional[AsyncSession] = None) -> int:
+    async def get_group_member_count_by_id(self, id: str, db: AsyncSession | None = None) -> int:
         async with get_async_db_context(db) as db:
             result = await db.execute(select(func.count(GroupMember.user_id)).filter(GroupMember.group_id == id))
             count = result.scalar()
             return count if count else 0
 
-    async def get_group_member_counts_by_ids(self, ids: list[str], db: Optional[AsyncSession] = None) -> dict[str, int]:
+    async def get_group_member_counts_by_ids(self, ids: list[str], db: AsyncSession | None = None) -> dict[str, int]:
         if not ids:
             return {}
         async with get_async_db_context(db) as db:
@@ -414,8 +410,8 @@ class GroupTable:
         id: str,
         form_data: GroupUpdateForm,
         overwrite: bool = False,
-        db: Optional[AsyncSession] = None,
-    ) -> Optional[GroupModel]:
+        db: AsyncSession | None = None,
+    ) -> GroupModel | None:
         try:
             async with get_async_db_context(db) as db:
                 await db.execute(
@@ -432,7 +428,7 @@ class GroupTable:
             log.exception(e)
             return None
 
-    async def delete_group_by_id(self, id: str, db: Optional[AsyncSession] = None) -> bool:
+    async def delete_group_by_id(self, id: str, db: AsyncSession | None = None) -> bool:
         try:
             async with get_async_db_context(db) as db:
                 await db.execute(delete(Group).filter_by(id=id))
@@ -441,7 +437,7 @@ class GroupTable:
         except Exception:
             return False
 
-    async def delete_all_groups(self, db: Optional[AsyncSession] = None) -> bool:
+    async def delete_all_groups(self, db: AsyncSession | None = None) -> bool:
         async with get_async_db_context(db) as db:
             try:
                 await db.execute(delete(Group))
@@ -451,7 +447,7 @@ class GroupTable:
             except Exception:
                 return False
 
-    async def remove_user_from_all_groups(self, user_id: str, db: Optional[AsyncSession] = None) -> bool:
+    async def remove_user_from_all_groups(self, user_id: str, db: AsyncSession | None = None) -> bool:
         async with get_async_db_context(db) as db:
             try:
                 # Find all groups the user belongs to
@@ -478,7 +474,7 @@ class GroupTable:
                 return False
 
     async def create_groups_by_group_names(
-        self, user_id: str, group_names: list[str], db: Optional[AsyncSession] = None
+        self, user_id: str, group_names: list[str], db: AsyncSession | None = None
     ) -> list[GroupModel]:
         # check for existing groups
         existing_groups = await self.get_all_groups(db=db)
@@ -514,7 +510,7 @@ class GroupTable:
             return new_groups
 
     async def sync_groups_by_group_names(
-        self, user_id: str, group_names: list[str], db: Optional[AsyncSession] = None
+        self, user_id: str, group_names: list[str], db: AsyncSession | None = None
     ) -> bool:
         async with get_async_db_context(db) as db:
             try:
@@ -574,9 +570,9 @@ class GroupTable:
     async def add_users_to_group(
         self,
         id: str,
-        user_ids: Optional[list[str]] = None,
-        db: Optional[AsyncSession] = None,
-    ) -> Optional[GroupModel]:
+        user_ids: list[str] | None = None,
+        db: AsyncSession | None = None,
+    ) -> GroupModel | None:
         try:
             async with get_async_db_context(db) as db:
                 result = await db.execute(select(Group).filter_by(id=id))
@@ -615,9 +611,9 @@ class GroupTable:
     async def remove_users_from_group(
         self,
         id: str,
-        user_ids: Optional[list[str]] = None,
-        db: Optional[AsyncSession] = None,
-    ) -> Optional[GroupModel]:
+        user_ids: list[str] | None = None,
+        db: AsyncSession | None = None,
+    ) -> GroupModel | None:
         try:
             async with get_async_db_context(db) as db:
                 result = await db.execute(select(Group).filter_by(id=id))

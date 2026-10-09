@@ -2,7 +2,6 @@ import base64
 import io
 import logging
 import os
-from typing import List, Optional
 from xml.etree import ElementTree as ET
 from xml.etree.ElementTree import Element
 
@@ -36,9 +35,9 @@ def search_yandex(
     yandex_search_config: str,
     query: str,
     count: int,
-    filter_list: Optional[List[str]] = None,
+    filter_list: list[str] | None = None,
     user=None,
-) -> List[SearchResult]:
+) -> list[SearchResult]:
     try:
         headers = {
             # LICENSE covers this Open WebUI user-agent identifier.

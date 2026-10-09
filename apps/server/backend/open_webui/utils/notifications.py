@@ -12,7 +12,6 @@ from open_webui.models.users import Users
 from open_webui.retrieval.web.utils import validate_url
 from open_webui.utils.webhook import post_webhook
 
-
 VALID_EVENTS = set(NOTIFICATION_EVENTS)
 LEGACY_EVENTS = {'chat.finished', 'chat.failed'}
 VALID_DELIVERY = {'away', 'always'}

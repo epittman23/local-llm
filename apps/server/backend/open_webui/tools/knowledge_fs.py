@@ -13,7 +13,7 @@ import re
 import shlex
 import time
 from contextlib import contextmanager
-from typing import Optional
+from datetime import UTC
 
 import regex
 from fastapi import Request
@@ -69,22 +69,22 @@ def match_budget():
 
 
 def is_regex_pattern(pattern: str) -> bool:
-    """Detect if a pattern looks like regex (|, .*, .+, \d, \w, \s, [...])."""
+    r"""Detect if a pattern looks like regex (|, .*, .+, \d, \w, \s, [...])."""
     return (
         '|' in pattern
         or '.*' in pattern
         or '.+' in pattern
         or '.?' in pattern
-        or '\d' in pattern
-        or '\w' in pattern
-        or '\s' in pattern
+        or r'\d' in pattern
+        or r'\w' in pattern
+        or r'\s' in pattern
         or bool(re.search(r'\[.+\]', pattern))
     )
 
 
 def normalize_regex(pattern: str) -> str:
-    """Normalize POSIX BRE patterns to Python regex (\| → |)."""
-    return pattern.replace('\\|', '|').replace('\|', '|')
+    r"""Normalize POSIX BRE patterns to Python regex (\| → |)."""
+    return pattern.replace('\\|', '|').replace(r'\|', '|')
 
 
 def validate_regex_quantifiers(pattern: str) -> str | None:
@@ -203,7 +203,7 @@ def _extract_flags(tokens: list[str]) -> tuple[set[str], list[str]]:
     return flags, args
 
 
-def _extract_numeric_flag(tokens: list[str]) -> tuple[Optional[int], list[str]]:
+def _extract_numeric_flag(tokens: list[str]) -> tuple[int | None, list[str]]:
     """Extract a numeric flag like -20 from tokens. Returns (number, remaining)."""
     num = None
     remaining = []
@@ -631,9 +631,9 @@ def _fmt_size(f: dict) -> str:
 
 def _fmt_date(f: dict) -> str:
     if f.get('updated_at'):
-        from datetime import datetime, timezone
+        from datetime import datetime
 
-        dt = datetime.fromtimestamp(f['updated_at'], tz=timezone.utc)
+        dt = datetime.fromtimestamp(f['updated_at'], tz=UTC)
         return dt.strftime('%Y-%m-%d')
     return ''
 
@@ -960,14 +960,14 @@ async def _kb_stat(args: list[str], flags: set[str], user: dict, model_knowledge
     ]
 
     if resolved.get('created_at'):
-        from datetime import datetime, timezone
+        from datetime import datetime
 
-        dt = datetime.fromtimestamp(resolved['created_at'], tz=timezone.utc)
+        dt = datetime.fromtimestamp(resolved['created_at'], tz=UTC)
         out.append(f'  Created: {dt.strftime("%Y-%m-%d %H:%M:%S UTC")}')
     if resolved.get('updated_at'):
-        from datetime import datetime, timezone
+        from datetime import datetime
 
-        dt = datetime.fromtimestamp(resolved['updated_at'], tz=timezone.utc)
+        dt = datetime.fromtimestamp(resolved['updated_at'], tz=UTC)
         out.append(f'  Updated: {dt.strftime("%Y-%m-%d %H:%M:%S UTC")}')
     if resolved.get('knowledge_name'):
         out.append(f'      KB: {resolved["knowledge_name"]} ({resolved.get("knowledge_id", "")})')
@@ -1148,7 +1148,7 @@ async def kb_exec(
     command: str,
     __request__: Request = None,
     __user__: dict = None,
-    __model_knowledge__: Optional[list[dict]] = None,
+    __model_knowledge__: list[dict] | None = None,
 ) -> str:
     """
     Run a filesystem command against the knowledge base.

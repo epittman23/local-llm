@@ -6,7 +6,6 @@ import logging
 import time
 import uuid
 import zipfile
-from typing import List, Optional
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -21,11 +20,10 @@ from open_webui.events import EVENTS, publish_event
 from open_webui.internal.db import get_async_session
 from open_webui.models.access_grants import AccessGrants
 from open_webui.models.config import Config
-from open_webui.models.files import FileMetadataResponse, FileModel, FileModelResponse, Files
+from open_webui.models.files import FileMetadataResponse, FileModel, Files
 from open_webui.models.groups import Groups
 from open_webui.models.knowledge import (
     KNOWLEDGE_SORTABLE_FIELDS,
-    KnowledgeDirectoryForm,
     KnowledgeDirectoryModel,
     KnowledgeFileListResponse,
     KnowledgeForm,
@@ -34,7 +32,7 @@ from open_webui.models.knowledge import (
     KnowledgeUserResponse,
 )
 from open_webui.models.models import ModelForm, Models
-from open_webui.retrieval.external import retrieve_external_knowledge, retrieve_external_knowledge_for_connection
+from open_webui.retrieval.external import retrieve_external_knowledge_for_connection
 from open_webui.retrieval.vector.async_client import ASYNC_VECTOR_DB_CLIENT
 from open_webui.routers.retrieval import (
     BatchProcessFilesForm,
@@ -484,7 +482,7 @@ async def reindex_knowledge_base_metadata_embeddings(
 class ExternalKnowledgeSourceForm(BaseModel):
     type: str = 'collection'
     name: str
-    config: Optional[dict] = None
+    config: dict | None = None
 
 
 class ExternalKnowledgeCreateForm(BaseModel):
@@ -492,7 +490,7 @@ class ExternalKnowledgeCreateForm(BaseModel):
     description: str = ''
     connection_id: str
     source: ExternalKnowledgeSourceForm
-    access_grants: Optional[list[dict]] = None
+    access_grants: list[dict] | None = None
 
 
 class ExternalKnowledgeSourceCreateForm(BaseModel):
@@ -500,7 +498,7 @@ class ExternalKnowledgeSourceCreateForm(BaseModel):
     description: str = ''
     connection: ExternalKnowledgeConnectionForm
     source: ExternalKnowledgeSourceForm
-    access_grants: Optional[list[dict]] = None
+    access_grants: list[dict] | None = None
     test_query: str
     test_count: int = 5
 
@@ -510,7 +508,7 @@ class ExternalKnowledgeSourceUpdateForm(ExternalKnowledgeSourceCreateForm):
 
 
 class ExternalKnowledgeSourceTestForm(BaseModel):
-    connection_id: Optional[str] = None
+    connection_id: str | None = None
     connection: ExternalKnowledgeConnectionForm
     source: ExternalKnowledgeSourceForm
     query: str
@@ -519,7 +517,7 @@ class ExternalKnowledgeSourceTestForm(BaseModel):
 
 class ExternalKnowledgeRetrieveTestForm(BaseModel):
     query: str
-    source: Optional[ExternalKnowledgeSourceForm] = None
+    source: ExternalKnowledgeSourceForm | None = None
     count: int = 5
 
 
@@ -527,9 +525,9 @@ class ExternalKnowledgeConnectionForm(BaseModel):
     name: str
     provider: str
     endpoint: str
-    auth_config: Optional[dict] = None
-    config: Optional[dict] = None
-    capabilities: Optional[dict] = None
+    auth_config: dict | None = None
+    config: dict | None = None
+    capabilities: dict | None = None
     enabled: bool = True
 
 
@@ -564,7 +562,7 @@ def _get_external_connection_provider_and_config(form_data: ExternalKnowledgeCon
     return provider, {key: value for key, value in config.items() if key in allowed_config_keys}
 
 
-def _get_external_auth_config(provider: str, incoming: Optional[dict], existing: Optional[dict] = None) -> dict:
+def _get_external_auth_config(provider: str, incoming: dict | None, existing: dict | None = None) -> dict:
     if provider == 'pgvector':
         return {}
     return existing if incoming is None else incoming or {}
@@ -617,7 +615,7 @@ async def _set_external_connections(connections: list[dict]) -> None:
 
 
 def _get_external_connection_from_form(
-    form_data: ExternalKnowledgeConnectionForm, user_id: str, id: Optional[str] = None
+    form_data: ExternalKnowledgeConnectionForm, user_id: str, id: str | None = None
 ) -> dict:
     provider, config = _get_external_connection_provider_and_config(form_data)
     now = int(time.time())
@@ -655,14 +653,12 @@ def _get_external_connection_update_from_form(
     }
 
 
-async def _get_external_connection_by_id(id: str) -> Optional[dict]:
+async def _get_external_connection_by_id(id: str) -> dict | None:
     connections = await _get_external_connections()
     return next((connection for connection in connections if connection.get('id') == id), None)
 
 
-async def _get_knowledge_base_count_for_external_connection(
-    connection_id: str, db: Optional[AsyncSession] = None
-) -> int:
+async def _get_knowledge_base_count_for_external_connection(connection_id: str, db: AsyncSession | None = None) -> int:
     count = 0
     for knowledge in await Knowledges.get_knowledge_bases(db=db):
         if (knowledge.meta or {}).get('external', {}).get('connection_id') == connection_id:
@@ -1401,7 +1397,7 @@ async def get_knowledge_files_by_id(
 
 class KnowledgeFileIdForm(BaseModel):
     file_id: str
-    directory_id: Optional[str] = None
+    directory_id: str | None = None
 
 
 @router.post('/{id}/file/add', response_model=KnowledgeFilesResponse | None)
@@ -2189,17 +2185,17 @@ async def export_knowledge_by_id(id: str, user=Depends(get_admin_user), db: Asyn
 
 class KnowledgeDirectoryCreateForm(BaseModel):
     name: str
-    parent_id: Optional[str] = None
+    parent_id: str | None = None
 
 
 class KnowledgeDirectoryUpdateForm(BaseModel):
-    name: Optional[str] = None
-    parent_id: Optional[str] = '__unset__'
+    name: str | None = None
+    parent_id: str | None = '__unset__'
 
 
 class KnowledgeFileMoveForm(BaseModel):
     file_id: str
-    directory_id: Optional[str] = None
+    directory_id: str | None = None
 
 
 async def _verify_knowledge_write_access(id: str, user, db: AsyncSession):

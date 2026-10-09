@@ -7,7 +7,7 @@ import copy
 import logging
 import re
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Literal
 from uuid import uuid4
 
@@ -160,7 +160,7 @@ async def create_timer(
     return JSONCodec.dumps(
         {
             'status': 'set',
-            'at': datetime.fromtimestamp(due_at / 1_000_000_000, timezone.utc).isoformat().replace('+00:00', 'Z'),
+            'at': datetime.fromtimestamp(due_at / 1_000_000_000, UTC).isoformat().replace('+00:00', 'Z'),
             'cancel_on': selected_events,
         },
         ensure_ascii=False,

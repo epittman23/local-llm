@@ -49,7 +49,6 @@ from open_webui.config import (
     DEFAULT_LOCALE,
     ENABLE_ADMIN_ANALYTICS,
     # Admin
-    ENABLE_ADMIN_CHAT_ACCESS,
     ENABLE_ADMIN_EXPORT,
     ENABLE_ONEDRIVE_BUSINESS,
     ENABLE_ONEDRIVE_PERSONAL,
@@ -82,6 +81,7 @@ from open_webui.env import (
     BYPASS_MODEL_ACCESS_CONTROL,
     CHANGELOG,
     DEPLOYMENT_ID,
+    ENABLE_ADMIN_CHAT_ACCESS,
     ENABLE_AUDIT_GET_REQUESTS,
     ENABLE_COMPRESSION_MIDDLEWARE,
     ENABLE_CUSTOM_MODEL_FALLBACK,
@@ -446,7 +446,7 @@ async def lifespan(app: FastAPI):
     if license_task:
         try:
             await asyncio.wait_for(asyncio.shield(license_task), timeout=2)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             log.warning('License data retrieval is still pending; continuing startup without it')
         except Exception as e:
             log.warning(f'License data retrieval failed during startup: {e}')
@@ -2557,7 +2557,7 @@ async def get_app_version():
 @app.get('/api/version/updates')
 async def get_app_latest_release_version(user=Depends(get_verified_user)):
     if not ENABLE_VERSION_UPDATE_CHECK:
-        log.debug(f'Version update check is disabled, returning current version as latest version')
+        log.debug('Version update check is disabled, returning current version as latest version')
         return {'current': VERSION, 'latest': VERSION}
     try:
         timeout = aiohttp.ClientTimeout(total=1)
@@ -2627,7 +2627,7 @@ try:
         log.info('Using Redis for session')
     else:
         raise ValueError('No Redis URL provided')
-except Exception as e:
+except Exception:
     app.add_middleware(
         SessionMiddleware,
         secret_key=WEBUI_SECRET_KEY,

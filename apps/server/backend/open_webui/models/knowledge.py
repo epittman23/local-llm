@@ -1,10 +1,9 @@
 import logging
 import time
 import uuid
-from typing import Optional
 
 from open_webui.config import RAG_FILE_CONTENT_SEARCH_MAX_CHARS
-from open_webui.internal.db import Base, JSONField, get_async_db_context
+from open_webui.internal.db import Base, get_async_db_context
 from open_webui.models.access_grants import AccessGrantModel, AccessGrants
 from open_webui.models.files import (
     File,
@@ -21,7 +20,6 @@ from sqlalchemy import (
     Column,
     ForeignKey,
     Index,
-    String,
     Text,
     UniqueConstraint,
     delete,
@@ -88,7 +86,7 @@ class KnowledgeModel(BaseModel):
     name: str
     description: str
 
-    meta: Optional[dict] = None
+    meta: dict | None = None
 
     access_grants: list[AccessGrantModel] = Field(default_factory=list)
 
@@ -119,7 +117,7 @@ class KnowledgeFileModel(BaseModel):
     id: str
     knowledge_id: str
     file_id: str
-    directory_id: Optional[str] = None
+    directory_id: str | None = None
     user_id: str
 
     created_at: int  # timestamp in epoch
@@ -133,7 +131,7 @@ class KnowledgeDirectoryModel(BaseModel):
 
     id: str
     knowledge_id: str
-    parent_id: Optional[str] = None
+    parent_id: str | None = None
     name: str
     user_id: str
 
@@ -143,19 +141,19 @@ class KnowledgeDirectoryModel(BaseModel):
 
 class KnowledgeDirectoryForm(BaseModel):
     name: str
-    parent_id: Optional[str] = None
+    parent_id: str | None = None
 
 
 ####################
 # Forms
 ####################
 class KnowledgeUserModel(KnowledgeModel):
-    user: Optional[UserResponse] = None
+    user: UserResponse | None = None
     file_count: int | None = None
 
 
 class KnowledgeResponse(KnowledgeModel):
-    files: Optional[list[FileMetadataResponse | dict]] = None
+    files: list[FileMetadataResponse | dict] | None = None
 
 
 class KnowledgeUserResponse(KnowledgeUserModel):
@@ -165,11 +163,11 @@ class KnowledgeUserResponse(KnowledgeUserModel):
 class KnowledgeForm(BaseModel):
     name: str
     description: str
-    access_grants: Optional[list[dict]] = None
+    access_grants: list[dict] | None = None
 
 
 class FileUserResponse(FileModelResponse):
-    user: Optional[UserResponse] = None
+    user: UserResponse | None = None
 
 
 class KnowledgeListResponse(BaseModel):
@@ -185,14 +183,14 @@ class KnowledgeFileListResponse(BaseModel):
 
 
 class KnowledgeTable:
-    async def _get_access_grants(self, knowledge_id: str, db: Optional[AsyncSession] = None) -> list[AccessGrantModel]:
+    async def _get_access_grants(self, knowledge_id: str, db: AsyncSession | None = None) -> list[AccessGrantModel]:
         return await AccessGrants.get_grants_by_resource('knowledge', knowledge_id, db=db)
 
     async def _to_knowledge_model(
         self,
         knowledge: Knowledge,
-        access_grants: Optional[list[AccessGrantModel]] = None,
-        db: Optional[AsyncSession] = None,
+        access_grants: list[AccessGrantModel] | None = None,
+        db: AsyncSession | None = None,
     ) -> KnowledgeModel:
         knowledge_model = KnowledgeModel.model_validate(knowledge)
         knowledge_model.access_grants = (
@@ -201,8 +199,8 @@ class KnowledgeTable:
         return knowledge_model
 
     async def insert_new_knowledge(
-        self, user_id: str, form_data: KnowledgeForm, db: Optional[AsyncSession] = None
-    ) -> Optional[KnowledgeModel]:
+        self, user_id: str, form_data: KnowledgeForm, db: AsyncSession | None = None
+    ) -> KnowledgeModel | None:
         async with get_async_db_context(db) as db:
             knowledge = KnowledgeModel(
                 **{
@@ -229,7 +227,7 @@ class KnowledgeTable:
                 return None
 
     async def get_knowledge_bases(
-        self, skip: int = 0, limit: int = 30, db: Optional[AsyncSession] = None
+        self, skip: int = 0, limit: int = 30, db: AsyncSession | None = None
     ) -> list[KnowledgeUserModel]:
         async with get_async_db_context(db) as db:
             result = await db.execute(select(Knowledge).order_by(Knowledge.updated_at.desc()))
@@ -266,7 +264,7 @@ class KnowledgeTable:
         filter: dict,
         skip: int = 0,
         limit: int = 30,
-        db: Optional[AsyncSession] = None,
+        db: AsyncSession | None = None,
     ) -> KnowledgeListResponse:
         try:
             async with get_async_db_context(db) as db:
@@ -368,7 +366,7 @@ class KnowledgeTable:
             return KnowledgeListResponse(items=[], total=0)
 
     async def search_knowledge_files(
-        self, filter: dict, skip: int = 0, limit: int = 30, db: Optional[AsyncSession] = None
+        self, filter: dict, skip: int = 0, limit: int = 30, db: AsyncSession | None = None
     ) -> KnowledgeFileListResponse:
         """
         Scalable version: search files across all knowledge bases the user has
@@ -472,7 +470,7 @@ class KnowledgeTable:
         id,
         user_id,
         permission='write',
-        db: Optional[AsyncSession] = None,
+        db: AsyncSession | None = None,
         user_group_ids: set[str] | None = None,
     ) -> bool:
         knowledge = await self.get_knowledge_by_id(id, db=db)
@@ -492,7 +490,7 @@ class KnowledgeTable:
             db=db,
         )
 
-    async def get_knowledge_by_id(self, id: str, db: Optional[AsyncSession] = None) -> Optional[KnowledgeModel]:
+    async def get_knowledge_by_id(self, id: str, db: AsyncSession | None = None) -> KnowledgeModel | None:
         try:
             async with get_async_db_context(db) as db:
                 result = await db.execute(select(Knowledge).filter_by(id=id))
@@ -501,7 +499,7 @@ class KnowledgeTable:
         except Exception:
             return None
 
-    async def get_knowledges_by_file_id(self, file_id: str, db: Optional[AsyncSession] = None) -> list[KnowledgeModel]:
+    async def get_knowledges_by_file_id(self, file_id: str, db: AsyncSession | None = None) -> list[KnowledgeModel]:
         try:
             async with get_async_db_context(db) as db:
                 result = await db.execute(
@@ -530,7 +528,7 @@ class KnowledgeTable:
         filter: dict,
         skip: int = 0,
         limit: int = 30,
-        db: Optional[AsyncSession] = None,
+        db: AsyncSession | None = None,
     ) -> KnowledgeFileListResponse:
         try:
             async with get_async_db_context(db) as db:
@@ -634,7 +632,7 @@ class KnowledgeTable:
             print(e)
             return KnowledgeFileListResponse(items=[], total=0)
 
-    async def get_files_by_id(self, knowledge_id: str, db: Optional[AsyncSession] = None) -> list[FileModel]:
+    async def get_files_by_id(self, knowledge_id: str, db: AsyncSession | None = None) -> list[FileModel]:
         try:
             async with get_async_db_context(db) as db:
                 result = await db.execute(
@@ -648,7 +646,7 @@ class KnowledgeTable:
             return []
 
     async def get_file_metadatas_by_id(
-        self, knowledge_id: str, db: Optional[AsyncSession] = None
+        self, knowledge_id: str, db: AsyncSession | None = None
     ) -> list[FileMetadataResponse]:
         """Column-only listing: File.data holds each file's full extracted
         text, which metadata views must never load."""
@@ -677,9 +675,9 @@ class KnowledgeTable:
         knowledge_id: str,
         file_id: str,
         user_id: str,
-        directory_id: Optional[str] = None,
-        db: Optional[AsyncSession] = None,
-    ) -> Optional[KnowledgeFileModel]:
+        directory_id: str | None = None,
+        db: AsyncSession | None = None,
+    ) -> KnowledgeFileModel | None:
         async with get_async_db_context(db) as db:
             knowledge_file = KnowledgeFileModel(
                 **{
@@ -705,7 +703,7 @@ class KnowledgeTable:
             except Exception:
                 return None
 
-    async def has_file(self, knowledge_id: str, file_id: str, db: Optional[AsyncSession] = None) -> bool:
+    async def has_file(self, knowledge_id: str, file_id: str, db: AsyncSession | None = None) -> bool:
         """Check whether a file belongs to a knowledge base."""
         try:
             async with get_async_db_context(db) as db:
@@ -717,7 +715,7 @@ class KnowledgeTable:
             return False
 
     async def remove_file_from_knowledge_by_id(
-        self, knowledge_id: str, file_id: str, db: Optional[AsyncSession] = None
+        self, knowledge_id: str, file_id: str, db: AsyncSession | None = None
     ) -> bool:
         try:
             async with get_async_db_context(db) as db:
@@ -728,8 +726,8 @@ class KnowledgeTable:
             return False
 
     async def reset_knowledge_by_id(
-        self, id: str, include_directories: bool = True, db: Optional[AsyncSession] = None
-    ) -> Optional[KnowledgeModel]:
+        self, id: str, include_directories: bool = True, db: AsyncSession | None = None
+    ) -> KnowledgeModel | None:
         try:
             async with get_async_db_context(db) as db:
                 # Delete all knowledge_file entries for this knowledge_id
@@ -755,8 +753,8 @@ class KnowledgeTable:
         id: str,
         form_data: KnowledgeForm,
         overwrite: bool = False,
-        db: Optional[AsyncSession] = None,
-    ) -> Optional[KnowledgeModel]:
+        db: AsyncSession | None = None,
+    ) -> KnowledgeModel | None:
         try:
             async with get_async_db_context(db) as db:
                 await db.execute(
@@ -776,8 +774,8 @@ class KnowledgeTable:
             return None
 
     async def update_knowledge_meta_by_id(
-        self, id: str, meta: dict, db: Optional[AsyncSession] = None
-    ) -> Optional[KnowledgeModel]:
+        self, id: str, meta: dict, db: AsyncSession | None = None
+    ) -> KnowledgeModel | None:
         try:
             async with get_async_db_context(db) as db:
                 await db.execute(
@@ -794,7 +792,7 @@ class KnowledgeTable:
             log.exception(e)
             return None
 
-    async def delete_knowledge_by_id(self, id: str, db: Optional[AsyncSession] = None) -> bool:
+    async def delete_knowledge_by_id(self, id: str, db: AsyncSession | None = None) -> bool:
         try:
             async with get_async_db_context(db) as db:
                 await AccessGrants.revoke_all_access('knowledge', id, db=db)
@@ -804,7 +802,7 @@ class KnowledgeTable:
         except Exception:
             return False
 
-    async def delete_all_knowledge(self, db: Optional[AsyncSession] = None) -> bool:
+    async def delete_all_knowledge(self, db: AsyncSession | None = None) -> bool:
         async with get_async_db_context(db) as db:
             try:
                 result = await db.execute(select(Knowledge.id))
@@ -825,9 +823,9 @@ class KnowledgeTable:
         knowledge_id: str,
         name: str,
         user_id: str,
-        parent_id: Optional[str] = None,
-        db: Optional[AsyncSession] = None,
-    ) -> Optional[KnowledgeDirectoryModel]:
+        parent_id: str | None = None,
+        db: AsyncSession | None = None,
+    ) -> KnowledgeDirectoryModel | None:
         async with get_async_db_context(db) as db:
             try:
                 now = int(time.time())
@@ -851,8 +849,8 @@ class KnowledgeTable:
     async def get_directories(
         self,
         knowledge_id: str,
-        parent_id: Optional[str] = None,
-        db: Optional[AsyncSession] = None,
+        parent_id: str | None = None,
+        db: AsyncSession | None = None,
     ) -> list[KnowledgeDirectoryModel]:
         """List directories at a given level (parent_id=None for root)."""
         async with get_async_db_context(db) as db:
@@ -869,7 +867,7 @@ class KnowledgeTable:
     async def get_all_directories(
         self,
         knowledge_id: str,
-        db: Optional[AsyncSession] = None,
+        db: AsyncSession | None = None,
     ) -> list[KnowledgeDirectoryModel]:
         """Get ALL directories for a KB (no parent filter). Used for tree building."""
         async with get_async_db_context(db) as db:
@@ -884,8 +882,8 @@ class KnowledgeTable:
     async def get_files_with_directory_ids(
         self,
         knowledge_id: str,
-        db: Optional[AsyncSession] = None,
-    ) -> list[tuple[FileModel, Optional[str]]]:
+        db: AsyncSession | None = None,
+    ) -> list[tuple[FileModel, str | None]]:
         """Get all files in a KB with their directory_id from KnowledgeFile."""
         try:
             async with get_async_db_context(db) as db:
@@ -899,8 +897,8 @@ class KnowledgeTable:
             return []
 
     async def get_directory_by_id(
-        self, directory_id: str, db: Optional[AsyncSession] = None
-    ) -> Optional[KnowledgeDirectoryModel]:
+        self, directory_id: str, db: AsyncSession | None = None
+    ) -> KnowledgeDirectoryModel | None:
         async with get_async_db_context(db) as db:
             result = await db.execute(select(KnowledgeDirectory).filter_by(id=directory_id))
             directory = result.scalars().first()
@@ -908,8 +906,8 @@ class KnowledgeTable:
 
     async def get_directory_breadcrumbs(
         self,
-        directory_id: Optional[str],
-        db: Optional[AsyncSession] = None,
+        directory_id: str | None,
+        db: AsyncSession | None = None,
     ) -> list[KnowledgeDirectoryModel]:
         """Walk up the parent chain to build breadcrumbs (root first)."""
         if not directory_id:
@@ -936,8 +934,8 @@ class KnowledgeTable:
         self,
         directory_id: str,
         name: str,
-        db: Optional[AsyncSession] = None,
-    ) -> Optional[KnowledgeDirectoryModel]:
+        db: AsyncSession | None = None,
+    ) -> KnowledgeDirectoryModel | None:
         async with get_async_db_context(db) as db:
             try:
                 await db.execute(
@@ -952,9 +950,9 @@ class KnowledgeTable:
     async def move_directory(
         self,
         directory_id: str,
-        new_parent_id: Optional[str],
-        db: Optional[AsyncSession] = None,
-    ) -> Optional[KnowledgeDirectoryModel]:
+        new_parent_id: str | None,
+        db: AsyncSession | None = None,
+    ) -> KnowledgeDirectoryModel | None:
         """Move a directory to a new parent, with cycle detection."""
         async with get_async_db_context(db) as db:
             try:
@@ -985,10 +983,10 @@ class KnowledgeTable:
     async def update_directory(
         self,
         directory_id: str,
-        name: Optional[str] = None,
-        parent_id: Optional[str] = '__unset__',
-        db: Optional[AsyncSession] = None,
-    ) -> Optional[KnowledgeDirectoryModel]:
+        name: str | None = None,
+        parent_id: str | None = '__unset__',
+        db: AsyncSession | None = None,
+    ) -> KnowledgeDirectoryModel | None:
         """Update directory name and/or parent. Pass parent_id=None to move to root."""
         # Handle move if parent_id is being changed
         if parent_id != '__unset__':
@@ -1005,7 +1003,7 @@ class KnowledgeTable:
         self,
         directory_id: str,
         move_files_to_parent: bool = True,
-        db: Optional[AsyncSession] = None,
+        db: AsyncSession | None = None,
     ) -> bool:
         """
         Delete a directory.
@@ -1044,7 +1042,7 @@ class KnowledgeTable:
     async def _move_files_from_subtree(
         self,
         directory_id: str,
-        target_directory_id: Optional[str],
+        target_directory_id: str | None,
         db: AsyncSession,
     ) -> None:
         """Recursively move all files from a directory subtree to the target."""
@@ -1073,8 +1071,8 @@ class KnowledgeTable:
         self,
         knowledge_id: str,
         file_id: str,
-        directory_id: Optional[str] = None,
-        db: Optional[AsyncSession] = None,
+        directory_id: str | None = None,
+        db: AsyncSession | None = None,
     ) -> bool:
         """Move a file to a different directory within the same KB."""
         async with get_async_db_context(db) as db:

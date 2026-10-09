@@ -5,13 +5,12 @@ from __future__ import annotations
 import re
 
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, ConfigDict
-
 from open_webui.benchmarks import compare as compare_logic
 from open_webui.env import DATA_DIR
 from open_webui.models.benchmark_tests import BenchmarkAnswers, BenchmarkResults
 from open_webui.routers.benchmarks.answers import _answer_document
 from open_webui.utils.auth import get_admin_user
+from pydantic import BaseModel, ConfigDict
 
 router = APIRouter()
 

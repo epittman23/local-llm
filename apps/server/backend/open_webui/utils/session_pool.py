@@ -24,7 +24,6 @@ via ``close_session()``.
 """
 
 import logging
-from typing import Optional
 
 import aiohttp
 from open_webui.env import (
@@ -38,7 +37,7 @@ from open_webui.utils.misc import stream_chunks_handler
 
 log = logging.getLogger(__name__)
 
-_session: Optional[aiohttp.ClientSession] = None
+_session: aiohttp.ClientSession | None = None
 
 _CLIENT_TIMEOUT = aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT)
 _CLIENT_STREAM_TIMEOUT = aiohttp.ClientTimeout(
@@ -93,8 +92,8 @@ async def close_session():
 
 
 async def cleanup_response(
-    response: Optional[aiohttp.ClientResponse],
-    session: Optional[aiohttp.ClientSession] = None,
+    response: aiohttp.ClientResponse | None,
+    session: aiohttp.ClientSession | None = None,
 ):
     """Release and close an aiohttp response, optionally closing the session.
 

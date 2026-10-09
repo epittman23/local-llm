@@ -1,6 +1,5 @@
 import logging
 import time
-from typing import Optional
 
 from open_webui.benchmarks.serving.profiles import (
     ProfileError,
@@ -136,7 +135,7 @@ class BenchmarkProfileModel(BaseModel):
     display_name: str
     is_default: bool
     created_at: int
-    archived_at: Optional[int] = None
+    archived_at: int | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -146,8 +145,8 @@ class BenchmarkProfileVersionModel(BaseModel):
     profile_id: int
     version: int
     created_at: int
-    created_by: Optional[str] = None
-    note: Optional[str] = None
+    created_by: str | None = None
+    note: str | None = None
     arch: str
     alias: str
     model_path: str
@@ -156,8 +155,8 @@ class BenchmarkProfileVersionModel(BaseModel):
     ctx: int
     threads: int
     ngl: int
-    moe: Optional[int] = None
-    override_tensors: Optional[str] = None
+    moe: int | None = None
+    override_tensors: str | None = None
     parallel: int = 1
     cache_k: str = 'q8_0'
     cache_v: str = 'q8_0'
@@ -166,7 +165,7 @@ class BenchmarkProfileVersionModel(BaseModel):
     spec: list[str]
     samplers: list[str]
     extra: list[str]
-    reasoning_effort_default: Optional[str] = None
+    reasoning_effort_default: str | None = None
     notes: str = ''
 
     model_config = ConfigDict(from_attributes=True)
@@ -222,7 +221,7 @@ class BenchmarkProfileTable:
         return entries
 
     async def list_profiles(
-        self, *, include_archived: bool = False, db: Optional[AsyncSession] = None
+        self, *, include_archived: bool = False, db: AsyncSession | None = None
     ) -> list[BenchmarkProfileEntry]:
         async with get_async_db_context(db) as db:
             query = select(BenchmarkProfile).order_by(BenchmarkProfile.profile_id)
@@ -231,14 +230,14 @@ class BenchmarkProfileTable:
             result = await db.execute(query)
             return await self._entries(db, list(result.scalars().all()))
 
-    async def get_by_name(self, name: str, db: Optional[AsyncSession] = None) -> Optional[BenchmarkProfileEntry]:
+    async def get_by_name(self, name: str, db: AsyncSession | None = None) -> BenchmarkProfileEntry | None:
         async with get_async_db_context(db) as db:
             result = await db.execute(select(BenchmarkProfile).filter_by(name=name))
             profile = result.scalars().first()
             entries = await self._entries(db, [profile]) if profile else []
             return entries[0] if entries else None
 
-    async def get_default(self, db: Optional[AsyncSession] = None) -> Optional[BenchmarkProfileEntry]:
+    async def get_default(self, db: AsyncSession | None = None) -> BenchmarkProfileEntry | None:
         async with get_async_db_context(db) as db:
             result = await db.execute(
                 select(BenchmarkProfile).filter(
@@ -249,16 +248,14 @@ class BenchmarkProfileTable:
             entries = await self._entries(db, [profile]) if profile else []
             return entries[0] if entries else None
 
-    async def get_version(
-        self, version_id: int, db: Optional[AsyncSession] = None
-    ) -> Optional[BenchmarkProfileVersionModel]:
+    async def get_version(self, version_id: int, db: AsyncSession | None = None) -> BenchmarkProfileVersionModel | None:
         async with get_async_db_context(db) as db:
             result = await db.execute(select(BenchmarkProfileVersion).filter_by(version_id=version_id))
             row = result.scalars().first()
             return BenchmarkProfileVersionModel.model_validate(row) if row else None
 
     async def list_versions(
-        self, profile_id: int, db: Optional[AsyncSession] = None
+        self, profile_id: int, db: AsyncSession | None = None
     ) -> list[BenchmarkProfileVersionModel]:
         async with get_async_db_context(db) as db:
             result = await db.execute(
@@ -274,9 +271,9 @@ class BenchmarkProfileTable:
         name: str,
         display_name: str,
         definition: dict,
-        created_by: Optional[str] = None,
-        note: Optional[str] = None,
-        db: Optional[AsyncSession] = None,
+        created_by: str | None = None,
+        note: str | None = None,
+        db: AsyncSession | None = None,
     ) -> BenchmarkProfileEntry:
         definition = validate_definition(definition)
         now = int(time.time())
@@ -302,9 +299,9 @@ class BenchmarkProfileTable:
         profile_id: int,
         *,
         definition: dict,
-        created_by: Optional[str] = None,
-        note: Optional[str] = None,
-        db: Optional[AsyncSession] = None,
+        created_by: str | None = None,
+        note: str | None = None,
+        db: AsyncSession | None = None,
     ) -> BenchmarkProfileVersionModel:
         """Record a new definition. The only way a profile's settings change.
 
@@ -333,14 +330,14 @@ class BenchmarkProfileTable:
             await db.refresh(row)
             return BenchmarkProfileVersionModel.model_validate(row)
 
-    async def set_display_name(self, profile_id: int, display_name: str, db: Optional[AsyncSession] = None) -> None:
+    async def set_display_name(self, profile_id: int, display_name: str, db: AsyncSession | None = None) -> None:
         async with get_async_db_context(db) as db:
             await db.execute(
                 update(BenchmarkProfile).filter_by(profile_id=profile_id).values(display_name=display_name)
             )
             await db.commit()
 
-    async def set_default(self, profile_id: int, db: Optional[AsyncSession] = None) -> None:
+    async def set_default(self, profile_id: int, db: AsyncSession | None = None) -> None:
         async with get_async_db_context(db) as db:
             result = await db.execute(select(BenchmarkProfile).filter_by(profile_id=profile_id))
             profile = result.scalars().first()
@@ -356,7 +353,7 @@ class BenchmarkProfileTable:
             await db.execute(update(BenchmarkProfile).filter_by(profile_id=profile_id).values(is_default=True))
             await db.commit()
 
-    async def archive(self, profile_id: int, db: Optional[AsyncSession] = None) -> None:
+    async def archive(self, profile_id: int, db: AsyncSession | None = None) -> None:
         """Hide a profile from pickers. Never a delete: runs reference its versions."""
         async with get_async_db_context(db) as db:
             result = await db.execute(select(BenchmarkProfile).filter_by(profile_id=profile_id))
@@ -368,7 +365,7 @@ class BenchmarkProfileTable:
             profile.archived_at = int(time.time())
             await db.commit()
 
-    async def unarchive(self, profile_id: int, db: Optional[AsyncSession] = None) -> None:
+    async def unarchive(self, profile_id: int, db: AsyncSession | None = None) -> None:
         async with get_async_db_context(db) as db:
             await db.execute(update(BenchmarkProfile).filter_by(profile_id=profile_id).values(archived_at=None))
             await db.commit()

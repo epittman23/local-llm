@@ -1,6 +1,5 @@
 import logging
 import time
-from typing import Optional
 
 from open_webui.internal.db import Base, get_async_db_context
 from pydantic import BaseModel, ConfigDict
@@ -61,22 +60,22 @@ class BenchmarkConfigModel(BaseModel):
     config_id: str
     alias: str
     config_text: str
-    arch: Optional[str] = None
-    ngl: Optional[int] = None
-    ctx: Optional[int] = None
-    parallel: Optional[int] = None
-    threads: Optional[int] = None
-    moe: Optional[int] = None
-    override_tensors: Optional[str] = None
-    speculative: Optional[str] = None
-    spec_draft_n_max: Optional[int] = None
-    cache_k: Optional[str] = None
-    cache_v: Optional[str] = None
-    flash_attn: Optional[str] = None
-    batch: Optional[int] = None
-    ubatch: Optional[int] = None
-    reasoning_effort: Optional[str] = None
-    samplers: Optional[str] = None
+    arch: str | None = None
+    ngl: int | None = None
+    ctx: int | None = None
+    parallel: int | None = None
+    threads: int | None = None
+    moe: int | None = None
+    override_tensors: str | None = None
+    speculative: str | None = None
+    spec_draft_n_max: int | None = None
+    cache_k: str | None = None
+    cache_v: str | None = None
+    flash_attn: str | None = None
+    batch: int | None = None
+    ubatch: int | None = None
+    reasoning_effort: str | None = None
+    samplers: str | None = None
     first_seen: int
 
     model_config = ConfigDict(from_attributes=True)
@@ -107,11 +106,11 @@ class BenchmarkRunModel(BaseModel):
     quant: str
     build: str
     port: int
-    pid: Optional[int] = None
+    pid: int | None = None
     started_at: int
-    ended_at: Optional[int] = None
-    ended_reason: Optional[str] = None
-    profile_version_id: Optional[int] = None
+    ended_at: int | None = None
+    ended_reason: str | None = None
+    profile_version_id: int | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -140,23 +139,23 @@ class BenchmarkRunLoadInfo(Base):
 
 class BenchmarkRunLoadInfoModel(BaseModel):
     run_id: int
-    n_layer: Optional[int] = None
-    n_layer_all: Optional[int] = None
-    layers_gpu: Optional[int] = None
-    layers_total: Optional[int] = None
-    layers_derived: Optional[int] = None
-    n_slots: Optional[int] = None
-    n_ctx_slot: Optional[int] = None
-    kv_unified: Optional[str] = None
-    fused_gdn: Optional[str] = None
-    mtp_head: Optional[str] = None
-    buffers: Optional[dict] = None
-    cpu_buffer_mib: Optional[float] = None
-    gpu_buffer_mib: Optional[float] = None
-    unused_tensors: Optional[int] = None
-    unused_prefixes: Optional[list] = None
-    warnings: Optional[list] = None
-    deprecated: Optional[list] = None
+    n_layer: int | None = None
+    n_layer_all: int | None = None
+    layers_gpu: int | None = None
+    layers_total: int | None = None
+    layers_derived: int | None = None
+    n_slots: int | None = None
+    n_ctx_slot: int | None = None
+    kv_unified: str | None = None
+    fused_gdn: str | None = None
+    mtp_head: str | None = None
+    buffers: dict | None = None
+    cpu_buffer_mib: float | None = None
+    gpu_buffer_mib: float | None = None
+    unused_tensors: int | None = None
+    unused_prefixes: list | None = None
+    warnings: list | None = None
+    deprecated: list | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -168,8 +167,8 @@ class BenchmarkConfigTable:
         alias: str,
         config_text: str,
         fields: dict,
-        db: Optional[AsyncSession] = None,
-    ) -> Optional[BenchmarkConfigModel]:
+        db: AsyncSession | None = None,
+    ) -> BenchmarkConfigModel | None:
         """Record a serving configuration, keyed by its fingerprint.
 
         Left alone on conflict, matching the original's ON CONFLICT DO
@@ -193,13 +192,13 @@ class BenchmarkConfigTable:
             await db.refresh(row)
             return BenchmarkConfigModel.model_validate(row)
 
-    async def get_by_id(self, config_id: str, db: Optional[AsyncSession] = None) -> Optional[BenchmarkConfigModel]:
+    async def get_by_id(self, config_id: str, db: AsyncSession | None = None) -> BenchmarkConfigModel | None:
         async with get_async_db_context(db) as db:
             result = await db.execute(select(BenchmarkConfig).filter_by(config_id=config_id))
             row = result.scalars().first()
             return BenchmarkConfigModel.model_validate(row) if row else None
 
-    async def list_all(self, db: Optional[AsyncSession] = None) -> list[BenchmarkConfigModel]:
+    async def list_all(self, db: AsyncSession | None = None) -> list[BenchmarkConfigModel]:
         async with get_async_db_context(db) as db:
             result = await db.execute(select(BenchmarkConfig))
             return [BenchmarkConfigModel.model_validate(row) for row in result.scalars().all()]
@@ -215,7 +214,7 @@ class BenchmarkRunTable:
         build: str,
         port: int,
         pid: int,
-        db: Optional[AsyncSession] = None,
+        db: AsyncSession | None = None,
     ) -> int:
         async with get_async_db_context(db) as db:
             row = BenchmarkRun(
@@ -232,7 +231,7 @@ class BenchmarkRunTable:
             await db.refresh(row)
             return row.run_id
 
-    async def close_run(self, run_id: int, reason: str = 'clean', db: Optional[AsyncSession] = None) -> None:
+    async def close_run(self, run_id: int, reason: str = 'clean', db: AsyncSession | None = None) -> None:
         async with get_async_db_context(db) as db:
             result = await db.execute(select(BenchmarkRun).filter_by(run_id=run_id))
             row = result.scalars().first()
@@ -241,7 +240,7 @@ class BenchmarkRunTable:
                 row.ended_reason = reason
                 await db.commit()
 
-    async def get_active_run(self, port: int, db: Optional[AsyncSession] = None) -> Optional[BenchmarkRunModel]:
+    async def get_active_run(self, port: int, db: AsyncSession | None = None) -> BenchmarkRunModel | None:
         async with get_async_db_context(db) as db:
             result = await db.execute(
                 select(BenchmarkRun)
@@ -251,7 +250,7 @@ class BenchmarkRunTable:
             row = result.scalars().first()
             return BenchmarkRunModel.model_validate(row) if row else None
 
-    async def get_any_active_run(self, db: Optional[AsyncSession] = None) -> Optional[BenchmarkRunModel]:
+    async def get_any_active_run(self, db: AsyncSession | None = None) -> BenchmarkRunModel | None:
         """Whether ANY server is currently being recorded, regardless of port.
 
         Used by the Serve router's single-flight guard (409 on a second
@@ -265,14 +264,14 @@ class BenchmarkRunTable:
             row = result.scalars().first()
             return BenchmarkRunModel.model_validate(row) if row else None
 
-    async def get_by_id(self, run_id: int, db: Optional[AsyncSession] = None) -> Optional[BenchmarkRunModel]:
+    async def get_by_id(self, run_id: int, db: AsyncSession | None = None) -> BenchmarkRunModel | None:
         async with get_async_db_context(db) as db:
             result = await db.execute(select(BenchmarkRun).filter_by(run_id=run_id))
             row = result.scalars().first()
             return BenchmarkRunModel.model_validate(row) if row else None
 
     async def list_runs(
-        self, *, limit: int = 20, active_only: bool = False, db: Optional[AsyncSession] = None
+        self, *, limit: int = 20, active_only: bool = False, db: AsyncSession | None = None
     ) -> list[BenchmarkRunModel]:
         async with get_async_db_context(db) as db:
             query = select(BenchmarkRun)
@@ -282,7 +281,7 @@ class BenchmarkRunTable:
             result = await db.execute(query)
             return [BenchmarkRunModel.model_validate(row) for row in result.scalars().all()]
 
-    async def get_latest_run_per_config(self, db: Optional[AsyncSession] = None) -> list[BenchmarkRunModel]:
+    async def get_latest_run_per_config(self, db: AsyncSession | None = None) -> list[BenchmarkRunModel]:
         """Each configuration's most recent run. Replaces sqlite's v_config_latest view.
 
         A plain Python group-by over `list_runs`, per this migration's
@@ -300,7 +299,7 @@ class BenchmarkRunTable:
 
 
 class BenchmarkRunLoadInfoTable:
-    async def set_load_info(self, run_id: int, info: dict, db: Optional[AsyncSession] = None) -> None:
+    async def set_load_info(self, run_id: int, info: dict, db: AsyncSession | None = None) -> None:
         async with get_async_db_context(db) as db:
             result = await db.execute(select(BenchmarkRunLoadInfo).filter_by(run_id=run_id))
             row = result.scalars().first()
@@ -311,9 +310,7 @@ class BenchmarkRunLoadInfoTable:
                 db.add(BenchmarkRunLoadInfo(run_id=run_id, **info))
             await db.commit()
 
-    async def get_by_run_id(
-        self, run_id: int, db: Optional[AsyncSession] = None
-    ) -> Optional[BenchmarkRunLoadInfoModel]:
+    async def get_by_run_id(self, run_id: int, db: AsyncSession | None = None) -> BenchmarkRunLoadInfoModel | None:
         async with get_async_db_context(db) as db:
             result = await db.execute(select(BenchmarkRunLoadInfo).filter_by(run_id=run_id))
             row = result.scalars().first()

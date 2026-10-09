@@ -1,6 +1,5 @@
 import logging
 import time
-from typing import Optional
 
 from open_webui.internal.db import Base, get_async_db_context
 from open_webui.models.access_grants import AccessGrantModel, AccessGrants
@@ -33,14 +32,14 @@ class Skill(Base):
 
 
 class SkillMeta(BaseModel):
-    tags: Optional[list[str]] = []
+    tags: list[str] | None = []
 
 
 class SkillModel(BaseModel):
     id: str
     user_id: str
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     content: str
     meta: SkillMeta
     is_active: bool = True
@@ -58,14 +57,14 @@ class SkillModel(BaseModel):
 
 
 class SkillUserModel(SkillModel):
-    user: Optional[UserResponse] = None
+    user: UserResponse | None = None
 
 
 class SkillResponse(BaseModel):
     id: str
     user_id: str
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     meta: SkillMeta
     is_active: bool = True
     access_grants: list[AccessGrantModel] = Field(default_factory=list)
@@ -74,23 +73,23 @@ class SkillResponse(BaseModel):
 
 
 class SkillUserResponse(SkillResponse):
-    user: Optional[UserResponse] = None
+    user: UserResponse | None = None
 
     model_config = ConfigDict(extra='allow')
 
 
 class SkillAccessResponse(SkillUserResponse):
-    write_access: Optional[bool] = False
+    write_access: bool | None = False
 
 
 class SkillForm(BaseModel):
     id: str
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     content: str
     meta: SkillMeta = SkillMeta()
     is_active: bool = True
-    access_grants: Optional[list[dict]] = None
+    access_grants: list[dict] | None = None
 
 
 class SkillListResponse(BaseModel):
@@ -104,14 +103,14 @@ class SkillAccessListResponse(BaseModel):
 
 
 class SkillsTable:
-    async def _get_access_grants(self, skill_id: str, db: Optional[AsyncSession] = None) -> list[AccessGrantModel]:
+    async def _get_access_grants(self, skill_id: str, db: AsyncSession | None = None) -> list[AccessGrantModel]:
         return await AccessGrants.get_grants_by_resource('skill', skill_id, db=db)
 
     async def _to_skill_model(
         self,
         skill: Skill,
-        access_grants: Optional[list[AccessGrantModel]] = None,
-        db: Optional[AsyncSession] = None,
+        access_grants: list[AccessGrantModel] | None = None,
+        db: AsyncSession | None = None,
     ) -> SkillModel:
         skill_model = SkillModel.model_validate(skill)
         skill_model.access_grants = (
@@ -123,8 +122,8 @@ class SkillsTable:
         self,
         user_id: str,
         form_data: SkillForm,
-        db: Optional[AsyncSession] = None,
-    ) -> Optional[SkillModel]:
+        db: AsyncSession | None = None,
+    ) -> SkillModel | None:
         async with get_async_db_context(db) as db:
             try:
                 result = Skill(
@@ -146,7 +145,7 @@ class SkillsTable:
                 log.exception(f'Error creating a new skill: {e}')
                 return None
 
-    async def get_skill_by_id(self, id: str, db: Optional[AsyncSession] = None) -> Optional[SkillModel]:
+    async def get_skill_by_id(self, id: str, db: AsyncSession | None = None) -> SkillModel | None:
         try:
             async with get_async_db_context(db) as db:
                 skill = await db.get(Skill, id)
@@ -154,7 +153,7 @@ class SkillsTable:
         except Exception:
             return None
 
-    async def get_skill_by_name(self, name: str, db: Optional[AsyncSession] = None) -> Optional[SkillModel]:
+    async def get_skill_by_name(self, name: str, db: AsyncSession | None = None) -> SkillModel | None:
         try:
             async with get_async_db_context(db) as db:
                 result = await db.execute(select(Skill).filter_by(name=name))
@@ -221,7 +220,7 @@ class SkillsTable:
         filter: dict = {},
         skip: int = 0,
         limit: int = 30,
-        db: Optional[AsyncSession] = None,
+        db: AsyncSession | None = None,
     ) -> SkillListResponse:
         try:
             async with get_async_db_context(db) as db:
@@ -313,9 +312,7 @@ class SkillsTable:
             log.exception(f'Error searching skills: {e}')
             return SkillListResponse(items=[], total=0)
 
-    async def update_skill_by_id(
-        self, id: str, updated: dict, db: Optional[AsyncSession] = None
-    ) -> Optional[SkillModel]:
+    async def update_skill_by_id(self, id: str, updated: dict, db: AsyncSession | None = None) -> SkillModel | None:
         try:
             async with get_async_db_context(db) as db:
                 access_grants = updated.pop('access_grants', None)
@@ -330,7 +327,7 @@ class SkillsTable:
         except Exception:
             return None
 
-    async def toggle_skill_by_id(self, id: str, db: Optional[AsyncSession] = None) -> Optional[SkillModel]:
+    async def toggle_skill_by_id(self, id: str, db: AsyncSession | None = None) -> SkillModel | None:
         async with get_async_db_context(db) as db:
             try:
                 result = await db.execute(select(Skill).filter_by(id=id))
@@ -346,7 +343,7 @@ class SkillsTable:
             except Exception:
                 return None
 
-    async def delete_skill_by_id(self, id: str, db: Optional[AsyncSession] = None) -> bool:
+    async def delete_skill_by_id(self, id: str, db: AsyncSession | None = None) -> bool:
         try:
             async with get_async_db_context(db) as db:
                 await AccessGrants.revoke_all_access('skill', id, db=db)

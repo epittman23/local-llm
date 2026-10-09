@@ -6,36 +6,34 @@ import logging
 import time
 from collections import Counter
 from datetime import datetime, timedelta
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from open_webui.constants import ERROR_MESSAGES
-from open_webui.events import EVENTS, publish_event
 from open_webui.env import ENABLE_PROFILE_IMAGE_URL_FORWARDING, PROFILE_IMAGE_ALLOWED_MIME_TYPES, STATIC_DIR
+from open_webui.events import EVENTS, publish_event
 from open_webui.internal.db import get_async_session
+from open_webui.models.access_grants import AccessGrants
 from open_webui.models.auths import Auths
-from open_webui.models.config import Config
 from open_webui.models.chat_messages import ChatMessages
 from open_webui.models.chats import Chats
+from open_webui.models.config import Config
 from open_webui.models.groups import Groups
+from open_webui.models.knowledge import Knowledges
+from open_webui.models.models import Models
 from open_webui.models.oauth_sessions import OAuthSessions
+from open_webui.models.tools import Tools
 from open_webui.models.users import (
     UserGroupIdsListResponse,
     UserGroupIdsModel,
     UserInfoListResponse,
     UserInfoResponse,
     UserModel,
-    UserRoleUpdateForm,
     Users,
     UserSettings,
     UserStatus,
     UserUpdateForm,
 )
-from open_webui.models.access_grants import AccessGrants
-from open_webui.models.knowledge import Knowledges
-from open_webui.models.models import Models
-from open_webui.models.tools import Tools
 from open_webui.utils.access_control import get_permissions, has_permission
 from open_webui.utils.auth import (
     get_admin_user,
@@ -339,7 +337,7 @@ class UserUsageToolEntry(BaseModel):
 
 
 class UserUsageInsights(BaseModel):
-    most_used_model: Optional[str] = None
+    most_used_model: str | None = None
     average_tokens_per_chat: float = 0
     average_messages_per_active_day: float = 0
     user_message_share: float = 0
@@ -706,9 +704,9 @@ async def update_user_info_by_session_user(  # PATCH-style merge
 
 @router.get('/usage', response_model=UserUsageResponse)
 async def get_user_usage_by_session_user(
-    days: Optional[int] = Query(None, ge=7, le=732),
-    start_date: Optional[int] = Query(None),
-    end_date: Optional[int] = Query(None),
+    days: int | None = Query(None, ge=7, le=732),
+    start_date: int | None = Query(None),
+    end_date: int | None = Query(None),
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
@@ -884,7 +882,7 @@ async def get_user_profile_image_by_id(user_id: str, user=Depends(get_verified_u
                             'X-Content-Type-Options': 'nosniff',
                         },
                     )
-                except Exception as e:
+                except Exception:
                     pass
         return FileResponse(f'{STATIC_DIR}/user.png')
     else:

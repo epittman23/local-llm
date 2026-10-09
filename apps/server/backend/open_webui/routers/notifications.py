@@ -3,8 +3,6 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
-from pydantic import BaseModel
-
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.models.config import Config
 from open_webui.utils.access_control import has_permission
@@ -18,6 +16,7 @@ from open_webui.utils.notifications import (
     test_target,
     update_target,
 )
+from pydantic import BaseModel
 
 router = APIRouter()
 

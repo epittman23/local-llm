@@ -3,7 +3,7 @@ import logging
 import os
 import sys
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import requests
 from langchain_core.documents import Document
@@ -34,7 +34,7 @@ class MistralLoader:
         max_retries: int = 3,
         enable_debug_logging: bool = False,
         use_base64: bool = False,
-        user: Optional[Any] = None,
+        user: Any | None = None,
     ):
         """
         Initializes the loader with enhanced features.
@@ -93,7 +93,7 @@ class MistralLoader:
         if self.debug:
             log.debug(message, *args)
 
-    def _handle_response(self, response: requests.Response) -> Dict[str, Any]:
+    def _handle_response(self, response: requests.Response) -> dict[str, Any]:
         """Checks response status and returns JSON content."""
         try:
             response.raise_for_status()  # Raises HTTPError for bad responses (4xx or 5xx)
@@ -231,7 +231,7 @@ class MistralLoader:
             log.error(f'Failed to get signed URL: {e}')
             raise
 
-    def _process_ocr(self, signed_url: str) -> Dict[str, Any]:
+    def _process_ocr(self, signed_url: str) -> dict[str, Any]:
         """Sends the signed URL to the OCR endpoint for processing."""
         log.info('Processing OCR via Mistral API')
         url = f'{self.base_url}/ocr'
@@ -280,7 +280,7 @@ class MistralLoader:
             # Log error but don't necessarily halt execution if deletion fails
             log.error(f'Failed to delete file ID {file_id}: {e}')
 
-    def _process_results(self, ocr_response: Dict[str, Any]) -> List[Document]:
+    def _process_results(self, ocr_response: dict[str, Any]) -> list[Document]:
         """Process OCR results into Document objects with enhanced metadata and memory efficiency."""
         pages_data = ocr_response.get('pages')
         if not pages_data:
@@ -354,7 +354,7 @@ class MistralLoader:
 
         return documents
 
-    def load(self) -> List[Document]:
+    def load(self) -> list[Document]:
         """
         Executes the full OCR workflow: upload, get URL, process OCR, delete file.
 

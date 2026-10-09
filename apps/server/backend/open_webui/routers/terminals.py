@@ -25,10 +25,10 @@ from open_webui.utils.terminals import (
     TERMINAL_CONTEXT_HEADER,
     get_terminal_server_url,
     is_terminal_orchestrator,
+    terminal_chat_uploads,
     terminal_context_available,
     terminal_context_config,
     terminal_context_id,
-    terminal_chat_uploads,
     terminal_contexts,
 )
 from starlette.background import BackgroundTask
@@ -264,7 +264,7 @@ async def _resolve_authenticated_connection(ws: WebSocket, server_id: str):
         if user is None:
             await ws.close(code=4001, reason='Invalid token')
             return None
-    except (asyncio.TimeoutError, JSONCodec.JSONDecodeError):
+    except (TimeoutError, JSONCodec.JSONDecodeError):
         await ws.close(code=4001, reason='Auth timeout or invalid payload')
         return None
     except Exception:

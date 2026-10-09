@@ -5,13 +5,11 @@ Revises: d4c1a8e37b62
 Create Date: 2026-09-07
 """
 
-from typing import Union
-
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = 'b3f8a1d94e70'
-down_revision: Union[str, None] = 'd4c1a8e37b62'
+down_revision: str | None = 'd4c1a8e37b62'
 branch_labels = None
 depends_on = None
 

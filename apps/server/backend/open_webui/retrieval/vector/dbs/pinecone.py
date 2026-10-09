@@ -4,7 +4,7 @@ NOTE: This vector database integration is community-supported and maintained on 
 
 import logging
 import time  # for measuring elapsed time
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 from pinecone import Pinecone, ServerlessSpec
 
@@ -164,7 +164,7 @@ class PineconeClient(VectorDBBase):
                 )
                 time.sleep(delay)
 
-    def _create_points(self, items: List[VectorItem], collection_name_with_prefix: str) -> List[Dict[str, Any]]:
+    def _create_points(self, items: list[VectorItem], collection_name_with_prefix: str) -> list[dict[str, Any]]:
         """Convert VectorItem objects to Pinecone point format."""
         points = []
         for item in items:
@@ -250,7 +250,7 @@ class PineconeClient(VectorDBBase):
             log.warning(f"Failed to delete collection '{collection_name_with_prefix}': {e}")
             raise
 
-    def insert(self, collection_name: str, items: List[VectorItem]) -> None:
+    def insert(self, collection_name: str, items: list[VectorItem]) -> None:
         """Insert vectors into a collection."""
         if not items:
             log.warning('No items to insert')
@@ -279,7 +279,7 @@ class PineconeClient(VectorDBBase):
             "Successfully inserted %s vectors in parallel batches into '%s'", len(points), collection_name_with_prefix
         )
 
-    def upsert(self, collection_name: str, items: List[VectorItem]) -> None:
+    def upsert(self, collection_name: str, items: list[VectorItem]) -> None:
         """Upsert (insert or update) vectors into a collection."""
         if not items:
             log.warning('No items to upsert')
@@ -308,7 +308,7 @@ class PineconeClient(VectorDBBase):
             "Successfully upserted %s vectors in parallel batches into '%s'", len(points), collection_name_with_prefix
         )
 
-    async def insert_async(self, collection_name: str, items: List[VectorItem]) -> None:
+    async def insert_async(self, collection_name: str, items: list[VectorItem]) -> None:
         """Async version of insert using asyncio and run_in_executor for improved performance."""
         if not items:
             log.warning('No items to insert')
@@ -330,7 +330,7 @@ class PineconeClient(VectorDBBase):
             "Successfully async inserted %s vectors in batches into '%s'", len(points), collection_name_with_prefix
         )
 
-    async def upsert_async(self, collection_name: str, items: List[VectorItem]) -> None:
+    async def upsert_async(self, collection_name: str, items: list[VectorItem]) -> None:
         """Async version of upsert using asyncio and run_in_executor for improved performance."""
         if not items:
             log.warning('No items to upsert')
@@ -355,10 +355,10 @@ class PineconeClient(VectorDBBase):
     def search(
         self,
         collection_name: str,
-        vectors: List[List[Union[float, int]]],
-        filter: Optional[dict] = None,
+        vectors: list[list[float | int]],
+        filter: dict | None = None,
         limit: int = 10,
-    ) -> Optional[SearchResult]:
+    ) -> SearchResult | None:
         """Search for similar vectors in a collection."""
         if not vectors or not vectors[0]:
             log.warning('No vectors provided for search')
@@ -409,7 +409,7 @@ class PineconeClient(VectorDBBase):
             log.error(f"Error searching in '{collection_name_with_prefix}': {e}")
             return None
 
-    def query(self, collection_name: str, filter: Dict, limit: Optional[int] = None) -> Optional[GetResult]:
+    def query(self, collection_name: str, filter: dict, limit: int | None = None) -> GetResult | None:
         """Query vectors by metadata filter."""
         collection_name_with_prefix = self._get_collection_name_with_prefix(collection_name)
 
@@ -440,7 +440,7 @@ class PineconeClient(VectorDBBase):
             log.error(f"Error querying collection '{collection_name}': {e}")
             return None
 
-    def get(self, collection_name: str) -> Optional[GetResult]:
+    def get(self, collection_name: str) -> GetResult | None:
         """Get all vectors in a collection."""
         collection_name_with_prefix = self._get_collection_name_with_prefix(collection_name)
 
@@ -466,8 +466,8 @@ class PineconeClient(VectorDBBase):
     def delete(
         self,
         collection_name: str,
-        ids: Optional[List[str]] = None,
-        filter: Optional[Dict] = None,
+        ids: list[str] | None = None,
+        filter: dict | None = None,
     ) -> None:
         """Delete vectors by IDs or filter."""
         collection_name_with_prefix = self._get_collection_name_with_prefix(collection_name)

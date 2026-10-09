@@ -21,7 +21,6 @@ import os
 import random
 import time
 from datetime import datetime, timedelta
-from typing import Optional
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -55,7 +54,7 @@ CALENDAR_ALERT_LOOKAHEAD_MINUTES = int(os.getenv('CALENDAR_ALERT_LOOKAHEAD_MINUT
 ####################
 
 
-def _resolve_tz(tz: str = None) -> Optional[ZoneInfo]:
+def _resolve_tz(tz: str = None) -> ZoneInfo | None:
     """Safely resolve a timezone string to ZoneInfo.
 
     Returns None (→ server-local fallback) when *tz* is empty, None,
@@ -71,7 +70,7 @@ def _resolve_tz(tz: str = None) -> Optional[ZoneInfo]:
         return None
 
 
-def _parse_rule(s: str, now: Optional[datetime] = None):
+def _parse_rule(s: str, now: datetime | None = None):
     """Parse RRULE with clock-aligned DTSTART for sub-daily frequencies.
 
     SECONDLY/MINUTELY/HOURLY rules use a fixed epoch DTSTART (2000-01-01 00:00)
@@ -141,7 +140,7 @@ def validate_rrule(s: str, tz: str = None) -> None:
         raise ValueError(ERROR_MESSAGES.AUTOMATION_NO_FUTURE_RUNS)
 
 
-def next_run_ns(s: str, tz: str = None) -> Optional[int]:
+def next_run_ns(s: str, tz: str = None) -> int | None:
     """Next occurrence as epoch nanoseconds, respecting user timezone."""
     zi = _resolve_tz(tz)
     now = datetime.now(zi) if zi else datetime.now()
@@ -177,7 +176,7 @@ def next_n_runs_ns(s: str, n: int = 5, tz: str = None) -> list[int]:
     return result
 
 
-def rrule_interval_seconds(s: str) -> Optional[int]:
+def rrule_interval_seconds(s: str) -> int | None:
     """Approximate interval between recurrences in seconds.
 
     Returns None for one-shot (COUNT=1) schedules or rules
@@ -275,7 +274,7 @@ async def scheduler_worker_loop(app) -> None:
 
 def _build_request(
     app,
-    token: Optional[str] = None,
+    token: str | None = None,
 ) -> Request:
     """Build a minimal ASGI Request for chat_completion.
 
@@ -305,7 +304,7 @@ def _build_request(
     return request
 
 
-async def _resolve_model_defaults(app, model_id: str) -> tuple[list[str], dict, list[str], Optional[str]]:
+async def _resolve_model_defaults(app, model_id: str) -> tuple[list[str], dict, list[str], str | None]:
     models = getattr(app.state, 'MODELS', {})
     model = models.get(model_id, {})
     meta = model.get('info', {}).get('meta', {})

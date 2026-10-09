@@ -15,13 +15,12 @@ import json
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict
-
 from open_webui.benchmarks import runner
 from open_webui.benchmarks.adapters import ADAPTERS_DIR
 from open_webui.benchmarks.suites import SUITES_DIR
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.utils.auth import get_admin_user
+from pydantic import BaseModel, ConfigDict
 
 router = APIRouter()
 

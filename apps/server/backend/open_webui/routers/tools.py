@@ -3,8 +3,6 @@ from __future__ import annotations
 import logging
 import re
 import time
-from pathlib import Path
-from typing import Optional
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -16,7 +14,6 @@ from open_webui.internal.db import get_async_session
 from open_webui.models.access_grants import AccessGrants
 from open_webui.models.config import Config
 from open_webui.models.groups import Groups
-from open_webui.models.oauth_sessions import OAuthSessions
 from open_webui.models.tools import (
     ToolAccessResponse,
     ToolForm,
@@ -32,8 +29,8 @@ from open_webui.utils.access_control import (
 )
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.plugin import (
-    get_tools_cache,
     get_tool_module_from_cache,
+    get_tools_cache,
     load_tool_module_by_id,
     replace_imports,
     resolve_valves_schema_options,
@@ -66,7 +63,7 @@ async def get_tool_module(request, tool_id, load_from_db=True):
 @router.get('/', response_model=list[ToolUserResponse])
 async def get_tools(
     request: Request,
-    query: Optional[str] = None,
+    query: str | None = None,
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
