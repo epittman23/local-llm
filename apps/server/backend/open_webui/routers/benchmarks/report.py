@@ -39,7 +39,9 @@ class ReportForm(BaseModel):
 async def generate_report(form_data: ReportForm, user=Depends(get_admin_user)):
     try:
         result = await report_logic.build_report(
-            tier=form_data.tier, model=form_data.model, benchmark=form_data.benchmark,
+            tier=form_data.tier,
+            model=form_data.model,
+            benchmark=form_data.benchmark,
             generate_figures=form_data.figures,
         )
     except report_logic.SciPyUnavailable as exc:
@@ -47,7 +49,7 @@ async def generate_report(form_data: ReportForm, user=Depends(get_admin_user)):
     except report_logic.NoBenchmarkResults as exc:
         return {'error': str(exc)}
 
-    run_dir = f"{time.strftime('%Y-%m-%d', time.gmtime())}-{uuid.uuid4().hex[:6]}"
+    run_dir = f'{time.strftime("%Y-%m-%d", time.gmtime())}-{uuid.uuid4().hex[:6]}'
     out_dir: Path = REPORTS_DIR / run_dir
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / 'report.md').write_text(result.markdown)

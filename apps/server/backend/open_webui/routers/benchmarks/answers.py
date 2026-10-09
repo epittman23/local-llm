@@ -52,13 +52,13 @@ async def get_answers(
 
 def _answer_document(record: dict, *, thinking: bool) -> str:
     lines = [
-        f"# {record['benchmark']}/{record['item_id']}",
+        f'# {record["benchmark"]}/{record["item_id"]}',
         '',
-        f"model: {record['model']}  ",
-        f"config: {record.get('config_id') or 'unrecorded'}  ",
-        f"suite run: {record['suite_run_id']}  ",
-        f"system: {record.get('system_name') or '(none)'}  ",
-        f"outcome: **{record['outcome']}**" + (f" - {record['reason']}" if record.get('reason') else ''),
+        f'model: {record["model"]}  ',
+        f'config: {record.get("config_id") or "unrecorded"}  ',
+        f'suite run: {record["suite_run_id"]}  ',
+        f'system: {record.get("system_name") or "(none)"}  ',
+        f'outcome: **{record["outcome"]}**' + (f' - {record["reason"]}' if record.get('reason') else ''),
         '',
     ]
     timings = record.get('timings') or {}
@@ -70,7 +70,14 @@ def _answer_document(record: dict, *, thinking: bool) -> str:
         if thinking:
             lines += ['## thinking', '', reasoning, '']
         else:
-            lines += ['<details><summary>thinking (hidden)</summary>', '', f'{len(reasoning)} characters', '', '</details>', '']
+            lines += [
+                '<details><summary>thinking (hidden)</summary>',
+                '',
+                f'{len(reasoning)} characters',
+                '',
+                '</details>',
+                '',
+            ]
     lines += ['## response', '', record.get('content', '')]
     return '\n'.join(lines)
 

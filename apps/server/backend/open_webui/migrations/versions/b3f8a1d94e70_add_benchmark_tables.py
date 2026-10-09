@@ -141,9 +141,7 @@ def upgrade():
         op.create_table(
             'benchmark_request',
             sa.Column('request_id', sa.Integer(), primary_key=True, autoincrement=True),
-            sa.Column(
-                'run_id', sa.Integer(), sa.ForeignKey('benchmark_run.run_id', ondelete='CASCADE'), nullable=True
-            ),
+            sa.Column('run_id', sa.Integer(), sa.ForeignKey('benchmark_run.run_id', ondelete='CASCADE'), nullable=True),
             sa.Column('at', sa.BigInteger(), nullable=False),
             sa.Column('model', sa.Text(), nullable=True),
             sa.Column('label', sa.Text(), nullable=True),
@@ -351,7 +349,9 @@ def upgrade():
             sa.Column('candidate_sha', sa.Text(), nullable=False),
             sa.Column('round', sa.Integer(), nullable=False),
             sa.Column('attempt', sa.Integer(), nullable=False, server_default='1'),
-            sa.Column('run_id', sa.Integer(), sa.ForeignKey('benchmark_run.run_id', ondelete='SET NULL'), nullable=True),
+            sa.Column(
+                'run_id', sa.Integer(), sa.ForeignKey('benchmark_run.run_id', ondelete='SET NULL'), nullable=True
+            ),
             sa.Column('config_id', sa.Text(), nullable=True),
             sa.Column('started_at', sa.BigInteger(), nullable=False),
             sa.Column('ended_at', sa.BigInteger(), nullable=True),
@@ -364,9 +364,7 @@ def upgrade():
             sa.Column('counts_toward_round', sa.Boolean(), nullable=False, server_default=sa.true()),
             sa.Column('status', sa.Text(), nullable=False),
             sa.Column('reason', sa.Text(), nullable=False, server_default=''),
-            sa.UniqueConstraint(
-                'sweep_id', 'candidate_sha', 'round', 'attempt', name='uq_benchmark_tune_visit_slot'
-            ),
+            sa.UniqueConstraint('sweep_id', 'candidate_sha', 'round', 'attempt', name='uq_benchmark_tune_visit_slot'),
             sa.CheckConstraint(
                 "status IN ('running','done','infeasible','aborted')", name='ck_benchmark_tune_visit_status'
             ),

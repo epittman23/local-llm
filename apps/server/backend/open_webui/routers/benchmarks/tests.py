@@ -65,7 +65,9 @@ async def _run_suite(form: TestsRunForm, queue: asyncio.Queue) -> None:
                 resume=form.resume,
             )
             total = len(todo)
-            await queue.put({'type': 'start', 'suite_run_id': ctx['suite_run_id'], 'total': total, 'skipped': len(skipped)})
+            await queue.put(
+                {'type': 'start', 'suite_run_id': ctx['suite_run_id'], 'total': total, 'skipped': len(skipped)}
+            )
 
             async def on_record(record: dict) -> None:
                 nonlocal passed, attempted
