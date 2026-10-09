@@ -24,6 +24,14 @@ describe('isAzure', () => {
 		expect(isAzure('', 'https://my.openai.azure.com/openai/v1', false)).toBe(false);
 		expect(isAzure('', 'https://openrouter.ai/api/v1', false)).toBe(false);
 	});
+	it('looks at the host, not anywhere in the URL', () => {
+		expect(isAzure('', 'https://x.services.ai.azure.com', false)).toBe(true);
+		expect(isAzure('', 'https://proxy.example/?to=my.openai.azure.com', false)).toBe(false);
+		expect(isAzure('', 'https://proxy.example/cognitive.microsoft.com', false)).toBe(false);
+		expect(isAzure('', 'https://notcognitive.microsoft.com', false)).toBe(false);
+		expect(isAzure('', 'my.openai.azure.com', false)).toBe(true);
+		expect(isAzure('', 'my.openai.azure', false)).toBe(false);
+	});
 });
 
 describe('parsePassthroughParams / parseHeaders', () => {

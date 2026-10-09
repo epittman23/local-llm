@@ -25,13 +25,31 @@ export type ConnectionFields = {
 
 export type ConnectionMode = { ollama: boolean; direct: boolean };
 
-/** Azure OpenAI is chosen explicitly, or guessed from an Azure-looking URL (never for direct connections, or the `/openai/v1` compatibility path). */
+/**
+ * Whether a URL's host looks like an Azure AI endpoint: an `azure` label with
+ * more after it (`my.openai.azure.com`, `x.services.ai.azure.com`) or the
+ * legacy `cognitive.microsoft.com`. This only presets the form's Azure fields,
+ * it is not a trust decision; it checks the parsed hostname so `azure.` in a
+ * path or query doesn't count. A URL typed without a scheme is read as
+ * https; one that still doesn't parse isn't Azure yet.
+ */
+const isAzureHost = (url: string) => {
+	let host: string;
+	try {
+		host = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(url) ? url : `https://${url}`).hostname.toLowerCase();
+	} catch {
+		return false;
+	}
+	return (
+		/(^|\.)azure\.[a-z0-9-]/.test(host) ||
+		host === 'cognitive.microsoft.com' ||
+		host.endsWith('.cognitive.microsoft.com')
+	);
+};
+
+/** Azure OpenAI is chosen explicitly, or guessed from an Azure host (never for direct connections, or the `/openai/v1` compatibility path). */
 export const isAzure = (provider: string, url: string, direct: boolean) =>
-	provider === 'azure' ||
-	((url.includes('azure.') || url.includes('cognitive.microsoft.com')) &&
-		!direct &&
-		provider === '' &&
-		!/\/openai\/v1(\/|$)/.test(url));
+	provider === 'azure' || (isAzureHost(url) && !direct && provider === '' && !/\/openai\/v1(\/|$)/.test(url));
 
 /** `"thinking, output_config"` -> `['thinking','output_config']`. */
 export const parsePassthroughParams = (value: string) =>
