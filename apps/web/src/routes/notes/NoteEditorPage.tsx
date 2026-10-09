@@ -135,11 +135,18 @@ function NoteEditor() {
 	const latest = useRef<NoteContent | null>(null);
 	useDocumentTitle(title || 'Note');
 
-	useEffect(() => {
-		if (!note.data) return;
+	// Seed the title and body from the server once per note, during render
+	// rather than in an effect: an effect left a frame with an empty title
+	// that a fast edit could land in and then be overwritten, and re-ran on
+	// every cache write -- pinning or changing access wrote the note as first
+	// loaded back into the cache, reverting an unsaved title edit (and the
+	// next autosave then sent the old title).
+	const [seededId, setSeededId] = useState<string | null>(null);
+	if (note.data && seededId !== note.data.id) {
+		setSeededId(note.data.id);
 		setTitle(note.data.title ?? '');
 		setText(note.data.data?.content?.md ?? '');
-	}, [note.data]);
+	}
 	useEffect(() => {
 		if (note.isError) {
 			toast.error(`${note.error}`);

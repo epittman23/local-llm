@@ -166,6 +166,19 @@ test('editing autosaves the title and the body as html, markdown and json', asyn
 	await expect(page.getByText(/^\d+ words · \d+ characters$/)).toBeVisible();
 });
 
+test('pinning keeps an unsaved title edit, and the save sends it', async ({ page }) => {
+	await mockWorkspaceBackend(page, enabled);
+	const seen = await mockNotes(page, [note('a', 'Groceries')]);
+	await page.goto('/notes/a');
+	const title = page.getByLabel('Title', { exact: true });
+	await title.fill('Weekly groceries');
+	await page.getByRole('button', { name: 'Note menu' }).click();
+	await page.getByRole('menuitem', { name: 'Pin to Sidebar' }).click();
+	await expect.poll(() => seen.pinned).toEqual(['a']);
+	await expect(title).toHaveValue('Weekly groceries');
+	await expect.poll(() => seen.updates.at(-1)?.title).toBe('Weekly groceries');
+});
+
 test('leaving right after typing still saves the last edit', async ({ page }) => {
 	await mockWorkspaceBackend(page, enabled);
 	const seen = await mockNotes(page, [note('a', 'Groceries')]);
