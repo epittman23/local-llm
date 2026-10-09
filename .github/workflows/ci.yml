@@ -1,0 +1,139 @@
+# Required check for main: the ruleset requires the `CI passed` job, which
+# only succeeds when every job above it did. Each job runs on every PR (no
+# `paths:` filters) because a required check that is skipped never reports
+# and would leave the PR blocked forever.
+#
+# Third-party actions are pinned to commit SHAs (tag in the trailing
+# comment); Dependabot (.github/dependabot.yml) bumps them.
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  NODE_VERSION: '26'
+  BUN_VERSION: '1.4.2'
+  PYTHON_VERSION: '3.12'
+  RUFF_VERSION: '0.16.10'
+
+jobs:
+  lint:
+    name: Lint (ruff, repo-owned backend code)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      # Same paths as .pre-commit-config.yaml: the rest of open_webui/ is
+      # upstream Open WebUI and is not held to this repo's lint.
+      - name: ruff check
+        working-directory: apps/server
+        run: uvx ruff@${RUFF_VERSION} check --output-format=github backend/open_webui/benchmarks backend/tests
+      - name: ruff format --check
+        working-directory: apps/server
+        run: uvx ruff@${RUFF_VERSION} format --check backend/open_webui/benchmarks backend/tests
+
+  web:
+    name: Web (astro check, vitest, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bunx astro check
+      - run: bun run test:unit
+      - run: bun run build
+
+  e2e:
+    name: Web e2e (Playwright, mocked backend)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run test:e2e
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-test-results
+          path: apps/web/test-results/
+          retention-days: 7
+
+  backend:
+    name: Backend (pytest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: apps/server/backend
+    env:
+      # Not a secret: the app refuses to import without one, and the tests
+      # never serve anything signed with it.
+      WEBUI_SECRET_KEY: ci-only-not-a-secret-0123456789abcdef0123456789abcdef
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: apps/server/backend/requirements.txt
+      # requirements.txt leaves torch unpinned and PyPI's default build is the
+      # multi-GB CUDA one. Installing the CPU wheel first, from its own index
+      # only, satisfies that requirement without mixing indexes for the rest.
+      - name: Install CPU torch
+        run: |
+          uv venv
+          uv pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Install requirements
+        run: uv pip install -r requirements.txt pytest pytest-asyncio
+      - run: .venv/bin/python -m pytest tests -q
+
+  ci-ok:
+    name: CI passed
+    if: always()
+    needs: [lint, web, e2e, backend]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job succeeded
+        run: |
+          echo '${{ toJSON(needs) }}'
+          [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}" = false ]
