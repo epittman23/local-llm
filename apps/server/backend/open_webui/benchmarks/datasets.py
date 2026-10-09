@@ -90,9 +90,7 @@ def read_manifest(bench: str, base: Path | None = None) -> dict | None:
 def read_items(bench: str, base: Path | None = None) -> list[dict]:
     path = items_path(bench, base)
     if not path.exists():
-        raise SystemExit(
-            f'benchmarks: {bench} is not downloaded yet.\n'
-            f'  fetch it first (see datasets.fetch_one)')
+        raise SystemExit(f'benchmarks: {bench} is not downloaded yet.\n  fetch it first (see datasets.fetch_one)')
     out = []
     for line in path.read_text().splitlines():
         line = line.strip()
@@ -142,15 +140,16 @@ def github_revision(repo: str, ref: str, path: str) -> str:
     rather than a requirement: content_sha256 pins the data either way. So a
     failure here is a warning, not an error.
     """
-    url = (f'https://api.github.com/repos/{repo}/commits'
-           f'?path={urllib.parse.quote(path)}&sha={urllib.parse.quote(ref)}&per_page=1')
+    url = (
+        f'https://api.github.com/repos/{repo}/commits'
+        f'?path={urllib.parse.quote(path)}&sha={urllib.parse.quote(ref)}&per_page=1'
+    )
     try:
         commits = get_json(url)
         if isinstance(commits, list) and commits:
             return commits[0].get('sha', '')
     except (urllib.error.URLError, json.JSONDecodeError, OSError) as exc:
-        print(f'  note: could not resolve the commit sha ({exc}); '
-              f'pinning by content hash only', file=sys.stderr)
+        print(f'  note: could not resolve the commit sha ({exc}); pinning by content hash only', file=sys.stderr)
     return ''
 
 
@@ -185,9 +184,11 @@ def hf_revision(dataset: str) -> str:
 
 def fetch_hf_rows(spec: dict) -> tuple[list[dict], str, str, bytes]:
     dataset, config, split = spec['dataset'], spec['config'], spec['split']
-    base = ('https://datasets-server.huggingface.co/rows'
-            f'?dataset={urllib.parse.quote(dataset, safe="")}'
-            f'&config={urllib.parse.quote(config)}&split={urllib.parse.quote(split)}')
+    base = (
+        'https://datasets-server.huggingface.co/rows'
+        f'?dataset={urllib.parse.quote(dataset, safe="")}'
+        f'&config={urllib.parse.quote(config)}&split={urllib.parse.quote(split)}'
+    )
     print(f'  GET {base} (paginated)', file=sys.stderr)
 
     rows: list[dict] = []
@@ -203,7 +204,7 @@ def fetch_hf_rows(spec: dict) -> tuple[list[dict], str, str, bytes]:
                 if exc.code not in (429, 502, 503) or attempt == 4:
                     raise
                 time.sleep(2 * (attempt + 1))
-        else:                                   # pragma: no cover - loop always breaks
+        else:  # pragma: no cover - loop always breaks
             raise SystemExit('benchmarks: gave up on the datasets-server')
 
         batch = payload.get('rows', [])
@@ -232,10 +233,13 @@ def fetch_one(adapter: dict, force: bool = False, base: Path | None = None) -> d
 
     if manifest.exists() and not force:
         current = json.loads(manifest.read_text())
-        print(f"{bench}: already downloaded "
-              f"({current['n_items']} items, revision "
-              f"{(current.get('revision') or current['content_sha256'])[:12]}); "
-              f"--force to refetch", file=sys.stderr)
+        print(
+            f'{bench}: already downloaded '
+            f'({current["n_items"]} items, revision '
+            f'{(current.get("revision") or current["content_sha256"])[:12]}); '
+            f'--force to refetch',
+            file=sys.stderr,
+        )
         return current
 
     spec = adapter['fetch']
@@ -249,8 +253,7 @@ def fetch_one(adapter: dict, force: bool = False, base: Path | None = None) -> d
         raise SystemExit(f'benchmarks: {bench} returned no rows')
 
     out.mkdir(parents=True, exist_ok=True)
-    (out / 'items.jsonl').write_text(
-        ''.join(json.dumps(r, sort_keys=True) + '\n' for r in rows))
+    (out / 'items.jsonl').write_text(''.join(json.dumps(r, sort_keys=True) + '\n' for r in rows))
 
     # Recorded even though nothing filters at fetch time: the filter is applied
     # when a suite is built, so widening it later must not require a refetch.

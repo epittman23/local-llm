@@ -46,7 +46,7 @@ SENTINEL_PREFIX = 'benchmarks: backfilled from sqlite llama.db on '
 
 
 def _epoch(iso: str | None) -> int | None:
-    """"2026-08-30T12:00:00Z" -> epoch seconds. The sqlite store's timestamps
+    """ "2026-08-30T12:00:00Z" -> epoch seconds. The sqlite store's timestamps
     are always this exact UTC format (time.strftime with time.gmtime()), so
     calendar.timegm (UTC-aware) is used rather than time.mktime (local)."""
     if not iso:
@@ -73,7 +73,7 @@ def _rows(sconn: sqlite3.Connection, table: str) -> list[sqlite3.Row]:
 
 def _already_backfilled(pconn: psycopg.Connection) -> str | None:
     row = pconn.execute(
-        "SELECT note FROM benchmark_schema_note WHERE note LIKE %s ORDER BY note_id DESC LIMIT 1",
+        'SELECT note FROM benchmark_schema_note WHERE note LIKE %s ORDER BY note_id DESC LIMIT 1',
         (SENTINEL_PREFIX + '%',),
     ).fetchone()
     return row['note'] if row else None
@@ -185,9 +185,17 @@ def backfill_run_load_info(sconn, pconn) -> int:
 
 
 REQUEST_TIMING_COLS = [
-    'cache_n', 'prompt_n', 'prompt_ms', 'prompt_per_token_ms', 'prompt_per_second',
-    'predicted_n', 'predicted_ms', 'predicted_per_token_ms', 'predicted_per_second',
-    'draft_n', 'draft_n_accepted',
+    'cache_n',
+    'prompt_n',
+    'prompt_ms',
+    'prompt_per_token_ms',
+    'prompt_per_second',
+    'predicted_n',
+    'predicted_ms',
+    'predicted_per_token_ms',
+    'predicted_per_second',
+    'draft_n',
+    'draft_n_accepted',
 ]
 
 
@@ -266,7 +274,7 @@ def backfill_schema_note(sconn, pconn) -> int:
     rows = _rows(sconn, 'schema_note')
     for r in rows:
         pconn.execute(
-            "INSERT INTO benchmark_schema_note (noted_on, note) VALUES (%(noted_on)s, %(note)s) "
+            'INSERT INTO benchmark_schema_note (noted_on, note) VALUES (%(noted_on)s, %(note)s) '
             'ON CONFLICT (note) DO NOTHING',
             dict(r),
         )
@@ -438,7 +446,7 @@ def main() -> int:
         f'(source: {args.sqlite_path}, counts: {json.dumps(counts)})'
     )
     pconn.execute(
-        "INSERT INTO benchmark_schema_note (noted_on, note) VALUES (%s, %s) ON CONFLICT (note) DO NOTHING",
+        'INSERT INTO benchmark_schema_note (noted_on, note) VALUES (%s, %s) ON CONFLICT (note) DO NOTHING',
         (time.strftime('%Y-%m-%d', time.gmtime()), note),
     )
     print('done:', note)

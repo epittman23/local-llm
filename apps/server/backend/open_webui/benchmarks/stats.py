@@ -31,9 +31,7 @@ def render_table(columns: list[str], rows: list[list[str]]) -> list[str]:
     ncol = max([len(r) for r in cells] or [0])
     cells = [r + [''] * (ncol - len(r)) for r in cells]
     width = [max(3, max(len(r[i]) for r in cells)) for i in range(ncol)]
-    numeric = [
-        all(is_number(r[i]) for r in cells[1:]) if len(cells) > 1 else False for i in range(ncol)
-    ]
+    numeric = [all(is_number(r[i]) for r in cells[1:]) if len(cells) > 1 else False for i in range(ncol)]
 
     def line(values: list[str]) -> str:
         return (
@@ -290,7 +288,7 @@ def _as_int(value: str | None) -> int | None:
 
 
 def _clean(value: str | None) -> str | None:
-    """"n/a" and "off" are recorded as themselves, not as NULL.
+    """ "n/a" and "off" are recorded as themselves, not as NULL.
 
     The distinction matters: a configuration that explicitly ran without
     speculative decoding is not one whose speculative setting went
@@ -335,7 +333,7 @@ def parse_config_text(text: str) -> dict:
 
 
 def short_spec(value: str | None) -> str:
-    """"--spec-type draft-mtp --spec-draft-n-max 2" -> "draft-mtp n=2"."""
+    """ "--spec-type draft-mtp --spec-draft-n-max 2" -> "draft-mtp n=2"."""
     if not value or value.strip() in ('off', 'n/a', ''):
         return 'off'
     kind = re.search(r'--spec-type\s+(\S+)', value)
@@ -446,7 +444,7 @@ def mtp_head(msgs: list[str]) -> str:
             else UNAVAILABLE
         )
     layers = int(hit.group(1))
-    return f"present (nextn_predict_layers = {layers}), {'used by draft-mtp' if used else 'ignored'}"
+    return f'present (nextn_predict_layers = {layers}), {"used by draft-mtp" if used else "ignored"}'
 
 
 def parse_server_log(path, ngl: str | int | None = None) -> dict | None:
@@ -524,7 +522,10 @@ def headroom_in_layers(info: dict, headroom: int | None) -> str | None:
     if headroom is None or not gpu_mib or not layers:
         return None
     per_layer = gpu_mib / layers
-    return f'~{headroom / per_layer:.1f} more layers at {per_layer:.1f} MiB/layer avg ({gpu_mib:.2f} MiB / {layers} layers)'
+    return (
+        f'~{headroom / per_layer:.1f} more layers at {per_layer:.1f} MiB/layer avg '
+        f'({gpu_mib:.2f} MiB / {layers} layers)'
+    )
 
 
 # ---------------------------------------------------------------------------

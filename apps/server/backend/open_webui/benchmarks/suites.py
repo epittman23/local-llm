@@ -11,9 +11,8 @@ from __future__ import annotations
 
 import hashlib
 import random
-from pathlib import Path
-
 import tomllib
+from pathlib import Path
 
 from open_webui.benchmarks import grading
 from open_webui.benchmarks.datasets import dotted, item_id, read_items
@@ -55,15 +54,13 @@ def sample(items: list[dict], n: int, seed: int, adapter: dict) -> list[dict]:
     ordered = sorted(items, key=lambda it: item_id(adapter, it))
     if n <= 0 or n >= len(ordered):
         return ordered
-    return sorted(random.Random(seed).sample(ordered, n),
-                  key=lambda it: item_id(adapter, it))
+    return sorted(random.Random(seed).sample(ordered, n), key=lambda it: item_id(adapter, it))
 
 
 # ---------------------------------------------------------------------------
 # suite assembly
 # ---------------------------------------------------------------------------
-def build_suite(suite: dict, adapters: dict[str, dict],
-                only: str | None = None) -> tuple[list[dict], list[dict]]:
+def build_suite(suite: dict, adapters: dict[str, dict], only: str | None = None) -> tuple[list[dict], list[dict]]:
     """Resolve a tier into the concrete list of items to run.
 
     Returns (selected, skipped). Skipped entries carry their reason so a run
@@ -79,8 +76,7 @@ def build_suite(suite: dict, adapters: dict[str, dict],
             continue
         adapter = adapters.get(bench)
         if adapter is None:
-            raise SystemExit(f"benchmarks: suite '{suite['id']}' names unknown "
-                             f"benchmark '{bench}'")
+            raise SystemExit(f"benchmarks: suite '{suite['id']}' names unknown benchmark '{bench}'")
         items = read_items(bench)
         keep, dropped = filter_items(adapter, items)
 
@@ -89,9 +85,14 @@ def build_suite(suite: dict, adapters: dict[str, dict],
         # by editing the adapter, the calibration by a dataset refetch or a
         # library upgrade on this box.
         for it in dropped:
-            skipped.append({'benchmark': bench, 'item_id': item_id(adapter, it),
-                            'kind': 'library_filter',
-                            'reason': "outside the adapter's library filter"})
+            skipped.append(
+                {
+                    'benchmark': bench,
+                    'item_id': item_id(adapter, it),
+                    'kind': 'library_filter',
+                    'reason': "outside the adapter's library filter",
+                }
+            )
 
         # Applied before sampling, not after. Dropping items from an already
         # drawn sample would give each benchmark a different effective n and
@@ -103,20 +104,23 @@ def build_suite(suite: dict, adapters: dict[str, dict],
             for it in keep:
                 iid = item_id(adapter, it)
                 if iid in blocked:
-                    skipped.append({'benchmark': bench, 'item_id': iid,
-                                    'kind': 'ungradeable',
-                                    'reason': f'ungradeable here ({blocked[iid]})'})
+                    skipped.append(
+                        {
+                            'benchmark': bench,
+                            'item_id': iid,
+                            'kind': 'ungradeable',
+                            'reason': f'ungradeable here ({blocked[iid]})',
+                        }
+                    )
                 else:
                     still.append(it)
             keep = still
 
         # The seed is offset per benchmark so the three do not draw parallel
         # index sequences, which would correlate the samples across benchmarks.
-        chosen = sample(keep, int(entry.get('n', 0)),
-                        seed + sum(map(ord, bench)), adapter)
+        chosen = sample(keep, int(entry.get('n', 0)), seed + sum(map(ord, bench)), adapter)
         for it in chosen:
-            selected.append({'benchmark': bench, 'adapter': adapter, 'item': it,
-                             'item_id': item_id(adapter, it)})
+            selected.append({'benchmark': bench, 'adapter': adapter, 'item': it, 'item_id': item_id(adapter, it)})
 
     return selected, skipped
 
@@ -154,7 +158,7 @@ def order_sha(selected: list[dict]) -> str:
     the order they run in are both part of what a sweep's rounds mean, since a
     round is a slice of this list.
     """
-    text = '\n'.join(f"{r['benchmark']}/{r['item_id']}" for r in selected)
+    text = '\n'.join(f'{r["benchmark"]}/{r["item_id"]}' for r in selected)
     return hashlib.sha1(text.encode()).hexdigest()[:12]
 
 
@@ -165,10 +169,17 @@ def missing_libraries(selected: list[dict]) -> dict[str, str]:
     second, and a `full` DS-1000 run would otherwise pay it 510 times to learn
     the same fact.
     """
-    needs = {'ds1000': {'Pandas': 'pandas', 'Numpy': 'numpy',
-                        'Scipy': 'scipy', 'Sklearn': 'sklearn',
-                        'Matplotlib': 'matplotlib', 'Tensorflow': 'tensorflow',
-                        'Pytorch': 'torch'}}
+    needs = {
+        'ds1000': {
+            'Pandas': 'pandas',
+            'Numpy': 'numpy',
+            'Scipy': 'scipy',
+            'Sklearn': 'sklearn',
+            'Matplotlib': 'matplotlib',
+            'Tensorflow': 'tensorflow',
+            'Pytorch': 'torch',
+        }
+    }
     wanted: set[str] = set()
     for row in selected:
         table = needs.get(row['benchmark'])
@@ -187,6 +198,5 @@ def missing_libraries(selected: list[dict]) -> dict[str, str]:
             continue
         module = table.get(dotted(row['item'], 'metadata.library'))
         if module and module.lower() not in have:
-            out[f"{row['benchmark']}/{row['item_id']}"] = (
-                f'{module} is not installed in the grading environment')
+            out[f'{row["benchmark"]}/{row["item_id"]}'] = f'{module} is not installed in the grading environment'
     return out
