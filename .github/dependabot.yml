@@ -1,11 +1,14 @@
-# Version updates for the workflow actions only, which keeps their SHA
-# pins (.github/workflows/) current. npm and pip get no version-update PRs:
-# the backend pins ~180 upstream Open WebUI dependencies and would flood the
-# repo. Vulnerable dependencies in any ecosystem still get Dependabot
-# *security* PRs, which are enabled in the repo settings, not here.
+# Dependency updates for all three ecosystems. Minor and patch bumps arrive
+# as one grouped PR per ecosystem, which dependabot-automerge.yml merges once
+# CI is green; major bumps arrive one per dependency and wait for a person.
+#
+# Security updates (enabled in the repo settings, not here) arrive as their
+# own PRs whatever the schedule, and are auto-merged the same way unless
+# they are a major bump.
 
 version: 2
 updates:
+  # Keeps the SHA pins in .github/workflows/ current.
   - package-ecosystem: github-actions
     directory: /
     schedule:
@@ -15,3 +18,40 @@ updates:
         patterns: ['*']
     commit-message:
       prefix: ci
+
+  # The backend: apps/server/pyproject.toml + uv.lock, the only place its
+  # dependencies are declared.
+  - package-ecosystem: uv
+    directory: /apps/server
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      backend-minor-patch:
+        applies-to: version-updates
+        update-types: [minor, patch]
+        patterns: ['*']
+    ignore:
+      # Pinned on purpose (pyproject.toml): aiodns 4 pulls pycares 5
+      # (c-ares 1.34.6), which breaks DNS on some hosts.
+      - dependency-name: aiodns
+        update-types: [version-update:semver-major]
+      # Pinned on purpose (pyproject.toml): newer av builds fail a FIPS
+      # self-test. Re-check open-webui/open-webui#15720 before lifting.
+      - dependency-name: av
+    commit-message:
+      prefix: build(deps)
+
+  # The frontend: apps/web/package.json + bun.lock.
+  - package-ecosystem: bun
+    directory: /apps/web
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      web-minor-patch:
+        applies-to: version-updates
+        update-types: [minor, patch]
+        patterns: ['*']
+    commit-message:
+      prefix: build(deps)

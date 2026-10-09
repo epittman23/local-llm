@@ -1,0 +1,38 @@
+# Turns on auto-merge for Dependabot's PRs that aren't major version bumps.
+# GitHub then squash-merges each one once the main ruleset's required checks
+# (`CI passed`, CodeQL) are green; a red PR just stays open. Major bumps get
+# no auto-merge and wait for a person.
+#
+# `pull_request` (never `pull_request_target`): the job runs no code from the
+# PR, only reads Dependabot's metadata and calls `gh pr merge --auto`.
+
+name: Dependabot auto-merge
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  automerge:
+    name: Enable auto-merge
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'epittman23/local-llm'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Read Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+      - name: Enable auto-merge (squash)
+        if: steps.meta.outputs.update-type != 'version-update:semver-major'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR_URL"
+      - name: Leave major bumps for review
+        if: steps.meta.outputs.update-type == 'version-update:semver-major'
+        run: echo "::notice::Major version bump (${{ steps.meta.outputs.dependency-names }}); auto-merge not enabled."
