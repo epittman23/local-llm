@@ -36,9 +36,9 @@ import io
 
 from open_webui.benchmarks import stats as lstats
 from open_webui.benchmarks.report import (
+    NONE_LEVEL,
     Block,
     Figure,
-    NONE_LEVEL,
     Regimes,
     _iso,
     detectable_effect,
@@ -89,7 +89,7 @@ def unicode_bars(labels: list[str], values: list[float | None], width: int = 36,
     """
     real = [v for v in values if v is not None]
     top = max(real) if real else 0.0
-    pad = max((len(l) for l in labels), default=0)
+    pad = max((len(label) for label in labels), default=0)
     lines = []
     for label, value in zip(labels, values):
         if value is None or top <= 0:
@@ -172,7 +172,7 @@ class Figures:
         if not by_run:
             return
         run_id = max(by_run, key=lambda k: len(by_run[k]))
-        series = sorted(by_run[run_id], key=lambda r: (r.get('at') or 0))
+        series = sorted(by_run[run_id], key=lambda r: r.get('at') or 0)
         values = [timing(r, 'predicted_per_second') for r in series]
         marks = [regimes.label(r) for r in series]
         title = f'Generation throughput over run {run_id}, requests in order (n = {len(series)})'
@@ -195,7 +195,14 @@ class Figures:
             if throttled and start_i is None:
                 start_i = i
             elif not throttled and start_i is not None:
-                ax.axvspan(start_i - 0.5, i - 0.5, color=FLAG, alpha=0.12, lw=0, label='served under a throttle' if not shaded else None)
+                ax.axvspan(
+                    start_i - 0.5,
+                    i - 0.5,
+                    color=FLAG,
+                    alpha=0.12,
+                    lw=0,
+                    label='served under a throttle' if not shaded else None,
+                )
                 shaded = True
                 start_i = None
 
@@ -328,8 +335,8 @@ class Figures:
             fig,
             ax,
             name,
-            title
-            + f' ({len(discordant)} of {len(items)} items vary; only those rows are drawn in full colour and ruled in orange, '
+            title + f' ({len(discordant)} of {len(items)} items vary; '
+            'only those rows are drawn in full colour and ruled in orange, '
             'the rest are constant and carry no information)',
             out,
             'pass/fail per item under each system prompt, with the varying items emphasised',
@@ -368,7 +375,9 @@ class Figures:
         if not self.png:
             rows = [f'{"level":<32} {"lost":>5} {"gained":>7} {"n disc":>7}']
             for j in others:
-                rows.append(f'{levels[j][:32]:<32} {len(lost[j]):>5} {len(gained[j]):>7} {len(lost[j]) + len(gained[j]):>7}')
+                rows.append(
+                    f'{levels[j][:32]:<32} {len(lost[j]):>5} {len(gained[j]):>7} {len(lost[j]) + len(gained[j]):>7}'
+                )
             rows += [
                 '',
                 'lost   = baseline passed, this level failed  (McNemar b)',
@@ -387,13 +396,37 @@ class Figures:
             ndisc = len(lost[j]) + len(gained[j])
             if ndisc == 0:
                 ax.annotate(
-                    'no item changed verdict', xy=(0, y), xytext=(8, 0), textcoords='offset points', color=MUTED, fontsize=8.5, va='center'
+                    'no item changed verdict',
+                    xy=(0, y),
+                    xytext=(8, 0),
+                    textcoords='offset points',
+                    color=MUTED,
+                    fontsize=8.5,
+                    va='center',
                 )
                 continue
             for k, i in enumerate(lost[j]):
-                ax.plot([-(k + 1)], [y], marker='o', markersize=9, color=FLAG, markeredgecolor=SURFACE, markeredgewidth=1.2, zorder=3)
+                ax.plot(
+                    [-(k + 1)],
+                    [y],
+                    marker='o',
+                    markersize=9,
+                    color=FLAG,
+                    markeredgecolor=SURFACE,
+                    markeredgewidth=1.2,
+                    zorder=3,
+                )
             for k, i in enumerate(gained[j]):
-                ax.plot([k + 1], [y], marker='o', markersize=9, color=SERIES, markeredgecolor=SURFACE, markeredgewidth=1.2, zorder=3)
+                ax.plot(
+                    [k + 1],
+                    [y],
+                    marker='o',
+                    markersize=9,
+                    color=SERIES,
+                    markeredgecolor=SURFACE,
+                    markeredgewidth=1.2,
+                    zorder=3,
+                )
             ax.annotate(
                 f'n disc {ndisc}',
                 xy=(max(len(gained[j]), 1), y),
@@ -411,10 +444,19 @@ class Figures:
         ticks = list(range(-span, span + 1))
         ax.set_xticks(ticks)
         ax.set_xticklabels([str(abs(t)) for t in ticks])
-        ax.set_xlabel('items lost (left, orange) and gained (right, blue) against the baseline', color=INK_2, fontsize=9)
+        ax.set_xlabel(
+            'items lost (left, orange) and gained (right, blue) against the baseline', color=INK_2, fontsize=9
+        )
         for side in ('left',):
             ax.spines[side].set_visible(False)
-        self._save(fig, ax, name, title, out, "items each system prompt lost and gained against the baseline, the pairing the McNemar test rests on")
+        self._save(
+            fig,
+            ax,
+            name,
+            title,
+            out,
+            'items each system prompt lost and gained against the baseline, the pairing the McNemar test rests on',
+        )
 
     # -- figure 4: the MDE curve ------------------------------------------
     def mde_curve(self, psi: float, ci: tuple[float, float], now: int, out: list[str]):
@@ -422,13 +464,27 @@ class Figures:
         mde = [detectable_effect(n, psi) for n in ns]
         title = f'Smallest detectable difference at 80% power, alpha 0.05, discordance psi = {psi:.3f}'
         if not self.png:
-            self._skip(out, title, unicode_bars([f'n = {n:>4}' for n in ns], [None if m is None else 100 * m for m in mde], unit=' pp'))
+            self._skip(
+                out,
+                title,
+                unicode_bars([f'n = {n:>4}' for n in ns], [None if m is None else 100 * m for m in mde], unit=' pp'),
+            )
             return
         name = 'fig4-mde.png'
         fig, ax = self._new(name, size=(8.5, 4.4))
         xs = [n for n, m in zip(ns, mde) if m is not None]
         ys = [100 * m for m in mde if m is not None]
-        ax.plot(xs, ys, color=SERIES, linewidth=2.0, marker='o', markersize=4.5, markeredgecolor=SURFACE, markeredgewidth=1.5, zorder=3)
+        ax.plot(
+            xs,
+            ys,
+            color=SERIES,
+            linewidth=2.0,
+            marker='o',
+            markersize=4.5,
+            markeredgecolor=SURFACE,
+            markeredgewidth=1.5,
+            zorder=3,
+        )
         ax.set_xscale('log')
         ax.set_xticks(xs)
         ax.set_xticklabels([str(x) for x in xs])
@@ -470,8 +526,20 @@ class Figures:
             note = f'this experiment:\n{now} items, {100 * here:.0f} pp'
         else:
             ceiling = mcnemar_power(now, psi, psi * 0.999)
-            note = f'this experiment: {now} items.\nNo effect is reachable at\n80% power -- even {100 * psi:.1f} pp is found only {100 * ceiling:.0f}% of the time.'
-        ax.annotate(note, xy=(now, top * 0.30), xytext=(10, 0), textcoords='offset points', color=FLAG, fontsize=9, ha='left', va='center')
+            note = (
+                f'this experiment: {now} items.\nNo effect is reachable at\n80% power -- '
+                f'even {100 * psi:.1f} pp is found only {100 * ceiling:.0f}% of the time.'
+            )
+        ax.annotate(
+            note,
+            xy=(now, top * 0.30),
+            xytext=(10, 0),
+            textcoords='offset points',
+            color=FLAG,
+            fontsize=9,
+            ha='left',
+            va='center',
+        )
         if xs and min(xs) > min(ns):
             # The curve starts where it starts for a reason; shade the dead
             # region and say why, rather than leaving a reader to wonder
@@ -488,5 +556,11 @@ class Figures:
                 va='bottom',
             )
         self._save(
-            fig, ax, name, title, out, 'minimum detectable effect against items per level, with the psi ceiling and this experiment\'s position marked'
+            fig,
+            ax,
+            name,
+            title,
+            out,
+            'minimum detectable effect against items per level, '
+            "with the psi ceiling and this experiment's position marked",
         )

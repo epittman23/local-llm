@@ -24,9 +24,7 @@ def build_program(item: dict, code: str) -> str | None:
     # json.dumps emits a valid Python string literal, which keeps the model's
     # quotes, backslashes and newlines out of the program's syntax.
     solution = json.dumps(code)
-    parts = [item['code_context'], '',
-             f'__solution = {solution}',
-             'test_execution(__solution)']
+    parts = [item['code_context'], '', f'__solution = {solution}', 'test_execution(__solution)']
     # Some items additionally constrain the surface form (a required API, a
     # banned keyword). The upstream runner calls it when present, so so do we.
     if re.search(r'^def\s+test_string\s*\(', item['code_context'], re.M):

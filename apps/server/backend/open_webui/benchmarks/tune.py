@@ -147,7 +147,8 @@ import aiohttp
 from open_webui.benchmarks import env_profile, report, runner
 from open_webui.benchmarks.adapters import load_adapters, render_prompt
 from open_webui.benchmarks.runner import SuiteLoadError
-from open_webui.benchmarks.suites import build_suite, interleave, load_suite, order_sha as order_sha_of
+from open_webui.benchmarks.suites import build_suite, interleave, load_suite
+from open_webui.benchmarks.suites import order_sha as order_sha_of
 from open_webui.benchmarks.tune_probe import (
     CollapseWatch,
     GpuProbe,
@@ -159,10 +160,10 @@ from open_webui.benchmarks.tune_probe import (
     tps,
 )
 from open_webui.benchmarks.tune_schedule import (
+    MODES,
     Budget,
     Candidate,
     Grid,
-    MODES,
     Schedule,
     TuneRefused,
     load_grid,
@@ -439,7 +440,7 @@ class Cooldown:
     timings.
     """
 
-    def __init__(self, sweep: 'Sweep', opts: SweepOptions):
+    def __init__(self, sweep: Sweep, opts: SweepOptions):
         self.sweep = sweep
         self.o = opts
         self.gpu = GpuProbe()
@@ -531,7 +532,9 @@ class Cooldown:
         if resolution == 'recovered':
             log.info('resumed after %.0fs of cooling', time.time() - started)
         else:
-            log.warning('gave up cooling after %.0fs; the card did not return to its round-1 throughput', time.time() - started)
+            log.warning(
+                'gave up cooling after %.0fs; the card did not return to its round-1 throughput', time.time() - started
+            )
         return resolution
 
     async def _wait(self, target: float, window: float) -> None:
@@ -560,7 +563,9 @@ class Cooldown:
         rows = self.sweep.probe_rows()
         if not rows:
             return None
-        server = Server(self.sweep.baseline, self.sweep.port, load_timeout=self.o.load_timeout, session=self.sweep.session)
+        server = Server(
+            self.sweep.baseline, self.sweep.port, load_timeout=self.o.load_timeout, session=self.sweep.session
+        )
         try:
             await server.start()
             await server.wait()
@@ -670,7 +675,7 @@ class Sweep:
         self.cancel_requested = False
 
     @classmethod
-    async def create(cls, opts: SweepOptions, session: aiohttp.ClientSession) -> 'Sweep':
+    async def create(cls, opts: SweepOptions, session: aiohttp.ClientSession) -> Sweep:
         sweep = cls(opts, session)
         sweep.profile_dict = await env_profile.profile(opts.profile)
         sweep.profile_name = sweep.profile_dict.get('name') or opts.profile or ''
@@ -839,7 +844,9 @@ class Sweep:
         visit_id = await BenchmarkTuneVisits.open_visit(
             self.sweep_id, cand.sha, rnd, attempt=attempt, item_from=lo, item_to=hi, since_pause_seconds=since
         )
-        log.info('round %s - %s - items %s:%s%s', rnd, cand.label, lo, hi, f' (attempt {attempt})' if attempt > 1 else '')
+        log.info(
+            'round %s - %s - items %s:%s%s', rnd, cand.label, lo, hi, f' (attempt {attempt})' if attempt > 1 else ''
+        )
         log.info(cand.flags())
 
         server = Server(cand, self.port, load_timeout=self.o.load_timeout, session=self.session)
@@ -898,7 +905,11 @@ class Sweep:
             drift = 'cliff' if watch.collapsed else None
         except Infeasible as exc:
             await BenchmarkTuneVisits.close_visit(
-                visit_id, status='infeasible', reason=f'{exc.kind}: {exc.reason}', items_done=0, counts_toward_round=False
+                visit_id,
+                status='infeasible',
+                reason=f'{exc.kind}: {exc.reason}',
+                items_done=0,
+                counts_toward_round=False,
             )
             await BenchmarkTuneCandidates.set_candidate(
                 self.sweep_id, cand.sha, status='infeasible', status_reason=f'{exc.kind}: {exc.reason}'
@@ -933,10 +944,16 @@ class Sweep:
 
         counts = not drift
         await BenchmarkTuneVisits.close_visit(
-            visit_id, status='done', items_done=len(records), counts_toward_round=counts, reason='drift' if drift else ''
+            visit_id,
+            status='done',
+            items_done=len(records),
+            counts_toward_round=counts,
+            reason='drift' if drift else '',
         )
         if drift:
-            log.warning("  throughput collapsed mid-visit; this visit's %s items are excluded from the round", len(records))
+            log.warning(
+                "  throughput collapsed mid-visit; this visit's %s items are excluded from the round", len(records)
+            )
         return {'status': 'done', 'items': len(records), 'drift': drift, 'visit_id': visit_id}
 
     def spent(self) -> str | None:
@@ -980,7 +997,9 @@ class Sweep:
             ],
         )
         for cand, why in rejected:
-            await BenchmarkTuneCandidates.set_candidate(self.sweep_id, cand.sha, status='infeasible', status_reason=why[:400])
+            await BenchmarkTuneCandidates.set_candidate(
+                self.sweep_id, cand.sha, status='infeasible', status_reason=why[:400]
+            )
 
     async def scores(self, rnd: int | None) -> dict[str, tuple[float | None, int]]:
         """Median paired log-ratio against the baseline, per candidate."""
@@ -1015,7 +1034,9 @@ class Sweep:
         11 candidates" read as a real "kept 11 of 11" decision, which then
         made the round look finished to every future resume.
         """
-        await BenchmarkTuneRounds.open_round(self.sweep_id, rnd, stage=stage, item_from=lo, item_to=hi, survivors=len(alive))
+        await BenchmarkTuneRounds.open_round(
+            self.sweep_id, rnd, stage=stage, item_from=lo, item_to=hi, survivors=len(alive)
+        )
         # A visit only counts as "handled" here if it either landed data
         # that counts toward the round or is permanently infeasible. A
         # drift- or crash-discarded visit (status 'done' with
@@ -1025,7 +1046,9 @@ class Sweep:
         # round after a crash caught it mid-retry.
         visits_here = await BenchmarkTuneVisits.sweep_visits(self.sweep_id, rnd=rnd)
         already = {
-            v.candidate_sha for v in visits_here if v.status == 'infeasible' or (v.status == 'done' and v.counts_toward_round)
+            v.candidate_sha
+            for v in visits_here
+            if v.status == 'infeasible' or (v.status == 'done' and v.counts_toward_round)
         }
         # UNIQUE (sweep_id, candidate_sha, round, attempt) means a re-visit
         # after a crash or a drift-discarded attempt must claim the next
@@ -1106,7 +1129,12 @@ class Sweep:
 
         survivors, decision = await self.eliminate(rnd, alive)
         await BenchmarkTuneRounds.close_round(
-            self.sweep_id, rnd, baseline_gen_tps=base_tps, drift_ratio=ratio, decision=decision, survivors=len(survivors)
+            self.sweep_id,
+            rnd,
+            baseline_gen_tps=base_tps,
+            drift_ratio=ratio,
+            decision=decision,
+            survivors=len(survivors),
         )
         return survivors
 
@@ -1126,7 +1154,9 @@ class Sweep:
             self.ended_reason = 'drift'
             log.warning('stopping: the card did not recover and this is an interactive budget')
             return False
-        log.warning('continuing under a changed machine state; the design audit decides whether these rounds can be compared')
+        log.warning(
+            'continuing under a changed machine state; the design audit decides whether these rounds can be compared'
+        )
         return True
 
     async def eliminate(self, rnd: int, alive: list[Candidate]) -> tuple[list[Candidate], str]:
@@ -1191,7 +1221,11 @@ class Sweep:
         for c in cut:
             c.status = 'eliminated'
             await BenchmarkTuneCandidates.set_candidate(
-                self.sweep_id, c.sha, status='eliminated', eliminated_round=rnd, status_reason=f'slower over round {rnd}'
+                self.sweep_id,
+                c.sha,
+                status='eliminated',
+                eliminated_round=rnd,
+                status_reason=f'slower over round {rnd}',
             )
         return survivors, decision
 
@@ -1264,7 +1298,9 @@ class Sweep:
         await self.record_rejected(rejected)
         return await self.run_refine_rounds(rnd, cands, cursor)
 
-    async def run_refine_rounds(self, rnd: int, alive: list[Candidate], cursor: int) -> tuple[int, list[Candidate], int]:
+    async def run_refine_rounds(
+        self, rnd: int, alive: list[Candidate], cursor: int
+    ) -> tuple[int, list[Candidate], int]:
         """The refine round loop, split out so resume_sweep() can re-enter it.
 
         refine() calls this after generating this stage's candidates; a
@@ -1302,7 +1338,7 @@ class Sweep:
         results = await BenchmarkResults.list_results()
         return [r.model_dump() for r in results if r.suite_run_id in runs]
 
-    async def audit(self) -> tuple[str, 'report.Audit', list]:
+    async def audit(self) -> tuple[str, report.Audit, list]:
         """The refusal contract, borrowed whole from benchmarks.report.
 
         A second, more forgiving implementation of "can this design support
@@ -1404,7 +1440,7 @@ class Sweep:
                     self.sweep_id,
                     cand.sha,
                     status='rejected',
-                    status_reason=f"correctness regression (McNemar p = {guard['p']:.3f})",
+                    status_reason=f'correctness regression (McNemar p = {guard["p"]:.3f})',
                 )
                 winner = None
             if winner is None:
@@ -1471,7 +1507,9 @@ def adoption_note(winner: BenchmarkTuneCandidateModel) -> dict:
     }
 
 
-async def sweep_report(sweep_id: str, *, design: str = '', blocked: list[str] | None = None, guard: dict | None = None) -> dict:
+async def sweep_report(
+    sweep_id: str, *, design: str = '', blocked: list[str] | None = None, guard: dict | None = None
+) -> dict:
     """Everything operational about one sweep, as structured data.
 
     Ported from the original's report_sweep(), with printing replaced by a
@@ -1522,7 +1560,9 @@ async def sweep_report(sweep_id: str, *, design: str = '', blocked: list[str] | 
         )
     ranking.sort(key=lambda r: -(r['score'] if r['score'] is not None else -math.inf))
 
-    not_measured = [{'candidate_sha': sha, 'reason': c.status_reason} for sha, c in cands.items() if c.status == 'infeasible']
+    not_measured = [
+        {'candidate_sha': sha, 'reason': c.status_reason} for sha, c in cands.items() if c.status == 'infeasible'
+    ]
 
     result = {
         'sweep_id': sweep_id,
@@ -1597,7 +1637,14 @@ async def plan_sweep(sweep: Sweep) -> dict:
         'item_count': len(sweep.items),
         'item_order_sha': sweep.order_sha,
         'rounds': [
-            {'round': i + 1, 'item_from': lo, 'item_to': hi, 'items': hi - lo, 'candidates': n, 'item_visits': n * (hi - lo)}
+            {
+                'round': i + 1,
+                'item_from': lo,
+                'item_to': hi,
+                'items': hi - lo,
+                'candidates': n,
+                'item_visits': n * (hi - lo),
+            }
             for i, (n, (lo, hi)) in enumerate(zip(s.survivors, s.slices))
         ],
         'winner_items': s.winner_items,
@@ -1667,7 +1714,7 @@ async def resume_sweep(sweep_id: str | None, defaults: SweepOptions, session: ai
     # discontinuity.
     if sweep.grid.sha != row.grid_sha:
         raise TuneRefused(
-            f"llama-tune: {row.grid_path} has changed since this sweep started "
+            f'llama-tune: {row.grid_path} has changed since this sweep started '
             f'({row.grid_sha} then, {sweep.grid.sha} now). The rounds already run measured the old '
             f'space. Restore the file, or start a new sweep.'
         )

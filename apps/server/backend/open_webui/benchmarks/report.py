@@ -87,7 +87,7 @@ import math
 import random
 import textwrap
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from open_webui.benchmarks import stats as lstats
 from open_webui.models.benchmark_configs import BenchmarkRuns
@@ -147,14 +147,14 @@ def _iso(ts: int | None) -> str:
     """
     if ts is None:
         return '-'
-    return dt.datetime.fromtimestamp(int(ts), tz=dt.timezone.utc).strftime(TS)
+    return dt.datetime.fromtimestamp(int(ts), tz=dt.UTC).strftime(TS)
 
 
 def _epoch_dt(ts: int | None) -> dt.datetime | None:
     """An epoch second as an aware UTC datetime, for arithmetic (not display)."""
     if ts is None:
         return None
-    return dt.datetime.fromtimestamp(int(ts), tz=dt.timezone.utc)
+    return dt.datetime.fromtimestamp(int(ts), tz=dt.UTC)
 
 
 # ---------------------------------------------------------------------------
@@ -392,7 +392,9 @@ def mcnemar_power(n: int, discordance: float, effect: float, alpha: float = 0.05
     return float(sps.norm.cdf(num / den))
 
 
-def items_needed(discordance: float, effect: float, power: float = 0.80, alpha: float = 0.05, cap: int = 100_000) -> int | None:
+def items_needed(
+    discordance: float, effect: float, power: float = 0.80, alpha: float = 0.05, cap: int = 100_000
+) -> int | None:
     """Smallest n with at least `power` to detect `effect`. None if unreachable."""
     if discordance <= 0 or effect <= 0 or effect > discordance:
         return None
@@ -513,7 +515,7 @@ class Block:
         records = self.cells.get((item, level))
         if not records:
             return None
-        first = sorted(records, key=lambda r: (r.get('at') or 0))[0]
+        first = sorted(records, key=lambda r: r.get('at') or 0)[0]
         if first.get('outcome') not in GRADED:
             return None
         return 1 if first.get('outcome') == PASS else 0
@@ -559,7 +561,9 @@ class Block:
 BLOCK_KEY = ['tier', 'model', 'config_id', 'benchmark', 'adapter_sha']
 
 
-def blocks_of(records: list[dict], level_factor: str = 'system_sha', key_factors: list[str] | None = None) -> list[Block]:
+def blocks_of(
+    records: list[dict], level_factor: str = 'system_sha', key_factors: list[str] | None = None
+) -> list[Block]:
     """Group graded records into blocks whose columns are levels of one factor.
 
     `level_factor` is a parameter because a tuning-style question asks the
@@ -843,10 +847,13 @@ def audit_design(records: list[dict], blocks: list[Block], regimes: Regimes) -> 
         'set of rows inside which the only thing that differs is the system',
         'prompt. `holes` counts item x level cells with no graded result;',
         '`repl` counts cells measured more than once; `regimes` is how many',
-        'distinct GPU throttle states the block\'s requests were served under,',
+        "distinct GPU throttle states the block's requests were served under,",
         'and a `!` marks a block whose levels did not share one.',
         '',
-        table(['benchmark', 'adapter', 'model', 'tier', 'levels', 'items', 'holes', 'repl', 'level order', 'regimes'], rows),
+        table(
+            ['benchmark', 'adapter', 'model', 'tier', 'levels', 'items', 'holes', 'repl', 'level order', 'regimes'],
+            rows,
+        ),
         '',
     ]
 
@@ -895,7 +902,9 @@ def audit_design(records: list[dict], blocks: list[Block], regimes: Regimes) -> 
 # ---------------------------------------------------------------------------
 # section 1: provenance
 # ---------------------------------------------------------------------------
-def section_provenance(records: list[dict], filters: dict, runs_by_id: dict[int, dict], schema_notes: list[dict]) -> str:
+def section_provenance(
+    records: list[dict], filters: dict, runs_by_id: dict[int, dict], schema_notes: list[dict]
+) -> str:
     """What was in scope, and what filters produced it.
 
     A reduced relative of the original's provenance section: the CLI opened
@@ -913,7 +922,9 @@ def section_provenance(records: list[dict], filters: dict, runs_by_id: dict[int,
     builds = sorted({row['build'] for row in runs_by_id.values() if row.get('build')})
     models = sorted({r.get('model') or '?' for r in records})
     revisions = sorted({r.get('dataset_revision') or '?' for r in records})
-    applied = [f'- {n["noted_on"]}: {n["note"]}' for n in sorted(schema_notes, key=lambda n: n['note_id'], reverse=True)[:3]]
+    applied = [
+        f'- {n["noted_on"]}: {n["note"]}' for n in sorted(schema_notes, key=lambda n: n['note_id'], reverse=True)[:3]
+    ]
 
     used = ', '.join(f'`{k}={v}`' for k, v in filters.items() if v) or 'none'
     out = [
@@ -939,13 +950,17 @@ def section_provenance(records: list[dict], filters: dict, runs_by_id: dict[int,
         '',
     ]
     if applied:
-        out += [
-            h(3, 'Most recent schema notes'),
-            '',
-            "The store's own account of its discontinuities. A number either "
-            'side of one of these is not necessarily comparable.',
-            '',
-        ] + applied + ['']
+        out += (
+            [
+                h(3, 'Most recent schema notes'),
+                '',
+                "The store's own account of its discontinuities. A number either "
+                'side of one of these is not necessarily comparable.',
+                '',
+            ]
+            + applied
+            + ['']
+        )
     return '\n'.join(out)
 
 
@@ -1071,10 +1086,15 @@ def section_reliability(records: list[dict]) -> tuple[str, float | None]:
 
     rows = []
     for key, group in sorted(flipped.items()):
-        outcomes = [r.get('outcome') for r in sorted(group, key=lambda r: (r.get('at') or 0))]
+        outcomes = [r.get('outcome') for r in sorted(group, key=lambda r: r.get('at') or 0)]
         rows.append([key[3], key[4], key[5], key[6], ' -> '.join(outcomes)])
     if rows:
-        out += [h(3, 'The cells that flipped'), '', table(['benchmark', 'item', 'system', 'adapter', 'outcomes'], rows), '']
+        out += [
+            h(3, 'The cells that flipped'),
+            '',
+            table(['benchmark', 'item', 'system', 'adapter', 'outcomes'], rows),
+            '',
+        ]
     return ('\n'.join(out), k / n)
 
 
@@ -1095,7 +1115,7 @@ def baseline_of(levels: list[str]) -> str:
     return NONE_LEVEL if NONE_LEVEL in levels else levels[0]
 
 
-def block_accuracy(b: Block, figs: 'Figures', audit: Audit) -> tuple[str, dict]:
+def block_accuracy(b: Block, figs: Figures, audit: Audit) -> tuple[str, dict]:
     items, levels, matrix = b.matrix()
     k = len(levels)
     base = baseline_of(levels)
@@ -1174,7 +1194,7 @@ def block_accuracy(b: Block, figs: 'Figures', audit: Audit) -> tuple[str, dict]:
             'The asymptotic p is quoted for completeness and should not be '
             'believed: the chi-square approximation to Q needs many items '
             f'that vary, and there are {n_eff}. The permutation p is exact '
-            'under the design\'s own randomisation and is the one to read.',
+            "under the design's own randomisation and is the one to read.",
             '',
         ]
 
@@ -1231,7 +1251,7 @@ def block_accuracy(b: Block, figs: 'Figures', audit: Audit) -> tuple[str, dict]:
     )
 
 
-def section_accuracy(blocks: list[Block], figs: 'Figures', audit: Audit) -> tuple[str, list[dict]]:
+def section_accuracy(blocks: list[Block], figs: Figures, audit: Audit) -> tuple[str, list[dict]]:
     complete = [b for b in blocks if b.complete()]
     out = [
         h(2, '4. Paired accuracy'),
@@ -1244,7 +1264,7 @@ def section_accuracy(blocks: list[Block], figs: 'Figures', audit: Audit) -> tupl
         'a paired test removes it entirely, which at these sample sizes is the',
         'difference between a test with some power and one with none.',
         '',
-        'So: Cochran\'s Q with a permutation reference distribution across the',
+        "So: Cochran's Q with a permutation reference distribution across the",
         'levels, exact McNemar against the baseline pairwise. Not ANOVA -- the',
         'response is binary, the cells hold one observation each, and the design',
         'carries no within-cell error term.',
@@ -1352,7 +1372,7 @@ def section_accuracy(blocks: list[Block], figs: 'Figures', audit: Audit) -> tupl
 EFFECTS = [0.05, 0.10, 0.15, 0.20]
 
 
-def section_power(results: list[dict], figs: 'Figures', floor: float | None) -> str:
+def section_power(results: list[dict], figs: Figures, floor: float | None) -> str:
     out = [
         h(2, '5. Power, and what to run next'),
         '',
@@ -1486,13 +1506,13 @@ def section_power(results: list[dict], figs: 'Figures', floor: float | None) -> 
                 f'largest number in this document and rests on the fewest observations.'
             )
         ),
-        f'- If the system-prompt question is worth settling, it needs the item '
-        f'count in the table above at the tier that supplies it, not more levels '
-        f'at a small one.',
-        f'- Cheaper alternative: drop the levels that are indistinguishable '
-        f'from the baseline and spend the runs on two levels with more items. '
-        f'Six levels at 8 items has less power than two levels at 24 for the '
-        f'same number of requests.',
+        '- If the system-prompt question is worth settling, it needs the item '
+        'count in the table above at the tier that supplies it, not more levels '
+        'at a small one.',
+        '- Cheaper alternative: drop the levels that are indistinguishable '
+        'from the baseline and spend the runs on two levels with more items. '
+        'Six levels at 8 items has less power than two levels at 24 for the '
+        'same number of requests.',
         '',
     ]
     return '\n'.join(out)
@@ -1535,7 +1555,7 @@ def kruskal_and_anova(samples: list[list[float]]) -> tuple[str, str]:
     return (krow, frow)
 
 
-def section_throughput(records: list[dict], blocks: list[Block], regimes: Regimes, audit: Audit, figs: 'Figures') -> str:
+def section_throughput(records: list[dict], blocks: list[Block], regimes: Regimes, audit: Audit, figs: Figures) -> str:
     out = [
         h(2, '6. Throughput'),
         '',
@@ -1615,7 +1635,12 @@ def section_throughput(records: list[dict], blocks: list[Block], regimes: Regime
             usable = {lv: v for lv, v in levels_here.items() if len(v) >= 2}
             if len(usable) < 2:
                 strat_rows.append(
-                    [regime, str(len(levels_here)), f'{sum(len(v) for v in levels_here.values())}', 'collapses: fewer than two levels survive here']
+                    [
+                        regime,
+                        str(len(levels_here)),
+                        f'{sum(len(v) for v in levels_here.values())}',
+                        'collapses: fewer than two levels survive here',
+                    ]
                 )
                 continue
             kr, _ = kruskal_and_anova(list(usable.values()))
@@ -1679,7 +1704,11 @@ def section_throughput(records: list[dict], blocks: list[Block], regimes: Regime
         # construction.
         base = baseline_of(levels)
         base_n = [v for r in by_level.get(base, []) if (v := timing(r, 'prompt_n')) is not None]
-        others = [(lv, [v for r in by_level.get(lv, []) if (v := timing(r, 'prompt_n')) is not None]) for lv in levels if lv != base]
+        others = [
+            (lv, [v for r in by_level.get(lv, []) if (v := timing(r, 'prompt_n')) is not None])
+            for lv in levels
+            if lv != base
+        ]
         checks = []
         for lv, values in others:
             if not values or not base_n:
@@ -1688,7 +1717,9 @@ def section_throughput(records: list[dict], blocks: list[Block], regimes: Regime
             delta = lstats.mean(values) - lstats.mean(base_n)
             try:
                 _u, up = sps.mannwhitneyu(values, base_n, alternative='two-sided')
-                verdict = 'prompt reached the server' if delta > 0 and up < 0.05 else 'not distinguishable from the baseline'
+                verdict = (
+                    'prompt reached the server' if delta > 0 and up < 0.05 else 'not distinguishable from the baseline'
+                )
                 checks.append([lv, num(delta, '{:+.1f}'), pv(float(up)), verdict])
             except ValueError as exc:
                 checks.append([lv, num(delta, '{:+.1f}'), '-', str(exc)])
@@ -1710,7 +1741,9 @@ def section_throughput(records: list[dict], blocks: list[Block], regimes: Regime
 # ---------------------------------------------------------------------------
 # section 7: throttle audit
 # ---------------------------------------------------------------------------
-def section_throttle(records: list[dict], regimes: Regimes, blocks: list[Block], samples_by_run: dict[int, list[dict]]) -> str:
+def section_throttle(
+    records: list[dict], regimes: Regimes, blocks: list[Block], samples_by_run: dict[int, list[dict]]
+) -> str:
     out = [
         h(2, '7. Throttle audit'),
         '',
@@ -1747,7 +1780,16 @@ def section_throttle(records: list[dict], regimes: Regimes, blocks: list[Block],
             h(3, 'Per serving run'),
             '',
             table(
-                ['run', 'samples', 'power avg W', 'power p95 W', 'sm p50 MHz', 'temp max C', 'min free VRAM MiB', 'throttle reasons seen'],
+                [
+                    'run',
+                    'samples',
+                    'power avg W',
+                    'power p95 W',
+                    'sm p50 MHz',
+                    'temp max C',
+                    'min free VRAM MiB',
+                    'throttle reasons seen',
+                ],
                 rows,
             ),
             '',
@@ -1780,7 +1822,7 @@ def section_throttle(records: list[dict], regimes: Regimes, blocks: list[Block],
     graded_records = [r for r in graded(records) if r.get('run_id') is not None]
     if graded_records:
         rows = []
-        for r in sorted(graded_records, key=lambda r: (r.get('at') or 0))[-60:]:
+        for r in sorted(graded_records, key=lambda r: r.get('at') or 0)[-60:]:
             rows.append(
                 [
                     _iso(r.get('at')),
@@ -1866,10 +1908,10 @@ def headline(results: list[dict], floor: float | None, audit: Audit, blocks: lis
             total = len(best['items'])
             lines += [
                 f"- **No system prompt differs from any other.** Cochran's Q "
-                f"= {best['q']:.3f} on {len(best['levels']) - 1} df, "
-                f"permutation p = {pv(best['p_perm'])}, over {total} items of "
-                f"which **{varied} vary at all**. The comparison rests on "
-                f"those {varied} items and nothing else."
+                f'= {best["q"]:.3f} on {len(best["levels"]) - 1} df, '
+                f'permutation p = {pv(best["p_perm"])}, over {total} items of '
+                f'which **{varied} vary at all**. The comparison rests on '
+                f'those {varied} items and nothing else.'
             ]
     if floor is not None:
         lines += [
@@ -1959,7 +2001,7 @@ def _assemble(
     runs_by_id: dict[int, dict],
     schema_notes: list[dict],
     filters: dict,
-    figs: 'Figures',
+    figs: Figures,
 ) -> ReportResult:
     """The sync compute-and-render phase: pure given what _fetch() returned.
 
@@ -1974,7 +2016,7 @@ def _assemble(
     reliability, floor = section_reliability(records)
     accuracy, section_results = section_accuracy(blocks, figs, audit)
 
-    now = dt.datetime.now(dt.timezone.utc).strftime(TS)
+    now = dt.datetime.now(dt.UTC).strftime(TS)
     used = ', '.join(f'{k}={v}' for k, v in filters.items() if v) or 'none'
     head = [
         f'# Measurement report - {now}',

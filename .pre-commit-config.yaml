@@ -1,0 +1,43 @@
+# Local guard rails, run on every `git commit` once installed:
+#
+#   uv tool install pre-commit && pre-commit install
+#
+# Run against everything with `pre-commit run --all-files`. CI
+# (.github/workflows/ci.yml) re-runs the ruff checks, so a skipped hook
+# (`git commit --no-verify`) is still caught before merge.
+#
+# Ruff covers only the backend code this repo owns (benchmarks/ and tests/).
+# The rest of apps/server/backend/open_webui/ is upstream Open WebUI, with
+# thousands of pre-existing findings; linting it would block every commit
+# that touches one of its files.
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c # v6.0.0
+    hooks:
+      # Commit on a branch and open a PR; the ruleset blocks pushing to main
+      # anyway, this just says so before the commit instead of after.
+      - id: no-commit-to-branch
+        args: [--branch, main]
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: detect-private-key
+      - id: check-yaml
+      - id: check-toml
+
+  # Scans the staged diff for API keys, tokens and passwords
+  # (infra/.env holds real ones and must never be committed).
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e # v8.30.1
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: f12be1ebaa5351c1fc76472de98db2c3446c8253 # v0.16.10
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+        files: ^apps/server/backend/(open_webui/benchmarks|tests)/
+      - id: ruff-format
+        files: ^apps/server/backend/(open_webui/benchmarks|tests)/
