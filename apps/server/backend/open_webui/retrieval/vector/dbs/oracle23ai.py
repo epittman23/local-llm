@@ -31,12 +31,11 @@ ORACLE_DB_POOL_INCREMENT = 1
 import array
 import json
 import logging
-import os
 import re
 import threading
 import time
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
 import oracledb
 from open_webui.config import (
@@ -47,7 +46,6 @@ from open_webui.config import (
     ORACLE_DB_POOL_MIN,
     ORACLE_DB_USE_WALLET,
     ORACLE_DB_USER,
-    ORACLE_VECTOR_LENGTH,
     ORACLE_WALLET_DIR,
     ORACLE_WALLET_PASSWORD,
 )
@@ -64,7 +62,7 @@ log = logging.getLogger(__name__)
 _SAFE_METADATA_KEY_RE = re.compile(r'^[A-Za-z_][A-Za-z0-9_]{0,63}$')
 
 
-def _metadata_where(filter: Optional[dict]) -> tuple[str, dict[str, Any]]:
+def _metadata_where(filter: dict | None) -> tuple[str, dict[str, Any]]:
     clause = ''
     params: dict[str, Any] = {}
     for i, (key, op, value) in enumerate(iter_filter_conditions(filter)):
@@ -349,7 +347,7 @@ class Oracle23aiClient(VectorDBBase):
         """
         pass
 
-    def _vector_to_blob(self, vector: List[float]) -> bytes:
+    def _vector_to_blob(self, vector: list[float]) -> bytes:
         """
         Convert a vector to Oracle BLOB format.
 
@@ -361,7 +359,7 @@ class Oracle23aiClient(VectorDBBase):
         """
         return array.array('f', vector)
 
-    def adjust_vector_length(self, vector: List[float]) -> List[float]:
+    def adjust_vector_length(self, vector: list[float]) -> list[float]:
         """
         Adjust vector to the expected length if needed.
 
@@ -390,7 +388,7 @@ class Oracle23aiClient(VectorDBBase):
             return float(obj)
         raise TypeError(f'{obj} is not JSON serializable')
 
-    def _metadata_to_json(self, metadata: Dict) -> str:
+    def _metadata_to_json(self, metadata: dict) -> str:
         """
         Convert metadata dictionary to JSON string.
 
@@ -402,7 +400,7 @@ class Oracle23aiClient(VectorDBBase):
         """
         return json.dumps(metadata, default=self._decimal_handler) if metadata else '{}'
 
-    def _json_to_metadata(self, json_str: str) -> Dict:
+    def _json_to_metadata(self, json_str: str) -> dict:
         """
         Convert JSON string to metadata dictionary.
 
@@ -414,7 +412,7 @@ class Oracle23aiClient(VectorDBBase):
         """
         return JSONCodec.loads(json_str) if json_str else {}
 
-    def insert(self, collection_name: str, items: List[VectorItem]) -> None:
+    def insert(self, collection_name: str, items: list[VectorItem]) -> None:
         """
         Insert vector items into the database.
 
@@ -465,7 +463,7 @@ class Oracle23aiClient(VectorDBBase):
                 log.exception(f'Error during insert: {e}')
                 raise
 
-    def upsert(self, collection_name: str, items: List[VectorItem]) -> None:
+    def upsert(self, collection_name: str, items: list[VectorItem]) -> None:
         """
         Update or insert vector items into the database.
 
@@ -536,10 +534,10 @@ class Oracle23aiClient(VectorDBBase):
     def search(
         self,
         collection_name: str,
-        vectors: List[List[Union[float, int]]],
-        filter: Optional[dict] = None,
+        vectors: list[list[float | int]],
+        filter: dict | None = None,
         limit: int = 10,
-    ) -> Optional[SearchResult]:
+    ) -> SearchResult | None:
         """
         Search for similar vectors in the database.
 
@@ -618,7 +616,7 @@ class Oracle23aiClient(VectorDBBase):
             log.exception(f'Error during search: {e}')
             return None
 
-    def query(self, collection_name: str, filter: Dict, limit: Optional[int] = None) -> Optional[GetResult]:
+    def query(self, collection_name: str, filter: dict, limit: int | None = None) -> GetResult | None:
         """
         Query items based on metadata filters.
 
@@ -687,7 +685,7 @@ class Oracle23aiClient(VectorDBBase):
             log.exception(f'Error during query: {e}')
             return None
 
-    def get(self, collection_name: str) -> Optional[GetResult]:
+    def get(self, collection_name: str) -> GetResult | None:
         """
         Get all items in a collection.
 
@@ -747,8 +745,8 @@ class Oracle23aiClient(VectorDBBase):
     def delete(
         self,
         collection_name: str,
-        ids: Optional[List[str]] = None,
-        filter: Optional[Dict[str, Any]] = None,
+        ids: list[str] | None = None,
+        filter: dict[str, Any] | None = None,
     ) -> None:
         """
         Delete items from the database.

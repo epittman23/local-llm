@@ -1,6 +1,5 @@
 import logging
 import time
-from typing import Optional
 
 from open_webui.internal.db import Base, get_async_db_context
 from pydantic import BaseModel, ConfigDict
@@ -58,24 +57,24 @@ class BenchmarkRequest(Base):
 
 class BenchmarkRequestModel(BaseModel):
     request_id: int
-    run_id: Optional[int] = None
+    run_id: int | None = None
     at: int
-    model: Optional[str] = None
-    label: Optional[str] = None
-    wall_ms: Optional[float] = None
-    params: Optional[dict] = None
-    cache_n: Optional[int] = None
-    prompt_n: Optional[int] = None
-    prompt_ms: Optional[float] = None
-    prompt_per_token_ms: Optional[float] = None
-    prompt_per_second: Optional[float] = None
-    predicted_n: Optional[int] = None
-    predicted_ms: Optional[float] = None
-    predicted_per_token_ms: Optional[float] = None
-    predicted_per_second: Optional[float] = None
-    draft_n: Optional[int] = None
-    draft_n_accepted: Optional[int] = None
-    timings: Optional[dict] = None
+    model: str | None = None
+    label: str | None = None
+    wall_ms: float | None = None
+    params: dict | None = None
+    cache_n: int | None = None
+    prompt_n: int | None = None
+    prompt_ms: float | None = None
+    prompt_per_token_ms: float | None = None
+    prompt_per_second: float | None = None
+    predicted_n: int | None = None
+    predicted_ms: float | None = None
+    predicted_per_token_ms: float | None = None
+    predicted_per_second: float | None = None
+    draft_n: int | None = None
+    draft_n_accepted: int | None = None
+    timings: dict | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -124,12 +123,12 @@ class BenchmarkResult(Base):
 class BenchmarkResultModel(BaseModel):
     result_id: int
     suite_run_id: str
-    run_id: Optional[int] = None
-    request_id: Optional[int] = None
-    config_id: Optional[str] = None
+    run_id: int | None = None
+    request_id: int | None = None
+    config_id: str | None = None
     at: int
     model: str
-    profile: Optional[str] = None
+    profile: str | None = None
     benchmark: str
     item_id: str
     dataset_revision: str
@@ -137,13 +136,13 @@ class BenchmarkResultModel(BaseModel):
     seed: int
     outcome: str
     reason: str = ''
-    reasoning_chars: Optional[int] = None
-    wall_ms: Optional[float] = None
-    params: Optional[dict] = None
-    timings: Optional[dict] = None
-    system_name: Optional[str] = None
-    system_sha: Optional[str] = None
-    adapter_sha: Optional[str] = None
+    reasoning_chars: int | None = None
+    wall_ms: float | None = None
+    params: dict | None = None
+    timings: dict | None = None
+    system_name: str | None = None
+    system_sha: str | None = None
+    adapter_sha: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -204,15 +203,15 @@ class BenchmarkSchemaNoteModel(BaseModel):
 class BenchmarkRequestTable:
     async def add_request(
         self,
-        run_id: Optional[int],
+        run_id: int | None,
         *,
         at: int,
         model: str,
         label: str,
-        wall_ms: Optional[float],
+        wall_ms: float | None,
         params: dict,
         timings: dict,
-        db: Optional[AsyncSession] = None,
+        db: AsyncSession | None = None,
     ) -> int:
         timing_keys = [
             'cache_n',
@@ -243,7 +242,7 @@ class BenchmarkRequestTable:
             await db.refresh(row)
             return row.request_id
 
-    async def get_run_request_aggregate(self, run_id: int, db: Optional[AsyncSession] = None) -> Optional[dict]:
+    async def get_run_request_aggregate(self, run_id: int, db: AsyncSession | None = None) -> dict | None:
         """Per-run request totals: cold/warm counts and summed cold-prefill/gen/draft figures.
 
         Added for benchmarks/compare.py's serving_summary(), which replaces
@@ -279,7 +278,7 @@ class BenchmarkRequestTable:
 
 
 class BenchmarkResultTable:
-    async def add_result(self, record: dict, answer: Optional[dict] = None, db: Optional[AsyncSession] = None) -> int:
+    async def add_result(self, record: dict, answer: dict | None = None, db: AsyncSession | None = None) -> int:
         """One graded item, and its request and answer, in one transaction.
 
         Committed per item, not per suite: a `full` run is many hours and
@@ -372,11 +371,11 @@ class BenchmarkResultTable:
     async def list_results(
         self,
         *,
-        tier: Optional[str] = None,
-        model: Optional[str] = None,
-        suite_run_id: Optional[str] = None,
-        outcome_in: Optional[list[str]] = None,
-        db: Optional[AsyncSession] = None,
+        tier: str | None = None,
+        model: str | None = None,
+        suite_run_id: str | None = None,
+        outcome_in: list[str] | None = None,
+        db: AsyncSession | None = None,
     ) -> list[BenchmarkResultModel]:
         async with get_async_db_context(db) as db:
             query = select(BenchmarkResult)
@@ -392,7 +391,7 @@ class BenchmarkResultTable:
             result = await db.execute(query)
             return [BenchmarkResultModel.model_validate(row) for row in result.scalars().all()]
 
-    async def completed(self, suite_run_id: str, db: Optional[AsyncSession] = None) -> set[tuple[str, str]]:
+    async def completed(self, suite_run_id: str, db: AsyncSession | None = None) -> set[tuple[str, str]]:
         async with get_async_db_context(db) as db:
             result = await db.execute(
                 select(BenchmarkResult.benchmark, BenchmarkResult.item_id).filter_by(suite_run_id=suite_run_id)
@@ -400,8 +399,8 @@ class BenchmarkResultTable:
             return {(row.benchmark, row.item_id) for row in result.all()}
 
     async def latest_suite_run(
-        self, *, model: Optional[str] = None, tier: Optional[str] = None, db: Optional[AsyncSession] = None
-    ) -> Optional[str]:
+        self, *, model: str | None = None, tier: str | None = None, db: AsyncSession | None = None
+    ) -> str | None:
         async with get_async_db_context(db) as db:
             query = select(BenchmarkResult.suite_run_id)
             if model:
@@ -413,7 +412,7 @@ class BenchmarkResultTable:
             row = result.scalars().first()
             return row
 
-    async def suite_runs(self, limit: int = 20, db: Optional[AsyncSession] = None) -> list[dict]:
+    async def suite_runs(self, limit: int = 20, db: AsyncSession | None = None) -> list[dict]:
         """Recent suite runs, newest first, with what each of them scored.
 
         `skipped` is left out of the denominator: an item nobody attempted
@@ -439,7 +438,7 @@ class BenchmarkResultTable:
             result = await db.execute(query)
             return [dict(row._mapping) for row in result.all()]
 
-    async def get_pass_rate_by_group(self, db: Optional[AsyncSession] = None) -> list[dict]:
+    async def get_pass_rate_by_group(self, db: AsyncSession | None = None) -> list[dict]:
         """(model, config_id, tier, benchmark, system_sha, adapter_sha) -> pass rate.
 
         Replaces sqlite's v_pass_rate view -- a plain Python-side query
@@ -484,9 +483,9 @@ class BenchmarkAnswerTable:
         self,
         benchmark: str,
         item_id: str,
-        suite_run_id: Optional[str] = None,
-        db: Optional[AsyncSession] = None,
-    ) -> Optional[dict]:
+        suite_run_id: str | None = None,
+        db: AsyncSession | None = None,
+    ) -> dict | None:
         async with get_async_db_context(db) as db:
             query = (
                 select(BenchmarkResult, BenchmarkAnswer)
@@ -507,7 +506,7 @@ class BenchmarkAnswerTable:
 
 
 class BenchmarkSuiteExclusionTable:
-    async def record_exclusions(self, rows: list[dict], db: Optional[AsyncSession] = None) -> int:
+    async def record_exclusions(self, rows: list[dict], db: AsyncSession | None = None) -> int:
         stamp = int(time.time())
         async with get_async_db_context(db) as db:
             for r in rows:
@@ -531,7 +530,7 @@ class BenchmarkSuiteExclusionTable:
             await db.commit()
             return len(rows)
 
-    async def list_all(self, db: Optional[AsyncSession] = None) -> list[BenchmarkSuiteExclusionModel]:
+    async def list_all(self, db: AsyncSession | None = None) -> list[BenchmarkSuiteExclusionModel]:
         async with get_async_db_context(db) as db:
             result = await db.execute(
                 select(BenchmarkSuiteExclusion).order_by(
@@ -542,14 +541,14 @@ class BenchmarkSuiteExclusionTable:
 
 
 class BenchmarkSchemaNoteTable:
-    async def add_note(self, noted_on: str, note: str, db: Optional[AsyncSession] = None) -> None:
+    async def add_note(self, noted_on: str, note: str, db: AsyncSession | None = None) -> None:
         async with get_async_db_context(db) as db:
             stmt = pg_insert(BenchmarkSchemaNote).values(noted_on=noted_on, note=note)
             stmt = stmt.on_conflict_do_nothing(index_elements=['note'])
             await db.execute(stmt)
             await db.commit()
 
-    async def list_notes(self, db: Optional[AsyncSession] = None) -> list[BenchmarkSchemaNoteModel]:
+    async def list_notes(self, db: AsyncSession | None = None) -> list[BenchmarkSchemaNoteModel]:
         async with get_async_db_context(db) as db:
             result = await db.execute(select(BenchmarkSchemaNote).order_by(BenchmarkSchemaNote.note_id))
             return [BenchmarkSchemaNoteModel.model_validate(row) for row in result.scalars().all()]

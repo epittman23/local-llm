@@ -30,13 +30,12 @@ Create Date: 2026-09-14
 """
 
 import time
-from typing import Union
 
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = '5a1f0c3e9b27'
-down_revision: Union[str, None] = 'b3f8a1d94e70'
+down_revision: str | None = 'b3f8a1d94e70'
 branch_labels = None
 depends_on = None
 

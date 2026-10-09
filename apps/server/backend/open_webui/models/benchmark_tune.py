@@ -1,7 +1,6 @@
 import logging
 import time
 import uuid
-from typing import Optional
 
 from open_webui.internal.db import Base, get_async_db_context
 from pydantic import BaseModel, ConfigDict
@@ -14,7 +13,6 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
-    PrimaryKeyConstraint,
     Text,
     UniqueConstraint,
     select,
@@ -90,21 +88,21 @@ class BenchmarkTuneSweep(Base):
 class BenchmarkTuneSweepModel(BaseModel):
     sweep_id: str
     started_at: int
-    ended_at: Optional[int] = None
-    ended_reason: Optional[str] = None
-    pid: Optional[int] = None
+    ended_at: int | None = None
+    ended_reason: str | None = None
+    pid: int | None = None
     profile: str
     tier: str
-    benchmark: Optional[str] = None
-    system_name: Optional[str] = None
-    system_sha: Optional[str] = None
+    benchmark: str | None = None
+    system_name: str | None = None
+    system_sha: str | None = None
     grid_path: str
     grid_sha: str
     item_order_sha: str
     item_count: int
     budget_mode: str
-    budget_seconds: Optional[int] = None
-    budget_visits: Optional[int] = None
+    budget_seconds: int | None = None
+    budget_visits: int | None = None
     eta: int
     round_items: int
     candidates: int
@@ -113,9 +111,9 @@ class BenchmarkTuneSweepModel(BaseModel):
     alpha: float
     on_drift: str
     seed: int
-    baseline_config_id: Optional[str] = None
-    winner_candidate: Optional[str] = None
-    verdict: Optional[str] = None
+    baseline_config_id: str | None = None
+    winner_candidate: str | None = None
+    verdict: str | None = None
     verdict_reason: str = ''
 
     model_config = ConfigDict(from_attributes=True)
@@ -144,12 +142,12 @@ class BenchmarkTuneCandidateModel(BaseModel):
     stage: str
     overrides: dict
     is_baseline: bool = False
-    config_id: Optional[str] = None
+    config_id: str | None = None
     suite_run_id: str
     status: str
     status_reason: str = ''
-    score: Optional[float] = None
-    eliminated_round: Optional[int] = None
+    score: float | None = None
+    eliminated_round: int | None = None
     created_at: int
 
     model_config = ConfigDict(from_attributes=True)
@@ -177,13 +175,13 @@ class BenchmarkTuneRoundModel(BaseModel):
     round: int
     stage: str
     started_at: int
-    ended_at: Optional[int] = None
+    ended_at: int | None = None
     item_from: int
     item_to: int
     survivors: int
-    baseline_gen_tps: Optional[float] = None
-    baseline_regime: Optional[str] = None
-    drift_ratio: Optional[float] = None
+    baseline_gen_tps: float | None = None
+    baseline_regime: str | None = None
+    drift_ratio: float | None = None
     decision: str = ''
     notes: str = ''
 
@@ -222,16 +220,16 @@ class BenchmarkTuneVisitModel(BaseModel):
     candidate_sha: str
     round: int
     attempt: int = 1
-    run_id: Optional[int] = None
-    config_id: Optional[str] = None
+    run_id: int | None = None
+    config_id: str | None = None
     started_at: int
-    ended_at: Optional[int] = None
-    server_pgid: Optional[int] = None
-    load_ms: Optional[float] = None
+    ended_at: int | None = None
+    server_pgid: int | None = None
+    load_ms: float | None = None
     item_from: int
     item_to: int
     items_done: int = 0
-    since_pause_seconds: Optional[float] = None
+    since_pause_seconds: float | None = None
     counts_toward_round: bool = True
     status: str
     reason: str = ''
@@ -269,27 +267,27 @@ class BenchmarkTunePause(Base):
 class BenchmarkTunePauseModel(BaseModel):
     pause_id: int
     sweep_id: str
-    round: Optional[int] = None
-    visit_id: Optional[int] = None
+    round: int | None = None
+    visit_id: int | None = None
     started_at: int
-    ended_at: Optional[int] = None
+    ended_at: int | None = None
     trigger_kind: str
-    drift_ratio: Optional[float] = None
+    drift_ratio: float | None = None
     attempt: int = 1
-    throttle_before: Optional[str] = None
-    throttle_after: Optional[str] = None
-    temp_before: Optional[float] = None
-    temp_after: Optional[float] = None
-    power_before: Optional[float] = None
-    power_after: Optional[float] = None
-    probe_tps: Optional[float] = None
-    resolution: Optional[str] = None
+    throttle_before: str | None = None
+    throttle_after: str | None = None
+    temp_before: float | None = None
+    temp_after: float | None = None
+    power_before: float | None = None
+    power_after: float | None = None
+    probe_tps: float | None = None
+    resolution: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class BenchmarkTuneSweepTable:
-    async def open_sweep(self, sweep_id: Optional[str] = None, db: Optional[AsyncSession] = None, **fields) -> str:
+    async def open_sweep(self, sweep_id: str | None = None, db: AsyncSession | None = None, **fields) -> str:
         sweep_id = sweep_id or f'{int(time.time())}-{uuid.uuid4().hex[:6]}'
         async with get_async_db_context(db) as db:
             row = BenchmarkTuneSweep(
@@ -304,10 +302,10 @@ class BenchmarkTuneSweepTable:
         sweep_id: str,
         *,
         reason: str,
-        verdict: Optional[str] = None,
-        winner: Optional[str] = None,
+        verdict: str | None = None,
+        winner: str | None = None,
         verdict_reason: str = '',
-        db: Optional[AsyncSession] = None,
+        db: AsyncSession | None = None,
     ) -> None:
         """Record how a sweep's invocation ended.
 
@@ -327,20 +325,20 @@ class BenchmarkTuneSweepTable:
                 row.verdict_reason = verdict_reason
                 await db.commit()
 
-    async def get_by_id(self, sweep_id: str, db: Optional[AsyncSession] = None) -> Optional[BenchmarkTuneSweepModel]:
+    async def get_by_id(self, sweep_id: str, db: AsyncSession | None = None) -> BenchmarkTuneSweepModel | None:
         async with get_async_db_context(db) as db:
             result = await db.execute(select(BenchmarkTuneSweep).filter_by(sweep_id=sweep_id))
             row = result.scalars().first()
             return BenchmarkTuneSweepModel.model_validate(row) if row else None
 
-    async def list_sweeps(self, limit: int = 20, db: Optional[AsyncSession] = None) -> list[BenchmarkTuneSweepModel]:
+    async def list_sweeps(self, limit: int = 20, db: AsyncSession | None = None) -> list[BenchmarkTuneSweepModel]:
         async with get_async_db_context(db) as db:
             result = await db.execute(
                 select(BenchmarkTuneSweep).order_by(BenchmarkTuneSweep.started_at.desc()).limit(limit)
             )
             return [BenchmarkTuneSweepModel.model_validate(row) for row in result.scalars().all()]
 
-    async def latest_sweep(self, *, open_only: bool = False, db: Optional[AsyncSession] = None) -> Optional[str]:
+    async def latest_sweep(self, *, open_only: bool = False, db: AsyncSession | None = None) -> str | None:
         async with get_async_db_context(db) as db:
             query = select(BenchmarkTuneSweep.sweep_id)
             if open_only:
@@ -353,7 +351,7 @@ class BenchmarkTuneSweepTable:
 
 
 class BenchmarkTuneCandidateTable:
-    async def add_candidates(self, sweep_id: str, rows: list[dict], db: Optional[AsyncSession] = None) -> int:
+    async def add_candidates(self, sweep_id: str, rows: list[dict], db: AsyncSession | None = None) -> int:
         added = 0
         async with get_async_db_context(db) as db:
             for r in rows:
@@ -374,9 +372,7 @@ class BenchmarkTuneCandidateTable:
             await db.commit()
             return added
 
-    async def set_candidate(
-        self, sweep_id: str, candidate_sha: str, db: Optional[AsyncSession] = None, **fields
-    ) -> None:
+    async def set_candidate(self, sweep_id: str, candidate_sha: str, db: AsyncSession | None = None, **fields) -> None:
         allowed = ('status', 'status_reason', 'config_id', 'score', 'eliminated_round', 'stage')
         sets = {k: v for k, v in fields.items() if k in allowed}
         if not sets:
@@ -392,7 +388,7 @@ class BenchmarkTuneCandidateTable:
                 await db.commit()
 
     async def sweep_candidates(
-        self, sweep_id: str, *, stage: Optional[str] = None, db: Optional[AsyncSession] = None
+        self, sweep_id: str, *, stage: str | None = None, db: AsyncSession | None = None
     ) -> list[BenchmarkTuneCandidateModel]:
         async with get_async_db_context(db) as db:
             query = select(BenchmarkTuneCandidate).filter_by(sweep_id=sweep_id)
@@ -417,7 +413,7 @@ class BenchmarkTuneRoundTable:
         item_from: int,
         item_to: int,
         survivors: int,
-        db: Optional[AsyncSession] = None,
+        db: AsyncSession | None = None,
     ) -> None:
         async with get_async_db_context(db) as db:
             stmt = pg_insert(BenchmarkTuneRound).values(
@@ -433,7 +429,7 @@ class BenchmarkTuneRoundTable:
             await db.execute(stmt)
             await db.commit()
 
-    async def close_round(self, sweep_id: str, rnd: int, db: Optional[AsyncSession] = None, **fields) -> None:
+    async def close_round(self, sweep_id: str, rnd: int, db: AsyncSession | None = None, **fields) -> None:
         allowed = ('baseline_gen_tps', 'baseline_regime', 'drift_ratio', 'decision', 'notes', 'survivors')
         sets = {k: v for k, v in fields.items() if k in allowed}
         async with get_async_db_context(db) as db:
@@ -445,7 +441,7 @@ class BenchmarkTuneRoundTable:
                 row.ended_at = int(time.time())
                 await db.commit()
 
-    async def sweep_rounds(self, sweep_id: str, db: Optional[AsyncSession] = None) -> list[BenchmarkTuneRoundModel]:
+    async def sweep_rounds(self, sweep_id: str, db: AsyncSession | None = None) -> list[BenchmarkTuneRoundModel]:
         async with get_async_db_context(db) as db:
             result = await db.execute(
                 select(BenchmarkTuneRound).filter_by(sweep_id=sweep_id).order_by(BenchmarkTuneRound.round)
@@ -463,8 +459,8 @@ class BenchmarkTuneVisitTable:
         attempt: int = 1,
         item_from: int,
         item_to: int,
-        since_pause_seconds: Optional[float] = None,
-        db: Optional[AsyncSession] = None,
+        since_pause_seconds: float | None = None,
+        db: AsyncSession | None = None,
     ) -> int:
         async with get_async_db_context(db) as db:
             row = BenchmarkTuneVisit(
@@ -483,7 +479,7 @@ class BenchmarkTuneVisitTable:
             await db.refresh(row)
             return row.visit_id
 
-    async def close_visit(self, visit_id: int, *, status: str, db: Optional[AsyncSession] = None, **fields) -> None:
+    async def close_visit(self, visit_id: int, *, status: str, db: AsyncSession | None = None, **fields) -> None:
         allowed = ('run_id', 'config_id', 'server_pgid', 'load_ms', 'items_done', 'counts_toward_round', 'reason')
         sets = {k: v for k, v in fields.items() if k in allowed}
         async with get_async_db_context(db) as db:
@@ -496,7 +492,7 @@ class BenchmarkTuneVisitTable:
                 row.ended_at = int(time.time())
                 await db.commit()
 
-    async def set_visit(self, visit_id: int, db: Optional[AsyncSession] = None, **fields) -> None:
+    async def set_visit(self, visit_id: int, db: AsyncSession | None = None, **fields) -> None:
         """Update a visit that is still running (the pgid and run_id land early)."""
         allowed = ('run_id', 'config_id', 'server_pgid', 'load_ms', 'items_done', 'counts_toward_round', 'reason')
         sets = {k: v for k, v in fields.items() if k in allowed}
@@ -511,7 +507,7 @@ class BenchmarkTuneVisitTable:
                 await db.commit()
 
     async def sweep_visits(
-        self, sweep_id: str, *, rnd: Optional[int] = None, db: Optional[AsyncSession] = None
+        self, sweep_id: str, *, rnd: int | None = None, db: AsyncSession | None = None
     ) -> list[BenchmarkTuneVisitModel]:
         async with get_async_db_context(db) as db:
             query = select(BenchmarkTuneVisit).filter_by(sweep_id=sweep_id)
@@ -528,14 +524,14 @@ class BenchmarkTunePauseTable:
         sweep_id: str,
         *,
         trigger: str,
-        rnd: Optional[int] = None,
-        visit_id: Optional[int] = None,
+        rnd: int | None = None,
+        visit_id: int | None = None,
         attempt: int = 1,
-        drift_ratio: Optional[float] = None,
-        throttle_before: Optional[str] = None,
-        temp_before: Optional[float] = None,
-        power_before: Optional[float] = None,
-        db: Optional[AsyncSession] = None,
+        drift_ratio: float | None = None,
+        throttle_before: str | None = None,
+        temp_before: float | None = None,
+        power_before: float | None = None,
+        db: AsyncSession | None = None,
     ) -> int:
         async with get_async_db_context(db) as db:
             row = BenchmarkTunePause(
@@ -555,7 +551,7 @@ class BenchmarkTunePauseTable:
             await db.refresh(row)
             return row.pause_id
 
-    async def close_pause(self, pause_id: int, *, resolution: str, db: Optional[AsyncSession] = None, **fields) -> None:
+    async def close_pause(self, pause_id: int, *, resolution: str, db: AsyncSession | None = None, **fields) -> None:
         allowed = ('throttle_after', 'temp_after', 'power_after', 'probe_tps')
         sets = {k: v for k, v in fields.items() if k in allowed}
         async with get_async_db_context(db) as db:
@@ -568,7 +564,7 @@ class BenchmarkTunePauseTable:
                 row.ended_at = int(time.time())
                 await db.commit()
 
-    async def sweep_pauses(self, sweep_id: str, db: Optional[AsyncSession] = None) -> list[dict]:
+    async def sweep_pauses(self, sweep_id: str, db: AsyncSession | None = None) -> list[dict]:
         """Replaces sqlite's v_tune_pause view (adds `seconds` + `interrupted_candidate`)."""
         async with get_async_db_context(db) as db:
             result = await db.execute(

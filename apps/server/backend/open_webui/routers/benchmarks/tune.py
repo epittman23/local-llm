@@ -24,12 +24,11 @@ import logging
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict
-
 from open_webui.benchmarks import tune
 from open_webui.benchmarks.tune_schedule import GRID_DIR, TuneRefused
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.utils.auth import get_admin_user
+from pydantic import BaseModel, ConfigDict
 
 log = logging.getLogger(__name__)
 
@@ -77,7 +76,7 @@ class TuneStartForm(BaseModel):
 
     model_config = ConfigDict(extra='forbid')
 
-    def to_options(self, **overrides) -> 'tune.SweepOptions':
+    def to_options(self, **overrides) -> tune.SweepOptions:
         return tune.SweepOptions(**{**self.model_dump(), **overrides})
 
 

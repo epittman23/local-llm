@@ -1,6 +1,5 @@
 import logging
 import os
-from typing import Iterator, List, Union
 from urllib.parse import quote
 
 import requests
@@ -35,7 +34,7 @@ class ExternalDocumentLoader(BaseLoader):
         self.headers = headers
         self.metadata = metadata
 
-    def load(self) -> List[Document]:
+    def load(self) -> list[Document]:
         with open(self.file_path, 'rb') as f:
             data = f.read()
 

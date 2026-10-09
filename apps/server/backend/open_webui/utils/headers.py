@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import quote
 
 import jwt
@@ -47,7 +47,7 @@ def _mint_forward_user_jwt(user: Any) -> str:
     return jwt.encode(payload, FORWARD_USER_INFO_HEADER_JWT_SECRET, algorithm='HS256')
 
 
-def include_user_info_headers(headers: dict, user: Optional[Any] = None) -> dict:
+def include_user_info_headers(headers: dict, user: Any | None = None) -> dict:
     """
     Forward user identity to external backends: signed JWT in
     FORWARD_USER_INFO_HEADER_JWT if FORWARD_USER_INFO_HEADER_JWT_SECRET is set;
@@ -75,7 +75,7 @@ def include_user_info_headers(headers: dict, user: Optional[Any] = None) -> dict
     }
 
 
-def custom_headers_require_user_groups(custom_headers: Optional[dict]) -> bool:
+def custom_headers_require_user_groups(custom_headers: dict | None) -> bool:
     if not custom_headers or not isinstance(custom_headers, dict):
         return False
     return any(
@@ -83,9 +83,7 @@ def custom_headers_require_user_groups(custom_headers: Optional[dict]) -> bool:
     )
 
 
-async def get_user_groups_for_custom_headers(
-    custom_headers: Optional[dict], user: Optional[Any] = None
-) -> Optional[list]:
+async def get_user_groups_for_custom_headers(custom_headers: dict | None, user: Any | None = None) -> list | None:
     """Fetch the user's groups only when a header value actually references a groups placeholder."""
     if user is None or not custom_headers_require_user_groups(custom_headers):
         return None
@@ -103,7 +101,7 @@ async def get_custom_headers(custom_headers: dict, user=None, metadata: dict = N
 
 
 def parse_custom_headers(
-    custom_headers: dict, user=None, metadata: dict = None, request=None, user_groups: Optional[list] = None
+    custom_headers: dict, user=None, metadata: dict = None, request=None, user_groups: list | None = None
 ) -> dict:
     if not custom_headers or not isinstance(custom_headers, dict):
         return {}

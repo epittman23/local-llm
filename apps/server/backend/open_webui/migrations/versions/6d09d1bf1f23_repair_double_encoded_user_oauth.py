@@ -7,18 +7,16 @@ Create Date: 2026-08-10 23:20:20.374826
 """
 
 import json
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
-import open_webui.internal.db
-
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = '6d09d1bf1f23'
-down_revision: Union[str, None] = '1ce6ade7d93b'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = '1ce6ade7d93b'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 _user = sa.table(

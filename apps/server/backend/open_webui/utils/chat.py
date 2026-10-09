@@ -2,15 +2,12 @@ import asyncio
 import logging
 import random
 import sys
-import time
 import uuid
-from typing import Any, Optional
+from typing import Any
 
-from aiocache import cached
-from fastapi import HTTPException, Request, status
+from fastapi import HTTPException, Request
 from open_webui.env import BYPASS_MODEL_ACCESS_CONTROL, GLOBAL_LOG_LEVEL
 from open_webui.functions import generate_function_chat_completion
-from open_webui.models.models import Models
 from open_webui.models.users import UserModel
 from open_webui.routers.ollama import (
     generate_chat_completion as generate_ollama_chat_completion,
@@ -19,7 +16,6 @@ from open_webui.routers.openai import (
     generate_chat_completion as generate_openai_chat_completion,
 )
 from open_webui.routers.pipelines import (
-    process_pipeline_inlet_filter,
     process_pipeline_outlet_filter,
 )
 from open_webui.socket.main import (
@@ -38,7 +34,7 @@ from open_webui.utils.response import (
     convert_response_ollama_to_openai,
     convert_streaming_response_ollama_to_openai,
 )
-from starlette.responses import JSONResponse, Response, StreamingResponse
+from starlette.responses import StreamingResponse
 
 logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
 log = logging.getLogger(__name__)
@@ -122,7 +118,7 @@ async def generate_direct_chat_completion(
             async def background():
                 try:
                     del sio.handlers['/'][channel]
-                except Exception as e:
+                except Exception:
                     pass
 
             # Return the streaming response

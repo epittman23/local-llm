@@ -1,6 +1,5 @@
 import logging
 import time
-from typing import Optional
 
 from open_webui.internal.db import Base, get_async_db_context
 from pydantic import BaseModel, ConfigDict
@@ -40,13 +39,13 @@ class BenchmarkGpuSampleModel(BaseModel):
     sample_id: int
     run_id: int
     at: int
-    temp_c: Optional[int] = None
-    util_pct: Optional[int] = None
-    mem_used_mib: Optional[int] = None
-    mem_total_mib: Optional[int] = None
-    power_w: Optional[float] = None
-    sm_mhz: Optional[int] = None
-    throttle: Optional[int] = None
+    temp_c: int | None = None
+    util_pct: int | None = None
+    mem_used_mib: int | None = None
+    mem_total_mib: int | None = None
+    power_w: float | None = None
+    sm_mhz: int | None = None
+    throttle: int | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -69,7 +68,7 @@ class BenchmarkMetricsScrapeModel(BaseModel):
 
 
 class BenchmarkGpuSampleTable:
-    async def add_sample(self, run_id: int, sample: dict, db: Optional[AsyncSession] = None) -> None:
+    async def add_sample(self, run_id: int, sample: dict, db: AsyncSession | None = None) -> None:
         async with get_async_db_context(db) as db:
             db.add(
                 BenchmarkGpuSample(
@@ -86,14 +85,14 @@ class BenchmarkGpuSampleTable:
             )
             await db.commit()
 
-    async def list_samples(self, run_id: int, db: Optional[AsyncSession] = None) -> list[BenchmarkGpuSampleModel]:
+    async def list_samples(self, run_id: int, db: AsyncSession | None = None) -> list[BenchmarkGpuSampleModel]:
         async with get_async_db_context(db) as db:
             result = await db.execute(
                 select(BenchmarkGpuSample).filter_by(run_id=run_id).order_by(BenchmarkGpuSample.at)
             )
             return [BenchmarkGpuSampleModel.model_validate(row) for row in result.scalars().all()]
 
-    async def get_run_aggregates(self, run_id: int, db: Optional[AsyncSession] = None) -> Optional[dict]:
+    async def get_run_aggregates(self, run_id: int, db: AsyncSession | None = None) -> dict | None:
         """Per-run GPU stat summary. Replaces sqlite's v_run_gpu view."""
         async with get_async_db_context(db) as db:
             result = await db.execute(
@@ -120,7 +119,7 @@ class BenchmarkGpuSampleTable:
 
 
 class BenchmarkMetricsScrapeTable:
-    async def add_metrics(self, run_id: int, at: int, values: dict, db: Optional[AsyncSession] = None) -> None:
+    async def add_metrics(self, run_id: int, at: int, values: dict, db: AsyncSession | None = None) -> None:
         """One /metrics scrape, stored whole rather than as a start/end pair.
 
         llama.cpp updates its prompt counters when a prompt is processed but
@@ -141,7 +140,7 @@ class BenchmarkMetricsScrapeTable:
                     db.add(BenchmarkMetricsScrape(run_id=run_id, at=at, counter=name, value=float(value)))
             await db.commit()
 
-    async def get_delta(self, run_id: int, db: Optional[AsyncSession] = None) -> dict[str, float]:
+    async def get_delta(self, run_id: int, db: AsyncSession | None = None) -> dict[str, float]:
         """Counters accumulated over the run: the last scrape minus the first.
 
         A counter that went backwards means the server restarted under the

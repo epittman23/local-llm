@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 
 from fastapi import APIRouter, Depends, HTTPException, status
-
 from open_webui.benchmarks import stats
 from open_webui.benchmarks.tune_probe import kill_pgid
 from open_webui.constants import ERROR_MESSAGES

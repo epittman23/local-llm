@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from functools import partialmethod
 from types import SimpleNamespace
-from typing import Literal, Optional
+from typing import Literal
 
 import aiohttp
 import jwt
@@ -84,8 +84,8 @@ from open_webui.models.users import Users
 from open_webui.retrieval.web.utils import get_ssrf_safe_session, validate_url
 from open_webui.utils.auth import (
     create_token,
-    get_password_hash,
     get_optional_verified_user_from_request,
+    get_password_hash,
     get_verified_user_by_id,
     revoke_user_tokens,
 )
@@ -108,8 +108,8 @@ OAuthResourceParameterMode = Literal['auto', 'include', 'omit']
 
 
 class OAuthClientInformationFull(OAuthClientMetadata):
-    issuer: Optional[str] = None  # URL of the OAuth server that issued this client
-    resource: Optional[str] = None  # RFC 8707 resource indicator for JWT audience
+    issuer: str | None = None  # URL of the OAuth server that issued this client
+    resource: str | None = None  # RFC 8707 resource indicator for JWT audience
     oauth_resource_parameter: OAuthResourceParameterMode = 'auto'
 
     client_id: str
@@ -117,7 +117,7 @@ class OAuthClientInformationFull(OAuthClientMetadata):
     client_id_issued_at: int | None = None
     client_secret_expires_at: int | None = None
 
-    server_metadata: Optional[OAuthMetadata] = None  # Fetched from the OAuth server
+    server_metadata: OAuthMetadata | None = None  # Fetched from the OAuth server
 
 
 from open_webui.env import GLOBAL_LOG_LEVEL
@@ -491,7 +491,7 @@ async def get_oauth_client_info_with_dynamic_client_registration(
     request,
     client_id: str,
     oauth_server_url: str,
-    oauth_server_key: Optional[str] = None,
+    oauth_server_key: str | None = None,
     oauth_scope: str | None = None,
 ) -> OAuthClientInformationFull:
     try:
@@ -616,7 +616,7 @@ async def get_oauth_client_info_with_dynamic_client_registration(
                         log.error(
                             f'Dynamic client registration failed at {registration_url}: {oauth_client_registration_response.status} - {error_text}'
                         )
-                    except Exception as e:
+                    except Exception:
                         pass
 
                     log.error(f'Error parsing client registration response: {e}')

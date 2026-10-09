@@ -7,7 +7,6 @@ import random
 import re
 import time
 from datetime import datetime
-from typing import Optional, Union
 from urllib.parse import urlparse
 
 import aiofiles
@@ -97,7 +96,7 @@ async def send_request(
     url: str,
     method: str = 'POST',
     *,
-    payload: Union[str, bytes | None] = None,
+    payload: str | (bytes | None) = None,
     key: str | None = None,
     user: UserModel = None,
     stream: bool = False,
@@ -872,7 +871,7 @@ class GenerateEmbedForm(BaseModel):
     input: list[str] | str
     truncate: bool | None = None
     options: dict | None = None
-    keep_alive: Union[int, str | None] = None
+    keep_alive: int | (str | None) = None
     model_config = ConfigDict(extra='allow')
 
 
@@ -924,7 +923,7 @@ class GenerateEmbeddingsForm(BaseModel):
     model: str
     prompt: str
     options: dict | None = None
-    keep_alive: Union[int, str | None] = None
+    keep_alive: int | (str | None) = None
 
 
 @router.post('/api/embeddings')
@@ -976,14 +975,14 @@ class GenerateCompletionForm(BaseModel):
     prompt: str | None = None
     suffix: str | None = None
     images: list[str] | None = None
-    format: Union[dict, str | None] = None
+    format: dict | (str | None) = None
     options: dict | None = None
     system: str | None = None
     template: str | None = None
     context: list[int] | None = None
     stream: bool | None = True
     raw: bool | None = None
-    keep_alive: Union[int, str | None] = None
+    keep_alive: int | (str | None) = None
 
 
 @router.post('/api/generate')
@@ -1048,11 +1047,11 @@ class GenerateChatCompletionForm(BaseModel):
 
     model: str
     messages: list[ChatMessage]
-    format: Union[dict, str | None] = None
+    format: dict | (str | None) = None
     options: dict | None = None
     template: str | None = None
     stream: bool | None = True
-    keep_alive: Union[int, str | None] = None
+    keep_alive: int | (str | None) = None
     tools: list[dict] | None = None
     model_config = ConfigDict(extra='allow')
 
@@ -1177,7 +1176,7 @@ class OpenAIChatMessage(BaseModel):
     """A single message in an OpenAI-compatible chat request."""
 
     role: str
-    content: Union[str | None, list[OpenAIChatMessageContent]]
+    content: str | None | list[OpenAIChatMessageContent]
     model_config = ConfigDict(extra='allow')
 
 

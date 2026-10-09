@@ -1,16 +1,16 @@
 import datetime as dt
 import importlib.metadata
 import json
-import tomllib
 import logging
 import os
 import pkgutil
 import re
 import shutil
 import sys
+import tomllib
 import traceback
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 import markdown
@@ -44,7 +44,7 @@ DOCKER = os.getenv('DOCKER', 'False').lower() == 'true'
 
 USE_CUDA = os.getenv('USE_CUDA_DOCKER', 'false')
 DEVICE_TYPE = 'cpu'
-_cuda_error: Optional[str] = None
+_cuda_error: str | None = None
 
 if USE_CUDA.lower() == 'true':
     try:
@@ -537,7 +537,6 @@ else:
 
 
 import ssl as _ssl
-
 
 # Dedicated env var for a custom CA bundle file path.  When set, this is
 # used as the default CA bundle for all outbound HTTPS connections that

@@ -5,13 +5,11 @@ from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.responses import FileResponse, Response, StreamingResponse
-from open_webui.config import ENABLE_ADMIN_CHAT_ACCESS, ENABLE_ADMIN_EXPORT
 from open_webui.constants import ERROR_MESSAGES
-from open_webui.events import EVENTS, publish_event
 from open_webui.env import STATIC_DIR
+from open_webui.events import EVENTS, publish_event
 from open_webui.internal.db import get_async_session
 from open_webui.models.access_grants import AccessGrants, has_public_read_access_grant, has_public_write_access_grant
-from open_webui.models.config import Config
 from open_webui.models.channels import (
     ChannelForm,
     ChannelModel,
@@ -21,6 +19,7 @@ from open_webui.models.channels import (
     ChannelWebhookModel,
     CreateChannelForm,
 )
+from open_webui.models.config import Config
 from open_webui.models.groups import Groups
 from open_webui.models.messages import (
     MessageForm,
@@ -30,7 +29,6 @@ from open_webui.models.messages import (
     MessageWithReactionsResponse,
 )
 from open_webui.models.users import (
-    UserIdNameResponse,
     UserIdNameStatusResponse,
     UserModel,
     UserNameResponse,
@@ -43,7 +41,7 @@ from open_webui.socket.main import (
     sio,
 )
 from open_webui.utils.access_control import filter_allowed_access_grants, has_permission
-from open_webui.utils.auth import get_admin_user, get_verified_user
+from open_webui.utils.auth import get_verified_user
 from open_webui.utils.channels import extract_mentions, replace_all_mentions
 from open_webui.utils.files import get_image_base64_from_file_id
 from open_webui.utils.models import (
@@ -63,7 +61,7 @@ async def channel_has_access(
     channel: ChannelModel,
     permission: str = 'read',
     strict: bool = True,
-    db: Optional[AsyncSession] = None,
+    db: AsyncSession | None = None,
 ) -> bool:
     if await AccessGrants.has_access(
         user_id=user_id,
@@ -81,7 +79,7 @@ async def channel_has_access(
 
 
 async def get_channel_users_with_access(
-    channel: ChannelModel, permission: str = 'read', db: Optional[AsyncSession] = None
+    channel: ChannelModel, permission: str = 'read', db: AsyncSession | None = None
 ):
     return await AccessGrants.get_users_with_access(
         resource_type='channel',
@@ -93,7 +91,7 @@ async def get_channel_users_with_access(
 
 def get_channel_permitted_group_and_user_ids(
     channel: ChannelModel, permission: str = 'read'
-) -> Optional[dict[str, list[str]]]:
+) -> dict[str, list[str]] | None:
     if permission == 'read' and has_public_read_access_grant(channel.access_grants):
         return None
 
@@ -116,8 +114,8 @@ def get_channel_permitted_group_and_user_ids(
 
 async def get_channel_member_user_ids(
     channel: ChannelModel,
-    db: Optional[AsyncSession] = None,
-) -> Optional[list[str]]:
+    db: AsyncSession | None = None,
+) -> list[str] | None:
     permitted_ids = get_channel_permitted_group_and_user_ids(channel, permission='read')
     if permitted_ids is None:
         return None
@@ -138,7 +136,7 @@ async def get_channel_member_user_ids(
 ############################
 
 
-async def check_channels_access(request: Request, user: Optional[UserModel] = None):
+async def check_channels_access(request: Request, user: UserModel | None = None):
     """Dependency to ensure channels are globally enabled."""
     if not await Config.get('channels.enable'):
         raise HTTPException(
@@ -162,10 +160,10 @@ async def check_channels_access(request: Request, user: Optional[UserModel] = No
 
 
 class ChannelListItemResponse(ChannelModel):
-    user_ids: Optional[list[str]] = None  # 'dm' channels only
-    users: Optional[list[UserIdNameStatusResponse]] = None  # 'dm' channels only
+    user_ids: list[str] | None = None  # 'dm' channels only
+    users: list[UserIdNameStatusResponse] | None = None  # 'dm' channels only
 
-    last_message_at: Optional[int] = None  # timestamp in epoch (time_ns)
+    last_message_at: int | None = None  # timestamp in epoch (time_ns)
     unread_count: int = 0
 
 
@@ -374,10 +372,10 @@ async def create_new_channel(
 
 
 class ChannelFullResponse(ChannelResponse):
-    user_ids: Optional[list[str]] = None  # 'group'/'dm' channels only
-    users: Optional[list[UserIdNameStatusResponse]] = None  # 'group'/'dm' channels only
+    user_ids: list[str] | None = None  # 'group'/'dm' channels only
+    users: list[UserIdNameStatusResponse] | None = None  # 'group'/'dm' channels only
 
-    last_read_at: Optional[int] = None  # timestamp in epoch (time_ns)
+    last_read_at: int | None = None  # timestamp in epoch (time_ns)
     unread_count: int = 0
 
 
@@ -514,10 +512,10 @@ def serialize_channel_member(user: UserModel) -> ChannelMemberResponse:
 async def get_channel_members_by_id(
     request: Request,
     id: str,
-    query: Optional[str] = None,
-    order_by: Optional[str] = None,
-    direction: Optional[str] = None,
-    page: Optional[int] = 1,
+    query: str | None = None,
+    order_by: str | None = None,
+    direction: str | None = None,
+    page: int | None = 1,
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
@@ -1026,7 +1024,7 @@ async def model_response_handler(request, channel, message, user, db=None):
                     MessageForm(
                         **{
                             'parent_id': response_parent_id,
-                            'content': f'',
+                            'content': '',
                             'data': {},
                             'meta': {
                                 'model_id': model_id,
@@ -1852,7 +1850,7 @@ async def get_webhook_profile_image(webhook_id: str, user=Depends(get_verified_u
                     media_type=media_type,
                     headers={'Content-Disposition': 'inline'},
                 )
-            except Exception as e:
+            except Exception:
                 pass
 
     # Return default favicon if no profile image

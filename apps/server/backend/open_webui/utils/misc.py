@@ -8,10 +8,10 @@ import re
 import threading
 import time
 import uuid
+from collections.abc import Sequence
 from datetime import timedelta
 from functools import lru_cache
 from pathlib import Path
-from typing import Callable, Optional, Sequence, Union
 
 import aiohttp
 import mimeparse
@@ -89,7 +89,7 @@ def get_allow_block_lists(filter_list):
     return allow_list, block_list
 
 
-def is_string_allowed(string: Union[str, Sequence[str]], filter_list: list[str] | None = None) -> bool:
+def is_string_allowed(string: str | Sequence[str], filter_list: list[str] | None = None) -> bool:
     """
     Checks if a string is allowed based on the provided filter list.
     :param string: The string or sequence of strings to check (e.g., domain or hostname).
@@ -150,7 +150,7 @@ def _host_matches_pattern(host: str, pattern: str) -> bool:
     return host == pattern or host.endswith('.' + pattern)
 
 
-def is_host_allowed(host: Union[str, Sequence[str]], filter_list: list[str] | None = None) -> bool:
+def is_host_allowed(host: str | Sequence[str], filter_list: list[str] | None = None) -> bool:
     """Allow/block a hostname (or list of hostnames / resolved IPs) against a
     WEB_FETCH_FILTER_LIST-style filter, matching on label boundaries.
 
@@ -172,7 +172,7 @@ def is_host_allowed(host: Union[str, Sequence[str]], filter_list: list[str] | No
     return not is_host_blocked(hosts, filter_list)
 
 
-def is_host_blocked(host: Union[str, Sequence[str]], filter_list: list[str] | None = None) -> bool:
+def is_host_blocked(host: str | Sequence[str], filter_list: list[str] | None = None) -> bool:
     """Whether a host or resolved address matches a block entry, ignoring any allow entries."""
     _, block_list = get_allow_block_lists(filter_list)
     hosts = [host] if isinstance(host, str) else list(host or [])

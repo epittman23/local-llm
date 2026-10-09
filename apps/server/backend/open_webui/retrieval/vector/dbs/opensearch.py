@@ -2,7 +2,7 @@
 NOTE: This vector database integration is community-supported and maintained on a best-effort basis.
 """
 
-from typing import Any, Optional
+from typing import Any
 
 from open_webui.config import (
     OPENSEARCH_CERT_VERIFY,
@@ -124,9 +124,9 @@ class OpenSearchClient(VectorDBBase):
         self,
         collection_name: str,
         vectors: list[list[float | int]],
-        filter: Optional[dict] = None,
+        filter: dict | None = None,
         limit: int = 10,
-    ) -> Optional[SearchResult]:
+    ) -> SearchResult | None:
         filter_clauses = [_metadata_filter(key, op, value) for key, op, value in iter_filter_conditions(filter)]
 
         try:
@@ -154,10 +154,10 @@ class OpenSearchClient(VectorDBBase):
 
             return self._result_to_search_result(result)
 
-        except Exception as e:
+        except Exception:
             return None
 
-    def query(self, collection_name: str, filter: dict, limit: Optional[int] = None) -> Optional[GetResult]:
+    def query(self, collection_name: str, filter: dict, limit: int | None = None) -> GetResult | None:
         if not self.has_collection(collection_name):
             return None
 
@@ -180,14 +180,14 @@ class OpenSearchClient(VectorDBBase):
 
             return self._result_to_get_result(result)
 
-        except Exception as e:
+        except Exception:
             return None
 
     def _create_index_if_not_exists(self, collection_name: str, dimension: int):
         if not self.has_collection(collection_name):
             self._create_index(collection_name, dimension)
 
-    def get(self, collection_name: str) -> Optional[GetResult]:
+    def get(self, collection_name: str) -> GetResult | None:
         query = {'query': {'match_all': {}}, '_source': ['text', 'metadata']}
 
         result = self.client.search(index=self._get_index_name(collection_name), body=query)
@@ -237,8 +237,8 @@ class OpenSearchClient(VectorDBBase):
     def delete(
         self,
         collection_name: str,
-        ids: Optional[list[str]] = None,
-        filter: Optional[dict] = None,
+        ids: list[str] | None = None,
+        filter: dict | None = None,
     ):
         if ids:
             actions = [

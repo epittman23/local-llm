@@ -2,7 +2,6 @@ from collections.abc import Callable
 
 from open_webui.utils.json_codec import JSONCodec
 
-
 ASK_USER_NAME = 'ask_user'
 
 

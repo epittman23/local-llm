@@ -10,7 +10,6 @@ rather than pulled from the CLI, since it is presentation-only and small.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-
 from open_webui.constants import ERROR_MESSAGES
 from open_webui.models.benchmark_tests import BenchmarkAnswers, BenchmarkResults
 from open_webui.utils.auth import get_admin_user

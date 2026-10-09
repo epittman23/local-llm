@@ -1,9 +1,8 @@
 import os
 import re
-from typing import Dict
 
 
-def set_security_headers() -> Dict[str, str]:
+def set_security_headers() -> dict[str, str]:
     """
     Sets security headers based on environment variables.
 
