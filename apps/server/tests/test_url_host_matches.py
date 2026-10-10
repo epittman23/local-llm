@@ -2,8 +2,8 @@
 
 import pytest
 
-from open_webui.utils.anthropic import is_anthropic_url
-from open_webui.utils.misc import url_host_matches
+from local_llm.utils.anthropic import is_anthropic_url
+from local_llm.utils.misc import url_host_matches
 
 
 @pytest.mark.parametrize(
@@ -78,7 +78,7 @@ class _FakeSession:
 def test_webhook_payload_follows_the_real_host(monkeypatch, url, shape):
     import asyncio
 
-    from open_webui.utils import webhook
+    from local_llm.utils import webhook
 
     sent = []
     monkeypatch.setattr(webhook, 'validate_url', lambda u: True)

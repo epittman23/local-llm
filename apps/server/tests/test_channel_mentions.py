@@ -1,6 +1,6 @@
 """Mentions in a channel message become plain text in a model's prompt (docs/history/code-review.md L4)."""
 
-from open_webui.utils.channels import extract_mentions, replace_all_mentions, replace_mentions
+from local_llm.utils.channels import extract_mentions, replace_all_mentions, replace_mentions
 
 
 def test_channel_mentions_become_hash_labels():

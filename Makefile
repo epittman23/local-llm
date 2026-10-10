@@ -75,7 +75,7 @@ backend:
 	fi; \
 	uv sync --frozen --no-install-project --project "$(SERVER_DIR)"; \
 	py="$(SERVER_DIR)/.venv/bin/python"; \
-	database_url="$$(PYTHONPATH="$(SERVER_DIR)" "$$py" -c 'import sys; from open_webui.benchmarks.serving.launcher import build_database_url; print(build_database_url(sys.argv[1]))' "$$POSTGRES_PASSWORD")"; \
+	database_url="$$(PYTHONPATH="$(SERVER_DIR)" "$$py" -c 'import sys; from local_llm.benchmarks.serving.launcher import build_database_url; print(build_database_url(sys.argv[1]))' "$$POSTGRES_PASSWORD")"; \
 	cd "$(SERVER_DIR)" && \
 	CORS_ALLOW_ORIGIN="http://localhost:$(LLLM_BACKEND_PORT);http://127.0.0.1:$(LLLM_BACKEND_PORT);http://localhost:5174;http://127.0.0.1:5174" \
 	WEBUI_SECRET_KEY="$$WEBUI_SECRET_KEY" \
@@ -85,7 +85,7 @@ backend:
 	OPENAI_API_BASE_URL="https://openrouter.ai/api/v1" \
 	OPENAI_API_KEY="$$OPENROUTER_API_KEY" \
 	HF_HUB_OFFLINE=1 \
-	"$$py" -m uvicorn open_webui.main:app --host $(LLLM_BACKEND_HOST) --port $(LLLM_BACKEND_PORT) --reload
+	"$$py" -m uvicorn local_llm.main:app --host $(LLLM_BACKEND_HOST) --port $(LLLM_BACKEND_PORT) --reload
 
 # astro dev always daemonizes (this Astro version's own CLI design, not a
 # choice made here): even a plain `astro dev` reports its dev server as

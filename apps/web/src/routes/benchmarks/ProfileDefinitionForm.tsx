@@ -76,7 +76,7 @@ type Props = {
 };
 
 /**
- * The DefinitionForm fields from apps/server/open_webui/routers/benchmarks/
+ * The DefinitionForm fields from apps/server/local_llm/routers/benchmarks/
  * profiles.py -- everything a profile *version* carries, deliberately
  * excluding name/display_name/is_default (the profile's identity, handled
  * by ProfilesPanel.tsx itself). Shared between create, clone, and

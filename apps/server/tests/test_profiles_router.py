@@ -22,14 +22,14 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from open_webui.benchmarks.serving.profiles import ProfileError
-from open_webui.models.benchmark_profiles import (
+from local_llm.benchmarks.serving.profiles import ProfileError
+from local_llm.models.benchmark_profiles import (
     BenchmarkProfileEntry,
     BenchmarkProfileModel,
     BenchmarkProfileVersionModel,
 )
-from open_webui.routers.benchmarks import profiles as profiles_router
-from open_webui.utils.auth import get_admin_user
+from local_llm.routers.benchmarks import profiles as profiles_router
+from local_llm.utils.auth import get_admin_user
 
 ADMIN = SimpleNamespace(id='admin-1', email='admin@example.com')
 

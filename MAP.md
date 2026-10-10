@@ -34,7 +34,7 @@ local-llm/
 the root `requirements.txt`/`.venv` are gone as of Phase 2c of the migration
 (2026-09-18) — see `docs/decisions.md`. `make backend`/
 `make frontend` are the replacement entry points; serving configuration
-itself lives in the backend as Python (`apps/server/open_webui/
+itself lives in the backend as Python (`apps/server/local_llm/
 benchmarks/serving/`), not in a shell profile table.
 
 Local/generated (not tracked by git — see "Local/generated" section below
@@ -140,7 +140,7 @@ permanent hard fork with no upstream sync path — see `docs/decisions.md`. Sinc
 FastAPI backend is left; its SvelteKit frontend (last present at `d863707`)
 was replaced by `apps/web/`:
 
-- **`open_webui/`** — the FastAPI app (the Python package): `main.py` (entrypoint),
+- **`local_llm/`** — the FastAPI app (the Python package): `main.py` (entrypoint),
   `routers/` (API endpoints, including `routers/benchmarks/`), `models/` (DB
   models, including `models/benchmark_*.py`), `internal/` + `migrations/`
   (Alembic DB migrations), `retrieval/` (RAG), `socket/` (websocket/
@@ -155,7 +155,7 @@ was replaced by `apps/web/`:
   compose variants, CI workflows, start scripts and community files are
   gone; this repo runs through the root `Makefile` and `infra/`.
 
-#### `open_webui/benchmarks/` (fork-owned, not upstream)
+#### `local_llm/benchmarks/` (fork-owned, not upstream)
 
 The testing/comparison/reporting/tuning suite that used to be this outer
 repo's standalone `lllm-test`/`lllm-compare`/`lllm-report`/`lllm-tune` CLI
@@ -199,7 +199,7 @@ than a second app glued on by a userscript. See `docs/decisions.md` for the migr
   `ServeProcess` directly for each candidate.
 - **`telemetry_recorder.py`** — the GPU telemetry recorder, still a
   detached subprocess for crash-independence, spawned directly by
-  `ServeProcess.start()` (`python -m open_webui.benchmarks.telemetry_recorder`,
+  `ServeProcess.start()` (`python -m local_llm.benchmarks.telemetry_recorder`,
   inheriting the backend's own `DATABASE_URL`) rather than by a shell script,
   writing to this app's Postgres via plain `psycopg`.
 
@@ -369,7 +369,7 @@ knowing about when navigating the filesystem directly:
   this repo since Phase 2c deleted the root `.venv/` along with `scripts/`.
 - **`apps/web/node_modules/`**, **`apps/web/dist/`**, **`apps/web/.astro/`** —
   the new frontend's dependency tree, production build output (served at
-  `/` when present — `FRONTEND_BUILD_DIR` in `apps/server/open_webui/env.py`),
+  `/` when present — `FRONTEND_BUILD_DIR` in `apps/server/local_llm/env.py`),
   and Astro's generated type cache. `bun.lock` beside them **is** tracked.
 - **`apps/web/test-results/`**, **`apps/web/playwright-report/`** — Playwright
   output from `bun run test:e2e`.

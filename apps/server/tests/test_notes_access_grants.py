@@ -18,9 +18,9 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from open_webui.internal.db import get_async_session
-from open_webui.routers import notes as notes_router
-from open_webui.utils.auth import get_verified_user
+from local_llm.internal.db import get_async_session
+from local_llm.routers import notes as notes_router
+from local_llm.utils.auth import get_verified_user
 
 ADMIN = SimpleNamespace(id='admin-1', role='admin', email='admin@example.com')
 

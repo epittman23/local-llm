@@ -10,7 +10,7 @@
 #
 # Rolling out in stages (docs/decisions.md, 2026-10-09). Formatting covers all
 # of apps/web and apps/server. Linting does not yet:
-#   - ruff-check covers only apps/server/open_webui/benchmarks/ and tests/ until
+#   - ruff-check covers only apps/server/local_llm/benchmarks/ and tests/ until
 #     the rest of the backend's ~2.8k existing findings are fixed;
 #   - Biome only formats until apps/web's ~800 existing lint findings are
 #     fixed, then the hook becomes `biome check --write --error-on-warnings`.
@@ -44,9 +44,9 @@ repos:
     hooks:
       - id: ruff-check
         args: [--fix]
-        files: ^apps/server/(open_webui/benchmarks|tests)/
+        files: ^apps/server/(local_llm/benchmarks|tests)/
       - id: ruff-format
-        files: ^apps/server/(open_webui|tests)/
+        files: ^apps/server/(local_llm|tests)/
 
   # Biome from apps/web/node_modules, so the hook, CI and the editor all run
   # the exact version package.json pins (Dependabot keeps it current). Runs

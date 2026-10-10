@@ -25,7 +25,7 @@ server running after Ctrl-C unless you `astro dev stop` it yourself.
 ## Building
 
 `bun run build` writes static output to `dist/`. The backend serves it at
-`/` (`FRONTEND_BUILD_DIR` in `apps/server/open_webui/env.py`
+`/` (`FRONTEND_BUILD_DIR` in `apps/server/local_llm/env.py`
 defaults to this `dist/`), so after a build `make backend` alone serves the
 whole app on `:4000`. At boot the backend copies `dist/static/` into its own
 static directory, which is where `/static/favicon.png` and friends come from.

@@ -20,9 +20,9 @@ from pathlib import Path
 
 import pytest
 
-from open_webui.benchmarks import env_profile
-from open_webui.benchmarks.serving.profiles import ProfileError
-from open_webui.models.benchmark_profiles import (
+from local_llm.benchmarks import env_profile
+from local_llm.benchmarks.serving.profiles import ProfileError
+from local_llm.models.benchmark_profiles import (
     BenchmarkProfileEntry,
     BenchmarkProfileModel,
     BenchmarkProfiles,
@@ -33,7 +33,7 @@ BASELINE_DIR = REPO_ROOT / 'docs' / 'serving-baseline'
 
 
 def _seeded_entry(name: str) -> BenchmarkProfileEntry:
-    from open_webui.models.benchmark_profiles import BenchmarkProfileVersionModel
+    from local_llm.models.benchmark_profiles import BenchmarkProfileVersionModel
 
     path = BASELINE_DIR / 'profiles.json'
     if not path.exists():  # pragma: no cover - only when run outside the repo
