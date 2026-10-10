@@ -16,6 +16,9 @@ instead.
 ```
 local-llm/
 ├── AGENTS.md                  agent and contributor guide (CLAUDE.md links to it)
+├── LICENSE, LICENSE_HISTORY   the Open WebUI License texts the derived code is under
+├── NOTICE                     what is derived, the license boundaries, the branding basis
+├── CONTRIBUTOR_LICENSE_AGREEMENT  referred to by LICENSE
 ├── CLAUDE.md                  symlink to AGENTS.md
 ├── Makefile                   make backend, make frontend, make help
 ├── README.md                  what it is, running it, pages and URLs
@@ -45,6 +48,17 @@ exists, models in use, conventions, commands, backend and frontend
 specifics, the maintenance policy (this file's own upkeep rule lives there)
 and the commit policy. `CLAUDE.md` is a symlink to it, so every agent reads
 the same file. Read it before making structural or config changes.
+
+## `LICENSE`, `LICENSE_HISTORY`, `NOTICE`, `CONTRIBUTOR_LICENSE_AGREEMENT`
+
+The license files, moved verbatim from `apps/server/` on 2026-10-10.
+`LICENSE` (the Open WebUI License) and `LICENSE_HISTORY` (the earlier BSD and
+MIT terms) are the legal texts; `CONTRIBUTOR_LICENSE_AGREEMENT` is kept because
+`LICENSE` refers to it. `NOTICE` merges the two former `LICENSE_NOTICE` files:
+which parts of `apps/server/` and `apps/web/` are derived, the upstream
+multi-license commit boundaries, the required copyright notice, and the clause
+4(i) basis for the changed branding. These are the one place the original
+project's name is required to stay.
 
 ## `README.md`
 
@@ -133,8 +147,8 @@ was replaced by `apps/web/`:
   real-time), `tools/`, `tasks.py`, `utils/`, `config.py`, and
   **`benchmarks/`** (see below — fork-owned, not upstream).
 - Root-level: `pyproject.toml`/`uv.lock` (backend deps; `pyproject.toml`
-  also holds the version),
-  `LICENSE`/`LICENSE_NOTICE`/`LICENSE_HISTORY`. The upstream Docker images,
+  also holds the version). The license files are at the repository root.
+  The upstream Docker images,
   compose variants, CI workflows, start scripts and community files are
   gone; this repo runs through the root `Makefile` and `infra/`.
 

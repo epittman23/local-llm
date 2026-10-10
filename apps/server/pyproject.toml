@@ -1,10 +1,10 @@
 [project]
 name = "open-webui"
-description = "Open WebUI"
+description = "Local LLM backend"
 authors = [
-    { name = "Timothy Jaeryang Baek", email = "tim@openwebui.com" }
+    { name = "epittman23" }
 ]
-license = { file = "LICENSE" }
+license = { text = "See LICENSE and NOTICE at the repository root" }
 dependencies = [
     "fastapi==0.136.3",
     "uvicorn[standard]==0.54.0",

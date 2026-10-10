@@ -4,7 +4,7 @@ This is the always-loaded guide for anyone, human or agent, changing this
 repository. `CLAUDE.md` is a symlink to it. It covers why the project
 exists, the rules it runs by, and where the deeper documentation lives.
 How to run the app is in [README.md](README.md). The backend began as a fork
-of Open WebUI v0.11.3; see [NOTICE](apps/server/LICENSE_NOTICE) for what is
+of Open WebUI v0.11.3; see [NOTICE](NOTICE) for what is
 derived and under which license.
 
 ## Why
