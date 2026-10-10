@@ -1,9 +1,7 @@
-# Postgres + pgvector for the backend (apps/server, the Open WebUI fork
-# vendored into this repo and pinned at v0.11.3 -- see docs/decisions.md).
-# The backend itself is not a container: it runs as a host process so it can
-# start and stop llama-server on this machine's GPU.
-# Postgres has no such constraint, so it stays the simplest option:
-# containerized.
+# Postgres + pgvector for the backend (apps/server). The backend itself is not
+# a container: it runs as a host process so it can start and stop
+# llama-server on this machine's GPU. Postgres has no such constraint, so it
+# stays the simplest option: containerized.
 #
 # `make backend` brings this up before starting the backend and tears it
 # down via a trap when the backend stops -- there is normally no need to run
@@ -12,24 +10,29 @@
 #
 # The project name is pinned rather than inherited from this file's parent
 # directory. Compose derives it from the directory by default, and the
-# volume name from the project name, so moving this file would silently
-# orphan postgres-data and bring the backend up against an EMPTY database.
-# Pinned here on 2026-09-14, before this file moved from open-web-ui/ to
-# infra/, so the existing open-web-ui_postgres-data volume keeps being the
-# one that is used. Do not change this value.
-name: open-web-ui
+# volume name from the project name, so moving or renaming this directory
+# would silently orphan the data volume and bring the backend up against an
+# EMPTY database. With the pin, the volume is always local-llm_postgres-data.
+# Do not change this value without moving the data deliberately.
+#
+# History: the project was pinned as `open-web-ui` from 2026-09-14, and its
+# volume was open-web-ui_postgres-data. It was renamed to `local-llm` on
+# 2026-10-10, when no volume existed on this machine, so the new volume starts
+# empty; a database from the old volume comes back by pg_dump/pg_restore (see
+# README.md, "Running it").
+name: local-llm
 
 services:
   postgres:
-    image: pgvector/pgvector:pg16   # verify exact tag availability at implementation time
+    image: pgvector/pgvector:pg16
     container_name: local-llm-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: openwebui
+      POSTGRES_USER: local_llm
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in infra/.env}
-      POSTGRES_DB: openwebui
+      POSTGRES_DB: local_llm
     ports:
-      # Published to loopback only: the consumer is lllm-backend, a host
+      # Published to loopback only: the consumer is the backend, a host
       # process reaching this via localhost, not a sibling container on a
       # Docker network -- nothing else needs to reach this port.
       - "127.0.0.1:5432:5432"

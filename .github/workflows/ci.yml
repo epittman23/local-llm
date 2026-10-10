@@ -129,13 +129,13 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg16
         env:
-          POSTGRES_USER: openwebui
+          POSTGRES_USER: local_llm
           POSTGRES_PASSWORD: ci-only-not-a-secret
-          POSTGRES_DB: openwebui
+          POSTGRES_DB: local_llm
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U openwebui"
+          --health-cmd "pg_isready -U local_llm"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
@@ -143,7 +143,7 @@ jobs:
       # Not secrets: the app refuses to import without a key, the tests never
       # serve anything signed with it, and the database exists only for this job.
       WEBUI_SECRET_KEY: ci-only-not-a-secret-0123456789abcdef0123456789abcdef
-      TEST_DATABASE_URL: postgresql://openwebui:ci-only-not-a-secret@localhost:5432/openwebui
+      TEST_DATABASE_URL: postgresql://local_llm:ci-only-not-a-secret@localhost:5432/local_llm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

@@ -264,8 +264,8 @@ def test_percent_encode_password(raw, encoded):
 
 
 def test_build_database_url_encodes_the_password():
-    url = build_database_url('p/w+d', host='localhost', port=5432, database='openwebui', user='openwebui')
-    assert url == 'postgresql://openwebui:p%2Fw%2Bd@localhost:5432/openwebui'
+    url = build_database_url('p/w+d', host='localhost', port=5432, database='local_llm', user='local_llm')
+    assert url == 'postgresql://local_llm:p%2Fw%2Bd@localhost:5432/local_llm'
 
 
 # ---------------------------------------------------------------------------
@@ -357,7 +357,7 @@ def _write_stub_server(tmp_path) -> tuple[Path, Path]:
 async def test_serve_process_lines_tees_to_the_server_log(tmp_path, monkeypatch, profiles):
     stub, model = _write_stub_server(tmp_path)
     config = _resolved(next(c for c in _cases() if c['case'] == 'base-qwen25c'), profiles)
-    monkeypatch.setenv('DATABASE_URL', 'postgresql://openwebui:test@localhost:5432/openwebui')
+    monkeypatch.setenv('DATABASE_URL', 'postgresql://local_llm:test@localhost:5432/local_llm')
 
     proc = ServeProcess(config=config, llama_bin=str(tmp_path), record_telemetry=False)
     monkeypatch.setattr('local_llm.benchmarks.serving.launcher.resolve_model_path', lambda *a, **k: str(model))

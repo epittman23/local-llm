@@ -182,8 +182,8 @@ def build_database_url(
     *,
     host: str = 'localhost',
     port: int = 5432,
-    database: str = 'openwebui',
-    user: str = 'openwebui',
+    database: str = 'local_llm',
+    user: str = 'local_llm',
 ) -> str:
     """A Postgres DSN with the password percent-encoded.
 

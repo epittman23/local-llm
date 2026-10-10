@@ -810,8 +810,8 @@ rm -rf apps/server/backend
 | 2a-2e Deletions + licenses | #56, #57, #58, #59, 2e: (this PR) | done | see "Phase 2" below | see "Phase 2" below |
 | 3 Flatten | #61 | done | see "Phase 3" below | see "Phase 3" below |
 | 4 Rename | #62 | done | see "Phase 4" below | see "Phase 4" below |
-| 5a/5b Blame + plugin compat | #63, 5b: (this PR) | done | see "Phase 5" below | none |
-| 6a-6d Identifiers + branding | — | | | |
+| 5a/5b Blame + plugin compat | #63, #64 | done | see "Phase 5" below | none |
+| 6a-6d Identifiers + branding | 6d: (this PR) | in progress | see "Phase 6" below | see "Phase 6" below |
 | 7a/7b Benchmarks | — | | | |
 | 8 make check | — | | | |
 | 10 Final sync + audit | — | | | |
@@ -950,4 +950,16 @@ rm -rf apps/server/backend
 - **5b.** `utils/plugin.py`'s `replace_imports` now also rewrites `from open_webui…` / `import open_webui…` to `local_llm`. It is word-bounded and applies only after `from`/`import`, so `'open_webui:code_interpreter'`, `required_open_webui_version` and `open_webui_extras` are untouched.
   - It runs where the existing rewrite already ran: on every Tool/Function load (whose result is saved back) and on create, update and import. Stored and pasted community plugins written against the old name therefore keep working, with no migration.
   - New `tests/test_plugin_imports.py` (3 tests). Verification: pytest 308 passed, 1 skipped; pre-commit passed.
+
+### Phase 6: runtime identifiers and branding (order: 6d, 6a, 6b, 6c)
+
+- **6d (Compose project, volume, Postgres role and database).**
+  - Compose `name: local-llm`, so the volume is `local-llm_postgres-data`; Q13 chose a fresh volume, with no `name:` pin to the old one. `POSTGRES_USER` and `POSTGRES_DB` are both `local_llm`. The file's comment keeps the pin rationale and records the old names.
+  - `launcher.build_database_url` defaults, the `test_launcher.py` URLs, the CI Postgres service, the throwaway-DB command in `docs/guides/testing.md`, README "Backend URLs" and MAP.md all updated.
+  - README "Running it" gains a "Restoring a database" note: `pg_dump` on the old setup, then `pg_restore --no-owner --role=local_llm` before the first `make backend`.
+  - **Verification:**
+    - `docker compose config` resolves the volume to `local-llm_postgres-data`.
+    - A real `up` under a throwaway project name creates role and database `local_llm` (superuser, `SCRAM-SHA-256` password, so a later rename would not clear it) and `CREATE EXTENSION vector` works (0.8.7). Torn down with `down -v`; no volume left behind.
+    - pytest 308 passed, 1 skipped; pre-commit passed; 0 broken links.
+  - **Audit allowlist addition:** the old names `openwebui` / `open-web-ui_postgres-data` remain only where they describe the old setup: the restore instructions in README, the history comment in `infra/docker-compose.yml`, and MAP.md's one-line history.
 

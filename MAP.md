@@ -106,11 +106,12 @@ Start here for "how do I run/use this."
 Infrastructure this repo runs but does not write.
 
 - **`docker-compose.yml`** — Postgres + pgvector service backing the fork.
-  Its Compose project name is **pinned** to `open-web-ui` rather than
+  Its Compose project name is **pinned** to `local-llm` rather than
   inherited from this directory's name; the volume name derives from the
-  project name, so without the pin the 2026-09-14 move of this file out of
-  `open-web-ui/` would have orphaned `open-web-ui_postgres-data` and started
-  the backend against an empty database. Do not change it.
+  project name, so the pin keeps the data in `local-llm_postgres-data`
+  however the directory moves. Role and database are both `local_llm`. (It
+  was pinned as `open-web-ui` from 2026-09-14 until the 2026-10-10 rename;
+  see the file's own comment.)
 - **`.env.example`** — the keys `infra/.env` needs, with empty values.
 - **`.env`** — secrets (API keys, DB password, webui secret key); not
   enumerated here, and not tracked. Compose resolves it relative to the
