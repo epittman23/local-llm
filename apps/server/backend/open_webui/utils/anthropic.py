@@ -9,6 +9,7 @@ from open_webui.env import (
 from open_webui.models.users import UserModel
 from open_webui.utils.headers import include_user_info_headers
 from open_webui.utils.json_codec import JSONCodec
+from open_webui.utils.misc import url_host_matches
 
 log = logging.getLogger(__name__)
 
@@ -34,7 +35,7 @@ ANTHROPIC_CONVERTED_REQUEST_PARAMS = {
 
 def is_anthropic_url(url: str) -> bool:
     """Check if the URL is an Anthropic API endpoint."""
-    return 'api.anthropic.com' in url
+    return url_host_matches(url, 'api.anthropic.com')
 
 
 async def get_anthropic_models(url: str, key: str, user: UserModel = None) -> dict:

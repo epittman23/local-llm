@@ -49,7 +49,7 @@ from open_webui.utils.access_control import has_permission
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.headers import include_user_info_headers
 from open_webui.utils.json_codec import JSONCodec
-from open_webui.utils.misc import strict_match_mime_type
+from open_webui.utils.misc import strict_match_mime_type, url_host_matches
 from open_webui.utils.session_pool import get_session
 from pydantic import BaseModel
 
@@ -1288,7 +1288,7 @@ async def get_available_models(request: Request) -> list[dict]:
 
     if engine == 'openai':
         base_url = await Config.get('audio.tts.openai.api_base_url')
-        if not base_url.startswith('https://api.openai.com'):
+        if not url_host_matches(base_url, 'api.openai.com', scheme='https'):
             session = await get_session()
             try:
                 async with session.get(
@@ -1362,7 +1362,7 @@ async def get_available_voices(request) -> dict:
 
     if engine == 'openai':
         base_url = await Config.get('audio.tts.openai.api_base_url')
-        if not base_url.startswith('https://api.openai.com'):
+        if not url_host_matches(base_url, 'api.openai.com', scheme='https'):
             try:
                 session = await get_session()
                 async with session.get(

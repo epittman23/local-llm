@@ -7,6 +7,7 @@ import logging
 import re
 import threading
 import time
+import urllib.parse
 import uuid
 from collections.abc import Sequence
 from datetime import timedelta
@@ -125,6 +126,24 @@ def as_network(pattern: str) -> ipaddress.IPv4Network | ipaddress.IPv6Network | 
         return ipaddress.ip_network((pattern or '').strip().lower().rstrip('.'), strict=False)
     except ValueError:
         return None
+
+
+def url_host_matches(url: str, *domains: str, scheme: str | None = None) -> bool:
+    """Whether `url`'s parsed hostname is one of `domains` or a subdomain of one.
+
+    For telling which service a URL points at. A substring test (`'api.openai.com'
+    in url`) also matches `https://evil.example/?api.openai.com` and
+    `https://api.openai.com.evil.example`; this compares DNS labels. `scheme`,
+    when given, must match too.
+    """
+    try:
+        parsed = urllib.parse.urlparse(url or '')
+    except ValueError:
+        return False
+    if scheme is not None and parsed.scheme != scheme:
+        return False
+    host = parsed.hostname or ''
+    return any(as_network(d) is None and _host_matches_pattern(host, d) for d in domains)
 
 
 def _host_matches_pattern(host: str, pattern: str) -> bool:
@@ -870,7 +889,11 @@ def validate_email_format(email: str) -> bool:
     if email.endswith('@localhost'):
         return True
 
-    return bool(re.match(r'[^@]+@[^@]+\.[^@]+', email))
+    # Same rule as the old `re.match(r'[^@]+@[^@]+\.[^@]+')`, without a regex:
+    # text, then `@`, then (up to any next `@`) a `.` with text on both sides.
+    local, at, domain = email.partition('@')
+    domain = domain.split('@', 1)[0]
+    return bool(local and at and '.' in domain[1:-1])
 
 
 def sanitize_filename(file_name):
