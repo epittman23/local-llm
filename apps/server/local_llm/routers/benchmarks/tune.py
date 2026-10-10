@@ -24,8 +24,8 @@ import logging
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
-from local_llm.benchmarks import tune
-from local_llm.benchmarks.tune_schedule import GRID_DIR, TuneRefused
+from local_llm.benchmarks.tuning import tune
+from local_llm.benchmarks.tuning.tune_schedule import GRID_DIR, TuneRefused
 from local_llm.constants import ERROR_MESSAGES
 from local_llm.utils.auth import get_admin_user
 from pydantic import BaseModel, ConfigDict

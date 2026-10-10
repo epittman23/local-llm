@@ -1,4 +1,4 @@
-"""benchmarks/stats.py - the statistics and the parsing, with nothing that writes.
+"""benchmarks/analysis/stats.py - the statistics and the parsing, with nothing that writes.
 
 Ported from local-llm's scripts/llama_stats.py (outer repo). The arithmetic and
 the parsers for text this app does not control (llama.cpp's server log, and the

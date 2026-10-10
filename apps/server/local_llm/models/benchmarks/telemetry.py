@@ -14,7 +14,7 @@ log = logging.getLogger(__name__)
 #
 # Ported from scripts/llama_db.py's `gpu_sample` and `metrics_scrape`
 # tables. Written by the telemetry recorder subprocess (see
-# benchmarks/telemetry_recorder.py) polling nvidia-smi and the served
+# benchmarks/serving/telemetry_recorder.py) polling nvidia-smi and the served
 # model's own /metrics endpoint for the life of a run -- raw samples are
 # kept, not just a running summary, so a statistic computed wrongly can
 # always be recomputed from the same rows.

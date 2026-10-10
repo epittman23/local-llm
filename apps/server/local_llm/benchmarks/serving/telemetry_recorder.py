@@ -1,4 +1,4 @@
-"""benchmarks/telemetry_recorder.py - record one serving run's GPU telemetry.
+"""benchmarks/serving/telemetry_recorder.py - record one serving run's GPU telemetry.
 
 Ported from local-llm's scripts/llama_record.py (outer repo). Still started as
 a *detached subprocess* for the entire life of one llama-server run -- a
@@ -62,7 +62,7 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-from local_llm.benchmarks import stats
+from local_llm.benchmarks.analysis import stats
 
 # Consecutive failed port probes before concluding the server is gone. This is
 # the fallback stop condition; the normal one is a SIGTERM from the router.

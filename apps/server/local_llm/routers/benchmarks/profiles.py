@@ -60,7 +60,7 @@ class DefinitionForm(BaseModel):
 
 
 #: A profile name is a URL path segment here and a tuning grid filename
-#: (benchmarks/tune_schedule.py: data/tuning/<name>.toml), so it is kept to a
+#: (benchmarks/tuning/tune_schedule.py: data/tuning/<name>.toml), so it is kept to a
 #: safe charset. 'default' is taken by GET /profiles/default.
 _NAME_RE = re.compile(r'^[a-z0-9][a-z0-9_-]{0,63}$')
 _RESERVED_NAMES = {'default'}

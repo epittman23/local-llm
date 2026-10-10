@@ -1,8 +1,8 @@
-"""benchmarks/tune_probe.py - serving one candidate, and reading the GPU with nothing served.
+"""benchmarks/tuning/tune_probe.py - serving one candidate, and reading the GPU with nothing served.
 
 Ported from local-llm's scripts/llama_tune.py (outer repo). Split out of
-benchmarks/tune.py (the round-elimination orchestrator) and
-benchmarks/tune_schedule.py (budget/round arithmetic and the search space)
+benchmarks/tuning/tune.py (the round-elimination orchestrator) and
+benchmarks/tuning/tune_schedule.py (budget/round arithmetic and the search space)
 because this is the module's other clearly separable concern: the mechanics
 of getting one candidate's `lllm-serve` up, watching it for a mid-visit
 collapse, and reading `nvidia-smi` when nothing is served at all (which the
@@ -43,15 +43,15 @@ from typing import TYPE_CHECKING
 
 import aiohttp
 
-from local_llm.benchmarks import stats
-from local_llm.benchmarks.proc import Command
+from local_llm.benchmarks.analysis import stats
 from local_llm.benchmarks.serving.launcher import LauncherError, ServeProcess
 from local_llm.benchmarks.serving.profiles import Overrides, ProfileError, resolve
-from local_llm.benchmarks.tune_schedule import median
+from local_llm.benchmarks.tuning.proc import Command
+from local_llm.benchmarks.tuning.tune_schedule import median
 from local_llm.models.benchmarks.profiles import BenchmarkProfiles
 
 if TYPE_CHECKING:  # pragma: no cover - typing only, avoids a real import cycle
-    from local_llm.benchmarks.tune_schedule import Candidate
+    from local_llm.benchmarks.tuning.tune_schedule import Candidate
 
 # ---------------------------------------------------------------------------
 # serving one candidate
@@ -183,7 +183,7 @@ class Server:
         docstring), not covered by this id or by `kill_pgid`. That is a
         deliberate, known gap rather than an oversight -- the recorder is
         already designed to notice its server's port has gone dead and stop
-        itself (see benchmarks/telemetry_recorder.py), so an orphaned one
+        itself (see benchmarks/serving/telemetry_recorder.py), so an orphaned one
         is self-healing, not a permanent leak the way an orphaned server
         holding VRAM would be.
         """

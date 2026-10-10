@@ -1,4 +1,4 @@
-"""benchmarks/grading/humaneval.py - the HumanEval harness.
+"""benchmarks/evaluation/grading/humaneval.py - the HumanEval harness.
 
 Each item ships `test` (a check(candidate) function) and `entry_point`. This
 module only arranges for the dataset's own verdict to be reached; it never

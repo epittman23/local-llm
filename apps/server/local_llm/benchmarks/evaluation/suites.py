@@ -1,4 +1,4 @@
-"""benchmarks/suites.py - suite TOML loading and seeded item selection.
+"""benchmarks/evaluation/suites.py - suite TOML loading and seeded item selection.
 
 Ported from local-llm's scripts/llama_tests.py (outer repo). A suite names a
 tier (smoke/standard/full) as a list of (benchmark, n) pairs; build_suite()
@@ -12,12 +12,10 @@ from __future__ import annotations
 import hashlib
 import random
 import tomllib
-from pathlib import Path
 
-from local_llm.benchmarks import grading
-from local_llm.benchmarks.datasets import dotted, item_id, read_items
-
-SUITES_DIR = Path(__file__).resolve().parent / 'data' / 'suites'
+from local_llm.benchmarks.evaluation import grading
+from local_llm.benchmarks.evaluation.datasets import dotted, item_id, read_items
+from local_llm.benchmarks.paths import SUITES_DIR
 
 
 def load_suite(name: str) -> dict:

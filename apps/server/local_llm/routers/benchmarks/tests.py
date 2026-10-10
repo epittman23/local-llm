@@ -15,9 +15,9 @@ import json
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from local_llm.benchmarks import runner
-from local_llm.benchmarks.adapters import ADAPTERS_DIR
-from local_llm.benchmarks.suites import SUITES_DIR
+from local_llm.benchmarks.evaluation import runner
+from local_llm.benchmarks.evaluation.adapters import ADAPTERS_DIR
+from local_llm.benchmarks.evaluation.suites import SUITES_DIR
 from local_llm.constants import ERROR_MESSAGES
 from local_llm.utils.auth import get_admin_user
 from pydantic import BaseModel, ConfigDict

@@ -2,7 +2,7 @@
 
 import pytest
 
-from local_llm.benchmarks import runner
+from local_llm.benchmarks.evaluation import runner
 from local_llm.routers.ollama import parse_huggingface_url, upload_path_for
 
 

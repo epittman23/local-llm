@@ -1,8 +1,8 @@
-"""benchmarks/tune.py - search the serving configuration space, and judge the winner.
+"""benchmarks/tuning/tune.py - search the serving configuration space, and judge the winner.
 
 Ported from local-llm's scripts/llama_tune.py (outer repo, 2265 lines -- the
 `lllm-tune` configuration-search / A-B testing engine, and the highest-risk
-port in this migration). `benchmarks/compare.py` and `benchmarks/report.py`
+port in this migration). `benchmarks/analysis/compare.py` and `benchmarks/analysis/report.py`
 analyse configurations somebody already thought to try. This searches: it
 serves a batch of configurations against the same benchmark items,
 eliminates the slow ones round by round, narrows onto the best values of
@@ -144,12 +144,14 @@ import time
 
 import aiohttp
 
-from local_llm.benchmarks import env_profile, report, runner
-from local_llm.benchmarks.adapters import load_adapters, render_prompt
-from local_llm.benchmarks.runner import SuiteLoadError
-from local_llm.benchmarks.suites import build_suite, interleave, load_suite
-from local_llm.benchmarks.suites import order_sha as order_sha_of
-from local_llm.benchmarks.tune_probe import (
+from local_llm.benchmarks.analysis import report
+from local_llm.benchmarks.evaluation import runner
+from local_llm.benchmarks.evaluation.adapters import load_adapters, render_prompt
+from local_llm.benchmarks.evaluation.runner import SuiteLoadError
+from local_llm.benchmarks.evaluation.suites import build_suite, interleave, load_suite
+from local_llm.benchmarks.evaluation.suites import order_sha as order_sha_of
+from local_llm.benchmarks.serving import env_profile
+from local_llm.benchmarks.tuning.tune_probe import (
     CollapseWatch,
     GpuProbe,
     Infeasible,
@@ -159,7 +161,7 @@ from local_llm.benchmarks.tune_probe import (
     throttled,
     tps,
 )
-from local_llm.benchmarks.tune_schedule import (
+from local_llm.benchmarks.tuning.tune_schedule import (
     MODES,
     Budget,
     Candidate,
@@ -190,7 +192,7 @@ log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # outcome vocabulary -- reimplemented rather than imported, the same
-# modularity choice benchmarks/report.py's own module docstring explains for
+# modularity choice benchmarks/analysis/report.py's own module docstring explains for
 # its copy of these six lines: this module must not depend on
 # benchmarks.compare or .report for something this small, and duplicating it
 # is cheaper than the coupling.

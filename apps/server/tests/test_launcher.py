@@ -289,7 +289,7 @@ def test_telemetry_argv_carries_the_fingerprint_and_model_split(profiles):
         return argv[argv.index(flag) + 1]
 
     assert argv[0] == '-m'
-    assert argv[1] == 'local_llm.benchmarks.telemetry_recorder'
+    assert argv[1] == 'local_llm.benchmarks.serving.telemetry_recorder'
     assert value_after('--config-id') == case['config_id']
     assert value_after('--alias') == config.alias
     name, quant = split_model('Qwen3.8-27B-UD-Q3_K_XL')
@@ -483,7 +483,7 @@ def test_telemetry_recorder_module_resolves_from_import_root():
     module resolves only because its package sits in the working directory.
     This pins that, whatever directory the backend itself was started from.
     """
-    module = 'local_llm.benchmarks.telemetry_recorder'
+    module = 'local_llm.benchmarks.serving.telemetry_recorder'
     env = {k: v for k, v in os.environ.items() if k != 'PYTHONPATH'}
     result = subprocess.run(
         [sys.executable, '-c', f'import importlib.util, sys; sys.exit(importlib.util.find_spec({module!r}) is None)'],

@@ -1,4 +1,4 @@
-"""benchmarks/runner.py - ask the server, grade the answer, record the result.
+"""benchmarks/evaluation/runner.py - ask the server, grade the answer, record the result.
 
 Ported from local-llm's scripts/llama_test.py (outer repo): the run/grade/
 record loop behind `lllm-test`. The original was already factored so a web UI
@@ -40,7 +40,7 @@ neither means anything without a terminal:
     original's docstring already anticipated for llama-tune.
 
 GRADING EXECUTES MODEL-GENERATED PYTHON in a subprocess under a timeout (see
-benchmarks/grading/__init__.py). That is process isolation, not a sandbox --
+benchmarks/evaluation/grading/__init__.py). That is process isolation, not a sandbox --
 an unchanged trust model from the original CLI tool.
 
 A known issue in the modules this file calls into: load_suite(), read_items()
@@ -64,26 +64,24 @@ import os
 import time
 import uuid
 from collections.abc import Awaitable, Callable
-from pathlib import Path
 
 import aiohttp
 
-from local_llm.benchmarks import env_profile
-from local_llm.benchmarks.adapters import load_adapters, render_prompt
-from local_llm.benchmarks.datasets import read_manifest
-from local_llm.benchmarks.grading import calibration_stale, grade
-from local_llm.benchmarks.suites import (
+from local_llm.benchmarks.evaluation.adapters import load_adapters, render_prompt
+from local_llm.benchmarks.evaluation.datasets import read_manifest
+from local_llm.benchmarks.evaluation.grading import calibration_stale, grade
+from local_llm.benchmarks.evaluation.suites import (
     build_suite,
     interleave,
     load_suite,
     missing_libraries,
 )
+from local_llm.benchmarks.paths import PROMPTS_DIR
+from local_llm.benchmarks.serving import env_profile
 from local_llm.models.benchmarks.configs import BenchmarkRuns
 from local_llm.models.benchmarks.tests import BenchmarkResults, BenchmarkSuiteExclusions
 
 log = logging.getLogger(__name__)
-
-PROMPTS_DIR = Path(__file__).resolve().parent / 'data' / 'prompts'
 
 
 # ---------------------------------------------------------------------------

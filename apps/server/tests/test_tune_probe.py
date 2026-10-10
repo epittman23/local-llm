@@ -21,10 +21,10 @@ import time
 
 import pytest
 
-from local_llm.benchmarks.proc import Command
 from local_llm.benchmarks.serving.launcher import ServeProcess
-from local_llm.benchmarks.tune_probe import Infeasible, Server
-from local_llm.benchmarks.tune_schedule import Candidate
+from local_llm.benchmarks.tuning.proc import Command
+from local_llm.benchmarks.tuning.tune_probe import Infeasible, Server
+from local_llm.benchmarks.tuning.tune_schedule import Candidate
 from local_llm.models.benchmarks.profiles import (
     BenchmarkProfileEntry,
     BenchmarkProfileModel,
