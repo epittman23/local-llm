@@ -2,26 +2,35 @@ import asyncio
 import logging
 from contextlib import AsyncExitStack
 
-log = logging.getLogger(__name__)
-
 import anyio
-import httpx
+import httpx2
 from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
+from mcp.types import PaginatedRequestParams
 from open_webui.env import (
     AIOHTTP_CLIENT_SESSION_TOOL_SERVER_SSL,
-    AIOHTTP_CLIENT_TIMEOUT_TOOL_SERVER,
     MCP_INITIALIZE_TIMEOUT,
 )
 
+log = logging.getLogger(__name__)
+
+# The MCP SDK's own defaults for a streamable-HTTP client: 30 s to connect
+# and write, 300 s to read, so the long-lived server-to-client stream stays
+# open. (A bare httpx2 client would time it out after 5 s.)
+MCP_DEFAULT_TIMEOUT = httpx2.Timeout(30, read=300)
+
 
 def _build_httpx_client(headers=None, timeout=None, auth=None, verify=True):
-    """Create an httpx AsyncClient for MCP transport.
+    """Create the httpx2 AsyncClient the MCP SDK (v2) sends its requests with.
 
-    Falls back to AIOHTTP_CLIENT_TIMEOUT_TOOL_SERVER when the caller
-    (i.e. the MCP SDK) does not supply an explicit timeout.
+    It must be an httpx2 client, not httpx: the SDK checks the type, and an
+    httpx client degrades silently (server-initiated messages stop arriving).
 
-    Note: verify must be passed at construction time because httpx
+    Timeout: the caller's, else MCP_DEFAULT_TIMEOUT. (Under mcp v1 the SDK
+    always passed its own 30/300 s timeout to this factory, so that is the
+    behavior kept; AIOHTTP_CLIENT_TIMEOUT_TOOL_SERVER never applied here.)
+
+    Note: verify must be passed at construction time because httpx2
     configures the SSL context during __init__. Setting client.verify = False
     after construction does not affect the underlying transport's SSL context.
     """
@@ -29,21 +38,18 @@ def _build_httpx_client(headers=None, timeout=None, auth=None, verify=True):
         'follow_redirects': True,
         'verify': verify,
     }
-    if timeout is not None:
-        kwargs['timeout'] = timeout
-    elif AIOHTTP_CLIENT_TIMEOUT_TOOL_SERVER is not None:
-        kwargs['timeout'] = float(AIOHTTP_CLIENT_TIMEOUT_TOOL_SERVER)
+    kwargs['timeout'] = timeout if timeout is not None else MCP_DEFAULT_TIMEOUT
     if headers is not None:
         kwargs['headers'] = headers
     if auth is not None:
         kwargs['auth'] = auth
-    return httpx.AsyncClient(**kwargs)
+    return httpx2.AsyncClient(**kwargs)
 
 
 def create_httpx_client(headers=None, timeout=None, auth=None):
     # AIOHTTP_CLIENT_SESSION_TOOL_SERVER_SSL may be True, False, or an
     # ssl.SSLContext (when a custom CA bundle path is configured).
-    # httpx's verify= accepts bool | str | ssl.SSLContext, so all three work.
+    # httpx2's verify= accepts bool | ssl.SSLContext, which covers all three.
     ssl_setting = AIOHTTP_CLIENT_SESSION_TOOL_SERVER_SSL
     verify = ssl_setting if ssl_setting is not True else True
     return _build_httpx_client(headers=headers, timeout=timeout, auth=auth, verify=verify)
@@ -61,16 +67,13 @@ class MCPClient:
     async def connect(self, url: str, headers: dict | None = None):
         async with AsyncExitStack() as exit_stack:
             try:
-                self._streams_context = streamablehttp_client(
-                    url,
-                    headers=headers,
-                    httpx_client_factory=create_httpx_client
-                    if AIOHTTP_CLIENT_SESSION_TOOL_SERVER_SSL
-                    else create_insecure_httpx_client,
+                make_client = (
+                    create_httpx_client if AIOHTTP_CLIENT_SESSION_TOOL_SERVER_SSL else create_insecure_httpx_client
                 )
+                http_client = await exit_stack.enter_async_context(make_client(headers=headers))
+                self._streams_context = streamable_http_client(url, http_client=http_client)
 
-                transport = await exit_stack.enter_async_context(self._streams_context)
-                read_stream, write_stream, _ = transport
+                read_stream, write_stream = await exit_stack.enter_async_context(self._streams_context)
 
                 self._session_context = ClientSession(read_stream, write_stream)  # pylint: disable=W0201
 
@@ -94,12 +97,7 @@ class MCPClient:
             name = tool.name
             description = tool.description
 
-            inputSchema = tool.inputSchema
-
-            # TODO: handle outputSchema if needed
-            outputSchema = getattr(tool, 'outputSchema', None)
-
-            tool_specs.append({'name': name, 'description': description, 'parameters': inputSchema})
+            tool_specs.append({'name': name, 'description': description, 'parameters': tool.input_schema})
 
         return tool_specs
 
@@ -111,10 +109,12 @@ class MCPClient:
         if not result:
             raise Exception('No result returned from MCP tool call.')
 
-        result_dict = result.model_dump(mode='json')
+        # by_alias: the MCP wire format (camelCase, e.g. `mimeType`), which is
+        # what middleware.py reads; a plain v2 model_dump() is snake_case.
+        result_dict = result.model_dump(mode='json', by_alias=True)
         result_content = result_dict.get('content', {})
 
-        if result.isError:
+        if result.is_error:
             raise Exception(result_content)
         else:
             return result_content
@@ -123,11 +123,13 @@ class MCPClient:
         if not self.session:
             raise RuntimeError('MCP client is not connected.')
 
-        result = await self.session.list_resources(cursor=cursor)
+        result = await self.session.list_resources(
+            params=PaginatedRequestParams(cursor=cursor) if cursor is not None else None
+        )
         if not result:
             raise Exception('No result returned from MCP list_resources call.')
 
-        result_dict = result.model_dump()
+        result_dict = result.model_dump(by_alias=True)
         resources = result_dict.get('resources', [])
 
         return resources
@@ -139,7 +141,7 @@ class MCPClient:
         result = await self.session.read_resource(uri)
         if not result:
             raise Exception('No result returned from MCP read_resource call.')
-        result_dict = result.model_dump()
+        result_dict = result.model_dump(by_alias=True)
 
         return result_dict
 
