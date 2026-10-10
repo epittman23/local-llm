@@ -63,9 +63,9 @@ never the `make backend` database:
 
 ```bash
 docker run --rm -d -p 127.0.0.1:55432:5432 \
-  -e POSTGRES_USER=openwebui -e POSTGRES_PASSWORD=throwaway -e POSTGRES_DB=openwebui \
+  -e POSTGRES_USER=local_llm -e POSTGRES_PASSWORD=throwaway -e POSTGRES_DB=local_llm \
   pgvector/pgvector:pg16
-TEST_DATABASE_URL=postgresql://openwebui:throwaway@127.0.0.1:55432/openwebui
+TEST_DATABASE_URL=postgresql://local_llm:throwaway@127.0.0.1:55432/local_llm
 ```
 
 Without it the test skips locally; CI provides one and fails rather than

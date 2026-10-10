@@ -46,10 +46,9 @@ WEBUI_SECRET_KEY=<openssl rand -base64 24>
 > **Moving from WSL2 to native Linux (2026-10-09).** Nothing gitignored
 > comes across with a fresh clone: recreate `infra/.env`, let `make backend`
 > build the venv, and rerun `bun install && bun run build` in `apps/web`.
-> Docker volumes do not move either, so the `open-web-ui_postgres-data`
-> volume (chats, accounts, benchmark history, profile edits) starts empty
-> on the new machine unless you `pg_dump` it from the old one and restore
-> it. Model weights and `~/llama.cpp` have to be copied or fetched again too
+> Docker volumes do not move either, so the database (chats, accounts,
+> benchmark history, profile edits) starts empty on the new machine unless
+> you restore a `pg_dump` of the old one (see "Restoring a database" below). Model weights and `~/llama.cpp` have to be copied or fetched again too
 > (see [docs/guides/llama-cpp.md](docs/guides/llama-cpp.md#building-llamacpp) and [docs/guides/model-downloads.md](docs/guides/model-downloads.md)).
 
 > **Upgrading an existing checkout (2026-10-10).** `apps/server/backend/`
@@ -68,6 +67,22 @@ WEBUI_SECRET_KEY=<openssl rand -base64 24>
 > - **The venv.** It is now uv's default `apps/server/.venv`, which the next
 >   `make backend` builds (quickly, from uv's cache). Afterwards remove the
 >   old one and the leftover directory: `rm -rf apps/server/backend`.
+
+> **Restoring a database.** The Compose project is `local-llm`, so the data
+> lives in the `local-llm_postgres-data` volume, with role and database
+> `local_llm`. (Until 2026-10-10 they were `open-web-ui_postgres-data` and
+> `openwebui`.) To bring an old database across, dump it on the old setup
+> and restore it here **before** the first `make backend`, so migrations
+> don't create an empty schema first:
+>
+> ```bash
+> # on the old setup
+> pg_dump -Fc -U openwebui openwebui > local-llm.dump
+> # here: start only Postgres, then restore into it
+> docker compose -f infra/docker-compose.yml up -d postgres
+> docker exec -i local-llm-postgres pg_restore --no-owner --role=local_llm \
+>   -U local_llm -d local_llm < local-llm.dump
+> ```
 
 then, in one terminal:
 
@@ -201,7 +216,7 @@ which never navigates on its own and renders a 404 page.
 | `/api/v1/**` | The REST API the pages call (auths, models, knowledge, prompts, skills, tools, benchmarks, ...) |
 | `/` and every page path | The built Astro app, when `apps/web/dist/` exists (see [Running it](#running-it)) |
 
-Postgres listens on `127.0.0.1:5432` (user/db `openwebui`, password from
+Postgres listens on `127.0.0.1:5432` (user/db `local_llm`, password from
 `infra/.env`), loopback only.
 
 ## Model setup
