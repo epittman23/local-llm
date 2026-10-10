@@ -248,6 +248,10 @@ if FROM_INIT_PY:
 
     DATA_DIR = Path(os.getenv('DATA_DIR', OPEN_WEBUI_DIR / 'data'))
 
+# Created here rather than relied on to exist: a fresh clone has no data dir,
+# and run_migrations() (config.py) runs before anything else creates one.
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
 STATIC_DIR = Path(os.getenv('STATIC_DIR', OPEN_WEBUI_DIR / 'static'))
 
 FONTS_DIR = Path(os.getenv('FONTS_DIR', OPEN_WEBUI_DIR / 'static' / 'fonts'))
@@ -773,11 +777,8 @@ WEBUI_AUTH_COOKIE_SECURE = (
 if WEBUI_AUTH and WEBUI_SECRET_KEY == '':
     raise SystemExit(
         'WEBUI_SECRET_KEY is not set. It is a hard requirement when authentication is enabled.\n'
-        'The supported start methods set or auto-generate it for you: use start.sh (Linux/macOS), '
-        'start_windows.bat (Windows), or `open-webui serve`.\n'
-        'If you start the backend another way (e.g. invoking uvicorn directly, which is unsupported), '
-        'you must set WEBUI_SECRET_KEY yourself to a long random value.\n'
-        'See https://docs.openwebui.com/reference/env-configuration#webui_secret_key'
+        'Set it to a long random value in infra/.env (`make backend` loads it from there), '
+        'or export it yourself when starting uvicorn by hand.'
     )
 
 ENABLE_COMPRESSION_MIDDLEWARE = os.getenv('ENABLE_COMPRESSION_MIDDLEWARE', 'True').lower() == 'true'

@@ -183,7 +183,7 @@ unstructured = [
 # Excel and PowerPoint fall back to pandas / python-pptx.
 all = [
     "pymongo==4.18.2",
-    "playwright==1.63.0", # Caution: version must match docker-compose.playwright.yaml - Update the docker-compose.yaml if necessary
+    "playwright==1.63.0",
     "elasticsearch==9.5.1",
 
     "qdrant-client==1.19.1",
@@ -213,20 +213,10 @@ sources = ["backend"]
 exclude = [
     ".gitignore",
     ".webui_secret_key",
-    "dev.sh",
-    "start.sh",
-    "start_windows.bat",
     "webui.db",
     "chroma.sqlite3",
 ]
 force-include = { "CHANGELOG.md" = "open_webui/CHANGELOG.md" }
-
-[tool.codespell]
-# Ref: https://github.com/codespell-project/codespell#using-a-config-file
-skip = '.git*,*.svg,package-lock.json,i18n,*.lock,*.css,*-bundle.js,locales,example-doc.txt,emoji-shortcodes.json'
-check-hidden = true
-# ignore-regex = ''
-ignore-words-list = 'ans'
 
 [dependency-groups]
 dev = [

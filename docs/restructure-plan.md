@@ -807,7 +807,7 @@ rm -rf apps/server/backend
 |---|---|---|---|---|
 | 0 Plan + baselines | (this PR) | done | see "Phase 0 baselines" below | none |
 | 1 Docs | (this PR) | done | see "Phase 1" below | see "Phase 1" below |
-| 2a-2e Deletions + licenses | — | | | |
+| 2a-2e Deletions + licenses | 2a: (this PR) | in progress | see "Phase 2" below | see "Phase 2" below |
 | 3 Flatten | — | | | |
 | 4 Rename | — | | | |
 | 5a/5b Blame + plugin compat | — | | | |
@@ -860,4 +860,21 @@ rm -rf apps/server/backend
   - README keeps the 2026-10-09 WSL2 note until Phase 3 adds the restructure upgrade note.
   - The NOTICE links in README and AGENTS.md point at `apps/server/LICENSE_NOTICE` until Phase 2e creates `NOTICE`.
   - `docs/guides/benchmarks.md` "The pages" still mentions the orphaned `tests/data/` cache; that goes with the gitignore rule in Phase 2a.
+
+### Phase 2: deletions and license consolidation
+
+- **Baselines re-created.** The session scratchpad was wiped by a session restart after Phase 1, which took the Phase 0 schema and metadata baselines with it.
+  - Rebuilt from the pre-restructure commit (1341930) in a temporary worktree: same sizes as Phase 0 (2,943 schema lines, 441 metadata lines).
+  - Now kept outside the scratchpad in `~/.cache/local-llm-restructure/`, along with `scratch_boot.sh` and `metadata_dump.py`.
+  - pg_dump's random `\restrict` token lines are filtered out before diffing.
+- **2a (remove unused upstream files).**
+  - Deleted every file the §4a/§4b/§4d manifest marked **delete**, plus `benchmarks/scripts/` (Q6) and `apps/web/public/favicon.svg`.
+  - Merged the server `.gitignore` files into the root one: `/apps/server/backend/data/`, `/apps/server/data/`, `*.db`, the boot-copied static files, and `.webui_secret_key` (until 2c removes the CLI). Dropped the `tests/data/` rule and anchored `/logs/`.
+  - `env.py` creates `DATA_DIR` itself, and its missing-secret message now points at `infra/.env` instead of the deleted start scripts.
+  - New `infra/.env.example`.
+  - pyproject: codespell config and the stale wheel excludes removed.
+  - **Verification:**
+    - pre-commit passed; `uv lock --check` OK; pytest 300 passed, 1 skipped; fingerprint 79 passed.
+    - Scratch boot OK; schema and metadata identical to baseline.
+    - `git status` shows no newly unignored files; web build OK. Playwright left to CI: no route or component changed.
 
