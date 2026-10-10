@@ -17,3 +17,8 @@
 # 2,189 mechanical fixes in 191 files. It also carried the
 # ENABLE_ADMIN_CHAT_ACCESS import fix and tests/test_imports.py.
 f19bb6b50147d2635c6be54036b0b045f7c37712
+
+# refactor(server)!: rename the Python package to local_llm (#62).
+# The directory move plus 1,460 word-boundary replacements of the package
+# name in 247 files; nothing else rode along.
+69c243c34ff32fabbf0f5cd8249bb9ddac1d8485
