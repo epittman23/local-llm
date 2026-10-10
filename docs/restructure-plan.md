@@ -810,7 +810,7 @@ rm -rf apps/server/backend
 | 2a-2e Deletions + licenses | #56, #57, #58, #59, 2e: (this PR) | done | see "Phase 2" below | see "Phase 2" below |
 | 3 Flatten | #61 | done | see "Phase 3" below | see "Phase 3" below |
 | 4 Rename | #62 | done | see "Phase 4" below | see "Phase 4" below |
-| 5a/5b Blame + plugin compat | 5a: (this PR) | in progress | see "Phase 5" below | none |
+| 5a/5b Blame + plugin compat | #63, 5b: (this PR) | done | see "Phase 5" below | none |
 | 6a-6d Identifiers + branding | — | | | |
 | 7a/7b Benchmarks | — | | | |
 | 8 make check | — | | | |
@@ -947,4 +947,7 @@ rm -rf apps/server/backend
 ### Phase 5: blame-ignore entry and stored-plugin compatibility
 
 - **5a.** Added `69c243c34ff32fabbf0f5cd8249bb9ddac1d8485` (the #62 squash) to `.git-blame-ignore-revs`, with a comment in the file's style that does not name the old package.
+- **5b.** `utils/plugin.py`'s `replace_imports` now also rewrites `from open_webui…` / `import open_webui…` to `local_llm`. It is word-bounded and applies only after `from`/`import`, so `'open_webui:code_interpreter'`, `required_open_webui_version` and `open_webui_extras` are untouched.
+  - It runs where the existing rewrite already ran: on every Tool/Function load (whose result is saved back) and on create, update and import. Stored and pasted community plugins written against the old name therefore keep working, with no migration.
+  - New `tests/test_plugin_imports.py` (3 tests). Verification: pytest 308 passed, 1 skipped; pre-commit passed.
 

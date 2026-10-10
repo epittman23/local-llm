@@ -184,10 +184,19 @@ def extract_frontmatter(content):
     return frontmatter
 
 
+# Tool and Function source written against the package's old name (stored
+# before the 2026-10-10 rename, or pasted from a community plugin) imports
+# `open_webui.*`; rewrite those imports to this package. Word-bounded and only
+# after `from`/`import`, so strings such as 'open_webui:code_interpreter' and
+# names such as required_open_webui_version are left alone.
+_OLD_PACKAGE_IMPORT = re.compile(r'\b(from|import)(\s+)open_webui\b')
+
+
 def replace_imports(content):
     """
     Replace the import paths in the content.
     """
+    content = _OLD_PACKAGE_IMPORT.sub(r'\1\2local_llm', content)
     replacements = {
         'from utils': 'from local_llm.utils',
         'from apps': 'from local_llm.apps',
