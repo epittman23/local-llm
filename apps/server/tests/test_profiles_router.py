@@ -3,7 +3,7 @@
 Database-free: BenchmarkProfiles (the module-level singleton the router
 calls) is monkeypatched with async stubs, so these check the router's own
 job -- status codes, 404/409/400 mapping, the immutable-name contract -- not
-the model layer underneath it (that's models/benchmark_profiles.py's own
+the model layer underneath it (that's models/benchmarks/profiles.py's own
 concern, exercised against real fingerprints in test_serving_profiles.py).
 A minimal FastAPI app mounts only this router, with get_admin_user
 overridden, so nothing here touches auth or a real database.
@@ -23,7 +23,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from local_llm.benchmarks.serving.profiles import ProfileError
-from local_llm.models.benchmark_profiles import (
+from local_llm.models.benchmarks.profiles import (
     BenchmarkProfileEntry,
     BenchmarkProfileModel,
     BenchmarkProfileVersionModel,

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from local_llm.constants import ERROR_MESSAGES
-from local_llm.models.benchmark_tests import BenchmarkAnswers, BenchmarkResults
+from local_llm.models.benchmarks.tests import BenchmarkAnswers, BenchmarkResults
 from local_llm.utils.auth import get_admin_user
 
 router = APIRouter()

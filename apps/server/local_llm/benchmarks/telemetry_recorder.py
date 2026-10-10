@@ -31,8 +31,8 @@ one, and SQLAlchemy's async engine would only add a dependency this process
 does not need to reason about itself. One psycopg connection, opened for the
 life of the process, matches the original's one-sqlite-connection pattern.
 
-The async SQLAlchemy models in local_llm/models/benchmark_configs.py and
-benchmark_telemetry.py are the *read* side other backend code (a future
+The async SQLAlchemy models in local_llm/models/benchmarks/configs.py and
+telemetry.py are the *read* side other backend code (a future
 Serve router, a Report page) uses inside the event loop; this file is the
 one writer that runs outside it, so both sides read and write the same
 tables without disagreeing on their shape.
@@ -199,8 +199,8 @@ def scrape_metrics(port: int) -> dict | None:
 # ---------------------------------------------------------------------------
 # database -- plain parameterized SQL over benchmark_config / benchmark_run /
 # benchmark_gpu_sample / benchmark_metrics_scrape / benchmark_run_load_info,
-# the same tables local_llm/models/benchmark_configs.py and
-# benchmark_telemetry.py read through the async engine. Column lists here are
+# the same tables local_llm/models/benchmarks/configs.py and
+# telemetry.py read through the async engine. Column lists here are
 # the migration's (b3f8a1d94e70_add_benchmark_tables.py), not guessed at.
 # ---------------------------------------------------------------------------
 def _database_url(explicit: str | None) -> str:

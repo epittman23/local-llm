@@ -48,7 +48,7 @@ from local_llm.benchmarks.proc import Command
 from local_llm.benchmarks.serving.launcher import LauncherError, ServeProcess
 from local_llm.benchmarks.serving.profiles import Overrides, ProfileError, resolve
 from local_llm.benchmarks.tune_schedule import median
-from local_llm.models.benchmark_profiles import BenchmarkProfiles
+from local_llm.models.benchmarks.profiles import BenchmarkProfiles
 
 if TYPE_CHECKING:  # pragma: no cover - typing only, avoids a real import cycle
     from local_llm.benchmarks.tune_schedule import Candidate

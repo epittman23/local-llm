@@ -8,9 +8,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from local_llm.benchmarks import stats
 from local_llm.benchmarks.tune_probe import kill_pgid
 from local_llm.constants import ERROR_MESSAGES
-from local_llm.models.benchmark_configs import BenchmarkRuns
-from local_llm.models.benchmark_telemetry import BenchmarkGpuSamples, BenchmarkMetricsScrapes
-from local_llm.models.benchmark_tests import BenchmarkRequests
+from local_llm.models.benchmarks.configs import BenchmarkRuns
+from local_llm.models.benchmarks.telemetry import BenchmarkGpuSamples, BenchmarkMetricsScrapes
+from local_llm.models.benchmarks.tests import BenchmarkRequests
 from local_llm.utils.auth import get_admin_user
 
 router = APIRouter()

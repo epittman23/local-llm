@@ -65,7 +65,7 @@ The arithmetic that used to be computed at write time (`is_cold`,
 `acceptance`, `mean_len` per request; pass rate excluding `skipped`; per-run
 GPU stats; each config's latest run) is no longer a set of SQL views —
 this fork's own schema uses no views anywhere else, so the same computations
-are plain query methods on the `models/benchmark_*.py` table-wrapper classes
+are plain query methods on the `models/benchmarks/` table-wrapper classes
 instead, which has the advantage of being unit-testable directly rather than
 only through a live-Postgres round trip.
 

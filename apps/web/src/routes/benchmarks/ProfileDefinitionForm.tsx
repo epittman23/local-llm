@@ -29,7 +29,7 @@ const emptyDefinition: ProfileDefinition = {
 };
 
 // spec/samplers/extra are argv token lists on the backend
-// (models/benchmark_profiles.py), edited here as one command-line string.
+// (models/benchmarks/profiles.py), edited here as one command-line string.
 // The raw text is kept as typed and only split on submit -- re-deriving the
 // input's value from the parsed list on every keystroke ate commas and spaces
 // (docs/history/bug-review-2026-09-27.md M7). Split shell-style: whitespace separates

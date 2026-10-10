@@ -198,7 +198,7 @@ def test_profile_table_module_imports_and_resolves_its_names():
     backend venv, not a bare interpreter.
     """
     pytest.importorskip('markdown', reason='needs the backend venv')
-    module = pytest.importorskip('local_llm.models.benchmark_profiles', reason='needs the backend venv')
+    module = pytest.importorskip('local_llm.models.benchmarks.profiles', reason='needs the backend venv')
 
     for name in ('validate_definition', 'ProfileError', 'ServingProfile'):
         assert hasattr(module, name), f'{name} is referenced but not imported'

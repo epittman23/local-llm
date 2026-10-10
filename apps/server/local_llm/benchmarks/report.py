@@ -33,8 +33,8 @@ Every test carries its assumption check and its n. A test whose assumptions
 fail is printed as refused, with the reason, and never silently omitted.
 
 Read-only by design: every fetch below goes through the async Table-wrapper
-query methods on local_llm.models.benchmark_tests/benchmark_telemetry/
-benchmark_configs (list_results, list_samples, get_by_id, list_runs, ...),
+query methods on local_llm.models.benchmarks.tests/telemetry/
+configs (list_results, list_samples, get_by_id, list_runs, ...),
 none of which write. This module itself never calls a write method, so the
 "a report can never be the thing it reports on" property the original
 enforced by opening its own sqlite connection with `mode=ro` holds here
@@ -42,8 +42,8 @@ automatically, by construction rather than by a connection flag.
 
 Structural change from the original: the CLI's `at` columns were sqlite TEXT
 timestamps ("YYYY-MM-DDTHH:MM:SSZ"), sortable and parseable as strings. This
-port's schema stores `at` as BigInteger unix seconds (see benchmark_tests.py,
-benchmark_telemetry.py), so every place the original parsed or lexically
+port's schema stores `at` as BigInteger unix seconds (see models/benchmarks/tests.py,
+telemetry.py), so every place the original parsed or lexically
 sorted a timestamp string here compares or formats an int instead (`_iso()`
 is the formatter, kept for markdown display only -- nothing parses it back).
 
@@ -90,9 +90,9 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from local_llm.benchmarks import stats as lstats
-from local_llm.models.benchmark_configs import BenchmarkRuns
-from local_llm.models.benchmark_telemetry import BenchmarkGpuSamples
-from local_llm.models.benchmark_tests import BenchmarkResults, BenchmarkSchemaNotes
+from local_llm.models.benchmarks.configs import BenchmarkRuns
+from local_llm.models.benchmarks.telemetry import BenchmarkGpuSamples
+from local_llm.models.benchmarks.tests import BenchmarkResults, BenchmarkSchemaNotes
 
 if TYPE_CHECKING:  # pragma: no cover - typing only, no runtime import cycle
     from local_llm.benchmarks.report_figures import Figures

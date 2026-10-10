@@ -2,7 +2,7 @@
 
 Backs decision 11 in docs/history/migration-plan.md: full profile CRUD (list,
 create, clone, edit, archive, set default) from the Serve page. Thin over
-models/benchmark_profiles.py.BenchmarkProfileTable, which already carries
+models/benchmarks/profiles.py.BenchmarkProfileTable, which already carries
 the actual rules (versioning, the default-profile guard rails); this file's
 only job is turning those into HTTP.
 
@@ -20,7 +20,7 @@ import re
 from fastapi import APIRouter, Depends, HTTPException, status
 from local_llm.benchmarks.serving.profiles import ProfileError
 from local_llm.constants import ERROR_MESSAGES
-from local_llm.models.benchmark_profiles import BenchmarkProfileEntry, BenchmarkProfiles
+from local_llm.models.benchmarks.profiles import BenchmarkProfileEntry, BenchmarkProfiles
 from local_llm.utils.auth import get_admin_user
 from pydantic import BaseModel, ConfigDict, field_validator
 
