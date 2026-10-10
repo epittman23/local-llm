@@ -565,8 +565,6 @@ export function AddToolServerModal({
 
 						{f.type === 'mcp' && (
 							<div className="rounded-2xl bg-yellow-500/20 px-4 py-3 text-xs text-yellow-700 dark:text-yellow-200">
-								{/* LICENSE covers this Open WebUI wordmark. Do not alter, remove, obscure, or replace it
-								    except as LICENSE permits: https://docs.openwebui.com/license. */}
 								Warning: MCP support is experimental and its specification changes often, which can lead to
 								incompatibilities. OpenAPI specification support is directly maintained by the Open WebUI team, making
 								it the more reliable option for compatibility.{' '}

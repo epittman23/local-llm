@@ -422,10 +422,7 @@ function WebhookDialog({
 									))}
 								</div>
 								<p className="text-muted-foreground text-xs">
-									{/* LICENSE covers this Open WebUI wordmark.
-									    Do not alter, remove, obscure, or replace it except as LICENSE permits:
-									    https://docs.openwebui.com/license. */}
-									Event names may change as Open WebUI evolves. Use broad patterns like user.* for integrations that
+									Event names may change as Local LLM evolves. Use broad patterns like user.* for integrations that
 									should continue across new related events.
 								</p>
 							</div>

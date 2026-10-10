@@ -1,4 +1,4 @@
-"""OpenTelemetry metrics bootstrap for Open WebUI.
+"""OpenTelemetry metrics bootstrap for Local LLM.
 
 This module initialises a MeterProvider that sends metrics to an OTLP
 collector. The collector is responsible for exposing a Prometheus

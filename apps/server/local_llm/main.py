@@ -303,27 +303,7 @@ class SPAStaticFiles(StaticFiles):
 
 
 if LOG_FORMAT != 'json':
-    banner = rf"""
- ██████╗ ██████╗ ███████╗███╗   ██╗    ██╗    ██╗███████╗██████╗ ██╗   ██╗██╗
-██╔═══██╗██╔══██╗██╔════╝████╗  ██║    ██║    ██║██╔════╝██╔══██╗██║   ██║██║
-██║   ██║██████╔╝█████╗  ██╔██╗ ██║    ██║ █╗ ██║█████╗  ██████╔╝██║   ██║██║
-██║   ██║██╔═══╝ ██╔══╝  ██║╚██╗██║    ██║███╗██║██╔══╝  ██╔══██╗██║   ██║██║
-╚██████╔╝██║     ███████╗██║ ╚████║    ╚███╔███╔╝███████╗██████╔╝╚██████╔╝██║
- ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═══╝     ╚══╝╚══╝ ╚══════╝╚═════╝  ╚═════╝ ╚═╝
-
-
-v{VERSION} - building the best AI user interface.
-{f'Commit: {LLLM_BUILD_HASH}' if LLLM_BUILD_HASH != 'dev-build' else ''}
-https://github.com/open-webui/open-webui
-"""
-    try:
-        print(banner)
-    except UnicodeEncodeError:
-        # Stdout can't encode the box-drawing banner (Windows cp1252, redirected/headless stdout); fall back to ASCII.
-        # LICENSE covers this Open WebUI CLI identifier.
-        # Do not alter, remove, obscure, or replace it except as LICENSE permits:
-        # https://docs.openwebui.com/license.
-        print(f'Open WebUI v{VERSION} - building the best AI user interface.\nhttps://github.com/open-webui/open-webui')
+    print(f'Local LLM v{VERSION}{f" (commit {LLLM_BUILD_HASH})" if LLLM_BUILD_HASH != "dev-build" else ""}')
 
 
 @asynccontextmanager
@@ -466,11 +446,8 @@ async def lifespan(app: FastAPI):
 # response_model routes keep FastAPI's Pydantic fast path either way.
 apply_orjson_http_json()
 
-# LICENSE covers this Open WebUI API metadata identifier.
-# Do not alter, remove, obscure, or replace it except as LICENSE permits:
-# https://docs.openwebui.com/license.
 app = FastAPI(
-    title='Open WebUI',
+    title='Local LLM',
     docs_url='/docs' if ENV == 'dev' else None,
     openapi_url='/openapi.json' if ENV == 'dev' else None,
     redoc_url=None,
@@ -480,7 +457,7 @@ app = FastAPI(
 # Used by readiness checks to gate traffic until startup work is done.
 app.state.startup_complete = False
 
-# For Open WebUI OIDC/OAuth2
+# For OIDC/OAuth2
 oauth_manager = OAuthManager(app)
 app.state.oauth_manager = oauth_manager
 
@@ -491,10 +468,6 @@ app.state.oauth_client_manager = oauth_client_manager
 app.state.instance_id = None
 app.state.redis = None
 
-# LICENSE covers this Open WebUI branding surface, including name, logo,
-# visual, textual, symbolic identifiers, metadata, and surrounding UI.
-# Do not alter, remove, obscure, or replace it except as LICENSE permits:
-# https://docs.openwebui.com/license.
 app.state.LLLM_NAME = LLLM_NAME
 app.state.EXTERNAL_PWA_MANIFEST_URL = EXTERNAL_PWA_MANIFEST_URL
 
@@ -1969,7 +1942,7 @@ async def generate_messages(
     pipeline, then converts the response back to Anthropic Messages format.
 
     Supports both streaming and non-streaming requests.
-    All models configured in Open WebUI are accessible via this endpoint.
+    All models configured in Local LLM are accessible via this endpoint.
 
     Authentication: Supports both standard Authorization header and
     Anthropic's x-api-key header (via middleware translation).
@@ -2520,7 +2493,7 @@ async def get_app_version():
 @app.get('/api/usage')
 async def get_current_usage(user=Depends(get_verified_user)):
     """
-    Get current usage statistics for Open WebUI.
+    Get current usage statistics for Local LLM.
     This is an experimental endpoint and subject to change.
     """
     try:
@@ -2556,7 +2529,7 @@ try:
         app.add_middleware(
             StarSessionsMiddleware,
             store=redis_session_store,
-            cookie_name='owui-session',
+            cookie_name='lllm-session',
             cookie_same_site=LLLM_SESSION_COOKIE_SAME_SITE,
             cookie_https_only=LLLM_SESSION_COOKIE_SECURE,
         )
@@ -2567,7 +2540,7 @@ except Exception:
     app.add_middleware(
         SessionMiddleware,
         secret_key=LLLM_SECRET_KEY,
-        session_cookie='owui-session',
+        session_cookie='lllm-session',
         same_site=LLLM_SESSION_COOKIE_SAME_SITE,
         https_only=LLLM_SESSION_COOKIE_SECURE,
     )
@@ -2768,10 +2741,6 @@ async def oauth_backchannel_logout(
 async def get_manifest_json():
     external_pwa_manifest_url = getattr(app.state, 'EXTERNAL_PWA_MANIFEST_URL', None)
     if external_pwa_manifest_url:
-        # LICENSE covers this install-time Open WebUI branding surface, including
-        # names, logos, manifests, metadata, and surrounding UI.
-        # Do not alter, remove, obscure, or replace it except as LICENSE permits:
-        # https://docs.openwebui.com/license.
         session = await get_session()
         async with session.get(
             external_pwa_manifest_url,
@@ -2780,10 +2749,6 @@ async def get_manifest_json():
             r.raise_for_status()
             return await r.json()
     else:
-        # LICENSE covers this generated Open WebUI install branding surface,
-        # including names, logos, manifests, metadata, and surrounding UI.
-        # Do not alter, remove, obscure, or replace it except as LICENSE permits:
-        # https://docs.openwebui.com/license.
         return {
             'name': app.state.LLLM_NAME,
             'short_name': app.state.LLLM_NAME,
@@ -2792,9 +2757,6 @@ async def get_manifest_json():
             'display': 'standalone',
             'background_color': '#343541',
             'icons': [
-                # LICENSE covers this Open WebUI install icon.
-                # Do not alter, remove, obscure, or replace it except as LICENSE permits:
-                # https://docs.openwebui.com/license.
                 {
                     'src': '/static/logo.png',
                     'type': 'image/png',
@@ -2819,9 +2781,6 @@ async def get_manifest_json():
 @app.get('/opensearch.xml')
 async def get_opensearch_xml():
     webui_url = await Config.get('webui.url')
-    # LICENSE covers this Open WebUI search identifier.
-    # Do not alter, remove, obscure, or replace it except as LICENSE permits:
-    # https://docs.openwebui.com/license.
     xml_content = rf"""
     <OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/" xmlns:moz="http://www.mozilla.org/2006/browser/search/">
     <ShortName>{app.state.LLLM_NAME}</ShortName>

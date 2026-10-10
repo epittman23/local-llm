@@ -43,10 +43,7 @@ export function ManifestModal({
 						helpful, please consider contributing to its development.
 					</div>
 					<div className="my-2">
-						{/* LICENSE covers this Open WebUI wordmark.
-						    Do not alter, remove, obscure, or replace it except as LICENSE permits:
-						    https://docs.openwebui.com/license. */}
-						Your entire contribution will go directly to the plugin developer; Open WebUI does not take any percentage.
+						Your entire contribution will go directly to the plugin developer; this app does not take any percentage.
 						However, the chosen funding platform might have its own fees.
 					</div>
 					<hr className="my-3" />

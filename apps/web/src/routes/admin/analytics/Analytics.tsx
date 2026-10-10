@@ -352,9 +352,6 @@ export default function Analytics() {
 														alt={model.name}
 														className="size-5 shrink-0 rounded-full object-cover"
 														onError={(e) => {
-															// LICENSE covers this Open WebUI fallback logo.
-															// Do not alter, remove, obscure, or replace it except as LICENSE permits:
-															// https://docs.openwebui.com/license.
 															e.currentTarget.src = '/favicon.png';
 														}}
 													/>

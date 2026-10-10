@@ -537,7 +537,7 @@ throughput and substantially eases the passive-cooling problem.
 | ------------------ | ------------------------------------------------------------------------------------------------ |
 | Primary option     | Tailscale (zero open ports)                                                                      |
 | Alternative        | Cloudflare Tunnel with custom domain                                                             |
-| Frontend           | Open WebUI                                                                                       |
+| Frontend           | Local LLM (apps/web)                                                                             |
 | Client integration | VS Code Copilot Chat BYOK custom endpoint; only `base_url` changes from the laptop configuration |
 
 ## Thermal limits

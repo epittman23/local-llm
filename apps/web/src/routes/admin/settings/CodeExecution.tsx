@@ -76,10 +76,7 @@ function EngineFields({
 							autoComplete="off"
 						/>
 					</SettingField>
-					{/* LICENSE covers this Open WebUI wordmark.
-					    Do not alter, remove, obscure, or replace it except as LICENSE permits:
-					    https://docs.openwebui.com/license. */}
-					<SettingRow label="Jupyter Auth" description="Select how Open WebUI authenticates with the Jupyter server.">
+					<SettingRow label="Jupyter Auth" description="Select how Local LLM authenticates with the Jupyter server.">
 						<SettingSelect
 							value={auth ?? ''}
 							onChange={(v) => set({ [key('JUPYTER_AUTH')]: v })}

@@ -78,7 +78,7 @@ class MistralLoader:
         # ENHANCEMENT: Added User-Agent for better API tracking and debugging
         self.headers = {
             'Authorization': f'Bearer {self.api_key}',
-            'User-Agent': 'OpenWebUI-MistralLoader/2.0',  # Helps API provider track usage
+            'User-Agent': 'LocalLLM-MistralLoader/2.0',  # Helps API provider track usage
         }
         if self.user is not None and ENABLE_FORWARD_USER_INFO_HEADERS:
             self.headers = include_user_info_headers(self.headers, self.user)

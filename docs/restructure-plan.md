@@ -811,7 +811,7 @@ rm -rf apps/server/backend
 | 3 Flatten | #61 | done | see "Phase 3" below | see "Phase 3" below |
 | 4 Rename | #62 | done | see "Phase 4" below | see "Phase 4" below |
 | 5a/5b Blame + plugin compat | #63, #64 | done | see "Phase 5" below | none |
-| 6a-6d Identifiers + branding | 6d #65, 6a #66, 6b: (this PR) | in progress | see "Phase 6" below | see "Phase 6" below |
+| 6a-6d Identifiers + branding | 6d #65, 6a #66, 6b #67, 6c: (this PR) | done | see "Phase 6" below | see "Phase 6" below |
 | 7a/7b Benchmarks | — | | | |
 | 8 make check | — | | | |
 | 10 Final sync + audit | — | | | |
@@ -1003,4 +1003,25 @@ rm -rf apps/server/backend
     - The Makefile's missing-key check rejects an old-style `.env` and accepts a new one, tested in isolation (`infra/.env` itself is never read).
     - Scratch boot OK; schema identical.
   - **You need to:** rename the key in `infra/.env` (§8 A): `sed -i 's/^WEBUI_SECRET_KEY=/LLLM_SECRET_KEY=/' infra/.env`.
+- **6c (rebrand as "Local LLM").**
+  - **License comment blocks:** removed all 61 upstream "LICENSE covers … do not alter … docs.openwebui.com/license" blocks (188 comment-only lines). NOTICE records the clause 4(i) basis once.
+  - **Name, banner and favicon:**
+    - `LLLM_NAME` defaults to "Local LLM", and the `' (Open WebUI)'` suffix logic is gone. `APP_NAME`, the FastAPI title and the error identifier ("Local LLM: Server Connection Error") change with it.
+    - The ASCII-art startup banner (with its upstream URL) becomes one line, `Local LLM v<version>`.
+    - `WEBUI_FAVICON_URL` (hard-coded openwebui.com) becomes `LLLM_FAVICON_URL`, optional; webhook cards omit the image when it is unset.
+  - **Identifiers:**
+    - Session cookie `owui-session` → `lllm-session` (signs existing sessions out once). JWT `iss` → `local-llm`.
+    - Forwarded headers `X-OpenWebUI-*` → `X-LLLM-*`; the external-extraction headers `OpenWebUI-*` → `LLLM-*` (and the admin-settings example).
+    - `REDIS_KEY_PREFIX`/`OTEL_SERVICE_NAME` → `local-llm`. All vector-store name defaults (Milvus, Qdrant, Elasticsearch, Pinecone, Valkey, OpenSearch) changed; those stores are unused, so no data exists under the old names.
+    - User-Agents and integration tags (`local-llm/…`), the k8s Ollama default, the OAuth dynamic-client name, and the `open_webui_params` local names (now `local_llm_params`).
+  - **Strings:**
+    - User-visible strings in Admin settings, Workspace, `ManifestModal`, and the plugin-version toast; the functions boilerplate `author`; the 25 en-US locale entries.
+    - Backend comments and docstrings, the Makefile help, the proposal's frontend cell, and ROADMAP's forward-looking "behind Local LLM" line (diagram still identical to the `.mmd`).
+    - Two stale comments that still described the removed hub sharing are corrected.
+  - **Kept, per §6:** upstream doc links (admin settings, `config.py`'s env-configuration hint), upstream issue/PR/discussion links, the open-terminal product name and "maintained by the Open WebUI team", the About attribution, the clause 4(i) notice, provenance comments, protocol strings, and the plugin-import shim.
+  - **Verification:**
+    - pre-commit passed (ruff-format reflowed one file); pytest 308 passed, 1 skipped.
+    - Scratch boot: `/api/config` name "Local LLM", banner "Local LLM v0.11.3"; schema identical.
+    - astro check 0 errors; Vitest 584 passed; build OK.
+  - **Tooling:** `scratch_boot.sh` now refuses to start if port 4100 is taken. A run killed by a closed pipe had left a uvicorn on that port, and the next run silently probed the stale server.
 

@@ -15,12 +15,9 @@ _mime_suffixes = '|'.join(re.escape(t.split('/')[-1]) for t in sorted(PROFILE_IM
 _SAFE_DATA_URI_RE = re.compile(rf'^data:image/({_mime_suffixes});base64,', re.IGNORECASE)
 
 # Exact relative paths accepted as profile images. These are the only
-# static-asset paths OWUI itself assigns; no prefix/wildcard matching is
+# static-asset paths the app itself assigns; no prefix/wildcard matching is
 # used so that arbitrary relative paths cannot trigger authenticated GETs
 # against internal endpoints when rendered as ``<img>`` sources.
-# LICENSE covers the Open WebUI favicon fallback paths below. Do not alter,
-# remove, obscure, or replace them except as LICENSE permits:
-# https://docs.openwebui.com/license.
 _SAFE_STATIC_PATHS = frozenset(
     {
         '/user.png',
@@ -36,8 +33,8 @@ def validate_profile_image_url(url: str) -> str:
 
     Allowed formats:
     - Empty string (falls back to default avatar)
-    - Known static-asset paths assigned by OWUI (exact match)
-    - The OWUI profile-image API route ``/api/v1/users/{id}/profile/image``
+    - Known static-asset paths assigned by the app (exact match)
+    - The the app profile-image API route ``/api/v1/users/{id}/profile/image``
     - ``http://`` and ``https://`` URLs with a valid hostname
     - ``data:image/{png,jpeg,gif,webp};base64,...`` URIs
 

@@ -5,9 +5,8 @@
 
 export const filterBoilerplate = `"""
 title: Example Filter
-author: open-webui
-author_url: https://github.com/open-webui
-funding_url: https://github.com/open-webui
+author: local-llm
+author_url: https://github.com/epittman23/local-llm
 version: 0.1
 """
 
@@ -82,9 +81,8 @@ class Filter:
 
 export const eventBoilerplate = `"""
 title: Example Event
-author: open-webui
-author_url: https://github.com/open-webui
-funding_url: https://github.com/open-webui
+author: local-llm
+author_url: https://github.com/epittman23/local-llm
 version: 0.1
 """
 

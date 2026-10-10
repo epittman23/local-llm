@@ -35,7 +35,7 @@ function HeaderVariablesHint() {
 				<div className="text-muted-foreground mt-1 text-[0.6875rem] leading-5">
 					<div>No additional headers are sent unless configured.</div>
 					<div>
-						Example: <code className={codeClass}>{'{"X-OpenWebUI-File-Id": "{{FILE_ID}}"}'}</code>
+						Example: <code className={codeClass}>{'{"X-LLLM-File-Id": "{{FILE_ID}}"}'}</code>
 					</div>
 					<div>
 						Available variables: <code className={codeClass}>{'{{FILE_ID}}'}</code>,{' '}

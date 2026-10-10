@@ -346,12 +346,9 @@ export default function Audio() {
 						)}
 
 						{stt.ENGINE === '' && (
-							// LICENSE covers this Open WebUI wordmark.
-							// Do not alter, remove, obscure, or replace it except as LICENSE permits:
-							// https://docs.openwebui.com/license.
 							<SettingField
 								label="STT Model"
-								description="Open WebUI uses faster-whisper internally."
+								description="Local LLM uses faster-whisper internally."
 								htmlFor="stt-WHISPER_MODEL"
 							>
 								<div className="flex w-full gap-2">
@@ -439,12 +436,9 @@ export default function Audio() {
 						)}
 
 						{tts.ENGINE === 'transformers' && (
-							// LICENSE covers this Open WebUI wordmark.
-							// Do not alter, remove, obscure, or replace it except as LICENSE permits:
-							// https://docs.openwebui.com/license.
 							<SettingField
 								label="TTS Model"
-								description="Open WebUI uses SpeechT5 and CMU Arctic speaker embeddings."
+								description="Local LLM uses SpeechT5 and CMU Arctic speaker embeddings."
 								htmlFor="tts-MODEL"
 							>
 								<SettingInput

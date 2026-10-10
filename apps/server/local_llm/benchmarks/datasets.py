@@ -56,7 +56,7 @@ from pathlib import Path
 
 from local_llm.env import DATA_DIR
 
-UA = {'User-Agent': 'open-webui/benchmarks (https://github.com/epittman23/local-llm)'}
+UA = {'User-Agent': 'local-llm/benchmarks (https://github.com/epittman23/local-llm)'}
 TIMEOUT = 60
 
 

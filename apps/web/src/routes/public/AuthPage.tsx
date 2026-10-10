@@ -30,7 +30,7 @@ const OAUTH_PROVIDER_LABELS: Record<string, string> = {
  * Two deliberate simplifications, both cosmetic: the onboarding screen is a
  * plain card ("Welcome — Get Started") instead of OnBoarding.svelte's
  * autoplaying background video (its own asset, /assets/welcome.mp4, is
- * Open WebUI's own branded footage this repo has no reason to vendor for a
+ * the original project's branded footage this repo has no reason to vendor for a
  * functionally identical CTA); and OAuth provider buttons are plain labeled
  * buttons instead of hand-drawn brand SVGs -- same click target, same
  * `${WEBUI_BASE_URL}/oauth/<provider>/login` destination, no per-brand icon.

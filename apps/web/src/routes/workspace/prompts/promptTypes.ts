@@ -74,10 +74,10 @@ export function toPromptDraft(p: Partial<PromptListItem> & { title?: string }): 
 export const isValidCommand = (command: string) => /^[a-zA-Z0-9-_]+$/.test(command);
 
 // --- untrusted input --------------------------------------------------------
-// Three places feed this page data it did not create: a message from the
-// Open WebUI community site (a cross-origin window), a prompt stashed in
-// sessionStorage, and an imported JSON file. None of them is allowed to choose
-// who a prompt is shared with, so all three go through the functions below.
+// Two places feed this page data it did not create: a prompt stashed in
+// sessionStorage (a clone or link import) and an imported JSON file. Neither is
+// allowed to choose who a prompt is shared with, so both go through the
+// functions below.
 
 const asString = (value: unknown, max: number) => (typeof value === 'string' ? value.slice(0, max) : '');
 

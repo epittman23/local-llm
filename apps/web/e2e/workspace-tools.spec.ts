@@ -218,7 +218,7 @@ test.describe('workspace tools', () => {
 		expect(body.content).toContain('class Tools');
 	});
 
-	test('create: a tool that requires a newer Open WebUI than this one is refused', async ({ page }) => {
+	test('create: a tool that requires a newer version than this one is refused', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockToolsApi(page, []);
 		await page.goto('/workspace/tools/create');
