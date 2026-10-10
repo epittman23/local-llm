@@ -54,4 +54,6 @@ not the migration plan's original "new-york".
   stray one is left running, `cd apps/web && bunx astro dev stop`.
 - **Sending in the first second after load** shows "Model not selected"
   until the model list arrives (the Svelte app behaved the same).
-- **English only for now.** No page calls `useTranslation` yet.
+- **English only.** No page calls `useTranslation` yet, so only the `en-US`
+  locale ships and there is no language picker (the other 63 locale files
+  were removed on 2026-10-10).

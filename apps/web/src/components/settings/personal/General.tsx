@@ -1,10 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { AdvancedParams } from '@/components/common/AdvancedParams';
 import type { Params } from '@/components/common/advancedParamDefs';
-import { getLanguages } from '@/lib/i18n';
-import i18next from '@/lib/i18n';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { THEMES, applyTheme, getTheme } from '@/lib/theme';
 import { SettingField, SettingRow, SettingSelect, SettingTextarea, SettingsForm, SettingsSection } from '../controls';
@@ -12,14 +9,13 @@ import { generalPatch, paramsForForm } from './personalSettings';
 
 /**
  * Ports Settings/General.svelte: theme (applied at once, kept in this
- * browser), language, the default system prompt for new chats, and the
- * user's default generation parameters (saved with the button).
+ * browser), the default system prompt for new chats, and the user's default
+ * generation parameters (saved with the button). There is no language picker:
+ * the app ships only the en-US locale.
  */
 export default function General() {
 	const { settings, update } = useUserSettings();
-	const languages = useQuery({ queryKey: ['languages'], staleTime: Infinity, queryFn: getLanguages });
 	const [theme, setTheme] = useState(getTheme);
-	const [lang, setLang] = useState(i18next.language || 'en-US');
 	const [system, setSystem] = useState('');
 	const [params, setParams] = useState<Params>({});
 	const [showAdvanced, setShowAdvanced] = useState(false);
@@ -58,29 +54,6 @@ export default function General() {
 							{THEMES.map((t) => (
 								<option key={t.id} value={t.id}>
 									{t.label}
-								</option>
-							))}
-						</SettingSelect>
-					)}
-				</SettingRow>
-				<SettingRow label="Language" description="Choose the language used for interface text.">
-					{(id) => (
-						<SettingSelect
-							aria-labelledby={id}
-							value={lang}
-							onChange={(v) => {
-								setLang(v);
-								void i18next.changeLanguage(v);
-								try {
-									localStorage.setItem('locale', v);
-								} catch {
-									/* storage unavailable */
-								}
-							}}
-						>
-							{(languages.data ?? []).map((l) => (
-								<option key={l.code} value={l.code}>
-									{l.title}
 								</option>
 							))}
 						</SettingSelect>
