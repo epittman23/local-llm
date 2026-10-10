@@ -57,7 +57,16 @@ running: they reuse it if present, which is fine, and `global-teardown.ts`
 stops it afterward, which is not. Stop `make frontend` first. Backend tests:
 from `apps/server/backend/`, `WEBUI_SECRET_KEY=<any long string>
 .venv/bin/python -m pytest tests` (the package imports from the working
-directory, and refuses to load without a secret key). pytest comes from
+directory, and refuses to load without a secret key). One test,
+`test_imports.py::test_the_app_imports`, imports the whole app, which
+connects the default vector store (pgvector) and runs migrations. It needs
+`TEST_DATABASE_URL` pointing at a **throwaway** Postgres with pgvector (never
+the `make backend` database), e.g. `docker run --rm -d -p 127.0.0.1:55432:5432
+-e POSTGRES_USER=openwebui -e POSTGRES_PASSWORD=throwaway -e POSTGRES_DB=openwebui
+pgvector/pgvector:pg16` and
+`TEST_DATABASE_URL=postgresql://openwebui:throwaway@127.0.0.1:55432/openwebui`.
+Without it the test skips locally; CI provides one and fails rather than
+skips. pytest comes from
 `pyproject.toml`'s `dev` dependency group, which `make backend`'s
 `uv sync` installs by default.
 

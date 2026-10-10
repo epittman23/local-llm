@@ -319,6 +319,22 @@ All commits should use conventional commit style and stay focused on one topic. 
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-09**: Cleared every open Dependabot alert (29). PyJWT 2.13 to
+  2.15.1 (14 advisories). `datasets` (only reached through the `all`
+  extra's colbert-ai) constrained to >= 5.0.1. Three dependencies with
+  advisories that **no release fixes** were removed instead:
+  `RestrictedPython` and `nltk` (neither imported anywhere) and `chromadb`
+  (critical pre-auth code injection in every release). Removing chromadb
+  changed the default `VECTOR_DB` from upstream's `chroma` to `pgvector`,
+  which surfaced a design flaw. `retrieval/vector/factory.py` built the
+  vector client on import, and `config.py` validated the pgvector URL on
+  import, so importing any retrieval router connected to the vector store;
+  that was only invisible while the default was an embedded Chroma. The
+  client is now created on first use (`LazyVectorDBClient`), the URL check
+  moved into `PgvectorClient`, and `main.py`'s lifespan resolves the client,
+  so a misconfigured store still fails startup. `test_the_app_imports`
+  needs `TEST_DATABASE_URL` (a throwaway pgvector Postgres; CI's backend job
+  runs one as a service) and skips locally without it.
 - **2026-10-09**: Linting and formatting now run through the root
   `.pre-commit-config.yaml` only: CI's `pre-commit` job runs the same file
   with `--all-files`, so the checks are defined once. `apps/web` gained
