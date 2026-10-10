@@ -142,7 +142,7 @@ jobs:
     env:
       # Not secrets: the app refuses to import without a key, the tests never
       # serve anything signed with it, and the database exists only for this job.
-      WEBUI_SECRET_KEY: ci-only-not-a-secret-0123456789abcdef0123456789abcdef
+      LLLM_SECRET_KEY: ci-only-not-a-secret-0123456789abcdef0123456789abcdef
       TEST_DATABASE_URL: postgresql://local_llm:ci-only-not-a-secret@localhost:5432/local_llm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

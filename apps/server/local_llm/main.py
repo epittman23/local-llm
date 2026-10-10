@@ -66,7 +66,7 @@ from local_llm.config import (
     STATIC_DIR,
     THREAD_POOL_SIZE,
     THREAD_POOL_THREAD_NAME_PREFIX,
-    WEBUI_AUTH,
+    LLLM_AUTH,
     async_reset_config,
     import_legacy_config_json,
     seed_registered_defaults,
@@ -109,15 +109,15 @@ from local_llm.env import (
     SCIM_TOKEN,
     VERSION,
     WEBSOCKET_HEARTBEAT_INTERVAL,
-    WEBUI_ADMIN_EMAIL,
-    WEBUI_ADMIN_NAME,
-    WEBUI_ADMIN_PASSWORD,
-    WEBUI_AUTH_TRUSTED_EMAIL_HEADER,
-    WEBUI_BUILD_HASH,
-    WEBUI_NAME,
-    WEBUI_SECRET_KEY,
-    WEBUI_SESSION_COOKIE_SAME_SITE,
-    WEBUI_SESSION_COOKIE_SECURE,
+    LLLM_ADMIN_EMAIL,
+    LLLM_ADMIN_NAME,
+    LLLM_ADMIN_PASSWORD,
+    LLLM_AUTH_TRUSTED_EMAIL_HEADER,
+    LLLM_BUILD_HASH,
+    LLLM_NAME,
+    LLLM_SECRET_KEY,
+    LLLM_SESSION_COOKIE_SAME_SITE,
+    LLLM_SESSION_COOKIE_SECURE,
 )
 from local_llm.events import (
     EVENTS,
@@ -313,7 +313,7 @@ if LOG_FORMAT != 'json':
 
 
 v{VERSION} - building the best AI user interface.
-{f'Commit: {WEBUI_BUILD_HASH}' if WEBUI_BUILD_HASH != 'dev-build' else ''}
+{f'Commit: {LLLM_BUILD_HASH}' if LLLM_BUILD_HASH != 'dev-build' else ''}
 https://github.com/open-webui/open-webui
 """
     try:
@@ -359,8 +359,8 @@ async def lifespan(app: FastAPI):
     await publish_event(app, EVENTS.SYSTEM_STARTUP_STARTED, source='system')
 
     # Create admin account from env vars if specified and no users exist
-    if WEBUI_ADMIN_EMAIL and WEBUI_ADMIN_PASSWORD:
-        if await create_admin_user(WEBUI_ADMIN_EMAIL, WEBUI_ADMIN_PASSWORD, WEBUI_ADMIN_NAME):
+    if LLLM_ADMIN_EMAIL and LLLM_ADMIN_PASSWORD:
+        if await create_admin_user(LLLM_ADMIN_EMAIL, LLLM_ADMIN_PASSWORD, LLLM_ADMIN_NAME):
             # Disable signup since we now have an admin
             await Config.upsert({'ui.enable_signup': False})
 
@@ -495,7 +495,7 @@ app.state.redis = None
 # visual, textual, symbolic identifiers, metadata, and surrounding UI.
 # Do not alter, remove, obscure, or replace it except as LICENSE permits:
 # https://docs.openwebui.com/license.
-app.state.WEBUI_NAME = WEBUI_NAME
+app.state.LLLM_NAME = LLLM_NAME
 app.state.EXTERNAL_PWA_MANIFEST_URL = EXTERNAL_PWA_MANIFEST_URL
 
 
@@ -2260,7 +2260,7 @@ async def get_app_config(request: Request):
     return {
         **({'onboarding': True} if onboarding else {}),
         'status': True,
-        'name': app.state.WEBUI_NAME,
+        'name': app.state.LLLM_NAME,
         'version': VERSION,
         'default_locale': str(DEFAULT_LOCALE),
         'oauth': {
@@ -2275,8 +2275,8 @@ async def get_app_config(request: Request):
         },
         'features': {
             # --- Public: required by login/signup page pre-auth ---
-            'auth': WEBUI_AUTH,
-            'auth_trusted_header': bool(WEBUI_AUTH_TRUSTED_EMAIL_HEADER),
+            'auth': LLLM_AUTH,
+            'auth_trusted_header': bool(LLLM_AUTH_TRUSTED_EMAIL_HEADER),
             'enable_signup_password_confirmation': ENABLE_SIGNUP_PASSWORD_CONFIRMATION,
             'enable_ldap': config.get('ldap.enable'),
             'enable_signup': config.get('ui.enable_signup'),
@@ -2557,8 +2557,8 @@ try:
             StarSessionsMiddleware,
             store=redis_session_store,
             cookie_name='owui-session',
-            cookie_same_site=WEBUI_SESSION_COOKIE_SAME_SITE,
-            cookie_https_only=WEBUI_SESSION_COOKIE_SECURE,
+            cookie_same_site=LLLM_SESSION_COOKIE_SAME_SITE,
+            cookie_https_only=LLLM_SESSION_COOKIE_SECURE,
         )
         log.info('Using Redis for session')
     else:
@@ -2566,10 +2566,10 @@ try:
 except Exception:
     app.add_middleware(
         SessionMiddleware,
-        secret_key=WEBUI_SECRET_KEY,
+        secret_key=LLLM_SECRET_KEY,
         session_cookie='owui-session',
-        same_site=WEBUI_SESSION_COOKIE_SAME_SITE,
-        https_only=WEBUI_SESSION_COOKIE_SECURE,
+        same_site=LLLM_SESSION_COOKIE_SAME_SITE,
+        https_only=LLLM_SESSION_COOKIE_SECURE,
     )
 
 
@@ -2785,9 +2785,9 @@ async def get_manifest_json():
         # Do not alter, remove, obscure, or replace it except as LICENSE permits:
         # https://docs.openwebui.com/license.
         return {
-            'name': app.state.WEBUI_NAME,
-            'short_name': app.state.WEBUI_NAME,
-            'description': f'{app.state.WEBUI_NAME} is an open, extensible, user-friendly interface for AI that adapts to your workflow.',
+            'name': app.state.LLLM_NAME,
+            'short_name': app.state.LLLM_NAME,
+            'description': f'{app.state.LLLM_NAME} is an open, extensible, user-friendly interface for AI that adapts to your workflow.',
             'start_url': '/',
             'display': 'standalone',
             'background_color': '#343541',
@@ -2824,8 +2824,8 @@ async def get_opensearch_xml():
     # https://docs.openwebui.com/license.
     xml_content = rf"""
     <OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/" xmlns:moz="http://www.mozilla.org/2006/browser/search/">
-    <ShortName>{app.state.WEBUI_NAME}</ShortName>
-    <Description>Search {app.state.WEBUI_NAME}</Description>
+    <ShortName>{app.state.LLLM_NAME}</ShortName>
+    <Description>Search {app.state.LLLM_NAME}</Description>
     <InputEncoding>UTF-8</InputEncoding>
     <Image width="16" height="16" type="image/x-icon">{webui_url}/static/favicon.png</Image>
     <Url type="text/html" method="get" template="{webui_url}/?q={'{searchTerms}'}"/>

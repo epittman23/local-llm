@@ -660,7 +660,7 @@ else:
 # Auth
 ####################################
 
-WEBUI_AUTH = os.getenv('WEBUI_AUTH', 'True').lower() == 'true'
+LLLM_AUTH = os.getenv('LLLM_AUTH', 'True').lower() == 'true'
 
 ENABLE_INITIAL_ADMIN_SIGNUP = os.getenv('ENABLE_INITIAL_ADMIN_SIGNUP', 'False').lower() == 'true'
 ENABLE_SIGNUP_PASSWORD_CONFIRMATION = os.getenv('ENABLE_SIGNUP_PASSWORD_CONFIRMATION', 'False').lower() == 'true'
@@ -669,29 +669,26 @@ ENABLE_SIGNUP_PASSWORD_CONFIRMATION = os.getenv('ENABLE_SIGNUP_PASSWORD_CONFIRMA
 # Secret key & cookies
 ####################################
 
-# WEBUI_JWT_SECRET_KEY is deprecated; use WEBUI_SECRET_KEY instead.
-# No hardcoded fallback by design: the supported start scripts set/auto-generate it; unset is rejected below.
-WEBUI_SECRET_KEY = os.getenv(
-    'WEBUI_SECRET_KEY',
-    os.getenv('WEBUI_JWT_SECRET_KEY', ''),
-)
+# No hardcoded fallback by design: `make backend` loads it from infra/.env, and
+# unset is rejected below.
+LLLM_SECRET_KEY = os.getenv('LLLM_SECRET_KEY', '')
 
 ENABLE_VALVE_ENCRYPTION = os.getenv('ENABLE_VALVE_ENCRYPTION', 'False').lower() == 'true'
 
-WEBUI_SESSION_COOKIE_SAME_SITE = os.getenv('WEBUI_SESSION_COOKIE_SAME_SITE', 'lax')
-WEBUI_SESSION_COOKIE_SECURE = os.getenv('WEBUI_SESSION_COOKIE_SECURE', 'false').lower() == 'true'
-WEBUI_AUTH_COOKIE_SAME_SITE = os.getenv('WEBUI_AUTH_COOKIE_SAME_SITE', WEBUI_SESSION_COOKIE_SAME_SITE)
-WEBUI_AUTH_COOKIE_SECURE = (
+LLLM_SESSION_COOKIE_SAME_SITE = os.getenv('LLLM_SESSION_COOKIE_SAME_SITE', 'lax')
+LLLM_SESSION_COOKIE_SECURE = os.getenv('LLLM_SESSION_COOKIE_SECURE', 'false').lower() == 'true'
+LLLM_AUTH_COOKIE_SAME_SITE = os.getenv('LLLM_AUTH_COOKIE_SAME_SITE', LLLM_SESSION_COOKIE_SAME_SITE)
+LLLM_AUTH_COOKIE_SECURE = (
     os.getenv(
-        'WEBUI_AUTH_COOKIE_SECURE',
-        os.getenv('WEBUI_SESSION_COOKIE_SECURE', 'false'),
+        'LLLM_AUTH_COOKIE_SECURE',
+        os.getenv('LLLM_SESSION_COOKIE_SECURE', 'false'),
     ).lower()
     == 'true'
 )
 
-if WEBUI_AUTH and WEBUI_SECRET_KEY == '':
+if LLLM_AUTH and LLLM_SECRET_KEY == '':
     raise SystemExit(
-        'WEBUI_SECRET_KEY is not set. It is a hard requirement when authentication is enabled.\n'
+        'LLLM_SECRET_KEY is not set. It is a hard requirement when authentication is enabled.\n'
         'Set it to a long random value in infra/.env (`make backend` loads it from there), '
         'or export it yourself when starting uvicorn by hand.'
     )
@@ -704,14 +701,14 @@ ENABLE_COMPRESSION_MIDDLEWARE = os.getenv('ENABLE_COMPRESSION_MIDDLEWARE', 'True
 
 # Optional env vars for creating an admin account on startup
 # Useful for headless/automated deployments
-WEBUI_ADMIN_EMAIL = os.getenv('WEBUI_ADMIN_EMAIL', '')
-WEBUI_ADMIN_PASSWORD = os.getenv('WEBUI_ADMIN_PASSWORD', '')
-WEBUI_ADMIN_NAME = os.getenv('WEBUI_ADMIN_NAME', 'Admin')
+LLLM_ADMIN_EMAIL = os.getenv('LLLM_ADMIN_EMAIL', '')
+LLLM_ADMIN_PASSWORD = os.getenv('LLLM_ADMIN_PASSWORD', '')
+LLLM_ADMIN_NAME = os.getenv('LLLM_ADMIN_NAME', 'Admin')
 
-WEBUI_AUTH_TRUSTED_EMAIL_HEADER = os.getenv('WEBUI_AUTH_TRUSTED_EMAIL_HEADER', None)
-WEBUI_AUTH_TRUSTED_NAME_HEADER = os.getenv('WEBUI_AUTH_TRUSTED_NAME_HEADER', None)
-WEBUI_AUTH_TRUSTED_GROUPS_HEADER = os.getenv('WEBUI_AUTH_TRUSTED_GROUPS_HEADER', None)
-WEBUI_AUTH_TRUSTED_ROLE_HEADER = os.getenv('WEBUI_AUTH_TRUSTED_ROLE_HEADER', None)
+LLLM_AUTH_TRUSTED_EMAIL_HEADER = os.getenv('LLLM_AUTH_TRUSTED_EMAIL_HEADER', None)
+LLLM_AUTH_TRUSTED_NAME_HEADER = os.getenv('LLLM_AUTH_TRUSTED_NAME_HEADER', None)
+LLLM_AUTH_TRUSTED_GROUPS_HEADER = os.getenv('LLLM_AUTH_TRUSTED_GROUPS_HEADER', None)
+LLLM_AUTH_TRUSTED_ROLE_HEADER = os.getenv('LLLM_AUTH_TRUSTED_ROLE_HEADER', None)
 
 # Custom header name for API key authentication.  Defaults to 'x-api-key'.
 # Useful when Open WebUI sits behind a reverse proxy / API gateway that
@@ -770,7 +767,7 @@ BYPASS_PYDUB_PREPROCESSING = os.getenv('BYPASS_PYDUB_PREPROCESSING', 'False').lo
 # compatible APIs for endpoints not natively handled by Open WebUI.
 ENABLE_OPENAI_API_PASSTHROUGH = os.getenv('ENABLE_OPENAI_API_PASSTHROUGH', 'False').lower() == 'true'
 
-WEBUI_AUTH_SIGNOUT_REDIRECT_URL = os.getenv('WEBUI_AUTH_SIGNOUT_REDIRECT_URL', None)
+LLLM_AUTH_SIGNOUT_REDIRECT_URL = os.getenv('LLLM_AUTH_SIGNOUT_REDIRECT_URL', None)
 
 ####################################
 # OAUTH Configuration
@@ -779,9 +776,9 @@ ENABLE_OAUTH_EMAIL_FALLBACK = os.getenv('ENABLE_OAUTH_EMAIL_FALLBACK', 'False').
 
 ENABLE_OAUTH_ID_TOKEN_COOKIE = os.getenv('ENABLE_OAUTH_ID_TOKEN_COOKIE', 'True').lower() == 'true'
 
-OAUTH_CLIENT_INFO_ENCRYPTION_KEY = os.getenv('OAUTH_CLIENT_INFO_ENCRYPTION_KEY', WEBUI_SECRET_KEY)
+OAUTH_CLIENT_INFO_ENCRYPTION_KEY = os.getenv('OAUTH_CLIENT_INFO_ENCRYPTION_KEY', LLLM_SECRET_KEY)
 
-OAUTH_SESSION_TOKEN_ENCRYPTION_KEY = os.getenv('OAUTH_SESSION_TOKEN_ENCRYPTION_KEY', WEBUI_SECRET_KEY)
+OAUTH_SESSION_TOKEN_ENCRYPTION_KEY = os.getenv('OAUTH_SESSION_TOKEN_ENCRYPTION_KEY', LLLM_SECRET_KEY)
 
 # Maximum number of concurrent OAuth sessions per user per provider
 # This prevents unbounded session growth while allowing multi-device usage
@@ -832,16 +829,16 @@ if ENABLE_SCIM and not SCIM_AUTH_PROVIDER:
 # visual, textual, symbolic identifiers, metadata, and surrounding UI.
 # Do not alter, remove, obscure, or replace it except as LICENSE permits:
 # https://docs.openwebui.com/license.
-WEBUI_NAME = os.getenv('WEBUI_NAME', 'Open WebUI')
-if WEBUI_NAME != 'Open WebUI':
-    WEBUI_NAME += ' (Open WebUI)'
+LLLM_NAME = os.getenv('LLLM_NAME', 'Open WebUI')
+if LLLM_NAME != 'Open WebUI':
+    LLLM_NAME += ' (Open WebUI)'
 
 # LICENSE covers this Open WebUI branding surface, including this favicon
 # and any visual, textual, or symbolic identifiers it preserves.
 # Do not alter, remove, obscure, or replace it except as LICENSE permits:
 # https://docs.openwebui.com/license.
 WEBUI_FAVICON_URL = 'https://openwebui.com/favicon.png'
-WEBUI_BUILD_HASH = os.getenv('WEBUI_BUILD_HASH', 'dev-build')
+LLLM_BUILD_HASH = os.getenv('LLLM_BUILD_HASH', 'dev-build')
 TRUSTED_SIGNATURE_KEY = os.getenv('TRUSTED_SIGNATURE_KEY', '')
 
 ####################################

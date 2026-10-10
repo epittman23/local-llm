@@ -64,7 +64,7 @@ class ERROR_MESSAGES(str, Enum):
         'Your provider has not provided a trusted header. Please contact your administrator for assistance.'
     )
 
-    EXISTING_USERS = "You can't turn off authentication because there are existing users. If you want to disable WEBUI_AUTH, make sure your web interface doesn't have any existing users and is a fresh installation."
+    EXISTING_USERS = "You can't turn off authentication because there are existing users. If you want to disable LLLM_AUTH, make sure your web interface doesn't have any existing users and is a fresh installation."
 
     UNAUTHORIZED = '401 Unauthorized'
     ACCESS_PROHIBITED = (

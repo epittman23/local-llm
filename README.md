@@ -40,7 +40,7 @@ ordinary tracked files, not a submodule. Put your secrets in `infra/.env`
 # infra/.env
 OPENROUTER_API_KEY=<your OpenRouter API key, from https://openrouter.ai/keys>
 POSTGRES_PASSWORD=<openssl rand -base64 24>
-WEBUI_SECRET_KEY=<openssl rand -base64 24>
+LLLM_SECRET_KEY=<openssl rand -base64 24>
 ```
 
 > **Moving from WSL2 to native Linux (2026-10-09).** Nothing gitignored
