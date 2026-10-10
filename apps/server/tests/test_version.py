@@ -9,7 +9,7 @@ import json
 import tomllib
 from pathlib import Path
 
-from open_webui.env import VERSION
+from local_llm.env import VERSION
 
 APP_DIR = Path(__file__).resolve().parents[1]  # apps/server/
 

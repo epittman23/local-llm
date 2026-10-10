@@ -10,10 +10,10 @@ import time
 
 import pytest
 
-from open_webui.utils.chat_variables import collect_chat_variable_fields, render_user_variables
-from open_webui.utils.middleware import extract_skill_ids_from_messages, strip_skill_mentions
-from open_webui.utils.misc import validate_email_format
-from open_webui.utils.plugin import extract_frontmatter
+from local_llm.utils.chat_variables import collect_chat_variable_fields, render_user_variables
+from local_llm.utils.middleware import extract_skill_ids_from_messages, strip_skill_mentions
+from local_llm.utils.misc import validate_email_format
+from local_llm.utils.plugin import extract_frontmatter
 
 N = 50_000
 

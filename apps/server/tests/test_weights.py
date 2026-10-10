@@ -17,8 +17,8 @@ from pathlib import Path
 
 import pytest
 
-from open_webui.benchmarks.serving.profiles import ServingProfile
-from open_webui.benchmarks.serving.weights import FetchProcess, WeightsError, fetch_argv
+from local_llm.benchmarks.serving.profiles import ServingProfile
+from local_llm.benchmarks.serving.weights import FetchProcess, WeightsError, fetch_argv
 
 #: apps/server/tests/ -> apps/server/ -> apps/ -> repo root
 REPO_ROOT = Path(__file__).resolve().parents[3]

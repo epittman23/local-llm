@@ -8,14 +8,14 @@ stops serving the app), and DATA_DIR starts the backend on an empty directory.
 
 from pathlib import Path
 
-from open_webui import env
+from local_llm import env
 
 SERVER_DIR = Path(__file__).resolve().parents[1]  # apps/server/
 REPO_ROOT = SERVER_DIR.parents[1]
 
 
 def test_package_and_server_dirs():
-    assert env.PACKAGE_DIR == SERVER_DIR / 'open_webui'
+    assert env.PACKAGE_DIR == SERVER_DIR / 'local_llm'
     assert env.SERVER_DIR == SERVER_DIR
 
 

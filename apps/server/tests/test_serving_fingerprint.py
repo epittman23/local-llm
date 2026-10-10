@@ -19,8 +19,8 @@ from pathlib import Path
 
 import pytest
 
-from open_webui.benchmarks.serving.fingerprint import config_id, config_lines
-from open_webui.benchmarks.serving.profiles import Overrides, ProfileError, ServingProfile, resolve
+from local_llm.benchmarks.serving.fingerprint import config_id, config_lines
+from local_llm.benchmarks.serving.profiles import Overrides, ProfileError, ServingProfile, resolve
 
 #: apps/server/tests/ -> apps/server/ -> apps/ -> repo root
 REPO_ROOT = Path(__file__).resolve().parents[3]

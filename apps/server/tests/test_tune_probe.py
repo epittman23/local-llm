@@ -21,11 +21,11 @@ import time
 
 import pytest
 
-from open_webui.benchmarks.proc import Command
-from open_webui.benchmarks.serving.launcher import ServeProcess
-from open_webui.benchmarks.tune_probe import Infeasible, Server
-from open_webui.benchmarks.tune_schedule import Candidate
-from open_webui.models.benchmark_profiles import (
+from local_llm.benchmarks.proc import Command
+from local_llm.benchmarks.serving.launcher import ServeProcess
+from local_llm.benchmarks.tune_probe import Infeasible, Server
+from local_llm.benchmarks.tune_schedule import Candidate
+from local_llm.models.benchmark_profiles import (
     BenchmarkProfileEntry,
     BenchmarkProfileModel,
     BenchmarkProfiles,

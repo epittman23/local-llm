@@ -21,8 +21,8 @@ from pathlib import Path
 
 import pytest
 
-from open_webui.benchmarks.serving.fingerprint import config_id, config_lines
-from open_webui.benchmarks.serving.profiles import (
+from local_llm.benchmarks.serving.fingerprint import config_id, config_lines
+from local_llm.benchmarks.serving.profiles import (
     Overrides,
     ProfileError,
     ServingProfile,
@@ -34,7 +34,7 @@ SERVER_DIR = Path(__file__).resolve().parents[1]
 #: apps/server/tests/ -> apps/server/ -> apps/ -> repo root
 REPO_ROOT = Path(__file__).resolve().parents[3]
 BASELINE_DIR = REPO_ROOT / 'docs' / 'serving-baseline'
-MIGRATION = SERVER_DIR / 'open_webui' / 'migrations' / 'versions' / '5a1f0c3e9b27_add_benchmark_serving_profiles.py'
+MIGRATION = SERVER_DIR / 'local_llm' / 'migrations' / 'versions' / '5a1f0c3e9b27_add_benchmark_serving_profiles.py'
 
 
 def _load_json(name: str):
@@ -198,7 +198,7 @@ def test_profile_table_module_imports_and_resolves_its_names():
     backend venv, not a bare interpreter.
     """
     pytest.importorskip('markdown', reason='needs the backend venv')
-    module = pytest.importorskip('open_webui.models.benchmark_profiles', reason='needs the backend venv')
+    module = pytest.importorskip('local_llm.models.benchmark_profiles', reason='needs the backend venv')
 
     for name in ('validate_definition', 'ProfileError', 'ServingProfile'):
         assert hasattr(module, name), f'{name} is referenced but not imported'

@@ -2,8 +2,8 @@
 
 import pytest
 
-from open_webui.benchmarks import runner
-from open_webui.routers.ollama import parse_huggingface_url, upload_path_for
+from local_llm.benchmarks import runner
+from local_llm.routers.ollama import parse_huggingface_url, upload_path_for
 
 
 def test_system_prompt_names_must_be_listed(tmp_path, monkeypatch):
@@ -42,11 +42,11 @@ def test_import_from_url_rejects_internal_addresses(monkeypatch, module, url):
 
     from fastapi import HTTPException
 
-    from open_webui.constants import ERROR_MESSAGES
-    from open_webui.retrieval.web import utils as web_utils
+    from local_llm.constants import ERROR_MESSAGES
+    from local_llm.retrieval.web import utils as web_utils
 
     monkeypatch.setattr(web_utils, 'ENABLE_LOCAL_WEB_FETCH', False, raising=False)
-    router = importlib.import_module(f'open_webui.routers.{module}')
+    router = importlib.import_module(f'local_llm.routers.{module}')
     load = router.load_function_from_url if module == 'functions' else router.load_tool_from_url
     with pytest.raises(HTTPException) as exc:
         asyncio.run(load(request=None, form_data=router.LoadUrlForm(url=url), user=None))

@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 SERVER_DIR = Path(__file__).resolve().parents[1]  # apps/server/
-PACKAGE = SERVER_DIR / 'open_webui'
+PACKAGE = SERVER_DIR / 'local_llm'
 
 
 def _module_name(path: Path) -> str:
@@ -76,7 +76,7 @@ def test_every_internal_from_import_resolves():
 
 
 def test_the_app_imports(tmp_path):
-    # Importing open_webui.main sets up the database and connects the default
+    # Importing local_llm.main sets up the database and connects the default
     # vector store, pgvector, so this needs a Postgres with the vector
     # extension. It runs migrations there: point TEST_DATABASE_URL at a
     # throwaway database, never the one `make backend` uses. CI provides one
@@ -96,7 +96,7 @@ def test_the_app_imports(tmp_path):
         'HF_HUB_OFFLINE': '1',
     }
     result = subprocess.run(
-        [sys.executable, '-c', 'import open_webui.main'],
+        [sys.executable, '-c', 'import local_llm.main'],
         cwd=SERVER_DIR,
         env=env,
         capture_output=True,

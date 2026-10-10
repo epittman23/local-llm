@@ -63,7 +63,7 @@ Fedora machine yet (2026-10-09).
 
 - **Profiles** are versioned rows in Postgres (`benchmark_profile`,
   `benchmark_profile_version`), resolved by
-  `apps/server/open_webui/benchmarks/serving/profiles.py`. Every
+  `apps/server/local_llm/benchmarks/serving/profiles.py`. Every
   profile serves one slot (`--parallel 1`), passed unconditionally.
 - **Serving** starts from Benchmarks > Serve (`/benchmarks/serve`).
   `serving/launcher.py`'s `ServeProcess` spawns `llama-server` and the GPU
@@ -101,7 +101,7 @@ that assume a cloud-only environment.**
 
 [MAP.md](MAP.md) is the structural index: what lives where. In short:
 `apps/server/` is the FastAPI backend (its package is
-`apps/server/open_webui/`), `apps/web/` is the Astro + React +
+`apps/server/local_llm/`), `apps/web/` is the Astro + React +
 shadcn/ui frontend, `infra/` holds the Postgres + pgvector Compose file, and
 `docs/` holds the decisions log, roadmap, guides, proposals and history.
 
@@ -118,7 +118,7 @@ shadcn/ui frontend, `infra/` holds the Postgres + pgvector Compose file, and
   assistant lives in the app (Admin Settings > Connections; Workspace >
   Models), never in a repo file.
 - **The one deliberate copy** is
-  `apps/server/open_webui/benchmarks/data/prompts/assistant.txt`,
+  `apps/server/local_llm/benchmarks/data/prompts/assistant.txt`,
   which duplicates the deployed system prompt so a local configuration can be
   measured under it. It configures nothing. When the prompt changes in the
   app, copy it there in the same change, or the benchmark measures a prompt
@@ -220,7 +220,7 @@ or agent) updates the docs in the same commit:
   change to those flags must be reflected in `serving/fingerprint.py` too,
   or old and new runs get fingerprinted as the same configuration.
 - **The database schema is append-only.** Migrations are ordinary Alembic
-  revisions under `apps/server/open_webui/migrations/versions/`; add
+  revisions under `apps/server/local_llm/migrations/versions/`; add
   one, never edit one that has been applied. When a change alters what the
   `config_id` fingerprint covers (which changes every existing id and makes
   rows either side of it incomparable), add a `benchmark_schema_note` row

@@ -25,8 +25,8 @@ from pathlib import Path
 
 import pytest
 
-from open_webui.benchmarks.serving.build_info import parse_build
-from open_webui.benchmarks.serving.launcher import (
+from local_llm.benchmarks.serving.build_info import parse_build
+from local_llm.benchmarks.serving.launcher import (
     IMPORT_ROOT,
     LauncherError,
     ServeProcess,
@@ -38,8 +38,8 @@ from open_webui.benchmarks.serving.launcher import (
     resolve_model_path,
     telemetry_argv,
 )
-from open_webui.benchmarks.serving.model_name import split_model
-from open_webui.benchmarks.serving.profiles import ARCH_DENSE, ARCH_MOE, Overrides, ServingProfile, resolve
+from local_llm.benchmarks.serving.model_name import split_model
+from local_llm.benchmarks.serving.profiles import ARCH_DENSE, ARCH_MOE, Overrides, ServingProfile, resolve
 
 #: apps/server/tests/ -> apps/server/ -> apps/ -> repo root
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -289,7 +289,7 @@ def test_telemetry_argv_carries_the_fingerprint_and_model_split(profiles):
         return argv[argv.index(flag) + 1]
 
     assert argv[0] == '-m'
-    assert argv[1] == 'open_webui.benchmarks.telemetry_recorder'
+    assert argv[1] == 'local_llm.benchmarks.telemetry_recorder'
     assert value_after('--config-id') == case['config_id']
     assert value_after('--alias') == config.alias
     name, quant = split_model('Qwen3.8-27B-UD-Q3_K_XL')
@@ -360,7 +360,7 @@ async def test_serve_process_lines_tees_to_the_server_log(tmp_path, monkeypatch,
     monkeypatch.setenv('DATABASE_URL', 'postgresql://openwebui:test@localhost:5432/openwebui')
 
     proc = ServeProcess(config=config, llama_bin=str(tmp_path), record_telemetry=False)
-    monkeypatch.setattr('open_webui.benchmarks.serving.launcher.resolve_model_path', lambda *a, **k: str(model))
+    monkeypatch.setattr('local_llm.benchmarks.serving.launcher.resolve_model_path', lambda *a, **k: str(model))
     await proc.start()
     try:
         lines = []
@@ -383,7 +383,7 @@ async def test_serve_process_with_telemetry_writes_the_log_file_and_unlinks_it(t
     monkeypatch.delenv('DATABASE_URL', raising=False)  # no recorder subprocess actually spawns
 
     proc = ServeProcess(config=config, llama_bin=str(tmp_path), record_telemetry=True)
-    monkeypatch.setattr('open_webui.benchmarks.serving.launcher.resolve_model_path', lambda *a, **k: str(model))
+    monkeypatch.setattr('local_llm.benchmarks.serving.launcher.resolve_model_path', lambda *a, **k: str(model))
     await proc.start()
     seen_path = proc.server_log_path
     assert seen_path is not None
@@ -412,7 +412,7 @@ async def test_serve_process_warning_set_for_dense_partial_offload(tmp_path, mon
     monkeypatch.delenv('DATABASE_URL', raising=False)
 
     proc = ServeProcess(config=config, llama_bin=str(tmp_path), record_telemetry=False)
-    monkeypatch.setattr('open_webui.benchmarks.serving.launcher.resolve_model_path', lambda *a, **k: str(model))
+    monkeypatch.setattr('local_llm.benchmarks.serving.launcher.resolve_model_path', lambda *a, **k: str(model))
     await proc.start()
     try:
         assert proc.warning is not None
@@ -441,7 +441,7 @@ async def test_serve_process_log_is_on_disk_before_stop(tmp_path, monkeypatch, p
     config = _resolved(next(c for c in _cases() if c['case'] == 'base-qwen25c'), profiles)
     monkeypatch.delenv('DATABASE_URL', raising=False)
     proc = ServeProcess(config=config, llama_bin=str(tmp_path), record_telemetry=True)
-    monkeypatch.setattr('open_webui.benchmarks.serving.launcher.resolve_model_path', lambda *a, **k: str(model))
+    monkeypatch.setattr('local_llm.benchmarks.serving.launcher.resolve_model_path', lambda *a, **k: str(model))
     await proc.start()
     try:
         async for line in proc.lines():
@@ -464,7 +464,7 @@ async def test_serve_process_stop_after_natural_exit_removes_the_log(tmp_path, m
     config = _resolved(next(c for c in _cases() if c['case'] == 'base-qwen25c'), profiles)
     monkeypatch.delenv('DATABASE_URL', raising=False)
     proc = ServeProcess(config=config, llama_bin=str(tmp_path), record_telemetry=True)
-    monkeypatch.setattr('open_webui.benchmarks.serving.launcher.resolve_model_path', lambda *a, **k: str(model))
+    monkeypatch.setattr('local_llm.benchmarks.serving.launcher.resolve_model_path', lambda *a, **k: str(model))
     await proc.start()
     log_path = proc.server_log_path
     assert [line async for line in proc.lines()] == ['crashed']
@@ -483,7 +483,7 @@ def test_telemetry_recorder_module_resolves_from_import_root():
     module resolves only because its package sits in the working directory.
     This pins that, whatever directory the backend itself was started from.
     """
-    module = 'open_webui.benchmarks.telemetry_recorder'
+    module = 'local_llm.benchmarks.telemetry_recorder'
     env = {k: v for k, v in os.environ.items() if k != 'PYTHONPATH'}
     result = subprocess.run(
         [sys.executable, '-c', f'import importlib.util, sys; sys.exit(importlib.util.find_spec({module!r}) is None)'],

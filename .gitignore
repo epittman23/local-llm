@@ -235,5 +235,5 @@ __marimo__/
 # Top-level files in the backend's static dir are copied in at every boot
 # from the frontend build's static/ (config.py deletes and recreates them);
 # the subdirectories are tracked.
-/apps/server/open_webui/static/*
-!/apps/server/open_webui/static/*/
+/apps/server/local_llm/static/*
+!/apps/server/local_llm/static/*/

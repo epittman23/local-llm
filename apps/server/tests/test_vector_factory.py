@@ -8,9 +8,9 @@ needed Postgres.
 
 import threading
 
-from open_webui.retrieval.vector import factory
-from open_webui.retrieval.vector.async_client import AsyncVectorDBClient
-from open_webui.retrieval.vector.main import VectorDBBase
+from local_llm.retrieval.vector import factory
+from local_llm.retrieval.vector.async_client import AsyncVectorDBClient
+from local_llm.retrieval.vector.main import VectorDBBase
 
 
 class _Plain(VectorDBBase):

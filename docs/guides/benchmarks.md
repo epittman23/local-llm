@@ -77,7 +77,7 @@ none of them a thin passthrough to a CLI that no longer exists:
   shelling out to `lllm-serve`/`lllm-config-id`.
 
 The adapter/suite TOMLs and system-prompt text files moved with the code,
-into `apps/server/open_webui/benchmarks/data/`; they no
+into `apps/server/local_llm/benchmarks/data/`; they no
 longer live at `tests/adapters/`, `tests/suites/`, `tests/tuning/` or
 `prompts/system/` in this repo. The datasets themselves are fetched, not
 vendored, into the backend's own `DATA_DIR` on first use.
@@ -103,7 +103,7 @@ beside the serving telemetry.
 
 **Nothing in this repository states an expected answer.** Every item and every
 verdict comes from the dataset. The files under
-`apps/server/open_webui/benchmarks/data/adapters/` (moved
+`apps/server/local_llm/benchmarks/data/adapters/` (moved
 there from this repo's own `tests/adapters/` on 2026-09-08, along with the
 code that reads them) describe only *adaptation* — how a completion-style
 stub becomes a chat turn, which harness grades it, how long it may run.
@@ -150,7 +150,7 @@ server is already serving something.
 
 By default a request carries one message: the item. Selecting a system
 prompt on the Tests page puts the text of the matching file under
-`apps/server/open_webui/benchmarks/data/prompts/` in front
+`apps/server/local_llm/benchmarks/data/prompts/` in front
 of it as a `system` message, which is where Open WebUI puts its own, and is
 the only place it can go — this `llama-server` build has no system-prompt
 flag.
@@ -583,7 +583,7 @@ noise floor to read any difference against.
 Statistics: scipy for the standard tests; Cochran's Q, its permutation p (exact
 by enumeration when the arrangement count allows, Monte Carlo with the `+1`
 correction otherwise), Wilson intervals, Holm correction and the MDE search are
-written out in the fork's `open_webui/benchmarks/report.py` (a direct port of
+written out in the fork's `local_llm/benchmarks/report.py` (a direct port of
 the original `scripts/llama_report.py`, unchanged statistics), and were
 cross-checked against statsmodels. Every test prints its `n` and its
 assumption check; a test whose assumptions fail is printed as refused with
