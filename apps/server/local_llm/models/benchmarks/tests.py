@@ -28,7 +28,7 @@ log = logging.getLogger(__name__)
 #
 # Ported from scripts/llama_db.py's `request`, `result`, `answer`,
 # `suite_exclusion` and `schema_note` tables -- the graded-item side of the
-# suite (as opposed to benchmark_configs.py's serving-config/run side).
+# suite (as opposed to configs.py's serving-config/run side).
 ####################
 
 

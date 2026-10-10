@@ -27,8 +27,8 @@ docs/decisions.md:
 
 Unlike the original, everything here is async: the sqlite connection and its
 plain function calls (db.results(), db.serving_summary(), ...) are replaced
-by the async Table-wrapper methods in local_llm.models.benchmark_configs,
-.benchmark_tests and .benchmark_telemetry. The grouping and rendering logic
+by the async Table-wrapper methods in local_llm.models.benchmarks.configs,
+.tests and .telemetry. The grouping and rendering logic
 (Group, group_records, flags_of, differing, caveats, and the row builders) is
 pure and stays synchronous, exactly as in the original, operating on plain
 dicts already fetched from the database.
@@ -51,9 +51,9 @@ from local_llm.benchmarks.stats import (
     short_ot,
     short_spec,
 )
-from local_llm.models.benchmark_configs import BenchmarkConfigs, BenchmarkRunLoadInfos, BenchmarkRuns
-from local_llm.models.benchmark_telemetry import BenchmarkGpuSamples, BenchmarkMetricsScrapes
-from local_llm.models.benchmark_tests import BenchmarkRequests, BenchmarkResults, BenchmarkSuiteExclusions
+from local_llm.models.benchmarks.configs import BenchmarkConfigs, BenchmarkRunLoadInfos, BenchmarkRuns
+from local_llm.models.benchmarks.telemetry import BenchmarkGpuSamples, BenchmarkMetricsScrapes
+from local_llm.models.benchmarks.tests import BenchmarkRequests, BenchmarkResults, BenchmarkSuiteExclusions
 
 # ---------------------------------------------------------------------------
 # outcomes -- ported from llama_results.py, which this app has no equivalent

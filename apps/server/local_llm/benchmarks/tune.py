@@ -110,8 +110,8 @@ SIGINT, rather than left uncalled. Two paths lead there now:
 Crash recovery (`reclaim_stale_runs()`/`reclaim_stale_sweeps()`) is ported
 from scripts/llama_db.py's `sweep_stale_runs()`/`sweep_stale_sweeps()`,
 which the original ran as a side effect of every `db.connect(sweep=True)`.
-Nothing in the already-ported model layer (local_llm.models.benchmark_tune/
-benchmark_configs) does this, so it is ported here instead, called
+Nothing in the already-ported model layer (local_llm.models.benchmarks.tune/
+configs) does this, so it is ported here instead, called
 explicitly by `start_sweep()`/`resume_sweep()` before touching a live sweep
 -- deliberately NOT inside `Sweep.create()`/`plan_sweep()`, so a dry-run plan
 still writes nothing, unlike the original where dry-run's own construction
@@ -122,8 +122,8 @@ sweep is detected because its recorded pid is dead, not because a state
 file went missing.
 
 Everything DB-touching is `async def` calling the async Table-wrapper
-methods on local_llm.models.benchmark_tune / benchmark_configs /
-benchmark_tests / benchmark_telemetry. `tune_matrix()` below is the one
+methods on local_llm.models.benchmarks.tune / configs /
+tests / telemetry. `tune_matrix()` below is the one
 piece with no ready-made model-layer method (the original had a dedicated
 SQL view, `v_tune_request`); it is built here the same way
 benchmarks.compare.serving_summary() and
@@ -174,10 +174,10 @@ from local_llm.benchmarks.tune_schedule import (
     sample_candidates,
     sign_test,
 )
-from local_llm.models.benchmark_configs import BenchmarkRuns
-from local_llm.models.benchmark_telemetry import BenchmarkGpuSamples
-from local_llm.models.benchmark_tests import BenchmarkResults
-from local_llm.models.benchmark_tune import (
+from local_llm.models.benchmarks.configs import BenchmarkRuns
+from local_llm.models.benchmarks.telemetry import BenchmarkGpuSamples
+from local_llm.models.benchmarks.tests import BenchmarkResults
+from local_llm.models.benchmarks.tune import (
     BenchmarkTuneCandidateModel,
     BenchmarkTuneCandidates,
     BenchmarkTunePauses,

@@ -28,8 +28,8 @@ from local_llm.benchmarks import env_profile
 from local_llm.benchmarks.serving.launcher import LauncherError, ServeProcess
 from local_llm.benchmarks.serving.profiles import Overrides, ProfileError, resolve
 from local_llm.constants import ERROR_MESSAGES
-from local_llm.models.benchmark_configs import BenchmarkRuns
-from local_llm.models.benchmark_profiles import BenchmarkProfiles
+from local_llm.models.benchmarks.configs import BenchmarkRuns
+from local_llm.models.benchmarks.profiles import BenchmarkProfiles
 from local_llm.utils.auth import get_admin_user
 from pydantic import BaseModel, ConfigDict
 

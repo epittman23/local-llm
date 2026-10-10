@@ -225,11 +225,8 @@ __marimo__/
 /logs/
 
 # The backend's runtime data (uploads, caches, benchmark datasets, reports):
-# DATA_DIR, which `make backend` pins to apps/server/data. Its old location,
-# apps/server/backend/data, stays ignored until an existing checkout has moved
-# it (docs/restructure-plan.md, section 8 B). Never tracked.
+# DATA_DIR, which `make backend` pins to apps/server/data. Never tracked.
 /apps/server/data/
-/apps/server/backend/
 *.db
 
 # Top-level files in the backend's static dir are copied in at every boot

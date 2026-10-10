@@ -44,7 +44,7 @@ from pathlib import Path
 
 from local_llm.benchmarks.serving.fingerprint import config_id, config_lines
 from local_llm.benchmarks.serving.profiles import Overrides, ProfileError, resolve
-from local_llm.models.benchmark_profiles import BenchmarkProfiles
+from local_llm.models.benchmarks.profiles import BenchmarkProfiles
 
 GRID_DIR = Path(__file__).resolve().parent / 'data' / 'tuning'
 

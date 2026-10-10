@@ -8,7 +8,7 @@ file -- a serving-profile lookup, not this app's request/grade/record logic.
 Until 2026-09-14 this shelled out to scripts/llama-env.sh (via LLAMA_ENV_SH),
 the outer local-llm repo's own serving-profile layer, because that script was
 the single source of truth for serving configuration. It no longer is: the
-profiles live in this app's own database now (models/benchmark_profiles.py),
+profiles live in this app's own database now (models/benchmarks/profiles.py),
 seeded from main.sh's profile table by migration 5a1f0c3e9b27 and editable
 from the Serve page (routers/benchmarks/profiles.py) -- see
 docs/history/migration-plan.md's Phase 2. `profile()` reads a profile from there and
@@ -27,7 +27,7 @@ import aiohttp
 
 from local_llm.benchmarks.serving.launcher import DEFAULT_PORT, resolve_model_path
 from local_llm.benchmarks.serving.profiles import Overrides, ProfileError, ResolvedConfig, resolve
-from local_llm.models.benchmark_profiles import BenchmarkProfiles
+from local_llm.models.benchmarks.profiles import BenchmarkProfiles
 
 log = logging.getLogger(__name__)
 

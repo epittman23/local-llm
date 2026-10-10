@@ -143,7 +143,7 @@ was replaced by `apps/web/`:
 
 - **`local_llm/`** — the FastAPI app (the Python package): `main.py` (entrypoint),
   `routers/` (API endpoints, including `routers/benchmarks/`), `models/` (DB
-  models, including `models/benchmark_*.py`), `internal/` + `migrations/`
+  models, including `models/benchmarks/`), `internal/` + `migrations/`
   (Alembic DB migrations), `retrieval/` (RAG), `socket/` (websocket/
   real-time), `tools/`, `tasks.py`, `utils/`, `config.py`, and
   **`benchmarks/`** (see below — fork-owned, not upstream).
@@ -171,7 +171,7 @@ than a second app glued on by a userscript. See `docs/decisions.md` for the migr
   assembly, spawns `llama-server` and the telemetry recorder), `weights.py`
   (`FetchProcess`, the `lllm-fetch` port), `build_info.py`/`model_name.py`
   (small `vram-log.sh` parsers). Profiles themselves are rows in Postgres
-  (`models/benchmark_profiles.py`), versioned and CRUD'd through
+  (`models/benchmarks/profiles.py`), versioned and CRUD'd through
   `routers/benchmarks/profiles.py`, not a shell case statement.
 - **`stats.py`** — percentiles, GPU throttle-bitmask decoding, config-text
   parsing, the server load-log parser. Pure functions.

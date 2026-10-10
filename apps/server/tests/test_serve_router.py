@@ -24,8 +24,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from local_llm.benchmarks.serving.launcher import LauncherError
-from local_llm.models.benchmark_configs import BenchmarkRuns
-from local_llm.models.benchmark_profiles import (
+from local_llm.models.benchmarks.configs import BenchmarkRuns
+from local_llm.models.benchmarks.profiles import (
     BenchmarkProfileEntry,
     BenchmarkProfileModel,
     BenchmarkProfiles,

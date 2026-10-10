@@ -811,8 +811,8 @@ rm -rf apps/server/backend
 | 3 Flatten | #61 | done | see "Phase 3" below | see "Phase 3" below |
 | 4 Rename | #62 | done | see "Phase 4" below | see "Phase 4" below |
 | 5a/5b Blame + plugin compat | #63, #64 | done | see "Phase 5" below | none |
-| 6a-6d Identifiers + branding | 6d #65, 6a #66, 6b #67, 6c: (this PR) | done | see "Phase 6" below | see "Phase 6" below |
-| 7a/7b Benchmarks | — | | | |
+| 6a-6d Identifiers + branding | 6d #65, 6a #66, 6b #67, 6c #68 | done | see "Phase 6" below | see "Phase 6" below |
+| 7a/7b Benchmarks | 7a: (this PR) | in progress | see "Phase 7" below | see "Phase 7" below |
 | 8 make check | — | | | |
 | 10 Final sync + audit | — | | | |
 
@@ -1024,4 +1024,17 @@ rm -rf apps/server/backend
     - Scratch boot: `/api/config` name "Local LLM", banner "Local LLM v0.11.3"; schema identical.
     - astro check 0 errors; Vitest 584 passed; build OK.
   - **Tooling:** `scratch_boot.sh` now refuses to start if port 4100 is taken. A run killed by a closed pipe had left a uvicorn on that port, and the next run silently probed the stale server.
+
+### Between Phases 6 and 7 (owner's local steps, 2026-10-10)
+
+- `infra/.env` updated to `LLLM_SECRET_KEY`. The data directory was moved to `apps/server/data`, and `apps/server/backend/` (only the old venv was left in it) was removed.
+- **No `pg_dump` of the old database exists, so its data is gone for good**: chats, accounts, benchmark history and profile edits from before the 2026-10-09 machine move. The new `local-llm_postgres-data` volume starts empty on the first `make backend`. The "existing Postgres data stays attached" invariant therefore has nothing left to protect. The measurements written into `docs/guides/` remain as documentation but can no longer be recomputed from the database. Phase 10's decisions-log entry records this.
+
+### Phase 7: benchmark organization
+
+- **7a (benchmark models under `models/benchmarks/`).**
+  - `git mv models/benchmark_{configs,profiles,telemetry,tests,tune}.py` to `models/benchmarks/{configs,profiles,telemetry,tests,tune}.py`, plus a new `__init__.py`.
+  - 21 files' imports and references rewritten, including `test_serving_profiles.py`'s `importorskip`. `__tablename__` and `Base` are untouched.
+  - The temporary `/apps/server/backend/` ignore rule is removed, now that the owner confirmed the data move.
+  - **Verification:** pre-commit passed; pytest 308 passed, 1 skipped. Metadata dump M (all table names and every `benchmark_*` table's DDL) identical to baseline; scratch boot OK; schema identical.
 

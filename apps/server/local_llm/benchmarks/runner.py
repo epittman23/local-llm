@@ -78,8 +78,8 @@ from local_llm.benchmarks.suites import (
     load_suite,
     missing_libraries,
 )
-from local_llm.models.benchmark_configs import BenchmarkRuns
-from local_llm.models.benchmark_tests import BenchmarkResults, BenchmarkSuiteExclusions
+from local_llm.models.benchmarks.configs import BenchmarkRuns
+from local_llm.models.benchmarks.tests import BenchmarkResults, BenchmarkSuiteExclusions
 
 log = logging.getLogger(__name__)
 
