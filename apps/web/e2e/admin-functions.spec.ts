@@ -250,12 +250,12 @@ test.describe('admin functions', () => {
 		expect(created).toEqual({ id: 'imp', name: 'Imported', content: 'class Filter: pass', meta: { description: 'x' } });
 	});
 
-	test('a message from an unexpected origin does not replace the create form', async ({ page }) => {
+	test('a posted message does not replace the create form', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockFunctionsApi(page, []);
 		await page.goto('/admin/functions/create');
 		await page.getByLabel('Function Name').fill('Mine');
-		// Same-origin (localhost:5174), which is not one of the community origins.
+		// No page listens for posted messages since the community-hub import was removed.
 		await page.evaluate(() =>
 			window.postMessage(
 				JSON.stringify({ id: 'evil', name: 'Evil', content: 'x = 1', meta: { description: 'e' } }),

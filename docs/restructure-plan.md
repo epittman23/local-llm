@@ -811,7 +811,7 @@ rm -rf apps/server/backend
 | 3 Flatten | #61 | done | see "Phase 3" below | see "Phase 3" below |
 | 4 Rename | #62 | done | see "Phase 4" below | see "Phase 4" below |
 | 5a/5b Blame + plugin compat | #63, #64 | done | see "Phase 5" below | none |
-| 6a-6d Identifiers + branding | 6d: (this PR) | in progress | see "Phase 6" below | see "Phase 6" below |
+| 6a-6d Identifiers + branding | 6d #65, 6a: (this PR) | in progress | see "Phase 6" below | see "Phase 6" below |
 | 7a/7b Benchmarks | — | | | |
 | 8 make check | — | | | |
 | 10 Final sync + audit | — | | | |
@@ -962,4 +962,27 @@ rm -rf apps/server/backend
     - A real `up` under a throwaway project name creates role and database `local_llm` (superuser, `SCRAM-SHA-256` password, so a later rename would not clear it) and `CREATE EXTENSION vector` works (0.8.7). Torn down with `down -v`; no volume left behind.
     - pytest 308 passed, 1 skipped; pre-commit passed; 0 broken links.
   - **Audit allowlist addition:** the old names `openwebui` / `open-web-ui_postgres-data` remain only where they describe the old setup: the restore instructions in README, the history comment in `infra/docker-compose.yml`, and MAP.md's one-line history.
+- **6a (remove the community hub and upstream services).**
+  - **Frontend:**
+    - Removed the Share action and "Made by Open WebUI Community" footer on Models, Prompts and Tools, and the Share action and `CommunityDiscover` (file deleted) on Functions.
+    - Removed the cross-window hub import (`COMMUNITY_ORIGINS` plus `postMessage` listeners) from the four create pages. The clone/link-import `sessionStorage` path stays.
+    - Removed the `*SharePayload` helpers and their tests.
+    - Settings > About: no update check, no Discord/X/GitHub links, no license-purchase line. The copyright and license lines are kept unchanged, plus one sentence pointing at NOTICE.
+    - Admin > General: the AboutBlock is reduced to the version; the Help/community links, license/"Upgrade" panel and Community Sharing switch are gone.
+    - Admin > Users: the seat-limit badge and "License Error" banner are gone. The over-50-users notice now cites clause 4(i) and NOTICE, with no sponsorship or enterprise links; it shows whenever there are more than 50 users.
+    - AuthPage: the license-metadata login footer is gone.
+    - API clients removed: `getVersionUpdates`, `exportChatStats`, `exportSingleChatStats`, `downloadChatStats`.
+  - **Backend:**
+    - `ENABLE_COMMUNITY_SHARING` (config default, `features` flag, AdminConfig field and key map) removed, along with both `/api/v1/chats/stats/export*` endpoints and their helpers.
+    - `GET /api/version/updates` and `ENABLE_VERSION_UPDATE_CHECK` removed.
+    - The license server is gone: `LICENSE_KEY`, `LICENSE_BLOB(_PATH)`, `LICENSE_PUBLIC_KEY`, `get_license_data`, `override_static`, `app.state.LICENSE_METADATA`/`USER_COUNT`, and `license_metadata`/`active_entries`/`user_count`/`metadata` in `/api/config`.
+    - The `CUSTOM_NAME` fetch from api.openwebui.com and the OpenRouter `HTTP-Referer`/`X-Title` headers are removed.
+    - `main.py` and `utils/webhook.py` now import `WEBUI_NAME`/`WEBUI_FAVICON_URL` from `env` instead of through `config.py`, so a future unused-import autofix in `config.py` cannot break startup (the #39 failure mode). Only imports this change made unused were removed, checked by diffing ruff F401 against `main`.
+  - Stale DB config rows such as `ui.enable_community_sharing` stay inert; no migration.
+  - e2e: removed the four tests of removed features (hub pre-fill for prompts/tools, the seat-limit licence, the update check), and reworded the functions "posted message" test.
+  - **Verification:**
+    - pre-commit passed; pytest 308 passed, 1 skipped.
+    - Scratch boot OK: `/api/version/updates` is no longer an endpoint (SPA HTML). Schema identical.
+    - astro check 0 errors; Vitest 584 passed (588 minus the 4 share-payload tests); build OK.
+    - Playwright locally: 340 passed, 4 failed. The 4 (admin-evaluations' first tests and admin-settings' "redirects into the modal" and "Models" list) are 5-second cold-start timeouts that fail **identically on `main`** in a clean worktree, with the machine at a load average of about 7. They pass when run alone. CI is the gate.
 

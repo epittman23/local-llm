@@ -159,17 +159,6 @@ async def get_headers_and_cookies(
     cookies = {}
     headers = {
         'Content-Type': 'application/json',
-        **(
-            {
-                # LICENSE covers this Open WebUI upstream metadata identifier.
-                # Do not alter, remove, obscure, or replace it except as LICENSE permits:
-                # https://docs.openwebui.com/license.
-                'HTTP-Referer': 'https://openwebui.com/',
-                'X-Title': 'Open WebUI',
-            }
-            if 'openrouter.ai' in url
-            else {}
-        ),
     }
 
     if ENABLE_FORWARD_USER_INFO_HEADERS and user:

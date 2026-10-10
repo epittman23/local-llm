@@ -2,11 +2,11 @@ import asyncio
 import logging
 import urllib.parse
 
-from local_llm.config import WEBUI_FAVICON_URL
 from local_llm.env import (
     AIOHTTP_CLIENT_ALLOW_REDIRECTS,
     AIOHTTP_CLIENT_SESSION_SSL,
     VERSION,
+    WEBUI_FAVICON_URL,
 )
 from local_llm.retrieval.web.utils import get_ssrf_safe_session, validate_url
 from local_llm.utils.json_codec import JSONCodec

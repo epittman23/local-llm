@@ -10,8 +10,6 @@ import { routePaths } from '@/routes/routePaths';
 import { FunctionEditor } from './FunctionEditor';
 import { type FunctionDraft, sanitizeIncomingFunction } from './functionTypes';
 
-const COMMUNITY_ORIGINS = ['https://openwebui.com', 'https://www.openwebui.com', 'http://localhost:9999'];
-
 // The create/update endpoints take exactly these four fields.
 const payload = (f: FunctionDraft) => ({ id: f.id, name: f.name, meta: f.meta, content: f.content });
 
@@ -27,9 +25,8 @@ const useRefreshFunctions = () => {
 
 /**
  * Ports (app)/admin/functions/create/+page.svelte. The form can be pre-filled
- * from a clone or link import (left in `sessionStorage.function`, read once) or
- * by a message from the Open WebUI community site; both are sanitized to the
- * four editable fields, and a message replaces the form (the editor is remounted).
+ * from a clone or link import (left in `sessionStorage.function`, read once),
+ * sanitized to the four editable fields.
  */
 export function FunctionCreatePage() {
 	const token = useAuthStore((s) => s.token) ?? '';
@@ -45,26 +42,7 @@ export function FunctionCreatePage() {
 			return null;
 		}
 	});
-	const [fn, setFn] = useState<FunctionDraft | null>(stash);
-	const [revision, setRevision] = useState(0);
-
-	useEffect(() => {
-		const onMessage = (event: MessageEvent) => {
-			if (!COMMUNITY_ORIGINS.includes(event.origin)) return;
-			try {
-				const incoming = sanitizeIncomingFunction(JSON.parse(event.data));
-				if (!incoming) return;
-				setFn(incoming);
-				setRevision((r) => r + 1);
-			} catch (error) {
-				console.error('Ignoring malformed function from community site', error);
-			}
-		};
-		window.addEventListener('message', onMessage);
-		// A fixed string with no data in it, so '*' discloses nothing.
-		if (window.opener) window.opener.postMessage('loaded', '*');
-		return () => window.removeEventListener('message', onMessage);
-	}, []);
+	const fn: FunctionDraft | null = stash;
 
 	const onSave = async (data: FunctionDraft) => {
 		if (refusedForVersion(data.content)) return;
@@ -81,7 +59,7 @@ export function FunctionCreatePage() {
 
 	return (
 		<div className="h-full min-w-0 overflow-x-hidden px-4">
-			<FunctionEditor key={revision} fn={fn} clone={stash !== null} onSave={onSave} />
+			<FunctionEditor fn={fn} clone={stash !== null} onSave={onSave} />
 		</div>
 	);
 }

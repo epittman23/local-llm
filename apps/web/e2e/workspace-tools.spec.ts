@@ -234,34 +234,6 @@ test.describe('workspace tools', () => {
 		expect(calls.some((c) => c.path === '/create')).toBe(false);
 	});
 
-	test('create: a community message pre-fills the form but cannot choose grants', async ({ page }) => {
-		await mockWorkspaceBackend(page);
-		const { calls } = await mockToolsApi(page, []);
-		await page.goto('/workspace/tools/create');
-		// The editor is lazy-loaded, so once it is on screen the page's effects have run.
-		await expect(page.locator('.cm-content')).toBeVisible();
-		await page.evaluate(() =>
-			window.dispatchEvent(
-				new MessageEvent('message', {
-					origin: 'https://openwebui.com',
-					data: JSON.stringify({
-						id: 'from_web',
-						name: 'From Web',
-						content: 'class Tools:\n    pass',
-						meta: { description: 'shared' },
-						access_grants: [{ principal_type: 'user', principal_id: '*', permission: 'write' }]
-					})
-				})
-			)
-		);
-		await expect(page.getByLabel('Tool Name')).toHaveValue('From Web');
-		await page.getByRole('button', { name: 'Save & Create' }).click();
-		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
-		await expect
-			.poll(() => calls.find((c) => c.path === '/create')?.body)
-			.toMatchObject({ id: 'from_web', access_grants: [] });
-	});
-
 	test('edit: loads by id, saves without an acknowledgement, and bounces read-only tools', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockToolsApi(page, [tool(1), tool(3, { write_access: false })]);

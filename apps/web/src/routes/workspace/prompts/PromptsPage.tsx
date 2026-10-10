@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import saveAs from 'file-saver';
-import { Check, Clipboard, Copy, Download, MoreHorizontal, Pencil, Share2, Trash2 } from 'lucide-react';
+import { Check, Clipboard, Copy, Download, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
@@ -21,7 +21,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { createNewPrompt, deletePromptById, getPromptItems, getPromptTags, togglePromptById } from '@/lib/apis/prompts';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { useConfigStore, useWebUIName } from '@/lib/stores/configStore';
+import { useWebUIName } from '@/lib/stores/configStore';
 import { useWorkspaceStore } from '@/lib/stores/workspaceStore';
 import { capitalizeFirstLetter, copyToClipboard, slugify } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
@@ -32,14 +32,12 @@ import { PromptCreateDialog } from './PromptCreateDialog';
 import {
 	type PromptDraft,
 	type PromptListItem,
-	communitySharePayload,
 	parsePromptImport,
 	sanitizeExternalDraft,
 	toPromptDraft
 } from './promptTypes';
 
 const PER_PAGE = 30;
-const COMMUNITY_ORIGINS = ['https://openwebui.com', 'https://www.openwebui.com', 'http://localhost:9999'];
 
 /**
  * Ports workspace/Prompts.svelte: the searchable, filterable, sortable,
@@ -59,7 +57,6 @@ const COMMUNITY_ORIGINS = ['https://openwebui.com', 'https://www.openwebui.com',
 export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?: boolean }) {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const user = useAuthStore((s) => s.user);
-	const config = useConfigStore((s) => s.config);
 	const webuiName = useWebUIName();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
@@ -141,24 +138,8 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 		return () => setActions([]);
 	}, [setActions, canImport, canExport, prompts]);
 
-	// --- prompts arriving from the Open WebUI community site -------------
+	// --- a prompt stashed by a clone or link import ----------------------
 	useEffect(() => {
-		const onMessage = (event: MessageEvent) => {
-			if (!COMMUNITY_ORIGINS.includes(event.origin)) return;
-			try {
-				const draft = sanitizeExternalDraft(JSON.parse(event.data));
-				if (!draft) return;
-				setCreateDraft(draft);
-				setShowCreate(true);
-			} catch (error) {
-				console.error('Ignoring malformed prompt from community site', error);
-			}
-		};
-		window.addEventListener('message', onMessage);
-		// A fixed string with no data in it, so '*' discloses nothing: the opener's
-		// origin is not knowable from here, and the community site is what listens.
-		if (window.opener) window.opener.postMessage('loaded', '*');
-
 		const stashed = sessionStorage.prompt;
 		if (stashed) {
 			sessionStorage.removeItem('prompt');
@@ -172,7 +153,6 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 				console.error('Ignoring malformed stashed prompt', error);
 			}
 		}
-		return () => window.removeEventListener('message', onMessage);
 	}, []);
 
 	// --- mutations -------------------------------------------------------
@@ -234,25 +214,6 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 			setCopiedId(prompt.command);
 			setTimeout(() => setCopiedId(null), 2000);
 		}
-	};
-
-	const shareHandler = (prompt: PromptListItem) => {
-		// LICENSE covers this Open WebUI Community wordmark.
-		// Do not alter, remove, obscure, or replace it except as LICENSE permits:
-		// https://docs.openwebui.com/license.
-		toast.success('Redirecting you to Open WebUI Community');
-		const url = 'https://openwebui.com';
-		const tab = window.open(`${url}/prompts/create`, '_blank');
-		// Answer the community site's 'loaded' once, then stop listening -- the
-		// Svelte version leaves a listener behind per click. The payload goes to
-		// that origin only (not '*') and carries just the prompt's own fields.
-		const onMessage = (event: MessageEvent) => {
-			if (event.origin !== url || event.data !== 'loaded') return;
-			window.removeEventListener('message', onMessage);
-			tab?.postMessage(JSON.stringify(communitySharePayload(prompt)), url);
-		};
-		window.addEventListener('message', onMessage);
-		setTimeout(() => window.removeEventListener('message', onMessage), 60_000);
 	};
 
 	const importFile = (file: File) => {
@@ -479,12 +440,6 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 																<Pencil />
 																Edit
 															</DropdownMenuItem>
-															{config?.features?.enable_community_sharing && (
-																<DropdownMenuItem onSelect={() => shareHandler(prompt)}>
-																	<Share2 />
-																	Share
-																</DropdownMenuItem>
-															)}
 															<DropdownMenuItem onSelect={() => cloneHandler(prompt)}>
 																<Copy />
 																Clone
@@ -535,30 +490,6 @@ export function PromptsPage({ showCreateOnMount = false }: { showCreateOnMount?:
 			{total > PER_PAGE && (
 				<div className="mt-4 mb-2 flex justify-center">
 					<PagePagination page={page} count={total} perPage={PER_PAGE} onPageChange={setPage} />
-				</div>
-			)}
-
-			{config?.features?.enable_community_sharing && (
-				<div className="mt-6 px-2 pb-8">
-					<div className="text-muted-foreground mb-0.5 text-[0.6875rem]">
-						{/* LICENSE covers this Open WebUI Community wordmark.
-						    Do not alter, remove, obscure, or replace it except as LICENSE permits:
-						    https://docs.openwebui.com/license. */}
-						Made by Open WebUI Community
-					</div>
-					<a
-						className="flex w-full items-center justify-between gap-3 py-1 text-left transition"
-						href="https://openwebui.com/prompts"
-						target="_blank"
-						rel="noreferrer"
-					>
-						<div className="min-w-0">
-							<div className="line-clamp-1 text-[0.8125rem]">Discover a prompt</div>
-							<div className="text-muted-foreground line-clamp-1 text-xs">
-								Discover, download, and explore custom prompts
-							</div>
-						</div>
-					</a>
 				</div>
 			)}
 		</div>

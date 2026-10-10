@@ -124,13 +124,3 @@ export function parsePromptImport(text: string): Array<{ command: string; name: 
 		return [{ command, name: asString(p.name, NAME_MAX) || command, content: asString(p.content, CONTENT_MAX) }];
 	});
 }
-
-/**
- * What "Share to Community" hands to the community site: the fields it needs to
- * pre-fill its own create form, and nothing else. The list row also carries the
- * author's name and email and the prompt's access grants, none of which belong
- * on another origin.
- */
-export function communitySharePayload(p: PromptListItem) {
-	return { name: p.name, command: p.command, content: p.content ?? '', tags: p.tags ?? [] };
-}

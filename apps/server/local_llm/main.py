@@ -67,13 +67,16 @@ from local_llm.config import (
     THREAD_POOL_SIZE,
     THREAD_POOL_THREAD_NAME_PREFIX,
     WEBUI_AUTH,
-    WEBUI_NAME,
     async_reset_config,
     import_legacy_config_json,
     seed_registered_defaults,
 )
 from local_llm.constants import ERROR_MESSAGES, TASKS
 from local_llm.env import (
+    # Admin Account Runtime Creation
+    # OAuth Back-Channel Logout
+    # Redis
+    # SCIM
     AIOHTTP_CLIENT_SESSION_SSL,
     AUDIT_EXCLUDED_PATHS,
     AUDIT_INCLUDED_PATHS,
@@ -85,25 +88,20 @@ from local_llm.env import (
     ENABLE_COMPRESSION_MIDDLEWARE,
     ENABLE_CUSTOM_MODEL_FALLBACK,
     ENABLE_EASTER_EGGS,
-    # OAuth Back-Channel Logout
     ENABLE_OAUTH_BACKCHANNEL_LOGOUT,
     ENABLE_OTEL,
     ENABLE_PLUGINS,
     ENABLE_PUBLIC_ACTIVE_USERS_COUNT,
     ENABLE_PYODIDE_FILE_PERSISTENCE,
-    # SCIM
     ENABLE_SCIM,
     ENABLE_SIGNUP_PASSWORD_CONFIRMATION,
     ENABLE_STAR_SESSIONS_MIDDLEWARE,
-    ENABLE_VERSION_UPDATE_CHECK,
     ENABLE_WEBSOCKET_SUPPORT,
     EXTERNAL_PWA_MANIFEST_URL,
     GLOBAL_LOG_LEVEL,
     INSTANCE_ID,
-    LICENSE_KEY,
     LOG_FORMAT,
     MAX_BODY_LOG_SIZE,
-    # Redis
     REDIS_KEY_PREFIX,
     REDIS_URL,
     RESET_CONFIG_ON_START,
@@ -111,12 +109,12 @@ from local_llm.env import (
     SCIM_TOKEN,
     VERSION,
     WEBSOCKET_HEARTBEAT_INTERVAL,
-    # Admin Account Runtime Creation
     WEBUI_ADMIN_EMAIL,
     WEBUI_ADMIN_NAME,
     WEBUI_ADMIN_PASSWORD,
     WEBUI_AUTH_TRUSTED_EMAIL_HEADER,
     WEBUI_BUILD_HASH,
+    WEBUI_NAME,
     WEBUI_SECRET_KEY,
     WEBUI_SESSION_COOKIE_SAME_SITE,
     WEBUI_SESSION_COOKIE_SECURE,
@@ -214,7 +212,6 @@ from local_llm.utils.auth import (
     decode_token,
     get_admin_user,
     get_http_authorization_cred,
-    get_license_data,
     get_verified_user,
 )
 from local_llm.utils.chat import (
@@ -361,10 +358,6 @@ async def lifespan(app: FastAPI):
     await migrate_legacy_webhook_config()
     await publish_event(app, EVENTS.SYSTEM_STARTUP_STARTED, source='system')
 
-    license_task = None
-    if LICENSE_KEY:
-        license_task = asyncio.create_task(asyncio.to_thread(get_license_data, app, LICENSE_KEY))
-
     # Create admin account from env vars if specified and no users exist
     if WEBUI_ADMIN_EMAIL and WEBUI_ADMIN_PASSWORD:
         if await create_admin_user(WEBUI_ADMIN_EMAIL, WEBUI_ADMIN_PASSWORD, WEBUI_ADMIN_NAME):
@@ -447,14 +440,6 @@ async def lifespan(app: FastAPI):
             log.warning(f'Failed to initialize terminal servers at startup: {e}')
 
     # Mark application as ready to accept traffic from a startup perspective.
-    if license_task:
-        try:
-            await asyncio.wait_for(asyncio.shield(license_task), timeout=2)
-        except TimeoutError:
-            log.warning('License data retrieval is still pending; continuing startup without it')
-        except Exception as e:
-            log.warning(f'License data retrieval failed during startup: {e}')
-
     app.state.startup_complete = True
     await publish_event(app, EVENTS.SYSTEM_STARTUP_COMPLETED, source='system')
 
@@ -511,8 +496,6 @@ app.state.redis = None
 # Do not alter, remove, obscure, or replace it except as LICENSE permits:
 # https://docs.openwebui.com/license.
 app.state.WEBUI_NAME = WEBUI_NAME
-app.state.LICENSE_METADATA = None
-app.state.USER_COUNT = None
 app.state.EXTERNAL_PWA_MANIFEST_URL = EXTERNAL_PWA_MANIFEST_URL
 
 
@@ -2223,8 +2206,6 @@ async def get_app_config(request: Request):
     if user is None:
         onboarding = not await Users.has_users()
 
-    license_metadata = getattr(app.state, 'LICENSE_METADATA', None)
-    user_count = await Users.get_num_users() if license_metadata else None
     config = await Config.get_many(
         'oauth.enable',
         'oauth.auto_redirect',
@@ -2250,7 +2231,6 @@ async def get_app_config(request: Request):
         'code_interpreter.enable',
         'image_generation.enable',
         'task.autocomplete.enable',
-        'ui.enable_community_sharing',
         'ui.enable_message_rating',
         'ui.enable_user_webhooks',
         'users.enable_status',
@@ -2312,7 +2292,6 @@ async def get_app_config(request: Request):
                 {
                     'enable_api_keys': config.get('auth.enable_api_keys'),
                     'enable_password_change_form': config.get('ui.enable_password_change_form'),
-                    'enable_version_update_check': ENABLE_VERSION_UPDATE_CHECK,
                     'enable_pyodide_file_persistence': ENABLE_PYODIDE_FILE_PERSISTENCE,
                     'enable_public_active_users_count': ENABLE_PUBLIC_ACTIVE_USERS_COUNT,
                     'enable_easter_eggs': ENABLE_EASTER_EGGS,
@@ -2334,7 +2313,6 @@ async def get_app_config(request: Request):
                     'enable_code_interpreter': config.get('code_interpreter.enable'),
                     'enable_image_generation': config.get('image_generation.enable'),
                     'enable_autocomplete_generation': config.get('task.autocomplete.enable'),
-                    'enable_community_sharing': config.get('ui.enable_community_sharing'),
                     'enable_message_rating': config.get('ui.enable_message_rating'),
                     'enable_user_webhooks': config.get('ui.enable_user_webhooks'),
                     'enable_user_status': config.get('users.enable_status'),
@@ -2362,7 +2340,6 @@ async def get_app_config(request: Request):
                 'default_models': config.get('ui.default_models'),
                 'default_pinned_models': config.get('ui.default_pinned_models'),
                 'default_prompt_suggestions': config.get('ui.prompt_suggestions'),
-                **({'user_count': user_count} if user_count is not None else {}),
                 'code': {
                     'engine': config.get('code_execution.engine'),
                     'interpreter_engine': config.get('code_interpreter.engine'),
@@ -2403,14 +2380,6 @@ async def get_app_config(request: Request):
                     'response_watermark': config.get('ui.watermark'),
                     'iframe_csp': IFRAME_CSP,
                 },
-                'license_metadata': license_metadata,
-                **(
-                    {
-                        'active_entries': user_count,
-                    }
-                    if user.role == 'admin' and user_count is not None
-                    else {}
-                ),
             }
             if user is not None and (user.role in ['admin', 'user'])
             else {
@@ -2422,16 +2391,6 @@ async def get_app_config(request: Request):
                         }
                     }
                     if user and user.role == 'pending'
-                    else {}
-                ),
-                **(
-                    {
-                        'metadata': {
-                            'login_footer': license_metadata.get('login_footer', ''),
-                            'auth_logo_position': license_metadata.get('auth_logo_position', ''),
-                        }
-                    }
-                    if license_metadata
                     else {}
                 ),
             }
@@ -2556,28 +2515,6 @@ async def get_app_version():
         'version': VERSION,
         'deployment_id': DEPLOYMENT_ID,
     }
-
-
-@app.get('/api/version/updates')
-async def get_app_latest_release_version(user=Depends(get_verified_user)):
-    if not ENABLE_VERSION_UPDATE_CHECK:
-        log.debug('Version update check is disabled, returning current version as latest version')
-        return {'current': VERSION, 'latest': VERSION}
-    try:
-        timeout = aiohttp.ClientTimeout(total=1)
-        async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
-            async with session.get(
-                'https://api.github.com/repos/open-webui/open-webui/releases/latest',
-                ssl=AIOHTTP_CLIENT_SESSION_SSL,
-            ) as response:
-                response.raise_for_status()
-                data = await response.json()
-                latest_version = data['tag_name']
-
-                return {'current': VERSION, 'latest': latest_version[1:]}
-    except Exception as e:
-        log.debug(e)
-        return {'current': VERSION, 'latest': VERSION}
 
 
 @app.get('/api/usage')

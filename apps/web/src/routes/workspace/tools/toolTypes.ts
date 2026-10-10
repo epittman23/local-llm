@@ -63,11 +63,6 @@ export function parseToolImport(text: string): ToolDraft[] {
 	});
 }
 
-/** What the community site is sent for "Share": the tool's own fields, not its author or grants. */
-export function toolSharePayload(tool: { id: string; name: string; meta?: unknown; content?: unknown }) {
-	return { id: tool.id, name: tool.name, meta: tool.meta ?? {}, content: tool.content ?? '' };
-}
-
 /** Filters/sorts the (client-side) tools list exactly as Tools.svelte's setFilteredItems does. */
 export function filterAndSortTools(
 	tools: ToolListItem[],

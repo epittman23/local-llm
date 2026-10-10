@@ -52,14 +52,3 @@ export function parseModelImport(text: string): IncomingModel[] {
 		return model ? [model] : [];
 	});
 }
-
-/** What "Share to Community" sends: the model's own definition, not its author, grants or timestamps. */
-export function modelSharePayload(model: Json) {
-	return {
-		id: model.id,
-		name: model.name,
-		base_model_id: model.base_model_id ?? null,
-		meta: model.meta ?? {},
-		params: model.params ?? {}
-	};
-}

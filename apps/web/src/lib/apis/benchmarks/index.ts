@@ -8,8 +8,7 @@ import { WEBUI_API_BASE_URL } from '@/lib/constants';
 // This mirrors the pattern already used for chat completion streaming in
 // `$lib/apis/streaming` (`createOpenAITextStream`) and the raw-response +
 // `AbortController` tuple pattern used by streaming fetches elsewhere (e.g.
-// `pullModel` in `$lib/apis/ollama` and `downloadChatStats` in
-// `$lib/apis/chats`): the fetch function itself returns the raw `Response`
+// `pullModel` in `$lib/apis/ollama`): the fetch function itself returns the raw `Response`
 // (not `.json()`-parsed) alongside an `AbortController` so the caller can
 // cancel the stream, and a small shared async generator turns
 // `res.body` into parsed SSE events via `TextDecoderStream` +
@@ -216,8 +215,7 @@ export const checkServe = async (token: string = '') => {
 
 // Returns the raw [Response, AbortController] tuple, matching the
 // established convention for streaming fetches in this codebase (see
-// `pullModel` in `$lib/apis/ollama` and `downloadChatStats` in
-// `$lib/apis/chats`). Callers pass `res.body` into `parseBenchmarksEventStream`
+// `pullModel` in `$lib/apis/ollama`). Callers pass `res.body` into `parseBenchmarksEventStream`
 // above to get parsed `{ event, data }` updates, the same way
 // `createOpenAITextStream(res.body, ...)` is used for chat streaming.
 export const streamServe = async (

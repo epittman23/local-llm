@@ -5,36 +5,29 @@ import base64
 import hashlib
 import hmac
 import logging
-import os
 import uuid
 from datetime import datetime, timedelta
 
 import bcrypt
 import jwt
-import requests
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from fastapi import BackgroundTasks, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from local_llm.constants import ERROR_MESSAGES
 from local_llm.env import (
     ENABLE_OTEL,
     ENABLE_PASSWORD_VALIDATION,
-    LICENSE_BLOB,
     PASSWORD_HASH_ALGORITHM,
     PASSWORD_VALIDATION_HINT,
     PASSWORD_VALIDATION_REGEX_PATTERN,
     REDIS_KEY_PREFIX,
-    STATIC_DIR,
     TRUSTED_SIGNATURE_KEY,
     WEBUI_AUTH_TRUSTED_EMAIL_HEADER,
     WEBUI_SECRET_KEY,
-    pk,
 )
 from local_llm.models.auths import Auths
 from local_llm.models.config import Config
 from local_llm.models.users import Users
 from local_llm.utils.access_control import has_permission
-from local_llm.utils.json_codec import JSONCodec
 from local_llm.utils.misc import parse_duration
 from pytz import UTC
 
@@ -63,105 +56,6 @@ def verify_signature(payload: str, signature: str) -> bool:
 
     except Exception:
         return False
-
-
-def override_static(path: str, content: str):
-    # Ensure path is safe
-    if '/' in path or '..' in path:
-        log.error(f'Invalid path: {path}')
-        return
-
-    file_path = os.path.join(STATIC_DIR, path)
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-
-    with open(file_path, 'wb') as f:
-        f.write(base64.b64decode(content))  # Convert Base64 back to raw binary
-
-
-def get_license_data(app, key):
-    def data_handler(data):
-        for k, v in data.items():
-            if k == 'resources':
-                # LICENSE covers these Open WebUI branding assets.
-                # Do not alter, remove, obscure, or replace them except as LICENSE permits:
-                # https://docs.openwebui.com/license.
-                for p, c in v.items():
-                    globals().get('override_static', lambda a, b: None)(p, c)
-            elif k == 'count':
-                setattr(app.state, 'USER_COUNT', v)
-            elif k == 'name':
-                # LICENSE covers this Open WebUI product name.
-                # Do not alter, remove, obscure, or replace it except as LICENSE permits:
-                # https://docs.openwebui.com/license.
-                setattr(app.state, 'WEBUI_NAME', v)
-            elif k == 'metadata':
-                setattr(app.state, 'LICENSE_METADATA', v)
-
-    def handler(u):
-        try:
-            res = requests.post(
-                f'{u}/api/v1/license/',
-                json={'key': key, 'version': '1'},
-                timeout=5,
-            )
-        except Exception as ex:
-            log.error(f'License: retrieval issue from {u}: {ex}')
-            return False
-
-        if getattr(res, 'ok', False):
-            payload = getattr(res, 'json', lambda: {})()
-            data_handler(payload)
-            return True
-        else:
-            log.error(f'License: retrieval issue: {getattr(res, "text", "unknown error")}')
-
-    if key:
-        us = [
-            'https://api.openwebui.com',
-            'https://licenses.api.openwebui.com',
-        ]
-        try:
-            for u in us:
-                if handler(u):
-                    return True
-        except Exception as ex:
-            log.exception(f'License: Uncaught Exception: {ex}')
-
-    try:
-        if LICENSE_BLOB:
-            nl = 12
-            kb = hashlib.sha256((key.replace('-', '').upper()).encode()).digest()
-
-            def nt(b):
-                return b[:nl], b[nl:]
-
-            lb = base64.b64decode(LICENSE_BLOB)
-            ln, lt = nt(lb)
-
-            aesgcm = AESGCM(kb)
-            p = JSONCodec.loads(aesgcm.decrypt(ln, lt, None))
-            pk.verify(base64.b64decode(p['s']), p['p'].encode())
-
-            pb = base64.b64decode(p['p'])
-            pn, pt = nt(pb)
-
-            data = JSONCodec.loads(aesgcm.decrypt(pn, pt, None).decode())
-
-            exp = data.get('exp')
-            if exp:
-                if isinstance(exp, str):
-                    from datetime import date
-
-                    exp = date.fromisoformat(exp)
-                if exp < datetime.now().date():
-                    return False
-
-            data_handler(data)
-            return True
-    except Exception as e:
-        log.error(f'License: {e}')
-
-    return False
 
 
 bearer_security = HTTPBearer(auto_error=False)

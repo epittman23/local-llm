@@ -7,7 +7,7 @@ import { APP_NAME } from '@/lib/constants';
 // (65+ fields); this app only ports the fields an actual page reads so far:
 // Phase 5's enable_benchmarks; Phase 6's auth/oauth/onboarding/metadata (all,
 // per main.py's own comment, "Public: required by login/signup page
-// pre-auth"); Phase 7's enable_plugins, enable_community_sharing and file.max_size. Extend as
+// pre-auth"); Phase 7's enable_plugins and file.max_size. Extend as
 // later phases need more of it, rather than porting the whole shape now for
 // fields nothing reads yet.
 export type BackendConfig = {
@@ -18,21 +18,13 @@ export type BackendConfig = {
 	/** Comma-separated model ids pinned for users who have not chosen their own. */
 	default_pinned_models?: string | null;
 	onboarding?: boolean;
-	/** Present only on licensed builds; `seats` caps the user count. */
-	license_metadata?: { seats?: number | null; [key: string]: unknown } | null;
 	oauth?: {
 		providers?: Record<string, string>;
 		auto_redirect?: boolean;
 	};
-	metadata?: {
-		auth_logo_position?: string;
-		login_footer?: string;
-		[key: string]: unknown;
-	};
 	features?: {
 		enable_benchmarks?: boolean;
 		enable_plugins?: boolean;
-		enable_community_sharing?: boolean;
 		enable_admin_analytics?: boolean;
 		enable_admin_chat_access?: boolean;
 		auth?: boolean;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { modelSharePayload, parseModelImport, sanitizeIncomingModel } from './modelImport';
+import { parseModelImport, sanitizeIncomingModel } from './modelImport';
 
 const grants = [{ principal_type: 'user', principal_id: '*', permission: 'write' }];
 
@@ -46,19 +46,5 @@ describe('parseModelImport', () => {
 		expect(out.map((m) => m.id)).toEqual(['a', 'b']);
 		expect(out[0].access_grants).toEqual([]);
 		expect(() => parseModelImport('{}')).toThrow(/array/);
-	});
-});
-
-describe('modelSharePayload', () => {
-	it('omits the author and grants', () => {
-		const p = modelSharePayload({
-			id: 'm',
-			name: 'M',
-			user: { email: 'a@b.c' },
-			access_grants: grants,
-			meta: { d: 1 }
-		});
-		expect(JSON.stringify(p)).not.toContain('a@b.c');
-		expect(p).toEqual({ id: 'm', name: 'M', base_model_id: null, meta: { d: 1 }, params: {} });
 	});
 });

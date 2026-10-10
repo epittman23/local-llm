@@ -272,7 +272,7 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   `knowledgeFiles.ts` holds its pure path/diff logic, `useKnowledgeUploads.ts`
   the upload flows), and `workspace/models/` (list with bulk actions and
   pinning; `ModelEditor` with its data flow in `modelEditorLogic.ts`, the
-  pickers in `EditorPickers`/`KnowledgePicker`, and import/community
+  pickers in `EditorPickers`/`KnowledgePicker`, and import
   sanitizers in `modelImport.ts`). `admin/` is Phase 8's surface:
   `AdminLayout` (admin-only gate, tab bar) and `adminAccess.ts`; `users/`
   (users and groups, permissions table in `permissionRows.ts`),
