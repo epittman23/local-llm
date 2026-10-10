@@ -198,9 +198,6 @@ all = [
     "unstructured==0.27.16",
 ]
 
-[project.scripts]
-open-webui = "open_webui:app"
-
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -212,7 +209,6 @@ allow-direct-references = true
 sources = ["backend"]
 exclude = [
     ".gitignore",
-    ".webui_secret_key",
     "webui.db",
     "chroma.sqlite3",
 ]

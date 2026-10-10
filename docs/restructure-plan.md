@@ -884,4 +884,9 @@ rm -rf apps/server/backend
     - Boot OK; schema identical; astro check 0 errors; Vitest 588 passed.
     - `/api/changelog` now returns the SPA's `text/html` 200, not JSON.
   - **Finding (pre-existing, not changed):** the backend's SPA mount answers **every** unknown path with `index.html` and 200, unknown `/api/*` paths included (`/api/does-not-exist` does the same). The boot script now reports content type so a removed endpoint is distinguishable.
+- **2c (remove the pip-install CLI).**
+  - `open_webui/__init__.py` (the typer `serve`/`dev`/`--version` CLI, which imported the undeclared `typer` on every package import) is now a one-line docstring.
+  - Removed `[project.scripts]`, the `FROM_INIT_PY` flag and its three `env.py` branches (the version via `importlib.metadata`, the copy-then-`rmtree` of `DATA_DIR`, and the `frontend/` build dir).
+  - Removed `pdf_generator.py`'s two pip-install font fallbacks (`FONTS_DIR` is always the package's `static/fonts`), plus the `.webui_secret_key` ignore rule and wheel exclude.
+  - **Verification:** pre-commit passed; lock OK; pytest 300 passed, 1 skipped; boot OK (version 0.11.3); schema identical.
 

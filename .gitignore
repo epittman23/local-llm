@@ -236,6 +236,3 @@ __marimo__/
 # the subdirectories are tracked.
 /apps/server/backend/open_webui/static/*
 !/apps/server/backend/open_webui/static/*/
-
-# Written by the backend's `serve` CLI when no secret key is set.
-.webui_secret_key

@@ -1,4 +1,3 @@
-import site
 from datetime import datetime
 from html import escape
 from pathlib import Path
@@ -95,18 +94,8 @@ class PDFGenerator:
         Generate a PDF from chat messages.
         """
         try:
-            global FONTS_DIR
-
             pdf = FPDF()
             pdf.add_page()
-
-            # When running using `pip install` the static directory is in the site packages.
-            if not FONTS_DIR.exists():
-                FONTS_DIR = Path(site.getsitepackages()[0]) / 'static/fonts'
-            # When running using `pip install -e .` the static directory is in the site packages.
-            # This path only works if `open-webui serve` is run from the root of this project.
-            if not FONTS_DIR.exists():
-                FONTS_DIR = Path('.') / 'backend' / 'static' / 'fonts'
 
             pdf.add_font('NotoSans', '', f'{FONTS_DIR}/NotoSans-Regular.ttf')
             pdf.add_font('NotoSans', 'b', f'{FONTS_DIR}/NotoSans-Bold.ttf')
