@@ -889,4 +889,12 @@ rm -rf apps/server/backend
   - Removed `[project.scripts]`, the `FROM_INIT_PY` flag and its three `env.py` branches (the version via `importlib.metadata`, the copy-then-`rmtree` of `DATA_DIR`, and the `frontend/` build dir).
   - Removed `pdf_generator.py`'s two pip-install font fallbacks (`FONTS_DIR` is always the package's `static/fonts`), plus the `.webui_secret_key` ignore rule and wheel exclude.
   - **Verification:** pre-commit passed; lock OK; pytest 300 passed, 1 skipped; boot OK (version 0.11.3); schema identical.
+- **2d (keep only the en-US locale).**
+  - Deleted 63 locale directories (about 11 MB) and `languages.json`.
+  - Settings > General loses its Language picker, which changed `<html lang>` and nothing else.
+  - `lib/i18n/index.ts` now sets `supportedLngs: ['en-US']`, drops the `fr` fallback map, and removes the now-unused `getLanguages`/`changeLanguage` helpers.
+  - **Verification:**
+    - pre-commit passed.
+    - astro check 0 errors, 0 warnings; Vitest 588 passed; build OK (one translation chunk instead of 64).
+    - Playwright `--workers=2`: 348 passed.
 

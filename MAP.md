@@ -289,7 +289,7 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   `benchmarks/profiles.ts`, new code for the profile CRUD endpoints that
   never had a frontend.
 - **`src/lib/auth/`**, **`stores/`** (Zustand: auth, config, UI),
-  **`socket/`**, **`i18n/`** (the fork's 65 locale files, verbatim),
+  **`socket/`**, **`i18n/`** (i18next setup and the one shipped locale, `en-US`),
   **`query/`**, **`utils/`** (only the functions from the SvelteKit app's
   `utils/index.ts` that ported pages actually use),
   **`access/`** (`accessGrants.ts`: the pure grant-rewriting rules behind
