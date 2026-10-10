@@ -219,16 +219,23 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# GPU telemetry captures from scripts/shell/vram-log.sh: machine-specific,
-# regenerated on every serving run. README.md/CLAUDE.md are the durable record.
-# (The script moved from scripts/llama-vram-log.sh on 2026-09-07; the old path
-# this comment used to name has not existed since.)
-logs/
+# Local logs and leftovers (e.g. logs/llama.db.retired-*, the old SQLite store
+# kept after its backfill into Postgres). Nothing in the repo writes here now;
+# the GPU telemetry recorder writes to Postgres.
+/logs/
 
-# Orphaned: the old CLI's fetched-dataset cache. scripts/llama_fetch.py, which
-# this comment used to name as the writer, was deleted on 2026-09-08 when the
-# benchmark suite moved into the fork -- the Benchmarks feature now fetches its
-# own copy under its own DATA_DIR. The rule is kept only so a leftover
-# tests/data/ on an existing checkout stays out of git status; the directory
-# itself is safe to delete.
-tests/data/
+# The backend's runtime data (uploads, caches, benchmark datasets, reports).
+# DATA_DIR defaults to apps/server/backend/data; apps/server/data is where it
+# moves when apps/server/backend/ is flattened. Neither is ever tracked.
+/apps/server/backend/data/
+/apps/server/data/
+*.db
+
+# Top-level files in the backend's static dir are copied in at every boot
+# from the frontend build's static/ (config.py deletes and recreates them);
+# the subdirectories are tracked.
+/apps/server/backend/open_webui/static/*
+!/apps/server/backend/open_webui/static/*/
+
+# Written by the backend's `serve` CLI when no secret key is set.
+.webui_secret_key

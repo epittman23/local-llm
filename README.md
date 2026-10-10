@@ -34,7 +34,7 @@ Python 3.12 the backend needs; see [docs/guides/dependencies.md](docs/guides/dep
 
 A plain `git clone` is enough — the fork lives inside `apps/server/` as
 ordinary tracked files, not a submodule. Put your secrets in `infra/.env`
-(gitignored):
+(gitignored; `cp infra/.env.example infra/.env` gives you the keys):
 
 ```bash
 # infra/.env

@@ -35,8 +35,8 @@ itself lives in the backend as Python (`apps/server/backend/open_webui/
 benchmarks/serving/`), not in a shell profile table.
 
 Local/generated (not tracked by git — see "Local/generated" section below
-for detail): `.vscode/`, `.claude/`, `logs/`, `tests/data/` (orphaned, see
-below), and scattered `__pycache__/` directories.
+for detail): `.vscode/`, `.claude/`, `logs/`, the backend's runtime data
+directory, and scattered `__pycache__/` directories.
 
 ## `AGENTS.md` and `CLAUDE.md`
 
@@ -97,6 +97,7 @@ Infrastructure this repo runs but does not write.
   project name, so without the pin the 2026-09-14 move of this file out of
   `open-web-ui/` would have orphaned `open-web-ui_postgres-data` and started
   the backend against an empty database. Do not change it.
+- **`.env.example`** — the keys `infra/.env` needs, with empty values.
 - **`.env`** — secrets (API keys, DB password, webui secret key); not
   enumerated here, and not tracked. Compose resolves it relative to the
   compose file, so it lives beside it.
@@ -131,12 +132,11 @@ was replaced by `apps/web/`:
   (Alembic DB migrations), `retrieval/` (RAG), `socket/` (websocket/
   real-time), `tools/`, `tasks.py`, `utils/`, `config.py`, and
   **`benchmarks/`** (see below — fork-owned, not upstream).
-- **`docs/`** — upstream's `SECURITY.md`.
 - Root-level: `pyproject.toml`/`uv.lock` (backend deps; `pyproject.toml`
   also holds the version), `CHANGELOG.md` (the backend reads it),
-  `LICENSE`/`LICENSE_NOTICE`/`LICENSE_HISTORY`, `TROUBLESHOOTING.md`. The upstream Docker images, compose
-  variants, CI workflows and the frontend build hook were deleted in Phase
-  11d; this repo runs through the root `Makefile` and `infra/`.
+  `LICENSE`/`LICENSE_NOTICE`/`LICENSE_HISTORY`. The upstream Docker images,
+  compose variants, CI workflows, start scripts and community files are
+  gone; this repo runs through the root `Makefile` and `infra/`.
 
 #### `backend/open_webui/benchmarks/` (fork-owned, not upstream)
 
@@ -185,9 +185,6 @@ than a second app glued on by a userscript. See `docs/decisions.md` for the migr
   `ServeProcess.start()` (`python -m open_webui.benchmarks.telemetry_recorder`,
   inheriting the backend's own `DATABASE_URL`) rather than by a shell script,
   writing to this app's Postgres via plain `psycopg`.
-- **`scripts/backfill_from_sqlite.py`** — one-time migration of the old
-  `logs/llama.db` (see below) into these Postgres tables. Already run; kept
-  for reference/disaster-recovery, not part of any regular workflow.
 
 ### `apps/web/` (Astro + React + shadcn/ui)
 
@@ -344,10 +341,9 @@ knowing about when navigating the filesystem directly:
 - **`logs/`** — `llama.db.retired-<date>` (the old sqlite store, kept as a
   backup after its contents were backfilled into the fork's Postgres —
   safe to delete once that backfill is trusted) and server logs.
-- **`tests/data/`** — orphaned: the old CLI's fetched-dataset cache
-  (HumanEval/MBPP/DS-1000 `items.jsonl`/`MANIFEST.json`/`CALIBRATION.json`).
-  Nothing reads this any more; the fork's Benchmarks feature fetches its own
-  copy under its own `DATA_DIR` on first use. Safe to delete.
+- **`apps/server/backend/data/`** — the backend's `DATA_DIR`: uploads,
+  caches, the Benchmarks section's fetched datasets, answer exports and
+  reports. Created at boot if missing.
 - **`apps/server/backend/.venv/`** — the fork backend's own virtualenv,
   bootstrapped by `make backend` on first run. The only Python virtualenv in
   this repo since Phase 2c deleted the root `.venv/` along with `scripts/`.

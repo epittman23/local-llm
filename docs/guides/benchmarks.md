@@ -79,9 +79,8 @@ none of them a thin passthrough to a CLI that no longer exists:
 The adapter/suite TOMLs and system-prompt text files moved with the code,
 into `apps/server/backend/open_webui/benchmarks/data/`; they no
 longer live at `tests/adapters/`, `tests/suites/`, `tests/tuning/` or
-`prompts/system/` in this repo (the gitignored, fetched-not-vendored
-`tests/data/` cache is left in place, orphaned but harmless, since the fork
-fetches its own copy under its own `DATA_DIR` on first use).
+`prompts/system/` in this repo. The datasets themselves are fetched, not
+vendored, into the backend's own `DATA_DIR` on first use.
 
 Direct database access, replacing `lllm-db`, is a normal Postgres client
 against the fork's own database — `psql "$DATABASE_URL"`, or anything else
@@ -256,8 +255,7 @@ otherwise show up raw in a browser rather than being rendered.
 | [DS-1000](https://github.com/xlang-ai/DS-1000) | 1000 (511 Pandas/Numpy) | `code_context`, which defines `test_execution(solution)` | CC-BY-SA-4.0 | Lai et al. 2022, [arXiv:2211.11501](https://arxiv.org/abs/2211.11501) |
 
 The Tests page's fetch action downloads them into the fork's own
-`<DATA_DIR>/benchmarks/datasets/` (`BENCHMARKS_DATA_DIR` overrides it) — no
-longer this repo's `tests/data/`, which is gitignored and now orphaned — and
+`<DATA_DIR>/benchmarks/datasets/` (`BENCHMARKS_DATA_DIR` overrides it) and
 writes a `MANIFEST.json` pinning the upstream revision and a SHA-256 of the
 bytes actually downloaded. **Every result records that revision**: per this project's
 convention a number without its configuration is not reusable, and for a pass
