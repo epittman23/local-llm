@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-	filterAndSortTools,
-	parseToolImport,
-	sanitizeIncomingTool,
-	toolSharePayload,
-	type ToolListItem
-} from './toolTypes';
+import { filterAndSortTools, parseToolImport, sanitizeIncomingTool, type ToolListItem } from './toolTypes';
 
 const grants = [{ principal_type: 'user', principal_id: '*', permission: 'write' }];
 
@@ -38,21 +32,6 @@ describe('parseToolImport', () => {
 		expect(out).toHaveLength(1);
 		expect(out[0].access_grants).toEqual([]);
 		expect(() => parseToolImport('{}')).toThrow(/array/);
-	});
-});
-
-describe('toolSharePayload', () => {
-	it('omits the author and grants', () => {
-		const p = toolSharePayload({
-			id: 't',
-			name: 'T',
-			content: 'c',
-			meta: { description: 'd' },
-			user: { email: 'a@b.c' },
-			access_grants: grants
-		} as never);
-		expect(JSON.stringify(p)).not.toContain('a@b.c');
-		expect(p).toEqual({ id: 't', name: 'T', meta: { description: 'd' }, content: 'c' });
 	});
 });
 

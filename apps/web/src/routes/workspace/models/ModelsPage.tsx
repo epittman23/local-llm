@@ -13,7 +13,6 @@ import {
 	Pencil,
 	Pin,
 	PinOff,
-	Share2,
 	Trash2
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -47,7 +46,7 @@ import {
 } from '@/lib/apis/models';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { useConfigStore, useWebUIName } from '@/lib/stores/configStore';
+import { useWebUIName } from '@/lib/stores/configStore';
 import { useWorkspaceStore } from '@/lib/stores/workspaceStore';
 import { capitalizeFirstLetter, copyToClipboard } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
@@ -55,7 +54,7 @@ import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { useShiftKey } from '@/lib/utils/useShiftKey';
 import { routePaths } from '@/routes/routePaths';
 import { DEFAULT_PROFILE_IMAGE } from './modelEditorLogic';
-import { modelSharePayload, parseModelImport } from './modelImport';
+import { parseModelImport } from './modelImport';
 
 const PER_PAGE = 30;
 
@@ -88,7 +87,6 @@ type ModelRow = {
 export function ModelsPage() {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const user = useAuthStore((s) => s.user);
-	const config = useConfigStore((s) => s.config);
 	const webuiName = useWebUIName();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
@@ -222,23 +220,6 @@ export function ModelsPage() {
 		const ok = await copyToClipboard(`${window.location.origin}/?model=${encodeURIComponent(m.id)}`);
 		if (ok) toast.success('Copied link to clipboard');
 		else toast.error('Failed to copy link');
-	};
-
-	const shareModel = async (m: ModelRow) => {
-		// LICENSE covers this Open WebUI Community wordmark.
-		// Do not alter, remove, obscure, or replace it except as LICENSE permits:
-		// https://docs.openwebui.com/license.
-		toast.success('Redirecting you to Open WebUI Community');
-		const url = 'https://openwebui.com';
-		const full = fullModel(m);
-		const tab = window.open(`${url}/post?type=model`, '_blank');
-		const onMessage = async (event: MessageEvent) => {
-			if (event.origin !== url || event.data !== 'loaded') return;
-			window.removeEventListener('message', onMessage);
-			tab?.postMessage(JSON.stringify(modelSharePayload(await full)), url);
-		};
-		window.addEventListener('message', onMessage);
-		setTimeout(() => window.removeEventListener('message', onMessage), 60_000);
 	};
 
 	// --- bulk actions over *every* page of the current search ----------------
@@ -581,12 +562,6 @@ export function ModelsPage() {
 																Export
 															</DropdownMenuItem>
 														)}
-														{model.write_access && config?.features?.enable_community_sharing && (
-															<DropdownMenuItem onSelect={() => shareModel(model)}>
-																<Share2 />
-																Share
-															</DropdownMenuItem>
-														)}
 														{model.write_access && (
 															<>
 																<DropdownMenuSeparator />
@@ -622,30 +597,6 @@ export function ModelsPage() {
 			{total > PER_PAGE && (
 				<div className="mt-4 mb-2 flex justify-center">
 					<PagePagination page={page} count={total} perPage={PER_PAGE} onPageChange={setPage} />
-				</div>
-			)}
-
-			{config?.features?.enable_community_sharing && (
-				<div className="mt-6 px-2 pb-8">
-					<div className="text-muted-foreground mb-0.5 text-[0.6875rem]">
-						{/* LICENSE covers this Open WebUI Community wordmark.
-						    Do not alter, remove, obscure, or replace it except as LICENSE permits:
-						    https://docs.openwebui.com/license. */}
-						Made by Open WebUI Community
-					</div>
-					<a
-						className="flex w-full items-center justify-between gap-3 py-1 text-left"
-						href="https://openwebui.com/models"
-						target="_blank"
-						rel="noreferrer"
-					>
-						<div className="min-w-0">
-							<div className="line-clamp-1 text-[0.8125rem]">Discover a model</div>
-							<div className="text-muted-foreground line-clamp-1 text-xs">
-								Discover, download, and explore model presets
-							</div>
-						</div>
-					</a>
 				</div>
 			)}
 		</div>

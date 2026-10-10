@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { communitySharePayload, parsePromptImport, sanitizeExternalDraft, type PromptListItem } from './promptTypes';
+import { parsePromptImport, sanitizeExternalDraft } from './promptTypes';
 
 describe('sanitizeExternalDraft', () => {
 	it('never carries access grants from outside, however they are spelled', () => {
@@ -48,23 +48,5 @@ describe('parsePromptImport', () => {
 	it('throws on a non-array file instead of importing nothing silently', () => {
 		expect(() => parsePromptImport('{"command":"x"}')).toThrow(/array/);
 		expect(() => parsePromptImport('not json')).toThrow();
-	});
-});
-
-describe('communitySharePayload', () => {
-	it("sends only the prompt's own fields, not the author or its grants", () => {
-		const row: PromptListItem = {
-			id: 'p1',
-			name: 'N',
-			command: 'c',
-			content: 'body',
-			tags: ['t'],
-			created_at: 1,
-			user: { id: 'u', name: 'Alice', email: 'alice@example.com' },
-			access_grants: [{ principal_type: 'user', principal_id: 'u2', permission: 'read' }]
-		};
-		const payload = communitySharePayload(row);
-		expect(payload).toEqual({ name: 'N', command: 'c', content: 'body', tags: ['t'] });
-		expect(JSON.stringify(payload)).not.toContain('alice');
 	});
 });

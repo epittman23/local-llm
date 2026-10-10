@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from cryptography.hazmat.primitives import serialization
 
 ####################################
 # Load .env file
@@ -826,31 +825,6 @@ if ENABLE_SCIM and not SCIM_AUTH_PROVIDER:
     )
 
 ####################################
-# LICENSE_KEY
-####################################
-
-LICENSE_KEY = os.getenv('LICENSE_KEY', '')
-
-LICENSE_BLOB = None
-LICENSE_BLOB_PATH = os.getenv('LICENSE_BLOB_PATH', DATA_DIR / 'l.data')
-if LICENSE_BLOB_PATH and os.path.exists(LICENSE_BLOB_PATH):
-    with open(LICENSE_BLOB_PATH, 'rb') as f:
-        LICENSE_BLOB = f.read()
-
-LICENSE_PUBLIC_KEY = os.getenv('LICENSE_PUBLIC_KEY', '')
-
-pk = None
-if LICENSE_PUBLIC_KEY:
-    pk = serialization.load_pem_public_key(
-        f"""
------BEGIN PUBLIC KEY-----
-{LICENSE_PUBLIC_KEY}
------END PUBLIC KEY-----
-""".encode()
-    )
-
-
-####################################
 # WEBUI Identity
 ####################################
 
@@ -1101,12 +1075,10 @@ PIP_PACKAGE_INDEX_OPTIONS = os.getenv('PIP_PACKAGE_INDEX_OPTIONS', '').split()
 # OFFLINE_MODE
 ####################################
 
-ENABLE_VERSION_UPDATE_CHECK = os.getenv('ENABLE_VERSION_UPDATE_CHECK', 'true').lower() == 'true'
 OFFLINE_MODE = os.getenv('OFFLINE_MODE', 'false').lower() == 'true'
 
 if OFFLINE_MODE:
     os.environ['HF_HUB_OFFLINE'] = '1'
-    ENABLE_VERSION_UPDATE_CHECK = False
 
 ####################################
 # Pyodide file persistence

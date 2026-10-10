@@ -9,8 +9,6 @@ import { routePaths } from '@/routes/routePaths';
 import { ToolkitEditor } from './ToolkitEditor';
 import { type ToolDraft, sanitizeIncomingTool } from './toolTypes';
 
-const COMMUNITY_ORIGINS = ['https://openwebui.com', 'https://www.openwebui.com', 'http://localhost:9999'];
-
 const payload = (t: ToolDraft) => ({
 	id: t.id,
 	name: t.name,
@@ -21,9 +19,7 @@ const payload = (t: ToolDraft) => ({
 
 /**
  * Ports (app)/workspace/tools/create/+page.svelte. The form can be pre-filled
- * from a clone or a link import (left in `sessionStorage.tool`, read once) or by
- * a message from the Open WebUI community site -- which is sanitized and never
- * carries grants. When such a message arrives the editor is remounted with it.
+ * from a clone or a link import (left in `sessionStorage.tool`, read once).
  */
 export function ToolCreatePage() {
 	const token = useAuthStore((s) => s.token) ?? '';
@@ -38,26 +34,7 @@ export function ToolCreatePage() {
 			return null;
 		}
 	});
-	const [tool, setTool] = useState<ToolDraft | null>(stash);
-	const [revision, setRevision] = useState(0);
-
-	useEffect(() => {
-		const onMessage = (event: MessageEvent) => {
-			if (!COMMUNITY_ORIGINS.includes(event.origin)) return;
-			try {
-				const incoming = sanitizeIncomingTool(JSON.parse(event.data), { withGrants: false });
-				if (!incoming) return;
-				setTool(incoming);
-				setRevision((r) => r + 1);
-			} catch (error) {
-				console.error('Ignoring malformed tool from community site', error);
-			}
-		};
-		window.addEventListener('message', onMessage);
-		// A fixed string with no data in it, so '*' discloses nothing.
-		if (window.opener) window.opener.postMessage('loaded', '*');
-		return () => window.removeEventListener('message', onMessage);
-	}, []);
+	const tool: ToolDraft | null = stash;
 
 	const onSave = async (data: ToolDraft) => {
 		if (refusedForVersion(data.content)) return;
@@ -73,7 +50,7 @@ export function ToolCreatePage() {
 
 	return (
 		<div className="h-full min-w-0 overflow-x-hidden">
-			<ToolkitEditor key={revision} tool={tool} clone={stash !== null} onSave={onSave} />
+			<ToolkitEditor tool={tool} clone={stash !== null} onSave={onSave} />
 		</div>
 	);
 }

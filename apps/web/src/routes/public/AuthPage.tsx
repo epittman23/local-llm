@@ -1,5 +1,3 @@
-import DOMPurify from 'dompurify';
-import { marked } from 'marked';
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { getBackendConfig } from '@/lib/apis';
@@ -401,15 +399,6 @@ export function AuthPage() {
 					>
 						{mode === 'ldap' ? 'Continue with Email' : 'Continue with LDAP'}
 					</button>
-				)}
-
-				{config?.metadata?.login_footer && (
-					<div
-						className="text-muted-foreground mt-4 text-center text-xs"
-						dangerouslySetInnerHTML={{
-							__html: DOMPurify.sanitize(marked.parse(config.metadata.login_footer) as string)
-						}}
-					/>
 				)}
 			</div>
 		</div>

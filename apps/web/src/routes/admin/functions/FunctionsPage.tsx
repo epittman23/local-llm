@@ -1,10 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import saveAs from 'file-saver';
-import { Copy, Download, Globe, Heart, MoreHorizontal, Pencil, Settings, Share2, Trash2 } from 'lucide-react';
+import { Copy, Download, Globe, Heart, MoreHorizontal, Pencil, Settings, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
-import { CommunityDiscover } from '@/components/common/CommunityDiscover';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { TagSelector, ViewSelector } from '@/components/common/FilterSelects';
 import { ImportUrlModal } from '@/components/common/ImportUrlModal';
@@ -33,20 +32,14 @@ import {
 	toggleGlobalById
 } from '@/lib/apis/functions';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { useConfigStore, useWebUIName } from '@/lib/stores/configStore';
+import { useWebUIName } from '@/lib/stores/configStore';
 import { capitalizeFirstLetter } from '@/lib/utils';
 import { dayjs } from '@/lib/utils/dates';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { useShiftKey } from '@/lib/utils/useShiftKey';
 import { routePaths } from '@/routes/routePaths';
 import { FunctionCodeWarning } from './FunctionEditor';
-import {
-	FUNCTION_TYPES,
-	type FunctionListItem,
-	filterAndSortFunctions,
-	functionSharePayload,
-	parseFunctionImport
-} from './functionTypes';
+import { FUNCTION_TYPES, type FunctionListItem, filterAndSortFunctions, parseFunctionImport } from './functionTypes';
 
 const LIST_KEY = ['functions', 'list'];
 const rowIconButton = 'text-muted-foreground flex size-6 items-center justify-center rounded-lg transition';
@@ -70,7 +63,6 @@ const rowIconButton = 'text-muted-foreground flex size-6 items-center justify-ce
 export function FunctionsPage() {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const user = useAuthStore((s) => s.user);
-	const config = useConfigStore((s) => s.config);
 	const webuiName = useWebUIName();
 	const navigate = useNavigate();
 	const queryClient = useQueryClient();
@@ -201,26 +193,6 @@ export function FunctionsPage() {
 		});
 		if (all)
 			saveAs(new Blob([JSON.stringify(all)], { type: 'application/json' }), `functions-export-${Date.now()}.json`);
-	};
-
-	const shareHandler = async (fn: FunctionListItem) => {
-		const full = await fetchFull(fn);
-		if (!full) return;
-		// LICENSE covers this Open WebUI Community wordmark.
-		// Do not alter, remove, obscure, or replace it except as LICENSE permits:
-		// https://docs.openwebui.com/license.
-		toast.success('Redirecting you to Open WebUI Community');
-		const url = 'https://openwebui.com';
-		const tab = window.open(`${url}/functions/create`, '_blank');
-		const onMessage = (event: MessageEvent) => {
-			if (event.origin !== url || event.data !== 'loaded') return;
-			window.removeEventListener('message', onMessage);
-			// The function's own fields to openwebui.com only; the Svelte version posts the
-			// full record (author email, ...) to '*'.
-			tab?.postMessage(JSON.stringify(functionSharePayload(full)), url);
-		};
-		window.addEventListener('message', onMessage);
-		setTimeout(() => window.removeEventListener('message', onMessage), 60_000);
 	};
 
 	const runImport = (file: File) => {
@@ -534,10 +506,6 @@ export function FunctionsPage() {
 															<Pencil />
 															Edit
 														</DropdownMenuItem>
-														<DropdownMenuItem onSelect={() => shareHandler(fn)}>
-															<Share2 />
-															Share
-														</DropdownMenuItem>
 														<DropdownMenuItem onSelect={() => cloneHandler(fn)}>
 															<Copy />
 															Clone
@@ -579,14 +547,6 @@ export function FunctionsPage() {
 					<ListEmptyState title="No functions found" />
 				)}
 			</div>
-
-			{config?.features?.enable_community_sharing && (
-				<CommunityDiscover
-					href="https://openwebui.com/functions"
-					title="Discover a function"
-					description="Discover, download, and explore custom functions"
-				/>
-			)}
 		</div>
 	);
 }

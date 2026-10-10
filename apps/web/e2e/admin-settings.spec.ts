@@ -715,7 +715,6 @@ test.describe('settings: Analytics', () => {
 
 test.describe('settings: General', () => {
 	const adminCfg = {
-		ENABLE_COMMUNITY_SHARING: true,
 		ENABLE_MESSAGE_RATING: true,
 		ENABLE_FOLDERS: false,
 		FOLDER_MAX_FILE_COUNT: null,
@@ -753,7 +752,7 @@ test.describe('settings: General', () => {
 		}
 	];
 
-	async function mockGeneral(page: Page, opts: { banners?: Rec[]; failWebhookPut?: boolean; version?: Rec } = {}) {
+	async function mockGeneral(page: Page, opts: { banners?: Rec[]; failWebhookPut?: boolean } = {}) {
 		const calls: Call[] = [];
 		const record = (route: any, extra: Rec = {}) => {
 			const req = route.request();
@@ -774,9 +773,6 @@ test.describe('settings: General', () => {
 			const { req } = record(route);
 			return json(route, req.method() === 'GET' ? (opts.banners ?? []) : true);
 		});
-		await page.route('**/api/version/updates', (route) =>
-			json(route, opts.version ?? { current: '1.0.0', latest: '9.9.9' })
-		);
 		await page.route('**/api/events**', (route) => {
 			const { req } = record(route);
 			const path = new URL(req.url()).pathname;
@@ -830,26 +826,6 @@ test.describe('settings: General', () => {
 		await expect(m.getByLabel('Model Response Mode')).toHaveCount(0);
 		await m.getByRole('switch', { name: 'Channels' }).click();
 		await expect(m.getByLabel('Model Response Mode')).toHaveValue('thread');
-	});
-
-	test('the update check is offered only when the backend enables it, and reports a newer release', async ({
-		page
-	}) => {
-		await mockWorkspaceBackend(page);
-		await mockGeneral(page);
-		await page.goto('/?settings=admin:general');
-		await expect(modal(page).getByRole('switch', { name: 'Notes' })).toBeVisible();
-		await expect(modal(page).getByRole('button', { name: 'Check for updates' })).toHaveCount(0);
-
-		const page2 = await page.context().newPage();
-		await mockWorkspaceBackend(page2, { features: { enable_version_update_check: true } });
-		await mockGeneral(page2);
-		await page2.goto('/?settings=admin:general');
-		await modal(page2).getByRole('button', { name: 'Check for updates' }).click();
-		await expect(modal(page2).getByRole('link', { name: '(v9.9.9 available!)' })).toHaveAttribute(
-			'href',
-			/releases\/tag\/v9\.9\.9$/
-		);
 	});
 
 	test('banners: one blank at a time, a type is required, reorder and remove, then saved in order', async ({

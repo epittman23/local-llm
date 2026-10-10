@@ -241,14 +241,6 @@ test.describe('admin users', () => {
 		await expect(dialog.getByText("User 2's Chats")).toBeVisible();
 		await expect(dialog.getByRole('link', { name: 'Their first chat' })).toHaveAttribute('href', /\/s\/c1$/);
 	});
-
-	test('a seat-limited licence shows "n of seats" and a banner once exceeded', async ({ page }) => {
-		await mockWorkspaceBackend(page, { config: { license_metadata: { seats: 1 } } });
-		await mockAdminApi(page, { users: [user(1), user(2)] });
-		await page.goto('/admin/users/overview');
-		await expect(page.getByRole('link', { name: /^Overview/ })).toContainText('2 of 1');
-		await expect(page.getByRole('alert')).toContainText('Exceeded the number of seats');
-	});
 });
 
 test.describe('admin groups', () => {

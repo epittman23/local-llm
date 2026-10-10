@@ -96,7 +96,6 @@ export function UserList() {
 	};
 	const sortState = (key: string) => (orderBy === key ? (direction === 'asc' ? 'ascending' : 'descending') : 'none');
 
-	const seats = config?.license_metadata?.seats ?? null;
 	const iconButton = 'hover:bg-muted w-fit self-center rounded-lg p-1.5';
 	const th = 'font-normal select-none';
 	const thButton = 'flex w-full items-center gap-1.5 px-2.5 py-1.5';
@@ -125,16 +124,6 @@ export function UserList() {
 					userId={selected.id}
 					userName={selected.name}
 				/>
-			)}
-
-			{seats !== null && total !== null && total > seats && (
-				<div
-					role="alert"
-					className="mt-1 mb-2 rounded-lg bg-red-500/15 px-3 py-1.5 text-xs text-red-700 dark:text-red-200"
-				>
-					<span className="font-medium">License Error</span> Exceeded the number of seats in your license. Please
-					contact support to increase the number of seats.
-				</div>
 			)}
 
 			{users === null || total === null ? (
@@ -320,51 +309,26 @@ export function UserList() {
 				</>
 			)}
 
-			{!config?.license_metadata && total !== null && total > 50 && <LargeTeamNotice />}
+			{total !== null && total > 50 && <LargeTeamNotice />}
 		</>
 	);
 }
 
-// LICENSE covers the Open WebUI branding narrative below.
-// Do not alter, remove, obscure, or replace it except as LICENSE permits:
-// https://docs.openwebui.com/license.
+/**
+ * The one in-app reminder of the condition the changed branding relies on:
+ * clause 4(i) of the Open WebUI License permits it only for deployments with no
+ * more than fifty end users in any rolling thirty-day period (see NOTICE).
+ */
 function LargeTeamNotice() {
 	return (
 		<div className="mt-3 mb-3 pb-1">
 			<div className="max-w-3xl text-xs leading-5">
-				<div>Running Open WebUI for a team?</div>
-				<div className="mt-2 space-y-2">
-					<p>
-						You have more than 50 users, which often means this workspace is supporting organizational use. Open WebUI
-						is free to use as-is, with no restrictions or hidden limits, and we want to keep it that way.
-					</p>
-					<p className="text-muted-foreground">
-						By supporting the project through sponsorship or an enterprise license, you help us stay independent, ship
-						new features faster, improve stability, and grow Open WebUI for the long haul.
-					</p>
-					<p className="text-muted-foreground">
-						Enterprise licenses also include dedicated support, customization options, and more, at a fraction of the
-						cost of building and maintaining this stack internally.
-					</p>
-				</div>
-				<div className="mt-2 flex items-center gap-3">
-					<a
-						className="text-xs underline transition"
-						href="https://docs.openwebui.com/enterprise"
-						target="_blank"
-						rel="noreferrer"
-					>
-						Enterprise licensing
-					</a>
-					<a
-						className="text-muted-foreground text-xs underline transition"
-						href="https://github.com/sponsors/open-webui"
-						target="_blank"
-						rel="noreferrer"
-					>
-						Sponsor on GitHub
-					</a>
-				</div>
+				<div>More than 50 users</div>
+				<p className="text-muted-foreground mt-2">
+					This app changes the Open WebUI branding under clause 4(i) of the Open WebUI License, which permits that only
+					for deployments with no more than fifty end users in any rolling thirty-day period. Above that, the branding
+					has to be restored or another of clause 4&apos;s permissions obtained; see NOTICE in the repository.
+				</p>
 			</div>
 		</div>
 	);

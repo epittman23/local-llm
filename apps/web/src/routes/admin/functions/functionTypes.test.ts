@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
 	type FunctionListItem,
 	filterAndSortFunctions,
-	functionSharePayload,
 	parseFunctionImport,
 	sanitizeIncomingFunction
 } from './functionTypes';
@@ -80,10 +79,5 @@ describe('imports', () => {
 		});
 		expect(out).toEqual({ id: 'x', name: 'X', content: 'c', meta: { description: '' } });
 		expect(sanitizeIncomingFunction([])).toBeNull();
-	});
-	it('shares only its own fields', () => {
-		expect(
-			functionSharePayload({ id: 'x', name: 'X', content: 'c', meta: { a: 1 }, ...{ user: 'secret' } } as never)
-		).toEqual({ id: 'x', name: 'X', meta: { a: 1 }, content: 'c' });
 	});
 });

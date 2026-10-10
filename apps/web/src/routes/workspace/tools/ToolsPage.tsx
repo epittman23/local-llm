@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import saveAs from 'file-saver';
-import { Copy, Download, Heart, MoreHorizontal, Pencil, Settings, Share2, Trash2 } from 'lucide-react';
+import { Copy, Download, Heart, MoreHorizontal, Pencil, Settings, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router';
 import { toast } from 'sonner';
@@ -29,7 +29,7 @@ import { dayjs } from '@/lib/utils/dates';
 import { useShiftKey } from '@/lib/utils/useShiftKey';
 import { routePaths } from '@/routes/routePaths';
 import { CodeExecutionWarning } from './ToolkitEditor';
-import { type ToolListItem, filterAndSortTools, parseToolImport, toolSharePayload } from './toolTypes';
+import { type ToolListItem, filterAndSortTools, parseToolImport } from './toolTypes';
 
 /**
  * Ports workspace/Tools.svelte. Unlike Prompts and Skills, the tools endpoint
@@ -153,24 +153,6 @@ export function ToolsPage() {
 				new Blob([JSON.stringify([full])], { type: 'application/json' }),
 				`tool-${full.id}-export-${Date.now()}.json`
 			);
-	};
-
-	const shareHandler = async (tool: ToolListItem) => {
-		const full = await fetchFull(tool);
-		if (!full) return;
-		// LICENSE covers this Open WebUI Community wordmark.
-		// Do not alter, remove, obscure, or replace it except as LICENSE permits:
-		// https://docs.openwebui.com/license.
-		toast.success('Redirecting you to Open WebUI Community');
-		const url = 'https://openwebui.com';
-		const tab = window.open(`${url}/tools/create`, '_blank');
-		const onMessage = (event: MessageEvent) => {
-			if (event.origin !== url || event.data !== 'loaded') return;
-			window.removeEventListener('message', onMessage);
-			tab?.postMessage(JSON.stringify(toolSharePayload(full)), url);
-		};
-		window.addEventListener('message', onMessage);
-		setTimeout(() => window.removeEventListener('message', onMessage), 60_000);
 	};
 
 	const runImport = (file: File) => {
@@ -429,12 +411,6 @@ export function ToolsPage() {
 																<Pencil />
 																Edit
 															</DropdownMenuItem>
-															{config?.features?.enable_community_sharing && (
-																<DropdownMenuItem onSelect={() => shareHandler(tool)}>
-																	<Share2 />
-																	Share
-																</DropdownMenuItem>
-															)}
 															<DropdownMenuItem onSelect={() => cloneHandler(tool)}>
 																<Copy />
 																Clone
@@ -463,30 +439,6 @@ export function ToolsPage() {
 				</div>
 			) : (
 				<ListEmptyState title="No tools found" />
-			)}
-
-			{config?.features?.enable_community_sharing && (
-				<div className="mt-6 px-2 pb-8">
-					<div className="text-muted-foreground mb-0.5 text-[0.6875rem]">
-						{/* LICENSE covers this Open WebUI Community wordmark.
-						    Do not alter, remove, obscure, or replace it except as LICENSE permits:
-						    https://docs.openwebui.com/license. */}
-						Made by Open WebUI Community
-					</div>
-					<a
-						className="flex w-full items-center justify-between gap-3 py-1 text-left"
-						href="https://openwebui.com/tools"
-						target="_blank"
-						rel="noreferrer"
-					>
-						<div className="min-w-0">
-							<div className="line-clamp-1 text-[0.8125rem]">Discover a tool</div>
-							<div className="text-muted-foreground line-clamp-1 text-xs">
-								Discover, download, and explore custom tools
-							</div>
-						</div>
-					</a>
-				</div>
 			)}
 		</div>
 	);

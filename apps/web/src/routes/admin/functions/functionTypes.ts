@@ -57,11 +57,6 @@ export function parseFunctionImport(text: string): FunctionDraft[] {
 	});
 }
 
-/** "Share to Community" sends the function's own fields, not its author record. */
-export function functionSharePayload(fn: { id: string; name: string; meta?: unknown; content?: unknown }) {
-	return { id: fn.id, name: fn.name, meta: fn.meta ?? {}, content: fn.content ?? '' };
-}
-
 /** Filters/sorts the (client-side) list exactly as Functions.svelte's setFilteredItems does. */
 export function filterAndSortFunctions(
 	functions: FunctionListItem[],
