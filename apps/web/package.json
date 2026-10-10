@@ -48,7 +48,7 @@
     "codemirror": "^6.0.2",
     "dayjs": "^1.11.23",
     "dompurify": "^3.4.16",
-    "eventsource-parser": "^1.1.2",
+    "eventsource-parser": "^4.1.1",
     "file-saver": "^2.0.5",
     "highlight.js": "^11",
     "i18next": "^26.4.2",

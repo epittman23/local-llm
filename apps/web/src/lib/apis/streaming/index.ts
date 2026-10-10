@@ -1,5 +1,5 @@
 import { EventSourceParserStream } from 'eventsource-parser/stream';
-import type { ParsedEvent } from 'eventsource-parser';
+import type { EventSourceMessage } from 'eventsource-parser';
 
 type TextStreamUpdate = {
 	done: boolean;
@@ -41,7 +41,7 @@ export async function createOpenAITextStream(
 }
 
 async function* openAIStreamToIterator(
-	reader: ReadableStreamDefaultReader<ParsedEvent>
+	reader: ReadableStreamDefaultReader<EventSourceMessage>
 ): AsyncGenerator<TextStreamUpdate> {
 	while (true) {
 		const { value, done } = await reader.read();
