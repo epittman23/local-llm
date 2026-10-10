@@ -13,9 +13,6 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { ACCEPTED_IMAGE_TYPES, resizeToDataUrl } from '@/lib/utils/image';
 import { type ArenaModel, arenaIdFromName, buildArenaModel } from './arenaModels';
 
-// LICENSE covers this Open WebUI fallback logo.
-// Do not alter, remove, obscure, or replace it except as LICENSE permits:
-// https://docs.openwebui.com/license.
 const FALLBACK_IMAGE = `${WEBUI_BASE_URL}/favicon.png`;
 
 type ModelInfo = { id: string; name: string; owned_by?: string };

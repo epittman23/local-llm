@@ -40,9 +40,6 @@ import { type ToolListItem, filterAndSortTools, parseToolImport } from './toolTy
  * Importing a tools file asks the user to acknowledge that tools run arbitrary
  * code before anything is created; importing from a link opens the create page
  * pre-filled instead of creating anything.
- *
- * "Share to Community" posts only the tool's own fields, to openwebui.com only
- * (the Svelte version posts the full record -- author email, grants -- to `*`).
  */
 export function ToolsPage() {
 	const token = useAuthStore((s) => s.token) ?? '';

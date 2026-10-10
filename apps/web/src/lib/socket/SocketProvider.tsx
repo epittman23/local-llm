@@ -6,7 +6,7 @@
 // resumes is left out). Still not ported: the version-mismatch auto-reload
 // (needs the WEBUI_VERSION/WEBUI_DEPLOYMENT_ID stores) and the
 // websocket_heartbeat_interval config read; the heartbeat runs on the same 30s
-// literal Open WebUI itself defaults to when that config value is absent.
+// literal the backend itself defaults to when that config value is absent.
 
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';

@@ -1,6 +1,6 @@
 # local-llm entry points.
 #
-#   make backend    Postgres + the Open WebUI fork's backend (uvicorn
+#   make backend    Postgres + the backend (uvicorn
 #                    --reload, :4000); tears Postgres down on exit,
 #                    including Ctrl-C.
 #   make frontend   the Astro + React + shadcn/ui frontend (apps/web,
@@ -40,7 +40,7 @@ LLLM_BACKEND_HOST ?= 127.0.0.1
 .PHONY: help backend frontend astro
 
 help:
-	@echo "make backend   Postgres + Open WebUI fork backend (uvicorn --reload, $(LLLM_BACKEND_HOST):$(LLLM_BACKEND_PORT))"
+	@echo "make backend   Postgres + the backend (uvicorn --reload, $(LLLM_BACKEND_HOST):$(LLLM_BACKEND_PORT))"
 	@echo "make frontend  Astro + React + shadcn/ui dev server (astro dev, :5174; alias: make astro)"
 
 # --reload caveat: a code change restarts the uvicorn worker, and with it the

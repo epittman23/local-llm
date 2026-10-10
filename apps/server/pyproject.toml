@@ -175,7 +175,7 @@ unstructured = [
     "unstructured==0.27.16",
 ]
 
-# Every optional backend Open WebUI supports and this install doesn't use
+# Every optional backend the inherited code supports and this install doesn't use
 # (it runs on pgvector). Each is imported lazily, only when configured, so
 # leaving them out of the default install just keeps their code (and their
 # vulnerabilities) off the machine. `uv sync --extra all` brings them back.
@@ -258,10 +258,11 @@ flake8-quotes.inline-quotes = "single"
 mccabe.max-complexity = 10
 pydocstyle.convention = "google"
 
-# This repo's own backend code (benchmarks/ and tests/) is linted in
-# pre-commit and CI; the rest of local_llm/ is upstream Open WebUI and is
-# not. Complexity is exempt there: its long report/stats functions read
-# top to bottom on purpose, and splitting them for a branch count is churn.
+# Linting is rolling out in stages: benchmarks/ and tests/ are linted in
+# pre-commit and CI; the rest of local_llm/ is not yet, until its existing
+# findings are fixed. Complexity is exempt in benchmarks/ and tests/: their
+# long report/stats functions read top to bottom on purpose, and splitting
+# them for a branch count is churn.
 [tool.ruff.lint.per-file-ignores]
 "local_llm/benchmarks/**" = ["C901"]
 "tests/**" = ["C901"]

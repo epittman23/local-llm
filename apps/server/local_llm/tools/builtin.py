@@ -1,5 +1,5 @@
 """
-Built-in tools for Open WebUI.
+Built-in tools for Local LLM.
 
 These tools are automatically available when native function calling is enabled.
 
@@ -145,10 +145,7 @@ async def notify(
         return 'Notification failed: user not found.'
 
     app_name = getattr(getattr(__request__, 'app', None), 'state', None)
-    # LICENSE covers this Open WebUI notification identifier.
-    # Do not alter, remove, obscure, or replace it except as LICENSE permits:
-    # https://docs.openwebui.com/license.
-    app_name = getattr(app_name, 'LLLM_NAME', 'Open WebUI')
+    app_name = getattr(app_name, 'LLLM_NAME', 'Local LLM')
     try:
         result = await notify_target(user_id, message, target=target, title=title, app_name=app_name)
         return f'Notification sent to {result.get("target_id")}.'

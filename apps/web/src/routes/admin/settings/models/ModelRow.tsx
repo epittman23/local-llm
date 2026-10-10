@@ -142,9 +142,6 @@ export function ModelRow({
 						loading="lazy"
 						decoding="async"
 						onError={(e) => {
-							// LICENSE covers this Open WebUI fallback logo.
-							// Do not alter, remove, obscure, or replace it except as LICENSE permits:
-							// https://docs.openwebui.com/license.
 							if (e.currentTarget.src !== DEFAULT_PROFILE_IMAGE) e.currentTarget.src = DEFAULT_PROFILE_IMAGE;
 						}}
 					/>

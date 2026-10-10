@@ -1,6 +1,6 @@
 /**
  * Scales a picked image so it covers a centred 250x250 square and returns it as
- * a webp data URL -- the profile-picture treatment Open WebUI applies to user,
+ * a webp data URL -- the profile-picture treatment the backend applies to user,
  * model and arena-model images alike. Rejects if the file cannot be read as an image.
  */
 export function resizeToDataUrl(file: File, size = 250): Promise<string> {

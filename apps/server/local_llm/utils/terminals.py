@@ -30,7 +30,7 @@ def get_terminal_server_url(connection: dict) -> str:
 
 
 def terminal_context_config(connection: dict, context: str) -> dict | bool:
-    """Return config for an OpenWebUI terminal context.
+    """Return config for an Local LLM terminal context.
 
     Missing config is legacy behavior: available, shared default terminal.
     """
@@ -48,7 +48,7 @@ def terminal_context_config(connection: dict, context: str) -> dict | bool:
 
 
 def terminal_context_available(connection: dict, context: str) -> bool:
-    """Return whether this terminal is exposed in an OpenWebUI context."""
+    """Return whether this terminal is exposed in an Local LLM context."""
     if context not in TERMINAL_CONTEXT_TYPES:
         return False
     return terminal_context_config(connection, context) is not False

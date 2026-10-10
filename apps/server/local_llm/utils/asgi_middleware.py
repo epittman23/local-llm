@@ -12,7 +12,7 @@ the inner task. That `CancelledError` then propagates into whatever
 the inner task was doing, including in-flight DB queries, embedding
 calls and disk I/O.
 
-In Open WebUI this surfaces as:
+In Local LLM this surfaces as:
 
 * SQLAlchemy logging multi-page `NotImplementedError:
   terminate_force_close()` tracebacks at ERROR every time a request is
@@ -49,7 +49,7 @@ log = logging.getLogger(__name__)
 
 
 class AppHTTPMiddleware:
-    """Open WebUI's pure-ASGI HTTP middleware.
+    """Local LLM's pure-ASGI HTTP middleware.
 
     Keeps the app's request-wide behavior in one middleware layer without
     hiding the old concerns behind a stack of wrappers:

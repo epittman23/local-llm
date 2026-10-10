@@ -302,7 +302,7 @@ RAG_SYSTEM_CONTEXT = os.getenv('RAG_SYSTEM_CONTEXT', 'False').lower() == 'true'
 REDIS_URL = os.getenv('REDIS_URL', '')
 REDIS_CLUSTER = os.getenv('REDIS_CLUSTER', 'False').lower() == 'true'
 
-REDIS_KEY_PREFIX = os.getenv('REDIS_KEY_PREFIX', 'open-webui')
+REDIS_KEY_PREFIX = os.getenv('REDIS_KEY_PREFIX', 'local-llm')
 
 try:
     REDIS_RESPONSE_STREAM_TTL = int(os.getenv('REDIS_RESPONSE_STREAM_TTL', '3600'))
@@ -464,7 +464,7 @@ import ssl as _ssl
 # to a path directly) take precedence over this global fallback.
 #
 # This follows the industry convention of ``SSL_CERT_FILE`` / ``REQUESTS_CA_BUNDLE``
-# but is scoped to Open WebUI to avoid interfering with system-level settings.
+# but is scoped to Local LLM to avoid interfering with system-level settings.
 AIOHTTP_CLIENT_SSL_CERT_FILE = os.getenv('AIOHTTP_CLIENT_SSL_CERT_FILE', '').strip()
 
 
@@ -496,7 +496,7 @@ def _parse_ssl_env(value: str) -> 'bool | _ssl.SSLContext':
     - ``"/path/to/ca-bundle.crt"`` → ``SSLContext`` loading that CA file
       (takes precedence over ``AIOHTTP_CLIENT_SSL_CERT_FILE``)
 
-    This allows users with corporate or internal CAs to point Open WebUI
+    This allows users with corporate or internal CAs to point Local LLM
     at a custom CA bundle without disabling verification entirely.
     """
     lower = value.strip().lower()
@@ -711,9 +711,9 @@ LLLM_AUTH_TRUSTED_GROUPS_HEADER = os.getenv('LLLM_AUTH_TRUSTED_GROUPS_HEADER', N
 LLLM_AUTH_TRUSTED_ROLE_HEADER = os.getenv('LLLM_AUTH_TRUSTED_ROLE_HEADER', None)
 
 # Custom header name for API key authentication.  Defaults to 'x-api-key'.
-# Useful when Open WebUI sits behind a reverse proxy / API gateway that
+# Useful when Local LLM sits behind a reverse proxy / API gateway that
 # already uses the Authorization header for its own authentication — set
-# this to a unique header (e.g. 'X-OpenWebUI-Key') so the middleware
+# this to a unique header (e.g. 'X-LLLM-Key') so the middleware
 # checks the custom header instead and avoids the 401 short-circuit.
 CUSTOM_API_KEY_HEADER = os.getenv('CUSTOM_API_KEY_HEADER', 'x-api-key')
 
@@ -764,7 +764,7 @@ BYPASS_PYDUB_PREPROCESSING = os.getenv('BYPASS_PYDUB_PREPROCESSING', 'False').lo
 
 # When disabled (default), the OpenAI catch-all proxy endpoint (/{path:path})
 # is blocked. Enable only if you need direct passthrough to upstream OpenAI-
-# compatible APIs for endpoints not natively handled by Open WebUI.
+# compatible APIs for endpoints not natively handled by Local LLM.
 ENABLE_OPENAI_API_PASSTHROUGH = os.getenv('ENABLE_OPENAI_API_PASSTHROUGH', 'False').lower() == 'true'
 
 LLLM_AUTH_SIGNOUT_REDIRECT_URL = os.getenv('LLLM_AUTH_SIGNOUT_REDIRECT_URL', None)
@@ -785,7 +785,7 @@ OAUTH_SESSION_TOKEN_ENCRYPTION_KEY = os.getenv('OAUTH_SESSION_TOKEN_ENCRYPTION_K
 OAUTH_MAX_SESSIONS_PER_USER = int(os.getenv('OAUTH_MAX_SESSIONS_PER_USER', '10'))
 
 # Token Exchange Configuration
-# Allows external apps to exchange OAuth tokens for OpenWebUI tokens
+# Allows external apps to exchange OAuth tokens for Local LLM tokens
 ENABLE_OAUTH_TOKEN_EXCHANGE = os.getenv('ENABLE_OAUTH_TOKEN_EXCHANGE', 'False').lower() == 'true'
 _oauth_token_exchange_rate_limit = (os.getenv('OAUTH_TOKEN_EXCHANGE_RATE_LIMIT') or '').strip()
 OAUTH_TOKEN_EXCHANGE_RATE_LIMIT = (
@@ -825,19 +825,10 @@ if ENABLE_SCIM and not SCIM_AUTH_PROVIDER:
 # WEBUI Identity
 ####################################
 
-# LICENSE covers this Open WebUI branding surface, including name, logo,
-# visual, textual, symbolic identifiers, metadata, and surrounding UI.
-# Do not alter, remove, obscure, or replace it except as LICENSE permits:
-# https://docs.openwebui.com/license.
-LLLM_NAME = os.getenv('LLLM_NAME', 'Open WebUI')
-if LLLM_NAME != 'Open WebUI':
-    LLLM_NAME += ' (Open WebUI)'
+LLLM_NAME = os.getenv('LLLM_NAME', 'Local LLM')
 
-# LICENSE covers this Open WebUI branding surface, including this favicon
-# and any visual, textual, or symbolic identifiers it preserves.
-# Do not alter, remove, obscure, or replace it except as LICENSE permits:
-# https://docs.openwebui.com/license.
-WEBUI_FAVICON_URL = 'https://openwebui.com/favicon.png'
+# Absolute URL of an icon for webhook cards (Teams `activityImage`); omitted when unset.
+LLLM_FAVICON_URL = os.getenv('LLLM_FAVICON_URL', '')
 LLLM_BUILD_HASH = os.getenv('LLLM_BUILD_HASH', 'dev-build')
 TRUSTED_SIGNATURE_KEY = os.getenv('TRUSTED_SIGNATURE_KEY', '')
 
@@ -871,17 +862,17 @@ PROFILE_IMAGE_MAX_DATA_URI_SIZE = int(_profile_image_max_data_uri_size) if _prof
 
 ENABLE_FORWARD_USER_INFO_HEADERS = os.getenv('ENABLE_FORWARD_USER_INFO_HEADERS', 'False').lower() == 'true'
 
-FORWARD_USER_INFO_HEADER_USER_NAME = os.getenv('FORWARD_USER_INFO_HEADER_USER_NAME', 'X-OpenWebUI-User-Name')
-FORWARD_USER_INFO_HEADER_USER_ID = os.getenv('FORWARD_USER_INFO_HEADER_USER_ID', 'X-OpenWebUI-User-Id')
-FORWARD_USER_INFO_HEADER_USER_EMAIL = os.getenv('FORWARD_USER_INFO_HEADER_USER_EMAIL', 'X-OpenWebUI-User-Email')
-FORWARD_USER_INFO_HEADER_USER_ROLE = os.getenv('FORWARD_USER_INFO_HEADER_USER_ROLE', 'X-OpenWebUI-User-Role')
-FORWARD_SESSION_INFO_HEADER_MESSAGE_ID = os.getenv('FORWARD_SESSION_INFO_HEADER_MESSAGE_ID', 'X-OpenWebUI-Message-Id')
-FORWARD_SESSION_INFO_HEADER_CHAT_ID = os.getenv('FORWARD_SESSION_INFO_HEADER_CHAT_ID', 'X-OpenWebUI-Chat-Id')
+FORWARD_USER_INFO_HEADER_USER_NAME = os.getenv('FORWARD_USER_INFO_HEADER_USER_NAME', 'X-LLLM-User-Name')
+FORWARD_USER_INFO_HEADER_USER_ID = os.getenv('FORWARD_USER_INFO_HEADER_USER_ID', 'X-LLLM-User-Id')
+FORWARD_USER_INFO_HEADER_USER_EMAIL = os.getenv('FORWARD_USER_INFO_HEADER_USER_EMAIL', 'X-LLLM-User-Email')
+FORWARD_USER_INFO_HEADER_USER_ROLE = os.getenv('FORWARD_USER_INFO_HEADER_USER_ROLE', 'X-LLLM-User-Role')
+FORWARD_SESSION_INFO_HEADER_MESSAGE_ID = os.getenv('FORWARD_SESSION_INFO_HEADER_MESSAGE_ID', 'X-LLLM-Message-Id')
+FORWARD_SESSION_INFO_HEADER_CHAT_ID = os.getenv('FORWARD_SESSION_INFO_HEADER_CHAT_ID', 'X-LLLM-Chat-Id')
 
 # If set while ENABLE_FORWARD_USER_INFO_HEADERS is True, send one signed HS256 JWT
-# (FORWARD_USER_INFO_HEADER_JWT) instead of separate X-OpenWebUI-User-* headers.
+# (FORWARD_USER_INFO_HEADER_JWT) instead of separate X-LLLM-User-* headers.
 FORWARD_USER_INFO_HEADER_JWT_SECRET = (os.environ.get('FORWARD_USER_INFO_HEADER_JWT_SECRET') or '').strip() or None
-FORWARD_USER_INFO_HEADER_JWT = os.environ.get('FORWARD_USER_INFO_HEADER_JWT', 'X-OpenWebUI-User-Jwt')
+FORWARD_USER_INFO_HEADER_JWT = os.environ.get('FORWARD_USER_INFO_HEADER_JWT', 'X-LLLM-User-Jwt')
 try:
     FORWARD_USER_INFO_HEADER_JWT_EXPIRES_SECONDS = int(
         os.environ.get('FORWARD_USER_INFO_HEADER_JWT_EXPIRES_SECONDS', '300')
@@ -893,10 +884,6 @@ except ValueError:
 # Progressive Web App
 ####################################
 
-# LICENSE covers this install-time Open WebUI branding surface, including
-# names, logos, manifests, metadata, and surrounding UI.
-# Do not alter, remove, obscure, or replace it except as LICENSE permits:
-# https://docs.openwebui.com/license.
 EXTERNAL_PWA_MANIFEST_URL = os.getenv('EXTERNAL_PWA_MANIFEST_URL', None)
 
 ####################################
@@ -1148,7 +1135,7 @@ OTEL_METRICS_EXPORTER_OTLP_INSECURE = (
 OTEL_LOGS_EXPORTER_OTLP_INSECURE = (
     os.getenv('OTEL_LOGS_EXPORTER_OTLP_INSECURE', str(OTEL_EXPORTER_OTLP_INSECURE)).lower() == 'true'
 )
-OTEL_SERVICE_NAME = os.getenv('OTEL_SERVICE_NAME', 'open-webui')
+OTEL_SERVICE_NAME = os.getenv('OTEL_SERVICE_NAME', 'local-llm')
 OTEL_RESOURCE_ATTRIBUTES = os.getenv('OTEL_RESOURCE_ATTRIBUTES', '')  # e.g. key1=val1,key2=val2
 OTEL_TRACES_SAMPLER = os.getenv('OTEL_TRACES_SAMPLER', 'parentbased_always_on').lower()
 OTEL_BASIC_AUTH_USERNAME = os.getenv('OTEL_BASIC_AUTH_USERNAME', '')

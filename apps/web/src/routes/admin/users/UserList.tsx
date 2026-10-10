@@ -202,9 +202,6 @@ export function UserList() {
 													src={`${WEBUI_API_BASE_URL}/users/${user.id}/profile/image`}
 													alt="user"
 													onError={(e) => {
-														// LICENSE covers this Open WebUI fallback logo.
-														// Do not alter, remove, obscure, or replace it except as LICENSE permits:
-														// https://docs.openwebui.com/license.
 														e.currentTarget.src = '/favicon.png';
 													}}
 												/>

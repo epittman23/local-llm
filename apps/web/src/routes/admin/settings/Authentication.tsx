@@ -336,15 +336,12 @@ function Ldap({
 						</>
 					)}
 
-					{/* LICENSE covers this Open WebUI wordmark.
-					    Do not alter, remove, obscure, or replace it except as LICENSE permits:
-					    https://docs.openwebui.com/license. */}
 					<Toggle
 						config={ldap}
 						set={set}
 						name="enable_group_management"
 						label="Group Mapping"
-						description="Map LDAP groups to Open WebUI groups."
+						description="Map LDAP groups to Local LLM groups."
 					/>
 					{ldap.enable_group_management && (
 						<>
@@ -453,10 +450,7 @@ function OAuth({ oauth, set }: { oauth: Rec; set: (p: Rec) => void }) {
 							'* (all domains)'
 						)}
 
-						{/* LICENSE covers this Open WebUI wordmark.
-						    Do not alter, remove, obscure, or replace it except as LICENSE permits:
-						    https://docs.openwebui.com/license. */}
-						{toggle('ENABLE_OAUTH_ROLE_MANAGEMENT', 'Role Mapping', 'Map OAuth claims to Open WebUI roles.')}
+						{toggle('ENABLE_OAUTH_ROLE_MANAGEMENT', 'Role Mapping', 'Map OAuth claims to Local LLM roles.')}
 						{oauth.ENABLE_OAUTH_ROLE_MANAGEMENT && (
 							<>
 								<div className={grid}>
@@ -467,10 +461,7 @@ function OAuth({ oauth, set }: { oauth: Rec; set: (p: Rec) => void }) {
 							</>
 						)}
 
-						{/* LICENSE covers this Open WebUI wordmark.
-						    Do not alter, remove, obscure, or replace it except as LICENSE permits:
-						    https://docs.openwebui.com/license. */}
-						{toggle('ENABLE_OAUTH_GROUP_MANAGEMENT', 'Group Mapping', 'Map OAuth claims to Open WebUI groups.')}
+						{toggle('ENABLE_OAUTH_GROUP_MANAGEMENT', 'Group Mapping', 'Map OAuth claims to Local LLM groups.')}
 						{oauth.ENABLE_OAUTH_GROUP_MANAGEMENT && (
 							<>
 								{toggle(

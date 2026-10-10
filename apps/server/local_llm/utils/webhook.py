@@ -6,7 +6,7 @@ from local_llm.env import (
     AIOHTTP_CLIENT_ALLOW_REDIRECTS,
     AIOHTTP_CLIENT_SESSION_SSL,
     VERSION,
-    WEBUI_FAVICON_URL,
+    LLLM_FAVICON_URL,
 )
 from local_llm.retrieval.web.utils import get_ssrf_safe_session, validate_url
 from local_llm.utils.json_codec import JSONCodec
@@ -73,10 +73,7 @@ async def post_webhook(name: str, url: str, message: str, event_data: dict, desc
                     {
                         'activityTitle': message,
                         'activitySubtitle': f'{name} ({VERSION}) - {action}',
-                        # LICENSE covers this Open WebUI webhook logo.
-                        # Do not alter, remove, obscure, or replace it except as LICENSE permits:
-                        # https://docs.openwebui.com/license.
-                        'activityImage': WEBUI_FAVICON_URL,
+                        **({'activityImage': LLLM_FAVICON_URL} if LLLM_FAVICON_URL else {}),
                         'text': description,
                         'facts': facts,
                         'markdown': True,

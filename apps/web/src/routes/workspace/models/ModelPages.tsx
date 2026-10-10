@@ -51,9 +51,6 @@ export function ModelCreatePage() {
 			...info,
 			meta: {
 				...info.meta,
-				// LICENSE covers this Open WebUI fallback logo.
-				// Do not alter, remove, obscure, or replace it except as LICENSE permits:
-				// https://docs.openwebui.com/license.
 				profile_image_url: info.meta.profile_image_url ?? DEFAULT_PROFILE_IMAGE,
 				suggestion_prompts: suggestions ? suggestions.filter((p) => p.content !== '') : null
 			},

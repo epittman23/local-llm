@@ -87,7 +87,7 @@ def apply_params_to_form_data(form_data: dict, model: dict, params: dict | None 
     params = payload_params if params is None else dict(params)
     custom_params = params.pop('custom_params', {})
 
-    open_webui_params = {
+    local_llm_params = {
         'stream_response': bool,
         'stream_delta_chunk_size': int,
         'function_calling': str,
@@ -99,7 +99,7 @@ def apply_params_to_form_data(form_data: dict, model: dict, params: dict | None 
     }
 
     for key in list(params.keys()):
-        if key in open_webui_params:
+        if key in local_llm_params:
             del params[key]
 
     if custom_params:
@@ -132,17 +132,17 @@ def apply_params_to_form_data(form_data: dict, model: dict, params: dict | None 
     return form_data
 
 
-def remove_open_webui_params(params: dict) -> dict:
+def remove_local_llm_params(params: dict) -> dict:
     """
-    Removes OpenWebUI specific parameters from the provided dictionary.
+    Removes app-specific parameters from the provided dictionary.
 
     Args:
         params (dict): The dictionary containing parameters.
 
     Returns:
-        dict: The modified dictionary with OpenWebUI parameters removed.
+        dict: The modified dictionary with app-specific parameters removed.
     """
-    open_webui_params = {
+    local_llm_params = {
         'stream_response': bool,
         'stream_delta_chunk_size': int,
         'function_calling': str,
@@ -154,7 +154,7 @@ def remove_open_webui_params(params: dict) -> dict:
     }
 
     for key in list(params.keys()):
-        if key in open_webui_params:
+        if key in local_llm_params:
             del params[key]
 
     return params
@@ -162,7 +162,7 @@ def remove_open_webui_params(params: dict) -> dict:
 
 # inplace function: form_data is modified
 def apply_model_params_to_body_openai(params: dict, form_data: dict) -> dict:
-    params = remove_open_webui_params(params)
+    params = remove_local_llm_params(params)
 
     custom_params = params.pop('custom_params', {})
     if custom_params:
@@ -196,7 +196,7 @@ def apply_model_params_to_body_openai(params: dict, form_data: dict) -> dict:
 
 
 def apply_model_params_to_body_ollama(params: dict, form_data: dict) -> dict:
-    params = remove_open_webui_params(params)
+    params = remove_local_llm_params(params)
 
     custom_params = params.pop('custom_params', {})
     if custom_params:

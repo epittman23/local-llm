@@ -70,7 +70,7 @@ def _metadata_exprs(filter: dict | None) -> list[str]:
 
 class MilvusClient(VectorDBBase):
     def __init__(self):
-        self.collection_prefix = 'open_webui'
+        self.collection_prefix = 'local_llm'
         if MILVUS_TOKEN is None:
             self.client = Client(uri=MILVUS_URI, db_name=MILVUS_DB)
         else:

@@ -433,9 +433,7 @@ function SourceDialog({
 							</div>
 						)}
 						<div className="text-muted-foreground mt-1 text-xs">
-							{/* LICENSE covers this Open WebUI wordmark. Do not alter, remove, obscure, or replace it
-							    except as LICENSE permits: https://docs.openwebui.com/license. */}
-							External vectors must be generated with the same embedding model configured in Open WebUI.
+							External vectors must be generated with the same embedding model configured in Local LLM.
 						</div>
 					</div>
 

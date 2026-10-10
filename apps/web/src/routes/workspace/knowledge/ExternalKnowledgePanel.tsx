@@ -9,7 +9,7 @@ type TestResult = { documents?: string[]; metadatas?: Array<Record<string, any>>
 
 /**
  * Ports the "connected source" branch of KnowledgeBase.svelte: a knowledge base
- * backed by an external provider is read-only here (Open WebUI can query it but
+ * backed by an external provider is read-only here (the app can query it but
  * not change it), so instead of a file list this shows what it is mapped to and
  * a test-query box.
  */
@@ -52,10 +52,7 @@ export function ExternalKnowledgePanel({ external }: { external: External }) {
 				</div>
 			</div>
 			<div className="text-muted-foreground text-xs">
-				{/* LICENSE covers this Open WebUI wordmark.
-				    Do not alter, remove, obscure, or replace it except as LICENSE permits:
-				    https://docs.openwebui.com/license. */}
-				This knowledge base retrieves from a connected source. Open WebUI can query it, but cannot upload, sync, edit,
+				This knowledge base retrieves from a connected source. Local LLM can query it, but cannot upload, sync, edit,
 				delete, reset, or reindex its source data.
 			</div>
 			<div className="flex flex-col gap-2">

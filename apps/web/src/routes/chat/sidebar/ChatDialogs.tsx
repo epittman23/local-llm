@@ -32,7 +32,7 @@ export const shareUrl = (shareId: string) => `${window.location.origin}${appHref
 /**
  * Ports chat/ShareChatModal.svelte: Copy Link shares the chat as it is now
  * (again, if it was shared before, which updates the snapshot), and an
- * existing link can be deleted. Not ported: sharing to the openwebui.com
+ * existing link can be deleted. Not ported: sharing to the original project's
  * community site.
  */
 export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { chatId: string }) {
