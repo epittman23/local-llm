@@ -808,9 +808,9 @@ rm -rf apps/server/backend
 | 0 Plan + baselines | #54 | done | see "Phase 0 baselines" below | none |
 | 1 Docs | #55 | done | see "Phase 1" below | see "Phase 1" below |
 | 2a-2e Deletions + licenses | #56, #57, #58, #59, 2e: (this PR) | done | see "Phase 2" below | see "Phase 2" below |
-| 3 Flatten | (this PR) | done | see "Phase 3" below | see "Phase 3" below |
-| 4 Rename | — | | | |
-| 5a/5b Blame + plugin compat | — | | | |
+| 3 Flatten | #61 | done | see "Phase 3" below | see "Phase 3" below |
+| 4 Rename | #62 | done | see "Phase 4" below | see "Phase 4" below |
+| 5a/5b Blame + plugin compat | 5a: (this PR) | in progress | see "Phase 5" below | none |
 | 6a-6d Identifiers + branding | — | | | |
 | 7a/7b Benchmarks | — | | | |
 | 8 make check | — | | | |
@@ -925,4 +925,26 @@ rm -rf apps/server/backend
   - Scratch boot from `apps/server`: version 0.11.3, `/` serves `<title>local-llm`. Schema and metadata identical to baseline.
   - No `apps/server/data/` was created by any run.
   - Web: astro check 0 errors, Vitest 588 passed, build OK.
+- **Merging #61 hit CodeQL:** GitHub keys alert dismissals by file path, so all 48 alerts already dismissed at `apps/server/backend/...` reappeared as new at `apps/server/...`, and the ruleset blocked the merge. Each one had an exact dismissed twin on `main` (same rule and line): 34 false positive, 13 won't fix, and 1 false positive with a fixed duplicate. With the owner's approval, every one was dismissed again with its twin's reason and a "Carried over from #N" comment, and #61 then merged normally. The procedure is scripted in `~/.cache/local-llm-restructure/carry_dismissals.py`, a dry run by default that refuses to apply if any alert lacks a twin.
+
+### Phase 4: package rename (#62, squash `69c243c3`)
+
+- **Done.**
+  - `git mv apps/server/open_webui apps/server/local_llm`; every file detected as a rename.
+  - A scripted word-boundary replacement of `open_webui` with `local_llm` (1,460 lines in 247 files) across `apps/`, the Makefile, `.github/`, pre-commit, `.gitignore`, README, AGENTS.md, MAP.md, `docs/guides/` and `docs/proposals/`. It excluded `open_webui:` protocol strings, `d863707:` comments, the four vector-store name defaults (left for 6c), non-import lines in `migrations/versions/`, and `benchmarks/data/prompts/`.
+  - All 62 non-import replacements were reviewed by hand, including the Makefile uvicorn target, the recorder's `-m` argv, `monkeypatch.setattr`, `import_module`, `importorskip`, and the `plugin.py` rewrite targets.
+  - pyproject `name = "local-llm"`. The `uv.lock` root entry was renamed and moved, with its content otherwise identical; the rest of the lock is unchanged.
+- **Verification:**
+  - The rename-aware diff of `migrations/versions/` is exactly 5 import lines in 3 files (Q15).
+  - pre-commit had nothing to change; `uv lock --check` OK.
+  - pytest 305 passed, 1 skipped; `test_imports.py` with a scratch DB 2 passed.
+  - Scratch boot (`local_llm.main:app`): 0.11.3, `/` serves the app.
+  - Schema and metadata identical to baseline.
+  - astro check 0 errors; Vitest 588 passed.
+- **CodeQL again:** the same 48 dismissed alerts resurfaced at `apps/server/local_llm/`; all 48 had twins, were carried over, and #62 merged normally.
+- **Deviation:** the rename PR could not carry its own Status update (it must contain only the rename), so these results are recorded here in 5a, as planned.
+
+### Phase 5: blame-ignore entry and stored-plugin compatibility
+
+- **5a.** Added `69c243c34ff32fabbf0f5cd8249bb9ddac1d8485` (the #62 squash) to `.git-blame-ignore-revs`, with a comment in the file's style that does not name the old package.
 
