@@ -3,7 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { listProfileVersions } from '@/lib/apis/benchmarks/profiles';
 import { useAuthStore } from '@/lib/stores/authStore';
 
-/** Renders `notes` per version, per Phase 5's own checklist wording (docs/migration-plan.md). */
+/** Renders `notes` per version, per Phase 5's own checklist wording (docs/history/migration-plan.md). */
 export function ProfileVersionHistory({ profileName }: { profileName: string }) {
 	const token = useAuthStore((state) => state.token) ?? '';
 

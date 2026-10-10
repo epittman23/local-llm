@@ -29,7 +29,7 @@ type View =
 	| { mode: 'history'; name: string };
 
 /**
- * Backs decision 11 in docs/migration-plan.md ("Full CRUD from the Serve
+ * Backs decision 11 in docs/history/migration-plan.md ("Full CRUD from the Serve
  * page") -- genuinely new UI, not a port: Serve.svelte never built one (see
  * this file's own git history / ProfileDefinitionForm.tsx's docstring), even
  * though the backend CRUD router (routers/benchmarks/profiles.py) has been

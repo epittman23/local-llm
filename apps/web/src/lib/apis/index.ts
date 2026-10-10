@@ -3,7 +3,7 @@
 // evidently never ran a strict tsc pass over its own lib/ files (only svelte-check on
 // .svelte components). Fixing it here would mean rewriting signatures beyond what a
 // verbatim port covers -- the same call the migration plan made for the Python side's
-// pre-existing Optional-typing debt (docs/CLAUDE.md, 2026-09-15 decisions entry).
+// pre-existing Optional-typing debt (docs/decisions.md, 2026-09-15 entry).
 import { WEBUI_BASE_URL } from '@/lib/constants';
 import { convertOpenApiToToolPayload } from '@/lib/utils/api-helpers';
 import { normalizeTags } from '@/lib/utils/tags';

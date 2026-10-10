@@ -96,8 +96,8 @@ export default function Audio() {
 				setSaving(false);
 			}}
 		>
-			{/* Voice input is not ported (docs/CLAUDE.md), so its engine and auto-send switches are not
-			    offered (docs/code-review.md M7); the language is, since audio uploads use it. */}
+			{/* Voice input is not ported (docs/decisions.md), so its engine and auto-send switches are not
+			    offered (docs/history/code-review.md M7); the language is, since audio uploads use it. */}
 			<SettingsSection title="STT Settings" first>
 				<SettingField label="Language" htmlFor="stt-language">
 					<SettingInput

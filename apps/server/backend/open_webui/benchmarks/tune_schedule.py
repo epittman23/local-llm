@@ -25,7 +25,7 @@ overrides would produce, *without serving it*. It has to live here rather
 than in env_profile.py because it needs a candidate's full override
 environment, not just a profile name. Until 2026-09-14 this shelled out to
 scripts/llama-env.sh's `config-id` subcommand; see
-docs/migration-plan.md's Phase 2b for why that stopped being necessary once
+docs/history/migration-plan.md's Phase 2b for why that stopped being necessary once
 the fingerprint itself lived in this app (Phase 2a).
 
 Nothing here imports FastAPI.

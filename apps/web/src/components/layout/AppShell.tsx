@@ -41,7 +41,7 @@ export function AppShell() {
 	useShortcuts();
 
 	// The saved UI scale and font apply on every load, as +layout.svelte does,
-	// not only while they are changed in Settings (docs/code-review.md M7).
+	// not only while they are changed in Settings (docs/history/code-review.md M7).
 	const { settings } = useUserSettings();
 	const textScale = (settings as Record<string, unknown> | null)?.textScale;
 	const fontFamily = (settings as Record<string, unknown> | null)?.fontFamily;

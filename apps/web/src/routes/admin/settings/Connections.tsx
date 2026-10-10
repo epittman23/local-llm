@@ -191,7 +191,7 @@ export default function Connections() {
 
 	// Each save shows the new values at once and puts the old ones back if the
 	// server refuses them. The `.catch` returns null: returning the toast's id
-	// (truthy) reported a failed save as done (docs/code-review.md M5).
+	// (truthy) reported a failed save as done (docs/history/code-review.md M5).
 	const failed = (error: unknown) => {
 		toast.error(`${error}`);
 		return null;

@@ -34,7 +34,7 @@ describe('ROWS', () => {
 	});
 });
 
-describe('only what the app does is offered (docs/code-review.md M7)', () => {
+describe('only what the app does is offered (docs/history/code-review.md M7)', () => {
 	const ctx = {
 		isAdmin: true,
 		canTemporaryChat: true,

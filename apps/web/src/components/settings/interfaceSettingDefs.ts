@@ -77,7 +77,7 @@ const sw = (
  * Rows for features this app does not have yet. They stay defined, so the
  * admin defaults keep their keys and porting a feature means deleting one
  * line here, but neither Settings modal offers them: a switch that changes
- * nothing is worse than no switch (docs/code-review.md M7).
+ * nothing is worse than no switch (docs/history/code-review.md M7).
  */
 const UNPORTED = {
 	ACCESSIBILITY: 'The accessibility styles are not ported.',
@@ -87,14 +87,14 @@ const UNPORTED = {
 	LANDING: 'The chat view has one layout.',
 	PREVIEWS: 'There are no previews: chat hover preview or compact previews.',
 	MULTI_TABS: 'Multi-model replies always show side by side.',
-	TERMINALS: 'Personal terminal servers are not wired into chat (docs/CLAUDE.md).',
-	PDF: 'Chats cannot be exported to PDF (docs/CLAUDE.md).',
+	TERMINALS: 'Personal terminal servers are not wired into chat (docs/decisions.md).',
+	PDF: 'Chats cannot be exported to PDF (docs/decisions.md).',
 	FLOATING: 'The floating quick-action toolbar is not ported.',
-	RICH_INPUT: 'The composer is a plain textarea, not the rich editor (docs/CLAUDE.md).',
+	RICH_INPUT: 'The composer is a plain textarea, not the rich editor (docs/decisions.md).',
 	ARTIFACTS: "Artifacts open from a code block's Preview button only.",
 	SANDBOX: 'The artifact preview has a fixed sandbox: scripts without same-origin (ArtifactPanel.tsx).',
-	VOICE: 'Voice calls are not ported (docs/CLAUDE.md).',
-	CHANNEL_IMAGES: 'Channel uploads are not compressed (docs/CLAUDE.md).'
+	VOICE: 'Voice calls are not ported (docs/decisions.md).',
+	CHANNEL_IMAGES: 'Channel uploads are not compressed (docs/decisions.md).'
 } as const;
 
 /** Whether a row is offered at all: ported, and its own condition (if any) holds. */

@@ -208,7 +208,7 @@ def test_profile_table_module_imports_and_resolves_its_names():
     assert callable(table.add_version)
 
 
-# docs/bug-review-2026-09-27.md M8 and L9
+# docs/history/bug-review-2026-09-27.md M8 and L9
 
 
 @pytest.mark.parametrize('field', ['reasoning_effort_default', 'override_tensors'])

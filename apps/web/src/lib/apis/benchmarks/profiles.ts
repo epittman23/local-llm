@@ -2,7 +2,7 @@
 // CRUD endpoints (list, get, get-default, list-versions, create, clone,
 // add-version, set-display-name, set-default, archive, unarchive) have no
 // SvelteKit frontend at all -- see this file's own docstring, and decision
-// 11 in docs/migration-plan.md ("Full CRUD from the Serve page"), which the
+// 11 in docs/history/migration-plan.md ("Full CRUD from the Serve page"), which the
 // existing Serve.svelte never actually built. Follows the same fetch/error
 // shape as the rest of d863707:apps/openwebui/src/lib/apis/benchmarks/index.ts
 // (ported verbatim elsewhere) so this reads as one module, not two styles.
@@ -31,7 +31,7 @@ export function errorMessage(detail: unknown): string {
 /**
  * Unlike the ported helpers, this always throws on failure -- a network error
  * or a non-JSON error body included -- so a caller never mistakes `null` for
- * success (docs/bug-review-2026-09-27.md L7). What it throws is a string.
+ * success (docs/history/bug-review-2026-09-27.md L7). What it throws is a string.
  */
 const request = async (path: string, token: string, init?: RequestInit) => {
 	let res: Response;

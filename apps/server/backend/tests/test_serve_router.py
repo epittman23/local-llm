@@ -217,7 +217,7 @@ def test_stop_200_and_stops_the_job(client, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# docs/bug-review-2026-09-27.md: M4 (version id), M5 (single-flight), M6
+# docs/history/bug-review-2026-09-27.md: M4 (version id), M5 (single-flight), M6
 # (spec 'on'), M3 (cleanup after the server exits on its own)
 # ---------------------------------------------------------------------------
 

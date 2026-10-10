@@ -806,7 +806,7 @@ rm -rf apps/server/backend
 | Phase | PR | State | Verification | Deviations |
 |---|---|---|---|---|
 | 0 Plan + baselines | (this PR) | done | see "Phase 0 baselines" below | none |
-| 1 Docs | — | | | |
+| 1 Docs | (this PR) | done | see "Phase 1" below | see "Phase 1" below |
 | 2a-2e Deletions + licenses | — | | | |
 | 3 Flatten | — | | | |
 | 4 Rename | — | | | |
@@ -836,3 +836,28 @@ rm -rf apps/server/backend
 - `pre-commit run --all-files`: all passed.
 - Name audit: 6,388 matches in 427 files.
 - **Finding:** the embedding model `sentence-transformers/all-MiniLM-L6-v2` is **not in the HF cache** on this machine. With `HF_HUB_OFFLINE=1` (as `make backend` sets it), the backend boots, but loading the embedding function fails. Knowledge uploads won't embed until the model is fetched once, for example by running the backend once without `HF_HUB_OFFLINE`. This predates the restructure; it goes in the §8 E smoke test.
+
+### Phase 1: documentation consolidation
+
+- **Done.**
+  - New root `AGENTS.md` (271 lines), with `CLAUDE.md` as a symlink to it.
+  - `README.md` rewritten from 1,628 to 248 lines.
+  - Six new guides plus `model-downloads.md` under `docs/guides/`.
+  - `docs/decisions.md`, with history docs and proposals moved.
+  - `apps/web/README.md`, `apps/web/AGENTS.md`, `apps/web/CLAUDE.md` and `apps/server/README.md` removed; pyproject `readme` dropped.
+  - 68 files' citations re-pointed.
+  - MAP.md, ROADMAP.md and `.mmd` updated.
+- **Verification:**
+  - The decisions log is byte-identical to `main:docs/CLAUDE.md` lines 317-end (`sed -n '5,$p' docs/decisions.md`).
+  - The mermaid copy is identical.
+  - 0 broken relative links or anchors in tracked Markdown.
+  - No stale citation of a moved doc outside `docs/decisions.md` and `docs/history/`.
+  - pre-commit passed; `uv lock --check` OK; pytest 300 passed, 1 skipped.
+  - Web: astro check 0 errors, Vitest 588 passed, build OK, Playwright 348 passed.
+- **Deviations from §3:**
+  - `docs/decisions.md` has a 4-line header, so the log starts at line 5, not 4.
+  - The guides keep README's original section headings (e.g. "Recorded telemetry and throughput", not "How it is recorded") to keep the move easy to diff.
+  - README keeps the 2026-10-09 WSL2 note until Phase 3 adds the restructure upgrade note.
+  - The NOTICE links in README and AGENTS.md point at `apps/server/LICENSE_NOTICE` until Phase 2e creates `NOTICE`.
+  - `docs/guides/benchmarks.md` "The pages" still mentions the orphaned `tests/data/` cache; that goes with the gitignore rule in Phase 2a.
+

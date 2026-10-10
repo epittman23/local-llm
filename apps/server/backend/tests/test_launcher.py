@@ -417,7 +417,7 @@ async def test_serve_process_warning_set_for_dense_partial_offload(tmp_path, mon
 
 
 # ---------------------------------------------------------------------------
-# docs/bug-review-2026-09-27.md M2 (log on disk as it is teed), M3 (stop()
+# docs/history/bug-review-2026-09-27.md M2 (log on disk as it is teed), M3 (stop()
 # cleans up after the server has already exited), M4 (version id in argv)
 # ---------------------------------------------------------------------------
 

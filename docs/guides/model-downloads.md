@@ -2,11 +2,11 @@
 
 The manual replacement for the deleted `lllm-fetch` shell command (Phase 2c
 of the migration, 2026-09-18): there is no "download weights" action in the
-Serve page yet (planned for Phase 5 — see `docs/migration-plan.md`), so
-until then, weights for a profile not already on disk are fetched by hand
+Serve page (`serving/weights.py`'s `FetchProcess` exists, but no route mounts
+it), so weights for a profile not already on disk are fetched by hand
 with these `hf` CLI commands, one per profile in `LLAMA_PROFILE_NAMES`'
 former order. Repo, quant pattern and local dir come from
-`docs/serving-baseline/profiles.json` / `serving/profiles.py`, the single
+[`docs/serving-baseline/profiles.json`](../serving-baseline/profiles.json) / `serving/profiles.py`, the single
 source of truth for profile definitions now that the shell case statement is
 gone.
 
@@ -29,7 +29,7 @@ download there instead, or the Serve page will not find the file.
 ---
 ## Every profile
 All four downloads in one go, into `LLAMA_MODELS` (default `~/models`). The
-three sizes recorded in `docs/CLAUDE.md` alone come to about 43 GiB
+three sizes recorded in [AGENTS.md](../../AGENTS.md#models-in-use) alone come to about 43 GiB
 (`qwen36` 20.81, `qwen3c` 17.87, `qwen25c` 4.36); `qwen38` comes on top of
 that.
 ```

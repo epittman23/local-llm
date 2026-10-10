@@ -1,6 +1,6 @@
 """routers/benchmarks/profiles.py - CRUD for stored serving profiles.
 
-Backs decision 11 in docs/migration-plan.md: full profile CRUD (list,
+Backs decision 11 in docs/history/migration-plan.md: full profile CRUD (list,
 create, clone, edit, archive, set default) from the Serve page. Thin over
 models/benchmark_profiles.py.BenchmarkProfileTable, which already carries
 the actual rules (versioning, the default-profile guard rails); this file's

@@ -255,7 +255,7 @@ FONTS_DIR = Path(os.getenv('FONTS_DIR', OPEN_WEBUI_DIR / 'static' / 'fonts'))
 # The Astro + React + shadcn/ui frontend's build output (apps/web/dist; run
 # `bun run build` in apps/web). BASE_DIR is apps/server/, so its parent is
 # apps/, sibling to apps/web/. The SvelteKit build (BASE_DIR / 'build') this
-# replaced was removed in Phase 11 of docs/migration-plan.md.
+# replaced was removed in Phase 11 of docs/history/migration-plan.md.
 FRONTEND_BUILD_DIR = Path(os.getenv('FRONTEND_BUILD_DIR', BASE_DIR.parent / 'web' / 'dist')).resolve()
 
 if FROM_INIT_PY:

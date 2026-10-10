@@ -379,7 +379,7 @@ export function useMessageActions(
 						</button>
 					</Tip>
 				)}
-				{/* The model's Action functions, a button each (ResponseMessage.svelte; docs/code-review.md M6). */}
+				{/* The model's Action functions, a button each (ResponseMessage.svelte; docs/history/code-review.md M6). */}
 				{reply &&
 					(models.find((x) => x.id === m.model)?.actions ?? []).map((action) => (
 						<Tip key={action.id} content={action.name}>

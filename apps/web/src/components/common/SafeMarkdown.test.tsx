@@ -3,7 +3,7 @@ import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { SafeMarkdown, safeMarkdownHtml } from './SafeMarkdown';
 
-// docs/code-review.md H1: DOMPurify's defaults keep all of this.
+// docs/history/code-review.md H1: DOMPurify's defaults keep all of this.
 const attack = [
 	'**hello**',
 	'<style>body{display:none}</style>',

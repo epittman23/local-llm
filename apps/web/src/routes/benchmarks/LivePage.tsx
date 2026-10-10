@@ -36,7 +36,7 @@ const formatTime = (at: number | undefined): string => {
  * Ports d863707:apps/openwebui/src/lib/components/benchmarks/Live.svelte: the same
  * run-identity strip, summary stat grid, deltas table, and recent-samples
  * table, polled the same 5s. "polls -- refetchInterval; Kill -> AlertDialog"
- * per Phase 5's own checklist wording (docs/migration-plan.md) -- the poll
+ * per Phase 5's own checklist wording (docs/history/migration-plan.md) -- the poll
  * is TanStack Query's refetchInterval instead of Svelte's setInterval, and
  * Kill is shadcn's AlertDialog instead of the fork's own ConfirmDialog.
  */

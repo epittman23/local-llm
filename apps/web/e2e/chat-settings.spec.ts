@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { json, mockChat, savedChat } from './chat-helpers';
 import { expect, test } from './test';
 
-// The personal settings chat reads (docs/code-review.md M1, M2, M7): each was
+// The personal settings chat reads (docs/history/code-review.md M1, M2, M7): each was
 // saved by the Settings modal but ignored by chat before.
 
 const withSettings = (page: Page, ui: Record<string, unknown>) =>

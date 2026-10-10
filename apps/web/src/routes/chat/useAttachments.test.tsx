@@ -26,7 +26,7 @@ describe('useAttachments', () => {
 		useConfigStore.setState({ config: null });
 	});
 
-	it('lists an image as uploading at once, before it is read, so Send waits for it (docs/code-review.md L10)', () => {
+	it('lists an image as uploading at once, before it is read, so Send waits for it (docs/history/code-review.md L10)', () => {
 		const { result } = renderHook(
 			() => useAttachments({ temporary: false, selectedModels: ['m'], models, chatId: null }),
 			{ wrapper }

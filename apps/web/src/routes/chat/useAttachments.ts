@@ -115,7 +115,7 @@ export function useAttachments({
 			}
 			// Listed at once, as uploading, before an image is read or scaled: Send
 			// waits for it, so a quick Enter can't leave it for the next message
-			// (docs/code-review.md L10).
+			// (docs/history/code-review.md L10).
 			const full =
 				opts.context === 'full' || (settings as Record<string, unknown> | null)?.defaultUploadContext === 'full';
 			setFiles((fs) => [

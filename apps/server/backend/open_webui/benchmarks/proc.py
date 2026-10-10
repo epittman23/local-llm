@@ -10,7 +10,7 @@ Until 2026-09-14 this ran every command through `bash -c "source
 llama-env.sh && ..."`, because llama-server itself was started through
 main.sh's `lllm-serve` shell function. Serving now goes through
 benchmarks/serving/launcher.ServeProcess directly (routers/benchmarks/
-serve.py, benchmarks/tune_probe.py's Server) -- see docs/migration-plan.md's
+serve.py, benchmarks/tune_probe.py's Server) -- see docs/history/migration-plan.md's
 Phase 2 -- so `Command` no longer needs a serving-profile shell layer
 sourced into it; it just runs the command it is given. What it keeps: owning
 a process group so a caller can signal a whole subprocess tree at once,

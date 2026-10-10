@@ -11,7 +11,7 @@ the single source of truth for serving configuration. It no longer is: the
 profiles live in this app's own database now (models/benchmark_profiles.py),
 seeded from main.sh's profile table by migration 5a1f0c3e9b27 and editable
 from the Serve page (routers/benchmarks/profiles.py) -- see
-docs/migration-plan.md's Phase 2. `profile()` reads a profile from there and
+docs/history/migration-plan.md's Phase 2. `profile()` reads a profile from there and
 resolves it through benchmarks/serving/profiles.resolve(), the same function
 benchmarks/serving/launcher.py uses to build a server's actual argv, so what
 this module reports can never disagree with what would actually be served.

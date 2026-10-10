@@ -2,7 +2,7 @@
 // setupSocket() (roughly lines 118-250): same io() options, same auth token,
 // same connect/disconnect/reconnect_attempt/reconnect_failed handling and
 // heartbeat, and its "Connection lost. Reconnecting..." / "Reconnected" toasts
-// (docs/code-review.md L12; the Svelte app's extra grace period after a tab
+// (docs/history/code-review.md L12; the Svelte app's extra grace period after a tab
 // resumes is left out). Still not ported: the version-mismatch auto-reload
 // (needs the WEBUI_VERSION/WEBUI_DEPLOYMENT_ID stores) and the
 // websocket_heartbeat_interval config read; the heartbeat runs on the same 30s

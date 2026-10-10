@@ -551,7 +551,7 @@ async def update_note_by_id(
     ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.DEFAULT())
 
-    # Fork change (docs/bug-review-2026-09-27.md, H1): only touch grants the
+    # Fork change (docs/history/bug-review-2026-09-27.md, H1): only touch grants the
     # client actually sent. Assigning the field unconditionally marks it as
     # set in Pydantic v2, so update_note_by_id's exclude_unset dump would see
     # `access_grants: None` and delete every grant on a plain content save.
