@@ -877,4 +877,11 @@ rm -rf apps/server/backend
     - pre-commit passed; `uv lock --check` OK; pytest 300 passed, 1 skipped; fingerprint 79 passed.
     - Scratch boot OK; schema and metadata identical to baseline.
     - `git status` shows no newly unignored files; web build OK. Playwright left to CI: no route or component changed.
+- **2b (remove the upstream changelog).**
+  - Deleted `apps/server/CHANGELOG.md` (1.2 MB) with its parser in `env.py` (and the `pkgutil`, `markdown` and `bs4` imports only it used), `GET /api/changelog` in `main.py`, the pyproject force-include, and the uncalled `getChangelog()` in `apps/web/src/lib/apis/index.ts`. The `showChangelog` settings row stays: it preserves an admin-defaults key.
+  - **Verification:**
+    - pre-commit passed; lock OK; pytest 300 passed, 1 skipped.
+    - Boot OK; schema identical; astro check 0 errors; Vitest 588 passed.
+    - `/api/changelog` now returns the SPA's `text/html` 200, not JSON.
+  - **Finding (pre-existing, not changed):** the backend's SPA mount answers **every** unknown path with `index.html` and 200, unknown `/api/*` paths included (`/api/does-not-exist` does the same). The boot script now reports content type so a removed endpoint is distinguishable.
 

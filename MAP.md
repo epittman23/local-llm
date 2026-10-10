@@ -133,7 +133,7 @@ was replaced by `apps/web/`:
   real-time), `tools/`, `tasks.py`, `utils/`, `config.py`, and
   **`benchmarks/`** (see below — fork-owned, not upstream).
 - Root-level: `pyproject.toml`/`uv.lock` (backend deps; `pyproject.toml`
-  also holds the version), `CHANGELOG.md` (the backend reads it),
+  also holds the version),
   `LICENSE`/`LICENSE_NOTICE`/`LICENSE_HISTORY`. The upstream Docker images,
   compose variants, CI workflows, start scripts and community files are
   gone; this repo runs through the root `Makefile` and `infra/`.

@@ -216,7 +216,6 @@ exclude = [
     "webui.db",
     "chroma.sqlite3",
 ]
-force-include = { "CHANGELOG.md" = "open_webui/CHANGELOG.md" }
 
 [dependency-groups]
 dev = [
