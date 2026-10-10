@@ -122,10 +122,28 @@ jobs:
     defaults:
       run:
         working-directory: apps/server
+    # A throwaway Postgres with pgvector (the image infra/docker-compose.yml
+    # runs) for tests/test_imports.py: importing the app connects the default
+    # vector store, pgvector.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: openwebui
+          POSTGRES_PASSWORD: ci-only-not-a-secret
+          POSTGRES_DB: openwebui
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U openwebui"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     env:
-      # Not a secret: the app refuses to import without one, and the tests
-      # never serve anything signed with it.
+      # Not secrets: the app refuses to import without a key, the tests never
+      # serve anything signed with it, and the database exists only for this job.
       WEBUI_SECRET_KEY: ci-only-not-a-secret-0123456789abcdef0123456789abcdef
+      TEST_DATABASE_URL: postgresql://openwebui:ci-only-not-a-secret@localhost:5432/openwebui
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

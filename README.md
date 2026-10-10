@@ -1527,6 +1527,13 @@ What the default install includes, and what it leaves out:
   RAG uploads of `.rst`/`.xml` files report `unstructured` missing (Excel and
   PowerPoint fall back to pandas / python-pptx). Install them with
   `uv sync --extra all` from `apps/server/`.
+- **Chroma isn't installed at all**, not even by `--extra all`: every
+  `chromadb` release has unpatched critical advisories (pre-auth code
+  injection among them), and upstream's default `VECTOR_DB=chroma` is now
+  `pgvector`. The Chroma code is still there; `VECTOR_DB=chroma` works if you
+  install `chromadb` yourself, and otherwise stops startup saying so.
+  `nltk` and `RestrictedPython` (unused, with unpatched advisories of their
+  own) were removed too, on 2026-10-09.
 
 `requirements-extra.txt` is gone, and has been since before this migration:
 it used to carry **numpy**, **pandas**, **pyyaml**, **scipy**,

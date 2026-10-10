@@ -54,7 +54,7 @@ from __future__ import annotations
 
 import asyncio
 
-from open_webui.retrieval.vector.factory import VECTOR_DB_CLIENT
+from open_webui.retrieval.vector.factory import VECTOR_DB_CLIENT, LazyVectorDBClient
 from open_webui.retrieval.vector.main import (
     GetResult,
     SearchResult,
@@ -83,7 +83,8 @@ class AsyncVectorDBClient:
 
     @property
     def supports_hybrid_search(self) -> bool:
-        return type(self._sync).hybrid_search is not VectorDBBase.hybrid_search
+        client = self._sync.resolve() if isinstance(self._sync, LazyVectorDBClient) else self._sync
+        return type(client).hybrid_search is not VectorDBBase.hybrid_search
 
     async def has_collection(self, collection_name: str) -> bool:
         return await asyncio.to_thread(self._sync.has_collection, collection_name)

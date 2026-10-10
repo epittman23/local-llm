@@ -86,6 +86,10 @@ class DocumentChunk(Base):
 
 class PgvectorClient(VectorDBBase):
     def __init__(self) -> None:
+        if not PGVECTOR_DB_URL.startswith('postgres'):
+            raise ValueError(
+                'Pgvector requires setting PGVECTOR_DB_URL or using Postgres with vector extension as the primary database.'
+            )
         # if no pgvector uri, use the existing database connection
         if not PGVECTOR_DB_URL:
             self.session = ScopedSession

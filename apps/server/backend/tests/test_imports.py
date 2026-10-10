@@ -11,6 +11,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 BACKEND = Path(__file__).resolve().parents[1]  # apps/server/backend/
 PACKAGE = BACKEND / 'open_webui'
 
@@ -74,12 +76,23 @@ def test_every_internal_from_import_resolves():
 
 
 def test_the_app_imports(tmp_path):
-    # In a subprocess: importing open_webui.main sets up the database and
-    # app state, so it gets a throwaway DATA_DIR and SQLite file of its own.
+    # Importing open_webui.main sets up the database and connects the default
+    # vector store, pgvector, so this needs a Postgres with the vector
+    # extension. It runs migrations there: point TEST_DATABASE_URL at a
+    # throwaway database, never the one `make backend` uses. CI provides one
+    # (ci.yml's postgres service) and fails rather than skips without it.
+    database_url = os.environ.get('TEST_DATABASE_URL')
+    if not database_url:
+        if os.environ.get('CI'):
+            pytest.fail('TEST_DATABASE_URL is not set; CI must run this test')
+        pytest.skip('set TEST_DATABASE_URL to a throwaway Postgres + pgvector database to run this test')
+    # In a subprocess, with its own DATA_DIR, so the import's side effects
+    # (data directories, app state) stay out of this test process.
     env = {
         **os.environ,
         'DATA_DIR': str(tmp_path),
-        'DATABASE_URL': f'sqlite:///{tmp_path}/webui.db',
+        'DATABASE_URL': database_url,
+        'VECTOR_DB': 'pgvector',
         'HF_HUB_OFFLINE': '1',
     }
     result = subprocess.run(
