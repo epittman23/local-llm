@@ -1,13 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 
-import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from open_webui.config import CACHE_DIR
 from open_webui.constants import ERROR_MESSAGES
-from open_webui.env import AIOHTTP_CLIENT_SESSION_SSL, AIOHTTP_CLIENT_TIMEOUT, ENABLE_PLUGINS
+from open_webui.env import AIOHTTP_CLIENT_SESSION_SSL, ENABLE_PLUGINS
 from open_webui.events import EVENTS, build_event, dispatch_event_functions, publish_event, schedule_webhook_dispatch
 from open_webui.internal.db import get_async_session
 from open_webui.models.functions import (
@@ -18,6 +18,7 @@ from open_webui.models.functions import (
     FunctionUserResponse,
     FunctionWithValvesModel,
 )
+from open_webui.retrieval.web.utils import get_ssrf_safe_session, validate_url
 from open_webui.utils.auth import get_admin_user, get_verified_user
 from open_webui.utils.plugin import (
     get_function_module_from_cache,
@@ -123,9 +124,15 @@ async def load_function_from_url(request: Request, form_data: LoadUrlForm, user=
     )
 
     try:
-        async with aiohttp.ClientSession(
-            trust_env=True, timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT)
-        ) as session:
+        # Same SSRF guard as the app's other fetches of request-supplied URLs:
+        # validate_url rejects private, loopback and metadata addresses (unless
+        # ENABLE_LOCAL_WEB_FETCH), and the safe session re-checks every
+        # connection, so a redirect or DNS rebinding can't reach them either.
+        try:
+            await asyncio.to_thread(validate_url, url)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=ERROR_MESSAGES.INVALID_URL)
+        async with get_ssrf_safe_session() as session:
             async with session.get(
                 url, headers={'Content-Type': 'application/json'}, ssl=AIOHTTP_CLIENT_SESSION_SSL
             ) as resp:

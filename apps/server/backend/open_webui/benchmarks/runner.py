@@ -156,10 +156,15 @@ def load_system(name: str | None) -> dict:
     """
     if not name:
         return {}
+    # Only a name system_names() lists, never a path built from the request:
+    # `../../x` would otherwise read any .txt file the server can (CodeQL
+    # py/path-injection).
+    known = system_names()
+    if name not in known:
+        raise SuiteLoadError(
+            f"no system prompt '{name}' in {PROMPTS_DIR} (known: {', '.join(known) or 'none defined'})"
+        )
     path = PROMPTS_DIR / f'{name}.txt'
-    if not path.is_file():
-        known = ', '.join(system_names()) or 'none defined'
-        raise SuiteLoadError(f"no system prompt '{name}' in {PROMPTS_DIR} (known: {known})")
     text = path.read_text(encoding='utf-8').rstrip('\n')
     if not text.strip():
         raise SuiteLoadError(f"system prompt '{name}' is empty")

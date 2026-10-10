@@ -1528,6 +1528,22 @@ class UploadBlobForm(BaseModel):
     filename: str
 
 
+def upload_path_for(file_name: str | None, upload_dir: str | None = None) -> str | None:
+    """UPLOAD_DIR/<file_name>, or None unless that is a plain file name inside it.
+
+    The name comes from the download URL's last path segment, so it is
+    rejected when empty, `.`/`..`, or anything whose resolved path would
+    leave UPLOAD_DIR (CodeQL py/path-injection).
+    """
+    upload_dir = upload_dir or UPLOAD_DIR
+    if not file_name or file_name in ('.', '..') or os.path.basename(file_name) != file_name:
+        return None
+    file_path = os.path.join(upload_dir, file_name)
+    if os.path.dirname(os.path.realpath(file_path)) != os.path.realpath(upload_dir):
+        return None
+    return file_path
+
+
 def parse_huggingface_url(hf_url: str) -> str | None:
     """Extract the filename from a HuggingFace download URL."""
     try:
@@ -1609,10 +1625,9 @@ async def download_model(
     url = (await Config.get('ollama.base_urls', []))[url_idx if url_idx is not None else 0]
     file_name = parse_huggingface_url(form_data.url)
 
-    if not file_name:
+    file_path = upload_path_for(file_name)
+    if file_path is None:
         return None
-
-    file_path = os.path.join(UPLOAD_DIR, file_name)
     return StreamingResponse(
         download_file_stream(url, form_data.url, file_path, file_name),
     )
