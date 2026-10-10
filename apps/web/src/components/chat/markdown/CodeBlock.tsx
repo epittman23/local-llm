@@ -10,7 +10,14 @@ let mermaidLoader: Promise<typeof import('mermaid').default> | null = null;
 const loadMermaid = () => {
 	mermaidLoader ??= import('mermaid').then((m) => {
 		const dark = document.documentElement.classList.contains('dark');
-		m.default.initialize({ startOnLoad: false, securityLevel: 'strict', theme: dark ? 'dark' : 'default' });
+		// look: 'classic' keeps diagrams as they rendered before mermaid 12,
+		// which made its new 'neo' look the default for ten diagram types.
+		m.default.initialize({
+			startOnLoad: false,
+			securityLevel: 'strict',
+			theme: dark ? 'dark' : 'default',
+			look: 'classic'
+		});
 		return m.default;
 	});
 	return mermaidLoader;
