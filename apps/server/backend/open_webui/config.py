@@ -497,13 +497,22 @@ CODE_INTERPRETER_PYODIDE_PROMPT = """
 # Vector Database
 ####################################
 
-VECTOR_DB = os.getenv('VECTOR_DB', 'chroma')
+# pgvector, not upstream's chroma: chromadb is no longer a dependency (every
+# release has unpatched critical advisories, see pyproject.toml), and this
+# install runs on Postgres anyway.
+VECTOR_DB = os.getenv('VECTOR_DB', 'pgvector')
 
 # Chroma
 CHROMA_DATA_PATH = f'{DATA_DIR}/vector_db'
 
 if VECTOR_DB == 'chroma':
-    import chromadb
+    try:
+        import chromadb
+    except ModuleNotFoundError as e:
+        raise RuntimeError(
+            "VECTOR_DB=chroma needs the chromadb package, which isn't installed by default "
+            '(every release has unpatched critical advisories). Install it yourself, or use VECTOR_DB=pgvector.'
+        ) from e
 
     CHROMA_TENANT = os.getenv('CHROMA_TENANT', chromadb.DEFAULT_TENANT)
     CHROMA_DATABASE = os.getenv('CHROMA_DATABASE', chromadb.DEFAULT_DATABASE)
@@ -643,10 +652,8 @@ SSL_ASSERT_FINGERPRINT = os.getenv('SSL_ASSERT_FINGERPRINT', None)
 ELASTICSEARCH_INDEX_PREFIX = os.getenv('ELASTICSEARCH_INDEX_PREFIX', 'open_webui_collections')
 # Pgvector
 PGVECTOR_DB_URL = os.getenv('PGVECTOR_DB_URL', DATABASE_URL)
-if VECTOR_DB == 'pgvector' and not PGVECTOR_DB_URL.startswith('postgres'):
-    raise ValueError(
-        'Pgvector requires setting PGVECTOR_DB_URL or using Postgres with vector extension as the primary database.'
-    )
+# (Checked in PgvectorClient, when the client is created at startup, rather
+# than here, so importing config doesn't require a Postgres URL.)
 PGVECTOR_INITIALIZE_MAX_VECTOR_LENGTH = int(os.getenv('PGVECTOR_INITIALIZE_MAX_VECTOR_LENGTH', '1536'))
 
 PGVECTOR_USE_HALFVEC = os.getenv('PGVECTOR_USE_HALFVEC', 'false').lower() == 'true'

@@ -142,6 +142,7 @@ from open_webui.models.functions import Functions
 from open_webui.models.messages import Messages
 from open_webui.models.models import Models, normalize_model_tags
 from open_webui.models.users import Users
+from open_webui.retrieval.vector.factory import VECTOR_DB_CLIENT
 from open_webui.routers import (
     analytics,
     audio,
@@ -347,6 +348,10 @@ async def lifespan(app: FastAPI):
 
     app.state.instance_id = INSTANCE_ID
     start_logger()
+
+    # The vector store's client is created lazily (retrieval/vector/factory.py);
+    # connect it now so a misconfigured store fails startup, not the first upload.
+    await asyncio.to_thread(VECTOR_DB_CLIENT.resolve)
 
     if RESET_CONFIG_ON_START:
         await async_reset_config()
