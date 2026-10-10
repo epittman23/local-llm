@@ -1,10 +1,8 @@
 import datetime as dt
-import importlib.metadata
 import json
 import logging
 import os
 import re
-import shutil
 import sys
 import tomllib
 import traceback
@@ -130,19 +128,14 @@ SRC_LOG_LEVELS = {}  # Legacy variable, do not remove
 
 ENV = os.getenv('ENV', 'dev')
 
-FROM_INIT_PY = os.getenv('FROM_INIT_PY', 'False').lower() == 'true'
-
 # The version lives in pyproject.toml (it came from the SvelteKit app's
 # package.json until Phase 11 deleted that app). apps/web/package.json carries
 # the same number for the About tab and plugin version checks.
-if FROM_INIT_PY:
-    PACKAGE_DATA = {'version': importlib.metadata.version('open-webui')}
-else:
-    try:
-        with open(BASE_DIR / 'pyproject.toml', 'rb') as f:
-            PACKAGE_DATA = {'version': tomllib.load(f)['project']['version']}
-    except Exception:
-        PACKAGE_DATA = {'version': '0.0.0'}
+try:
+    with open(BASE_DIR / 'pyproject.toml', 'rb') as f:
+        PACKAGE_DATA = {'version': tomllib.load(f)['project']['version']}
+except Exception:
+    PACKAGE_DATA = {'version': '0.0.0'}
 
 VERSION = PACKAGE_DATA['version']
 
@@ -164,28 +157,6 @@ ENABLE_ORJSON = os.getenv('ENABLE_ORJSON', 'False').lower() == 'true'
 
 DATA_DIR = Path(os.getenv('DATA_DIR', BACKEND_DIR / 'data')).resolve()
 
-if FROM_INIT_PY:
-    NEW_DATA_DIR = Path(os.getenv('DATA_DIR', OPEN_WEBUI_DIR / 'data')).resolve()
-    NEW_DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-    # Check if the data directory exists in the package directory
-    if DATA_DIR.exists() and DATA_DIR != NEW_DATA_DIR:
-        log.info('Moving %s to %s', DATA_DIR, NEW_DATA_DIR)
-        for item in DATA_DIR.iterdir():
-            dest = NEW_DATA_DIR / item.name
-            if item.is_dir():
-                shutil.copytree(item, dest, dirs_exist_ok=True)
-            else:
-                shutil.copy2(item, dest)
-
-        # Zip the data directory
-        shutil.make_archive(DATA_DIR.parent / 'open_webui_data', 'zip', DATA_DIR)
-
-        # Remove the old data directory
-        shutil.rmtree(DATA_DIR)
-
-    DATA_DIR = Path(os.getenv('DATA_DIR', OPEN_WEBUI_DIR / 'data'))
-
 # Created here rather than relied on to exist: a fresh clone has no data dir,
 # and run_migrations() (config.py) runs before anything else creates one.
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -199,9 +170,6 @@ FONTS_DIR = Path(os.getenv('FONTS_DIR', OPEN_WEBUI_DIR / 'static' / 'fonts'))
 # apps/, sibling to apps/web/. The SvelteKit build (BASE_DIR / 'build') this
 # replaced was removed in Phase 11 of docs/history/migration-plan.md.
 FRONTEND_BUILD_DIR = Path(os.getenv('FRONTEND_BUILD_DIR', BASE_DIR.parent / 'web' / 'dist')).resolve()
-
-if FROM_INIT_PY:
-    FRONTEND_BUILD_DIR = Path(os.getenv('FRONTEND_BUILD_DIR', OPEN_WEBUI_DIR / 'frontend')).resolve()
 
 ####################################
 # Database
