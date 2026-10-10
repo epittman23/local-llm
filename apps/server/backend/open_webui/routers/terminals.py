@@ -227,11 +227,11 @@ async def proxy_terminal(
     except (aiohttp.ClientConnectionError, TimeoutError) as error:
         await session.close()
         log.error('Terminal proxy error: %s', str(error) or type(error).__name__)
-        return JSONResponse({'error': f'Terminal proxy error: {error}'}, status_code=502)
+        return JSONResponse({'error': 'Terminal proxy error'}, status_code=502)
     except Exception as error:
         await session.close()
         log.exception('Terminal proxy error: %s', error)
-        return JSONResponse({'error': f'Terminal proxy error: {error}'}, status_code=502)
+        return JSONResponse({'error': 'Terminal proxy error'}, status_code=502)
 
 
 # ---------------------------------------------------------------------------

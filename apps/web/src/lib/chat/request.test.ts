@@ -31,6 +31,10 @@ describe('initialModels', () => {
 describe('request pieces', () => {
 	it('decodes stop tokens', () => {
 		expect(stopTokens('\\n, END')).toEqual(['\n', 'END']);
+		expect(stopTokens(['\\t\\u0041', 'say \\"hi\\"', 'C:\\\\dir'])).toEqual(['\tA', 'say "hi"', 'C:\\dir']);
+		// A trailing or unknown backslash is kept, and the rest still decodes.
+		expect(stopTokens(['end\\', '\\n\\q'])).toEqual(['end\\', '\n\\q']);
+		expect(stopTokens('100%')).toEqual(['100%']);
 		expect(stopTokens(undefined)).toBeUndefined();
 	});
 	it('only enables features the server and permissions allow', () => {

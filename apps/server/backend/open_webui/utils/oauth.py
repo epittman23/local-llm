@@ -2340,7 +2340,10 @@ class OAuthManager:
             log.warning(f'Back-channel logout: invalid logout_token: {e}')
             return JSONResponse(
                 status_code=400,
-                content={'error': 'invalid_request', 'error_description': f'Invalid logout_token: {e}'},
+                content={
+                    'error': 'invalid_request',
+                    'error_description': 'Invalid logout_token',
+                },  # detail logged above
             )
         except Exception as e:
             log.error(f'Back-channel logout: error validating logout_token: {e}')

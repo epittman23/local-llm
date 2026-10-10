@@ -151,7 +151,14 @@ async def generate_chat_completion(
     bypass_filter: bool = False,
     bypass_system_prompt: bool = False,
 ):
-    log.debug('generate_chat_completion: %s', form_data)
+    # Not the whole request: it carries the conversation (and can carry keys
+    # in model params), which shouldn't land in logs even at debug level.
+    log.debug(
+        'generate_chat_completion: model=%s messages=%d stream=%s',
+        form_data.get('model'),
+        len(form_data.get('messages') or []),
+        form_data.get('stream'),
+    )
     if BYPASS_MODEL_ACCESS_CONTROL:
         bypass_filter = True
 

@@ -332,6 +332,7 @@ def verify_ssl_cert(url: str) -> bool:
     try:
         hostname = url.split('://')[-1].split('/')[0]
         context = ssl.create_default_context(cafile=certifi.where())
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
         with context.wrap_socket(ssl.socket(), server_hostname=hostname) as s:
             s.connect((hostname, 443))
         return True

@@ -154,7 +154,8 @@ def extract_frontmatter(content):
     frontmatter = {}
     frontmatter_started = False
     frontmatter_ended = False
-    frontmatter_pattern = re.compile(r'^\s*([a-z_]+):\s*(.*)\s*$', re.IGNORECASE)
+    # The value is stripped below, so no whitespace quantifiers around it.
+    frontmatter_pattern = re.compile(r'^\s*([a-z_]+):(.*)$', re.IGNORECASE)
 
     try:
         lines = content.splitlines()

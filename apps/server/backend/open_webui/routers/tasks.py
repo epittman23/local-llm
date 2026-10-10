@@ -467,9 +467,12 @@ async def generate_queries(request: Request, form_data: dict, user=Depends(get_v
     try:
         return await generate_chat_completion(request, form_data=payload, user=user)
     except Exception as e:
+        # Logged in full; the client gets the same generic message as this
+        # router's other handlers, not the exception text.
+        log.exception(e)
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
-            content={'detail': str(e)},
+            content={'detail': 'An internal error has occurred.'},
         )
 
 
@@ -598,9 +601,12 @@ async def generate_emoji(request: Request, form_data: dict, user=Depends(get_ver
     try:
         return await generate_chat_completion(request, form_data=payload, user=user)
     except Exception as e:
+        # Logged in full; the client gets the same generic message as this
+        # router's other handlers, not the exception text.
+        log.exception(e)
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
-            content={'detail': str(e)},
+            content={'detail': 'An internal error has occurred.'},
         )
 
 
@@ -651,7 +657,10 @@ async def generate_moa_response(request: Request, form_data: dict, user=Depends(
     try:
         return await generate_chat_completion(request, form_data=payload, user=user)
     except Exception as e:
+        # Logged in full; the client gets the same generic message as this
+        # router's other handlers, not the exception text.
+        log.exception(e)
         return JSONResponse(
             status_code=status.HTTP_400_BAD_REQUEST,
-            content={'detail': str(e)},
+            content={'detail': 'An internal error has occurred.'},
         )

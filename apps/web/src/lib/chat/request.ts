@@ -33,6 +33,28 @@ export function promptVariables(user: { name?: string; email?: string } | null, 
 	};
 }
 
+const ESCAPES: Record<string, string> = {
+	n: '\n',
+	t: '\t',
+	r: '\r',
+	b: '\b',
+	f: '\f',
+	'"': '"',
+	'\\': '\\',
+	'/': '/'
+};
+
+/**
+ * JSON-style escapes (`\n`, `\t`, `\uXXXX`, ...) decoded; any other backslash is
+ * kept as typed. Replaces wrapping the token in quotes for JSON.parse, which
+ * escaped `"` but not `\`, so a token like `a\` or `\"` made invalid JSON and
+ * silently skipped decoding altogether (CodeQL js/incomplete-sanitization).
+ */
+const unescapeStopToken = (s: string) =>
+	s.replace(/\\(u[0-9a-fA-F]{4}|.)/g, (match, esc: string) =>
+		esc.length === 5 ? String.fromCharCode(Number.parseInt(esc.slice(1), 16)) : (ESCAPES[esc] ?? match)
+	);
+
 /** Stop sequences from a list or a comma-separated string, with escapes like `\n` decoded. */
 export function stopTokens(stop: unknown): string[] | undefined {
 	if (!stop) return undefined;
@@ -42,10 +64,11 @@ export function stopTokens(stop: unknown): string[] | undefined {
 				.split(',')
 				.map((s) => s.trim());
 	return tokens.filter(Boolean).map((t) => {
+		const unescaped = unescapeStopToken(String(t));
 		try {
-			return decodeURIComponent(JSON.parse(`"${String(t).replace(/"/g, '\\"')}"`));
+			return decodeURIComponent(unescaped);
 		} catch {
-			return String(t);
+			return unescaped;
 		}
 	});
 }

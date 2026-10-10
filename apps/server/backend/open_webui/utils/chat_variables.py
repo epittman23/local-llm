@@ -6,8 +6,14 @@ from typing import Any
 from open_webui.utils.json_codec import JSONCodec
 
 CHAT_VARIABLE_KEY_RE = re.compile(r'^[a-z][a-z0-9_]*$')
-CHAT_VARIABLE_ANY_RE = re.compile(r'{{\s*chat\.variables\.([^\s|}]+)(?:\s*\|\s*([^}]*))?\s*}}')
-USER_VARIABLE_ANY_RE = re.compile(r'{{\s*user\.variables\.([^\s|}]+)(?:\s*\|\s*([^}]*))?\s*}}')
+# `{{chat.variables.key}}` or `{{chat.variables.key | definition}}`. Written so
+# matching stays linear on any input: the definition can't contain `{` or `}`
+# (so a scan stops at the next `{{`), and no two adjacent parts can both
+# match whitespace. The earlier form, `(?:\s*\|\s*([^}]*))?\s*}}`, took
+# minutes on a system prompt with a few thousand spaces after a `|`. Callers
+# strip the definition, so its surrounding whitespace doesn't matter.
+CHAT_VARIABLE_ANY_RE = re.compile(r'{{\s*chat\.variables\.([^\s|{}]+)\s*(?:\|([^{}]*))?}}')
+USER_VARIABLE_ANY_RE = re.compile(r'{{\s*user\.variables\.([^\s|{}]+)\s*(?:\|([^{}]*))?}}')
 MAX_VARIABLE_VALUE_LENGTH = 20_000
 MAX_VARIABLES_JSON_LENGTH = 100_000
 

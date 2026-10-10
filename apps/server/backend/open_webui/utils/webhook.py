@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import urllib.parse
 
 from open_webui.config import WEBUI_FAVICON_URL
 from open_webui.env import (
@@ -9,6 +10,7 @@ from open_webui.env import (
 )
 from open_webui.retrieval.web.utils import get_ssrf_safe_session, validate_url
 from open_webui.utils.json_codec import JSONCodec
+from open_webui.utils.misc import url_host_matches
 
 log = logging.getLogger(__name__)
 
@@ -41,14 +43,16 @@ async def post_webhook(name: str, url: str, message: str, event_data: dict, desc
     try:
         payload = {}
         # Slack and Google Chat Webhooks
-        if 'https://hooks.slack.com' in url or 'https://chat.googleapis.com' in url:
+        if url_host_matches(url, 'hooks.slack.com', 'chat.googleapis.com', scheme='https'):
             payload['text'] = _event_text(message, description, event_data)
         # Discord Webhooks
-        elif 'https://discord.com/api/webhooks' in url:
+        elif url_host_matches(url, 'discord.com', scheme='https') and urllib.parse.urlparse(url).path.startswith(
+            '/api/webhooks'
+        ):
             content = _event_text(message, description, event_data)
             payload['content'] = content if len(content) < 2000 else f'{content[: 2000 - 20]}... (truncated)'
         # Microsoft Teams Webhooks
-        elif 'webhook.office.com' in url:
+        elif url_host_matches(url, 'webhook.office.com'):
             action = event_data.get('action', 'undefined')
             user_data = event_data.get('user') or event_data.get('actor') or {}
             if isinstance(user_data, dict):
