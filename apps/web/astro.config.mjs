@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 // Mirrors d863707:apps/openwebui/vite.config.ts's dev-server proxy: the backend
 // isn't containerized, so both frontends point at the same host process,
 // started by `make backend` (see docs/history/migration-plan.md's Phase 3).
-const backendTarget = process.env.WEBUI_BACKEND_URL || 'http://localhost:4000';
+const backendTarget = process.env.LLLM_BACKEND_URL || 'http://localhost:4000';
 
 // Read, not process.env.npm_package_version: that is set only when Astro runs
 // through a package script, and without it APP_VERSION is left undefined and

@@ -27,14 +27,14 @@ from local_llm.env import (
     OAUTH_TOKEN_EXCHANGE_RATE_LIMIT,
     OAUTH_TOKEN_EXCHANGE_RATE_LIMIT_WINDOW,
     OAUTH_TOKEN_EXCHANGE_TRUSTED_CLIENT_IDS,
-    WEBUI_AUTH,
-    WEBUI_AUTH_COOKIE_SAME_SITE,
-    WEBUI_AUTH_COOKIE_SECURE,
-    WEBUI_AUTH_SIGNOUT_REDIRECT_URL,
-    WEBUI_AUTH_TRUSTED_EMAIL_HEADER,
-    WEBUI_AUTH_TRUSTED_GROUPS_HEADER,
-    WEBUI_AUTH_TRUSTED_NAME_HEADER,
-    WEBUI_AUTH_TRUSTED_ROLE_HEADER,
+    LLLM_AUTH,
+    LLLM_AUTH_COOKIE_SAME_SITE,
+    LLLM_AUTH_COOKIE_SECURE,
+    LLLM_AUTH_SIGNOUT_REDIRECT_URL,
+    LLLM_AUTH_TRUSTED_EMAIL_HEADER,
+    LLLM_AUTH_TRUSTED_GROUPS_HEADER,
+    LLLM_AUTH_TRUSTED_NAME_HEADER,
+    LLLM_AUTH_TRUSTED_ROLE_HEADER,
 )
 from local_llm.events import EVENTS, publish_event
 from local_llm.internal.db import get_async_session
@@ -200,8 +200,8 @@ async def create_session_response(
             value=token,
             expires=datetime_expires_at,
             httponly=True,
-            samesite=WEBUI_AUTH_COOKIE_SAME_SITE,
-            secure=WEBUI_AUTH_COOKIE_SECURE,
+            samesite=LLLM_AUTH_COOKIE_SAME_SITE,
+            secure=LLLM_AUTH_COOKIE_SECURE,
             **({'max_age': max_age} if max_age is not None else {}),
         )
 
@@ -282,8 +282,8 @@ async def get_session_user(
             value=token,
             expires=(datetime.datetime.fromtimestamp(expires_at, datetime.UTC) if expires_at else None),
             httponly=True,  # Ensures the cookie is not accessible via JavaScript
-            samesite=WEBUI_AUTH_COOKIE_SAME_SITE,
-            secure=WEBUI_AUTH_COOKIE_SECURE,
+            samesite=LLLM_AUTH_COOKIE_SAME_SITE,
+            secure=LLLM_AUTH_COOKIE_SECURE,
             **({'max_age': max_age} if max_age is not None else {}),
         )
 
@@ -390,7 +390,7 @@ async def update_password(
     db: AsyncSession = Depends(get_async_session),
 ):
     # Trusted-header auth mode delegates passwords to the reverse proxy
-    if WEBUI_AUTH_TRUSTED_EMAIL_HEADER:
+    if LLLM_AUTH_TRUSTED_EMAIL_HEADER:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=ERROR_MESSAGES.ACTION_PROHIBITED)
     if session_user:
         user = await Auths.authenticate_user(
@@ -728,16 +728,16 @@ async def signin(
 
     auth_source = 'password'
 
-    if WEBUI_AUTH_TRUSTED_EMAIL_HEADER:
+    if LLLM_AUTH_TRUSTED_EMAIL_HEADER:
         auth_source = 'trusted_header'
-        if WEBUI_AUTH_TRUSTED_EMAIL_HEADER not in request.headers:
+        if LLLM_AUTH_TRUSTED_EMAIL_HEADER not in request.headers:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=ERROR_MESSAGES.INVALID_TRUSTED_HEADER)
 
-        email = request.headers[WEBUI_AUTH_TRUSTED_EMAIL_HEADER].lower()
+        email = request.headers[LLLM_AUTH_TRUSTED_EMAIL_HEADER].lower()
         name = email
 
-        if WEBUI_AUTH_TRUSTED_NAME_HEADER:
-            name = request.headers.get(WEBUI_AUTH_TRUSTED_NAME_HEADER, email)
+        if LLLM_AUTH_TRUSTED_NAME_HEADER:
+            name = request.headers.get(LLLM_AUTH_TRUSTED_NAME_HEADER, email)
             try:
                 name = urllib.parse.unquote(name, encoding='utf-8')
             except Exception:
@@ -759,15 +759,15 @@ async def signin(
 
         user = await Auths.authenticate_user_by_email(email, db=db)
         if user:
-            if WEBUI_AUTH_TRUSTED_GROUPS_HEADER:
-                group_names = request.headers.get(WEBUI_AUTH_TRUSTED_GROUPS_HEADER, '').split(',')
+            if LLLM_AUTH_TRUSTED_GROUPS_HEADER:
+                group_names = request.headers.get(LLLM_AUTH_TRUSTED_GROUPS_HEADER, '').split(',')
                 group_names = [name.strip() for name in group_names if name.strip()]
 
                 if group_names:
                     await Groups.sync_groups_by_group_names(user.id, group_names, db=db)
 
-            if WEBUI_AUTH_TRUSTED_ROLE_HEADER:
-                trusted_role = request.headers.get(WEBUI_AUTH_TRUSTED_ROLE_HEADER, '').lower().strip()
+            if LLLM_AUTH_TRUSTED_ROLE_HEADER:
+                trusted_role = request.headers.get(LLLM_AUTH_TRUSTED_ROLE_HEADER, '').lower().strip()
                 if trusted_role in {'admin', 'user', 'pending'}:
                     if user.role != trusted_role:
                         updated_user = await Users.update_user_role_by_id(user.id, trusted_role, db=db)
@@ -784,7 +784,7 @@ async def signin(
                 elif trusted_role:
                     log.warning(f'Ignoring invalid trusted role header value: {trusted_role}')
 
-    elif WEBUI_AUTH == False:
+    elif LLLM_AUTH == False:
         auth_source = 'system'
         admin_email = 'admin@localhost'
         admin_password = 'admin'
@@ -904,7 +904,7 @@ async def signup(
 ):
     has_users = await Users.has_users(db=db)
 
-    if WEBUI_AUTH:
+    if LLLM_AUTH:
         if has_users:
             if not await Config.get('ui.enable_signup') or not await Config.get('ui.enable_login_form'):
                 raise HTTPException(status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.ACCESS_PROHIBITED)
@@ -1027,8 +1027,8 @@ async def signout(request: Request, response: Response, db: AsyncSession = Depen
                                         'status': True,
                                         'redirect_url': f'{logout_url}?id_token_hint={oauth_id_token}'
                                         + (
-                                            f'&post_logout_redirect_uri={WEBUI_AUTH_SIGNOUT_REDIRECT_URL}'
-                                            if WEBUI_AUTH_SIGNOUT_REDIRECT_URL
+                                            f'&post_logout_redirect_uri={LLLM_AUTH_SIGNOUT_REDIRECT_URL}'
+                                            if LLLM_AUTH_SIGNOUT_REDIRECT_URL
                                             else ''
                                         ),
                                     },
@@ -1045,12 +1045,12 @@ async def signout(request: Request, response: Response, db: AsyncSession = Depen
                     headers=response.headers,
                 )
 
-    if WEBUI_AUTH_SIGNOUT_REDIRECT_URL:
+    if LLLM_AUTH_SIGNOUT_REDIRECT_URL:
         return JSONResponse(
             status_code=200,
             content={
                 'status': True,
-                'redirect_url': WEBUI_AUTH_SIGNOUT_REDIRECT_URL,
+                'redirect_url': LLLM_AUTH_SIGNOUT_REDIRECT_URL,
             },
             headers=response.headers,
         )

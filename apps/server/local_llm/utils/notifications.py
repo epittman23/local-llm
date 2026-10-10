@@ -398,7 +398,7 @@ async def dispatch_notification_event(app: Any, event: Any) -> None:
     # LICENSE covers this Open WebUI notification identifier.
     # Do not alter, remove, obscure, or replace it except as LICENSE permits:
     # https://docs.openwebui.com/license.
-    app_name = getattr(getattr(app, 'state', None), 'WEBUI_NAME', 'Open WebUI')
+    app_name = getattr(getattr(app, 'state', None), 'LLLM_NAME', 'Open WebUI')
     for user_id in event_user_ids(event):
         try:
             notifications = await _load_notifications(user_id)

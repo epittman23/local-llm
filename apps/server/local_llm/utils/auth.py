@@ -21,8 +21,8 @@ from local_llm.env import (
     PASSWORD_VALIDATION_REGEX_PATTERN,
     REDIS_KEY_PREFIX,
     TRUSTED_SIGNATURE_KEY,
-    WEBUI_AUTH_TRUSTED_EMAIL_HEADER,
-    WEBUI_SECRET_KEY,
+    LLLM_AUTH_TRUSTED_EMAIL_HEADER,
+    LLLM_SECRET_KEY,
 )
 from local_llm.models.auths import Auths
 from local_llm.models.config import Config
@@ -33,7 +33,7 @@ from pytz import UTC
 
 log = logging.getLogger(__name__)
 
-SESSION_SECRET = WEBUI_SECRET_KEY
+SESSION_SECRET = LLLM_SECRET_KEY
 ALGORITHM = 'HS256'
 PASSWORD_BCRYPT_MAX_BYTES = 72
 
@@ -301,8 +301,8 @@ async def get_current_user(
                     detail=ERROR_MESSAGES.INVALID_TOKEN,
                 )
             else:
-                if WEBUI_AUTH_TRUSTED_EMAIL_HEADER:
-                    trusted_email = request.headers.get(WEBUI_AUTH_TRUSTED_EMAIL_HEADER, '').lower()
+                if LLLM_AUTH_TRUSTED_EMAIL_HEADER:
+                    trusted_email = request.headers.get(LLLM_AUTH_TRUSTED_EMAIL_HEADER, '').lower()
                     if trusted_email and user.email != trusted_email:
                         raise HTTPException(
                             status_code=status.HTTP_401_UNAUTHORIZED,

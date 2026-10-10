@@ -19,7 +19,7 @@ from local_llm.env import (
     FRONTEND_BUILD_DIR,
     OFFLINE_MODE,
     PACKAGE_DIR,
-    WEBUI_AUTH,
+    LLLM_AUTH,
     log,
 )
 from local_llm.models.config import Config
@@ -1606,10 +1606,10 @@ AUDIO_TTS_MISTRAL_API_BASE_URL = os.getenv('AUDIO_TTS_MISTRAL_API_BASE_URL', 'ht
 ####################################
 
 
-WEBUI_URL = os.getenv('WEBUI_URL', '')
+WEBUI_URL = os.getenv('LLLM_URL', '')
 
 
-ENABLE_SIGNUP = False if not WEBUI_AUTH else os.getenv('ENABLE_SIGNUP', 'True').lower() == 'true'
+ENABLE_SIGNUP = False if not LLLM_AUTH else os.getenv('ENABLE_SIGNUP', 'True').lower() == 'true'
 
 ENABLE_LOGIN_FORM = os.getenv('ENABLE_LOGIN_FORM', 'True').lower() == 'true'
 
@@ -2137,10 +2137,10 @@ class BannerModel(BaseModel):
 
 
 try:
-    banners = JSONCodec.loads(os.getenv('WEBUI_BANNERS', '[]'))
+    banners = JSONCodec.loads(os.getenv('LLLM_BANNERS', '[]'))
     banners = [BannerModel(**banner) for banner in banners]
 except Exception as e:
-    log.exception(f'Error loading WEBUI_BANNERS: {e}')
+    log.exception(f'Error loading LLLM_BANNERS: {e}')
     banners = []
 
 WEBUI_BANNERS = banners

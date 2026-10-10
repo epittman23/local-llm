@@ -49,7 +49,7 @@ frontend/backend seam also needs a real run against `make backend`.
 From `apps/server/`:
 
 ```bash
-WEBUI_SECRET_KEY=<any long string> .venv/bin/python -m pytest tests
+LLLM_SECRET_KEY=<any long string> .venv/bin/python -m pytest tests
 ```
 
 The package imports from the working directory, and refuses to load without

@@ -72,8 +72,8 @@ from local_llm.env import (
     ENABLE_OAUTH_ID_TOKEN_COOKIE,
     OAUTH_CLIENT_INFO_ENCRYPTION_KEY,
     OAUTH_MAX_SESSIONS_PER_USER,
-    WEBUI_AUTH_COOKIE_SAME_SITE,
-    WEBUI_AUTH_COOKIE_SECURE,
+    LLLM_AUTH_COOKIE_SAME_SITE,
+    LLLM_AUTH_COOKIE_SECURE,
 )
 from local_llm.events import EVENTS, publish_event
 from local_llm.models.auths import Auths
@@ -2170,8 +2170,8 @@ class OAuthManager:
             key='token',
             value=jwt_token,
             httponly=False,  # Required for frontend access
-            samesite=WEBUI_AUTH_COOKIE_SAME_SITE,
-            secure=WEBUI_AUTH_COOKIE_SECURE,
+            samesite=LLLM_AUTH_COOKIE_SAME_SITE,
+            secure=LLLM_AUTH_COOKIE_SECURE,
             **({'max_age': cookie_max_age} if cookie_max_age is not None else {}),
         )
 
@@ -2191,8 +2191,8 @@ class OAuthManager:
                 key='oauth_id_token',
                 value=token.get('id_token'),
                 httponly=True,
-                samesite=WEBUI_AUTH_COOKIE_SAME_SITE,
-                secure=WEBUI_AUTH_COOKIE_SECURE,
+                samesite=LLLM_AUTH_COOKIE_SAME_SITE,
+                secure=LLLM_AUTH_COOKIE_SECURE,
                 **({'max_age': cookie_max_age} if cookie_max_age is not None else {}),
             )
 
@@ -2224,8 +2224,8 @@ class OAuthManager:
                     key='oauth_session_id',
                     value=session.id,
                     httponly=True,
-                    samesite=WEBUI_AUTH_COOKIE_SAME_SITE,
-                    secure=WEBUI_AUTH_COOKIE_SECURE,
+                    samesite=LLLM_AUTH_COOKIE_SAME_SITE,
+                    secure=LLLM_AUTH_COOKIE_SECURE,
                     **({'max_age': cookie_max_age} if cookie_max_age is not None else {}),
                 )
 

@@ -63,10 +63,18 @@ help:
 backend:
 	@envfile="$(REPO_ROOT)/infra/.env"; \
 	if [ ! -f "$$envfile" ]; then \
-		echo "make backend: $$envfile not found -- create it with OPENROUTER_API_KEY, POSTGRES_PASSWORD, WEBUI_SECRET_KEY" >&2; \
+		echo "make backend: $$envfile not found -- copy infra/.env.example and fill in OPENROUTER_API_KEY, POSTGRES_PASSWORD, LLLM_SECRET_KEY" >&2; \
 		exit 1; \
 	fi; \
 	set -a; source "$$envfile"; set +a; \
+	missing=""; \
+	for key in OPENROUTER_API_KEY POSTGRES_PASSWORD LLLM_SECRET_KEY; do \
+		if [ -z "$${!key:-}" ]; then missing="$$missing $$key"; fi; \
+	done; \
+	if [ -n "$$missing" ]; then \
+		echo "make backend: infra/.env is missing:$$missing (WEBUI_SECRET_KEY was renamed LLLM_SECRET_KEY on 2026-10-10)" >&2; \
+		exit 1; \
+	fi; \
 	trap '$(COMPOSE) down' EXIT; \
 	$(COMPOSE) up -d postgres; \
 	if ! command -v uv >/dev/null 2>&1; then \
@@ -78,7 +86,7 @@ backend:
 	database_url="$$(PYTHONPATH="$(SERVER_DIR)" "$$py" -c 'import sys; from local_llm.benchmarks.serving.launcher import build_database_url; print(build_database_url(sys.argv[1]))' "$$POSTGRES_PASSWORD")"; \
 	cd "$(SERVER_DIR)" && \
 	CORS_ALLOW_ORIGIN="http://localhost:$(LLLM_BACKEND_PORT);http://127.0.0.1:$(LLLM_BACKEND_PORT);http://localhost:5174;http://127.0.0.1:5174" \
-	WEBUI_SECRET_KEY="$$WEBUI_SECRET_KEY" \
+	LLLM_SECRET_KEY="$$LLLM_SECRET_KEY" \
 	DATABASE_URL="$$database_url" \
 	DATA_DIR="$(DATA_DIR)" \
 	VECTOR_DB=pgvector \
@@ -98,7 +106,7 @@ frontend:
 	@cd "$(WEB_DIR)" && \
 	bun install --frozen-lockfile && \
 	trap 'bunx astro dev stop' EXIT; \
-	WEBUI_BACKEND_URL="http://localhost:$(LLLM_BACKEND_PORT)" bunx astro dev --background; \
+	LLLM_BACKEND_URL="http://localhost:$(LLLM_BACKEND_PORT)" bunx astro dev --background; \
 	bunx astro dev logs --follow
 
 # The target's name through the migration, when `frontend` was the Svelte app.

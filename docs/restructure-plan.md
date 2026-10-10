@@ -811,7 +811,7 @@ rm -rf apps/server/backend
 | 3 Flatten | #61 | done | see "Phase 3" below | see "Phase 3" below |
 | 4 Rename | #62 | done | see "Phase 4" below | see "Phase 4" below |
 | 5a/5b Blame + plugin compat | #63, #64 | done | see "Phase 5" below | none |
-| 6a-6d Identifiers + branding | 6d #65, 6a: (this PR) | in progress | see "Phase 6" below | see "Phase 6" below |
+| 6a-6d Identifiers + branding | 6d #65, 6a #66, 6b: (this PR) | in progress | see "Phase 6" below | see "Phase 6" below |
 | 7a/7b Benchmarks | — | | | |
 | 8 make check | — | | | |
 | 10 Final sync + audit | — | | | |
@@ -985,4 +985,22 @@ rm -rf apps/server/backend
     - Scratch boot OK: `/api/version/updates` is no longer an endpoint (SPA HTML). Schema identical.
     - astro check 0 errors; Vitest 584 passed (588 minus the 4 share-payload tests); build OK.
     - Playwright locally: 340 passed, 4 failed. The 4 (admin-evaluations' first tests and admin-settings' "redirects into the modal" and "Models" list) are 5-second cold-start timeouts that fail **identically on `main`** in a clean worktree, with the machine at a load average of about 7. They pass when run alone. CI is the gate.
+- **6b (environment variables `WEBUI_*` → `LLLM_*`).**
+  - Word-boundary rename across `apps/server` (excluding `migrations/versions/`) of the env-backed names and their Python constants:
+    - `SECRET_KEY`, `AUTH`, `NAME`, `BUILD_HASH`
+    - `ADMIN_{EMAIL,PASSWORD,NAME}`
+    - `AUTH_TRUSTED_{EMAIL,NAME,GROUPS,ROLE}_HEADER`
+    - `{SESSION,AUTH}_COOKIE_{SAME_SITE,SECURE}`
+    - `AUTH_SIGNOUT_REDIRECT_URL`
+  - This includes `app.state.LLLM_NAME` and the `getattr(..., 'LLLM_NAME', ...)` lookups.
+  - `WEBUI_URL` and `WEBUI_BANNERS` change only their env keys (`LLLM_URL`, `LLLM_BANNERS`), because the Python names are also the admin-config API field and config-row names.
+  - The deprecated `WEBUI_JWT_SECRET_KEY` fallback is removed. `WEBUI_BACKEND_URL` became `LLLM_BACKEND_URL` (`astro.config.mjs`, Makefile). `WEBUI_FAVICON_URL` (a constant, not an env var) is left for 6c.
+  - `make backend` now names any of `OPENROUTER_API_KEY`, `POSTGRES_PASSWORD`, `LLLM_SECRET_KEY` missing from `infra/.env` (with a hint about the rename) instead of failing later at import.
+  - CI env, `infra/.env.example`, README "Running it", AGENTS.md and the guides updated.
+  - **Verification:**
+    - pre-commit passed; pytest 308 passed, 1 skipped (with `LLLM_SECRET_KEY`).
+    - Importing `env` with only `WEBUI_SECRET_KEY` set is refused with the new message.
+    - The Makefile's missing-key check rejects an old-style `.env` and accepts a new one, tested in isolation (`infra/.env` itself is never read).
+    - Scratch boot OK; schema identical.
+  - **You need to:** rename the key in `infra/.env` (§8 A): `sed -i 's/^WEBUI_SECRET_KEY=/LLLM_SECRET_KEY=/' infra/.env`.
 

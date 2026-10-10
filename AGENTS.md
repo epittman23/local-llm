@@ -144,7 +144,9 @@ shadcn/ui frontend, `infra/` holds the Postgres + pgvector Compose file, and
   to `:4000`. Only needed while editing the UI.
 - `cd apps/web && bun run build`: rebuild the UI that `make backend` serves.
 - `infra/.env` (gitignored) holds `OPENROUTER_API_KEY`, `POSTGRES_PASSWORD`
-  and `WEBUI_SECRET_KEY`.
+  and `LLLM_SECRET_KEY`. Backend settings use the `LLLM_` prefix
+  (`LLLM_SECRET_KEY`, `LLLM_AUTH`, `LLLM_NAME`, ...; `WEBUI_*` until
+  2026-10-10).
 - Tests: `bun run test:unit`, `bun run test:e2e` (use `--workers=2`) and
   `bunx astro check` in `apps/web`; pytest in `apps/server` (see
   [docs/guides/testing.md](docs/guides/testing.md)).
