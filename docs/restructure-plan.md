@@ -805,9 +805,9 @@ rm -rf apps/server/backend
 
 | Phase | PR | State | Verification | Deviations |
 |---|---|---|---|---|
-| 0 Plan + baselines | (this PR) | done | see "Phase 0 baselines" below | none |
-| 1 Docs | (this PR) | done | see "Phase 1" below | see "Phase 1" below |
-| 2a-2e Deletions + licenses | 2a: (this PR) | in progress | see "Phase 2" below | see "Phase 2" below |
+| 0 Plan + baselines | #54 | done | see "Phase 0 baselines" below | none |
+| 1 Docs | #55 | done | see "Phase 1" below | see "Phase 1" below |
+| 2a-2e Deletions + licenses | #56, #57, #58, #59, 2e: (this PR) | done | see "Phase 2" below | see "Phase 2" below |
 | 3 Flatten | — | | | |
 | 4 Rename | — | | | |
 | 5a/5b Blame + plugin compat | — | | | |
@@ -897,4 +897,11 @@ rm -rf apps/server/backend
     - pre-commit passed.
     - astro check 0 errors, 0 warnings; Vitest 588 passed; build OK (one translation chunk instead of 64).
     - Playwright `--workers=2`: 348 passed.
+- **2e (licenses at the root).**
+  - `git mv` of `LICENSE`, `LICENSE_HISTORY` and `CONTRIBUTOR_LICENSE_AGREEMENT` from `apps/server/` to the root (R100: text unchanged).
+  - New root `NOTICE` merges both `LICENSE_NOTICE` files (both deleted). It keeps the upstream multi-license notice verbatim (indented as a quotation, with a note that its commit ids are upstream's), the derived-works list, the copyright notice, and the clause 4(i) branding statement.
+  - pyproject `license` becomes text pointing at the root files; `description` and `authors` change per §1, so the Phase 4 PR changes only `name`.
+  - README "License", AGENTS.md, MAP.md re-pointed. Settings > About is unchanged (it shows the lines, not file paths).
+  - **Verification:** pre-commit passed (gitleaks, detect-private-key); `uv lock --check` OK; pytest 300 passed, 1 skipped; 0 broken links.
+- **Tooling:** the link checker was also lost with the scratchpad and now lives in `~/.cache/local-llm-restructure/check_links.py`.
 

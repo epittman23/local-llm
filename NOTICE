@@ -1,0 +1,52 @@
+NOTICE
+
+local-llm contains code derived from Open WebUI
+(https://github.com/open-webui/open-webui), forked at v0.11.3 and vendored
+into this repository on 2026-09-14.
+
+Derived works
+-------------
+- apps/server/: the backend, a fork of Open WebUI's backend.
+- apps/web/: portions derived from Open WebUI's SvelteKit frontend as
+  vendored in this repository (last present at commit d863707, under
+  apps/openwebui/): the API client modules under src/lib/apis/, the locale
+  file under src/lib/i18n/locales/, and logic ported file by file elsewhere
+  (comments reading `d863707:apps/openwebui/...` name the source file).
+
+Licenses
+--------
+Those portions remain under the Open WebUI License and the earlier licenses
+it refers to. The full texts are LICENSE and LICENSE_HISTORY in this
+directory; LICENSE also refers to CONTRIBUTOR_LICENSE_AGREEMENT, kept here
+beside it. The notice below is reproduced verbatim from the original
+project; the commit identifiers in it refer to the upstream Open WebUI
+repository's history, not to this repository's.
+
+    # Open WebUI Multi-License Notice
+
+    This repository contains code governed by multiple licenses based on the date and origin of contribution:
+
+    1. All code committed prior to commit a76068d69cd59568b920dfab85dc573dbbb8f131 is licensed under the MIT License (see LICENSE_HISTORY).
+
+    2. All code committed from commit a76068d69cd59568b920dfab85dc573dbbb8f131 up to and including commit 60d84a3aae9802339705826e9095e272e3c83623 is licensed under the BSD 3-Clause License (see LICENSE_HISTORY).
+
+    3. All code contributed or modified after commit 60d84a3aae9802339705826e9095e272e3c83623 is licensed under the Open WebUI License (see LICENSE).
+
+    For details on which commits are covered by which license, refer to LICENSE_HISTORY.
+
+Copyright
+---------
+The copyright notice those licenses require:
+
+    Copyright (c) 2023- Open WebUI Inc. [Created by Timothy Jaeryang Baek]
+    All rights reserved.
+
+The app's Settings > About tab shows the same license and copyright lines.
+
+Branding
+--------
+This deployment changes the Open WebUI branding under clause 4(i) of the
+Open WebUI License, which permits it for deployments with no more than fifty
+end users in any rolling thirty-day period. It is a personal, single-user
+deployment; exceeding that limit would require restoring the branding or
+one of clause 4's other permissions.

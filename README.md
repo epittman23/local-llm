@@ -8,7 +8,7 @@ local llama.cpp server under evaluation. It is one app in two parts:
   on Postgres + pgvector, the OpenAI-compatible model connections, and the
   admin-only Benchmarks section that serves, tests and tunes local models).
   It began as a fork of Open WebUI v0.11.3 and is now this project's own
-  code; see [NOTICE](apps/server/LICENSE_NOTICE) for what is derived and its
+  code; see [NOTICE](NOTICE) for what is derived and its
   license.
 - **`apps/web/`**: the Astro + React + shadcn/ui frontend, which the backend
   serves from its last build.
@@ -239,9 +239,9 @@ OpenAI-compatible endpoint.
 
 The backend in `apps/server/` is a fork of Open WebUI and stays under its
 license; parts of `apps/web/` are derived from Open WebUI's frontend. The
-license texts are `apps/server/LICENSE` and `apps/server/LICENSE_HISTORY`;
-[apps/server/LICENSE_NOTICE](apps/server/LICENSE_NOTICE) and
-[apps/web/LICENSE_NOTICE](apps/web/LICENSE_NOTICE) say which parts are
-derived, reproduce the required copyright notice, and record the basis for
-the changed branding (clause 4(i): no more than fifty end users). The app's
-Settings > About tab shows the same license and copyright lines.
+license texts are [LICENSE](LICENSE) and [LICENSE_HISTORY](LICENSE_HISTORY)
+at the repository root. [NOTICE](NOTICE) says which parts are derived,
+reproduces the multi-license notice and the required copyright notice, and
+records the basis for the changed branding (clause 4(i): no more than fifty
+end users). The app's Settings > About tab shows the same license and
+copyright lines.
