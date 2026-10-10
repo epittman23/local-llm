@@ -71,7 +71,7 @@ dependencies = [
     "boto3==1.43.108",
     
     "transformers==5.19.0",
-    "sentence-transformers==5.6.0",
+    "sentence-transformers==6.1.0",
     "accelerate==1.15.0",
     "pyarrow==25.0.1",
     "einops==0.8.2",
