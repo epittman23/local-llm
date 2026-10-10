@@ -1,4 +1,4 @@
-"""benchmarks/grading/mbpp.py - the MBPP (sanitized) harness.
+"""benchmarks/evaluation/grading/mbpp.py - the MBPP (sanitized) harness.
 
 Each item ships `test_imports` and `test_list` (three asserts). This module
 only arranges for the dataset's own verdict to be reached; it never states an

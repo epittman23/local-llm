@@ -211,7 +211,7 @@ def telemetry_argv(
     wait: int = 600,
     profile_version_id: int | None = None,
 ) -> list[str]:
-    """The `local_llm.benchmarks.telemetry_recorder` argv for this run.
+    """The `local_llm.benchmarks.serving.telemetry_recorder` argv for this run.
 
     `config_id`/`config_lines` come from fingerprint.py, `model`/`quant` from
     model_name.split_model on the resolved model path's basename -- the same
@@ -228,7 +228,7 @@ def telemetry_argv(
 
     argv = [
         '-m',
-        'local_llm.benchmarks.telemetry_recorder',
+        'local_llm.benchmarks.serving.telemetry_recorder',
         '--config-id',
         cfg_id,
         '--alias',
@@ -277,7 +277,7 @@ class ServeProcess:
     its own input.
 
     `start_new_session=True` on both children, same reasoning as
-    benchmarks/proc.py's `Command`: each owns a process group so `stop()`
+    benchmarks/tuning/proc.py's `Command`: each owns a process group so `stop()`
     can signal the whole tree, not just the direct child.
 
     **A caller must start draining `lines()` immediately after `start()`

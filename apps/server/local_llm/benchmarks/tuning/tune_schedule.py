@@ -1,9 +1,9 @@
-"""benchmarks/tune_schedule.py - budget/round arithmetic and the search space.
+"""benchmarks/tuning/tune_schedule.py - budget/round arithmetic and the search space.
 
 Ported from local-llm's scripts/llama_tune.py (outer repo, the `lllm-tune`
 configuration-search engine) -- specifically the half of it that is pure
-arithmetic plus one shell-out, split out of benchmarks/tune.py (the round-
-elimination orchestrator) and benchmarks/tune_probe.py (server lifecycle and
+arithmetic plus one shell-out, split out of benchmarks/tuning/tune.py (the round-
+elimination orchestrator) and benchmarks/tuning/tune_probe.py (server lifecycle and
 GPU cooldown probing) because it is the one third of the original with almost
 no process/DB state of its own:
 
@@ -42,17 +42,16 @@ import time
 import tomllib
 from pathlib import Path
 
+from local_llm.benchmarks.paths import GRID_DIR
 from local_llm.benchmarks.serving.fingerprint import config_id, config_lines
 from local_llm.benchmarks.serving.profiles import Overrides, ProfileError, resolve
 from local_llm.models.benchmarks.profiles import BenchmarkProfiles
-
-GRID_DIR = Path(__file__).resolve().parent / 'data' / 'tuning'
 
 
 class TuneRefused(RuntimeError):
     """The engine declined to run at all: a bad grid, an impossible schedule, ...
 
-    Mirrors benchmarks/runner.py's SuiteLoadError -- the ported role of
+    Mirrors benchmarks/evaluation/runner.py's SuiteLoadError -- the ported role of
     llama_tune.py's own `refuse()` / `raise SystemExit(2)` contract. The
     original distinguished exit 2 ("I will not do that, here is why") from
     exit 0 with a verdict and exit 1 with a resume line; there is no process
@@ -403,7 +402,7 @@ async def config_id_of(candidate: Candidate) -> dict:
     Resolves the candidate's profile (read from the database) through the
     same resolve()/config_id() the telemetry recorder uses to fingerprint an
     actual run (see benchmarks/serving/launcher.py's telemetry_argv and
-    benchmarks/telemetry_recorder.py's upsert_config()) -- one fingerprint
+    benchmarks/serving/telemetry_recorder.py's upsert_config()) -- one fingerprint
     implementation, not a second copy that could disagree with it. Still
     `async def` and still awaited everywhere it is called, even though
     nothing here is I/O any more, so no call site needed to change.

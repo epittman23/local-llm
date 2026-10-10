@@ -170,39 +170,33 @@ than a second app glued on by a userscript. See `docs/decisions.md` for the migr
   bit-for-bit from `_vramlog_config`), `launcher.py` (`ServeProcess`: argv
   assembly, spawns `llama-server` and the telemetry recorder), `weights.py`
   (`FetchProcess`, the `lllm-fetch` port), `build_info.py`/`model_name.py`
-  (small `vram-log.sh` parsers). Profiles themselves are rows in Postgres
-  (`models/benchmarks/profiles.py`), versioned and CRUD'd through
-  `routers/benchmarks/profiles.py`, not a shell case statement.
-- **`stats.py`** — percentiles, GPU throttle-bitmask decoding, config-text
-  parsing, the server load-log parser. Pure functions.
-- **`proc.py`** — `Command`, the async subprocess wrapper (process-group
-  start/stop/interrupt). Only caller left is `tune_probe.py`'s
-  `LLAMA_TUNE_LAUNCH` fault-injection escape hatch; serving and tuning
-  candidates both go through `serving/launcher.py`'s `ServeProcess` now, not
-  through this plus a shelled-out `lllm-serve`.
-- **`env_profile.py`** — resolves a serving profile and what's actually
-  being served by reading `BenchmarkProfiles` and calling
-  `serving/profiles.py`'s `resolve()` in-process (no subprocess, no shell).
-- **`adapters.py`, `suites.py`, `datasets.py`, `grading/`** — benchmark
-  adapter/suite loading, dataset fetch/manifest handling, and the per-
-  benchmark grading harnesses (HumanEval/MBPP/DS-1000), plus their TOML/text
-  config under `data/adapters/`, `data/suites/`, `data/tuning/`,
-  `data/prompts/` (moved here from this repo's old `tests/adapters/`,
-  `tests/suites/`, `tests/tuning/`, `prompts/system/`).
-- **`runner.py`** — the run/grade/record loop (`prepare_suite`/`run_items`),
-  callback-driven so a router can stream live progress.
-- **`compare.py`**, **`report.py`** + **`report_figures.py`** — config
-  comparison and the design-audited statistical report (Wilson intervals,
-  Cochran's Q, exact McNemar, power/MDE), reading the DB read-only.
-- **`tune.py`** + **`tune_schedule.py`** + **`tune_probe.py`** — the
-  round-elimination configuration-search engine (staged explore/refine,
-  paired throughput ranking, GPU-cooldown/drift handling), driving
-  `ServeProcess` directly for each candidate.
-- **`telemetry_recorder.py`** — the GPU telemetry recorder, still a
-  detached subprocess for crash-independence, spawned directly by
-  `ServeProcess.start()` (`python -m local_llm.benchmarks.telemetry_recorder`,
-  inheriting the backend's own `DATABASE_URL`) rather than by a shell script,
-  writing to this app's Postgres via plain `psycopg`.
+  (small `vram-log.sh` parsers). Also `env_profile.py` (resolves a serving
+  profile and what's actually being served, in-process) and
+  `telemetry_recorder.py` (the GPU telemetry recorder: a detached subprocess
+  for crash-independence, spawned by `ServeProcess.start()` as
+  `python -m local_llm.benchmarks.serving.telemetry_recorder`, inheriting the
+  backend's `DATABASE_URL` and writing to Postgres via plain `psycopg`).
+  Profiles themselves are rows in Postgres (`models/benchmarks/profiles.py`),
+  versioned and CRUD'd through `routers/benchmarks/profiles.py`.
+- **`evaluation/`** — `adapters.py`, `suites.py`, `datasets.py` (adapter and
+  suite loading, dataset fetch and manifests), `runner.py` (the run/grade/
+  record loop, `prepare_suite`/`run_items`, callback-driven so a router can
+  stream live progress), and `grading/` (the HumanEval/MBPP/DS-1000 harnesses).
+- **`analysis/`** — `compare.py`, `report.py` + `report_figures.py` (config
+  comparison and the design-audited statistical report: Wilson intervals,
+  Cochran's Q, exact McNemar, power/MDE; reads the DB read-only) and
+  `stats.py` (percentiles, GPU throttle-bitmask decoding, config-text and
+  load-log parsing; pure functions shared with serving and tuning).
+- **`tuning/`** — `tune.py` + `tune_schedule.py` + `tune_probe.py` (the
+  round-elimination configuration search: staged explore/refine, paired
+  throughput ranking, GPU-cooldown/drift handling, driving `ServeProcess`
+  directly for each candidate) and `proc.py` (`Command`, the async subprocess
+  wrapper; its only caller is `tune_probe.py`'s `LLAMA_TUNE_LAUNCH`
+  fault-injection escape hatch).
+- **`data/`** + **`paths.py`** — the version-controlled TOML/text config
+  (`data/adapters/`, `data/suites/`, `data/tuning/`, `data/prompts/`, moved
+  here from this repo's old `tests/adapters/`, `tests/suites/`,
+  `tests/tuning/`, `prompts/system/`), and the one module that locates it.
 
 ### `apps/web/` (Astro + React + shadcn/ui)
 

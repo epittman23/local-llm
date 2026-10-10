@@ -1,4 +1,4 @@
-"""benchmarks/report_figures.py - the matplotlib figures for report.py.
+"""benchmarks/analysis/report_figures.py - the matplotlib figures for report.py.
 
 Ported from the `Figures` class and its supporting helpers in local-llm's
 scripts/llama_report.py (outer repo). Split into its own module purely for
@@ -34,8 +34,8 @@ from __future__ import annotations
 
 import io
 
-from local_llm.benchmarks import stats as lstats
-from local_llm.benchmarks.report import (
+from local_llm.benchmarks.analysis import stats as lstats
+from local_llm.benchmarks.analysis.report import (
     NONE_LEVEL,
     Block,
     Figure,

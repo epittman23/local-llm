@@ -1,4 +1,4 @@
-"""benchmarks/report.py - a statistical report over the measurement store.
+"""benchmarks/analysis/report.py - a statistical report over the measurement store.
 
 Ported from local-llm's scripts/llama_report.py (outer repo, 2226 lines --
 the largest and most intricate module in this migration). `compare.py`
@@ -89,13 +89,13 @@ import textwrap
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from local_llm.benchmarks import stats as lstats
+from local_llm.benchmarks.analysis import stats as lstats
 from local_llm.models.benchmarks.configs import BenchmarkRuns
 from local_llm.models.benchmarks.telemetry import BenchmarkGpuSamples
 from local_llm.models.benchmarks.tests import BenchmarkResults, BenchmarkSchemaNotes
 
 if TYPE_CHECKING:  # pragma: no cover - typing only, no runtime import cycle
-    from local_llm.benchmarks.report_figures import Figures
+    from local_llm.benchmarks.analysis.report_figures import Figures
 
 # scipy is a hard requirement for this module's actual analyses (see the
 # module docstring for why the import failure does not raise here). Checked
@@ -2089,7 +2089,7 @@ async def build_report(
     # labelling and statistics helpers defined above it in this module, and
     # this module only ever needs report_figures inside this one function,
     # after it has finished loading -- see the module docstring.
-    from local_llm.benchmarks.report_figures import Figures
+    from local_llm.benchmarks.analysis.report_figures import Figures
 
     filters = {'tier': tier, 'model': model, 'benchmark': benchmark}
     figs = Figures(enabled=generate_figures)

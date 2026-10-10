@@ -583,7 +583,7 @@ noise floor to read any difference against.
 Statistics: scipy for the standard tests; Cochran's Q, its permutation p (exact
 by enumeration when the arrangement count allows, Monte Carlo with the `+1`
 correction otherwise), Wilson intervals, Holm correction and the MDE search are
-written out in the fork's `local_llm/benchmarks/report.py` (a direct port of
+written out in the fork's `local_llm/benchmarks/analysis/report.py` (a direct port of
 the original `scripts/llama_report.py`, unchanged statistics), and were
 cross-checked against statsmodels. Every test prints its `n` and its
 assumption check; a test whose assumptions fail is printed as refused with

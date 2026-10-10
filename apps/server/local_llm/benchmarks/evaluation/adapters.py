@@ -1,4 +1,4 @@
-"""benchmarks/adapters.py - adapter TOML loading and prompt rendering.
+"""benchmarks/evaluation/adapters.py - adapter TOML loading and prompt rendering.
 
 Ported from local-llm's scripts/llama_tests.py (outer repo). An adapter
 describes one benchmark: id, name, license, homepage, citation, the
@@ -17,11 +17,9 @@ from __future__ import annotations
 import hashlib
 import json
 import tomllib
-from pathlib import Path
 
-from local_llm.benchmarks.datasets import dotted
-
-ADAPTERS_DIR = Path(__file__).resolve().parent / 'data' / 'adapters'
+from local_llm.benchmarks.evaluation.datasets import dotted
+from local_llm.benchmarks.paths import ADAPTERS_DIR
 
 
 def load_adapters() -> dict[str, dict]:

@@ -245,7 +245,7 @@ class BenchmarkRequestTable:
     async def get_run_request_aggregate(self, run_id: int, db: AsyncSession | None = None) -> dict | None:
         """Per-run request totals: cold/warm counts and summed cold-prefill/gen/draft figures.
 
-        Added for benchmarks/compare.py's serving_summary(), which replaces
+        Added for benchmarks/analysis/compare.py's serving_summary(), which replaces
         the original llama_db.serving_summary()'s raw SQL aggregate over
         `request` with this query method (a plain SUM/COUNT, so it belongs
         here rather than being reassembled row-by-row in Python).

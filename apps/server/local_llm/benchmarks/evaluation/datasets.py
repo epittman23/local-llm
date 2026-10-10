@@ -1,4 +1,4 @@
-"""benchmarks/datasets.py - fetched dataset storage, and reading it back.
+"""benchmarks/evaluation/datasets.py - fetched dataset storage, and reading it back.
 
 Ported from local-llm's scripts/llama_fetch.py and the dataset-reading half of
 scripts/llama_tests.py (outer repo). Two things live here on purpose: the

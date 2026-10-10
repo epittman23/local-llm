@@ -5,7 +5,7 @@ Ported from `_vramlog_config` in local-llm's scripts/shell/vram-log.sh (lines
 
 **This module's output is load-bearing in a way that fails silently.** Every
 row in the benchmark_* tables is keyed by `config_id`, and
-`benchmarks/stats.py:parse_config_text` parses the six lines below back into
+`benchmarks/analysis/stats.py:parse_config_text` parses the six lines below back into
 the typed columns beside it. Change a separator, a default spelling, or the
 order of a field, and nothing raises: the same serving configuration is simply
 filed under a new id from then on, and every historical measurement stops

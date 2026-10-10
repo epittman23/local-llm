@@ -9,7 +9,7 @@ Per docs/history/migration-plan.md's "Assumptions requiring confirmation" sectio
 this is meant to back a "Download weights" action on the Serve page (a
 backend endpoint, Phase 5's UI) rather than be called directly -- hence
 `FetchProcess` following the same start()/lines()/wait() shape as
-benchmarks/proc.py's `Command` and launcher.py's `ServeProcess`, so a router
+benchmarks/tuning/proc.py's `Command` and launcher.py's `ServeProcess`, so a router
 can stream its progress the same way it already streams a server's log.
 """
 

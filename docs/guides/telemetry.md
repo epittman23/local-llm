@@ -13,7 +13,7 @@ samples `nvidia-smi` every 5 seconds by default, scrapes `/metrics` on the
 same pass, parses the server's own load output, and writes each of those as
 it happens into the Open WebUI fork's own Postgres database
 (`infra/docker-compose.yml`), the same one the chat interface itself uses.
-It is `local_llm.benchmarks.telemetry_recorder`, run under the fork's own
+It is `local_llm.benchmarks.serving.telemetry_recorder`, run under the fork's own
 backend venv (`sys.executable`, inheriting the backend process's own
 `DATABASE_URL` rather than re-deriving one — see the launcher's own
 docstring for why a second encoding site was rejected) and it writes with
@@ -217,7 +217,7 @@ during generation and the GPU spends most of a token waiting, so a small active
 average is the expected reading, not a sign of a stalled run.
 
 **Percentiles and throttle decoding stay in Python**, in the fork's
-`local_llm/benchmarks/stats.py` (the same module `llama_stats.py` was
+`local_llm/benchmarks/analysis/stats.py` (the same module `llama_stats.py` was
 ported into on 2026-09-08, unchanged statistics).
 `percentile()` interpolates linearly between closest ranks (numpy's default
 method) and `throttle_reasons()` decodes named bits and prints unnamed ones as

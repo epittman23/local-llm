@@ -1,4 +1,4 @@
-"""Tests for benchmarks/env_profile.py's database-backed profile lookup.
+"""Tests for benchmarks/serving/env_profile.py's database-backed profile lookup.
 
 Phase 2b: this module used to shell out to scripts/llama-env.sh; now it
 reads BenchmarkProfiles (monkeypatched here, no real database) and resolves
@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from local_llm.benchmarks import env_profile
+from local_llm.benchmarks.serving import env_profile
 from local_llm.benchmarks.serving.profiles import ProfileError
 from local_llm.models.benchmarks.profiles import (
     BenchmarkProfileEntry,

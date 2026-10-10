@@ -30,7 +30,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from local_llm.benchmarks.datasets import datasets_base_dir, read_manifest
+from local_llm.benchmarks.evaluation.datasets import datasets_base_dir, read_manifest
 from local_llm.env import SERVER_DIR
 
 from . import ds1000, humaneval, mbpp
@@ -278,7 +278,7 @@ def calibrate(bench: str, adapter: dict, items: list[dict], on_item=None, base: 
     answer takes, so this tests the harness end to end and not just the exec
     call.
     """
-    from local_llm.benchmarks.datasets import item_id
+    from local_llm.benchmarks.evaluation.datasets import item_id
 
     ungradeable_: dict[str, str] = {}
     checked = 0

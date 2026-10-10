@@ -1,4 +1,4 @@
-"""benchmarks/env_profile.py - resolve the serving profile, and what's actually running.
+"""benchmarks/serving/env_profile.py - resolve the serving profile, and what's actually running.
 
 Ported from local-llm's scripts/llama_test.py (outer repo): profile(), port()
 and served_model(). Kept in its own small module rather than folded into
@@ -81,7 +81,7 @@ async def profile(name: str | None) -> dict:
 
 def _to_profile_json(config: ResolvedConfig) -> dict:
     """The shape `lllm-profile-json` produced, field for field and (mostly)
-    type for type: `benchmarks/tune_schedule.py`'s `profile_key()`/
+    type for type: `benchmarks/tuning/tune_schedule.py`'s `profile_key()`/
     `Grid.violated()` and the Serve page's frontend both still read this
     dict by those exact keys, and the knob values are still strings (as
     `jq`'s `--arg` always produced) rather than the native ints `resolve()`

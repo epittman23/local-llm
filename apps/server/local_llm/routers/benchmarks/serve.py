@@ -24,7 +24,7 @@ import json
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
-from local_llm.benchmarks import env_profile
+from local_llm.benchmarks.serving import env_profile
 from local_llm.benchmarks.serving.launcher import LauncherError, ServeProcess
 from local_llm.benchmarks.serving.profiles import Overrides, ProfileError, resolve
 from local_llm.constants import ERROR_MESSAGES

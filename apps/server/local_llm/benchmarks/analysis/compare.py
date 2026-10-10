@@ -1,4 +1,4 @@
-"""benchmarks/compare.py - compare models and serving configurations on test results.
+"""benchmarks/analysis/compare.py - compare models and serving configurations on test results.
 
 Ported from local-llm's scripts/llama_compare.py (outer repo, the `lllm-test
 compare` engine). The serving telemetry already ranks configurations by
@@ -42,7 +42,7 @@ from __future__ import annotations
 import datetime as dt
 import re
 
-from local_llm.benchmarks.stats import (
+from local_llm.benchmarks.analysis.stats import (
     config_value,
     effective_bandwidth,
     headroom_in_layers,

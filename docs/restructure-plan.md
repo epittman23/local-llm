@@ -812,7 +812,7 @@ rm -rf apps/server/backend
 | 4 Rename | #62 | done | see "Phase 4" below | see "Phase 4" below |
 | 5a/5b Blame + plugin compat | #63, #64 | done | see "Phase 5" below | none |
 | 6a-6d Identifiers + branding | 6d #65, 6a #66, 6b #67, 6c #68 | done | see "Phase 6" below | see "Phase 6" below |
-| 7a/7b Benchmarks | 7a: (this PR) | in progress | see "Phase 7" below | see "Phase 7" below |
+| 7a/7b Benchmarks | 7a #69, 7b: (this PR) | done | see "Phase 7" below | see "Phase 7" below |
 | 8 make check | — | | | |
 | 10 Final sync + audit | — | | | |
 
@@ -1037,4 +1037,24 @@ rm -rf apps/server/backend
   - 21 files' imports and references rewritten, including `test_serving_profiles.py`'s `importorskip`. `__tablename__` and `Base` are untouched.
   - The temporary `/apps/server/backend/` ignore rule is removed, now that the owner confirmed the data move.
   - **Verification:** pre-commit passed; pytest 308 passed, 1 skipped. Metadata dump M (all table names and every `benchmark_*` table's DDL) identical to baseline; scratch boot OK; schema identical.
+- **7b (benchmark modules grouped).**
+  - `git mv` into four subpackages, each with an `__init__.py`:
+    - `serving/` gains `env_profile.py` and `telemetry_recorder.py`.
+    - `evaluation/` gets `adapters.py`, `suites.py`, `datasets.py`, `runner.py` and `grading/`.
+    - `analysis/` gets `compare.py`, `report.py`, `report_figures.py` and `stats.py`.
+    - `tuning/` gets `tune.py`, `tune_schedule.py`, `tune_probe.py` and `proc.py`.
+    - `data/` stays put.
+  - New `benchmarks/paths.py` (`BENCHMARK_DATA_DIR` plus `ADAPTERS_DIR`, `SUITES_DIR`, `GRID_DIR`, `PROMPTS_DIR`) replaces the four `Path(__file__).parent / 'data'` lookups, which the move would otherwise have broken silently.
+  - 41 files' references rewritten by script. The script handles dotted paths, `from local_llm.benchmarks import a, b` lines (split per group), and `benchmarks/<module>.py` path mentions, leaving `routers/benchmarks/` alone.
+  - The launcher's recorder argv is now `local_llm.benchmarks.serving.telemetry_recorder`, with its test updated.
+  - Checked before moving: `grading/` runs its interpreter with `-c` and temp files and locates the venv via `SERVER_DIR`, so nothing in it depended on its location. The `report` ↔ `report_figures` lazy import still breaks the cycle.
+  - New `tests/test_benchmark_paths.py`. MAP.md's benchmarks section rewritten for the groups.
+  - **Verification:**
+    - pre-commit passed (ruff re-sorted imports and dropped now-unused `Path` imports in 10 places).
+    - pytest 310 passed, 1 skipped, fingerprint tests included. `test_imports.py` against a scratch DB: 2 passed.
+    - Metadata and schema identical to baseline; scratch boot OK; 0 broken links.
+  - **Bug found by CI and fixed before merge:** the path-mention rewrite also matched `benchmarks/<name>/`, which rewrote API URL segments: `/benchmarks/compare/`, `/benchmarks/report/` and `/benchmarks/tune/` became `/benchmarks/analysis/compare/` and so on, in the web API client, the e2e mocks and the backend's report-file URL. The runtime path `<DATA_DIR>/benchmarks/datasets/` in the benchmarks guide was rewritten the same way.
+    - Most e2e tests still passed because their mocks were rewritten consistently. CI's "Compare renders rows generically" failed all three retries and caught it.
+    - All 25 occurrences were reverted; `apps/web` now has no diff against `main`. The script (`~/.cache/local-llm-restructure/regroup_benchmarks.py`) now rewrites only `benchmarks/<name>.py` and `benchmarks/grading/`.
+    - Re-verified: the benchmarks e2e spec (14 passed) and pytest 310 passed, 1 skipped.
 

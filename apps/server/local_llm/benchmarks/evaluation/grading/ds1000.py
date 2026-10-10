@@ -1,4 +1,4 @@
-"""benchmarks/grading/ds1000.py - the DS-1000 harness.
+"""benchmarks/evaluation/grading/ds1000.py - the DS-1000 harness.
 
 Each item carries `code_context`, which defines test_execution(solution). This
 module only arranges for the dataset's own verdict to be reached; it never
