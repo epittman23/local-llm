@@ -1,0 +1,19 @@
+# Bulk formatting and lint-autofix commits, skipped by `git blame` so it
+# points at the change that last meant something. GitHub's blame view reads
+# this file automatically; for local blame, run once:
+#
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# Squash-merged PRs land as one commit, so an entry here also hides the few
+# hand-written fixes that rode along in the same PR (noted per entry).
+
+# build: Biome for apps/web, and all lint/format through pre-commit (#19).
+# Biome formatted 377 web files and ruff-formatted 10 backend files. It also
+# carried five small web fixes (Azure URL check, prompt-variables focus, note
+# title revert, Functions toggle race, two e2e test fixes).
+1fde9b25786dd0a0020bff504ff6df42aaa47f6d
+
+# style(server): ruff's safe fixes across the whole backend (#39).
+# 2,189 mechanical fixes in 191 files. It also carried the
+# ENABLE_ADMIN_CHAT_ACCESS import fix and tests/test_imports.py.
+f19bb6b50147d2635c6be54036b0b045f7c37712
