@@ -291,7 +291,7 @@ test('Compare renders rows generically and sorts on header click', async ({ page
 	// own hand-rolled sort, which always started ascending regardless of
 	// column type. Kept rather than fought, since "best result first" is the
 	// more useful default for a rate column and the checklist asked for
-	// TanStack Table specifically (docs/migration-plan.md).
+	// TanStack Table specifically (docs/history/migration-plan.md).
 	const firstDataRow = page.getByRole('row').nth(1);
 	await page.getByRole('columnheader', { name: 'Pass Rate' }).click();
 	await expect(firstDataRow).toContainText('bbb222');
@@ -440,7 +440,7 @@ test('Tune shows sweep status streamed as whole-object replacements, and Stop re
 		// Two full-object status payloads, not an appended list -- the second
 		// must fully replace the first (a third round added, a candidate's
 		// score changed), exercising the "diff, don't append" contract Phase
-		// 5's checklist calls out (docs/migration-plan.md).
+		// 5's checklist calls out (docs/history/migration-plan.md).
 		const events = [
 			{
 				sweep_id: '20260101-abc123',
@@ -507,7 +507,7 @@ test('a non-admin user is bounced out of Benchmarks entirely', async ({ page }) 
 	await expect(page.getByRole('textbox', { name: 'Message' })).toBeVisible();
 });
 
-// docs/bug-review-2026-09-27.md M1: the log stream stays open as long as the
+// docs/history/bug-review-2026-09-27.md M1: the log stream stays open as long as the
 // server runs; the Start mutation used to await it, so the button read
 // "Starting…" for the server's whole lifetime.
 test('Serve Start settles while the log stream is still open', async ({ page }) => {

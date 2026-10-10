@@ -1,7 +1,7 @@
 # Postgres + pgvector for the backend (apps/server, the Open WebUI fork
-# vendored into this repo and pinned at v0.11.3 -- see docs/CLAUDE.md's
-# decisions log). The backend itself is not a container: it runs as a host
-# process so it can start and stop llama-server on this machine's GPU.
+# vendored into this repo and pinned at v0.11.3 -- see docs/decisions.md).
+# The backend itself is not a container: it runs as a host process so it can
+# start and stop llama-server on this machine's GPU.
 # Postgres has no such constraint, so it stays the simplest option:
 # containerized.
 #

@@ -8,7 +8,7 @@
 # `--all-files`, so a skipped hook (`git commit --no-verify`) is still caught
 # before merge. Run it yourself with `pre-commit run --all-files`.
 #
-# Rolling out in stages (docs/CLAUDE.md, 2026-10-09). Formatting covers all
+# Rolling out in stages (docs/decisions.md, 2026-10-09). Formatting covers all
 # of apps/web and apps/server/backend. Linting does not yet:
 #   - ruff-check covers only backend/open_webui/benchmarks/ and tests/ until
 #     the rest of the backend's ~2.8k existing findings are fixed;

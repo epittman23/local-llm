@@ -206,7 +206,7 @@ test('a temporary chat sends the whole conversation and asks for no title', asyn
 	await expect(page).toHaveURL(/localhost:5174\/$/);
 });
 
-// docs/bug-review-2026-09-27.md H2: switching chats in place (no reload) used
+// docs/history/bug-review-2026-09-27.md H2: switching chats in place (no reload) used
 // to keep the first chat's models, so the next message went to the wrong one.
 test("switching to another saved chat uses that chat's own models", async ({ page }) => {
 	await page.context().addInitScript(() => window.localStorage.setItem('sidebar', 'true'));

@@ -3,30 +3,33 @@
 A fast index of this repo's layout: what lives where, and what each
 directory/major file is for. Use this to orient before searching — it
 answers "where would X be," not "how does X work." For the *why* behind
-decisions and per-module conventions, see [`docs/CLAUDE.md`](docs/CLAUDE.md).
-For usage/operations ("how do I run this"), see [`README.md`](README.md).
+decisions see [`docs/decisions.md`](docs/decisions.md); for conventions and
+rules see [`AGENTS.md`](AGENTS.md); for running the app see
+[`README.md`](README.md).
 
 This file is a structural index only. It does not restate rationale that
-already lives in `docs/CLAUDE.md`'s "Conventions" section — it points there
+already lives in `AGENTS.md`'s "Conventions" section — it points there
 instead.
 
 ## Top-level tree
 
 ```
 local-llm/
+├── AGENTS.md                  agent and contributor guide (CLAUDE.md links to it)
+├── CLAUDE.md                  symlink to AGENTS.md
 ├── Makefile                   make backend, make frontend, make help
-├── README.md                  usage/operations guide
+├── README.md                  what it is, running it, pages and URLs
 ├── MAP.md                     this file
 ├── apps/                      the applications themselves
 │   ├── server/                FastAPI backend (the vendored Open WebUI fork)
-│   └── web/                   Astro + React + shadcn/ui frontend (Phase 3+)
-├── docs/                      meta docs: conventions, roadmap, proposals
+│   └── web/                   Astro + React + shadcn/ui frontend
+├── docs/                      decisions log, roadmap, guides, proposals, history
 └── infra/                     docker-compose for Postgres + pgvector
 ```
 
 `scripts/` (the shell orchestrator plus the `llama-console` CLI helpers) and
 the root `requirements.txt`/`.venv` are gone as of Phase 2c of the migration
-(2026-09-18) — see `docs/CLAUDE.md`'s decisions log. `make backend`/
+(2026-09-18) — see `docs/decisions.md`. `make backend`/
 `make frontend` are the replacement entry points; serving configuration
 itself lives in the backend as Python (`apps/server/backend/open_webui/
 benchmarks/serving/`), not in a shell profile table.
@@ -35,44 +38,54 @@ Local/generated (not tracked by git — see "Local/generated" section below
 for detail): `.vscode/`, `.claude/`, `logs/`, `tests/data/` (orphaned, see
 below), and scattered `__pycache__/` directories.
 
+## `AGENTS.md` and `CLAUDE.md`
+
+The one agent and contributor guide for the whole repo: why the project
+exists, models in use, conventions, commands, backend and frontend
+specifics, the maintenance policy (this file's own upkeep rule lives there)
+and the commit policy. `CLAUDE.md` is a symlink to it, so every agent reads
+the same file. Read it before making structural or config changes.
+
 ## `README.md`
 
-The usage/operations guide: running the assistant, model setup, local
-inference with llama.cpp, and the Open WebUI fork (frontend/backend/Postgres,
-the Benchmarks section covering testing/comparison/reporting/tuning). Start
-here for "how do I run/use this."
+The run guide: what the app is, "Running it" and "Pages and URLs" (which the
+maintenance policy keeps current), model setup, and an index of the guides.
+Start here for "how do I run/use this."
 
 ## `docs/`
 
-Meta docs — conventions, history, and proposals, not end-user usage docs.
-
-- **`CLAUDE.md`** — the contributor guide: project conventions, the
-  maintenance policy (this file's own upkeep rule lives there), and a dated
-  decisions log explaining *why* things are the way they are. Read this
-  before making structural or config changes.
+- **`decisions.md`** — the dated decisions log explaining *why* things are
+  the way they are. Entries are history and never edited; new ones go at the
+  top.
 - **`ROADMAP.md`** + **`roadmap-timeline.mmd`** — project history and
   timeline. The `.mmd` file is the canonical mermaid source; `ROADMAP.md`
   embeds a copy of it (GitHub can't transclude external files), so the two
   are kept byte-identical in their diagram content.
-- **`model-downloads.md`** — quick-reference `hf download` commands for the
-  GGUF model weights in use.
-- **`proposed-inference-server.md`** — a hardware proposal (Dell R730 +
-  Tesla V100) for a future dedicated inference server. Status: proposed, not
-  built.
-- **`migration-plan.md`** — the plan for the monorepo / shell-removal /
-  Astro-frontend migration, complete as of 2026-09-27 (all eleven phases
-  done): locked decisions, per-phase checklists and session notes. Kept as a
-  record because code comments cite its decisions and phases; not updated
-  any more.
-- **`bug-review-2026-09-27.md`** — a review of the migration branch
-  (3 high, 9 medium, 18 low findings) and, in its "Status" section, how
-  each was fixed and tested. Kept as a record.
+- **`guides/`** — long-form operational docs, one per topic:
+  `llama-cpp.md` (building llama.cpp, serving profiles, measurements),
+  `telemetry.md` (the recorded GPU/throughput tables and how to read them),
+  `benchmarks.md` (the Benchmarks section: tests, grading, compare, report),
+  `testing.md` (the app's own test suites), `dependencies.md` (the backend
+  venv and offline model cache), `frontend.md` (`apps/web` dev server,
+  build, rough edges), `model-downloads.md` (`hf download` commands for the
+  GGUF weights).
+- **`proposals/`** — not yet built: `proposed-inference-server.md`, a
+  hardware proposal (Dell R730 + Tesla V100) for a dedicated inference
+  server.
+- **`history/`** — completed records, kept because code comments cite them
+  and not updated any more: `migration-plan.md` (the monorepo /
+  shell-removal / Astro-frontend migration, complete 2026-09-27),
+  `bug-review-2026-09-27.md` and `code-review.md` (reviews with a "Status"
+  section mapping each finding to its fix), and the migration-era mapping
+  docs `common-components-mapping.md` (where each SvelteKit `common/`
+  component landed) and `icons-mapping.md`.
+- **`restructure-plan.md`** — the 2026-10 repository restructure plan and its
+  Status; moves to `history/` when the work is done.
 - **`serving-baseline/`** — test input, not prose: `config-id` fingerprints,
   profile seed data and the verbatim profile rationale, captured from
-  `scripts/shell/main.sh` on 2026-09-14 before the shell layer is ported to
-  Python and the profiles move into Postgres. Its own `README.md` explains
-  what each file pins and why. Keep it after the port: it is also the record
-  of what the shell layer meant.
+  `scripts/shell/main.sh` on 2026-09-14 before the shell layer was ported to
+  Python. Its own `README.md` explains what each file pins and why. It is
+  also the record of what the shell layer meant.
 
 ## `infra/`
 
@@ -92,12 +105,12 @@ Infrastructure this repo runs but does not write.
 
 The applications themselves. Before 2026-09-14 this repo held no application
 code at all; the fork lived in a submodule and that rule was a real
-constraint. It is not any more — see `docs/CLAUDE.md`'s Conventions.
+constraint. It is not any more — see `AGENTS.md`'s Conventions.
 
 - **`server/`** — the vendored Open WebUI fork, its FastAPI backend only since Phase 11 (mapped below).
 - **`web/`** — the Astro + React + shadcn/ui frontend (mapped below), which
   replaced the fork's SvelteKit app over Phases 3-11 of
-  `docs/migration-plan.md`; its build (`dist/`) is what the fork's `main.py`
+  `docs/history/migration-plan.md`; its build (`dist/`) is what the fork's `main.py`
   serves at `/`.
 
 ### `apps/server/` (vendored fork)
@@ -108,9 +121,7 @@ previously a git submodule. The import squashed the fork's history to a
 single commit; the full history remains at
 `https://github.com/epittman23/open-webui.git` (branch `customizations`, at
 `67d4039`), which is kept as a read-only archive. This is now owned code, a
-permanent hard fork with no upstream sync path — see `docs/CLAUDE.md`'s
-decisions log. For upstream feature docs see its own
-`README.md`/`CHANGELOG.md`, not restated here. Since Phase 11e only the
+permanent hard fork with no upstream sync path — see `docs/decisions.md`. Since Phase 11e only the
 FastAPI backend is left; its SvelteKit frontend (last present at `d863707`)
 was replaced by `apps/web/`:
 
@@ -133,8 +144,7 @@ The testing/comparison/reporting/tuning suite that used to be this outer
 repo's standalone `lllm-test`/`lllm-compare`/`lllm-report`/`lllm-tune` CLI
 and `lllm-web` dashboard, migrated in whole into the fork so it is native
 functionality (own routers, own pages, own Postgres tables) rather
-than a second app glued on by a userscript. See docs/CLAUDE.md's decisions
-log for the migration and why each piece landed where it did.
+than a second app glued on by a userscript. See `docs/decisions.md` for the migration and why each piece landed where it did.
 
 - **`serving/`** — the serving layer ported from shell in Phase 2a/2b of the
   migration (2026-09-14 to 2026-09-17): `profiles.py` (`ServingProfile`,
@@ -182,15 +192,15 @@ log for the migration and why each piece landed where it did.
 ### `apps/web/` (Astro + React + shadcn/ui)
 
 The frontend, which replaced the fork's SvelteKit app surface by
-surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
-`README.md` covers usage in detail; this is a structural summary.
+surface (see `docs/history/migration-plan.md`'s Phases 3-11).
+`docs/guides/frontend.md` covers usage; this is a structural summary.
 
 - **`astro.config.mjs`** — `output: 'static'`, `@astrojs/react`,
   `@tailwindcss/vite`; the dev-server proxy mirrors the Svelte app's
   `vite.config.ts` (`d863707:apps/openwebui/vite.config.ts`) exactly (`/api`, `/ollama`, `/openai`, `/oauth`, `/ws`
   → `:4000`); `base` is `/`, where `main.py` mounts the build.
 - **`components.json`** — shadcn/ui's own config: `radix-nova` preset,
-  Lucide icons, CSS variables. See `docs/CLAUDE.md`'s 2026-09-18 decisions
+  Lucide icons, CSS variables. See `docs/decisions.md`'s 2026-09-18
   entry for why this preset and not the migration plan's original
   "new-york" (the CLI's own style system changed).
 - **`src/layouts/Base.astro`** — `<html>`/`<head>` shell: the anti-FOUC
@@ -228,8 +238,6 @@ surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
   (`ui/sonner.tsx`, mounted in `App.tsx`) reads the theme from the `<html>`
   class rather than `next-themes`.
 - **`src/components/ui/`** — shadcn/ui components (`bunx shadcn add <name>`).
-  `src/components/COMMON_MAPPING.md` records where each of the SvelteKit
-  app's `common/` components lands.
 - **`src/routes/`** — react-router. `AppRouter.tsx` has three kinds of
   route: gated ones under `AppShell` (the chat, `benchmarks/`,
   `workspace/`, `admin/` and the Phase 9 surfaces); the public ones
@@ -286,12 +294,16 @@ surface (see `docs/migration-plan.md`'s Phases 3-11). Its own
 - **`src/lib/auth/`**, **`stores/`** (Zustand: auth, config, UI),
   **`socket/`**, **`i18n/`** (the fork's 65 locale files, verbatim),
   **`query/`**, **`utils/`** (only the functions from the SvelteKit app's
-  `utils/index.ts` that ported pages actually use), **`icons/MAPPING.md`**,
+  `utils/index.ts` that ported pages actually use),
   **`access/`** (`accessGrants.ts`: the pure grant-rewriting rules behind
   `AccessControl`), and **`settings/`** (`userSettings.ts`: the user's saved
   UI settings through TanStack Query, for model pinning; `useConfigDraft`
   and `useAdminSaved`, the load-edit-save pattern of the admin tabs;
   `useSettingsUrl`, the `?settings=` param).
+- **`src/lib/emoji/`** — emoji data and shortcode lookup behind
+  `components/common/EmojiPicker`.
+- **`src/styles/global.css`** — the Tailwind v4 entry and the shadcn Nova
+  preset's design tokens.
 - **`e2e/`** — Playwright; `global-teardown.ts` force-stops the dev server
   after a run (see its own comment for why that isn't left to Playwright's
   ordinary teardown alone). Specs import `test` from `e2e/test.ts`, not from
@@ -312,13 +324,13 @@ proxying to `:4000` — added Phase 3 as `make astro`, renamed in Phase 11e
 when the Svelte `make frontend` went; works around
 that Astro version's `dev` command always daemonizing, see the target's own
 comment). Replaces `scripts/` (deleted in Phase 2c of
-the migration, 2026-09-18 — see `docs/CLAUDE.md`'s decisions log), which held
+the migration, 2026-09-18 — see `docs/decisions.md`), which held
 a shell orchestrator, `lllm-*` commands, and a Rich/plain terminal CLI
 (`llama_console.py`, backing `lllm-profiles`/`lllm-check`/`lllm-vram`) with
 no replacement of its own; those diagnostics now live in the fork's own
 Benchmarks section (Serve/Live pages), same as serving itself since
 Phase 2a/2b. Per-module purpose and rationale are documented in detail in
-[`docs/CLAUDE.md`](docs/CLAUDE.md)'s "Conventions" section — this entry is a
+[`AGENTS.md`](AGENTS.md)'s "Conventions" section — this entry is a
 summary, not a replacement.
 
 ## Local/generated (not tracked)

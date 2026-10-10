@@ -12,7 +12,7 @@ for its profile-parsing functions), not a design this port needs to keep.
 without spawning anything. `ServeProcess` is the part that actually spawns
 `llama-server` and the telemetry recorder; it has not been exercised against
 real hardware in the session that wrote it, the same posture
-docs/CLAUDE.md's 2026-09-06 decisions-log entry already takes for this
+docs/decisions.md's 2026-09-06 entry already takes for this
 project's other unattended-GPU-run code -- starting a real server has real
 side effects (VRAM, a running process, a recorded benchmark_run row) that
 need standing authorization to trigger, which a porting session does not

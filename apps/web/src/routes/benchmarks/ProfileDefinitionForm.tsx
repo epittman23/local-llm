@@ -32,7 +32,7 @@ const emptyDefinition: ProfileDefinition = {
 // (models/benchmark_profiles.py), edited here as one command-line string.
 // The raw text is kept as typed and only split on submit -- re-deriving the
 // input's value from the parsed list on every keystroke ate commas and spaces
-// (docs/bug-review-2026-09-27.md M7). Split shell-style: whitespace separates
+// (docs/history/bug-review-2026-09-27.md M7). Split shell-style: whitespace separates
 // tokens, and single or double quotes keep a value with spaces or commas in
 // one token (`-ot "a=CUDA0,b=CUDA0"`).
 const quoteArg = (arg: string) => (/[\s'"]/.test(arg) || arg === '' ? `'${arg.replace(/'/g, `'"'"'`)}'` : arg);

@@ -63,7 +63,7 @@ type Note = {
  * with the component). Only the fields edited here are sent: the server merges
  * `data`, so attachments stay as they are. `access_grants` is deliberately
  * omitted; that leaves sharing untouched only because routers/notes.py was
- * patched to skip grants the client didn't send (docs/bug-review-2026-09-27.md
+ * patched to skip grants the client didn't send (docs/history/bug-review-2026-09-27.md
  * H1) -- before that, every autosave cleared them.
  */
 function useNoteSaver(id: string) {

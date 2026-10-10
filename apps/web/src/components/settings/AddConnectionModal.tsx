@@ -99,7 +99,7 @@ export function AddConnectionModal({
 	};
 
 	// A block body on purpose: `(e) => toast.error(e)` would return the toast's
-	// id, which is truthy, and report a failed check as verified (docs/code-review.md M5).
+	// id, which is truthy, and report a failed check as verified (docs/history/code-review.md M5).
 	const failed = (error: unknown) => {
 		toast.error(`${error}`);
 		return null;

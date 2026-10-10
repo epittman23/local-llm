@@ -13,7 +13,7 @@ already ported 1:1 into stats.py (short_spec, short_ot, config_value) rather
 than reimplemented, so a row here reads the same as it always did.
 
 Three rules the output obeys, each of them learned from a mistake recorded in
-the outer repo's CLAUDE.md decisions log:
+docs/decisions.md:
 
   * Counts, never bare percentages. At the smoke tier one item is about four
     points, and `88%` invites a comparison that 24 items cannot support.

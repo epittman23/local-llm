@@ -2,7 +2,7 @@
  * The personal settings that change how chat looks and behaves, read once
  * with the same defaults the Settings modal shows (interfaceSettingDefs.ts),
  * so every chat component agrees on them. Each was saved but never read
- * before docs/code-review.md M7.
+ * before docs/history/code-review.md M7.
  */
 export type ChatPrefs = {
 	/** User messages in bubbles; off shows them like replies, with a name. */

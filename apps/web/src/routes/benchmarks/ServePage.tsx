@@ -40,11 +40,11 @@ const specOptions = [
  * useMutation's own onSuccess can just invalidate it instead of a
  * hand-written refreshRunning().
  *
- * "download weights" (one of Phase 5's checklist items, docs/migration-
- * plan.md) is NOT here: there is no backend endpoint for it yet (grepped
+ * "download weights" (one of Phase 5's checklist items, docs/history/
+ * migration-plan.md) is NOT here: there is no backend endpoint for it yet (grepped
  * routers/benchmarks/*.py directly -- weights.py/FetchProcess exist per
- * Phase 2a but nothing mounts them at an HTTP route). docs/model-
- * downloads.md remains the documented interim path until that exists.
+ * Phase 2a but nothing mounts them at an HTTP route). docs/guides/
+ * model-downloads.md remains the documented interim path until that exists.
  */
 export function ServePage() {
 	const token = useAuthStore((state) => state.token) ?? '';

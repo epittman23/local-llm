@@ -134,7 +134,7 @@ REQUIRED_FIELDS = frozenset({'arch', 'alias', 'model_path', 'ctx', 'threads', 'n
 #: Nullable text fields where an empty string means "none". Stored as '' they
 #: are not None, so e.g. reasoning_effort_default='' made resolve() treat a
 #: model as thinking and the launcher pass an empty reasoning_effort that the
-#: fingerprint records as n/a (docs/bug-review-2026-09-27.md M8).
+#: fingerprint records as n/a (docs/history/bug-review-2026-09-27.md M8).
 BLANK_MEANS_NONE = ('reasoning_effort_default', 'override_tensors')
 
 #: Both spellings llama-server accepts for the slot count.

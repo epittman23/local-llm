@@ -1,4 +1,4 @@
-"""Regression test for docs/bug-review-2026-09-27.md H1.
+"""Regression test for docs/history/bug-review-2026-09-27.md H1.
 
 A note content save that does not send `access_grants` must not reach the
 model layer with the field marked as set: update_note_by_id dumps with

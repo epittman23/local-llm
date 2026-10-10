@@ -3,9 +3,9 @@
 Ported from `lllm-fetch` in local-llm's scripts/shell/main.sh (lines 277-292
 at the time of the port). Not test data: the benchmark datasets fetch
 themselves, independently, into the fork's own DATA_DIR (see
-docs/CLAUDE.md); this is the GGUF a serving profile points at.
+AGENTS.md); this is the GGUF a serving profile points at.
 
-Per docs/migration-plan.md's "Assumptions requiring confirmation" section,
+Per docs/history/migration-plan.md's "Assumptions requiring confirmation" section,
 this is meant to back a "Download weights" action on the Serve page (a
 backend endpoint, Phase 5's UI) rather than be called directly -- hence
 `FetchProcess` following the same start()/lines()/wait() shape as

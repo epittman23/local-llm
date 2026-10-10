@@ -22,7 +22,7 @@ export type UserPermissions = {
 // declared there), plus the two fields the SvelteKit app reads off the same
 // object without ever declaring them (`+layout.svelte`'s `$user?.expires_at`
 // and the sign-in response's own `token`/`token_type`) -- see this repo's
-// docs/CLAUDE.md 2026-09-15 entry on that app's inherited type looseness.
+// docs/decisions.md 2026-09-15 entry on that app's inherited type looseness.
 // This is new code, not a port, so it types the whole shape properly.
 export type SessionUser = {
 	id: string;

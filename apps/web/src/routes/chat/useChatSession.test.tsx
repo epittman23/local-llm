@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useChatSession } from './useChatSession';
 
-// docs/bug-review-2026-09-27.md H3: a slow load of the chat the user just
+// docs/history/bug-review-2026-09-27.md H3: a slow load of the chat the user just
 // left must not overwrite the one now open.
 
 const pending: Record<string, (v: unknown) => void> = {};

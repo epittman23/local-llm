@@ -488,7 +488,7 @@ export function ChatPage() {
 					}
 					onSubmit={(text, files) => requestSend(text, files, true)}
 					wide={prefs.widescreen}
-					// Until the chat on screen has loaded, a message would be built on the previous one (docs/code-review.md L11).
+					// Until the chat on screen has loaded, a message would be built on the previous one (docs/history/code-review.md L11).
 					disabled={session.loading}
 					onPasteText={prefs.largeTextAsFile ? (file) => attachments.addFiles([file], { context: 'full' }) : undefined}
 				/>

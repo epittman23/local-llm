@@ -150,7 +150,7 @@ const router = createBrowserRouter(
 				}
 			]
 		},
-		// Phase 6 (docs/migration-plan.md): the four public/static pages. None
+		// Phase 6 (docs/history/migration-plan.md): the four public/static pages. None
 		// of these should ever require a session -- /auth is precisely where
 		// an anonymous visitor is sent, and /error, /watch, and a shared-chat
 		// link all need to render before or without one.

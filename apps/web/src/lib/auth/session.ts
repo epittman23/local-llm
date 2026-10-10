@@ -3,8 +3,8 @@
 // `isCurrentSessionUnauthorized`, roughly lines 879-1079), which is genuinely new
 // infrastructure for this app rather than a port of any $lib/apis module: the
 // SvelteKit app has no shared fetch wrapper either, and Phase 4's own checklist
-// (docs/migration-plan.md) calls for one. Behavior kept identical, including
-// the "Session expired" toast (docs/code-review.md L12).
+// (docs/history/migration-plan.md) calls for one. Behavior kept identical, including
+// the "Session expired" toast (docs/history/code-review.md L12).
 
 import { toast } from 'sonner';
 import { getBackendConfig } from '@/lib/apis';
@@ -108,7 +108,7 @@ const checkTokenExpiry = () => {
 /**
  * Runs the expiry check whenever there is a session, however it was set:
  * restored here in initAuth, or signed in later from /auth without a reload
- * (docs/bug-review-2026-09-27.md L4). Installed once per page load.
+ * (docs/history/bug-review-2026-09-27.md L4). Installed once per page load.
  */
 const installSessionWatch = () => {
 	if (sessionWatchInstalled) return;

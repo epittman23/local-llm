@@ -51,7 +51,7 @@ export function useMessageFeed(
 	const typingTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 	const optsRef = useRef(opts);
 	optsRef.current = opts;
-	/** Events that arrive while the first page loads, applied to it once it lands; null once loaded (docs/code-review.md L6). */
+	/** Events that arrive while the first page loads, applied to it once it lands; null once loaded (docs/history/code-review.md L6). */
 	const early = useRef<ChannelEvent[] | null>([]);
 
 	const fetchPage = useCallback(
@@ -113,7 +113,7 @@ export function useMessageFeed(
 			if (type === 'typing') {
 				const who = event.user;
 				// Not for the viewer's own typing, which the server echoes back; and
-				// the same array when they are no longer listed (docs/code-review.md L8).
+				// the same array when they are no longer listed (docs/history/code-review.md L8).
 				if ((event.message_id ?? null) !== parentId || !who || who.id === me?.id) return;
 				clearTimeout(typingTimers.current[who.id]);
 				typingTimers.current[who.id] = setTimeout(
@@ -185,7 +185,7 @@ export function useMessageFeed(
 		if (!res && !parentId) setMessages((ms) => ms?.filter((m) => m.temp_id !== tempId) ?? ms);
 		// The echo may beat the response or not arrive at all (no socket); either way end with the saved copy.
 		// The response is the bare message (no author, quote or reactions), so those come from what
-		// was sent until the echo brings the full copy (docs/code-review.md L5).
+		// was sent until the echo brings the full copy (docs/history/code-review.md L5).
 		if (res) {
 			const saved = {
 				...res,
@@ -210,7 +210,7 @@ export function useMessageFeed(
 	const actions = (onPinChange?: (id: string, pinned: boolean) => void): MessageActions => ({
 		onDelete: (m) => {
 			setMessages((ms) => ms?.filter((x) => x.id !== m.id) ?? ms);
-			// Deleting the root from inside its thread ends the thread, echo or not (docs/code-review.md L7).
+			// Deleting the root from inside its thread ends the thread, echo or not (docs/history/code-review.md L7).
 			if (parentId && m.id === parentId) optsRef.current.onRootDeleted?.();
 			optsRef.current.onMessageDeleted?.(m.id);
 			deleteMessage(token, channelId, m.id).catch((e) => toast.error(`${e}`));

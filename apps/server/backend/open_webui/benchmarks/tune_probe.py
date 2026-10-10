@@ -16,7 +16,7 @@ being read.
 
 A candidate is served through benchmarks/serving/launcher.ServeProcess
 directly -- until 2026-09-14 this shelled out to main.sh's `lllm-serve`
-(see docs/migration-plan.md's Phase 2). LLAMA_TUNE_LAUNCH is kept as an
+(see docs/history/migration-plan.md's Phase 2). LLAMA_TUNE_LAUNCH is kept as an
 escape hatch, still running through benchmarks.proc.Command, a plain shell
 command rather than the launcher: it lets the whole algorithm be exercised
 against a stub with no GPU (fault injection -- refuse to bind, OOM, hang

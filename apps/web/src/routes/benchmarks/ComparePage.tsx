@@ -75,7 +75,7 @@ const isWarningNote = (note: string): boolean => /^\s*warning\b/i.test(note);
 
 /**
  * Ports Compare.svelte's generic column/row rendering onto TanStack Table
- * (per Phase 5's own checklist wording, docs/migration-plan.md), rather than
+ * (per Phase 5's own checklist wording, docs/history/migration-plan.md), rather than
  * a hand-rolled sort. The response shape genuinely varies with `by` -- see
  * that file's own comment, ported verbatim below -- normalized into one
  * (columns, rows) shape before it ever reaches the table.

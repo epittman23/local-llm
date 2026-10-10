@@ -41,7 +41,7 @@ const formatRunLabel = (run: {
 /**
  * Ports Answers.svelte's run picker, filterable results table, and answer
  * detail -- except the detail view. The checklist is explicit here (Phase 5,
- * docs/migration-plan.md): "build a minimal transcript renderer; do not port
+ * docs/history/migration-plan.md): "build a minimal transcript renderer; do not port
  * chat/Messages.svelte for it." Svelte's own version reused the live chat's
  * Messages component purely for its markdown/code-block rendering, at the
  * cost of a documented layout bug ("does not size correctly outside the

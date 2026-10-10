@@ -11,8 +11,8 @@
 #   make help       this text.
 #
 # Replaces scripts/shell/main.sh's lllm-backend/lllm-frontend, deleted along
-# with the rest of scripts/ in Phase 2c of docs/migration-plan.md -- see that
-# file and docs/CLAUDE.md's decisions log for why. Serving configuration
+# with the rest of scripts/ in Phase 2c of docs/history/migration-plan.md -- see that
+# file and docs/decisions.md for why. Serving configuration
 # itself (profiles, argv assembly, fingerprinting) moved into the backend as
 # Python in Phases 2a/2b; this Makefile only owns process lifecycle, the same
 # job lllm-backend/lllm-frontend had.
@@ -28,7 +28,7 @@ COMPOSE := docker compose -f $(REPO_ROOT)/infra/docker-compose.yml
 LLLM_BACKEND_PORT ?= 4000
 # Loopback by default: the backend's admin API can start processes on this
 # machine, so it is not offered to the LAN unless asked for with
-# `make backend LLLM_BACKEND_HOST=0.0.0.0` (docs/code-review.md L13).
+# `make backend LLLM_BACKEND_HOST=0.0.0.0` (docs/history/code-review.md L13).
 LLLM_BACKEND_HOST ?= 127.0.0.1
 
 .PHONY: help backend frontend astro

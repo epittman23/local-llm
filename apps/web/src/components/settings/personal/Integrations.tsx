@@ -19,8 +19,8 @@ import { SettingsForm, SettingsSection } from '../controls';
  * Saved but not yet used by chat: this app has no browser-side executor for
  * direct servers (the Svelte layout's `execute:tool` socket handler) and does
  * not send `tool_servers`/`terminal_id` with a completion. Rather than let the
- * settings silently do nothing, the tab says so (docs/bug-review-2026-09-27.md
- * M9; listed with the deliberate gaps in docs/CLAUDE.md).
+ * settings silently do nothing, the tab says so (docs/history/bug-review-2026-09-27.md
+ * M9; listed with the deliberate gaps in docs/decisions.md).
  */
 export default function Integrations() {
 	const { settings, update } = useUserSettings();

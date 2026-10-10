@@ -326,7 +326,7 @@ export function ChannelMessageView({
 									<div className="bg-muted my-1 h-4 w-24 animate-pulse rounded" aria-label="Thinking" />
 								) : (
 									<div className="flex flex-wrap items-baseline">
-										{/* The chat renderer, as the Svelte channel used: raw HTML in a message shows as text (docs/code-review.md H1). */}
+										{/* The chat renderer, as the Svelte channel used: raw HTML in a message shows as text (docs/history/code-review.md H1). */}
 										<Markdown
 											id={`channel-${message.id}`}
 											content={message.content}

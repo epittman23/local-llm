@@ -11,11 +11,11 @@ import { routePaths } from '@/routes/routePaths';
 
 /**
  * Ports d863707:apps/openwebui/src/routes/s/[id]/+page.svelte as the "read-only
- * React island" Phase 6's own checklist calls for (docs/migration-plan.md)
+ * React island" Phase 6's own checklist calls for (docs/history/migration-plan.md)
  * -- not a port of chat/Messages.svelte. Each message goes through the chat's
  * Markdown renderer, as the Svelte page's did: the sharer wrote this content
  * and anyone with the link sees it on this origin, so raw HTML must show as
- * text, never as live markup (docs/code-review.md H1).
+ * text, never as live markup (docs/history/code-review.md H1).
  */
 export function SharedChatPage() {
 	const { id } = useParams();

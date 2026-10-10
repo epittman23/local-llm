@@ -54,7 +54,7 @@ const candidateName = (c: Record<string, unknown>): string =>
  * and the live status panel (summary, rounds, candidates, pauses,
  * not-measured/blocked, design audit, adoption, guard). "SSE status is a
  * full-object re-send every ~2s; diff, don't append" per Phase 5's own
- * checklist wording (docs/migration-plan.md) -- streamTuneLog isn't tailing
+ * checklist wording (docs/history/migration-plan.md) -- streamTuneLog isn't tailing
  * a subprocess log the way Serve's stream does, it's a poll-driven feed
  * that resends the whole status object each time, so each event just
  * replaces `status` wholesale (setStatus(data)), never appends to a list.

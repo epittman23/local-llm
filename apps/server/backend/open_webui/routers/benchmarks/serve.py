@@ -7,7 +7,7 @@ named after the LLAMA_* variables main.sh's override mechanism used
 `Overrides.from_env()` on a small env-shaped dict -- the same parsing
 golden-tested against docs/serving-baseline/, rather than a second copy of
 it here. Until 2026-09-14 `/start` shelled out to `lllm-serve` through
-benchmarks.proc.Command; see docs/migration-plan.md's Phase 2.
+benchmarks.proc.Command; see docs/history/migration-plan.md's Phase 2.
 
 Single-flight by design: only one server (and one recorded run) at a time,
 same as the original CLI dashboard. The in-memory `_job` handle assumes this
@@ -137,7 +137,7 @@ async def _start_serve_locked(form_data: ServeStartForm):
 
     # spec 'on' means "the profile's own speculative flags", i.e. no override.
     # Overrides.from_env would otherwise pass a literal `on` argument to
-    # llama-server, which refuses to start (docs/bug-review-2026-09-27.md M6).
+    # llama-server, which refuses to start (docs/history/bug-review-2026-09-27.md M6).
     if form_data.spec == 'on':
         form_data.spec = None
     env_like = {

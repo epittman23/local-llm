@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { errorMessage } from '@/lib/apis/benchmarks/profiles';
 import { argvToText, textToArgv } from './ProfileDefinitionForm';
 
-// docs/bug-review-2026-09-27.md M7 and L7.
+// docs/history/bug-review-2026-09-27.md M7 and L7.
 describe('profile argv fields', () => {
 	it('splits on whitespace, like a command line', () => {
 		expect(textToArgv('--temp 1.0   --top-p 0.95 ')).toEqual(['--temp', '1.0', '--top-p', '0.95']);

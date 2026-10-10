@@ -989,7 +989,7 @@ test.describe('settings: General', () => {
 		await m.getByRole('switch', { name: 'Title Auto-Generation' }).click();
 		await m.getByRole('button', { name: 'Chat Direction' }).click();
 		await m.getByRole('button', { name: 'Chat Direction' }).click();
-		// Rows for features the app lacks are not offered (docs/code-review.md M7); the bubble hides the username switch.
+		// Rows for features the app lacks are not offered (docs/history/code-review.md M7); the bubble hides the username switch.
 		await expect(m.getByRole('switch', { name: 'Toast Notifications for New Updates' })).toHaveCount(0);
 		await expect(m.getByRole('switch', { name: 'Display the Username Instead of You in the Chat' })).toHaveCount(0);
 		await m.getByRole('switch', { name: 'Chat Bubble UI' }).click();

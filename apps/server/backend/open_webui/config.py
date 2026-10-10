@@ -101,7 +101,7 @@ except Exception:
 # Fork change: fall back to the frontend's source public/static when there is
 # no build yet (`make backend` + `make frontend` in a fresh clone), so
 # /static/favicon.png -- the model-avatar fallback -- still exists
-# (docs/bug-review-2026-09-27.md L14). FRONTEND_BUILD_DIR is apps/web/dist.
+# (docs/history/bug-review-2026-09-27.md L14). FRONTEND_BUILD_DIR is apps/web/dist.
 FRONTEND_STATIC_DIR = FRONTEND_BUILD_DIR / 'static'
 if not FRONTEND_STATIC_DIR.exists() and (FRONTEND_BUILD_DIR.parent / 'public' / 'static').exists():
     FRONTEND_STATIC_DIR = FRONTEND_BUILD_DIR.parent / 'public' / 'static'
