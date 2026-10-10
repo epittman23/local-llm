@@ -1,5 +1,9 @@
 // @ts-nocheck -- ported verbatim from d863707:apps/openwebui/src/lib/utils/marked/; untyped tokenizer code.
-export const disableSingleTilde = {
+import type { MarkedExtension } from 'marked';
+
+// Typed at the export only: TypeScript 6 infers a type for the untyped
+// tokenizer below that marked.use() rejects.
+export const disableSingleTilde: MarkedExtension = {
 	tokenizer: {
 		del(src) {
 			// 1. First check for the REAL strikethrough: ~~text~~

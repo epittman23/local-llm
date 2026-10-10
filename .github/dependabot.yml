@@ -53,5 +53,11 @@ updates:
         applies-to: version-updates
         update-types: [minor, patch]
         patterns: ['*']
+    ignore:
+      # astro check (@astrojs/check) supports TypeScript 5 and 6 only; 7.0
+      # makes it exit with an error. Lift once Astro's type checking runs on
+      # TypeScript 7 (see @astrojs/ts-content-mapper, experimental for 7.1+).
+      - dependency-name: typescript
+        versions: ['>=7']
     commit-message:
       prefix: build(deps)

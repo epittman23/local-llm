@@ -25,7 +25,7 @@ export type BenchmarksSSEEvent<T = any> = {
 };
 
 export async function* parseBenchmarksEventStream<T = any>(
-	body: ReadableStream<Uint8Array>
+	body: ReadableStream<Uint8Array<ArrayBuffer>>
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): AsyncGenerator<BenchmarksSSEEvent<T>> {
 	const reader = body.pipeThrough(new TextDecoderStream()).pipeThrough(new EventSourceParserStream()).getReader();
