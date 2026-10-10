@@ -206,12 +206,7 @@ build-backend = "hatchling.build"
 allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
-sources = ["backend"]
-exclude = [
-    ".gitignore",
-    "webui.db",
-    "chroma.sqlite3",
-]
+packages = ["open_webui"]
 
 [dependency-groups]
 dev = [
@@ -268,5 +263,5 @@ pydocstyle.convention = "google"
 # not. Complexity is exempt there: its long report/stats functions read
 # top to bottom on purpose, and splitting them for a branch count is churn.
 [tool.ruff.lint.per-file-ignores]
-"backend/open_webui/benchmarks/**" = ["C901"]
-"backend/tests/**" = ["C901"]
+"open_webui/benchmarks/**" = ["C901"]
+"tests/**" = ["C901"]

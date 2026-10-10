@@ -10,7 +10,7 @@ failure paths that did not exist when start() only ever built a shell
 string. No real llama-server, no GPU: LauncherError is provoked with a
 LLAMA_BIN pointed at an empty directory, never a real binary.
 
-Run from the backend directory:
+Run from apps/server:
 
     python -m pytest tests/test_tune_probe.py
 """
@@ -20,6 +20,7 @@ from __future__ import annotations
 import time
 
 import pytest
+
 from open_webui.benchmarks.proc import Command
 from open_webui.benchmarks.serving.launcher import ServeProcess
 from open_webui.benchmarks.tune_probe import Infeasible, Server

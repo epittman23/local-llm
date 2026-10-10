@@ -19,7 +19,7 @@ from open_webui.env import (
     ENV,
     FRONTEND_BUILD_DIR,
     OFFLINE_MODE,
-    OPEN_WEBUI_DIR,
+    PACKAGE_DIR,
     WEBUI_AUTH,
     WEBUI_FAVICON_URL,
     WEBUI_NAME,
@@ -57,9 +57,9 @@ def run_migrations():
         from alembic import command
         from alembic.config import Config as AlembicConfig
 
-        alembic_cfg = AlembicConfig(OPEN_WEBUI_DIR / 'alembic.ini')
+        alembic_cfg = AlembicConfig(PACKAGE_DIR / 'alembic.ini')
 
-        migrations_path = OPEN_WEBUI_DIR / 'migrations'
+        migrations_path = PACKAGE_DIR / 'migrations'
         alembic_cfg.set_main_option('script_location', str(migrations_path))
 
         command.upgrade(alembic_cfg, 'head')
@@ -85,7 +85,7 @@ async def import_legacy_config_json():
 # Static DIR
 ####################################
 
-STATIC_DIR = Path(os.getenv('STATIC_DIR', OPEN_WEBUI_DIR / 'static')).resolve()
+STATIC_DIR = Path(os.getenv('STATIC_DIR', PACKAGE_DIR / 'static')).resolve()
 
 try:
     if STATIC_DIR.exists():

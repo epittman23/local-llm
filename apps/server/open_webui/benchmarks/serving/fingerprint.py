@@ -15,7 +15,7 @@ with the wrong answer.
 `docs/serving-baseline/fingerprints.json` in the repo root holds 24 captures
 taken from the shell implementation before it was retired, including four
 cases that are expected to *collide* with another case. The test in
-backend/tests/test_serving_fingerprint.py checks this module against all of
+apps/server/tests/test_serving_fingerprint.py checks this module against all of
 them. Do not change anything here without re-running it.
 
 Two things are deliberately excluded from the hash, and both exclusions are

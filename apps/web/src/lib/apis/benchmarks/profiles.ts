@@ -1,4 +1,4 @@
-// New code, not a port: backend/open_webui/routers/benchmarks/profiles.py's
+// New code, not a port: apps/server/open_webui/routers/benchmarks/profiles.py's
 // CRUD endpoints (list, get, get-default, list-versions, create, clone,
 // add-version, set-display-name, set-default, archive, unarchive) have no
 // SvelteKit frontend at all -- see this file's own docstring, and decision

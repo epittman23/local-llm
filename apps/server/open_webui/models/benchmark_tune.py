@@ -28,7 +28,7 @@ log = logging.getLogger(__name__)
 #
 # Ported from scripts/llama_db.py's tune_sweep/tune_candidate/tune_round/
 # tune_visit/tune_pause tables -- the scheduling record for the config
-# search engine (backend/open_webui/benchmarks/tune.py). Deliberately not
+# search engine (open_webui/benchmarks/tune.py). Deliberately not
 # another store of measurements: throughput lives in benchmark_request and
 # verdicts live in benchmark_result, so this is the schedule that produced
 # them plus the keys to join back.

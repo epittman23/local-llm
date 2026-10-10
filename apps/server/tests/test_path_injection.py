@@ -1,6 +1,7 @@
 """Request-supplied names can't escape their directory (CodeQL py/path-injection)."""
 
 import pytest
+
 from open_webui.benchmarks import runner
 from open_webui.routers.ollama import parse_huggingface_url, upload_path_for
 
@@ -40,6 +41,7 @@ def test_import_from_url_rejects_internal_addresses(monkeypatch, module, url):
     import importlib
 
     from fastapi import HTTPException
+
     from open_webui.constants import ERROR_MESSAGES
     from open_webui.retrieval.web import utils as web_utils
 

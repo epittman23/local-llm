@@ -1,6 +1,7 @@
 """Service detection by parsed hostname, not substring (CodeQL py/incomplete-url-substring-sanitization)."""
 
 import pytest
+
 from open_webui.utils.anthropic import is_anthropic_url
 from open_webui.utils.misc import url_host_matches
 

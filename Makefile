@@ -22,7 +22,13 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
-BACKEND_DIR := $(REPO_ROOT)/apps/server/backend
+SERVER_DIR := $(REPO_ROOT)/apps/server
+# DATA_DIR is pinned rather than left to env.py's default (the package's
+# parent directory): that default moved once already, when apps/server/backend/
+# was flattened into apps/server/, and a moved default silently starts the
+# backend on an empty uploads/cache/benchmark-datasets directory. Same
+# reasoning as the pinned Compose project name in infra/docker-compose.yml.
+DATA_DIR ?= $(REPO_ROOT)/apps/server/data
 WEB_DIR := $(REPO_ROOT)/apps/web
 COMPOSE := docker compose -f $(REPO_ROOT)/infra/docker-compose.yml
 LLLM_BACKEND_PORT ?= 4000
@@ -67,13 +73,14 @@ backend:
 		echo "make backend: uv not found -- install it (https://docs.astral.sh/uv/, e.g. \`curl -LsSf https://astral.sh/uv/install.sh | sh\`)" >&2; \
 		exit 1; \
 	fi; \
-	UV_PROJECT_ENVIRONMENT="$(BACKEND_DIR)/.venv" uv sync --frozen --no-install-project --project "$(REPO_ROOT)/apps/server"; \
-	py="$(BACKEND_DIR)/.venv/bin/python"; \
-	database_url="$$(PYTHONPATH="$(BACKEND_DIR)" "$$py" -c 'import sys; from open_webui.benchmarks.serving.launcher import build_database_url; print(build_database_url(sys.argv[1]))' "$$POSTGRES_PASSWORD")"; \
-	cd "$(BACKEND_DIR)" && \
+	uv sync --frozen --no-install-project --project "$(SERVER_DIR)"; \
+	py="$(SERVER_DIR)/.venv/bin/python"; \
+	database_url="$$(PYTHONPATH="$(SERVER_DIR)" "$$py" -c 'import sys; from open_webui.benchmarks.serving.launcher import build_database_url; print(build_database_url(sys.argv[1]))' "$$POSTGRES_PASSWORD")"; \
+	cd "$(SERVER_DIR)" && \
 	CORS_ALLOW_ORIGIN="http://localhost:$(LLLM_BACKEND_PORT);http://127.0.0.1:$(LLLM_BACKEND_PORT);http://localhost:5174;http://127.0.0.1:5174" \
 	WEBUI_SECRET_KEY="$$WEBUI_SECRET_KEY" \
 	DATABASE_URL="$$database_url" \
+	DATA_DIR="$(DATA_DIR)" \
 	VECTOR_DB=pgvector \
 	OPENAI_API_BASE_URL="https://openrouter.ai/api/v1" \
 	OPENAI_API_KEY="$$OPENROUTER_API_KEY" \

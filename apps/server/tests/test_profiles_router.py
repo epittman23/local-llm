@@ -8,7 +8,7 @@ concern, exercised against real fingerprints in test_serving_profiles.py).
 A minimal FastAPI app mounts only this router, with get_admin_user
 overridden, so nothing here touches auth or a real database.
 
-Run from the backend directory:
+Run from apps/server:
 
     python -m pytest tests/test_profiles_router.py
 """
@@ -21,6 +21,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
 from open_webui.benchmarks.serving.profiles import ProfileError
 from open_webui.models.benchmark_profiles import (
     BenchmarkProfileEntry,

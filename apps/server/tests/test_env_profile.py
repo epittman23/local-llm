@@ -7,7 +7,7 @@ through the same profiles.resolve() the launcher uses. These check the
 (tune_schedule.py's profile_key(), the Serve page) still expect is
 preserved.
 
-Run from the backend directory:
+Run from apps/server:
 
     python -m pytest tests/test_env_profile.py
 """
@@ -19,6 +19,7 @@ import time
 from pathlib import Path
 
 import pytest
+
 from open_webui.benchmarks import env_profile
 from open_webui.benchmarks.serving.profiles import ProfileError
 from open_webui.models.benchmark_profiles import (
@@ -27,7 +28,7 @@ from open_webui.models.benchmark_profiles import (
     BenchmarkProfiles,
 )
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 BASELINE_DIR = REPO_ROOT / 'docs' / 'serving-baseline'
 
 

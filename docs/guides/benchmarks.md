@@ -77,7 +77,7 @@ none of them a thin passthrough to a CLI that no longer exists:
   shelling out to `lllm-serve`/`lllm-config-id`.
 
 The adapter/suite TOMLs and system-prompt text files moved with the code,
-into `apps/server/backend/open_webui/benchmarks/data/`; they no
+into `apps/server/open_webui/benchmarks/data/`; they no
 longer live at `tests/adapters/`, `tests/suites/`, `tests/tuning/` or
 `prompts/system/` in this repo. The datasets themselves are fetched, not
 vendored, into the backend's own `DATA_DIR` on first use.
@@ -103,7 +103,7 @@ beside the serving telemetry.
 
 **Nothing in this repository states an expected answer.** Every item and every
 verdict comes from the dataset. The files under
-`apps/server/backend/open_webui/benchmarks/data/adapters/` (moved
+`apps/server/open_webui/benchmarks/data/adapters/` (moved
 there from this repo's own `tests/adapters/` on 2026-09-08, along with the
 code that reads them) describe only *adaptation* — how a completion-style
 stub becomes a chat turn, which harness grades it, how long it may run.
@@ -150,7 +150,7 @@ server is already serving something.
 
 By default a request carries one message: the item. Selecting a system
 prompt on the Tests page puts the text of the matching file under
-`apps/server/backend/open_webui/benchmarks/data/prompts/` in front
+`apps/server/open_webui/benchmarks/data/prompts/` in front
 of it as a `system` message, which is where Open WebUI puts its own, and is
 the only place it can go — this `llama-server` build has no system-prompt
 flag.

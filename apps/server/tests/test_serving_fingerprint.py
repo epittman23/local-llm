@@ -7,7 +7,7 @@ why this matters more than a normal regression test: a drifting fingerprint
 does not raise, it silently refiles a serving configuration under a new id and
 makes every historical measurement uncomparable with every new one.
 
-Run from the backend directory:
+Run from apps/server:
 
     python -m pytest tests/test_serving_fingerprint.py
 """
@@ -18,11 +18,12 @@ import json
 from pathlib import Path
 
 import pytest
+
 from open_webui.benchmarks.serving.fingerprint import config_id, config_lines
 from open_webui.benchmarks.serving.profiles import Overrides, ProfileError, ServingProfile, resolve
 
-#: backend/tests/ -> backend/ -> apps/server/ -> apps/ -> repo root
-REPO_ROOT = Path(__file__).resolve().parents[4]
+#: apps/server/tests/ -> apps/server/ -> apps/ -> repo root
+REPO_ROOT = Path(__file__).resolve().parents[3]
 BASELINE_DIR = REPO_ROOT / 'docs' / 'serving-baseline'
 
 

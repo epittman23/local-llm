@@ -13,12 +13,12 @@ from pathlib import Path
 
 import pytest
 
-BACKEND = Path(__file__).resolve().parents[1]  # apps/server/backend/
-PACKAGE = BACKEND / 'open_webui'
+SERVER_DIR = Path(__file__).resolve().parents[1]  # apps/server/
+PACKAGE = SERVER_DIR / 'open_webui'
 
 
 def _module_name(path: Path) -> str:
-    parts = list(path.relative_to(BACKEND).with_suffix('').parts)
+    parts = list(path.relative_to(SERVER_DIR).with_suffix('').parts)
     if parts[-1] == '__init__':
         parts = parts[:-1]
     return '.'.join(parts)
@@ -71,7 +71,7 @@ def test_every_internal_from_import_resolves():
             for alias in node.names:
                 if alias.name == '*' or star or alias.name in names or f'{node.module}.{alias.name}' in modules:
                     continue
-                missing.append(f'{path.relative_to(BACKEND)}:{node.lineno}: from {node.module} import {alias.name}')
+                missing.append(f'{path.relative_to(SERVER_DIR)}:{node.lineno}: from {node.module} import {alias.name}')
     assert not missing, '\n'.join(missing)
 
 
@@ -97,7 +97,7 @@ def test_the_app_imports(tmp_path):
     }
     result = subprocess.run(
         [sys.executable, '-c', 'import open_webui.main'],
-        cwd=BACKEND,
+        cwd=SERVER_DIR,
         env=env,
         capture_output=True,
         text=True,

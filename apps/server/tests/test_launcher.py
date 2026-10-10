@@ -10,7 +10,7 @@ the bottom spawn a small local stub script standing in for llama-server --
 never the real binary, never the GPU -- to exercise start()/lines()/stop()
 end to end.
 
-Run from the backend directory:
+Run from apps/server:
 
     python -m pytest tests/test_launcher.py
 """
@@ -18,11 +18,16 @@ Run from the backend directory:
 from __future__ import annotations
 
 import json
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
+
 from open_webui.benchmarks.serving.build_info import parse_build
 from open_webui.benchmarks.serving.launcher import (
+    IMPORT_ROOT,
     LauncherError,
     ServeProcess,
     build_argv,
@@ -36,8 +41,8 @@ from open_webui.benchmarks.serving.launcher import (
 from open_webui.benchmarks.serving.model_name import split_model
 from open_webui.benchmarks.serving.profiles import ARCH_DENSE, ARCH_MOE, Overrides, ServingProfile, resolve
 
-#: backend/tests/ -> backend/ -> apps/server/ -> apps/ -> repo root
-REPO_ROOT = Path(__file__).resolve().parents[4]
+#: apps/server/tests/ -> apps/server/ -> apps/ -> repo root
+REPO_ROOT = Path(__file__).resolve().parents[3]
 BASELINE_DIR = REPO_ROOT / 'docs' / 'serving-baseline'
 
 
@@ -469,3 +474,23 @@ async def test_serve_process_stop_after_natural_exit_removes_the_log(tmp_path, m
     assert await proc.stop(grace=1.0) == 3
     assert not log_path.exists()
     await proc.stop(grace=1.0)  # idempotent
+
+
+def test_telemetry_recorder_module_resolves_from_import_root():
+    """The recorder is `python -m <module>` run in IMPORT_ROOT, with no PYTHONPATH.
+
+    The project is never installed (`uv sync --no-install-project`), so the
+    module resolves only because its package sits in the working directory.
+    This pins that, whatever directory the backend itself was started from.
+    """
+    module = 'open_webui.benchmarks.telemetry_recorder'
+    env = {k: v for k, v in os.environ.items() if k != 'PYTHONPATH'}
+    result = subprocess.run(
+        [sys.executable, '-c', f'import importlib.util, sys; sys.exit(importlib.util.find_spec({module!r}) is None)'],
+        cwd=IMPORT_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert (IMPORT_ROOT / 'pyproject.toml').is_file()

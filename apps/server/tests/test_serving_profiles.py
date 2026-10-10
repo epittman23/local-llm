@@ -8,7 +8,7 @@ by field -- with no database. A transcription slip in the seed shows up here
 as a failing test, rather than months later as a configuration served under
 the wrong flags or filed under the wrong config_id.
 
-Run from the backend directory:
+Run from apps/server:
 
     python -m pytest tests/test_serving_profiles.py
 """
@@ -20,6 +20,7 @@ import json
 from pathlib import Path
 
 import pytest
+
 from open_webui.benchmarks.serving.fingerprint import config_id, config_lines
 from open_webui.benchmarks.serving.profiles import (
     Overrides,
@@ -29,11 +30,11 @@ from open_webui.benchmarks.serving.profiles import (
     validate_definition,
 )
 
-BACKEND = Path(__file__).resolve().parents[1]
-#: backend/tests/ -> backend/ -> apps/server/ -> apps/ -> repo root
-REPO_ROOT = Path(__file__).resolve().parents[4]
+SERVER_DIR = Path(__file__).resolve().parents[1]
+#: apps/server/tests/ -> apps/server/ -> apps/ -> repo root
+REPO_ROOT = Path(__file__).resolve().parents[3]
 BASELINE_DIR = REPO_ROOT / 'docs' / 'serving-baseline'
-MIGRATION = BACKEND / 'open_webui' / 'migrations' / 'versions' / '5a1f0c3e9b27_add_benchmark_serving_profiles.py'
+MIGRATION = SERVER_DIR / 'open_webui' / 'migrations' / 'versions' / '5a1f0c3e9b27_add_benchmark_serving_profiles.py'
 
 
 def _load_json(name: str):

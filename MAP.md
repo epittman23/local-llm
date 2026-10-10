@@ -34,7 +34,7 @@ local-llm/
 the root `requirements.txt`/`.venv` are gone as of Phase 2c of the migration
 (2026-09-18) — see `docs/decisions.md`. `make backend`/
 `make frontend` are the replacement entry points; serving configuration
-itself lives in the backend as Python (`apps/server/backend/open_webui/
+itself lives in the backend as Python (`apps/server/open_webui/
 benchmarks/serving/`), not in a shell profile table.
 
 Local/generated (not tracked by git — see "Local/generated" section below
@@ -140,19 +140,22 @@ permanent hard fork with no upstream sync path — see `docs/decisions.md`. Sinc
 FastAPI backend is left; its SvelteKit frontend (last present at `d863707`)
 was replaced by `apps/web/`:
 
-- **`backend/open_webui/`** — the FastAPI app: `main.py` (entrypoint),
+- **`open_webui/`** — the FastAPI app (the Python package): `main.py` (entrypoint),
   `routers/` (API endpoints, including `routers/benchmarks/`), `models/` (DB
   models, including `models/benchmark_*.py`), `internal/` + `migrations/`
   (Alembic DB migrations), `retrieval/` (RAG), `socket/` (websocket/
   real-time), `tools/`, `tasks.py`, `utils/`, `config.py`, and
   **`benchmarks/`** (see below — fork-owned, not upstream).
+- **`tests/`** — the backend's pytest suite, run from `apps/server/`
+  (`tests/test_paths.py` pins the package's default paths).
 - Root-level: `pyproject.toml`/`uv.lock` (backend deps; `pyproject.toml`
-  also holds the version). The license files are at the repository root.
-  The upstream Docker images,
+  also holds the version). There is no `backend/` level any more: it was
+  flattened into `apps/server/` on 2026-10-10. The license files are at the
+  repository root. The upstream Docker images,
   compose variants, CI workflows, start scripts and community files are
   gone; this repo runs through the root `Makefile` and `infra/`.
 
-#### `backend/open_webui/benchmarks/` (fork-owned, not upstream)
+#### `open_webui/benchmarks/` (fork-owned, not upstream)
 
 The testing/comparison/reporting/tuning suite that used to be this outer
 repo's standalone `lllm-test`/`lllm-compare`/`lllm-report`/`lllm-tune` CLI
@@ -328,7 +331,8 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
 ## `Makefile`
 
 Root-level process lifecycle only: `make backend` (Postgres +
-`apps/server/backend`'s `uvicorn --reload` on `:4000`, Postgres torn down
+`apps/server`'s `uvicorn --reload` on `:4000`, with `DATA_DIR` pinned to
+`apps/server/data`, Postgres torn down
 on exit including Ctrl-C; it also serves `apps/web/dist` at `/`), and
 `make frontend`, alias `make astro` (`apps/web`'s `astro dev` on `:5174`,
 proxying to `:4000` — added Phase 3 as `make astro`, renamed in Phase 11e
@@ -355,15 +359,17 @@ knowing about when navigating the filesystem directly:
 - **`logs/`** — `llama.db.retired-<date>` (the old sqlite store, kept as a
   backup after its contents were backfilled into the fork's Postgres —
   safe to delete once that backfill is trusted) and server logs.
-- **`apps/server/backend/data/`** — the backend's `DATA_DIR`: uploads,
-  caches, the Benchmarks section's fetched datasets, answer exports and
-  reports. Created at boot if missing.
-- **`apps/server/backend/.venv/`** — the fork backend's own virtualenv,
+- **`apps/server/data/`** — the backend's `DATA_DIR` (pinned by the
+  Makefile): uploads, caches, the Benchmarks section's fetched datasets,
+  answer exports and reports. Created at boot if missing. A checkout from
+  before 2026-10-10 has it at `apps/server/backend/data/` until moved.
+- **`apps/server/.venv/`** — the backend's own virtualenv (uv's default
+  location),
   bootstrapped by `make backend` on first run. The only Python virtualenv in
   this repo since Phase 2c deleted the root `.venv/` along with `scripts/`.
 - **`apps/web/node_modules/`**, **`apps/web/dist/`**, **`apps/web/.astro/`** —
   the new frontend's dependency tree, production build output (served at
-  `/` when present — `FRONTEND_BUILD_DIR` in `apps/server/backend/open_webui/env.py`),
+  `/` when present — `FRONTEND_BUILD_DIR` in `apps/server/open_webui/env.py`),
   and Astro's generated type cache. `bun.lock` beside them **is** tracked.
 - **`apps/web/test-results/`**, **`apps/web/playwright-report/`** — Playwright
   output from `bun run test:e2e`.

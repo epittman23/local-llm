@@ -17,6 +17,7 @@ import pytest
 import uvicorn
 from mcp.server.mcpserver import MCPServer
 from mcp.types import ImageContent
+
 from open_webui.utils.mcp.client import MCPClient
 
 PIXEL = base64.b64encode(b'\x89PNG\r\n\x1a\n').decode()
