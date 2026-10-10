@@ -224,15 +224,16 @@ __marimo__/
 # the GPU telemetry recorder writes to Postgres.
 /logs/
 
-# The backend's runtime data (uploads, caches, benchmark datasets, reports).
-# DATA_DIR defaults to apps/server/backend/data; apps/server/data is where it
-# moves when apps/server/backend/ is flattened. Neither is ever tracked.
-/apps/server/backend/data/
+# The backend's runtime data (uploads, caches, benchmark datasets, reports):
+# DATA_DIR, which `make backend` pins to apps/server/data. Its old location,
+# apps/server/backend/data, stays ignored until an existing checkout has moved
+# it (docs/restructure-plan.md, section 8 B). Never tracked.
 /apps/server/data/
+/apps/server/backend/
 *.db
 
 # Top-level files in the backend's static dir are copied in at every boot
 # from the frontend build's static/ (config.py deletes and recreates them);
 # the subdirectories are tracked.
-/apps/server/backend/open_webui/static/*
-!/apps/server/backend/open_webui/static/*/
+/apps/server/open_webui/static/*
+!/apps/server/open_webui/static/*/

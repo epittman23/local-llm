@@ -19,19 +19,15 @@ from cryptography.hazmat.primitives import serialization
 # Use .resolve() to get the canonical path, removing any '..' or '.' components
 ENV_FILE_PATH = Path(__file__).resolve()
 
-# OPEN_WEBUI_DIR should be the directory where env.py resides (open_webui/)
-OPEN_WEBUI_DIR = ENV_FILE_PATH.parent
-
-# BACKEND_DIR is the parent of OPEN_WEBUI_DIR (backend/)
-BACKEND_DIR = OPEN_WEBUI_DIR.parent
-
-# BASE_DIR is the parent of BACKEND_DIR (open-webui-dev/)
-BASE_DIR = BACKEND_DIR.parent
+# PACKAGE_DIR is the package itself (apps/server/open_webui/); SERVER_DIR is
+# its parent, apps/server/, which holds pyproject.toml, tests/ and .venv/.
+PACKAGE_DIR = ENV_FILE_PATH.parent
+SERVER_DIR = PACKAGE_DIR.parent
 
 try:
     from dotenv import find_dotenv, load_dotenv
 
-    load_dotenv(find_dotenv(str(BASE_DIR / '.env')))
+    load_dotenv(find_dotenv(str(SERVER_DIR / '.env')))
 except ImportError:
     print('dotenv not installed, skipping...')
 
@@ -132,7 +128,7 @@ ENV = os.getenv('ENV', 'dev')
 # package.json until Phase 11 deleted that app). apps/web/package.json carries
 # the same number for the About tab and plugin version checks.
 try:
-    with open(BASE_DIR / 'pyproject.toml', 'rb') as f:
+    with open(SERVER_DIR / 'pyproject.toml', 'rb') as f:
         PACKAGE_DATA = {'version': tomllib.load(f)['project']['version']}
 except Exception:
     PACKAGE_DATA = {'version': '0.0.0'}
@@ -155,21 +151,35 @@ ENABLE_ORJSON = os.getenv('ENABLE_ORJSON', 'False').lower() == 'true'
 # DATA/FRONTEND BUILD DIR
 ####################################
 
-DATA_DIR = Path(os.getenv('DATA_DIR', BACKEND_DIR / 'data')).resolve()
+
+def default_data_dir() -> Path:
+    """Where runtime data lives when DATA_DIR is unset: apps/server/data.
+
+    `make backend` pins DATA_DIR explicitly, so this default only applies to
+    a hand-started backend. It moved once already (from apps/server/backend/
+    data when backend/ was flattened), which is why the Makefile pins it.
+    """
+    return SERVER_DIR / 'data'
+
+
+def default_frontend_build_dir() -> Path:
+    """The Astro frontend's build output, apps/web/dist (`bun run build`)."""
+    return SERVER_DIR.parent / 'web' / 'dist'
+
+
+DATA_DIR = Path(os.getenv('DATA_DIR', default_data_dir())).resolve()
 
 # Created here rather than relied on to exist: a fresh clone has no data dir,
 # and run_migrations() (config.py) runs before anything else creates one.
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-STATIC_DIR = Path(os.getenv('STATIC_DIR', OPEN_WEBUI_DIR / 'static'))
+STATIC_DIR = Path(os.getenv('STATIC_DIR', PACKAGE_DIR / 'static'))
 
-FONTS_DIR = Path(os.getenv('FONTS_DIR', OPEN_WEBUI_DIR / 'static' / 'fonts'))
+FONTS_DIR = Path(os.getenv('FONTS_DIR', PACKAGE_DIR / 'static' / 'fonts'))
 
-# The Astro + React + shadcn/ui frontend's build output (apps/web/dist; run
-# `bun run build` in apps/web). BASE_DIR is apps/server/, so its parent is
-# apps/, sibling to apps/web/. The SvelteKit build (BASE_DIR / 'build') this
-# replaced was removed in Phase 11 of docs/history/migration-plan.md.
-FRONTEND_BUILD_DIR = Path(os.getenv('FRONTEND_BUILD_DIR', BASE_DIR.parent / 'web' / 'dist')).resolve()
+# The SvelteKit build this replaced was removed in Phase 11 of
+# docs/history/migration-plan.md.
+FRONTEND_BUILD_DIR = Path(os.getenv('FRONTEND_BUILD_DIR', default_frontend_build_dir())).resolve()
 
 ####################################
 # Database

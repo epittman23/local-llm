@@ -1,7 +1,7 @@
 # Backend dependencies
 
 This repo has exactly one Python environment now:
-`apps/server/backend/.venv`, which `make backend` keeps in sync with
+`apps/server/.venv`, which `make backend` keeps in sync with
 `apps/server/pyproject.toml` + `apps/server/uv.lock` (`uv sync --frozen`)
 on every run. Those two files are the only place backend dependencies are
 declared; add or change one with `uv add` / `uv lock` from `apps/server/`.
@@ -38,6 +38,16 @@ DS-1000 slice, and `pyyaml` is needed for DS-1000 items that round-trip through
 YAML. scipy is a hard dependency (the Report page's request fails outright
 without it); matplotlib is installed by default but optional in code (the
 report falls back to unicode plots).
+
+## Runtime data (`DATA_DIR`)
+
+Uploads, caches, the Benchmarks section's fetched datasets, answer exports and
+reports live under `DATA_DIR`. `make backend` pins it to `apps/server/data`
+(gitignored) instead of relying on `env.py`'s default, because that default
+is relative to the package and moved once already, when `apps/server/backend/`
+was flattened; a moved default would silently start the backend on an empty
+directory. Override it with `make backend DATA_DIR=/some/where`. Chats,
+accounts, settings and benchmark results are in Postgres, not here.
 
 ## Offline model cache
 

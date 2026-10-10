@@ -8,7 +8,7 @@ ServeProcess that fails to start) and that overrides reach resolve()
 correctly -- with BenchmarkProfiles and ServeProcess itself monkeypatched,
 so nothing here touches a real database, llama-server, or the GPU.
 
-Run from the backend directory:
+Run from apps/server:
 
     python -m pytest tests/test_serve_router.py
 """
@@ -22,6 +22,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
 from open_webui.benchmarks.serving.launcher import LauncherError
 from open_webui.models.benchmark_configs import BenchmarkRuns
 from open_webui.models.benchmark_profiles import (

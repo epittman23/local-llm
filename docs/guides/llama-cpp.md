@@ -46,7 +46,7 @@ Serving settings are grouped into profiles rather than scattered across env
 vars, stored in Postgres (`benchmark_profile`/`benchmark_profile_version`,
 versioned and append-only — editing a profile inserts a new version rather
 than overwriting one) and resolved by
-`apps/server/backend/open_webui/benchmarks/serving/profiles.py`. The
+`apps/server/open_webui/benchmarks/serving/profiles.py`. The
 Serve page's profile list shows all four and whether their weights are on
 disk; the table below is the same information for reference:
 

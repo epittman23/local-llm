@@ -63,7 +63,7 @@ Fedora machine yet (2026-10-09).
 
 - **Profiles** are versioned rows in Postgres (`benchmark_profile`,
   `benchmark_profile_version`), resolved by
-  `apps/server/backend/open_webui/benchmarks/serving/profiles.py`. Every
+  `apps/server/open_webui/benchmarks/serving/profiles.py`. Every
   profile serves one slot (`--parallel 1`), passed unconditionally.
 - **Serving** starts from Benchmarks > Serve (`/benchmarks/serve`).
   `serving/launcher.py`'s `ServeProcess` spawns `llama-server` and the GPU
@@ -101,7 +101,7 @@ that assume a cloud-only environment.**
 
 [MAP.md](MAP.md) is the structural index: what lives where. In short:
 `apps/server/` is the FastAPI backend (its package is
-`apps/server/backend/open_webui/`), `apps/web/` is the Astro + React +
+`apps/server/open_webui/`), `apps/web/` is the Astro + React +
 shadcn/ui frontend, `infra/` holds the Postgres + pgvector Compose file, and
 `docs/` holds the decisions log, roadmap, guides, proposals and history.
 
@@ -118,7 +118,7 @@ shadcn/ui frontend, `infra/` holds the Postgres + pgvector Compose file, and
   assistant lives in the app (Admin Settings > Connections; Workspace >
   Models), never in a repo file.
 - **The one deliberate copy** is
-  `apps/server/backend/open_webui/benchmarks/data/prompts/assistant.txt`,
+  `apps/server/open_webui/benchmarks/data/prompts/assistant.txt`,
   which duplicates the deployed system prompt so a local configuration can be
   measured under it. It configures nothing. When the prompt changes in the
   app, copy it there in the same change, or the benchmark measures a prompt
@@ -146,7 +146,7 @@ shadcn/ui frontend, `infra/` holds the Postgres + pgvector Compose file, and
 - `infra/.env` (gitignored) holds `OPENROUTER_API_KEY`, `POSTGRES_PASSWORD`
   and `WEBUI_SECRET_KEY`.
 - Tests: `bun run test:unit`, `bun run test:e2e` (use `--workers=2`) and
-  `bunx astro check` in `apps/web`; pytest in `apps/server/backend` (see
+  `bunx astro check` in `apps/web`; pytest in `apps/server` (see
   [docs/guides/testing.md](docs/guides/testing.md)).
 - Lint and format: `pre-commit run --all-files`
   (`.pre-commit-config.yaml` is the only definition; CI runs the same file).
@@ -167,6 +167,9 @@ shadcn/ui frontend, `infra/` holds the Postgres + pgvector Compose file, and
 - `make backend` sets `HF_HUB_OFFLINE=1`: embedding and reranking models
   must already be in the Hugging Face cache, or knowledge uploads won't
   embed (see the guide above).
+- `make backend` pins `DATA_DIR` to `apps/server/data` (uploads, caches,
+  benchmark datasets and reports), so the location never moves with the
+  code; a hand-started backend defaults to the same place.
 - The database schema is append-only (see the maintenance policy).
 
 ## Frontend (`apps/web`)
@@ -217,7 +220,7 @@ or agent) updates the docs in the same commit:
   change to those flags must be reflected in `serving/fingerprint.py` too,
   or old and new runs get fingerprinted as the same configuration.
 - **The database schema is append-only.** Migrations are ordinary Alembic
-  revisions under `apps/server/backend/open_webui/migrations/versions/`; add
+  revisions under `apps/server/open_webui/migrations/versions/`; add
   one, never edit one that has been applied. When a change alters what the
   `config_id` fingerprint covers (which changes every existing id and makes
   rows either side of it incomparable), add a `benchmark_schema_note` row

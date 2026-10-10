@@ -6,6 +6,7 @@ import time
 import requests
 from fastapi import HTTPException, status
 from langchain_core.documents import Document
+from open_webui.env import DATA_DIR
 from open_webui.utils.json_codec import JSONCodec
 
 log = logging.getLogger(__name__)
@@ -207,7 +208,9 @@ class DatalabMarkerLoader:
                 detail='Marker returned empty content',
             )
 
-        marker_output_dir = os.path.join('/app/backend/data/uploads', 'marker_output')
+        # Under DATA_DIR's uploads, like every other upload; the path here was
+        # upstream's Docker image layout (/app/backend/data), absent on this host.
+        marker_output_dir = os.path.join(DATA_DIR, 'uploads', 'marker_output')
         os.makedirs(marker_output_dir, exist_ok=True)
 
         file_ext_map = {'markdown': 'md', 'json': 'json', 'html': 'html'}

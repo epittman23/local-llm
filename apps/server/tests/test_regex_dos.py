@@ -9,6 +9,7 @@ in milliseconds; the bound is loose so a slow CI machine can't flake it.
 import time
 
 import pytest
+
 from open_webui.utils.chat_variables import collect_chat_variable_fields, render_user_variables
 from open_webui.utils.middleware import extract_skill_ids_from_messages, strip_skill_mentions
 from open_webui.utils.misc import validate_email_format

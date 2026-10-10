@@ -11,7 +11,7 @@ from pathlib import Path
 
 from open_webui.env import VERSION
 
-APP_DIR = Path(__file__).resolve().parents[2]  # apps/server/
+APP_DIR = Path(__file__).resolve().parents[1]  # apps/server/
 
 
 def test_version_is_read_from_pyproject():

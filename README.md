@@ -29,7 +29,7 @@ that). Requires Docker Engine with the Compose plugin, with your user in the
 plus `make`, Bun, **Node ≥ 22.12** (Astro's `engines`), and
 **[uv](https://docs.astral.sh/uv/)** for the backend (it also provides the
 Python 3.12 the backend needs; see [docs/guides/dependencies.md](docs/guides/dependencies.md)). The first
-`make backend` builds `apps/server/backend/.venv` from `apps/server/uv.lock`
+`make backend` builds `apps/server/.venv` from `apps/server/uv.lock`
 (about 2.5 GB); later runs only re-check it against the lock.
 
 A plain `git clone` is enough — the fork lives inside `apps/server/` as
@@ -51,6 +51,23 @@ WEBUI_SECRET_KEY=<openssl rand -base64 24>
 > on the new machine unless you `pg_dump` it from the old one and restore
 > it. Model weights and `~/llama.cpp` have to be copied or fetched again too
 > (see [docs/guides/llama-cpp.md](docs/guides/llama-cpp.md#building-llamacpp) and [docs/guides/model-downloads.md](docs/guides/model-downloads.md)).
+
+> **Upgrading an existing checkout (2026-10-10).** `apps/server/backend/`
+> was flattened into `apps/server/`. A `git pull` moves the tracked files but
+> not two gitignored directories:
+>
+> - **The data directory.** `make backend` now pins `DATA_DIR` to
+>   `apps/server/data`. Back up and move the old one before the next
+>   `make backend`, or the backend starts on an empty uploads/cache
+>   directory:
+>   ```bash
+>   tar -C apps/server/backend -czf ~/local-llm-data-backup-$(date +%F).tar.gz data
+>   if [ -e apps/server/data ]; then echo "apps/server/data already exists; merge by hand"; \
+>   else mv apps/server/backend/data apps/server/data; fi
+>   ```
+> - **The venv.** It is now uv's default `apps/server/.venv`, which the next
+>   `make backend` builds (quickly, from uv's cache). Afterwards remove the
+>   old one and the leftover directory: `rm -rf apps/server/backend`.
 
 then, in one terminal:
 

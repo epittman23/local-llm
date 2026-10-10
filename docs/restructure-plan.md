@@ -808,7 +808,7 @@ rm -rf apps/server/backend
 | 0 Plan + baselines | #54 | done | see "Phase 0 baselines" below | none |
 | 1 Docs | #55 | done | see "Phase 1" below | see "Phase 1" below |
 | 2a-2e Deletions + licenses | #56, #57, #58, #59, 2e: (this PR) | done | see "Phase 2" below | see "Phase 2" below |
-| 3 Flatten | — | | | |
+| 3 Flatten | (this PR) | done | see "Phase 3" below | see "Phase 3" below |
 | 4 Rename | — | | | |
 | 5a/5b Blame + plugin compat | — | | | |
 | 6a-6d Identifiers + branding | — | | | |
@@ -904,4 +904,25 @@ rm -rf apps/server/backend
   - README "License", AGENTS.md, MAP.md re-pointed. Settings > About is unchanged (it shows the lines, not file paths).
   - **Verification:** pre-commit passed (gitleaks, detect-private-key); `uv lock --check` OK; pytest 300 passed, 1 skipped; 0 broken links.
 - **Tooling:** the link checker was also lost with the scratchpad and now lives in `~/.cache/local-llm-restructure/check_links.py`.
+
+### Phase 3: flatten `apps/server/backend/`
+
+- **Done.**
+  - `git mv` of `backend/open_webui` to `apps/server/open_webui` and of `backend/tests` to `apps/server/tests`. That is 352 renames, all detected as renames.
+  - `env.py`: `PACKAGE_DIR`/`SERVER_DIR` replace `OPEN_WEBUI_DIR`/`BACKEND_DIR`/`BASE_DIR`. The defaults are the pure functions `default_data_dir()` (`apps/server/data`) and `default_frontend_build_dir()` (`apps/web/dist`). Callers in `config.py` and `grading/__init__.py` updated; the grader's venv is now `SERVER_DIR/.venv`.
+  - Makefile: `SERVER_DIR`, uv's default `apps/server/.venv` (no `UV_PROJECT_ENVIRONMENT`), `DATA_DIR ?= apps/server/data` pinned with its rationale, and `cd apps/server`.
+  - pyproject: wheel `packages = ["open_webui"]`; ruff per-file-ignores re-pathed. CI pytest runs from `apps/server`. pre-commit `files:` re-pathed.
+  - `.gitignore`: `/apps/server/data/` and the static rule re-pathed. `/apps/server/backend/` stays ignored until the §8 B/C local moves are done.
+  - Tests: `parents[4]` → `[3]` (five files), `test_version` `parents[2]` → `[1]`. New `tests/test_paths.py` pins the three silent-failure paths.
+  - **Deviation:** `ServeProcess` now spawns the telemetry recorder with an explicit `cwd=IMPORT_ROOT`, the package's import root derived from the module's dotted name, instead of inheriting uvicorn's working directory. New test `test_telemetry_recorder_module_resolves_from_import_root`.
+  - `datalab_marker.py`: the hard-coded `/app/backend/data/uploads` became `DATA_DIR/uploads`.
+  - Docs updated: README "Running it" (venv, plus a restructure upgrade note with the data-move commands), AGENTS.md, MAP.md, guides.
+- **Verification:**
+  - Built the new `apps/server/.venv` (`uv sync --frozen --no-install-project --group dev`).
+  - pre-commit passed. The ruff I001 re-sort of 14 test files (first-party section break) was expected and is folded in.
+  - `uv lock --check` OK.
+  - pytest 305 passed, 1 skipped; with `TEST_DATABASE_URL`, `test_imports.py` 2 passed. Fingerprint 79 passed.
+  - Scratch boot from `apps/server`: version 0.11.3, `/` serves `<title>local-llm`. Schema and metadata identical to baseline.
+  - No `apps/server/data/` was created by any run.
+  - Web: astro check 0 errors, Vitest 588 passed, build OK.
 

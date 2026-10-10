@@ -162,8 +162,7 @@ jobs:
       - name: Install
         run: uv sync --frozen --no-install-project --group dev
       - name: pytest
-        working-directory: apps/server/backend
-        run: uv run --frozen --project .. python -m pytest tests -q
+        run: uv run --frozen python -m pytest tests -q
 
   ci-ok:
     name: CI passed

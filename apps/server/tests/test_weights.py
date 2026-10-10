@@ -5,7 +5,7 @@ profiles' real hf_repo/hf_pattern values, and FetchProcess's precondition
 checks (no 'hf' CLI, start() never called) are exercised directly. Nothing
 here downloads anything.
 
-Run from the backend directory:
+Run from apps/server:
 
     python -m pytest tests/test_weights.py
 """
@@ -16,11 +16,12 @@ import json
 from pathlib import Path
 
 import pytest
+
 from open_webui.benchmarks.serving.profiles import ServingProfile
 from open_webui.benchmarks.serving.weights import FetchProcess, WeightsError, fetch_argv
 
-#: backend/tests/ -> backend/ -> apps/server/ -> apps/ -> repo root
-REPO_ROOT = Path(__file__).resolve().parents[4]
+#: apps/server/tests/ -> apps/server/ -> apps/ -> repo root
+REPO_ROOT = Path(__file__).resolve().parents[3]
 BASELINE_DIR = REPO_ROOT / 'docs' / 'serving-baseline'
 
 

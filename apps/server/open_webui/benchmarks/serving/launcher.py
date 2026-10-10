@@ -257,6 +257,14 @@ def telemetry_argv(
     return argv
 
 
+#: The directory the top-level package is importable from (apps/server/),
+#: derived from this module's own dotted name so it survives package moves.
+#: The telemetry recorder is spawned as `python -m <package>...` with this as
+#: its working directory, rather than inheriting uvicorn's, so it resolves
+#: however the backend itself was started.
+IMPORT_ROOT = Path(__file__).resolve().parents[len(__name__.split('.')) - 1]
+
+
 @dataclass
 class ServeProcess:
     """Owns one llama-server invocation and its telemetry recorder.
@@ -376,6 +384,7 @@ class ServeProcess:
         self.telemetry_proc = await asyncio.create_subprocess_exec(
             sys.executable,
             *tel_argv,
+            cwd=IMPORT_ROOT,
             start_new_session=True,
         )
 

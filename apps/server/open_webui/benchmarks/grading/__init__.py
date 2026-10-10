@@ -31,7 +31,7 @@ import time
 from pathlib import Path
 
 from open_webui.benchmarks.datasets import datasets_base_dir, read_manifest
-from open_webui.env import BACKEND_DIR
+from open_webui.env import SERVER_DIR
 
 from . import ds1000, humaneval, mbpp
 
@@ -114,7 +114,7 @@ def grader_python() -> str:
     override = os.environ.get('LLAMA_GRADER_PYTHON')
     if override:
         return override
-    venv = BACKEND_DIR / '.venv' / 'bin' / 'python'
+    venv = SERVER_DIR / '.venv' / 'bin' / 'python'
     return str(venv) if venv.exists() else sys.executable
 
 
