@@ -16,7 +16,7 @@ instead.
 ```
 local-llm/
 ├── AGENTS.md                  agent and contributor guide (CLAUDE.md links to it)
-├── LICENSE, LICENSE_HISTORY   the Open WebUI License texts the derived code is under
+├── LICENSE, LICENSE_HISTORY   the license texts the derived code is under (see NOTICE)
 ├── NOTICE                     what is derived, the license boundaries, the branding basis
 ├── CONTRIBUTOR_LICENSE_AGREEMENT  referred to by LICENSE
 ├── CLAUDE.md                  symlink to AGENTS.md
@@ -24,7 +24,7 @@ local-llm/
 ├── README.md                  what it is, running it, pages and URLs
 ├── MAP.md                     this file
 ├── apps/                      the applications themselves
-│   ├── server/                FastAPI backend (the vendored Open WebUI fork)
+│   ├── server/                FastAPI backend (package local_llm)
 │   └── web/                   Astro + React + shadcn/ui frontend
 ├── docs/                      decisions log, roadmap, guides, proposals, history
 └── infra/                     docker-compose for Postgres + pgvector
@@ -52,8 +52,8 @@ the same file. Read it before making structural or config changes.
 ## `LICENSE`, `LICENSE_HISTORY`, `NOTICE`, `CONTRIBUTOR_LICENSE_AGREEMENT`
 
 The license files, moved verbatim from `apps/server/` on 2026-10-10.
-`LICENSE` (the Open WebUI License) and `LICENSE_HISTORY` (the earlier BSD and
-MIT terms) are the legal texts; `CONTRIBUTOR_LICENSE_AGREEMENT` is kept because
+`LICENSE` (the license the derived code is under) and `LICENSE_HISTORY` (the
+earlier BSD and MIT terms) are the legal texts; `CONTRIBUTOR_LICENSE_AGREEMENT` is kept because
 `LICENSE` refers to it. `NOTICE` merges the two former `LICENSE_NOTICE` files:
 which parts of `apps/server/` and `apps/web/` are derived, the upstream
 multi-license commit boundaries, the required copyright notice, and the clause
@@ -105,7 +105,7 @@ Start here for "how do I run/use this."
 
 Infrastructure this repo runs but does not write.
 
-- **`docker-compose.yml`** — Postgres + pgvector service backing the fork.
+- **`docker-compose.yml`** — Postgres + pgvector service backing the backend.
   Its Compose project name is **pinned** to `local-llm` rather than
   inherited from this directory's name; the volume name derives from the
   project name, so the pin keeps the data in `local-llm_postgres-data`
@@ -119,48 +119,45 @@ Infrastructure this repo runs but does not write.
 
 ## `apps/`
 
-The applications themselves. Before 2026-09-14 this repo held no application
-code at all; the fork lived in a submodule and that rule was a real
-constraint. It is not any more — see `AGENTS.md`'s Conventions.
+The applications themselves, all of it this project's own code (see
+`AGENTS.md`'s Conventions).
 
-- **`server/`** — the vendored Open WebUI fork, its FastAPI backend only since Phase 11 (mapped below).
+- **`server/`** — the FastAPI backend (mapped below).
 - **`web/`** — the Astro + React + shadcn/ui frontend (mapped below), which
-  replaced the fork's SvelteKit app over Phases 3-11 of
-  `docs/history/migration-plan.md`; its build (`dist/`) is what the fork's `main.py`
-  serves at `/`.
+  replaced the original SvelteKit app over Phases 3-11 of
+  `docs/history/migration-plan.md`; its build (`dist/`) is what the backend's
+  `main.py` serves at `/`.
 
-### `apps/server/` (vendored fork)
+### `apps/server/` (the backend)
 
-A pinned fork of [`open-webui/open-webui`](https://github.com/open-webui/open-webui)
-(v0.11.3), vendored into this repo as ordinary tracked files on 2026-09-14 —
-previously a git submodule. The import squashed the fork's history to a
-single commit; the full history remains at
+The FastAPI backend. It began as a fork of Open WebUI v0.11.3, vendored into
+this repo on 2026-09-14 and owned outright since (no upstream sync path; see
+`NOTICE` for what is derived and `docs/decisions.md` for the history). The
+fork's pre-import history is kept read-only at
 `https://github.com/epittman23/open-webui.git` (branch `customizations`, at
-`67d4039`), which is kept as a read-only archive. This is now owned code, a
-permanent hard fork with no upstream sync path — see `docs/decisions.md`. Since Phase 11e only the
-FastAPI backend is left; its SvelteKit frontend (last present at `d863707`)
-was replaced by `apps/web/`:
+`67d4039`). Its SvelteKit frontend (last present at `d863707`) was replaced by
+`apps/web/`:
 
 - **`local_llm/`** — the FastAPI app (the Python package): `main.py` (entrypoint),
   `routers/` (API endpoints, including `routers/benchmarks/`), `models/` (DB
   models, including `models/benchmarks/`), `internal/` + `migrations/`
   (Alembic DB migrations), `retrieval/` (RAG), `socket/` (websocket/
   real-time), `tools/`, `tasks.py`, `utils/`, `config.py`, and
-  **`benchmarks/`** (see below — fork-owned, not upstream).
+  **`benchmarks/`** (see below).
 - **`tests/`** — the backend's pytest suite, run from `apps/server/`
   (`tests/test_paths.py` pins the package's default paths).
 - Root-level: `pyproject.toml`/`uv.lock` (backend deps; `pyproject.toml`
   also holds the version). There is no `backend/` level any more: it was
   flattened into `apps/server/` on 2026-10-10. The license files are at the
-  repository root. The upstream Docker images,
-  compose variants, CI workflows, start scripts and community files are
-  gone; this repo runs through the root `Makefile` and `infra/`.
+  repository root. The original project's Docker images, compose variants,
+  CI workflows, start scripts and community files are gone; this repo runs
+  through the root `Makefile` and `infra/`.
 
-#### `local_llm/benchmarks/` (fork-owned, not upstream)
+#### `local_llm/benchmarks/`
 
 The testing/comparison/reporting/tuning suite that used to be this outer
 repo's standalone `lllm-test`/`lllm-compare`/`lllm-report`/`lllm-tune` CLI
-and `lllm-web` dashboard, migrated in whole into the fork so it is native
+and `lllm-web` dashboard, migrated in whole into the backend so it is native
 functionality (own routers, own pages, own Postgres tables) rather
 than a second app glued on by a userscript. See `docs/decisions.md` for the migration and why each piece landed where it did.
 
@@ -200,7 +197,7 @@ than a second app glued on by a userscript. See `docs/decisions.md` for the migr
 
 ### `apps/web/` (Astro + React + shadcn/ui)
 
-The frontend, which replaced the fork's SvelteKit app surface by
+The frontend, which replaced the original SvelteKit app surface by
 surface (see `docs/history/migration-plan.md`'s Phases 3-11).
 `docs/guides/frontend.md` covers usage; this is a structural summary.
 
@@ -339,7 +336,7 @@ comment). Replaces `scripts/` (deleted in Phase 2c of
 the migration, 2026-09-18 — see `docs/decisions.md`), which held
 a shell orchestrator, `lllm-*` commands, and a Rich/plain terminal CLI
 (`llama_console.py`, backing `lllm-profiles`/`lllm-check`/`lllm-vram`) with
-no replacement of its own; those diagnostics now live in the fork's own
+no replacement of its own; those diagnostics now live in the app's own
 Benchmarks section (Serve/Live pages), same as serving itself since
 Phase 2a/2b. Per-module purpose and rationale are documented in detail in
 [`AGENTS.md`](AGENTS.md)'s "Conventions" section — this entry is a
@@ -353,9 +350,10 @@ knowing about when navigating the filesystem directly:
 - **`.vscode/`** — editor config (currently empty).
 - **`.claude/`** — Claude Code local state (`settings.local.json`,
   scheduled task locks).
-- **`logs/`** — `llama.db.retired-<date>` (the old sqlite store, kept as a
-  backup after its contents were backfilled into the fork's Postgres —
-  safe to delete once that backfill is trusted) and server logs.
+- **`logs/`** — local logs. On a checkout that has one,
+  `llama.db.retired-<date>` is the old SQLite store from before 2026-09-08;
+  its Postgres backfill was lost with the old database on 2026-10-09, so that
+  file is the only copy of that history. Absent on the current machine.
 - **`apps/server/data/`** — the backend's `DATA_DIR` (pinned by the
   Makefile): uploads, caches, the Benchmarks section's fetched datasets,
   answer exports and reports. Created at boot if missing. A checkout from
@@ -370,5 +368,4 @@ knowing about when navigating the filesystem directly:
   and Astro's generated type cache. `bun.lock` beside them **is** tracked.
 - **`apps/web/test-results/`**, **`apps/web/playwright-report/`** — Playwright
   output from `bun run test:e2e`.
-- **`__pycache__/`** — Python bytecode cache, scattered under the vendored
-  fork.
+- **`__pycache__/`** — Python bytecode cache, scattered under `apps/server/`.

@@ -32,7 +32,7 @@ Python 3.12 the backend needs; see [docs/guides/dependencies.md](docs/guides/dep
 `make backend` builds `apps/server/.venv` from `apps/server/uv.lock`
 (about 2.5 GB); later runs only re-check it against the lock.
 
-A plain `git clone` is enough — the fork lives inside `apps/server/` as
+A plain `git clone` is enough: the backend lives in `apps/server/` as
 ordinary tracked files, not a submodule. Put your secrets in `infra/.env`
 (gitignored; `cp infra/.env.example infra/.env` gives you the keys):
 
@@ -43,46 +43,29 @@ POSTGRES_PASSWORD=<openssl rand -base64 24>
 LLLM_SECRET_KEY=<openssl rand -base64 24>
 ```
 
-> **Moving from WSL2 to native Linux (2026-10-09).** Nothing gitignored
-> comes across with a fresh clone: recreate `infra/.env`, let `make backend`
-> build the venv, and rerun `bun install && bun run build` in `apps/web`.
-> Docker volumes do not move either, so the database (chats, accounts,
-> benchmark history, profile edits) starts empty on the new machine unless
-> you restore a `pg_dump` of the old one (see "Restoring a database" below). Model weights and `~/llama.cpp` have to be copied or fetched again too
-> (see [docs/guides/llama-cpp.md](docs/guides/llama-cpp.md#building-llamacpp) and [docs/guides/model-downloads.md](docs/guides/model-downloads.md)).
-
-> **Upgrading an existing checkout (2026-10-10).** `apps/server/backend/`
-> was flattened into `apps/server/`. A `git pull` moves the tracked files but
-> not two gitignored directories:
->
-> - **The data directory.** `make backend` now pins `DATA_DIR` to
->   `apps/server/data`. Back up and move the old one before the next
->   `make backend`, or the backend starts on an empty uploads/cache
->   directory:
->   ```bash
->   tar -C apps/server/backend -czf ~/local-llm-data-backup-$(date +%F).tar.gz data
->   if [ -e apps/server/data ]; then echo "apps/server/data already exists; merge by hand"; \
->   else mv apps/server/backend/data apps/server/data; fi
->   ```
-> - **The venv.** It is now uv's default `apps/server/.venv`, which the next
->   `make backend` builds (quickly, from uv's cache). Afterwards remove the
->   old one and the leftover directory: `rm -rf apps/server/backend`.
-
-> **Restoring a database.** The Compose project is `local-llm`, so the data
-> lives in the `local-llm_postgres-data` volume, with role and database
-> `local_llm`. (Until 2026-10-10 they were `open-web-ui_postgres-data` and
-> `openwebui`.) To bring an old database across, dump it on the old setup
-> and restore it here **before** the first `make backend`, so migrations
-> don't create an empty schema first:
+> **The database.** Postgres data (accounts, chats, settings, benchmark
+> history) lives in the `local-llm_postgres-data` Docker volume, role and
+> database `local_llm`. The first `make backend` creates it empty. A Docker
+> volume does not move with a clone or survive a new machine, so **back it up**
+> while `make backend` is running:
 >
 > ```bash
-> # on the old setup
-> pg_dump -Fc -U openwebui openwebui > local-llm.dump
-> # here: start only Postgres, then restore into it
+> docker exec local-llm-postgres pg_dump -Fc -U local_llm local_llm > local-llm-$(date +%F).dump
+> ```
+>
+> To restore a dump into a fresh volume, do it **before** the first
+> `make backend`, so migrations don't create an empty schema first:
+>
+> ```bash
 > docker compose -f infra/docker-compose.yml up -d postgres
 > docker exec -i local-llm-postgres pg_restore --no-owner --role=local_llm \
->   -U local_llm -d local_llm < local-llm.dump
+>   -U local_llm -d local_llm < local-llm-<date>.dump
 > ```
+>
+> Model weights and `~/llama.cpp` live outside the repo too; on a new machine
+> they are copied or fetched again (see
+> [docs/guides/llama-cpp.md](docs/guides/llama-cpp.md#building-llamacpp) and
+> [docs/guides/model-downloads.md](docs/guides/model-downloads.md)).
 
 then, in one terminal:
 
@@ -90,7 +73,7 @@ then, in one terminal:
 make backend
 ```
 
-which brings up Postgres (`infra/docker-compose.yml`) and the fork's
+which brings up Postgres (`infra/docker-compose.yml`) and the
 backend (`uvicorn`, port `4000`) together, and tears Postgres back down when
 the backend stops (Ctrl-C included). The backend listens on `127.0.0.1` only;
 to reach it from another machine, start it with
@@ -225,7 +208,7 @@ Postgres listens on `127.0.0.1:5432` (user/db `local_llm`, password from
 
 ## Model setup
 
-Under **Workspace → Models**, this project defines one Open WebUI model entry
+Under **Workspace → Models**, this project defines one model entry
 per task, each wrapping a specific OpenRouter model id:
 
 - **Coding** → `qwen/qwen-2.5-coder-32b-instruct`
@@ -252,7 +235,7 @@ connection under **Admin Panel → Settings → Connections**: change the base U
 to your local server's OpenAI-compatible endpoint (`http://localhost:8090/v1`
 for a server started from the Serve page, or `http://localhost:11434/v1`
 for Ollama), and update the API key if your local server requires one. No
-other changes should be necessary, since Open WebUI talks to any
+other changes should be necessary, since the backend talks to any
 OpenAI-compatible endpoint.
 
 ## Documentation
@@ -273,9 +256,9 @@ OpenAI-compatible endpoint.
 
 ## License
 
-The backend in `apps/server/` is a fork of Open WebUI and stays under its
-license; parts of `apps/web/` are derived from Open WebUI's frontend. The
-license texts are [LICENSE](LICENSE) and [LICENSE_HISTORY](LICENSE_HISTORY)
+The backend in `apps/server/` and parts of `apps/web/` are derived from
+another project and stay under its license (the provenance line at the top
+of this file names it). The license texts are [LICENSE](LICENSE) and [LICENSE_HISTORY](LICENSE_HISTORY)
 at the repository root. [NOTICE](NOTICE) says which parts are derived,
 reproduces the multi-license notice and the required copyright notice, and
 records the basis for the changed branding (clause 4(i): no more than fifty

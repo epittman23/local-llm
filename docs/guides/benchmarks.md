@@ -8,8 +8,8 @@ throughput data in [telemetry.md](telemetry.md).
 
 ## Architecture
 
-Benchmarks is not a second app. It is a set of pages inside the same Open
-WebUI fork as chat, started by the same `make backend` described in [Running
+Benchmarks is not a second app. It is a set of pages inside the same app
+as chat, started by the same `make backend` described in [Running
 it](../../README.md#running-it)
 (port `4000`; `make frontend` adds a dev server on `5174`),
 and reached through its own entry in the sidebar (`apps/web/src/components/
@@ -32,7 +32,7 @@ Ctrl-C included. See [Running it](../../README.md#running-it) for the full comma
 
 The GPU telemetry recorder runs under the backend's venv and writes with
 `psycopg` directly. It runs as a
-**separate subprocess**, not a task inside the fork's backend's own event
+**separate subprocess**, not a task inside the backend's own event
 loop, and that part is unchanged on purpose: the whole reason it was ever a
 subprocess was so a recording survives a crash or restart of whatever started
 it, and folding it into the backend's event loop would trade that guarantee
@@ -44,9 +44,9 @@ Benchmark running, grading, comparison, reporting and tuning are not shell
 functions any more. `lllm-test`, `lllm-compare` (`lllm-test compare`),
 `lllm-report`, `lllm-tune` and the standalone `lllm-web` dashboard were
 retired outright on 2026-09-08, and the whole suite now lives inside the
-Open WebUI fork itself, as an admin-only **Benchmarks** section at
+app itself, as an admin-only **Benchmarks** section at
 `/benchmarks`, served by the same `make backend` as the rest
-of the fork rather than a separate process or port. See the sections
+of the app rather than a separate process or port. See the sections
 below for the harnesses themselves. Seven pages,
 none of them a thin passthrough to a CLI that no longer exists:
 
@@ -64,7 +64,7 @@ none of them a thin passthrough to a CLI that no longer exists:
 - **Compare** (`/benchmarks/compare`) and **Answers** (`/benchmarks/answers`)
   read the same tables and the same stored responses the old `lllm-test
   compare`/`lllm-test answer` printed, through the same underlying query
-  logic, ported into the fork's own backend rather than rewritten.
+  logic, ported into the backend rather than rewritten.
 - **Report** (`/benchmarks/report`) and **Tune** (`/benchmarks/tune`) drive
   the same code `lllm-report`/`lllm-tune` did: Report renders the same
   design-audited markdown and PNGs unmodified, rather than inventing a
@@ -83,7 +83,7 @@ longer live at `tests/adapters/`, `tests/suites/`, `tests/tuning/` or
 vendored, into the backend's own `DATA_DIR` on first use.
 
 Direct database access, replacing `lllm-db`, is a normal Postgres client
-against the fork's own database — `psql "$DATABASE_URL"`, or anything else
+against the app's own database — `psql "$DATABASE_URL"`, or anything else
 that speaks that connection string — rather than a bespoke wrapper: every
 table from the old schema is there under a `benchmark_` prefix (`config` →
 `benchmark_config`, `result` → `benchmark_result`, and so on — see [The
@@ -138,7 +138,7 @@ in-filter items); rows recorded before that carry a NULL `adapter_sha`, show as
 | Compare → export answers | Write a whole suite run's stored answers back out as flat markdown files, for grepping/diffing/archiving outside the app |
 | Answers → view one | Render one stored answer as markdown directly in the browser |
 | Report | The statistical comparison, rendered to the page, without running anything new |
-| `psql` (or any Postgres client) against `DATABASE_URL` | Raw access to the fork's own database (the `benchmark_*` tables) |
+| `psql` (or any Postgres client) against `DATABASE_URL` | Raw access to the app's own database (the `benchmark_*` tables) |
 
 The profile picker on the Serve page names the serving profile whose alias
 and `reasoning_effort` are used; the model name itself is read from the
@@ -151,7 +151,7 @@ server is already serving something.
 By default a request carries one message: the item. Selecting a system
 prompt on the Tests page puts the text of the matching file under
 `apps/server/local_llm/benchmarks/data/prompts/` in front
-of it as a `system` message, which is where Open WebUI puts its own, and is
+of it as a `system` message, which is where the app puts its own, and is
 the only place it can go — this `llama-server` build has no system-prompt
 flag.
 
@@ -184,9 +184,9 @@ beside it, in the pass-rate query and on the Compare page, and every existing
 `config_id` still means what it always did.
 
 `assistant.txt`, under that same `benchmarks/data/prompts/` directory, is a
-copy of the text configured per-model in Open WebUI (see [Model
+copy of the text configured per-model in the app (see [Model
 setup](../../README.md#model-setup)), kept so a benchmark run can be made under the prompt
-the assistant actually serves. Open WebUI remains the source of truth for
+the assistant actually serves. The app remains the source of truth for
 that; if it changes there, copy it here in the same change or the comparison
 measures a prompt nobody is using. This is a different directory from the
 `prompts/` this repo's own 2026-08-30 decision deleted (that one held ad hoc
@@ -203,7 +203,7 @@ the only copy of it). The shape is:
 
 | name | what it is |
 | --- | --- |
-| `assistant` | the deployed Open WebUI prompt, verbatim |
+| `assistant` | the deployed prompt, verbatim |
 | `assistant-local` | the same six intents, rewritten for a small local model |
 | `assistant-direct` | `assistant-local` without "explain the steps" |
 | `style-only` | the tone and punctuation rules alone |
@@ -223,12 +223,12 @@ rewrites name the fence and `assistant` does not, so an `assistant` versus
 comparison among the four rewrites is clean, since that instruction is identical
 across them.
 
-**None of these is deployed.** Open WebUI still serves `assistant.txt`, and if a
+**None of these is deployed.** The app still serves `assistant.txt`, and if a
 rewrite measures better it is adopted there, with `assistant.txt` updated to
 match in the same change. Winning a benchmark here changes nothing on its own.
 
 Request knobs, unchanged from the shell version and read the same way, just
-now by the fork's backend process rather than a CLI: `LLAMA_TEST_MAX_TOKENS`
+now by the backend process rather than a CLI: `LLAMA_TEST_MAX_TOKENS`
 (2048), `LLAMA_TEST_TIMEOUT` (900 s), `LLAMA_TEST_CACHE_PROMPT` (`0`;
 prompt-cache reuse makes a prefill figure meaningless, so it is off unless
 asked for), `LLAMA_TEST_STREAM` (`1`), and `LLAMA_REASONING` for the effort
@@ -241,7 +241,7 @@ differ only by the flags under test. `LLAMA_TEST_RAW` is gone: it used to keep
 the response's temp file, and every response is now stored in full in the
 `benchmark_answer` table regardless. `LLAMA_GRADER_PYTHON` overrides the
 interpreter the graders execute against. `LLAMA_PLAIN=1` (or `NO_COLOR`)
-still forces plain output, and the fork now sets it itself on every
+still forces plain output, and the backend now sets it itself on every
 subprocess it streams into an SSE connection (the Serve and Tune pages, for
 `llama-server`'s and a sweep's own output) — Rich's escape codes would
 otherwise show up raw in a browser rather than being rendered.
@@ -254,7 +254,7 @@ otherwise show up raw in a browser rather than being rendered.
 | [MBPP (sanitized)](https://github.com/google-research/google-research/tree/master/mbpp) | 427 | `test_imports` + `test_list` (3 asserts) | CC-BY-4.0 | Austin et al. 2021, [arXiv:2108.07732](https://arxiv.org/abs/2108.07732) |
 | [DS-1000](https://github.com/xlang-ai/DS-1000) | 1000 (511 Pandas/Numpy) | `code_context`, which defines `test_execution(solution)` | CC-BY-SA-4.0 | Lai et al. 2022, [arXiv:2211.11501](https://arxiv.org/abs/2211.11501) |
 
-The Tests page's fetch action downloads them into the fork's own
+The Tests page's fetch action downloads them into the backend's own
 `<DATA_DIR>/benchmarks/datasets/` (`BENCHMARKS_DATA_DIR` overrides it) and
 writes a `MANIFEST.json` pinning the upstream revision and a SHA-256 of the
 bytes actually downloaded. **Every result records that revision**: per this project's
@@ -275,8 +275,8 @@ the discriminating power.
 
 **Coverage gap:** [AGENTS.md](../../AGENTS.md#why) lists math and statistics among four primary use
 cases; the suite covers coding and data analysis, and measures neither of the
-other two. Adding GSM8K or a MATH subset is a new file in the fork's
-`benchmarks/data/adapters/` rather than new code, but until that exists, a
+other two. Adding GSM8K or a MATH subset is a new file in
+`apps/server/local_llm/benchmarks/data/adapters/` rather than new code, but until that exists, a
 pass rate here says nothing about
 the math and statistics work this assistant is also for.
 
@@ -520,7 +520,7 @@ items and a test that ignores the pairing throws away the only thing that makes
 8 items informative.
 
 Seven sections, ordered so each gates the next: **provenance** (which database,
-which rows, which revisions — the fork's Postgres is not something a reader
+which rows, which revisions — the app's Postgres is not something a reader
 can casually open elsewhere, so a number without this is not checkable),
 **design audit**, **reliability floor**, **paired accuracy**,
 **power/MDE**, **throughput**, **throttle audit**.
@@ -583,7 +583,7 @@ noise floor to read any difference against.
 Statistics: scipy for the standard tests; Cochran's Q, its permutation p (exact
 by enumeration when the arrangement count allows, Monte Carlo with the `+1`
 correction otherwise), Wilson intervals, Holm correction and the MDE search are
-written out in the fork's `local_llm/benchmarks/analysis/report.py` (a direct port of
+written out in `local_llm/benchmarks/analysis/report.py` (a direct port of
 the original `scripts/llama_report.py`, unchanged statistics), and were
 cross-checked against statsmodels. Every test prints its `n` and its
 assumption check; a test whose assumptions fail is printed as refused with
@@ -593,7 +593,7 @@ the reason, never dropped silently.
 written — verified by checksum and row counts either side of a run. Rather
 than opening the database itself in a read-only mode the way `mode=ro` did
 against a SQLite file, the report goes through the same read-only async
-Table-wrapper query methods every other read path in the fork uses, and never
+Table-wrapper query methods every other read path in the backend uses, and never
 touches the migration/stale-run-sweep path that a normal connection runs on
 first use and that would therefore write.
 

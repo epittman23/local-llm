@@ -813,8 +813,8 @@ rm -rf apps/server/backend
 | 5a/5b Blame + plugin compat | #63, #64 | done | see "Phase 5" below | none |
 | 6a-6d Identifiers + branding | 6d #65, 6a #66, 6b #67, 6c #68 | done | see "Phase 6" below | see "Phase 6" below |
 | 7a/7b Benchmarks | 7a #69, 7b #70 | done | see "Phase 7" below | see "Phase 7" below |
-| 8 make check | (this PR) | done | see "Phase 8" below | see "Phase 8" below |
-| 10 Final sync + audit | — | | | |
+| 8 make check | #71 | done | see "Phase 8" below | see "Phase 8" below |
+| 10 Final sync + audit | 10a: (this PR) | in progress | see "Phase 10" below | see "Phase 10" below |
 
 ### Phase 0 baselines (2026-10-10, `main` at 1341930)
 
@@ -1073,4 +1073,17 @@ rm -rf apps/server/backend
   - `make test-web`: astro check 0 errors, Vitest 584 passed, build OK.
   - `make test-e2e`: 344 passed in 9.8 min (348 minus the 4 tests removed with the hub features).
   - 0 broken links.
+
+### Phase 10: final documentation sync and name audit
+
+- **10a (stragglers).**
+  - The audit script (`~/.cache/local-llm-restructure/name_audit.py`) applies §6 mechanically and lists what is left. Before this PR, 40 matches were outside the allowlist, all in current-state docs:
+    - guide prose that called the running app "Open WebUI" or "the fork"
+    - MAP.md's "vendored Open WebUI fork" descriptions
+    - README's model-setup and migrating lines, and its license paragraph
+  - The guides, MAP.md and README now say "the app" or "the backend" where they mean the app. They keep "upstream" where it really means an upstream source (dataset revisions, the benchmark runners).
+  - **Pruned** (maintenance policy, "prune what is no longer true"): README's 2026-10-09 WSL2-move note, its 2026-10-10 flatten upgrade note, and the restore note that named the old `openwebui` database, which no longer exists anywhere. The decisions log records both moves. They are replaced by one **Database** note: where the data lives, how to back it up (`pg_dump`, since the lack of a backup is what lost the old data), and how to restore.
+  - MAP.md's `logs/` entry is corrected: the SQLite file's Postgres backfill was lost with the old database.
+  - **Audit result after this PR:** every match is allowlisted. What remains outside the path and line rules is 3 provenance passages (README, AGENTS.md, and MAP.md's backend section, added to item 6 together with its archive URL) and 16 dated historical milestone lines in ROADMAP.md and `roadmap-timeline.mmd` (item 3).
+  - **Verification:** pre-commit passed; 0 broken links. Docs only.
 

@@ -2,8 +2,8 @@
 
 Local self-hosting is now being tested alongside the OpenRouter setup, using
 [llama.cpp](https://github.com/ggml-org/llama.cpp)'s `llama-server`, which
-exposes the same OpenAI-compatible API Open WebUI already speaks. Pointing
-Open WebUI at it is a connection-settings change only (see [Migrating to local
+exposes the same OpenAI-compatible API the app already speaks. Pointing
+the app at it is a connection-settings change only (see [Migrating to local
 hardware later](../../README.md#migrating-to-local-hardware-later)).
 
 ## Building llama.cpp
@@ -37,7 +37,7 @@ Serving lives entirely in the backend now — there is no shell layer or
 `~/.bashrc` helper to source any more (`scripts/shell/main.sh` and everything
 under `scripts/` were deleted in Phase 2c of the migration, 2026-09-18; see the 2026-09-18 entry in
 [docs/decisions.md](../decisions.md)). Start a server, stop it, and edit or pick
-a profile from the fork's own **Serve** page at `/benchmarks/serve` (admin
+a profile from the app's own **Serve** page at `/benchmarks/serve` (admin
 only) once `make backend` is running — see [benchmarks.md](benchmarks.md) for
 what that page and its siblings do.
 GPU telemetry while a server runs is the **Live** page, `/benchmarks/live`.

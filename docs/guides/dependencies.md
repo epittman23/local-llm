@@ -27,7 +27,7 @@ What the default install includes, and what it leaves out:
   `uv sync --extra all` from `apps/server/`.
 - **Chroma isn't installed at all**, not even by `--extra all`: every
   `chromadb` release has unpatched critical advisories (pre-auth code
-  injection among them), and upstream's default `VECTOR_DB=chroma` is now
+  injection among them), and the inherited default `VECTOR_DB=chroma` is now
   `pgvector`. The Chroma code is still there; `VECTOR_DB=chroma` works if you
   install `chromadb` yourself, and otherwise stops startup saying so.
   `nltk` and `RestrictedPython` (unused, with unpatched advisories of their

@@ -11,9 +11,9 @@ already computed for this run, so the two cannot disagree the way a second
 shell computation could have. The recorder waits for the port to open,
 samples `nvidia-smi` every 5 seconds by default, scrapes `/metrics` on the
 same pass, parses the server's own load output, and writes each of those as
-it happens into the Open WebUI fork's own Postgres database
+it happens into the app's own Postgres database
 (`infra/docker-compose.yml`), the same one the chat interface itself uses.
-It is `local_llm.benchmarks.serving.telemetry_recorder`, run under the fork's own
+It is `local_llm.benchmarks.serving.telemetry_recorder`, run under the backend's own
 backend venv (`sys.executable`, inheriting the backend process's own
 `DATABASE_URL` rather than re-deriving one — see the launcher's own
 docstring for why a second encoding site was rejected) and it writes with
@@ -28,7 +28,7 @@ reading it.
 **One database, for everything this repo measures.** Serving configurations, runs,
 GPU samples, `/metrics` scrapes, per-request timings, test results, and the full
 answers are tables in it, each named with a `benchmark_` prefix so they sit
-beside Open WebUI's own tables without colliding. Model and quantization are
+beside the app's other tables without colliding. Model and quantization are
 columns rather than halves of a filename, so a cross-model question is a query
 rather than a comparison between files that never sit beside each other.
 
@@ -56,7 +56,7 @@ either way.
 
 This is a schema-preserving 1:1 port of the old SQLite tables (`config` →
 `benchmark_config`, `result` → `benchmark_result`, and so on), added by an
-ordinary Alembic migration alongside the rest of the fork's schema
+ordinary Alembic migration alongside the rest of the app's schema
 (`b3f8a1d94e70_add_benchmark_tables.py`) rather than hand-rolled DDL, and the
 historical rows were carried over by a one-time backfill script guarded
 against running twice.
@@ -64,7 +64,7 @@ against running twice.
 The arithmetic that used to be computed at write time (`is_cold`,
 `acceptance`, `mean_len` per request; pass rate excluding `skipped`; per-run
 GPU stats; each config's latest run) is no longer a set of SQL views —
-this fork's own schema uses no views anywhere else, so the same computations
+the app's own schema uses no views anywhere else, so the same computations
 are plain query methods on the `models/benchmarks/` table-wrapper classes
 instead, which has the advantage of being unit-testable directly rather than
 only through a live-Postgres round trip.
@@ -216,7 +216,7 @@ even the busy samples are low here — the CPU-resident layers are the bottlenec
 during generation and the GPU spends most of a token waiting, so a small active
 average is the expected reading, not a sign of a stalled run.
 
-**Percentiles and throttle decoding stay in Python**, in the fork's
+**Percentiles and throttle decoding stay in Python**, in
 `local_llm/benchmarks/analysis/stats.py` (the same module `llama_stats.py` was
 ported into on 2026-09-08, unchanged statistics).
 `percentile()` interpolates linearly between closest ranks (numpy's default
@@ -284,7 +284,7 @@ agree:**
 - **`benchmark_request` rows** are exact and per-request, but only the
   Benchmarks section's Tests page contributes them — a version-controlled
   prompt at `temperature 0`, which is what makes two runs comparable. Traffic
-  from Open WebUI or a hand-written `curl` is not counted.
+  from chat or a hand-written `curl` is not counted.
 - **`benchmark_metrics_scrape` rows** are the server's own counters, so they cover *every*
   client. They are cumulative totals only: the endpoint exposes no per-request
   breakdown and, as of build 10597, no request counter at all. The first scrape
@@ -317,7 +317,7 @@ middle of.
 A test still runs and prints its numbers when no run is open; its `config_id` is
 simply NULL, displayed as `unrecorded`, rather than attributed to a guess.
 
-There is no database file to gitignore any more: the store is the fork's own
+There is no database file to gitignore any more: the store is the app's own
 Postgres, reached via `DATABASE_URL` (loaded from `infra/.env` by
 `make backend`; the telemetry recorder inherits it directly as a child
 process rather than re-deriving it, see the top of this page). There

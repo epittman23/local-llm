@@ -1,7 +1,7 @@
 # The frontend (`apps/web`)
 
 `apps/web/` is the Astro + React + shadcn/ui frontend for the backend in
-`apps/server`. It replaced the fork's SvelteKit app surface by surface (see
+`apps/server`. It replaced the original SvelteKit app surface by surface (see
 [the migration plan](../history/migration-plan.md), Phases 3-11). Comments
 reading `d863707:apps/openwebui/...` name the Svelte file a piece was ported
 from; `git show d863707:<path>` opens it. Its layout is mapped in
