@@ -29,5 +29,6 @@ def test_frontend_build_dir_defaults_to_apps_web_dist():
 
 def test_data_dir_defaults_to_apps_server_data():
     # The default is computed, not created: this test must not leave an
-    # apps/server/data/ behind (the suite runs with DATA_DIR set elsewhere).
+    # apps/server/data/ behind (tests/conftest.py points DATA_DIR at a temp
+    # directory).
     assert env.default_data_dir() == SERVER_DIR / 'data'

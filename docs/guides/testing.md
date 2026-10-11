@@ -25,9 +25,10 @@ The root Makefile mirrors CI job for job, with the same commands:
 | `make test` | all three test jobs | the three above |
 | `make check` | `CI passed` | `make lint`, then `make test` |
 
-`make test-backend` removes its Postgres container on exit (Ctrl-C included)
-and points `DATA_DIR` at a temp directory, so it never touches
-`apps/server/data` or the `make backend` database. Stop `make frontend`
+`make test-backend` removes its Postgres container on exit (Ctrl-C included),
+so it never touches the `make backend` database. Any pytest run, `make` or
+not, points `DATA_DIR` at a temp directory (`tests/conftest.py`), so it
+never touches `apps/server/data`. Stop `make frontend`
 before `make test-e2e` (see below).
 
 ## Frontend (`apps/web`)
