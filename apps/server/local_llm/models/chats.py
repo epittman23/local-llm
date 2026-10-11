@@ -354,48 +354,6 @@ class ChatUsageStatsListResponse(BaseModel):
     model_config = ConfigDict(extra='allow')
 
 
-class MessageStats(BaseModel):
-    id: str
-    role: str
-    model: str | None = None
-    content_length: int
-    token_count: int | None = None
-    timestamp: int | None = None
-    rating: int | None = None  # Derived from message.annotation.rating
-    tags: list[str] | None = None  # Derived from message.annotation.tags
-
-
-class ChatHistoryStats(BaseModel):
-    messages: dict[str, MessageStats]
-    currentId: str | None = None
-
-
-class ChatBody(BaseModel):
-    history: ChatHistoryStats
-
-
-class AggregateChatStats(BaseModel):
-    average_response_time: float
-    average_user_message_content_length: float
-    average_assistant_message_content_length: float
-    models: dict[str, int]
-    message_count: int
-    history_models: dict[str, int]
-    history_message_count: int
-    history_user_message_count: int
-    history_assistant_message_count: int
-
-
-class ChatStatsExport(BaseModel):
-    id: str
-    user_id: str
-    created_at: int
-    updated_at: int
-    tags: list[str] = []
-    stats: AggregateChatStats
-    chat: ChatBody
-
-
 class ChatTable:
     def _clean_null_bytes(self, obj):
         """Recursively remove null bytes from strings in dict/list structures."""
