@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
+import importlib.abc
+import importlib.machinery
 import logging
 import os
 import re
@@ -184,19 +187,48 @@ def extract_frontmatter(content):
     return frontmatter
 
 
-# Tool and Function source written against the package's old name (stored
-# before the 2026-10-10 rename, or pasted from a community plugin) imports
-# `open_webui.*`; rewrite those imports to this package. Word-bounded and only
-# after `from`/`import`, so strings such as 'open_webui:code_interpreter' and
-# names such as required_open_webui_version are left alone.
-_OLD_PACKAGE_IMPORT = re.compile(r'\b(from|import)(\s+)open_webui\b')
+_OLD_PACKAGE = 'open_webui'
+_PACKAGE = __name__.split('.')[0]
+
+
+class _OldPackageAlias(importlib.abc.MetaPathFinder, importlib.abc.Loader):
+    """Make `open_webui` and `open_webui.*` the same module objects as this package's.
+
+    Tool and Function source written against the package's old name (stored
+    before the 2026-10-10 rename, or pasted from a community plugin) imports
+    it in every form Python allows: `from open_webui.x import y`,
+    `import open_webui.x` then `open_webui.x.y`, `importlib.import_module`.
+    Aliasing at import time covers all of them, where rewriting the source
+    cannot. The real module is imported under its own name and placed in
+    sys.modules under the old one, so it is never executed twice and its
+    __spec__ is untouched.
+    """
+
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == _OLD_PACKAGE or fullname.startswith(_OLD_PACKAGE + '.'):
+            return importlib.machinery.ModuleSpec(fullname, self)
+        return None
+
+    def create_module(self, spec):
+        return None  # the default placeholder module, replaced in exec_module
+
+    def exec_module(self, module):
+        real = importlib.import_module(_PACKAGE + module.__name__[len(_OLD_PACKAGE) :])
+        # The import system returns whatever sys.modules holds for the name
+        # once exec_module returns, so the placeholder is never seen.
+        sys.modules[module.__name__] = real
+
+
+# First on the path: once `open_webui` is this package, the default finders
+# would load `open_webui.x` from its __path__ as a second copy of `local_llm.x`.
+if not any(isinstance(finder, _OldPackageAlias) for finder in sys.meta_path):
+    sys.meta_path.insert(0, _OldPackageAlias())
 
 
 def replace_imports(content):
     """
     Replace the import paths in the content.
     """
-    content = _OLD_PACKAGE_IMPORT.sub(r'\1\2local_llm', content)
     replacements = {
         'from utils': 'from local_llm.utils',
         'from apps': 'from local_llm.apps',
@@ -227,6 +259,8 @@ async def load_tool_module_by_id(tool_id, content=None):
         content = replace_imports(content)
         await Tools.update_tool_by_id(tool_id, {'content': content})
     else:
+        # Callers such as utils/tools.get_tools pass stored source as-is.
+        content = replace_imports(content)
         frontmatter = extract_frontmatter(content)
         # Install required packages found within the frontmatter.
         # Runs `pip install` via subprocess, which can take a long time;
@@ -279,6 +313,8 @@ async def load_function_module_by_id(function_id: str, content: str | None = Non
         content = replace_imports(content)
         await Functions.update_function_by_id(function_id, {'content': content})
     else:
+        # Callers may pass stored source as-is.
+        content = replace_imports(content)
         frontmatter = extract_frontmatter(content)
         # `pip install` via subprocess can block for a long time; offload it.
         await asyncio.to_thread(install_frontmatter_requirements, frontmatter.get('requirements', ''))

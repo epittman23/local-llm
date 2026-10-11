@@ -1156,3 +1156,39 @@ OTEL_METRICS_OTLP_SPAN_EXPORTER = os.getenv(
 OTEL_LOGS_OTLP_SPAN_EXPORTER = os.getenv(
     'OTEL_LOGS_OTLP_SPAN_EXPORTER', OTEL_OTLP_SPAN_EXPORTER
 ).lower()  # grpc or http
+
+
+####################################
+# Names from before the 2026-10-10 rename
+####################################
+
+# Tool and Function source written against open_webui.env (utils/plugin.py
+# aliases the old package to this one) may import names this module no
+# longer defines. Nothing in the app reads these; they resolve only on a
+# lookup that would otherwise raise.
+_LEGACY_NAMES = {
+    'OPEN_WEBUI_DIR': lambda: PACKAGE_DIR,
+    # apps/server/backend/ and its parent apps/server/ before the flatten.
+    'BACKEND_DIR': lambda: SERVER_DIR,
+    'BASE_DIR': lambda: SERVER_DIR,
+    # Removed features: inert values, as if unset.
+    'LICENSE_KEY': lambda: '',
+    'LICENSE_BLOB': lambda: None,
+    'LICENSE_PUBLIC_KEY': lambda: '',
+    'ENABLE_VERSION_UPDATE_CHECK': lambda: False,
+}
+
+
+def legacy_name(name: str):
+    """The value an old name stands for; AttributeError if it is not one."""
+    if name in _LEGACY_NAMES:
+        return _LEGACY_NAMES[name]()
+    # WEBUI_* became LLLM_*; the check also keeps a WEBUI_ name with no
+    # LLLM_ counterpart an AttributeError.
+    if name.startswith('WEBUI_') and (renamed := 'LLLM_' + name[len('WEBUI_') :]) in globals():
+        return globals()[renamed]
+    raise AttributeError(f'module {__name__!r} has no attribute {name!r}')
+
+
+def __getattr__(name: str):
+    return legacy_name(name)

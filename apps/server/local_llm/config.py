@@ -20,6 +20,7 @@ from local_llm.env import (
     OFFLINE_MODE,
     PACKAGE_DIR,
     LLLM_AUTH,
+    legacy_name,
     log,
 )
 from local_llm.models.config import Config
@@ -3202,3 +3203,17 @@ Config.configure(
     enable_persistent=ENABLE_PERSISTENT_CONFIG,
     enable_oauth_persistent=ENABLE_OAUTH_PERSISTENT_CONFIG,
 )
+
+
+# Names old plugin source imports from open_webui.config (see legacy_name in
+# env.py): the env names it re-exported, plus two removed features, inert.
+_LEGACY_NAMES = {'CUSTOM_NAME': '', 'ENABLE_COMMUNITY_SHARING': False}
+
+
+def __getattr__(name: str):
+    if name in _LEGACY_NAMES:
+        return _LEGACY_NAMES[name]
+    try:
+        return legacy_name(name)
+    except AttributeError:
+        raise AttributeError(f'module {__name__!r} has no attribute {name!r}') from None

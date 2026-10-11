@@ -7,6 +7,20 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-11**: Old plugin source is aliased, not rewritten. The
+  2026-10-10 entry's rewrite of `open_webui.*` imports only reached
+  `from`/`import` lines, and not the chat-time tool loader at all, so a
+  qualified use (`import open_webui.x` then `open_webui.x.f()`),
+  `importlib.import_module('open_webui.x')`, or any stored tool enabled in a
+  chat still failed. `utils/plugin.py` now registers an import-time alias
+  that makes `open_webui` and `open_webui.*` the same module objects as
+  `local_llm` and `local_llm.*`, and stored source is left as written. The
+  names old source imports from `open_webui.env` and `open_webui.config`
+  that the restructure renamed or removed (`WEBUI_*` now `LLLM_*`,
+  `BASE_DIR`, `OPEN_WEBUI_DIR`, the license and update-check settings,
+  `CUSTOM_NAME`, `ENABLE_COMMUNITY_SHARING`) resolve through a module
+  `__getattr__`: renamed ones to their new values, removed features to inert
+  ones. Found by a cloud review of the restructure.
 - **2026-10-10**: Restructured the repository into one project, **Local
   LLM**, in a series of PRs starting at #54 (the plan, every PR and each
   phase's verification are in `docs/history/restructure-plan.md`). Nothing
