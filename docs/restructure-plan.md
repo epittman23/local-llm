@@ -812,8 +812,8 @@ rm -rf apps/server/backend
 | 4 Rename | #62 | done | see "Phase 4" below | see "Phase 4" below |
 | 5a/5b Blame + plugin compat | #63, #64 | done | see "Phase 5" below | none |
 | 6a-6d Identifiers + branding | 6d #65, 6a #66, 6b #67, 6c #68 | done | see "Phase 6" below | see "Phase 6" below |
-| 7a/7b Benchmarks | 7a #69, 7b: (this PR) | done | see "Phase 7" below | see "Phase 7" below |
-| 8 make check | — | | | |
+| 7a/7b Benchmarks | 7a #69, 7b #70 | done | see "Phase 7" below | see "Phase 7" below |
+| 8 make check | (this PR) | done | see "Phase 8" below | see "Phase 8" below |
 | 10 Final sync + audit | — | | | |
 
 ### Phase 0 baselines (2026-10-10, `main` at 1341930)
@@ -1057,4 +1057,20 @@ rm -rf apps/server/backend
     - Most e2e tests still passed because their mocks were rewritten consistently. CI's "Compare renders rows generically" failed all three retries and caught it.
     - All 25 occurrences were reverted; `apps/web` now has no diff against `main`. The script (`~/.cache/local-llm-restructure/regroup_benchmarks.py`) now rewrites only `benchmarks/<name>.py` and `benchmarks/grading/`.
     - Re-verified: the benchmarks e2e spec (14 passed) and pytest 310 passed, 1 skipped.
+
+### Phase 8: Makefile check targets
+
+- **Done.** The Makefile has new targets mirroring `.github/workflows/ci.yml` job for job:
+  - `make lint`: `SKIP=no-commit-to-branch uvx pre-commit@4.6.2 run --all-files`. The version is pinned with a keep-in-sync comment.
+  - `make test-backend`: `uv lock --check`, `uv sync --frozen --no-install-project --group dev`, then pytest with a throwaway `pgvector/pgvector:pg16` on `127.0.0.1:$(LLLM_TEST_PG_PORT)` (default 55432), as CI's service provides. The container is removed on exit, Ctrl-C included. A busy port is refused up front, and `DATA_DIR` is a temp directory.
+  - `make test-web`: `bunx astro check`, `bun run test:unit`, `bun run build`.
+  - `make test-e2e`: `bunx playwright test --workers=2` (CI's count).
+  - `make test` runs those three; `make check` runs lint then test. `make help` is updated.
+- **Docs.** AGENTS.md "Commands" now leads with `make check`. The "Makefile stays thin" convention now includes the CI-mirroring check targets, and a CI job change must change its target in the same commit. README "Running it" has one line; `docs/guides/testing.md` has a target-to-CI-job table; MAP.md updated.
+- **Verification:**
+  - `make lint` passed.
+  - `make test-backend`: 311 passed, **0 skipped**; `test_the_app_imports` now runs locally, as in CI. No container was left behind.
+  - `make test-web`: astro check 0 errors, Vitest 584 passed, build OK.
+  - `make test-e2e`: 344 passed in 9.8 min (348 minus the 4 tests removed with the hub features).
+  - 0 broken links.
 

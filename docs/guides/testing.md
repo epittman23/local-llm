@@ -12,6 +12,24 @@ Two different things get tested in this repo, and they use different tools:
 CI (`.github/workflows/ci.yml`) runs every suite below on every pull request,
 and `main` requires its `CI passed` job.
 
+## Running it all locally: `make check`
+
+The root Makefile mirrors CI job for job, with the same commands:
+
+| Target | CI job | What it runs |
+|---|---|---|
+| `make lint` | Lint and format (pre-commit) | `pre-commit run --all-files` (pinned to CI's pre-commit version) |
+| `make test-backend` | Backend (pytest) | `uv lock --check`, `uv sync --frozen --group dev`, then pytest with a throwaway pgvector Postgres on `127.0.0.1:55432` (`LLLM_TEST_PG_PORT`), so `test_the_app_imports` runs instead of skipping |
+| `make test-web` | Web (astro check, vitest, build) | `bunx astro check`, `bun run test:unit`, `bun run build` |
+| `make test-e2e` | Web e2e (Playwright) | `bunx playwright test --workers=2` |
+| `make test` | all three test jobs | the three above |
+| `make check` | `CI passed` | `make lint`, then `make test` |
+
+`make test-backend` removes its Postgres container on exit (Ctrl-C included)
+and points `DATA_DIR` at a temp directory, so it never touches
+`apps/server/data` or the `make backend` database. Stop `make frontend`
+before `make test-e2e` (see below).
+
 ## Frontend (`apps/web`)
 
 Run these from `apps/web/`:

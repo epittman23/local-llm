@@ -20,7 +20,7 @@ local-llm/
 ├── NOTICE                     what is derived, the license boundaries, the branding basis
 ├── CONTRIBUTOR_LICENSE_AGREEMENT  referred to by LICENSE
 ├── CLAUDE.md                  symlink to AGENTS.md
-├── Makefile                   make backend, make frontend, make help
+├── Makefile                   make backend, make frontend, make check, make help
 ├── README.md                  what it is, running it, pages and URLs
 ├── MAP.md                     this file
 ├── apps/                      the applications themselves
@@ -325,7 +325,9 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
 
 ## `Makefile`
 
-Root-level process lifecycle only: `make backend` (Postgres +
+Root-level process lifecycle and CI-mirroring checks: `make lint`/`make
+test`/`make check` (the same commands as `.github/workflows/ci.yml`'s jobs;
+see `docs/guides/testing.md`), `make backend` (Postgres +
 `apps/server`'s `uvicorn --reload` on `:4000`, with `DATA_DIR` pinned to
 `apps/server/data`, Postgres torn down
 on exit including Ctrl-C; it also serves `apps/web/dist` at `/`), and

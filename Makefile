@@ -8,6 +8,9 @@
 #                    `make astro` is the same target under its old name.
 #                    Not needed to use the app: `make backend` also serves
 #                    the last `bun run build` of apps/web at :4000/.
+#   make lint       pre-commit over every file (CI's "Lint and format").
+#   make test       backend pytest + web checks + Playwright (CI's other jobs).
+#   make check      lint, then test: one command that predicts `CI passed`.
 #   make help       this text.
 #
 # Replaces scripts/shell/main.sh's lllm-backend/lllm-frontend, deleted along
@@ -36,12 +39,20 @@ LLLM_BACKEND_PORT ?= 4000
 # machine, so it is not offered to the LAN unless asked for with
 # `make backend LLLM_BACKEND_HOST=0.0.0.0` (docs/history/code-review.md L13).
 LLLM_BACKEND_HOST ?= 127.0.0.1
+# Keep in sync with PRE_COMMIT_VERSION in .github/workflows/ci.yml.
+PRE_COMMIT_VERSION := 4.6.2
+# Host port for the throwaway Postgres `make test-backend` starts; not 5432,
+# so it never collides with `make backend`'s database.
+LLLM_TEST_PG_PORT ?= 55432
 
-.PHONY: help backend frontend astro
+.PHONY: help backend frontend astro lint test test-backend test-web test-e2e check
 
 help:
 	@echo "make backend   Postgres + the backend (uvicorn --reload, $(LLLM_BACKEND_HOST):$(LLLM_BACKEND_PORT))"
 	@echo "make frontend  Astro + React + shadcn/ui dev server (astro dev, :5174; alias: make astro)"
+	@echo "make lint      pre-commit over every file, as CI runs it"
+	@echo "make test      test-backend + test-web + test-e2e, as CI runs them"
+	@echo "make check     lint, then test (predicts CI's 'CI passed')"
 
 # --reload caveat: a code change restarts the uvicorn worker, and with it the
 # in-memory handle Benchmarks > Serve keeps on a running llama-server. The
@@ -111,3 +122,61 @@ frontend:
 
 # The target's name through the migration, when `frontend` was the Svelte app.
 astro: frontend
+
+# --- Checks: the same commands as .github/workflows/ci.yml, job for job, so a
+# green `make check` predicts a green `CI passed`. If you change a CI job,
+# change its target here too.
+
+# CI's "Lint and format (pre-commit)". no-commit-to-branch is skipped for the
+# same reason as in CI: it guards commits, not the tree.
+lint:
+	@cd "$(WEB_DIR)" && bun install --frozen-lockfile
+	SKIP=no-commit-to-branch uvx pre-commit@$(PRE_COMMIT_VERSION) run --all-files --show-diff-on-failure
+
+# CI's "Backend (pytest)", including the throwaway pgvector Postgres that
+# tests/test_imports.py needs (without it that test skips locally, while CI
+# fails). The container is removed on exit, Ctrl-C included. DATA_DIR points
+# at a temp directory so tests never touch apps/server/data.
+test-backend:
+	@cd "$(SERVER_DIR)"; \
+	uv lock --check; \
+	uv sync --frozen --no-install-project --group dev; \
+	if ss -ltn | grep -q "127.0.0.1:$(LLLM_TEST_PG_PORT) "; then \
+		echo "make test-backend: port $(LLLM_TEST_PG_PORT) is in use -- set LLLM_TEST_PG_PORT" >&2; \
+		exit 1; \
+	fi; \
+	pg="lllm-test-pg-$$$$"; tmp="$$(mktemp -d)"; \
+	trap 'docker rm -f "$$pg" >/dev/null 2>&1; rm -rf "$$tmp"' EXIT; \
+	docker run --rm -d --name "$$pg" -p "127.0.0.1:$(LLLM_TEST_PG_PORT):5432" \
+		-e POSTGRES_USER=local_llm -e POSTGRES_PASSWORD=test-only-not-a-secret -e POSTGRES_DB=local_llm \
+		pgvector/pgvector:pg16 >/dev/null; \
+	for i in $$(seq 1 60); do \
+		docker exec "$$pg" psql -U local_llm -d local_llm -tAc 'select 1' >/dev/null 2>&1 && break; \
+		sleep 1; \
+	done; \
+	LLLM_SECRET_KEY=test-only-not-a-secret-0123456789abcdef0123456789abcdef \
+	TEST_DATABASE_URL="postgresql://local_llm:test-only-not-a-secret@127.0.0.1:$(LLLM_TEST_PG_PORT)/local_llm" \
+	DATA_DIR="$$tmp" \
+	uv run --frozen python -m pytest tests -q
+
+# CI's "Web (astro check, vitest, build)".
+test-web:
+	@cd "$(WEB_DIR)" && \
+	bun install --frozen-lockfile && \
+	bunx astro check && \
+	bun run test:unit && \
+	bun run build
+
+# CI's "Web e2e (Playwright, mocked backend)". Two workers, CI's count: at the
+# default (half the cores) a cold dev server misses 5 s timeouts here. Stop
+# `make frontend` first; Playwright reuses and then stops a running dev server.
+test-e2e:
+	@cd "$(WEB_DIR)" && \
+	bun install --frozen-lockfile && \
+	bunx playwright install chromium && \
+	bunx playwright test --workers=2
+
+test: test-backend test-web test-e2e
+
+check: lint test
+

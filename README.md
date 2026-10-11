@@ -107,6 +107,10 @@ Chat is then at `http://localhost:4000/`. While editing the UI, run
 hot reload, proxying API/WebSocket calls to the backend (see
 [docs/guides/frontend.md](docs/guides/frontend.md)).
 
+To run everything CI runs before opening a pull request: `make check` (lint,
+backend pytest against a throwaway Postgres, web checks and build, and
+Playwright). It needs Docker, uv and Bun, like the app itself.
+
 The first account you create becomes the admin. Admin accounts also see a **Benchmarks** entry in the
 sidebar, at `/benchmarks` — serving, testing, comparison, reporting and
 tuning for the local-inference setup below, built into this same frontend

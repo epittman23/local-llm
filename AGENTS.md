@@ -111,8 +111,9 @@ shadcn/ui frontend, `infra/` holds the Postgres + pgvector Compose file, and
   is a permanent hard fork with no upstream sync path, so it is restructured
   and edited freely, and inherited code gets the same scrutiny as new code.
 - **The Makefile stays thin.** It owns process lifecycle (Postgres, the
-  backend venv, the two servers) and nothing else; behaviour belongs in the
-  apps.
+  backend venv, the two servers) and the check targets that mirror CI job
+  for job; behaviour belongs in the apps. When a CI job changes, its `make`
+  target changes in the same commit.
 - **Serving configuration has one source of truth**: `serving/profiles.py`,
   backed by Postgres. Model and system-prompt configuration for the
   assistant lives in the app (Admin Settings > Connections; Workspace >
@@ -147,11 +148,13 @@ shadcn/ui frontend, `infra/` holds the Postgres + pgvector Compose file, and
   and `LLLM_SECRET_KEY`. Backend settings use the `LLLM_` prefix
   (`LLLM_SECRET_KEY`, `LLLM_AUTH`, `LLLM_NAME`, ...; `WEBUI_*` until
   2026-10-10).
-- Tests: `bun run test:unit`, `bun run test:e2e` (use `--workers=2`) and
-  `bunx astro check` in `apps/web`; pytest in `apps/server` (see
-  [docs/guides/testing.md](docs/guides/testing.md)).
-- Lint and format: `pre-commit run --all-files`
-  (`.pre-commit-config.yaml` is the only definition; CI runs the same file).
+- `make check`: everything CI runs (`make lint`, then `make test`, which is
+  `test-backend` + `test-web` + `test-e2e`), with the same commands, so a
+  green `make check` predicts a green `CI passed`. Run it before opening a
+  PR. The pieces run on their own too; see
+  [docs/guides/testing.md](docs/guides/testing.md).
+- Lint and format: `make lint` (`pre-commit run --all-files`;
+  `.pre-commit-config.yaml` is the only definition, and CI runs the same file).
 - Requirements: native Linux (Fedora 44 since 2026-10-09), Docker Engine with
   the Compose plugin and the user in the `docker` group, `make`, Bun,
   Node ≥ 22.12, and **uv**, which builds the backend venv from
