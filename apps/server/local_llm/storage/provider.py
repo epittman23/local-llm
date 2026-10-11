@@ -69,6 +69,14 @@ class LocalStorageProvider(StorageProvider):
     @staticmethod
     def get_file(file_path: str) -> str:
         """Handles downloading of the file from local storage."""
+        # Rows store the absolute path at upload time, so a moved DATA_DIR
+        # (apps/server/backend/data before 2026-10-10) leaves them pointing
+        # at the old one. Uploads live directly in UPLOAD_DIR, as
+        # delete_file already assumes.
+        if not os.path.isfile(file_path):
+            current = os.path.join(UPLOAD_DIR, os.path.basename(file_path))
+            if os.path.isfile(current):
+                return current
         return file_path
 
     @staticmethod
