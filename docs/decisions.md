@@ -7,6 +7,71 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-10**: Restructured the repository into one project, **Local
+  LLM**, in a series of PRs starting at #54 (the plan, every PR and each
+  phase's verification are in `docs/history/restructure-plan.md`). Nothing
+  in the app's behaviour was meant to change except where listed under
+  "Removed".
+  - **Docs.** One `README.md` (running it, pages and URLs) and one
+    `AGENTS.md` at the root (`CLAUDE.md` is a symlink to it). Long
+    operational material moved to `docs/guides/`. This log moved here,
+    verbatim, from `docs/CLAUDE.md`. Completed records moved to
+    `docs/history/`, the server proposal to `docs/proposals/`. The per-app
+    READMEs and agent files are gone.
+  - **Layout.** `apps/server/backend/` was flattened into `apps/server/`. The
+    package `open_webui` is `local_llm` (distribution `local-llm`; the
+    rename commit is in `.git-blame-ignore-revs`). Benchmark models are
+    under `models/benchmarks/`. The benchmark code is grouped into
+    `serving/`, `evaluation/`, `analysis/` and `tuning/`, with one
+    `benchmarks/paths.py` for its `data/`. `LICENSE`, `LICENSE_HISTORY` and
+    `CONTRIBUTOR_LICENSE_AGREEMENT` moved to the root, text unchanged; the
+    two notice files merged into a root `NOTICE`.
+  - **Runtime identifiers.**
+    - Env vars `WEBUI_*` are `LLLM_*` (`infra/.env` needs `LLLM_SECRET_KEY`).
+    - The Compose project is `local-llm` (volume `local-llm_postgres-data`),
+      and the Postgres role and database are `local_llm`.
+    - The session cookie is `lllm-session`, and the JWT issuer, forwarded
+      headers, User-Agents and Redis/OTEL/vector-store defaults use
+      `local-llm`/`LLLM`.
+    - `make backend` pins `DATA_DIR` to `apps/server/data`, because its
+      package-relative default moved with the flatten.
+    - The display name is "Local LLM". The branding change rests on clause
+      4(i) of the Open WebUI License (no more than fifty end users), recorded
+      once in `NOTICE`. The copyright and license lines stay in Settings >
+      About.
+  - **Removed.**
+    - Upstream community files and start scripts.
+    - The 1.2 MB upstream changelog and `GET /api/changelog`.
+    - The unused pip-install CLI, including a code path that copied
+      `DATA_DIR` and then deleted it.
+    - 63 of 64 locales and the language picker; no page translates anything.
+    - The openwebui.com community hub (share, import, discover, the
+      community-sharing setting and the stats-export endpoints it gated).
+    - The GitHub update check, the license server and `CUSTOM_NAME`.
+    - The OpenRouter attribution headers.
+  - **Added.** `make lint`, `make test` and `make check`, mirroring CI job for
+    job, so a green `make check` predicts `CI passed`. Stored or pasted
+    plugin code that imports `open_webui.*` is rewritten to `local_llm` on
+    load and save (no migration).
+  - **Deviations the owner approved.**
+    - The import lines (only) of three applied migrations were edited for the
+      rename. The schema is proven unchanged: the `pg_dump --schema-only` of
+      a migrated scratch database and the SQLAlchemy metadata were identical
+      to the pre-restructure baseline after every backend phase.
+    - The Compose volume is fresh rather than pinned to the old name.
+    - The planned removal of unused retrieval integrations was dropped.
+  - **Data lost.** No dump of the old Postgres database existed when the
+    2026-10-09 machine move left it behind, so its contents are gone for
+    good: accounts, chats, benchmark history and profile edits. The new
+    volume starts empty. Measurements already written into `docs/guides/`
+    stay as documentation but cannot be recomputed. README now says how to
+    back the database up.
+  - **Worth knowing next time.** GitHub keys CodeQL dismissals by path, so
+    moving or rewriting a file resurfaces already-dismissed alerts and the
+    ruleset blocks the merge. They were re-dismissed with each original's
+    reason, only where an exact dismissed twin existed. Separately, a
+    rewrite script that matched `benchmarks/<name>/` also rewrote API URL
+    segments; CI's e2e caught it before merge.
 - **2026-10-09**: Cleared every open Dependabot alert (29). PyJWT 2.13 to
   2.15.1 (14 advisories). `datasets` (only reached through the `all`
   extra's colbert-ai) constrained to >= 5.0.1. Three dependencies with

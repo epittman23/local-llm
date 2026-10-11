@@ -814,7 +814,7 @@ rm -rf apps/server/backend
 | 6a-6d Identifiers + branding | 6d #65, 6a #66, 6b #67, 6c #68 | done | see "Phase 6" below | see "Phase 6" below |
 | 7a/7b Benchmarks | 7a #69, 7b #70 | done | see "Phase 7" below | see "Phase 7" below |
 | 8 make check | #71 | done | see "Phase 8" below | see "Phase 8" below |
-| 10 Final sync + audit | 10a: (this PR) | in progress | see "Phase 10" below | see "Phase 10" below |
+| 10 Final sync + audit | 10a #72, 10b #73 | done | see "Phase 10" below | see "Phase 10" below |
 
 ### Phase 0 baselines (2026-10-10, `main` at 1341930)
 
@@ -1086,4 +1086,32 @@ rm -rf apps/server/backend
   - MAP.md's `logs/` entry is corrected: the SQLite file's Postgres backfill was lost with the old database.
   - **Audit result after this PR:** every match is allowlisted. What remains outside the path and line rules is 3 provenance passages (README, AGENTS.md, and MAP.md's backend section, added to item 6 together with its archive URL) and 16 dated historical milestone lines in ROADMAP.md and `roadmap-timeline.mmd` (item 3).
   - **Verification:** pre-commit passed; 0 broken links. Docs only.
+- **10b (record and close).**
+  - New dated entry at the top of `docs/decisions.md` (2026-10-10). It records:
+    - the restructure and its removals
+    - the approved deviations: migration import lines, the fresh volume, the dropped integration phase
+    - the `LLLM_` rename and the `DATA_DIR` pin
+    - the permanently lost database
+    - the CodeQL path-keyed dismissals and the URL-rewrite bug, as lessons
+  - The older entries are byte-identical to before.
+  - Matching milestone added to `roadmap-timeline.mmd` and to ROADMAP.md's embedded copy, which are still identical. "Planned future additions" is unchanged (nothing about what's next moved).
+  - This plan moved to `docs/history/restructure-plan.md`, with MAP.md updated.
+
+## Outcome
+
+- **Every phase is done except Phase 9**, which was dropped by decision (Q10).
+- **Verified after every backend phase:**
+  - Serving fingerprints: `test_serving_fingerprint.py` passed throughout.
+  - Schema: the `pg_dump --schema-only` of a migrated scratch database and the SQLAlchemy metadata stayed identical to the pre-restructure baseline.
+  - CI: every PR merged on a green `CI passed`.
+- **Commit policy:** no attribution lines in any commit or PR.
+- **Name audit:** 6,388 matches at the start, and every remaining match is now allowlisted under §6. The only §6 adjustments are additions:
+  - MAP.md's backend-section provenance passage (with item 6)
+  - the old Postgres names in README's restore note, then pruned in 10a, so no longer present
+- **Not done here, by design:**
+  - The unused retrieval integrations stay (Q10).
+  - Pre-existing issues were found and left alone:
+    - the backend's SPA mount answers unknown `/api/*` paths with `index.html` and 200
+    - `routers/users.py` serves a `user.png` that is never copied into the static dir
+    - the embedding model is not in the HF cache on this machine, so knowledge uploads won't embed until it is fetched once
 

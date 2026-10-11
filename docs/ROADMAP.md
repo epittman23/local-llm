@@ -46,6 +46,7 @@ timeline
       2026-09-28 : Code review of the React frontend (docs/history/code-review.md) : one high and seven medium findings fixed, among them live HTML from other users in channels and shared chats, and 44 settings that were saved but never used : the dev backend now binds loopback by default
     section Native Linux (Oct 2026)
       2026-10-09 : Moved from WSL2 to native Fedora 44 on the same laptop : Docker Engine replaces Docker Desktop : Python 3.12 via uv, backend venv and frontend rebuilt : llama.cpp CUDA build and the old Postgres data still to restore : WSL2-era benchmark numbers marked historical
+      2026-10-10 : Repository restructured into one project, Local LLM : docs and agent guide consolidated at the root : backend flattened, package renamed local_llm, WEBUI_* env vars renamed LLLM_* : upstream hub, update check and license server removed : make check mirrors CI : the old Postgres data confirmed lost (no dump existed)
     section Near-Term
       "~1 week" : Resolve the blocking rack hole-type question : confirm riser and PSU questions : re-verify current component pricing
     section Short-Term

@@ -92,9 +92,9 @@ Start here for "how do I run/use this."
   `bug-review-2026-09-27.md` and `code-review.md` (reviews with a "Status"
   section mapping each finding to its fix), and the migration-era mapping
   docs `common-components-mapping.md` (where each SvelteKit `common/`
-  component landed) and `icons-mapping.md`.
-- **`restructure-plan.md`** — the 2026-10 repository restructure plan and its
-  Status; moves to `history/` when the work is done.
+  component landed) and `icons-mapping.md`; and `restructure-plan.md`, the
+  2026-10 restructure into one project (plan, decisions, and each phase's
+  PRs and verification).
 - **`serving-baseline/`** — test input, not prose: `config-id` fingerprints,
   profile seed data and the verbatim profile rationale, captured from
   `scripts/shell/main.sh` on 2026-09-14 before the shell layer was ported to
