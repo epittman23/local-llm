@@ -2457,40 +2457,6 @@
     }
    ],
    [
-    "emit",
-    {
-     "type": "response:completion",
-     "data": {
-      "selected_model_id": "m2"
-     }
-    }
-   ],
-   [
-    "save_response_stream",
-    [
-     "<redis>",
-     "a1",
-     "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
-     "a1",
-     "a",
-     [
-      {
-       "type": "message",
-       "id": "msg_000000000000000000000001",
-       "status": "in_progress",
-       "role": "assistant",
-       "content": [
-        {
-         "type": "output_text",
-         "text": "a"
-        }
-       ]
-      }
-     ]
-    ],
-    {}
-   ],
-   [
     "chats.get_chat_title",
     [
      "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
@@ -2749,15 +2715,6 @@
         "delta": {}
        }
       ]
-     }
-    }
-   ],
-   [
-    "emit",
-    {
-     "type": "chat:completion",
-     "data": {
-      "selected_model_id": "m2"
      }
     }
    ],
