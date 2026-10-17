@@ -1,0 +1,469 @@
+{
+ "defaults": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY \"user\".created_at DESC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY \"user\".created_at DESC"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "empty_filter_and_sort": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY \"user\".created_at DESC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY \"user\".created_at DESC"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "query": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" \nWHERE \"user\".name ILIKE '%%ada o''brien%%' OR \"user\".email ILIKE '%%ada o''brien%%') AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" \nWHERE \"user\".name ILIKE '%%ada o''brien%%' OR \"user\".email ILIKE '%%ada o''brien%%'"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "empty_query": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\") AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\""
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "channel": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" \nWHERE EXISTS (SELECT channel_member.id \nFROM channel_member \nWHERE channel_member.user_id = \"user\".id AND channel_member.channel_id = 'ch1')) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" \nWHERE EXISTS (SELECT channel_member.id \nFROM channel_member \nWHERE channel_member.user_id = \"user\".id AND channel_member.channel_id = 'ch1')"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "user_ids": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" \nWHERE \"user\".id IN ('u1', 'u2')) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" \nWHERE \"user\".id IN ('u1', 'u2')"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "group_ids": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" \nWHERE EXISTS (SELECT group_member.id \nFROM group_member \nWHERE group_member.user_id = \"user\".id AND group_member.group_id IN ('g1'))) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" \nWHERE EXISTS (SELECT group_member.id \nFROM group_member \nWHERE group_member.user_id = \"user\".id AND group_member.group_id IN ('g1'))"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "user_and_group_ids": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" \nWHERE \"user\".id IN ('u1') AND (EXISTS (SELECT group_member.id \nFROM group_member \nWHERE group_member.user_id = \"user\".id AND group_member.group_id IN ('g1', 'g2')))) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" \nWHERE \"user\".id IN ('u1') AND (EXISTS (SELECT group_member.id \nFROM group_member \nWHERE group_member.user_id = \"user\".id AND group_member.group_id IN ('g1', 'g2')))"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "both_id_lists_empty_returns_nothing": {
+  "executed": [],
+  "result": {
+   "users": [],
+   "total": 0
+  }
+ },
+ "one_id_list_empty": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" \nWHERE EXISTS (SELECT group_member.id \nFROM group_member \nWHERE group_member.user_id = \"user\".id AND group_member.group_id IN ('g1'))) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" \nWHERE EXISTS (SELECT group_member.id \nFROM group_member \nWHERE group_member.user_id = \"user\".id AND group_member.group_id IN ('g1'))"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "empty_user_ids_alone": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\") AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\""
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "id_filters_not_lists": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" \nWHERE \"user\".id IN ('u1')) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" \nWHERE \"user\".id IN ('u1')"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "roles_include": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" \nWHERE \"user\".role IN ('admin', 'user')) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" \nWHERE \"user\".role IN ('admin', 'user')"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "roles_exclude": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" \nWHERE (\"user\".role NOT IN ('pending'))) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" \nWHERE (\"user\".role NOT IN ('pending'))"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "roles_mixed": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" \nWHERE \"user\".role IN ('user') AND (\"user\".role NOT IN ('pending', 'admin'))) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" \nWHERE \"user\".role IN ('user') AND (\"user\".role NOT IN ('pending', 'admin'))"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "roles_empty": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\") AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\""
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "every_filter": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" \nWHERE (\"user\".name ILIKE '%%x%%' OR \"user\".email ILIKE '%%x%%') AND (EXISTS (SELECT channel_member.id \nFROM channel_member \nWHERE channel_member.user_id = \"user\".id AND channel_member.channel_id = 'ch1')) AND \"user\".id IN ('u1') AND (EXISTS (SELECT group_member.id \nFROM group_member \nWHERE group_member.user_id = \"user\".id AND group_member.group_id IN ('g1'))) AND \"user\".role IN ('user') AND (\"user\".role NOT IN ('pending'))) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" \nWHERE (\"user\".name ILIKE '%%x%%' OR \"user\".email ILIKE '%%x%%') AND (EXISTS (SELECT channel_member.id \nFROM channel_member \nWHERE channel_member.user_id = \"user\".id AND channel_member.channel_id = 'ch1')) AND \"user\".id IN ('u1') AND (EXISTS (SELECT group_member.id \nFROM group_member \nWHERE group_member.user_id = \"user\".id AND group_member.group_id IN ('g1'))) AND \"user\".role IN ('user') AND (\"user\".role NOT IN ('pending'))"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "sort_name_asc": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY \"user\".name ASC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY \"user\".name ASC"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "sort_email_asc": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY \"user\".email ASC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY \"user\".email ASC"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "sort_created_at_asc": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY \"user\".created_at ASC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY \"user\".created_at ASC"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "sort_last_active_at_asc": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY \"user\".last_active_at ASC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY \"user\".last_active_at ASC"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "sort_updated_at_asc": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY \"user\".updated_at ASC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY \"user\".updated_at ASC"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "sort_role_asc": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY \"user\".role ASC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY \"user\".role ASC"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "sort_name_desc": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY \"user\".name DESC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY \"user\".name DESC"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "sort_email_desc": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY \"user\".email DESC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY \"user\".email DESC"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "sort_created_at_desc": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY \"user\".created_at DESC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY \"user\".created_at DESC"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "sort_last_active_at_desc": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY \"user\".last_active_at DESC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY \"user\".last_active_at DESC"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "sort_updated_at_desc": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY \"user\".updated_at DESC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY \"user\".updated_at DESC"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "sort_role_desc": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY \"user\".role DESC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY \"user\".role DESC"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "sort_name_default_direction": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY \"user\".name DESC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY \"user\".name DESC"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "sort_email_default_direction": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY \"user\".email DESC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY \"user\".email DESC"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "sort_created_at_default_direction": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY \"user\".created_at DESC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY \"user\".created_at DESC"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "sort_last_active_at_default_direction": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY \"user\".last_active_at DESC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY \"user\".last_active_at DESC"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "sort_updated_at_default_direction": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY \"user\".updated_at DESC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY \"user\".updated_at DESC"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "sort_role_default_direction": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY \"user\".role DESC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY \"user\".role DESC"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "sort_group_asc": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY CASE WHEN (EXISTS (SELECT group_member.id \nFROM group_member \nWHERE group_member.user_id = \"user\".id AND group_member.group_id = 'g1')) THEN 1 ELSE 0 END ASC, \"user\".name ASC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY CASE WHEN (EXISTS (SELECT group_member.id \nFROM group_member \nWHERE group_member.user_id = \"user\".id AND group_member.group_id = 'g1')) THEN 1 ELSE 0 END ASC, \"user\".name ASC"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "sort_group_desc": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY CASE WHEN (EXISTS (SELECT group_member.id \nFROM group_member \nWHERE group_member.user_id = \"user\".id AND group_member.group_id = 'g1')) THEN 1 ELSE 0 END DESC, \"user\".name ASC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY CASE WHEN (EXISTS (SELECT group_member.id \nFROM group_member \nWHERE group_member.user_id = \"user\".id AND group_member.group_id = 'g1')) THEN 1 ELSE 0 END DESC, \"user\".name ASC"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "sort_group_with_colon_in_id": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY CASE WHEN (EXISTS (SELECT group_member.id \nFROM group_member \nWHERE group_member.user_id = \"user\".id AND group_member.group_id = 'a:b')) THEN 1 ELSE 0 END DESC, \"user\".name ASC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY CASE WHEN (EXISTS (SELECT group_member.id \nFROM group_member \nWHERE group_member.user_id = \"user\".id AND group_member.group_id = 'a:b')) THEN 1 ELSE 0 END DESC, \"user\".name ASC"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "sort_unknown_without_filter": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY \"user\".created_at DESC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY \"user\".created_at DESC"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "sort_unknown_with_filter": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" \nWHERE \"user\".role IN ('user')) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" \nWHERE \"user\".role IN ('user')"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "no_sort_with_filter": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" \nWHERE \"user\".name ILIKE '%%x%%' OR \"user\".email ILIKE '%%x%%') AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" \nWHERE \"user\".name ILIKE '%%x%%' OR \"user\".email ILIKE '%%x%%'"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "sort_with_filter": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" \nWHERE \"user\".name ILIKE '%%x%%' OR \"user\".email ILIKE '%%x%%' ORDER BY \"user\".email ASC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" \nWHERE \"user\".name ILIKE '%%x%%' OR \"user\".email ILIKE '%%x%%' ORDER BY \"user\".email ASC"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "sort_direction_only": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY \"user\".created_at DESC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY \"user\".created_at DESC"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "skip_and_limit": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY \"user\".created_at DESC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY \"user\".created_at DESC \n LIMIT 10 OFFSET 20"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "zero_skip_and_limit": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY \"user\".created_at DESC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY \"user\".created_at DESC \n LIMIT 0 OFFSET 0"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "limit_only": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" ORDER BY \"user\".created_at DESC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" ORDER BY \"user\".created_at DESC \n LIMIT 5"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ },
+ "everything": {
+  "executed": [
+   "SELECT count(*) AS count_1 \nFROM (SELECT \"user\".id AS id, \"user\".email AS email, \"user\".username AS username, \"user\".role AS role, \"user\".name AS name, \"user\".profile_image_url AS profile_image_url, \"user\".profile_banner_image_url AS profile_banner_image_url, \"user\".bio AS bio, \"user\".gender AS gender, \"user\".date_of_birth AS date_of_birth, \"user\".timezone AS timezone, \"user\".presence_state AS presence_state, \"user\".status_emoji AS status_emoji, \"user\".status_message AS status_message, \"user\".status_expires_at AS status_expires_at, \"user\".info AS info, \"user\".variables AS variables, \"user\".settings AS settings, \"user\".oauth AS oauth, \"user\".scim AS scim, \"user\".last_active_at AS last_active_at, \"user\".updated_at AS updated_at, \"user\".created_at AS created_at \nFROM \"user\" \nWHERE (\"user\".name ILIKE '%%x%%' OR \"user\".email ILIKE '%%x%%') AND (EXISTS (SELECT group_member.id \nFROM group_member \nWHERE group_member.user_id = \"user\".id AND group_member.group_id IN ('g1'))) AND (\"user\".role NOT IN ('pending')) ORDER BY CASE WHEN (EXISTS (SELECT group_member.id \nFROM group_member \nWHERE group_member.user_id = \"user\".id AND group_member.group_id = 'g1')) THEN 1 ELSE 0 END ASC, \"user\".name ASC) AS anon_1",
+   "SELECT \"user\".id, \"user\".email, \"user\".username, \"user\".role, \"user\".name, \"user\".profile_image_url, \"user\".profile_banner_image_url, \"user\".bio, \"user\".gender, \"user\".date_of_birth, \"user\".timezone, \"user\".presence_state, \"user\".status_emoji, \"user\".status_message, \"user\".status_expires_at, \"user\".info, \"user\".variables, \"user\".settings, \"user\".oauth, \"user\".scim, \"user\".last_active_at, \"user\".updated_at, \"user\".created_at \nFROM \"user\" \nWHERE (\"user\".name ILIKE '%%x%%' OR \"user\".email ILIKE '%%x%%') AND (EXISTS (SELECT group_member.id \nFROM group_member \nWHERE group_member.user_id = \"user\".id AND group_member.group_id IN ('g1'))) AND (\"user\".role NOT IN ('pending')) ORDER BY CASE WHEN (EXISTS (SELECT group_member.id \nFROM group_member \nWHERE group_member.user_id = \"user\".id AND group_member.group_id = 'g1')) THEN 1 ELSE 0 END ASC, \"user\".name ASC \n LIMIT 5 OFFSET 5"
+  ],
+  "result": {
+   "users": [],
+   "total": 7
+  }
+ }
+}
