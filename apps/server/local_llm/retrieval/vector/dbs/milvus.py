@@ -181,7 +181,8 @@ class MilvusClient(VectorDBBase):
             log.warning(
                 f"Unsupported MILVUS_INDEX_TYPE: '{index_type}'. "
                 f'Supported types: HNSW, IVF_FLAT, DISKANN, FLAT, AUTOINDEX. '
-                f'Milvus will use its default for the collection if this type is not directly supported for index creation.'
+                'Milvus will use its default for the collection if this type is not directly supported for index '
+                'creation.'
             )
             # For unsupported types, pass the type directly to Milvus; it might handle it or use a default.
             # If Milvus errors out, the user needs to correct the MILVUS_INDEX_TYPE env var.
@@ -291,7 +292,8 @@ class MilvusClient(VectorDBBase):
 
         except Exception as e:
             log.exception(
-                f"Error querying collection {self.collection_prefix}_{collection_name} with filter '{filter_string}' and limit {limit}: {e}"
+                f"Error querying collection {self.collection_prefix}_{collection_name} with filter '{filter_string}' "
+                f'and limit {limit}: {e}'
             )
             return None
 
@@ -299,7 +301,8 @@ class MilvusClient(VectorDBBase):
         # Get all the items in the collection. This can be very resource-intensive for large collections.
         collection_name = collection_name.replace('-', '_')
         log.warning(
-            f"Fetching ALL items from collection '{self.collection_prefix}_{collection_name}'. This might be slow for large collections."
+            f"Fetching ALL items from collection '{self.collection_prefix}_{collection_name}'. This might be slow "
+            'for large collections.'
         )
         # Using query with a trivial filter to get all items.
         # This will use the paginated query logic.
@@ -312,7 +315,8 @@ class MilvusClient(VectorDBBase):
             log.info('Collection %s_%s does not exist. Creating now.', self.collection_prefix, collection_name)
             if not items:
                 log.error(
-                    f'Cannot create collection {self.collection_prefix}_{collection_name} without items to determine dimension.'
+                    f'Cannot create collection {self.collection_prefix}_{collection_name} without items to determine '
+                    'dimension.'
                 )
                 raise ValueError('Cannot create Milvus collection without items to determine vector dimension.')
             self._create_collection(collection_name=collection_name, dimension=len(items[0]['vector']))
@@ -342,7 +346,8 @@ class MilvusClient(VectorDBBase):
             raise
 
     def upsert(self, collection_name: str, items: list[VectorItem]):
-        # Update the items in the collection, if the items are not present, insert them. If the collection does not exist, it will be created.
+        # Update the items in the collection, if the items are not present, insert them. If the collection does not
+        # exist, it will be created.
         collection_name = collection_name.replace('-', '_')
         if not self.client.has_collection(collection_name=f'{self.collection_prefix}_{collection_name}'):
             log.info(
@@ -350,7 +355,8 @@ class MilvusClient(VectorDBBase):
             )
             if not items:
                 log.error(
-                    f'Cannot create collection {self.collection_prefix}_{collection_name} for upsert without items to determine dimension.'
+                    f'Cannot create collection {self.collection_prefix}_{collection_name} for upsert without items '
+                    'to determine dimension.'
                 )
                 raise ValueError(
                     'Cannot create Milvus collection for upsert without items to determine vector dimension.'
@@ -415,7 +421,8 @@ class MilvusClient(VectorDBBase):
             )
         else:
             log.warning(
-                f'Delete operation on {self.collection_prefix}_{collection_name} called without IDs or filter. No action taken.'
+                f'Delete operation on {self.collection_prefix}_{collection_name} called without IDs or filter. No '
+                'action taken.'
             )
             return None
 

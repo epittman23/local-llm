@@ -156,7 +156,8 @@ class ChromaClient(VectorDBBase):
             collection.add(*batch)
 
     def upsert(self, collection_name: str, items: list[VectorItem]):
-        # Update the items in the collection, if the items are not present, insert them. If the collection does not exist, it will be created.
+        # Update the items in the collection, if the items are not present, insert them. If the collection does not
+        # exist, it will be created.
         collection = self.client.get_or_create_collection(name=collection_name, metadata={'hnsw:space': 'cosine'})
 
         ids = [item['id'] for item in items]

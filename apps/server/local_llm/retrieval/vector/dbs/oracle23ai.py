@@ -26,7 +26,7 @@ ORACLE_VECTOR_LENGTH = 768
 ORACLE_DB_POOL_MIN = 2
 ORACLE_DB_POOL_MAX = 10
 ORACLE_DB_POOL_INCREMENT = 1
-"""
+"""  # noqa: E501 - example connection strings, kept whole for copy-paste
 
 import array
 import json

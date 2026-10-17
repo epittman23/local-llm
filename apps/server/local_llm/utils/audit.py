@@ -57,7 +57,8 @@ class AuditLevel(StrEnum):
 
 class AuditLogger:
     """
-    A helper class that encapsulates audit logging functionality. It uses Loguru’s logger with an auditable binding to ensure that audit log entries are filtered correctly.
+    A helper class that encapsulates audit logging functionality. It uses Loguru’s logger with an auditable binding to
+    ensure that audit log entries are filtered correctly.
 
     Parameters:
     logger (Logger): An instance of Loguru’s logger.
@@ -87,7 +88,8 @@ class AuditLogger:
 
 class AuditContext:
     """
-    Captures and aggregates the HTTP request and response bodies during the processing of a request. It ensures that only a configurable maximum amount of data is stored to prevent excessive memory usage.
+    Captures and aggregates the HTTP request and response bodies during the processing of a request. It ensures that
+    only a configurable maximum amount of data is stored to prevent excessive memory usage.
 
     Attributes:
     request_body (bytearray): Accumulated request payload.
@@ -113,7 +115,9 @@ class AuditContext:
 
 class AuditLoggingMiddleware:
     """
-    ASGI middleware that intercepts HTTP requests and responses to perform audit logging. It captures request/response bodies (depending on audit level), headers, HTTP methods, and user information, then logs a structured audit entry at the end of the request cycle.
+    ASGI middleware that intercepts HTTP requests and responses to perform audit logging. It captures request/response
+    bodies (depending on audit level), headers, HTTP methods, and user information, then logs a structured audit entry
+    at the end of the request cycle.
     """
 
     DEFAULT_AUDITED_METHODS = {'PUT', 'PATCH', 'DELETE', 'POST'}

@@ -189,7 +189,9 @@ class DatalabMarkerLoader:
                 available_fields = list(result.keys()) if isinstance(result, dict) else 'non-dict response'
                 raise HTTPException(
                     status.HTTP_502_BAD_GATEWAY,
-                    detail=f"Custom Marker endpoint returned success but no 'output' field found. Available fields: {available_fields}. Expected either 'request_check_url' for polling or 'output' field for direct response.",
+                    detail="Custom Marker endpoint returned success but no 'output' field found. Available fields: "
+                    f"{available_fields}. Expected either 'request_check_url' for polling or 'output' field for "
+                    'direct response.',
                 )
 
         if self.output_format.lower() == 'json':

@@ -345,7 +345,8 @@ async def get_note_chat_by_id(
         system = (
             f'CONTEXT:\nCurrent note id: {note.id}\n'
             'This chat is attached to the current note.\n'
-            'For edit requests like make this concise, rewrite, enhance, shorten, or update: call view_note then replace_note_content.\n'
+            'For edit requests like make this concise, rewrite, enhance, shorten, or update: call view_note then '
+            'replace_note_content.\n'
             'Do not say an edit is done unless replace_note_content succeeds.'
         )
         if params.get('system') != system:
@@ -372,7 +373,8 @@ async def get_note_chat_by_id(
                     'system': (
                         f'CONTEXT:\nCurrent note id: {note.id}\n'
                         'This chat is attached to the current note.\n'
-                        'For edit requests like make this concise, rewrite, enhance, shorten, or update: call view_note then replace_note_content.\n'
+                        'For edit requests like make this concise, rewrite, enhance, shorten, or update: call '
+                        'view_note then replace_note_content.\n'
                         'Do not say an edit is done unless replace_note_content succeeds.'
                     )
                 },
@@ -435,7 +437,8 @@ async def get_note_chats_by_id(
         system = (
             f'CONTEXT:\nCurrent note id: {note.id}\n'
             'This chat is attached to the current note.\n'
-            'For edit requests like make this concise, rewrite, enhance, shorten, or update: call view_note then replace_note_content.\n'
+            'For edit requests like make this concise, rewrite, enhance, shorten, or update: call view_note then '
+            'replace_note_content.\n'
             'Do not say an edit is done unless replace_note_content succeeds.'
         )
         if params.get('system') != system:
@@ -494,7 +497,8 @@ async def create_note_chat_by_id(
                     'system': (
                         f'CONTEXT:\nCurrent note id: {note.id}\n'
                         'This chat is attached to the current note.\n'
-                        'For edit requests like make this concise, rewrite, enhance, shorten, or update: call view_note then replace_note_content.\n'
+                        'For edit requests like make this concise, rewrite, enhance, shorten, or update: call '
+                        'view_note then replace_note_content.\n'
                         'Do not say an edit is done unless replace_note_content succeeds.'
                     )
                 },

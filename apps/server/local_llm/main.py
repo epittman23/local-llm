@@ -872,7 +872,8 @@ async def get_models(request: Request, refresh: bool = False, user=Depends(get_v
 
     if log.isEnabledFor(logging.DEBUG):
         log.debug(
-            f'/api/models returned filtered models accessible to the user: {JSONCodec.dumps([model.get("id") for model in models])}'
+            '/api/models returned filtered models accessible to the user: '
+            f'{JSONCodec.dumps([model.get("id") for model in models])}'
         )
     return {'data': models}
 
@@ -2746,7 +2747,10 @@ async def get_manifest_json():
         return {
             'name': app.state.LLLM_NAME,
             'short_name': app.state.LLLM_NAME,
-            'description': f'{app.state.LLLM_NAME} is an open, extensible, user-friendly interface for AI that adapts to your workflow.',
+            'description': (
+                f'{app.state.LLLM_NAME} is an open, extensible, user-friendly interface for AI that adapts to your '
+                'workflow.'
+            ),
             'start_url': '/',
             'display': 'standalone',
             'background_color': '#343541',

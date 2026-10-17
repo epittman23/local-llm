@@ -638,7 +638,8 @@ class SafeMicrosoftWebIQLoader(BaseLoader, RateLimitMixin, URLProcessingMixin):
 
 
 class SafePlaywrightURLLoader(PlaywrightURLLoader, RateLimitMixin, URLProcessingMixin):
-    """Load HTML pages safely with Playwright, supporting SSL verification, rate limiting, and remote browser connection.
+    """Load HTML pages safely with Playwright, supporting SSL verification, rate limiting, and remote browser
+    connection.
 
     Attributes:
         web_paths (List[str]): List of URLs to load.

@@ -430,7 +430,7 @@ You have access to a Python code interpreter via: `<code_interpreter type="code"
 - **If a link to an image, audio, or any file appears in the output, display it exactly as-is** in your response so the user can access it. Do not modify the link.
 - Respond in the chat's primary language. Default to English if multilingual.
 
-Ensure the code interpreter is effectively utilized to achieve the highest-quality analysis for the user."""
+Ensure the code interpreter is effectively utilized to achieve the highest-quality analysis for the user."""  # noqa: E501 - prompt text, kept byte for byte
 
 # Appended to the code interpreter prompt only when engine is pyodide (not jupyter)
 CODE_INTERPRETER_PYODIDE_PROMPT = """
@@ -445,7 +445,7 @@ CODE_INTERPRETER_PYODIDE_PROMPT = """
 - User-uploaded files are available at `/mnt/uploads/`. When the user asks you to work with their files, read from this directory.
 - You can also write output files to `/mnt/uploads/` so the user can access and download them from the file browser.
 - The file system persists across code executions within the same session.
-- Use `import os; os.listdir('/mnt/uploads')` to discover available files."""
+- Use `import os; os.listdir('/mnt/uploads')` to discover available files."""  # noqa: E501 - prompt text, kept byte for byte
 
 
 ####################################
@@ -482,7 +482,8 @@ if VECTOR_DB == 'chroma':
     else:
         CHROMA_HTTP_HEADERS = None
     CHROMA_HTTP_SSL = os.getenv('CHROMA_HTTP_SSL', 'false').lower() == 'true'
-# this uses the model defined in the Dockerfile ENV variable. If you dont use docker or docker based deployments such as k8s, the default embedding model will be used (sentence-transformers/all-MiniLM-L6-v2)
+# this uses the model defined in the Dockerfile ENV variable. If you dont use docker or docker based deployments such as
+# k8s, the default embedding model will be used (sentence-transformers/all-MiniLM-L6-v2)
 
 
 # MariaDB Vector (mariadb-vector)
@@ -1046,7 +1047,7 @@ Provide a clear and direct response to the user's query, including inline citati
 <context>
 {{CONTEXT}}
 </context>
-"""
+"""  # noqa: E501 - prompt text, kept byte for byte
 
 RAG_TEMPLATE = os.getenv('RAG_TEMPLATE', DEFAULT_RAG_TEMPLATE)
 
@@ -1630,11 +1631,18 @@ if default_prompt_suggestions == []:
     default_prompt_suggestions = [
         {
             'title': ['Help me study', 'vocabulary for a college entrance exam'],
-            'content': "Help me study vocabulary: write a sentence for me to fill in the blank, and I'll try to pick the correct option.",
+            'content': (
+                "Help me study vocabulary: write a sentence for me to fill in the blank, and I'll try to pick the "
+                'correct option.'
+            ),
         },
         {
             'title': ['Give me ideas', "for what to do with my kids' art"],
-            'content': "What are 5 creative things I could do with my kids' art? I don't want to throw them away, but it's also so much clutter.",
+            'content': (
+                "What are 5 creative things I could do with my kids' art? I don't want to throw them away, but it's "
+                'also '
+                'so much clutter.'
+            ),
         },
         {
             'title': ['Tell me a fun fact', 'about the Roman Empire'],
@@ -1653,7 +1661,10 @@ if default_prompt_suggestions == []:
         },
         {
             'title': ['Overcome procrastination', 'give me tips'],
-            'content': 'Could you start by asking me about instances when I procrastinate the most and then give me some suggestions to overcome it?',
+            'content': (
+                'Could you start by asking me about instances when I procrastinate the most and then give me some '
+                'suggestions to overcome it?'
+            ),
         },
     ]
 
@@ -2093,7 +2104,8 @@ def validate_cors_origin(origin):
     schemes = ['http', 'https'] + CORS_ALLOW_CUSTOM_SCHEME
     if parsed_url.scheme not in schemes:
         raise ValueError(
-            f"Invalid scheme in CORS_ALLOW_ORIGIN: '{origin}'. Only 'http' and 'https' and CORS_ALLOW_CUSTOM_SCHEME are allowed."
+            f"Invalid scheme in CORS_ALLOW_ORIGIN: '{origin}'. Only 'http' and 'https' and CORS_ALLOW_CUSTOM_SCHEME "
+            'are allowed.'
         )
 
     # Ensure that the netloc (domain + port) is present, indicating it's a valid URL
@@ -2203,7 +2215,7 @@ JSON format: { "title": "your concise title here" }
 ### Chat History:
 <chat_history>
 {{MESSAGES:END:2}}
-</chat_history>"""
+</chat_history>"""  # noqa: E501 - prompt text, kept byte for byte
 
 TAGS_GENERATION_PROMPT_TEMPLATE = os.getenv('TAGS_GENERATION_PROMPT_TEMPLATE', '')
 
@@ -2223,7 +2235,7 @@ JSON format: { "tags": ["tag1", "tag2", "tag3"] }
 ### Chat History:
 <chat_history>
 {{MESSAGES:END:6}}
-</chat_history>"""
+</chat_history>"""  # noqa: E501 - prompt text, kept byte for byte
 
 IMAGE_PROMPT_GENERATION_PROMPT_TEMPLATE = os.getenv('IMAGE_PROMPT_GENERATION_PROMPT_TEMPLATE', '')
 
@@ -2245,7 +2257,7 @@ Strictly return in JSON format:
 ### Chat History:
 <chat_history>
 {{MESSAGES:END:6}}
-</chat_history>"""
+</chat_history>"""  # noqa: E501 - prompt text, kept byte for byte
 
 
 FOLLOW_UP_GENERATION_PROMPT_TEMPLATE = os.getenv('FOLLOW_UP_GENERATION_PROMPT_TEMPLATE', '')
@@ -2264,7 +2276,7 @@ JSON format: { "follow_ups": ["Question 1?", "Question 2?", "Question 3?"] }
 ### Chat History:
 <chat_history>
 {{MESSAGES:END:6}}
-</chat_history>"""
+</chat_history>"""  # noqa: E501 - prompt text, kept byte for byte
 
 ENABLE_FOLLOW_UP_GENERATION = os.getenv('ENABLE_FOLLOW_UP_GENERATION', 'True').lower() == 'true'
 
@@ -2302,7 +2314,7 @@ Strictly return in JSON format:
 <chat_history>
 {{MESSAGES:END:6}}
 </chat_history>
-"""
+"""  # noqa: E501 - prompt text, kept byte for byte
 
 ENABLE_AUTOCOMPLETE_GENERATION = os.getenv('ENABLE_AUTOCOMPLETE_GENERATION', 'False').lower() == 'true'
 
@@ -2351,7 +2363,7 @@ Output:
 <type>{{TYPE}}</type>
 <text>{{PROMPT}}</text>
 #### Output:
-"""
+"""  # noqa: E501 - prompt text, kept byte for byte
 
 
 VOICE_MODE_PROMPT_TEMPLATE = os.getenv('VOICE_MODE_PROMPT_TEMPLATE', '')
@@ -2407,18 +2419,18 @@ The format for the JSON response is strictly:
     {"name": "toolName1", "parameters": {"key1": "value1"}},
     {"name": "toolName2", "parameters": {"key2": "value2"}}
   ]
-}"""
+}"""  # noqa: E501 - prompt text, kept byte for byte
 
 
 DEFAULT_EMOJI_GENERATION_PROMPT_TEMPLATE = """Your task is to reflect the speaker's likely facial expression through a fitting emoji. Interpret emotions from the message and reflect their facial expression using fitting, diverse emojis (e.g., 😊, 😢, 😡, 😱).
 
-Message: ```{{prompt}}```"""
+Message: ```{{prompt}}```"""  # noqa: E501 - prompt text, kept byte for byte
 
 DEFAULT_MOA_GENERATION_PROMPT_TEMPLATE = """You have been provided with a set of responses from various models to the latest user query: "{{prompt}}"
 
 Your task is to synthesize these responses into a single, high-quality response. It is crucial to critically evaluate the information provided in these responses, recognizing that some of it may be biased or incorrect. Your response should not simply replicate the given answers but should offer a refined, accurate, and comprehensive reply to the instruction. Ensure your response is well-structured, coherent, and adheres to the highest standards of accuracy and reliability.
 
-Responses from models: {{responses}}"""
+Responses from models: {{responses}}"""  # noqa: E501 - prompt text, kept byte for byte
 
 
 ####################################

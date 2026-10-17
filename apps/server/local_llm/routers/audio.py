@@ -967,7 +967,8 @@ async def _transcribe_mistral(request, file_path, filename, metadata, file_dir, 
             text_instruction = (
                 f'Transcribe this audio exactly as spoken in {language}. Do not translate it.'
                 if language
-                else 'Transcribe this audio exactly as spoken in its original language. Do not translate it to another language.'
+                else 'Transcribe this audio exactly as spoken in its original language. Do not translate it to another '
+                'language.'
             )
 
             payload = {

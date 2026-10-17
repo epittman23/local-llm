@@ -166,11 +166,12 @@ class MariaDBVectorClient(VectorDBBase):
                     dist = self.distance_strategy
                     cur.execute(f"""
                         CREATE TABLE IF NOT EXISTS document_chunk (
-                            -- MariaDB Vector requires the table PRIMARY KEY used with a VECTOR INDEX to be <= 256 bytes.
-                            -- VARCHAR has internal length/metadata overhead, so VARCHAR(255) can exceed the 256-byte limit.
-                            -- We use VARCHAR(254) to stay safely under the limit, and force ASCII (1 byte/char) so the byte
-                            -- size is predictable (avoid utf8mb4 where a "255 char" key could be up to 1020 bytes).
-                            -- ascii_bin gives bytewise, case-sensitive comparisons for stable ID matching.
+                            -- MariaDB Vector requires the table PRIMARY KEY used with a VECTOR INDEX to be <= 256
+                            -- bytes. VARCHAR has internal length/metadata overhead, so VARCHAR(255) can exceed the
+                            -- 256-byte limit. We use VARCHAR(254) to stay safely under the limit, and force ASCII (1
+                            -- byte/char) so the byte size is predictable (avoid utf8mb4 where a "255 char" key could be
+                            -- up to 1020 bytes). ascii_bin gives bytewise, case-sensitive comparisons for stable ID
+                            -- matching.
                             id VARCHAR(254) CHARACTER SET ascii COLLATE ascii_bin PRIMARY KEY,
                             embedding VECTOR({self.vector_length}) NOT NULL,
                             collection_name VARCHAR(255) NOT NULL,
@@ -206,7 +207,8 @@ class MariaDBVectorClient(VectorDBBase):
                 existing = int(m.group(1))
                 if existing != int(self.vector_length):
                     raise Exception(
-                        f'VECTOR_LENGTH {self.vector_length} does not match existing vector column dimension {existing}. '
+                        f'VECTOR_LENGTH {self.vector_length} does not match existing vector column dimension '
+                        f'{existing}. '
                         'Cannot change vector size after initialization without migrating the data.'
                     )
 

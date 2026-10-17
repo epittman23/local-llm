@@ -1469,7 +1469,8 @@ async def get_sources_from_items(
             if item.get('context') == 'full' or bypass_embedding_and_retrieval:
                 if item.get('file', {}).get('data', {}).get('content', ''):
                     # Manual Full Mode Toggle
-                    # Used from chat file modal, we can assume that the file content will be available from item.get("file").get("data", {}).get("content")
+                    # Used from chat file modal, we can assume that the file content will be available from
+                    # item.get("file").get("data", {}).get("content")
                     query_result = {
                         'documents': [[item.get('file', {}).get('data', {}).get('content', '')]],
                         'metadatas': [

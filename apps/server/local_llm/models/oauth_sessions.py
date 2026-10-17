@@ -244,7 +244,8 @@ class OAuthSessionTable:
                         )
                     except Exception as e:
                         log.warning(
-                            f'Skipping OAuth session {session.id} due to decryption failure, deleting corrupted session: {type(e).__name__}: {e}'
+                            f'Skipping OAuth session {session.id} due to decryption failure, deleting corrupted '
+                            f'session: {type(e).__name__}: {e}'
                         )
                         await db.execute(delete(OAuthSession).filter_by(id=session.id))
                         await db.commit()

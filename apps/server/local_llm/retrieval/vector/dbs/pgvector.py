@@ -89,7 +89,8 @@ class PgvectorClient(VectorDBBase):
     def __init__(self) -> None:
         if not PGVECTOR_DB_URL.startswith('postgres'):
             raise ValueError(
-                'Pgvector requires setting PGVECTOR_DB_URL or using Postgres with vector extension as the primary database.'
+                'Pgvector requires setting PGVECTOR_DB_URL or using Postgres with vector extension as the primary '
+                'database.'
             )
         # if no pgvector uri, use the existing database connection
         if not PGVECTOR_DB_URL:
@@ -223,7 +224,8 @@ class PgvectorClient(VectorDBBase):
             raise RuntimeError(
                 f"Existing pgvector index '{index_name}' uses method '{existing_method}' but configuration now "
                 f"requires '{index_method}'. Automatic rebuild is disabled to prevent long-running maintenance. "
-                'Drop the index manually (optionally after tuning maintenance_work_mem/max_parallel_maintenance_workers) '
+                'Drop the index manually (optionally after tuning '
+                'maintenance_work_mem/max_parallel_maintenance_workers) '
                 'and recreate it with the new method before restarting Local LLM.'
             )
 
@@ -283,7 +285,8 @@ class PgvectorClient(VectorDBBase):
             db_vector_length = getattr(vector_type, 'dim', None)
             if db_vector_length is not None and db_vector_length != VECTOR_LENGTH:
                 raise Exception(
-                    f'VECTOR_LENGTH {VECTOR_LENGTH} does not match existing vector column dimension {db_vector_length}. '
+                    f'VECTOR_LENGTH {VECTOR_LENGTH} does not match existing vector column dimension '
+                    f'{db_vector_length}. '
                     'Cannot change vector size after initialization without migrating the data.'
                 )
         else:

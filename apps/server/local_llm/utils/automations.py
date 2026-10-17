@@ -444,7 +444,10 @@ async def _execute_channel_automation(
         'messages': [
             {
                 'role': 'system',
-                'content': f'You are {model.get("name", model_id)}, participating in a channel conversation. Be concise and conversational.',
+                'content': (
+                    f'You are {model.get("name", model_id)}, participating in a channel conversation. Be concise and '
+                    'conversational.'
+                ),
             },
             {'role': 'user', 'content': f'{user.name if user else "User"}: {prompt}'},
         ],

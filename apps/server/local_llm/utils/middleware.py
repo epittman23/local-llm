@@ -1042,7 +1042,10 @@ async def process_tool_result(
                 tool_result = {
                     'status': 'error',
                     'code': 'ui_component',
-                    'message': f'{tool_function_name}: Unexpected status code {tool_result.status_code} from embedded UI result.',
+                    'message': (
+                        f'{tool_function_name}: Unexpected status code {tool_result.status_code} from embedded UI '
+                        'result.'
+                    ),
                 }
         else:
             tool_result = tool_result.body.decode('utf-8', 'replace')
@@ -1838,7 +1841,10 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
                 }
             )
 
-            system_message_content = '<context>The requested image has been edited and created and is now being shown to the user. Let them know that it has been generated.</context>'
+            system_message_content = (
+                '<context>The requested image has been edited and created and is now being shown to the user. Let '
+                'them know that it has been generated.</context>'
+            )
         except Exception as e:
             log.debug(e)
 
@@ -1859,7 +1865,10 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
                 }
             )
 
-            system_message_content = f'<context>Image generation was attempted but failed. The system is currently unable to generate the image. Tell the user that the following error occurred: {error_message}</context>'
+            system_message_content = (
+                '<context>Image generation was attempted but failed. The system is currently unable to generate the '
+                f'image. Tell the user that the following error occurred: {error_message}</context>'
+            )
 
     elif not await Config.get('image_generation.enable'):
         await __event_emitter__(
@@ -1872,7 +1881,10 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
             }
         )
 
-        system_message_content = '<context>Image generation was requested but the feature is currently disabled by the administrator, so no image was created. Let the user know that image generation is currently unavailable.</context>'
+        system_message_content = (
+            '<context>Image generation was requested but the feature is currently disabled by the administrator, so '
+            'no image was created. Let the user know that image generation is currently unavailable.</context>'
+        )
 
     else:
         # Create image(s)
@@ -1946,7 +1958,11 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
                 }
             )
 
-            system_message_content = '<context>The requested image has been created by the system successfully and is now being shown to the user. Let the user know that the image they requested has been generated and is now shown in the chat.</context>'
+            system_message_content = (
+                '<context>The requested image has been created by the system successfully and is now being shown to '
+                'the user. Let the user know that the image they requested has been generated and is now shown in '
+                'the chat.</context>'
+            )
         except Exception as e:
             log.debug(e)
 
@@ -1967,7 +1983,11 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
                 }
             )
 
-            system_message_content = f'<context>Image generation was attempted but failed because of an error. The system is currently unable to generate the image. Tell the user that the following error occurred: {error_message}</context>'
+            system_message_content = (
+                '<context>Image generation was attempted but failed because of an error. The system is currently '
+                'unable to generate the image. Tell the user that the following error occurred: '
+                f'{error_message}</context>'
+            )
 
     if system_message_content:
         form_data['messages'] = add_or_update_system_message(system_message_content, form_data['messages'])
@@ -4876,7 +4896,8 @@ async def streaming_chat_response_handler(response, ctx):
                                             for part in item.get('content', []):
                                                 for annotation in part.get('annotations', []):
                                                     if annotation.get('type') == 'url_citation':
-                                                        # Handle both flat (Responses API) and nested (Chat Completions) formats
+                                                        # Handle both flat (Responses API) and nested (Chat Completions)
+                                                        # formats
                                                         url_citation = annotation.get('url_citation', annotation)
 
                                                         url = url_citation.get('url', '')
@@ -5962,7 +5983,10 @@ async def streaming_chat_response_handler(response, ctx):
                                         'content': [
                                             {
                                                 'type': 'text',
-                                                'text': 'Here are the images from the tool results above. Please analyze them.',
+                                                'text': (
+                                                    'Here are the images from the tool results above. Please analyze '
+                                                    'them.'
+                                                ),
                                             },
                                             *[{'type': 'image_url', 'image_url': {'url': url}} for url in image_urls],
                                         ],

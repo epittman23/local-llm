@@ -2362,7 +2362,8 @@ class ChatTable:
                 elif dialect_name == 'postgresql':
                     stmt = stmt.filter(
                         text(
-                            f"EXISTS (SELECT 1 FROM json_array_elements_text(Chat.meta->'tags') elem WHERE elem = :{param})"
+                            "EXISTS (SELECT 1 FROM json_array_elements_text(Chat.meta->'tags') elem WHERE elem = "
+                            f':{param})'
                         )
                     ).params(**{param: tag_id})
                 else:

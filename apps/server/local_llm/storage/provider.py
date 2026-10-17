@@ -206,7 +206,8 @@ class S3StorageProvider(StorageProvider):
         # Always delete from local storage
         LocalStorageProvider.delete_all_files()
 
-    # The s3 key is the name assigned to an object. It excludes the bucket name, but includes the internal path and the file name.
+    # The s3 key is the name assigned to an object. It excludes the bucket name, but includes the internal path and the
+    # file name.
     def _extract_s3_key(self, full_file_path: str) -> str:
         return '/'.join(full_file_path.split('//')[1].split('/')[1:])
 
@@ -289,7 +290,8 @@ class AzureStorageProvider(StorageProvider):
             self.blob_service_client = BlobServiceClient(account_url=self.endpoint, credential=storage_key)
         else:
             # Configure using the Azure Storage Account Endpoint and DefaultAzureCredential
-            # If the key is not configured, then the DefaultAzureCredential will be used to support Managed Identity authentication
+            # If the key is not configured, then the DefaultAzureCredential will be used to support Managed Identity
+            # authentication
             self.blob_service_client = BlobServiceClient(account_url=self.endpoint, credential=DefaultAzureCredential())
         self.container_client = self.blob_service_client.get_container_client(self.container_name)
 

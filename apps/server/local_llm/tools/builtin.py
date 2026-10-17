@@ -418,7 +418,10 @@ async def generate_image(
             return JSONCodec.dumps(
                 {
                     'status': 'success',
-                    'message': 'The image has been successfully generated and is already visible to the user in the chat. You do not need to display or embed the image again - just acknowledge that it has been created.',
+                    'message': (
+                        'The image has been successfully generated and is already visible to the user in the chat. You '
+                        'do not need to display or embed the image again - just acknowledge that it has been created.'
+                    ),
                     'images': images,
                 },
                 ensure_ascii=False,
@@ -491,7 +494,11 @@ async def edit_image(
             return JSONCodec.dumps(
                 {
                     'status': 'success',
-                    'message': 'The edited image has been successfully generated and is already visible to the user in the chat. You do not need to display or embed the image again - just acknowledge that it has been created.',
+                    'message': (
+                        'The edited image has been successfully generated and is already visible to the user in the '
+                        'chat. You do not need to display or embed the image again - just acknowledge that it has been '
+                        'created.'
+                    ),
                     'images': images,
                 },
                 ensure_ascii=False,
@@ -522,7 +529,7 @@ async def ask_user(
     :param allow_other: Whether users may enter a free-form answer instead of choosing one of the options
     :param timeout_ms: How long the browser should keep the prompt open before cancelling it
     :return: JSON with status and answers keyed by question id
-    """
+    """  # noqa: E501 - the model reads this docstring as the tool description
     try:
         if not isinstance(questions, list) or not 1 <= len(questions) <= 3:
             raise ValueError('ask_user requires 1-3 questions.')
@@ -3568,7 +3575,7 @@ async def create_tasks(
 
     :param tasks: List of task items. Each item: content (string, required), status (pending|in_progress|completed|cancelled, default pending), id (optional, auto-generated).
     :return: JSON with the full task list and summary counts
-    """
+    """  # noqa: E501 - the model reads this docstring as the tool description
     if not is_saved_chat_id(__chat_id__):
         return JSONCodec.dumps({'error': 'Saved chat context not available'})
 
@@ -4227,7 +4234,7 @@ async def create_calendar_event(
     :param location: Event location (optional)
     :param reminder_minutes: Minutes before the event to send a notification (optional, default: 10). Use 0 for "at time of event", -1 for no notification.
     :return: JSON with the created event details including id
-    """
+    """  # noqa: E501 - the model reads this docstring as the tool description
     if __request__ is None:
         return JSONCodec.dumps({'error': 'Request context not available'})
 
@@ -4354,7 +4361,7 @@ async def update_calendar_event(
     :param is_cancelled: Set to true to cancel the event (optional)
     :param reminder_minutes: Minutes before the event to send a reminder notification (optional). Use 0 for "at time of event", -1 for no reminder. Accepts any positive integer for custom timing (e.g. 120 for 2 hours before).
     :return: JSON with the updated event details
-    """
+    """  # noqa: E501 - the model reads this docstring as the tool description
     if __request__ is None:
         return JSONCodec.dumps({'error': 'Request context not available'})
 

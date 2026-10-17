@@ -78,7 +78,10 @@ def set_xframe(value: str):
 
 # Set Permissions-Policy response header
 def set_permissions_policy(value: str):
-    pattern = r'^(?:(accelerometer|autoplay|camera|clipboard-read|clipboard-write|fullscreen|geolocation|gyroscope|magnetometer|microphone|midi|payment|picture-in-picture|sync-xhr|usb|xr-spatial-tracking)=\((self)?\),?)*$'
+    pattern = (
+        r'^(?:(accelerometer|autoplay|camera|clipboard-read|clipboard-write|fullscreen|geolocation|gyroscope|'
+        r'magnetometer|microphone|midi|payment|picture-in-picture|sync-xhr|usb|xr-spatial-tracking)=\((self)?\),?)*$'
+    )
     match = re.match(pattern, value, re.IGNORECASE)
     if not match:
         value = 'none'
@@ -87,7 +90,10 @@ def set_permissions_policy(value: str):
 
 # Set Referrer-Policy response header
 def set_referrer(value: str):
-    pattern = r'^(no-referrer|no-referrer-when-downgrade|origin|origin-when-cross-origin|same-origin|strict-origin|strict-origin-when-cross-origin|unsafe-url)$'
+    pattern = (
+        r'^(no-referrer|no-referrer-when-downgrade|origin|origin-when-cross-origin|same-origin|strict-origin|'
+        r'strict-origin-when-cross-origin|unsafe-url)$'
+    )
     match = re.match(pattern, value, re.IGNORECASE)
     if not match:
         value = 'no-referrer'
@@ -96,7 +102,11 @@ def set_referrer(value: str):
 
 # Set Cache-Control response header
 def set_cache_control(value: str):
-    pattern = r'^(public|private|no-cache|no-store|must-revalidate|proxy-revalidate|max-age=\d+|s-maxage=\d+|no-transform|immutable)(,\s*(public|private|no-cache|no-store|must-revalidate|proxy-revalidate|max-age=\d+|s-maxage=\d+|no-transform|immutable))*$'
+    pattern = (
+        r'^(public|private|no-cache|no-store|must-revalidate|proxy-revalidate|max-age=\d+|s-maxage=\d+|no-transform|immutable)'
+        r'(,\s*(public|private|no-cache|no-store|must-revalidate|proxy-revalidate|max-age=\d+|s-maxage=\d+|no-transform|'
+        r'immutable))*$'
+    )
     match = re.match(pattern, value, re.IGNORECASE)
     if not match:
         value = 'no-store, max-age=0'

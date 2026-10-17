@@ -229,7 +229,8 @@ def _normalize_token_expiry(token: dict) -> dict:
         expires_at = int(dt.datetime.now().timestamp() + DEFAULT_TOKEN_EXPIRY_SECONDS)
     else:
         log.info(
-            "OAuth token response missing 'expires_in', 'expires_at' and 'refresh_token'; treating token as non-expiring"
+            "OAuth token response missing 'expires_in', 'expires_at' and 'refresh_token'; treating token as "
+            'non-expiring'
         )
         expires_at = NON_EXPIRING_TOKEN_EXPIRES_AT
 
@@ -587,7 +588,8 @@ async def get_oauth_client_info_with_dynamic_client_registration(
                 try:
                     registration_response_json = await oauth_client_registration_response.json()
 
-                    # The mcp package requires optional unset values to be None. If an empty string is passed, it gets validated and fails.
+                    # The mcp package requires optional unset values to be None. If an empty string is passed, it gets
+                    # validated and fails.
                     # This replaces all empty strings with None.
                     registration_response_json = {
                         k: (None if v == '' else v) for k, v in registration_response_json.items()
@@ -611,7 +613,8 @@ async def get_oauth_client_info_with_dynamic_client_registration(
                     try:
                         error_text = await oauth_client_registration_response.text()
                         log.error(
-                            f'Dynamic client registration failed at {registration_url}: {oauth_client_registration_response.status} - {error_text}'
+                            f'Dynamic client registration failed at {registration_url}: '
+                            f'{oauth_client_registration_response.status} - {error_text}'
                         )
                     except Exception:
                         pass
@@ -993,7 +996,8 @@ class OAuthClientManager:
                         )
                     ):
                         log.warning(
-                            f'OAuth client preflight detected invalid registration for {client_info.client_id}: {error} {error_description}'
+                            f'OAuth client preflight detected invalid registration for {client_info.client_id}: '
+                            f'{error} {error_description}'
                         )
 
                         return False
@@ -1053,7 +1057,8 @@ class OAuthClientManager:
                     return refreshed_token
                 else:
                     log.warning(
-                        f'Token refresh failed for user {user_id}, client_id {session.provider}, deleting session {session.id}'
+                        f'Token refresh failed for user {user_id}, client_id {session.provider}, deleting session '
+                        f'{session.id}'
                     )
                     await OAuthSessions.delete_session_by_id(session.id)
                     return None
@@ -1380,7 +1385,8 @@ class OAuthManager:
                     return refreshed_token
                 else:
                     log.warning(
-                        f'Token refresh failed for user {user_id}, provider {session.provider}, deleting session {session.id}'
+                        f'Token refresh failed for user {user_id}, provider {session.provider}, deleting session '
+                        f'{session.id}'
                     )
                     await OAuthSessions.delete_session_by_id(session.id)
 
@@ -1795,7 +1801,8 @@ class OAuthManager:
                 get_kwargs['headers'] = {
                     'Authorization': f'Bearer {access_token}',
                 }
-            # get_ssrf_safe_session pins the connect-time IP (defeats DNS rebinding); allow_redirects=False keeps validate_url's vet authoritative.
+            # get_ssrf_safe_session pins the connect-time IP (defeats DNS rebinding); allow_redirects=False keeps
+            # validate_url's vet authoritative.
             async with get_ssrf_safe_session() as session:
                 async with session.get(
                     picture_url,
@@ -1938,7 +1945,8 @@ class OAuthManager:
             email = user_data.get(email_claim, '')
             # We currently mandate that email addresses are provided
             if not email:
-                # If the provider is GitHub,and public email is not provided, we can use the access token to fetch the user's email
+                # If the provider is GitHub,and public email is not provided, we can use the access token to fetch the
+                # user's email
                 if provider == 'github':
                     try:
                         access_token = token.get('access_token')
@@ -2029,7 +2037,8 @@ class OAuthManager:
                             existing_user = await Users.get_user_by_email(new_email, db=db)
                             if existing_user:
                                 log.error(
-                                    f'Cannot update email to {new_email} for user {user.id} because it is already taken.'
+                                    f'Cannot update email to {new_email} for user {user.id} because it is already '
+                                    'taken.'
                                 )
                             elif await Auths.update_email_by_id(user.id, new_email.lower(), db=db):
                                 user = await Users.get_user_by_id(user.id, db=db) or user

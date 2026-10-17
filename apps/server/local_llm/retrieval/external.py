@@ -363,7 +363,8 @@ async def retrieve_external_knowledge_for_connection(
 
     chunks = chunks[:count]
     log.info(
-        'external_knowledge_retrieval knowledge_id=%s connection_id=%s provider=%s user_id=%s latency_ms=%s result_count=%s',
+        'external_knowledge_retrieval knowledge_id=%s connection_id=%s provider=%s user_id=%s latency_ms=%s '
+        'result_count=%s',
         knowledge.id,
         connection.get('id'),
         connection.get('provider'),

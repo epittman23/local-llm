@@ -558,7 +558,7 @@ Existing memories:
 
 Conversation:
 {transcript}
-"""
+"""  # noqa: E501 - prompt text, kept byte for byte
 
     response = await generate_chat_completion(
         request,

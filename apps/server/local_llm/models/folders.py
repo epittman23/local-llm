@@ -423,7 +423,8 @@ class FolderTable:
         self, user_id: str, queries: list[str], db: AsyncSession | None = None
     ) -> list[FolderModel]:
         """
-        Search for folders for a user where the name matches any of the queries, treating _ and space as equivalent, case-insensitive.
+        Search for folders for a user where the name matches any of the queries, treating _ and space as equivalent,
+        case-insensitive.
         """
         normalized_queries = [self.normalize_folder_name(q) for q in queries]
         if not normalized_queries:

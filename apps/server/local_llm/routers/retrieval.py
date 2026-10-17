@@ -2695,7 +2695,8 @@ async def search_web(request: Request, engine: str, query: str, user=None) -> li
             )
         else:
             raise Exception(
-                'AZURE_AI_SEARCH_API_KEY, AZURE_AI_SEARCH_ENDPOINT, and AZURE_AI_SEARCH_INDEX_NAME are required for Azure AI Search'
+                'AZURE_AI_SEARCH_API_KEY, AZURE_AI_SEARCH_ENDPOINT, and AZURE_AI_SEARCH_INDEX_NAME are required for '
+                'Azure AI Search'
             )
     elif engine == 'perplexity':
         return await asyncio.to_thread(
@@ -2937,7 +2938,10 @@ async def process_web_search(request: Request, form_data: SearchForm, user=Depen
                 log.exception(f'Error saving web search results to vector DB: {e}')
                 raise HTTPException(
                     status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail='Failed to embed and store the retrieved web pages. Check the embedding configuration in Admin Settings > Documents.',
+                    detail=(
+                        'Failed to embed and store the retrieved web pages. Check the embedding configuration in Admin '
+                        'Settings > Documents.'
+                    ),
                 )
 
             return {

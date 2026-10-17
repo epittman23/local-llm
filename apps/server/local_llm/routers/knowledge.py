@@ -303,7 +303,8 @@ async def create_new_knowledge(
     user=Depends(get_verified_user),
 ):
     # NOTE: We intentionally do NOT use Depends(get_async_session) here.
-    # Database operations (has_permission, filter_allowed_access_grants, insert_new_knowledge) manage their own sessions.
+    # Database operations (has_permission, filter_allowed_access_grants, insert_new_knowledge) manage their own
+    # sessions.
     # This prevents holding a connection during embed_knowledge_base_metadata()
     # which makes external embedding API calls (1-5+ seconds).
     if user.role != 'admin' and not await has_permission(
