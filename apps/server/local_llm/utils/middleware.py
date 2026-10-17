@@ -4418,14 +4418,16 @@ class _TagScanner:
 
         Returns the output and whether a block was closed."""
         last_type = output[-1].get('type', '') if output else ''
-        if last_type == 'message':
-            return self._open_block(content_type, tags, output)
+        # An open block of this kind is checked for its end tag first: a tagged message
+        # (a solution block) is a message too, and would otherwise only be scanned for start tags.
         if (
             (last_type == 'reasoning' and content_type == 'reasoning')
             or (last_type == 'open_webui:code_interpreter' and content_type == 'code_interpreter')
             or (last_type == 'message' and output[-1].get('_tag_type') == content_type)
         ):
             return output, self._close_block(content_type, output, last_type)
+        if last_type == 'message':
+            return self._open_block(content_type, tags, output)
         return output, False
 
     def _open_block(self, content_type: str, tags: list, output: list) -> tuple[list, bool]:
