@@ -1676,7 +1676,11 @@
     {
      "index": 0,
      "logprobs": null,
-     "finish_reason": "stop"
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": "nottext"
+     }
     }
    ],
    "object": "chat.completion"
@@ -1707,7 +1711,9 @@
  },
  "list_reply_streamed": {
   "stream": [
-   "data: {\"id\": \"mypipe-00000000-0000-0000-0000-000000000001\", \"created\": 1000, \"model\": \"mypipe\", \"choices\": [{\"index\": 0, \"logprobs\": null, \"finish_reason\": \"stop\", \"delta\": {}}], \"object\": \"chat.completion.chunk\"}\n\n",
+   "data: {\"id\": \"mypipe-00000000-0000-0000-0000-000000000001\", \"created\": 1000, \"model\": \"mypipe\", \"choices\": [{\"index\": 0, \"logprobs\": null, \"finish_reason\": null, \"delta\": {\"content\": \"not\"}}], \"object\": \"chat.completion.chunk\"}\n\n",
+   "data: {\"id\": \"mypipe-00000000-0000-0000-0000-000000000002\", \"created\": 1000, \"model\": \"mypipe\", \"choices\": [{\"index\": 0, \"logprobs\": null, \"finish_reason\": null, \"delta\": {\"content\": \"text\"}}], \"object\": \"chat.completion.chunk\"}\n\n",
+   "data: {\"id\": \"mypipe-00000000-0000-0000-0000-000000000003\", \"created\": 1000, \"model\": \"mypipe\", \"choices\": [{\"index\": 0, \"logprobs\": null, \"finish_reason\": \"stop\", \"delta\": {}}], \"object\": \"chat.completion.chunk\"}\n\n",
    "data: [DONE]"
   ],
   "pipe_received": {
@@ -1743,7 +1749,156 @@
     {
      "index": 0,
      "logprobs": null,
-     "finish_reason": "stop"
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": ""
+     }
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "none_reply_streamed": {
+  "stream": [
+   "data: {\"id\": \"mypipe-00000000-0000-0000-0000-000000000001\", \"created\": 1000, \"model\": \"mypipe\", \"choices\": [{\"index\": 0, \"logprobs\": null, \"finish_reason\": \"stop\", \"delta\": {}}], \"object\": \"chat.completion.chunk\"}\n\n",
+   "data: [DONE]"
+  ],
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": true
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "number_reply": {
+  "returned": {
+   "id": "mypipe-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": "42"
+     }
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "odd_lines_streamed": {
+  "stream": [
+   "data: {\"id\": \"mypipe-00000000-0000-0000-0000-000000000001\", \"created\": 1000, \"model\": \"mypipe\", \"choices\": [{\"index\": 0, \"logprobs\": null, \"finish_reason\": null, \"delta\": {\"content\": \"text, \"}}], \"object\": \"chat.completion.chunk\"}\n\n",
+   "data: {\"id\": \"mypipe-00000000-0000-0000-0000-000000000002\", \"created\": 1000, \"model\": \"mypipe\", \"choices\": [{\"index\": 0, \"logprobs\": null, \"finish_reason\": null, \"delta\": {\"content\": \"7\"}}], \"object\": \"chat.completion.chunk\"}\n\n",
+   "data: {\"id\": \"mypipe-00000000-0000-0000-0000-000000000003\", \"created\": 1000, \"model\": \"mypipe\", \"choices\": [{\"index\": 0, \"logprobs\": null, \"finish_reason\": null, \"delta\": {\"content\": \"None\"}}], \"object\": \"chat.completion.chunk\"}\n\n",
+   "data: {\"id\": \"mypipe-00000000-0000-0000-0000-000000000004\", \"created\": 1000, \"model\": \"mypipe\", \"choices\": [{\"index\": 0, \"logprobs\": null, \"finish_reason\": \"stop\", \"delta\": {}}], \"object\": \"chat.completion.chunk\"}\n\n",
+   "data: [DONE]"
+  ],
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": true
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "odd_lines_joined": {
+  "returned": {
+   "id": "mypipe-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": "text, 7None"
+     }
     }
    ],
    "object": "chat.completion"

@@ -103,6 +103,14 @@ def _pipes():
     def as_none(body):
         return None
 
+    def as_number(body):
+        return 42
+
+    def odd_lines(body):
+        yield 'text, '
+        yield 7
+        yield None
+
     def fails(body):
         raise ValueError('pipe exploded')
 
@@ -185,6 +193,10 @@ CASES = [
     _case('list_reply', 'as_list'),
     _case('list_reply_streamed', 'as_list', stream=True),
     _case('none_reply', 'as_none'),
+    _case('none_reply_streamed', 'as_none', stream=True),
+    _case('number_reply', 'as_number'),
+    _case('odd_lines_streamed', 'odd_lines', stream=True),
+    _case('odd_lines_joined', 'odd_lines'),
     _case('pipe_fails', 'fails'),
     _case('pipe_fails_streamed', 'fails', stream=True),
     _case('models_passed_in', models={'mypipe': {'id': 'mypipe'}}),

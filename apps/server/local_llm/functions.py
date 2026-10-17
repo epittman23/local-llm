@@ -144,13 +144,17 @@ async def _execute_pipe(pipe, params):
     return pipe(**params)
 
 
-async def _message_content(res: str | Generator | AsyncGenerator) -> str:
+async def _message_content(res) -> str:
+    """A pipe's non-streamed output as message text; nothing (None) is empty text, anything else its str()."""
+    if res is None:
+        return ''
     if isinstance(res, str):
         return res
-    if isinstance(res, Generator):
+    if isinstance(res, (Generator, list, tuple)):
         return ''.join(map(str, res))
     if isinstance(res, AsyncGenerator):
         return ''.join([str(stream) async for stream in res])
+    return str(res)
 
 
 def _sse_line(model: str, line) -> str:
@@ -163,6 +167,8 @@ def _sse_line(model: str, line) -> str:
         line = line.decode('utf-8')
     except Exception:
         pass
+    if not isinstance(line, str):
+        line = str(line)
     if line.startswith('data:'):
         return f'{line}\n\n'
     return f'data: {JSONCodec.dumps(openai_chat_chunk_message_template(model, line))}\n\n'
@@ -269,7 +275,7 @@ async def _stream_pipe(pipe, params: dict, model: str):
 
     if isinstance(res, str):
         yield f'data: {JSONCodec.dumps(openai_chat_chunk_message_template(model, res))}\n\n'
-    if isinstance(res, Iterator):
+    if isinstance(res, (Iterator, list, tuple)):
         for line in res:
             yield _sse_line(model, line)
     if isinstance(res, AsyncGenerator):
