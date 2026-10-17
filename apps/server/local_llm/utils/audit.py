@@ -3,7 +3,7 @@ import uuid
 from collections.abc import AsyncGenerator, MutableMapping
 from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -48,7 +48,7 @@ class AuditLogEntry:
     response_status_code: int | None = None
 
 
-class AuditLevel(str, Enum):
+class AuditLevel(StrEnum):
     NONE = 'NONE'
     METADATA = 'METADATA'
     REQUEST = 'REQUEST'

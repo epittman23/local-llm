@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import errno
-from enum import Enum
+from enum import StrEnum
 
 _ERRNO_MESSAGES = {
     errno.ENAMETOOLONG: 'File name is too long.',
@@ -23,21 +23,18 @@ def _error_message(err='', fallback='') -> str:
     return f'[ERROR: {err}]'
 
 
-class MESSAGES(str, Enum):
+class MESSAGES(StrEnum):
     DEFAULT = lambda msg='': f'{msg if msg else ""}'
     MODEL_ADDED = lambda model='': f"The model '{model}' has been added successfully."
     MODEL_DELETED = lambda model='': f"The model '{model}' has been deleted successfully."
 
 
-class WEBHOOK_MESSAGES(str, Enum):
+class WEBHOOK_MESSAGES(StrEnum):
     DEFAULT = lambda msg='': f'{msg if msg else ""}'
     USER_SIGNUP = lambda username='': f'New user signed up: {username}' if username else 'New user signed up'
 
 
-class ERROR_MESSAGES(str, Enum):
-    def __str__(self) -> str:
-        return super().__str__()
-
+class ERROR_MESSAGES(StrEnum):
     DEFAULT = _error_message
     ENV_VAR_NOT_FOUND = 'Required environment variable not found. Terminating now.'
     CREATE_USER_ERROR = 'Oops! Something went wrong while creating your account. Please try again later. If the issue persists, contact support for assistance.'
@@ -129,10 +126,7 @@ class ERROR_MESSAGES(str, Enum):
     OAUTH_NOT_CONFIGURED = lambda name='': f"Provider '{name}' is not configured"
 
 
-class TASKS(str, Enum):
-    def __str__(self) -> str:
-        return super().__str__()
-
+class TASKS(StrEnum):
     DEFAULT = lambda task='': f'{task if task else "generation"}'
     TITLE_GENERATION = 'title_generation'
     FOLLOW_UP_GENERATION = 'follow_up_generation'
