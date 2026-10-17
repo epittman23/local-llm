@@ -27,3 +27,11 @@ f19bb6b50147d2635c6be54036b0b045f7c37712
 # ruff's I001 fix across local_llm/: 166 import blocks in 165 files; nothing
 # else rode along.
 0e0ef1c4bc7215bafcf8a1f5e70cbfea65b9b3a5
+
+# build: fix the backend's ruff findings and gate ruff-check on all of it (#80).
+# 323 mechanical fixes (long lines, late imports, datetime as dt, lambdas,
+# Optional, None/True comparisons, whitespace) in 76 files. It also carried
+# real changes: two duplicated route handlers renamed (files.py,
+# functions.py) with image_edits calling the right one, the string enums made
+# StrEnum, unused variables dropped, and the ruff-check gate widened.
+44ab8a262e7bc84be9876f259622f2018a6199e9
