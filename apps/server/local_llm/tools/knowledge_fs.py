@@ -712,18 +712,9 @@ async def _kb_tail(
     return result
 
 
-async def _kb_grep(
-    args: list[str], flags: set[str], user: dict, model_knowledge: list[dict] | None, piped_input: str | None = None
-) -> str:
-    """Text search across files or piped input. Supports -E for regex."""
-    if not args:
-        return 'Usage: grep [-E] [-i] [-l] [-c] "pattern" [file] [*.ext]'
-
-    pattern = args[0]
-    file_ref = None
-    ext_filter = None
-    dir_scope = None
-
+def _parse_grep_args(args: list[str]) -> tuple[str, str | None, str | None, str | None]:
+    """grep's pattern, file, extension filter (*.py or .py) and directory scope (docs/); the last of each wins."""
+    file_ref = ext_filter = dir_scope = None
     for arg in args[1:]:
         if '*' in arg or arg.startswith('.'):
             ext_filter = arg.lstrip('*').lstrip('.')
@@ -731,128 +722,123 @@ async def _kb_grep(
             dir_scope = arg.strip('/')
         else:
             file_ref = arg
+    return args[0], file_ref, ext_filter, dir_scope
 
-    case_insensitive = 'i' in flags
-    filenames_only = 'l' in flags
-    count_only = 'c' in flags
-    use_regex = 'E' in flags
 
-    _matches, err = build_matcher(pattern, case_insensitive, use_regex)
-    if err:
-        return err
+def _matching_lines(text: str, matches) -> list[tuple[int, str]]:
+    """(line number, line) for each line that matches, numbered from 1."""
+    return [(i, line) for i, line in enumerate(text.split('\n'), 1) if matches(line)]
 
-    # Grep on piped input
-    if piped_input is not None:
-        lines = piped_input.split('\n')
-        matched = []
-        for i, line in enumerate(lines, 1):
-            if _matches(line):
-                matched.append(f'{i}: {line}')
-        if count_only:
-            return str(len(matched))
-        if filenames_only:
-            return '(standard input)' if matched else f'No matches for "{pattern}"'
-        return '\n'.join(matched) if matched else f'No matches for "{pattern}"'
 
-    # Single file grep
-    if file_ref and not dir_scope:
-        resolved = await _resolve_file(file_ref, user, model_knowledge)
-        if not resolved:
-            # Maybe it's a directory path without trailing /
-            dir_scope = file_ref
-        elif 'error' in resolved:
-            return resolved['error']
-        else:
-            lines = resolved['content'].split('\n')
-            matched = []
-            for i, line in enumerate(lines, 1):
-                if _matches(line):
-                    matched.append(f'{i}: {line}')
+def _grep_piped(piped_input: str, matches, pattern: str, count_only: bool, filenames_only: bool) -> str:
+    matched = [f'{i}: {line}' for i, line in _matching_lines(piped_input, matches)]
+    if count_only:
+        return str(len(matched))
+    if filenames_only:
+        return '(standard input)' if matched else f'No matches for "{pattern}"'
+    return '\n'.join(matched) if matched else f'No matches for "{pattern}"'
 
-            if count_only:
-                return f'{resolved["id"]}  {resolved["filename"]}: {len(matched)}'
-            if filenames_only:
-                return f'{resolved["id"]}  {resolved["filename"]}' if matched else f'No matches for "{pattern}"'
 
-            if not matched:
-                return f'No matches for "{pattern}" in {resolved["filename"]}'
-            return '\n'.join(matched)
+def _grep_resolved_file(resolved: dict, matches, pattern: str, count_only: bool, filenames_only: bool) -> str:
+    matched = [f'{i}: {line}' for i, line in _matching_lines(resolved['content'], matches)]
+    file_label = f'{resolved["id"]}  {resolved["filename"]}'
+    if count_only:
+        return f'{file_label}: {len(matched)}'
+    if filenames_only:
+        return file_label if matched else f'No matches for "{pattern}"'
+    if not matched:
+        return f'No matches for "{pattern}" in {resolved["filename"]}'
+    return '\n'.join(matched)
 
-    # Cross-file grep (optionally scoped to directory)
-    accessible = await _get_accessible_files(user, model_knowledge)
 
-    if dir_scope:
-        # Resolve directory and collect all descendant IDs
-        kb_ids = {fi['knowledge_id'] for fi in accessible if fi.get('knowledge_id')}
-        target_dir_ids = set()
-        for kb_id in kb_ids:
-            dir_id = await _resolve_dir_path(dir_scope, kb_id)
-            if dir_id:
-                desc = await _get_descendant_dir_ids(dir_id, kb_id)
-                target_dir_ids.update(desc)
-        if not target_dir_ids:
-            return f'No files found under "{dir_scope}/"'
-        accessible = [f for f in accessible if f.get('directory_id') in target_dir_ids]
-        if not accessible:
-            return f'No files found under "{dir_scope}/"'
+async def _files_under_dir(accessible: list[dict], dir_scope: str) -> list[dict] | str:
+    """The accessible files under a directory (in any knowledge base, recursively), or a message if there are none."""
+    kb_ids = {fi['knowledge_id'] for fi in accessible if fi.get('knowledge_id')}
+    target_dir_ids = set()
+    for kb_id in kb_ids:
+        dir_id = await _resolve_dir_path(dir_scope, kb_id)
+        if dir_id:
+            target_dir_ids.update(await _get_descendant_dir_ids(dir_id, kb_id))
+    scoped = [f for f in accessible if f.get('directory_id') in target_dir_ids] if target_dir_ids else []
+    return scoped or f'No files found under "{dir_scope}/"'
 
-    if ext_filter:
-        accessible = [f for f in accessible if f['filename'].endswith(f'.{ext_filter}')]
 
-    if len(accessible) > KB_EXEC_MAX_GREP_FILES:
-        return f'Too many files ({len(accessible)}). Scope your search: grep "{pattern}" docs/ or grep "{pattern}" *.py'
-
+async def _grep_across_files(files: list[dict], matches, pattern: str, count_only: bool, filenames_only: bool) -> str:
+    """grep over many files: per-file counts (-c), file names (-l), or matching lines up to the match limit."""
     from local_llm.models.files import Files
 
     results = []
     file_match_counts = []
-    files_with_matches = []
     total_matches = 0
-
-    for file_info in accessible:
+    for file_info in files:
         f = await Files.get_file_by_id(file_info['id'])
-        if not f or not f.data:
-            continue
-
-        content = f.data.get('content', '')
+        content = f.data.get('content', '') if f and f.data else ''
         if not content:
             continue
+        file_matches = _matching_lines(content, matches)
+        if not file_matches:
+            continue
+        file_match_counts.append((file_info, len(file_matches)))
+        total_matches += len(file_matches)
+        if not count_only and not filenames_only:
+            for line_num, line_text in file_matches:
+                if len(results) < KNOWLEDGE_GREP_MAX_MATCHES:
+                    results.append(f'{file_info["id"]}  {file_info["filename"]}:{line_num}: {line_text.rstrip()}')
 
-        lines = content.split('\n')
-        file_matches = []
-        for i, line in enumerate(lines, 1):
-            if _matches(line):
-                file_matches.append((i, line))
-
-        if file_matches:
-            files_with_matches.append(file_info)
-            file_match_counts.append((file_info, len(file_matches)))
-            total_matches += len(file_matches)
-
-            if not count_only and not filenames_only:
-                for line_num, line_text in file_matches:
-                    if len(results) < KNOWLEDGE_GREP_MAX_MATCHES:
-                        results.append(f'{file_info["id"]}  {file_info["filename"]}:{line_num}: {line_text.rstrip()}')
-
+    if (count_only or filenames_only) and not file_match_counts:
+        return f'No matches for "{pattern}"'
     if count_only:
-        if not file_match_counts:
-            return f'No matches for "{pattern}"'
         lines = [f'{fi["id"]}  {fi["filename"]}: {cnt}' for fi, cnt in file_match_counts]
         lines.append(f'Total: {total_matches} matches in {len(file_match_counts)} files')
         return '\n'.join(lines)
-
     if filenames_only:
-        if not files_with_matches:
-            return f'No matches for "{pattern}"'
-        return '\n'.join(f'{fi["id"]}  {fi["filename"]}' for fi in files_with_matches)
-
+        return '\n'.join(f'{fi["id"]}  {fi["filename"]}' for fi, _ in file_match_counts)
     if not results:
-        return f'No matches for "{pattern}" across {len(accessible)} files'
-
+        return f'No matches for "{pattern}" across {len(files)} files'
     output = '\n'.join(results)
     if total_matches > KNOWLEDGE_GREP_MAX_MATCHES:
         output += f'\n[showing {KNOWLEDGE_GREP_MAX_MATCHES} of {total_matches} matches]'
     return output
+
+
+async def _kb_grep(
+    args: list[str], flags: set[str], user: dict, model_knowledge: list[dict] | None, piped_input: str | None = None
+) -> str:
+    """Text search across files or piped input. Supports -E for regex."""
+    if not args:
+        return 'Usage: grep [-E] [-i] [-l] [-c] "pattern" [file] [*.ext]'
+
+    pattern, file_ref, ext_filter, dir_scope = _parse_grep_args(args)
+    count_only = 'c' in flags
+    filenames_only = 'l' in flags
+
+    matches, err = build_matcher(pattern, 'i' in flags, 'E' in flags)
+    if err:
+        return err
+
+    if piped_input is not None:
+        return _grep_piped(piped_input, matches, pattern, count_only, filenames_only)
+
+    if file_ref and not dir_scope:
+        resolved = await _resolve_file(file_ref, user, model_knowledge)
+        if resolved and 'error' in resolved:
+            return resolved['error']
+        if resolved:
+            return _grep_resolved_file(resolved, matches, pattern, count_only, filenames_only)
+        # Not a file: maybe a directory path without its trailing /
+        dir_scope = file_ref
+
+    # Cross-file grep, optionally scoped to a directory
+    files = await _get_accessible_files(user, model_knowledge)
+    if dir_scope:
+        files = await _files_under_dir(files, dir_scope)
+        if isinstance(files, str):
+            return files
+    if ext_filter:
+        files = [f for f in files if f['filename'].endswith(f'.{ext_filter}')]
+    if len(files) > KB_EXEC_MAX_GREP_FILES:
+        return f'Too many files ({len(files)}). Scope your search: grep "{pattern}" docs/ or grep "{pattern}" *.py'
+    return await _grep_across_files(files, matches, pattern, count_only, filenames_only)
 
 
 async def _kb_find(args: list[str], flags: set[str], user: dict, model_knowledge: list[dict] | None) -> str:
