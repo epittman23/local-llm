@@ -1,14 +1,15 @@
 import time
 import uuid
 
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from sqlalchemy import JSON, BigInteger, Column, ForeignKey, Text, delete, func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from local_llm.internal.db import Base, get_async_db_context
 from local_llm.models.access_grants import AccessGrantModel, AccessGrants
 from local_llm.models.groups import Groups
 from local_llm.models.users import User, UserModel, UserResponse
 from local_llm.utils.json_codec import JSONCodec
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import JSON, BigInteger, Column, ForeignKey, Text, delete, func, or_, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 ####################
 # Note DB Schema

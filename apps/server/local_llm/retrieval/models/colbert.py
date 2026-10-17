@@ -5,6 +5,7 @@ import numpy as np
 import torch
 from colbert.infra import ColBERTConfig
 from colbert.modeling.checkpoint import Checkpoint
+
 from local_llm.retrieval.models.base_reranker import BaseReranker
 
 log = logging.getLogger(__name__)

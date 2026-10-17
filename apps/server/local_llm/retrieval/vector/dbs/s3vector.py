@@ -6,6 +6,7 @@ import logging
 from typing import Any
 
 import boto3
+
 from local_llm.config import S3_VECTOR_BUCKET_NAME, S3_VECTOR_REGION
 from local_llm.retrieval.vector.main import (
     GetResult,

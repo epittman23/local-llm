@@ -6,6 +6,7 @@ from typing import Any
 
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk, scan
+
 from local_llm.config import (
     ELASTICSEARCH_API_KEY,
     ELASTICSEARCH_CA_CERTS,

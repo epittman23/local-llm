@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel
+
 from local_llm.constants import ERROR_MESSAGES
 from local_llm.models.config import Config
 from local_llm.utils.access_control import has_permission
@@ -16,7 +18,6 @@ from local_llm.utils.notifications import (
     test_target,
     update_target,
 )
-from pydantic import BaseModel
 
 router = APIRouter()
 

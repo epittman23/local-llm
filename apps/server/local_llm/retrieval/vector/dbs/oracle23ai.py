@@ -38,6 +38,7 @@ from decimal import Decimal
 from typing import Any
 
 import oracledb
+
 from local_llm.config import (
     ORACLE_DB_DSN,
     ORACLE_DB_PASSWORD,

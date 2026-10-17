@@ -5,6 +5,9 @@ import logging
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from local_llm.config import RAG_EMBEDDING_CONTENT_PREFIX, RAG_EMBEDDING_QUERY_PREFIX
 from local_llm.constants import ERROR_MESSAGES
 from local_llm.events import EVENTS, publish_event
@@ -24,8 +27,6 @@ from local_llm.utils.memory import (
     search_memory_rows,
     validate_memory_operations,
 )
-from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 
 log = logging.getLogger(__name__)
 

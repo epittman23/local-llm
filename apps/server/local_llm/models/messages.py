@@ -1,12 +1,13 @@
 import time
 import uuid
 
-from local_llm.internal.db import Base, get_async_db_context
-from local_llm.models.channels import Channels
-from local_llm.models.users import User, UserNameResponse, Users
 from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy import JSON, BigInteger, Boolean, Column, Text, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from local_llm.internal.db import Base, get_async_db_context
+from local_llm.models.channels import Channels
+from local_llm.models.users import User, UserNameResponse, Users
 
 ####################
 # Message DB Schema

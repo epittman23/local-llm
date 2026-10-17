@@ -2,11 +2,6 @@ import logging
 import time
 from uuid import uuid4
 
-from local_llm.constants import ERROR_MESSAGES
-from local_llm.internal.db import Base, get_async_db_context
-from local_llm.models.access_grants import AccessGrantModel, AccessGrants
-from local_llm.models.groups import Groups
-from local_llm.models.users import User, UserModel, UserResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import (
     JSON,
@@ -23,6 +18,12 @@ from sqlalchemy import (
     update,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from local_llm.constants import ERROR_MESSAGES
+from local_llm.internal.db import Base, get_async_db_context
+from local_llm.models.access_grants import AccessGrantModel, AccessGrants
+from local_llm.models.groups import Groups
+from local_llm.models.users import User, UserModel, UserResponse
 
 log = logging.getLogger(__name__)
 MIN_CALENDAR_RRULE_INTERVAL_SECONDS = 24 * 60 * 60

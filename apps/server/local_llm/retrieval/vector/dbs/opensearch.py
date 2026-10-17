@@ -4,6 +4,9 @@ NOTE: This vector database integration is community-supported and maintained on 
 
 from typing import Any
 
+from opensearchpy import OpenSearch
+from opensearchpy.helpers import bulk
+
 from local_llm.config import (
     OPENSEARCH_CERT_VERIFY,
     OPENSEARCH_PASSWORD,
@@ -18,8 +21,6 @@ from local_llm.retrieval.vector.main import (
     VectorItem,
 )
 from local_llm.retrieval.vector.utils import iter_filter_conditions, process_metadata
-from opensearchpy import OpenSearch
-from opensearchpy.helpers import bulk
 
 
 def _metadata_filter(key: str, op: str, value: Any) -> dict:

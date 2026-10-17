@@ -8,15 +8,6 @@ import time
 import uuid
 from typing import Any, Literal
 
-# local imports
-from local_llm.env import ENABLE_ADMIN_CHAT_ACCESS
-from local_llm.internal.db import Base, get_async_db_context
-from local_llm.models.access_grants import AccessGrants
-from local_llm.models.automations import AutomationRun
-from local_llm.models.chat_messages import ChatMessage, ChatMessages
-from local_llm.models.folders import Folders
-from local_llm.models.tags import TagModel, Tags
-from local_llm.utils.misc import get_output_text, sanitize_data_for_db, sanitize_text_for_db
 from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy import (
     JSON,
@@ -41,6 +32,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.sql import case, exists
 from sqlalchemy.sql.expression import bindparam
+
+# local imports
+from local_llm.env import ENABLE_ADMIN_CHAT_ACCESS
+from local_llm.internal.db import Base, get_async_db_context
+from local_llm.models.access_grants import AccessGrants
+from local_llm.models.automations import AutomationRun
+from local_llm.models.chat_messages import ChatMessage, ChatMessages
+from local_llm.models.folders import Folders
+from local_llm.models.tags import TagModel, Tags
+from local_llm.utils.misc import get_output_text, sanitize_data_for_db, sanitize_text_for_db
 
 log = logging.getLogger(__name__)
 ACTIVE_CHAT_GAP_SECONDS = 30 * 60

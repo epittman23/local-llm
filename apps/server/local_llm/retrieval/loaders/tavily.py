@@ -5,6 +5,7 @@ from typing import Literal
 import requests
 from langchain_core.document_loaders import BaseLoader
 from langchain_core.documents import Document
+
 from local_llm.env import TAVILY_API_BASE_URL
 
 log = logging.getLogger(__name__)

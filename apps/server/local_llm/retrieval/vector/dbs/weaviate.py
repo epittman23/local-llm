@@ -7,6 +7,7 @@ import uuid
 from typing import Any
 
 import weaviate
+
 from local_llm.config import (
     WEAVIATE_API_KEY,
     WEAVIATE_GRPC_HOST,

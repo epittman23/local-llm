@@ -4,8 +4,6 @@ from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from local_llm.internal.db import Base, get_async_db_context
-from local_llm.utils.response import merge_usage, normalize_usage
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import (
     JSON,
@@ -23,6 +21,9 @@ from sqlalchemy import (
     select,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from local_llm.internal.db import Base, get_async_db_context
+from local_llm.utils.response import merge_usage, normalize_usage
 
 ####################
 # Helpers

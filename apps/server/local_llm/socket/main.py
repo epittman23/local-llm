@@ -9,6 +9,8 @@ from typing import Any
 
 import pycrdt as Y
 import socketio
+from socketio.packet import Packet
+
 from local_llm.config import (
     CORS_ALLOW_ORIGIN,
 )
@@ -48,7 +50,6 @@ from local_llm.utils.redis import (
     get_redis_connection,
     get_sentinels_from_env,
 )
-from socketio.packet import Packet
 
 logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
 log = logging.getLogger(__name__)

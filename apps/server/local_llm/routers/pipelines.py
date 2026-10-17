@@ -14,13 +14,14 @@ from fastapi import (
     UploadFile,
     status,
 )
+from pydantic import BaseModel
+
 from local_llm.config import CACHE_DIR
 from local_llm.env import AIOHTTP_CLIENT_SESSION_SSL, AIOHTTP_FILE_STREAM_CHUNK_SIZE
 from local_llm.events import EVENTS, publish_event
 from local_llm.models.config import Config
 from local_llm.routers.openai import get_all_models_responses
 from local_llm.utils.auth import get_admin_user
-from pydantic import BaseModel
 
 log = logging.getLogger(__name__)
 

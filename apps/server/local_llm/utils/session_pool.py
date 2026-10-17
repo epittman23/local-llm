@@ -26,6 +26,7 @@ via ``close_session()``.
 import logging
 
 import aiohttp
+
 from local_llm.env import (
     AIOHTTP_CLIENT_STREAM_IDLE_TIMEOUT,
     AIOHTTP_CLIENT_TIMEOUT,

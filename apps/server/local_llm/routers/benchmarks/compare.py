@@ -5,12 +5,13 @@ from __future__ import annotations
 import re
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel, ConfigDict
+
 from local_llm.benchmarks.analysis import compare as compare_logic
 from local_llm.env import DATA_DIR
 from local_llm.models.benchmarks.tests import BenchmarkAnswers, BenchmarkResults
 from local_llm.routers.benchmarks.answers import _answer_document
 from local_llm.utils.auth import get_admin_user
-from pydantic import BaseModel, ConfigDict
 
 router = APIRouter()
 

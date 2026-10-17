@@ -17,6 +17,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
+
 from local_llm.migrations.util import get_existing_tables
 
 revision: str = 'f1e2d3c4b5a6'

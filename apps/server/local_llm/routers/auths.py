@@ -15,6 +15,10 @@ from fastapi.responses import JSONResponse, Response
 from ldap3 import NONE, Connection, Server, Tls
 from ldap3.utils.conv import escape_filter_chars
 from ldap3.utils.dn import parse_dn
+from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from local_llm.config import (
     ENABLE_PASSWORD_AUTH,
     OAUTH_PROVIDERS,
@@ -24,9 +28,6 @@ from local_llm.env import (
     AIOHTTP_CLIENT_SESSION_SSL,
     ENABLE_INITIAL_ADMIN_SIGNUP,
     ENABLE_OAUTH_TOKEN_EXCHANGE,
-    OAUTH_TOKEN_EXCHANGE_RATE_LIMIT,
-    OAUTH_TOKEN_EXCHANGE_RATE_LIMIT_WINDOW,
-    OAUTH_TOKEN_EXCHANGE_TRUSTED_CLIENT_IDS,
     LLLM_AUTH,
     LLLM_AUTH_COOKIE_SAME_SITE,
     LLLM_AUTH_COOKIE_SECURE,
@@ -35,6 +36,9 @@ from local_llm.env import (
     LLLM_AUTH_TRUSTED_GROUPS_HEADER,
     LLLM_AUTH_TRUSTED_NAME_HEADER,
     LLLM_AUTH_TRUSTED_ROLE_HEADER,
+    OAUTH_TOKEN_EXCHANGE_RATE_LIMIT,
+    OAUTH_TOKEN_EXCHANGE_RATE_LIMIT_WINDOW,
+    OAUTH_TOKEN_EXCHANGE_TRUSTED_CLIENT_IDS,
 )
 from local_llm.events import EVENTS, publish_event
 from local_llm.internal.db import get_async_session
@@ -78,9 +82,6 @@ from local_llm.utils.groups import apply_default_group_assignment
 from local_llm.utils.misc import parse_duration, validate_email_format
 from local_llm.utils.rate_limit import RateLimiter
 from local_llm.utils.redis import get_redis_client
-from pydantic import BaseModel
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
 

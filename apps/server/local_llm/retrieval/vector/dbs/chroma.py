@@ -4,6 +4,7 @@ import chromadb
 from chromadb import Settings
 from chromadb.errors import NotFoundError
 from chromadb.utils.batch_utils import create_batches
+
 from local_llm.config import (
     CHROMA_CLIENT_AUTH_CREDENTIALS,
     CHROMA_CLIENT_AUTH_PROVIDER,

@@ -3,8 +3,9 @@ from __future__ import annotations
 import logging
 
 import requests
-from local_llm.retrieval.web.main import SearchResult
 from yarl import URL
+
+from local_llm.retrieval.web.main import SearchResult
 
 log = logging.getLogger(__name__)
 

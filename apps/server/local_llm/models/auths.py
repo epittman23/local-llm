@@ -6,13 +6,14 @@ import logging
 import uuid
 
 import bcrypt
-from local_llm.internal.db import Base, get_async_db_context
-from local_llm.models.users import User, UserModel, UserProfileImageResponse, Users
-from local_llm.utils.validate import validate_profile_image_url
 from pydantic import BaseModel, field_validator
 from sqlalchemy import Boolean, Column, String, Text, delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from local_llm.internal.db import Base, get_async_db_context
+from local_llm.models.users import User, UserModel, UserProfileImageResponse, Users
+from local_llm.utils.validate import validate_profile_image_url
 
 log = logging.getLogger(__name__)
 

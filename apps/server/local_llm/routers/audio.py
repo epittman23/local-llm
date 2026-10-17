@@ -24,6 +24,12 @@ from fastapi import (
     status,
 )
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
+
+# pydub needs stdlib audioop (gone in 3.13); keep requires-python capped < 3.13
+from pydub import AudioSegment
+from pydub.utils import mediainfo
+
 from local_llm.config import (
     CACHE_DIR,
     ELEVENLABS_API_BASE_URL,
@@ -51,11 +57,6 @@ from local_llm.utils.headers import include_user_info_headers
 from local_llm.utils.json_codec import JSONCodec
 from local_llm.utils.misc import strict_match_mime_type, url_host_matches
 from local_llm.utils.session_pool import get_session
-from pydantic import BaseModel
-
-# pydub needs stdlib audioop (gone in 3.13); keep requires-python capped < 3.13
-from pydub import AudioSegment
-from pydub.utils import mediainfo
 
 log = logging.getLogger(__name__)
 router = APIRouter()

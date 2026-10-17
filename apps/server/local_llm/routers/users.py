@@ -9,6 +9,9 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse, Response, StreamingResponse
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from local_llm.constants import ERROR_MESSAGES
 from local_llm.env import ENABLE_PROFILE_IMAGE_URL_FORWARDING, PROFILE_IMAGE_ALLOWED_MIME_TYPES, STATIC_DIR
 from local_llm.events import EVENTS, publish_event
@@ -43,8 +46,6 @@ from local_llm.utils.auth import (
     validate_password,
 )
 from local_llm.utils.chat_variables import ChatVariablesError, normalize_user_variables, validate_user_variables
-from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy.ext.asyncio import AsyncSession
 
 log = logging.getLogger(__name__)
 

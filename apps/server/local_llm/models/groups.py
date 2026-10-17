@@ -2,8 +2,6 @@ import logging
 import time
 import uuid
 
-from local_llm.env import DEFAULT_GROUP_SHARE_PERMISSION
-from local_llm.internal.db import Base, get_async_db_context
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import (
     JSON,
@@ -20,6 +18,9 @@ from sqlalchemy import (
     update,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from local_llm.env import DEFAULT_GROUP_SHARE_PERMISSION
+from local_llm.internal.db import Base, get_async_db_context
 
 log = logging.getLogger(__name__)
 

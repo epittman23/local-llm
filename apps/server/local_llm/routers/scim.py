@@ -13,13 +13,14 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from local_llm.env import SCIM_AUTH_PROVIDER
 from local_llm.events import EVENTS, publish_event
 from local_llm.internal.db import get_async_session
 from local_llm.models.groups import GroupModel, Groups
 from local_llm.models.users import UserModel, Users
-from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy.ext.asyncio import AsyncSession
 
 log = logging.getLogger(__name__)
 

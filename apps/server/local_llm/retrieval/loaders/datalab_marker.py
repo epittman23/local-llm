@@ -6,6 +6,7 @@ import time
 import requests
 from fastapi import HTTPException, status
 from langchain_core.documents import Document
+
 from local_llm.utils.json_codec import JSONCodec
 
 log = logging.getLogger(__name__)

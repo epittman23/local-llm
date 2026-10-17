@@ -1,12 +1,6 @@
 import logging
 import time
 
-from local_llm.benchmarks.serving.profiles import (
-    ProfileError,
-    ServingProfile,
-    validate_definition,
-)
-from local_llm.internal.db import Base, get_async_db_context
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import (
     JSON,
@@ -25,6 +19,13 @@ from sqlalchemy import (
     update,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from local_llm.benchmarks.serving.profiles import (
+    ProfileError,
+    ServingProfile,
+    validate_definition,
+)
+from local_llm.internal.db import Base, get_async_db_context
 
 log = logging.getLogger(__name__)
 

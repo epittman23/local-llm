@@ -21,6 +21,8 @@ from fastapi import Request
 from langchain_core.utils.function_calling import (
     convert_to_openai_function as convert_pydantic_model_to_openai_function_spec,
 )
+from pydantic import BaseModel, Field, create_model
+
 from local_llm.config import BYPASS_ADMIN_ACCESS_CONTROL
 from local_llm.env import (
     AIOHTTP_CLIENT_ALLOW_REDIRECTS,
@@ -113,7 +115,6 @@ from local_llm.utils.terminals import (
     terminal_context_config,
     terminal_context_id,
 )
-from pydantic import BaseModel, Field, create_model
 
 log = logging.getLogger(__name__)
 

@@ -1,6 +1,9 @@
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from local_llm.constants import ERROR_MESSAGES
 from local_llm.events import EVENTS, publish_event
 from local_llm.internal.db import get_async_session
@@ -24,8 +27,6 @@ from local_llm.utils.access_control import (
 )
 from local_llm.utils.access_control.files import can_read_all_folder_files, get_accessible_folder_files
 from local_llm.utils.auth import get_verified_user
-from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 
 log = logging.getLogger(__name__)
 

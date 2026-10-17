@@ -3,9 +3,10 @@ from __future__ import annotations
 from urllib.parse import urlparse
 
 import validators
+from pydantic import BaseModel
+
 from local_llm.retrieval.web.utils import resolve_hostname
 from local_llm.utils.misc import as_network, get_allow_block_lists, is_host_allowed
-from pydantic import BaseModel
 
 
 def get_filtered_results(results, filter_list):

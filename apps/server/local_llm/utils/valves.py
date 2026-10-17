@@ -4,6 +4,7 @@ import logging
 from functools import lru_cache
 
 from cryptography.fernet import Fernet, InvalidToken
+
 from local_llm.env import ENABLE_VALVE_ENCRYPTION, LLLM_SECRET_KEY
 from local_llm.utils.json_codec import JSONCodec
 

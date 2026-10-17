@@ -8,6 +8,9 @@ from uuid import uuid4
 
 from fastapi import Request
 from fastapi.security import HTTPAuthorizationCredentials
+from sqlalchemy import select
+from starlette.datastructures import Headers
+
 from local_llm.internal.db import get_async_db
 from local_llm.models.chat_messages import ChatMessages
 from local_llm.models.chats import Chat, ChatForm, Chats
@@ -17,8 +20,6 @@ from local_llm.tasks import create_task, has_active_tasks
 from local_llm.utils.auth import create_token
 from local_llm.utils.json_codec import JSONCodec
 from local_llm.utils.misc import get_message_list
-from sqlalchemy import select
-from starlette.datastructures import Headers
 
 DEFAULT_SUBAGENT_SYSTEM_PROMPT = """You are a sub-agent working on a specific task assigned by the lead agent.
 

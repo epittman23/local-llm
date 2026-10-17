@@ -12,24 +12,25 @@ import bcrypt
 import jwt
 from fastapi import BackgroundTasks, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pytz import UTC
+
 from local_llm.constants import ERROR_MESSAGES
 from local_llm.env import (
     ENABLE_OTEL,
     ENABLE_PASSWORD_VALIDATION,
+    LLLM_AUTH_TRUSTED_EMAIL_HEADER,
+    LLLM_SECRET_KEY,
     PASSWORD_HASH_ALGORITHM,
     PASSWORD_VALIDATION_HINT,
     PASSWORD_VALIDATION_REGEX_PATTERN,
     REDIS_KEY_PREFIX,
     TRUSTED_SIGNATURE_KEY,
-    LLLM_AUTH_TRUSTED_EMAIL_HEADER,
-    LLLM_SECRET_KEY,
 )
 from local_llm.models.auths import Auths
 from local_llm.models.config import Config
 from local_llm.models.users import Users
 from local_llm.utils.access_control import has_permission
 from local_llm.utils.misc import parse_duration
-from pytz import UTC
 
 log = logging.getLogger(__name__)
 

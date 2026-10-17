@@ -4,6 +4,7 @@ import sys
 from typing import Any
 
 from fastapi import Request
+
 from local_llm.env import ENABLE_PLUGINS, GLOBAL_LOG_LEVEL
 from local_llm.models.functions import Functions
 from local_llm.models.users import UserModel

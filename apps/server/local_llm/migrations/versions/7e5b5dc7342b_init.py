@@ -6,9 +6,10 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-import local_llm.internal.db  # noqa: F401
 import sqlalchemy as sa
 from alembic import op
+
+import local_llm.internal.db  # noqa: F401
 from local_llm.internal.db import JSONField
 from local_llm.migrations.util import get_existing_tables
 

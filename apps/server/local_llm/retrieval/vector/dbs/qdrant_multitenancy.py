@@ -6,6 +6,10 @@ import logging
 from typing import Any
 from urllib.parse import urlparse
 
+from qdrant_client import QdrantClient as Qclient
+from qdrant_client.http.models import PointStruct
+from qdrant_client.models import models
+
 from local_llm.config import (
     QDRANT_API_KEY,
     QDRANT_COLLECTION_PREFIX,
@@ -23,9 +27,6 @@ from local_llm.retrieval.vector.main import (
     VectorItem,
 )
 from local_llm.retrieval.vector.utils import iter_filter_conditions
-from qdrant_client import QdrantClient as Qclient
-from qdrant_client.http.models import PointStruct
-from qdrant_client.models import models
 
 NO_LIMIT = 999999999
 TENANT_ID_FIELD = 'tenant_id'

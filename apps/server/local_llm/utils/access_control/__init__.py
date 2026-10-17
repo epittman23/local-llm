@@ -1,5 +1,7 @@
 from typing import Any
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from local_llm.config import DEFAULT_USER_PERMISSIONS
 from local_llm.models.access_grants import (
     has_anyone_read_access_grant,
@@ -12,7 +14,6 @@ from local_llm.models.access_grants import (
 from local_llm.models.groups import Groups
 from local_llm.models.users import UserModel
 from local_llm.utils.json_codec import JSONCodec
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def fill_missing_permissions(permissions: dict[str, Any], default_permissions: dict[str, Any]) -> dict[str, Any]:

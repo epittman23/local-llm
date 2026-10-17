@@ -1,6 +1,16 @@
 from base64 import b64encode
 
 from fastapi import FastAPI
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
+    OTLPSpanExporter as HttpOTLPSpanExporter,
+)
+from opentelemetry.sdk.resources import SERVICE_NAME, Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from sqlalchemy import Engine
+
 from local_llm.env import (
     ENABLE_OTEL_METRICS,
     ENABLE_OTEL_TRACES,
@@ -13,15 +23,6 @@ from local_llm.env import (
 )
 from local_llm.utils.telemetry.instrumentors import Instrumentor
 from local_llm.utils.telemetry.metrics import setup_metrics
-from opentelemetry import trace
-from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
-    OTLPSpanExporter as HttpOTLPSpanExporter,
-)
-from opentelemetry.sdk.resources import SERVICE_NAME, Resource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from sqlalchemy import Engine
 
 
 def setup(app: FastAPI, db_engine: Engine):

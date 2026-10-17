@@ -1,5 +1,7 @@
 import logging
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from local_llm.models.access_grants import AccessGrants
 from local_llm.models.channels import Channels
 from local_llm.models.chats import Chats
@@ -9,7 +11,6 @@ from local_llm.models.groups import Groups
 from local_llm.models.knowledge import Knowledges
 from local_llm.models.models import Models
 from local_llm.models.users import UserModel, Users
-from sqlalchemy.ext.asyncio import AsyncSession
 
 log = logging.getLogger(__name__)
 

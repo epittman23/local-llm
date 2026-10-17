@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 
 import requests
+
 from local_llm.retrieval.web.main import SearchResult, get_filtered_results
 
 log = logging.getLogger(__name__)

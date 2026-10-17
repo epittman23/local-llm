@@ -5,6 +5,9 @@ from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.responses import FileResponse, Response, StreamingResponse
+from pydantic import BaseModel, field_validator
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from local_llm.constants import ERROR_MESSAGES
 from local_llm.env import STATIC_DIR
 from local_llm.events import EVENTS, publish_event
@@ -48,8 +51,6 @@ from local_llm.utils.models import (
     get_all_models,
     get_filtered_models,
 )
-from pydantic import BaseModel, field_validator
-from sqlalchemy.ext.asyncio import AsyncSession
 
 log = logging.getLogger(__name__)
 

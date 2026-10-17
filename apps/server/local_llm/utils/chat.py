@@ -6,6 +6,8 @@ import uuid
 from typing import Any
 
 from fastapi import HTTPException, Request
+from starlette.responses import StreamingResponse
+
 from local_llm.env import BYPASS_MODEL_ACCESS_CONTROL, GLOBAL_LOG_LEVEL
 from local_llm.functions import generate_function_chat_completion
 from local_llm.models.users import UserModel
@@ -34,7 +36,6 @@ from local_llm.utils.response import (
     convert_response_ollama_to_openai,
     convert_streaming_response_ollama_to_openai,
 )
-from starlette.responses import StreamingResponse
 
 logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
 log = logging.getLogger(__name__)

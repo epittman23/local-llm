@@ -1,4 +1,5 @@
 from fastapi import APIRouter
+
 from local_llm.routers.benchmarks import answers, compare, live, profiles, report, serve, tests
 
 router = APIRouter()
