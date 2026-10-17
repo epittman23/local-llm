@@ -3597,7 +3597,8 @@ def _messages_for_tasks(message_list: list[dict]) -> list[dict]:
 def _task_reply_json(res: dict, text_from_message) -> str:
     """The {...} span of a task model's reply, from its single choice's message text."""
     if len(res.get('choices', [])) == 1:
-        text = text_from_message(res.get('choices', [])[0].get('message', {}))
+        # A reply may carry content and reasoning_content as null; read that as no text.
+        text = text_from_message(res.get('choices', [])[0].get('message', {})) or ''
     else:
         text = ''
     return text[text.find('{') : text.rfind('}') + 1]

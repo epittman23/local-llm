@@ -3022,10 +3022,7 @@
   ]
  },
  "background:saved_chat_follow_up_reply_all_none": {
-  "raised": [
-   "AttributeError",
-   "'NoneType' object has no attribute 'find'"
-  ],
+  "returned": null,
   "form_messages_after": [],
   "calls": [
    [
@@ -3055,14 +3052,69 @@
      "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
     },
     "<user>"
+   ],
+   [
+    "tags",
+    {
+     "model": "m1",
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ],
+     "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+    },
+    "<user>"
+   ],
+   [
+    "review_memory_after_turn",
+    {
+     "user": "<user>",
+     "model": {
+      "id": "m1"
+     },
+     "metadata": {
+      "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+      "message_id": "a1"
+     },
+     "form_data": {
+      "model": "form-model",
+      "messages": []
+     },
+     "assistant_message": {
+      "content": "final"
+     },
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ]
+    }
    ]
   ]
  },
  "background:saved_chat_tags_reply_all_none": {
-  "raised": [
-   "AttributeError",
-   "'NoneType' object has no attribute 'find'"
-  ],
+  "returned": null,
   "form_messages_after": [],
   "calls": [
    [
@@ -3091,14 +3143,46 @@
      "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
     },
     "<user>"
+   ],
+   [
+    "review_memory_after_turn",
+    {
+     "user": "<user>",
+     "model": {
+      "id": "m1"
+     },
+     "metadata": {
+      "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+      "message_id": "a1"
+     },
+     "form_data": {
+      "model": "form-model",
+      "messages": []
+     },
+     "assistant_message": {
+      "content": "final"
+     },
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ]
+    }
    ]
   ]
  },
  "background:saved_chat_title_reply_and_message_empty": {
-  "raised": [
-   "AttributeError",
-   "'NoneType' object has no attribute 'find'"
-  ],
+  "returned": null,
   "form_messages_after": [],
   "calls": [
    [
@@ -3127,6 +3211,56 @@
      "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
     },
     "<user>"
+   ],
+   [
+    "chats.update_chat_title_by_id",
+    [
+     "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+     "What is  a monad?"
+    ],
+    {}
+   ],
+   [
+    "emit",
+    {
+     "type": "chat:title",
+     "data": "What is  a monad?"
+    }
+   ],
+   [
+    "review_memory_after_turn",
+    {
+     "user": "<user>",
+     "model": {
+      "id": "m1"
+     },
+     "metadata": {
+      "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+      "message_id": "a1"
+     },
+     "form_data": {
+      "model": "form-model",
+      "messages": []
+     },
+     "assistant_message": {
+      "content": "final"
+     },
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": null,
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ]
+    }
    ]
   ]
  },
