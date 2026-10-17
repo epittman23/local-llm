@@ -2,6 +2,7 @@ import asyncio
 import copy
 import logging
 import sys
+from typing import NamedTuple
 
 from fastapi import Request
 
@@ -67,13 +68,12 @@ async def get_all_base_models(request: Request, user: UserModel = None):
     return function_models + openai_models + ollama_models
 
 
-async def get_all_models(request, refresh: bool = False, user: UserModel = None):
-    config = await Config.get_many(
-        'models.base_models_cache',
-        'evaluation.arena.enable',
-        'evaluation.arena.models',
-        'models.default_metadata',
-    )
+async def _load_base_models(request, config: dict, refresh: bool, user: UserModel = None) -> list:
+    """The base models: from the Redis or in-process cache when enabled, else fetched (and cached) again.
+
+    A refresh clears the provider caches and the stored copy first. When a
+    fetch returns nothing, the previous base models are kept.
+    """
     if refresh:
         await openai.get_all_models.cache.clear()
         await ollama.get_all_models.cache.clear()
@@ -84,218 +84,157 @@ async def get_all_models(request, refresh: bool = False, user: UserModel = None)
 
     redis = getattr(request.app.state, 'redis', None)
     use_cache = config.get('models.base_models_cache') and not refresh
-    base_models = None
 
     if use_cache and redis is not None:
         cached_base_models = await redis.get(BASE_MODELS_CACHE_KEY)
         if cached_base_models:
             base_models = JSONCodec.loads(cached_base_models)
             request.app.state.BASE_MODELS = base_models
-        else:
-            await openai.get_all_models.cache.clear()
-            await ollama.get_all_models.cache.clear()
+            return base_models
+        await openai.get_all_models.cache.clear()
+        await ollama.get_all_models.cache.clear()
     elif use_cache and request.app.state.MODELS and request.app.state.BASE_MODELS:
-        base_models = request.app.state.BASE_MODELS
+        return request.app.state.BASE_MODELS
 
-    if base_models is None:
-        base_models = await get_all_base_models(request, user=user)
-        if base_models:
-            request.app.state.BASE_MODELS = base_models
-            if config.get('models.base_models_cache') and redis is not None:
-                await redis.set(BASE_MODELS_CACHE_KEY, JSONCodec.dumps(base_models))
-        else:
-            base_models = request.app.state.BASE_MODELS
+    base_models = await get_all_base_models(request, user=user)
+    if not base_models:
+        return request.app.state.BASE_MODELS
+    request.app.state.BASE_MODELS = base_models
+    if config.get('models.base_models_cache') and redis is not None:
+        await redis.set(BASE_MODELS_CACHE_KEY, JSONCodec.dumps(base_models))
+    return base_models
 
-    # deep copy the base models to avoid modifying the original list
-    models = [model.copy() for model in base_models]
 
-    # If there are no models, return an empty list
-    if len(models) == 0:
-        return []
+def _arena_models(config: dict) -> list[dict]:
+    """The configured arena models, or the default one."""
+    arena_config = config.get('evaluation.arena.models') or []
+    return [
+        {
+            'id': model['id'],
+            'name': model['name'],
+            'info': {'meta': model['meta']},
+            'object': 'model',
+            'created': 0,
+            'owned_by': 'arena',
+            'arena': True,
+        }
+        for model in (arena_config if len(arena_config) > 0 else [DEFAULT_ARENA_MODEL])
+    ]
 
-    # Add arena models
-    if config.get('evaluation.arena.enable'):
-        arena_models = []
-        arena_config = config.get('evaluation.arena.models') or []
-        if len(arena_config) > 0:
-            arena_models = [
-                {
-                    'id': model['id'],
-                    'name': model['name'],
-                    'info': {
-                        'meta': model['meta'],
-                    },
-                    'object': 'model',
-                    'created': 0,
-                    'owned_by': 'arena',
-                    'arena': True,
-                }
-                for model in arena_config
-            ]
-        else:
-            # Add default arena model
-            arena_models = [
-                {
-                    'id': DEFAULT_ARENA_MODEL['id'],
-                    'name': DEFAULT_ARENA_MODEL['name'],
-                    'info': {
-                        'meta': DEFAULT_ARENA_MODEL['meta'],
-                    },
-                    'object': 'model',
-                    'created': 0,
-                    'owned_by': 'arena',
-                    'arena': True,
-                }
-            ]
-        models = models + arena_models
 
-    # One query per type: the global sets are subsets of the active sets, so
-    # deriving them from the same rows halves the function-table queries.
-    if ENABLE_PLUGINS:
-        active_actions = await Functions.get_active_function_ids_by_type('action')
-        global_action_ids = {function_id for function_id, is_global in active_actions if is_global}
-        enabled_action_ids = {function_id for function_id, _ in active_actions}
+class _PluginIds(NamedTuple):
+    global_action_ids: set
+    enabled_action_ids: set
+    global_filter_ids: set
+    enabled_filter_ids: set
 
-        active_filters = await Functions.get_active_function_ids_by_type('filter')
-        global_filter_ids = {function_id for function_id, is_global in active_filters if is_global}
-        enabled_filter_ids = {function_id for function_id, _ in active_filters}
-    else:
-        global_action_ids = set()
-        enabled_action_ids = set()
-        global_filter_ids = set()
-        enabled_filter_ids = set()
 
-    custom_models = await Models.get_all_models()
+async def _plugin_function_ids() -> _PluginIds:
+    """Active and global action and filter ids; all empty with plugins disabled.
 
+    One query per type: the global sets are subsets of the active sets, so
+    deriving them from the same rows halves the function-table queries.
+    """
+    if not ENABLE_PLUGINS:
+        return _PluginIds(set(), set(), set(), set())
+    active_actions = await Functions.get_active_function_ids_by_type('action')
+    active_filters = await Functions.get_active_function_ids_by_type('filter')
+    return _PluginIds(
+        global_action_ids={function_id for function_id, is_global in active_actions if is_global},
+        enabled_action_ids={function_id for function_id, _ in active_actions},
+        global_filter_ids={function_id for function_id, is_global in active_filters if is_global},
+        enabled_filter_ids={function_id for function_id, _ in active_filters},
+    )
+
+
+def _apply_base_override(model: dict, custom_model) -> None:
+    """A workspace model sharing a base model's id: its name, info and plugin ids replace the base model's."""
+    model['name'] = custom_model.name
+    model['info'] = custom_model.model_dump()
+    schema = get_chat_variables_schema(custom_model.params.model_dump().get('system'))
+    if schema:
+        model['info'].setdefault('meta', {})['chat_variables_schema'] = schema
+
+    action_ids = []
+    filter_ids = []
+    if 'info' in model:
+        if 'meta' in model['info'] and ENABLE_PLUGINS:
+            action_ids.extend(model['info']['meta'].get('actionIds', []))
+            filter_ids.extend(model['info']['meta'].get('filterIds', []))
+        if 'params' in model['info']:
+            del model['info']['params']
+    model['action_ids'] = action_ids
+    model['filter_ids'] = filter_ids
+
+
+def _preset_model(custom_model, base_model_lookup: dict) -> dict:
+    """A workspace model built on a base model (a preset), carrying over what it can from that base."""
+    owned_by = 'openai'
+    connection_type = None
+    pipe = None
+    base_model = base_model_lookup.get(custom_model.base_model_id)
+    if base_model is None:
+        base_model = base_model_lookup.get(custom_model.base_model_id.split(':')[0])
+    if base_model:
+        owned_by = base_model.get('owned_by', 'unknown')
+        if 'pipe' in base_model:
+            pipe = base_model['pipe']
+        connection_type = base_model.get('connection_type', None)
+
+    model = {
+        'id': f'{custom_model.id}',
+        'name': custom_model.name,
+        'object': 'model',
+        'created': custom_model.created_at,
+        'owned_by': owned_by,
+        'connection_type': connection_type,
+        'preset': True,
+        **({'pipe': pipe} if pipe is not None else {}),
+        **({'provider': base_model.get('provider')} if base_model and base_model.get('provider') else {}),
+        **({'loaded': base_model.get('loaded')} if base_model and base_model.get('loaded') is not None else {}),
+    }
+
+    info = custom_model.model_dump()
+    schema = get_chat_variables_schema(custom_model.params.model_dump().get('system'))
+    if schema:
+        info.setdefault('meta', {})['chat_variables_schema'] = schema
+    if 'params' in info:
+        # Remove params to avoid exposing sensitive info
+        del info['params']
+    model['info'] = info
+
+    meta = custom_model.meta.model_dump() if custom_model.meta else {}
+    model['action_ids'] = list(meta['actionIds']) if ENABLE_PLUGINS and 'actionIds' in meta else []
+    model['filter_ids'] = list(meta['filterIds']) if ENABLE_PLUGINS and 'filterIds' in meta else []
+    return model
+
+
+def _apply_workspace_models(models: list[dict], custom_models: list) -> list[dict]:
+    """Workspace models: overrides of base models (an inactive one hides its base model), and active presets."""
     # Single O(1) lookup: Ollama base names first, then exact IDs (exact wins).
     base_model_lookup = {}
     for model in models:
         if model.get('owned_by') == 'ollama':
             base_model_lookup.setdefault(model['id'].split(':')[0], model)
         base_model_lookup[model['id']] = model
-
     existing_ids = {m['id'] for m in models}
 
     for custom_model in custom_models:
         if custom_model.base_model_id is None:
             # Override applied directly to a base model (shares the same ID)
             model = base_model_lookup.get(custom_model.id)
+            if model and custom_model.is_active:
+                _apply_base_override(model, custom_model)
+            elif model:
+                models = [m for m in models if m is not model]
+        elif custom_model.is_active and custom_model.id not in existing_ids:
+            models.append(_preset_model(custom_model, base_model_lookup))
+    return models
 
-            if model:
-                if custom_model.is_active:
-                    model['name'] = custom_model.name
-                    model['info'] = custom_model.model_dump()
-                    schema = get_chat_variables_schema(custom_model.params.model_dump().get('system'))
-                    if schema:
-                        model['info'].setdefault('meta', {})['chat_variables_schema'] = schema
 
-                    action_ids = []
-                    filter_ids = []
-
-                    if 'info' in model:
-                        if 'meta' in model['info']:
-                            if ENABLE_PLUGINS:
-                                action_ids.extend(model['info']['meta'].get('actionIds', []))
-                                filter_ids.extend(model['info']['meta'].get('filterIds', []))
-
-                        if 'params' in model['info']:
-                            del model['info']['params']
-
-                    model['action_ids'] = action_ids
-                    model['filter_ids'] = filter_ids
-                else:
-                    models = [m for m in models if m is not model]
-
-        elif custom_model.is_active:
-            if custom_model.id in existing_ids:
-                continue
-
-            owned_by = 'openai'
-            connection_type = None
-            pipe = None
-
-            base_model = base_model_lookup.get(custom_model.base_model_id)
-            if base_model is None:
-                base_model = base_model_lookup.get(custom_model.base_model_id.split(':')[0])
-            if base_model:
-                owned_by = base_model.get('owned_by', 'unknown')
-                if 'pipe' in base_model:
-                    pipe = base_model['pipe']
-                connection_type = base_model.get('connection_type', None)
-
-            model = {
-                'id': f'{custom_model.id}',
-                'name': custom_model.name,
-                'object': 'model',
-                'created': custom_model.created_at,
-                'owned_by': owned_by,
-                'connection_type': connection_type,
-                'preset': True,
-                **({'pipe': pipe} if pipe is not None else {}),
-                **({'provider': base_model.get('provider')} if base_model and base_model.get('provider') else {}),
-                **({'loaded': base_model.get('loaded')} if base_model and base_model.get('loaded') is not None else {}),
-            }
-
-            info = custom_model.model_dump()
-            schema = get_chat_variables_schema(custom_model.params.model_dump().get('system'))
-            if schema:
-                info.setdefault('meta', {})['chat_variables_schema'] = schema
-            if 'params' in info:
-                # Remove params to avoid exposing sensitive info
-                del info['params']
-
-            model['info'] = info
-
-            action_ids = []
-            filter_ids = []
-
-            if custom_model.meta:
-                meta = custom_model.meta.model_dump()
-
-                if ENABLE_PLUGINS and 'actionIds' in meta:
-                    action_ids.extend(meta['actionIds'])
-
-                if ENABLE_PLUGINS and 'filterIds' in meta:
-                    filter_ids.extend(meta['filterIds'])
-
-            model['action_ids'] = action_ids
-            model['filter_ids'] = filter_ids
-
-            models.append(model)
-
-    # Process action_ids to get the actions
-    def get_action_items_from_module(function, module):
-        actions = []
-        if hasattr(module, 'actions'):
-            actions = module.actions
-            return [
-                {
-                    'id': f'{function.id}.{action["id"]}',
-                    'name': action.get('name', f'{function.name} ({action["id"]})'),
-                    'description': function.meta.description,
-                    'icon': action.get(
-                        'icon_url',
-                        function.meta.manifest.get('icon_url', None)
-                        or getattr(module, 'icon_url', None)
-                        or getattr(module, 'icon', None),
-                    ),
-                }
-                for action in actions
-            ]
-        else:
-            return [
-                {
-                    'id': function.id,
-                    'name': function.name,
-                    'description': function.meta.description,
-                    'icon': function.meta.manifest.get('icon_url', None)
-                    or getattr(module, 'icon_url', None)
-                    or getattr(module, 'icon', None),
-                }
-            ]
-
-    # Process filter_ids to get the filters
-    def get_filter_items_from_module(function, module):
+def _action_items_from_module(function, module) -> list[dict]:
+    """A function's action items: one per entry in its module's `actions`, or one for the function itself."""
+    if not hasattr(module, 'actions'):
         return [
             {
                 'id': function.id,
@@ -304,141 +243,149 @@ async def get_all_models(request, refresh: bool = False, user: UserModel = None)
                 'icon': function.meta.manifest.get('icon_url', None)
                 or getattr(module, 'icon_url', None)
                 or getattr(module, 'icon', None),
-                'has_user_valves': hasattr(module, 'UserValves'),
             }
         ]
+    return [
+        {
+            'id': f'{function.id}.{action["id"]}',
+            'name': action.get('name', f'{function.name} ({action["id"]})'),
+            'description': function.meta.description,
+            'icon': action.get(
+                'icon_url',
+                function.meta.manifest.get('icon_url', None)
+                or getattr(module, 'icon_url', None)
+                or getattr(module, 'icon', None),
+            ),
+        }
+        for action in module.actions
+    ]
 
-    # Batch-prefetch all needed function records to avoid N+1 queries
-    all_function_ids = set()
-    for model in models:
-        all_function_ids.update(model.get('action_ids', []))
-        all_function_ids.update(model.get('filter_ids', []))
-    all_function_ids.update(global_action_ids)
-    all_function_ids.update(global_filter_ids)
 
-    functions_by_id = {f.id: f for f in await Functions.get_functions_by_ids(list(all_function_ids))}
+def _filter_items_from_module(function, module) -> list[dict]:
+    return [
+        {
+            'id': function.id,
+            'name': function.name,
+            'description': function.meta.description,
+            'icon': function.meta.manifest.get('icon_url', None)
+            or getattr(module, 'icon_url', None)
+            or getattr(module, 'icon', None),
+            'has_user_valves': hasattr(module, 'UserValves'),
+        }
+    ]
 
-    # Pre-warm the function module cache once per unique function ID.
-    # This ensures each function's DB freshness check runs exactly once,
-    # not once per (model × function) pair.
-    # Only attempt to load functions that actually exist in the local DB;
-    # imported/custom model configs may reference tools or filters the user
-    # hasn't installed, and trying to load those would cause persistent
-    # "Failed to load function module" log spam on every model refresh.
+
+async def _warm_function_modules(request, functions_by_id: dict) -> None:
+    """Loads each referenced function's module once, so its DB freshness check runs once per function.
+
+    Only functions that exist locally are loaded: imported or custom model
+    configs may reference plugins the user hasn't installed, and trying to
+    load those would log "Failed to load function module" on every refresh.
+    """
     for function_id, function in functions_by_id.items():
         try:
             await get_function_module_from_cache(request, function_id, function=function)
         except Exception as e:
             log.debug('Failed to load function module for %s: %s', function_id, e)
 
-    # Apply global model defaults to all models
-    # Per-model overrides take precedence over global defaults
-    default_metadata = config.get('models.default_metadata') or {}
 
-    if default_metadata:
-        for model in models:
-            info = model.get('info')
+def _apply_default_metadata(models: list[dict], default_metadata: dict) -> None:
+    """Global model defaults; per-model values win, and capabilities merge with the model's overriding."""
+    if not default_metadata:
+        return
+    for model in models:
+        info = model.get('info')
+        if info is None:
+            model['info'] = {'meta': copy.deepcopy(default_metadata)}
+            continue
+        meta = info.setdefault('meta', {})
+        for key, value in default_metadata.items():
+            if key == 'capabilities':
+                existing = meta.get('capabilities') or {}
+                meta['capabilities'] = {**value, **existing}
+            elif meta.get(key) is None:
+                meta[key] = copy.deepcopy(value)
 
-            if info is None:
-                model['info'] = {'meta': copy.deepcopy(default_metadata)}
-                continue
 
-            meta = info.setdefault('meta', {})
-            for key, value in default_metadata.items():
-                if key == 'capabilities':
-                    # Merge capabilities: defaults as base, per-model overrides win
-                    existing = meta.get('capabilities') or {}
-                    meta['capabilities'] = {**value, **existing}
-                elif meta.get(key) is None:
-                    meta[key] = copy.deepcopy(value)
+class _PluginItems:
+    """Each model's action and filter items, memoized across models (global ones appear in every model)."""
 
-    # Batch-fetch all function valves in one query to avoid N+1 DB hits
-    # inside get_action_priority (previously called per action × per model).
-    all_function_valves = await Functions.get_function_valves_by_ids(list(all_function_ids))
-    functions_cache = get_functions_cache(request)
+    def __init__(self, functions_by_id: dict, functions_cache, all_function_valves: dict):
+        self.functions_by_id = functions_by_id
+        self.functions_cache = functions_cache
+        self.all_function_valves = all_function_valves
+        self.action_priorities = {}
+        self.action_items_by_id = {}
+        self.filter_items_by_id = {}
 
-    # Global actions and filters appear in every model, so priorities and item
-    # lists are memoized across the loop instead of rebuilt per model.
-    action_priorities = {}
-
-    def get_action_priority(action_id):
-        if action_id in action_priorities:
-            return action_priorities[action_id]
+    def action_priority(self, action_id) -> int:
+        if action_id in self.action_priorities:
+            return self.action_priorities[action_id]
         priority = 0
         try:
-            function_module = functions_cache.get(action_id)
+            function_module = self.functions_cache.get(action_id)
             if function_module and hasattr(function_module, 'Valves'):
-                valves_db = all_function_valves.get(action_id)
+                valves_db = self.all_function_valves.get(action_id)
                 valves = function_module.Valves(**(valves_db if valves_db else {}))
                 priority = getattr(valves, 'priority', 0)
         except Exception:
             priority = 0
-        action_priorities[action_id] = priority
+        self.action_priorities[action_id] = priority
         return priority
 
-    action_items_by_id = {}
-    filter_items_by_id = {}
+    def _loaded(self, kind: str, function_id):
+        """The function and its module, or None (logged) when either is missing."""
+        function = self.functions_by_id.get(function_id)
+        if function is None:
+            log.info('%s not found: %s', kind.capitalize(), function_id)
+            return None
+        module = self.functions_cache.get(function_id)
+        if module is None:
+            log.info('Failed to load %s module: %s', kind, function_id)
+            return None
+        return function, module
 
+    def actions(self, action_id) -> list[dict]:
+        if action_id not in self.action_items_by_id:
+            loaded = self._loaded('action', action_id)
+            self.action_items_by_id[action_id] = _action_items_from_module(*loaded) if loaded else []
+        return self.action_items_by_id[action_id]
+
+    def filters(self, filter_id) -> list[dict]:
+        if filter_id not in self.filter_items_by_id:
+            loaded = self._loaded('filter', filter_id)
+            # Only filters that can be toggled are listed.
+            if loaded and getattr(loaded[1], 'toggle', None):
+                self.filter_items_by_id[filter_id] = _filter_items_from_module(*loaded)
+            else:
+                self.filter_items_by_id[filter_id] = []
+        return self.filter_items_by_id[filter_id]
+
+
+def _attach_plugins(models: list[dict], plugin_ids: _PluginIds, items: _PluginItems) -> None:
+    """Replaces each model's action_ids and filter_ids with its enabled actions (by priority) and filters."""
     for model in models:
         action_ids = [
             action_id
-            for action_id in set(model.pop('action_ids', [])) | global_action_ids
-            if action_id in enabled_action_ids
+            for action_id in set(model.pop('action_ids', [])) | plugin_ids.global_action_ids
+            if action_id in plugin_ids.enabled_action_ids
         ]
-        action_ids.sort(key=lambda aid: (get_action_priority(aid), aid))
-
+        action_ids.sort(key=lambda aid: (items.action_priority(aid), aid))
         filter_ids = [
             filter_id
-            for filter_id in set(model.pop('filter_ids', [])) | global_filter_ids
-            if filter_id in enabled_filter_ids
+            for filter_id in set(model.pop('filter_ids', [])) | plugin_ids.global_filter_ids
+            if filter_id in plugin_ids.enabled_filter_ids
         ]
         # Set order varies per process, and an unstable order defeats the RedisDict content signature.
         filter_ids.sort()
 
-        model['actions'] = []
-        for action_id in action_ids:
-            items = action_items_by_id.get(action_id)
-            if items is None:
-                action_function = functions_by_id.get(action_id)
-                if action_function is None:
-                    log.info('Action not found: %s', action_id)
-                    action_items_by_id[action_id] = []
-                    continue
+        # Shallow copies keep per-model item dicts independent
+        model['actions'] = [{**item} for action_id in action_ids for item in items.actions(action_id)]
+        model['filters'] = [{**item} for filter_id in filter_ids for item in items.filters(filter_id)]
 
-                function_module = functions_cache.get(action_id)
-                if function_module is None:
-                    log.info('Failed to load action module: %s', action_id)
-                    action_items_by_id[action_id] = []
-                    continue
-                items = get_action_items_from_module(action_function, function_module)
-                action_items_by_id[action_id] = items
-            # Shallow copies keep per-model item dicts independent, as before
-            model['actions'].extend({**item} for item in items)
 
-        model['filters'] = []
-        for filter_id in filter_ids:
-            items = filter_items_by_id.get(filter_id)
-            if items is None:
-                filter_function = functions_by_id.get(filter_id)
-                if filter_function is None:
-                    log.info('Filter not found: %s', filter_id)
-                    filter_items_by_id[filter_id] = []
-                    continue
-
-                function_module = functions_cache.get(filter_id)
-                if function_module is None:
-                    log.info('Failed to load filter module: %s', filter_id)
-                    filter_items_by_id[filter_id] = []
-                    continue
-                if getattr(function_module, 'toggle', None):
-                    items = get_filter_items_from_module(filter_function, function_module)
-                else:
-                    items = []
-                filter_items_by_id[filter_id] = items
-            model['filters'].extend({**item} for item in items)
-
-    log.debug('get_all_models() returned %s models', len(models))
-
+def _publish_models(request, models: list[dict]) -> None:
+    """Stores the models by id in the app's model cache (Redis-backed when configured)."""
     models_dict = {model['id']: model for model in models}
     if isinstance(request.app.state.MODELS, RedisDict):
         try:
@@ -449,6 +396,46 @@ async def get_all_models(request, refresh: bool = False, user: UserModel = None)
     else:
         request.app.state.MODELS = models_dict
 
+
+async def get_all_models(request, refresh: bool = False, user: UserModel = None):
+    config = await Config.get_many(
+        'models.base_models_cache',
+        'evaluation.arena.enable',
+        'evaluation.arena.models',
+        'models.default_metadata',
+    )
+    base_models = await _load_base_models(request, config, refresh, user)
+
+    # Copy the base models to avoid modifying the original list
+    models = [model.copy() for model in base_models]
+    if len(models) == 0:
+        return []
+    if config.get('evaluation.arena.enable'):
+        models = models + _arena_models(config)
+
+    plugin_ids = await _plugin_function_ids()
+    models = _apply_workspace_models(models, await Models.get_all_models())
+
+    # Batch-prefetch every referenced function record to avoid N+1 queries
+    all_function_ids = set()
+    for model in models:
+        all_function_ids.update(model.get('action_ids', []))
+        all_function_ids.update(model.get('filter_ids', []))
+    all_function_ids.update(plugin_ids.global_action_ids)
+    all_function_ids.update(plugin_ids.global_filter_ids)
+    functions_by_id = {f.id: f for f in await Functions.get_functions_by_ids(list(all_function_ids))}
+    await _warm_function_modules(request, functions_by_id)
+
+    _apply_default_metadata(models, config.get('models.default_metadata') or {})
+
+    # Batch-fetch all function valves in one query, for the action priorities
+    all_function_valves = await Functions.get_function_valves_by_ids(list(all_function_ids))
+    _attach_plugins(
+        models, plugin_ids, _PluginItems(functions_by_id, get_functions_cache(request), all_function_valves)
+    )
+
+    log.debug('get_all_models() returned %s models', len(models))
+    _publish_models(request, models)
     return models
 
 
