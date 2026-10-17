@@ -1,5 +1,4 @@
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,7 +54,7 @@ async def get_groups(
 ############################
 
 
-@router.post('/create', response_model=Optional[GroupResponse])
+@router.post('/create', response_model=GroupResponse | None)
 async def create_new_group(
     request: Request,
     form_data: GroupForm,
@@ -96,7 +95,7 @@ async def create_new_group(
 ############################
 
 
-@router.get('/id/{id}', response_model=Optional[GroupResponse])
+@router.get('/id/{id}', response_model=GroupResponse | None)
 async def get_group_by_id(id: str, user=Depends(get_admin_user), db: AsyncSession = Depends(get_async_session)):
     group = await Groups.get_group_by_id(id, db=db)
     if group:
@@ -111,7 +110,7 @@ async def get_group_by_id(id: str, user=Depends(get_admin_user), db: AsyncSessio
         )
 
 
-@router.get('/id/{id}/info', response_model=Optional[GroupInfoResponse])
+@router.get('/id/{id}/info', response_model=GroupInfoResponse | None)
 async def get_group_info_by_id(id: str, user=Depends(get_verified_user), db: AsyncSession = Depends(get_async_session)):
     group = await Groups.get_group_by_id(id, db=db)
     if group:
@@ -136,7 +135,7 @@ class GroupExportResponse(GroupResponse):
     pass
 
 
-@router.get('/id/{id}/export', response_model=Optional[GroupExportResponse])
+@router.get('/id/{id}/export', response_model=GroupExportResponse | None)
 async def export_group_by_id(id: str, user=Depends(get_admin_user), db: AsyncSession = Depends(get_async_session)):
     group = await Groups.get_group_by_id(id, db=db)
     if group:
@@ -175,7 +174,7 @@ async def get_users_in_group(id: str, user=Depends(get_admin_user), db: AsyncSes
 ############################
 
 
-@router.post('/id/{id}/update', response_model=Optional[GroupResponse])
+@router.post('/id/{id}/update', response_model=GroupResponse | None)
 async def update_group_by_id(
     request: Request,
     id: str,
@@ -217,7 +216,7 @@ async def update_group_by_id(
 ############################
 
 
-@router.post('/id/{id}/users/add', response_model=Optional[GroupResponse])
+@router.post('/id/{id}/users/add', response_model=GroupResponse | None)
 async def add_user_to_group(
     request: Request,
     id: str,
@@ -257,7 +256,7 @@ async def add_user_to_group(
         )
 
 
-@router.post('/id/{id}/users/remove', response_model=Optional[GroupResponse])
+@router.post('/id/{id}/users/remove', response_model=GroupResponse | None)
 async def remove_users_from_group(
     request: Request,
     id: str,

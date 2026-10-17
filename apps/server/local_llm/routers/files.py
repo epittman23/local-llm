@@ -5,7 +5,6 @@ import logging
 import os
 import uuid
 from pathlib import Path
-from typing import Optional
 from urllib.parse import quote
 
 from fastapi import (
@@ -588,7 +587,7 @@ async def delete_all_files(
 ############################
 
 
-@router.get('/{id}', response_model=Optional[FileModel])
+@router.get('/{id}', response_model=FileModel | None)
 async def get_file_by_id(id: str, user=Depends(get_verified_user), db: AsyncSession = Depends(get_async_session)):
     file = await Files.get_file_by_id(id, db=db)
 

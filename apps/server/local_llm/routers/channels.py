@@ -1,7 +1,6 @@
 import base64
 import io
 import logging
-from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from fastapi.responses import FileResponse, Response, StreamingResponse
@@ -234,7 +233,7 @@ async def get_all_channels(
 ############################
 
 
-@router.get('/users/{user_id}', response_model=Optional[ChannelModel])
+@router.get('/users/{user_id}', response_model=ChannelModel | None)
 async def get_dm_channel_by_user_id(
     request: Request,
     user_id: str,
@@ -292,7 +291,7 @@ async def get_dm_channel_by_user_id(
 ############################
 
 
-@router.post('/create', response_model=Optional[ChannelModel])
+@router.post('/create', response_model=ChannelModel | None)
 async def create_new_channel(
     request: Request,
     form_data: CreateChannelForm,
@@ -380,7 +379,7 @@ class ChannelFullResponse(ChannelResponse):
     unread_count: int = 0
 
 
-@router.get('/{id}', response_model=Optional[ChannelFullResponse])
+@router.get('/{id}', response_model=ChannelFullResponse | None)
 async def get_channel_by_id(
     request: Request,
     id: str,
@@ -705,7 +704,7 @@ async def remove_members_by_id(
 ############################
 
 
-@router.post('/{id}/update', response_model=Optional[ChannelModel])
+@router.post('/{id}/update', response_model=ChannelModel | None)
 async def update_channel_by_id(
     request: Request,
     id: str,
@@ -1219,7 +1218,7 @@ async def new_message_handler(request: Request, id: str, form_data: MessageForm,
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ERROR_MESSAGES.DEFAULT())
 
 
-@router.post('/{id}/messages/post', response_model=Optional[MessageModel])
+@router.post('/{id}/messages/post', response_model=MessageModel | None)
 async def post_new_message(
     request: Request,
     id: str,
@@ -1281,7 +1280,7 @@ async def post_new_message(
 ############################
 
 
-@router.get('/{id}/messages/{message_id}', response_model=Optional[MessageResponse])
+@router.get('/{id}/messages/{message_id}', response_model=MessageResponse | None)
 async def get_channel_message(
     request: Request,
     id: str,
@@ -1322,7 +1321,7 @@ async def get_channel_message(
 ############################
 
 
-@router.get('/{id}/messages/{message_id}/data', response_model=Optional[dict])
+@router.get('/{id}/messages/{message_id}/data', response_model=dict | None)
 async def get_channel_message_data(
     request: Request,
     id: str,
@@ -1361,7 +1360,7 @@ class PinMessageForm(BaseModel):
     is_pinned: bool
 
 
-@router.post('/{id}/messages/{message_id}/pin', response_model=Optional[MessageUserResponse])
+@router.post('/{id}/messages/{message_id}/pin', response_model=MessageUserResponse | None)
 async def pin_channel_message(
     request: Request,
     id: str,
@@ -1497,7 +1496,7 @@ async def get_channel_thread_messages(
 ############################
 
 
-@router.post('/{id}/messages/{message_id}/update', response_model=Optional[MessageModel])
+@router.post('/{id}/messages/{message_id}/update', response_model=MessageModel | None)
 async def update_message_by_id(
     request: Request,
     id: str,

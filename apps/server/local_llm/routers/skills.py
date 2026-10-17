@@ -1,6 +1,5 @@
 import logging
 import re
-from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
@@ -149,7 +148,7 @@ async def export_skills(
 ############################
 
 
-@router.post('/create', response_model=Optional[SkillResponse])
+@router.post('/create', response_model=SkillResponse | None)
 async def create_new_skill(
     request: Request,
     form_data: SkillForm,
@@ -225,7 +224,7 @@ async def create_new_skill(
 ############################
 
 
-@router.get('/id/{id}', response_model=Optional[SkillAccessResponse])
+@router.get('/id/{id}', response_model=SkillAccessResponse | None)
 async def get_skill_by_id(id: str, user=Depends(get_verified_user), db: AsyncSession = Depends(get_async_session)):
     skill = await Skills.get_skill_by_id(id, db=db)
 
@@ -272,7 +271,7 @@ async def get_skill_by_id(id: str, user=Depends(get_verified_user), db: AsyncSes
 ############################
 
 
-@router.post('/id/{id}/update', response_model=Optional[SkillModel])
+@router.post('/id/{id}/update', response_model=SkillModel | None)
 async def update_skill_by_id(
     request: Request,
     id: str,
@@ -355,7 +354,7 @@ class SkillAccessGrantsForm(BaseModel):
     access_grants: list[dict]
 
 
-@router.post('/id/{id}/access/update', response_model=Optional[SkillModel])
+@router.post('/id/{id}/access/update', response_model=SkillModel | None)
 async def update_skill_access_by_id(
     request: Request,
     id: str,
@@ -412,7 +411,7 @@ async def update_skill_access_by_id(
 ############################
 
 
-@router.post('/id/{id}/toggle', response_model=Optional[SkillModel])
+@router.post('/id/{id}/toggle', response_model=SkillModel | None)
 async def toggle_skill_by_id(
     request: Request,
     id: str,

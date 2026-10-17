@@ -1,5 +1,4 @@
 import logging
-from typing import Optional
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -201,7 +200,7 @@ async def search_notes(
 ############################
 
 
-@router.post('/create', response_model=Optional[NoteModel])
+@router.post('/create', response_model=NoteModel | None)
 async def create_new_note(
     request: Request,
     form_data: NoteForm,
@@ -249,7 +248,7 @@ class NoteResponse(NoteModel):
     write_access: bool = False
 
 
-@router.get('/{id}', response_model=Optional[NoteResponse])
+@router.get('/{id}', response_model=NoteResponse | None)
 async def get_note_by_id(
     request: Request,
     id: str,
@@ -520,7 +519,7 @@ async def create_note_chat_by_id(
 ############################
 
 
-@router.post('/{id}/update', response_model=Optional[NoteModel])
+@router.post('/{id}/update', response_model=NoteModel | None)
 async def update_note_by_id(
     request: Request,
     id: str,
@@ -605,7 +604,7 @@ class NoteAccessGrantsForm(BaseModel):
     access_grants: list[dict]
 
 
-@router.post('/{id}/access/update', response_model=Optional[NoteModel])
+@router.post('/{id}/access/update', response_model=NoteModel | None)
 async def update_note_access_by_id(
     request: Request,
     id: str,
@@ -664,7 +663,7 @@ async def update_note_access_by_id(
 ############################
 
 
-@router.post('/{id}/pin', response_model=Optional[NoteModel])
+@router.post('/{id}/pin', response_model=NoteModel | None)
 async def pin_note_by_id(
     request: Request,
     id: str,
