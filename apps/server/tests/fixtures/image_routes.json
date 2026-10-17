@@ -1936,12 +1936,6 @@
        "parts": [
         {
          "text": "p"
-        },
-        {
-         "inline_data": {
-          "mime_type": "image/png",
-          "data": "ZmlsZS1vbmU="
-         }
         }
        ]
       }
@@ -2019,12 +2013,6 @@
        "parts": [
         {
          "text": "p"
-        },
-        {
-         "inline_data": {
-          "mime_type": "image/png",
-          "data": "c3RhdGljLXBuZw=="
-         }
         }
        ]
       }
@@ -2094,12 +2082,6 @@
        "parts": [
         {
          "text": "p"
-        },
-        {
-         "inline_data": {
-          "mime_type": "image/jpeg",
-          "data": "ZmlsZS10d28="
-         }
         }
        ]
       }
@@ -2429,12 +2411,6 @@
        "parts": [
         {
          "text": "p"
-        },
-        {
-         "inline_data": {
-          "mime_type": "image/png",
-          "data": "cG5nLW9uZQ=="
-         }
         }
        ]
       }
@@ -2466,12 +2442,6 @@
        "parts": [
         {
          "text": "p"
-        },
-        {
-         "inline_data": {
-          "mime_type": "image/png",
-          "data": "cG5nLW9uZQ=="
-         }
         }
        ]
       }
@@ -2552,18 +2522,6 @@
        "parts": [
         {
          "text": "p"
-        },
-        {
-         "inline_data": {
-          "mime_type": "image/png",
-          "data": "cG5nLW9uZQ=="
-         }
-        },
-        {
-         "inline_data": {
-          "mime_type": "image/jpeg",
-          "data": "anBlZy1vbmU="
-         }
         }
        ]
       }

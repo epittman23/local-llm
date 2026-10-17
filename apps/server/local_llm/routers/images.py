@@ -1001,7 +1001,9 @@ async def _edit_gemini(request, image_config, form_data, model, size, metadata, 
     res = await _post_engine_json(
         f'{image_config.IMAGES_EDIT_GEMINI_API_BASE_URL}/models/{model}:generateContent', headers, json=data
     )
-    return await _store_gemini_parts(request, res, {**data, **metadata}, user)
+    # The result files record the prompt, not a copy of every input image.
+    request_metadata = {'contents': [{'parts': [{'text': form_data.prompt}]}]}
+    return await _store_gemini_parts(request, res, {**request_metadata, **metadata}, user)
 
 
 async def _upload_to_comfyui(image_config, image: str | list[str]) -> list[str]:
