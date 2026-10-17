@@ -259,7 +259,6 @@ pydocstyle.convention = "google"
 [tool.ruff.lint.per-file-ignores]
 "local_llm/functions.py" = ["C901"]
 "local_llm/main.py" = ["C901"]
-"local_llm/routers/images.py" = ["C901"]
 "local_llm/tools/builtin.py" = ["C901"]
 "local_llm/utils/middleware.py" = ["C901"]
 "local_llm/utils/oauth.py" = ["C901"]
