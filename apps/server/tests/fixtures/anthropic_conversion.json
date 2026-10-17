@@ -779,7 +779,26 @@
   "tool_name_arrives_after_arguments": [
    "event: message_start\ndata: {\"type\": \"message_start\", \"message\": {\"id\": \"msg_000000000000000000000000\", \"type\": \"message\", \"role\": \"assistant\", \"content\": [], \"model\": \"\", \"stop_reason\": null, \"stop_sequence\": null, \"usage\": {\"input_tokens\": 0, \"output_tokens\": 0}}}\n\n",
    "event: content_block_start\ndata: {\"type\": \"content_block_start\", \"index\": 0, \"content_block\": {\"type\": \"tool_use\", \"id\": \"call_1\", \"name\": \"late_name\", \"input\": {}}}\n\n",
+   "event: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"input_json_delta\", \"partial_json\": \"{\\\"early\\\": \"}}\n\n",
    "event: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"input_json_delta\", \"partial_json\": \"true}\"}}\n\n",
+   "event: content_block_stop\ndata: {\"type\": \"content_block_stop\", \"index\": 0}\n\n",
+   "event: message_delta\ndata: {\"type\": \"message_delta\", \"delta\": {\"stop_reason\": \"end_turn\", \"stop_sequence\": null}, \"usage\": {\"output_tokens\": 0}}\n\n",
+   "event: message_stop\ndata: {\"type\": \"message_stop\"}\n\n"
+  ],
+  "tool_name_arrives_after_complete_arguments": [
+   "event: message_start\ndata: {\"type\": \"message_start\", \"message\": {\"id\": \"msg_000000000000000000000000\", \"type\": \"message\", \"role\": \"assistant\", \"content\": [], \"model\": \"\", \"stop_reason\": null, \"stop_sequence\": null, \"usage\": {\"input_tokens\": 0, \"output_tokens\": 0}}}\n\n",
+   "event: content_block_start\ndata: {\"type\": \"content_block_start\", \"index\": 0, \"content_block\": {\"type\": \"tool_use\", \"id\": \"call_1\", \"name\": \"late_name\", \"input\": {}}}\n\n",
+   "event: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"input_json_delta\", \"partial_json\": \"{\\\"done\\\": true}\"}}\n\n",
+   "event: content_block_stop\ndata: {\"type\": \"content_block_stop\", \"index\": 0}\n\n",
+   "event: message_delta\ndata: {\"type\": \"message_delta\", \"delta\": {\"stop_reason\": \"tool_use\", \"stop_sequence\": null}, \"usage\": {\"output_tokens\": 0}}\n\n",
+   "event: message_stop\ndata: {\"type\": \"message_stop\"}\n\n"
+  ],
+  "tool_name_arrives_with_more_arguments": [
+   "event: message_start\ndata: {\"type\": \"message_start\", \"message\": {\"id\": \"msg_000000000000000000000000\", \"type\": \"message\", \"role\": \"assistant\", \"content\": [], \"model\": \"\", \"stop_reason\": null, \"stop_sequence\": null, \"usage\": {\"input_tokens\": 0, \"output_tokens\": 0}}}\n\n",
+   "event: content_block_start\ndata: {\"type\": \"content_block_start\", \"index\": 0, \"content_block\": {\"type\": \"tool_use\", \"id\": \"call_1\", \"name\": \"late_name\", \"input\": {}}}\n\n",
+   "event: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"input_json_delta\", \"partial_json\": \"{\\\"a\\\": 1, \"}}\n\n",
+   "event: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"input_json_delta\", \"partial_json\": \"\\\"b\\\": \"}}\n\n",
+   "event: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"input_json_delta\", \"partial_json\": \"2}\"}}\n\n",
    "event: content_block_stop\ndata: {\"type\": \"content_block_stop\", \"index\": 0}\n\n",
    "event: message_delta\ndata: {\"type\": \"message_delta\", \"delta\": {\"stop_reason\": \"end_turn\", \"stop_sequence\": null}, \"usage\": {\"output_tokens\": 0}}\n\n",
    "event: message_stop\ndata: {\"type\": \"message_stop\"}\n\n"

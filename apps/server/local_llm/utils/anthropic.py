@@ -774,7 +774,9 @@ class _AnthropicStreamConverter:
         if tool_call_name and not tool['name']:
             tool['name'] = tool_call_name
 
-        # A tool's block starts as soon as it has a name.
+        # A tool's block starts as soon as it has a name. Arguments that
+        # arrived before the name were buffered; they go out first, so the
+        # client's input_json_delta pieces add up to the whole arguments.
         if not tool['started'] and tool['name']:
             tool['block_index'] = self.current_block_index
             tool['started'] = True
@@ -787,18 +789,25 @@ class _AnthropicStreamConverter:
                 }
             )
             self.current_block_index += 1
+            if tool['arguments']:
+                yield self._input_json_delta(tool, tool['arguments'])
+                yield from self._close_tool_if_complete(tool)
 
         if arguments_chunk:
             tool['arguments'] += arguments_chunk
             if tool['started'] and not tool['stopped']:
-                yield _sse(
-                    {
-                        'type': 'content_block_delta',
-                        'index': tool['block_index'],
-                        'delta': {'type': 'input_json_delta', 'partial_json': arguments_chunk},
-                    }
-                )
+                yield self._input_json_delta(tool, arguments_chunk)
             yield from self._close_tool_if_complete(tool)
+
+    @staticmethod
+    def _input_json_delta(tool: dict, partial_json: str) -> bytes:
+        return _sse(
+            {
+                'type': 'content_block_delta',
+                'index': tool['block_index'],
+                'delta': {'type': 'input_json_delta', 'partial_json': partial_json},
+            }
+        )
 
     def _close_tool_if_complete(self, tool: dict):
         """Closes a tool's block once its buffered arguments parse as complete JSON."""

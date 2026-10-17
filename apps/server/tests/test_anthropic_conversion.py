@@ -541,6 +541,27 @@ STREAM_CASES = [
         None,
     ),
     (
+        'tool_name_arrives_after_complete_arguments',
+        [
+            _delta(tool_calls=[_tool(0, 'call_1', args='{"done": ')]),
+            _delta(tool_calls=[_tool(0, args='true}')]),
+            _delta(tool_calls=[_tool(0, name='late_name')]),
+            _finish('tool_calls'),
+        ],
+        '',
+        None,
+    ),
+    (
+        'tool_name_arrives_with_more_arguments',
+        [
+            _delta(tool_calls=[_tool(0, 'call_1', args='{"a": 1, ')]),
+            _delta(tool_calls=[_tool(0, name='late_name', args='"b": ')]),
+            _delta(tool_calls=[_tool(0, args='2}')]),
+        ],
+        '',
+        None,
+    ),
+    (
         'tool_without_name_never_starts',
         [
             _delta(tool_calls=[_tool(0, 'call_1', args='{"x": 1}')]),
