@@ -2350,8 +2350,9 @@ class OAuthManager:
             data={'auth_method': 'oauth', 'provider': provider},
         )
 
-        # Legacy cookies for compatibility with older frontend versions
-        if ENABLE_OAUTH_ID_TOKEN_COOKIE:
+        # Legacy cookies for compatibility with older frontend versions; a plain
+        # OAuth 2 provider (GitHub, Feishu) issues no ID token to put in one.
+        if ENABLE_OAUTH_ID_TOKEN_COOKIE and token.get('id_token'):
             _set_auth_cookie(response, 'oauth_id_token', token.get('id_token'), httponly=True, max_age=cookie_max_age)
 
         await _store_oauth_session(response, user, provider, token, cookie_max_age, db=db)

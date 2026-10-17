@@ -2339,10 +2339,6 @@
     ],
     [
      "set-cookie",
-     "oauth_id_token=None; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
-    ],
-    [
-     "set-cookie",
      "oauth_session_id=sess-new; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
     ]
    ]
@@ -2475,10 +2471,6 @@
     [
      "set-cookie",
      "token=jwt-u-new; Max-Age=2419200; Path=/; SameSite=lax"
-    ],
-    [
-     "set-cookie",
-     "oauth_id_token=None; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
     ],
     [
      "set-cookie",
@@ -2818,10 +2810,6 @@
     [
      "set-cookie",
      "token=jwt-u-new; Max-Age=2419200; Path=/; SameSite=lax"
-    ],
-    [
-     "set-cookie",
-     "oauth_id_token=None; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
     ],
     [
      "set-cookie",
