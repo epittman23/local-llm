@@ -271,7 +271,6 @@ pydocstyle.convention = "google"
 "local_llm/utils/anthropic.py" = ["C901"]
 "local_llm/utils/memory.py" = ["C901"]
 "local_llm/utils/middleware.py" = ["C901"]
-"local_llm/utils/misc.py" = ["C901"]
 "local_llm/utils/models.py" = ["C901"]
 "local_llm/utils/oauth.py" = ["C901"]
 "local_llm/utils/subagents.py" = ["C901"]

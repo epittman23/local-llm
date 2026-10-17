@@ -342,6 +342,211 @@ def get_reasoning_details(payload: dict):
     return payload.get('reasoning_details') or provider_details
 
 
+def _tool_output_content(output_item: dict) -> tuple[str, list[str]]:
+    """A function_call_output's text and image URLs."""
+    content = ''
+    image_urls = []
+    for part in output_item.get('output', []):
+        if part.get('type') == 'input_text':
+            output_text = part.get('text', '')
+            content += output_text if isinstance(output_text, str) else str(output_text)
+        elif part.get('type') == 'input_image':
+            url = part.get('image_url', '')
+            if url:
+                image_urls.append(url)
+    return content, image_urls
+
+
+def _replayable_reasoning_details(item: dict, raw: bool):
+    """A reasoning item's reasoning_details to replay (raw only), without unsigned Claude blocks."""
+    reasoning_details = item.get('reasoning_details') if raw else None
+    if not reasoning_details:
+        return reasoning_details
+    details = reasoning_details if isinstance(reasoning_details, list) else [reasoning_details]
+    return [
+        detail
+        for detail in details
+        if isinstance(detail, dict) and (detail.get('format') != 'anthropic-claude-v1' or detail.get('signature'))
+    ]
+
+
+def _reasoning_item_text(item: dict) -> str:
+    """A reasoning item's text, from its summary or else its content."""
+    return ''.join(
+        part.get('text', '')
+        for part in item.get('summary', []) or item.get('content', [])
+        if part.get('type') == 'output_text' or 'text' in part
+    )
+
+
+def _code_interpreter_contents(item: dict) -> list[str]:
+    """A code interpreter item as tagged content, so the model knows the code already ran and doesn't retry it."""
+    contents = []
+    code = item.get('code', '')
+    code_output = item.get('output', '')
+    if code:
+        contents.append(f'<code_interpreter>\n{code}\n</code_interpreter>')
+    if code_output:
+        if isinstance(code_output, dict):
+            output_text = code_output.get('stdout', '') or code_output.get('result', '')
+        else:
+            output_text = str(code_output)
+        if output_text:
+            contents.append(f'<code_interpreter_output>\n{output_text}\n</code_interpreter_output>')
+    return contents
+
+
+class _OutputMessageBuilder:
+    """Rebuilds Chat Completion messages from output items, one item at a time.
+
+    Assistant text, tool calls and reasoning are batched into one assistant
+    message until something else (tool outputs, images, the end) flushes them.
+    Tool outputs wait until the next item that isn't a tool call or output,
+    so a round's calls and outputs stay together.
+    """
+
+    def __init__(self, output: list, raw: bool, reasoning_format: str | None, flatten_tool_images: bool):
+        self.raw = raw
+        self.reasoning_format = reasoning_format
+        self.flatten_tool_images = flatten_tool_images
+        self.messages = []
+        self.pending_content = []
+        self.pending_tool_calls = []
+        self.pending_reasoning = []  # Only populated for top-level structured reasoning fields.
+        self.pending_reasoning_details = []
+        self.pending_tool_outputs = []
+        self.pending_tool_image_urls = []
+
+        # Only calls that finished and got an output are replayed, with their outputs.
+        completed_call_ids = {
+            item.get('call_id')
+            for item in output
+            if item.get('type') == 'function_call'
+            and item.get('call_id')
+            and item.get('status') in {'completed', 'failed', 'rejected'}
+        }
+        result_call_ids = {
+            item.get('call_id') for item in output if item.get('type') == 'function_call_output' and item.get('call_id')
+        }
+        self.function_call_ids = completed_call_ids & result_call_ids
+
+    def add(self, item: dict) -> None:
+        item_type = item.get('type', '')
+        if item_type not in {'function_call', 'function_call_output'}:
+            self.flush_tool_outputs()
+            self.flush_tool_images()
+
+        if item_type == 'message':
+            text = ''.join(
+                part.get('text', '') for part in item.get('content', []) if part.get('type') == 'output_text'
+            )
+            if text:
+                self.pending_content.append(text)
+        elif item_type == 'function_call':
+            self._add_function_call(item)
+        elif item_type == 'function_call_output':
+            if item.get('call_id') in self.function_call_ids:
+                self.pending_tool_outputs.append(item)
+        elif item_type == 'reasoning':
+            self._add_reasoning(item)
+        elif item_type == 'open_webui:code_interpreter':
+            self.pending_content.extend(_code_interpreter_contents(item))
+        elif item_type.startswith('open_webui:'):
+            pass  # Other extension types are skipped (a non-string type still raises here, as it always has).
+
+    def _add_function_call(self, item: dict) -> None:
+        if item.get('call_id') not in self.function_call_ids:
+            return
+        arguments = item.get('arguments', '{}')
+        # Arguments are always a JSON string
+        if not isinstance(arguments, str):
+            arguments = JSONCodec.dumps(arguments)
+        self.pending_tool_calls.append(
+            {
+                'id': item.get('call_id', ''),
+                'type': 'function',
+                'function': {'name': item.get('name', ''), 'arguments': arguments},
+            }
+        )
+
+    def _add_reasoning(self, item: dict) -> None:
+        reasoning_details = _replayable_reasoning_details(item, self.raw)
+        if not self.reasoning_format and not reasoning_details:
+            return
+        reasoning_text = _reasoning_item_text(item)
+        if reasoning_text:
+            if self.reasoning_format == 'think_tags':
+                # Legacy tag replay: embed in content with the item's original tags.
+                start_tag = item.get('start_tag', '<think>')
+                end_tag = item.get('end_tag', '</think>')
+                self.pending_content.append(f'{start_tag}{reasoning_text}{end_tag}')
+            elif self.reasoning_format in {'thinking', 'reasoning_content'}:
+                # Native providers: collect for their top-level reasoning field.
+                self.pending_reasoning.append(reasoning_text)
+        if reasoning_details:
+            self.pending_reasoning_details.extend(reasoning_details)
+
+    def flush_pending(self) -> None:
+        """The batched assistant text, tool calls and reasoning, as one assistant message."""
+        if not (
+            self.pending_content or self.pending_tool_calls or self.pending_reasoning or self.pending_reasoning_details
+        ):
+            return
+        message = {
+            'role': 'assistant',
+            'content': '\n'.join(self.pending_content) if self.pending_content else '',
+            **({'tool_calls': self.pending_tool_calls} if self.pending_tool_calls else {}),
+        }
+        if self.pending_reasoning:
+            field = 'thinking' if self.reasoning_format == 'thinking' else 'reasoning_content'
+            message[field] = '\n'.join(self.pending_reasoning)
+        if self.pending_reasoning_details:
+            message['reasoning_details'] = self.pending_reasoning_details
+        self.messages.append(message)
+        self.pending_content = []
+        self.pending_tool_calls = []
+        self.pending_reasoning = []
+        self.pending_reasoning_details = []
+
+    def flush_tool_images(self) -> None:
+        """Flattened tool output images, as one user message after the tool messages."""
+        if not self.pending_tool_image_urls:
+            return
+        self.messages.append(
+            {
+                'role': 'user',
+                'content': [
+                    {'type': 'text', 'text': 'Here are the images from the tool results above. Please analyze them.'},
+                    *[{'type': 'image_url', 'image_url': {'url': url}} for url in self.pending_tool_image_urls],
+                ],
+            }
+        )
+        self.pending_tool_image_urls = []
+
+    def flush_tool_outputs(self) -> None:
+        """The batched assistant message, then one tool message per waiting tool output."""
+        if not self.pending_tool_outputs:
+            return
+        self.flush_pending()
+        for output_item in self.pending_tool_outputs:
+            content, image_urls = _tool_output_content(output_item)
+            if self.flatten_tool_images:
+                self.pending_tool_image_urls.extend(image_urls)
+            elif image_urls:
+                content = [
+                    {'type': 'input_text', 'text': content},
+                    *[{'type': 'input_image', 'image_url': url} for url in image_urls],
+                ]
+            self.messages.append({'role': 'tool', 'tool_call_id': output_item.get('call_id', ''), 'content': content})
+        self.pending_tool_outputs = []
+
+    def finish(self) -> list[dict]:
+        self.flush_tool_outputs()
+        self.flush_tool_images()
+        self.flush_pending()
+        return self.messages
+
+
 def convert_output_to_messages(
     output: list,
     raw: bool = False,
@@ -353,12 +558,13 @@ def convert_output_to_messages(
 
     This reconstructs the full conversation from the stored Responses API-native
     output items, including assistant messages with tool_calls arrays and tool
-    role messages.
+    role messages. Code interpreter blocks are always included, so the model
+    knows the code already ran.
 
     Args:
         output: List of OR-aligned output items (Responses API format).
-        raw: If True, include code interpreter blocks for LLM re-processing
-             follow-ups.
+        raw: If True, replay reasoning items' ``reasoning_details`` (unsigned
+             Claude blocks are dropped).
         reasoning_format: How to include reasoning blocks in the output:
             - None: skip reasoning (default, safe for strict providers).
             - ``'thinking'``: set as ``thinking`` top-level field
@@ -372,226 +578,10 @@ def convert_output_to_messages(
     """
     if not output or not isinstance(output, list):
         return []
-
-    messages = []
-    pending_tool_calls = []
-    pending_content = []
-    pending_reasoning = []  # Only populated for top-level structured reasoning fields.
-    pending_reasoning_details = []
-    pending_tool_image_urls = []
-    pending_tool_outputs = []
-    completed_call_ids = {
-        item.get('call_id')
-        for item in output
-        if item.get('type') == 'function_call'
-        and item.get('call_id')
-        and item.get('status') in {'completed', 'failed', 'rejected'}
-    }
-    result_call_ids = {
-        item.get('call_id') for item in output if item.get('type') == 'function_call_output' and item.get('call_id')
-    }
-    function_call_ids = completed_call_ids & result_call_ids
-
-    def flush_pending():
-        nonlocal pending_content, pending_tool_calls, pending_reasoning, pending_reasoning_details
-        if not pending_content and not pending_tool_calls and not pending_reasoning and not pending_reasoning_details:
-            return
-
-        message = {
-            'role': 'assistant',
-            'content': '\n'.join(pending_content) if pending_content else '',
-            **({'tool_calls': pending_tool_calls} if pending_tool_calls else {}),
-        }
-
-        if pending_reasoning:
-            if reasoning_format == 'thinking':
-                message['thinking'] = '\n'.join(pending_reasoning)
-            else:
-                message['reasoning_content'] = '\n'.join(pending_reasoning)
-
-        if pending_reasoning_details:
-            message['reasoning_details'] = pending_reasoning_details
-
-        messages.append(message)
-        pending_content = []
-        pending_tool_calls = []
-        pending_reasoning = []
-        pending_reasoning_details = []
-
-    def flush_tool_images():
-        nonlocal pending_tool_image_urls
-        if not pending_tool_image_urls:
-            return
-
-        messages.append(
-            {
-                'role': 'user',
-                'content': [
-                    {
-                        'type': 'text',
-                        'text': 'Here are the images from the tool results above. Please analyze them.',
-                    },
-                    *[{'type': 'image_url', 'image_url': {'url': url}} for url in pending_tool_image_urls],
-                ],
-            }
-        )
-        pending_tool_image_urls = []
-
-    def flush_tool_outputs():
-        nonlocal pending_tool_outputs
-        if not pending_tool_outputs:
-            return
-
-        flush_pending()
-        for output_item in pending_tool_outputs:
-            output_parts = output_item.get('output', [])
-            content = ''
-            image_urls = []
-            for part in output_parts:
-                if part.get('type') == 'input_text':
-                    output_text = part.get('text', '')
-                    content += str(output_text) if not isinstance(output_text, str) else output_text
-                elif part.get('type') == 'input_image':
-                    url = part.get('image_url', '')
-                    if url:
-                        image_urls.append(url)
-
-            if flatten_tool_images:
-                messages.append(
-                    {
-                        'role': 'tool',
-                        'tool_call_id': output_item.get('call_id', ''),
-                        'content': content,
-                    }
-                )
-                pending_tool_image_urls.extend(image_urls)
-            elif image_urls:
-                messages.append(
-                    {
-                        'role': 'tool',
-                        'tool_call_id': output_item.get('call_id', ''),
-                        'content': [
-                            {'type': 'input_text', 'text': content},
-                            *[{'type': 'input_image', 'image_url': url} for url in image_urls],
-                        ],
-                    }
-                )
-            else:
-                messages.append(
-                    {
-                        'role': 'tool',
-                        'tool_call_id': output_item.get('call_id', ''),
-                        'content': content,
-                    }
-                )
-
-        pending_tool_outputs = []
-
+    builder = _OutputMessageBuilder(output, raw, reasoning_format, flatten_tool_images)
     for item in output:
-        item_type = item.get('type', '')
-        if item_type not in {'function_call', 'function_call_output'}:
-            flush_tool_outputs()
-            flush_tool_images()
-
-        if item_type == 'message':
-            # Extract text from output_text content parts
-            content_parts = item.get('content', [])
-            text = ''
-            for part in content_parts:
-                if part.get('type') == 'output_text':
-                    text += part.get('text', '')
-            if text:
-                pending_content.append(text)
-
-        elif item_type == 'function_call':
-            if item.get('call_id') not in function_call_ids:
-                continue
-
-            # Collect tool calls to batch into assistant message
-            arguments = item.get('arguments', '{}')
-            # Ensure arguments is always a JSON string
-            if not isinstance(arguments, str):
-                arguments = JSONCodec.dumps(arguments)
-            pending_tool_calls.append(
-                {
-                    'id': item.get('call_id', ''),
-                    'type': 'function',
-                    'function': {
-                        'name': item.get('name', ''),
-                        'arguments': arguments,
-                    },
-                }
-            )
-
-        elif item_type == 'function_call_output':
-            if item.get('call_id') not in function_call_ids:
-                continue
-
-            pending_tool_outputs.append(item)
-
-        elif item_type == 'reasoning':
-            reasoning_details = item.get('reasoning_details') if raw else None
-            if reasoning_details:
-                reasoning_details = reasoning_details if isinstance(reasoning_details, list) else [reasoning_details]
-                reasoning_details = [
-                    detail
-                    for detail in reasoning_details
-                    if isinstance(detail, dict)
-                    and (detail.get('format') != 'anthropic-claude-v1' or detail.get('signature'))
-                ]
-            if not reasoning_format and not reasoning_details:
-                continue
-
-            reasoning_text = ''
-            source_list = item.get('summary', []) or item.get('content', [])
-            for part in source_list:
-                if part.get('type') == 'output_text':
-                    reasoning_text += part.get('text', '')
-                elif 'text' in part:
-                    reasoning_text += part.get('text', '')
-
-            if reasoning_text:
-                if reasoning_format == 'think_tags':
-                    # Legacy tag replay: embed in content with the item's original tags.
-                    start_tag = item.get('start_tag', '<think>')
-                    end_tag = item.get('end_tag', '</think>')
-                    pending_content.append(f'{start_tag}{reasoning_text}{end_tag}')
-                elif reasoning_format in {'thinking', 'reasoning_content'}:
-                    # Native providers: collect for their top-level reasoning field.
-                    pending_reasoning.append(reasoning_text)
-
-            if reasoning_details:
-                pending_reasoning_details.extend(reasoning_details)
-
-        elif item_type == 'open_webui:code_interpreter':
-            # Always include code interpreter content so the LLM knows
-            # the code was already executed and doesn't retry.
-            code = item.get('code', '')
-            code_output = item.get('output', '')
-
-            if code:
-                pending_content.append(f'<code_interpreter>\n{code}\n</code_interpreter>')
-
-            if code_output:
-                if isinstance(code_output, dict):
-                    stdout = code_output.get('stdout', '')
-                    result = code_output.get('result', '')
-                    output_text = stdout or result
-                else:
-                    output_text = str(code_output)
-                if output_text:
-                    pending_content.append(f'<code_interpreter_output>\n{output_text}\n</code_interpreter_output>')
-
-        elif item_type.startswith('open_webui:'):
-            # Skip other extension types
-            pass
-
-    # Flush remaining content/tool_calls
-    flush_tool_outputs()
-    flush_tool_images()
-    flush_pending()
-
-    return reconcile_tool_pairs(messages)
+        builder.add(item)
+    return reconcile_tool_pairs(builder.finish())
 
 
 def get_last_user_message(messages: list[dict]) -> str | None:
