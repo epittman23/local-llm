@@ -358,8 +358,9 @@ async def _local_tool_entries(request: Request, tool_id: str, tool, user: UserMo
     return entries
 
 
-def _parse_server_tool_id(tool_id: str) -> tuple[str, str]:
-    """A tool id's server type and id: server:<id> is OpenAPI, server:<type>:<id> names its type."""
+def _parse_server_tool_id(tool_id: str) -> tuple[str, str] | None:
+    """A tool id's server type and id: server:<id> is OpenAPI, server:<type>:<id> names its type.
+    None for any other shape."""
     splits = tool_id.split(':')
     if len(splits) == 2:
         server_type = 'openapi'
@@ -367,6 +368,8 @@ def _parse_server_tool_id(tool_id: str) -> tuple[str, str]:
     elif len(splits) == 3:
         server_type = splits[1]
         server_id = splits[2]
+    else:
+        return None
 
     server_id_splits = server_id.split('|')
     if len(server_id_splits) == 2:
@@ -493,7 +496,11 @@ async def get_tools(request: Request, tool_ids: list[str], user: UserModel, extr
             prefix = tool_id
             entries = await _local_tool_entries(request, tool_id, tool, user, extra_params)
         elif tool_id.startswith('server:'):
-            server_type, server_id = _parse_server_tool_id(tool_id)
+            parsed = _parse_server_tool_id(tool_id)
+            if parsed is None:
+                log.warning(f'Skipping malformed tool server id {tool_id}')
+                continue
+            server_type, server_id = parsed
             if server_type != 'openapi':
                 continue
             prefix = server_id

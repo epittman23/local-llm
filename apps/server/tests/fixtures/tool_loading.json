@@ -1669,10 +1669,87 @@
   ]
  },
  "get_tools:server_id_with_extra_colons": {
-  "raised": [
-   "UnboundLocalError",
-   "cannot access local variable 'server_id' where it is not associated with a value"
+  "tools": [
+   {
+    "name": "add",
+    "tool_id": "calc",
+    "spec": {
+     "name": "add",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "a": {
+        "type": "int"
+       },
+       "b": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "a",
+       "b"
+      ]
+     },
+     "description": "Add two numbers.\n\n    "
+    },
+    "metadata": {
+     "file_handler": true,
+     "citation": false
+    },
+    "signature": [
+     "a",
+     "b"
+    ],
+    "is_coroutine": true,
+    "called_with": {
+     "a": 2,
+     "b": 3,
+     "__id__": "calc",
+     "__user__": {
+      "id": "u1",
+      "name": "Ada",
+      "valves": {
+       "type": "_UserValves",
+       "tone": "dry"
+      }
+     },
+     "__metadata__": {
+      "chat_id": "c1"
+     }
+    }
+   },
+   {
+    "name": "blank_doc",
+    "tool_id": "calc",
+    "spec": {
+     "name": "blank_doc",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "n": {
+        "type": "integer"
+       }
+      },
+      "required": []
+     },
+     "description": "blank_doc"
+    },
+    "metadata": {
+     "file_handler": true,
+     "citation": false
+    },
+    "signature": [
+     "n"
+    ],
+    "is_coroutine": true,
+    "called_with": {
+     "n": 7
+    }
+   }
   ],
+  "contents_cache": {
+   "calc": "v1"
+  },
   "calls": [
    [
     "groups",
