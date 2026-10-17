@@ -1,0 +1,1923 @@
+{
+ "text": {
+  "returned": {
+   "id": "mypipe-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": "echo: hi"
+     }
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "text_streamed": {
+  "stream": [
+   "data: {\"id\": \"mypipe-00000000-0000-0000-0000-000000000001\", \"created\": 1000, \"model\": \"mypipe\", \"choices\": [{\"index\": 0, \"logprobs\": null, \"finish_reason\": null, \"delta\": {\"content\": \"echo: hi\"}}], \"object\": \"chat.completion.chunk\"}\n\n",
+   "data: {\"id\": \"mypipe-00000000-0000-0000-0000-000000000002\", \"created\": 1000, \"model\": \"mypipe\", \"choices\": [{\"index\": 0, \"logprobs\": null, \"finish_reason\": \"stop\", \"delta\": {}}], \"object\": \"chat.completion.chunk\"}\n\n",
+   "data: [DONE]"
+  ],
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": true
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "async_text": {
+  "returned": {
+   "id": "mypipe-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": "async hello"
+     }
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "async_text_streamed": {
+  "stream": [
+   "data: {\"id\": \"mypipe-00000000-0000-0000-0000-000000000001\", \"created\": 1000, \"model\": \"mypipe\", \"choices\": [{\"index\": 0, \"logprobs\": null, \"finish_reason\": null, \"delta\": {\"content\": \"async hello\"}}], \"object\": \"chat.completion.chunk\"}\n\n",
+   "data: {\"id\": \"mypipe-00000000-0000-0000-0000-000000000002\", \"created\": 1000, \"model\": \"mypipe\", \"choices\": [{\"index\": 0, \"logprobs\": null, \"finish_reason\": \"stop\", \"delta\": {}}], \"object\": \"chat.completion.chunk\"}\n\n",
+   "data: [DONE]"
+  ],
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": true
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "manifold_model_id": {
+  "returned": {
+   "id": "mypipe.sub-model-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe.sub-model",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": "echo: hi"
+     }
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "body": {
+    "model": "mypipe.sub-model",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "every_param": {
+  "returned": {
+   "id": "mypipe-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": "saw every param"
+     }
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "__chat_id__": "c1",
+   "__event_call__": "<event call for c1>",
+   "__event_emitter__": "<event emitter for c1>",
+   "__files__": [
+    {
+     "id": "f1"
+    }
+   ],
+   "__message_id__": "m1",
+   "__metadata__": {
+    "session_id": "s1",
+    "chat_id": "c1",
+    "message_id": "m1",
+    "task": "title_generation",
+    "task_body": {
+     "x": 1
+    },
+    "files": [
+     {
+      "id": "f1"
+     }
+    ],
+    "tool_ids": null,
+    "tools": {
+     "search": {}
+    }
+   },
+   "__oauth_token__": {
+    "access_token": "t1"
+   },
+   "__request__": "<request>",
+   "__session_id__": "s1",
+   "__task__": "title_generation",
+   "__task_body__": {
+    "x": 1
+   },
+   "__tools__": {
+    "search": {}
+   },
+   "__user__": {
+    "id": "u1",
+    "email": "ada@example.invalid",
+    "username": null,
+    "role": "user",
+    "name": "Ada",
+    "profile_image_url": "/api/v1/users/u1/profile/image",
+    "profile_banner_image_url": null,
+    "bio": null,
+    "gender": null,
+    "date_of_birth": null,
+    "timezone": null,
+    "presence_state": null,
+    "status_emoji": null,
+    "status_message": null,
+    "status_expires_at": null,
+    "info": null,
+    "settings": null,
+    "oauth": null,
+    "scim": null,
+    "last_active_at": 0,
+    "updated_at": 0,
+    "created_at": 0
+   },
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_token",
+    "u1",
+    "oauth-sess"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "metadata_without_event_ids": {
+  "returned": {
+   "id": "mypipe-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": "saw every param"
+     }
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "__chat_id__": "c1",
+   "__event_call__": null,
+   "__event_emitter__": null,
+   "__files__": [],
+   "__message_id__": null,
+   "__metadata__": {
+    "chat_id": "c1",
+    "task": "t"
+   },
+   "__oauth_token__": null,
+   "__request__": "<request>",
+   "__session_id__": null,
+   "__task__": "t",
+   "__task_body__": null,
+   "__tools__": {},
+   "__user__": {
+    "id": "u1",
+    "email": "ada@example.invalid",
+    "username": null,
+    "role": "user",
+    "name": "Ada",
+    "profile_image_url": "/api/v1/users/u1/profile/image",
+    "profile_banner_image_url": null,
+    "bio": null,
+    "gender": null,
+    "date_of_birth": null,
+    "timezone": null,
+    "presence_state": null,
+    "status_emoji": null,
+    "status_message": null,
+    "status_expires_at": null,
+    "info": null,
+    "settings": null,
+    "oauth": null,
+    "scim": null,
+    "last_active_at": 0,
+    "updated_at": 0,
+    "created_at": 0
+   },
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "no_metadata": {
+  "returned": {
+   "id": "mypipe-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": "saw every param"
+     }
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "__chat_id__": null,
+   "__event_call__": null,
+   "__event_emitter__": null,
+   "__files__": [],
+   "__message_id__": null,
+   "__metadata__": {},
+   "__oauth_token__": null,
+   "__request__": "<request>",
+   "__session_id__": null,
+   "__task__": null,
+   "__task_body__": null,
+   "__tools__": {},
+   "__user__": {
+    "id": "u1",
+    "email": "ada@example.invalid",
+    "username": null,
+    "role": "user",
+    "name": "Ada",
+    "profile_image_url": "/api/v1/users/u1/profile/image",
+    "profile_banner_image_url": null,
+    "bio": null,
+    "gender": null,
+    "date_of_birth": null,
+    "timezone": null,
+    "presence_state": null,
+    "status_emoji": null,
+    "status_message": null,
+    "status_expires_at": null,
+    "info": null,
+    "settings": null,
+    "oauth": null,
+    "scim": null,
+    "last_active_at": 0,
+    "updated_at": 0,
+    "created_at": 0
+   },
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "signature_subset": {
+  "returned": {
+   "id": "mypipe-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": "user only"
+     }
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "__user__": {
+    "id": "u1",
+    "email": "ada@example.invalid",
+    "username": null,
+    "role": "user",
+    "name": "Ada",
+    "profile_image_url": "/api/v1/users/u1/profile/image",
+    "profile_banner_image_url": null,
+    "bio": null,
+    "gender": null,
+    "date_of_birth": null,
+    "timezone": null,
+    "presence_state": null,
+    "status_emoji": null,
+    "status_message": null,
+    "status_expires_at": null,
+    "info": null,
+    "settings": null,
+    "oauth": null,
+    "scim": null,
+    "last_active_at": 0,
+    "updated_at": 0,
+    "created_at": 0
+   },
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "oauth_from_latest_session": {
+  "returned": {
+   "id": "mypipe-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": "saw every param"
+     }
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "__chat_id__": null,
+   "__event_call__": null,
+   "__event_emitter__": null,
+   "__files__": [],
+   "__message_id__": null,
+   "__metadata__": {},
+   "__oauth_token__": {
+    "access_token": "latest"
+   },
+   "__request__": "<request>",
+   "__session_id__": null,
+   "__task__": null,
+   "__task_body__": null,
+   "__tools__": {},
+   "__user__": {
+    "id": "u1",
+    "email": "ada@example.invalid",
+    "username": null,
+    "role": "user",
+    "name": "Ada",
+    "profile_image_url": "/api/v1/users/u1/profile/image",
+    "profile_banner_image_url": null,
+    "bio": null,
+    "gender": null,
+    "date_of_birth": null,
+    "timezone": null,
+    "presence_state": null,
+    "status_emoji": null,
+    "status_message": null,
+    "status_expires_at": null,
+    "info": null,
+    "settings": null,
+    "oauth": null,
+    "scim": null,
+    "last_active_at": 0,
+    "updated_at": 0,
+    "created_at": 0
+   },
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "oauth_token",
+    "u1",
+    "new"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "oauth_cookie_without_token_falls_back": {
+  "returned": {
+   "id": "mypipe-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": "saw every param"
+     }
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "__chat_id__": null,
+   "__event_call__": null,
+   "__event_emitter__": null,
+   "__files__": [],
+   "__message_id__": null,
+   "__metadata__": {},
+   "__oauth_token__": {
+    "access_token": "fallback"
+   },
+   "__request__": "<request>",
+   "__session_id__": null,
+   "__task__": null,
+   "__task_body__": null,
+   "__tools__": {},
+   "__user__": {
+    "id": "u1",
+    "email": "ada@example.invalid",
+    "username": null,
+    "role": "user",
+    "name": "Ada",
+    "profile_image_url": "/api/v1/users/u1/profile/image",
+    "profile_banner_image_url": null,
+    "bio": null,
+    "gender": null,
+    "date_of_birth": null,
+    "timezone": null,
+    "presence_state": null,
+    "status_emoji": null,
+    "status_message": null,
+    "status_expires_at": null,
+    "info": null,
+    "settings": null,
+    "oauth": null,
+    "scim": null,
+    "last_active_at": 0,
+    "updated_at": 0,
+    "created_at": 0
+   },
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_token",
+    "u1",
+    "dead"
+   ],
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "oauth_token",
+    "u1",
+    "s9"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "oauth_no_sessions": {
+  "returned": {
+   "id": "mypipe-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": "saw every param"
+     }
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "__chat_id__": null,
+   "__event_call__": null,
+   "__event_emitter__": null,
+   "__files__": [],
+   "__message_id__": null,
+   "__metadata__": {},
+   "__oauth_token__": null,
+   "__request__": "<request>",
+   "__session_id__": null,
+   "__task__": null,
+   "__task_body__": null,
+   "__tools__": {},
+   "__user__": {
+    "id": "u1",
+    "email": "ada@example.invalid",
+    "username": null,
+    "role": "user",
+    "name": "Ada",
+    "profile_image_url": "/api/v1/users/u1/profile/image",
+    "profile_banner_image_url": null,
+    "bio": null,
+    "gender": null,
+    "date_of_birth": null,
+    "timezone": null,
+    "presence_state": null,
+    "status_emoji": null,
+    "status_message": null,
+    "status_expires_at": null,
+    "info": null,
+    "settings": null,
+    "oauth": null,
+    "scim": null,
+    "last_active_at": 0,
+    "updated_at": 0,
+    "created_at": 0
+   },
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "oauth_lookup_fails": {
+  "returned": {
+   "id": "mypipe-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": "saw every param"
+     }
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "__chat_id__": null,
+   "__event_call__": null,
+   "__event_emitter__": null,
+   "__files__": [],
+   "__message_id__": null,
+   "__metadata__": {},
+   "__oauth_token__": null,
+   "__request__": "<request>",
+   "__session_id__": null,
+   "__task__": null,
+   "__task_body__": null,
+   "__tools__": {},
+   "__user__": {
+    "id": "u1",
+    "email": "ada@example.invalid",
+    "username": null,
+    "role": "user",
+    "name": "Ada",
+    "profile_image_url": "/api/v1/users/u1/profile/image",
+    "profile_banner_image_url": null,
+    "bio": null,
+    "gender": null,
+    "date_of_birth": null,
+    "timezone": null,
+    "presence_state": null,
+    "status_emoji": null,
+    "status_message": null,
+    "status_expires_at": null,
+    "info": null,
+    "settings": null,
+    "oauth": null,
+    "scim": null,
+    "last_active_at": 0,
+    "updated_at": 0,
+    "created_at": 0
+   },
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_token",
+    "u1",
+    "boom"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "user_valves": {
+  "returned": {
+   "id": "mypipe-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": "user only"
+     }
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "__user__": {
+    "id": "u1",
+    "email": "ada@example.invalid",
+    "username": null,
+    "role": "user",
+    "name": "Ada",
+    "profile_image_url": "/api/v1/users/u1/profile/image",
+    "profile_banner_image_url": null,
+    "bio": null,
+    "gender": null,
+    "date_of_birth": null,
+    "timezone": null,
+    "presence_state": null,
+    "status_emoji": null,
+    "status_message": null,
+    "status_expires_at": null,
+    "info": null,
+    "settings": null,
+    "oauth": null,
+    "scim": null,
+    "last_active_at": 0,
+    "updated_at": 0,
+    "created_at": 0,
+    "valves": {
+     "model": "UserValves",
+     "level": 3
+    }
+   },
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ],
+   [
+    "user_valves",
+    "mypipe",
+    "u1"
+   ]
+  ]
+ },
+ "user_valves_invalid": {
+  "returned": {
+   "id": "mypipe-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": "user only"
+     }
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "__user__": {
+    "id": "u1",
+    "email": "ada@example.invalid",
+    "username": null,
+    "role": "user",
+    "name": "Ada",
+    "profile_image_url": "/api/v1/users/u1/profile/image",
+    "profile_banner_image_url": null,
+    "bio": null,
+    "gender": null,
+    "date_of_birth": null,
+    "timezone": null,
+    "presence_state": null,
+    "status_emoji": null,
+    "status_message": null,
+    "status_expires_at": null,
+    "info": null,
+    "settings": null,
+    "oauth": null,
+    "scim": null,
+    "last_active_at": 0,
+    "updated_at": 0,
+    "created_at": 0,
+    "valves": {
+     "model": "UserValves",
+     "level": 1
+    }
+   },
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ],
+   [
+    "user_valves",
+    "mypipe",
+    "u1"
+   ]
+  ]
+ },
+ "user_valves_without_user_param": {
+  "returned": {
+   "id": "mypipe-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": "echo: hi"
+     }
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "user_not_a_user_model": {
+  "returned": {
+   "id": "mypipe-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": "saw every param"
+     }
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "__chat_id__": null,
+   "__event_call__": null,
+   "__event_emitter__": null,
+   "__files__": [],
+   "__message_id__": null,
+   "__metadata__": {},
+   "__oauth_token__": null,
+   "__request__": "<request>",
+   "__session_id__": null,
+   "__task__": null,
+   "__task_body__": null,
+   "__tools__": {},
+   "__user__": {},
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "check_model_access",
+    "u1",
+    "mypipe",
+    false
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "workspace_model_base_and_params": {
+  "returned": {
+   "id": "mypipe-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": "echo: hi"
+     }
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Be brief."
+     },
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false,
+    "temperature": 0.2
+   }
+  },
+  "caller_body_unchanged": false,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "check_model_access",
+    "u1",
+    "custom",
+    false
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "workspace_model_bypass_system_prompt": {
+  "returned": {
+   "id": "mypipe-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": "echo: hi"
+     }
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "check_model_access",
+    "u1",
+    "mypipe",
+    false
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "workspace_model_empty_params": {
+  "returned": {
+   "id": "mypipe-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": "echo: hi"
+     }
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "check_model_access",
+    "u1",
+    "mypipe",
+    false
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "access_check_admin_bypass": {
+  "returned": {
+   "id": "mypipe-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": "echo: hi"
+     }
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "a1"
+   ],
+   [
+    "check_model_access",
+    "a1",
+    "mypipe",
+    true
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "access_check_skipped": {
+  "returned": {
+   "id": "mypipe-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": "echo: hi"
+     }
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "lines_streamed": {
+  "stream": [
+   "data: {\"id\": \"mypipe-00000000-0000-0000-0000-000000000001\", \"created\": 1000, \"model\": \"mypipe\", \"choices\": [{\"index\": 0, \"logprobs\": null, \"finish_reason\": null, \"delta\": {\"content\": \"plain text\"}}], \"object\": \"chat.completion.chunk\"}\n\n",
+   "data: {\"id\": \"mypipe-00000000-0000-0000-0000-000000000002\", \"created\": 1000, \"model\": \"mypipe\", \"choices\": [{\"index\": 0, \"logprobs\": null, \"finish_reason\": null, \"delta\": {\"content\": \"bytes text\"}}], \"object\": \"chat.completion.chunk\"}\n\n",
+   "data: {\"choices\": [{\"delta\": {\"content\": \"from dict\"}}]}\n\n",
+   "data: {\"text\":\"from model\"}\n\n",
+   "data: {\"raw\": true}\n\n",
+   "data: {\"id\": \"mypipe-00000000-0000-0000-0000-000000000003\", \"created\": 1000, \"model\": \"mypipe\", \"choices\": [{\"index\": 0, \"logprobs\": null, \"finish_reason\": \"stop\", \"delta\": {}}], \"object\": \"chat.completion.chunk\"}\n\n",
+   "data: [DONE]"
+  ],
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": true
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "parts_joined": {
+  "returned": {
+   "id": "mypipe-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": "part one, part two"
+     }
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "async_lines_streamed": {
+  "stream": [
+   "data: {\"id\": \"mypipe-00000000-0000-0000-0000-000000000001\", \"created\": 1000, \"model\": \"mypipe\", \"choices\": [{\"index\": 0, \"logprobs\": null, \"finish_reason\": null, \"delta\": {\"content\": \"async one\"}}], \"object\": \"chat.completion.chunk\"}\n\n",
+   "data: {\"async\": true}\n\n",
+   "data: {\"id\": \"mypipe-00000000-0000-0000-0000-000000000002\", \"created\": 1000, \"model\": \"mypipe\", \"choices\": [{\"index\": 0, \"logprobs\": null, \"finish_reason\": \"stop\", \"delta\": {}}], \"object\": \"chat.completion.chunk\"}\n\n",
+   "data: [DONE]"
+  ],
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": true
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "async_lines_joined": {
+  "returned": {
+   "id": "mypipe-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": "async oneb'data: {\"async\": true}'"
+     }
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "dict_reply": {
+  "returned": {
+   "id": "x",
+   "choices": [
+    {
+     "message": {
+      "content": "dict reply"
+     }
+    }
+   ]
+  },
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "dict_reply_streamed": {
+  "stream": [
+   "data: {\"id\": \"x\", \"choices\": [{\"message\": {\"content\": \"dict reply\"}}]}\n\n"
+  ],
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": true
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "model_reply": {
+  "returned": {
+   "text": "model reply"
+  },
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "model_reply_streamed": {
+  "stream": [
+   "data: {\"id\": \"mypipe-00000000-0000-0000-0000-000000000001\", \"created\": 1000, \"model\": \"mypipe\", \"choices\": [{\"index\": 0, \"logprobs\": null, \"finish_reason\": \"stop\", \"delta\": {}}], \"object\": \"chat.completion.chunk\"}\n\n",
+   "data: [DONE]"
+  ],
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": true
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "streaming_response": {
+  "stream": [
+   "data: {\"streamed\": 1}\n\n",
+   "data: [DONE]"
+  ],
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "streaming_response_streamed": {
+  "stream": [
+   "data: {\"streamed\": 1}\n\n",
+   "data: [DONE]"
+  ],
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": true
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "list_reply": {
+  "returned": {
+   "id": "mypipe-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "list_reply_streamed": {
+  "stream": [
+   "data: {\"id\": \"mypipe-00000000-0000-0000-0000-000000000001\", \"created\": 1000, \"model\": \"mypipe\", \"choices\": [{\"index\": 0, \"logprobs\": null, \"finish_reason\": \"stop\", \"delta\": {}}], \"object\": \"chat.completion.chunk\"}\n\n",
+   "data: [DONE]"
+  ],
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": true
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "none_reply": {
+  "returned": {
+   "id": "mypipe-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop"
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "pipe_fails": {
+  "returned": {
+   "error": {
+    "detail": "pipe exploded"
+   }
+  },
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "pipe_fails_streamed": {
+  "stream": [
+   "data: {\"error\": {\"detail\": \"pipe exploded\"}}\n\n"
+  ],
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": true
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "models_passed_in": {
+  "returned": {
+   "id": "mypipe-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": "echo: hi"
+     }
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ },
+ "caller_body_not_mutated": {
+  "returned": {
+   "id": "mypipe-00000000-0000-0000-0000-000000000001",
+   "created": 1000,
+   "model": "mypipe",
+   "choices": [
+    {
+     "index": 0,
+     "logprobs": null,
+     "finish_reason": "stop",
+     "message": {
+      "role": "assistant",
+      "content": "echo: hi"
+     }
+    }
+   ],
+   "object": "chat.completion"
+  },
+  "pipe_received": {
+   "body": {
+    "model": "mypipe",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false
+   }
+  },
+  "caller_body_unchanged": true,
+  "calls": [
+   [
+    "oauth_sessions",
+    "u1"
+   ],
+   [
+    "check_model_access",
+    "u1",
+    "custom",
+    false
+   ],
+   [
+    "load_pipe",
+    "mypipe"
+   ]
+  ]
+ }
+}
