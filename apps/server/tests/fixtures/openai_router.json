@@ -2626,7 +2626,7 @@
    },
    "outcome": {
     "kind": "HTTPException",
-    "status": 200,
+    "status": 502,
     "detail": "Local LLM: Server Connection Error"
    },
    "form_data_after": {

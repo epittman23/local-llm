@@ -617,6 +617,16 @@ def test_chat_completion_matches_golden(monkeypatch, case_id, spec):
     assert observed == _golden()['chat'][case_id]
 
 
+@pytest.mark.parametrize(
+    ('response', 'expected'),
+    [(None, 500), (SimpleNamespace(status=200), 502), (SimpleNamespace(status=301), 502)]
+    + [(SimpleNamespace(status=code), code) for code in (400, 404, 429, 500, 503)],
+)
+def test_upstream_error_status(response, expected):
+    """Used by every upstream call in the router, not only the chat completion path the golden file covers."""
+    assert openai_router._upstream_error_status(response) == expected
+
+
 def test_record_golden(monkeypatch):
     """Writes the golden file, only when OPENAI_GOLDEN_RECORD=1."""
     if not RECORD:
