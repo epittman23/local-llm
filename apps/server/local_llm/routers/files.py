@@ -891,7 +891,7 @@ async def get_html_file_content_by_id(
 
 
 @router.get('/{id}/content/{file_name}')
-async def get_file_content_by_id(
+async def get_file_content_by_id_and_name(
     id: str, user=Depends(get_verified_user), db: AsyncSession = Depends(get_async_session)
 ):
     file = await Files.get_file_by_id(id, db=db)

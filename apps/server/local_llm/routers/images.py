@@ -947,7 +947,7 @@ async def image_edits(
                 else:
                     file_id = data
 
-                file_response = await get_file_content_by_id(file_id, user)
+                file_response = await get_file_content_by_id(file_id, user, attachment=False, db=None)
                 if isinstance(file_response, FileResponse):
                     file_path = file_response.path
 
