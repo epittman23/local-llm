@@ -1,0 +1,6901 @@
+{
+ "get_tools:plugins_disabled": {
+  "tools": [],
+  "contents_cache": {},
+  "calls": []
+ },
+ "get_tools:no_tool_ids": {
+  "tools": [],
+  "contents_cache": {},
+  "calls": []
+ },
+ "get_tools:own_tool_with_valves": {
+  "tools": [
+   {
+    "name": "add",
+    "tool_id": "calc",
+    "spec": {
+     "name": "add",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "a": {
+        "type": "int"
+       },
+       "b": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "a",
+       "b"
+      ]
+     },
+     "description": "Add two numbers.\n\n    "
+    },
+    "metadata": {
+     "file_handler": true,
+     "citation": false
+    },
+    "signature": [
+     "a",
+     "b"
+    ],
+    "is_coroutine": true,
+    "called_with": {
+     "a": 2,
+     "b": 3,
+     "__id__": "calc",
+     "__user__": {
+      "id": "u1",
+      "name": "Ada",
+      "valves": {
+       "type": "_UserValves",
+       "tone": "dry"
+      }
+     },
+     "__metadata__": {
+      "chat_id": "c1"
+     }
+    }
+   },
+   {
+    "name": "blank_doc",
+    "tool_id": "calc",
+    "spec": {
+     "name": "blank_doc",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "n": {
+        "type": "integer"
+       }
+      },
+      "required": []
+     },
+     "description": "blank_doc"
+    },
+    "metadata": {
+     "file_handler": true,
+     "citation": false
+    },
+    "signature": [
+     "n"
+    ],
+    "is_coroutine": true,
+    "called_with": {
+     "n": 7
+    }
+   }
+  ],
+  "contents_cache": {
+   "calc": "v1"
+  },
+  "calls": [
+   [
+    "groups",
+    "u1"
+   ],
+   [
+    "tools_by_ids",
+    [
+     "calc"
+    ]
+   ],
+   [
+    "load_module",
+    "calc",
+    "v1"
+   ],
+   [
+    "tool_valves",
+    "calc"
+   ],
+   [
+    "user_valves",
+    "calc",
+    "u1"
+   ]
+  ]
+ },
+ "get_tools:denied_tool": {
+  "tools": [],
+  "contents_cache": {},
+  "calls": [
+   [
+    "groups",
+    "u1"
+   ],
+   [
+    "tools_by_ids",
+    [
+     "loud"
+    ]
+   ],
+   [
+    "has_access",
+    "u1",
+    "tool",
+    "loud",
+    "read",
+    [
+     "g1",
+     "g2"
+    ]
+   ]
+  ]
+ },
+ "get_tools:granted_tool": {
+  "tools": [
+   {
+    "name": "shout",
+    "tool_id": "shared",
+    "spec": {
+     "name": "shout",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "text": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "text"
+      ]
+     },
+     "description": "shout"
+    },
+    "metadata": {
+     "file_handler": false,
+     "citation": true
+    },
+    "signature": [
+     "text"
+    ],
+    "is_coroutine": true,
+    "called_with": {
+     "text": "5",
+     "__user__": {
+      "id": "u1",
+      "name": "Ada"
+     }
+    }
+   }
+  ],
+  "contents_cache": {
+   "shared": "v1"
+  },
+  "calls": [
+   [
+    "groups",
+    "u1"
+   ],
+   [
+    "tools_by_ids",
+    [
+     "shared"
+    ]
+   ],
+   [
+    "has_access",
+    "u1",
+    "tool",
+    "shared",
+    "read",
+    [
+     "g1",
+     "g2"
+    ]
+   ],
+   [
+    "load_module",
+    "shared",
+    "v1"
+   ]
+  ]
+ },
+ "get_tools:admin_bypass": {
+  "tools": [
+   {
+    "name": "shout",
+    "tool_id": "loud",
+    "spec": {
+     "name": "shout",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "text": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "text"
+      ]
+     },
+     "description": "shout"
+    },
+    "metadata": {
+     "file_handler": false,
+     "citation": false
+    },
+    "signature": [
+     "text"
+    ],
+    "is_coroutine": true,
+    "called_with": {
+     "text": "5",
+     "__user__": {
+      "id": "u1",
+      "name": "Ada"
+     }
+    }
+   }
+  ],
+  "contents_cache": {
+   "loud": "v1"
+  },
+  "calls": [
+   [
+    "groups",
+    "u1"
+   ],
+   [
+    "tools_by_ids",
+    [
+     "loud"
+    ]
+   ],
+   [
+    "load_module",
+    "loud",
+    "v1"
+   ]
+  ]
+ },
+ "get_tools:admin_without_bypass": {
+  "tools": [],
+  "contents_cache": {},
+  "calls": [
+   [
+    "groups",
+    "u1"
+   ],
+   [
+    "tools_by_ids",
+    [
+     "loud"
+    ]
+   ],
+   [
+    "has_access",
+    "u1",
+    "tool",
+    "loud",
+    "read",
+    [
+     "g1",
+     "g2"
+    ]
+   ]
+  ]
+ },
+ "get_tools:cached_module_reused": {
+  "tools": [
+   {
+    "name": "add",
+    "tool_id": "calc",
+    "spec": {
+     "name": "add",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "a": {
+        "type": "int"
+       },
+       "b": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "a",
+       "b"
+      ]
+     },
+     "description": "Add two numbers.\n\n    "
+    },
+    "metadata": {
+     "file_handler": true,
+     "citation": false
+    },
+    "signature": [
+     "a",
+     "b"
+    ],
+    "is_coroutine": true,
+    "called_with": {
+     "a": 2,
+     "b": 3,
+     "__id__": "calc",
+     "__user__": {
+      "id": "u1",
+      "name": "Ada",
+      "valves": {
+       "type": "_UserValves",
+       "tone": "dry"
+      }
+     },
+     "__metadata__": {
+      "chat_id": "c1"
+     }
+    }
+   },
+   {
+    "name": "blank_doc",
+    "tool_id": "calc",
+    "spec": {
+     "name": "blank_doc",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "n": {
+        "type": "integer"
+       }
+      },
+      "required": []
+     },
+     "description": "blank_doc"
+    },
+    "metadata": {
+     "file_handler": true,
+     "citation": false
+    },
+    "signature": [
+     "n"
+    ],
+    "is_coroutine": true,
+    "called_with": {
+     "n": 7
+    }
+   }
+  ],
+  "contents_cache": {
+   "calc": "v1"
+  },
+  "calls": [
+   [
+    "groups",
+    "u1"
+   ],
+   [
+    "tools_by_ids",
+    [
+     "calc"
+    ]
+   ],
+   [
+    "tool_valves",
+    "calc"
+   ],
+   [
+    "user_valves",
+    "calc",
+    "u1"
+   ]
+  ]
+ },
+ "get_tools:cached_module_stale": {
+  "tools": [
+   {
+    "name": "add",
+    "tool_id": "calc",
+    "spec": {
+     "name": "add",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "a": {
+        "type": "int"
+       },
+       "b": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "a",
+       "b"
+      ]
+     },
+     "description": "Add two numbers.\n\n    "
+    },
+    "metadata": {
+     "file_handler": true,
+     "citation": false
+    },
+    "signature": [
+     "a",
+     "b"
+    ],
+    "is_coroutine": true,
+    "called_with": {
+     "a": 2,
+     "b": 3,
+     "__id__": "calc",
+     "__user__": {
+      "id": "u1",
+      "name": "Ada",
+      "valves": {
+       "type": "_UserValves",
+       "tone": "dry"
+      }
+     },
+     "__metadata__": {
+      "chat_id": "c1"
+     }
+    }
+   },
+   {
+    "name": "blank_doc",
+    "tool_id": "calc",
+    "spec": {
+     "name": "blank_doc",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "n": {
+        "type": "integer"
+       }
+      },
+      "required": []
+     },
+     "description": "blank_doc"
+    },
+    "metadata": {
+     "file_handler": true,
+     "citation": false
+    },
+    "signature": [
+     "n"
+    ],
+    "is_coroutine": true,
+    "called_with": {
+     "n": 7
+    }
+   }
+  ],
+  "contents_cache": {
+   "calc": "v1"
+  },
+  "calls": [
+   [
+    "groups",
+    "u1"
+   ],
+   [
+    "tools_by_ids",
+    [
+     "calc"
+    ]
+   ],
+   [
+    "load_module",
+    "calc",
+    "v1"
+   ],
+   [
+    "tool_valves",
+    "calc"
+   ],
+   [
+    "user_valves",
+    "calc",
+    "u1"
+   ]
+  ]
+ },
+ "get_tools:name_collision": {
+  "tools": [
+   {
+    "name": "shout",
+    "tool_id": "loud",
+    "spec": {
+     "name": "shout",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "text": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "text"
+      ]
+     },
+     "description": "shout"
+    },
+    "metadata": {
+     "file_handler": false,
+     "citation": false
+    },
+    "signature": [
+     "text"
+    ],
+    "is_coroutine": true,
+    "called_with": {
+     "text": "5",
+     "__user__": {
+      "id": "u1",
+      "name": "Ada"
+     }
+    }
+   },
+   {
+    "name": "shared_shout",
+    "tool_id": "shared",
+    "spec": {
+     "name": "shout",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "text": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "text"
+      ]
+     },
+     "description": "shout"
+    },
+    "metadata": {
+     "file_handler": false,
+     "citation": true
+    },
+    "signature": [
+     "text"
+    ],
+    "is_coroutine": true,
+    "called_with": {
+     "text": "5",
+     "__user__": {
+      "id": "u1",
+      "name": "Ada"
+     }
+    }
+   }
+  ],
+  "contents_cache": {
+   "loud": "v1",
+   "shared": "v1"
+  },
+  "calls": [
+   [
+    "groups",
+    "u1"
+   ],
+   [
+    "tools_by_ids",
+    [
+     "loud",
+     "shared"
+    ]
+   ],
+   [
+    "load_module",
+    "loud",
+    "v1"
+   ],
+   [
+    "load_module",
+    "shared",
+    "v1"
+   ]
+  ]
+ },
+ "get_tools:unknown_tool_id": {
+  "tools": [],
+  "contents_cache": {},
+  "calls": [
+   [
+    "groups",
+    "u1"
+   ],
+   [
+    "tools_by_ids",
+    [
+     "ghost"
+    ]
+   ]
+  ]
+ },
+ "get_tools:server_openapi": {
+  "tools": [
+   {
+    "name": "list_items",
+    "tool_id": "server:inv",
+    "spec": {
+     "name": "list_items",
+     "description": "List",
+     "parameters": {
+      "type": "object",
+      "properties": {}
+     }
+    },
+    "type": "external",
+    "signature": [
+     "kwargs"
+    ],
+    "is_coroutine": true,
+    "called_with": [
+     {
+      "ok": "list_items"
+     },
+     null
+    ]
+   }
+  ],
+  "contents_cache": {},
+  "calls": [
+   [
+    "groups",
+    "u1"
+   ],
+   [
+    "tools_by_ids",
+    [
+     "server:inv"
+    ]
+   ],
+   [
+    "tool_servers"
+   ],
+   [
+    "config_get",
+    "tool_server.connections",
+    []
+   ],
+   [
+    "connection_access",
+    "u1",
+    "inventory",
+    [
+     "g1",
+     "g2"
+    ]
+   ],
+   [
+    "server_headers",
+    "inventory",
+    "inv",
+    {
+     "chat_id": "c1"
+    },
+    [
+     "__event_emitter__",
+     "__metadata__",
+     "__user__"
+    ]
+   ],
+   [
+    "execute_tool_server",
+    "https://inv.test",
+    {
+     "Authorization": "Bearer inv",
+     "Content-Type": "application/json"
+    },
+    {
+     "session": "c1"
+    },
+    "list_items",
+    {},
+    "inv"
+   ]
+  ]
+ },
+ "get_tools:server_openapi_typed_and_suffixed": {
+  "tools": [
+   {
+    "name": "list_items",
+    "tool_id": "server:openapi:inv|abc",
+    "spec": {
+     "name": "list_items",
+     "description": "List",
+     "parameters": {
+      "type": "object",
+      "properties": {}
+     }
+    },
+    "type": "external",
+    "signature": [
+     "kwargs"
+    ],
+    "is_coroutine": true,
+    "called_with": [
+     {
+      "ok": "list_items"
+     },
+     null
+    ]
+   }
+  ],
+  "contents_cache": {},
+  "calls": [
+   [
+    "groups",
+    "u1"
+   ],
+   [
+    "tools_by_ids",
+    [
+     "server:openapi:inv|abc"
+    ]
+   ],
+   [
+    "tool_servers"
+   ],
+   [
+    "config_get",
+    "tool_server.connections",
+    []
+   ],
+   [
+    "connection_access",
+    "u1",
+    "inventory",
+    [
+     "g1",
+     "g2"
+    ]
+   ],
+   [
+    "server_headers",
+    "inventory",
+    "inv",
+    {
+     "chat_id": "c1"
+    },
+    [
+     "__event_emitter__",
+     "__metadata__",
+     "__user__"
+    ]
+   ],
+   [
+    "execute_tool_server",
+    "https://inv.test",
+    {
+     "Authorization": "Bearer inv",
+     "Content-Type": "application/json"
+    },
+    {
+     "session": "c1"
+    },
+    "list_items",
+    {},
+    "inv"
+   ]
+  ]
+ },
+ "get_tools:server_mcp_skipped": {
+  "tools": [],
+  "contents_cache": {},
+  "calls": [
+   [
+    "groups",
+    "u1"
+   ],
+   [
+    "tools_by_ids",
+    [
+     "server:mcp:inv"
+    ]
+   ]
+  ]
+ },
+ "get_tools:server_not_found": {
+  "tools": [],
+  "contents_cache": {},
+  "calls": [
+   [
+    "groups",
+    "u1"
+   ],
+   [
+    "tools_by_ids",
+    [
+     "server:nowhere"
+    ]
+   ],
+   [
+    "tool_servers"
+   ]
+  ]
+ },
+ "get_tools:server_index_out_of_range": {
+  "tools": [],
+  "contents_cache": {},
+  "calls": [
+   [
+    "groups",
+    "u1"
+   ],
+   [
+    "tools_by_ids",
+    [
+     "server:far"
+    ]
+   ],
+   [
+    "tool_servers"
+   ],
+   [
+    "config_get",
+    "tool_server.connections",
+    []
+   ]
+  ]
+ },
+ "get_tools:server_access_denied": {
+  "tools": [],
+  "contents_cache": {},
+  "calls": [
+   [
+    "groups",
+    "u1"
+   ],
+   [
+    "tools_by_ids",
+    [
+     "server:locked"
+    ]
+   ],
+   [
+    "tool_servers"
+   ],
+   [
+    "config_get",
+    "tool_server.connections",
+    []
+   ],
+   [
+    "connection_access",
+    "u1",
+    "locked",
+    [
+     "g1",
+     "g2"
+    ]
+   ]
+  ]
+ },
+ "get_tools:server_filter_as_list": {
+  "tools": [
+   {
+    "name": "list_items",
+    "tool_id": "server:inv",
+    "spec": {
+     "name": "list_items",
+     "description": "List",
+     "parameters": {
+      "type": "object",
+      "properties": {}
+     }
+    },
+    "type": "external",
+    "signature": [
+     "kwargs"
+    ],
+    "is_coroutine": true,
+    "called_with": [
+     {
+      "ok": "list_items"
+     },
+     null
+    ]
+   }
+  ],
+  "contents_cache": {},
+  "calls": [
+   [
+    "groups",
+    "u1"
+   ],
+   [
+    "tools_by_ids",
+    [
+     "server:inv"
+    ]
+   ],
+   [
+    "tool_servers"
+   ],
+   [
+    "config_get",
+    "tool_server.connections",
+    []
+   ],
+   [
+    "connection_access",
+    "u1",
+    null,
+    [
+     "g1",
+     "g2"
+    ]
+   ],
+   [
+    "server_headers",
+    null,
+    "inv",
+    {
+     "chat_id": "c1"
+    },
+    [
+     "__event_emitter__",
+     "__metadata__",
+     "__user__"
+    ]
+   ],
+   [
+    "execute_tool_server",
+    "https://inv.test",
+    {
+     "Authorization": "Bearer inv",
+     "Content-Type": "application/json"
+    },
+    {
+     "session": "c1"
+    },
+    "list_items",
+    {},
+    "inv"
+   ]
+  ]
+ },
+ "get_tools:server_no_filter": {
+  "tools": [
+   {
+    "name": "list_items",
+    "tool_id": "server:inv",
+    "spec": {
+     "name": "list_items",
+     "description": "List",
+     "parameters": {
+      "type": "object",
+      "properties": {}
+     }
+    },
+    "type": "external",
+    "signature": [
+     "kwargs"
+    ],
+    "is_coroutine": true,
+    "called_with": [
+     {
+      "ok": "list_items"
+     },
+     null
+    ]
+   },
+   {
+    "name": "delete_item",
+    "tool_id": "server:inv",
+    "spec": {
+     "name": "delete_item",
+     "description": "Delete",
+     "parameters": {
+      "type": "object",
+      "properties": {}
+     }
+    },
+    "type": "external",
+    "signature": [
+     "kwargs"
+    ],
+    "is_coroutine": true,
+    "called_with": [
+     {
+      "ok": "delete_item"
+     },
+     null
+    ]
+   }
+  ],
+  "contents_cache": {},
+  "calls": [
+   [
+    "groups",
+    "u1"
+   ],
+   [
+    "tools_by_ids",
+    [
+     "server:inv"
+    ]
+   ],
+   [
+    "tool_servers"
+   ],
+   [
+    "config_get",
+    "tool_server.connections",
+    []
+   ],
+   [
+    "connection_access",
+    "u1",
+    null,
+    [
+     "g1",
+     "g2"
+    ]
+   ],
+   [
+    "server_headers",
+    null,
+    "inv",
+    {
+     "chat_id": "c1"
+    },
+    [
+     "__event_emitter__",
+     "__metadata__",
+     "__user__"
+    ]
+   ],
+   [
+    "server_headers",
+    null,
+    "inv",
+    {
+     "chat_id": "c1"
+    },
+    [
+     "__event_emitter__",
+     "__metadata__",
+     "__user__"
+    ]
+   ],
+   [
+    "execute_tool_server",
+    "https://inv.test",
+    {
+     "Authorization": "Bearer inv",
+     "Content-Type": "application/json"
+    },
+    {
+     "session": "c1"
+    },
+    "list_items",
+    {},
+    "inv"
+   ],
+   [
+    "execute_tool_server",
+    "https://inv.test",
+    {
+     "Authorization": "Bearer inv",
+     "Content-Type": "application/json"
+    },
+    {
+     "session": "c1"
+    },
+    "delete_item",
+    {},
+    "inv"
+   ]
+  ]
+ },
+ "get_tools:server_empty_filter_list": {
+  "tools": [
+   {
+    "name": "list_items",
+    "tool_id": "server:inv",
+    "spec": {
+     "name": "list_items",
+     "description": "List",
+     "parameters": {
+      "type": "object",
+      "properties": {}
+     }
+    },
+    "type": "external",
+    "signature": [
+     "kwargs"
+    ],
+    "is_coroutine": true,
+    "called_with": [
+     {
+      "ok": "list_items"
+     },
+     null
+    ]
+   },
+   {
+    "name": "delete_item",
+    "tool_id": "server:inv",
+    "spec": {
+     "name": "delete_item",
+     "description": "Delete",
+     "parameters": {
+      "type": "object",
+      "properties": {}
+     }
+    },
+    "type": "external",
+    "signature": [
+     "kwargs"
+    ],
+    "is_coroutine": true,
+    "called_with": [
+     {
+      "ok": "delete_item"
+     },
+     null
+    ]
+   }
+  ],
+  "contents_cache": {},
+  "calls": [
+   [
+    "groups",
+    "u1"
+   ],
+   [
+    "tools_by_ids",
+    [
+     "server:inv"
+    ]
+   ],
+   [
+    "tool_servers"
+   ],
+   [
+    "config_get",
+    "tool_server.connections",
+    []
+   ],
+   [
+    "connection_access",
+    "u1",
+    null,
+    [
+     "g1",
+     "g2"
+    ]
+   ],
+   [
+    "server_headers",
+    null,
+    "inv",
+    {
+     "chat_id": "c1"
+    },
+    [
+     "__event_emitter__",
+     "__metadata__",
+     "__user__"
+    ]
+   ],
+   [
+    "server_headers",
+    null,
+    "inv",
+    {
+     "chat_id": "c1"
+    },
+    [
+     "__event_emitter__",
+     "__metadata__",
+     "__user__"
+    ]
+   ],
+   [
+    "execute_tool_server",
+    "https://inv.test",
+    {
+     "Authorization": "Bearer inv",
+     "Content-Type": "application/json"
+    },
+    {
+     "session": "c1"
+    },
+    "list_items",
+    {},
+    "inv"
+   ],
+   [
+    "execute_tool_server",
+    "https://inv.test",
+    {
+     "Authorization": "Bearer inv",
+     "Content-Type": "application/json"
+    },
+    {
+     "session": "c1"
+    },
+    "delete_item",
+    {},
+    "inv"
+   ]
+  ]
+ },
+ "get_tools:server_name_collision": {
+  "tools": [
+   {
+    "name": "list_items",
+    "tool_id": "server:inv",
+    "spec": {
+     "name": "list_items",
+     "description": "List",
+     "parameters": {
+      "type": "object",
+      "properties": {}
+     }
+    },
+    "type": "external",
+    "signature": [
+     "kwargs"
+    ],
+    "is_coroutine": true,
+    "called_with": [
+     {
+      "ok": "list_items"
+     },
+     null
+    ]
+   },
+   {
+    "name": "delete_item",
+    "tool_id": "server:inv",
+    "spec": {
+     "name": "delete_item",
+     "description": "Delete",
+     "parameters": {
+      "type": "object",
+      "properties": {}
+     }
+    },
+    "type": "external",
+    "signature": [
+     "kwargs"
+    ],
+    "is_coroutine": true,
+    "called_with": [
+     {
+      "ok": "delete_item"
+     },
+     null
+    ]
+   },
+   {
+    "name": "inv_list_items",
+    "tool_id": "server:openapi:inv",
+    "spec": {
+     "name": "list_items",
+     "description": "List",
+     "parameters": {
+      "type": "object",
+      "properties": {}
+     }
+    },
+    "type": "external",
+    "signature": [
+     "kwargs"
+    ],
+    "is_coroutine": true,
+    "called_with": [
+     {
+      "ok": "list_items"
+     },
+     null
+    ]
+   },
+   {
+    "name": "inv_delete_item",
+    "tool_id": "server:openapi:inv",
+    "spec": {
+     "name": "delete_item",
+     "description": "Delete",
+     "parameters": {
+      "type": "object",
+      "properties": {}
+     }
+    },
+    "type": "external",
+    "signature": [
+     "kwargs"
+    ],
+    "is_coroutine": true,
+    "called_with": [
+     {
+      "ok": "delete_item"
+     },
+     null
+    ]
+   }
+  ],
+  "contents_cache": {},
+  "calls": [
+   [
+    "groups",
+    "u1"
+   ],
+   [
+    "tools_by_ids",
+    [
+     "server:inv",
+     "server:openapi:inv"
+    ]
+   ],
+   [
+    "tool_servers"
+   ],
+   [
+    "config_get",
+    "tool_server.connections",
+    []
+   ],
+   [
+    "connection_access",
+    "u1",
+    null,
+    [
+     "g1",
+     "g2"
+    ]
+   ],
+   [
+    "server_headers",
+    null,
+    "inv",
+    {
+     "chat_id": "c1"
+    },
+    [
+     "__event_emitter__",
+     "__metadata__",
+     "__user__"
+    ]
+   ],
+   [
+    "server_headers",
+    null,
+    "inv",
+    {
+     "chat_id": "c1"
+    },
+    [
+     "__event_emitter__",
+     "__metadata__",
+     "__user__"
+    ]
+   ],
+   [
+    "tool_servers"
+   ],
+   [
+    "config_get",
+    "tool_server.connections",
+    []
+   ],
+   [
+    "connection_access",
+    "u1",
+    null,
+    [
+     "g1",
+     "g2"
+    ]
+   ],
+   [
+    "server_headers",
+    null,
+    "inv",
+    {
+     "chat_id": "c1"
+    },
+    [
+     "__event_emitter__",
+     "__metadata__",
+     "__user__"
+    ]
+   ],
+   [
+    "server_headers",
+    null,
+    "inv",
+    {
+     "chat_id": "c1"
+    },
+    [
+     "__event_emitter__",
+     "__metadata__",
+     "__user__"
+    ]
+   ],
+   [
+    "execute_tool_server",
+    "https://inv.test",
+    {
+     "Authorization": "Bearer inv",
+     "Content-Type": "application/json"
+    },
+    {
+     "session": "c1"
+    },
+    "list_items",
+    {},
+    "inv"
+   ],
+   [
+    "execute_tool_server",
+    "https://inv.test",
+    {
+     "Authorization": "Bearer inv",
+     "Content-Type": "application/json"
+    },
+    {
+     "session": "c1"
+    },
+    "delete_item",
+    {},
+    "inv"
+   ],
+   [
+    "execute_tool_server",
+    "https://inv.test",
+    {
+     "Authorization": "Bearer inv",
+     "Content-Type": "application/json"
+    },
+    {
+     "session": "c1"
+    },
+    "list_items",
+    {},
+    "inv"
+   ],
+   [
+    "execute_tool_server",
+    "https://inv.test",
+    {
+     "Authorization": "Bearer inv",
+     "Content-Type": "application/json"
+    },
+    {
+     "session": "c1"
+    },
+    "delete_item",
+    {},
+    "inv"
+   ]
+  ]
+ },
+ "get_tools:local_and_server": {
+  "tools": [
+   {
+    "name": "add",
+    "tool_id": "calc",
+    "spec": {
+     "name": "add",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "a": {
+        "type": "int"
+       },
+       "b": {
+        "type": "string"
+       }
+      },
+      "required": [
+       "a",
+       "b"
+      ]
+     },
+     "description": "Add two numbers.\n\n    "
+    },
+    "metadata": {
+     "file_handler": true,
+     "citation": false
+    },
+    "signature": [
+     "a",
+     "b"
+    ],
+    "is_coroutine": true,
+    "called_with": {
+     "a": 2,
+     "b": 3,
+     "__id__": "calc",
+     "__user__": {
+      "id": "u1",
+      "name": "Ada",
+      "valves": {
+       "type": "_UserValves",
+       "tone": "dry"
+      }
+     },
+     "__metadata__": {
+      "chat_id": "c1"
+     }
+    }
+   },
+   {
+    "name": "blank_doc",
+    "tool_id": "calc",
+    "spec": {
+     "name": "blank_doc",
+     "parameters": {
+      "type": "object",
+      "properties": {
+       "n": {
+        "type": "integer"
+       }
+      },
+      "required": []
+     },
+     "description": "blank_doc"
+    },
+    "metadata": {
+     "file_handler": true,
+     "citation": false
+    },
+    "signature": [
+     "n"
+    ],
+    "is_coroutine": true,
+    "called_with": {
+     "n": 7
+    }
+   },
+   {
+    "name": "list_items",
+    "tool_id": "server:inv",
+    "spec": {
+     "name": "list_items",
+     "description": "List",
+     "parameters": {
+      "type": "object",
+      "properties": {}
+     }
+    },
+    "type": "external",
+    "signature": [
+     "kwargs"
+    ],
+    "is_coroutine": true,
+    "called_with": [
+     {
+      "ok": "list_items"
+     },
+     null
+    ]
+   }
+  ],
+  "contents_cache": {
+   "calc": "v1"
+  },
+  "calls": [
+   [
+    "groups",
+    "u1"
+   ],
+   [
+    "tools_by_ids",
+    [
+     "calc",
+     "server:inv"
+    ]
+   ],
+   [
+    "load_module",
+    "calc",
+    "v1"
+   ],
+   [
+    "tool_valves",
+    "calc"
+   ],
+   [
+    "user_valves",
+    "calc",
+    "u1"
+   ],
+   [
+    "tool_servers"
+   ],
+   [
+    "config_get",
+    "tool_server.connections",
+    []
+   ],
+   [
+    "connection_access",
+    "u1",
+    "inventory",
+    [
+     "g1",
+     "g2"
+    ]
+   ],
+   [
+    "server_headers",
+    "inventory",
+    "inv",
+    {
+     "chat_id": "c1"
+    },
+    [
+     "__event_emitter__",
+     "__metadata__",
+     "__user__"
+    ]
+   ],
+   [
+    "execute_tool_server",
+    "https://inv.test",
+    {
+     "Authorization": "Bearer inv",
+     "Content-Type": "application/json"
+    },
+    {
+     "session": "c1"
+    },
+    "list_items",
+    {},
+    "inv"
+   ]
+  ]
+ },
+ "get_tools:server_id_with_extra_colons": {
+  "raised": [
+   "UnboundLocalError",
+   "cannot access local variable 'server_id' where it is not associated with a value"
+  ],
+  "calls": [
+   [
+    "groups",
+    "u1"
+   ],
+   [
+    "tools_by_ids",
+    [
+     "calc",
+     "server:mcp:a:b"
+    ]
+   ],
+   [
+    "load_module",
+    "calc",
+    "v1"
+   ],
+   [
+    "tool_valves",
+    "calc"
+   ],
+   [
+    "user_valves",
+    "calc",
+    "u1"
+   ]
+  ]
+ },
+ "builtin:defaults_user_nothing_enabled": {
+  "tools": [
+   [
+    "get_current_timestamp",
+    "builtin:get_current_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "calculate_timestamp",
+    "builtin:calculate_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "ask_user",
+    "builtin:ask_user",
+    "builtin",
+    [
+     "__event_call__"
+    ]
+   ],
+   [
+    "list_knowledge_bases",
+    "builtin:list_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_bases",
+    "builtin:search_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_bases",
+    "builtin:query_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "grep_knowledge_files",
+    "builtin:grep_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_files",
+    "builtin:search_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_files",
+    "builtin:query_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_knowledge_file",
+    "builtin:view_knowledge_file",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_chats",
+    "builtin:search_chats",
+    "builtin",
+    [
+     "__chat_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_chat",
+    "builtin:view_chat",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ]
+  ],
+  "bound": {
+   "__request__": "<request>",
+   "__user__": {
+    "id": "u1",
+    "role": "user"
+   },
+   "__event_call__": "<call>",
+   "__model_knowledge__": [],
+   "__chat_id__": null
+  },
+  "delegate_background": {
+   "property": false,
+   "required": false
+  },
+  "calls": [
+   [
+    "config_get_many",
+    [
+     "web.search.enable",
+     "image_generation.enable",
+     "images.edit.enable",
+     "code_interpreter.enable",
+     "notes.enable",
+     "channels.enable",
+     "automations.enable",
+     "calendar.enable",
+     "ui.enable_user_webhooks",
+     "subagents.enable",
+     "subagents.background_enabled"
+    ]
+   ]
+  ]
+ },
+ "builtin:admin_everything_enabled": {
+  "tools": [
+   [
+    "get_current_timestamp",
+    "builtin:get_current_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "calculate_timestamp",
+    "builtin:calculate_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "ask_user",
+    "builtin:ask_user",
+    "builtin",
+    [
+     "__event_call__"
+    ]
+   ],
+   [
+    "list_knowledge_bases",
+    "builtin:list_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_bases",
+    "builtin:search_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_bases",
+    "builtin:query_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "grep_knowledge_files",
+    "builtin:grep_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_files",
+    "builtin:search_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_files",
+    "builtin:query_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_knowledge_file",
+    "builtin:view_knowledge_file",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_chats",
+    "builtin:search_chats",
+    "builtin",
+    [
+     "__chat_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_chat",
+    "builtin:view_chat",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "delegate_task",
+    "builtin:delegate_task",
+    "builtin",
+    [
+     "__chat_id__",
+     "__message_id__",
+     "__metadata__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "timer",
+    "builtin:timer",
+    "builtin",
+    [
+     "__chat_id__",
+     "__message_id__",
+     "__metadata__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_memories",
+    "builtin:search_memories",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "list_memory_paths",
+    "builtin:list_memory_paths",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "read_memory_path",
+    "builtin:read_memory_path",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "list_memories",
+    "builtin:list_memories",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "update_memory",
+    "builtin:update_memory",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "add_memory",
+    "builtin:add_memory",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "replace_memory_content",
+    "builtin:replace_memory_content",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "delete_memory",
+    "builtin:delete_memory",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_web",
+    "builtin:search_web",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "fetch_url",
+    "builtin:fetch_url",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "generate_image",
+    "builtin:generate_image",
+    "builtin",
+    [
+     "__chat_id__",
+     "__event_emitter__",
+     "__message_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "edit_image",
+    "builtin:edit_image",
+    "builtin",
+    [
+     "__chat_id__",
+     "__event_emitter__",
+     "__message_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "execute_code",
+    "builtin:execute_code",
+    "builtin",
+    [
+     "__chat_id__",
+     "__event_call__",
+     "__event_emitter__",
+     "__message_id__",
+     "__metadata__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_notes",
+    "builtin:search_notes",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_note",
+    "builtin:view_note",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "write_note",
+    "builtin:write_note",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "replace_note_content",
+    "builtin:replace_note_content",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_channels",
+    "builtin:search_channels",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_channel_messages",
+    "builtin:search_channel_messages",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_channel_thread",
+    "builtin:view_channel_thread",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_channel_message",
+    "builtin:view_channel_message",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "create_tasks",
+    "builtin:create_tasks",
+    "builtin",
+    [
+     "__chat_id__",
+     "__event_emitter__",
+     "__message_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "update_task",
+    "builtin:update_task",
+    "builtin",
+    [
+     "__chat_id__",
+     "__event_emitter__",
+     "__message_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "create_automation",
+    "builtin:create_automation",
+    "builtin",
+    [
+     "__metadata__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "update_automation",
+    "builtin:update_automation",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "list_automations",
+    "builtin:list_automations",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "toggle_automation",
+    "builtin:toggle_automation",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "delete_automation",
+    "builtin:delete_automation",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_calendar_events",
+    "builtin:search_calendar_events",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "create_calendar_event",
+    "builtin:create_calendar_event",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "update_calendar_event",
+    "builtin:update_calendar_event",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "delete_calendar_event",
+    "builtin:delete_calendar_event",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "notify",
+    "builtin:notify",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ]
+  ],
+  "bound": {
+   "__request__": "<request>",
+   "__user__": {
+    "id": "u1",
+    "role": "admin"
+   },
+   "__event_call__": "<call>",
+   "__model_knowledge__": [],
+   "__chat_id__": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+   "__metadata__": {
+    "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+    "folder_knowledge": null
+   },
+   "__message_id__": "msg-1",
+   "__event_emitter__": "<emitter>"
+  },
+  "delegate_background": {
+   "property": true,
+   "required": false
+  },
+  "calls": [
+   [
+    "config_get_many",
+    [
+     "web.search.enable",
+     "image_generation.enable",
+     "images.edit.enable",
+     "code_interpreter.enable",
+     "notes.enable",
+     "channels.enable",
+     "automations.enable",
+     "calendar.enable",
+     "ui.enable_user_webhooks",
+     "subagents.enable",
+     "subagents.background_enabled"
+    ]
+   ]
+  ]
+ },
+ "builtin:user_permissions_mixed": {
+  "tools": [
+   [
+    "get_current_timestamp",
+    "builtin:get_current_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "calculate_timestamp",
+    "builtin:calculate_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "ask_user",
+    "builtin:ask_user",
+    "builtin",
+    [
+     "__event_call__"
+    ]
+   ],
+   [
+    "list_knowledge_bases",
+    "builtin:list_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_bases",
+    "builtin:search_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_bases",
+    "builtin:query_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "grep_knowledge_files",
+    "builtin:grep_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_files",
+    "builtin:search_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_files",
+    "builtin:query_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_knowledge_file",
+    "builtin:view_knowledge_file",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_chats",
+    "builtin:search_chats",
+    "builtin",
+    [
+     "__chat_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_chat",
+    "builtin:view_chat",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "delegate_task",
+    "builtin:delegate_task",
+    "builtin",
+    [
+     "__chat_id__",
+     "__message_id__",
+     "__metadata__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "timer",
+    "builtin:timer",
+    "builtin",
+    [
+     "__chat_id__",
+     "__message_id__",
+     "__metadata__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_memories",
+    "builtin:search_memories",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "list_memory_paths",
+    "builtin:list_memory_paths",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "read_memory_path",
+    "builtin:read_memory_path",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "list_memories",
+    "builtin:list_memories",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "update_memory",
+    "builtin:update_memory",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "add_memory",
+    "builtin:add_memory",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "replace_memory_content",
+    "builtin:replace_memory_content",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "delete_memory",
+    "builtin:delete_memory",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_web",
+    "builtin:search_web",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "fetch_url",
+    "builtin:fetch_url",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_notes",
+    "builtin:search_notes",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_note",
+    "builtin:view_note",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "write_note",
+    "builtin:write_note",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "replace_note_content",
+    "builtin:replace_note_content",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "create_tasks",
+    "builtin:create_tasks",
+    "builtin",
+    [
+     "__chat_id__",
+     "__event_emitter__",
+     "__message_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "update_task",
+    "builtin:update_task",
+    "builtin",
+    [
+     "__chat_id__",
+     "__event_emitter__",
+     "__message_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_calendar_events",
+    "builtin:search_calendar_events",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "create_calendar_event",
+    "builtin:create_calendar_event",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "update_calendar_event",
+    "builtin:update_calendar_event",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "delete_calendar_event",
+    "builtin:delete_calendar_event",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ]
+  ],
+  "bound": {
+   "__request__": "<request>",
+   "__user__": {
+    "id": "u1",
+    "role": "user"
+   },
+   "__event_call__": "<call>",
+   "__model_knowledge__": [],
+   "__chat_id__": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+   "__metadata__": {
+    "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+    "folder_knowledge": null
+   },
+   "__message_id__": "msg-1",
+   "__event_emitter__": "<emitter>"
+  },
+  "delegate_background": {
+   "property": true,
+   "required": false
+  },
+  "calls": [
+   [
+    "config_get_many",
+    [
+     "web.search.enable",
+     "image_generation.enable",
+     "images.edit.enable",
+     "code_interpreter.enable",
+     "notes.enable",
+     "channels.enable",
+     "automations.enable",
+     "calendar.enable",
+     "ui.enable_user_webhooks",
+     "subagents.enable",
+     "subagents.background_enabled"
+    ]
+   ],
+   [
+    "config_get",
+    "user.permissions"
+   ],
+   [
+    "has_permission",
+    "u1",
+    "features.memories"
+   ],
+   [
+    "config_get",
+    "user.permissions"
+   ],
+   [
+    "has_permission",
+    "u1",
+    "features.web_search"
+   ],
+   [
+    "config_get",
+    "user.permissions"
+   ],
+   [
+    "has_permission",
+    "u1",
+    "features.image_generation"
+   ],
+   [
+    "config_get",
+    "user.permissions"
+   ],
+   [
+    "has_permission",
+    "u1",
+    "features.image_generation"
+   ],
+   [
+    "config_get",
+    "user.permissions"
+   ],
+   [
+    "has_permission",
+    "u1",
+    "features.code_interpreter"
+   ],
+   [
+    "config_get",
+    "user.permissions"
+   ],
+   [
+    "has_permission",
+    "u1",
+    "features.notes"
+   ],
+   [
+    "config_get",
+    "user.permissions"
+   ],
+   [
+    "has_permission",
+    "u1",
+    "features.channels"
+   ],
+   [
+    "config_get",
+    "user.permissions"
+   ],
+   [
+    "has_permission",
+    "u1",
+    "features.automations"
+   ],
+   [
+    "config_get",
+    "user.permissions"
+   ],
+   [
+    "has_permission",
+    "u1",
+    "features.calendar"
+   ],
+   [
+    "config_get",
+    "user.permissions"
+   ],
+   [
+    "has_permission",
+    "u1",
+    "features.webhooks"
+   ]
+  ]
+ },
+ "builtin:categories_switched_off": {
+  "tools": [],
+  "bound": {},
+  "delegate_background": {
+   "property": false,
+   "required": false
+  },
+  "calls": [
+   [
+    "config_get_many",
+    [
+     "web.search.enable",
+     "image_generation.enable",
+     "images.edit.enable",
+     "code_interpreter.enable",
+     "notes.enable",
+     "channels.enable",
+     "automations.enable",
+     "calendar.enable",
+     "ui.enable_user_webhooks",
+     "subagents.enable",
+     "subagents.background_enabled"
+    ]
+   ]
+  ]
+ },
+ "builtin:capabilities_switched_off": {
+  "tools": [
+   [
+    "get_current_timestamp",
+    "builtin:get_current_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "calculate_timestamp",
+    "builtin:calculate_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "ask_user",
+    "builtin:ask_user",
+    "builtin",
+    [
+     "__event_call__"
+    ]
+   ],
+   [
+    "list_knowledge_bases",
+    "builtin:list_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_bases",
+    "builtin:search_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_bases",
+    "builtin:query_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "grep_knowledge_files",
+    "builtin:grep_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_files",
+    "builtin:search_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_files",
+    "builtin:query_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_knowledge_file",
+    "builtin:view_knowledge_file",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_chats",
+    "builtin:search_chats",
+    "builtin",
+    [
+     "__chat_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_chat",
+    "builtin:view_chat",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "delegate_task",
+    "builtin:delegate_task",
+    "builtin",
+    [
+     "__chat_id__",
+     "__message_id__",
+     "__metadata__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "timer",
+    "builtin:timer",
+    "builtin",
+    [
+     "__chat_id__",
+     "__message_id__",
+     "__metadata__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_notes",
+    "builtin:search_notes",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_note",
+    "builtin:view_note",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "write_note",
+    "builtin:write_note",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "replace_note_content",
+    "builtin:replace_note_content",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_channels",
+    "builtin:search_channels",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_channel_messages",
+    "builtin:search_channel_messages",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_channel_thread",
+    "builtin:view_channel_thread",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_channel_message",
+    "builtin:view_channel_message",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "create_automation",
+    "builtin:create_automation",
+    "builtin",
+    [
+     "__metadata__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "update_automation",
+    "builtin:update_automation",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "list_automations",
+    "builtin:list_automations",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "toggle_automation",
+    "builtin:toggle_automation",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "delete_automation",
+    "builtin:delete_automation",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_calendar_events",
+    "builtin:search_calendar_events",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "create_calendar_event",
+    "builtin:create_calendar_event",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "update_calendar_event",
+    "builtin:update_calendar_event",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "delete_calendar_event",
+    "builtin:delete_calendar_event",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "notify",
+    "builtin:notify",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ]
+  ],
+  "bound": {
+   "__request__": "<request>",
+   "__user__": {
+    "id": "u1",
+    "role": "admin"
+   },
+   "__event_call__": "<call>",
+   "__model_knowledge__": [],
+   "__chat_id__": null,
+   "__metadata__": {
+    "chat_id": null,
+    "folder_knowledge": null
+   },
+   "__message_id__": "msg-1"
+  },
+  "delegate_background": {
+   "property": true,
+   "required": false
+  },
+  "calls": [
+   [
+    "config_get_many",
+    [
+     "web.search.enable",
+     "image_generation.enable",
+     "images.edit.enable",
+     "code_interpreter.enable",
+     "notes.enable",
+     "channels.enable",
+     "automations.enable",
+     "calendar.enable",
+     "ui.enable_user_webhooks",
+     "subagents.enable",
+     "subagents.background_enabled"
+    ]
+   ]
+  ]
+ },
+ "builtin:chat_files_without_file_context": {
+  "tools": [
+   [
+    "get_current_timestamp",
+    "builtin:get_current_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "calculate_timestamp",
+    "builtin:calculate_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "ask_user",
+    "builtin:ask_user",
+    "builtin",
+    [
+     "__event_call__"
+    ]
+   ],
+   [
+    "list_chat_files",
+    "builtin:list_chat_files",
+    "builtin",
+    [
+     "__files__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_chat_files",
+    "builtin:query_chat_files",
+    "builtin",
+    [
+     "__files__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "grep_chat_files",
+    "builtin:grep_chat_files",
+    "builtin",
+    [
+     "__files__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_file",
+    "builtin:view_file",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "list_knowledge_bases",
+    "builtin:list_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_bases",
+    "builtin:search_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_bases",
+    "builtin:query_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "grep_knowledge_files",
+    "builtin:grep_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_files",
+    "builtin:search_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_files",
+    "builtin:query_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_knowledge_file",
+    "builtin:view_knowledge_file",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_chats",
+    "builtin:search_chats",
+    "builtin",
+    [
+     "__chat_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_chat",
+    "builtin:view_chat",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ]
+  ],
+  "bound": {
+   "__request__": "<request>",
+   "__user__": {
+    "id": "u1",
+    "role": "user"
+   },
+   "__event_call__": "<call>",
+   "__files__": [
+    {
+     "type": "file",
+     "id": "file-1",
+     "name": "data.csv"
+    },
+    {
+     "type": "file",
+     "url": "https://x.test/a.png"
+    },
+    "junk"
+   ],
+   "__model_knowledge__": [],
+   "__chat_id__": null
+  },
+  "delegate_background": {
+   "property": false,
+   "required": false
+  },
+  "calls": [
+   [
+    "config_get_many",
+    [
+     "web.search.enable",
+     "image_generation.enable",
+     "images.edit.enable",
+     "code_interpreter.enable",
+     "notes.enable",
+     "channels.enable",
+     "automations.enable",
+     "calendar.enable",
+     "ui.enable_user_webhooks",
+     "subagents.enable",
+     "subagents.background_enabled"
+    ]
+   ],
+   [
+    "config_get",
+    "user.permissions"
+   ],
+   [
+    "has_permission",
+    "u1",
+    "chat.file_upload"
+   ]
+  ]
+ },
+ "builtin:chat_files_from_extra_params": {
+  "tools": [
+   [
+    "get_current_timestamp",
+    "builtin:get_current_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "calculate_timestamp",
+    "builtin:calculate_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "ask_user",
+    "builtin:ask_user",
+    "builtin",
+    [
+     "__event_call__"
+    ]
+   ],
+   [
+    "list_chat_files",
+    "builtin:list_chat_files",
+    "builtin",
+    [
+     "__files__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_chat_files",
+    "builtin:query_chat_files",
+    "builtin",
+    [
+     "__files__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "grep_chat_files",
+    "builtin:grep_chat_files",
+    "builtin",
+    [
+     "__files__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_file",
+    "builtin:view_file",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "list_knowledge_bases",
+    "builtin:list_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_bases",
+    "builtin:search_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_bases",
+    "builtin:query_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "grep_knowledge_files",
+    "builtin:grep_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_files",
+    "builtin:search_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_files",
+    "builtin:query_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_knowledge_file",
+    "builtin:view_knowledge_file",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_chats",
+    "builtin:search_chats",
+    "builtin",
+    [
+     "__chat_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_chat",
+    "builtin:view_chat",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ]
+  ],
+  "bound": {
+   "__request__": "<request>",
+   "__user__": {
+    "id": "u1",
+    "role": "admin"
+   },
+   "__event_call__": "<call>",
+   "__files__": [
+    {
+     "type": "file",
+     "id": "file-1",
+     "name": "data.csv"
+    }
+   ],
+   "__model_knowledge__": [],
+   "__chat_id__": null
+  },
+  "delegate_background": {
+   "property": false,
+   "required": false
+  },
+  "calls": [
+   [
+    "config_get_many",
+    [
+     "web.search.enable",
+     "image_generation.enable",
+     "images.edit.enable",
+     "code_interpreter.enable",
+     "notes.enable",
+     "channels.enable",
+     "automations.enable",
+     "calendar.enable",
+     "ui.enable_user_webhooks",
+     "subagents.enable",
+     "subagents.background_enabled"
+    ]
+   ]
+  ]
+ },
+ "builtin:chat_files_only_remote": {
+  "tools": [
+   [
+    "get_current_timestamp",
+    "builtin:get_current_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "calculate_timestamp",
+    "builtin:calculate_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "ask_user",
+    "builtin:ask_user",
+    "builtin",
+    [
+     "__event_call__"
+    ]
+   ],
+   [
+    "list_knowledge_bases",
+    "builtin:list_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_bases",
+    "builtin:search_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_bases",
+    "builtin:query_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "grep_knowledge_files",
+    "builtin:grep_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_files",
+    "builtin:search_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_files",
+    "builtin:query_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_knowledge_file",
+    "builtin:view_knowledge_file",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_chats",
+    "builtin:search_chats",
+    "builtin",
+    [
+     "__chat_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_chat",
+    "builtin:view_chat",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ]
+  ],
+  "bound": {
+   "__request__": "<request>",
+   "__user__": {
+    "id": "u1",
+    "role": "admin"
+   },
+   "__event_call__": "<call>",
+   "__model_knowledge__": [],
+   "__chat_id__": null
+  },
+  "delegate_background": {
+   "property": false,
+   "required": false
+  },
+  "calls": [
+   [
+    "config_get_many",
+    [
+     "web.search.enable",
+     "image_generation.enable",
+     "images.edit.enable",
+     "code_interpreter.enable",
+     "notes.enable",
+     "channels.enable",
+     "automations.enable",
+     "calendar.enable",
+     "ui.enable_user_webhooks",
+     "subagents.enable",
+     "subagents.background_enabled"
+    ]
+   ]
+  ]
+ },
+ "builtin:chat_files_no_permission": {
+  "tools": [
+   [
+    "get_current_timestamp",
+    "builtin:get_current_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "calculate_timestamp",
+    "builtin:calculate_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "ask_user",
+    "builtin:ask_user",
+    "builtin",
+    [
+     "__event_call__"
+    ]
+   ],
+   [
+    "list_knowledge_bases",
+    "builtin:list_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_bases",
+    "builtin:search_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_bases",
+    "builtin:query_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "grep_knowledge_files",
+    "builtin:grep_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_files",
+    "builtin:search_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_files",
+    "builtin:query_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_knowledge_file",
+    "builtin:view_knowledge_file",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_chats",
+    "builtin:search_chats",
+    "builtin",
+    [
+     "__chat_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_chat",
+    "builtin:view_chat",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ]
+  ],
+  "bound": {
+   "__request__": "<request>",
+   "__user__": {
+    "id": "u1",
+    "role": "user"
+   },
+   "__event_call__": "<call>",
+   "__model_knowledge__": [],
+   "__chat_id__": null
+  },
+  "delegate_background": {
+   "property": false,
+   "required": false
+  },
+  "calls": [
+   [
+    "config_get_many",
+    [
+     "web.search.enable",
+     "image_generation.enable",
+     "images.edit.enable",
+     "code_interpreter.enable",
+     "notes.enable",
+     "channels.enable",
+     "automations.enable",
+     "calendar.enable",
+     "ui.enable_user_webhooks",
+     "subagents.enable",
+     "subagents.background_enabled"
+    ]
+   ],
+   [
+    "config_get",
+    "user.permissions"
+   ],
+   [
+    "has_permission",
+    "u1",
+    "chat.file_upload"
+   ]
+  ]
+ },
+ "builtin:model_knowledge_files_and_notes": {
+  "tools": [
+   [
+    "get_current_timestamp",
+    "builtin:get_current_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "calculate_timestamp",
+    "builtin:calculate_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "ask_user",
+    "builtin:ask_user",
+    "builtin",
+    [
+     "__event_call__"
+    ]
+   ],
+   [
+    "list_knowledge",
+    "builtin:list_knowledge",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_files",
+    "builtin:search_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "grep_knowledge_files",
+    "builtin:grep_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_files",
+    "builtin:query_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_file",
+    "builtin:view_file",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_knowledge_file",
+    "builtin:view_knowledge_file",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_note",
+    "builtin:view_note",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_chats",
+    "builtin:search_chats",
+    "builtin",
+    [
+     "__chat_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_chat",
+    "builtin:view_chat",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ]
+  ],
+  "bound": {
+   "__request__": "<request>",
+   "__user__": {
+    "id": "u1",
+    "role": "user"
+   },
+   "__event_call__": "<call>",
+   "__model_knowledge__": [
+    {
+     "type": "file",
+     "id": "f1",
+     "source": "model"
+    },
+    {
+     "type": "note",
+     "id": "n1",
+     "source": "model"
+    }
+   ],
+   "__chat_id__": null
+  },
+  "delegate_background": {
+   "property": false,
+   "required": false
+  },
+  "calls": [
+   [
+    "config_get_many",
+    [
+     "web.search.enable",
+     "image_generation.enable",
+     "images.edit.enable",
+     "code_interpreter.enable",
+     "notes.enable",
+     "channels.enable",
+     "automations.enable",
+     "calendar.enable",
+     "ui.enable_user_webhooks",
+     "subagents.enable",
+     "subagents.background_enabled"
+    ]
+   ]
+  ]
+ },
+ "builtin:model_knowledge_note_only": {
+  "tools": [
+   [
+    "get_current_timestamp",
+    "builtin:get_current_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "calculate_timestamp",
+    "builtin:calculate_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "ask_user",
+    "builtin:ask_user",
+    "builtin",
+    [
+     "__event_call__"
+    ]
+   ],
+   [
+    "list_knowledge",
+    "builtin:list_knowledge",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_files",
+    "builtin:search_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "grep_knowledge_files",
+    "builtin:grep_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_files",
+    "builtin:query_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_note",
+    "builtin:view_note",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_chats",
+    "builtin:search_chats",
+    "builtin",
+    [
+     "__chat_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_chat",
+    "builtin:view_chat",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ]
+  ],
+  "bound": {
+   "__request__": "<request>",
+   "__user__": {
+    "id": "u1",
+    "role": "user"
+   },
+   "__event_call__": "<call>",
+   "__model_knowledge__": [
+    {
+     "type": "note",
+     "id": "n1",
+     "source": "model"
+    }
+   ],
+   "__chat_id__": null
+  },
+  "delegate_background": {
+   "property": false,
+   "required": false
+  },
+  "calls": [
+   [
+    "config_get_many",
+    [
+     "web.search.enable",
+     "image_generation.enable",
+     "images.edit.enable",
+     "code_interpreter.enable",
+     "notes.enable",
+     "channels.enable",
+     "automations.enable",
+     "calendar.enable",
+     "ui.enable_user_webhooks",
+     "subagents.enable",
+     "subagents.background_enabled"
+    ]
+   ]
+  ]
+ },
+ "builtin:model_knowledge_collection_only": {
+  "tools": [
+   [
+    "get_current_timestamp",
+    "builtin:get_current_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "calculate_timestamp",
+    "builtin:calculate_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "ask_user",
+    "builtin:ask_user",
+    "builtin",
+    [
+     "__event_call__"
+    ]
+   ],
+   [
+    "list_knowledge",
+    "builtin:list_knowledge",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_files",
+    "builtin:search_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "grep_knowledge_files",
+    "builtin:grep_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_files",
+    "builtin:query_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_file",
+    "builtin:view_file",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_knowledge_file",
+    "builtin:view_knowledge_file",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_chats",
+    "builtin:search_chats",
+    "builtin",
+    [
+     "__chat_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_chat",
+    "builtin:view_chat",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ]
+  ],
+  "bound": {
+   "__request__": "<request>",
+   "__user__": {
+    "id": "u1",
+    "role": "user"
+   },
+   "__event_call__": "<call>",
+   "__model_knowledge__": [
+    {
+     "type": "collection",
+     "id": "kb1",
+     "source": "model"
+    }
+   ],
+   "__chat_id__": null
+  },
+  "delegate_background": {
+   "property": false,
+   "required": false
+  },
+  "calls": [
+   [
+    "config_get_many",
+    [
+     "web.search.enable",
+     "image_generation.enable",
+     "images.edit.enable",
+     "code_interpreter.enable",
+     "notes.enable",
+     "channels.enable",
+     "automations.enable",
+     "calendar.enable",
+     "ui.enable_user_webhooks",
+     "subagents.enable",
+     "subagents.background_enabled"
+    ]
+   ]
+  ]
+ },
+ "builtin:folder_and_chat_knowledge": {
+  "tools": [
+   [
+    "get_current_timestamp",
+    "builtin:get_current_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "calculate_timestamp",
+    "builtin:calculate_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "ask_user",
+    "builtin:ask_user",
+    "builtin",
+    [
+     "__event_call__"
+    ]
+   ],
+   [
+    "list_knowledge",
+    "builtin:list_knowledge",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_files",
+    "builtin:search_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "grep_knowledge_files",
+    "builtin:grep_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_files",
+    "builtin:query_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_file",
+    "builtin:view_file",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_knowledge_file",
+    "builtin:view_knowledge_file",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_note",
+    "builtin:view_note",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_chats",
+    "builtin:search_chats",
+    "builtin",
+    [
+     "__chat_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_chat",
+    "builtin:view_chat",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ]
+  ],
+  "bound": {
+   "__request__": "<request>",
+   "__user__": {
+    "id": "u1",
+    "role": "user"
+   },
+   "__event_call__": "<call>",
+   "__model_knowledge__": [
+    {
+     "type": "collection",
+     "id": "kb1",
+     "source": "folder"
+    },
+    {
+     "type": "note",
+     "id": "n2",
+     "name": "N",
+     "source": "chat"
+    }
+   ],
+   "__chat_id__": null
+  },
+  "delegate_background": {
+   "property": false,
+   "required": false
+  },
+  "calls": [
+   [
+    "config_get_many",
+    [
+     "web.search.enable",
+     "image_generation.enable",
+     "images.edit.enable",
+     "code_interpreter.enable",
+     "notes.enable",
+     "channels.enable",
+     "automations.enable",
+     "calendar.enable",
+     "ui.enable_user_webhooks",
+     "subagents.enable",
+     "subagents.background_enabled"
+    ]
+   ],
+   [
+    "config_get",
+    "user.permissions"
+   ],
+   [
+    "has_permission",
+    "u1",
+    "chat.file_upload"
+   ]
+  ]
+ },
+ "builtin:kb_exec_without_model_knowledge": {
+  "tools": [
+   [
+    "get_current_timestamp",
+    "builtin:get_current_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "calculate_timestamp",
+    "builtin:calculate_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "ask_user",
+    "builtin:ask_user",
+    "builtin",
+    [
+     "__event_call__"
+    ]
+   ],
+   [
+    "kb_exec",
+    "builtin:kb_exec",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_files",
+    "builtin:query_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_bases",
+    "builtin:query_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_bases",
+    "builtin:search_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_chats",
+    "builtin:search_chats",
+    "builtin",
+    [
+     "__chat_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_chat",
+    "builtin:view_chat",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ]
+  ],
+  "bound": {
+   "__request__": "<request>",
+   "__user__": {
+    "id": "u1",
+    "role": "user"
+   },
+   "__event_call__": "<call>",
+   "__model_knowledge__": [],
+   "__chat_id__": null
+  },
+  "delegate_background": {
+   "property": false,
+   "required": false
+  },
+  "calls": [
+   [
+    "config_get_many",
+    [
+     "web.search.enable",
+     "image_generation.enable",
+     "images.edit.enable",
+     "code_interpreter.enable",
+     "notes.enable",
+     "channels.enable",
+     "automations.enable",
+     "calendar.enable",
+     "ui.enable_user_webhooks",
+     "subagents.enable",
+     "subagents.background_enabled"
+    ]
+   ]
+  ]
+ },
+ "builtin:kb_exec_with_note_knowledge": {
+  "tools": [
+   [
+    "get_current_timestamp",
+    "builtin:get_current_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "calculate_timestamp",
+    "builtin:calculate_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "ask_user",
+    "builtin:ask_user",
+    "builtin",
+    [
+     "__event_call__"
+    ]
+   ],
+   [
+    "kb_exec",
+    "builtin:kb_exec",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_files",
+    "builtin:query_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_note",
+    "builtin:view_note",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_chats",
+    "builtin:search_chats",
+    "builtin",
+    [
+     "__chat_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_chat",
+    "builtin:view_chat",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ]
+  ],
+  "bound": {
+   "__request__": "<request>",
+   "__user__": {
+    "id": "u1",
+    "role": "user"
+   },
+   "__event_call__": "<call>",
+   "__model_knowledge__": [
+    {
+     "type": "note",
+     "id": "n1",
+     "source": "model"
+    }
+   ],
+   "__chat_id__": null
+  },
+  "delegate_background": {
+   "property": false,
+   "required": false
+  },
+  "calls": [
+   [
+    "config_get_many",
+    [
+     "web.search.enable",
+     "image_generation.enable",
+     "images.edit.enable",
+     "code_interpreter.enable",
+     "notes.enable",
+     "channels.enable",
+     "automations.enable",
+     "calendar.enable",
+     "ui.enable_user_webhooks",
+     "subagents.enable",
+     "subagents.background_enabled"
+    ]
+   ]
+  ]
+ },
+ "builtin:kb_exec_with_file_knowledge": {
+  "tools": [
+   [
+    "get_current_timestamp",
+    "builtin:get_current_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "calculate_timestamp",
+    "builtin:calculate_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "ask_user",
+    "builtin:ask_user",
+    "builtin",
+    [
+     "__event_call__"
+    ]
+   ],
+   [
+    "kb_exec",
+    "builtin:kb_exec",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_files",
+    "builtin:query_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_chats",
+    "builtin:search_chats",
+    "builtin",
+    [
+     "__chat_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_chat",
+    "builtin:view_chat",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ]
+  ],
+  "bound": {
+   "__request__": "<request>",
+   "__user__": {
+    "id": "u1",
+    "role": "user"
+   },
+   "__event_call__": "<call>",
+   "__model_knowledge__": [
+    {
+     "type": "file",
+     "id": "f1",
+     "source": "model"
+    }
+   ],
+   "__chat_id__": null
+  },
+  "delegate_background": {
+   "property": false,
+   "required": false
+  },
+  "calls": [
+   [
+    "config_get_many",
+    [
+     "web.search.enable",
+     "image_generation.enable",
+     "images.edit.enable",
+     "code_interpreter.enable",
+     "notes.enable",
+     "channels.enable",
+     "automations.enable",
+     "calendar.enable",
+     "ui.enable_user_webhooks",
+     "subagents.enable",
+     "subagents.background_enabled"
+    ]
+   ]
+  ]
+ },
+ "builtin:internal_request": {
+  "tools": [
+   [
+    "get_current_timestamp",
+    "builtin:get_current_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "calculate_timestamp",
+    "builtin:calculate_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "ask_user",
+    "builtin:ask_user",
+    "builtin",
+    [
+     "__event_call__"
+    ]
+   ],
+   [
+    "list_knowledge_bases",
+    "builtin:list_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_bases",
+    "builtin:search_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_bases",
+    "builtin:query_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "grep_knowledge_files",
+    "builtin:grep_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_files",
+    "builtin:search_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_files",
+    "builtin:query_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_knowledge_file",
+    "builtin:view_knowledge_file",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_chats",
+    "builtin:search_chats",
+    "builtin",
+    [
+     "__chat_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_chat",
+    "builtin:view_chat",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_memories",
+    "builtin:search_memories",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "list_memory_paths",
+    "builtin:list_memory_paths",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "read_memory_path",
+    "builtin:read_memory_path",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "list_memories",
+    "builtin:list_memories",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_web",
+    "builtin:search_web",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "fetch_url",
+    "builtin:fetch_url",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "generate_image",
+    "builtin:generate_image",
+    "builtin",
+    [
+     "__chat_id__",
+     "__event_emitter__",
+     "__message_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "edit_image",
+    "builtin:edit_image",
+    "builtin",
+    [
+     "__chat_id__",
+     "__event_emitter__",
+     "__message_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "execute_code",
+    "builtin:execute_code",
+    "builtin",
+    [
+     "__chat_id__",
+     "__event_call__",
+     "__event_emitter__",
+     "__message_id__",
+     "__metadata__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_notes",
+    "builtin:search_notes",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_note",
+    "builtin:view_note",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "write_note",
+    "builtin:write_note",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "replace_note_content",
+    "builtin:replace_note_content",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_channels",
+    "builtin:search_channels",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_channel_messages",
+    "builtin:search_channel_messages",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_channel_thread",
+    "builtin:view_channel_thread",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_channel_message",
+    "builtin:view_channel_message",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "create_automation",
+    "builtin:create_automation",
+    "builtin",
+    [
+     "__metadata__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "update_automation",
+    "builtin:update_automation",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "list_automations",
+    "builtin:list_automations",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "toggle_automation",
+    "builtin:toggle_automation",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "delete_automation",
+    "builtin:delete_automation",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_calendar_events",
+    "builtin:search_calendar_events",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "create_calendar_event",
+    "builtin:create_calendar_event",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "update_calendar_event",
+    "builtin:update_calendar_event",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "delete_calendar_event",
+    "builtin:delete_calendar_event",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "notify",
+    "builtin:notify",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ]
+  ],
+  "bound": {
+   "__request__": "<request>",
+   "__user__": {
+    "id": "u1",
+    "role": "admin"
+   },
+   "__event_call__": "<call>",
+   "__model_knowledge__": [],
+   "__chat_id__": null,
+   "__event_emitter__": "<emitter>",
+   "__message_id__": "msg-1",
+   "__metadata__": {
+    "chat_id": null,
+    "folder_knowledge": null
+   }
+  },
+  "delegate_background": {
+   "property": false,
+   "required": false
+  },
+  "calls": [
+   [
+    "config_get_many",
+    [
+     "web.search.enable",
+     "image_generation.enable",
+     "images.edit.enable",
+     "code_interpreter.enable",
+     "notes.enable",
+     "channels.enable",
+     "automations.enable",
+     "calendar.enable",
+     "ui.enable_user_webhooks",
+     "subagents.enable",
+     "subagents.background_enabled"
+    ]
+   ]
+  ]
+ },
+ "builtin:direct_request": {
+  "tools": [
+   [
+    "get_current_timestamp",
+    "builtin:get_current_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "calculate_timestamp",
+    "builtin:calculate_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "ask_user",
+    "builtin:ask_user",
+    "builtin",
+    [
+     "__event_call__"
+    ]
+   ],
+   [
+    "list_knowledge_bases",
+    "builtin:list_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_bases",
+    "builtin:search_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_bases",
+    "builtin:query_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "grep_knowledge_files",
+    "builtin:grep_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_files",
+    "builtin:search_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_files",
+    "builtin:query_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_knowledge_file",
+    "builtin:view_knowledge_file",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_chats",
+    "builtin:search_chats",
+    "builtin",
+    [
+     "__chat_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_chat",
+    "builtin:view_chat",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_memories",
+    "builtin:search_memories",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "list_memory_paths",
+    "builtin:list_memory_paths",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "read_memory_path",
+    "builtin:read_memory_path",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "list_memories",
+    "builtin:list_memories",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "update_memory",
+    "builtin:update_memory",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "add_memory",
+    "builtin:add_memory",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "replace_memory_content",
+    "builtin:replace_memory_content",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "delete_memory",
+    "builtin:delete_memory",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_web",
+    "builtin:search_web",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "fetch_url",
+    "builtin:fetch_url",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "generate_image",
+    "builtin:generate_image",
+    "builtin",
+    [
+     "__chat_id__",
+     "__event_emitter__",
+     "__message_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "edit_image",
+    "builtin:edit_image",
+    "builtin",
+    [
+     "__chat_id__",
+     "__event_emitter__",
+     "__message_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "execute_code",
+    "builtin:execute_code",
+    "builtin",
+    [
+     "__chat_id__",
+     "__event_call__",
+     "__event_emitter__",
+     "__message_id__",
+     "__metadata__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_notes",
+    "builtin:search_notes",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_note",
+    "builtin:view_note",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "write_note",
+    "builtin:write_note",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "replace_note_content",
+    "builtin:replace_note_content",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_channels",
+    "builtin:search_channels",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_channel_messages",
+    "builtin:search_channel_messages",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_channel_thread",
+    "builtin:view_channel_thread",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_channel_message",
+    "builtin:view_channel_message",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "create_automation",
+    "builtin:create_automation",
+    "builtin",
+    [
+     "__metadata__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "update_automation",
+    "builtin:update_automation",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "list_automations",
+    "builtin:list_automations",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "toggle_automation",
+    "builtin:toggle_automation",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "delete_automation",
+    "builtin:delete_automation",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_calendar_events",
+    "builtin:search_calendar_events",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "create_calendar_event",
+    "builtin:create_calendar_event",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "update_calendar_event",
+    "builtin:update_calendar_event",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "delete_calendar_event",
+    "builtin:delete_calendar_event",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "notify",
+    "builtin:notify",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ]
+  ],
+  "bound": {
+   "__request__": "<request>",
+   "__user__": {
+    "id": "u1",
+    "role": "admin"
+   },
+   "__event_call__": "<call>",
+   "__model_knowledge__": [],
+   "__chat_id__": null,
+   "__event_emitter__": "<emitter>",
+   "__message_id__": "msg-1",
+   "__metadata__": {
+    "chat_id": null,
+    "folder_knowledge": null
+   }
+  },
+  "delegate_background": {
+   "property": false,
+   "required": false
+  },
+  "calls": [
+   [
+    "config_get_many",
+    [
+     "web.search.enable",
+     "image_generation.enable",
+     "images.edit.enable",
+     "code_interpreter.enable",
+     "notes.enable",
+     "channels.enable",
+     "automations.enable",
+     "calendar.enable",
+     "ui.enable_user_webhooks",
+     "subagents.enable",
+     "subagents.background_enabled"
+    ]
+   ]
+  ]
+ },
+ "builtin:subagents_without_background": {
+  "tools": [
+   [
+    "get_current_timestamp",
+    "builtin:get_current_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "calculate_timestamp",
+    "builtin:calculate_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "ask_user",
+    "builtin:ask_user",
+    "builtin",
+    [
+     "__event_call__"
+    ]
+   ],
+   [
+    "list_knowledge_bases",
+    "builtin:list_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_bases",
+    "builtin:search_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_bases",
+    "builtin:query_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "grep_knowledge_files",
+    "builtin:grep_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_files",
+    "builtin:search_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_files",
+    "builtin:query_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_knowledge_file",
+    "builtin:view_knowledge_file",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_chats",
+    "builtin:search_chats",
+    "builtin",
+    [
+     "__chat_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_chat",
+    "builtin:view_chat",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "delegate_task",
+    "builtin:delegate_task",
+    "builtin",
+    [
+     "__chat_id__",
+     "__message_id__",
+     "__metadata__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "timer",
+    "builtin:timer",
+    "builtin",
+    [
+     "__chat_id__",
+     "__message_id__",
+     "__metadata__",
+     "__request__",
+     "__user__"
+    ]
+   ]
+  ],
+  "bound": {
+   "__request__": "<request>",
+   "__user__": {
+    "id": "u1",
+    "role": "admin"
+   },
+   "__event_call__": "<call>",
+   "__model_knowledge__": [],
+   "__chat_id__": null,
+   "__metadata__": {
+    "chat_id": null,
+    "folder_knowledge": null
+   },
+   "__message_id__": "msg-1"
+  },
+  "delegate_background": {
+   "property": false,
+   "required": false
+  },
+  "calls": [
+   [
+    "config_get_many",
+    [
+     "web.search.enable",
+     "image_generation.enable",
+     "images.edit.enable",
+     "code_interpreter.enable",
+     "notes.enable",
+     "channels.enable",
+     "automations.enable",
+     "calendar.enable",
+     "ui.enable_user_webhooks",
+     "subagents.enable",
+     "subagents.background_enabled"
+    ]
+   ]
+  ]
+ },
+ "builtin:note_chat_with_notes_off": {
+  "tools": [
+   [
+    "get_current_timestamp",
+    "builtin:get_current_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "calculate_timestamp",
+    "builtin:calculate_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "ask_user",
+    "builtin:ask_user",
+    "builtin",
+    [
+     "__event_call__"
+    ]
+   ],
+   [
+    "list_knowledge_bases",
+    "builtin:list_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_bases",
+    "builtin:search_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_bases",
+    "builtin:query_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "grep_knowledge_files",
+    "builtin:grep_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_files",
+    "builtin:search_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_files",
+    "builtin:query_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_knowledge_file",
+    "builtin:view_knowledge_file",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_chats",
+    "builtin:search_chats",
+    "builtin",
+    [
+     "__chat_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_chat",
+    "builtin:view_chat",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_notes",
+    "builtin:search_notes",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_note",
+    "builtin:view_note",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "write_note",
+    "builtin:write_note",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "replace_note_content",
+    "builtin:replace_note_content",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ]
+  ],
+  "bound": {
+   "__request__": "<request>",
+   "__user__": {
+    "id": "u1",
+    "role": "user"
+   },
+   "__event_call__": "<call>",
+   "__model_knowledge__": [],
+   "__chat_id__": null
+  },
+  "delegate_background": {
+   "property": false,
+   "required": false
+  },
+  "calls": [
+   [
+    "config_get_many",
+    [
+     "web.search.enable",
+     "image_generation.enable",
+     "images.edit.enable",
+     "code_interpreter.enable",
+     "notes.enable",
+     "channels.enable",
+     "automations.enable",
+     "calendar.enable",
+     "ui.enable_user_webhooks",
+     "subagents.enable",
+     "subagents.background_enabled"
+    ]
+   ]
+  ]
+ },
+ "builtin:skills_attached": {
+  "tools": [
+   [
+    "get_current_timestamp",
+    "builtin:get_current_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "calculate_timestamp",
+    "builtin:calculate_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "ask_user",
+    "builtin:ask_user",
+    "builtin",
+    [
+     "__event_call__"
+    ]
+   ],
+   [
+    "list_knowledge_bases",
+    "builtin:list_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_bases",
+    "builtin:search_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_bases",
+    "builtin:query_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "grep_knowledge_files",
+    "builtin:grep_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_files",
+    "builtin:search_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_files",
+    "builtin:query_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_knowledge_file",
+    "builtin:view_knowledge_file",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_chats",
+    "builtin:search_chats",
+    "builtin",
+    [
+     "__chat_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_chat",
+    "builtin:view_chat",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_skill",
+    "builtin:view_skill",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ]
+  ],
+  "bound": {
+   "__request__": "<request>",
+   "__user__": {
+    "id": "u1",
+    "role": "user"
+   },
+   "__event_call__": "<call>",
+   "__model_knowledge__": [],
+   "__chat_id__": null
+  },
+  "delegate_background": {
+   "property": false,
+   "required": false
+  },
+  "calls": [
+   [
+    "config_get_many",
+    [
+     "web.search.enable",
+     "image_generation.enable",
+     "images.edit.enable",
+     "code_interpreter.enable",
+     "notes.enable",
+     "channels.enable",
+     "automations.enable",
+     "calendar.enable",
+     "ui.enable_user_webhooks",
+     "subagents.enable",
+     "subagents.background_enabled"
+    ]
+   ]
+  ]
+ },
+ "builtin:local_chat_has_no_tasks": {
+  "tools": [
+   [
+    "get_current_timestamp",
+    "builtin:get_current_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "calculate_timestamp",
+    "builtin:calculate_timestamp",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "ask_user",
+    "builtin:ask_user",
+    "builtin",
+    [
+     "__event_call__"
+    ]
+   ],
+   [
+    "list_knowledge_bases",
+    "builtin:list_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_bases",
+    "builtin:search_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_bases",
+    "builtin:query_knowledge_bases",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "grep_knowledge_files",
+    "builtin:grep_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_knowledge_files",
+    "builtin:search_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "query_knowledge_files",
+    "builtin:query_knowledge_files",
+    "builtin",
+    [
+     "__model_knowledge__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_knowledge_file",
+    "builtin:view_knowledge_file",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "search_chats",
+    "builtin:search_chats",
+    "builtin",
+    [
+     "__chat_id__",
+     "__request__",
+     "__user__"
+    ]
+   ],
+   [
+    "view_chat",
+    "builtin:view_chat",
+    "builtin",
+    [
+     "__request__",
+     "__user__"
+    ]
+   ]
+  ],
+  "bound": {
+   "__request__": "<request>",
+   "__user__": {
+    "id": "u1",
+    "role": "admin"
+   },
+   "__event_call__": "<call>",
+   "__model_knowledge__": [],
+   "__chat_id__": "local:abc"
+  },
+  "delegate_background": {
+   "property": false,
+   "required": false
+  },
+  "calls": [
+   [
+    "config_get_many",
+    [
+     "web.search.enable",
+     "image_generation.enable",
+     "images.edit.enable",
+     "code_interpreter.enable",
+     "notes.enable",
+     "channels.enable",
+     "automations.enable",
+     "calendar.enable",
+     "ui.enable_user_webhooks",
+     "subagents.enable",
+     "subagents.background_enabled"
+    ]
+   ]
+  ]
+ },
+ "execute:no_openapi": {
+  "returned": [
+   {
+    "error": "No matching route found for operationId: get_item"
+   },
+   null
+  ],
+  "calls": []
+ },
+ "execute:unknown_operation": {
+  "returned": [
+   {
+    "error": "No matching route found for operationId: secret"
+   },
+   null
+  ],
+  "calls": []
+ },
+ "execute:get_with_path_and_query": {
+  "returned": [
+   {
+    "ok": true
+   },
+   {
+    "Content-Type": "application/json",
+    "X-Trace": "t1"
+   }
+  ],
+  "calls": [
+   [
+    "client_session",
+    true,
+    null
+   ],
+   [
+    "request",
+    "get",
+    "https://inv.test/items/a%20b%2Fc?verbose=",
+    {
+     "headers": {
+      "Authorization": "Bearer t"
+     },
+     "cookies": {
+      "session": "c1"
+     }
+    },
+    {
+     "ssl": true,
+     "allow_redirects": true
+    }
+   ]
+  ]
+ },
+ "execute:get_query_values": {
+  "returned": [
+   {
+    "ok": true
+   },
+   {
+    "Content-Type": "application/json",
+    "X-Trace": "t1"
+   }
+  ],
+  "calls": [
+   [
+    "client_session",
+    true,
+    null
+   ],
+   [
+    "request",
+    "get",
+    "https://inv.test/items/7?verbose=True&fields=name&tag=%5B%27x%27%2C+%27y%27%5D",
+    {
+     "headers": {
+      "Authorization": "Bearer t"
+     },
+     "cookies": {
+      "session": "c1"
+     }
+    },
+    {
+     "ssl": true,
+     "allow_redirects": true
+    }
+   ]
+  ]
+ },
+ "execute:put_body_with_path_param": {
+  "returned": [
+   {
+    "ok": true
+   },
+   {
+    "Content-Type": "application/json",
+    "X-Trace": "t1"
+   }
+  ],
+  "calls": [
+   [
+    "client_session",
+    true,
+    null
+   ],
+   [
+    "request",
+    "put",
+    "https://inv.test/items/7",
+    {
+     "json": {
+      "item_id": 7,
+      "name": "new"
+     },
+     "headers": {
+      "Authorization": "Bearer t"
+     },
+     "cookies": {
+      "session": "c1"
+     }
+    },
+    {
+     "ssl": true,
+     "allow_redirects": true
+    }
+   ]
+  ]
+ },
+ "execute:post_body_and_query": {
+  "returned": [
+   {
+    "ok": true
+   },
+   {
+    "Content-Type": "application/json",
+    "X-Trace": "t1"
+   }
+  ],
+  "calls": [
+   [
+    "client_session",
+    true,
+    null
+   ],
+   [
+    "request",
+    "post",
+    "https://inv.test/items?dry_run=yes",
+    {
+     "json": {
+      "dry_run": "yes",
+      "name": "n"
+     },
+     "headers": {
+      "Authorization": "Bearer t"
+     },
+     "cookies": {
+      "session": "c1"
+     }
+    },
+    {
+     "ssl": true,
+     "allow_redirects": true
+    }
+   ]
+  ]
+ },
+ "execute:post_without_params": {
+  "returned": [
+   {
+    "ok": true
+   },
+   {
+    "Content-Type": "application/json",
+    "X-Trace": "t1"
+   }
+  ],
+  "calls": [
+   [
+    "client_session",
+    true,
+    null
+   ],
+   [
+    "request",
+    "post",
+    "https://inv.test/items",
+    {
+     "json": {},
+     "headers": {
+      "Authorization": "Bearer t"
+     },
+     "cookies": {
+      "session": "c1"
+     }
+    },
+    {
+     "ssl": true,
+     "allow_redirects": true
+    }
+   ]
+  ]
+ },
+ "execute:patch_without_body_schema": {
+  "returned": [
+   {
+    "ok": true
+   },
+   {
+    "Content-Type": "application/json",
+    "X-Trace": "t1"
+   }
+  ],
+  "calls": [
+   [
+    "client_session",
+    true,
+    null
+   ],
+   [
+    "request",
+    "patch",
+    "https://inv.test/items",
+    {
+     "json": {},
+     "headers": {
+      "Authorization": "Bearer t"
+     },
+     "cookies": {
+      "session": "c1"
+     }
+    },
+    {
+     "ssl": true,
+     "allow_redirects": true
+    }
+   ]
+  ]
+ },
+ "execute:delete_sends_empty_json": {
+  "returned": [
+   {
+    "ok": true
+   },
+   {
+    "Content-Type": "application/json",
+    "X-Trace": "t1"
+   }
+  ],
+  "calls": [
+   [
+    "client_session",
+    true,
+    null
+   ],
+   [
+    "request",
+    "delete",
+    "https://inv.test/items/3",
+    {
+     "json": {},
+     "headers": {
+      "Authorization": "Bearer t"
+     },
+     "cookies": {
+      "session": "c1"
+     }
+    },
+    {
+     "ssl": true,
+     "allow_redirects": true
+    }
+   ]
+  ]
+ },
+ "execute:head_like_get": {
+  "returned": [
+   {
+    "ok": true
+   },
+   {
+    "Content-Type": "application/json",
+    "X-Trace": "t1"
+   }
+  ],
+  "calls": [
+   [
+    "client_session",
+    true,
+    null
+   ],
+   [
+    "request",
+    "head",
+    "https://inv.test/items/3",
+    {
+     "headers": {
+      "Authorization": "Bearer t"
+     },
+     "cookies": {
+      "session": "c1"
+     }
+    },
+    {
+     "ssl": true,
+     "allow_redirects": true
+    }
+   ]
+  ]
+ },
+ "execute:get_http_error": {
+  "returned": [
+   {
+    "error": "HTTP error 404: no such item"
+   },
+   null
+  ],
+  "calls": [
+   [
+    "client_session",
+    true,
+    null
+   ],
+   [
+    "request",
+    "get",
+    "https://inv.test/items/1",
+    {
+     "headers": {
+      "Authorization": "Bearer t"
+     },
+     "cookies": {
+      "session": "c1"
+     }
+    },
+    {
+     "ssl": true,
+     "allow_redirects": true
+    }
+   ]
+  ]
+ },
+ "execute:post_http_error": {
+  "returned": [
+   {
+    "error": "HTTP error 500: boom"
+   },
+   null
+  ],
+  "calls": [
+   [
+    "client_session",
+    true,
+    null
+   ],
+   [
+    "request",
+    "post",
+    "https://inv.test/items",
+    {
+     "json": {},
+     "headers": {
+      "Authorization": "Bearer t"
+     },
+     "cookies": {
+      "session": "c1"
+     }
+    },
+    {
+     "ssl": true,
+     "allow_redirects": true
+    }
+   ]
+  ]
+ },
+ "execute:text_reply": {
+  "returned": [
+   "plain words",
+   {
+    "Content-Type": "text/plain; charset=utf-8"
+   }
+  ],
+  "calls": [
+   [
+    "client_session",
+    true,
+    null
+   ],
+   [
+    "request",
+    "get",
+    "https://inv.test/items/1",
+    {
+     "headers": {
+      "Authorization": "Bearer t"
+     },
+     "cookies": {
+      "session": "c1"
+     }
+    },
+    {
+     "ssl": true,
+     "allow_redirects": true
+    }
+   ]
+  ]
+ },
+ "execute:untyped_reply": {
+  "returned": [
+   "mystery",
+   {}
+  ],
+  "calls": [
+   [
+    "client_session",
+    true,
+    null
+   ],
+   [
+    "request",
+    "post",
+    "https://inv.test/items",
+    {
+     "json": {},
+     "headers": {
+      "Authorization": "Bearer t"
+     },
+     "cookies": {
+      "session": "c1"
+     }
+    },
+    {
+     "ssl": true,
+     "allow_redirects": true
+    }
+   ]
+  ]
+ },
+ "execute:binary_reply": {
+  "returned": [
+   "data:image/png;base64,UE5HREFUQQ==",
+   {
+    "Content-Type": "image/png"
+   }
+  ],
+  "calls": [
+   [
+    "client_session",
+    true,
+    null
+   ],
+   [
+    "request",
+    "get",
+    "https://inv.test/items/1",
+    {
+     "headers": {
+      "Authorization": "Bearer t"
+     },
+     "cookies": {
+      "session": "c1"
+     }
+    },
+    {
+     "ssl": true,
+     "allow_redirects": true
+    }
+   ]
+  ]
+ },
+ "execute:binary_reply_to_post": {
+  "returned": [
+   "data:application/pdf;base64,UERG",
+   {
+    "Content-Type": "application/pdf"
+   }
+  ],
+  "calls": [
+   [
+    "client_session",
+    true,
+    null
+   ],
+   [
+    "request",
+    "post",
+    "https://inv.test/items",
+    {
+     "json": {},
+     "headers": {
+      "Authorization": "Bearer t"
+     },
+     "cookies": {
+      "session": "c1"
+     }
+    },
+    {
+     "ssl": true,
+     "allow_redirects": true
+    }
+   ]
+  ]
+ },
+ "execute:text_reply_to_post": {
+  "returned": [
+   "created",
+   {
+    "Content-Type": "text/html"
+   }
+  ],
+  "calls": [
+   [
+    "client_session",
+    true,
+    null
+   ],
+   [
+    "request",
+    "post",
+    "https://inv.test/items",
+    {
+     "json": {},
+     "headers": {
+      "Authorization": "Bearer t"
+     },
+     "cookies": {
+      "session": "c1"
+     }
+    },
+    {
+     "ssl": true,
+     "allow_redirects": true
+    }
+   ]
+  ]
+ },
+ "execute:connection_fails": {
+  "returned": [
+   {
+    "error": "connection refused"
+   },
+   null
+  ],
+  "calls": [
+   [
+    "client_session",
+    true,
+    null
+   ],
+   [
+    "request",
+    "get",
+    "https://inv.test/items/1",
+    {
+     "headers": {
+      "Authorization": "Bearer t"
+     },
+     "cookies": {
+      "session": "c1"
+     }
+    },
+    {
+     "ssl": true,
+     "allow_redirects": true
+    }
+   ]
+  ]
+ }
+}
