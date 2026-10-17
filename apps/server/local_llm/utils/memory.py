@@ -287,35 +287,60 @@ def model_allows_memory(model: dict | None) -> bool:
     return ((model or {}).get('info', {}).get('meta', {}).get('capabilities') or {}).get('memory', True)
 
 
-async def add_memory_context(request, form_data: dict, user, model: dict | None = None):
-    if not model_allows_memory(model):
-        return form_data
-
+def _recent_user_text(messages: list) -> str:
+    """The text of the last seven user messages (oldest first), capped at its last 4000 characters."""
     user_messages = []
-    for message in reversed(form_data.get('messages', [])):
+    for message in reversed(messages):
         if message.get('role') != 'user':
             continue
-
         content = get_content_from_message(message)
         if isinstance(content, str) and content.strip():
             user_messages.append(content.strip())
-
         if len(user_messages) >= 7:
             break
+    return '\n\n'.join(reversed(user_messages))[-4000:]
 
-    query = '\n\n'.join(reversed(user_messages))[-4000:]
-    if not query:
-        return form_data
 
-    all_memories = await Memories.get_memories_by_user_id(user.id)
-    results = None
+async def _vector_memory_results(request, query: str, user):
+    """The vector store's closest memories to the query, or None if the search fails."""
     try:
         from local_llm.routers.memories import QueryMemoryForm, query_memory
 
-        results = await query_memory(request, QueryMemoryForm(content=query, k=8), user)
+        return await query_memory(request, QueryMemoryForm(content=query, k=8), user)
     except Exception as e:
         log.debug(e)
+        return None
 
+
+def _vector_hit_labels(results, seen_ids: set) -> list[tuple[str, str]]:
+    """(section, label) for each vector hit not already shown, with its path prefix moved into the label."""
+    if not (results and hasattr(results, 'documents') and results.documents):
+        return []
+    labels = []
+    for doc_idx, doc in enumerate(results.documents[0]):
+        if not doc:
+            continue
+        metadata = {}
+        if results.metadatas and results.metadatas[0] and len(results.metadatas[0]) > doc_idx:
+            metadata = results.metadatas[0][doc_idx] or {}
+        memory_id = None
+        if results.ids and results.ids[0] and len(results.ids[0]) > doc_idx:
+            memory_id = results.ids[0][doc_idx]
+        if memory_id and memory_id in seen_ids:
+            continue
+        if memory_id:
+            seen_ids.add(memory_id)
+
+        content = str(doc)
+        path = metadata.get('path')
+        if path and content.startswith(f'{path}\n'):
+            content = content[len(path) + 1 :]
+        labels.append((Memories.normalize_memory_type(metadata.get('type')), f'{path}: {content}' if path else content))
+    return labels
+
+
+def _memory_sections(all_memories: list, query: str, results) -> dict[str, list[str]]:
+    """Labels for each section, each memory once: user memories, memories near paths the query names, vector hits."""
     sections = {'user': [], 'neighborhood': [], 'context': []}
     seen_ids = set()
     for memory in sorted(
@@ -326,40 +351,19 @@ async def add_memory_context(request, form_data: dict, user, model: dict | None 
         sections['user'].append(memory_label(memory))
 
     for hint in memory_path_hints(query, all_memories):
-        for memory in search_memory_rows(
-            all_memories,
-            path=hint,
-            memory_type='context',
-            limit=4,
-        ):
+        for memory in search_memory_rows(all_memories, path=hint, memory_type='context', limit=4):
             if memory.id in seen_ids:
                 continue
             seen_ids.add(memory.id)
             sections['neighborhood'].append(memory_label(memory))
 
-    if results and hasattr(results, 'documents') and results.documents:
-        for doc_idx, doc in enumerate(results.documents[0]):
-            if not doc:
-                continue
+    for section, label in _vector_hit_labels(results, seen_ids):
+        sections[section].append(label)
+    return sections
 
-            metadata = {}
-            if results.metadatas and results.metadatas[0] and len(results.metadatas[0]) > doc_idx:
-                metadata = results.metadatas[0][doc_idx] or {}
 
-            memory_id = None
-            if results.ids and results.ids[0] and len(results.ids[0]) > doc_idx:
-                memory_id = results.ids[0][doc_idx]
-            if memory_id and memory_id in seen_ids:
-                continue
-            if memory_id:
-                seen_ids.add(memory_id)
-
-            content = str(doc)
-            if metadata.get('path') and content.startswith(f'{metadata.get("path")}\n'):
-                content = content[len(metadata.get('path')) + 1 :]
-            label = f'{metadata.get("path")}: {content}' if metadata.get('path') else content
-            sections[Memories.normalize_memory_type(metadata.get('type'))].append(label)
-
+def _render_memory_sections(sections: dict[str, list[str]]) -> list[str]:
+    """Each non-empty section as a titled, sorted bullet list."""
     parts = []
     for title, key in (
         ('User Memory', 'user'),
@@ -369,27 +373,51 @@ async def add_memory_context(request, form_data: dict, user, model: dict | None 
         if sections[key]:
             ordered = sorted(sections[key], key=lambda memory: (memory.casefold(), memory))
             parts.append(f'[{title}]\n' + '\n'.join(f'- {memory}' for memory in ordered))
+    return parts
+
+
+def _char_limit(value) -> int:
+    """A configured character limit: at least 250, and 2000 when unset or unreadable."""
+    try:
+        return max(250, int(value or 2000))
+    except Exception:
+        return 2000
+
+
+def _strip_memory_block(messages: list) -> None:
+    """Removes an earlier memory block from the system message, so it is replaced rather than repeated."""
+    if not messages or messages[0].get('role') != 'system':
+        return
+    content = messages[0].get('content', '')
+    if not (isinstance(content, str) and MEMORY_CONTEXT_OPEN in content):
+        return
+    start = content.find(MEMORY_CONTEXT_OPEN)
+    end = content.find(MEMORY_CONTEXT_CLOSE, start)
+    if end != -1:
+        messages[0]['content'] = (content[:start] + content[end + len(MEMORY_CONTEXT_CLOSE) :]).strip()
+
+
+async def add_memory_context(request, form_data: dict, user, model: dict | None = None):
+    """Adds the user's relevant memories to the system message, as a block within the configured length limits."""
+    if not model_allows_memory(model):
+        return form_data
+
+    query = _recent_user_text(form_data.get('messages', []))
+    if not query:
+        return form_data
+
+    all_memories = await Memories.get_memories_by_user_id(user.id)
+    results = await _vector_memory_results(request, query, user)
+    parts = _render_memory_sections(_memory_sections(all_memories, query, results))
     if not parts:
         return form_data
 
     config = await Config.get_many('memories.user_char_limit', 'memories.context_char_limit')
-    try:
-        user_limit = max(250, int(config.get('memories.user_char_limit') or 2000))
-    except Exception:
-        user_limit = 2000
-    try:
-        context_limit = max(250, int(config.get('memories.context_char_limit') or 2000))
-    except Exception:
-        context_limit = 2000
+    user_limit = _char_limit(config.get('memories.user_char_limit'))
+    context_limit = _char_limit(config.get('memories.context_char_limit'))
 
     messages = form_data['messages']
-    if messages and messages[0].get('role') == 'system':
-        content = messages[0].get('content', '')
-        if isinstance(content, str) and MEMORY_CONTEXT_OPEN in content:
-            start = content.find(MEMORY_CONTEXT_OPEN)
-            end = content.find(MEMORY_CONTEXT_CLOSE, start)
-            if end != -1:
-                messages[0]['content'] = (content[:start] + content[end + len(MEMORY_CONTEXT_CLOSE) :]).strip()
+    _strip_memory_block(messages)
 
     user_parts = [part for part in parts if part.startswith('[User Memory]')]
     context_parts = [part for part in parts if not part.startswith('[User Memory]')]
