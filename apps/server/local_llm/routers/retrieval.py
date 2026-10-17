@@ -10,6 +10,7 @@ import shutil
 import uuid
 from collections.abc import Callable
 from types import SimpleNamespace
+from typing import NamedTuple
 from urllib.parse import unquote, urlparse
 
 import tiktoken
@@ -2432,6 +2433,225 @@ async def process_web(
         )
 
 
+class _WebSearchEngine(NamedTuple):
+    """How search_web calls one engine's provider.
+
+    provider returns the provider function (looked up when called, so the
+    module-level name is what runs); args builds its (args, kwargs) from the
+    config, query, request and user. A threaded provider is sync and runs in
+    a worker thread; otherwise it is awaited.
+    """
+
+    provider: Callable[[], Callable]
+    args: Callable[..., tuple[tuple, dict]]
+    required: tuple[str, ...] = ()
+    missing: str = ''
+    threaded: bool = True
+
+
+def _missing_key(key: str) -> str:
+    return f'No {key} found in environment variables'
+
+
+def _counted(c) -> tuple:
+    """The result count and domain filter most providers take after the query."""
+    return c.WEB_SEARCH_RESULT_COUNT, c.WEB_SEARCH_DOMAIN_FILTER_LIST
+
+
+def _keyed(key: str, provider, threaded: bool = True) -> _WebSearchEngine:
+    """An engine whose provider takes (api key, query, count, filter list) and needs that key."""
+    return _WebSearchEngine(
+        provider,
+        lambda c, q, r, u: ((getattr(c, key), q, *_counted(c)), {}),
+        (key,),
+        _missing_key(key),
+        threaded,
+    )
+
+
+_WEB_SEARCH_ENGINES: dict[str, _WebSearchEngine] = {
+    'ollama_cloud': _WebSearchEngine(
+        lambda: search_ollama_cloud,
+        lambda c, q, r, u: (('https://ollama.com', c.OLLAMA_CLOUD_WEB_SEARCH_API_KEY, q, *_counted(c)), {}),
+    ),
+    'perplexity_search': _WebSearchEngine(
+        lambda: search_perplexity_search,
+        lambda c, q, r, u: ((c.PERPLEXITY_API_KEY, q, *_counted(c), c.PERPLEXITY_SEARCH_API_URL, u), {}),
+        ('PERPLEXITY_API_KEY',),
+        _missing_key('PERPLEXITY_API_KEY'),
+    ),
+    'searxng': _WebSearchEngine(
+        lambda: search_searxng,
+        lambda c, q, r, u: ((c.SEARXNG_QUERY_URL, q, *_counted(c)), {'language': c.SEARXNG_LANGUAGE}),
+        ('SEARXNG_QUERY_URL',),
+        _missing_key('SEARXNG_QUERY_URL'),
+        threaded=False,
+    ),
+    'openserp': _WebSearchEngine(
+        lambda: search_openserp,
+        lambda c, q, r, u: ((c.OPENSERP_BASE_URL, q, *_counted(c)), {}),
+        ('OPENSERP_BASE_URL',),
+        _missing_key('OPENSERP_BASE_URL'),
+        threaded=False,
+    ),
+    'yacy': _WebSearchEngine(
+        lambda: search_yacy,
+        lambda c, q, r, u: ((c.YACY_QUERY_URL, c.YACY_USERNAME, c.YACY_PASSWORD, q, *_counted(c)), {}),
+        ('YACY_QUERY_URL',),
+        _missing_key('YACY_QUERY_URL'),
+    ),
+    'google_pse': _WebSearchEngine(
+        lambda: search_google_pse,
+        lambda c, q, r, u: ((c.GOOGLE_PSE_API_KEY, c.GOOGLE_PSE_ENGINE_ID, q, *_counted(c)), {'referer': c.WEBUI_URL}),
+        ('GOOGLE_PSE_API_KEY', 'GOOGLE_PSE_ENGINE_ID'),
+        'No GOOGLE_PSE_API_KEY or GOOGLE_PSE_ENGINE_ID found in environment variables',
+        threaded=False,
+    ),
+    'brave': _keyed('BRAVE_SEARCH_API_KEY', lambda: search_brave, threaded=False),
+    'brave_llm_context': _WebSearchEngine(
+        lambda: search_brave_llm_context,
+        lambda c, q, r, u: ((c.BRAVE_SEARCH_API_KEY, q, *_counted(c), c.BRAVE_SEARCH_CONTEXT_TOKENS), {}),
+        ('BRAVE_SEARCH_API_KEY',),
+        _missing_key('BRAVE_SEARCH_API_KEY'),
+    ),
+    'kagi': _keyed('KAGI_SEARCH_API_KEY', lambda: search_kagi),
+    'mojeek': _keyed('MOJEEK_SEARCH_API_KEY', lambda: search_mojeek),
+    'bocha': _keyed('BOCHA_SEARCH_API_KEY', lambda: search_bocha),
+    'serpstack': _WebSearchEngine(
+        lambda: search_serpstack,
+        lambda c, q, r, u: ((c.SERPSTACK_API_KEY, q, *_counted(c)), {'https_enabled': c.SERPSTACK_HTTPS}),
+        ('SERPSTACK_API_KEY',),
+        _missing_key('SERPSTACK_API_KEY'),
+        threaded=False,
+    ),
+    'serper': _keyed('SERPER_API_KEY', lambda: search_serper, threaded=False),
+    'serphouse': _WebSearchEngine(
+        lambda: search_serphouse,
+        lambda c, q, r, u: ((c.SERPHOUSE_API_KEY, c.SERPHOUSE_DOMAIN, q, *_counted(c)), {}),
+        ('SERPHOUSE_API_KEY',),
+        _missing_key('SERPHOUSE_API_KEY'),
+        threaded=False,
+    ),
+    'serply': _WebSearchEngine(
+        lambda: search_serply,
+        lambda c, q, r, u: (
+            (c.SERPLY_API_KEY, q, c.WEB_SEARCH_RESULT_COUNT),
+            {'filter_list': c.WEB_SEARCH_DOMAIN_FILTER_LIST},
+        ),
+        ('SERPLY_API_KEY',),
+        _missing_key('SERPLY_API_KEY'),
+    ),
+    'duckduckgo': _WebSearchEngine(
+        lambda: search_duckduckgo,
+        lambda c, q, r, u: (
+            (q, *_counted(c)),
+            {'concurrent_requests': c.WEB_SEARCH_CONCURRENT_REQUESTS, 'backend': c.DDGS_BACKEND},
+        ),
+    ),
+    'tavily': _keyed('TAVILY_API_KEY', lambda: search_tavily),
+    'exa': _keyed('EXA_API_KEY', lambda: search_exa),
+    'searchapi': _WebSearchEngine(
+        lambda: search_searchapi,
+        lambda c, q, r, u: ((c.SEARCHAPI_API_KEY, c.SEARCHAPI_ENGINE, q, *_counted(c)), {}),
+        ('SEARCHAPI_API_KEY',),
+        _missing_key('SEARCHAPI_API_KEY'),
+    ),
+    'serpapi': _WebSearchEngine(
+        lambda: search_serpapi,
+        lambda c, q, r, u: ((c.SERPAPI_API_KEY, c.SERPAPI_ENGINE, q, *_counted(c)), {}),
+        ('SERPAPI_API_KEY',),
+        _missing_key('SERPAPI_API_KEY'),
+    ),
+    'jina': _WebSearchEngine(
+        lambda: search_jina,
+        lambda c, q, r, u: ((c.JINA_API_KEY, q, c.WEB_SEARCH_RESULT_COUNT, c.JINA_API_BASE_URL), {}),
+    ),
+    'bing': _WebSearchEngine(
+        lambda: search_bing,
+        lambda c, q, r, u: (
+            (c.BING_SEARCH_V7_SUBSCRIPTION_KEY, c.BING_SEARCH_V7_ENDPOINT, str(DEFAULT_LOCALE), q, *_counted(c)),
+            {},
+        ),
+    ),
+    'azure': _WebSearchEngine(
+        lambda: search_azure,
+        lambda c, q, r, u: (
+            (c.AZURE_AI_SEARCH_API_KEY, c.AZURE_AI_SEARCH_ENDPOINT, c.AZURE_AI_SEARCH_INDEX_NAME, q, *_counted(c)),
+            {},
+        ),
+        ('AZURE_AI_SEARCH_API_KEY', 'AZURE_AI_SEARCH_ENDPOINT', 'AZURE_AI_SEARCH_INDEX_NAME'),
+        'AZURE_AI_SEARCH_API_KEY, AZURE_AI_SEARCH_ENDPOINT, and AZURE_AI_SEARCH_INDEX_NAME are required for '
+        'Azure AI Search',
+    ),
+    'perplexity': _WebSearchEngine(
+        lambda: search_perplexity,
+        lambda c, q, r, u: (
+            (c.PERPLEXITY_API_KEY, q, *_counted(c)),
+            {'model': c.PERPLEXITY_MODEL, 'search_context_usage': c.PERPLEXITY_SEARCH_CONTEXT_USAGE},
+        ),
+    ),
+    'microsoft_web_iq': _WebSearchEngine(
+        lambda: search_microsoft_web_iq,
+        lambda c, q, r, u: (
+            (
+                c.MICROSOFT_WEB_IQ_API_BASE_URL,
+                c.MICROSOFT_WEB_IQ_API_KEY,
+                q,
+                *_counted(c),
+                c.MICROSOFT_WEB_IQ_LANGUAGE,
+                u,
+            ),
+            {},
+        ),
+        ('MICROSOFT_WEB_IQ_API_KEY',),
+        _missing_key('MICROSOFT_WEB_IQ_API_KEY'),
+    ),
+    'sougou': _WebSearchEngine(
+        lambda: search_sougou,
+        lambda c, q, r, u: ((c.SOUGOU_API_SID, c.SOUGOU_API_SK, q, *_counted(c)), {}),
+        ('SOUGOU_API_SID', 'SOUGOU_API_SK'),
+        'No SOUGOU_API_SID or SOUGOU_API_SK found in environment variables',
+    ),
+    'firecrawl': _WebSearchEngine(
+        lambda: search_firecrawl,
+        lambda c, q, r, u: ((c.FIRECRAWL_API_BASE_URL, c.FIRECRAWL_API_KEY, q, *_counted(c)), {}),
+    ),
+    'external': _WebSearchEngine(
+        lambda: search_external,
+        lambda c, q, r, u: (
+            (r, c.EXTERNAL_WEB_SEARCH_URL, c.EXTERNAL_WEB_SEARCH_API_KEY, q, *_counted(c)),
+            {'user': u},
+        ),
+    ),
+    'yandex': _WebSearchEngine(
+        lambda: search_yandex,
+        lambda c, q, r, u: (
+            (r, c.YANDEX_WEB_SEARCH_URL, c.YANDEX_WEB_SEARCH_API_KEY, c.YANDEX_WEB_SEARCH_CONFIG, q, *_counted(c)),
+            {'user': u},
+        ),
+    ),
+    'youcom': _WebSearchEngine(
+        lambda: search_youcom,
+        lambda c, q, r, u: ((c.YOUCOM_API_KEY, q, *_counted(c)), {}),
+    ),
+    'linkup': _WebSearchEngine(
+        lambda: search_linkup,
+        lambda c, q, r, u: (
+            (),
+            {
+                'api_key': c.LINKUP_API_KEY,
+                'query': q,
+                'count': c.WEB_SEARCH_RESULT_COUNT,
+                'filter_list': c.WEB_SEARCH_DOMAIN_FILTER_LIST,
+                'params': c.LINKUP_SEARCH_PARAMS,
+            },
+        ),
+        ('LINKUP_API_KEY',),
+        _missing_key('LINKUP_API_KEY'),
+    ),
+}
+
+
 async def search_web(request: Request, engine: str, query: str, user=None) -> list[SearchResult]:
     """Dispatch a web search query to the configured engine and return results.
 
@@ -2439,355 +2659,19 @@ async def search_web(request: Request, engine: str, query: str, user=None) -> li
     Legacy sync providers are offloaded via ``asyncio.to_thread`` to avoid
     blocking the event loop.
     """
-
     # TODO: add playwright to search the web
     config = await get_retrieval_config()
-    if engine == 'ollama_cloud':
-        return await asyncio.to_thread(
-            search_ollama_cloud,
-            'https://ollama.com',
-            config.OLLAMA_CLOUD_WEB_SEARCH_API_KEY,
-            query,
-            config.WEB_SEARCH_RESULT_COUNT,
-            config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-        )
-    elif engine == 'perplexity_search':
-        if config.PERPLEXITY_API_KEY:
-            return await asyncio.to_thread(
-                search_perplexity_search,
-                config.PERPLEXITY_API_KEY,
-                query,
-                config.WEB_SEARCH_RESULT_COUNT,
-                config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-                config.PERPLEXITY_SEARCH_API_URL,
-                user,
-            )
-        else:
-            raise Exception('No PERPLEXITY_API_KEY found in environment variables')
-    elif engine == 'searxng':
-        if config.SEARXNG_QUERY_URL:
-            searxng_kwargs = {'language': config.SEARXNG_LANGUAGE}
-            return await search_searxng(
-                config.SEARXNG_QUERY_URL,
-                query,
-                config.WEB_SEARCH_RESULT_COUNT,
-                config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-                **searxng_kwargs,
-            )
-        else:
-            raise Exception('No SEARXNG_QUERY_URL found in environment variables')
-    elif engine == 'openserp':
-        if config.OPENSERP_BASE_URL:
-            return await search_openserp(
-                config.OPENSERP_BASE_URL,
-                query,
-                config.WEB_SEARCH_RESULT_COUNT,
-                config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-            )
-        else:
-            raise Exception('No OPENSERP_BASE_URL found in environment variables')
-    elif engine == 'yacy':
-        if config.YACY_QUERY_URL:
-            return await asyncio.to_thread(
-                search_yacy,
-                config.YACY_QUERY_URL,
-                config.YACY_USERNAME,
-                config.YACY_PASSWORD,
-                query,
-                config.WEB_SEARCH_RESULT_COUNT,
-                config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-            )
-        else:
-            raise Exception('No YACY_QUERY_URL found in environment variables')
-    elif engine == 'google_pse':
-        if config.GOOGLE_PSE_API_KEY and config.GOOGLE_PSE_ENGINE_ID:
-            return await search_google_pse(
-                config.GOOGLE_PSE_API_KEY,
-                config.GOOGLE_PSE_ENGINE_ID,
-                query,
-                config.WEB_SEARCH_RESULT_COUNT,
-                config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-                referer=config.WEBUI_URL,
-            )
-        else:
-            raise Exception('No GOOGLE_PSE_API_KEY or GOOGLE_PSE_ENGINE_ID found in environment variables')
-    elif engine == 'brave':
-        if config.BRAVE_SEARCH_API_KEY:
-            return await search_brave(
-                config.BRAVE_SEARCH_API_KEY,
-                query,
-                config.WEB_SEARCH_RESULT_COUNT,
-                config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-            )
-        else:
-            raise Exception('No BRAVE_SEARCH_API_KEY found in environment variables')
-    elif engine == 'brave_llm_context':
-        if config.BRAVE_SEARCH_API_KEY:
-            return await asyncio.to_thread(
-                search_brave_llm_context,
-                config.BRAVE_SEARCH_API_KEY,
-                query,
-                config.WEB_SEARCH_RESULT_COUNT,
-                config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-                config.BRAVE_SEARCH_CONTEXT_TOKENS,
-            )
-        else:
-            raise Exception('No BRAVE_SEARCH_API_KEY found in environment variables')
-    elif engine == 'kagi':
-        if config.KAGI_SEARCH_API_KEY:
-            return await asyncio.to_thread(
-                search_kagi,
-                config.KAGI_SEARCH_API_KEY,
-                query,
-                config.WEB_SEARCH_RESULT_COUNT,
-                config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-            )
-        else:
-            raise Exception('No KAGI_SEARCH_API_KEY found in environment variables')
-    elif engine == 'mojeek':
-        if config.MOJEEK_SEARCH_API_KEY:
-            return await asyncio.to_thread(
-                search_mojeek,
-                config.MOJEEK_SEARCH_API_KEY,
-                query,
-                config.WEB_SEARCH_RESULT_COUNT,
-                config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-            )
-        else:
-            raise Exception('No MOJEEK_SEARCH_API_KEY found in environment variables')
-    elif engine == 'bocha':
-        if config.BOCHA_SEARCH_API_KEY:
-            return await asyncio.to_thread(
-                search_bocha,
-                config.BOCHA_SEARCH_API_KEY,
-                query,
-                config.WEB_SEARCH_RESULT_COUNT,
-                config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-            )
-        else:
-            raise Exception('No BOCHA_SEARCH_API_KEY found in environment variables')
-    elif engine == 'serpstack':
-        if config.SERPSTACK_API_KEY:
-            return await search_serpstack(
-                config.SERPSTACK_API_KEY,
-                query,
-                config.WEB_SEARCH_RESULT_COUNT,
-                config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-                https_enabled=config.SERPSTACK_HTTPS,
-            )
-        else:
-            raise Exception('No SERPSTACK_API_KEY found in environment variables')
-    elif engine == 'serper':
-        if config.SERPER_API_KEY:
-            return await search_serper(
-                config.SERPER_API_KEY,
-                query,
-                config.WEB_SEARCH_RESULT_COUNT,
-                config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-            )
-        else:
-            raise Exception('No SERPER_API_KEY found in environment variables')
-    elif engine == 'serphouse':
-        if config.SERPHOUSE_API_KEY:
-            return await search_serphouse(
-                config.SERPHOUSE_API_KEY,
-                config.SERPHOUSE_DOMAIN,
-                query,
-                config.WEB_SEARCH_RESULT_COUNT,
-                config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-            )
-        else:
-            raise Exception('No SERPHOUSE_API_KEY found in environment variables')
-    elif engine == 'serply':
-        if config.SERPLY_API_KEY:
-            return await asyncio.to_thread(
-                search_serply,
-                config.SERPLY_API_KEY,
-                query,
-                config.WEB_SEARCH_RESULT_COUNT,
-                filter_list=config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-            )
-        else:
-            raise Exception('No SERPLY_API_KEY found in environment variables')
-    elif engine == 'duckduckgo':
-        return await asyncio.to_thread(
-            search_duckduckgo,
-            query,
-            config.WEB_SEARCH_RESULT_COUNT,
-            config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-            concurrent_requests=config.WEB_SEARCH_CONCURRENT_REQUESTS,
-            backend=config.DDGS_BACKEND,
-        )
-    elif engine == 'tavily':
-        if config.TAVILY_API_KEY:
-            return await asyncio.to_thread(
-                search_tavily,
-                config.TAVILY_API_KEY,
-                query,
-                config.WEB_SEARCH_RESULT_COUNT,
-                config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-            )
-        else:
-            raise Exception('No TAVILY_API_KEY found in environment variables')
-    elif engine == 'exa':
-        if config.EXA_API_KEY:
-            return await asyncio.to_thread(
-                search_exa,
-                config.EXA_API_KEY,
-                query,
-                config.WEB_SEARCH_RESULT_COUNT,
-                config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-            )
-        else:
-            raise Exception('No EXA_API_KEY found in environment variables')
-    elif engine == 'searchapi':
-        if config.SEARCHAPI_API_KEY:
-            return await asyncio.to_thread(
-                search_searchapi,
-                config.SEARCHAPI_API_KEY,
-                config.SEARCHAPI_ENGINE,
-                query,
-                config.WEB_SEARCH_RESULT_COUNT,
-                config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-            )
-        else:
-            raise Exception('No SEARCHAPI_API_KEY found in environment variables')
-    elif engine == 'serpapi':
-        if config.SERPAPI_API_KEY:
-            return await asyncio.to_thread(
-                search_serpapi,
-                config.SERPAPI_API_KEY,
-                config.SERPAPI_ENGINE,
-                query,
-                config.WEB_SEARCH_RESULT_COUNT,
-                config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-            )
-        else:
-            raise Exception('No SERPAPI_API_KEY found in environment variables')
-    elif engine == 'jina':
-        return await asyncio.to_thread(
-            search_jina,
-            config.JINA_API_KEY,
-            query,
-            config.WEB_SEARCH_RESULT_COUNT,
-            config.JINA_API_BASE_URL,
-        )
-    elif engine == 'bing':
-        return await asyncio.to_thread(
-            search_bing,
-            config.BING_SEARCH_V7_SUBSCRIPTION_KEY,
-            config.BING_SEARCH_V7_ENDPOINT,
-            str(DEFAULT_LOCALE),
-            query,
-            config.WEB_SEARCH_RESULT_COUNT,
-            config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-        )
-    elif engine == 'azure':
-        if config.AZURE_AI_SEARCH_API_KEY and config.AZURE_AI_SEARCH_ENDPOINT and config.AZURE_AI_SEARCH_INDEX_NAME:
-            return await asyncio.to_thread(
-                search_azure,
-                config.AZURE_AI_SEARCH_API_KEY,
-                config.AZURE_AI_SEARCH_ENDPOINT,
-                config.AZURE_AI_SEARCH_INDEX_NAME,
-                query,
-                config.WEB_SEARCH_RESULT_COUNT,
-                config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-            )
-        else:
-            raise Exception(
-                'AZURE_AI_SEARCH_API_KEY, AZURE_AI_SEARCH_ENDPOINT, and AZURE_AI_SEARCH_INDEX_NAME are required for '
-                'Azure AI Search'
-            )
-    elif engine == 'perplexity':
-        return await asyncio.to_thread(
-            search_perplexity,
-            config.PERPLEXITY_API_KEY,
-            query,
-            config.WEB_SEARCH_RESULT_COUNT,
-            config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-            model=config.PERPLEXITY_MODEL,
-            search_context_usage=config.PERPLEXITY_SEARCH_CONTEXT_USAGE,
-        )
-    elif engine == 'microsoft_web_iq':
-        if config.MICROSOFT_WEB_IQ_API_KEY:
-            return await asyncio.to_thread(
-                search_microsoft_web_iq,
-                config.MICROSOFT_WEB_IQ_API_BASE_URL,
-                config.MICROSOFT_WEB_IQ_API_KEY,
-                query,
-                config.WEB_SEARCH_RESULT_COUNT,
-                config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-                config.MICROSOFT_WEB_IQ_LANGUAGE,
-                user,
-            )
-        else:
-            raise Exception('No MICROSOFT_WEB_IQ_API_KEY found in environment variables')
-    elif engine == 'sougou':
-        if config.SOUGOU_API_SID and config.SOUGOU_API_SK:
-            return await asyncio.to_thread(
-                search_sougou,
-                config.SOUGOU_API_SID,
-                config.SOUGOU_API_SK,
-                query,
-                config.WEB_SEARCH_RESULT_COUNT,
-                config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-            )
-        else:
-            raise Exception('No SOUGOU_API_SID or SOUGOU_API_SK found in environment variables')
-    elif engine == 'firecrawl':
-        return await asyncio.to_thread(
-            search_firecrawl,
-            config.FIRECRAWL_API_BASE_URL,
-            config.FIRECRAWL_API_KEY,
-            query,
-            config.WEB_SEARCH_RESULT_COUNT,
-            config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-        )
-    elif engine == 'external':
-        return await asyncio.to_thread(
-            search_external,
-            request,
-            config.EXTERNAL_WEB_SEARCH_URL,
-            config.EXTERNAL_WEB_SEARCH_API_KEY,
-            query,
-            config.WEB_SEARCH_RESULT_COUNT,
-            config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-            user=user,
-        )
-    elif engine == 'yandex':
-        return await asyncio.to_thread(
-            search_yandex,
-            request,
-            config.YANDEX_WEB_SEARCH_URL,
-            config.YANDEX_WEB_SEARCH_API_KEY,
-            config.YANDEX_WEB_SEARCH_CONFIG,
-            query,
-            config.WEB_SEARCH_RESULT_COUNT,
-            config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-            user=user,
-        )
-    elif engine == 'youcom':
-        return await asyncio.to_thread(
-            search_youcom,
-            config.YOUCOM_API_KEY,
-            query,
-            config.WEB_SEARCH_RESULT_COUNT,
-            config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-        )
-    elif engine == 'linkup':
-        if config.LINKUP_API_KEY:
-            return await asyncio.to_thread(
-                search_linkup,
-                api_key=config.LINKUP_API_KEY,
-                query=query,
-                count=config.WEB_SEARCH_RESULT_COUNT,
-                filter_list=config.WEB_SEARCH_DOMAIN_FILTER_LIST,
-                params=config.LINKUP_SEARCH_PARAMS,
-            )
-        else:
-            raise Exception('No LINKUP_API_KEY found in environment variables')
-    else:
+    search_engine = _WEB_SEARCH_ENGINES.get(engine)
+    if search_engine is None:
         raise Exception('No search engine API key found in environment variables')
+    if not all(getattr(config, key) for key in search_engine.required):
+        raise Exception(search_engine.missing)
+
+    args, kwargs = search_engine.args(config, query, request, user)
+    provider = search_engine.provider()
+    if search_engine.threaded:
+        return await asyncio.to_thread(provider, *args, **kwargs)
+    return await provider(*args, **kwargs)
 
 
 @router.post('/process/web/search')
