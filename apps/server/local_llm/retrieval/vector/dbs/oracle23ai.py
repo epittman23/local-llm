@@ -315,8 +315,8 @@ class Oracle23aiClient(VectorDBBase):
                     """
                     BEGIN
                         EXECUTE IMMEDIATE '
-                            CREATE VECTOR INDEX IF NOT EXISTS document_chunk_vector_ivf_idx 
-                            ON document_chunk(vector) 
+                            CREATE VECTOR INDEX IF NOT EXISTS document_chunk_vector_ivf_idx
+                            ON document_chunk(vector)
                             ORGANIZATION NEIGHBOR PARTITIONS
                             DISTANCE COSINE
                             WITH TARGET ACCURACY 95
@@ -443,8 +443,8 @@ class Oracle23aiClient(VectorDBBase):
 
                         cursor.execute(
                             """
-                            INSERT INTO document_chunk 
-                            (id, collection_name, text, vmetadata, vector) 
+                            INSERT INTO document_chunk
+                            (id, collection_name, text, vmetadata, vector)
                             VALUES (:id, :collection_name, :text, :metadata, :vector)
                         """,
                             {
@@ -501,7 +501,7 @@ class Oracle23aiClient(VectorDBBase):
                             USING (SELECT :merge_id as id FROM dual) s
                             ON (d.id = s.id)
                             WHEN MATCHED THEN
-                                UPDATE SET 
+                                UPDATE SET
                                     collection_name = :upd_collection_name,
                                     text = :upd_text,
                                     vmetadata = :upd_metadata,
@@ -644,7 +644,7 @@ class Oracle23aiClient(VectorDBBase):
             limit = limit or 100
 
             query = """
-                SELECT id, text, JSON_SERIALIZE(vmetadata RETURNING VARCHAR2(4096)) as vmetadata 
+                SELECT id, text, JSON_SERIALIZE(vmetadata RETURNING VARCHAR2(4096)) as vmetadata
                 FROM document_chunk
                 WHERE collection_name = :collection_name
             """
@@ -904,7 +904,7 @@ class Oracle23aiClient(VectorDBBase):
                 with connection.cursor() as cursor:
                     cursor.execute(
                         """
-                        DELETE FROM document_chunk 
+                        DELETE FROM document_chunk
                         WHERE collection_name = :collection_name
                     """,
                         {'collection_name': collection_name},
