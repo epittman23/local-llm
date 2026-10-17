@@ -268,6 +268,421 @@ async def process_pending_internal_messages(
         await source_request.app.state.CHAT_COMPLETION_HANDLER(request, form_data, user=user)
 
 
+def _subagent_limits(config: dict) -> tuple[int, int, int, int]:
+    """(max concurrent foreground, max background, max tool iterations, max output chars); -1 means unlimited."""
+    max_concurrent = int(config.get('subagents.max_concurrent') or 20)
+    max_async = int(config.get('subagents.max_async') or 20)
+    max_iterations = int(config.get('subagents.max_iterations') or 30)
+    max_output = int(config.get('subagents.max_output') or 30_000)
+    if max_concurrent != -1:
+        max_concurrent = max(1, max_concurrent)
+    if max_async != -1:
+        max_async = max(1, max_async)
+    return max_concurrent, max_async, max_iterations, max_output
+
+
+async def _run_settings(metadata: dict, background: bool) -> dict:
+    """What the sub-agent inherits from the parent's request.
+
+    In the background it gets no tool servers, and no code interpreter unless that runs on Jupyter.
+    """
+    features = copy.deepcopy(metadata.get('features') or {})
+    if (
+        background
+        and features.get('code_interpreter')
+        and await Config.get('code_interpreter.engine', 'pyodide') != 'jupyter'
+    ):
+        features.pop('code_interpreter')
+    return {
+        'model_id': metadata.get('model_id') or (metadata.get('model') or {}).get('id'),
+        'session_id': metadata.get('session_id'),
+        'tool_ids': copy.deepcopy(metadata.get('tool_ids') or []),
+        'skill_ids': copy.deepcopy(metadata.get('skill_ids') or []),
+        'system_prompt': metadata.get('system_prompt'),
+        'tool_servers': [] if background else copy.deepcopy(metadata.get('tool_servers') or []),
+        'filter_ids': copy.deepcopy(metadata.get('filter_ids') or []),
+        'terminal_id': metadata.get('terminal_id'),
+        'features': features,
+        'files': copy.deepcopy(metadata.get('files') or []),
+        'variables': copy.deepcopy(metadata.get('variables') or {}),
+        'direct': bool(metadata.get('direct')),
+    }
+
+
+def _nested_file_id(file: dict):
+    return file.get('file', {}).get('id') if isinstance(file.get('file'), dict) else None
+
+
+def _select_files(metadata: dict, file_ids: list[str] | None) -> tuple[list, str | None]:
+    """The parent's attached files the sub-agent asked for (by id, url or nested file id), or an error."""
+    if not file_ids:
+        return [], None
+    requested_file_ids = {str(file_id) for file_id in file_ids if file_id}
+    files = [
+        copy.deepcopy(file)
+        for file in metadata.get('files') or []
+        if str(file.get('id') or '') in requested_file_ids
+        or str(file.get('url') or '') in requested_file_ids
+        or str(_nested_file_id(file) or '') in requested_file_ids
+    ]
+    found_file_ids = {
+        str(value) for file in files for value in (file.get('id'), file.get('url'), _nested_file_id(file)) if value
+    }
+    missing_file_ids = sorted(requested_file_ids - found_file_ids)
+    if missing_file_ids:
+        return files, f'Error: file_ids not attached or unavailable: {", ".join(missing_file_ids)}'
+    return files, None
+
+
+def _message_text(message: dict) -> str:
+    """A completion message's text: its content (text parts joined), else the text of its output items."""
+    summary = message.get('content') or ''
+    if isinstance(summary, list):
+        summary = ''.join(
+            str(item.get('text', '')) for item in summary if isinstance(item, dict) and item.get('type') == 'text'
+        )
+    if not summary:
+        summary = ''.join(
+            str(part.get('text', ''))
+            for item in message.get('output') or []
+            if item.get('type') == 'message'
+            for part in item.get('content') or []
+            if part.get('type') == 'output_text'
+        )
+    return summary
+
+
+def _background_result_text(delegation_id: str, task: str, context: str, chat_id: str, result: dict, duration: str):
+    """The message a finished background sub-agent leaves in its parent chat."""
+    lines = [
+        f'[ASYNC SUBAGENT COMPLETE - {delegation_id}]',
+        (
+            'A background subagent you dispatched earlier has finished. '
+            'The original task source is included so you can decide whether '
+            'to use the result or continue without it.'
+        ),
+        '',
+        f'Original task: {task}',
+    ]
+    if context:
+        lines.append(f'Context provided: {context}')
+    lines.extend(
+        [
+            f'Subagent chat: {chat_id}',
+            f'Status: {result.get("status", "completed")}   Duration: {duration}',
+            '--- RESULT ---',
+        ]
+    )
+    if result.get('status') == 'completed':
+        lines.append(result.get('summary') or 'Subagent completed without a final summary.')
+    else:
+        if result.get('status') == 'interrupted':
+            lines.append('The subagent was interrupted before completing.')
+        else:
+            detail = f' {result.get("error")}' if result.get('error') else ''
+            lines.append(f'The subagent did not complete successfully.{detail}')
+        if result.get('summary'):
+            lines.extend(['Partial output:', result['summary']])
+    return '\n'.join(lines)
+
+
+class _SubagentRun:
+    """One delegation: its slot, its sub-agent chat, and running it in the foreground or background."""
+
+    def __init__(self, *, task, context, background, run, limits, config, request, user_data, parent_chat_id,
+                 parent_message_id):  # fmt: skip
+        self.task = task
+        self.context = context
+        self.background = background
+        self.run = run
+        self.max_concurrent, self.max_async, self.max_iterations, self.max_output = limits
+        self.config = config
+        self.request = request
+        self.user_data = user_data
+        self.parent_chat_id = parent_chat_id
+        self.parent_message_id = parent_message_id
+        self.delegation_id = f'deleg_{uuid4().hex[:8]}'
+        self.foreground_semaphore = None
+
+    async def reserve(self) -> str | None:
+        """Takes a background slot or a foreground semaphore permit; an error when no background slot is free."""
+        global _foreground_semaphore
+        if self.background:
+            async with _background_lock:
+                if self.max_async != -1 and len(_background_active) >= self.max_async:
+                    return (
+                        f'Error: Async subagent capacity reached ({self.max_async} running). '
+                        'Wait for one to finish or increase subagents.max_async.'
+                    )
+                _background_active.add(self.delegation_id)
+        elif self.max_concurrent != -1:
+            if _foreground_semaphore is None:
+                _foreground_semaphore = asyncio.Semaphore(self.max_concurrent)
+            self.foreground_semaphore = _foreground_semaphore
+            await self.foreground_semaphore.acquire()
+        return None
+
+    async def release(self) -> None:
+        if self.background:
+            async with _background_lock:
+                _background_active.discard(self.delegation_id)
+        elif self.foreground_semaphore:
+            self.foreground_semaphore.release()
+
+    async def create_chat(self) -> str | None:
+        """Creates the sub-agent's chat with its prompt; an error (with the slot released) if that fails."""
+        mode = 'background' if self.background else 'foreground'
+        try:
+            self.user = UserModel(**self.user_data)
+            self.chat_id = str(uuid4())
+            self.user_message_id = str(uuid4())
+            self.assistant_message_id = str(uuid4())
+            self.prompt = f'{self.task}\n\n## Context\n{self.context}' if self.context else self.task
+            prompt_files = copy.deepcopy(self.run.get('files') or [])
+            self.user_message = {
+                'id': self.user_message_id,
+                'parentId': None,
+                'childrenIds': [self.assistant_message_id],
+                'role': 'user',
+                'content': self.prompt,
+                'timestamp': int(time.time()),
+                'models': [self.run['model_id']],
+                **({'files': prompt_files} if prompt_files else {}),
+            }
+            chat = await Chats.insert_new_chat(
+                self.chat_id,
+                self.user.id,
+                ChatForm(
+                    chat={
+                        'id': self.chat_id,
+                        'title': f'Sub-agent: {self.task[:60]}',
+                        'models': [self.run['model_id']],
+                        'history': {
+                            'currentId': self.assistant_message_id,
+                            'messages': {
+                                self.user_message_id: self.user_message,
+                                self.assistant_message_id: {
+                                    'id': self.assistant_message_id,
+                                    'parentId': self.user_message_id,
+                                    'childrenIds': [],
+                                    'role': 'assistant',
+                                    'content': '',
+                                    'done': False,
+                                    'model': self.run['model_id'],
+                                    'timestamp': int(time.time()),
+                                },
+                            },
+                        },
+                        'messages': [
+                            {
+                                'role': 'user',
+                                'content': self.prompt,
+                                **({'files': prompt_files} if prompt_files else {}),
+                            }
+                        ],
+                        'files': prompt_files,
+                    }
+                ),
+                internal_meta={
+                    'internal': True,
+                    'type': 'subagent',
+                    'parent_chat_id': self.parent_chat_id,
+                    'parent_message_id': self.parent_message_id,
+                    'delegation_id': self.delegation_id,
+                    'mode': mode,
+                },
+            )
+            if not chat:
+                raise RuntimeError('Failed to create sub-agent chat')
+        except Exception as exc:
+            await self.release()
+            prefix = 'background ' if self.background else ''
+            return f'Error: failed to create {prefix}sub-agent: {exc}'
+        return None
+
+    def _completion_form(self) -> dict:
+        run = self.run
+        parent_system_prompt = run.get('system_prompt') or ''
+        subagent_system_prompt = (
+            str(self.config.get('subagents.system_prompt') or '').strip() or DEFAULT_SUBAGENT_SYSTEM_PROMPT
+        )
+        form_data = {
+            'model': run['model_id'],
+            'messages': [
+                {
+                    'role': 'system',
+                    'content': (
+                        f'{parent_system_prompt}\n\n{subagent_system_prompt}'
+                        if parent_system_prompt
+                        else subagent_system_prompt
+                    ),
+                },
+                {'role': 'user', 'content': self.prompt},
+            ],
+            'stream': True,
+            'chat_id': self.chat_id,
+            'id': self.assistant_message_id,
+            'parent_id': None,
+            'user_message': self.user_message,
+            'session_id': run.get('session_id') or f'subagent:{self.chat_id}',
+            'background_tasks': {},
+            'tool_ids': run.get('tool_ids') or [],
+            'skill_ids': run.get('skill_ids') or [],
+            'filter_ids': run.get('filter_ids') or [],
+            'features': run.get('features') or {},
+            'files': run.get('files') or [],
+            'variables': run.get('variables') or {},
+        }
+        if run.get('terminal_id'):
+            form_data['terminal_id'] = run['terminal_id']
+        if run.get('tool_servers'):
+            form_data['tool_servers'] = run['tool_servers']
+        return form_data
+
+    async def run_reserved(self) -> dict:
+        """Runs the sub-agent's completion in its slot and returns its status, summary and error."""
+        try:
+            child_request = _build_request(self.request, self.user.id, internal=True)
+            child_request.state.max_tool_call_iterations = self.max_iterations
+            await self.request.app.state.CHAT_COMPLETION_HANDLER(child_request, self._completion_form(), user=self.user)
+            message = await Chats.get_message_by_id_and_message_id(self.chat_id, self.assistant_message_id)
+            if not message:
+                return {
+                    'status': 'error',
+                    'summary': '',
+                    'error': 'Sub-agent chat or completion message no longer exists.',
+                }
+            summary = _message_text(message)
+            if len(summary) > self.max_output:
+                summary = f'{summary[: self.max_output]}\n\n[output truncated]'
+            error = message.get('error')
+            return {
+                'status': 'error' if error else 'completed',
+                'summary': summary or ('Sub-agent produced no output.' if not error else ''),
+                'error': error,
+            }
+        except asyncio.CancelledError:
+            await self._mark_failed('Sub-agent cancelled.')
+            raise
+        except Exception as exc:
+            await self._mark_failed(str(exc))
+            raise
+        finally:
+            await self.release()
+
+    async def _mark_failed(self, content: str) -> None:
+        await Chats.upsert_message_to_chat_by_id_and_message_id(
+            self.chat_id,
+            self.assistant_message_id,
+            {'done': True, 'error': {'content': content}},
+        )
+
+    async def run_background(self) -> dict:
+        """Runs the sub-agent, posts its result into the parent chat, and wakes the parent if it is idle."""
+        started_at = time.time()
+        cancelled = False
+        try:
+            result = await self.run_reserved()
+        except asyncio.CancelledError:
+            result = {'status': 'interrupted', 'summary': '', 'error': 'cancelled'}
+            cancelled = True
+        except Exception as exc:
+            result = {'status': 'error', 'summary': '', 'error': str(exc)}
+
+        duration = f'{time.time() - started_at:.1f}s'
+        pending_message_id = str(uuid4())
+        pending_message = {
+            'id': pending_message_id,
+            'parentId': None,
+            'childrenIds': [],
+            'role': 'user',
+            'content': _background_result_text(
+                self.delegation_id, self.task, self.context, self.chat_id, result, duration
+            ),
+            'model': self.run['model_id'],
+            'meta': {
+                'internal': True,
+                'type': 'subagent',
+                'delegation_id': self.delegation_id,
+                'subagent_chat_id': self.chat_id,
+            },
+            'timestamp': int(time.time()),
+        }
+
+        if not await self._post_result(pending_message):
+            if cancelled:
+                raise asyncio.CancelledError
+            return result
+
+        if pending_message['meta'].get('status') == 'pending':
+            from local_llm.socket.main import sio
+
+            await sio.emit(
+                'events',
+                {
+                    'chat_id': self.parent_chat_id,
+                    'message_id': pending_message_id,
+                    'data': {'type': 'chat:reload'},
+                },
+                room=f'user:{self.user.id}',
+            )
+        if not await has_active_tasks(self.request.app.state.redis, self.parent_chat_id):
+            await process_pending_internal_messages(self.request, self.parent_chat_id, self.user.id, self.run)
+        if cancelled:
+            raise asyncio.CancelledError
+        return result
+
+    async def _post_result(self, pending_message: dict) -> bool:
+        """Adds the result message under the parent's latest finished reply; False if the parent chat is gone.
+
+        While the parent is still running, the message is marked pending, to be picked up when it finishes.
+        """
+        lock = _parent_locks.setdefault(self.parent_chat_id, asyncio.Lock())
+        async with lock:
+            async with get_async_db() as db:
+                stmt = select(Chat).where(Chat.id == self.parent_chat_id, Chat.user_id == self.user.id)
+                if db.bind.dialect.name == 'postgresql':
+                    stmt = stmt.with_for_update()
+                result_row = await db.execute(stmt)
+                parent = result_row.scalar_one_or_none()
+                if not parent:
+                    return False
+
+                updated_chat = copy.deepcopy(parent.chat or {})
+                updated_history = updated_chat.setdefault('history', {})
+                updated_messages = updated_history.setdefault('messages', {})
+                done_assistants = [
+                    message
+                    for message in updated_messages.values()
+                    if message.get('role') == 'assistant' and message.get('done') is not False
+                ]
+                result_parent_id = (
+                    max(done_assistants, key=lambda message: message.get('timestamp', 0)).get('id')
+                    if done_assistants
+                    else self.parent_message_id
+                )
+                pending_message['parentId'] = result_parent_id
+                if await has_active_tasks(self.request.app.state.redis, self.parent_chat_id):
+                    pending_message['meta']['status'] = 'pending'
+                updated_messages[pending_message['id']] = pending_message
+                if result_parent_id and result_parent_id in updated_messages:
+                    children = updated_messages[result_parent_id].setdefault('childrenIds', [])
+                    if pending_message['id'] not in children:
+                        children.append(pending_message['id'])
+                updated_history['messages'] = updated_messages
+                parent.chat = {**(parent.chat or {}), **updated_chat, 'history': updated_history}
+                parent.updated_at = int(time.time())
+                await db.commit()
+
+            await ChatMessages.upsert_message(
+                message_id=pending_message['id'],
+                chat_id=self.parent_chat_id,
+                user_id=self.user.id,
+                data=pending_message,
+            )
+        return True
+
+
 async def delegate(
     task: str,
     context: str,
@@ -280,8 +695,7 @@ async def delegate(
     parent_chat_id: str,
     parent_message_id: str | None,
 ) -> str:
-    global _foreground_semaphore
-
+    """Runs a task in a sub-agent chat: in the foreground (returning its summary) or the background."""
     task = task.strip()
     if not task:
         return 'Error: task must not be empty.'
@@ -296,393 +710,51 @@ async def delegate(
         'subagents.max_output',
         'subagents.system_prompt',
     )
-    max_concurrent = int(config.get('subagents.max_concurrent') or 20)
-    max_async = int(config.get('subagents.max_async') or 20)
-    max_iterations = int(config.get('subagents.max_iterations') or 30)
-    max_output = int(config.get('subagents.max_output') or 30_000)
-    if max_concurrent != -1:
-        max_concurrent = max(1, max_concurrent)
-    if max_async != -1:
-        max_async = max(1, max_async)
-
+    limits = _subagent_limits(config)
     if background and not config.get('subagents.background_enabled'):
         return 'Error: background sub-agents are disabled in settings.'
 
-    features = copy.deepcopy(metadata.get('features') or {})
-    if (
-        background
-        and features.get('code_interpreter')
-        and await Config.get('code_interpreter.engine', 'pyodide') != 'jupyter'
-    ):
-        features.pop('code_interpreter')
-    run = {
-        'model_id': metadata.get('model_id') or (metadata.get('model') or {}).get('id'),
-        'session_id': metadata.get('session_id'),
-        'tool_ids': copy.deepcopy(metadata.get('tool_ids') or []),
-        'skill_ids': copy.deepcopy(metadata.get('skill_ids') or []),
-        'system_prompt': metadata.get('system_prompt'),
-        'tool_servers': [] if background else copy.deepcopy(metadata.get('tool_servers') or []),
-        'filter_ids': copy.deepcopy(metadata.get('filter_ids') or []),
-        'terminal_id': metadata.get('terminal_id'),
-        'features': features,
-        'files': copy.deepcopy(metadata.get('files') or []),
-        'variables': copy.deepcopy(metadata.get('variables') or {}),
-        'direct': bool(metadata.get('direct')),
-    }
+    run = await _run_settings(metadata, background)
     if not run.get('model_id'):
         return 'Error: model context is required.'
     if run.get('direct'):
         return 'Error: sub-agents are unavailable for direct connections.'
-    if file_ids:
-        requested_file_ids = {str(file_id) for file_id in file_ids if file_id}
-        run['files'] = [
-            copy.deepcopy(file)
-            for file in metadata.get('files') or []
-            if str(file.get('id') or '') in requested_file_ids
-            or str(file.get('url') or '') in requested_file_ids
-            or (isinstance(file.get('file'), dict) and str(file.get('file', {}).get('id') or '') in requested_file_ids)
-        ]
-        found_file_ids = {
-            str(value)
-            for file in run['files']
-            for value in (
-                file.get('id'),
-                file.get('url'),
-                file.get('file', {}).get('id') if isinstance(file.get('file'), dict) else None,
-            )
-            if value
-        }
-        missing_file_ids = sorted(requested_file_ids - found_file_ids)
-        if missing_file_ids:
-            return f'Error: file_ids not attached or unavailable: {", ".join(missing_file_ids)}'
-    else:
-        run['files'] = []
+    run['files'], error = _select_files(metadata, file_ids)
+    if error:
+        return error
 
-    delegation_id = f'deleg_{uuid4().hex[:8]}'
-    foreground_semaphore = None
-    if background:
-        async with _background_lock:
-            if max_async != -1 and len(_background_active) >= max_async:
-                return (
-                    f'Error: Async subagent capacity reached ({max_async} running). '
-                    'Wait for one to finish or increase subagents.max_async.'
-                )
-            _background_active.add(delegation_id)
-    elif max_concurrent != -1:
-        if _foreground_semaphore is None:
-            _foreground_semaphore = asyncio.Semaphore(max_concurrent)
-        foreground_semaphore = _foreground_semaphore
-        await foreground_semaphore.acquire()
-
-    mode = 'background' if background else 'foreground'
-    try:
-        user = UserModel(**user_data)
-        chat_id = str(uuid4())
-        user_message_id = str(uuid4())
-        assistant_message_id = str(uuid4())
-        prompt = f'{task}\n\n## Context\n{context}' if context else task
-        prompt_files = copy.deepcopy(run.get('files') or [])
-        user_message = {
-            'id': user_message_id,
-            'parentId': None,
-            'childrenIds': [assistant_message_id],
-            'role': 'user',
-            'content': prompt,
-            'timestamp': int(time.time()),
-            'models': [run['model_id']],
-            **({'files': prompt_files} if prompt_files else {}),
-        }
-        chat = await Chats.insert_new_chat(
-            chat_id,
-            user.id,
-            ChatForm(
-                chat={
-                    'id': chat_id,
-                    'title': f'Sub-agent: {task[:60]}',
-                    'models': [run['model_id']],
-                    'history': {
-                        'currentId': assistant_message_id,
-                        'messages': {
-                            user_message_id: user_message,
-                            assistant_message_id: {
-                                'id': assistant_message_id,
-                                'parentId': user_message_id,
-                                'childrenIds': [],
-                                'role': 'assistant',
-                                'content': '',
-                                'done': False,
-                                'model': run['model_id'],
-                                'timestamp': int(time.time()),
-                            },
-                        },
-                    },
-                    'messages': [
-                        {
-                            'role': 'user',
-                            'content': prompt,
-                            **({'files': prompt_files} if prompt_files else {}),
-                        }
-                    ],
-                    'files': prompt_files,
-                }
-            ),
-            internal_meta={
-                'internal': True,
-                'type': 'subagent',
-                'parent_chat_id': parent_chat_id,
-                'parent_message_id': parent_message_id,
-                'delegation_id': delegation_id,
-                'mode': mode,
-            },
-        )
-        if not chat:
-            raise RuntimeError('Failed to create sub-agent chat')
-    except Exception as exc:
-        if background:
-            async with _background_lock:
-                _background_active.discard(delegation_id)
-        elif foreground_semaphore:
-            foreground_semaphore.release()
-        prefix = 'background ' if background else ''
-        return f'Error: failed to create {prefix}sub-agent: {exc}'
-
-    async def run_reserved() -> dict:
-        try:
-            child_request = _build_request(request, user.id, internal=True)
-            child_request.state.max_tool_call_iterations = max_iterations
-            parent_system_prompt = run.get('system_prompt') or ''
-            subagent_system_prompt = (
-                str(config.get('subagents.system_prompt') or '').strip() or DEFAULT_SUBAGENT_SYSTEM_PROMPT
-            )
-            form_data = {
-                'model': run['model_id'],
-                'messages': [
-                    {
-                        'role': 'system',
-                        'content': (
-                            f'{parent_system_prompt}\n\n{subagent_system_prompt}'
-                            if parent_system_prompt
-                            else subagent_system_prompt
-                        ),
-                    },
-                    {'role': 'user', 'content': prompt},
-                ],
-                'stream': True,
-                'chat_id': chat_id,
-                'id': assistant_message_id,
-                'parent_id': None,
-                'user_message': user_message,
-                'session_id': run.get('session_id') or f'subagent:{chat_id}',
-                'background_tasks': {},
-                'tool_ids': run.get('tool_ids') or [],
-                'skill_ids': run.get('skill_ids') or [],
-                'filter_ids': run.get('filter_ids') or [],
-                'features': run.get('features') or {},
-                'files': run.get('files') or [],
-                'variables': run.get('variables') or {},
-            }
-            if run.get('terminal_id'):
-                form_data['terminal_id'] = run['terminal_id']
-            if run.get('tool_servers'):
-                form_data['tool_servers'] = run['tool_servers']
-            await request.app.state.CHAT_COMPLETION_HANDLER(child_request, form_data, user=user)
-            message = await Chats.get_message_by_id_and_message_id(chat_id, assistant_message_id)
-            if not message:
-                return {
-                    'status': 'error',
-                    'summary': '',
-                    'error': 'Sub-agent chat or completion message no longer exists.',
-                }
-
-            summary = message.get('content') or ''
-            if isinstance(summary, list):
-                summary = ''.join(
-                    str(item.get('text', ''))
-                    for item in summary
-                    if isinstance(item, dict) and item.get('type') == 'text'
-                )
-            if not summary:
-                summary = ''.join(
-                    str(part.get('text', ''))
-                    for item in message.get('output') or []
-                    if item.get('type') == 'message'
-                    for part in item.get('content') or []
-                    if part.get('type') == 'output_text'
-                )
-            if len(summary) > max_output:
-                summary = f'{summary[:max_output]}\n\n[output truncated]'
-            error = message.get('error')
-            return {
-                'status': 'error' if error else 'completed',
-                'summary': summary or ('Sub-agent produced no output.' if not error else ''),
-                'error': error,
-            }
-        except asyncio.CancelledError:
-            await Chats.upsert_message_to_chat_by_id_and_message_id(
-                chat_id,
-                assistant_message_id,
-                {'done': True, 'error': {'content': 'Sub-agent cancelled.'}},
-            )
-            raise
-        except Exception as exc:
-            await Chats.upsert_message_to_chat_by_id_and_message_id(
-                chat_id,
-                assistant_message_id,
-                {'done': True, 'error': {'content': str(exc)}},
-            )
-            raise
-        finally:
-            if background:
-                async with _background_lock:
-                    _background_active.discard(delegation_id)
-            elif foreground_semaphore:
-                foreground_semaphore.release()
-
-    async def run_background() -> dict:
-        started_at = time.time()
-        cancelled = False
-        try:
-            result = await run_reserved()
-        except asyncio.CancelledError:
-            result = {'status': 'interrupted', 'summary': '', 'error': 'cancelled'}
-            cancelled = True
-        except Exception as exc:
-            result = {'status': 'error', 'summary': '', 'error': str(exc)}
-
-        duration = f'{time.time() - started_at:.1f}s'
-        lines = [
-            f'[ASYNC SUBAGENT COMPLETE - {delegation_id}]',
-            (
-                'A background subagent you dispatched earlier has finished. '
-                'The original task source is included so you can decide whether '
-                'to use the result or continue without it.'
-            ),
-            '',
-            f'Original task: {task}',
-        ]
-        if context:
-            lines.append(f'Context provided: {context}')
-        lines.extend(
-            [
-                f'Subagent chat: {chat_id}',
-                f'Status: {result.get("status", "completed")}   Duration: {duration}',
-                '--- RESULT ---',
-            ]
-        )
-        if result.get('status') == 'completed':
-            lines.append(result.get('summary') or 'Subagent completed without a final summary.')
-        elif result.get('status') == 'interrupted':
-            lines.append('The subagent was interrupted before completing.')
-            if result.get('summary'):
-                lines.extend(['Partial output:', result['summary']])
-        else:
-            detail = f' {result.get("error")}' if result.get('error') else ''
-            lines.append(f'The subagent did not complete successfully.{detail}')
-            if result.get('summary'):
-                lines.extend(['Partial output:', result['summary']])
-
-        pending_message_id = str(uuid4())
-        pending_meta = {
-            'internal': True,
-            'type': 'subagent',
-            'delegation_id': delegation_id,
-            'subagent_chat_id': chat_id,
-        }
-        pending_message = {
-            'id': pending_message_id,
-            'parentId': None,
-            'childrenIds': [],
-            'role': 'user',
-            'content': '\n'.join(lines),
-            'model': run['model_id'],
-            'meta': pending_meta,
-            'timestamp': int(time.time()),
-        }
-
-        lock = _parent_locks.setdefault(parent_chat_id, asyncio.Lock())
-        async with lock:
-            async with get_async_db() as db:
-                stmt = select(Chat).where(Chat.id == parent_chat_id, Chat.user_id == user.id)
-                if db.bind.dialect.name == 'postgresql':
-                    stmt = stmt.with_for_update()
-                result_row = await db.execute(stmt)
-                parent = result_row.scalar_one_or_none()
-                if not parent:
-                    if cancelled:
-                        raise asyncio.CancelledError
-                    return result
-
-                updated_chat = copy.deepcopy(parent.chat or {})
-                updated_history = updated_chat.setdefault('history', {})
-                updated_messages = updated_history.setdefault('messages', {})
-                done_assistants = [
-                    message
-                    for message in updated_messages.values()
-                    if message.get('role') == 'assistant' and message.get('done') is not False
-                ]
-                result_parent_id = (
-                    max(done_assistants, key=lambda message: message.get('timestamp', 0)).get('id')
-                    if done_assistants
-                    else parent_message_id
-                )
-                pending_message['parentId'] = result_parent_id
-                if await has_active_tasks(request.app.state.redis, parent_chat_id):
-                    pending_message['meta']['status'] = 'pending'
-                updated_messages[pending_message_id] = pending_message
-                if result_parent_id and result_parent_id in updated_messages:
-                    children = updated_messages[result_parent_id].setdefault('childrenIds', [])
-                    if pending_message_id not in children:
-                        children.append(pending_message_id)
-                updated_history['messages'] = updated_messages
-                parent.chat = {**(parent.chat or {}), **updated_chat, 'history': updated_history}
-                parent.updated_at = int(time.time())
-                await db.commit()
-
-            await ChatMessages.upsert_message(
-                message_id=pending_message_id,
-                chat_id=parent_chat_id,
-                user_id=user.id,
-                data=pending_message,
-            )
-
-        if pending_message['meta'].get('status') == 'pending':
-            from local_llm.socket.main import sio
-
-            await sio.emit(
-                'events',
-                {
-                    'chat_id': parent_chat_id,
-                    'message_id': pending_message_id,
-                    'data': {'type': 'chat:reload'},
-                },
-                room=f'user:{user.id}',
-            )
-        if not await has_active_tasks(request.app.state.redis, parent_chat_id):
-            await process_pending_internal_messages(request, parent_chat_id, user.id, run)
-        if cancelled:
-            raise asyncio.CancelledError
-        return result
+    subagent = _SubagentRun(
+        task=task,
+        context=context,
+        background=background,
+        run=run,
+        limits=limits,
+        config=config,
+        request=request,
+        user_data=user_data,
+        parent_chat_id=parent_chat_id,
+        parent_message_id=parent_message_id,
+    )
+    error = await subagent.reserve() or await subagent.create_chat()
+    if error:
+        return error
 
     try:
         _, child_task = await create_task(
             request.app.state.redis,
-            run_background() if background else run_reserved(),
-            id=chat_id,
+            subagent.run_background() if background else subagent.run_reserved(),
+            id=subagent.chat_id,
         )
     except Exception as exc:
-        if background:
-            async with _background_lock:
-                _background_active.discard(delegation_id)
-        elif foreground_semaphore:
-            foreground_semaphore.release()
+        await subagent.release()
         return f'Error: {exc}'
 
     if background:
         return JSONCodec.dumps(
             {
                 'status': 'dispatched',
-                'delegation_id': delegation_id,
-                'subagent_chat_id': chat_id,
+                'delegation_id': subagent.delegation_id,
+                'subagent_chat_id': subagent.chat_id,
                 'mode': 'background',
                 'task': task,
             },
