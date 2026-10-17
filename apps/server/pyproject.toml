@@ -257,4 +257,3 @@ pydocstyle.convention = "google"
 # tests) rather than exempted; a file leaves this list in the PR that
 # refactors its last such function, and the list is deleted when empty.
 [tool.ruff.lint.per-file-ignores]
-"local_llm/tools/builtin.py" = ["C901"]

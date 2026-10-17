@@ -1331,6 +1331,94 @@ async def write_note(
         return JSONCodec.dumps({'error': str(e)})
 
 
+class _NoteOperationError(Exception):
+    """A note operation that can't be applied; ``payload`` is the error the tool returns."""
+
+    def __init__(self, error: str, code: str, **details):
+        super().__init__(error)
+        self.payload = {'error': error, 'code': code, **details}
+
+
+def _whole_replacement(operation: dict, idx: int, operation_count: int) -> str:
+    if operation_count != 1:
+        raise _NoteOperationError('replace operation must be the only operation', 'invalid_operations', index=idx)
+    replacement = operation.get('content')
+    if not isinstance(replacement, str):
+        raise _NoteOperationError('replace operation content must be a string', 'invalid_content', index=idx)
+    return replacement
+
+
+def _range_operation(operation: dict, idx: int, current_content: str) -> dict:
+    start = operation.get('start')
+    end = operation.get('end')
+    replacement = operation.get('content')
+    expected = operation.get('expected')
+    if not isinstance(start, int) or not isinstance(end, int):
+        raise _NoteOperationError('operation start and end must be integers', 'invalid_range', index=idx)
+    if not isinstance(replacement, str):
+        raise _NoteOperationError('operation content must be a string', 'invalid_content', index=idx)
+    if start < 0 or end < start or end > len(current_content):
+        raise _NoteOperationError('operation range is out of bounds', 'range_out_of_bounds', index=idx)
+    if expected is not None and current_content[start:end] != expected:
+        raise _NoteOperationError(
+            'operation expected text does not match current content', 'expected_mismatch', index=idx
+        )
+    return {'start': start, 'end': end, 'content': replacement}
+
+
+def _apply_ranges(range_operations: list[dict], current_content: str) -> str:
+    range_operations.sort(key=lambda operation: operation['start'])
+    previous_end = 0
+    for idx, operation in enumerate(range_operations):
+        if operation['start'] < previous_end:
+            raise _NoteOperationError('operation ranges must not overlap', 'overlapping_operations', index=idx)
+        previous_end = operation['end']
+
+    # Back to front, so each edit leaves the offsets of the ones before it intact.
+    content = current_content
+    for operation in reversed(range_operations):
+        content = content[: operation['start']] + operation['content'] + content[operation['end'] :]
+    return content
+
+
+def _apply_note_operations(operations, current_content: str) -> tuple[str, int]:
+    """Return the note's new markdown and how many operations made it, or raise _NoteOperationError."""
+    if not isinstance(operations, list) or len(operations) == 0:
+        raise _NoteOperationError('operations must be a non-empty list', 'invalid_operations')
+
+    range_operations = []
+    for idx, operation in enumerate(operations):
+        if not isinstance(operation, dict):
+            raise _NoteOperationError('each operation must be an object', 'invalid_operation', index=idx)
+        action = operation.get('action')
+        if action == 'replace':
+            return _whole_replacement(operation, idx, len(operations)), 1
+        if action != 'replace_range':
+            raise _NoteOperationError('unknown operation action', 'invalid_action', index=idx, action=action)
+        range_operations.append(_range_operation(operation, idx, current_content))
+
+    return _apply_ranges(range_operations, current_content), len(range_operations)
+
+
+def _note_update(note, content: str, title: str | None) -> dict:
+    # The editor regenerates json and html from md, so stale copies are cleared.
+    data = note.data or {}
+    update_data = {
+        'data': {
+            **data,
+            'content': {
+                **(data.get('content') or {}),
+                'json': None,
+                'html': '',
+                'md': content,
+            },
+        }
+    }
+    if title:
+        update_data['title'] = title
+    return update_data
+
+
 async def replace_note_content(
     note_id: str,
     content: str | None = None,
@@ -1371,85 +1459,10 @@ async def replace_note_content(
         current_content = ((note.data or {}).get('content') or {}).get('md') or ''
         applied_operation_count = 0
         if operations is not None:
-            if not isinstance(operations, list) or len(operations) == 0:
-                return JSONCodec.dumps({'error': 'operations must be a non-empty list', 'code': 'invalid_operations'})
-
-            range_operations = []
-            for idx, operation in enumerate(operations):
-                if not isinstance(operation, dict):
-                    return JSONCodec.dumps(
-                        {'error': 'each operation must be an object', 'code': 'invalid_operation', 'index': idx}
-                    )
-
-                action = operation.get('action')
-                replacement = operation.get('content')
-
-                if action == 'replace':
-                    if len(operations) != 1:
-                        return JSONCodec.dumps(
-                            {
-                                'error': 'replace operation must be the only operation',
-                                'code': 'invalid_operations',
-                                'index': idx,
-                            }
-                        )
-                    if not isinstance(replacement, str):
-                        return JSONCodec.dumps(
-                            {
-                                'error': 'replace operation content must be a string',
-                                'code': 'invalid_content',
-                                'index': idx,
-                            }
-                        )
-                    content = replacement
-                    applied_operation_count = 1
-                    break
-
-                if action != 'replace_range':
-                    return JSONCodec.dumps(
-                        {'error': 'unknown operation action', 'code': 'invalid_action', 'index': idx, 'action': action}
-                    )
-
-                start = operation.get('start')
-                end = operation.get('end')
-                expected = operation.get('expected')
-                if not isinstance(start, int) or not isinstance(end, int):
-                    return JSONCodec.dumps(
-                        {'error': 'operation start and end must be integers', 'code': 'invalid_range', 'index': idx}
-                    )
-                if not isinstance(replacement, str):
-                    return JSONCodec.dumps(
-                        {'error': 'operation content must be a string', 'code': 'invalid_content', 'index': idx}
-                    )
-                if start < 0 or end < start or end > len(current_content):
-                    return JSONCodec.dumps(
-                        {'error': 'operation range is out of bounds', 'code': 'range_out_of_bounds', 'index': idx}
-                    )
-                if expected is not None and current_content[start:end] != expected:
-                    return JSONCodec.dumps(
-                        {
-                            'error': 'operation expected text does not match current content',
-                            'code': 'expected_mismatch',
-                            'index': idx,
-                        }
-                    )
-
-                range_operations.append({'start': start, 'end': end, 'content': replacement})
-
-            range_operations.sort(key=lambda operation: operation['start'])
-            previous_end = 0
-            for idx, operation in enumerate(range_operations):
-                if operation['start'] < previous_end:
-                    return JSONCodec.dumps(
-                        {'error': 'operation ranges must not overlap', 'code': 'overlapping_operations', 'index': idx}
-                    )
-                previous_end = operation['end']
-
-            if range_operations:
-                content = current_content
-                for operation in reversed(range_operations):
-                    content = content[: operation['start']] + operation['content'] + content[operation['end'] :]
-                applied_operation_count = len(range_operations)
+            try:
+                content, applied_operation_count = _apply_note_operations(operations, current_content)
+            except _NoteOperationError as e:
+                return JSONCodec.dumps(e.payload)
         elif content is None:
             return JSONCodec.dumps({'error': 'content or operations is required', 'code': 'content_required'})
 
@@ -1458,21 +1471,7 @@ async def replace_note_content(
         except Exception:
             pass
 
-        update_data = {
-            'data': {
-                **(note.data or {}),
-                'content': {
-                    **((note.data or {}).get('content') or {}),
-                    'json': None,
-                    'html': '',
-                    'md': content,
-                },
-            }
-        }
-        if title:
-            update_data['title'] = title
-
-        form = NoteUpdateForm(**update_data)
+        form = NoteUpdateForm(**_note_update(note, content, title))
         updated_note = await Notes.update_note_by_id(note_id, form)
 
         if not updated_note:
@@ -3136,6 +3135,174 @@ async def list_knowledge(
         return JSONCodec.dumps({'error': str(e)})
 
 
+def _coerce_count(count):
+    # LLM tool calls may pass numbers as strings.
+    if isinstance(count, str):
+        try:
+            return int(count)
+        except ValueError:
+            return 5
+    return count
+
+
+def _coerce_knowledge_ids(knowledge_ids):
+    """Accept "None", "null", "", a JSON array as a string, or a bare id, as LLM tool calls send them."""
+    if not isinstance(knowledge_ids, str):
+        return knowledge_ids
+    if knowledge_ids.lower() in ('none', 'null', ''):
+        return None
+    try:
+        return JSONCodec.loads(knowledge_ids)
+    except JSONCodec.JSONDecodeError:
+        return [knowledge_ids]
+
+
+class _KnowledgeSearch:
+    """What a knowledge search covers for one user: vector collections, external knowledge bases and notes."""
+
+    def __init__(self, user: dict, group_ids: list[str]):
+        self.user_id = user.get('id')
+        self.user_role = user.get('role', 'user')
+        self.group_ids = group_ids
+        self.collection_names = []
+        self.external_knowledges = []
+        self.note_results = []  # Notes aren't vectorized, so their full content is returned
+
+    async def can_read_knowledge(self, knowledge) -> bool:
+        from local_llm.models.access_grants import AccessGrants
+
+        return (
+            self.user_role == 'admin'
+            or knowledge.user_id == self.user_id
+            or await AccessGrants.has_access(
+                user_id=self.user_id,
+                resource_type='knowledge',
+                resource_id=knowledge.id,
+                permission='read',
+                user_group_ids=set(self.group_ids),
+            )
+        )
+
+    async def can_read_note(self, note) -> bool:
+        from local_llm.models.access_grants import AccessGrants
+
+        return (
+            self.user_role == 'admin'
+            or note.user_id == self.user_id
+            or await AccessGrants.has_access(
+                user_id=self.user_id,
+                resource_type='note',
+                resource_id=note.id,
+                permission='read',
+            )
+        )
+
+    def add_knowledge(self, knowledge, collection_name: str) -> None:
+        if (knowledge.meta or {}).get('source') == 'external':
+            self.external_knowledges.append(knowledge)
+        else:
+            self.collection_names.append(collection_name)
+
+    async def add_readable_knowledge(self, knowledge_id: str) -> None:
+        from local_llm.models.knowledge import Knowledges
+
+        knowledge = await Knowledges.get_knowledge_by_id(knowledge_id)
+        if knowledge and await self.can_read_knowledge(knowledge):
+            self.add_knowledge(knowledge, knowledge_id)
+
+    async def add_model_file(self, file_id: str) -> None:
+        from local_llm.models.files import Files
+
+        # A file attached to the model is readable through it (see _has_read_access_to_file).
+        if await Files.get_file_by_id(file_id):
+            self.collection_names.append(f'file-{file_id}')
+
+    async def add_model_note(self, note_id: str) -> None:
+        from local_llm.models.notes import Notes
+
+        note = await Notes.get_note_by_id(note_id)
+        if note and await self.can_read_note(note):
+            self.note_results.append(
+                {
+                    'content': note.data.get('content', {}).get('md', ''),
+                    'source': note.title,
+                    'note_id': note.id,
+                    'type': 'note',
+                }
+            )
+
+    async def add_model_knowledge(self, items: list[dict]) -> None:
+        for item in items:
+            item_type = item.get('type')
+            item_id = item.get('id')
+            if item_type == 'collection':
+                await self.add_readable_knowledge(item_id)
+            elif item_type == 'file':
+                await self.add_model_file(item_id)
+            elif item_type == 'note':
+                await self.add_model_note(item_id)
+
+    async def add_all_accessible(self) -> None:
+        from local_llm.models.knowledge import Knowledges
+
+        result = await Knowledges.search_knowledge_bases(
+            self.user_id,
+            filter={
+                'query': '',
+                'user_id': self.user_id,
+                'group_ids': self.group_ids,
+            },
+            skip=0,
+            limit=50,
+        )
+        for knowledge_base in result.items:
+            self.add_knowledge(knowledge_base, knowledge_base.id)
+
+
+def _first_query_hits(query_results: dict) -> tuple[list, list, list]:
+    return tuple(query_results.get(key, [[]])[0] for key in ('documents', 'metadatas', 'distances'))
+
+
+def _with_distance(chunk_info: dict, idx: int, distances: list) -> dict:
+    if idx < len(distances):
+        chunk_info['distance'] = distances[idx]
+    return chunk_info
+
+
+def _vector_chunks(query_results) -> list[dict]:
+    if not (query_results and 'documents' in query_results):
+        return []
+    documents, metadatas, distances = _first_query_hits(query_results)
+    return [
+        _with_distance(
+            {
+                'content': doc,
+                'source': metadatas[idx].get('source', metadatas[idx].get('name', 'Unknown')),
+                'file_id': metadatas[idx].get('file_id', ''),
+            },
+            idx,
+            distances,
+        )
+        for idx, doc in enumerate(documents)
+    ]
+
+
+def _external_chunks(query_results: dict, knowledge) -> list[dict]:
+    documents, metadatas, distances = _first_query_hits(query_results)
+    chunks = []
+    for idx, doc in enumerate(documents):
+        metadata = metadatas[idx] if idx < len(metadatas) else {}
+        chunk_info = {
+            'content': doc,
+            'source': metadata.get('source', metadata.get('name', knowledge.name)),
+            'file_id': metadata.get('file_id', f'external-{knowledge.id}'),
+            'type': 'external',
+            'knowledge_id': knowledge.id,
+        }
+        chunks.append(_with_distance(chunk_info, idx, distances))
+    return chunks
+
+
 async def query_knowledge_files(
     query: str,
     knowledge_ids: list[str] | None = None,
@@ -3160,168 +3327,43 @@ async def query_knowledge_files(
     if not __user__:
         return JSONCodec.dumps({'error': 'User context not available'})
 
-    # Coerce parameters from LLM tool calls (may come as strings)
-    if isinstance(count, str):
-        try:
-            count = int(count)
-        except ValueError:
-            count = 5  # Default fallback
-
-    # Handle knowledge_ids being string "None", "null", or empty
-    if isinstance(knowledge_ids, str):
-        if knowledge_ids.lower() in ('none', 'null', ''):
-            knowledge_ids = None
-        else:
-            # Try to parse as JSON array if it looks like one
-            try:
-                knowledge_ids = JSONCodec.loads(knowledge_ids)
-            except JSONCodec.JSONDecodeError:
-                # Treat as single ID
-                knowledge_ids = [knowledge_ids]
+    count = _coerce_count(count)
+    knowledge_ids = _coerce_knowledge_ids(knowledge_ids)
 
     try:
-        from local_llm.models.access_grants import AccessGrants
-        from local_llm.models.files import Files
-        from local_llm.models.knowledge import Knowledges
-        from local_llm.models.notes import Notes
         from local_llm.retrieval.external import retrieve_external_knowledge
         from local_llm.retrieval.utils import query_collection
 
-        user_id = __user__.get('id')
-        user_role = __user__.get('role', 'user')
-        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id)]
+        user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(__user__.get('id'))]
 
         embedding_function = getattr(__request__.app.state, 'EMBEDDING_FUNCTION', None)
         if not embedding_function:
             return JSONCodec.dumps({'error': 'Embedding function not configured'})
         user_model = UserModel(**__user__)
 
-        collection_names = []
-        external_knowledges = []
-        note_results = []  # Notes aren't vectorized, handle separately
-
-        # If model has attached knowledge, use those
+        # Model knowledge takes precedence over given ids; with neither, every accessible KB is searched.
+        search = _KnowledgeSearch(__user__, user_group_ids)
         if __model_knowledge__:
-            for item in __model_knowledge__:
-                item_type = item.get('type')
-                item_id = item.get('id')
-
-                if item_type == 'collection':
-                    # Knowledge base - use KB ID as collection name
-                    knowledge = await Knowledges.get_knowledge_by_id(item_id)
-                    if knowledge and (
-                        user_role == 'admin'
-                        or knowledge.user_id == user_id
-                        or await AccessGrants.has_access(
-                            user_id=user_id,
-                            resource_type='knowledge',
-                            resource_id=knowledge.id,
-                            permission='read',
-                            user_group_ids=set(user_group_ids),
-                        )
-                    ):
-                        if (knowledge.meta or {}).get('source') == 'external':
-                            external_knowledges.append(knowledge)
-                        else:
-                            collection_names.append(item_id)
-
-                elif item_type == 'file':
-                    # Individual file - use file-{id} as collection name
-                    file = await Files.get_file_by_id(item_id)
-                    if file:
-                        collection_names.append(f'file-{item_id}')
-
-                elif item_type == 'note':
-                    # Note - always return full content as context
-                    note = await Notes.get_note_by_id(item_id)
-                    if note and (
-                        user_role == 'admin'
-                        or note.user_id == user_id
-                        or await AccessGrants.has_access(
-                            user_id=user_id,
-                            resource_type='note',
-                            resource_id=note.id,
-                            permission='read',
-                        )
-                    ):
-                        content = note.data.get('content', {}).get('md', '')
-                        note_results.append(
-                            {
-                                'content': content,
-                                'source': note.title,
-                                'note_id': note.id,
-                                'type': 'note',
-                            }
-                        )
-
+            await search.add_model_knowledge(__model_knowledge__)
         elif knowledge_ids:
-            # User specified specific KBs
             for knowledge_id in knowledge_ids:
-                knowledge = await Knowledges.get_knowledge_by_id(knowledge_id)
-                if knowledge and (
-                    user_role == 'admin'
-                    or knowledge.user_id == user_id
-                    or await AccessGrants.has_access(
-                        user_id=user_id,
-                        resource_type='knowledge',
-                        resource_id=knowledge.id,
-                        permission='read',
-                        user_group_ids=set(user_group_ids),
-                    )
-                ):
-                    if (knowledge.meta or {}).get('source') == 'external':
-                        external_knowledges.append(knowledge)
-                    else:
-                        collection_names.append(knowledge_id)
+                await search.add_readable_knowledge(knowledge_id)
         else:
-            # No model knowledge and no specific IDs - search all accessible KBs
-            result = await Knowledges.search_knowledge_bases(
-                user_id,
-                filter={
-                    'query': '',
-                    'user_id': user_id,
-                    'group_ids': user_group_ids,
-                },
-                skip=0,
-                limit=50,
-            )
-            for knowledge_base in result.items:
-                if (knowledge_base.meta or {}).get('source') == 'external':
-                    external_knowledges.append(knowledge_base)
-                else:
-                    collection_names.append(knowledge_base.id)
+            await search.add_all_accessible()
 
-        chunks = []
+        chunks = list(search.note_results)
 
-        # Add note results first
-        chunks.extend(note_results)
-
-        # Query vector collections if any
-        if collection_names:
+        if search.collection_names:
             query_results = await query_collection(
                 __request__,
-                collection_names=collection_names,
+                collection_names=search.collection_names,
                 queries=[query],
                 embedding_function=lambda queries, prefix: embedding_function(queries, prefix=prefix, user=user_model),
                 k=count,
             )
+            chunks.extend(_vector_chunks(query_results))
 
-            if query_results and 'documents' in query_results:
-                documents = query_results.get('documents', [[]])[0]
-                metadatas = query_results.get('metadatas', [[]])[0]
-                distances = query_results.get('distances', [[]])[0]
-
-                for idx, doc in enumerate(documents):
-                    chunk_info = {
-                        'content': doc,
-                        'source': metadatas[idx].get('source', metadatas[idx].get('name', 'Unknown')),
-                        'file_id': metadatas[idx].get('file_id', ''),
-                    }
-                    if idx < len(distances):
-                        chunk_info['distance'] = distances[idx]
-                    chunks.append(chunk_info)
-
-        for knowledge in external_knowledges:
+        for knowledge in search.external_knowledges:
             query_results = await retrieve_external_knowledge(
                 __request__,
                 knowledge,
@@ -3329,27 +3371,9 @@ async def query_knowledge_files(
                 count=count,
                 user=user_model,
             )
-            documents = query_results.get('documents', [[]])[0]
-            metadatas = query_results.get('metadatas', [[]])[0]
-            distances = query_results.get('distances', [[]])[0]
+            chunks.extend(_external_chunks(query_results, knowledge))
 
-            for idx, doc in enumerate(documents):
-                metadata = metadatas[idx] if idx < len(metadatas) else {}
-                chunk_info = {
-                    'content': doc,
-                    'source': metadata.get('source', metadata.get('name', knowledge.name)),
-                    'file_id': metadata.get('file_id', f'external-{knowledge.id}'),
-                    'type': 'external',
-                    'knowledge_id': knowledge.id,
-                }
-                if idx < len(distances):
-                    chunk_info['distance'] = distances[idx]
-                chunks.append(chunk_info)
-
-        # Limit to requested count
-        chunks = chunks[:count]
-
-        return JSONCodec.dumps(chunks, ensure_ascii=False)
+        return JSONCodec.dumps(chunks[:count], ensure_ascii=False)
     except Exception as e:
         log.exception(f'query_knowledge_files error: {e}')
         return JSONCodec.dumps({'error': str(e)})
