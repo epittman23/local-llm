@@ -1,0 +1,450 @@
+{
+ "memory_disabled_for_model": {
+  "same_object": true,
+  "messages": [
+   {
+    "role": "user",
+    "content": "hi"
+   }
+  ],
+  "vector_query": null
+ },
+ "no_messages": {
+  "same_object": true,
+  "messages": [],
+  "vector_query": null
+ },
+ "only_blank_user_messages": {
+  "same_object": true,
+  "messages": [
+   {
+    "role": "user",
+    "content": "   "
+   },
+   {
+    "role": "user",
+    "content": ""
+   }
+  ],
+  "vector_query": null
+ },
+ "only_assistant_messages": {
+  "same_object": true,
+  "messages": [
+   {
+    "role": "assistant",
+    "content": "hello"
+   }
+  ],
+  "vector_query": null
+ },
+ "user_memories_only": {
+  "same_object": true,
+  "messages": [
+   {
+    "role": "system",
+    "content": "<memory_context>\n[User Memory]\n- Prefers metric units\n- profile/health: allergic to nuts\n- profile: Name is Ada\n</memory_context>"
+   },
+   {
+    "role": "user",
+    "content": "hi there"
+   }
+  ],
+  "vector_query": {
+   "content": "hi there",
+   "k": 8
+  }
+ },
+ "nothing_to_add": {
+  "same_object": true,
+  "messages": [
+   {
+    "role": "user",
+    "content": "hi there"
+   }
+  ],
+  "vector_query": {
+   "content": "hi there",
+   "k": 8
+  }
+ },
+ "neighborhood_from_path_hints": {
+  "same_object": true,
+  "messages": [
+   {
+    "role": "system",
+    "content": "<memory_context>\n[Memory Neighborhood]\n- home/garden: Garden faces south\n- home/kitchen/fridge: Fridge is older\n- home/kitchen: Kitchen has a gas stove\n</memory_context>"
+   },
+   {
+    "role": "user",
+    "content": "what about the kitchen fridge?"
+   }
+  ],
+  "vector_query": {
+   "content": "what about the kitchen fridge?",
+   "k": 8
+  }
+ },
+ "all_sections": {
+  "same_object": true,
+  "messages": [
+   {
+    "role": "system",
+    "content": "<memory_context>\n[User Memory]\n- Likes jazz\n- Prefers metric units\n- profile/health: allergic to nuts\n- profile: Name is Ada\n\n[Memory Neighborhood]\n- home/garden: Garden faces south\n- home/kitchen/fridge: Fridge is older\n- home/kitchen: Kitchen has a gas stove\n- work/project: Project deadline is Friday\n\n[Relevant Context]\n- orphan doc\n</memory_context>"
+   },
+   {
+    "role": "user",
+    "content": "kitchen plans and the project"
+   }
+  ],
+  "vector_query": {
+   "content": "kitchen plans and the project",
+   "k": 8
+  }
+ },
+ "vector_hits_only": {
+  "same_object": true,
+  "messages": [
+   {
+    "role": "system",
+    "content": "<memory_context>\n[User Memory]\n- Likes jazz\n\n[Relevant Context]\n- home/kitchen: Kitchen has a gas stove\n- orphan doc\n- work/project: Project deadline is Friday\n</memory_context>"
+   },
+   {
+    "role": "user",
+    "content": "anything"
+   }
+  ],
+  "vector_query": {
+   "content": "anything",
+   "k": 8
+  }
+ },
+ "vector_search_fails": {
+  "same_object": true,
+  "messages": [
+   {
+    "role": "system",
+    "content": "<memory_context>\n[User Memory]\n- Prefers metric units\n- profile/health: allergic to nuts\n- profile: Name is Ada\n\n[Memory Neighborhood]\n- home/garden: Garden faces south\n- home/kitchen/fridge: Fridge is older\n- home/kitchen: Kitchen has a gas stove\n</memory_context>"
+   },
+   {
+    "role": "user",
+    "content": "kitchen"
+   }
+  ],
+  "vector_query": {
+   "content": "kitchen",
+   "k": 8
+  }
+ },
+ "vector_result_without_documents": {
+  "same_object": true,
+  "messages": [
+   {
+    "role": "system",
+    "content": "<memory_context>\n[User Memory]\n- Prefers metric units\n- profile/health: allergic to nuts\n- profile: Name is Ada\n</memory_context>"
+   },
+   {
+    "role": "user",
+    "content": "x"
+   }
+  ],
+  "vector_query": {
+   "content": "x",
+   "k": 8
+  }
+ },
+ "vector_result_empty_documents": {
+  "same_object": true,
+  "messages": [
+   {
+    "role": "system",
+    "content": "<memory_context>\n[User Memory]\n- Prefers metric units\n- profile/health: allergic to nuts\n- profile: Name is Ada\n</memory_context>"
+   },
+   {
+    "role": "user",
+    "content": "x"
+   }
+  ],
+  "vector_query": {
+   "content": "x",
+   "k": 8
+  }
+ },
+ "vector_result_without_metadata_or_ids": {
+  "same_object": true,
+  "messages": [
+   {
+    "role": "system",
+    "content": "<memory_context>\n[Relevant Context]\n- a\n- b\n</memory_context>"
+   },
+   {
+    "role": "user",
+    "content": "x"
+   }
+  ],
+  "vector_query": {
+   "content": "x",
+   "k": 8
+  }
+ },
+ "vector_metadata_path_not_a_prefix": {
+  "same_object": true,
+  "messages": [
+   {
+    "role": "system",
+    "content": "<memory_context>\n[Relevant Context]\n- some/path: no prefix here\n</memory_context>"
+   },
+   {
+    "role": "user",
+    "content": "x"
+   }
+  ],
+  "vector_query": {
+   "content": "x",
+   "k": 8
+  }
+ },
+ "last_seven_user_messages": {
+  "same_object": true,
+  "messages": [
+   {
+    "role": "system",
+    "content": "<memory_context>\n[User Memory]\n- Prefers metric units\n- profile/health: allergic to nuts\n- profile: Name is Ada\n</memory_context>"
+   },
+   {
+    "role": "user",
+    "content": "message 0"
+   },
+   {
+    "role": "user",
+    "content": "message 1"
+   },
+   {
+    "role": "user",
+    "content": "message 2"
+   },
+   {
+    "role": "user",
+    "content": "message 3"
+   },
+   {
+    "role": "user",
+    "content": "message 4"
+   },
+   {
+    "role": "user",
+    "content": "message 5"
+   },
+   {
+    "role": "user",
+    "content": "message 6"
+   },
+   {
+    "role": "user",
+    "content": "message 7"
+   },
+   {
+    "role": "user",
+    "content": "message 8"
+   },
+   {
+    "role": "user",
+    "content": "message 9"
+   }
+  ],
+  "vector_query": {
+   "content": "message 3\n\nmessage 4\n\nmessage 5\n\nmessage 6\n\nmessage 7\n\nmessage 8\n\nmessage 9",
+   "k": 8
+  }
+ },
+ "query_keeps_last_4000_chars": {
+  "same_object": true,
+  "messages": [
+   {
+    "role": "system",
+    "content": "<memory_context>\n[User Memory]\n- Prefers metric units\n- profile/health: allergic to nuts\n- profile: Name is Ada\n</memory_context>"
+   },
+   {
+    "role": "user",
+    "content": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+   },
+   {
+    "role": "user",
+    "content": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+   }
+  ],
+  "vector_query": {
+   "content": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n\nbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+   "k": 8
+  }
+ },
+ "multimodal_user_content": {
+  "same_object": true,
+  "messages": [
+   {
+    "role": "system",
+    "content": "<memory_context>\n[User Memory]\n- Prefers metric units\n- profile/health: allergic to nuts\n- profile: Name is Ada\n</memory_context>"
+   },
+   {
+    "role": "user",
+    "content": [
+     {
+      "type": "text",
+      "text": "look at this"
+     },
+     {
+      "type": "image_url",
+      "image_url": {
+       "url": "x"
+      }
+     }
+    ]
+   }
+  ],
+  "vector_query": {
+   "content": "look at this",
+   "k": 8
+  }
+ },
+ "existing_system_message": {
+  "same_object": true,
+  "messages": [
+   {
+    "role": "system",
+    "content": "You are helpful.\n<memory_context>\n[User Memory]\n- Prefers metric units\n- profile/health: allergic to nuts\n- profile: Name is Ada\n</memory_context>"
+   },
+   {
+    "role": "user",
+    "content": "hi"
+   }
+  ],
+  "vector_query": {
+   "content": "hi",
+   "k": 8
+  }
+ },
+ "replaces_previous_memory_block": {
+  "same_object": true,
+  "messages": [
+   {
+    "role": "system",
+    "content": "Be brief.\n\nAlways cite.\n<memory_context>\n[User Memory]\n- Prefers metric units\n- profile/health: allergic to nuts\n- profile: Name is Ada\n</memory_context>"
+   },
+   {
+    "role": "user",
+    "content": "hi"
+   }
+  ],
+  "vector_query": {
+   "content": "hi",
+   "k": 8
+  }
+ },
+ "unterminated_memory_block_left_alone": {
+  "same_object": true,
+  "messages": [
+   {
+    "role": "system",
+    "content": "Start <memory_context> never closed\n<memory_context>\n[User Memory]\n- Prefers metric units\n- profile/health: allergic to nuts\n- profile: Name is Ada\n</memory_context>"
+   },
+   {
+    "role": "user",
+    "content": "hi"
+   }
+  ],
+  "vector_query": {
+   "content": "hi",
+   "k": 8
+  }
+ },
+ "system_message_with_list_content": {
+  "same_object": true,
+  "messages": [
+   {
+    "role": "system",
+    "content": [
+     {
+      "type": "text",
+      "text": "listed\n<memory_context>\n[User Memory]\n- Prefers metric units\n- profile/health: allergic to nuts\n- profile: Name is Ada\n</memory_context>"
+     }
+    ]
+   },
+   {
+    "role": "user",
+    "content": "hi"
+   }
+  ],
+  "vector_query": {
+   "content": "hi",
+   "k": 8
+  }
+ },
+ "char_limits_from_config": {
+  "same_object": true,
+  "messages": [
+   {
+    "role": "system",
+    "content": "<memory_context>\n[User Memory]\n- Likes jazz\n- Prefers metric units\n- profile/health: allergic to nuts\n- profile: Name is Ada\n\n[Memory Neighborhood]\n- home/garden: Garden faces south\n- home/kitchen/fridge: Fridge is older\n- home/kitchen: Kitchen has a gas stove\n- work/project: Project deadline is Friday\n\n[Relevant Context]\n- orphan doc\n</memory_context>"
+   },
+   {
+    "role": "user",
+    "content": "kitchen project"
+   }
+  ],
+  "vector_query": {
+   "content": "kitchen project",
+   "k": 8
+  }
+ },
+ "char_limits_below_minimum": {
+  "same_object": true,
+  "messages": [
+   {
+    "role": "system",
+    "content": "<memory_context>\n[User Memory]\n- Prefers metric units\n- profile/health: allergic to nuts\n- profile: Name is Ada\n\n[Memory Neighborhood]\n- home/garden: Garden faces south\n- home/kitchen/fridge: Fridge is older\n- home/kitchen: Kitchen has a gas stove\n</memory_context>"
+   },
+   {
+    "role": "user",
+    "content": "kitchen"
+   }
+  ],
+  "vector_query": {
+   "content": "kitchen",
+   "k": 8
+  }
+ },
+ "char_limits_invalid": {
+  "same_object": true,
+  "messages": [
+   {
+    "role": "system",
+    "content": "<memory_context>\n[User Memory]\n- Prefers metric units\n- profile/health: allergic to nuts\n- profile: Name is Ada\n\n[Memory Neighborhood]\n- home/garden: Garden faces south\n- home/kitchen/fridge: Fridge is older\n- home/kitchen: Kitchen has a gas stove\n</memory_context>"
+   },
+   {
+    "role": "user",
+    "content": "kitchen"
+   }
+  ],
+  "vector_query": {
+   "content": "kitchen",
+   "k": 8
+  }
+ },
+ "char_limits_zero_means_default": {
+  "same_object": true,
+  "messages": [
+   {
+    "role": "system",
+    "content": "<memory_context>\n[User Memory]\n- Prefers metric units\n- profile/health: allergic to nuts\n- profile: Name is Ada\n\n[Memory Neighborhood]\n- home/garden: Garden faces south\n- home/kitchen/fridge: Fridge is older\n- home/kitchen: Kitchen has a gas stove\n</memory_context>"
+   },
+   {
+    "role": "user",
+    "content": "kitchen"
+   }
+  ],
+  "vector_query": {
+   "content": "kitchen",
+   "k": 8
+  }
+ }
+}
