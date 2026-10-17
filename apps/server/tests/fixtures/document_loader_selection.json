@@ -1,0 +1,745 @@
+{
+ "archive_missing_file_is_not_checked": {
+  "loader": "Docx2txtLoader",
+  "args": [
+   "<tmp>/a.docx"
+  ],
+  "kwargs": {}
+ },
+ "archive_not_a_zip_is_not_checked": {
+  "loader": "Docx2txtLoader",
+  "args": [
+   "<tmp>/a.docx"
+  ],
+  "kwargs": {}
+ },
+ "archive_small_zip_passes": {
+  "loader": "Docx2txtLoader",
+  "args": [
+   "<tmp>/a.docx"
+  ],
+  "kwargs": {}
+ },
+ "archive_bomb_rejected": {
+  "raised": "ValueError",
+  "message": "Document archive is too large after decompression"
+ },
+ "archive_bomb_by_content_type": {
+  "raised": "ValueError",
+  "message": "Document archive is too large after decompression"
+ },
+ "archive_bomb_within_raised_limit_still_capped": {
+  "raised": "ValueError",
+  "message": "Document archive is too large after decompression"
+ },
+ "archive_bomb_limit_below_ratio": {
+  "raised": "ValueError",
+  "message": "Document archive is too large after decompression"
+ },
+ "archive_limit_unparseable": {
+  "raised": "ValueError",
+  "message": "Document archive is too large after decompression"
+ },
+ "archive_limit_zero_means_default": {
+  "raised": "ValueError",
+  "message": "Document archive is too large after decompression"
+ },
+ "archive_limit_negative_disables_check": {
+  "loader": "Docx2txtLoader",
+  "args": [
+   "<tmp>/a.docx"
+  ],
+  "kwargs": {}
+ },
+ "archive_check_runs_before_engine": {
+  "raised": "ValueError",
+  "message": "Document archive is too large after decompression"
+ },
+ "external": {
+  "loader": "ExternalDocumentLoader",
+  "args": [],
+  "kwargs": {
+   "file_path": "<tmp>/a.pdf",
+   "url": "https://ext",
+   "api_key": "k",
+   "mime_type": "application/pdf",
+   "user": "<user>",
+   "user_groups": [
+    "g1"
+   ],
+   "headers": null,
+   "metadata": {
+    "chat_id": "c1",
+    "file_name": "a.pdf",
+    "file_content_type": "application/pdf"
+   }
+  }
+ },
+ "external_without_api_key": {
+  "loader": "PyPDFLoader",
+  "args": [
+   "<tmp>/a.pdf"
+  ],
+  "kwargs": {
+   "extract_images": null,
+   "mode": "page"
+  }
+ },
+ "tika_text_file": {
+  "loader": "TextLoader",
+  "args": [
+   "<tmp>/a.py"
+  ],
+  "kwargs": {
+   "encoding": "<encoding of a.py>"
+  }
+ },
+ "tika_text_content_type": {
+  "loader": "TextLoader",
+  "args": [
+   "<tmp>/notes"
+  ],
+  "kwargs": {
+   "encoding": "<encoding of notes>"
+  }
+ },
+ "tika_document": {
+  "loader": "TikaLoader",
+  "args": [],
+  "kwargs": {
+   "url": "https://tika",
+   "file_path": "<tmp>/a.pdf",
+   "server_version": "3",
+   "extract_images": true
+  }
+ },
+ "tika_html_is_not_text": {
+  "loader": "TikaLoader",
+  "args": [],
+  "kwargs": {
+   "url": "https://tika",
+   "file_path": "<tmp>/a.html",
+   "server_version": null,
+   "extract_images": null
+  }
+ },
+ "tika_without_url": {
+  "loader": "PyPDFLoader",
+  "args": [
+   "<tmp>/a.pdf"
+  ],
+  "kwargs": {
+   "extract_images": null,
+   "mode": "page"
+  }
+ },
+ "datalab_marker_defaults": {
+  "loader": "DatalabMarkerLoader",
+  "args": [],
+  "kwargs": {
+   "file_path": "<tmp>/a.pdf",
+   "api_key": "k",
+   "api_base_url": "https://www.datalab.to/api/v1/marker",
+   "additional_config": null,
+   "use_llm": false,
+   "skip_cache": false,
+   "force_ocr": false,
+   "paginate": false,
+   "strip_existing_ocr": false,
+   "disable_image_extraction": false,
+   "format_lines": false,
+   "output_format": "markdown"
+  }
+ },
+ "datalab_marker_all_options": {
+  "loader": "DatalabMarkerLoader",
+  "args": [],
+  "kwargs": {
+   "file_path": "<tmp>/a.PNG",
+   "api_key": "k",
+   "api_base_url": "https://marker",
+   "additional_config": "{\"x\": 1}",
+   "use_llm": true,
+   "skip_cache": true,
+   "force_ocr": true,
+   "paginate": true,
+   "strip_existing_ocr": true,
+   "disable_image_extraction": true,
+   "format_lines": true,
+   "output_format": "json"
+  }
+ },
+ "datalab_marker_blank_base_url": {
+  "loader": "DatalabMarkerLoader",
+  "args": [],
+  "kwargs": {
+   "file_path": "<tmp>/a.docx",
+   "api_key": "k",
+   "api_base_url": "https://www.datalab.to/api/v1/marker",
+   "additional_config": null,
+   "use_llm": false,
+   "skip_cache": false,
+   "force_ocr": false,
+   "paginate": false,
+   "strip_existing_ocr": false,
+   "disable_image_extraction": false,
+   "format_lines": false,
+   "output_format": "markdown"
+  }
+ },
+ "datalab_marker_unsupported_ext": {
+  "loader": "TextLoader",
+  "args": [
+   "<tmp>/a.txt"
+  ],
+  "kwargs": {
+   "encoding": "<encoding of a.txt>"
+  }
+ },
+ "datalab_marker_without_key": {
+  "loader": "PyPDFLoader",
+  "args": [
+   "<tmp>/a.pdf"
+  ],
+  "kwargs": {
+   "extract_images": null,
+   "mode": "page"
+  }
+ },
+ "docling_text_file": {
+  "loader": "TextLoader",
+  "args": [
+   "<tmp>/a.md"
+  ],
+  "kwargs": {
+   "encoding": "<encoding of a.md>"
+  }
+ },
+ "docling_default_params": {
+  "loader": "DoclingLoader",
+  "args": [],
+  "kwargs": {
+   "url": "https://docling",
+   "api_key": null,
+   "file_path": "<tmp>/a.pdf",
+   "mime_type": "application/pdf",
+   "params": {}
+  }
+ },
+ "docling_dict_params": {
+  "loader": "DoclingLoader",
+  "args": [],
+  "kwargs": {
+   "url": "https://docling",
+   "api_key": "k",
+   "file_path": "<tmp>/a.pdf",
+   "mime_type": "application/pdf",
+   "params": {
+    "do_ocr": true
+   }
+  }
+ },
+ "docling_json_params": {
+  "loader": "DoclingLoader",
+  "args": [],
+  "kwargs": {
+   "url": "https://docling",
+   "api_key": null,
+   "file_path": "<tmp>/a.pdf",
+   "mime_type": "",
+   "params": {
+    "ocr_lang": [
+     "en"
+    ]
+   }
+  }
+ },
+ "docling_invalid_params": {
+  "loader": "DoclingLoader",
+  "args": [],
+  "kwargs": {
+   "url": "https://docling",
+   "api_key": null,
+   "file_path": "<tmp>/a.pdf",
+   "mime_type": "",
+   "params": {}
+  }
+ },
+ "docling_without_url": {
+  "loader": "PyPDFLoader",
+  "args": [
+   "<tmp>/a.pdf"
+  ],
+  "kwargs": {
+   "extract_images": null,
+   "mode": "page"
+  }
+ },
+ "document_intelligence_key": {
+  "loader": "AzureAIDocumentIntelligenceLoader",
+  "args": [],
+  "kwargs": {
+   "file_path": "<tmp>/a.pdf",
+   "api_endpoint": "https://di",
+   "api_key": "k",
+   "api_model": "prebuilt"
+  }
+ },
+ "document_intelligence_credential": {
+  "loader": "AzureAIDocumentIntelligenceLoader",
+  "args": [],
+  "kwargs": {
+   "file_path": "<tmp>/a.pptx",
+   "api_endpoint": "https://di",
+   "azure_credential": "<DefaultAzureCredential>",
+   "api_model": "prebuilt"
+  }
+ },
+ "document_intelligence_content_type": {
+  "loader": "AzureAIDocumentIntelligenceLoader",
+  "args": [],
+  "kwargs": {
+   "file_path": "<tmp>/upload",
+   "api_endpoint": "https://di",
+   "api_key": "k",
+   "api_model": "prebuilt"
+  }
+ },
+ "document_intelligence_ppt_content_type": {
+  "loader": "AzureAIDocumentIntelligenceLoader",
+  "args": [],
+  "kwargs": {
+   "file_path": "<tmp>/upload",
+   "api_endpoint": "https://di",
+   "api_key": "k",
+   "api_model": "prebuilt"
+  }
+ },
+ "document_intelligence_unsupported": {
+  "loader": "UnstructuredExcelLoader",
+  "args": [
+   "<tmp>/a.xlsx"
+  ],
+  "kwargs": {}
+ },
+ "document_intelligence_empty_endpoint": {
+  "loader": "PyPDFLoader",
+  "args": [
+   "<tmp>/a.pdf"
+  ],
+  "kwargs": {
+   "extract_images": null,
+   "mode": "page"
+  }
+ },
+ "document_intelligence_unset_endpoint": {
+  "loader": "AzureAIDocumentIntelligenceLoader",
+  "args": [],
+  "kwargs": {
+   "file_path": "<tmp>/a.pdf",
+   "api_endpoint": null,
+   "api_key": null,
+   "api_model": null
+  }
+ },
+ "mineru_defaults": {
+  "loader": "MinerULoader",
+  "args": [],
+  "kwargs": {
+   "file_path": "<tmp>/a.pdf",
+   "api_mode": "local",
+   "api_url": "http://localhost:8000",
+   "api_key": "",
+   "params": {},
+   "timeout": 300,
+   "max_markdown_bytes": 12345
+  }
+ },
+ "mineru_all_options": {
+  "loader": "MinerULoader",
+  "args": [],
+  "kwargs": {
+   "file_path": "<tmp>/a.png",
+   "api_mode": "cloud",
+   "api_url": "https://mineru",
+   "api_key": "k",
+   "params": {
+    "lang": "en"
+   },
+   "timeout": 120,
+   "max_markdown_bytes": 12345
+  }
+ },
+ "mineru_bad_timeout": {
+  "loader": "MinerULoader",
+  "args": [],
+  "kwargs": {
+   "file_path": "<tmp>/a.pdf",
+   "api_mode": "local",
+   "api_url": "http://localhost:8000",
+   "api_key": "",
+   "params": {},
+   "timeout": 300,
+   "max_markdown_bytes": 12345
+  }
+ },
+ "mineru_zero_timeout": {
+  "loader": "MinerULoader",
+  "args": [],
+  "kwargs": {
+   "file_path": "<tmp>/a.pdf",
+   "api_mode": "local",
+   "api_url": "http://localhost:8000",
+   "api_key": "",
+   "params": {},
+   "timeout": 0,
+   "max_markdown_bytes": 12345
+  }
+ },
+ "mineru_unsupported_ext": {
+  "loader": "Docx2txtLoader",
+  "args": [
+   "<tmp>/a.docx"
+  ],
+  "kwargs": {}
+ },
+ "mistral_ocr": {
+  "loader": "MistralLoader",
+  "args": [],
+  "kwargs": {
+   "base_url": "https://m",
+   "api_key": "k",
+   "file_path": "<tmp>/a.pdf",
+   "use_base64": false,
+   "user": "<user>"
+  }
+ },
+ "mistral_ocr_base64": {
+  "loader": "MistralLoader",
+  "args": [],
+  "kwargs": {
+   "base_url": null,
+   "api_key": "k",
+   "file_path": "<tmp>/a.pdf",
+   "use_base64": true,
+   "user": "<user>"
+  }
+ },
+ "mistral_ocr_unset_key": {
+  "loader": "MistralLoader",
+  "args": [],
+  "kwargs": {
+   "base_url": null,
+   "api_key": null,
+   "file_path": "<tmp>/a.pdf",
+   "use_base64": false,
+   "user": "<user>"
+  }
+ },
+ "mistral_ocr_empty_key": {
+  "loader": "PyPDFLoader",
+  "args": [
+   "<tmp>/a.pdf"
+  ],
+  "kwargs": {
+   "extract_images": null,
+   "mode": "page"
+  }
+ },
+ "mistral_ocr_not_pdf": {
+  "loader": "TextLoader",
+  "args": [
+   "<tmp>/a.png"
+  ],
+  "kwargs": {
+   "encoding": "<encoding of a.png>"
+  }
+ },
+ "paddleocr_vl": {
+  "loader": "PaddleOCRVLLoader",
+  "args": [],
+  "kwargs": {
+   "api_url": "https://paddle",
+   "token": "t",
+   "file_path": "<tmp>/a.pdf"
+  }
+ },
+ "paddleocr_vl_without_token": {
+  "loader": "PyPDFLoader",
+  "args": [
+   "<tmp>/a.pdf"
+  ],
+  "kwargs": {
+   "extract_images": null,
+   "mode": "page"
+  }
+ },
+ "paddleocr_vl_unsupported_ext": {
+  "loader": "Docx2txtLoader",
+  "args": [
+   "<tmp>/a.docx"
+  ],
+  "kwargs": {}
+ },
+ "pdf": {
+  "loader": "PyPDFLoader",
+  "args": [
+   "<tmp>/a.PDF"
+  ],
+  "kwargs": {
+   "extract_images": null,
+   "mode": "page"
+  }
+ },
+ "pdf_options": {
+  "loader": "PyPDFLoader",
+  "args": [
+   "<tmp>/a.pdf"
+  ],
+  "kwargs": {
+   "extract_images": true,
+   "mode": "single"
+  }
+ },
+ "csv": {
+  "loader": "CSVLoaderWithSummary",
+  "args": [
+   "<tmp>/a.csv",
+   "a.csv",
+   "<encoding of a.csv>"
+  ],
+  "kwargs": {}
+ },
+ "rst": {
+  "loader": "UnstructuredRSTLoader",
+  "args": [
+   "<tmp>/a.rst"
+  ],
+  "kwargs": {
+   "mode": "elements"
+  }
+ },
+ "rst_without_unstructured": {
+  "loader": "TextLoader",
+  "args": [
+   "<tmp>/a.rst"
+  ],
+  "kwargs": {
+   "encoding": "<encoding of a.rst>"
+  }
+ },
+ "xml": {
+  "loader": "UnstructuredXMLLoader",
+  "args": [
+   "<tmp>/a.xml"
+  ],
+  "kwargs": {}
+ },
+ "xml_without_unstructured": {
+  "loader": "TextLoader",
+  "args": [
+   "<tmp>/a.xml"
+  ],
+  "kwargs": {
+   "encoding": "<encoding of a.xml>"
+  }
+ },
+ "htm": {
+  "loader": "BSHTMLLoader",
+  "args": [
+   "<tmp>/a.htm"
+  ],
+  "kwargs": {
+   "open_encoding": "unicode_escape"
+  }
+ },
+ "html": {
+  "loader": "BSHTMLLoader",
+  "args": [
+   "<tmp>/a.html"
+  ],
+  "kwargs": {
+   "open_encoding": "unicode_escape"
+  }
+ },
+ "md": {
+  "loader": "TextLoader",
+  "args": [
+   "<tmp>/a.md"
+  ],
+  "kwargs": {
+   "encoding": "<encoding of a.md>"
+  }
+ },
+ "epub_by_content_type": {
+  "loader": "UnstructuredEPubLoader",
+  "args": [
+   "<tmp>/book"
+  ],
+  "kwargs": {}
+ },
+ "epub_extension_alone_is_text": {
+  "loader": "TextLoader",
+  "args": [
+   "<tmp>/a.epub"
+  ],
+  "kwargs": {
+   "encoding": "<encoding of a.epub>"
+  }
+ },
+ "epub_without_unstructured": {
+  "raised": "ValueError",
+  "message": "Processing .epub files requires the 'unstructured' package. Install it with: pip install unstructured"
+ },
+ "docx": {
+  "loader": "Docx2txtLoader",
+  "args": [
+   "<tmp>/a.docx"
+  ],
+  "kwargs": {}
+ },
+ "docx_by_content_type": {
+  "loader": "Docx2txtLoader",
+  "args": [
+   "<tmp>/upload"
+  ],
+  "kwargs": {}
+ },
+ "doc": {
+  "loader": "UnstructuredWordDocumentLoader",
+  "args": [
+   "<tmp>/a.doc"
+  ],
+  "kwargs": {}
+ },
+ "doc_by_content_type": {
+  "loader": "UnstructuredWordDocumentLoader",
+  "args": [
+   "<tmp>/upload"
+  ],
+  "kwargs": {}
+ },
+ "doc_without_unstructured": {
+  "raised": "ValueError",
+  "message": "Processing .doc files requires the 'unstructured' package. Install it with: pip install unstructured"
+ },
+ "xls": {
+  "loader": "UnstructuredExcelLoader",
+  "args": [
+   "<tmp>/a.xls"
+  ],
+  "kwargs": {}
+ },
+ "xlsx_by_content_type": {
+  "loader": "UnstructuredExcelLoader",
+  "args": [
+   "<tmp>/upload"
+  ],
+  "kwargs": {}
+ },
+ "excel_without_unstructured": {
+  "loader": "ExcelLoader",
+  "args": [
+   "<tmp>/a.xlsx"
+  ],
+  "kwargs": {}
+ },
+ "ppt": {
+  "loader": "UnstructuredPowerPointLoader",
+  "args": [
+   "<tmp>/a.ppt"
+  ],
+  "kwargs": {}
+ },
+ "pptx_by_content_type": {
+  "loader": "UnstructuredPowerPointLoader",
+  "args": [
+   "<tmp>/upload"
+  ],
+  "kwargs": {}
+ },
+ "ppt_by_content_type": {
+  "loader": "UnstructuredPowerPointLoader",
+  "args": [
+   "<tmp>/upload"
+  ],
+  "kwargs": {}
+ },
+ "powerpoint_without_unstructured": {
+  "loader": "PptxLoader",
+  "args": [
+   "<tmp>/a.pptx"
+  ],
+  "kwargs": {}
+ },
+ "msg": {
+  "loader": "UnstructuredEmailLoader",
+  "args": [
+   "<tmp>/a.msg"
+  ],
+  "kwargs": {
+   "process_attachments": false
+  }
+ },
+ "msg_without_unstructured": {
+  "raised": "ValueError",
+  "message": "Processing .msg files requires the 'unstructured' package. Install it with: pip install unstructured"
+ },
+ "odt": {
+  "loader": "UnstructuredODTLoader",
+  "args": [
+   "<tmp>/a.odt"
+  ],
+  "kwargs": {}
+ },
+ "odt_without_unstructured": {
+  "raised": "ValueError",
+  "message": "Processing .odt files requires the 'unstructured' package. Install it with: pip install unstructured"
+ },
+ "source_file": {
+  "loader": "TextLoader",
+  "args": [
+   "<tmp>/main.rs"
+  ],
+  "kwargs": {
+   "encoding": "<encoding of main.rs>"
+  }
+ },
+ "text_content_type": {
+  "loader": "TextLoader",
+  "args": [
+   "<tmp>/README"
+  ],
+  "kwargs": {
+   "encoding": "<encoding of README>"
+  }
+ },
+ "unknown_file": {
+  "loader": "TextLoader",
+  "args": [
+   "<tmp>/blob.xyz"
+  ],
+  "kwargs": {
+   "encoding": "<encoding of blob.xyz>"
+  }
+ },
+ "no_extension": {
+  "loader": "TextLoader",
+  "args": [
+   "<tmp>/Makefile"
+  ],
+  "kwargs": {
+   "encoding": "<encoding of Makefile>"
+  }
+ },
+ "unknown_engine_uses_default": {
+  "loader": "PyPDFLoader",
+  "args": [
+   "<tmp>/a.pdf"
+  ],
+  "kwargs": {
+   "extract_images": null,
+   "mode": "page"
+  }
+ }
+}
