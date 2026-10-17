@@ -3263,6 +3263,11 @@ def _first_query_hits(query_results: dict) -> tuple[list, list, list]:
     return tuple(query_results.get(key, [[]])[0] for key in ('documents', 'metadatas', 'distances'))
 
 
+def _hit_metadata(metadatas: list, idx: int) -> dict:
+    # A hit may have no metadata entry, or a null one (vmetadata is nullable).
+    return (metadatas[idx] if idx < len(metadatas) else None) or {}
+
+
 def _with_distance(chunk_info: dict, idx: int, distances: list) -> dict:
     if idx < len(distances):
         chunk_info['distance'] = distances[idx]
@@ -3273,25 +3278,23 @@ def _vector_chunks(query_results) -> list[dict]:
     if not (query_results and 'documents' in query_results):
         return []
     documents, metadatas, distances = _first_query_hits(query_results)
-    return [
-        _with_distance(
-            {
-                'content': doc,
-                'source': metadatas[idx].get('source', metadatas[idx].get('name', 'Unknown')),
-                'file_id': metadatas[idx].get('file_id', ''),
-            },
-            idx,
-            distances,
-        )
-        for idx, doc in enumerate(documents)
-    ]
+    chunks = []
+    for idx, doc in enumerate(documents):
+        metadata = _hit_metadata(metadatas, idx)
+        chunk_info = {
+            'content': doc,
+            'source': metadata.get('source', metadata.get('name', 'Unknown')),
+            'file_id': metadata.get('file_id', ''),
+        }
+        chunks.append(_with_distance(chunk_info, idx, distances))
+    return chunks
 
 
 def _external_chunks(query_results: dict, knowledge) -> list[dict]:
     documents, metadatas, distances = _first_query_hits(query_results)
     chunks = []
     for idx, doc in enumerate(documents):
-        metadata = metadatas[idx] if idx < len(metadatas) else {}
+        metadata = _hit_metadata(metadatas, idx)
         chunk_info = {
             'content': doc,
             'source': metadata.get('source', metadata.get('name', knowledge.name)),

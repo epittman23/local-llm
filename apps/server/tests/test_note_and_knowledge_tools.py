@@ -187,6 +187,16 @@ KB_CASES = [
         {'query': 'q', 'knowledge_ids': ['kb_external']},
         {'external_result': {'documents': [['e1', 'e2']], 'metadatas': [[{'name': 'only one'}]]}},
     ),
+    (
+        'search_null_metadata',
+        {'query': 'q', 'knowledge_ids': ['kb_own']},
+        {'search_result': {'documents': [['a', 'b']], 'metadatas': [[None, {'name': 'n'}]], 'distances': [[0.1, 0.2]]}},
+    ),
+    (
+        'external_null_metadata',
+        {'query': 'q', 'knowledge_ids': ['kb_external']},
+        {'external_result': {'documents': [['e1']], 'metadatas': [[None]], 'distances': [[0.3]]}},
+    ),
     ('search_raises', {'query': 'q', 'knowledge_ids': ['kb_own']}, {'search_result': 'raise'}),
 ]
 

@@ -1120,9 +1120,20 @@
   ]
  },
  "kb:search_fewer_metadatas": {
-  "returned": {
-   "error": "list index out of range"
-  },
+  "returned": [
+   {
+    "content": "a",
+    "source": "s",
+    "file_id": "",
+    "distance": 0.1
+   },
+   {
+    "content": "b",
+    "source": "Unknown",
+    "file_id": "",
+    "distance": 0.2
+   }
+  ],
   "calls": [
    [
     "vector_search",
@@ -1152,6 +1163,58 @@
     "file_id": "external-kb_external",
     "type": "external",
     "knowledge_id": "kb_external"
+   }
+  ],
+  "calls": [
+   [
+    "external",
+    "kb_external",
+    [
+     "q"
+    ],
+    5,
+    "u1"
+   ]
+  ]
+ },
+ "kb:search_null_metadata": {
+  "returned": [
+   {
+    "content": "a",
+    "source": "Unknown",
+    "file_id": "",
+    "distance": 0.1
+   },
+   {
+    "content": "b",
+    "source": "n",
+    "file_id": "",
+    "distance": 0.2
+   }
+  ],
+  "calls": [
+   [
+    "vector_search",
+    [
+     "kb_own"
+    ],
+    [
+     "q"
+    ],
+    5,
+    "<embedded ['x'] prefix=p for u1>"
+   ]
+  ]
+ },
+ "kb:external_null_metadata": {
+  "returned": [
+   {
+    "content": "e1",
+    "source": "External",
+    "file_id": "external-kb_external",
+    "type": "external",
+    "knowledge_id": "kb_external",
+    "distance": 0.3
    }
   ],
   "calls": [
