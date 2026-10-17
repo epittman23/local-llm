@@ -1,0 +1,2559 @@
+{
+ "no_items": {
+  "sources": [],
+  "calls": [],
+  "items_after": []
+ },
+ "text_full_with_file": {
+  "sources": [
+   {
+    "source": {
+     "type": "text",
+     "context": "full",
+     "file": {
+      "data": {
+       "content": "inline content",
+       "metadata": {
+        "page": 1
+       }
+      },
+      "meta": {
+       "name": "inline.txt"
+      }
+     }
+    },
+    "document": [
+     "inline content"
+    ],
+    "metadata": [
+     {
+      "name": "inline.txt"
+     }
+    ]
+   }
+  ],
+  "calls": [],
+  "items_after": [
+   {
+    "type": "text",
+    "context": "full",
+    "file": {
+     "data": {
+      "content": "inline content",
+      "metadata": {
+       "page": 1
+      }
+     },
+     "meta": {
+      "name": "inline.txt"
+     }
+    }
+   }
+  ]
+ },
+ "text_full_without_file_uses_collection": {
+  "sources": [
+   {
+    "source": {
+     "type": "text",
+     "context": "full",
+     "collection_name": "col-a"
+    },
+    "document": [
+     "hit in col-a"
+    ],
+    "metadata": [
+     {
+      "collection": "col-a"
+     }
+    ],
+    "distances": [
+     0.1
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "filter_collections",
+    [
+     "col-a"
+    ],
+    "u1"
+   ],
+   [
+    "search",
+    [
+     "col-a"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "text",
+    "context": "full",
+    "collection_name": "col-a"
+   }
+  ]
+ },
+ "text_collection": {
+  "sources": [
+   {
+    "source": {
+     "type": "text",
+     "collection_name": "col-a"
+    },
+    "document": [
+     "hit in col-a"
+    ],
+    "metadata": [
+     {
+      "collection": "col-a"
+     }
+    ],
+    "distances": [
+     0.1
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "filter_collections",
+    [
+     "col-a"
+    ],
+    "u1"
+   ],
+   [
+    "search",
+    [
+     "col-a"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "text",
+    "collection_name": "col-a"
+   }
+  ]
+ },
+ "text_file": {
+  "sources": [
+   {
+    "source": {
+     "type": "text",
+     "file": {
+      "data": {
+       "content": "inline content",
+       "metadata": {
+        "page": 1
+       }
+      },
+      "meta": {
+       "name": "inline.txt"
+      }
+     }
+    },
+    "document": [
+     "inline content"
+    ],
+    "metadata": [
+     {
+      "name": "inline.txt"
+     }
+    ]
+   }
+  ],
+  "calls": [],
+  "items_after": [
+   {
+    "type": "text",
+    "file": {
+     "data": {
+      "content": "inline content",
+      "metadata": {
+       "page": 1
+      }
+     },
+     "meta": {
+      "name": "inline.txt"
+     }
+    }
+   }
+  ]
+ },
+ "text_content": {
+  "sources": [
+   {
+    "source": {
+     "type": "text",
+     "id": "t1",
+     "name": "Pasted",
+     "content": "pasted text"
+    },
+    "document": [
+     "pasted text"
+    ],
+    "metadata": [
+     {
+      "file_id": "t1",
+      "name": "Pasted"
+     }
+    ]
+   }
+  ],
+  "calls": [],
+  "items_after": [
+   {
+    "type": "text",
+    "id": "t1",
+    "name": "Pasted",
+    "content": "pasted text"
+   }
+  ]
+ },
+ "text_no_user": {
+  "sources": [
+   {
+    "source": {
+     "type": "text",
+     "collection_name": "col-a"
+    },
+    "document": [
+     "hit in col-a"
+    ],
+    "metadata": [
+     {
+      "collection": "col-a"
+     }
+    ],
+    "distances": [
+     0.1
+    ]
+   },
+   {
+    "source": {
+     "type": "text",
+     "content": "x"
+    },
+    "document": [
+     "x"
+    ],
+    "metadata": [
+     {
+      "file_id": null,
+      "name": null
+     }
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "search",
+    [
+     "col-a"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "text",
+    "collection_name": "col-a"
+   },
+   {
+    "type": "text",
+    "content": "x"
+   }
+  ]
+ },
+ "note_own": {
+  "sources": [
+   {
+    "source": {
+     "type": "note",
+     "id": "n_own"
+    },
+    "document": [
+     "# mine"
+    ],
+    "metadata": [
+     {
+      "file_id": "n_own",
+      "name": "My note"
+     }
+    ]
+   }
+  ],
+  "calls": [],
+  "items_after": [
+   {
+    "type": "note",
+    "id": "n_own"
+   }
+  ]
+ },
+ "note_shared": {
+  "sources": [
+   {
+    "source": {
+     "type": "note",
+     "id": "n_shared"
+    },
+    "document": [
+     "shared"
+    ],
+    "metadata": [
+     {
+      "file_id": "n_shared",
+      "name": "Shared note"
+     }
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "grant",
+    "u1",
+    "note",
+    "n_shared",
+    "read"
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "note",
+    "id": "n_shared"
+   }
+  ]
+ },
+ "note_denied": {
+  "sources": [],
+  "calls": [
+   [
+    "grant",
+    "u1",
+    "note",
+    "n_denied",
+    "read"
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "note",
+    "id": "n_denied"
+   }
+  ]
+ },
+ "note_admin": {
+  "sources": [
+   {
+    "source": {
+     "type": "note",
+     "id": "n_denied"
+    },
+    "document": [
+     "private"
+    ],
+    "metadata": [
+     {
+      "file_id": "n_denied",
+      "name": "Private note"
+     }
+    ]
+   }
+  ],
+  "calls": [],
+  "items_after": [
+   {
+    "type": "note",
+    "id": "n_denied"
+   }
+  ]
+ },
+ "note_missing": {
+  "sources": [],
+  "calls": [],
+  "items_after": [
+   {
+    "type": "note",
+    "id": "nope"
+   }
+  ]
+ },
+ "note_without_markdown": {
+  "sources": [
+   {
+    "source": {
+     "type": "note",
+     "id": "n_no_md"
+    },
+    "document": [
+     ""
+    ],
+    "metadata": [
+     {
+      "file_id": "n_no_md",
+      "name": "Empty note"
+     }
+    ]
+   }
+  ],
+  "calls": [],
+  "items_after": [
+   {
+    "type": "note",
+    "id": "n_no_md"
+   }
+  ]
+ },
+ "chat_own": {
+  "sources": [
+   {
+    "source": {
+     "type": "chat",
+     "id": "ch_own"
+    },
+    "document": [
+     "#### User\nquestion\n\n#### Assistant\nanswer\n"
+    ],
+    "metadata": [
+     {
+      "file_id": "ch_own",
+      "name": "Own chat"
+     }
+    ]
+   }
+  ],
+  "calls": [],
+  "items_after": [
+   {
+    "type": "chat",
+    "id": "ch_own"
+   }
+  ]
+ },
+ "chat_shared": {
+  "sources": [
+   {
+    "source": {
+     "type": "chat",
+     "id": "ch_shared"
+    },
+    "document": [
+     "#### User\nquestion\n\n#### Assistant\nanswer\n"
+    ],
+    "metadata": [
+     {
+      "file_id": "ch_shared",
+      "name": "Shared chat"
+     }
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "grant",
+    "u1",
+    "shared_chat",
+    "ch_shared",
+    "read"
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "chat",
+    "id": "ch_shared"
+   }
+  ]
+ },
+ "chat_via_folder": {
+  "sources": [
+   {
+    "source": {
+     "type": "chat",
+     "id": "ch_folder"
+    },
+    "document": [
+     "#### User\nquestion\n\n#### Assistant\nanswer\n"
+    ],
+    "metadata": [
+     {
+      "file_id": "ch_folder",
+      "name": "Folder chat"
+     }
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "grant",
+    "u1",
+    "shared_chat",
+    "ch_folder",
+    "read"
+   ],
+   [
+    "folder",
+    "chat_folder"
+   ],
+   [
+    "folder_access",
+    "u1",
+    "chat_folder",
+    "read"
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "chat",
+    "id": "ch_folder"
+   }
+  ]
+ },
+ "chat_folder_denied": {
+  "sources": [],
+  "calls": [
+   [
+    "grant",
+    "u1",
+    "shared_chat",
+    "ch_folder_denied",
+    "read"
+   ],
+   [
+    "folder",
+    "fold_other"
+   ],
+   [
+    "folder_access",
+    "u1",
+    "fold_other",
+    "read"
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "chat",
+    "id": "ch_folder_denied"
+   }
+  ]
+ },
+ "chat_denied": {
+  "sources": [],
+  "calls": [
+   [
+    "grant",
+    "u1",
+    "shared_chat",
+    "ch_denied",
+    "read"
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "chat",
+    "id": "ch_denied"
+   }
+  ]
+ },
+ "chat_admin": {
+  "sources": [
+   {
+    "source": {
+     "type": "chat",
+     "id": "ch_denied"
+    },
+    "document": [
+     "#### User\nquestion\n\n#### Assistant\nanswer\n"
+    ],
+    "metadata": [
+     {
+      "file_id": "ch_denied",
+      "name": "Private chat"
+     }
+    ]
+   }
+  ],
+  "calls": [],
+  "items_after": [
+   {
+    "type": "chat",
+    "id": "ch_denied"
+   }
+  ]
+ },
+ "chat_missing": {
+  "sources": [],
+  "calls": [],
+  "items_after": [
+   {
+    "type": "chat",
+    "id": "nope"
+   }
+  ]
+ },
+ "chat_without_history": {
+  "sources": [],
+  "calls": [],
+  "items_after": [
+   {
+    "type": "chat",
+    "id": "ch_empty"
+   }
+  ]
+ },
+ "url": {
+  "sources": [
+   {
+    "source": {
+     "type": "url",
+     "url": "https://example.com/page"
+    },
+    "document": [
+     "page text"
+    ],
+    "metadata": [
+     {
+      "url": "https://example.com/page",
+      "name": "https://example.com/page"
+     }
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "fetch_url",
+    "https://example.com/page"
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "url",
+    "url": "https://example.com/page"
+   }
+  ]
+ },
+ "url_without_docs": {
+  "sources": [],
+  "calls": [
+   [
+    "fetch_url",
+    "https://example.com/empty"
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "url",
+    "url": "https://example.com/empty"
+   }
+  ]
+ },
+ "file_full_inline": {
+  "sources": [
+   {
+    "source": {
+     "type": "file",
+     "id": "f_any",
+     "name": "Inline",
+     "context": "full",
+     "file": {
+      "data": {
+       "content": "inline content",
+       "metadata": {
+        "page": 1
+       }
+      },
+      "meta": {
+       "name": "inline.txt"
+      }
+     }
+    },
+    "document": [
+     "inline content"
+    ],
+    "metadata": [
+     {
+      "file_id": "f_any",
+      "name": "Inline",
+      "page": 1
+     }
+    ]
+   }
+  ],
+  "calls": [],
+  "items_after": [
+   {
+    "type": "file",
+    "id": "f_any",
+    "name": "Inline",
+    "context": "full",
+    "file": {
+     "data": {
+      "content": "inline content",
+      "metadata": {
+       "page": 1
+      }
+     },
+     "meta": {
+      "name": "inline.txt"
+     }
+    }
+   }
+  ]
+ },
+ "file_full_own": {
+  "sources": [
+   {
+    "source": {
+     "type": "file",
+     "id": "f_own",
+     "context": "full"
+    },
+    "document": [
+     "own content"
+    ],
+    "metadata": [
+     {
+      "file_id": "f_own",
+      "name": "own.txt",
+      "source": "own.txt"
+     }
+    ]
+   }
+  ],
+  "calls": [],
+  "items_after": [
+   {
+    "type": "file",
+    "id": "f_own",
+    "context": "full"
+   }
+  ]
+ },
+ "file_full_granted": {
+  "sources": [
+   {
+    "source": {
+     "type": "file",
+     "id": "f_granted",
+     "context": "full",
+     "file": {
+      "data": {}
+     }
+    },
+    "document": [
+     "granted content"
+    ],
+    "metadata": [
+     {
+      "file_id": "f_granted",
+      "name": "granted.txt",
+      "source": "granted.txt"
+     }
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "file_access",
+    "f_granted",
+    "read",
+    "u1"
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "file",
+    "id": "f_granted",
+    "context": "full",
+    "file": {
+     "data": {}
+    }
+   }
+  ]
+ },
+ "file_full_denied": {
+  "sources": [],
+  "calls": [
+   [
+    "file_access",
+    "f_denied",
+    "read",
+    "u1"
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "file",
+    "id": "f_denied",
+    "context": "full"
+   }
+  ]
+ },
+ "file_full_admin": {
+  "sources": [
+   {
+    "source": {
+     "type": "file",
+     "id": "f_denied",
+     "context": "full"
+    },
+    "document": [
+     "denied content"
+    ],
+    "metadata": [
+     {
+      "file_id": "f_denied",
+      "name": "denied.txt",
+      "source": "denied.txt"
+     }
+    ]
+   }
+  ],
+  "calls": [],
+  "items_after": [
+   {
+    "type": "file",
+    "id": "f_denied",
+    "context": "full"
+   }
+  ]
+ },
+ "file_full_missing": {
+  "sources": [],
+  "calls": [],
+  "items_after": [
+   {
+    "type": "file",
+    "id": "nope",
+    "context": "full"
+   }
+  ]
+ },
+ "file_full_without_id": {
+  "sources": [],
+  "calls": [],
+  "items_after": [
+   {
+    "type": "file",
+    "context": "full"
+   }
+  ]
+ },
+ "file_bypass_retrieval": {
+  "sources": [
+   {
+    "source": {
+     "type": "file",
+     "id": "f_own"
+    },
+    "document": [
+     "own content"
+    ],
+    "metadata": [
+     {
+      "file_id": "f_own",
+      "name": "own.txt",
+      "source": "own.txt"
+     }
+    ]
+   }
+  ],
+  "calls": [],
+  "items_after": [
+   {
+    "type": "file",
+    "id": "f_own"
+   }
+  ]
+ },
+ "file_chunks_own": {
+  "sources": [
+   {
+    "source": {
+     "type": "file",
+     "id": "f_own"
+    },
+    "document": [
+     "hit in file-f_own"
+    ],
+    "metadata": [
+     {
+      "collection": "file-f_own"
+     }
+    ],
+    "distances": [
+     0.1
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "filter_collections",
+    [
+     "file-f_own"
+    ],
+    "u1"
+   ],
+   [
+    "search",
+    [
+     "file-f_own"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "file",
+    "id": "f_own"
+   }
+  ]
+ },
+ "file_chunks_legacy": {
+  "sources": [
+   {
+    "source": {
+     "type": "file",
+     "id": "f_own",
+     "legacy": true
+    },
+    "document": [
+     "hit in f_own"
+    ],
+    "metadata": [
+     {
+      "collection": "f_own"
+     }
+    ],
+    "distances": [
+     0.1
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "filter_collections",
+    [
+     "f_own"
+    ],
+    "u1"
+   ],
+   [
+    "search",
+    [
+     "f_own"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "file",
+    "id": "f_own",
+    "legacy": true
+   }
+  ]
+ },
+ "file_chunks_denied": {
+  "sources": [],
+  "calls": [
+   [
+    "file_access",
+    "f_denied",
+    "read",
+    "u1"
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "file",
+    "id": "f_denied"
+   }
+  ]
+ },
+ "file_chunks_without_id": {
+  "sources": [],
+  "calls": [],
+  "items_after": [
+   {
+    "type": "file"
+   }
+  ]
+ },
+ "file_chunks_bypass_access": {
+  "sources": [
+   {
+    "source": {
+     "type": "file",
+     "id": "f_denied"
+    },
+    "document": [
+     "hit in file-f_denied"
+    ],
+    "metadata": [
+     {
+      "collection": "file-f_denied"
+     }
+    ],
+    "distances": [
+     0.1
+    ]
+   },
+   {
+    "source": {
+     "type": "file",
+     "id": "f_x",
+     "legacy": true
+    },
+    "document": [
+     "hit in f_x"
+    ],
+    "metadata": [
+     {
+      "collection": "f_x"
+     }
+    ],
+    "distances": [
+     0.1
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "filter_collections",
+    [
+     "file-f_denied"
+    ],
+    "u1"
+   ],
+   [
+    "search",
+    [
+     "file-f_denied"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ],
+   [
+    "filter_collections",
+    [
+     "f_x"
+    ],
+    "u1"
+   ],
+   [
+    "search",
+    [
+     "f_x"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "file",
+    "id": "f_denied"
+   },
+   {
+    "type": "file",
+    "id": "f_x",
+    "legacy": true
+   }
+  ]
+ },
+ "file_chunks_full_context": {
+  "sources": [
+   {
+    "source": {
+     "type": "file",
+     "id": "f_own"
+    },
+    "document": [
+     "all of file-f_own"
+    ],
+    "metadata": [
+     {
+      "collection": "file-f_own"
+     }
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "filter_collections",
+    [
+     "file-f_own"
+    ],
+    "u1"
+   ],
+   [
+    "read_all",
+    [
+     "file-f_own"
+    ]
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "file",
+    "id": "f_own"
+   }
+  ]
+ },
+ "file_chunks_search_fails": {
+  "sources": [],
+  "calls": [
+   [
+    "file_access",
+    "f_granted",
+    "read",
+    "u1"
+   ],
+   [
+    "filter_collections",
+    [
+     "file-f_granted"
+    ],
+    "u1"
+   ],
+   [
+    "search",
+    [
+     "file-f_granted"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "file",
+    "id": "f_granted"
+   }
+  ]
+ },
+ "collection_own_chunks": {
+  "sources": [
+   {
+    "source": {
+     "type": "collection",
+     "id": "kb_own"
+    },
+    "document": [
+     "hit in kb_own"
+    ],
+    "metadata": [
+     {
+      "collection": "kb_own"
+     }
+    ],
+    "distances": [
+     0.1
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "filter_collections",
+    [
+     "kb_own"
+    ],
+    "u1"
+   ],
+   [
+    "search",
+    [
+     "kb_own"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "collection",
+    "id": "kb_own"
+   }
+  ]
+ },
+ "collection_shared_full": {
+  "sources": [
+   {
+    "source": {
+     "type": "collection",
+     "id": "kb_shared",
+     "context": "full"
+    },
+    "document": [
+     "denied content"
+    ],
+    "metadata": [
+     {
+      "file_id": "f_denied",
+      "name": "denied.txt",
+      "source": "denied.txt"
+     }
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "grant",
+    "u1",
+    "knowledge",
+    "kb_shared",
+    "read"
+   ],
+   [
+    "grant",
+    "u1",
+    "knowledge",
+    "kb_shared",
+    "read"
+   ],
+   [
+    "kb_files",
+    "kb_shared"
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "collection",
+    "id": "kb_shared",
+    "context": "full"
+   }
+  ]
+ },
+ "collection_bypass_retrieval": {
+  "sources": [
+   {
+    "source": {
+     "type": "collection",
+     "id": "kb_own"
+    },
+    "document": [
+     "own content",
+     "granted content"
+    ],
+    "metadata": [
+     {
+      "file_id": "f_own",
+      "name": "own.txt",
+      "source": "own.txt"
+     },
+     {
+      "file_id": "f_granted",
+      "name": "granted.txt",
+      "source": "granted.txt"
+     }
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "kb_files",
+    "kb_own"
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "collection",
+    "id": "kb_own"
+   }
+  ]
+ },
+ "collection_denied": {
+  "sources": [],
+  "calls": [
+   [
+    "grant",
+    "u1",
+    "knowledge",
+    "kb_denied",
+    "read"
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "collection",
+    "id": "kb_denied"
+   }
+  ]
+ },
+ "collection_admin": {
+  "sources": [
+   {
+    "source": {
+     "type": "collection",
+     "id": "kb_denied"
+    },
+    "document": [
+     "hit in kb_denied"
+    ],
+    "metadata": [
+     {
+      "collection": "kb_denied"
+     }
+    ],
+    "distances": [
+     0.1
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "filter_collections",
+    [
+     "kb_denied"
+    ],
+    "a1"
+   ],
+   [
+    "search",
+    [
+     "kb_denied"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "collection",
+    "id": "kb_denied"
+   }
+  ]
+ },
+ "collection_missing": {
+  "sources": [],
+  "calls": [],
+  "items_after": [
+   {
+    "type": "collection",
+    "id": "nope"
+   }
+  ]
+ },
+ "collection_external": {
+  "sources": [
+   {
+    "source": {
+     "type": "collection",
+     "id": "kb_external"
+    },
+    "document": [
+     "external doc"
+    ],
+    "metadata": [
+     {
+      "source": "ext"
+     }
+    ]
+   },
+   {
+    "source": {
+     "type": "collection",
+     "id": "kb_external"
+    },
+    "document": [
+     "external doc"
+    ],
+    "metadata": [
+     {
+      "source": "ext"
+     }
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "external",
+    "kb_external",
+    [
+     "what?"
+    ],
+    4
+   ],
+   [
+    "external",
+    "kb_external",
+    [
+     "what?"
+    ],
+    4
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "collection",
+    "id": "kb_external"
+   },
+   {
+    "type": "collection",
+    "id": "kb_external"
+   }
+  ]
+ },
+ "collection_legacy_names_validated": {
+  "sources": [
+   {
+    "source": {
+     "type": "collection",
+     "id": "kb_own",
+     "legacy": true,
+     "collection_names": [
+      "file-f_own",
+      "file-f_denied",
+      "kb_own"
+     ]
+    },
+    "document": [
+     "hit in file-f_own",
+     "hit in kb_own"
+    ],
+    "metadata": [
+     {
+      "collection": "file-f_own"
+     },
+     {
+      "collection": "kb_own"
+     }
+    ],
+    "distances": [
+     0.1,
+     0.2
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "kb_files",
+    "kb_own"
+   ],
+   [
+    "filter_collections",
+    [
+     "file-f_own",
+     "kb_own"
+    ],
+    "u1"
+   ],
+   [
+    "search",
+    [
+     "file-f_own",
+     "kb_own"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "collection",
+    "id": "kb_own",
+    "legacy": true,
+    "collection_names": [
+     "file-f_own",
+     "file-f_denied",
+     "kb_own"
+    ]
+   }
+  ]
+ },
+ "collection_legacy_no_valid_names": {
+  "sources": [
+   {
+    "source": {
+     "type": "collection",
+     "id": "kb_own",
+     "legacy": true,
+     "collection_names": [
+      "file-f_denied"
+     ]
+    },
+    "document": [
+     "hit in kb_own"
+    ],
+    "metadata": [
+     {
+      "collection": "kb_own"
+     }
+    ],
+    "distances": [
+     0.1
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "kb_files",
+    "kb_own"
+   ],
+   [
+    "filter_collections",
+    [
+     "kb_own"
+    ],
+    "u1"
+   ],
+   [
+    "search",
+    [
+     "kb_own"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "collection",
+    "id": "kb_own",
+    "legacy": true,
+    "collection_names": [
+     "file-f_denied"
+    ]
+   }
+  ]
+ },
+ "collection_legacy_without_names": {
+  "sources": [
+   {
+    "source": {
+     "type": "collection",
+     "id": "kb_own",
+     "legacy": true
+    },
+    "document": [
+     "hit in kb_own"
+    ],
+    "metadata": [
+     {
+      "collection": "kb_own"
+     }
+    ],
+    "distances": [
+     0.1
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "kb_files",
+    "kb_own"
+   ],
+   [
+    "filter_collections",
+    [
+     "kb_own"
+    ],
+    "u1"
+   ],
+   [
+    "search",
+    [
+     "kb_own"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "collection",
+    "id": "kb_own",
+    "legacy": true
+   }
+  ]
+ },
+ "collection_legacy_bypass_access": {
+  "sources": [
+   {
+    "source": {
+     "type": "collection",
+     "id": "kb_own",
+     "legacy": true,
+     "collection_names": [
+      "anything"
+     ]
+    },
+    "document": [
+     "hit in anything"
+    ],
+    "metadata": [
+     {
+      "collection": "anything"
+     }
+    ],
+    "distances": [
+     0.1
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "filter_collections",
+    [
+     "anything"
+    ],
+    "u1"
+   ],
+   [
+    "search",
+    [
+     "anything"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "collection",
+    "id": "kb_own",
+    "legacy": true,
+    "collection_names": [
+     "anything"
+    ]
+   }
+  ]
+ },
+ "folder_expands_to_its_files": {
+  "sources": [
+   {
+    "source": {
+     "type": "file",
+     "id": "f_folder"
+    },
+    "document": [
+     "hit in file-f_folder"
+    ],
+    "metadata": [
+     {
+      "collection": "file-f_folder"
+     }
+    ],
+    "distances": [
+     0.1
+    ]
+   },
+   {
+    "source": {
+     "type": "collection",
+     "id": "kb_folder"
+    },
+    "document": [
+     "hit in kb_folder"
+    ],
+    "metadata": [
+     {
+      "collection": "kb_folder"
+     }
+    ],
+    "distances": [
+     0.1
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "folder",
+    "fold1"
+   ],
+   [
+    "folder_access",
+    "u1",
+    "fold1",
+    "read"
+   ],
+   [
+    "file_access",
+    "f_folder",
+    "read",
+    "u1"
+   ],
+   [
+    "search",
+    [
+     "file-f_folder"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ],
+   [
+    "grant",
+    "u1",
+    "knowledge",
+    "kb_folder",
+    "read"
+   ],
+   [
+    "search",
+    [
+     "kb_folder"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "folder",
+    "id": "fold1"
+   }
+  ]
+ },
+ "folder_listed_twice": {
+  "sources": [
+   {
+    "source": {
+     "type": "file",
+     "id": "f_folder"
+    },
+    "document": [
+     "hit in file-f_folder"
+    ],
+    "metadata": [
+     {
+      "collection": "file-f_folder"
+     }
+    ],
+    "distances": [
+     0.1
+    ]
+   },
+   {
+    "source": {
+     "type": "collection",
+     "id": "kb_folder"
+    },
+    "document": [
+     "hit in kb_folder"
+    ],
+    "metadata": [
+     {
+      "collection": "kb_folder"
+     }
+    ],
+    "distances": [
+     0.1
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "folder",
+    "fold1"
+   ],
+   [
+    "folder_access",
+    "u1",
+    "fold1",
+    "read"
+   ],
+   [
+    "file_access",
+    "f_folder",
+    "read",
+    "u1"
+   ],
+   [
+    "search",
+    [
+     "file-f_folder"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ],
+   [
+    "grant",
+    "u1",
+    "knowledge",
+    "kb_folder",
+    "read"
+   ],
+   [
+    "search",
+    [
+     "kb_folder"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "folder",
+    "id": "fold1"
+   },
+   {
+    "type": "folder",
+    "id": "fold1"
+   }
+  ]
+ },
+ "folder_denied": {
+  "sources": [],
+  "calls": [
+   [
+    "folder",
+    "fold_other"
+   ],
+   [
+    "folder_access",
+    "u1",
+    "fold_other",
+    "read"
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "folder",
+    "id": "fold_other"
+   }
+  ]
+ },
+ "folder_admin": {
+  "sources": [
+   {
+    "source": {
+     "type": "file",
+     "id": "f_denied"
+    },
+    "document": [
+     "hit in file-f_denied"
+    ],
+    "metadata": [
+     {
+      "collection": "file-f_denied"
+     }
+    ],
+    "distances": [
+     0.1
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "folder",
+    "fold_other"
+   ],
+   [
+    "search",
+    [
+     "file-f_denied"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "folder",
+    "id": "fold_other"
+   }
+  ]
+ },
+ "folder_missing_or_without_id": {
+  "sources": [],
+  "calls": [
+   [
+    "folder",
+    "nope"
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "folder",
+    "id": "nope"
+   },
+   {
+    "type": "folder"
+   }
+  ]
+ },
+ "folder_without_user": {
+  "sources": [
+   {
+    "source": {
+     "type": "text",
+     "content": "x"
+    },
+    "document": [
+     "x"
+    ],
+    "metadata": [
+     {
+      "file_id": null,
+      "name": null
+     }
+    ]
+   }
+  ],
+  "calls": [],
+  "items_after": [
+   {
+    "type": "folder",
+    "id": "fold1"
+   },
+   {
+    "type": "text",
+    "content": "x"
+   }
+  ]
+ },
+ "folder_grants_file_access": {
+  "sources": [
+   {
+    "source": {
+     "type": "file",
+     "id": "f_folder",
+     "context": "full"
+    },
+    "document": [
+     "folder content"
+    ],
+    "metadata": [
+     {
+      "file_id": "f_folder",
+      "name": "folder.txt",
+      "source": "folder.txt"
+     }
+    ]
+   },
+   {
+    "source": {
+     "type": "file",
+     "id": "f_folder"
+    },
+    "document": [
+     "hit in file-f_folder"
+    ],
+    "metadata": [
+     {
+      "collection": "file-f_folder"
+     }
+    ],
+    "distances": [
+     0.1
+    ]
+   },
+   {
+    "source": {
+     "type": "collection",
+     "id": "kb_folder"
+    },
+    "document": [
+     "hit in kb_folder"
+    ],
+    "metadata": [
+     {
+      "collection": "kb_folder"
+     }
+    ],
+    "distances": [
+     0.1
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "folder",
+    "fold1"
+   ],
+   [
+    "folder_access",
+    "u1",
+    "fold1",
+    "read"
+   ],
+   [
+    "file_access",
+    "f_folder",
+    "read",
+    "u1"
+   ],
+   [
+    "file_access",
+    "f_folder",
+    "read",
+    "u1"
+   ],
+   [
+    "search",
+    [
+     "file-f_folder"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ],
+   [
+    "grant",
+    "u1",
+    "knowledge",
+    "kb_folder",
+    "read"
+   ],
+   [
+    "search",
+    [
+     "kb_folder"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "folder",
+    "id": "fold1"
+   },
+   {
+    "type": "file",
+    "id": "f_folder",
+    "context": "full"
+   }
+  ]
+ },
+ "docs_item": {
+  "sources": [
+   {
+    "source": {
+     "docs": [
+      {
+       "content": "doc a",
+       "metadata": {
+        "source": "a"
+       }
+      },
+      {
+       "content": "doc b",
+       "metadata": null
+      }
+     ]
+    },
+    "document": [
+     "doc a",
+     "doc b"
+    ],
+    "metadata": [
+     {
+      "source": "a"
+     },
+     null
+    ]
+   }
+  ],
+  "calls": [],
+  "items_after": [
+   {
+    "docs": [
+     {
+      "content": "doc a",
+      "metadata": {
+       "source": "a"
+      }
+     },
+     {
+      "content": "doc b",
+      "metadata": null
+     }
+    ]
+   }
+  ]
+ },
+ "web_search_collection": {
+  "sources": [
+   {
+    "source": {
+     "type": "web_search",
+     "collection_name": "web-search-abc"
+    },
+    "document": [
+     "hit in web-search-abc"
+    ],
+    "metadata": [
+     {
+      "collection": "web-search-abc"
+     }
+    ],
+    "distances": [
+     0.1
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "filter_collections",
+    [
+     "web-search-abc"
+    ],
+    "u1"
+   ],
+   [
+    "search",
+    [
+     "web-search-abc"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "web_search",
+    "collection_name": "web-search-abc"
+   }
+  ]
+ },
+ "web_search_without_collection": {
+  "sources": [],
+  "calls": [],
+  "items_after": [
+   {
+    "type": "web_search"
+   }
+  ]
+ },
+ "untyped_collection_name_ignored": {
+  "sources": [],
+  "calls": [],
+  "items_after": [
+   {
+    "collection_name": "col-a"
+   },
+   {
+    "collection_names": [
+     "col-b"
+    ]
+   }
+  ]
+ },
+ "untyped_collection_names_bypass": {
+  "sources": [
+   {
+    "source": {
+     "collection_name": "col-a"
+    },
+    "document": [
+     "hit in col-a"
+    ],
+    "metadata": [
+     {
+      "collection": "col-a"
+     }
+    ],
+    "distances": [
+     0.1
+    ]
+   },
+   {
+    "source": {
+     "collection_names": [
+      "col-b",
+      "col-c"
+     ]
+    },
+    "document": [
+     "hit in col-b",
+     "hit in col-c"
+    ],
+    "metadata": [
+     {
+      "collection": "col-b"
+     },
+     {
+      "collection": "col-c"
+     }
+    ],
+    "distances": [
+     0.1,
+     0.2
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "filter_collections",
+    [
+     "col-a"
+    ],
+    "u1"
+   ],
+   [
+    "search",
+    [
+     "col-a"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ],
+   [
+    "filter_collections",
+    [
+     "col-b",
+     "col-c"
+    ],
+    "u1"
+   ],
+   [
+    "search",
+    [
+     "col-b",
+     "col-c"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ]
+  ],
+  "items_after": [
+   {
+    "collection_name": "col-a"
+   },
+   {
+    "collection_names": [
+     "col-b",
+     "col-c"
+    ]
+   }
+  ]
+ },
+ "unknown_item": {
+  "sources": [],
+  "calls": [],
+  "items_after": [
+   {
+    "type": "mystery",
+    "id": "x"
+   }
+  ]
+ },
+ "collection_access_filtered_out": {
+  "sources": [],
+  "calls": [
+   [
+    "filter_collections",
+    [
+     "deny-me"
+    ],
+    "u1"
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "text",
+    "collection_name": "deny-me"
+   }
+  ]
+ },
+ "already_extracted_collection_skipped": {
+  "sources": [
+   {
+    "source": {
+     "type": "file",
+     "id": "f_own"
+    },
+    "document": [
+     "hit in file-f_own"
+    ],
+    "metadata": [
+     {
+      "collection": "file-f_own"
+     }
+    ],
+    "distances": [
+     0.1
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "filter_collections",
+    [
+     "file-f_own"
+    ],
+    "u1"
+   ],
+   [
+    "search",
+    [
+     "file-f_own"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "file",
+    "id": "f_own"
+   },
+   {
+    "type": "file",
+    "id": "f_own"
+   }
+  ]
+ },
+ "collection_without_metadatas_dropped": {
+  "sources": [],
+  "calls": [
+   [
+    "filter_collections",
+    [
+     "no-metadatas"
+    ],
+    "u1"
+   ],
+   [
+    "search",
+    [
+     "no-metadatas"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "text",
+    "collection_name": "no-metadatas"
+   }
+  ]
+ },
+ "collection_without_documents_dropped": {
+  "sources": [],
+  "calls": [
+   [
+    "filter_collections",
+    [
+     "no-documents"
+    ],
+    "u1"
+   ],
+   [
+    "search",
+    [
+     "no-documents"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "text",
+    "collection_name": "no-documents"
+   }
+  ]
+ },
+ "collection_with_empty_documents_dropped": {
+  "sources": [],
+  "calls": [
+   [
+    "filter_collections",
+    [
+     "empty-documents"
+    ],
+    "u1"
+   ],
+   [
+    "search",
+    [
+     "empty-documents"
+    ],
+    [
+     "what?"
+    ],
+    4
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "text",
+    "collection_name": "empty-documents"
+   }
+  ]
+ },
+ "everything_together": {
+  "sources": [
+   {
+    "source": {
+     "type": "note",
+     "id": "n_own"
+    },
+    "document": [
+     "# mine"
+    ],
+    "metadata": [
+     {
+      "file_id": "n_own",
+      "name": "My note"
+     }
+    ]
+   },
+   {
+    "source": {
+     "type": "file",
+     "id": "f_granted",
+     "context": "full"
+    },
+    "document": [
+     "granted content"
+    ],
+    "metadata": [
+     {
+      "file_id": "f_granted",
+      "name": "granted.txt",
+      "source": "granted.txt"
+     }
+    ]
+   },
+   {
+    "source": {
+     "type": "collection",
+     "id": "kb_own"
+    },
+    "document": [
+     "hit in kb_own"
+    ],
+    "metadata": [
+     {
+      "collection": "kb_own"
+     }
+    ],
+    "distances": [
+     0.1
+    ]
+   },
+   {
+    "source": {
+     "type": "url",
+     "url": "https://example.com/page"
+    },
+    "document": [
+     "page text"
+    ],
+    "metadata": [
+     {
+      "url": "https://example.com/page",
+      "name": "https://example.com/page"
+     }
+    ]
+   }
+  ],
+  "calls": [
+   [
+    "file_access",
+    "f_granted",
+    "read",
+    "u1"
+   ],
+   [
+    "filter_collections",
+    [
+     "kb_own"
+    ],
+    "u1"
+   ],
+   [
+    "search",
+    [
+     "kb_own"
+    ],
+    [
+     "a",
+     "b"
+    ],
+    4
+   ],
+   [
+    "fetch_url",
+    "https://example.com/page"
+   ]
+  ],
+  "items_after": [
+   {
+    "type": "note",
+    "id": "n_own"
+   },
+   {
+    "type": "file",
+    "id": "f_granted",
+    "context": "full"
+   },
+   {
+    "type": "collection",
+    "id": "kb_own"
+   },
+   {
+    "type": "url",
+    "url": "https://example.com/page"
+   }
+  ]
+ }
+}
