@@ -2772,8 +2772,10 @@ async def _add_terminal_tools(request, form_data: dict, user, model: dict, termi
 
 
 def _add_direct_server_tools(form_data: dict, direct_tool_servers, tools_dict: dict) -> None:
+    # Read the servers, never pop from them: metadata['tool_servers'] is shared by every model of a
+    # multi-model chat, and is saved for a tool-approval resume and handed to sub-agents.
     for tool_server in direct_tool_servers or []:
-        system_prompt = tool_server.pop('system_prompt', None)
+        system_prompt = tool_server.get('system_prompt')
         if system_prompt:
             form_data['messages'] = add_or_update_system_message(
                 system_prompt,
@@ -2781,11 +2783,12 @@ def _add_direct_server_tools(form_data: dict, direct_tool_servers, tools_dict: d
                 append=True,
             )
 
-        for tool in tool_server.pop('specs', []):
+        server = {key: value for key, value in tool_server.items() if key not in ('system_prompt', 'specs')}
+        for tool in tool_server.get('specs', []):
             tools_dict[tool['name']] = {
                 'spec': tool,
                 'direct': True,
-                'server': tool_server,
+                'server': server,
             }
 
 

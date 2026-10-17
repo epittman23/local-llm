@@ -25726,7 +25726,13 @@
     },
     "tool_servers": [
      {
-      "url": "https://direct.test"
+      "url": "https://direct.test",
+      "system_prompt": "Direct rules",
+      "specs": [
+       {
+        "name": "direct_op"
+       }
+      ]
      },
      {
       "url": "https://bare.test"
@@ -25858,7 +25864,13 @@
    },
    "tool_servers": [
     {
-     "url": "https://direct.test"
+     "url": "https://direct.test",
+     "system_prompt": "Direct rules",
+     "specs": [
+      {
+       "name": "direct_op"
+      }
+     ]
     },
     {
      "url": "https://bare.test"
@@ -25949,7 +25961,13 @@
    },
    "tool_servers": [
     {
-     "url": "https://direct.test"
+     "url": "https://direct.test",
+     "system_prompt": "Direct rules",
+     "specs": [
+      {
+       "name": "direct_op"
+      }
+     ]
     },
     {
      "url": "https://bare.test"
@@ -27024,7 +27042,13 @@
        },
        "tool_servers": [
         {
-         "url": "https://direct.test"
+         "url": "https://direct.test",
+         "system_prompt": "Direct rules",
+         "specs": [
+          {
+           "name": "direct_op"
+          }
+         ]
         },
         {
          "url": "https://bare.test"
@@ -27143,7 +27167,13 @@
        },
        "tool_servers": [
         {
-         "url": "https://direct.test"
+         "url": "https://direct.test",
+         "system_prompt": "Direct rules",
+         "specs": [
+          {
+           "name": "direct_op"
+          }
+         ]
         },
         {
          "url": "https://bare.test"
@@ -27298,7 +27328,13 @@
        },
        "tool_servers": [
         {
-         "url": "https://direct.test"
+         "url": "https://direct.test",
+         "system_prompt": "Direct rules",
+         "specs": [
+          {
+           "name": "direct_op"
+          }
+         ]
         },
         {
          "url": "https://bare.test"
@@ -27422,7 +27458,13 @@
       },
       "tool_servers": [
        {
-        "url": "https://direct.test"
+        "url": "https://direct.test",
+        "system_prompt": "Direct rules",
+        "specs": [
+         {
+          "name": "direct_op"
+         }
+        ]
        },
        {
         "url": "https://bare.test"
@@ -27556,7 +27598,13 @@
        },
        "tool_servers": [
         {
-         "url": "https://direct.test"
+         "url": "https://direct.test",
+         "system_prompt": "Direct rules",
+         "specs": [
+          {
+           "name": "direct_op"
+          }
+         ]
         },
         {
          "url": "https://bare.test"
