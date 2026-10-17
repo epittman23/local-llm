@@ -1253,67 +1253,93 @@ def _normalize_stored_item(item: dict) -> dict:
     return {k: v for k, v in item.items() if k in allowed}
 
 
-def convert_to_responses_payload(payload: dict) -> dict:
-    """
-    Convert Chat Completions payload to Responses API format.
+def _joined_text(content: list) -> str:
+    return '\n'.join(p.get('text', '') for p in content if p.get('type') == 'text')
 
-    Chat Completions: { messages: [{role, content}], ... }
-    Responses API: { input: [{type: "message", role, content: [...]}], instructions: "system" }
-    """
-    messages = payload.pop('messages', [])
 
+def _assistant_tool_call_items(content, tool_calls: list) -> list[dict]:
+    """An assistant message with tool calls: its text (if any) as a message, then one function_call per call."""
+    items = []
+    if content:
+        text = content if isinstance(content, str) else _joined_text(content)
+        if text.strip():
+            items.append({'type': 'message', 'role': 'assistant', 'content': [{'type': 'output_text', 'text': text}]})
+    for tool_call in tool_calls:
+        func = tool_call.get('function', {})
+        items.append(
+            {
+                'type': 'function_call',
+                'call_id': tool_call.get('id', ''),
+                'name': func.get('name', ''),
+                'arguments': func.get('arguments', '{}'),
+            }
+        )
+    return items
+
+
+def _responses_image_part(part: dict) -> dict:
+    url_data = part.get('image_url', {})
+    if isinstance(url_data, dict):
+        url = url_data.get('url', '')
+        detail = url_data.get('detail') or 'auto'
+    else:
+        url = url_data if isinstance(url_data, str) else ''
+        detail = 'auto'
+    return {'type': 'input_image', 'image_url': url, 'detail': detail}
+
+
+def _responses_file_part(part: dict) -> dict | None:
+    # OpenAI-compatible proxy path only. Local LLM attachments are handled
+    # separately via metadata.files/RAG and must not be converted here.
+    file = part.get('file')
+    if not isinstance(file, dict):
+        return None
+    file_part = {k: file[k] for k in ('file_id', 'file_data', 'filename') if k in file}
+    if 'file_id' in file_part or 'file_data' in file_part:
+        return {'type': 'input_file', **file_part}
+    return None
+
+
+def _responses_content_parts(content, text_type: str) -> list[dict]:
+    """A Chat Completions message's content as Responses API content parts; unknown part types are dropped."""
+    if isinstance(content, str):
+        return [{'type': text_type, 'text': content}]
+    if not isinstance(content, list):
+        return [{'type': text_type, 'text': str(content)}]
+    parts = []
+    for part in content:
+        if part.get('type') == 'text':
+            parts.append({'type': text_type, 'text': part.get('text', '')})
+        elif part.get('type') == 'image_url':
+            parts.append(_responses_image_part(part))
+        elif part.get('type') == 'file':
+            file_part = _responses_file_part(part)
+            if file_part is not None:
+                parts.append(file_part)
+    return parts
+
+
+def _responses_input(messages: list) -> tuple[str, list[dict]]:
+    """The system prompt (the last system message wins) and the Responses API input items for these messages."""
     system_content = ''
     input_items = []
-
     for msg in messages:
         role = msg.get('role', 'user')
         content = msg.get('content', '')
 
-        # Check for stored output items (from previous Responses API turn)
+        # Stored output items from a previous Responses API turn are replayed as they are.
         stored_output = msg.get('output')
         if stored_output and isinstance(stored_output, list):
             input_items.extend(_normalize_stored_item(item) for item in stored_output)
-            continue
-
-        if role == 'system':
+        elif role == 'system':
             if isinstance(content, str):
                 system_content = content
             elif isinstance(content, list):
-                system_content = '\n'.join(p.get('text', '') for p in content if p.get('type') == 'text')
-            continue
-
-        # Handle assistant messages with tool_calls (from convert_output_to_messages)
-        if role == 'assistant' and msg.get('tool_calls'):
-            # Add text content as message if present
-            if content:
-                text = (
-                    content
-                    if isinstance(content, str)
-                    else '\n'.join(p.get('text', '') for p in content if p.get('type') == 'text')
-                )
-                if text.strip():
-                    input_items.append(
-                        {
-                            'type': 'message',
-                            'role': 'assistant',
-                            'content': [{'type': 'output_text', 'text': text}],
-                        }
-                    )
-            # Convert each tool_call to a function_call input item
-            for tool_call in msg['tool_calls']:
-                func = tool_call.get('function', {})
-                input_items.append(
-                    {
-                        'type': 'function_call',
-                        'call_id': tool_call.get('id', ''),
-                        'name': func.get('name', ''),
-                        'arguments': func.get('arguments', '{}'),
-                    }
-                )
-            continue
-
-        # Handle tool result messages
-        if role == 'tool':
+                system_content = _joined_text(content)
+        elif role == 'assistant' and msg.get('tool_calls'):
+            # Assistant messages with tool_calls, as convert_output_to_messages writes them.
+            input_items.extend(_assistant_tool_call_items(content, msg['tool_calls']))
+        elif role == 'tool':
             input_items.append(
                 {
                     'type': 'function_call_output',
@@ -1321,40 +1347,42 @@ def convert_to_responses_payload(payload: dict) -> dict:
                     'output': msg.get('content', ''),
                 }
             )
-            continue
-
-        # Convert content format
-        text_type = 'output_text' if role == 'assistant' else 'input_text'
-
-        if isinstance(content, str):
-            content_parts = [{'type': text_type, 'text': content}]
-        elif isinstance(content, list):
-            content_parts = []
-            for part in content:
-                if part.get('type') == 'text':
-                    content_parts.append({'type': text_type, 'text': part.get('text', '')})
-                elif part.get('type') == 'image_url':
-                    url_data = part.get('image_url', {})
-                    if isinstance(url_data, dict):
-                        url = url_data.get('url', '')
-                        detail = url_data.get('detail') or 'auto'
-                    else:
-                        url = url_data if isinstance(url_data, str) else ''
-                        detail = 'auto'
-                    content_parts.append({'type': 'input_image', 'image_url': url, 'detail': detail})
-                elif part.get('type') == 'file':
-                    # OpenAI-compatible proxy path only. Local LLM attachments are handled
-                    # separately via metadata.files/RAG and must not be converted here.
-                    file = part.get('file')
-                    if isinstance(file, dict):
-                        file_part = {k: file[k] for k in ('file_id', 'file_data', 'filename') if k in file}
-                        if 'file_id' in file_part or 'file_data' in file_part:
-                            content_parts.append({'type': 'input_file', **file_part})
         else:
-            content_parts = [{'type': text_type, 'text': str(content)}]
+            text_type = 'output_text' if role == 'assistant' else 'input_text'
+            input_items.append(
+                {'type': 'message', 'role': role, 'content': _responses_content_parts(content, text_type)}
+            )
+    return system_content, input_items
 
-        input_items.append({'type': 'message', 'role': role, 'content': content_parts})
 
+def _responses_tool(tool):
+    """A Chat Completions tool in Responses API form; anything else passes through.
+
+    Chat Completions: {"type": "function", "function": {"name": ..., "description": ..., "parameters": ...}}
+    Responses API:    {"type": "function", "name": ..., "description": ..., "parameters": ...}
+    """
+    if not (isinstance(tool, dict) and 'function' in tool):
+        return tool
+    func = tool['function']
+    converted = {'type': tool.get('type', 'function')}
+    if isinstance(func, dict):
+        converted['name'] = func.get('name', '')
+        for key in ('description', 'parameters', 'strict'):
+            if key in func:
+                converted[key] = func[key]
+    return converted
+
+
+def convert_to_responses_payload(payload: dict) -> dict:
+    """
+    Convert Chat Completions payload to Responses API format.
+
+    Chat Completions: { messages: [{role, content}], ... }
+    Responses API: { input: [{type: "message", role, content: [...]}], instructions: "system" }
+
+    `messages` is popped from the payload passed in.
+    """
+    system_content, input_items = _responses_input(payload.pop('messages', []))
     responses_payload = {**payload, 'input': input_items}
 
     # Forward previous_response_id when the middleware has set it
@@ -1366,44 +1394,16 @@ def convert_to_responses_payload(payload: dict) -> dict:
     if system_content:
         responses_payload['instructions'] = system_content
 
-    if 'max_tokens' in responses_payload:
-        responses_payload['max_output_tokens'] = responses_payload.pop('max_tokens')
-
-    if 'max_completion_tokens' in responses_payload:
-        responses_payload['max_output_tokens'] = responses_payload.pop('max_completion_tokens')
+    for key in ('max_tokens', 'max_completion_tokens'):
+        if key in responses_payload:
+            responses_payload['max_output_tokens'] = responses_payload.pop(key)
 
     # Remove Chat Completions-only parameters not supported by the Responses API
-    for unsupported_key in (
-        'stream_options',
-        'logit_bias',
-        'frequency_penalty',
-        'presence_penalty',
-        'stop',
-    ):
+    for unsupported_key in ('stream_options', 'logit_bias', 'frequency_penalty', 'presence_penalty', 'stop'):
         responses_payload.pop(unsupported_key, None)
 
-    # Convert Chat Completions tools format to Responses API format
-    # Chat Completions: {"type": "function", "function": {"name": ..., "description": ..., "parameters": ...}}
-    # Responses API:    {"type": "function", "name": ..., "description": ..., "parameters": ...}
     if 'tools' in responses_payload and isinstance(responses_payload['tools'], list):
-        converted_tools = []
-        for tool in responses_payload['tools']:
-            if isinstance(tool, dict) and 'function' in tool:
-                func = tool['function']
-                converted_tool = {'type': tool.get('type', 'function')}
-                if isinstance(func, dict):
-                    converted_tool['name'] = func.get('name', '')
-                    if 'description' in func:
-                        converted_tool['description'] = func['description']
-                    if 'parameters' in func:
-                        converted_tool['parameters'] = func['parameters']
-                    if 'strict' in func:
-                        converted_tool['strict'] = func['strict']
-                converted_tools.append(converted_tool)
-            else:
-                # Already in correct format or unknown format, pass through
-                converted_tools.append(tool)
-        responses_payload['tools'] = converted_tools
+        responses_payload['tools'] = [_responses_tool(tool) for tool in responses_payload['tools']]
 
     return responses_payload
 
@@ -1442,6 +1442,140 @@ def convert_responses_result(response: dict) -> dict:
     }
 
 
+async def _apply_model_info(request: Request, payload: dict, metadata, user, bypass_filter: bool) -> tuple[dict, str]:
+    """Apply a workspace model's base model, params and system prompt, and check access; returns (payload, model id)."""
+    model_id = payload.get('model')
+    model_info = await Models.get_model_by_id(model_id)
+    if not model_info:
+        await check_model_access(user, None, bypass_filter)
+        return payload, model_id
+
+    if model_info.base_model_id:
+        # The request's own base_model_id wins when it has one.
+        base_model_id = request.base_model_id if hasattr(request, 'base_model_id') else model_info.base_model_id
+        payload['model'] = base_model_id
+        model_id = base_model_id
+
+    params = model_info.params.model_dump()
+    if params:
+        system = params.pop('system', None)
+        payload = apply_model_params_to_body_openai(params, payload)
+        if not getattr(request.state, 'bypass_system_prompt', False):
+            payload = await apply_system_prompt_to_body(system, payload, metadata, user)
+
+    await check_model_access(user, model_info, bypass_filter)
+    return payload, model_id
+
+
+async def _find_openai_model(request: Request, model_id: str, user) -> dict:
+    """The model from the app's cache, refreshing it once if the model is missing; 404 if it still is."""
+    models = request.app.state.OPENAI_MODELS
+    if not models or model_id not in models:
+        await get_all_models(request, user=user)
+        models = request.app.state.OPENAI_MODELS
+    model = models.get(model_id)
+    if not model:
+        raise HTTPException(status_code=404, detail=ERROR_MESSAGES.MODEL_NOT_FOUND())
+    return model
+
+
+def _adapt_payload_for_provider(payload: dict, model: dict, url: str, user) -> dict:
+    """Provider-specific payload changes: pipeline user info, reasoning-model params, token limits, logit_bias."""
+    # Add user info to the payload if the model is a pipeline
+    if 'pipeline' in model and model.get('pipeline'):
+        payload['user'] = {'name': user.name, 'id': user.id, 'email': user.email, 'role': user.role}
+
+    if is_openai_new_model(payload['model']):
+        payload = openai_reasoning_model_handler(payload)
+    elif 'api.openai.com' not in url and 'max_completion_tokens' in payload:
+        # Other providers take max_tokens, for backward compatibility
+        payload['max_tokens'] = payload.pop('max_completion_tokens')
+
+    if 'max_tokens' in payload and 'max_completion_tokens' in payload:
+        del payload['max_tokens']
+
+    if 'logit_bias' in payload and payload['logit_bias']:
+        logit_bias = convert_logit_bias_input_to_json(payload['logit_bias'])
+        if logit_bias:
+            payload['logit_bias'] = JSONCodec.loads(logit_bias)
+    return payload
+
+
+def _chat_request_target(url: str, key: str, api_config: dict, payload: dict, headers: dict) -> tuple[str, dict, bool]:
+    """The upstream URL and payload for this connection, converting to the Responses API when it uses it.
+
+    Sets Azure's api-key and api-version headers in `headers`. Returns
+    (request URL, payload, whether it is a Responses API request).
+    """
+    is_responses = api_config.get('api_type') == 'responses'
+    endpoint = 'responses' if is_responses else 'chat/completions'
+
+    if not (api_config.get('azure') or api_config.get('provider') == 'azure'):
+        if is_responses:
+            payload = convert_to_responses_payload(payload)
+        return f'{url}/{endpoint}', payload, is_responses
+
+    # Only set the api-key header if not using Azure Entra ID authentication
+    if api_config.get('auth_type', 'bearer') not in ('azure_ad', 'microsoft_entra_id'):
+        headers['api-key'] = key
+
+    # Azure v1 format: base URL already ends with /openai/v1,
+    # model stays in the payload, no deployment URL rewriting.
+    if re.search(r'/openai/v1(?:/|$)', url):
+        if is_responses:
+            payload = convert_to_responses_payload(payload)
+        return f'{url.rstrip("/")}/{endpoint}', payload, is_responses
+
+    api_version = api_config.get('api_version', '2023-03-15-preview')
+    deployment_url, payload = convert_to_azure_payload(url, payload, api_version)
+    headers['api-version'] = api_version
+    if is_responses:
+        payload = convert_to_responses_payload(payload)
+    return f'{deployment_url}/{endpoint}?api-version={api_version}', payload, is_responses
+
+
+def _strip_tool_message_images(payload: dict) -> None:
+    """Chat Completions doesn't take images in tool content, so multimodal tool messages become their text."""
+    for message in payload.get('messages', []):
+        if message.get('role') == 'tool' and isinstance(message.get('content'), list):
+            message['content'] = ''.join(
+                part.get('text', '') for part in message['content'] if part.get('type') in ('input_text', 'text')
+            )
+
+
+async def _sse_error_response(r, report_failure) -> JSONResponse:
+    """An error status sent with an SSE content type, read and returned as a proper error instead of streamed."""
+    error_body = await r.text()
+    log.error('Provider returned HTTP %d with SSE content-type: %s', r.status, error_body[:1000])
+    try:
+        error_json = JSONCodec.loads(error_body)
+    except JSONCodec.JSONDecodeError:
+        await report_failure(error_body)
+        return JSONResponse(status_code=r.status, content={'error': {'message': error_body, 'code': r.status}})
+    await report_failure(error_json)
+    return JSONResponse(status_code=r.status, content=error_json)
+
+
+async def _non_streaming_result(r, is_responses: bool, report_failure):
+    """A non-SSE upstream response: an error response for an error status, else the body (Responses converted)."""
+    try:
+        response = await r.json(loads=JSONCodec.loads)
+    except Exception as e:
+        log.error(e)
+        response = await r.text()
+
+    if r.status >= 400:
+        await report_failure(response)
+        if isinstance(response, (dict, list)):
+            return JSONResponse(status_code=r.status, content=response)
+        return PlainTextResponse(status_code=r.status, content=response)
+
+    # Convert Responses API result to simple format
+    if is_responses and isinstance(response, dict):
+        response = convert_responses_result(response)
+    return response
+
+
 @router.post('/chat/completions')
 async def generate_chat_completion(
     request: Request,
@@ -1463,233 +1597,66 @@ async def generate_chat_completion(
     bypass_filter = getattr(request.state, 'bypass_filter', False)
     if BYPASS_MODEL_ACCESS_CONTROL:
         bypass_filter = True
-    bypass_system_prompt = getattr(request.state, 'bypass_system_prompt', False)
 
-    idx = 0
-
+    # A one-level copy: the messages list is still the caller's, so the
+    # in-place message changes below reach form_data too.
     payload = {**form_data}
     metadata = payload.pop('metadata', None)
 
-    model_id = form_data.get('model')
-    model_info = await Models.get_model_by_id(model_id)
+    payload, model_id = await _apply_model_info(request, payload, metadata, user, bypass_filter)
+    model = await _find_openai_model(request, model_id, user)
 
-    # Check model info and override the payload
-    if model_info:
-        if model_info.base_model_id:
-            base_model_id = (
-                request.base_model_id if hasattr(request, 'base_model_id') else model_info.base_model_id
-            )  # Use request's base_model_id if available
-            payload['model'] = base_model_id
-            model_id = base_model_id
-
-        params = model_info.params.model_dump()
-
-        if params:
-            system = params.pop('system', None)
-
-            payload = apply_model_params_to_body_openai(params, payload)
-            if not bypass_system_prompt:
-                payload = await apply_system_prompt_to_body(system, payload, metadata, user)
-
-        await check_model_access(user, model_info, bypass_filter)
-    else:
-        await check_model_access(user, None, bypass_filter)
-
-    # Check if model is already in app state cache to avoid expensive get_all_models() call
-    models = request.app.state.OPENAI_MODELS
-    if not models or model_id not in models:
-        await get_all_models(request, user=user)
-        models = request.app.state.OPENAI_MODELS
-    model = models.get(model_id)
-
-    if model:
-        idx = model['urlIdx']
-    else:
-        raise HTTPException(
-            status_code=404,
-            detail=ERROR_MESSAGES.MODEL_NOT_FOUND(),
-        )
-
-    url, key, api_config = await get_openai_connection(idx)
-
-    prefix_id = api_config.get('prefix_id', None)
-    payload['model'] = strip_provider_model_prefix(payload['model'], prefix_id)
-
-    # Add user info to the payload if the model is a pipeline
-    if 'pipeline' in model and model.get('pipeline'):
-        payload['user'] = {
-            'name': user.name,
-            'id': user.id,
-            'email': user.email,
-            'role': user.role,
-        }
-
-    # Check if model is a reasoning model that needs special handling
-    if is_openai_new_model(payload['model']):
-        payload = openai_reasoning_model_handler(payload)
-    elif 'api.openai.com' not in url:
-        # Remove "max_completion_tokens" from the payload for backward compatibility
-        if 'max_completion_tokens' in payload:
-            payload['max_tokens'] = payload['max_completion_tokens']
-            del payload['max_completion_tokens']
-
-    if 'max_tokens' in payload and 'max_completion_tokens' in payload:
-        del payload['max_tokens']
-
-    # Convert the modified body back to JSON
-    if 'logit_bias' in payload and payload['logit_bias']:
-        logit_bias = convert_logit_bias_input_to_json(payload['logit_bias'])
-
-        if logit_bias:
-            payload['logit_bias'] = JSONCodec.loads(logit_bias)
+    url, key, api_config = await get_openai_connection(model['urlIdx'])
+    payload['model'] = strip_provider_model_prefix(payload['model'], api_config.get('prefix_id', None))
+    payload = _adapt_payload_for_provider(payload, model, url, user)
 
     headers, cookies = await get_headers_and_cookies(request, url, key, api_config, metadata, user=user)
-
-    is_responses = api_config.get('api_type') == 'responses'
-
-    if api_config.get('azure') or api_config.get('provider') == 'azure':
-        # Only set api-key header if not using Azure Entra ID authentication
-        auth_type = api_config.get('auth_type', 'bearer')
-        if auth_type not in ('azure_ad', 'microsoft_entra_id'):
-            headers['api-key'] = key
-
-        # Azure v1 format: base URL already ends with /openai/v1,
-        # model stays in the payload, no deployment URL rewriting.
-        is_azure_v1 = bool(re.search(r'/openai/v1(?:/|$)', url))
-
-        if is_azure_v1:
-            if is_responses:
-                payload = convert_to_responses_payload(payload)
-                request_url = f'{url.rstrip("/")}/responses'
-            else:
-                request_url = f'{url.rstrip("/")}/chat/completions'
-        else:
-            api_version = api_config.get('api_version', '2023-03-15-preview')
-            request_url, payload = convert_to_azure_payload(url, payload, api_version)
-            headers['api-version'] = api_version
-
-            if is_responses:
-                payload = convert_to_responses_payload(payload)
-                request_url = f'{request_url}/responses?api-version={api_version}'
-            else:
-                request_url = f'{request_url}/chat/completions?api-version={api_version}'
-    else:
-        if is_responses:
-            payload = convert_to_responses_payload(payload)
-            request_url = f'{url}/responses'
-        else:
-            request_url = f'{url}/chat/completions'
+    request_url, payload, is_responses = _chat_request_target(url, key, api_config, payload, headers)
     requested_model = payload.get('model')
-    # For Chat Completions, strip image parts from multimodal tool messages
-    # (Chat Completions doesn't support images in tool content).
     if not is_responses and 'messages' in payload:
-        for message in payload['messages']:
-            if message.get('role') == 'tool' and isinstance(message.get('content'), list):
-                message['content'] = ''.join(
-                    part.get('text', '') for part in message['content'] if part.get('type') in ('input_text', 'text')
-                )
+        _strip_tool_message_images(payload)
 
     is_streaming_request = bool(payload.get('stream', False))
     if not is_streaming_request:
         payload.pop('stream_options', None)
+    body = JSONCodec.dumps(payload)
 
-    payload = JSONCodec.dumps(payload)
+    async def report_failure(upstream_error):
+        await publish_model_provider_request_failed(
+            request,
+            actor=user,
+            provider='openai-compatible',
+            base_url=url,
+            api_key=key,
+            status=r.status,
+            requested_model=requested_model,
+            upstream_error=upstream_error,
+        )
 
     r = None
     streaming = False
-    response = None
-
     try:
         session = await get_session()
-
         r = await session.request(
             method='POST',
             url=request_url,
-            data=payload,
+            data=body,
             headers=headers,
             cookies=cookies,
             ssl=AIOHTTP_CLIENT_SESSION_SSL,
             timeout=get_client_timeout(stream=is_streaming_request),
         )
 
-        # Check if response is SSE
-        if 'text/event-stream' in r.headers.get('Content-Type', ''):
-            # If the provider returned an error status with SSE content-type,
-            # read the body and return a proper error response instead of
-            # streaming the error back (which hides the error from logs).
-            if r.status >= 400:
-                error_body = await r.text()
-                log.error(
-                    'Provider returned HTTP %d with SSE content-type: %s',
-                    r.status,
-                    error_body[:1000],
-                )
-                try:
-                    error_json = JSONCodec.loads(error_body)
-                    await publish_model_provider_request_failed(
-                        request,
-                        actor=user,
-                        provider='openai-compatible',
-                        base_url=url,
-                        api_key=key,
-                        status=r.status,
-                        requested_model=requested_model,
-                        upstream_error=error_json,
-                    )
-                    return JSONResponse(status_code=r.status, content=error_json)
-                except JSONCodec.JSONDecodeError:
-                    await publish_model_provider_request_failed(
-                        request,
-                        actor=user,
-                        provider='openai-compatible',
-                        base_url=url,
-                        api_key=key,
-                        status=r.status,
-                        requested_model=requested_model,
-                        upstream_error=error_body,
-                    )
-                    return JSONResponse(
-                        status_code=r.status,
-                        content={'error': {'message': error_body, 'code': r.status}},
-                    )
-
-            streaming = True
-            return StreamingResponse(
-                stream_wrapper(r),
-                status_code=r.status,
-                headers=_clean_proxy_headers(r.headers),
-            )
-        else:
-            try:
-                response = await r.json(loads=JSONCodec.loads)
-            except Exception as e:
-                log.error(e)
-                response = await r.text()
-
-            if r.status >= 400:
-                await publish_model_provider_request_failed(
-                    request,
-                    actor=user,
-                    provider='openai-compatible',
-                    base_url=url,
-                    api_key=key,
-                    status=r.status,
-                    requested_model=requested_model,
-                    upstream_error=response,
-                )
-                if isinstance(response, (dict, list)):
-                    return JSONResponse(status_code=r.status, content=response)
-                else:
-                    return PlainTextResponse(status_code=r.status, content=response)
-
-            # Convert Responses API result to simple format
-            if is_responses and isinstance(response, dict):
-                response = convert_responses_result(response)
-
-            return response
+        if 'text/event-stream' not in r.headers.get('Content-Type', ''):
+            return await _non_streaming_result(r, is_responses, report_failure)
+        # An error status with an SSE content type is read and returned as an
+        # error, rather than streamed back where it would be hidden from logs.
+        if r.status >= 400:
+            return await _sse_error_response(r, report_failure)
+        streaming = True
+        return StreamingResponse(stream_wrapper(r), status_code=r.status, headers=_clean_proxy_headers(r.headers))
     except Exception as e:
         log.exception(e)
-
         raise HTTPException(
             status_code=r.status if r else 500,
             detail=ERROR_MESSAGES.SERVER_CONNECTION_ERROR,

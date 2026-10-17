@@ -264,7 +264,6 @@ pydocstyle.convention = "google"
 "local_llm/retrieval/utils.py" = ["C901"]
 "local_llm/routers/configs.py" = ["C901"]
 "local_llm/routers/images.py" = ["C901"]
-"local_llm/routers/openai.py" = ["C901"]
 "local_llm/routers/retrieval.py" = ["C901"]
 "local_llm/tools/builtin.py" = ["C901"]
 "local_llm/tools/knowledge_fs.py" = ["C901"]
