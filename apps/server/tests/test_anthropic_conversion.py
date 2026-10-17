@@ -418,7 +418,8 @@ def _finish(reason) -> dict:
 
 # (case id, chunks, model, input_tokens). A chunk is {'data': obj} (one SSE
 # data line), {'raw': str} (sent as is), {'bytes': str} (sent utf-8 encoded),
-# or {'raise': msg} (the source generator raises RuntimeError(msg)).
+# {'object': value} (sent as is, not text), or {'raise': msg} (the source
+# generator raises RuntimeError(msg)).
 STREAM_CASES = [
     ('empty_stream', [], '', None),
     ('empty_stream_with_model_and_tokens', [], 'm', 12),
@@ -442,10 +443,10 @@ STREAM_CASES = [
             },
             {'bytes': 'data: {"choices": [{"delta": {"content": "c"}}]}\n\n'},
             {'raw': '   data:{"choices": [{"delta": {"content": "d"}}]}   '},
-            # A JSON value that is not an object raises inside the loop; the one
-            # try/except around the whole loop ends the conversion there.
+            # A JSON value that is not an object can't be read; it is skipped
+            # and the conversion carries on.
             {'raw': 'data: "a string"\n\n'},
-            {'raw': 'data: {"choices": [{"delta": {"content": "never sent"}}]}\n\n'},
+            {'raw': 'data: {"choices": [{"delta": {"content": "e"}}]}\n\n'},
         ],
         '',
         None,
@@ -661,13 +662,30 @@ STREAM_CASES = [
         None,
     ),
     (
-        'malformed_chunk_stops_the_conversion',
+        'malformed_chunk_is_skipped',
         [
             _delta(content='before'),
             _data({'choices': [{'delta': None}]}),
-            _delta(content='after, never sent'),
+            _data({'choices': ['not a dict']}),
+            _delta(content='after'),
             _finish('length'),
         ],
+        '',
+        None,
+    ),
+    (
+        'malformed_tool_call_entry_is_skipped',
+        [
+            _delta(tool_calls=[_tool(0, 'call_1', 'f', '{"ok": true}'), 'not a dict', _tool(1, 'call_2', 'g', '{}')]),
+            _delta(tool_calls=[_tool(1, 'call_2', 'g', '{}')]),
+            _finish('tool_calls'),
+        ],
+        '',
+        None,
+    ),
+    (
+        'non_text_chunk_is_skipped',
+        [_delta(content='a'), {'object': 12}, _delta(content='b')],
         '',
         None,
     ),
@@ -703,6 +721,8 @@ async def _source(chunks):
             raise RuntimeError(chunk['raise'])
         if 'bytes' in chunk:
             yield chunk['bytes'].encode()
+        elif 'object' in chunk:
+            yield chunk['object']
         elif 'raw' in chunk:
             yield chunk['raw']
         else:

@@ -490,8 +490,8 @@
   "passthrough_comma_string": {
    "model": "",
    "messages": [],
-   "seed": 1,
-   "logprobs": true
+   "logprobs": true,
+   "seed": 1
   },
   "passthrough_list": {
    "model": "",
@@ -689,6 +689,7 @@
    "event: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"text_delta\", \"text\": \"b\"}}\n\n",
    "event: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"text_delta\", \"text\": \"c\"}}\n\n",
    "event: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"text_delta\", \"text\": \"d\"}}\n\n",
+   "event: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"text_delta\", \"text\": \"e\"}}\n\n",
    "event: content_block_stop\ndata: {\"type\": \"content_block_stop\", \"index\": 0}\n\n",
    "event: message_delta\ndata: {\"type\": \"message_delta\", \"delta\": {\"stop_reason\": \"end_turn\", \"stop_sequence\": null}, \"usage\": {\"output_tokens\": 0}}\n\n",
    "event: message_stop\ndata: {\"type\": \"message_stop\"}\n\n"
@@ -876,10 +877,31 @@
    "event: message_delta\ndata: {\"type\": \"message_delta\", \"delta\": {\"stop_reason\": \"end_turn\", \"stop_sequence\": null}, \"usage\": {\"output_tokens\": 4, \"input_tokens\": 0, \"cache_creation_input_tokens\": 5, \"cache_read_input_tokens\": 1, \"output_tokens_details\": {\"reasoning_tokens\": 3}, \"server_tool_use\": {\"web_search_requests\": 1}, \"service_tier\": \"standard\"}}\n\n",
    "event: message_stop\ndata: {\"type\": \"message_stop\"}\n\n"
   ],
-  "malformed_chunk_stops_the_conversion": [
+  "malformed_chunk_is_skipped": [
    "event: message_start\ndata: {\"type\": \"message_start\", \"message\": {\"id\": \"msg_000000000000000000000000\", \"type\": \"message\", \"role\": \"assistant\", \"content\": [], \"model\": \"\", \"stop_reason\": null, \"stop_sequence\": null, \"usage\": {\"input_tokens\": 0, \"output_tokens\": 0}}}\n\n",
    "event: content_block_start\ndata: {\"type\": \"content_block_start\", \"index\": 0, \"content_block\": {\"type\": \"text\", \"text\": \"\"}}\n\n",
    "event: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"text_delta\", \"text\": \"before\"}}\n\n",
+   "event: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"text_delta\", \"text\": \"after\"}}\n\n",
+   "event: content_block_stop\ndata: {\"type\": \"content_block_stop\", \"index\": 0}\n\n",
+   "event: message_delta\ndata: {\"type\": \"message_delta\", \"delta\": {\"stop_reason\": \"max_tokens\", \"stop_sequence\": null}, \"usage\": {\"output_tokens\": 0}}\n\n",
+   "event: message_stop\ndata: {\"type\": \"message_stop\"}\n\n"
+  ],
+  "malformed_tool_call_entry_is_skipped": [
+   "event: message_start\ndata: {\"type\": \"message_start\", \"message\": {\"id\": \"msg_000000000000000000000000\", \"type\": \"message\", \"role\": \"assistant\", \"content\": [], \"model\": \"\", \"stop_reason\": null, \"stop_sequence\": null, \"usage\": {\"input_tokens\": 0, \"output_tokens\": 0}}}\n\n",
+   "event: content_block_start\ndata: {\"type\": \"content_block_start\", \"index\": 0, \"content_block\": {\"type\": \"tool_use\", \"id\": \"call_1\", \"name\": \"f\", \"input\": {}}}\n\n",
+   "event: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"input_json_delta\", \"partial_json\": \"{\\\"ok\\\": true}\"}}\n\n",
+   "event: content_block_stop\ndata: {\"type\": \"content_block_stop\", \"index\": 0}\n\n",
+   "event: content_block_start\ndata: {\"type\": \"content_block_start\", \"index\": 1, \"content_block\": {\"type\": \"tool_use\", \"id\": \"call_2\", \"name\": \"g\", \"input\": {}}}\n\n",
+   "event: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 1, \"delta\": {\"type\": \"input_json_delta\", \"partial_json\": \"{}\"}}\n\n",
+   "event: content_block_stop\ndata: {\"type\": \"content_block_stop\", \"index\": 1}\n\n",
+   "event: message_delta\ndata: {\"type\": \"message_delta\", \"delta\": {\"stop_reason\": \"tool_use\", \"stop_sequence\": null}, \"usage\": {\"output_tokens\": 0}}\n\n",
+   "event: message_stop\ndata: {\"type\": \"message_stop\"}\n\n"
+  ],
+  "non_text_chunk_is_skipped": [
+   "event: message_start\ndata: {\"type\": \"message_start\", \"message\": {\"id\": \"msg_000000000000000000000000\", \"type\": \"message\", \"role\": \"assistant\", \"content\": [], \"model\": \"\", \"stop_reason\": null, \"stop_sequence\": null, \"usage\": {\"input_tokens\": 0, \"output_tokens\": 0}}}\n\n",
+   "event: content_block_start\ndata: {\"type\": \"content_block_start\", \"index\": 0, \"content_block\": {\"type\": \"text\", \"text\": \"\"}}\n\n",
+   "event: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"text_delta\", \"text\": \"a\"}}\n\n",
+   "event: content_block_delta\ndata: {\"type\": \"content_block_delta\", \"index\": 0, \"delta\": {\"type\": \"text_delta\", \"text\": \"b\"}}\n\n",
    "event: content_block_stop\ndata: {\"type\": \"content_block_stop\", \"index\": 0}\n\n",
    "event: message_delta\ndata: {\"type\": \"message_delta\", \"delta\": {\"stop_reason\": \"end_turn\", \"stop_sequence\": null}, \"usage\": {\"output_tokens\": 0}}\n\n",
    "event: message_stop\ndata: {\"type\": \"message_stop\"}\n\n"
