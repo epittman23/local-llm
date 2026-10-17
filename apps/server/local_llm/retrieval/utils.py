@@ -3,10 +3,12 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
+import operator
 import os
 import re
 import time
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Sequence
+from typing import Any
 
 import aiohttp
 import requests
@@ -16,7 +18,9 @@ from langchain_classic.retrievers import (
     EnsembleRetriever,
 )
 from langchain_community.retrievers import BM25Retriever
-from langchain_core.documents import Document
+from langchain_core.callbacks import CallbackManagerForRetrieverRun, Callbacks
+from langchain_core.documents import BaseDocumentCompressor, Document
+from langchain_core.retrievers import BaseRetriever
 
 from local_llm.config import (
     RAG_EMBEDDING_CONTENT_PREFIX,
@@ -53,12 +57,6 @@ from local_llm.utils.headers import get_json_bearer_headers, include_user_info_h
 from local_llm.utils.misc import get_content_from_message, get_message_list
 
 log = logging.getLogger(__name__)
-
-
-from typing import Any
-
-from langchain_core.callbacks import CallbackManagerForRetrieverRun
-from langchain_core.retrievers import BaseRetriever
 
 
 def is_youtube_url(url: str) -> bool:
@@ -1720,13 +1718,6 @@ def get_model_path(model: str, update_model: bool = False):
         if OFFLINE_MODE:
             raise
         return model
-
-
-import operator
-from collections.abc import Sequence
-
-from langchain_core.callbacks import Callbacks
-from langchain_core.documents import BaseDocumentCompressor
 
 
 class RerankCompressor(BaseDocumentCompressor):

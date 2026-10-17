@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import re
+import ssl as _ssl
 import sys
 import tomllib
 import traceback
@@ -453,8 +454,6 @@ else:
     except ValueError:
         WEBSOCKET_EVENT_CALLER_TIMEOUT = 300
 
-
-import ssl as _ssl
 
 # Dedicated env var for a custom CA bundle file path.  When set, this is
 # used as the default CA bundle for all outbound HTTPS connections that

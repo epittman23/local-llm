@@ -26,15 +26,13 @@ from local_llm.utils.access_control import (
     has_permission,
 )
 from local_llm.utils.access_control.files import can_read_all_folder_files, get_accessible_folder_files
+from local_llm.utils.access_control.folders import has_folder_access as _has_folder_access
 from local_llm.utils.auth import get_verified_user
 
 log = logging.getLogger(__name__)
 
 
 router = APIRouter()
-
-
-from local_llm.utils.access_control.folders import has_folder_access as _has_folder_access
 
 
 async def get_folder_unread_counts(user_id: str, db: AsyncSession | None = None) -> dict[str, int]:

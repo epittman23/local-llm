@@ -1,4 +1,5 @@
 import logging
+import os
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.concurrency import run_in_threadpool
@@ -58,7 +59,6 @@ async def get_config_values(key_map: dict[str, str]) -> dict:
 #    4. Feedbacks about unrelated topics (e.g., "cooking") contribute less
 #    This gives topic-specific leaderboards without needing separate data.
 
-import os
 
 EMBEDDING_MODEL_NAME = os.environ.get('AUXILIARY_EMBEDDING_MODEL', 'TaylorAI/bge-micro-v2')
 _embedding_model = None

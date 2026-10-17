@@ -72,6 +72,7 @@ from local_llm.env import (
     AIOHTTP_CLIENT_SESSION_SSL,
     ENABLE_OAUTH_EMAIL_FALLBACK,
     ENABLE_OAUTH_ID_TOKEN_COOKIE,
+    GLOBAL_LOG_LEVEL,
     LLLM_AUTH_COOKIE_SAME_SITE,
     LLLM_AUTH_COOKIE_SECURE,
     OAUTH_CLIENT_INFO_ENCRYPTION_KEY,
@@ -92,6 +93,7 @@ from local_llm.utils.auth import (
     revoke_user_tokens,
 )
 from local_llm.utils.groups import apply_default_group_assignment
+from local_llm.utils.json_codec import JSONCodec
 from local_llm.utils.misc import parse_duration
 from local_llm.utils.validate import validate_profile_image_url
 
@@ -120,9 +122,6 @@ class OAuthClientInformationFull(OAuthClientMetadata):
 
     server_metadata: OAuthMetadata | None = None  # Fetched from the OAuth server
 
-
-from local_llm.env import GLOBAL_LOG_LEVEL
-from local_llm.utils.json_codec import JSONCodec
 
 logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
 log = logging.getLogger(__name__)

@@ -1,8 +1,8 @@
-from __future__ import annotations
-
 """Alembic migration utilities."""
 
-from alembic import op  # noqa: E402 — alembic runtime context
+from __future__ import annotations
+
+from alembic import op
 from sqlalchemy import inspect  # metadata inspection
 
 

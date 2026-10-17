@@ -29,6 +29,22 @@ from sqlalchemy.orm import declarative_base, scoped_session, sessionmaker
 from sqlalchemy.pool import NullPool, QueuePool
 from sqlalchemy.sql import true
 
+from local_llm.config import (
+    OPENGAUSS_DB_URL,
+    OPENGAUSS_INITIALIZE_MAX_VECTOR_LENGTH,
+    OPENGAUSS_POOL_MAX_OVERFLOW,
+    OPENGAUSS_POOL_RECYCLE,
+    OPENGAUSS_POOL_SIZE,
+    OPENGAUSS_POOL_TIMEOUT,
+)
+from local_llm.retrieval.vector.main import (
+    GetResult,
+    SearchResult,
+    VectorDBBase,
+    VectorItem,
+)
+from local_llm.retrieval.vector.utils import iter_filter_conditions, process_metadata
+
 
 class OpenGaussDialect(PGDialect_psycopg2):
     name = 'opengauss'
@@ -51,21 +67,6 @@ class OpenGaussDialect(PGDialect_psycopg2):
 # Register dialect
 registry.register('opengauss', __name__, 'OpenGaussDialect')
 
-from local_llm.config import (
-    OPENGAUSS_DB_URL,
-    OPENGAUSS_INITIALIZE_MAX_VECTOR_LENGTH,
-    OPENGAUSS_POOL_MAX_OVERFLOW,
-    OPENGAUSS_POOL_RECYCLE,
-    OPENGAUSS_POOL_SIZE,
-    OPENGAUSS_POOL_TIMEOUT,
-)
-from local_llm.retrieval.vector.main import (
-    GetResult,
-    SearchResult,
-    VectorDBBase,
-    VectorItem,
-)
-from local_llm.retrieval.vector.utils import iter_filter_conditions, process_metadata
 
 VECTOR_LENGTH = OPENGAUSS_INITIALIZE_MAX_VECTOR_LENGTH
 Base = declarative_base()

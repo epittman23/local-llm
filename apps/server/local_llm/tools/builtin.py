@@ -12,6 +12,7 @@ import time
 from typing import Literal
 
 from fastapi import HTTPException, Request
+from pydantic import BaseModel, Field
 
 from local_llm.config import RAG_EMBEDDING_QUERY_PREFIX
 from local_llm.env import (
@@ -3516,9 +3517,6 @@ async def view_skill(
 # TASK MANAGEMENT TOOLS
 # =============================================================================
 
-from typing import Literal
-
-from pydantic import BaseModel, Field
 
 VALID_TASK_STATUSES = {'pending', 'in_progress', 'completed', 'cancelled'}
 
