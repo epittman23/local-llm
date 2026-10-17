@@ -2274,159 +2274,125 @@ async def connect_mcp_server(
     return client, tool_specs
 
 
-async def process_chat_payload(request, form_data, user, metadata, model):
-    # Ensure chat_id is always a string — external API clients may omit it.
-    if not isinstance(metadata.get('chat_id'), str):
-        metadata['chat_id'] = ''
+def _resolve_arena_model(request, form_data: dict, metadata: dict, model: dict) -> dict:
+    """An arena model's pick of a sub-model, so downstream processing uses its settings, not the wrapper's."""
+    arena_model_ids = model.get('info', {}).get('meta', {}).get('model_ids')
+    arena_filter_mode = model.get('info', {}).get('meta', {}).get('filter_mode')
+    if arena_model_ids and arena_filter_mode == 'exclude':
+        arena_model_ids = [
+            available_model['id']
+            for available_model in request.app.state.MODELS.values()
+            if available_model.get('owned_by') != 'arena' and available_model['id'] not in arena_model_ids
+        ]
 
-    # Pipeline Inlet -> Filter Inlet -> Chat Memory -> Chat Web Search -> Chat Image Generation
-    # -> Chat Code Interpreter (Form Data Update) -> (Default) Chat Tools Function Calling
-    # -> Chat Files
+    if not (isinstance(arena_model_ids, list) and arena_model_ids):
+        arena_model_ids = [
+            available_model['id']
+            for available_model in request.app.state.MODELS.values()
+            if available_model.get('owned_by') != 'arena'
+        ]
+    selected_model_id = random.choice(arena_model_ids)
 
-    # Arena model resolution — pick the sub-model now so all downstream
-    # processing (knowledge, capabilities, tools, params) uses its settings
-    # instead of the empty arena wrapper.
-    if model.get('owned_by') == 'arena':
-        arena_model_ids = model.get('info', {}).get('meta', {}).get('model_ids')
-        arena_filter_mode = model.get('info', {}).get('meta', {}).get('filter_mode')
-        if arena_model_ids and arena_filter_mode == 'exclude':
-            arena_model_ids = [
-                available_model['id']
-                for available_model in request.app.state.MODELS.values()
-                if available_model.get('owned_by') != 'arena' and available_model['id'] not in arena_model_ids
-            ]
+    selected_model = request.app.state.MODELS.get(selected_model_id)
+    if not selected_model:
+        return model
+    form_data['model'] = selected_model_id
+    metadata['selected_model_id'] = selected_model_id
+    return selected_model
 
-        if isinstance(arena_model_ids, list) and arena_model_ids:
-            selected_model_id = random.choice(arena_model_ids)
-        else:
-            arena_model_ids = [
-                available_model['id']
-                for available_model in request.app.state.MODELS.values()
-                if available_model.get('owned_by') != 'arena'
-            ]
-            selected_model_id = random.choice(arena_model_ids)
 
-        selected_model = request.app.state.MODELS.get(selected_model_id)
-        if selected_model:
-            model = selected_model
-            form_data['model'] = selected_model_id
-            metadata['selected_model_id'] = selected_model_id
-
-    # Captured before apply_params_to_form_data pops 'params'; populates metadata['system_prompt'] below
-    model_system_prompt = (form_data.get('params') or {}).get('system')
-
-    form_data = apply_params_to_form_data(form_data, model)
-    log.debug('form_data: %s', form_data)
-
-    # Guided regeneration: extract before it reaches the LLM provider
-    regeneration_prompt = form_data.pop('regeneration_prompt', None)
-
-    # Load messages from DB when available — DB preserves structured 'output' items
-    # which the frontend strips, causing tool calls to be merged into content.
-    chat_id = metadata.get('chat_id')
-    user_message_id = metadata.get('user_message_id')
-
-    if is_saved_chat_id(chat_id) and user_message_id:
-        db_messages = await load_messages_from_db(chat_id, user_message_id)
-        if db_messages:
-            # Continue: frontend sends assistant_message_id when continuing
-            # an existing response. Load its content so the LLM sees prior output.
-            assistant_message_id = metadata.get('assistant_message_id')
-            if assistant_message_id:
-                assistant_message = await Chats.get_message_by_id_and_message_id(chat_id, assistant_message_id)
-                if assistant_message and (assistant_message.get('content') or assistant_message.get('output')):
-                    db_messages.append({k: v for k, v in assistant_message.items() if k in MESSAGE_REPLAY_KEYS})
-
-            system_message = get_system_message(form_data.get('messages', []))
-            form_data['messages'] = [system_message, *db_messages] if system_message else db_messages
-
-            # Inject image files into content as image_url parts (mirrors frontend logic)
-            for message in form_data['messages']:
-                image_files = [
-                    f
-                    for f in message.get('files', [])
-                    if f.get('type') == 'image' or (f.get('content_type') or '').startswith('image/')
+def _inline_message_images(messages: list[dict]) -> None:
+    """Put a user message's image files into its content as image_url parts (mirrors frontend logic)."""
+    for message in messages:
+        image_files = [
+            f
+            for f in message.get('files', [])
+            if f.get('type') == 'image' or (f.get('content_type') or '').startswith('image/')
+        ]
+        if message.get('role') == 'user' and image_files:
+            text_content = message.get('content', '')
+            if isinstance(text_content, str):
+                message['content'] = [
+                    {'type': 'text', 'text': text_content},
+                    *[
+                        {
+                            'type': 'image_url',
+                            'image_url': {'url': f['url']},
+                        }
+                        for f in image_files
+                        if f.get('url')
+                    ],
                 ]
-                if message.get('role') == 'user' and image_files:
-                    text_content = message.get('content', '')
-                    if isinstance(text_content, str):
-                        message['content'] = [
-                            {'type': 'text', 'text': text_content},
-                            *[
-                                {
-                                    'type': 'image_url',
-                                    'image_url': {'url': f['url']},
-                                }
-                                for f in image_files
-                                if f.get('url')
-                            ],
-                        ]
-                # Strip files field — it's been incorporated into content
-                message.pop('files', None)
+        # Strip files field — it's been incorporated into content
+        message.pop('files', None)
 
-    if regeneration_prompt:
-        form_data['messages'].append({'role': 'user', 'content': regeneration_prompt})
 
-    if is_saved_chat_id(chat_id) and user_message_id:
-        if getattr(request.state, 'direct', False) and hasattr(request.state, 'model'):
-            compaction_models = {
-                **dict(request.app.state.MODELS.items()),
-                request.state.model['id']: request.state.model,
-            }
-        else:
-            compaction_models = request.app.state.MODELS
+async def _replay_history_from_db(form_data: dict, metadata: dict, chat_id: str, user_message_id: str) -> None:
+    """Use the stored history when there is one: it keeps the structured 'output' items the frontend strips."""
+    db_messages = await load_messages_from_db(chat_id, user_message_id)
+    if not db_messages:
+        return
 
-        system_message = get_system_message(form_data.get('messages', []))
-        system_prompt = get_content_from_message(system_message) if system_message else ''
+    # Continue: frontend sends assistant_message_id when continuing
+    # an existing response. Load its content so the LLM sees prior output.
+    assistant_message_id = metadata.get('assistant_message_id')
+    if assistant_message_id:
+        assistant_message = await Chats.get_message_by_id_and_message_id(chat_id, assistant_message_id)
+        if assistant_message and (assistant_message.get('content') or assistant_message.get('output')):
+            db_messages.append({k: v for k, v in assistant_message.items() if k in MESSAGE_REPLAY_KEYS})
 
-        try:
-            form_data['messages'], context_summary, _ = await compact_messages_for_request(
-                request,
-                user,
-                form_data.get('messages', []),
-                metadata,
-                form_data.get('model'),
-                compaction_models,
-                system_prompt,
+    system_message = get_system_message(form_data.get('messages', []))
+    form_data['messages'] = [system_message, *db_messages] if system_message else db_messages
+    _inline_message_images(form_data['messages'])
+
+
+async def _compact_history(request, user, form_data: dict, metadata: dict) -> None:
+    if getattr(request.state, 'direct', False) and hasattr(request.state, 'model'):
+        compaction_models = {
+            **dict(request.app.state.MODELS.items()),
+            request.state.model['id']: request.state.model,
+        }
+    else:
+        compaction_models = request.app.state.MODELS
+
+    system_message = get_system_message(form_data.get('messages', []))
+    system_prompt = get_content_from_message(system_message) if system_message else ''
+
+    try:
+        form_data['messages'], context_summary, _ = await compact_messages_for_request(
+            request,
+            user,
+            form_data.get('messages', []),
+            metadata,
+            form_data.get('model'),
+            compaction_models,
+            system_prompt,
+        )
+        if context_summary:
+            form_data['messages'] = add_or_update_system_message(
+                f'[CONVERSATION SUMMARY]\n{context_summary}',
+                form_data['messages'],
+                append=True,
             )
-            if context_summary:
-                form_data['messages'] = add_or_update_system_message(
-                    f'[CONVERSATION SUMMARY]\n{context_summary}',
-                    form_data['messages'],
-                    append=True,
-                )
-        except Exception:
-            log.exception('Context compaction failed; continuing with full chat history')
+    except Exception:
+        log.exception('Context compaction failed; continuing with full chat history')
 
-    # Process messages with OR-aligned output items for clean LLM messages
-    for message in form_data.get('messages', []):
+
+def _messages_for_model(messages: list[dict], model: dict) -> list[dict]:
+    """Replayable messages: OR-aligned output items, reasoning kept only for this model's own output."""
+    for message in messages:
         output = message.get('output')
         # reasoning_details can be model/provider-bound, so only replay them
         # for output produced by the same model.
         if message.get('role') == 'assistant' and message.get('model') != model['id'] and isinstance(output, list):
             message['output'] = strip_reasoning_details(output)
 
-    form_data['messages'] = process_messages_with_output(
-        form_data.get('messages', []),
-        reasoning_format=get_reasoning_format(model),
-    )
-    form_data['messages'] = sanitize_tool_pairs(form_data['messages'])
+    messages = process_messages_with_output(messages, reasoning_format=get_reasoning_format(model))
+    return sanitize_tool_pairs(messages)
 
-    system_message = get_system_message(form_data.get('messages', []))
-    if system_message:  # Chat Controls/User Settings
-        try:
-            form_data = await apply_system_prompt_to_body(
-                system_message.get('content'), form_data, metadata, user, replace=True
-            )  # Required to handle system prompt variables
-        except Exception:
-            pass
 
-    form_data = await convert_url_images_to_base64(form_data, user=user)
-
-    event_emitter = await get_event_emitter(metadata)
-    event_caller = await get_event_call(metadata)
-
-    extra_params = {
+async def _payload_extra_params(request, user, metadata: dict, model: dict, event_emitter, event_caller) -> dict:
+    return {
         '__event_emitter__': event_emitter,
         '__event_call__': event_caller,
         '__user__': user.model_dump() if isinstance(user, UserModel) else {},
@@ -2437,27 +2403,19 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         '__chat_id__': metadata.get('chat_id'),
         '__message_id__': metadata.get('message_id'),
     }
-    # Initialize events to store additional event to be sent to the client
-    # Initialize contexts and citation
+
+
+def _payload_models(request) -> dict:
+    # A direct connection only knows its own model.
     if getattr(request.state, 'direct', False) and hasattr(request.state, 'model'):
-        models = {
+        return {
             request.state.model['id']: request.state.model,
         }
-    else:
-        models = request.app.state.MODELS
+    return request.app.state.MODELS
 
-    task_model_id = get_task_model_id(
-        form_data['model'],
-        await Config.get('task.model.default'),
-        await Config.get('task.model.external'),
-        models,
-    )
 
-    events = []
-    sources = []
-
-    # Folder "Project" handling
-    # Check if the request has chat_id and is inside of a folder
+async def _apply_folder(form_data: dict, metadata: dict, user) -> dict:
+    """A chat's folder ("Project") adds its system prompt and its files or folder knowledge."""
     # Uses lightweight column query — only fetches folder_id, not the full chat JSON blob
     chat_id = metadata.get('chat_id', None)
     folder_id = None
@@ -2468,75 +2426,67 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     if not folder_id:
         folder_id = metadata.get('folder_id', None)
 
-    if folder_id and user:
-        folder = await Folders.get_folder_by_id(folder_id)
-        if folder and user.role != 'admin' and not await has_folder_access(user.id, folder, 'read', db=None):
-            folder = None
+    if not (folder_id and user):
+        return form_data
 
-        if folder and folder.data:
-            if 'system_prompt' in folder.data:
-                form_data = await apply_system_prompt_to_body(folder.data['system_prompt'], form_data, metadata, user)
-            if 'files' in folder.data:
-                if metadata.get('params', {}).get('function_calling') == 'legacy':
-                    form_data['files'] = [
-                        {'type': 'folder', 'id': folder.id},
-                        *form_data.get('files', []),
-                    ]
-                else:
-                    # Native FC: skip RAG injection, builtin tools
-                    # will read folder knowledge from metadata.
-                    metadata['folder_knowledge'] = await get_owner_accessible_folder_files(folder)
+    folder = await Folders.get_folder_by_id(folder_id)
+    if folder and user.role != 'admin' and not await has_folder_access(user.id, folder, 'read', db=None):
+        folder = None
 
-    # Model "Knowledge" handling
-    user_message = get_last_user_message(form_data['messages'])
-    model_knowledge = model.get('info', {}).get('meta', {}).get('knowledge', False)
-
-    if model_knowledge and metadata.get('params', {}).get('function_calling') == 'legacy':
-        await event_emitter(
-            {
-                'type': 'status',
-                'data': {
-                    'action': 'knowledge_search',
-                    'query': user_message,
-                    'done': False,
-                },
-            }
-        )
-
-        knowledge_files = []
-        for item in model_knowledge:
-            if item.get('collection_name'):
-                knowledge_files.append(
-                    {
-                        'id': item.get('collection_name'),
-                        'name': item.get('name'),
-                        'legacy': True,
-                    }
-                )
-            elif item.get('collection_names'):
-                knowledge_files.append(
-                    {
-                        'name': item.get('name'),
-                        'type': 'collection',
-                        'collection_names': item.get('collection_names'),
-                        'legacy': True,
-                    }
-                )
+    if folder and folder.data:
+        if 'system_prompt' in folder.data:
+            form_data = await apply_system_prompt_to_body(folder.data['system_prompt'], form_data, metadata, user)
+        if 'files' in folder.data:
+            if metadata.get('params', {}).get('function_calling') == 'legacy':
+                form_data['files'] = [
+                    {'type': 'folder', 'id': folder.id},
+                    *form_data.get('files', []),
+                ]
             else:
-                knowledge_files.append(item)
+                # Native FC: skip RAG injection, builtin tools
+                # will read folder knowledge from metadata.
+                metadata['folder_knowledge'] = await get_owner_accessible_folder_files(folder)
+    return form_data
 
-        files = form_data.get('files', [])
-        files.extend(knowledge_files)
-        form_data['files'] = files
 
-    form_data.pop('variables', None)
-    payload_tools = form_data.get('tools', None)  # snapshot before filters
+def _legacy_knowledge_file(item: dict) -> dict:
+    if item.get('collection_name'):
+        return {
+            'id': item.get('collection_name'),
+            'name': item.get('name'),
+            'legacy': True,
+        }
+    if item.get('collection_names'):
+        return {
+            'name': item.get('name'),
+            'type': 'collection',
+            'collection_names': item.get('collection_names'),
+            'legacy': True,
+        }
+    return item
 
-    # Process the form_data through the pipeline
-    try:
-        form_data = await process_pipeline_inlet_filter(request, form_data, user, models)
-    except Exception as e:
-        raise e
+
+async def _search_model_knowledge(form_data: dict, model_knowledge: list, event_emitter, user_message) -> None:
+    """Legacy function calling: the model's knowledge joins the files RAG searches."""
+    await event_emitter(
+        {
+            'type': 'status',
+            'data': {
+                'action': 'knowledge_search',
+                'query': user_message,
+                'done': False,
+            },
+        }
+    )
+
+    files = form_data.get('files', [])
+    files.extend(_legacy_knowledge_file(item) for item in model_knowledge)
+    form_data['files'] = files
+
+
+async def _run_inlet_filters(request, form_data: dict, user, model: dict, metadata: dict, models, extra_params):
+    """The pipeline inlet, then the inlet filter functions; returns the form data and the filters to reuse."""
+    form_data = await process_pipeline_inlet_filter(request, form_data, user, models)
 
     filter_functions = []
     filter_context = get_filter_context(request) if ENABLE_PLUGINS else None
@@ -2554,82 +2504,522 @@ async def process_chat_payload(request, form_data, user, metadata, model):
             )
         except Exception as e:
             raise Exception(f'{e}')
+    return form_data, filter_functions, filter_context
+
+
+async def _may_use_feature(user, feature_key: str) -> bool:
+    # features is client-supplied; re-check the permission the native FC path enforces.
+    return getattr(user, 'role', None) == 'admin' or await has_permission(
+        getattr(user, 'id', ''),
+        f'features.{feature_key}',
+        await Config.get('user.permissions'),
+    )
+
+
+async def _apply_code_interpreter(form_data: dict, metadata: dict) -> None:
+    engine = await Config.get('code_interpreter.engine', 'pyodide')
+
+    # Skip XML-tag prompt injection when native FC is enabled —
+    # execute_code will be injected as a builtin tool instead
+    if metadata.get('params', {}).get('function_calling') == 'legacy':
+        ci_prompt_template = await Config.get('code_interpreter.prompt_template')
+        prompt = ci_prompt_template if ci_prompt_template != '' else DEFAULT_CODE_INTERPRETER_PROMPT
+
+        # Append filesystem awareness only for pyodide engine
+        if engine != 'jupyter':
+            prompt += CODE_INTERPRETER_PYODIDE_PROMPT
+
+        form_data['messages'] = add_or_update_user_message(
+            prompt,
+            form_data['messages'],
+        )
+    elif engine != 'jupyter':
+        # Native FC: tool docstring can't be dynamic, so inject
+        # filesystem context into the system message for pyodide
+        # engine.  Appending to the system prompt (instead of the
+        # user message) keeps it in the stable cached prefix so
+        # providers with prefix caching don't re-bill the full
+        # conversation on every turn.
+        form_data['messages'] = add_or_update_system_message(
+            CODE_INTERPRETER_PYODIDE_PROMPT,
+            form_data['messages'],
+            append=True,
+        )
+
+
+async def _apply_features(request, form_data: dict, user, model: dict, metadata: dict, extra_params, features: dict):
+    """The chat's feature toggles: voice, memory, and (legacy FC only) web search, image generation, code."""
+    is_legacy = metadata.get('params', {}).get('function_calling') == 'legacy'
+
+    if features.get('voice') and await Config.get('task.voice.prompt.enable'):
+        template = await Config.get('task.voice.prompt_template')
+        if not template:
+            template = DEFAULT_VOICE_MODE_PROMPT_TEMPLATE
+        form_data['messages'] = add_or_update_system_message(template, form_data['messages'])
+
+    if (
+        features.get('memory')
+        and await Config.get('memories.system_context.enable')
+        and await _may_use_feature(user, 'memories')
+    ):
+        form_data = await add_memory_context(request, form_data, user, model)
+
+    if (
+        features.get('web_search')
+        and await Config.get('web.search.enable')
+        and await _may_use_feature(user, 'web_search')
+    ):
+        # Skip forced RAG web search when native FC is enabled - model can use web_search tool
+        if is_legacy:
+            form_data = await chat_web_search_handler(request, form_data, extra_params, user)
+
+    # features is client-supplied; re-check the permission the direct /images routes enforce.
+    if features.get('image_generation') and await _may_use_feature(user, 'image_generation'):
+        # Skip forced image generation when native FC is enabled - model can use generate_image tool
+        if is_legacy:
+            form_data = await chat_image_generation_handler(request, form_data, extra_params, user)
+
+    if features.get('code_interpreter'):
+        await _apply_code_interpreter(form_data, metadata)
+    return form_data
+
+
+async def _note_chat_files(chat, user, files):
+    """A note's own chat also gets the note's non-image files, when the user can read the note."""
+    note_id = (chat.meta or {}).get('note_id')
+    note = await Notes.get_note_by_id(note_id) if note_id else None
+    if not note or not (
+        user.role == 'admin'
+        or note.user_id == user.id
+        or await AccessGrants.has_access(
+            user_id=user.id,
+            resource_type='note',
+            resource_id=note.id,
+            permission='read',
+        )
+    ):
+        return files
+    note_files = [
+        file
+        for file in ((note.data or {}).get('files') or [])
+        if isinstance(file, dict)
+        and file.get('type') != 'image'
+        and not (file.get('content_type') or '').startswith('image/')
+    ]
+    return [*(files or []), *note_files] if note_files else files
+
+
+async def _apply_skills(form_data: dict, user, skill_ids: list, mentioned_skill_ids: set, use_builtin_tools: bool):
+    """Mentioned skills (or all, without builtin tools) go in whole; the rest are listed for view_skill.
+
+    Returns the available skills and the ids view_skill may load."""
+    from local_llm.models.skills import Skills as SkillsModel
+
+    accessible_skills = {s.id: s for s in await SkillsModel.get_skills(user_id=user.id, ids=skill_ids)}
+    available_skills = [
+        accessible_skills[sid] for sid in skill_ids if sid in accessible_skills and accessible_skills[sid].is_active
+    ]
+
+    view_skill_ids = []
+    skill_manifest = ''
+    for skill in available_skills:
+        if skill.id in mentioned_skill_ids or not use_builtin_tools:
+            form_data['messages'] = add_or_update_system_message(
+                f'<skill name="{skill.name}">\n{skill.content}\n</skill>',
+                form_data['messages'],
+                append=True,
+            )
+        else:
+            view_skill_ids.append(skill.id)
+            skill_manifest += (
+                f'<skill>\n<id>{skill.id}</id>\n<name>{skill.name}</name>\n'
+                f'<description>{skill.description or ""}</description>\n</skill>\n'
+            )
+
+    if skill_manifest:
+        form_data['messages'] = add_or_update_system_message(
+            f'<available_skills>\n{skill_manifest}</available_skills>',
+            form_data['messages'],
+            append=True,
+        )
+    return available_skills, view_skill_ids
+
+
+def _mcp_tool_function(client, function_name: str):
+    async def tool_function(**kwargs):
+        return await client.call_tool(
+            function_name,
+            function_args=kwargs,
+        )
+
+    return tool_function
+
+
+async def _add_mcp_server_tools(
+    request, server_id: str, user, metadata: dict, extra_params: dict, mcp_clients: dict, mcp_tools_dict: dict
+) -> None:
+    """Connect one MCP server into mcp_clients and add its tools, keyed <server>_<tool>, to mcp_tools_dict."""
+    result = await connect_mcp_server(
+        request,
+        server_id,
+        user,
+        metadata,
+        extra_params,
+    )
+    if result is None:
+        return
+
+    client, tool_specs = result
+    mcp_clients[server_id] = client
+    for tool_spec in tool_specs:
+        mcp_tools_dict[f'{server_id}_{tool_spec["name"]}'] = {
+            'spec': {
+                **tool_spec,
+                'name': f'{server_id}_{tool_spec["name"]}',
+            },
+            'callable': _mcp_tool_function(client, tool_spec['name']),
+            'type': 'mcp',
+            'client': client,
+            'direct': False,
+        }
+
+
+async def _selected_tools(
+    request,
+    form_data: dict,
+    user,
+    metadata: dict,
+    extra_params: dict,
+    models,
+    task_model_id,
+    event_emitter,
+    mcp_clients,
+) -> dict:
+    """The tools picked by id: MCP servers (server:mcp:<id>) and, with plugins on, the database's."""
+    tool_ids = metadata.get('tool_ids', None)
+    if not tool_ids:
+        return {}
+
+    tools_dict = {}
+    mcp_tools_dict = {}
+    db_tool_ids = []
+    for tool_id in tool_ids:
+        if tool_id.startswith('server:mcp:'):
+            server_id = tool_id[len('server:mcp:') :]
+            try:
+                await _add_mcp_server_tools(
+                    request, server_id, user, metadata, extra_params, mcp_clients, mcp_tools_dict
+                )
+            except Exception as e:
+                log.debug(e)
+                if event_emitter:
+                    await event_emitter(
+                        {
+                            'type': 'chat:message:error',
+                            'data': {'error': {'content': f"Failed to connect to MCP server '{server_id}'"}},
+                        }
+                    )
+        elif ENABLE_PLUGINS:
+            db_tool_ids.append(tool_id)
+
+    if db_tool_ids:
+        tools_dict = await get_tools(
+            request,
+            db_tool_ids,
+            user,
+            {
+                **extra_params,
+                '__model__': models[task_model_id],
+                '__messages__': form_data['messages'],
+                '__files__': metadata.get('files', []),
+            },
+        )
+
+    if mcp_tools_dict:
+        tools_dict = {**tools_dict, **mcp_tools_dict}
+    return tools_dict
+
+
+async def _add_terminal_tools(request, form_data: dict, user, model: dict, terminal_id, extra_params, tools_dict):
+    # Outside the tool_ids check so system terminals work even when no other tools are selected
+    terminal_capability = (model.get('info', {}).get('meta', {}).get('capabilities') or {}).get('terminal', True)
+    if not (terminal_id and terminal_capability):
+        return tools_dict
+    try:
+        terminal_result = await get_terminal_tools(
+            request,
+            terminal_id,
+            user,
+            extra_params,
+        )
+        if isinstance(terminal_result, tuple):
+            terminal_tools, system_prompt = terminal_result
+        else:
+            terminal_tools = terminal_result
+            system_prompt = None
+        if terminal_tools:
+            tools_dict = {**tools_dict, **terminal_tools}
+        if system_prompt:
+            form_data['messages'] = add_or_update_system_message(
+                system_prompt,
+                form_data['messages'],
+                append=True,
+            )
+    except Exception as e:
+        log.exception(e)
+        raise HTTPException(status_code=503, detail=f'Terminal unavailable: {e}') from e
+    return tools_dict
+
+
+def _add_direct_server_tools(form_data: dict, direct_tool_servers, tools_dict: dict) -> None:
+    for tool_server in direct_tool_servers or []:
+        system_prompt = tool_server.pop('system_prompt', None)
+        if system_prompt:
+            form_data['messages'] = add_or_update_system_message(
+                system_prompt,
+                form_data['messages'],
+                append=True,
+            )
+
+        for tool in tool_server.pop('specs', []):
+            tools_dict[tool['name']] = {
+                'spec': tool,
+                'direct': True,
+                'server': tool_server,
+            }
+
+
+def _attached_knowledge_tags(model: dict, metadata: dict) -> list[str]:
+    from html import escape
+
+    knowledge_tags = []
+    for item in get_attached_knowledge(model, metadata):
+        if not item.get('id') or not item.get('type'):
+            continue
+        attrs = f'type="{escape(str(item["type"]), quote=True)}" id="{escape(str(item["id"]), quote=True)}"'
+        if item.get('name'):
+            attrs += f' name="{escape(str(item["name"]), quote=True)}"'
+        if item.get('source'):
+            attrs += f' source="{escape(str(item["source"]), quote=True)}"'
+        knowledge_tags.append(f'<knowledge {attrs}/>')
+    return knowledge_tags
+
+
+async def _add_builtin_tools(
+    request,
+    form_data: dict,
+    user,
+    model,
+    metadata,
+    extra_params,
+    event_emitter,
+    view_skill_ids,
+    features,
+    is_note_chat,
+    tools_dict,
+):
+    """Native function calling from the UI: file context, the attached knowledge list and the builtin tools."""
+    # Add file context to user messages
+    form_data['messages'] = await add_file_context(form_data.get('messages', []), metadata.get('chat_id'), user)
+
+    if (model.get('info', {}).get('meta', {}).get('builtinTools') or {}).get('knowledge', True):
+        knowledge_tags = _attached_knowledge_tags(model, metadata)
+        if knowledge_tags:
+            form_data['messages'] = add_or_update_system_message(
+                '<attached_knowledge>\n' + '\n'.join(knowledge_tags) + '\n</attached_knowledge>',
+                form_data['messages'],
+                append=True,
+            )
+
+    builtin_tools = await get_builtin_tools(
+        request,
+        {
+            **extra_params,
+            '__event_emitter__': event_emitter,
+            '__skill_ids__': view_skill_ids,
+        },
+        features,
+        model,
+        is_note_chat=is_note_chat,
+    )
+    for name, tool_dict in builtin_tools.items():
+        if name not in tools_dict:
+            tools_dict[name] = tool_dict
+
+
+async def _resolve_payload_tools(
+    request,
+    form_data: dict,
+    user,
+    model: dict,
+    metadata: dict,
+    extra_params: dict,
+    models,
+    task_model_id,
+    event_emitter,
+    terminal_id,
+    use_builtin_tools: bool,
+    view_skill_ids: list,
+    features: dict,
+    is_note_chat: bool,
+    inlet_filter_tools,
+    sources: list,
+):
+    """Resolve the chat's tools server-side and hand them to the model (native) or the tools handler (legacy)."""
+    mcp_clients = {}
+    tools_dict = await _selected_tools(
+        request, form_data, user, metadata, extra_params, models, task_model_id, event_emitter, mcp_clients
+    )
+    tools_dict = await _add_terminal_tools(request, form_data, user, model, terminal_id, extra_params, tools_dict)
+    # Client side tools
+    _add_direct_server_tools(form_data, metadata.get('tool_servers', None), tools_dict)
+
+    if mcp_clients:
+        metadata['mcp_clients'] = mcp_clients
+
+    # Inject builtin tools for native function calling based on enabled features and model capability.
+    # Only inject when the request originates from the UI (identified by session_id).
+    # API callers don't expect hidden tools; they can explicitly request tools via tool_ids.
+    if use_builtin_tools:
+        await _add_builtin_tools(
+            request,
+            form_data,
+            user,
+            model,
+            metadata,
+            extra_params,
+            event_emitter,
+            view_skill_ids,
+            features,
+            is_note_chat,
+            tools_dict,
+        )
+
+    if not tools_dict:
+        return form_data
+
+    # Always store resolved tools in metadata so downstream consumers
+    # (e.g. pipe functions) can access all tools including MCP and builtins.
+    metadata['tools'] = tools_dict
+
+    if metadata.get('params', {}).get('function_calling') != 'legacy':
+        form_data['tools'] = [{'type': 'function', 'function': tool.get('spec', {})} for tool in tools_dict.values()]
+        if inlet_filter_tools:
+            form_data['tools'].extend(inlet_filter_tools)
+        return form_data
+
+    # Legacy function calling: a task model picks the tool calls up front
+    try:
+        form_data, flags = await chat_completion_tools_handler(
+            request, form_data, extra_params, user, models, tools_dict
+        )
+        sources.extend(flags.get('sources', []))
+    except Exception as e:
+        log.exception(e)
+    return form_data
+
+
+async def _record_system_prompt(form_data: dict, metadata: dict, user, model_system_prompt) -> None:
+    """Save the pre-RAG system prompt, so the native tool call loop can restore the true original.
+
+    A snapshot taken after file-source injection would already have the RAG template baked in."""
+    system_message = get_system_message(form_data['messages'])
+    system_content = get_content_from_message(system_message) if system_message else ''
+    resolved_model_system_prompt = await resolve_system_prompt(
+        model_system_prompt,
+        metadata,
+        user,
+    )
+    if resolved_model_system_prompt:
+        system_content = (
+            f'{resolved_model_system_prompt}\n{system_content}' if system_content else resolved_model_system_prompt
+        )
+    metadata['system_prompt'] = system_content or None
+
+
+async def process_chat_payload(request, form_data, user, metadata, model):
+    # Ensure chat_id is always a string — external API clients may omit it.
+    if not isinstance(metadata.get('chat_id'), str):
+        metadata['chat_id'] = ''
+
+    # Pipeline Inlet -> Filter Inlet -> Chat Memory -> Chat Web Search -> Chat Image Generation
+    # -> Chat Code Interpreter (Form Data Update) -> (Default) Chat Tools Function Calling
+    # -> Chat Files
+
+    # Arena model resolution — pick the sub-model now so all downstream
+    # processing (knowledge, capabilities, tools, params) uses its settings
+    # instead of the empty arena wrapper.
+    if model.get('owned_by') == 'arena':
+        model = _resolve_arena_model(request, form_data, metadata, model)
+
+    # Captured before apply_params_to_form_data pops 'params'; populates metadata['system_prompt'] below
+    model_system_prompt = (form_data.get('params') or {}).get('system')
+
+    form_data = apply_params_to_form_data(form_data, model)
+    log.debug('form_data: %s', form_data)
+
+    # Guided regeneration: extract before it reaches the LLM provider
+    regeneration_prompt = form_data.pop('regeneration_prompt', None)
+
+    chat_id = metadata.get('chat_id')
+    user_message_id = metadata.get('user_message_id')
+    has_stored_history = is_saved_chat_id(chat_id) and user_message_id
+    if has_stored_history:
+        await _replay_history_from_db(form_data, metadata, chat_id, user_message_id)
+
+    if regeneration_prompt:
+        form_data['messages'].append({'role': 'user', 'content': regeneration_prompt})
+
+    if has_stored_history:
+        await _compact_history(request, user, form_data, metadata)
+
+    form_data['messages'] = _messages_for_model(form_data.get('messages', []), model)
+
+    system_message = get_system_message(form_data.get('messages', []))
+    if system_message:  # Chat Controls/User Settings
+        try:
+            form_data = await apply_system_prompt_to_body(
+                system_message.get('content'), form_data, metadata, user, replace=True
+            )  # Required to handle system prompt variables
+        except Exception:
+            pass
+
+    form_data = await convert_url_images_to_base64(form_data, user=user)
+
+    event_emitter = await get_event_emitter(metadata)
+    event_caller = await get_event_call(metadata)
+    extra_params = await _payload_extra_params(request, user, metadata, model, event_emitter, event_caller)
+
+    models = _payload_models(request)
+    task_model_id = get_task_model_id(
+        form_data['model'],
+        await Config.get('task.model.default'),
+        await Config.get('task.model.external'),
+        models,
+    )
+
+    # Additional events to send to the client, and the sources cited
+    events = []
+    sources = []
+
+    form_data = await _apply_folder(form_data, metadata, user)
+
+    # Model "Knowledge" handling
+    user_message = get_last_user_message(form_data['messages'])
+    model_knowledge = model.get('info', {}).get('meta', {}).get('knowledge', False)
+    if model_knowledge and metadata.get('params', {}).get('function_calling') == 'legacy':
+        await _search_model_knowledge(form_data, model_knowledge, event_emitter, user_message)
+
+    form_data.pop('variables', None)
+    payload_tools = form_data.get('tools', None)  # snapshot before filters
+
+    form_data, filter_functions, filter_context = await _run_inlet_filters(
+        request, form_data, user, model, metadata, models, extra_params
+    )
 
     features = form_data.pop('features', None) or {}
     extra_params['__features__'] = features
-    if features:
-        if 'voice' in features and features['voice']:
-            if await Config.get('task.voice.prompt.enable'):
-                template = await Config.get('task.voice.prompt_template')
-                if not template:
-                    template = DEFAULT_VOICE_MODE_PROMPT_TEMPLATE
-
-                form_data['messages'] = add_or_update_system_message(
-                    template,
-                    form_data['messages'],
-                )
-
-        if 'memory' in features and features['memory'] and await Config.get('memories.system_context.enable'):
-            # features is client-supplied; re-check the permission the native FC path enforces.
-            if getattr(user, 'role', None) == 'admin' or await has_permission(
-                getattr(user, 'id', ''),
-                'features.memories',
-                await Config.get('user.permissions'),
-            ):
-                form_data = await add_memory_context(request, form_data, user, model)
-
-        if 'web_search' in features and features['web_search'] and await Config.get('web.search.enable'):
-            # features is client-supplied; re-check the permission the native FC path enforces.
-            if getattr(user, 'role', None) == 'admin' or await has_permission(
-                getattr(user, 'id', ''),
-                'features.web_search',
-                await Config.get('user.permissions'),
-            ):
-                # Skip forced RAG web search when native FC is enabled - model can use web_search tool
-                if metadata.get('params', {}).get('function_calling') == 'legacy':
-                    form_data = await chat_web_search_handler(request, form_data, extra_params, user)
-
-        if 'image_generation' in features and features['image_generation']:
-            # features is client-supplied; re-check the permission the direct /images routes enforce.
-            if getattr(user, 'role', None) == 'admin' or await has_permission(
-                getattr(user, 'id', ''),
-                'features.image_generation',
-                await Config.get('user.permissions'),
-            ):
-                # Skip forced image generation when native FC is enabled - model can use generate_image tool
-                if metadata.get('params', {}).get('function_calling') == 'legacy':
-                    form_data = await chat_image_generation_handler(request, form_data, extra_params, user)
-
-        if 'code_interpreter' in features and features['code_interpreter']:
-            engine = await Config.get('code_interpreter.engine', 'pyodide')
-
-            # Skip XML-tag prompt injection when native FC is enabled —
-            # execute_code will be injected as a builtin tool instead
-            if metadata.get('params', {}).get('function_calling') == 'legacy':
-                ci_prompt_template = await Config.get('code_interpreter.prompt_template')
-                prompt = ci_prompt_template if ci_prompt_template != '' else DEFAULT_CODE_INTERPRETER_PROMPT
-
-                # Append filesystem awareness only for pyodide engine
-                if engine != 'jupyter':
-                    prompt += CODE_INTERPRETER_PYODIDE_PROMPT
-
-                form_data['messages'] = add_or_update_user_message(
-                    prompt,
-                    form_data['messages'],
-                )
-            else:
-                # Native FC: tool docstring can't be dynamic, so inject
-                # filesystem context into the system message for pyodide
-                # engine.  Appending to the system prompt (instead of the
-                # user message) keeps it in the stable cached prefix so
-                # providers with prefix caching don't re-bill the full
-                # conversation on every turn.
-                if engine != 'jupyter':
-                    form_data['messages'] = add_or_update_system_message(
-                        CODE_INTERPRETER_PYODIDE_PROMPT,
-                        form_data['messages'],
-                        append=True,
-                    )
+    form_data = await _apply_features(request, form_data, user, model, metadata, extra_params, features)
 
     tool_ids = form_data.pop('tool_ids', None)
     terminal_id = form_data.pop('terminal_id', None)
@@ -2647,36 +3037,10 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         | set(model.get('info', {}).get('meta', {}).get('skillIds', []))
         | mentioned_skill_ids
     )
-    available_skills = []
-    view_skill_ids = []
-    chat = None
-    if is_saved_chat_id(metadata.get('chat_id')):
-        chat = await Chats.get_chat_by_id(metadata['chat_id'])
-
+    chat = await Chats.get_chat_by_id(metadata['chat_id']) if is_saved_chat_id(metadata.get('chat_id')) else None
     is_note_chat = bool(chat and (chat.meta or {}).get('internal') is True and (chat.meta or {}).get('type') == 'note')
-
     if is_note_chat:
-        note_id = (chat.meta or {}).get('note_id')
-        note = await Notes.get_note_by_id(note_id) if note_id else None
-        if note and (
-            user.role == 'admin'
-            or note.user_id == user.id
-            or await AccessGrants.has_access(
-                user_id=user.id,
-                resource_type='note',
-                resource_id=note.id,
-                permission='read',
-            )
-        ):
-            note_files = [
-                file
-                for file in ((note.data or {}).get('files') or [])
-                if isinstance(file, dict)
-                and file.get('type') != 'image'
-                and not (file.get('content_type') or '').startswith('image/')
-            ]
-            if note_files:
-                files = [*(files or []), *note_files]
+        files = await _note_chat_files(chat, user, files)
 
     use_builtin_tools = is_note_chat or (
         bool(metadata.get('session_id'))
@@ -2684,36 +3048,11 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         and (model.get('info', {}).get('meta', {}).get('capabilities') or {}).get('builtin_tools', True)
     )
 
+    available_skills, view_skill_ids = [], []
     if skill_ids:
-        from local_llm.models.skills import Skills as SkillsModel
-
-        accessible_skills = {s.id: s for s in await SkillsModel.get_skills(user_id=user.id, ids=skill_ids)}
-        for sid in skill_ids:
-            s = accessible_skills.get(sid)
-            if s and s.is_active:
-                available_skills.append(s)
-
-        skill_manifest = ''
-        for skill in available_skills:
-            if skill.id in mentioned_skill_ids or not use_builtin_tools:
-                form_data['messages'] = add_or_update_system_message(
-                    f'<skill name="{skill.name}">\n{skill.content}\n</skill>',
-                    form_data['messages'],
-                    append=True,
-                )
-            else:
-                view_skill_ids.append(skill.id)
-                skill_manifest += (
-                    f'<skill>\n<id>{skill.id}</id>\n<name>{skill.name}</name>\n'
-                    f'<description>{skill.description or ""}</description>\n</skill>\n'
-                )
-
-        if skill_manifest:
-            form_data['messages'] = add_or_update_system_message(
-                f'<available_skills>\n{skill_manifest}</available_skills>',
-                form_data['messages'],
-                append=True,
-            )
+        available_skills, view_skill_ids = await _apply_skills(
+            form_data, user, skill_ids, mentioned_skill_ids, use_builtin_tools
+        )
 
     # Strip <$skillId|label> mention tags so the model doesn't see raw markup.
     strip_skill_mentions(form_data.get('messages', []))
@@ -2755,232 +3094,34 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     # skip all server-side tool resolution and pass the caller's tools through
     # unchanged.  Sending `tools: []` explicitly opts out of builtin injection.
     if payload_tools is None:
-        # Server side tools
-        tool_ids = metadata.get('tool_ids', None)
-        # Client side tools
-        direct_tool_servers = metadata.get('tool_servers', None)
-
-        log.debug('tool_ids=%r', tool_ids)
-        log.debug('direct_tool_servers=%r', direct_tool_servers)
-
-        tools_dict = {}
-
-        mcp_clients = {}
-        mcp_tools_dict = {}
-
-        if tool_ids:
-            db_tool_ids = []
-            for tool_id in tool_ids:
-                if tool_id.startswith('server:mcp:'):
-                    try:
-                        server_id = tool_id[len('server:mcp:') :]
-
-                        result = await connect_mcp_server(
-                            request,
-                            server_id,
-                            user,
-                            metadata,
-                            extra_params,
-                        )
-                        if result is None:
-                            continue
-
-                        client, tool_specs = result
-                        mcp_clients[server_id] = client
-
-                        for tool_spec in tool_specs:
-
-                            async def make_tool_function(client, function_name):
-                                async def tool_function(**kwargs):
-                                    return await client.call_tool(
-                                        function_name,
-                                        function_args=kwargs,
-                                    )
-
-                                return tool_function
-
-                            tool_function = await make_tool_function(client, tool_spec['name'])
-
-                            mcp_tools_dict[f'{server_id}_{tool_spec["name"]}'] = {
-                                'spec': {
-                                    **tool_spec,
-                                    'name': f'{server_id}_{tool_spec["name"]}',
-                                },
-                                'callable': tool_function,
-                                'type': 'mcp',
-                                'client': client,
-                                'direct': False,
-                            }
-                    except Exception as e:
-                        log.debug(e)
-                        if event_emitter:
-                            await event_emitter(
-                                {
-                                    'type': 'chat:message:error',
-                                    'data': {'error': {'content': f"Failed to connect to MCP server '{server_id}'"}},
-                                }
-                            )
-                        continue
-                elif ENABLE_PLUGINS:
-                    db_tool_ids.append(tool_id)
-
-            if db_tool_ids:
-                tools_dict = await get_tools(
-                    request,
-                    db_tool_ids,
-                    user,
-                    {
-                        **extra_params,
-                        '__model__': models[task_model_id],
-                        '__messages__': form_data['messages'],
-                        '__files__': metadata.get('files', []),
-                    },
-                )
-
-            if mcp_tools_dict:
-                tools_dict = {**tools_dict, **mcp_tools_dict}
-
-        # Resolve terminal tools if terminal_id is set (outside tool_ids check
-        # so system terminals work even when no other tools are selected)
-        terminal_capability = (model.get('info', {}).get('meta', {}).get('capabilities') or {}).get('terminal', True)
-        if terminal_id and terminal_capability:
-            try:
-                terminal_result = await get_terminal_tools(
-                    request,
-                    terminal_id,
-                    user,
-                    extra_params,
-                )
-                if isinstance(terminal_result, tuple):
-                    terminal_tools, system_prompt = terminal_result
-                else:
-                    terminal_tools = terminal_result
-                    system_prompt = None
-                if terminal_tools:
-                    tools_dict = {**tools_dict, **terminal_tools}
-                if system_prompt:
-                    form_data['messages'] = add_or_update_system_message(
-                        system_prompt,
-                        form_data['messages'],
-                        append=True,
-                    )
-            except Exception as e:
-                log.exception(e)
-                raise HTTPException(status_code=503, detail=f'Terminal unavailable: {e}') from e
-
-        if direct_tool_servers:
-            for tool_server in direct_tool_servers:
-                system_prompt = tool_server.pop('system_prompt', None)
-                if system_prompt:
-                    form_data['messages'] = add_or_update_system_message(
-                        system_prompt,
-                        form_data['messages'],
-                        append=True,
-                    )
-
-                tool_specs = tool_server.pop('specs', [])
-
-                for tool in tool_specs:
-                    tools_dict[tool['name']] = {
-                        'spec': tool,
-                        'direct': True,
-                        'server': tool_server,
-                    }
-
-        if mcp_clients:
-            metadata['mcp_clients'] = mcp_clients
-
-        # Inject builtin tools for native function calling based on enabled features and model capability.
-        # Only inject when the request originates from the UI (identified by session_id).
-        # API callers don't expect hidden tools; they can explicitly request tools via tool_ids.
-        if use_builtin_tools:
-            # Add file context to user messages
-            chat_id = metadata.get('chat_id')
-            form_data['messages'] = await add_file_context(form_data.get('messages', []), chat_id, user)
-
-            if (model.get('info', {}).get('meta', {}).get('builtinTools') or {}).get('knowledge', True):
-                from html import escape
-
-                knowledge_tags = []
-                for item in get_attached_knowledge(model, metadata):
-                    if not item.get('id') or not item.get('type'):
-                        continue
-                    attrs = f'type="{escape(str(item["type"]), quote=True)}" id="{escape(str(item["id"]), quote=True)}"'
-                    if item.get('name'):
-                        attrs += f' name="{escape(str(item["name"]), quote=True)}"'
-                    if item.get('source'):
-                        attrs += f' source="{escape(str(item["source"]), quote=True)}"'
-                    knowledge_tags.append(f'<knowledge {attrs}/>')
-
-                if knowledge_tags:
-                    form_data['messages'] = add_or_update_system_message(
-                        '<attached_knowledge>\n' + '\n'.join(knowledge_tags) + '\n</attached_knowledge>',
-                        form_data['messages'],
-                        append=True,
-                    )
-
-            builtin_tools = await get_builtin_tools(
-                request,
-                {
-                    **extra_params,
-                    '__event_emitter__': event_emitter,
-                    '__skill_ids__': view_skill_ids,
-                },
-                features,
-                model,
-                is_note_chat=is_note_chat,
-            )
-            for name, tool_dict in builtin_tools.items():
-                if name not in tools_dict:
-                    tools_dict[name] = tool_dict
-
-        if tools_dict:
-            # Always store resolved tools in metadata so downstream consumers
-            # (e.g. pipe functions) can access all tools including MCP and builtins.
-            metadata['tools'] = tools_dict
-
-            if metadata.get('params', {}).get('function_calling') != 'legacy':
-                # If the function calling is native, then call the tools function calling handler
-                form_data['tools'] = [
-                    {'type': 'function', 'function': tool.get('spec', {})} for tool in tools_dict.values()
-                ]
-                if inlet_filter_tools:
-                    form_data['tools'].extend(inlet_filter_tools)
-            else:
-                # If the function calling is not native, then call the tools function calling handler
-                try:
-                    form_data, flags = await chat_completion_tools_handler(
-                        request, form_data, extra_params, user, models, tools_dict
-                    )
-                    sources.extend(flags.get('sources', []))
-                except Exception as e:
-                    log.exception(e)
+        form_data = await _resolve_payload_tools(
+            request,
+            form_data,
+            user,
+            model,
+            metadata,
+            extra_params,
+            models,
+            task_model_id,
+            event_emitter,
+            terminal_id,
+            use_builtin_tools,
+            view_skill_ids,
+            features,
+            is_note_chat,
+            inlet_filter_tools,
+            sources,
+        )
 
     # Check if file context extraction is enabled for this model (default True)
-    file_context_enabled = (model.get('info', {}).get('meta', {}).get('capabilities') or {}).get('file_context', True)
-
-    if file_context_enabled:
+    if (model.get('info', {}).get('meta', {}).get('capabilities') or {}).get('file_context', True):
         try:
             form_data, flags = await chat_completion_files_handler(request, form_data, extra_params, user)
             sources.extend(flags.get('sources', []))
         except Exception as e:
             log.exception(e)
 
-    # Save the pre-RAG message state so the native tool call loop can
-    # restore to the true original (before file-source injection) rather
-    # than a snapshot that already has the RAG template baked in.
-    system_message = get_system_message(form_data['messages'])
-    system_content = get_content_from_message(system_message) if system_message else ''
-    resolved_model_system_prompt = await resolve_system_prompt(
-        model_system_prompt,
-        metadata,
-        user,
-    )
-    if resolved_model_system_prompt:
-        system_content = (
-            f'{resolved_model_system_prompt}\n{system_content}' if system_content else resolved_model_system_prompt
-        )
-    metadata['system_prompt'] = system_content or None
+    await _record_system_prompt(form_data, metadata, user, model_system_prompt)
     metadata['user_prompt'] = get_last_user_message(form_data['messages'])
     metadata['sources'] = sources[:] if sources else []
 
@@ -2988,13 +3129,12 @@ async def process_chat_payload(request, form_data, user, metadata, model):
     if sources and prompt:
         form_data['messages'] = await apply_source_context_to_messages(request, form_data['messages'], sources, prompt)
 
-    # If there are citations, add them to the data_items
+    # Only sources with a name or id are shown as citations
     sources = [
         source
         for source in sources
         if source.get('source', {}).get('name', '') or source.get('source', {}).get('id', '')
     ]
-
     if len(sources) > 0:
         events.append({'sources': sources})
 
