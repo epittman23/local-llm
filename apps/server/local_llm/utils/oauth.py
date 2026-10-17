@@ -31,7 +31,7 @@ from mcp.shared.auth import (
 from mcp.shared.auth import (
     OAuthMetadata,
 )
-from starlette.responses import RedirectResponse
+from starlette.responses import JSONResponse, RedirectResponse
 
 from local_llm.config import (
     DEFAULT_USER_ROLE,
@@ -1316,6 +1316,316 @@ class OAuthClientManager:
         return response
 
 
+# ---------------------------------------------------------------------------
+# OAuth sign-in (OAuthManager.handle_callback) and back-channel logout steps
+# ---------------------------------------------------------------------------
+
+
+def _invalid_callback(provider: str, e: Exception, step: str) -> HTTPException:
+    detailed_error = _build_oauth_callback_error_message(e)
+    log.warning(
+        'OAuth callback error during %s for provider %s: %s',
+        step,
+        provider,
+        detailed_error,
+        exc_info=True,
+    )
+    return HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
+
+
+async def _authorize_access_token(request, provider: str, client) -> dict:
+    """Exchange the callback's code for a token, retrying once with fresh keys after a bad signature."""
+    auth_params = {}
+    if client and hasattr(client, 'client_id') and OAUTH_ACCESS_TOKEN_REQUEST_INCLUDE_CLIENT_ID:
+        auth_params['client_id'] = client.client_id
+
+    try:
+        return await client.authorize_access_token(request, **auth_params)
+    except BadSignatureError:
+        # The IdP likely rotated its signing keys and the cached JWKS
+        # is stale.  Evict the cached key set so the next attempt
+        # fetches fresh keys from the jwks_uri.
+        log.warning(
+            'OIDC bad_signature for provider %s — evicting cached JWKS and retrying',
+            provider,
+        )
+        if hasattr(client, 'server_metadata') and isinstance(client.server_metadata, dict):
+            client.server_metadata.pop('jwks', None)
+        try:
+            return await client.authorize_access_token(request, **auth_params)
+        except Exception as retry_exc:
+            raise _invalid_callback(provider, retry_exc, 'authorize_access_token retry')
+    except Exception as e:
+        raise _invalid_callback(provider, e, 'authorize_access_token')
+
+
+async def _callback_user_data(client, token: dict, provider: str, auth_config) -> UserInfo:
+    # Try to get userinfo from the token first, some providers include it there
+    user_data: UserInfo = token.get('userinfo')
+    # Preserve extra claims from the ID token (e.g. roles, groups for
+    # Microsoft Entra ID) before the userinfo endpoint possibly overwrites them.
+    id_token_claims = dict(user_data) if user_data else {}
+    if (
+        (not user_data)
+        or (auth_config.OAUTH_EMAIL_CLAIM not in user_data)
+        or (auth_config.OAUTH_USERNAME_CLAIM not in user_data)
+    ):
+        user_data = await client.userinfo(token=token)
+        # Merge back ID token claims that the userinfo endpoint doesn't
+        # return.  Only backfill missing keys so userinfo always wins.
+        if user_data and id_token_claims:
+            for key, value in id_token_claims.items():
+                if key not in user_data:
+                    user_data[key] = value
+    if provider == 'feishu' and isinstance(user_data, dict) and 'data' in user_data:
+        user_data = user_data['data']
+    if not user_data:
+        log.warning(f'OAuth callback failed, user data is missing: {token}')
+        raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
+    return user_data
+
+
+def _callback_sub(user_data: UserInfo, provider: str, auth_config) -> str:
+    # The "sub" claim, or the configured claim, or the provider's own default
+    sub_claim = auth_config.OAUTH_SUB_CLAIM or OAUTH_PROVIDERS[provider].get('sub_claim', 'sub')
+    sub = user_data.get(sub_claim)
+    if not sub:
+        log.warning(f'OAuth callback failed, sub is missing: {user_data}')
+        raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
+    return str(sub)
+
+
+async def _github_primary_email(token: dict) -> str:
+    """GitHub leaves a private email out of userinfo; the access token can read the primary one."""
+    try:
+        access_token = token.get('access_token')
+        headers = {'Authorization': f'Bearer {access_token}'}
+        async with aiohttp.ClientSession(trust_env=True) as session:
+            async with session.get(
+                'https://api.github.com/user/emails',
+                headers=headers,
+                ssl=AIOHTTP_CLIENT_SESSION_SSL,
+            ) as resp:
+                if not resp.ok:
+                    log.warning('Failed to fetch GitHub email')
+                    raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
+                emails = await resp.json()
+                primary_email = next((e['email'] for e in emails if e.get('primary')), None)
+                if not primary_email:
+                    log.warning('No primary email found in GitHub response')
+                    raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
+                return primary_email
+    except Exception as e:
+        log.warning(f'Error fetching GitHub email: {e}')
+        raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
+
+
+async def _callback_email(user_data: UserInfo, token: dict, provider: str, sub: str, auth_config) -> str:
+    email = user_data.get(auth_config.OAUTH_EMAIL_CLAIM, '')
+    # We currently mandate that email addresses are provided
+    if not email:
+        if provider == 'github':
+            email = await _github_primary_email(token)
+        elif ENABLE_OAUTH_EMAIL_FALLBACK:
+            email = f'{provider}@{sub}.local'
+        else:
+            log.warning(f'OAuth callback failed, email is missing: {user_data}')
+            raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
+
+    email = email.lower()
+    if '*' not in auth_config.OAUTH_ALLOWED_DOMAINS and email.split('@')[-1] not in auth_config.OAUTH_ALLOWED_DOMAINS:
+        log.warning(f'OAuth callback failed, e-mail domain is not in the list of allowed domains: {user_data}')
+        raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
+    return email
+
+
+async def _find_oauth_user(provider: str, sub: str, email: str, auth_config, db=None):
+    """The user signed in by this provider's sub, or (when merging is on) by email, linked to the sub."""
+    user = await Users.get_user_by_oauth_sub(provider, sub, db=db)
+    if not user and auth_config.OAUTH_MERGE_ACCOUNTS_BY_EMAIL:
+        user = await Users.get_user_by_email(email, db=db)
+        if user:
+            user = await Users.update_user_oauth_by_id(user.id, provider, sub, db=db) or user
+
+    if user:
+        provider_oauth = (user.oauth or {}).get(provider) if isinstance(user.oauth, dict) else None
+        # Lazy repair for legacy rows that stored numeric provider ids as JSON numbers.
+        if isinstance(provider_oauth, dict) and provider_oauth.get('sub') != sub:
+            user = await Users.update_user_oauth_by_id(user.id, provider, sub, db=db) or user
+    return user
+
+
+async def _name_from_login(user, user_data: UserInfo, auth_config, db=None):
+    """The user renamed to the IdP's name, or None when nothing changed."""
+    username_claim = auth_config.OAUTH_USERNAME_CLAIM
+    new_name = user_data.get(username_claim) if username_claim else None
+    if not new_name or new_name == user.name:
+        return None
+    updated_user = await Users.update_user_by_id(user.id, {'name': new_name}, db=db)
+    if updated_user:
+        log.debug('Updated name for user %s', updated_user.email)
+    return updated_user
+
+
+async def _email_from_login(user, user_data: UserInfo, auth_config, db=None):
+    """The user moved to the IdP's email, or None when it is unchanged, taken or not saved."""
+    email_claim = auth_config.OAUTH_EMAIL_CLAIM
+    new_email = user_data.get(email_claim) if email_claim else None
+    if not new_email or new_email.lower() == user.email.lower():
+        return None
+    if await Users.get_user_by_email(new_email, db=db):
+        log.error(f'Cannot update email to {new_email} for user {user.id} because it is already taken.')
+        return None
+    if not await Auths.update_email_by_id(user.id, new_email.lower(), db=db):
+        return None
+    user = await Users.get_user_by_id(user.id, db=db) or user
+    log.debug('Updated email for user %s', user.id)
+    return user
+
+
+def _set_auth_cookie(response, key: str, value, httponly: bool, max_age: int | None) -> None:
+    response.set_cookie(
+        key=key,
+        value=value,
+        httponly=httponly,
+        samesite=LLLM_AUTH_COOKIE_SAME_SITE,
+        secure=LLLM_AUTH_COOKIE_SECURE,
+        **({'max_age': max_age} if max_age is not None else {}),
+    )
+
+
+async def _store_oauth_session(response, user, provider: str, token: dict, max_age: int | None, db=None) -> None:
+    """Keep the provider token server-side and point a cookie at it; failures only lose the stored token."""
+    try:
+        _normalize_token_expiry(token)
+
+        # Enforce max concurrent sessions per user/provider to prevent
+        # unbounded growth while allowing multi-device usage
+        sessions = await OAuthSessions.get_sessions_by_user_id(user.id, db=db)
+        provider_sessions = sorted(
+            [session for session in sessions if session.provider == provider],
+            key=lambda session: session.created_at,
+            reverse=True,
+        )
+        # Keep the newest sessions up to the limit, prune the rest
+        if len(provider_sessions) >= OAUTH_MAX_SESSIONS_PER_USER:
+            for old_session in provider_sessions[OAUTH_MAX_SESSIONS_PER_USER - 1 :]:
+                await OAuthSessions.delete_session_by_id(old_session.id, db=db)
+
+        session = await OAuthSessions.create_session(
+            user_id=user.id,
+            provider=provider,
+            token=token,
+            db=db,
+        )
+
+        if session:
+            _set_auth_cookie(response, 'oauth_session_id', session.id, httponly=True, max_age=max_age)
+            log.info('Stored OAuth session server-side for user %s, provider %s', user.id, provider)
+        else:
+            log.warning(f'Failed to create OAuth session for user {user.id}, provider {provider}')
+    except Exception as e:
+        log.error(f'Failed to store OAuth session server-side: {e}')
+
+
+def _logout_error(description: str) -> JSONResponse:
+    return JSONResponse(
+        status_code=400,
+        content={'error': 'invalid_request', 'error_description': description},
+    )
+
+
+async def _verify_logout_token(logout_token: str, client, token_issuer: str) -> dict:
+    """The logout_token's claims, checked against the provider's signing keys; raises InvalidTokenError."""
+    token_kid = jwt.get_unverified_header(logout_token).get('kid')
+    if not token_kid:
+        raise jwt.InvalidTokenError('logout_token missing kid header')
+
+    try:
+        jwk_set = jwt.PyJWKSet.from_dict(await client.fetch_jwk_set())
+    except jwt.PyJWTError as e:
+        raise jwt.InvalidTokenError(str(e))
+
+    signing_key = next(
+        (key for key in jwk_set.keys if key.key_id == token_kid and key.public_key_use in ['sig', None]),
+        None,
+    )
+    if not signing_key:
+        raise jwt.InvalidTokenError('no signing key matches the token kid')
+
+    return jwt.decode(
+        logout_token,
+        signing_key.key,
+        algorithms=['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512'],
+        audience=client.client_id,
+        issuer=token_issuer,
+        options={
+            'require': ['iss', 'aud', 'iat', 'events'],
+        },
+    )
+
+
+def _logout_claims_problem(claims: dict) -> str | None:
+    """Why verified logout claims still can't be acted on, per the spec, or None."""
+    events = claims.get('events', {})
+    if 'http://schemas.openid.net/event/backchannel-logout' not in events:
+        log.warning('Back-channel logout: missing required backchannel-logout event claim')
+        return 'Missing backchannel-logout event claim'
+
+    # Per spec, back-channel logout tokens MUST NOT contain a nonce
+    if 'nonce' in claims:
+        log.warning('Back-channel logout: logout_token contains nonce (rejected per spec)')
+        return 'logout_token must not contain nonce'
+
+    # At least one of sub and sid must be present
+    if not claims.get('sub') and not claims.get('sid'):
+        log.warning('Back-channel logout: logout_token contains neither sub nor sid')
+        return 'logout_token must contain sub or sid'
+    return None
+
+
+async def _users_to_log_out(provider: str, sub, sid, db=None) -> list:
+    users = []
+    if sub:
+        user = await Users.get_user_by_oauth_sub(provider, str(sub), db=db)
+        if user:
+            users.append(user)
+
+    if not users and sid:
+        log.debug('Back-channel logout: no user found by sub, sid-based lookup not yet supported (sid=%s)', sid)
+    return users
+
+
+async def _log_out_users(request, users: list, provider: str, db=None) -> None:
+    """Delete every OAuth session of each user and, when Redis is there, revoke their JWTs."""
+    redis = request.app.state.redis
+    if not redis:
+        log.warning(
+            'Back-channel logout: Redis not configured, cannot revoke JWT tokens. '
+            'OAuth sessions will be deleted but existing JWTs will remain valid until expiry.'
+        )
+
+    revoked_count = 0
+    for user in users:
+        sessions = await OAuthSessions.get_sessions_by_user_id(user.id, db=db)
+        for oauth_session in sessions:
+            await OAuthSessions.delete_session_by_id(oauth_session.id, db=db)
+
+        if redis:
+            await revoke_user_tokens(request, user.id)
+            revoked_count += 1
+
+        log.info(
+            'Back-channel logout: revoked sessions for user %s (email=%s, provider=%s, sessions_deleted=%s)',
+            user.id,
+            user.email,
+            provider,
+            len(sessions),
+        )
+
+    log.info('Back-channel logout: completed for %s user(s), %s revocation(s) set', len(users), revoked_count)
+
+
 class OAuthManager:
     def __init__(self, app):
         self.oauth = OAuth()
@@ -1851,6 +2161,123 @@ class OAuthManager:
 
         return await client.authorize_redirect(request, redirect_uri, **kwargs)
 
+    async def _picture_from_login(self, user, user_data: UserInfo, provider: str, token: dict, auth_config, db=None):
+        """The user with the IdP's picture, or None when it is unchanged or not saved."""
+        picture_claim = auth_config.OAUTH_PICTURE_CLAIM
+        if not picture_claim:
+            return None
+        new_picture_url = user_data.get(
+            picture_claim,
+            OAUTH_PROVIDERS[provider].get('picture_url', ''),
+        )
+        processed_picture_url = await self._process_picture_url(new_picture_url, token.get('access_token'))
+        if processed_picture_url == user.profile_image_url:
+            return None
+        updated_user = await Users.update_user_profile_image_url_by_id(user.id, processed_picture_url, db=db)
+        if updated_user:
+            log.debug('Updated profile picture for user %s', updated_user.email)
+        return updated_user
+
+    async def _sync_oauth_user(
+        self, request, user, user_data: UserInfo, provider: str, token: dict, auth_config, db=None
+    ):
+        """Bring an existing user's role, and the profile fields enabled for it, in line with the IdP."""
+        user = await self.update_user_role_from_oauth(
+            request=request,
+            user=user,
+            user_data=user_data,
+            provider=provider,
+            db=db,
+        )
+
+        updated_fields = []
+        if auth_config.OAUTH_UPDATE_NAME_ON_LOGIN and (
+            updated := await _name_from_login(user, user_data, auth_config, db)
+        ):
+            user = updated
+            updated_fields.append('name')
+        if auth_config.OAUTH_UPDATE_EMAIL_ON_LOGIN and (
+            updated := await _email_from_login(user, user_data, auth_config, db)
+        ):
+            user = updated
+            updated_fields.append('email')
+        if auth_config.OAUTH_UPDATE_PICTURE_ON_LOGIN and (
+            updated := await self._picture_from_login(user, user_data, provider, token, auth_config, db)
+        ):
+            user = updated
+            updated_fields.append('profile_image_url')
+
+        if updated_fields:
+            await publish_event(
+                request,
+                EVENTS.USER_UPDATED,
+                actor=user,
+                subject_id=user.id,
+                source='oauth',
+                data={'updated_fields': updated_fields, 'provider': provider},
+            )
+        return user
+
+    async def _sign_up_oauth_user(
+        self, request, provider: str, sub: str, email: str, user_data: UserInfo, token: dict, auth_config, db=None
+    ):
+        if not auth_config.ENABLE_OAUTH_SIGNUP:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+            )
+
+        # Check if an existing user with the same email already exists
+        if await Users.get_user_by_email(email, db=db):
+            raise HTTPException(400, detail=ERROR_MESSAGES.EMAIL_TAKEN)
+
+        picture_claim = auth_config.OAUTH_PICTURE_CLAIM
+        if picture_claim:
+            picture_url = user_data.get(
+                picture_claim,
+                OAUTH_PROVIDERS[provider].get('picture_url', ''),
+            )
+            picture_url = await self._process_picture_url(picture_url, token.get('access_token'))
+        else:
+            picture_url = '/user.png'
+
+        name = user_data.get(auth_config.OAUTH_USERNAME_CLAIM)
+        if not name:
+            log.warning('Username claim is missing, using email as name')
+            name = email
+
+        user = await Auths.insert_new_auth(
+            email=email,
+            password=await get_password_hash(str(uuid.uuid4())),  # Random password, not used
+            name=name,
+            profile_image_url=picture_url,
+            role=await self.get_user_role(None, user_data),
+            oauth={provider: {'sub': sub}},
+            db=db,
+        )
+
+        if not user:
+            raise HTTPException(500, detail=ERROR_MESSAGES.CREATE_USER_ERROR)
+
+        # Atomically check if this is the only user *after* the
+        # insert to avoid TOCTOU race on first-user registration.
+        # Matches signup_handler pattern.
+        if await Users.get_num_users(db=db) == 1:
+            await Users.update_user_role_by_id(user.id, 'admin', db=db)
+            user = await Users.get_user_by_id(user.id, db=db)
+
+        default_group_id = await Config.get('ui.default_group_id')
+        await apply_default_group_assignment(default_group_id, user.id, db=db)
+        await publish_event(
+            request,
+            EVENTS.USER_CREATED,
+            actor=user,
+            subject_id=user.id,
+            source='oauth',
+            data={'role': user.role, 'provider': provider},
+        )
+        return user
+
     async def handle_callback(self, request, provider, response, db=None):
         auth_config = await get_oauth_runtime_config()
         if not auth_config.ENABLE_OAUTH:
@@ -1861,279 +2288,18 @@ class OAuthManager:
         error_message = None
         try:
             client = self.get_client(provider)
+            token = await _authorize_access_token(request, provider, client)
+            user_data = await _callback_user_data(client, token, provider, auth_config)
+            sub = _callback_sub(user_data, provider, auth_config)
+            email = await _callback_email(user_data, token, provider, sub, auth_config)
 
-            auth_params = {}
-
-            if client:
-                if hasattr(client, 'client_id') and OAUTH_ACCESS_TOKEN_REQUEST_INCLUDE_CLIENT_ID:
-                    auth_params['client_id'] = client.client_id
-
-            try:
-                token = await client.authorize_access_token(request, **auth_params)
-            except BadSignatureError:
-                # The IdP likely rotated its signing keys and the cached JWKS
-                # is stale.  Evict the cached key set so the next attempt
-                # fetches fresh keys from the jwks_uri.
-                log.warning(
-                    'OIDC bad_signature for provider %s — evicting cached JWKS and retrying',
-                    provider,
-                )
-                if hasattr(client, 'server_metadata') and isinstance(client.server_metadata, dict):
-                    client.server_metadata.pop('jwks', None)
-                try:
-                    token = await client.authorize_access_token(request, **auth_params)
-                except Exception as retry_exc:
-                    detailed_error = _build_oauth_callback_error_message(retry_exc)
-                    log.warning(
-                        'OAuth callback error during authorize_access_token retry for provider %s: %s',
-                        provider,
-                        detailed_error,
-                        exc_info=True,
-                    )
-                    raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
-            except Exception as e:
-                detailed_error = _build_oauth_callback_error_message(e)
-                log.warning(
-                    'OAuth callback error during authorize_access_token for provider %s: %s',
-                    provider,
-                    detailed_error,
-                    exc_info=True,
-                )
-                raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
-
-            # Try to get userinfo from the token first, some providers include it there
-            user_data: UserInfo = token.get('userinfo')
-            # Preserve extra claims from the ID token (e.g. roles, groups for
-            # Microsoft Entra ID) before the userinfo endpoint possibly overwrites them.
-            id_token_claims = dict(user_data) if user_data else {}
-            if (
-                (not user_data)
-                or (auth_config.OAUTH_EMAIL_CLAIM not in user_data)
-                or (auth_config.OAUTH_USERNAME_CLAIM not in user_data)
-            ):
-                user_data: UserInfo = await client.userinfo(token=token)
-                # Merge back ID token claims that the userinfo endpoint doesn't
-                # return.  Only backfill missing keys so userinfo always wins.
-                if user_data and id_token_claims:
-                    for key, value in id_token_claims.items():
-                        if key not in user_data:
-                            user_data[key] = value
-            if provider == 'feishu' and isinstance(user_data, dict) and 'data' in user_data:
-                user_data = user_data['data']
-            if not user_data:
-                log.warning(f'OAuth callback failed, user data is missing: {token}')
-                raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
-
-            # Extract the "sub" claim, using custom claim if configured
-            if auth_config.OAUTH_SUB_CLAIM:
-                sub = user_data.get(auth_config.OAUTH_SUB_CLAIM)
-            else:
-                # Fallback to the default sub claim if not configured
-                sub = user_data.get(OAUTH_PROVIDERS[provider].get('sub_claim', 'sub'))
-            if not sub:
-                log.warning(f'OAuth callback failed, sub is missing: {user_data}')
-                raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
-            sub = str(sub)
-
-            oauth_data = {}
-            oauth_data[provider] = {
-                'sub': sub,
-            }
-
-            # Email extraction
-            email_claim = auth_config.OAUTH_EMAIL_CLAIM
-            email = user_data.get(email_claim, '')
-            # We currently mandate that email addresses are provided
-            if not email:
-                # If the provider is GitHub,and public email is not provided, we can use the access token to fetch the
-                # user's email
-                if provider == 'github':
-                    try:
-                        access_token = token.get('access_token')
-                        headers = {'Authorization': f'Bearer {access_token}'}
-                        async with aiohttp.ClientSession(trust_env=True) as session:
-                            async with session.get(
-                                'https://api.github.com/user/emails',
-                                headers=headers,
-                                ssl=AIOHTTP_CLIENT_SESSION_SSL,
-                            ) as resp:
-                                if resp.ok:
-                                    emails = await resp.json()
-                                    # use the primary email as the user's email
-                                    primary_email = next(
-                                        (e['email'] for e in emails if e.get('primary')),
-                                        None,
-                                    )
-                                    if primary_email:
-                                        email = primary_email
-                                    else:
-                                        log.warning('No primary email found in GitHub response')
-                                        raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
-                                else:
-                                    log.warning('Failed to fetch GitHub email')
-                                    raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
-                    except Exception as e:
-                        log.warning(f'Error fetching GitHub email: {e}')
-                        raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
-                elif ENABLE_OAUTH_EMAIL_FALLBACK:
-                    email = f'{provider}@{sub}.local'
-                else:
-                    log.warning(f'OAuth callback failed, email is missing: {user_data}')
-                    raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
-
-            email = email.lower()
-            # If allowed domains are configured, check if the email domain is in the list
-            if (
-                '*' not in auth_config.OAUTH_ALLOWED_DOMAINS
-                and email.split('@')[-1] not in auth_config.OAUTH_ALLOWED_DOMAINS
-            ):
-                log.warning(f'OAuth callback failed, e-mail domain is not in the list of allowed domains: {user_data}')
-                raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
-
-            # Check if the user exists
-            user = await Users.get_user_by_oauth_sub(provider, sub, db=db)
-            if not user:
-                # If the user does not exist, check if merging is enabled
-                if auth_config.OAUTH_MERGE_ACCOUNTS_BY_EMAIL:
-                    # Check if the user exists by email
-                    user = await Users.get_user_by_email(email, db=db)
-                    if user:
-                        # Update the user with the new oauth sub
-                        user = await Users.update_user_oauth_by_id(user.id, provider, sub, db=db) or user
-
+            user = await _find_oauth_user(provider, sub, email, auth_config, db=db)
             if user:
-                provider_oauth = (user.oauth or {}).get(provider) if isinstance(user.oauth, dict) else None
-                # Lazy repair for legacy rows that stored numeric provider ids as JSON numbers.
-                if isinstance(provider_oauth, dict) and provider_oauth.get('sub') != sub:
-                    user = await Users.update_user_oauth_by_id(user.id, provider, sub, db=db) or user
-
-            if user:
-                user = await self.update_user_role_from_oauth(
-                    request=request,
-                    user=user,
-                    user_data=user_data,
-                    provider=provider,
-                    db=db,
-                )
-
-                updated_fields = []
-
-                if auth_config.OAUTH_UPDATE_NAME_ON_LOGIN:
-                    username_claim = auth_config.OAUTH_USERNAME_CLAIM
-                    if username_claim:
-                        new_name = user_data.get(username_claim)
-                        if new_name and new_name != user.name:
-                            updated_user = await Users.update_user_by_id(user.id, {'name': new_name}, db=db)
-                            if updated_user:
-                                user = updated_user
-                                updated_fields.append('name')
-                                log.debug('Updated name for user %s', user.email)
-
-                if auth_config.OAUTH_UPDATE_EMAIL_ON_LOGIN:
-                    email_claim = auth_config.OAUTH_EMAIL_CLAIM
-                    if email_claim:
-                        new_email = user_data.get(email_claim)
-                        if new_email and new_email.lower() != user.email.lower():
-                            existing_user = await Users.get_user_by_email(new_email, db=db)
-                            if existing_user:
-                                log.error(
-                                    f'Cannot update email to {new_email} for user {user.id} because it is already '
-                                    'taken.'
-                                )
-                            elif await Auths.update_email_by_id(user.id, new_email.lower(), db=db):
-                                user = await Users.get_user_by_id(user.id, db=db) or user
-                                updated_fields.append('email')
-                                log.debug('Updated email for user %s', user.id)
-
-                # Update profile picture if enabled and different from current
-                if auth_config.OAUTH_UPDATE_PICTURE_ON_LOGIN:
-                    picture_claim = auth_config.OAUTH_PICTURE_CLAIM
-                    if picture_claim:
-                        new_picture_url = user_data.get(
-                            picture_claim,
-                            OAUTH_PROVIDERS[provider].get('picture_url', ''),
-                        )
-                        processed_picture_url = await self._process_picture_url(
-                            new_picture_url, token.get('access_token')
-                        )
-                        if processed_picture_url != user.profile_image_url:
-                            updated_user = await Users.update_user_profile_image_url_by_id(
-                                user.id, processed_picture_url, db=db
-                            )
-                            if updated_user:
-                                user = updated_user
-                                updated_fields.append('profile_image_url')
-                                log.debug('Updated profile picture for user %s', user.email)
-
-                if updated_fields:
-                    await publish_event(
-                        request,
-                        EVENTS.USER_UPDATED,
-                        actor=user,
-                        subject_id=user.id,
-                        source='oauth',
-                        data={'updated_fields': updated_fields, 'provider': provider},
-                    )
+                user = await self._sync_oauth_user(request, user, user_data, provider, token, auth_config, db=db)
             else:
-                # If the user does not exist, check if signups are enabled
-                if auth_config.ENABLE_OAUTH_SIGNUP:
-                    # Check if an existing user with the same email already exists
-                    existing_user = await Users.get_user_by_email(email, db=db)
-                    if existing_user:
-                        raise HTTPException(400, detail=ERROR_MESSAGES.EMAIL_TAKEN)
-
-                    picture_claim = auth_config.OAUTH_PICTURE_CLAIM
-                    if picture_claim:
-                        picture_url = user_data.get(
-                            picture_claim,
-                            OAUTH_PROVIDERS[provider].get('picture_url', ''),
-                        )
-                        picture_url = await self._process_picture_url(picture_url, token.get('access_token'))
-                    else:
-                        picture_url = '/user.png'
-                    username_claim = auth_config.OAUTH_USERNAME_CLAIM
-
-                    name = user_data.get(username_claim)
-                    if not name:
-                        log.warning('Username claim is missing, using email as name')
-                        name = email
-
-                    user = await Auths.insert_new_auth(
-                        email=email,
-                        password=await get_password_hash(str(uuid.uuid4())),  # Random password, not used
-                        name=name,
-                        profile_image_url=picture_url,
-                        role=await self.get_user_role(None, user_data),
-                        oauth=oauth_data,
-                        db=db,
-                    )
-
-                    if not user:
-                        raise HTTPException(500, detail=ERROR_MESSAGES.CREATE_USER_ERROR)
-
-                    # Atomically check if this is the only user *after* the
-                    # insert to avoid TOCTOU race on first-user registration.
-                    # Matches signup_handler pattern.
-                    if await Users.get_num_users(db=db) == 1:
-                        await Users.update_user_role_by_id(user.id, 'admin', db=db)
-                        user = await Users.get_user_by_id(user.id, db=db)
-
-                    default_group_id = await Config.get('ui.default_group_id')
-                    await apply_default_group_assignment(default_group_id, user.id, db=db)
-                    await publish_event(
-                        request,
-                        EVENTS.USER_CREATED,
-                        actor=user,
-                        subject_id=user.id,
-                        source='oauth',
-                        data={'role': user.role, 'provider': provider},
-                    )
-
-                else:
-                    raise HTTPException(
-                        status.HTTP_403_FORBIDDEN,
-                        detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
-                    )
+                user = await self._sign_up_oauth_user(
+                    request, provider, sub, email, user_data, token, auth_config, db=db
+                )
 
             jwt_token = create_token(
                 data={'id': user.id},
@@ -2170,16 +2336,8 @@ class OAuthManager:
         expires_delta = parse_duration(auth_config.JWT_EXPIRES_IN)
         cookie_max_age = int(expires_delta.total_seconds()) if expires_delta else None
 
-        # Set the cookie token
-        # Redirect back to the frontend with the JWT token
-        response.set_cookie(
-            key='token',
-            value=jwt_token,
-            httponly=False,  # Required for frontend access
-            samesite=LLLM_AUTH_COOKIE_SAME_SITE,
-            secure=LLLM_AUTH_COOKIE_SECURE,
-            **({'max_age': cookie_max_age} if cookie_max_age is not None else {}),
-        )
+        # Redirect back to the frontend with the JWT token; the frontend reads it, so not httponly
+        _set_auth_cookie(response, 'token', jwt_token, httponly=False, max_age=cookie_max_age)
 
         await publish_event(
             request,
@@ -2193,100 +2351,13 @@ class OAuthManager:
 
         # Legacy cookies for compatibility with older frontend versions
         if ENABLE_OAUTH_ID_TOKEN_COOKIE:
-            response.set_cookie(
-                key='oauth_id_token',
-                value=token.get('id_token'),
-                httponly=True,
-                samesite=LLLM_AUTH_COOKIE_SAME_SITE,
-                secure=LLLM_AUTH_COOKIE_SECURE,
-                **({'max_age': cookie_max_age} if cookie_max_age is not None else {}),
-            )
+            _set_auth_cookie(response, 'oauth_id_token', token.get('id_token'), httponly=True, max_age=cookie_max_age)
 
-        try:
-            _normalize_token_expiry(token)
-
-            # Enforce max concurrent sessions per user/provider to prevent
-            # unbounded growth while allowing multi-device usage
-            sessions = await OAuthSessions.get_sessions_by_user_id(user.id, db=db)
-            provider_sessions = sorted(
-                [session for session in sessions if session.provider == provider],
-                key=lambda session: session.created_at,
-                reverse=True,
-            )
-            # Keep the newest sessions up to the limit, prune the rest
-            if len(provider_sessions) >= OAUTH_MAX_SESSIONS_PER_USER:
-                for old_session in provider_sessions[OAUTH_MAX_SESSIONS_PER_USER - 1 :]:
-                    await OAuthSessions.delete_session_by_id(old_session.id, db=db)
-
-            session = await OAuthSessions.create_session(
-                user_id=user.id,
-                provider=provider,
-                token=token,
-                db=db,
-            )
-
-            if session:
-                response.set_cookie(
-                    key='oauth_session_id',
-                    value=session.id,
-                    httponly=True,
-                    samesite=LLLM_AUTH_COOKIE_SAME_SITE,
-                    secure=LLLM_AUTH_COOKIE_SECURE,
-                    **({'max_age': cookie_max_age} if cookie_max_age is not None else {}),
-                )
-
-                log.info('Stored OAuth session server-side for user %s, provider %s', user.id, provider)
-            else:
-                log.warning(f'Failed to create OAuth session for user {user.id}, provider {provider}')
-        except Exception as e:
-            log.error(f'Failed to store OAuth session server-side: {e}')
-
+        await _store_oauth_session(response, user, provider, token, cookie_max_age, db=db)
         return response
 
-    async def handle_backchannel_logout(self, request, db=None):
-        """
-        Handle an OIDC Back-Channel Logout request.
-        Validates the logout_token, identifies the user, revokes their
-        sessions via Redis, and deletes their OAuth sessions.
-        Returns a JSONResponse per the OIDC Back-Channel Logout 1.0 spec.
-        """
-        from fastapi.responses import JSONResponse
-
-        # 1. Extract logout_token from form body
-        try:
-            form = await request.form()
-            logout_token = form.get('logout_token')
-        except Exception:
-            logout_token = None
-
-        if not logout_token:
-            return JSONResponse(
-                status_code=400,
-                content={'error': 'invalid_request', 'error_description': 'Missing logout_token parameter'},
-            )
-
-        # 2. Peek at unverified issuer to match against configured providers
-        try:
-            unverified_claims = jwt.decode(logout_token, options={'verify_signature': False})
-            token_issuer = unverified_claims.get('iss')
-        except Exception as e:
-            log.warning(f'Back-channel logout: cannot decode logout_token: {e}')
-            return JSONResponse(
-                status_code=400,
-                content={'error': 'invalid_request', 'error_description': 'Malformed logout_token'},
-            )
-
-        if not token_issuer:
-            return JSONResponse(
-                status_code=400,
-                content={'error': 'invalid_request', 'error_description': 'logout_token missing iss claim'},
-            )
-
-        # 3. Find the configured provider whose issuer matches the token
-        matched_provider = None
-        matched_client = None
-        matched_jwks_uri = None
-
+    async def _match_logout_provider(self, token_issuer: str):
+        """The configured provider, client and jwks_uri whose discovery document names this issuer."""
         for provider_name in OAUTH_PROVIDERS:
             client = self.get_client(provider_name)
             if not client:
@@ -2299,103 +2370,61 @@ class OAuthManager:
                 continue
 
             if oidc_config.get('issuer') == token_issuer:
-                matched_provider = provider_name
-                matched_client = client
-                matched_jwks_uri = oidc_config.get('jwks_uri')
-                break
+                return provider_name, client, oidc_config.get('jwks_uri')
+        return None, None, None
 
+    async def handle_backchannel_logout(self, request, db=None):
+        """
+        Handle an OIDC Back-Channel Logout request.
+        Validates the logout_token, identifies the user, revokes their
+        sessions via Redis, and deletes their OAuth sessions.
+        Returns a JSONResponse per the OIDC Back-Channel Logout 1.0 spec.
+        """
+        # 1. Extract logout_token from form body
+        try:
+            form = await request.form()
+            logout_token = form.get('logout_token')
+        except Exception:
+            logout_token = None
+
+        if not logout_token:
+            return _logout_error('Missing logout_token parameter')
+
+        # 2. Peek at unverified issuer to match against configured providers
+        try:
+            unverified_claims = jwt.decode(logout_token, options={'verify_signature': False})
+            token_issuer = unverified_claims.get('iss')
+        except Exception as e:
+            log.warning(f'Back-channel logout: cannot decode logout_token: {e}')
+            return _logout_error('Malformed logout_token')
+
+        if not token_issuer:
+            return _logout_error('logout_token missing iss claim')
+
+        # 3. Find the configured provider whose issuer matches the token
+        matched_provider, matched_client, matched_jwks_uri = await self._match_logout_provider(token_issuer)
         if not matched_provider or not matched_client or not matched_client.client_id or not matched_jwks_uri:
             log.warning(f'Back-channel logout: no configured provider matches issuer {token_issuer}')
-            return JSONResponse(
-                status_code=400,
-                content={
-                    'error': 'invalid_request',
-                    'error_description': 'No configured provider matches token issuer',
-                },
-            )
+            return _logout_error('No configured provider matches token issuer')
 
         # 4. Validate the logout_token signature and claims
         try:
-            token_kid = jwt.get_unverified_header(logout_token).get('kid')
-            if not token_kid:
-                raise jwt.InvalidTokenError('logout_token missing kid header')
-
-            try:
-                jwk_set = jwt.PyJWKSet.from_dict(await matched_client.fetch_jwk_set())
-            except jwt.PyJWTError as e:
-                raise jwt.InvalidTokenError(str(e))
-
-            signing_key = next(
-                (key for key in jwk_set.keys if key.key_id == token_kid and key.public_key_use in ['sig', None]),
-                None,
-            )
-            if not signing_key:
-                raise jwt.InvalidTokenError('no signing key matches the token kid')
-
-            claims = jwt.decode(
-                logout_token,
-                signing_key.key,
-                algorithms=['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512'],
-                audience=matched_client.client_id,
-                issuer=token_issuer,
-                options={
-                    'require': ['iss', 'aud', 'iat', 'events'],
-                },
-            )
+            claims = await _verify_logout_token(logout_token, matched_client, token_issuer)
         except jwt.InvalidTokenError as e:
             log.warning(f'Back-channel logout: invalid logout_token: {e}')
-            return JSONResponse(
-                status_code=400,
-                content={
-                    'error': 'invalid_request',
-                    'error_description': 'Invalid logout_token',
-                },  # detail logged above
-            )
+            return _logout_error('Invalid logout_token')  # detail logged above
         except Exception as e:
             log.error(f'Back-channel logout: error validating logout_token: {e}')
-            return JSONResponse(
-                status_code=400,
-                content={'error': 'invalid_request', 'error_description': 'Failed to validate logout_token'},
-            )
+            return _logout_error('Failed to validate logout_token')
 
-        # 5. Validate events claim per spec
-        events = claims.get('events', {})
-        if 'http://schemas.openid.net/event/backchannel-logout' not in events:
-            log.warning('Back-channel logout: missing required backchannel-logout event claim')
-            return JSONResponse(
-                status_code=400,
-                content={'error': 'invalid_request', 'error_description': 'Missing backchannel-logout event claim'},
-            )
-
-        # 6. Per spec, back-channel logout tokens MUST NOT contain a nonce
-        if 'nonce' in claims:
-            log.warning('Back-channel logout: logout_token contains nonce (rejected per spec)')
-            return JSONResponse(
-                status_code=400,
-                content={'error': 'invalid_request', 'error_description': 'logout_token must not contain nonce'},
-            )
-
-        # 7. Extract sub and/or sid — at least one must be present
-        sub = claims.get('sub')
-        sid = claims.get('sid')
-
-        if not sub and not sid:
-            log.warning('Back-channel logout: logout_token contains neither sub nor sid')
-            return JSONResponse(
-                status_code=400,
-                content={'error': 'invalid_request', 'error_description': 'logout_token must contain sub or sid'},
-            )
+        # 5-7. The events claim, no nonce, and sub and/or sid
+        if problem := _logout_claims_problem(claims):
+            return _logout_error(problem)
 
         # 8. Identify users to log out
-        users_to_logout = []
-        if sub:
-            user = await Users.get_user_by_oauth_sub(matched_provider, str(sub), db=db)
-            if user:
-                users_to_logout.append(user)
-
-        if not users_to_logout and sid:
-            log.debug('Back-channel logout: no user found by sub, sid-based lookup not yet supported (sid=%s)', sid)
-
+        sub = claims.get('sub')
+        sid = claims.get('sid')
+        users_to_logout = await _users_to_log_out(matched_provider, sub, sid, db=db)
         if not users_to_logout:
             log.debug(
                 'Back-channel logout: no matching user for provider=%s, sub=%s, sid=%s', matched_provider, sub, sid
@@ -2403,32 +2432,5 @@ class OAuthManager:
             return JSONResponse(status_code=200, content={})
 
         # 9. Revoke tokens and delete sessions
-        redis = request.app.state.redis
-        if not redis:
-            log.warning(
-                'Back-channel logout: Redis not configured, cannot revoke JWT tokens. '
-                'OAuth sessions will be deleted but existing JWTs will remain valid until expiry.'
-            )
-
-        revoked_count = 0
-        for user in users_to_logout:
-            sessions = await OAuthSessions.get_sessions_by_user_id(user.id, db=db)
-            for oauth_session in sessions:
-                await OAuthSessions.delete_session_by_id(oauth_session.id, db=db)
-
-            if redis:
-                await revoke_user_tokens(request, user.id)
-                revoked_count += 1
-
-            log.info(
-                'Back-channel logout: revoked sessions for user %s (email=%s, provider=%s, sessions_deleted=%s)',
-                user.id,
-                user.email,
-                matched_provider,
-                len(sessions),
-            )
-
-        log.info(
-            'Back-channel logout: completed for %s user(s), %s revocation(s) set', len(users_to_logout), revoked_count
-        )
+        await _log_out_users(request, users_to_logout, matched_provider, db=db)
         return JSONResponse(status_code=200, content={})
