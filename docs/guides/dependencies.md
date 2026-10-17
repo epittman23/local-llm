@@ -18,20 +18,21 @@ What the default install includes, and what it leaves out:
   in `pyproject.toml`). It only runs sentence-transformers' embedding and
   reranking models here; llama-server does inference. A CUDA build added
   ~5 GB and competed with llama-server for VRAM.
-- **Vector stores and loaders this install doesn't use** (Milvus, Qdrant,
-  Pinecone, Weaviate, Elasticsearch, Oracle, MongoDB, ColBERT, Azure Search,
-  Playwright, unstructured) are in the `all` extra, not the default install.
+- **pgvector is the only vector store.** It lives in the app's own Postgres.
+  The twelve other stores the inherited code supported (Chroma, Milvus,
+  Qdrant, Pinecone, Weaviate, Elasticsearch, OpenSearch, Oracle 23ai,
+  MariaDB, openGauss, S3 Vectors, Valkey) were removed on 2026-10-17, along
+  with their dependencies. Any other `VECTOR_DB` value stops startup.
+- **Loaders and integrations this install doesn't use** (the Qdrant and
+  Milvus clients for external knowledge connections, MongoDB, ColBERT, Azure
+  Search, Playwright, unstructured) are in the `all` extra, not the default
+  install.
   Each is imported only when configured, so nothing breaks without them;
   RAG uploads of `.rst`/`.xml` files report `unstructured` missing (Excel and
   PowerPoint fall back to pandas / python-pptx). Install them with
   `uv sync --extra all` from `apps/server/`.
-- **Chroma isn't installed at all**, not even by `--extra all`: every
-  `chromadb` release has unpatched critical advisories (pre-auth code
-  injection among them), and the inherited default `VECTOR_DB=chroma` is now
-  `pgvector`. The Chroma code is still there; `VECTOR_DB=chroma` works if you
-  install `chromadb` yourself, and otherwise stops startup saying so.
-  `nltk` and `RestrictedPython` (unused, with unpatched advisories of their
-  own) were removed too, on 2026-10-09.
+- **`nltk` and `RestrictedPython`** (unused, with unpatched advisories of
+  their own) were removed on 2026-10-09.
 
 Two dependencies exist for the Benchmarks section: `scikit-learn` widens the
 DS-1000 slice, and `pyyaml` is needed for DS-1000 items that round-trip through

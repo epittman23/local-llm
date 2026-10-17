@@ -7,6 +7,28 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-17**: pgvector is the only vector store. The inherited code
+  supported twelve others: Chroma, Milvus (and a multi-tenant variant),
+  Qdrant (likewise), Pinecone, Weaviate, Elasticsearch, OpenSearch,
+  Oracle 23ai, MariaDB, openGauss, S3 Vectors and Valkey. None was
+  configured here: `VECTOR_DB` was never set, and the Makefile pins
+  pgvector, which runs in the app's own Postgres and moves to self-hosted
+  hardware unchanged. Several of the others would send document text to a
+  third-party cloud.
+  - **Removed:** their 14 client files, their roughly 90 settings in
+    `config.py`, three filter helpers in `vector/utils.py` that only they
+    used, and the dependencies only they needed (`opensearch-py`, the
+    `mariadb` extra, and `elasticsearch`, `weaviate-client`, `pinecone` and
+    `oracledb` from `all`).
+  - **Startup now fails on any other `VECTOR_DB`** with a message naming
+    pgvector, instead of trying to load a store that is gone.
+  - **Prompted by the ruff complexity work.** `s3vector.py` held one of the
+    35 functions above the limit. Deleting it, rather than refactoring it,
+    was the owner's call for features this install doesn't use.
+  - **Kept:** external knowledge connections, which query someone else's
+    Qdrant or Milvus as a knowledge source (`retrieval/external.py`, with
+    `qdrant-client` and `pymilvus` still in `all`). That is a separate
+    feature from this install's own store.
 - **2026-10-17**: Generated code is excluded from linting and formatting
   (owner's rule). A repo-wide search found no files with generator stamps,
   so each generator was checked for what it writes:
