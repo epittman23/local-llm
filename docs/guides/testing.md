@@ -103,3 +103,21 @@ and format checks; CI runs the same file with `--all-files`. Install it once
 with `uv tool install pre-commit && pre-commit install` (and `bun install` in
 `apps/web`, since the Biome hook runs that copy), or run it by hand with
 `pre-commit run --all-files`.
+
+Generated code is not linted or formatted:
+
+- `apps/server/local_llm/migrations/versions/`: Alembic revisions, which are
+  also never edited once applied. Excluded in `apps/server/pyproject.toml`
+  with `force-exclude`. That holds under pre-commit, CI and the editor
+  extension, which pass `--force-exclude`, and when ruff runs from
+  `apps/server`. A bare `ruff check` started at the repo root walks into the
+  directory anyway, because it reads `force-exclude` from the root, which
+  has no ruff config.
+- `apps/web/src/components/ui/`: shadcn/ui components as
+  `bunx --bun shadcn add` writes them. Excluded in `apps/web/biome.jsonc`.
+- `apps/server/uv.lock`: skipped by `check-toml`; CI's `uv lock --check`
+  validates it.
+
+The security hooks (gitleaks, private keys, large files, merge markers) still
+scan everything, generated or not. If a generated file is ever edited by
+hand, it is no longer generated: take it off its exclusion list.

@@ -31,6 +31,8 @@ repos:
       - id: detect-private-key
       - id: check-yaml
       - id: check-toml
+        # uv.lock is generated; CI's `uv lock --check` validates it.
+        exclude: ^apps/server/uv\.lock$
 
   # Scans the staged diff for API keys, tokens and passwords
   # (infra/.env holds real ones and must never be committed).

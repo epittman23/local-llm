@@ -6,8 +6,10 @@
 	"vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
 	"files": {
 		// The two .astro files are left out: Biome only partly parses Astro
-		// templates, and both files are short layout shells.
-		"includes": ["**", "!**/*.astro"]
+		// templates, and both files are short layout shells. src/components/ui
+		// is generated code (`bunx --bun shadcn add`) and is left as the CLI
+		// writes it, so neither tool rewrites the other's output.
+		"includes": ["**", "!**/*.astro", "!src/components/ui"]
 	},
 	"formatter": {
 		"indentStyle": "tab",

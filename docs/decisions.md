@@ -7,6 +7,22 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-17**: Generated code is excluded from linting and formatting
+  (owner's rule). A repo-wide search found no files with generator stamps,
+  so each generator was checked for what it writes:
+  - Alembic revisions under `migrations/versions/` are excluded from ruff,
+    both check and format, with `force-exclude`. This replaces the same
+    day's ruff-check-only ignore.
+  - shadcn/ui's `src/components/ui/` is excluded from Biome. None of its 21
+    files was edited after `shadcn add` wrote it, apart from Biome's 2026-10-09
+    bulk format.
+  - `uv.lock` is excluded from `check-toml`, since `uv lock --check`
+    validates it.
+  - Checked and left as they are: `migrations/env.py` (hand-customized),
+    `src/env.d.ts` (hand-written declarations), the i18n `translation.json`
+    (no extractor configured), and `bun.lock`, the swagger-ui bundle and the
+    serving-baseline JSON, which no linter covers.
+  - Security hooks still scan everything.
 - **2026-10-17**: ruff-check now gates the whole backend
   (`^apps/server/(local_llm|tests)/`), not just `benchmarks/` and `tests/`.
   The ungated code had drifted: the `local_llm` rename alone left 166

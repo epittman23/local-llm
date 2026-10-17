@@ -38,6 +38,9 @@ See [testing.md](testing.md#frontend-appsweb).
 
 `components.json` is shadcn/ui's own config (`style: "radix-nova"`, Lucide
 icons, CSS variables). Add components with `bunx --bun shadcn add <name>`.
+`src/components/ui/` holds the CLI's output and is excluded from Biome, so
+leave those files as generated and build on them in your own components.
+If one has to be edited by hand, take it off the exclusion in `biome.jsonc`.
 See the 2026-09-18 entry in [decisions.md](../decisions.md) for why Nova and
 not the migration plan's original "new-york".
 
