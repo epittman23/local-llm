@@ -7,6 +7,24 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-17**: ruff-check now gates the whole backend
+  (`^apps/server/(local_llm|tests)/`), not just `benchmarks/` and `tests/`.
+  The ungated code had drifted: the `local_llm` rename alone left 166
+  import blocks unsorted.
+  - **Fixed, not exempted.** About 690 findings were fixed by hand, one
+    commit per rule. SQLAlchemy comparisons use `== true()` / `.is_(None)`,
+    since ruff's own fix (`is True`, `is None`) silently breaks a query, and
+    the compiled SQL is identical. Long strings were split into adjacent
+    literals with identical ASTs. Text a model reads (default task prompts,
+    tool docstrings) keeps its bytes behind a `noqa`.
+  - **Complexity.** `max-complexity` is 25, as decided on 2026-10-09. The
+    owner's rule: generated code is excluded, everything else is
+    refactored. None of the 37 functions above 25 is generated. The two in
+    applied migrations can't be edited (the schema is append-only), so
+    `migrations/versions/` is excluded from linting. The other 35 are being
+    refactored behind characterization tests. Until each one is done, its
+    file is on a temporary C901-only list in `pyproject.toml`, so new
+    complexity is blocked everywhere else in the meantime.
 - **2026-10-11**: Old plugin source is aliased, not rewritten. The
   2026-10-10 entry's rewrite of `open_webui.*` imports only reached
   `from`/`import` lines, and not the chat-time tool loader at all, so a

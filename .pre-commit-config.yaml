@@ -44,7 +44,7 @@ repos:
     hooks:
       - id: ruff-check
         args: [--fix]
-        files: ^apps/server/(local_llm/benchmarks|tests)/
+        files: ^apps/server/(local_llm|tests)/
       - id: ruff-format
         files: ^apps/server/(local_llm|tests)/
 

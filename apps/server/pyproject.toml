@@ -258,9 +258,33 @@ flake8-quotes.inline-quotes = "single"
 mccabe.max-complexity = 25
 pydocstyle.convention = "google"
 
-# Linting is rolling out in stages: benchmarks/ and tests/ are linted in
-# pre-commit and CI; the rest of local_llm/ is not yet, until its existing
-# findings are fixed. Applied migrations are never edited (the schema is
-# append-only), so their findings are history rather than something to fix.
+# Applied migrations are never edited (the schema is append-only), so their
+# findings are history rather than something to fix.
+#
+# The other entries are temporary. Each file holds an inherited function
+# above max-complexity that is being refactored (behind characterization
+# tests) rather than exempted; a file leaves this list in the PR that
+# refactors its last such function, and the list is deleted when empty.
 [tool.ruff.lint.per-file-ignores]
 "local_llm/migrations/versions/**" = ["ALL"]
+"local_llm/functions.py" = ["C901"]
+"local_llm/main.py" = ["C901"]
+"local_llm/models/users.py" = ["C901"]
+"local_llm/retrieval/loaders/main.py" = ["C901"]
+"local_llm/retrieval/utils.py" = ["C901"]
+"local_llm/retrieval/vector/dbs/s3vector.py" = ["C901"]
+"local_llm/routers/auths.py" = ["C901"]
+"local_llm/routers/configs.py" = ["C901"]
+"local_llm/routers/images.py" = ["C901"]
+"local_llm/routers/openai.py" = ["C901"]
+"local_llm/routers/retrieval.py" = ["C901"]
+"local_llm/tools/builtin.py" = ["C901"]
+"local_llm/tools/knowledge_fs.py" = ["C901"]
+"local_llm/utils/anthropic.py" = ["C901"]
+"local_llm/utils/memory.py" = ["C901"]
+"local_llm/utils/middleware.py" = ["C901"]
+"local_llm/utils/misc.py" = ["C901"]
+"local_llm/utils/models.py" = ["C901"]
+"local_llm/utils/oauth.py" = ["C901"]
+"local_llm/utils/subagents.py" = ["C901"]
+"local_llm/utils/tools.py" = ["C901"]
