@@ -2711,19 +2711,41 @@
  "edit:comfyui_list_duplicate_outputs": {
   "returned": [
    {
-    "id": "file:comfy-o1",
-    "url": "/api/v1/files/file:comfy-o1/content",
-    "name": "comfy-o1.out",
-    "content_type": "image/out"
-   },
-   {
     "id": "file:comfy-o2",
     "url": "/api/v1/files/file:comfy-o2/content",
     "name": "comfy-o2.out",
     "content_type": "image/out"
+   },
+   {
+    "id": "file:comfy-o1",
+    "url": "/api/v1/files/file:comfy-o1/content",
+    "name": "comfy-o1.out",
+    "content_type": "image/out"
    }
   ],
   "calls": [
+   [
+    "comfyui_upload",
+    "image",
+    "uuid-1.png",
+    {
+     "bytes": "png-one"
+    },
+    "image/png",
+    "http://comfy.test:8188",
+    ""
+   ],
+   [
+    "comfyui_upload",
+    "image",
+    "uuid-2.jpg",
+    {
+     "bytes": "jpeg-one"
+    },
+    "image/jpeg",
+    "http://comfy.test:8188",
+    ""
+   ],
    [
     "comfyui_edit",
     "qwen-edit",
@@ -2748,31 +2770,9 @@
     ""
    ],
    [
-    "comfyui_upload",
-    "image",
-    "uuid-1.png",
-    {
-     "bytes": "png-one"
-    },
-    "image/png",
-    "http://comfy.test:8188",
-    ""
-   ],
-   [
-    "comfyui_upload",
-    "image",
-    "uuid-2.jpg",
-    {
-     "bytes": "jpeg-one"
-    },
-    "image/jpeg",
-    "http://comfy.test:8188",
-    ""
-   ],
-   [
     "session",
     "get",
-    "http://comfy.test:8188/view?filename=o1.png&type=output",
+    "http://comfy.test:8188/view?filename=o2.png&type=output",
     {
      "headers": null
     },
@@ -2781,9 +2781,28 @@
     }
    ],
    [
+    "upload",
+    "generated-image.png",
+    "comfy-o2",
+    "image/png",
+    {
+     "workflow": {
+      "workflow": "{\"9\": {}}",
+      "nodes": []
+     },
+     "image": [
+      "uuid-1.png",
+      "uuid-2.jpg"
+     ],
+     "prompt": "p"
+    },
+    false,
+    "u1"
+   ],
+   [
     "session",
     "get",
-    "http://comfy.test:8188/view?filename=o2.png&type=output",
+    "http://comfy.test:8188/view?filename=o1.png&type=output",
     {
      "headers": null
     },
@@ -2809,28 +2828,8 @@
     },
     false,
     "u1"
-   ],
-   [
-    "upload",
-    "generated-image.png",
-    "comfy-o2",
-    "image/png",
-    {
-     "workflow": {
-      "workflow": "{\"9\": {}}",
-      "nodes": []
-     },
-     "image": [
-      "uuid-1.png",
-      "uuid-2.jpg"
-     ],
-     "prompt": "p"
-    },
-    false,
-    "u1"
    ]
-  ],
-  "order_unpinned": true
+  ]
  },
  "edit:comfyui_no_output_urls_untrusted": {
   "returned": [

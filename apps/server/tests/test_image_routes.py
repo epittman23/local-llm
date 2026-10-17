@@ -409,8 +409,6 @@ EDIT_CASES = [
                 ('get', 'o1.png', {'body': 'comfy-o1', 'headers': {'content-type': 'image/png'}}),
                 ('get', 'o2.png', {'body': 'comfy-o2', 'headers': {'content-type': 'image/png'}}),
             ],
-            # The URLs pass through a set, so their order changes between processes.
-            'order_unpinned': True,
         },
     ),
     (
@@ -663,14 +661,7 @@ def _run(tool, kwargs, world, monkeypatch):
             outcome = {'http_error': [e.status_code, str(e.detail)]}
         except Exception as e:
             outcome = {'raised': [type(e).__name__, str(e)]}
-    observed = {**outcome, 'calls': log}
-    if world.get('order_unpinned'):
-        observed = {
-            **{k: sorted(v, key=json.dumps) if isinstance(v, list) else v for k, v in outcome.items()},
-            'calls': sorted(log, key=json.dumps),
-            'order_unpinned': True,
-        }
-    return json.loads(json.dumps(observed))
+    return json.loads(json.dumps({**outcome, 'calls': log}))
 
 
 def _golden() -> dict:

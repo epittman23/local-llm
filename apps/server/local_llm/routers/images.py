@@ -1018,7 +1018,8 @@ async def _upload_to_comfyui(image_config, image: str | list[str]) -> list[str]:
 
 
 def _comfyui_result_urls(res: dict) -> list[str]:
-    image_urls = list({image['url'] for image in res['data']})
+    # Duplicates dropped, first appearance kept, so results come back in ComfyUI's order.
+    image_urls = list(dict.fromkeys(image['url'] for image in res['data']))
     # Prioritize output type URLs if available
     output_type_urls = [url for url in image_urls if 'type=output' in url]
     return output_type_urls or image_urls
