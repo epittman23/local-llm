@@ -6480,7 +6480,7 @@
    [
     "request",
     "get",
-    "https://inv.test/items/7?verbose=True&fields=name&tag=%5B%27x%27%2C+%27y%27%5D",
+    "https://inv.test/items/7?verbose=True&fields=name&tag=x&tag=y",
     {
      "headers": {
       "Authorization": "Bearer t"

@@ -1728,7 +1728,8 @@ def _operation_url(url: str, route_path: str, path_params: dict, query_params: d
     for key, value in path_params.items():
         final_url = final_url.replace(f'{{{key}}}', quote(str(value), safe=''))
     if query_params:
-        final_url = f'{final_url}?{urlencode(query_params)}'
+        # A list goes as one key per value (OpenAPI's default form style, exploded).
+        final_url = f'{final_url}?{urlencode(query_params, doseq=True)}'
     return final_url
 
 
