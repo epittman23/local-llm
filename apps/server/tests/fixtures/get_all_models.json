@@ -1,0 +1,2397 @@
+{
+ "no_models_at_all": {
+  "returned": [],
+  "state_models": {},
+  "state_base_models": [],
+  "cache_clears": [],
+  "redis": [],
+  "base_fetches": 1,
+  "warmed": [],
+  "function_lookups": [],
+  "valves_lookups": []
+ },
+ "fetch_empty_uses_previous_base_models": {
+  "returned": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "actions": [],
+    "filters": []
+   }
+  ],
+  "state_models": {
+   "gpt-x": {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "actions": [],
+    "filters": []
+   }
+  },
+  "state_base_models": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external"
+   }
+  ],
+  "cache_clears": [],
+  "redis": [],
+  "base_fetches": 1,
+  "warmed": [],
+  "function_lookups": [
+   []
+  ],
+  "valves_lookups": [
+   []
+  ]
+ },
+ "basic": {
+  "returned": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "actions": [],
+    "filters": []
+   },
+   {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    },
+    "actions": [],
+    "filters": []
+   }
+  ],
+  "state_models": {
+   "gpt-x": {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "actions": [],
+    "filters": []
+   },
+   "qwen": {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    },
+    "actions": [],
+    "filters": []
+   }
+  },
+  "state_base_models": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external"
+   },
+   {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    }
+   }
+  ],
+  "cache_clears": [],
+  "redis": [],
+  "base_fetches": 1,
+  "warmed": [],
+  "function_lookups": [
+   []
+  ],
+  "valves_lookups": [
+   []
+  ]
+ },
+ "refresh_with_redis": {
+  "returned": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "actions": [],
+    "filters": []
+   },
+   {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    },
+    "actions": [],
+    "filters": []
+   }
+  ],
+  "state_models": {
+   "gpt-x": {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "actions": [],
+    "filters": []
+   },
+   "qwen": {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    },
+    "actions": [],
+    "filters": []
+   }
+  },
+  "state_base_models": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external"
+   },
+   {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    }
+   }
+  ],
+  "cache_clears": [
+   "openai",
+   "ollama"
+  ],
+  "redis": [
+   [
+    "delete",
+    "local-llm:models:base"
+   ]
+  ],
+  "base_fetches": 1,
+  "warmed": [],
+  "function_lookups": [
+   []
+  ],
+  "valves_lookups": [
+   []
+  ]
+ },
+ "refresh_without_redis": {
+  "returned": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "actions": [],
+    "filters": []
+   },
+   {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    },
+    "actions": [],
+    "filters": []
+   }
+  ],
+  "state_models": {
+   "gpt-x": {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "actions": [],
+    "filters": []
+   },
+   "qwen": {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    },
+    "actions": [],
+    "filters": []
+   }
+  },
+  "state_base_models": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external"
+   },
+   {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    }
+   }
+  ],
+  "cache_clears": [
+   "openai",
+   "ollama"
+  ],
+  "redis": [],
+  "base_fetches": 1,
+  "warmed": [],
+  "function_lookups": [
+   []
+  ],
+  "valves_lookups": [
+   []
+  ]
+ },
+ "cache_hit_in_redis": {
+  "returned": [
+   {
+    "id": "llama3:8b",
+    "name": "llama3:8b",
+    "object": "model",
+    "owned_by": "ollama",
+    "loaded": true,
+    "connection_type": "local",
+    "actions": [],
+    "filters": []
+   },
+   {
+    "id": "pipe-model",
+    "name": "Pipe",
+    "object": "model",
+    "owned_by": "function",
+    "pipe": {
+     "type": "pipe"
+    },
+    "loaded": false,
+    "actions": [],
+    "filters": []
+   }
+  ],
+  "state_models": {
+   "llama3:8b": {
+    "id": "llama3:8b",
+    "name": "llama3:8b",
+    "object": "model",
+    "owned_by": "ollama",
+    "loaded": true,
+    "connection_type": "local",
+    "actions": [],
+    "filters": []
+   },
+   "pipe-model": {
+    "id": "pipe-model",
+    "name": "Pipe",
+    "object": "model",
+    "owned_by": "function",
+    "pipe": {
+     "type": "pipe"
+    },
+    "loaded": false,
+    "actions": [],
+    "filters": []
+   }
+  },
+  "state_base_models": [
+   {
+    "id": "llama3:8b",
+    "name": "llama3:8b",
+    "object": "model",
+    "owned_by": "ollama",
+    "loaded": true,
+    "connection_type": "local"
+   },
+   {
+    "id": "pipe-model",
+    "name": "Pipe",
+    "object": "model",
+    "owned_by": "function",
+    "pipe": {
+     "type": "pipe"
+    },
+    "loaded": false
+   }
+  ],
+  "cache_clears": [],
+  "redis": [
+   [
+    "get",
+    "local-llm:models:base"
+   ]
+  ],
+  "base_fetches": 0,
+  "warmed": [],
+  "function_lookups": [
+   []
+  ],
+  "valves_lookups": [
+   []
+  ]
+ },
+ "cache_miss_in_redis": {
+  "returned": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "actions": [],
+    "filters": []
+   },
+   {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    },
+    "actions": [],
+    "filters": []
+   }
+  ],
+  "state_models": {
+   "gpt-x": {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "actions": [],
+    "filters": []
+   },
+   "qwen": {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    },
+    "actions": [],
+    "filters": []
+   }
+  },
+  "state_base_models": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external"
+   },
+   {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    }
+   }
+  ],
+  "cache_clears": [
+   "openai",
+   "ollama"
+  ],
+  "redis": [
+   [
+    "get",
+    "local-llm:models:base"
+   ],
+   [
+    "set",
+    "local-llm:models:base",
+    [
+     {
+      "id": "gpt-x",
+      "name": "GPT X",
+      "object": "model",
+      "owned_by": "openai",
+      "connection_type": "external"
+     },
+     {
+      "id": "qwen",
+      "name": "Qwen",
+      "object": "model",
+      "owned_by": "openai",
+      "provider": "openrouter",
+      "info": {
+       "meta": {
+        "description": "base info"
+       }
+      }
+     }
+    ]
+   ]
+  ],
+  "base_fetches": 1,
+  "warmed": [],
+  "function_lookups": [
+   []
+  ],
+  "valves_lookups": [
+   []
+  ]
+ },
+ "cache_off_with_redis_does_not_store": {
+  "returned": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "actions": [],
+    "filters": []
+   },
+   {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    },
+    "actions": [],
+    "filters": []
+   }
+  ],
+  "state_models": {
+   "gpt-x": {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "actions": [],
+    "filters": []
+   },
+   "qwen": {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    },
+    "actions": [],
+    "filters": []
+   }
+  },
+  "state_base_models": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external"
+   },
+   {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    }
+   }
+  ],
+  "cache_clears": [],
+  "redis": [],
+  "base_fetches": 1,
+  "warmed": [],
+  "function_lookups": [
+   []
+  ],
+  "valves_lookups": [
+   []
+  ]
+ },
+ "cache_in_process": {
+  "returned": [
+   {
+    "id": "llama3:8b",
+    "name": "llama3:8b",
+    "object": "model",
+    "owned_by": "ollama",
+    "loaded": true,
+    "connection_type": "local",
+    "actions": [],
+    "filters": []
+   },
+   {
+    "id": "pipe-model",
+    "name": "Pipe",
+    "object": "model",
+    "owned_by": "function",
+    "pipe": {
+     "type": "pipe"
+    },
+    "loaded": false,
+    "actions": [],
+    "filters": []
+   }
+  ],
+  "state_models": {
+   "llama3:8b": {
+    "id": "llama3:8b",
+    "name": "llama3:8b",
+    "object": "model",
+    "owned_by": "ollama",
+    "loaded": true,
+    "connection_type": "local",
+    "actions": [],
+    "filters": []
+   },
+   "pipe-model": {
+    "id": "pipe-model",
+    "name": "Pipe",
+    "object": "model",
+    "owned_by": "function",
+    "pipe": {
+     "type": "pipe"
+    },
+    "loaded": false,
+    "actions": [],
+    "filters": []
+   }
+  },
+  "state_base_models": [
+   {
+    "id": "llama3:8b",
+    "name": "llama3:8b",
+    "object": "model",
+    "owned_by": "ollama",
+    "loaded": true,
+    "connection_type": "local"
+   },
+   {
+    "id": "pipe-model",
+    "name": "Pipe",
+    "object": "model",
+    "owned_by": "function",
+    "pipe": {
+     "type": "pipe"
+    },
+    "loaded": false
+   }
+  ],
+  "cache_clears": [],
+  "redis": [],
+  "base_fetches": 0,
+  "warmed": [],
+  "function_lookups": [
+   []
+  ],
+  "valves_lookups": [
+   []
+  ]
+ },
+ "cache_in_process_without_models": {
+  "returned": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "actions": [],
+    "filters": []
+   },
+   {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    },
+    "actions": [],
+    "filters": []
+   }
+  ],
+  "state_models": {
+   "gpt-x": {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "actions": [],
+    "filters": []
+   },
+   "qwen": {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    },
+    "actions": [],
+    "filters": []
+   }
+  },
+  "state_base_models": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external"
+   },
+   {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    }
+   }
+  ],
+  "cache_clears": [],
+  "redis": [],
+  "base_fetches": 1,
+  "warmed": [],
+  "function_lookups": [
+   []
+  ],
+  "valves_lookups": [
+   []
+  ]
+ },
+ "arena_default": {
+  "returned": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "actions": [],
+    "filters": []
+   },
+   {
+    "id": "arena-model",
+    "name": "Arena Model",
+    "info": {
+     "meta": {
+      "profile_image_url": "/favicon.png",
+      "description": "Submit your questions to anonymous AI chatbots and vote on the best response.",
+      "model_ids": null
+     }
+    },
+    "object": "model",
+    "created": 0,
+    "owned_by": "arena",
+    "arena": true,
+    "actions": [],
+    "filters": []
+   }
+  ],
+  "state_models": {
+   "gpt-x": {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "actions": [],
+    "filters": []
+   },
+   "arena-model": {
+    "id": "arena-model",
+    "name": "Arena Model",
+    "info": {
+     "meta": {
+      "profile_image_url": "/favicon.png",
+      "description": "Submit your questions to anonymous AI chatbots and vote on the best response.",
+      "model_ids": null
+     }
+    },
+    "object": "model",
+    "created": 0,
+    "owned_by": "arena",
+    "arena": true,
+    "actions": [],
+    "filters": []
+   }
+  },
+  "state_base_models": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external"
+   }
+  ],
+  "cache_clears": [],
+  "redis": [],
+  "base_fetches": 1,
+  "warmed": [],
+  "function_lookups": [
+   []
+  ],
+  "valves_lookups": [
+   []
+  ]
+ },
+ "arena_configured": {
+  "returned": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "actions": [],
+    "filters": []
+   },
+   {
+    "id": "arena-a",
+    "name": "Arena A",
+    "info": {
+     "meta": {
+      "model_ids": [
+       "gpt-x"
+      ]
+     }
+    },
+    "object": "model",
+    "created": 0,
+    "owned_by": "arena",
+    "arena": true,
+    "actions": [],
+    "filters": []
+   }
+  ],
+  "state_models": {
+   "gpt-x": {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "actions": [],
+    "filters": []
+   },
+   "arena-a": {
+    "id": "arena-a",
+    "name": "Arena A",
+    "info": {
+     "meta": {
+      "model_ids": [
+       "gpt-x"
+      ]
+     }
+    },
+    "object": "model",
+    "created": 0,
+    "owned_by": "arena",
+    "arena": true,
+    "actions": [],
+    "filters": []
+   }
+  },
+  "state_base_models": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external"
+   }
+  ],
+  "cache_clears": [],
+  "redis": [],
+  "base_fetches": 1,
+  "warmed": [],
+  "function_lookups": [
+   []
+  ],
+  "valves_lookups": [
+   []
+  ]
+ },
+ "custom_overrides": {
+  "returned": [
+   {
+    "id": "gpt-x",
+    "name": "Renamed GPT",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "info": {
+     "id": "gpt-x",
+     "base_model_id": null,
+     "name": "Renamed GPT",
+     "meta": {
+      "actionIds": [
+       "act1"
+      ],
+      "chat_variables_schema": {
+       "fields": [
+        {
+         "key": "topic",
+         "type": "text",
+         "required": false
+        }
+       ]
+      }
+     },
+     "is_active": true,
+     "created_at": 100
+    },
+    "actions": [],
+    "filters": []
+   },
+   {
+    "id": "llama3:8b",
+    "name": "Llama by base name",
+    "object": "model",
+    "owned_by": "ollama",
+    "loaded": true,
+    "connection_type": "local",
+    "info": {
+     "id": "llama3",
+     "base_model_id": null,
+     "name": "Llama by base name",
+     "meta": {},
+     "is_active": true,
+     "created_at": 100
+    },
+    "actions": [],
+    "filters": []
+   },
+   {
+    "id": "pipe-model",
+    "name": "Pipe",
+    "object": "model",
+    "owned_by": "function",
+    "pipe": {
+     "type": "pipe"
+    },
+    "loaded": false,
+    "actions": [],
+    "filters": []
+   }
+  ],
+  "state_models": {
+   "gpt-x": {
+    "id": "gpt-x",
+    "name": "Renamed GPT",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "info": {
+     "id": "gpt-x",
+     "base_model_id": null,
+     "name": "Renamed GPT",
+     "meta": {
+      "actionIds": [
+       "act1"
+      ],
+      "chat_variables_schema": {
+       "fields": [
+        {
+         "key": "topic",
+         "type": "text",
+         "required": false
+        }
+       ]
+      }
+     },
+     "is_active": true,
+     "created_at": 100
+    },
+    "actions": [],
+    "filters": []
+   },
+   "llama3:8b": {
+    "id": "llama3:8b",
+    "name": "Llama by base name",
+    "object": "model",
+    "owned_by": "ollama",
+    "loaded": true,
+    "connection_type": "local",
+    "info": {
+     "id": "llama3",
+     "base_model_id": null,
+     "name": "Llama by base name",
+     "meta": {},
+     "is_active": true,
+     "created_at": 100
+    },
+    "actions": [],
+    "filters": []
+   },
+   "pipe-model": {
+    "id": "pipe-model",
+    "name": "Pipe",
+    "object": "model",
+    "owned_by": "function",
+    "pipe": {
+     "type": "pipe"
+    },
+    "loaded": false,
+    "actions": [],
+    "filters": []
+   }
+  },
+  "state_base_models": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external"
+   },
+   {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    }
+   },
+   {
+    "id": "llama3:8b",
+    "name": "llama3:8b",
+    "object": "model",
+    "owned_by": "ollama",
+    "loaded": true,
+    "connection_type": "local"
+   },
+   {
+    "id": "pipe-model",
+    "name": "Pipe",
+    "object": "model",
+    "owned_by": "function",
+    "pipe": {
+     "type": "pipe"
+    },
+    "loaded": false
+   }
+  ],
+  "cache_clears": [],
+  "redis": [],
+  "base_fetches": 1,
+  "warmed": [],
+  "function_lookups": [
+   []
+  ],
+  "valves_lookups": [
+   []
+  ]
+ },
+ "custom_presets": {
+  "returned": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "actions": [],
+    "filters": []
+   },
+   {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    },
+    "actions": [],
+    "filters": []
+   },
+   {
+    "id": "llama3:8b",
+    "name": "llama3:8b",
+    "object": "model",
+    "owned_by": "ollama",
+    "loaded": true,
+    "connection_type": "local",
+    "actions": [],
+    "filters": []
+   },
+   {
+    "id": "pipe-model",
+    "name": "Pipe",
+    "object": "model",
+    "owned_by": "function",
+    "pipe": {
+     "type": "pipe"
+    },
+    "loaded": false,
+    "actions": [],
+    "filters": []
+   },
+   {
+    "id": "helper",
+    "name": "Custom helper",
+    "object": "model",
+    "created": 100,
+    "owned_by": "openai",
+    "connection_type": null,
+    "preset": true,
+    "provider": "openrouter",
+    "info": {
+     "id": "helper",
+     "base_model_id": "qwen",
+     "name": "Custom helper",
+     "meta": {
+      "tags": [],
+      "chat_variables_schema": {
+       "fields": [
+        {
+         "key": "task",
+         "type": "the task",
+         "required": false
+        }
+       ]
+      }
+     },
+     "is_active": true,
+     "created_at": 100
+    },
+    "actions": [],
+    "filters": []
+   },
+   {
+    "id": "llama-preset",
+    "name": "Custom llama-preset",
+    "object": "model",
+    "created": 100,
+    "owned_by": "ollama",
+    "connection_type": "local",
+    "preset": true,
+    "loaded": true,
+    "info": {
+     "id": "llama-preset",
+     "base_model_id": "llama3:latest",
+     "name": "Custom llama-preset",
+     "meta": {},
+     "is_active": true,
+     "created_at": 100
+    },
+    "actions": [],
+    "filters": []
+   },
+   {
+    "id": "piped",
+    "name": "Custom piped",
+    "object": "model",
+    "created": 100,
+    "owned_by": "function",
+    "connection_type": null,
+    "preset": true,
+    "pipe": {
+     "type": "pipe"
+    },
+    "loaded": false,
+    "info": {
+     "id": "piped",
+     "base_model_id": "pipe-model",
+     "name": "Custom piped",
+     "meta": {},
+     "is_active": true,
+     "created_at": 100
+    },
+    "actions": [],
+    "filters": []
+   },
+   {
+    "id": "nowhere",
+    "name": "Custom nowhere",
+    "object": "model",
+    "created": 100,
+    "owned_by": "openai",
+    "connection_type": null,
+    "preset": true,
+    "info": {
+     "id": "nowhere",
+     "base_model_id": "unknown-base",
+     "name": "Custom nowhere",
+     "meta": {},
+     "is_active": true,
+     "created_at": 100
+    },
+    "actions": [],
+    "filters": []
+   }
+  ],
+  "state_models": {
+   "gpt-x": {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "actions": [],
+    "filters": []
+   },
+   "qwen": {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    },
+    "actions": [],
+    "filters": []
+   },
+   "llama3:8b": {
+    "id": "llama3:8b",
+    "name": "llama3:8b",
+    "object": "model",
+    "owned_by": "ollama",
+    "loaded": true,
+    "connection_type": "local",
+    "actions": [],
+    "filters": []
+   },
+   "pipe-model": {
+    "id": "pipe-model",
+    "name": "Pipe",
+    "object": "model",
+    "owned_by": "function",
+    "pipe": {
+     "type": "pipe"
+    },
+    "loaded": false,
+    "actions": [],
+    "filters": []
+   },
+   "helper": {
+    "id": "helper",
+    "name": "Custom helper",
+    "object": "model",
+    "created": 100,
+    "owned_by": "openai",
+    "connection_type": null,
+    "preset": true,
+    "provider": "openrouter",
+    "info": {
+     "id": "helper",
+     "base_model_id": "qwen",
+     "name": "Custom helper",
+     "meta": {
+      "tags": [],
+      "chat_variables_schema": {
+       "fields": [
+        {
+         "key": "task",
+         "type": "the task",
+         "required": false
+        }
+       ]
+      }
+     },
+     "is_active": true,
+     "created_at": 100
+    },
+    "actions": [],
+    "filters": []
+   },
+   "llama-preset": {
+    "id": "llama-preset",
+    "name": "Custom llama-preset",
+    "object": "model",
+    "created": 100,
+    "owned_by": "ollama",
+    "connection_type": "local",
+    "preset": true,
+    "loaded": true,
+    "info": {
+     "id": "llama-preset",
+     "base_model_id": "llama3:latest",
+     "name": "Custom llama-preset",
+     "meta": {},
+     "is_active": true,
+     "created_at": 100
+    },
+    "actions": [],
+    "filters": []
+   },
+   "piped": {
+    "id": "piped",
+    "name": "Custom piped",
+    "object": "model",
+    "created": 100,
+    "owned_by": "function",
+    "connection_type": null,
+    "preset": true,
+    "pipe": {
+     "type": "pipe"
+    },
+    "loaded": false,
+    "info": {
+     "id": "piped",
+     "base_model_id": "pipe-model",
+     "name": "Custom piped",
+     "meta": {},
+     "is_active": true,
+     "created_at": 100
+    },
+    "actions": [],
+    "filters": []
+   },
+   "nowhere": {
+    "id": "nowhere",
+    "name": "Custom nowhere",
+    "object": "model",
+    "created": 100,
+    "owned_by": "openai",
+    "connection_type": null,
+    "preset": true,
+    "info": {
+     "id": "nowhere",
+     "base_model_id": "unknown-base",
+     "name": "Custom nowhere",
+     "meta": {},
+     "is_active": true,
+     "created_at": 100
+    },
+    "actions": [],
+    "filters": []
+   }
+  },
+  "state_base_models": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external"
+   },
+   {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    }
+   },
+   {
+    "id": "llama3:8b",
+    "name": "llama3:8b",
+    "object": "model",
+    "owned_by": "ollama",
+    "loaded": true,
+    "connection_type": "local"
+   },
+   {
+    "id": "pipe-model",
+    "name": "Pipe",
+    "object": "model",
+    "owned_by": "function",
+    "pipe": {
+     "type": "pipe"
+    },
+    "loaded": false
+   }
+  ],
+  "cache_clears": [],
+  "redis": [],
+  "base_fetches": 1,
+  "warmed": [],
+  "function_lookups": [
+   []
+  ],
+  "valves_lookups": [
+   []
+  ]
+ },
+ "plugins": {
+  "returned": [
+   {
+    "id": "gpt-x",
+    "name": "Custom gpt-x",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "info": {
+     "id": "gpt-x",
+     "base_model_id": null,
+     "name": "Custom gpt-x",
+     "meta": {
+      "actionIds": [
+       "act1",
+       "multi",
+       "missing_action",
+       "broken"
+      ],
+      "filterIds": [
+       "flt1",
+       "flt2",
+       "missing_filter",
+       "broken_filter"
+      ]
+     },
+     "is_active": true,
+     "created_at": 100
+    },
+    "actions": [
+     {
+      "id": "act2",
+      "name": "Translate",
+      "description": "translate",
+      "icon": "module-icon.png"
+     },
+     {
+      "id": "multi.a",
+      "name": "First",
+      "description": "several actions",
+      "icon": "multi-icon"
+     },
+     {
+      "id": "multi.b",
+      "name": "Multi (b)",
+      "description": "several actions",
+      "icon": "b.png"
+     },
+     {
+      "id": "act1",
+      "name": "Summarize",
+      "description": "sum it up",
+      "icon": "act1.png"
+     }
+    ],
+    "filters": [
+     {
+      "id": "flt1",
+      "name": "Redact",
+      "description": "redact pii",
+      "icon": null,
+      "has_user_valves": true
+     },
+     {
+      "id": "gflt",
+      "name": "Global filter",
+      "description": "everywhere",
+      "icon": "g.png",
+      "has_user_valves": false
+     }
+    ]
+   },
+   {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    },
+    "actions": [
+     {
+      "id": "act2",
+      "name": "Translate",
+      "description": "translate",
+      "icon": "module-icon.png"
+     }
+    ],
+    "filters": [
+     {
+      "id": "gflt",
+      "name": "Global filter",
+      "description": "everywhere",
+      "icon": "g.png",
+      "has_user_valves": false
+     }
+    ]
+   },
+   {
+    "id": "helper",
+    "name": "Custom helper",
+    "object": "model",
+    "created": 100,
+    "owned_by": "openai",
+    "connection_type": null,
+    "preset": true,
+    "provider": "openrouter",
+    "info": {
+     "id": "helper",
+     "base_model_id": "qwen",
+     "name": "Custom helper",
+     "meta": {
+      "actionIds": [
+       "act1",
+       "not_enabled"
+      ],
+      "filterIds": [
+       "flt1"
+      ]
+     },
+     "is_active": true,
+     "created_at": 100
+    },
+    "actions": [
+     {
+      "id": "act2",
+      "name": "Translate",
+      "description": "translate",
+      "icon": "module-icon.png"
+     },
+     {
+      "id": "act1",
+      "name": "Summarize",
+      "description": "sum it up",
+      "icon": "act1.png"
+     }
+    ],
+    "filters": [
+     {
+      "id": "flt1",
+      "name": "Redact",
+      "description": "redact pii",
+      "icon": null,
+      "has_user_valves": true
+     },
+     {
+      "id": "gflt",
+      "name": "Global filter",
+      "description": "everywhere",
+      "icon": "g.png",
+      "has_user_valves": false
+     }
+    ]
+   }
+  ],
+  "state_models": {
+   "gpt-x": {
+    "id": "gpt-x",
+    "name": "Custom gpt-x",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "info": {
+     "id": "gpt-x",
+     "base_model_id": null,
+     "name": "Custom gpt-x",
+     "meta": {
+      "actionIds": [
+       "act1",
+       "multi",
+       "missing_action",
+       "broken"
+      ],
+      "filterIds": [
+       "flt1",
+       "flt2",
+       "missing_filter",
+       "broken_filter"
+      ]
+     },
+     "is_active": true,
+     "created_at": 100
+    },
+    "actions": [
+     {
+      "id": "act2",
+      "name": "Translate",
+      "description": "translate",
+      "icon": "module-icon.png"
+     },
+     {
+      "id": "multi.a",
+      "name": "First",
+      "description": "several actions",
+      "icon": "multi-icon"
+     },
+     {
+      "id": "multi.b",
+      "name": "Multi (b)",
+      "description": "several actions",
+      "icon": "b.png"
+     },
+     {
+      "id": "act1",
+      "name": "Summarize",
+      "description": "sum it up",
+      "icon": "act1.png"
+     }
+    ],
+    "filters": [
+     {
+      "id": "flt1",
+      "name": "Redact",
+      "description": "redact pii",
+      "icon": null,
+      "has_user_valves": true
+     },
+     {
+      "id": "gflt",
+      "name": "Global filter",
+      "description": "everywhere",
+      "icon": "g.png",
+      "has_user_valves": false
+     }
+    ]
+   },
+   "qwen": {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    },
+    "actions": [
+     {
+      "id": "act2",
+      "name": "Translate",
+      "description": "translate",
+      "icon": "module-icon.png"
+     }
+    ],
+    "filters": [
+     {
+      "id": "gflt",
+      "name": "Global filter",
+      "description": "everywhere",
+      "icon": "g.png",
+      "has_user_valves": false
+     }
+    ]
+   },
+   "helper": {
+    "id": "helper",
+    "name": "Custom helper",
+    "object": "model",
+    "created": 100,
+    "owned_by": "openai",
+    "connection_type": null,
+    "preset": true,
+    "provider": "openrouter",
+    "info": {
+     "id": "helper",
+     "base_model_id": "qwen",
+     "name": "Custom helper",
+     "meta": {
+      "actionIds": [
+       "act1",
+       "not_enabled"
+      ],
+      "filterIds": [
+       "flt1"
+      ]
+     },
+     "is_active": true,
+     "created_at": 100
+    },
+    "actions": [
+     {
+      "id": "act2",
+      "name": "Translate",
+      "description": "translate",
+      "icon": "module-icon.png"
+     },
+     {
+      "id": "act1",
+      "name": "Summarize",
+      "description": "sum it up",
+      "icon": "act1.png"
+     }
+    ],
+    "filters": [
+     {
+      "id": "flt1",
+      "name": "Redact",
+      "description": "redact pii",
+      "icon": null,
+      "has_user_valves": true
+     },
+     {
+      "id": "gflt",
+      "name": "Global filter",
+      "description": "everywhere",
+      "icon": "g.png",
+      "has_user_valves": false
+     }
+    ]
+   }
+  },
+  "state_base_models": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external"
+   },
+   {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    }
+   }
+  ],
+  "cache_clears": [],
+  "redis": [],
+  "base_fetches": 1,
+  "warmed": [
+   "act1",
+   "act2",
+   "broken",
+   "broken_filter",
+   "flt1",
+   "flt2",
+   "gflt",
+   "multi"
+  ],
+  "function_lookups": [
+   [
+    "act1",
+    "act2",
+    "broken",
+    "broken_filter",
+    "flt1",
+    "flt2",
+    "gflt",
+    "missing_action",
+    "missing_filter",
+    "multi",
+    "not_enabled"
+   ]
+  ],
+  "valves_lookups": [
+   [
+    "act1",
+    "act2",
+    "broken",
+    "broken_filter",
+    "flt1",
+    "flt2",
+    "gflt",
+    "missing_action",
+    "missing_filter",
+    "multi",
+    "not_enabled"
+   ]
+  ]
+ },
+ "plugins_disabled_ignores_ids": {
+  "returned": [
+   {
+    "id": "gpt-x",
+    "name": "Custom gpt-x",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "info": {
+     "id": "gpt-x",
+     "base_model_id": null,
+     "name": "Custom gpt-x",
+     "meta": {
+      "actionIds": [
+       "act1"
+      ],
+      "filterIds": [
+       "flt1"
+      ]
+     },
+     "is_active": true,
+     "created_at": 100
+    },
+    "actions": [],
+    "filters": []
+   },
+   {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    },
+    "actions": [],
+    "filters": []
+   },
+   {
+    "id": "helper",
+    "name": "Custom helper",
+    "object": "model",
+    "created": 100,
+    "owned_by": "openai",
+    "connection_type": null,
+    "preset": true,
+    "provider": "openrouter",
+    "info": {
+     "id": "helper",
+     "base_model_id": "qwen",
+     "name": "Custom helper",
+     "meta": {
+      "actionIds": [
+       "act1"
+      ]
+     },
+     "is_active": true,
+     "created_at": 100
+    },
+    "actions": [],
+    "filters": []
+   }
+  ],
+  "state_models": {
+   "gpt-x": {
+    "id": "gpt-x",
+    "name": "Custom gpt-x",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "info": {
+     "id": "gpt-x",
+     "base_model_id": null,
+     "name": "Custom gpt-x",
+     "meta": {
+      "actionIds": [
+       "act1"
+      ],
+      "filterIds": [
+       "flt1"
+      ]
+     },
+     "is_active": true,
+     "created_at": 100
+    },
+    "actions": [],
+    "filters": []
+   },
+   "qwen": {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    },
+    "actions": [],
+    "filters": []
+   },
+   "helper": {
+    "id": "helper",
+    "name": "Custom helper",
+    "object": "model",
+    "created": 100,
+    "owned_by": "openai",
+    "connection_type": null,
+    "preset": true,
+    "provider": "openrouter",
+    "info": {
+     "id": "helper",
+     "base_model_id": "qwen",
+     "name": "Custom helper",
+     "meta": {
+      "actionIds": [
+       "act1"
+      ]
+     },
+     "is_active": true,
+     "created_at": 100
+    },
+    "actions": [],
+    "filters": []
+   }
+  },
+  "state_base_models": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external"
+   },
+   {
+    "id": "qwen",
+    "name": "Qwen",
+    "object": "model",
+    "owned_by": "openai",
+    "provider": "openrouter",
+    "info": {
+     "meta": {
+      "description": "base info"
+     }
+    }
+   }
+  ],
+  "cache_clears": [],
+  "redis": [],
+  "base_fetches": 1,
+  "warmed": [],
+  "function_lookups": [
+   []
+  ],
+  "valves_lookups": [
+   []
+  ]
+ },
+ "plugin_module_warm_up_fails": {
+  "returned": [
+   {
+    "id": "gpt-x",
+    "name": "Custom gpt-x",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "info": {
+     "id": "gpt-x",
+     "base_model_id": null,
+     "name": "Custom gpt-x",
+     "meta": {
+      "actionIds": [
+       "act1"
+      ]
+     },
+     "is_active": true,
+     "created_at": 100
+    },
+    "actions": [
+     {
+      "id": "act2",
+      "name": "Translate",
+      "description": "translate",
+      "icon": "module-icon.png"
+     },
+     {
+      "id": "act1",
+      "name": "Summarize",
+      "description": "sum it up",
+      "icon": "act1.png"
+     }
+    ],
+    "filters": [
+     {
+      "id": "gflt",
+      "name": "Global filter",
+      "description": "everywhere",
+      "icon": "g.png",
+      "has_user_valves": false
+     }
+    ]
+   }
+  ],
+  "state_models": {
+   "gpt-x": {
+    "id": "gpt-x",
+    "name": "Custom gpt-x",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "info": {
+     "id": "gpt-x",
+     "base_model_id": null,
+     "name": "Custom gpt-x",
+     "meta": {
+      "actionIds": [
+       "act1"
+      ]
+     },
+     "is_active": true,
+     "created_at": 100
+    },
+    "actions": [
+     {
+      "id": "act2",
+      "name": "Translate",
+      "description": "translate",
+      "icon": "module-icon.png"
+     },
+     {
+      "id": "act1",
+      "name": "Summarize",
+      "description": "sum it up",
+      "icon": "act1.png"
+     }
+    ],
+    "filters": [
+     {
+      "id": "gflt",
+      "name": "Global filter",
+      "description": "everywhere",
+      "icon": "g.png",
+      "has_user_valves": false
+     }
+    ]
+   }
+  },
+  "state_base_models": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external"
+   }
+  ],
+  "cache_clears": [],
+  "redis": [],
+  "base_fetches": 1,
+  "warmed": [
+   "act1",
+   "act2",
+   "gflt"
+  ],
+  "function_lookups": [
+   [
+    "act1",
+    "act2",
+    "gflt"
+   ]
+  ],
+  "valves_lookups": [
+   [
+    "act1",
+    "act2",
+    "gflt"
+   ]
+  ]
+ },
+ "default_metadata": {
+  "returned": [
+   {
+    "id": "bare",
+    "name": "Bare",
+    "owned_by": "openai",
+    "info": {
+     "meta": {
+      "capabilities": {
+       "vision": true,
+       "citations": true
+      },
+      "description": "default",
+      "tags": [
+       "x"
+      ]
+     }
+    },
+    "actions": [],
+    "filters": []
+   },
+   {
+    "id": "with-info",
+    "name": "Info",
+    "owned_by": "openai",
+    "info": {
+     "id": "with-info",
+     "meta": {
+      "capabilities": {
+       "vision": true,
+       "citations": true
+      },
+      "description": "default",
+      "tags": [
+       "x"
+      ]
+     }
+    },
+    "actions": [],
+    "filters": []
+   },
+   {
+    "id": "with-meta",
+    "name": "Meta",
+    "owned_by": "openai",
+    "info": {
+     "meta": {
+      "capabilities": {
+       "vision": false,
+       "citations": true
+      },
+      "description": "mine",
+      "tags": [
+       "x"
+      ]
+     }
+    },
+    "actions": [],
+    "filters": []
+   },
+   {
+    "id": "caps-none",
+    "name": "Caps none",
+    "owned_by": "openai",
+    "info": {
+     "meta": {
+      "capabilities": {
+       "vision": true,
+       "citations": true
+      },
+      "description": "default",
+      "tags": [
+       "x"
+      ]
+     }
+    },
+    "actions": [],
+    "filters": []
+   }
+  ],
+  "state_models": {
+   "bare": {
+    "id": "bare",
+    "name": "Bare",
+    "owned_by": "openai",
+    "info": {
+     "meta": {
+      "capabilities": {
+       "vision": true,
+       "citations": true
+      },
+      "description": "default",
+      "tags": [
+       "x"
+      ]
+     }
+    },
+    "actions": [],
+    "filters": []
+   },
+   "with-info": {
+    "id": "with-info",
+    "name": "Info",
+    "owned_by": "openai",
+    "info": {
+     "id": "with-info",
+     "meta": {
+      "capabilities": {
+       "vision": true,
+       "citations": true
+      },
+      "description": "default",
+      "tags": [
+       "x"
+      ]
+     }
+    },
+    "actions": [],
+    "filters": []
+   },
+   "with-meta": {
+    "id": "with-meta",
+    "name": "Meta",
+    "owned_by": "openai",
+    "info": {
+     "meta": {
+      "capabilities": {
+       "vision": false,
+       "citations": true
+      },
+      "description": "mine",
+      "tags": [
+       "x"
+      ]
+     }
+    },
+    "actions": [],
+    "filters": []
+   },
+   "caps-none": {
+    "id": "caps-none",
+    "name": "Caps none",
+    "owned_by": "openai",
+    "info": {
+     "meta": {
+      "capabilities": {
+       "vision": true,
+       "citations": true
+      },
+      "description": "default",
+      "tags": [
+       "x"
+      ]
+     }
+    },
+    "actions": [],
+    "filters": []
+   }
+  },
+  "state_base_models": [
+   {
+    "id": "bare",
+    "name": "Bare",
+    "owned_by": "openai"
+   },
+   {
+    "id": "with-info",
+    "name": "Info",
+    "owned_by": "openai",
+    "info": {
+     "id": "with-info",
+     "meta": {
+      "capabilities": {
+       "vision": true,
+       "citations": true
+      },
+      "description": "default",
+      "tags": [
+       "x"
+      ]
+     }
+    }
+   },
+   {
+    "id": "with-meta",
+    "name": "Meta",
+    "owned_by": "openai",
+    "info": {
+     "meta": {
+      "capabilities": {
+       "vision": false,
+       "citations": true
+      },
+      "description": "mine",
+      "tags": [
+       "x"
+      ]
+     }
+    }
+   },
+   {
+    "id": "caps-none",
+    "name": "Caps none",
+    "owned_by": "openai",
+    "info": {
+     "meta": {
+      "capabilities": {
+       "vision": true,
+       "citations": true
+      },
+      "description": "default",
+      "tags": [
+       "x"
+      ]
+     }
+    }
+   }
+  ],
+  "cache_clears": [],
+  "redis": [],
+  "base_fetches": 1,
+  "warmed": [],
+  "function_lookups": [
+   []
+  ],
+  "valves_lookups": [
+   []
+  ]
+ },
+ "models_cache_is_redis_dict": {
+  "returned": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "actions": [],
+    "filters": []
+   }
+  ],
+  "state_models": "<_FakeRedisDict>",
+  "state_base_models": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external"
+   }
+  ],
+  "cache_clears": [],
+  "redis": [
+   [
+    "redis_dict_set",
+    [
+     "gpt-x"
+    ]
+   ]
+  ],
+  "base_fetches": 1,
+  "warmed": [],
+  "function_lookups": [
+   []
+  ],
+  "valves_lookups": [
+   []
+  ]
+ },
+ "models_cache_redis_dict_fails": {
+  "returned": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "actions": [],
+    "filters": []
+   }
+  ],
+  "state_models": {
+   "gpt-x": {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external",
+    "actions": [],
+    "filters": []
+   }
+  },
+  "state_base_models": [
+   {
+    "id": "gpt-x",
+    "name": "GPT X",
+    "object": "model",
+    "owned_by": "openai",
+    "connection_type": "external"
+   }
+  ],
+  "cache_clears": [],
+  "redis": [],
+  "base_fetches": 1,
+  "warmed": [],
+  "function_lookups": [
+   []
+  ],
+  "valves_lookups": [
+   []
+  ]
+ }
+}
