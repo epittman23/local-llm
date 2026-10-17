@@ -1,6 +1,6 @@
+import datetime as dt
 import time
 from collections import Counter
-from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -56,7 +56,7 @@ def _timezone(tz: str | None) -> ZoneInfo:
 
 
 def _date_key(timestamp: int, tz: ZoneInfo) -> str:
-    return datetime.fromtimestamp(_normalize_timestamp(timestamp), tz=tz).strftime('%Y-%m-%d')
+    return dt.datetime.fromtimestamp(_normalize_timestamp(timestamp), tz=tz).strftime('%Y-%m-%d')
 
 
 def get_usage(data: dict) -> dict | None:
@@ -817,10 +817,10 @@ class ChatMessageTable:
                 if row.usage:
                     entry['tokens'] += int(row.input_tokens or 0) + int(row.output_tokens or 0)
 
-            current = datetime.fromtimestamp(_normalize_timestamp(start_date), tz=tz).replace(
+            current = dt.datetime.fromtimestamp(_normalize_timestamp(start_date), tz=tz).replace(
                 hour=0, minute=0, second=0, microsecond=0
             )
-            end_dt = datetime.fromtimestamp(_normalize_timestamp(end_date), tz=tz).replace(
+            end_dt = dt.datetime.fromtimestamp(_normalize_timestamp(end_date), tz=tz).replace(
                 hour=0, minute=0, second=0, microsecond=0
             )
             while current <= end_dt:
@@ -829,7 +829,7 @@ class ChatMessageTable:
                     date,
                     {'date': date, 'messages': 0, 'chat_ids': set(), 'tokens': 0, 'models': Counter()},
                 )
-                current += timedelta(days=1)
+                current += dt.timedelta(days=1)
 
             return [
                 {
@@ -971,8 +971,6 @@ class ChatMessageTable:
     ) -> dict[str, dict[str, int]]:
         """Get message counts grouped by day and model."""
         async with get_async_db_context(db) as db:
-            from datetime import datetime, timedelta
-
             from local_llm.models.groups import GroupMember
 
             stmt = select(ChatMessage.created_at, ChatMessage.model_id).filter(
@@ -994,20 +992,20 @@ class ChatMessageTable:
             # Group by date -> model -> count
             daily_counts: dict[str, dict[str, int]] = {}
             for timestamp, model_id in results:
-                date_str = datetime.fromtimestamp(_normalize_timestamp(timestamp)).strftime('%Y-%m-%d')
+                date_str = dt.datetime.fromtimestamp(_normalize_timestamp(timestamp)).strftime('%Y-%m-%d')
                 if date_str not in daily_counts:
                     daily_counts[date_str] = {}
                 daily_counts[date_str][model_id] = daily_counts[date_str].get(model_id, 0) + 1
 
             # Fill in missing days
             if start_date and end_date:
-                current = datetime.fromtimestamp(_normalize_timestamp(start_date))
-                end_dt = datetime.fromtimestamp(_normalize_timestamp(end_date))
+                current = dt.datetime.fromtimestamp(_normalize_timestamp(start_date))
+                end_dt = dt.datetime.fromtimestamp(_normalize_timestamp(end_date))
                 while current <= end_dt:
                     date_str = current.strftime('%Y-%m-%d')
                     if date_str not in daily_counts:
                         daily_counts[date_str] = {}
-                    current += timedelta(days=1)
+                    current += dt.timedelta(days=1)
 
             return daily_counts
 
@@ -1019,8 +1017,6 @@ class ChatMessageTable:
     ) -> dict[str, dict[str, int]]:
         """Get message counts grouped by hour and model."""
         async with get_async_db_context(db) as db:
-            from datetime import datetime, timedelta
-
             stmt = select(ChatMessage.created_at, ChatMessage.model_id).filter(
                 ChatMessage.role == 'assistant',
                 ChatMessage.model_id.isnot(None),
@@ -1037,22 +1033,22 @@ class ChatMessageTable:
             # Group by hour -> model -> count
             hourly_counts: dict[str, dict[str, int]] = {}
             for timestamp, model_id in results:
-                hour_str = datetime.fromtimestamp(_normalize_timestamp(timestamp)).strftime('%Y-%m-%d %H:00')
+                hour_str = dt.datetime.fromtimestamp(_normalize_timestamp(timestamp)).strftime('%Y-%m-%d %H:00')
                 if hour_str not in hourly_counts:
                     hourly_counts[hour_str] = {}
                 hourly_counts[hour_str][model_id] = hourly_counts[hour_str].get(model_id, 0) + 1
 
             # Fill in missing hours
             if start_date and end_date:
-                current = datetime.fromtimestamp(_normalize_timestamp(start_date)).replace(
+                current = dt.datetime.fromtimestamp(_normalize_timestamp(start_date)).replace(
                     minute=0, second=0, microsecond=0
                 )
-                end_dt = datetime.fromtimestamp(_normalize_timestamp(end_date))
+                end_dt = dt.datetime.fromtimestamp(_normalize_timestamp(end_date))
                 while current <= end_dt:
                     hour_str = current.strftime('%Y-%m-%d %H:00')
                     if hour_str not in hourly_counts:
                         hourly_counts[hour_str] = {}
-                    current += timedelta(hours=1)
+                    current += dt.timedelta(hours=1)
 
             return hourly_counts
 

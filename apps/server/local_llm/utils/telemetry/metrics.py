@@ -17,7 +17,7 @@ high-cardinality label sets.
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import logging
 import time
 from base64 import b64encode
@@ -83,7 +83,7 @@ def _count_active_users(db_engine: Engine) -> int | None:
 
 def _count_users_active_today(db_engine: Engine) -> int | None:
     """Return the number of users active since midnight today (sync)."""
-    now = int(datetime.datetime.now().timestamp())
+    now = int(dt.datetime.now().timestamp())
     today_midnight = now - (now % 86400)
     with Session(db_engine) as session:
         return session.execute(

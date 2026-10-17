@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import logging
 import os
 import random
 import re
 import time
-from datetime import datetime
 from urllib.parse import urlparse
 
 import aiofiles
@@ -447,8 +447,8 @@ async def get_all_models(request: Request, user: UserModel | None = None):
         expires_map = {m['model']: m['expires_at'] for m in loaded['models'] if 'expires_at' in m}
         for m in models_dict['models']:
             if m['model'] in expires_map:
-                dt = datetime.fromisoformat(expires_map[m['model']])
-                m['expires_at'] = int(dt.timestamp())
+                when = dt.datetime.fromisoformat(expires_map[m['model']])
+                m['expires_at'] = int(when.timestamp())
     except Exception as exc:
         log.debug('Failed to get loaded models: %s', exc)
 

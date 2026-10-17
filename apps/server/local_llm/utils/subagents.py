@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import datetime as dt
 import time
-from datetime import timedelta
 from uuid import uuid4
 
 from fastapi import Request
@@ -61,7 +61,7 @@ def _build_request(source: Request, user_id: str, *, internal: bool) -> Request:
     request = Request(scope)
     token = create_token(
         data={'id': user_id, 'typ': 'subagent'},
-        expires_delta=timedelta(hours=1),
+        expires_delta=dt.timedelta(hours=1),
     )
     request.state.token = HTTPAuthorizationCredentials(scheme='Bearer', credentials=token)
     request.state.enable_api_keys = False

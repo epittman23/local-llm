@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+import datetime as dt
 import logging
 import os
 import re
 import sys
 from contextlib import asynccontextmanager, contextmanager
-from datetime import UTC, datetime, timedelta
 from typing import Any, Self
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
@@ -149,7 +149,7 @@ SQLALCHEMY_DATABASE_URL = reattach_ssl_params_to_url(_url_without_ssl, _ssl_dict
 
 
 class RDSIAMTokenAuth:
-    _refresh_after = timedelta(minutes=14)
+    _refresh_after = dt.timedelta(minutes=14)
 
     def __init__(self, database_url: str) -> None:
         url = make_url(database_url)
@@ -163,7 +163,7 @@ class RDSIAMTokenAuth:
         self.username = url.username
         self._client = None
         self._token: str | None = None
-        self._expires_at = datetime.min.replace(tzinfo=UTC)
+        self._expires_at = dt.datetime.min.replace(tzinfo=dt.UTC)
 
     @property
     def client(self):
@@ -174,7 +174,7 @@ class RDSIAMTokenAuth:
         return self._client
 
     def get_password(self) -> str:
-        now = datetime.now(UTC)
+        now = dt.datetime.now(dt.UTC)
         if self._token and now < self._expires_at:
             return self._token
 

@@ -1,4 +1,4 @@
-from datetime import datetime
+import datetime as dt
 from html import escape
 from pathlib import Path
 from typing import Any
@@ -30,7 +30,7 @@ class PDFGenerator:
     def format_timestamp(self, timestamp: float) -> str:
         """Convert a UNIX timestamp to a formatted date string."""
         try:
-            date_time = datetime.fromtimestamp(timestamp)
+            date_time = dt.datetime.fromtimestamp(timestamp)
             return date_time.strftime('%Y-%m-%d, %H:%M:%S')
         except (ValueError, TypeError):
             # Log the error if necessary

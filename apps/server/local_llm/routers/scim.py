@@ -5,10 +5,10 @@ Provides System for Cross-domain Identity Management endpoints for users and gro
 NOTE: This is an experimental implementation and may not fully comply with SCIM 2.0 standards, and is subject to change.
 """
 
+import datetime as dt
 import hmac
 import logging
 import uuid
-from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
@@ -354,8 +354,8 @@ async def user_to_scim(user: UserModel, request: Request, db=None) -> SCIMUser:
         groups=groups if groups else None,
         meta=SCIMMeta(
             resourceType=SCIM_RESOURCE_TYPE_USER,
-            created=datetime.fromtimestamp(user.created_at, tz=UTC).isoformat(),
-            lastModified=datetime.fromtimestamp(user.updated_at, tz=UTC).isoformat(),
+            created=dt.datetime.fromtimestamp(user.created_at, tz=dt.UTC).isoformat(),
+            lastModified=dt.datetime.fromtimestamp(user.updated_at, tz=dt.UTC).isoformat(),
             location=f'{request.base_url}api/v1/scim/v2/Users/{user.id}',
         ),
     )
@@ -382,8 +382,8 @@ async def group_to_scim(group: GroupModel, request: Request, db=None) -> SCIMGro
         members=members,
         meta=SCIMMeta(
             resourceType=SCIM_RESOURCE_TYPE_GROUP,
-            created=datetime.fromtimestamp(group.created_at, tz=UTC).isoformat(),
-            lastModified=datetime.fromtimestamp(group.updated_at, tz=UTC).isoformat(),
+            created=dt.datetime.fromtimestamp(group.created_at, tz=dt.UTC).isoformat(),
+            lastModified=dt.datetime.fromtimestamp(group.updated_at, tz=dt.UTC).isoformat(),
             location=f'{request.base_url}api/v1/scim/v2/Groups/{group.id}',
         ),
     )

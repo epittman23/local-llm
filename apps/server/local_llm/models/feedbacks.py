@@ -1,3 +1,4 @@
+import datetime as dt
 import logging
 import time
 import uuid
@@ -326,7 +327,6 @@ class FeedbackTable:
         Returns: [{"date": "2026-01-08", "won": 5, "lost": 2}, ...]
         """
         from collections import defaultdict
-        from datetime import datetime, timedelta
 
         async with get_async_db_context(db) as db:
             if days == 0:
@@ -352,7 +352,7 @@ class FeedbackTable:
             if rating_str not in ('1', '-1'):
                 continue
 
-            date_str = datetime.fromtimestamp(created_at).strftime('%Y-%m-%d')
+            date_str = dt.datetime.fromtimestamp(created_at).strftime('%Y-%m-%d')
             if rating_str == '1':
                 daily_counts[date_str]['won'] += 1
             else:
@@ -364,19 +364,19 @@ class FeedbackTable:
 
         # Generate date range
         result = []
-        today = datetime.now().date()
+        today = dt.datetime.now().date()
 
         if days == 0 and first_date:
             # All time: start from first feedback date
-            start_date = datetime.strptime(first_date, '%Y-%m-%d').date()
+            start_date = dt.datetime.strptime(first_date, '%Y-%m-%d').date()
             num_days = (today - start_date).days + 1
         else:
             # Fixed range
             num_days = days
-            start_date = today - timedelta(days=days - 1)
+            start_date = today - dt.timedelta(days=days - 1)
 
         for i in range(num_days):
-            d = start_date + timedelta(days=i)
+            d = start_date + dt.timedelta(days=i)
             date_str = d.strftime('%Y-%m-%d')
             counts = daily_counts.get(date_str, {'won': 0, 'lost': 0})
             result.append(ModelHistoryEntry(date=date_str, won=counts['won'], lost=counts['lost']))
@@ -391,7 +391,6 @@ class FeedbackTable:
     ) -> list[ModelHistoryCounts]:
         """Get aggregated feedback counts per day for a model, preserving all matching days."""
         from collections import defaultdict
-        from datetime import datetime
 
         async with get_async_db_context(db) as db:
             stmt = select(Feedback.created_at, Feedback.data).filter(Feedback.data['model_id'].as_string() == model_id)
@@ -411,7 +410,7 @@ class FeedbackTable:
             if rating_str not in ('1', '-1'):
                 continue
 
-            date_str = datetime.fromtimestamp(created_at).strftime('%Y-%m-%d')
+            date_str = dt.datetime.fromtimestamp(created_at).strftime('%Y-%m-%d')
             if rating_str == '1':
                 daily_counts[date_str]['won'] += 1
             else:

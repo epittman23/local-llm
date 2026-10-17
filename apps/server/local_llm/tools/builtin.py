@@ -6,6 +6,7 @@ These tools are automatically available when native function calling is enabled.
 IMPORTANT: DO NOT IMPORT THIS MODULE DIRECTLY IN OTHER PARTS OF THE CODEBASE.
 """
 
+import datetime as dt
 import logging
 import time
 from typing import Literal
@@ -163,10 +164,9 @@ async def get_current_timestamp(
     :return: JSON with current_timestamp (seconds), current_iso (UTC ISO format), and user_local_iso (user's local time)
     """
     try:
-        import datetime
         from zoneinfo import ZoneInfo
 
-        now = datetime.datetime.now(datetime.UTC)
+        now = dt.datetime.now(dt.UTC)
         result = {
             'current_timestamp': int(now.timestamp()),
             'current_iso': now.isoformat(),
@@ -209,16 +209,14 @@ async def calculate_timestamp(
     :return: JSON with current_timestamp and calculated_timestamp (both in seconds)
     """
     try:
-        import datetime
-
         from dateutil.relativedelta import relativedelta
 
-        now = datetime.datetime.now(datetime.UTC)
+        now = dt.datetime.now(dt.UTC)
         current_ts = int(now.timestamp())
 
         # Calculate the adjusted time
         total_days = days_ago + (weeks_ago * 7)
-        adjusted = now - datetime.timedelta(days=total_days)
+        adjusted = now - dt.timedelta(days=total_days)
 
         # Handle months and years separately (variable length)
         if months_ago > 0 or years_ago > 0:
@@ -249,12 +247,11 @@ async def calculate_timestamp(
         return JSONCodec.dumps(result, ensure_ascii=False)
     except ImportError:
         # Fallback without dateutil
-        import datetime
 
-        now = datetime.datetime.now(datetime.UTC)
+        now = dt.datetime.now(dt.UTC)
         current_ts = int(now.timestamp())
         total_days = days_ago + (weeks_ago * 7) + (months_ago * 30) + (years_ago * 365)
-        adjusted = now - datetime.timedelta(days=total_days)
+        adjusted = now - dt.timedelta(days=total_days)
         adjusted_ts = int(adjusted.timestamp())
         result = {
             'current_timestamp': current_ts,
@@ -4080,22 +4077,20 @@ def _get_user_tz(user_dict: dict):
 
 def _dt_to_ns(dt_str: str, tz) -> int:
     """Convert a datetime string to nanoseconds since epoch, interpreting in the given timezone."""
-    from datetime import datetime
 
-    dt = datetime.fromisoformat(dt_str)
+    when = dt.datetime.fromisoformat(dt_str)
     # If naive (no timezone info), localize to user's timezone
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=tz)
-    return int(dt.timestamp() * 1_000) * 1_000_000
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=tz)
+    return int(when.timestamp() * 1_000) * 1_000_000
 
 
 def _ns_to_dt(ns: int, tz) -> str:
     """Convert nanoseconds since epoch to a datetime string in the given timezone."""
-    from datetime import datetime
 
     seconds = ns / 1_000_000_000
-    dt = datetime.fromtimestamp(seconds, tz=tz)
-    return dt.strftime('%Y-%m-%d %H:%M')
+    when = dt.datetime.fromtimestamp(seconds, tz=tz)
+    return when.strftime('%Y-%m-%d %H:%M')
 
 
 def _event_to_dict(event, tz) -> dict:

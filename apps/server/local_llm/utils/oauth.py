@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import datetime as dt
 import fnmatch
 import hashlib
 import logging
@@ -8,7 +9,6 @@ import sys
 import urllib
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
 from functools import partialmethod
 from types import SimpleNamespace
 from typing import Literal
@@ -216,18 +216,18 @@ def _normalize_token_expiry(token: dict) -> dict:
 
     Also stamps *issued_at* for auditing.
     """
-    token['issued_at'] = datetime.now().timestamp()
+    token['issued_at'] = dt.datetime.now().timestamp()
 
     if token.get('expires_at') is not None:
         expires_at = int(token['expires_at'])
     elif token.get('expires_in') is not None:
-        expires_at = int(datetime.now().timestamp() + token['expires_in'])
+        expires_at = int(dt.datetime.now().timestamp() + token['expires_in'])
     elif token.get('refresh_token'):
         log.warning(
             "OAuth token response missing both 'expires_in' and 'expires_at'; "
             f'defaulting to {DEFAULT_TOKEN_EXPIRY_SECONDS}s from now'
         )
-        expires_at = int(datetime.now().timestamp() + DEFAULT_TOKEN_EXPIRY_SECONDS)
+        expires_at = int(dt.datetime.now().timestamp() + DEFAULT_TOKEN_EXPIRY_SECONDS)
     else:
         log.info(
             "OAuth token response missing 'expires_in', 'expires_at' and 'refresh_token'; treating token as non-expiring"
@@ -1046,7 +1046,7 @@ class OAuthClientManager:
             if (
                 force_refresh
                 or session.expires_at is None
-                or datetime.now() + timedelta(minutes=5) >= datetime.fromtimestamp(session.expires_at)
+                or dt.datetime.now() + dt.timedelta(minutes=5) >= dt.datetime.fromtimestamp(session.expires_at)
             ):
                 log.debug('Token refresh needed for user %s, client_id %s', user_id, session.provider)
                 refreshed_token = await self._refresh_token(session)
@@ -1373,7 +1373,7 @@ class OAuthManager:
             if (
                 force_refresh
                 or session.expires_at is None
-                or datetime.now() + timedelta(minutes=5) >= datetime.fromtimestamp(session.expires_at)
+                or dt.datetime.now() + dt.timedelta(minutes=5) >= dt.datetime.fromtimestamp(session.expires_at)
             ):
                 log.debug('Token refresh needed for user %s, provider %s', user_id, session.provider)
                 refreshed_token = await self._refresh_token(session)

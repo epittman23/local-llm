@@ -1,4 +1,5 @@
 import asyncio
+import datetime as dt
 import http.cookiejar
 import ipaddress
 import logging
@@ -8,7 +9,6 @@ import time
 import urllib.parse
 import urllib.request
 from collections.abc import AsyncIterator, Iterable, Iterator, Sequence
-from datetime import datetime, timedelta
 from typing import (
     Any,
     Literal,
@@ -348,20 +348,20 @@ class RateLimitMixin:
     async def _wait_for_rate_limit(self):
         """Wait to respect the rate limit if specified."""
         if self.requests_per_second and self.last_request_time:
-            min_interval = timedelta(seconds=1.0 / self.requests_per_second)
-            time_since_last = datetime.now() - self.last_request_time
+            min_interval = dt.timedelta(seconds=1.0 / self.requests_per_second)
+            time_since_last = dt.datetime.now() - self.last_request_time
             if time_since_last < min_interval:
                 await asyncio.sleep((min_interval - time_since_last).total_seconds())
-        self.last_request_time = datetime.now()
+        self.last_request_time = dt.datetime.now()
 
     def _sync_wait_for_rate_limit(self):
         """Synchronous version of rate limit wait."""
         if self.requests_per_second and self.last_request_time:
-            min_interval = timedelta(seconds=1.0 / self.requests_per_second)
-            time_since_last = datetime.now() - self.last_request_time
+            min_interval = dt.timedelta(seconds=1.0 / self.requests_per_second)
+            time_since_last = dt.datetime.now() - self.last_request_time
             if time_since_last < min_interval:
                 time.sleep((min_interval - time_since_last).total_seconds())
-        self.last_request_time = datetime.now()
+        self.last_request_time = dt.datetime.now()
 
 
 class URLProcessingMixin:

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import base64
+import datetime as dt
 import io
 import logging
 import time
 from collections import Counter
-from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import FileResponse, Response, StreamingResponse
@@ -362,14 +362,14 @@ class UserUsageResponse(BaseModel):
     period: UserUsagePeriod
 
 
-def _week_start(date: datetime) -> datetime:
-    return date - timedelta(days=date.weekday())
+def _week_start(date: dt.datetime) -> dt.datetime:
+    return date - dt.timedelta(days=date.weekday())
 
 
 def _build_weekly_heatmap(heatmap: list[dict]) -> list[dict]:
     weeks: dict[str, dict] = {}
     for day in heatmap:
-        week = _week_start(datetime.strptime(day['date'], '%Y-%m-%d')).strftime('%Y-%m-%d')
+        week = _week_start(dt.datetime.strptime(day['date'], '%Y-%m-%d')).strftime('%Y-%m-%d')
         entry = weeks.setdefault(week, {'date': week, 'messages': 0, 'chats': 0, 'tokens': 0, 'models': Counter()})
         entry['messages'] += day.get('messages', 0)
         entry['chats'] += day.get('chats', 0)

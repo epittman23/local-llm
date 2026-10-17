@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import datetime as dt
 import logging
 import re
 import time
-from datetime import UTC, datetime
 from typing import Literal
 from uuid import uuid4
 
@@ -52,7 +52,7 @@ def parse_timer_at(value: str) -> int:
             'at must be a relative time such as 10s or in 10 seconds, or an RFC 3339 timestamp with a timezone.'
         )
     try:
-        parsed = datetime.fromisoformat(raw.replace('Z', '+00:00'))
+        parsed = dt.datetime.fromisoformat(raw.replace('Z', '+00:00'))
     except ValueError as exc:
         raise ValueError(
             'at must be a relative time such as 10s or in 10 seconds, or an RFC 3339 timestamp with a timezone.'
@@ -161,7 +161,7 @@ async def create_timer(
     return JSONCodec.dumps(
         {
             'status': 'set',
-            'at': datetime.fromtimestamp(due_at / 1_000_000_000, UTC).isoformat().replace('+00:00', 'Z'),
+            'at': dt.datetime.fromtimestamp(due_at / 1_000_000_000, dt.UTC).isoformat().replace('+00:00', 'Z'),
             'cancel_on': selected_events,
         },
         ensure_ascii=False,

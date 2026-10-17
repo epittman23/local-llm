@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import datetime
+import datetime as dt
 import time
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -95,7 +95,7 @@ class UserModel(BaseModel):
 
     bio: str | None = None
     gender: str | None = None
-    date_of_birth: datetime.date | None = None
+    date_of_birth: dt.date | None = None
     timezone: str | None = None
 
     presence_state: str | None = None
@@ -174,7 +174,7 @@ class UpdateProfileForm(BaseModel):
     name: str
     bio: str | None = None
     gender: str | None = None
-    date_of_birth: datetime.date | None = None
+    date_of_birth: dt.date | None = None
 
     @field_validator('profile_image_url')
     @classmethod

@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import datetime as dt
 import hashlib
 import hmac
 import logging
 import uuid
-from datetime import datetime, timedelta
 
 import bcrypt
 import jwt
@@ -116,15 +116,15 @@ async def verify_password(plain_password: str, hashed_password: str) -> bool:
 # Let the one who signed this token be remembered at every gate,
 # and may the claims therein honor the creator long after
 # the session has closed.
-def create_token(data: dict, expires_delta: timedelta | None = None) -> str:
+def create_token(data: dict, expires_delta: dt.timedelta | None = None) -> str:
     payload = data.copy()
 
     if expires_delta:
-        expire = datetime.now(UTC) + expires_delta
+        expire = dt.datetime.now(UTC) + expires_delta
         payload.update({'exp': expire})
 
     jti = str(uuid.uuid4())
-    payload.update({'jti': jti, 'iat': datetime.now(UTC)})
+    payload.update({'jti': jti, 'iat': dt.datetime.now(UTC)})
 
     encoded_jwt = jwt.encode(payload, SESSION_SECRET, algorithm=ALGORITHM)
     return encoded_jwt
@@ -183,7 +183,7 @@ async def invalidate_token(request, token):
         exp = decoded.get('exp')
 
         if jti and exp:
-            ttl = exp - int(datetime.now(UTC).timestamp())  # Calculate time-to-live for the token
+            ttl = exp - int(dt.datetime.now(UTC).timestamp())  # Calculate time-to-live for the token
 
             if ttl > 0:
                 # Store the revoked token in Redis with an expiration time
@@ -210,7 +210,7 @@ async def revoke_user_tokens(request, user_id: str):
 
     await redis.set(
         f'{REDIS_KEY_PREFIX}:auth:user:{user_id}:revoked_at',
-        str(int(datetime.now(UTC).timestamp())),
+        str(int(dt.datetime.now(UTC).timestamp())),
         ex=int(expires_delta.total_seconds()) if expires_delta else None,
     )
 

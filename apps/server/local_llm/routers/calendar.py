@@ -1,3 +1,4 @@
+import datetime as dt
 import logging
 import time
 
@@ -160,11 +161,10 @@ async def get_events(
     - Virtual events computed from active automation RRULEs (Scheduled Tasks calendar)
     """
     await check_calendar_permission(request, user)
-    from datetime import datetime
 
     try:
-        start_dt = datetime.fromisoformat(start.replace('Z', '+00:00'))
-        end_dt = datetime.fromisoformat(end.replace('Z', '+00:00'))
+        start_dt = dt.datetime.fromisoformat(start.replace('Z', '+00:00'))
+        end_dt = dt.datetime.fromisoformat(end.replace('Z', '+00:00'))
     except ValueError:
         raise HTTPException(status_code=400, detail='Invalid date format. Use ISO 8601 (e.g. 2026-04-01T00:00:00)')
 

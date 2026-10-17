@@ -1,8 +1,8 @@
+import datetime as dt
 import logging
 import math
 import re
 import uuid
-from datetime import datetime
 from typing import Any
 
 from local_llm.config import DEFAULT_RAG_TEMPLATE
@@ -49,9 +49,9 @@ async def prompt_template(template: str, user: Any | None = None) -> str:
                 try:
                     # If birth_date is str, convert to datetime
                     if isinstance(birth_date, str):
-                        birth_date = datetime.strptime(birth_date, '%Y-%m-%d')
+                        birth_date = dt.datetime.strptime(birth_date, '%Y-%m-%d')
 
-                    today = datetime.now()
+                    today = dt.datetime.now()
                     age = today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
                 except Exception:
                     pass
@@ -81,7 +81,7 @@ async def prompt_template(template: str, user: Any | None = None) -> str:
             }
 
     # Get the current date
-    current_date = datetime.now()
+    current_date = dt.datetime.now()
 
     # Format the date to YYYY-MM-DD
     formatted_date = current_date.strftime('%Y-%m-%d')

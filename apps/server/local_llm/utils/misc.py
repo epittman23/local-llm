@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import collections.abc
+import datetime as dt
 import hashlib
 import ipaddress
 import logging
@@ -10,7 +11,6 @@ import time
 import urllib.parse
 import uuid
 from collections.abc import Sequence
-from datetime import timedelta
 from functools import lru_cache
 from pathlib import Path
 
@@ -1033,7 +1033,7 @@ def extract_folders_after_data_docs(path):
     return tags
 
 
-def parse_duration(duration: str) -> timedelta | None:
+def parse_duration(duration: str) -> dt.timedelta | None:
     if duration == '-1' or duration == '0':
         return None
 
@@ -1044,22 +1044,22 @@ def parse_duration(duration: str) -> timedelta | None:
     if not matches:
         raise ValueError('Invalid duration string')
 
-    total_duration = timedelta()
+    total_duration = dt.timedelta()
 
     for number, _, unit in matches:
         number = float(number)
         if unit == 'ms':
-            total_duration += timedelta(milliseconds=number)
+            total_duration += dt.timedelta(milliseconds=number)
         elif unit == 's':
-            total_duration += timedelta(seconds=number)
+            total_duration += dt.timedelta(seconds=number)
         elif unit == 'm':
-            total_duration += timedelta(minutes=number)
+            total_duration += dt.timedelta(minutes=number)
         elif unit == 'h':
-            total_duration += timedelta(hours=number)
+            total_duration += dt.timedelta(hours=number)
         elif unit == 'd':
-            total_duration += timedelta(days=number)
+            total_duration += dt.timedelta(days=number)
         elif unit == 'w':
-            total_duration += timedelta(weeks=number)
+            total_duration += dt.timedelta(weeks=number)
 
     return total_duration
 

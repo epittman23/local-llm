@@ -1,6 +1,6 @@
+import datetime as dt
 import logging
 from collections import defaultdict
-from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
@@ -349,10 +349,10 @@ async def get_model_overview(
     """Get model overview with feedback history and chat tags."""
 
     # Calculate start date for history
-    now = datetime.now()
+    now = dt.datetime.now()
     start_dt = None
     if days > 0:
-        start_dt = now - timedelta(days=days)
+        start_dt = now - dt.timedelta(days=days)
 
     # Get chat IDs that used this model
     chat_ids = await ChatMessages.get_chat_ids_by_model_id(
@@ -386,7 +386,7 @@ async def get_model_overview(
         elif history_counts:
             # Find earliest date
             min_date = min(history_counts.keys())
-            current = datetime.strptime(min_date, '%Y-%m-%d')
+            current = dt.datetime.strptime(min_date, '%Y-%m-%d')
         else:
             current = now
 
@@ -400,7 +400,7 @@ async def get_model_overview(
                     lost=counts['lost'],
                 )
             )
-            current += timedelta(days=1)
+            current += dt.timedelta(days=1)
 
     # Get chat tags
     tag_counts: dict[str, int] = defaultdict(int)

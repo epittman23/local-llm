@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-import datetime
+import datetime as dt
 import logging
 import re
 import time
@@ -194,7 +194,7 @@ async def create_session_response(
     )
 
     if set_cookie and response:
-        datetime_expires_at = datetime.datetime.fromtimestamp(expires_at, datetime.UTC) if expires_at else None
+        datetime_expires_at = dt.datetime.fromtimestamp(expires_at, dt.UTC) if expires_at else None
         max_age = int(expires_delta.total_seconds()) if expires_delta else None
         response.set_cookie(
             key='token',
@@ -243,7 +243,7 @@ class SessionUserResponse(Token, UserProfileImageResponse):
 class SessionUserInfoResponse(SessionUserResponse, UserStatus):
     bio: str | None = None
     gender: str | None = None
-    date_of_birth: datetime.date | None = None
+    date_of_birth: dt.date | None = None
 
 
 @router.get('/', response_model=SessionUserInfoResponse)
@@ -281,7 +281,7 @@ async def get_session_user(
         response.set_cookie(
             key='token',
             value=token,
-            expires=(datetime.datetime.fromtimestamp(expires_at, datetime.UTC) if expires_at else None),
+            expires=(dt.datetime.fromtimestamp(expires_at, dt.UTC) if expires_at else None),
             httponly=True,  # Ensures the cookie is not accessible via JavaScript
             samesite=LLLM_AUTH_COOKIE_SAME_SITE,
             secure=LLLM_AUTH_COOKIE_SECURE,

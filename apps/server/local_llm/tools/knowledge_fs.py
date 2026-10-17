@@ -8,12 +8,12 @@ Re-exported through builtin.py for consistent imports.
 """
 
 import contextvars
+import datetime as dt
 import logging
 import re
 import shlex
 import time
 from contextlib import contextmanager
-from datetime import UTC
 
 import regex
 from fastapi import Request
@@ -630,10 +630,8 @@ def _fmt_size(f: dict) -> str:
 
 def _fmt_date(f: dict) -> str:
     if f.get('updated_at'):
-        from datetime import datetime
-
-        dt = datetime.fromtimestamp(f['updated_at'], tz=UTC)
-        return dt.strftime('%Y-%m-%d')
+        when = dt.datetime.fromtimestamp(f['updated_at'], tz=dt.UTC)
+        return when.strftime('%Y-%m-%d')
     return ''
 
 
@@ -959,15 +957,11 @@ async def _kb_stat(args: list[str], flags: set[str], user: dict, model_knowledge
     ]
 
     if resolved.get('created_at'):
-        from datetime import datetime
-
-        dt = datetime.fromtimestamp(resolved['created_at'], tz=UTC)
-        out.append(f'  Created: {dt.strftime("%Y-%m-%d %H:%M:%S UTC")}')
+        when = dt.datetime.fromtimestamp(resolved['created_at'], tz=dt.UTC)
+        out.append(f'  Created: {when.strftime("%Y-%m-%d %H:%M:%S UTC")}')
     if resolved.get('updated_at'):
-        from datetime import datetime
-
-        dt = datetime.fromtimestamp(resolved['updated_at'], tz=UTC)
-        out.append(f'  Updated: {dt.strftime("%Y-%m-%d %H:%M:%S UTC")}')
+        when = dt.datetime.fromtimestamp(resolved['updated_at'], tz=dt.UTC)
+        out.append(f'  Updated: {when.strftime("%Y-%m-%d %H:%M:%S UTC")}')
     if resolved.get('knowledge_name'):
         out.append(f'      KB: {resolved["knowledge_name"]} ({resolved.get("knowledge_id", "")})')
 

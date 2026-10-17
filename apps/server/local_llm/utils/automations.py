@@ -16,11 +16,11 @@ Environment:
 """
 
 import asyncio
+import datetime as dt
 import logging
 import os
 import random
 import time
-from datetime import datetime, timedelta
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -71,7 +71,7 @@ def _resolve_tz(tz: str = None) -> ZoneInfo | None:
         return None
 
 
-def _parse_rule(s: str, now: datetime | None = None):
+def _parse_rule(s: str, now: dt.datetime | None = None):
     """Parse RRULE with clock-aligned DTSTART for sub-daily frequencies.
 
     SECONDLY/MINUTELY/HOURLY rules use a fixed epoch DTSTART (2000-01-01 00:00)
@@ -88,14 +88,14 @@ def _parse_rule(s: str, now: datetime | None = None):
 
     rule = rules[0]
     start = rule._dtstart.replace(tzinfo=None)
-    anchor = now or datetime.now()
+    anchor = now or dt.datetime.now()
     lines = s.splitlines()
     stripped = '\n'.join(line for line in lines if not line.upper().startswith('DTSTART')) or s
     has_dtstart = any(line.upper().startswith('DTSTART') for line in lines)
     step = {
-        SECONDLY: timedelta(seconds=rule._interval),
-        MINUTELY: timedelta(minutes=rule._interval),
-        HOURLY: timedelta(hours=rule._interval),
+        SECONDLY: dt.timedelta(seconds=rule._interval),
+        MINUTELY: dt.timedelta(minutes=rule._interval),
+        HOURLY: dt.timedelta(hours=rule._interval),
     }.get(rule._freq)
 
     if step is None:
@@ -115,7 +115,7 @@ def _parse_rule(s: str, now: datetime | None = None):
             else:
                 return parsed
     if not has_dtstart or dtstart is None:
-        epoch = datetime(2000, 1, 1)
+        epoch = dt.datetime(2000, 1, 1)
         dtstart = epoch + ((anchor - epoch) // step) * step
 
     return rrulestr(stripped, dtstart=dtstart, ignoretz=True)
@@ -132,7 +132,7 @@ def validate_rrule(s: str, tz: str = None) -> None:
     if 'COUNT=' in upper and 'DTSTART' not in upper:
         raise ValueError(ERROR_MESSAGES.AUTOMATION_COUNT_REQUIRES_DTSTART)
     zi = _resolve_tz(tz)
-    now = datetime.now(zi).replace(tzinfo=None) if zi else datetime.now()
+    now = dt.datetime.now(zi).replace(tzinfo=None) if zi else dt.datetime.now()
     try:
         rule = _parse_rule(s, now)
     except Exception as e:
@@ -144,14 +144,14 @@ def validate_rrule(s: str, tz: str = None) -> None:
 def next_run_ns(s: str, tz: str = None) -> int | None:
     """Next occurrence as epoch nanoseconds, respecting user timezone."""
     zi = _resolve_tz(tz)
-    now = datetime.now(zi) if zi else datetime.now()
+    now = dt.datetime.now(zi) if zi else dt.datetime.now()
     now_naive = now.replace(tzinfo=None)
-    dt = _parse_rule(s, now_naive).after(now_naive)
-    if dt is None:
+    when = _parse_rule(s, now_naive).after(now_naive)
+    if when is None:
         return None
     if zi:
-        dt = dt.replace(tzinfo=zi)
-    return int(dt.timestamp() * 1_000_000_000)
+        when = when.replace(tzinfo=zi)
+    return int(when.timestamp() * 1_000_000_000)
 
 
 def next_n_runs_ns(s: str, n: int = 5, tz: str = None) -> list[int]:
@@ -162,18 +162,18 @@ def next_n_runs_ns(s: str, n: int = 5, tz: str = None) -> list[int]:
     """
     zi = _resolve_tz(tz)
     result = []
-    now = datetime.now(zi).replace(tzinfo=None) if zi else datetime.now()
+    now = dt.datetime.now(zi).replace(tzinfo=None) if zi else dt.datetime.now()
     rule = _parse_rule(s, now)
-    dt = now
+    when = now
     for _ in range(n):
-        dt = rule.after(dt)
-        if not dt:
+        when = rule.after(when)
+        if not when:
             break
         if zi:
-            dt_tz = dt.replace(tzinfo=zi)
+            dt_tz = when.replace(tzinfo=zi)
             result.append(int(dt_tz.timestamp() * 1_000_000_000))
         else:
-            result.append(int(dt.timestamp() * 1_000_000_000))
+            result.append(int(when.timestamp() * 1_000_000_000))
     return result
 
 
@@ -186,7 +186,7 @@ def rrule_interval_seconds(s: str) -> int | None:
     if 'COUNT=1' in s:
         return None
     s = '\n'.join(line for line in s.splitlines() if not line.upper().startswith('DTSTART')) or s
-    now = datetime.now()
+    now = dt.datetime.now()
     rule = _parse_rule(s, now)
     first = rule.after(now)
     if first is None:
@@ -533,7 +533,7 @@ async def execute_automation(app, automation: AutomationModel) -> None:
             expires_delta = None
         token = create_token(
             data={'id': user.id, 'typ': 'automation'},
-            expires_delta=expires_delta or timedelta(hours=1),
+            expires_delta=expires_delta or dt.timedelta(hours=1),
         )
 
         target = automation.data.get('target') or {}
