@@ -138,209 +138,179 @@ async def get_function_models(request):
     return pipe_models
 
 
-async def generate_function_chat_completion(request, form_data, user, models: dict | None = None):
-    if models is None:
-        models = {}
+async def _execute_pipe(pipe, params):
+    if inspect.iscoroutinefunction(pipe):
+        return await pipe(**params)
+    return pipe(**params)
 
-    async def execute_pipe(pipe, params):
-        if inspect.iscoroutinefunction(pipe):
-            return await pipe(**params)
-        else:
-            return pipe(**params)
 
-    async def get_message_content(res: str | Generator | AsyncGenerator) -> str:
-        if isinstance(res, str):
-            return res
-        if isinstance(res, Generator):
-            return ''.join(map(str, res))
-        if isinstance(res, AsyncGenerator):
-            return ''.join([str(stream) async for stream in res])
+async def _message_content(res: str | Generator | AsyncGenerator) -> str:
+    if isinstance(res, str):
+        return res
+    if isinstance(res, Generator):
+        return ''.join(map(str, res))
+    if isinstance(res, AsyncGenerator):
+        return ''.join([str(stream) async for stream in res])
 
-    def process_line(form_data: dict, line):
-        if isinstance(line, BaseModel):
-            line = line.model_dump_json()
-            line = f'data: {line}'
-        if isinstance(line, dict):
-            line = f'data: {JSONCodec.dumps(line)}'
 
+def _sse_line(model: str, line) -> str:
+    """One line a pipe yielded, as an SSE event: a data line passes through, plain text becomes a chunk."""
+    if isinstance(line, BaseModel):
+        line = f'data: {line.model_dump_json()}'
+    if isinstance(line, dict):
+        line = f'data: {JSONCodec.dumps(line)}'
+    try:
+        line = line.decode('utf-8')
+    except Exception:
+        pass
+    if line.startswith('data:'):
+        return f'{line}\n\n'
+    return f'data: {JSONCodec.dumps(openai_chat_chunk_message_template(model, line))}\n\n'
+
+
+def _pipe_id(model_id: str) -> str:
+    """The function id of a pipe model; a manifold's sub-model ids are '<function id>.<sub id>'."""
+    return model_id.split('.', 1)[0] if '.' in model_id else model_id
+
+
+async def _pipe_params(function_module, form_data: dict, user, extra_params: dict) -> dict:
+    """The body plus the extra params the pipe's signature asks for, with the user's valves if it takes __user__."""
+    sig = inspect.signature(function_module.pipe)
+    params = {'body': form_data} | {k: v for k, v in extra_params.items() if k in sig.parameters}
+    if '__user__' in params and hasattr(function_module, 'UserValves'):
+        user_valves = await Functions.get_user_valves_by_id_and_user_id(_pipe_id(form_data['model']), user.id)
         try:
-            line = line.decode('utf-8')
-        except Exception:
-            pass
+            params['__user__']['valves'] = function_module.UserValves(**user_valves)
+        except Exception as e:
+            log.exception(e)
+            params['__user__']['valves'] = function_module.UserValves()
+    return params
 
-        if line.startswith('data:'):
-            return f'{line}\n\n'
-        else:
-            line = openai_chat_chunk_message_template(form_data['model'], line)
-            return f'data: {JSONCodec.dumps(line)}\n\n'
 
-    def get_pipe_id(form_data: dict) -> str:
-        pipe_id = form_data['model']
-        if '.' in pipe_id:
-            pipe_id, _ = pipe_id.split('.', 1)
-        return pipe_id
-
-    async def get_function_params(function_module, form_data, user, extra_params=None):
-        if extra_params is None:
-            extra_params = {}
-
-        pipe_id = get_pipe_id(form_data)
-
-        # Get the signature of the function
-        sig = inspect.signature(function_module.pipe)
-        params = {'body': form_data} | {k: v for k, v in extra_params.items() if k in sig.parameters}
-
-        if '__user__' in params and hasattr(function_module, 'UserValves'):
-            user_valves = await Functions.get_user_valves_by_id_and_user_id(pipe_id, user.id)
-            try:
-                params['__user__']['valves'] = function_module.UserValves(**user_valves)
-            except Exception as e:
-                log.exception(e)
-                params['__user__']['valves'] = function_module.UserValves()
-
-        return params
-
-    # Set server-side by utils/chat.py, never by client input. Mirrors the routers.
-    bypass_system_prompt = getattr(request.state, 'bypass_system_prompt', False)
-
-    # Copy so the base-model substitution below doesn't leak into the caller's
-    # payload, which the tool-call continuation re-submits. Mirrors the routers.
-    form_data = {**form_data}
-
-    model_id = form_data.get('model')
-    model_info = await Models.get_model_by_id(model_id)
-
-    metadata = form_data.pop('metadata', {})
-
-    files = metadata.get('files', [])
-    tool_ids = metadata.get('tool_ids', [])
-    # Check if tool_ids is None
-    if tool_ids is None:
-        tool_ids = []
-
-    __event_emitter__ = None
-    __event_call__ = None
-    __task__ = None
-    __task_body__ = None
-
-    if metadata:
-        if all(k in metadata for k in ('session_id', 'chat_id', 'message_id')):
-            __event_emitter__ = await get_event_emitter(metadata)
-            __event_call__ = await get_event_call(metadata)
-        __task__ = metadata.get('task', None)
-        __task_body__ = metadata.get('task_body', None)
-
+async def _pipe_oauth_token(request, user):
+    """The user's OAuth token: from the request's OAuth session, else (automations, API keys) their latest one."""
     oauth_token = None
     try:
         oauth_session_id = request.cookies.get('oauth_session_id', None)
         if oauth_session_id:
-            oauth_token = await request.app.state.oauth_manager.get_oauth_token(
-                user.id,
-                oauth_session_id,
-            )
-
-        # Fallback: no cookie (automation, API key, etc.) — use most recent session
+            oauth_token = await request.app.state.oauth_manager.get_oauth_token(user.id, oauth_session_id)
         if oauth_token is None:
             from local_llm.models.oauth_sessions import OAuthSessions
 
             sessions = await OAuthSessions.get_sessions_by_user_id(user.id)
             if sessions:
                 best = max(sessions, key=lambda s: s.updated_at)
-                oauth_token = await request.app.state.oauth_manager.get_oauth_token(
-                    user.id,
-                    best.id,
-                )
+                oauth_token = await request.app.state.oauth_manager.get_oauth_token(user.id, best.id)
     except Exception as e:
         log.error(f'Error getting OAuth token: {e}')
+    return oauth_token
 
-    extra_params = {
-        '__event_emitter__': __event_emitter__,
-        '__event_call__': __event_call__,
+
+async def _pipe_extra_params(request, metadata: dict, user) -> dict:
+    """Everything a pipe can ask for by name: event callers, chat and task ids, files, user, tools, OAuth token."""
+    event_emitter = event_call = task = task_body = None
+    if metadata:
+        if all(k in metadata for k in ('session_id', 'chat_id', 'message_id')):
+            event_emitter = await get_event_emitter(metadata)
+            event_call = await get_event_call(metadata)
+        task = metadata.get('task', None)
+        task_body = metadata.get('task_body', None)
+    oauth_token = await _pipe_oauth_token(request, user)
+    return {
+        '__event_emitter__': event_emitter,
+        '__event_call__': event_call,
         '__chat_id__': metadata.get('chat_id', None),
         '__session_id__': metadata.get('session_id', None),
         '__message_id__': metadata.get('message_id', None),
-        '__task__': __task__,
-        '__task_body__': __task_body__,
-        '__files__': files,
+        '__task__': task,
+        '__task_body__': task_body,
+        '__files__': metadata.get('files', []),
         '__user__': user.model_dump() if isinstance(user, UserModel) else {},
         '__metadata__': metadata,
         '__oauth_token__': oauth_token,
         '__request__': request,
+        '__tools__': metadata.get('tools', {}),
     }
-    extra_params['__tools__'] = metadata.get('tools', {})
 
+
+async def _apply_workspace_model(request, form_data: dict, metadata: dict, user, model_info) -> dict:
+    """A workspace model over the pipe: its base model, access check, params and system prompt."""
+    if model_info.base_model_id:
+        form_data['model'] = model_info.base_model_id
+    if not BYPASS_MODEL_ACCESS_CONTROL:
+        bypass = isinstance(user, UserModel) and user.role == 'admin' and BYPASS_ADMIN_ACCESS_CONTROL
+        await check_model_access(user if isinstance(user, UserModel) else UserModel(**user), model_info, bypass)
+    params = model_info.params.model_dump()
+    if params:
+        system = params.pop('system', None)
+        form_data = apply_model_params_to_body_openai(params, form_data)
+        # Set server-side by utils/chat.py, never by client input. Mirrors the routers.
+        if not getattr(request.state, 'bypass_system_prompt', False):
+            form_data = await apply_system_prompt_to_body(system, form_data, metadata, user)
+    return form_data
+
+
+async def _stream_pipe(pipe, params: dict, model: str):
+    """The pipe's output as SSE: passed through, or as chunks ending with a stop chunk and [DONE]."""
+    try:
+        res = await _execute_pipe(pipe, params)
+        # Directly return if the response is a StreamingResponse
+        if isinstance(res, StreamingResponse):
+            async for data in res.body_iterator:
+                yield data
+            return
+        if isinstance(res, dict):
+            yield f'data: {JSONCodec.dumps(res)}\n\n'
+            return
+    except Exception as e:
+        log.error(f'Error: {e}')
+        yield f'data: {JSONCodec.dumps({"error": {"detail": str(e)}})}\n\n'
+        return
+
+    if isinstance(res, str):
+        yield f'data: {JSONCodec.dumps(openai_chat_chunk_message_template(model, res))}\n\n'
+    if isinstance(res, Iterator):
+        for line in res:
+            yield _sse_line(model, line)
+    if isinstance(res, AsyncGenerator):
+        async for line in res:
+            yield _sse_line(model, line)
+
+    finish_message = openai_chat_chunk_message_template(model, '')
+    finish_message['choices'][0]['finish_reason'] = 'stop'
+    yield f'data: {JSONCodec.dumps(finish_message)}\n\n'
+    yield 'data: [DONE]'
+
+
+async def _complete_pipe(pipe, params: dict, model: str):
+    """The pipe's output as one completion (a response or dict from the pipe is returned as it is)."""
+    try:
+        res = await _execute_pipe(pipe, params)
+    except Exception as e:
+        log.error(f'Error: {e}')
+        return {'error': {'detail': str(e)}}
+    if isinstance(res, StreamingResponse) or isinstance(res, dict):
+        return res
+    if isinstance(res, BaseModel):
+        return res.model_dump()
+    return openai_chat_completion_message_template(model, await _message_content(res))
+
+
+async def generate_function_chat_completion(request, form_data, user, models: dict | None = None):
+    """Runs a pipe function as a model, streaming or not, as form_data asks."""
+    # Copy so the base-model substitution below doesn't leak into the caller's
+    # payload, which the tool-call continuation re-submits. Mirrors the routers.
+    form_data = {**form_data}
+    model_info = await Models.get_model_by_id(form_data.get('model'))
+    metadata = form_data.pop('metadata', {})
+    extra_params = await _pipe_extra_params(request, metadata, user)
     if model_info:
-        if model_info.base_model_id:
-            form_data['model'] = model_info.base_model_id
+        form_data = await _apply_workspace_model(request, form_data, metadata, user, model_info)
 
-        if not BYPASS_MODEL_ACCESS_CONTROL:
-            bypass = isinstance(user, UserModel) and user.role == 'admin' and BYPASS_ADMIN_ACCESS_CONTROL
-            await check_model_access(user if isinstance(user, UserModel) else UserModel(**user), model_info, bypass)
-
-        params = model_info.params.model_dump()
-
-        if params:
-            system = params.pop('system', None)
-            form_data = apply_model_params_to_body_openai(params, form_data)
-            if not bypass_system_prompt:
-                form_data = await apply_system_prompt_to_body(system, form_data, metadata, user)
-
-    pipe_id = get_pipe_id(form_data)
-    function_module = await get_function_module_by_id(request, pipe_id)
-
+    function_module = await get_function_module_by_id(request, _pipe_id(form_data['model']))
     pipe = function_module.pipe
-    params = await get_function_params(function_module, form_data, user, extra_params)
+    params = await _pipe_params(function_module, form_data, user, extra_params)
 
     if form_data.get('stream', False):
-
-        async def stream_content():
-            try:
-                res = await execute_pipe(pipe, params)
-
-                # Directly return if the response is a StreamingResponse
-                if isinstance(res, StreamingResponse):
-                    async for data in res.body_iterator:
-                        yield data
-                    return
-                if isinstance(res, dict):
-                    yield f'data: {JSONCodec.dumps(res)}\n\n'
-                    return
-
-            except Exception as e:
-                log.error(f'Error: {e}')
-                yield f'data: {JSONCodec.dumps({"error": {"detail": str(e)}})}\n\n'
-                return
-
-            if isinstance(res, str):
-                message = openai_chat_chunk_message_template(form_data['model'], res)
-                yield f'data: {JSONCodec.dumps(message)}\n\n'
-
-            if isinstance(res, Iterator):
-                for line in res:
-                    yield process_line(form_data, line)
-
-            if isinstance(res, AsyncGenerator):
-                async for line in res:
-                    yield process_line(form_data, line)
-
-            finish_message = openai_chat_chunk_message_template(form_data['model'], '')
-            finish_message['choices'][0]['finish_reason'] = 'stop'
-            yield f'data: {JSONCodec.dumps(finish_message)}\n\n'
-            yield 'data: [DONE]'
-
-        return StreamingResponse(stream_content(), media_type='text/event-stream')
-    else:
-        try:
-            res = await execute_pipe(pipe, params)
-
-        except Exception as e:
-            log.error(f'Error: {e}')
-            return {'error': {'detail': str(e)}}
-
-        if isinstance(res, StreamingResponse) or isinstance(res, dict):
-            return res
-        if isinstance(res, BaseModel):
-            return res.model_dump()
-
-        message = await get_message_content(res)
-        return openai_chat_completion_message_template(form_data['model'], message)
+        return StreamingResponse(_stream_pipe(pipe, params, form_data['model']), media_type='text/event-stream')
+    return await _complete_pipe(pipe, params, form_data['model'])
