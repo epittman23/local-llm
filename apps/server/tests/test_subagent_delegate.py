@@ -445,3 +445,17 @@ def test_record_golden(monkeypatch):
             golden[case_id] = _run(spec, m)
     GOLDEN.parent.mkdir(exist_ok=True)
     GOLDEN.write_text(json.dumps(golden, indent=1, ensure_ascii=False) + '\n', encoding='utf-8')
+
+
+@pytest.mark.parametrize(
+    ('error', 'text'),
+    [
+        ({'content': 'model failed'}, 'model failed'),
+        ({'content': None}, ''),
+        ({'code': 500}, "{'code': 500}"),
+        ('plain', 'plain'),
+    ],
+)
+def test_error_text(error, text):
+    """A stored message error reads as its content; anything else as its string form."""
+    assert subagents._error_text(error) == text

@@ -352,6 +352,13 @@ def _message_text(message: dict) -> str:
     return summary
 
 
+def _error_text(error) -> str:
+    """A stored message error as text: chat messages keep errors as {'content': ...}."""
+    if isinstance(error, dict) and 'content' in error:
+        return str(error.get('content') or '')
+    return str(error)
+
+
 def _background_result_text(delegation_id: str, task: str, context: str, chat_id: str, result: dict, duration: str):
     """The message a finished background sub-agent leaves in its parent chat."""
     lines = [
@@ -559,7 +566,7 @@ class _SubagentRun:
             return {
                 'status': 'error' if error else 'completed',
                 'summary': summary or ('Sub-agent produced no output.' if not error else ''),
-                'error': error,
+                'error': _error_text(error) if error else error,
             }
         except asyncio.CancelledError:
             await self._mark_failed('Sub-agent cancelled.')

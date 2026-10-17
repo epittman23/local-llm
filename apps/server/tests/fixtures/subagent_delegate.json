@@ -1332,15 +1332,13 @@
   "parent_after": null
  },
  "foreground_message_error": {
-  "returned": "Error: {'content': 'model failed'}",
+  "returned": "Error: model failed",
   "background_task": [
    {
     "result": {
      "status": "error",
      "summary": "partial",
-     "error": {
-      "content": "model failed"
-     }
+     "error": "model failed"
     }
    }
   ],
@@ -3823,9 +3821,7 @@
     "result": {
      "status": "error",
      "summary": "half done",
-     "error": {
-      "content": "boom"
-     }
+     "error": "boom"
     }
    }
   ],
@@ -3965,7 +3961,7 @@
      "parentId": "a2",
      "childrenIds": [],
      "role": "user",
-     "content": "[ASYNC SUBAGENT COMPLETE - deleg_00000000]\nA background subagent you dispatched earlier has finished. The original task source is included so you can decide whether to use the result or continue without it.\n\nOriginal task: Summarize the report\nContext provided: ctx\nSubagent chat: 00000000-0000-0000-0000-000000000002\nStatus: error   Duration: 0.0s\n--- RESULT ---\nThe subagent did not complete successfully. {'content': 'boom'}\nPartial output:\nhalf done",
+     "content": "[ASYNC SUBAGENT COMPLETE - deleg_00000000]\nA background subagent you dispatched earlier has finished. The original task source is included so you can decide whether to use the result or continue without it.\n\nOriginal task: Summarize the report\nContext provided: ctx\nSubagent chat: 00000000-0000-0000-0000-000000000002\nStatus: error   Duration: 0.0s\n--- RESULT ---\nThe subagent did not complete successfully. boom\nPartial output:\nhalf done",
      "model": "qwen",
      "meta": {
       "internal": true,
@@ -4049,7 +4045,7 @@
       "parentId": "a2",
       "childrenIds": [],
       "role": "user",
-      "content": "[ASYNC SUBAGENT COMPLETE - deleg_00000000]\nA background subagent you dispatched earlier has finished. The original task source is included so you can decide whether to use the result or continue without it.\n\nOriginal task: Summarize the report\nContext provided: ctx\nSubagent chat: 00000000-0000-0000-0000-000000000002\nStatus: error   Duration: 0.0s\n--- RESULT ---\nThe subagent did not complete successfully. {'content': 'boom'}\nPartial output:\nhalf done",
+      "content": "[ASYNC SUBAGENT COMPLETE - deleg_00000000]\nA background subagent you dispatched earlier has finished. The original task source is included so you can decide whether to use the result or continue without it.\n\nOriginal task: Summarize the report\nContext provided: ctx\nSubagent chat: 00000000-0000-0000-0000-000000000002\nStatus: error   Duration: 0.0s\n--- RESULT ---\nThe subagent did not complete successfully. boom\nPartial output:\nhalf done",
       "model": "qwen",
       "meta": {
        "internal": true,
