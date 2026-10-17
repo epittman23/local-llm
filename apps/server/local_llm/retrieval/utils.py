@@ -1129,16 +1129,18 @@ def get_embedding_function(
 
         return async_embedding_function
     elif embedding_engine in ['ollama', 'openai', 'azure_openai']:
-        embedding_function = lambda query, prefix=None, user=None: generate_embeddings(
-            engine=embedding_engine,
-            model=embedding_model,
-            text=query,
-            prefix=prefix,
-            url=url,
-            key=key,
-            user=user,
-            azure_api_version=azure_api_version,
-        )
+
+        def embedding_function(query, prefix=None, user=None):
+            return generate_embeddings(
+                engine=embedding_engine,
+                model=embedding_model,
+                text=query,
+                prefix=prefix,
+                url=url,
+                key=key,
+                user=user,
+                azure_api_version=azure_api_version,
+            )
 
         async def async_embedding_function(query, prefix=None, user=None):
             if isinstance(query, list):

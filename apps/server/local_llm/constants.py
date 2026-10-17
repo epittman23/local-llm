@@ -24,14 +24,22 @@ def _error_message(err='', fallback='') -> str:
 
 
 class MESSAGES(StrEnum):
-    DEFAULT = lambda msg='': f'{msg if msg else ""}'
-    MODEL_ADDED = lambda model='': f"The model '{model}' has been added successfully."
-    MODEL_DELETED = lambda model='': f"The model '{model}' has been deleted successfully."
+    def DEFAULT(msg=''):
+        return f'{msg if msg else ""}'
+
+    def MODEL_ADDED(model=''):
+        return f"The model '{model}' has been added successfully."
+
+    def MODEL_DELETED(model=''):
+        return f"The model '{model}' has been deleted successfully."
 
 
 class WEBHOOK_MESSAGES(StrEnum):
-    DEFAULT = lambda msg='': f'{msg if msg else ""}'
-    USER_SIGNUP = lambda username='': f'New user signed up: {username}' if username else 'New user signed up'
+    def DEFAULT(msg=''):
+        return f'{msg if msg else ""}'
+
+    def USER_SIGNUP(username=''):
+        return f'New user signed up: {username}' if username else 'New user signed up'
 
 
 class ERROR_MESSAGES(StrEnum):
@@ -80,11 +88,18 @@ class ERROR_MESSAGES(StrEnum):
     MALICIOUS = 'Unusual activities detected, please try again in a few minutes.'
 
     PANDOC_NOT_INSTALLED = 'Pandoc is not installed on the server. Please contact your administrator for assistance.'
-    INCORRECT_FORMAT = lambda err='': f'Invalid format. Please use the correct format{err}'
+
+    def INCORRECT_FORMAT(err=''):
+        return f'Invalid format. Please use the correct format{err}'
+
     RATE_LIMIT_EXCEEDED = 'API rate limit exceeded'
 
-    MODEL_NOT_FOUND = lambda name='': f"Model '{name}' was not found"
-    OPENAI_NOT_FOUND = lambda name='': 'OpenAI API was not found'
+    def MODEL_NOT_FOUND(name=''):
+        return f"Model '{name}' was not found"
+
+    def OPENAI_NOT_FOUND(name=''):
+        return 'OpenAI API was not found'
+
     OLLAMA_NOT_FOUND = 'WebUI could not connect to Ollama'
     CREATE_API_KEY_ERROR = 'Oops! Something went wrong while creating your API key. Please try again later. If the issue persists, contact support for assistance.'
     API_KEY_CREATION_NOT_ALLOWED = 'API key creation is not allowed in the environment.'
@@ -99,35 +114,51 @@ class ERROR_MESSAGES(StrEnum):
 
     OLLAMA_API_DISABLED = 'The Ollama API is disabled. Please enable it to use this feature.'
 
-    FILE_TOO_LARGE = lambda size='': (
-        f"Oops! The file you're trying to upload is too large. Please upload a file that is less than {size}."
-    )
+    def FILE_TOO_LARGE(size=''):
+        return f"Oops! The file you're trying to upload is too large. Please upload a file that is less than {size}."
 
     DUPLICATE_CONTENT = 'Duplicate content detected. Please provide unique content to proceed.'
     FILE_NOT_PROCESSED = (
         'Extracted content is not available for this file. Please ensure that the file is processed before proceeding.'
     )
 
-    INVALID_PASSWORD = lambda err='': err if err else 'The password does not meet the required validation criteria.'
+    def INVALID_PASSWORD(err=''):
+        return err if err else 'The password does not meet the required validation criteria.'
 
-    AUTOMATION_LIMIT_EXCEEDED = lambda size='': f'Automation limit reached ({size})'
-    AUTOMATION_TOO_FREQUENT = lambda interval='': f'Schedule too frequent. Minimum interval is {interval} seconds.'
-    AUTOMATION_INVALID_RRULE = lambda err='': f'Invalid RRULE: {err}'
+    def AUTOMATION_LIMIT_EXCEEDED(size=''):
+        return f'Automation limit reached ({size})'
+
+    def AUTOMATION_TOO_FREQUENT(interval=''):
+        return f'Schedule too frequent. Minimum interval is {interval} seconds.'
+
+    def AUTOMATION_INVALID_RRULE(err=''):
+        return f'Invalid RRULE: {err}'
+
     AUTOMATION_NO_FUTURE_RUNS = 'RRULE has no future occurrences'
     AUTOMATION_COUNT_REQUIRES_DTSTART = (
         'RRULE with COUNT requires an explicit DTSTART line to anchor the occurrence window'
     )
     CALENDAR_RRULE_TOO_FREQUENT = 'Recurring events cannot repeat more often than daily'
 
-    FEATURE_DISABLED = lambda name='': f'{name} is disabled'
-    INPUT_TOO_LONG = lambda size='': f'Input prompt exceeds maximum length of {size}'
+    def FEATURE_DISABLED(name=''):
+        return f'{name} is disabled'
+
+    def INPUT_TOO_LONG(size=''):
+        return f'Input prompt exceeds maximum length of {size}'
+
     SERVER_CONNECTION_ERROR = 'Local LLM: Server Connection Error'
-    REQUIRED_FIELD_EMPTY = lambda name='': f'Required field {name} is empty'
-    OAUTH_NOT_CONFIGURED = lambda name='': f"Provider '{name}' is not configured"
+
+    def REQUIRED_FIELD_EMPTY(name=''):
+        return f'Required field {name} is empty'
+
+    def OAUTH_NOT_CONFIGURED(name=''):
+        return f"Provider '{name}' is not configured"
 
 
 class TASKS(StrEnum):
-    DEFAULT = lambda task='': f'{task if task else "generation"}'
+    def DEFAULT(task=''):
+        return f'{task if task else "generation"}'
+
     TITLE_GENERATION = 'title_generation'
     FOLLOW_UP_GENERATION = 'follow_up_generation'
     TAGS_GENERATION = 'tags_generation'

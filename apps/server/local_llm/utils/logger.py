@@ -179,7 +179,9 @@ def start_logger():
     """
     logger.remove()
 
-    audit_filter = lambda record: True if ENABLE_AUDIT_STDOUT else 'auditable' not in record['extra']
+    def audit_filter(record):
+        return True if ENABLE_AUDIT_STDOUT else 'auditable' not in record['extra']
+
     if LOG_FORMAT == 'json':
         logger.add(
             _json_sink,
