@@ -1,0 +1,2944 @@
+{
+ "gen:openai_b64": {
+  "returned": [
+   {
+    "id": "file:out-1",
+    "url": "/api/v1/files/file:out-1/content",
+    "name": "out-1.out",
+    "content_type": "image/out"
+   },
+   {
+    "id": "file:out-2",
+    "url": "/api/v1/files/file:out-2/content",
+    "name": "out-2.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "session",
+    "post",
+    "https://oai.test/v1/images/generations",
+    {
+     "json": {
+      "model": "dall-e-3",
+      "prompt": "a cat",
+      "n": 2,
+      "size": "1024x1024",
+      "response_format": "b64_json"
+     },
+     "headers": {
+      "Authorization": "Bearer sk-gen",
+      "Content-Type": "application/json"
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "out-1",
+    "image/png",
+    {
+     "model": "dall-e-3",
+     "prompt": "a cat",
+     "n": 2,
+     "size": "1024x1024",
+     "response_format": "b64_json"
+    },
+    false,
+    "u1"
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "out-2",
+    "image/png",
+    {
+     "model": "dall-e-3",
+     "prompt": "a cat",
+     "n": 2,
+     "size": "1024x1024",
+     "response_format": "b64_json"
+    },
+    false,
+    "u1"
+   ]
+  ]
+ },
+ "gen:openai_form_size_and_chat": {
+  "returned": [
+   {
+    "id": "file:one",
+    "url": "/api/v1/files/file:one/content",
+    "name": "one.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "session",
+    "post",
+    "https://oai.test/v1/images/generations",
+    {
+     "json": {
+      "model": "dall-e-3",
+      "prompt": "p",
+      "n": 1,
+      "size": "256x256",
+      "response_format": "b64_json"
+     },
+     "headers": {
+      "Authorization": "Bearer sk-gen",
+      "Content-Type": "application/json"
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "one",
+    "image/png",
+    {
+     "model": "dall-e-3",
+     "prompt": "p",
+     "n": 1,
+     "size": "256x256",
+     "response_format": "b64_json",
+     "chat_id": "c1",
+     "message_id": "m1"
+    },
+    false,
+    "u1"
+   ],
+   [
+    "link_chat_files",
+    "c1",
+    "m1",
+    [
+     "file:one"
+    ],
+    "u1",
+    null
+   ]
+  ]
+ },
+ "gen:openai_url_model_versioned": {
+  "returned": [
+   {
+    "id": "file:cdn-bytes",
+    "url": "/api/v1/files/file:cdn-bytes/content",
+    "name": "cdn-bytes.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "session",
+    "post",
+    "https://oai.test/v1/images/generations?api-version=2024-02-01",
+    {
+     "json": {
+      "model": "gpt-image-1",
+      "prompt": "p",
+      "n": 1,
+      "size": "1024x1024",
+      "quality": "high"
+     },
+     "headers": {
+      "Authorization": "Bearer sk-gen",
+      "Content-Type": "application/json",
+      "X-User-Id": "u1"
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "validate_url",
+    "https://cdn.test/img1.png"
+   ],
+   [
+    "session",
+    "get",
+    "https://cdn.test/img1.png",
+    {
+     "headers": {
+      "Authorization": "Bearer sk-gen",
+      "X-User-Id": "u1"
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "cdn-bytes",
+    "image/png",
+    {
+     "model": "gpt-image-1",
+     "prompt": "p",
+     "n": 1,
+     "size": "1024x1024",
+     "quality": "high"
+    },
+    false,
+    "u1"
+   ]
+  ]
+ },
+ "gen:openai_no_size": {
+  "returned": [
+   {
+    "id": "file:out-1",
+    "url": "/api/v1/files/file:out-1/content",
+    "name": "out-1.out",
+    "content_type": "image/out"
+   },
+   {
+    "id": "file:out-2",
+    "url": "/api/v1/files/file:out-2/content",
+    "name": "out-2.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "session",
+    "post",
+    "https://oai.test/v1/images/generations",
+    {
+     "json": {
+      "model": "dall-e-3",
+      "prompt": "p",
+      "n": 1,
+      "response_format": "b64_json"
+     },
+     "headers": {
+      "Authorization": "Bearer sk-gen",
+      "Content-Type": "application/json"
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "out-1",
+    "image/png",
+    {
+     "model": "dall-e-3",
+     "prompt": "p",
+     "n": 1,
+     "response_format": "b64_json"
+    },
+    false,
+    "u1"
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "out-2",
+    "image/png",
+    {
+     "model": "dall-e-3",
+     "prompt": "p",
+     "n": 1,
+     "response_format": "b64_json"
+    },
+    false,
+    "u1"
+   ]
+  ]
+ },
+ "gen:openai_size_auto": {
+  "returned": [
+   {
+    "id": "file:out-1",
+    "url": "/api/v1/files/file:out-1/content",
+    "name": "out-1.out",
+    "content_type": "image/out"
+   },
+   {
+    "id": "file:out-2",
+    "url": "/api/v1/files/file:out-2/content",
+    "name": "out-2.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "session",
+    "post",
+    "https://oai.test/v1/images/generations",
+    {
+     "json": {
+      "model": "dall-e-3",
+      "prompt": "p",
+      "n": 1,
+      "size": "auto",
+      "response_format": "b64_json"
+     },
+     "headers": {
+      "Authorization": "Bearer sk-gen",
+      "Content-Type": "application/json"
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "out-1",
+    "image/png",
+    {
+     "model": "dall-e-3",
+     "prompt": "p",
+     "n": 1,
+     "size": "auto",
+     "response_format": "b64_json"
+    },
+    false,
+    "u1"
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "out-2",
+    "image/png",
+    {
+     "model": "dall-e-3",
+     "prompt": "p",
+     "n": 1,
+     "size": "auto",
+     "response_format": "b64_json"
+    },
+    false,
+    "u1"
+   ]
+  ]
+ },
+ "gen:openai_model_default": {
+  "returned": [
+   {
+    "id": "file:out-1",
+    "url": "/api/v1/files/file:out-1/content",
+    "name": "out-1.out",
+    "content_type": "image/out"
+   },
+   {
+    "id": "file:out-2",
+    "url": "/api/v1/files/file:out-2/content",
+    "name": "out-2.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "session",
+    "post",
+    "https://oai.test/v1/images/generations",
+    {
+     "json": {
+      "model": "dall-e-2",
+      "prompt": "p",
+      "n": 1,
+      "size": "1024x1024",
+      "response_format": "b64_json"
+     },
+     "headers": {
+      "Authorization": "Bearer sk-gen",
+      "Content-Type": "application/json"
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "out-1",
+    "image/png",
+    {
+     "model": "dall-e-2",
+     "prompt": "p",
+     "n": 1,
+     "size": "1024x1024",
+     "response_format": "b64_json"
+    },
+    false,
+    "u1"
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "out-2",
+    "image/png",
+    {
+     "model": "dall-e-2",
+     "prompt": "p",
+     "n": 1,
+     "size": "1024x1024",
+     "response_format": "b64_json"
+    },
+    false,
+    "u1"
+   ]
+  ]
+ },
+ "gen:openai_url_not_image": {
+  "http_error": [
+   400,
+   "Something went wrong :/"
+  ],
+  "calls": [
+   [
+    "session",
+    "post",
+    "https://oai.test/v1/images/generations",
+    {
+     "json": {
+      "model": "dall-e-3",
+      "prompt": "p",
+      "n": 1,
+      "size": "1024x1024",
+      "response_format": "b64_json"
+     },
+     "headers": {
+      "Authorization": "Bearer sk-gen",
+      "Content-Type": "application/json"
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "validate_url",
+    "https://cdn.test/img1.png"
+   ],
+   [
+    "session",
+    "get",
+    "https://cdn.test/img1.png",
+    {
+     "headers": {
+      "Authorization": "Bearer sk-gen"
+     }
+    },
+    {
+     "ssl": true
+    }
+   ]
+  ]
+ },
+ "gen:openai_bad_base64": {
+  "http_error": [
+   400,
+   "Something went wrong :/"
+  ],
+  "calls": [
+   [
+    "session",
+    "post",
+    "https://oai.test/v1/images/generations",
+    {
+     "json": {
+      "model": "dall-e-3",
+      "prompt": "p",
+      "n": 1,
+      "size": "1024x1024",
+      "response_format": "b64_json"
+     },
+     "headers": {
+      "Authorization": "Bearer sk-gen",
+      "Content-Type": "application/json"
+     }
+    },
+    {
+     "ssl": true
+    }
+   ]
+  ]
+ },
+ "gen:openai_http_error": {
+  "http_error": [
+   400,
+   "[ERROR: HTTP 401]"
+  ],
+  "calls": [
+   [
+    "session",
+    "post",
+    "https://oai.test/v1/images/generations",
+    {
+     "json": {
+      "model": "dall-e-3",
+      "prompt": "p",
+      "n": 1,
+      "size": "1024x1024",
+      "response_format": "b64_json"
+     },
+     "headers": {
+      "Authorization": "Bearer sk-gen",
+      "Content-Type": "application/json"
+     }
+    },
+    {
+     "ssl": true
+    }
+   ]
+  ]
+ },
+ "gen:invalid_form_size": {
+  "raised": [
+   "ValueError",
+   "invalid literal for int() with base 10: 'big'"
+  ],
+  "calls": []
+ },
+ "gen:gemini_predict_default_model": {
+  "returned": [
+   {
+    "id": "file:g1",
+    "url": "/api/v1/files/file:g1/content",
+    "name": "g1.out",
+    "content_type": "image/out"
+   },
+   {
+    "id": "file:g2",
+    "url": "/api/v1/files/file:g2/content",
+    "name": "g2.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "session",
+    "post",
+    "https://gem.test/v1beta/models/imagen-3.0-generate-002:predict",
+    {
+     "json": {
+      "instances": {
+       "prompt": "p"
+      },
+      "parameters": {
+       "sampleCount": 2,
+       "outputOptions": {
+        "mimeType": "image/png"
+       }
+      }
+     },
+     "headers": {
+      "Content-Type": "application/json",
+      "x-goog-api-key": "g-key"
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "g1",
+    "image/png",
+    {
+     "instances": {
+      "prompt": "p"
+     },
+     "parameters": {
+      "sampleCount": 2,
+      "outputOptions": {
+       "mimeType": "image/png"
+      }
+     }
+    },
+    false,
+    "u1"
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "g2",
+    "image/png",
+    {
+     "instances": {
+      "prompt": "p"
+     },
+     "parameters": {
+      "sampleCount": 2,
+      "outputOptions": {
+       "mimeType": "image/png"
+      }
+     }
+    },
+    false,
+    "u1"
+   ]
+  ]
+ },
+ "gen:gemini_predict_explicit": {
+  "returned": [
+   {
+    "id": "file:g1",
+    "url": "/api/v1/files/file:g1/content",
+    "name": "g1.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "session",
+    "post",
+    "https://gem.test/v1beta/models/imagen-4:predict",
+    {
+     "json": {
+      "instances": {
+       "prompt": "p"
+      },
+      "parameters": {
+       "sampleCount": 1,
+       "outputOptions": {
+        "mimeType": "image/png"
+       }
+      }
+     },
+     "headers": {
+      "Content-Type": "application/json",
+      "x-goog-api-key": "g-key"
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "g1",
+    "image/png",
+    {
+     "instances": {
+      "prompt": "p"
+     },
+     "parameters": {
+      "sampleCount": 1,
+      "outputOptions": {
+       "mimeType": "image/png"
+      }
+     }
+    },
+    false,
+    "u1"
+   ]
+  ]
+ },
+ "gen:gemini_generate_content": {
+  "returned": [
+   {
+    "id": "file:c1",
+    "url": "/api/v1/files/file:c1/content",
+    "name": "c1.out",
+    "content_type": "image/out"
+   },
+   {
+    "id": "file:c2",
+    "url": "/api/v1/files/file:c2/content",
+    "name": "c2.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "session",
+    "post",
+    "https://gem.test/v1beta/models/gemini-img:generateContent",
+    {
+     "json": {
+      "contents": [
+       {
+        "parts": [
+         {
+          "text": "p"
+         }
+        ]
+       }
+      ]
+     },
+     "headers": {
+      "Content-Type": "application/json",
+      "x-goog-api-key": "g-key"
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "c1",
+    "image/png",
+    {
+     "contents": [
+      {
+       "parts": [
+        {
+         "text": "p"
+        }
+       ]
+      }
+     ],
+     "chat_id": "c1"
+    },
+    false,
+    "u1"
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "c2",
+    "image/png",
+    {
+     "contents": [
+      {
+       "parts": [
+        {
+         "text": "p"
+        }
+       ]
+      }
+     ],
+     "chat_id": "c1"
+    },
+    false,
+    "u1"
+   ]
+  ]
+ },
+ "gen:gemini_unknown_method": {
+  "returned": [],
+  "calls": [
+   [
+    "session",
+    "post",
+    "https://gem.test/v1beta/models/dall-e-3",
+    {
+     "json": {},
+     "headers": {
+      "Content-Type": "application/json",
+      "x-goog-api-key": "g-key"
+     }
+    },
+    {
+     "ssl": true
+    }
+   ]
+  ]
+ },
+ "gen:gemini_http_error": {
+  "http_error": [
+   400,
+   "[ERROR: HTTP 403]"
+  ],
+  "calls": [
+   [
+    "session",
+    "post",
+    "https://gem.test/v1beta/models/dall-e-3:predict",
+    {
+     "json": {
+      "instances": {
+       "prompt": "p"
+      },
+      "parameters": {
+       "sampleCount": 1,
+       "outputOptions": {
+        "mimeType": "image/png"
+       }
+      }
+     },
+     "headers": {
+      "Content-Type": "application/json",
+      "x-goog-api-key": "g-key"
+     }
+    },
+    {
+     "ssl": true
+    }
+   ]
+  ]
+ },
+ "gen:comfyui_config_steps_trusted_url": {
+  "returned": [
+   {
+    "id": "file:comfy-bytes",
+    "url": "/api/v1/files/file:comfy-bytes/content",
+    "name": "comfy-bytes.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "comfyui_create",
+    "dall-e-3",
+    {
+     "workflow": {
+      "workflow": "{\"3\": {}}",
+      "nodes": []
+     },
+     "prompt": "p",
+     "negative_prompt": "blurry",
+     "width": 640,
+     "height": 480,
+     "n": 1,
+     "steps": 20,
+     "seed": null
+    },
+    "uuid-1",
+    "http://comfy.test:8188",
+    "ck"
+   ],
+   [
+    "session",
+    "get",
+    "http://comfy.test:8188/view?filename=a.png",
+    {
+     "headers": {
+      "Authorization": "Bearer ck"
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "comfy-bytes",
+    "image/png",
+    {
+     "workflow": {
+      "workflow": "{\"3\": {}}",
+      "nodes": []
+     },
+     "prompt": "p",
+     "negative_prompt": "blurry",
+     "width": 640,
+     "height": 480,
+     "n": 1,
+     "steps": 20
+    },
+    false,
+    "u1"
+   ]
+  ]
+ },
+ "gen:comfyui_form_steps_untrusted_url": {
+  "returned": [
+   {
+    "id": "file:comfy-bytes",
+    "url": "/api/v1/files/file:comfy-bytes/content",
+    "name": "comfy-bytes.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "comfyui_create",
+    "sdxl.safetensors",
+    {
+     "workflow": {
+      "workflow": "{\"3\": {}}",
+      "nodes": []
+     },
+     "prompt": "p",
+     "negative_prompt": null,
+     "width": 1024,
+     "height": 1024,
+     "n": 1,
+     "steps": 5,
+     "seed": null
+    },
+    "uuid-1",
+    "http://comfy.test:8188",
+    ""
+   ],
+   [
+    "validate_url",
+    "http://other.test/view?filename=a.png"
+   ],
+   [
+    "session",
+    "get",
+    "http://other.test/view?filename=a.png",
+    {
+     "headers": null
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "comfy-bytes",
+    "image/png",
+    {
+     "workflow": {
+      "workflow": "{\"3\": {}}",
+      "nodes": []
+     },
+     "prompt": "p",
+     "width": 1024,
+     "height": 1024,
+     "n": 1,
+     "steps": 5
+    },
+    false,
+    "u1"
+   ]
+  ]
+ },
+ "gen:comfyui_no_steps": {
+  "returned": [],
+  "calls": [
+   [
+    "comfyui_create",
+    "",
+    {
+     "workflow": {
+      "workflow": "{\"3\": {}}",
+      "nodes": []
+     },
+     "prompt": "p",
+     "negative_prompt": null,
+     "width": 1024,
+     "height": 1024,
+     "n": 1,
+     "steps": null,
+     "seed": null
+    },
+    "uuid-1",
+    "http://comfy.test:8188",
+    ""
+   ]
+  ]
+ },
+ "gen:a1111_admin_sets_model": {
+  "returned": [
+   {
+    "id": "file:a1",
+    "url": "/api/v1/files/file:a1/content",
+    "name": "a1.out",
+    "content_type": "image/out"
+   },
+   {
+    "id": "file:a2",
+    "url": "/api/v1/files/file:a2/content",
+    "name": "a2.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "session",
+    "get",
+    "http://a1111.test/sdapi/v1/options",
+    {
+     "headers": {
+      "authorization": "Basic dXNlcjpwYXNz"
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "set_image_model",
+    "sdxl"
+   ],
+   [
+    "session",
+    "post",
+    "http://a1111.test/sdapi/v1/txt2img",
+    {
+     "json": {
+      "prompt": "p",
+      "batch_size": 2,
+      "width": 1024,
+      "height": 1024
+     },
+     "headers": {
+      "authorization": "Basic dXNlcjpwYXNz"
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "a1",
+    "image/png",
+    {
+     "prompt": "p",
+     "batch_size": 2,
+     "width": 1024,
+     "height": 1024,
+     "info": "seed=1"
+    },
+    false,
+    "u1"
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "a2",
+    "image/png",
+    {
+     "prompt": "p",
+     "batch_size": 2,
+     "width": 1024,
+     "height": 1024,
+     "info": "seed=1"
+    },
+    false,
+    "u1"
+   ]
+  ]
+ },
+ "gen:a1111_user_model_ignored": {
+  "returned": [
+   {
+    "id": "file:a1",
+    "url": "/api/v1/files/file:a1/content",
+    "name": "a1.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "session",
+    "get",
+    "http://a1111.test/sdapi/v1/options",
+    {
+     "headers": {
+      "authorization": "Basic "
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "session",
+    "post",
+    "http://a1111.test/sdapi/v1/txt2img",
+    {
+     "json": {
+      "prompt": "p",
+      "batch_size": 1,
+      "width": 768,
+      "height": 1024,
+      "steps": 30,
+      "negative_prompt": "ugly",
+      "cfg_scale": 7
+     },
+     "headers": {
+      "authorization": "Basic "
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "a1",
+    "image/png",
+    {
+     "prompt": "p",
+     "batch_size": 1,
+     "width": 768,
+     "height": 1024,
+     "steps": 30,
+     "negative_prompt": "ugly",
+     "cfg_scale": 7,
+     "info": "seed=2"
+    },
+    false,
+    "u1"
+   ]
+  ]
+ },
+ "gen:a1111_options_fail": {
+  "http_error": [
+   400,
+   "[ERROR: Failed to connect to the image generation engine]"
+  ],
+  "calls": [
+   [
+    "session",
+    "get",
+    "http://a1111.test/sdapi/v1/options",
+    {
+     "headers": {
+      "authorization": "Basic "
+     }
+    },
+    {
+     "ssl": true
+    }
+   ]
+  ]
+ },
+ "gen:a1111_missing_images": {
+  "http_error": [
+   400,
+   "Something went wrong :/"
+  ],
+  "calls": [
+   [
+    "session",
+    "get",
+    "http://a1111.test/sdapi/v1/options",
+    {
+     "headers": {
+      "authorization": "Basic "
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "session",
+    "post",
+    "http://a1111.test/sdapi/v1/txt2img",
+    {
+     "json": {
+      "prompt": "p",
+      "batch_size": 1,
+      "width": 1024,
+      "height": 1024
+     },
+     "headers": {
+      "authorization": "Basic "
+     }
+    },
+    {
+     "ssl": true
+    }
+   ]
+  ]
+ },
+ "gen:unknown_engine": {
+  "returned": null,
+  "calls": []
+ },
+ "edit:openai_data_url_and_chat": {
+  "returned": [
+   {
+    "id": "file:out-1",
+    "url": "/api/v1/files/file:out-1/content",
+    "name": "out-1.out",
+    "content_type": "image/out"
+   },
+   {
+    "id": "file:out-2",
+    "url": "/api/v1/files/file:out-2/content",
+    "name": "out-2.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "normalize",
+    "data:image/png;base64,cG5nLW9uZQ=="
+   ],
+   [
+    "session",
+    "post",
+    "https://oai.test/v1/images/edits",
+    {
+     "headers": {
+      "Authorization": "Bearer sk-edit"
+     },
+     "data": {
+      "form": [
+       [
+        "model",
+        "dall-e-2",
+        null,
+        null
+       ],
+       [
+        "prompt",
+        "add a hat",
+        null,
+        null
+       ],
+       [
+        "n",
+        "2",
+        null,
+        null
+       ],
+       [
+        "size",
+        "1024x1024",
+        null,
+        null
+       ],
+       [
+        "background",
+        "transparent",
+        null,
+        null
+       ],
+       [
+        "response_format",
+        "b64_json",
+        null,
+        null
+       ],
+       [
+        "image",
+        {
+         "bytes": "png-one"
+        },
+        "uuid-1.png",
+        "image/png"
+       ]
+      ]
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "out-1",
+    "image/png",
+    {
+     "model": "dall-e-2",
+     "prompt": "add a hat",
+     "n": 2,
+     "size": "1024x1024",
+     "background": "transparent",
+     "response_format": "b64_json",
+     "chat_id": "c1",
+     "message_id": "m1"
+    },
+    false,
+    "u1"
+   ],
+   [
+    "link_chat_files",
+    "c1",
+    "m1",
+    [
+     "file:out-1"
+    ],
+    "u1",
+    null
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "out-2",
+    "image/png",
+    {
+     "model": "dall-e-2",
+     "prompt": "add a hat",
+     "n": 2,
+     "size": "1024x1024",
+     "background": "transparent",
+     "response_format": "b64_json",
+     "chat_id": "c1",
+     "message_id": "m1"
+    },
+    false,
+    "u1"
+   ],
+   [
+    "link_chat_files",
+    "c1",
+    "m1",
+    [
+     "file:out-2"
+    ],
+    "u1",
+    null
+   ]
+  ]
+ },
+ "edit:openai_list_versioned": {
+  "returned": [
+   {
+    "id": "file:one",
+    "url": "/api/v1/files/file:one/content",
+    "name": "one.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "session",
+    "post",
+    "https://oai.test/v1/images/edits?api-version=2025-04-01",
+    {
+     "headers": {
+      "Authorization": "Bearer sk-edit",
+      "X-User-Id": "u1"
+     },
+     "data": {
+      "form": [
+       [
+        "model",
+        "gpt-image-1",
+        null,
+        null
+       ],
+       [
+        "prompt",
+        "merge",
+        null,
+        null
+       ],
+       [
+        "size",
+        "512x512",
+        null,
+        null
+       ],
+       [
+        "image[]",
+        {
+         "bytes": "png-one"
+        },
+        "uuid-1.png",
+        "image/png"
+       ],
+       [
+        "image[]",
+        {
+         "bytes": "jpeg-one"
+        },
+        "uuid-2.jpg",
+        "image/jpeg"
+       ]
+      ]
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "one",
+    "image/png",
+    {
+     "model": "gpt-image-1",
+     "prompt": "merge",
+     "size": "512x512"
+    },
+    false,
+    "u1"
+   ]
+  ]
+ },
+ "edit:openai_single_unnormalized": {
+  "returned": [
+   {
+    "id": "file:out-1",
+    "url": "/api/v1/files/file:out-1/content",
+    "name": "out-1.out",
+    "content_type": "image/out"
+   },
+   {
+    "id": "file:out-2",
+    "url": "/api/v1/files/file:out-2/content",
+    "name": "out-2.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "session",
+    "post",
+    "https://oai.test/v1/images/edits",
+    {
+     "headers": {
+      "Authorization": "Bearer sk-edit"
+     },
+     "data": {
+      "form": [
+       [
+        "model",
+        "dall-e-2",
+        null,
+        null
+       ],
+       [
+        "prompt",
+        "p",
+        null,
+        null
+       ],
+       [
+        "background",
+        "opaque",
+        null,
+        null
+       ],
+       [
+        "response_format",
+        "b64_json",
+        null,
+        null
+       ],
+       [
+        "image",
+        {
+         "bytes": "jpeg-one"
+        },
+        "uuid-1.jpg",
+        "image/jpeg"
+       ]
+      ]
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "out-1",
+    "image/png",
+    {
+     "model": "dall-e-2",
+     "prompt": "p",
+     "background": "opaque",
+     "response_format": "b64_json"
+    },
+    false,
+    "u1"
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "out-2",
+    "image/png",
+    {
+     "model": "dall-e-2",
+     "prompt": "p",
+     "background": "opaque",
+     "response_format": "b64_json"
+    },
+    false,
+    "u1"
+   ]
+  ]
+ },
+ "edit:openai_model_override": {
+  "returned": [
+   {
+    "id": "file:out-1",
+    "url": "/api/v1/files/file:out-1/content",
+    "name": "out-1.out",
+    "content_type": "image/out"
+   },
+   {
+    "id": "file:out-2",
+    "url": "/api/v1/files/file:out-2/content",
+    "name": "out-2.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "normalize",
+    "data:image/png;base64,cG5nLW9uZQ=="
+   ],
+   [
+    "session",
+    "post",
+    "https://oai.test/v1/images/edits",
+    {
+     "headers": {
+      "Authorization": "Bearer sk-edit"
+     },
+     "data": {
+      "form": [
+       [
+        "model",
+        "gpt-image-1",
+        null,
+        null
+       ],
+       [
+        "prompt",
+        "p",
+        null,
+        null
+       ],
+       [
+        "response_format",
+        "b64_json",
+        null,
+        null
+       ],
+       [
+        "image",
+        {
+         "bytes": "png-one"
+        },
+        "uuid-1.png",
+        "image/png"
+       ]
+      ]
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "out-1",
+    "image/png",
+    {
+     "model": "gpt-image-1",
+     "prompt": "p",
+     "response_format": "b64_json"
+    },
+    false,
+    "u1"
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "out-2",
+    "image/png",
+    {
+     "model": "gpt-image-1",
+     "prompt": "p",
+     "response_format": "b64_json"
+    },
+    false,
+    "u1"
+   ]
+  ]
+ },
+ "edit:openai_url_response": {
+  "returned": [
+   {
+    "id": "file:cdn-bytes",
+    "url": "/api/v1/files/file:cdn-bytes/content",
+    "name": "cdn-bytes.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "normalize",
+    "data:image/png;base64,cG5nLW9uZQ=="
+   ],
+   [
+    "session",
+    "post",
+    "https://oai.test/v1/images/edits",
+    {
+     "headers": {
+      "Authorization": "Bearer sk-edit"
+     },
+     "data": {
+      "form": [
+       [
+        "model",
+        "dall-e-2",
+        null,
+        null
+       ],
+       [
+        "prompt",
+        "p",
+        null,
+        null
+       ],
+       [
+        "response_format",
+        "b64_json",
+        null,
+        null
+       ],
+       [
+        "image",
+        {
+         "bytes": "png-one"
+        },
+        "uuid-1.png",
+        "image/png"
+       ]
+      ]
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "validate_url",
+    "https://cdn.test/img1.png"
+   ],
+   [
+    "session",
+    "get",
+    "https://cdn.test/img1.png",
+    {
+     "headers": {
+      "Authorization": "Bearer sk-edit"
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "cdn-bytes",
+    "image/png",
+    {
+     "model": "dall-e-2",
+     "prompt": "p",
+     "response_format": "b64_json"
+    },
+    false,
+    "u1"
+   ]
+  ]
+ },
+ "edit:openai_http_error": {
+  "http_error": [
+   400,
+   "[ERROR: HTTP 429]"
+  ],
+  "calls": [
+   [
+    "normalize",
+    "data:image/png;base64,cG5nLW9uZQ=="
+   ],
+   [
+    "session",
+    "post",
+    "https://oai.test/v1/images/edits",
+    {
+     "headers": {
+      "Authorization": "Bearer sk-edit"
+     },
+     "data": {
+      "form": [
+       [
+        "model",
+        "dall-e-2",
+        null,
+        null
+       ],
+       [
+        "prompt",
+        "p",
+        null,
+        null
+       ],
+       [
+        "response_format",
+        "b64_json",
+        null,
+        null
+       ],
+       [
+        "image",
+        {
+         "bytes": "png-one"
+        },
+        "uuid-1.png",
+        "image/png"
+       ]
+      ]
+     }
+    },
+    {
+     "ssl": true
+    }
+   ]
+  ]
+ },
+ "edit:size_without_x": {
+  "raised": [
+   "ValueError",
+   "invalid literal for int() with base 10: 'auto'"
+  ],
+  "calls": []
+ },
+ "edit:size_form_only": {
+  "returned": [],
+  "calls": [
+   [
+    "comfyui_upload",
+    "image",
+    "uuid-1.png",
+    {
+     "bytes": "png-one"
+    },
+    "image/png",
+    "http://comfy.test:8188",
+    ""
+   ],
+   [
+    "comfyui_edit",
+    "qwen-edit",
+    {
+     "workflow": {
+      "workflow": "{\"9\": {}}",
+      "nodes": []
+     },
+     "image": [
+      "uuid-1.png"
+     ],
+     "prompt": "p",
+     "width": 300,
+     "height": 200,
+     "n": null,
+     "steps": null,
+     "seed": null
+    },
+    "uuid-2",
+    "http://comfy.test:8188",
+    ""
+   ]
+  ]
+ },
+ "edit:image_http_external": {
+  "returned": [
+   {
+    "id": "file:out-1",
+    "url": "/api/v1/files/file:out-1/content",
+    "name": "out-1.out",
+    "content_type": "image/out"
+   },
+   {
+    "id": "file:out-2",
+    "url": "/api/v1/files/file:out-2/content",
+    "name": "out-2.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "validate_url",
+    "https://img.test/a.jpg"
+   ],
+   [
+    "ssrf_session",
+    "get",
+    "https://img.test/a.jpg",
+    {
+     "allow_redirects": false
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "normalize",
+    "data:image/jpeg;base64,cmVtb3RlLWpwZWc="
+   ],
+   [
+    "session",
+    "post",
+    "https://oai.test/v1/images/edits",
+    {
+     "headers": {
+      "Authorization": "Bearer sk-edit"
+     },
+     "data": {
+      "form": [
+       [
+        "model",
+        "dall-e-2",
+        null,
+        null
+       ],
+       [
+        "prompt",
+        "p",
+        null,
+        null
+       ],
+       [
+        "response_format",
+        "b64_json",
+        null,
+        null
+       ],
+       [
+        "image",
+        {
+         "bytes": "remote-jpeg"
+        },
+        "uuid-1.jpg",
+        "image/jpeg"
+       ]
+      ]
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "out-1",
+    "image/png",
+    {
+     "model": "dall-e-2",
+     "prompt": "p",
+     "response_format": "b64_json"
+    },
+    false,
+    "u1"
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "out-2",
+    "image/png",
+    {
+     "model": "dall-e-2",
+     "prompt": "p",
+     "response_format": "b64_json"
+    },
+    false,
+    "u1"
+   ]
+  ]
+ },
+ "edit:image_http_blocked": {
+  "http_error": [
+   400,
+   "[ERROR: Error loading image]"
+  ],
+  "calls": [
+   [
+    "validate_url",
+    "https://blocked.test/a.png"
+   ]
+  ]
+ },
+ "edit:image_http_status_error": {
+  "http_error": [
+   400,
+   "[ERROR: Error loading image]"
+  ],
+  "calls": [
+   [
+    "validate_url",
+    "https://img.test/gone.png"
+   ],
+   [
+    "ssrf_session",
+    "get",
+    "https://img.test/gone.png",
+    {
+     "allow_redirects": false
+    },
+    {
+     "ssl": true
+    }
+   ]
+  ]
+ },
+ "edit:image_own_file_url": {
+  "returned": [
+   {
+    "id": "file:e1",
+    "url": "/api/v1/files/file:e1/content",
+    "name": "e1.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "serve_file",
+    "f1",
+    "u1",
+    false,
+    null
+   ],
+   [
+    "session",
+    "post",
+    "https://gem.test/v1beta/models/gemini-2.5-flash-image:generateContent",
+    {
+     "json": {
+      "contents": [
+       {
+        "parts": [
+         {
+          "text": "p"
+         },
+         {
+          "inline_data": {
+           "mime_type": "image/png",
+           "data": "ZmlsZS1vbmU="
+          }
+         }
+        ]
+       }
+      ]
+     },
+     "headers": {
+      "Content-Type": "application/json",
+      "x-goog-api-key": "ge-key"
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "e1",
+    "image/png",
+    {
+     "contents": [
+      {
+       "parts": [
+        {
+         "text": "p"
+        },
+        {
+         "inline_data": {
+          "mime_type": "image/png",
+          "data": "ZmlsZS1vbmU="
+         }
+        }
+       ]
+      }
+     ]
+    },
+    false,
+    "u1"
+   ]
+  ]
+ },
+ "edit:image_own_host_other_path": {
+  "returned": [
+   {
+    "id": "file:e1",
+    "url": "/api/v1/files/file:e1/content",
+    "name": "e1.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "validate_url",
+    "http://app.local/static/a.png"
+   ],
+   [
+    "ssrf_session",
+    "get",
+    "http://app.local/static/a.png",
+    {
+     "allow_redirects": false
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "session",
+    "post",
+    "https://gem.test/v1beta/models/gemini-2.5-flash-image:generateContent",
+    {
+     "json": {
+      "contents": [
+       {
+        "parts": [
+         {
+          "text": "p"
+         },
+         {
+          "inline_data": {
+           "mime_type": "image/png",
+           "data": "c3RhdGljLXBuZw=="
+          }
+         }
+        ]
+       }
+      ]
+     },
+     "headers": {
+      "Content-Type": "application/json",
+      "x-goog-api-key": "ge-key"
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "e1",
+    "image/png",
+    {
+     "contents": [
+      {
+       "parts": [
+        {
+         "text": "p"
+        },
+        {
+         "inline_data": {
+          "mime_type": "image/png",
+          "data": "c3RhdGljLXBuZw=="
+         }
+        }
+       ]
+      }
+     ]
+    },
+    false,
+    "u1"
+   ]
+  ]
+ },
+ "edit:image_file_path": {
+  "returned": [
+   {
+    "id": "file:e1",
+    "url": "/api/v1/files/file:e1/content",
+    "name": "e1.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "serve_file",
+    "f2",
+    "u1",
+    false,
+    null
+   ],
+   [
+    "session",
+    "post",
+    "https://gem.test/v1beta/models/gemini-2.5-flash-image:generateContent",
+    {
+     "json": {
+      "contents": [
+       {
+        "parts": [
+         {
+          "text": "p"
+         },
+         {
+          "inline_data": {
+           "mime_type": "image/png",
+           "data": "ZmlsZS10d28="
+          }
+         }
+        ]
+       }
+      ]
+     },
+     "headers": {
+      "Content-Type": "application/json",
+      "x-goog-api-key": "ge-key"
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "e1",
+    "image/png",
+    {
+     "contents": [
+      {
+       "parts": [
+        {
+         "text": "p"
+        },
+        {
+         "inline_data": {
+          "mime_type": "image/png",
+          "data": "ZmlsZS10d28="
+         }
+        }
+       ]
+      }
+     ]
+    },
+    false,
+    "u1"
+   ]
+  ]
+ },
+ "edit:image_file_id": {
+  "returned": [
+   {
+    "id": "file:out-1",
+    "url": "/api/v1/files/file:out-1/content",
+    "name": "out-1.out",
+    "content_type": "image/out"
+   },
+   {
+    "id": "file:out-2",
+    "url": "/api/v1/files/file:out-2/content",
+    "name": "out-2.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "serve_file",
+    "f1",
+    "u1",
+    false,
+    null
+   ],
+   [
+    "normalize",
+    "data:image/png;base64,ZmlsZS1vbmU="
+   ],
+   [
+    "session",
+    "post",
+    "https://oai.test/v1/images/edits",
+    {
+     "headers": {
+      "Authorization": "Bearer sk-edit"
+     },
+     "data": {
+      "form": [
+       [
+        "model",
+        "dall-e-2",
+        null,
+        null
+       ],
+       [
+        "prompt",
+        "p",
+        null,
+        null
+       ],
+       [
+        "response_format",
+        "b64_json",
+        null,
+        null
+       ],
+       [
+        "image",
+        {
+         "bytes": "file-one"
+        },
+        "uuid-1.png",
+        "image/png"
+       ]
+      ]
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "out-1",
+    "image/png",
+    {
+     "model": "dall-e-2",
+     "prompt": "p",
+     "response_format": "b64_json"
+    },
+    false,
+    "u1"
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "out-2",
+    "image/png",
+    {
+     "model": "dall-e-2",
+     "prompt": "p",
+     "response_format": "b64_json"
+    },
+    false,
+    "u1"
+   ]
+  ]
+ },
+ "edit:image_file_not_served": {
+  "http_error": [
+   400,
+   "Something went wrong :/"
+  ],
+  "calls": [
+   [
+    "serve_file",
+    "f_dict",
+    "u1",
+    false,
+    null
+   ],
+   [
+    "normalize",
+    "f_dict"
+   ]
+  ]
+ },
+ "edit:image_file_missing": {
+  "http_error": [
+   404,
+   "File not found"
+  ],
+  "calls": [
+   [
+    "serve_file",
+    "f_missing",
+    "u1",
+    false,
+    null
+   ]
+  ]
+ },
+ "edit:image_list_mixed": {
+  "returned": [
+   {
+    "id": "file:out-1",
+    "url": "/api/v1/files/file:out-1/content",
+    "name": "out-1.out",
+    "content_type": "image/out"
+   },
+   {
+    "id": "file:out-2",
+    "url": "/api/v1/files/file:out-2/content",
+    "name": "out-2.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "serve_file",
+    "f2",
+    "u1",
+    false,
+    null
+   ],
+   [
+    "serve_file",
+    "f1",
+    "u1",
+    false,
+    null
+   ],
+   [
+    "normalize",
+    "data:image/png;base64,cG5nLW9uZQ=="
+   ],
+   [
+    "normalize",
+    "data:image/jpeg;base64,ZmlsZS10d28="
+   ],
+   [
+    "normalize",
+    "data:image/png;base64,ZmlsZS1vbmU="
+   ],
+   [
+    "session",
+    "post",
+    "https://oai.test/v1/images/edits",
+    {
+     "headers": {
+      "Authorization": "Bearer sk-edit"
+     },
+     "data": {
+      "form": [
+       [
+        "model",
+        "dall-e-2",
+        null,
+        null
+       ],
+       [
+        "prompt",
+        "p",
+        null,
+        null
+       ],
+       [
+        "response_format",
+        "b64_json",
+        null,
+        null
+       ],
+       [
+        "image[]",
+        {
+         "bytes": "png-one"
+        },
+        "uuid-1.png",
+        "image/png"
+       ],
+       [
+        "image[]",
+        {
+         "bytes": "file-two"
+        },
+        "uuid-2.jpg",
+        "image/jpeg"
+       ],
+       [
+        "image[]",
+        {
+         "bytes": "file-one"
+        },
+        "uuid-3.png",
+        "image/png"
+       ]
+      ]
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "out-1",
+    "image/png",
+    {
+     "model": "dall-e-2",
+     "prompt": "p",
+     "response_format": "b64_json"
+    },
+    false,
+    "u1"
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "out-2",
+    "image/png",
+    {
+     "model": "dall-e-2",
+     "prompt": "p",
+     "response_format": "b64_json"
+    },
+    false,
+    "u1"
+   ]
+  ]
+ },
+ "edit:gemini_single": {
+  "returned": [
+   {
+    "id": "file:e1",
+    "url": "/api/v1/files/file:e1/content",
+    "name": "e1.out",
+    "content_type": "image/out"
+   },
+   {
+    "id": "file:e2",
+    "url": "/api/v1/files/file:e2/content",
+    "name": "e2.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "session",
+    "post",
+    "https://gem.test/v1beta/models/gemini-2.5-flash-image:generateContent",
+    {
+     "json": {
+      "contents": [
+       {
+        "parts": [
+         {
+          "text": "p"
+         },
+         {
+          "inline_data": {
+           "mime_type": "image/png",
+           "data": "cG5nLW9uZQ=="
+          }
+         }
+        ]
+       }
+      ]
+     },
+     "headers": {
+      "Content-Type": "application/json",
+      "x-goog-api-key": "ge-key"
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "e1",
+    "image/png",
+    {
+     "contents": [
+      {
+       "parts": [
+        {
+         "text": "p"
+        },
+        {
+         "inline_data": {
+          "mime_type": "image/png",
+          "data": "cG5nLW9uZQ=="
+         }
+        }
+       ]
+      }
+     ],
+     "chat_id": "c1",
+     "message_id": "m1"
+    },
+    false,
+    "u1"
+   ],
+   [
+    "link_chat_files",
+    "c1",
+    "m1",
+    [
+     "file:e1"
+    ],
+    "u1",
+    null
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "e2",
+    "image/png",
+    {
+     "contents": [
+      {
+       "parts": [
+        {
+         "text": "p"
+        },
+        {
+         "inline_data": {
+          "mime_type": "image/png",
+          "data": "cG5nLW9uZQ=="
+         }
+        }
+       ]
+      }
+     ],
+     "chat_id": "c1",
+     "message_id": "m1"
+    },
+    false,
+    "u1"
+   ],
+   [
+    "link_chat_files",
+    "c1",
+    "m1",
+    [
+     "file:e2"
+    ],
+    "u1",
+    null
+   ]
+  ]
+ },
+ "edit:gemini_list_jpeg_override": {
+  "returned": [
+   {
+    "id": "file:e1",
+    "url": "/api/v1/files/file:e1/content",
+    "name": "e1.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "session",
+    "post",
+    "https://gem.test/v1beta/models/g-override:generateContent",
+    {
+     "json": {
+      "contents": [
+       {
+        "parts": [
+         {
+          "text": "p"
+         },
+         {
+          "inline_data": {
+           "mime_type": "image/png",
+           "data": "cG5nLW9uZQ=="
+          }
+         },
+         {
+          "inline_data": {
+           "mime_type": "image/png",
+           "data": "anBlZy1vbmU="
+          }
+         }
+        ]
+       }
+      ]
+     },
+     "headers": {
+      "Content-Type": "application/json",
+      "x-goog-api-key": "ge-key"
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "e1",
+    "image/png",
+    {
+     "contents": [
+      {
+       "parts": [
+        {
+         "text": "p"
+        },
+        {
+         "inline_data": {
+          "mime_type": "image/png",
+          "data": "cG5nLW9uZQ=="
+         }
+        },
+        {
+         "inline_data": {
+          "mime_type": "image/png",
+          "data": "anBlZy1vbmU="
+         }
+        }
+       ]
+      }
+     ]
+    },
+    false,
+    "u1"
+   ]
+  ]
+ },
+ "edit:gemini_raw_base64": {
+  "http_error": [
+   404,
+   "File not found"
+  ],
+  "calls": [
+   [
+    "serve_file",
+    "cmF3LWJ5dGVz",
+    "u1",
+    false,
+    null
+   ]
+  ]
+ },
+ "edit:gemini_http_error": {
+  "http_error": [
+   400,
+   "[ERROR: HTTP 500]"
+  ],
+  "calls": [
+   [
+    "session",
+    "post",
+    "https://gem.test/v1beta/models/gemini-2.5-flash-image:generateContent",
+    {
+     "json": {
+      "contents": [
+       {
+        "parts": [
+         {
+          "text": "p"
+         },
+         {
+          "inline_data": {
+           "mime_type": "image/png",
+           "data": "cG5nLW9uZQ=="
+          }
+         }
+        ]
+       }
+      ]
+     },
+     "headers": {
+      "Content-Type": "application/json",
+      "x-goog-api-key": "ge-key"
+     }
+    },
+    {
+     "ssl": true
+    }
+   ]
+  ]
+ },
+ "edit:comfyui_single": {
+  "returned": [
+   {
+    "id": "file:comfy-bytes",
+    "url": "/api/v1/files/file:comfy-bytes/content",
+    "name": "comfy-bytes.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "comfyui_upload",
+    "image",
+    "uuid-1.png",
+    {
+     "bytes": "png-one"
+    },
+    "image/png",
+    "http://comfy.test:8188",
+    "ck"
+   ],
+   [
+    "comfyui_edit",
+    "qwen-edit",
+    {
+     "workflow": {
+      "workflow": "{\"9\": {}}",
+      "nodes": []
+     },
+     "image": [
+      "uploaded-uuid-1.png"
+     ],
+     "prompt": "p",
+     "width": 640,
+     "height": 480,
+     "n": 2,
+     "steps": null,
+     "seed": null
+    },
+    "uuid-2",
+    "http://comfy.test:8188",
+    "ck"
+   ],
+   [
+    "session",
+    "get",
+    "http://comfy.test:8188/view?filename=o1.png&type=output",
+    {
+     "headers": {
+      "Authorization": "Bearer ck"
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "comfy-bytes",
+    "image/png",
+    {
+     "workflow": {
+      "workflow": "{\"9\": {}}",
+      "nodes": []
+     },
+     "image": [
+      "uploaded-uuid-1.png"
+     ],
+     "prompt": "p",
+     "width": 640,
+     "height": 480,
+     "n": 2,
+     "chat_id": "c1"
+    },
+    false,
+    "u1"
+   ]
+  ]
+ },
+ "edit:comfyui_list_duplicate_outputs": {
+  "returned": [
+   {
+    "id": "file:comfy-o1",
+    "url": "/api/v1/files/file:comfy-o1/content",
+    "name": "comfy-o1.out",
+    "content_type": "image/out"
+   },
+   {
+    "id": "file:comfy-o2",
+    "url": "/api/v1/files/file:comfy-o2/content",
+    "name": "comfy-o2.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "comfyui_edit",
+    "qwen-edit",
+    {
+     "workflow": {
+      "workflow": "{\"9\": {}}",
+      "nodes": []
+     },
+     "image": [
+      "uuid-1.png",
+      "uuid-2.jpg"
+     ],
+     "prompt": "p",
+     "width": null,
+     "height": null,
+     "n": null,
+     "steps": null,
+     "seed": null
+    },
+    "uuid-3",
+    "http://comfy.test:8188",
+    ""
+   ],
+   [
+    "comfyui_upload",
+    "image",
+    "uuid-1.png",
+    {
+     "bytes": "png-one"
+    },
+    "image/png",
+    "http://comfy.test:8188",
+    ""
+   ],
+   [
+    "comfyui_upload",
+    "image",
+    "uuid-2.jpg",
+    {
+     "bytes": "jpeg-one"
+    },
+    "image/jpeg",
+    "http://comfy.test:8188",
+    ""
+   ],
+   [
+    "session",
+    "get",
+    "http://comfy.test:8188/view?filename=o1.png&type=output",
+    {
+     "headers": null
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "session",
+    "get",
+    "http://comfy.test:8188/view?filename=o2.png&type=output",
+    {
+     "headers": null
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "comfy-o1",
+    "image/png",
+    {
+     "workflow": {
+      "workflow": "{\"9\": {}}",
+      "nodes": []
+     },
+     "image": [
+      "uuid-1.png",
+      "uuid-2.jpg"
+     ],
+     "prompt": "p"
+    },
+    false,
+    "u1"
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "comfy-o2",
+    "image/png",
+    {
+     "workflow": {
+      "workflow": "{\"9\": {}}",
+      "nodes": []
+     },
+     "image": [
+      "uuid-1.png",
+      "uuid-2.jpg"
+     ],
+     "prompt": "p"
+    },
+    false,
+    "u1"
+   ]
+  ],
+  "order_unpinned": true
+ },
+ "edit:comfyui_no_output_urls_untrusted": {
+  "returned": [
+   {
+    "id": "file:comfy-bytes",
+    "url": "/api/v1/files/file:comfy-bytes/content",
+    "name": "comfy-bytes.out",
+    "content_type": "image/out"
+   }
+  ],
+  "calls": [
+   [
+    "comfyui_upload",
+    "image",
+    "uuid-1.png",
+    {
+     "bytes": "png-one"
+    },
+    "image/png",
+    "http://comfy.test:8188",
+    ""
+   ],
+   [
+    "comfyui_edit",
+    "qwen-edit",
+    {
+     "workflow": {
+      "workflow": "{\"9\": {}}",
+      "nodes": []
+     },
+     "image": [
+      "uploaded-uuid-1.png"
+     ],
+     "prompt": "p",
+     "width": null,
+     "height": null,
+     "n": null,
+     "steps": null,
+     "seed": null
+    },
+    "uuid-2",
+    "http://comfy.test:8188",
+    ""
+   ],
+   [
+    "validate_url",
+    "http://other.test/view?filename=t1.png&type=temp"
+   ],
+   [
+    "session",
+    "get",
+    "http://other.test/view?filename=t1.png&type=temp",
+    {
+     "headers": null
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "comfy-bytes",
+    "image/png",
+    {
+     "workflow": {
+      "workflow": "{\"9\": {}}",
+      "nodes": []
+     },
+     "image": [
+      "uploaded-uuid-1.png"
+     ],
+     "prompt": "p"
+    },
+    false,
+    "u1"
+   ]
+  ]
+ },
+ "edit:comfyui_upload_fails": {
+  "http_error": [
+   400,
+   "Something went wrong :/"
+  ],
+  "calls": [
+   [
+    "comfyui_upload",
+    "image",
+    "uuid-1.png",
+    {
+     "bytes": "png-one"
+    },
+    "image/png",
+    "http://comfy.test:8188",
+    ""
+   ]
+  ]
+ },
+ "edit:unsupported_engine": {
+  "returned": null,
+  "calls": []
+ }
+}
