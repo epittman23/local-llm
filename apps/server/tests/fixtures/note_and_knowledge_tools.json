@@ -1,0 +1,1187 @@
+{
+ "note:no_request": {
+  "returned": {
+   "error": "Request context not available"
+  },
+  "calls": []
+ },
+ "note:no_user": {
+  "returned": {
+   "error": "User context not available"
+  },
+  "calls": []
+ },
+ "note:note_missing": {
+  "returned": {
+   "error": "Note not found",
+   "code": "not_found"
+  },
+  "calls": []
+ },
+ "note:write_denied": {
+  "returned": {
+   "error": "Write access denied",
+   "code": "write_access_denied"
+  },
+  "calls": [
+   [
+    "write_access",
+    "n1",
+    "u1"
+   ]
+  ]
+ },
+ "note:admin_skips_write_check": {
+  "returned": {
+   "status": "success",
+   "id": "n1",
+   "title": "My note",
+   "updated_at": 1234,
+   "applied_operation_count": 0
+  },
+  "calls": [
+   [
+    "stop_tasks",
+    "note:n1"
+   ],
+   [
+    "update",
+    "n1",
+    {
+     "data": {
+      "content": {
+       "md": "x",
+       "json": null,
+       "html": ""
+      },
+      "other": 1
+     }
+    }
+   ],
+   [
+    "emit_updated",
+    "n1",
+    "a1"
+   ]
+  ]
+ },
+ "note:whole_content": {
+  "returned": {
+   "status": "success",
+   "id": "n1",
+   "title": "New title",
+   "updated_at": 1234,
+   "applied_operation_count": 0
+  },
+  "calls": [
+   [
+    "write_access",
+    "n1",
+    "u1"
+   ],
+   [
+    "stop_tasks",
+    "note:n1"
+   ],
+   [
+    "update",
+    "n1",
+    {
+     "title": "New title",
+     "data": {
+      "content": {
+       "md": "new text",
+       "json": null,
+       "html": ""
+      },
+      "other": 1
+     }
+    }
+   ],
+   [
+    "emit_updated",
+    "n1",
+    "u1"
+   ]
+  ]
+ },
+ "note:content_required": {
+  "returned": {
+   "error": "content or operations is required",
+   "code": "content_required"
+  },
+  "calls": [
+   [
+    "write_access",
+    "n1",
+    "u1"
+   ]
+  ]
+ },
+ "note:title_alone_needs_content": {
+  "returned": {
+   "error": "content or operations is required",
+   "code": "content_required"
+  },
+  "calls": [
+   [
+    "write_access",
+    "n1",
+    "u1"
+   ]
+  ]
+ },
+ "note:operations_empty": {
+  "returned": {
+   "error": "operations must be a non-empty list",
+   "code": "invalid_operations"
+  },
+  "calls": [
+   [
+    "write_access",
+    "n1",
+    "u1"
+   ]
+  ]
+ },
+ "note:operations_not_a_list": {
+  "returned": {
+   "error": "operations must be a non-empty list",
+   "code": "invalid_operations"
+  },
+  "calls": [
+   [
+    "write_access",
+    "n1",
+    "u1"
+   ]
+  ]
+ },
+ "note:operation_not_an_object": {
+  "returned": {
+   "error": "each operation must be an object",
+   "code": "invalid_operation",
+   "index": 0
+  },
+  "calls": [
+   [
+    "write_access",
+    "n1",
+    "u1"
+   ]
+  ]
+ },
+ "note:replace_operation": {
+  "returned": {
+   "status": "success",
+   "id": "n1",
+   "title": "My note",
+   "updated_at": 1234,
+   "applied_operation_count": 1
+  },
+  "calls": [
+   [
+    "write_access",
+    "n1",
+    "u1"
+   ],
+   [
+    "stop_tasks",
+    "note:n1"
+   ],
+   [
+    "update",
+    "n1",
+    {
+     "data": {
+      "content": {
+       "md": "all new",
+       "json": null,
+       "html": ""
+      },
+      "other": 1
+     }
+    }
+   ],
+   [
+    "emit_updated",
+    "n1",
+    "u1"
+   ]
+  ]
+ },
+ "note:replace_must_be_alone": {
+  "returned": {
+   "error": "replace operation must be the only operation",
+   "code": "invalid_operations",
+   "index": 0
+  },
+  "calls": [
+   [
+    "write_access",
+    "n1",
+    "u1"
+   ]
+  ]
+ },
+ "note:replace_content_not_string": {
+  "returned": {
+   "error": "replace operation content must be a string",
+   "code": "invalid_content",
+   "index": 0
+  },
+  "calls": [
+   [
+    "write_access",
+    "n1",
+    "u1"
+   ]
+  ]
+ },
+ "note:unknown_action": {
+  "returned": {
+   "error": "unknown operation action",
+   "code": "invalid_action",
+   "index": 0,
+   "action": "append"
+  },
+  "calls": [
+   [
+    "write_access",
+    "n1",
+    "u1"
+   ]
+  ]
+ },
+ "note:range_one": {
+  "returned": {
+   "status": "success",
+   "id": "n1",
+   "title": "My note",
+   "updated_at": 1234,
+   "applied_operation_count": 1
+  },
+  "calls": [
+   [
+    "write_access",
+    "n1",
+    "u1"
+   ],
+   [
+    "stop_tasks",
+    "note:n1"
+   ],
+   [
+    "update",
+    "n1",
+    {
+     "data": {
+      "content": {
+       "md": "Howdy world. This is a note.",
+       "json": null,
+       "html": ""
+      },
+      "other": 1
+     }
+    }
+   ],
+   [
+    "emit_updated",
+    "n1",
+    "u1"
+   ]
+  ]
+ },
+ "note:range_several_out_of_order": {
+  "returned": {
+   "status": "success",
+   "id": "n1",
+   "title": "My note",
+   "updated_at": 1234,
+   "applied_operation_count": 2
+  },
+  "calls": [
+   [
+    "write_access",
+    "n1",
+    "u1"
+   ],
+   [
+    "stop_tasks",
+    "note:n1"
+   ],
+   [
+    "update",
+    "n1",
+    {
+     "data": {
+      "content": {
+       "md": "Hi world. That is a note.",
+       "json": null,
+       "html": ""
+      },
+      "other": 1
+     }
+    }
+   ],
+   [
+    "emit_updated",
+    "n1",
+    "u1"
+   ]
+  ]
+ },
+ "note:range_not_integers": {
+  "returned": {
+   "error": "operation start and end must be integers",
+   "code": "invalid_range",
+   "index": 0
+  },
+  "calls": [
+   [
+    "write_access",
+    "n1",
+    "u1"
+   ]
+  ]
+ },
+ "note:range_content_not_string": {
+  "returned": {
+   "error": "operation content must be a string",
+   "code": "invalid_content",
+   "index": 0
+  },
+  "calls": [
+   [
+    "write_access",
+    "n1",
+    "u1"
+   ]
+  ]
+ },
+ "note:range_negative": {
+  "returned": {
+   "error": "operation range is out of bounds",
+   "code": "range_out_of_bounds",
+   "index": 0
+  },
+  "calls": [
+   [
+    "write_access",
+    "n1",
+    "u1"
+   ]
+  ]
+ },
+ "note:range_backwards": {
+  "returned": {
+   "error": "operation range is out of bounds",
+   "code": "range_out_of_bounds",
+   "index": 0
+  },
+  "calls": [
+   [
+    "write_access",
+    "n1",
+    "u1"
+   ]
+  ]
+ },
+ "note:range_past_end": {
+  "returned": {
+   "error": "operation range is out of bounds",
+   "code": "range_out_of_bounds",
+   "index": 0
+  },
+  "calls": [
+   [
+    "write_access",
+    "n1",
+    "u1"
+   ]
+  ]
+ },
+ "note:range_expected_mismatch": {
+  "returned": {
+   "error": "operation expected text does not match current content",
+   "code": "expected_mismatch",
+   "index": 0
+  },
+  "calls": [
+   [
+    "write_access",
+    "n1",
+    "u1"
+   ]
+  ]
+ },
+ "note:ranges_overlap": {
+  "returned": {
+   "error": "operation ranges must not overlap",
+   "code": "overlapping_operations",
+   "index": 1
+  },
+  "calls": [
+   [
+    "write_access",
+    "n1",
+    "u1"
+   ]
+  ]
+ },
+ "note:note_without_content": {
+  "returned": {
+   "status": "success",
+   "id": "n_empty",
+   "title": "Empty",
+   "updated_at": 1234,
+   "applied_operation_count": 1
+  },
+  "calls": [
+   [
+    "write_access",
+    "n_empty",
+    "u1"
+   ],
+   [
+    "stop_tasks",
+    "note:n_empty"
+   ],
+   [
+    "update",
+    "n_empty",
+    {
+     "data": {
+      "content": {
+       "json": null,
+       "html": "",
+       "md": "first"
+      }
+     }
+    }
+   ],
+   [
+    "emit_updated",
+    "n_empty",
+    "u1"
+   ]
+  ]
+ },
+ "note:stop_tasks_fails": {
+  "returned": {
+   "status": "success",
+   "id": "n1",
+   "title": "My note",
+   "updated_at": 1234,
+   "applied_operation_count": 0
+  },
+  "calls": [
+   [
+    "write_access",
+    "n1",
+    "u1"
+   ],
+   [
+    "stop_tasks",
+    "note:n1"
+   ],
+   [
+    "update",
+    "n1",
+    {
+     "data": {
+      "content": {
+       "md": "x",
+       "json": null,
+       "html": ""
+      },
+      "other": 1
+     }
+    }
+   ],
+   [
+    "emit_updated",
+    "n1",
+    "u1"
+   ]
+  ]
+ },
+ "note:update_fails": {
+  "returned": {
+   "error": "Failed to update note",
+   "code": "update_failed"
+  },
+  "calls": [
+   [
+    "write_access",
+    "n1",
+    "u1"
+   ],
+   [
+    "stop_tasks",
+    "note:n1"
+   ],
+   [
+    "update",
+    "n1",
+    {
+     "data": {
+      "content": {
+       "md": "x",
+       "json": null,
+       "html": ""
+      },
+      "other": 1
+     }
+    }
+   ]
+  ]
+ },
+ "note:update_raises": {
+  "returned": {
+   "error": "db down",
+   "code": "unexpected_error"
+  },
+  "calls": [
+   [
+    "write_access",
+    "n1",
+    "u1"
+   ],
+   [
+    "stop_tasks",
+    "note:n1"
+   ],
+   [
+    "update",
+    "n1",
+    {
+     "data": {
+      "content": {
+       "md": "x",
+       "json": null,
+       "html": ""
+      },
+      "other": 1
+     }
+    }
+   ]
+  ]
+ },
+ "kb:kb_no_request": {
+  "returned": {
+   "error": "Request context not available"
+  },
+  "calls": []
+ },
+ "kb:kb_no_user": {
+  "returned": {
+   "error": "User context not available"
+  },
+  "calls": []
+ },
+ "kb:kb_no_embedding_function": {
+  "returned": {
+   "error": "Embedding function not configured"
+  },
+  "calls": []
+ },
+ "kb:all_accessible": {
+  "returned": {
+   "error": "'types.SimpleNamespace' object has no attribute 'name'"
+  },
+  "calls": [
+   [
+    "search_kbs",
+    "u1",
+    {
+     "query": "",
+     "user_id": "u1",
+     "group_ids": [
+      "g1",
+      "g2"
+     ]
+    },
+    0,
+    50
+   ],
+   [
+    "vector_search",
+    [
+     "kb_own"
+    ],
+    [
+     "q"
+    ],
+    5,
+    "<embedded ['x'] prefix=p for u1>"
+   ],
+   [
+    "external",
+    "kb_external",
+    [
+     "q"
+    ],
+    5,
+    "u1"
+   ]
+  ]
+ },
+ "kb:all_accessible_none_found": {
+  "returned": [],
+  "calls": [
+   [
+    "search_kbs",
+    "u1",
+    {
+     "query": "",
+     "user_id": "u1",
+     "group_ids": [
+      "g1",
+      "g2"
+     ]
+    },
+    0,
+    50
+   ]
+  ]
+ },
+ "kb:specific_ids": {
+  "returned": [
+   {
+    "content": "chunk one",
+    "source": "a.pdf",
+    "file_id": "fa",
+    "distance": 0.11
+   },
+   {
+    "content": "chunk two",
+    "source": "b.txt",
+    "file_id": "",
+    "distance": 0.22
+   },
+   {
+    "content": "ext doc",
+    "source": "External",
+    "file_id": "external-kb_external",
+    "type": "external",
+    "knowledge_id": "kb_external",
+    "distance": 0.5
+   }
+  ],
+  "calls": [
+   [
+    "grant",
+    "u1",
+    "knowledge",
+    "kb_shared",
+    "read",
+    [
+     "g1",
+     "g2"
+    ]
+   ],
+   [
+    "grant",
+    "u1",
+    "knowledge",
+    "kb_denied",
+    "read",
+    [
+     "g1",
+     "g2"
+    ]
+   ],
+   [
+    "vector_search",
+    [
+     "kb_own",
+     "kb_shared"
+    ],
+    [
+     "q"
+    ],
+    5,
+    "<embedded ['x'] prefix=p for u1>"
+   ],
+   [
+    "external",
+    "kb_external",
+    [
+     "q"
+    ],
+    5,
+    "u1"
+   ]
+  ]
+ },
+ "kb:specific_ids_admin": {
+  "returned": [
+   {
+    "content": "chunk one",
+    "source": "a.pdf",
+    "file_id": "fa",
+    "distance": 0.11
+   },
+   {
+    "content": "chunk two",
+    "source": "b.txt",
+    "file_id": "",
+    "distance": 0.22
+   }
+  ],
+  "calls": [
+   [
+    "vector_search",
+    [
+     "kb_denied"
+    ],
+    [
+     "q"
+    ],
+    5,
+    "<embedded ['x'] prefix=p for a1>"
+   ]
+  ]
+ },
+ "kb:ids_as_json_string": {
+  "returned": [
+   {
+    "content": "chunk one",
+    "source": "a.pdf",
+    "file_id": "fa",
+    "distance": 0.11
+   },
+   {
+    "content": "chunk two",
+    "source": "b.txt",
+    "file_id": "",
+    "distance": 0.22
+   }
+  ],
+  "calls": [
+   [
+    "vector_search",
+    [
+     "kb_own"
+    ],
+    [
+     "q"
+    ],
+    5,
+    "<embedded ['x'] prefix=p for u1>"
+   ]
+  ]
+ },
+ "kb:ids_as_plain_string": {
+  "returned": [
+   {
+    "content": "chunk one",
+    "source": "a.pdf",
+    "file_id": "fa",
+    "distance": 0.11
+   },
+   {
+    "content": "chunk two",
+    "source": "b.txt",
+    "file_id": "",
+    "distance": 0.22
+   }
+  ],
+  "calls": [
+   [
+    "vector_search",
+    [
+     "kb_own"
+    ],
+    [
+     "q"
+    ],
+    5,
+    "<embedded ['x'] prefix=p for u1>"
+   ]
+  ]
+ },
+ "kb:ids_none_string": {
+  "returned": {
+   "error": "'types.SimpleNamespace' object has no attribute 'name'"
+  },
+  "calls": [
+   [
+    "search_kbs",
+    "u1",
+    {
+     "query": "",
+     "user_id": "u1",
+     "group_ids": [
+      "g1",
+      "g2"
+     ]
+    },
+    0,
+    50
+   ],
+   [
+    "vector_search",
+    [
+     "kb_own"
+    ],
+    [
+     "q"
+    ],
+    5,
+    "<embedded ['x'] prefix=p for u1>"
+   ],
+   [
+    "external",
+    "kb_external",
+    [
+     "q"
+    ],
+    5,
+    "u1"
+   ]
+  ]
+ },
+ "kb:count_as_string": {
+  "returned": {
+   "error": "'types.SimpleNamespace' object has no attribute 'name'"
+  },
+  "calls": [
+   [
+    "search_kbs",
+    "u1",
+    {
+     "query": "",
+     "user_id": "u1",
+     "group_ids": [
+      "g1",
+      "g2"
+     ]
+    },
+    0,
+    50
+   ],
+   [
+    "vector_search",
+    [
+     "kb_own"
+    ],
+    [
+     "q"
+    ],
+    2,
+    "<embedded ['x'] prefix=p for u1>"
+   ],
+   [
+    "external",
+    "kb_external",
+    [
+     "q"
+    ],
+    2,
+    "u1"
+   ]
+  ]
+ },
+ "kb:count_unparseable": {
+  "returned": {
+   "error": "'types.SimpleNamespace' object has no attribute 'name'"
+  },
+  "calls": [
+   [
+    "search_kbs",
+    "u1",
+    {
+     "query": "",
+     "user_id": "u1",
+     "group_ids": [
+      "g1",
+      "g2"
+     ]
+    },
+    0,
+    50
+   ],
+   [
+    "vector_search",
+    [
+     "kb_own"
+    ],
+    [
+     "q"
+    ],
+    5,
+    "<embedded ['x'] prefix=p for u1>"
+   ],
+   [
+    "external",
+    "kb_external",
+    [
+     "q"
+    ],
+    5,
+    "u1"
+   ]
+  ]
+ },
+ "kb:model_knowledge": {
+  "returned": [
+   {
+    "content": "Hello world. This is a note.",
+    "source": "My note",
+    "note_id": "n1",
+    "type": "note"
+   },
+   {
+    "content": "shared md",
+    "source": "Shared",
+    "note_id": "n_shared",
+    "type": "note"
+   },
+   {
+    "content": "chunk one",
+    "source": "a.pdf",
+    "file_id": "fa",
+    "distance": 0.11
+   },
+   {
+    "content": "chunk two",
+    "source": "b.txt",
+    "file_id": "",
+    "distance": 0.22
+   },
+   {
+    "content": "ext doc",
+    "source": "External",
+    "file_id": "external-kb_external",
+    "type": "external",
+    "knowledge_id": "kb_external",
+    "distance": 0.5
+   }
+  ],
+  "calls": [
+   [
+    "grant",
+    "u1",
+    "knowledge",
+    "kb_denied",
+    "read",
+    [
+     "g1",
+     "g2"
+    ]
+   ],
+   [
+    "file",
+    "f1"
+   ],
+   [
+    "file",
+    "f_missing"
+   ],
+   [
+    "grant",
+    "u1",
+    "note",
+    "n_shared",
+    "read",
+    null
+   ],
+   [
+    "grant",
+    "u1",
+    "note",
+    "n_denied",
+    "read",
+    null
+   ],
+   [
+    "vector_search",
+    [
+     "kb_own",
+     "file-f1"
+    ],
+    [
+     "q"
+    ],
+    5,
+    "<embedded ['x'] prefix=p for u1>"
+   ],
+   [
+    "external",
+    "kb_external",
+    [
+     "q"
+    ],
+    5,
+    "u1"
+   ]
+  ]
+ },
+ "kb:model_knowledge_wins_over_ids": {
+  "returned": [
+   {
+    "content": "Hello world. This is a note.",
+    "source": "My note",
+    "note_id": "n1",
+    "type": "note"
+   }
+  ],
+  "calls": []
+ },
+ "kb:results_trimmed_to_count": {
+  "returned": [
+   {
+    "content": "Hello world. This is a note.",
+    "source": "My note",
+    "note_id": "n1",
+    "type": "note"
+   },
+   {
+    "content": "chunk one",
+    "source": "a.pdf",
+    "file_id": "fa",
+    "distance": 0.11
+   }
+  ],
+  "calls": [
+   [
+    "vector_search",
+    [
+     "kb_own"
+    ],
+    [
+     "q"
+    ],
+    2,
+    "<embedded ['x'] prefix=p for u1>"
+   ]
+  ]
+ },
+ "kb:search_without_documents": {
+  "returned": [],
+  "calls": [
+   [
+    "vector_search",
+    [
+     "kb_own"
+    ],
+    [
+     "q"
+    ],
+    5,
+    "<embedded ['x'] prefix=p for u1>"
+   ]
+  ]
+ },
+ "kb:search_returns_nothing": {
+  "returned": [],
+  "calls": [
+   [
+    "vector_search",
+    [
+     "kb_own"
+    ],
+    [
+     "q"
+    ],
+    5,
+    "<embedded ['x'] prefix=p for u1>"
+   ]
+  ]
+ },
+ "kb:search_fewer_distances": {
+  "returned": [
+   {
+    "content": "a",
+    "source": "n",
+    "file_id": "",
+    "distance": 0.1
+   },
+   {
+    "content": "b",
+    "source": "Unknown",
+    "file_id": ""
+   }
+  ],
+  "calls": [
+   [
+    "vector_search",
+    [
+     "kb_own"
+    ],
+    [
+     "q"
+    ],
+    5,
+    "<embedded ['x'] prefix=p for u1>"
+   ]
+  ]
+ },
+ "kb:search_fewer_metadatas": {
+  "returned": {
+   "error": "list index out of range"
+  },
+  "calls": [
+   [
+    "vector_search",
+    [
+     "kb_own"
+    ],
+    [
+     "q"
+    ],
+    5,
+    "<embedded ['x'] prefix=p for u1>"
+   ]
+  ]
+ },
+ "kb:external_short_metadata": {
+  "returned": [
+   {
+    "content": "e1",
+    "source": "only one",
+    "file_id": "external-kb_external",
+    "type": "external",
+    "knowledge_id": "kb_external"
+   },
+   {
+    "content": "e2",
+    "source": "External",
+    "file_id": "external-kb_external",
+    "type": "external",
+    "knowledge_id": "kb_external"
+   }
+  ],
+  "calls": [
+   [
+    "external",
+    "kb_external",
+    [
+     "q"
+    ],
+    5,
+    "u1"
+   ]
+  ]
+ },
+ "kb:search_raises": {
+  "returned": {
+   "error": "vector store down"
+  },
+  "calls": [
+   [
+    "vector_search",
+    [
+     "kb_own"
+    ],
+    [
+     "q"
+    ],
+    5,
+    "<embedded ['x'] prefix=p for u1>"
+   ]
+  ]
+ }
+}
