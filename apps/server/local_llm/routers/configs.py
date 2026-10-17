@@ -610,6 +610,7 @@ async def _verify_mcp_oauth(form_data: ToolServerConnection) -> dict:
 
 async def _verify_mcp_connection(request: Request, form_data: ToolServerConnection, user) -> dict:
     """Any other MCP server: connect with its auth headers and list its tools."""
+    client = None
     try:
         client = MCPClient()
         headers = await _tool_server_auth_headers(request, form_data, user)
@@ -620,7 +621,6 @@ async def _verify_mcp_connection(request: Request, form_data: ToolServerConnecti
         log.debug('Failed to create MCP client: %s', e)
         raise HTTPException(status_code=400, detail='Failed to create MCP client')
     finally:
-        # Unbound when MCPClient() itself fails; the NameError reaches the caller's generic 400.
         if client:
             await client.disconnect()
 

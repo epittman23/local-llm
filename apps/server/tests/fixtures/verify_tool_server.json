@@ -516,7 +516,7 @@
   "openapi_fetch": null,
   "oauth_lookups": [],
   "http_error": 400,
-  "detail": "Failed to connect to the tool server"
+  "detail": "Failed to create MCP client"
  },
  "openapi_no_auth": {
   "discovery_fetched": [],
