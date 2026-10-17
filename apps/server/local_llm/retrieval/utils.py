@@ -8,6 +8,7 @@ import os
 import re
 import time
 from collections.abc import Awaitable, Sequence
+from dataclasses import dataclass, field
 from typing import Any
 
 import aiohttp
@@ -1330,6 +1331,333 @@ async def filter_accessible_collections(
     return validated
 
 
+@dataclass
+class _SourceContext:
+    """What every item's source lookup needs, and the collections already searched across items."""
+
+    request: Any
+    user: UserModel | None
+    queries: list
+    k: Any
+    bypass_embedding_and_retrieval: bool
+    folder_items: set = field(default_factory=set)
+    extracted_collections: list = field(default_factory=list)
+
+
+def _single_document(content, metadata) -> dict:
+    return {'documents': [[content]], 'metadatas': [[metadata]]}
+
+
+def _file_data_document(item: dict) -> dict:
+    return _single_document(
+        item.get('file', {}).get('data', {}).get('content'),
+        item.get('file', {}).get('meta', {}),
+    )
+
+
+async def _expand_folders(items: list, user) -> set:
+    """Appends each readable folder's files to items (each folder once); returns their (type, id) pairs.
+
+    Those pairs count as readable later, since access was checked on the folder.
+    """
+    folder_items = set()
+    expanded_folders = set()
+    for item in items:
+        if item.get('type') != 'folder' or not user:
+            continue
+        folder_id = item.get('id')
+        if not folder_id or folder_id in expanded_folders:
+            continue
+        expanded_folders.add(folder_id)
+
+        folder = await Folders.get_folder_by_id(folder_id)
+        if folder and (user.role == 'admin' or await has_folder_access(user.id, folder, 'read', db=None)):
+            files = await get_owner_accessible_folder_files(folder)
+            folder_items.update((entry.get('type'), entry.get('id')) for entry in files if isinstance(entry, dict))
+            items.extend(files)
+    return folder_items
+
+
+async def _text_item(item: dict, ctx: _SourceContext):
+    """Raw text, as attached during temporary chats or for web pages and YouTube."""
+    if item.get('context') == 'full' and item.get('file'):
+        return _file_data_document(item), []
+    if item.get('collection_name'):
+        return None, [item.get('collection_name')]
+    if item.get('file'):
+        return _file_data_document(item), []
+    return _single_document(item.get('content'), {'file_id': item.get('id'), 'name': item.get('name')}), []
+
+
+async def _note_item(item: dict, ctx: _SourceContext):
+    note = await Notes.get_note_by_id(item.get('id'))
+    user = ctx.user
+    if note and (
+        user.role == 'admin'
+        or note.user_id == user.id
+        or await AccessGrants.has_access(user_id=user.id, resource_type='note', resource_id=note.id, permission='read')
+    ):
+        return _single_document(
+            note.data.get('content', {}).get('md', ''),
+            {'file_id': note.id, 'name': note.title},
+        ), []
+    return None, []
+
+
+async def _chat_readable(chat, user) -> bool:
+    """Owner or admin, a share grant, or read access to the chat's folder."""
+    has_read_access = bool(chat and (user.role == 'admin' or chat.user_id == user.id))
+    if chat and not has_read_access:
+        has_read_access = await AccessGrants.has_access(
+            user_id=user.id,
+            resource_type='shared_chat',
+            resource_id=chat.id,
+            permission='read',
+        )
+    if chat and not has_read_access and chat.folder_id:
+        folder = await Folders.get_folder_by_id(chat.folder_id)
+        has_read_access = folder and await has_folder_access(user.id, folder, 'read', db=None)
+    return has_read_access
+
+
+async def _chat_item(item: dict, ctx: _SourceContext):
+    """An attached chat, as its current branch of messages."""
+    chat = await Chats.get_chat_by_id(item.get('id'))
+    if not await _chat_readable(chat, ctx.user):
+        return None, []
+    messages_map = chat.chat.get('history', {}).get('messages', {})
+    message_id = chat.chat.get('history', {}).get('currentId')
+    if not (messages_map and message_id):
+        return None, []
+    message_history = '\n'.join(
+        [
+            f'#### {m.get("role", "user").capitalize()}\n{get_content_from_message(m) or ""}\n'
+            for m in get_message_list(messages_map, message_id)
+        ]
+    )
+    return _single_document(message_history, {'file_id': chat.id, 'name': chat.title}), []
+
+
+async def _url_item(item: dict, ctx: _SourceContext):
+    content, docs = await get_content_from_url(ctx.request, item.get('url'))
+    if docs:
+        return _single_document(content, {'url': item.get('url'), 'name': item.get('url')}), []
+    return None, []
+
+
+async def _file_readable(file_object, file_id, user, folder_items: set) -> bool:
+    return bool(
+        file_object
+        and (
+            user.role == 'admin'
+            or file_object.user_id == user.id
+            or await has_access_to_file(file_id, 'read', user)
+            or ('file', file_id) in folder_items
+        )
+    )
+
+
+async def _file_item(item: dict, ctx: _SourceContext):
+    """A file: its whole content in full-context mode, else its vector collection, once read access is checked."""
+    if item.get('context') == 'full' or ctx.bypass_embedding_and_retrieval:
+        if item.get('file', {}).get('data', {}).get('content', ''):
+            # Manual full mode, from the chat file modal: the content travels with the item.
+            return {
+                'documents': [[item.get('file', {}).get('data', {}).get('content', '')]],
+                'metadatas': [
+                    [
+                        {
+                            'file_id': item.get('id'),
+                            'name': item.get('name'),
+                            **item.get('file').get('data', {}).get('metadata', {}),
+                        }
+                    ]
+                ],
+            }, []
+        if item.get('id'):
+            file_object = await Files.get_file_by_id(item.get('id'))
+            if await _file_readable(file_object, item.get('id'), ctx.user, ctx.folder_items):
+                return _single_document(
+                    file_object.data.get('content', ''),
+                    {'file_id': item.get('id'), 'name': file_object.filename, 'source': file_object.filename},
+                ), []
+        return None, []
+
+    # Chunked retrieval: the same read check before exposing the file's vector collection.
+    file_id = item.get('id')
+    if not file_id:
+        return None, []
+    if not BYPASS_RETRIEVAL_ACCESS_CONTROL:
+        file_object = await Files.get_file_by_id(file_id)
+        if not await _file_readable(file_object, file_id, ctx.user, ctx.folder_items):
+            return None, []
+    return None, [f'{file_id}' if item.get('legacy') else f'file-{file_id}']
+
+
+async def _knowledge_readable(knowledge_base, item: dict, user, folder_items: set) -> bool:
+    return bool(
+        knowledge_base
+        and (
+            user.role == 'admin'
+            or knowledge_base.user_id == user.id
+            or await AccessGrants.has_access(
+                user_id=user.id,
+                resource_type='knowledge',
+                resource_id=knowledge_base.id,
+                permission='read',
+            )
+            or ('collection', item.get('id')) in folder_items
+        )
+    )
+
+
+async def _legacy_collection_names(knowledge_base, item: dict) -> list:
+    """A legacy knowledge base's collection names, which the client supplies.
+
+    They are checked against the knowledge base's own files, so one tenant
+    can't name another's collections; with none valid, the knowledge base's
+    own collection is used.
+    """
+    if BYPASS_RETRIEVAL_ACCESS_CONTROL:
+        return item.get('collection_names', [])
+    files = await Knowledges.get_files_by_id(knowledge_base.id)
+    owned_names = {f'file-{f.id}' for f in files}
+    owned_names.add(knowledge_base.id)
+    valid_names = [n for n in (item.get('collection_names') or []) if n in owned_names]
+    return valid_names if valid_names else [knowledge_base.id]
+
+
+async def _collection_item(item: dict, ctx: _SourceContext):
+    """A knowledge base: external retrieval, every file in full-context mode, or its collections to search."""
+    knowledge_base = await Knowledges.get_knowledge_by_id(item.get('id'))
+    if not await _knowledge_readable(knowledge_base, item, ctx.user, ctx.folder_items):
+        return None, []
+
+    if (knowledge_base.meta or {}).get('source') == 'external':
+        query_result = await retrieve_external_knowledge(
+            ctx.request,
+            knowledge_base,
+            queries=ctx.queries,
+            count=ctx.k,
+            user=ctx.user,
+        )
+        ctx.extracted_collections.append(knowledge_base.id)
+        return query_result, []
+
+    if item.get('context') == 'full' or ctx.bypass_embedding_and_retrieval:
+        # Access is checked again here, as it always has been (the check above already passed).
+        if not await _knowledge_readable(knowledge_base, item, ctx.user, ctx.folder_items):
+            return None, []
+        files = await Knowledges.get_files_by_id(knowledge_base.id)
+        return {
+            'documents': [[file.data.get('content', '') for file in files]],
+            'metadatas': [[{'file_id': file.id, 'name': file.filename, 'source': file.filename} for file in files]],
+        }, []
+
+    if item.get('legacy'):
+        return None, await _legacy_collection_names(knowledge_base, item)
+    return None, [item['id']]
+
+
+def _untyped_item(item: dict, ctx: _SourceContext):
+    """Items without one of the known types: pre-fetched docs, web search results, raw collection names."""
+    if item.get('docs'):
+        # BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL
+        return {
+            'documents': [[doc.get('content') for doc in item.get('docs')]],
+            'metadatas': [[doc.get('metadata') for doc in item.get('docs')]],
+        }, []
+    if item.get('type') == 'web_search' and item.get('collection_name'):
+        # Trusted server-generated collection; authorized by
+        # filter_accessible_collections (allowlists web-search-*).
+        return None, [item['collection_name']]
+    if item.get('collection_name'):
+        if BYPASS_RETRIEVAL_ACCESS_CONTROL:
+            return None, [item['collection_name']]
+        log.debug(
+            "get_sources_from_items: ignoring untrusted direct collection_name '%s' on item without type",
+            item.get('collection_name'),
+        )
+    elif item.get('collection_names'):
+        if BYPASS_RETRIEVAL_ACCESS_CONTROL:
+            return None, list(item['collection_names'])
+        log.debug('get_sources_from_items: ignoring untrusted direct collection_names on item without type')
+    return None, []
+
+
+_ITEM_SOURCES = {
+    'text': _text_item,
+    'note': _note_item,
+    'chat': _chat_item,
+    'url': _url_item,
+    'file': _file_item,
+    'collection': _collection_item,
+}
+
+
+async def _item_source(item: dict, ctx: _SourceContext):
+    """(query result, collection names to search instead) for one item."""
+    resolve = _ITEM_SOURCES.get(item.get('type'))
+    if resolve is None:
+        return _untyped_item(item, ctx)
+    return await resolve(item, ctx)
+
+
+async def _search_collections(item, collection_names, ctx: _SourceContext, embedding_function, full_context: bool):
+    """Searches (or, with full_context, reads) the readable collections not already searched.
+
+    Returns (query result or None, the collections searched), or None to skip the item.
+    """
+    collection_names = set(collection_names).difference(ctx.extracted_collections)
+    if not collection_names:
+        log.debug('skipping %s as it has already been extracted', item)
+        return None
+
+    # Filter out collections the user cannot read
+    if ctx.user and (item.get('type'), item.get('id')) not in ctx.folder_items:
+        collection_names = await filter_accessible_collections(collection_names, ctx.user)
+        if not collection_names:
+            log.debug('access denied for all collections in item %s', item)
+            return None
+
+    query_result = None
+    try:
+        if full_context:
+            # Sync helper makes blocking VECTOR_DB_CLIENT calls;
+            # offload so the async caller's event loop stays free.
+            query_result = await asyncio.to_thread(get_all_items_from_collections, collection_names)
+        else:
+            query_result = await query_collection(
+                ctx.request,
+                collection_names=collection_names,
+                queries=ctx.queries,
+                embedding_function=embedding_function,
+                k=ctx.k,
+            )
+    except Exception as e:
+        log.exception(e)
+    return query_result, collection_names
+
+
+def _sources_from_results(query_results: list) -> list:
+    """Each result with documents and metadatas as a source (with distances when the search returned them)."""
+    sources = []
+    for query_result in query_results:
+        try:
+            if 'documents' in query_result and 'metadatas' in query_result:
+                source = {
+                    'source': query_result['file'],
+                    'document': query_result['documents'][0],
+                    'metadata': query_result['metadatas'][0],
+                }
+                if 'distances' in query_result and query_result['distances']:
+                    source['distances'] = query_result['distances'][0]
+                sources.append(source)
+        except Exception as e:
+            log.exception(e)
+    return sources
+
+
 async def get_sources_from_items(
     request,
     items,
@@ -1346,340 +1674,32 @@ async def get_sources_from_items(
 ):
     log.debug('items: %s %s %s %s %s', items, queries, embedding_function, reranking_function, full_context)
 
-    bypass_embedding_and_retrieval = await Config.get('rag.bypass_embedding_and_retrieval')
-    extracted_collections = []
-    query_results = []
-    folder_items = set()
-    expanded_folders = set()
-
+    ctx = _SourceContext(
+        request=request,
+        user=user,
+        queries=queries,
+        k=k,
+        bypass_embedding_and_retrieval=await Config.get('rag.bypass_embedding_and_retrieval'),
+    )
     items = list(items)
+    ctx.folder_items = await _expand_folders(items, user)
+
+    query_results = []
     for item in items:
-        if item.get('type') != 'folder' or not user:
-            continue
-        folder_id = item.get('id')
-        if not folder_id or folder_id in expanded_folders:
-            continue
-        expanded_folders.add(folder_id)
-
-        folder = await Folders.get_folder_by_id(folder_id)
-        if folder and (user.role == 'admin' or await has_folder_access(user.id, folder, 'read', db=None)):
-            files = await get_owner_accessible_folder_files(folder)
-            folder_items.update((entry.get('type'), entry.get('id')) for entry in files if isinstance(entry, dict))
-            items.extend(files)
-
-    for item in items:
-        query_result = None
-        collection_names = []
-
-        if item.get('type') == 'text':
-            # Raw Text
-            # Used during temporary chat file uploads or web page & youtube attachements
-
-            if item.get('context') == 'full':
-                if item.get('file'):
-                    # if item has file data, use it
-                    query_result = {
-                        'documents': [[item.get('file', {}).get('data', {}).get('content')]],
-                        'metadatas': [[item.get('file', {}).get('meta', {})]],
-                    }
-
-            if query_result is None:
-                # Fallback
-                if item.get('collection_name'):
-                    # If item has a collection name, use it
-                    collection_names.append(item.get('collection_name'))
-                elif item.get('file'):
-                    # If item has file data, use it
-                    query_result = {
-                        'documents': [[item.get('file', {}).get('data', {}).get('content')]],
-                        'metadatas': [[item.get('file', {}).get('meta', {})]],
-                    }
-                else:
-                    # Fallback to item content
-                    query_result = {
-                        'documents': [[item.get('content')]],
-                        'metadatas': [[{'file_id': item.get('id'), 'name': item.get('name')}]],
-                    }
-
-        elif item.get('type') == 'note':
-            # Note Attached
-            note = await Notes.get_note_by_id(item.get('id'))
-
-            if note and (
-                user.role == 'admin'
-                or note.user_id == user.id
-                or await AccessGrants.has_access(
-                    user_id=user.id,
-                    resource_type='note',
-                    resource_id=note.id,
-                    permission='read',
-                )
-            ):
-                # User has access to the note
-                query_result = {
-                    'documents': [[note.data.get('content', {}).get('md', '')]],
-                    'metadatas': [[{'file_id': note.id, 'name': note.title}]],
-                }
-
-        elif item.get('type') == 'chat':
-            # Chat Attached
-            chat = await Chats.get_chat_by_id(item.get('id'))
-            has_read_access = bool(chat and (user.role == 'admin' or chat.user_id == user.id))
-
-            if chat and not has_read_access:
-                has_read_access = await AccessGrants.has_access(
-                    user_id=user.id,
-                    resource_type='shared_chat',
-                    resource_id=chat.id,
-                    permission='read',
-                )
-
-            if chat and not has_read_access and chat.folder_id:
-                folder = await Folders.get_folder_by_id(chat.folder_id)
-                has_read_access = folder and await has_folder_access(user.id, folder, 'read', db=None)
-
-            if has_read_access:
-                messages_map = chat.chat.get('history', {}).get('messages', {})
-                message_id = chat.chat.get('history', {}).get('currentId')
-
-                if messages_map and message_id:
-                    # Reconstruct the message list in order
-                    message_list = get_message_list(messages_map, message_id)
-                    message_history = '\n'.join(
-                        [
-                            f'#### {m.get("role", "user").capitalize()}\n{get_content_from_message(m) or ""}\n'
-                            for m in message_list
-                        ]
-                    )
-
-                    # User has access to the chat
-                    query_result = {
-                        'documents': [[message_history]],
-                        'metadatas': [[{'file_id': chat.id, 'name': chat.title}]],
-                    }
-
-        elif item.get('type') == 'url':
-            content, docs = await get_content_from_url(request, item.get('url'))
-            if docs:
-                query_result = {
-                    'documents': [[content]],
-                    'metadatas': [[{'url': item.get('url'), 'name': item.get('url')}]],
-                }
-        elif item.get('type') == 'file':
-            if item.get('context') == 'full' or bypass_embedding_and_retrieval:
-                if item.get('file', {}).get('data', {}).get('content', ''):
-                    # Manual Full Mode Toggle
-                    # Used from chat file modal, we can assume that the file content will be available from
-                    # item.get("file").get("data", {}).get("content")
-                    query_result = {
-                        'documents': [[item.get('file', {}).get('data', {}).get('content', '')]],
-                        'metadatas': [
-                            [
-                                {
-                                    'file_id': item.get('id'),
-                                    'name': item.get('name'),
-                                    **item.get('file').get('data', {}).get('metadata', {}),
-                                }
-                            ]
-                        ],
-                    }
-                elif item.get('id'):
-                    file_object = await Files.get_file_by_id(item.get('id'))
-                    if file_object and (
-                        user.role == 'admin'
-                        or file_object.user_id == user.id
-                        or await has_access_to_file(item.get('id'), 'read', user)
-                        or ('file', item.get('id')) in folder_items
-                    ):
-                        query_result = {
-                            'documents': [[file_object.data.get('content', '')]],
-                            'metadatas': [
-                                [
-                                    {
-                                        'file_id': item.get('id'),
-                                        'name': file_object.filename,
-                                        'source': file_object.filename,
-                                    }
-                                ]
-                            ],
-                        }
-            else:
-                # Chunked-retrieval fallback — verify read access before
-                # exposing the file's vector collection (same posture as the
-                # full-context branch above).
-                file_id = item.get('id')
-                if file_id:
-                    if BYPASS_RETRIEVAL_ACCESS_CONTROL:
-                        if item.get('legacy'):
-                            collection_names.append(f'{file_id}')
-                        else:
-                            collection_names.append(f'file-{file_id}')
-                    else:
-                        file_object = await Files.get_file_by_id(file_id)
-                        if file_object and (
-                            user.role == 'admin'
-                            or file_object.user_id == user.id
-                            or await has_access_to_file(file_id, 'read', user)
-                            or ('file', file_id) in folder_items
-                        ):
-                            if item.get('legacy'):
-                                collection_names.append(f'{file_id}')
-                            else:
-                                collection_names.append(f'file-{file_id}')
-
-        elif item.get('type') == 'collection':
-            # Manual Full Mode Toggle for Collection
-            knowledge_base = await Knowledges.get_knowledge_by_id(item.get('id'))
-
-            if knowledge_base and (
-                user.role == 'admin'
-                or knowledge_base.user_id == user.id
-                or await AccessGrants.has_access(
-                    user_id=user.id,
-                    resource_type='knowledge',
-                    resource_id=knowledge_base.id,
-                    permission='read',
-                )
-                or ('collection', item.get('id')) in folder_items
-            ):
-                if (knowledge_base.meta or {}).get('source') == 'external':
-                    query_result = await retrieve_external_knowledge(
-                        request,
-                        knowledge_base,
-                        queries=queries,
-                        count=k,
-                        user=user,
-                    )
-                    extracted_collections.append(knowledge_base.id)
-
-                else:
-                    if item.get('context') == 'full' or bypass_embedding_and_retrieval:
-                        if knowledge_base and (
-                            user.role == 'admin'
-                            or knowledge_base.user_id == user.id
-                            or await AccessGrants.has_access(
-                                user_id=user.id,
-                                resource_type='knowledge',
-                                resource_id=knowledge_base.id,
-                                permission='read',
-                            )
-                            or ('collection', item.get('id')) in folder_items
-                        ):
-                            files = await Knowledges.get_files_by_id(knowledge_base.id)
-
-                            documents = []
-                            metadatas = []
-                            for file in files:
-                                documents.append(file.data.get('content', ''))
-                                metadatas.append(
-                                    {
-                                        'file_id': file.id,
-                                        'name': file.filename,
-                                        'source': file.filename,
-                                    }
-                                )
-
-                            query_result = {
-                                'documents': [documents],
-                                'metadatas': [metadatas],
-                            }
-                    else:
-                        if item.get('legacy'):
-                            if BYPASS_RETRIEVAL_ACCESS_CONTROL:
-                                collection_names = item.get('collection_names', [])
-                            else:
-                                # Legacy KB: item.collection_names is client-supplied.
-                                # Validate against the KB's actual files to prevent
-                                # cross-tenant collection name substitution.
-                                files = await Knowledges.get_files_by_id(knowledge_base.id)
-                                owned_names = {f'file-{f.id}' for f in files}
-                                owned_names.add(knowledge_base.id)
-                                valid_names = [n for n in (item.get('collection_names') or []) if n in owned_names]
-                                collection_names = valid_names if valid_names else [knowledge_base.id]
-                        else:
-                            collection_names.append(item['id'])
-
-        elif item.get('docs'):
-            # BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL
-            query_result = {
-                'documents': [[doc.get('content') for doc in item.get('docs')]],
-                'metadatas': [[doc.get('metadata') for doc in item.get('docs')]],
-            }
-        elif item.get('type') == 'web_search' and item.get('collection_name'):
-            # Trusted server-generated collection; authorized by
-            # filter_accessible_collections below (allowlists web-search-*).
-            collection_names.append(item['collection_name'])
-        elif item.get('collection_name'):
-            if BYPASS_RETRIEVAL_ACCESS_CONTROL:
-                collection_names.append(item['collection_name'])
-            else:
-                log.debug(
-                    "get_sources_from_items: ignoring untrusted direct collection_name '%s' on item without type",
-                    item.get('collection_name'),
-                )
-        elif item.get('collection_names'):
-            if BYPASS_RETRIEVAL_ACCESS_CONTROL:
-                collection_names.extend(item['collection_names'])
-            else:
-                log.debug(
-                    'get_sources_from_items: ignoring untrusted direct collection_names on item without type',
-                )
-
-        # If query_result is None
-        # Fallback to collection names and vector search the collections
+        query_result, collection_names = await _item_source(item, ctx)
         if query_result is None and collection_names:
-            collection_names = set(collection_names).difference(extracted_collections)
-            if not collection_names:
-                log.debug('skipping %s as it has already been extracted', item)
+            searched = await _search_collections(item, collection_names, ctx, embedding_function, full_context)
+            if searched is None:
                 continue
-
-            # Filter out collections the user cannot read
-            if user and (item.get('type'), item.get('id')) not in folder_items:
-                collection_names = await filter_accessible_collections(collection_names, user)
-                if not collection_names:
-                    log.debug('access denied for all collections in item %s', item)
-                    continue
-
-            try:
-                if full_context:
-                    # Sync helper makes blocking VECTOR_DB_CLIENT calls;
-                    # offload so the async caller's event loop stays free.
-                    query_result = await asyncio.to_thread(get_all_items_from_collections, collection_names)
-                else:
-                    query_result = await query_collection(
-                        request,
-                        collection_names=collection_names,
-                        queries=queries,
-                        embedding_function=embedding_function,
-                        k=k,
-                    )
-            except Exception as e:
-                log.exception(e)
-
-            extracted_collections.extend(collection_names)
+            query_result, collection_names = searched
+            ctx.extracted_collections.extend(collection_names)
 
         if query_result:
             if 'data' in item:
                 del item['data']
             query_results.append({**query_result, 'file': item})
 
-    sources = []
-    for query_result in query_results:
-        try:
-            if 'documents' in query_result:
-                if 'metadatas' in query_result:
-                    source = {
-                        'source': query_result['file'],
-                        'document': query_result['documents'][0],
-                        'metadata': query_result['metadatas'][0],
-                    }
-                    if 'distances' in query_result and query_result['distances']:
-                        source['distances'] = query_result['distances'][0]
-
-                    sources.append(source)
-        except Exception as e:
-            log.exception(e)
-    return sources
+    return _sources_from_results(query_results)
 
 
 def get_model_path(model: str, update_model: bool = False):
