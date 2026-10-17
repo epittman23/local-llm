@@ -1495,7 +1495,15 @@ def _adapt_payload_for_provider(payload: dict, model: dict, url: str, user) -> d
         del payload['max_tokens']
 
     if 'logit_bias' in payload and payload['logit_bias']:
-        logit_bias = convert_logit_bias_input_to_json(payload['logit_bias'])
+        try:
+            logit_bias = convert_logit_bias_input_to_json(payload['logit_bias'])
+        except (ValueError, AttributeError) as e:
+            # A request's own malformed logit_bias is the client's error, not a server one.
+            raise HTTPException(
+                status_code=400,
+                detail='Invalid logit_bias: expected an object of token ids to biases, '
+                'or "token:bias" pairs separated by commas.',
+            ) from e
         if logit_bias:
             payload['logit_bias'] = JSONCodec.loads(logit_bias)
     return payload

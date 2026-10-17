@@ -318,6 +318,8 @@ CHAT_CASES = [
     _case('logit_bias_empty', {'model': 'm', 'messages': USER_MSG, 'logit_bias': ''}),
     _case('logit_bias_dict', {'model': 'm', 'messages': USER_MSG, 'logit_bias': {'50256': -100}}),
     _case('logit_bias_clamped', {'model': 'm', 'messages': USER_MSG, 'logit_bias': '1:500, 2:-500'}),
+    _case('logit_bias_bad_number', {'model': 'm', 'messages': USER_MSG, 'logit_bias': '1:high'}),
+    _case('logit_bias_wrong_type', {'model': 'm', 'messages': USER_MSG, 'logit_bias': [1, 2]}),
     _case('logit_bias_invalid', {'model': 'm', 'messages': USER_MSG, 'logit_bias': 'nonsense'}),
     _case(
         'azure_deployment_chat',

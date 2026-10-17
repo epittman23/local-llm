@@ -1533,6 +1533,63 @@
     "logit_bias": "1:500, 2:-500"
    }
   },
+  "logit_bias_bad_number": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [],
+   "request": null,
+   "outcome": {
+    "kind": "HTTPException",
+    "status": 400,
+    "detail": "Invalid logit_bias: expected an object of token ids to biases, or \"token:bias\" pairs separated by commas."
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "logit_bias": "1:high"
+   }
+  },
+  "logit_bias_wrong_type": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [],
+   "request": null,
+   "outcome": {
+    "kind": "HTTPException",
+    "status": 400,
+    "detail": "Invalid logit_bias: expected an object of token ids to biases, or \"token:bias\" pairs separated by commas."
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "logit_bias": [
+     1,
+     2
+    ]
+   }
+  },
   "logit_bias_invalid": {
    "access_checks": [
     {
@@ -1545,9 +1602,9 @@
    "cleaned_up": [],
    "request": null,
    "outcome": {
-    "kind": "raised",
-    "type": "ValueError",
-    "message": "not enough values to unpack (expected 2, got 1)"
+    "kind": "HTTPException",
+    "status": 400,
+    "detail": "Invalid logit_bias: expected an object of token ids to biases, or \"token:bias\" pairs separated by commas."
    },
    "form_data_after": {
     "model": "m",
