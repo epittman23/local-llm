@@ -19,6 +19,7 @@ import asyncio
 import copy
 import datetime as dt
 import json
+import logging
 import os
 from pathlib import Path
 from types import SimpleNamespace
@@ -674,3 +675,13 @@ def test_record_golden(monkeypatch):
             golden[case_id] = _run(kind, provider, world, m)
     GOLDEN.parent.mkdir(exist_ok=True)
     GOLDEN.write_text(json.dumps(golden, indent=1, ensure_ascii=False) + '\n', encoding='utf-8')
+
+
+def test_missing_user_data_does_not_log_the_token(monkeypatch, caplog):
+    world = next(w for c, _, w in CALLBACK_CASES if c == 'userinfo_missing')
+    secret_token = {**world['token'], 'access_token': 'secret-access', 'refresh_token': 'secret-refresh'}
+    with caplog.at_level(logging.DEBUG, logger=oauth.log.name):
+        _run('callback', 'oidc', {**world, 'token': secret_token}, monkeypatch)
+    assert 'user data is missing' in caplog.text
+    assert 'secret-access' not in caplog.text
+    assert 'secret-refresh' not in caplog.text

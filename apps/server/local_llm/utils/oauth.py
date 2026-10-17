@@ -1380,7 +1380,8 @@ async def _callback_user_data(client, token: dict, provider: str, auth_config) -
     if provider == 'feishu' and isinstance(user_data, dict) and 'data' in user_data:
         user_data = user_data['data']
     if not user_data:
-        log.warning(f'OAuth callback failed, user data is missing: {token}')
+        # Name the token response's fields, never their values: they include the access and refresh tokens.
+        log.warning('OAuth callback failed, user data is missing (token response fields: %s)', sorted(token))
         raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
     return user_data
 
