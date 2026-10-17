@@ -1,0 +1,2586 @@
+{
+ "responses": {
+  "empty": {
+   "result": {
+    "input": []
+   },
+   "input_after": {}
+  },
+  "no_messages_key": {
+   "result": {
+    "model": "m",
+    "temperature": 0.3,
+    "input": []
+   },
+   "input_after": {
+    "model": "m",
+    "temperature": 0.3
+   }
+  },
+  "user_string": {
+   "result": {
+    "model": "m",
+    "input": [
+     {
+      "type": "message",
+      "role": "user",
+      "content": [
+       {
+        "type": "input_text",
+        "text": "hi"
+       }
+      ]
+     }
+    ]
+   },
+   "input_after": {
+    "model": "m"
+   }
+  },
+  "role_defaults_to_user": {
+   "result": {
+    "input": [
+     {
+      "type": "message",
+      "role": "user",
+      "content": [
+       {
+        "type": "input_text",
+        "text": "hi"
+       }
+      ]
+     }
+    ]
+   },
+   "input_after": {}
+  },
+  "missing_content": {
+   "result": {
+    "input": [
+     {
+      "type": "message",
+      "role": "user",
+      "content": [
+       {
+        "type": "input_text",
+        "text": ""
+       }
+      ]
+     }
+    ]
+   },
+   "input_after": {}
+  },
+  "non_string_content": {
+   "result": {
+    "input": [
+     {
+      "type": "message",
+      "role": "user",
+      "content": [
+       {
+        "type": "input_text",
+        "text": "12"
+       }
+      ]
+     },
+     {
+      "type": "message",
+      "role": "user",
+      "content": [
+       {
+        "type": "input_text",
+        "text": "None"
+       }
+      ]
+     }
+    ]
+   },
+   "input_after": {}
+  },
+  "system_string_and_list": {
+   "result": {
+    "input": [
+     {
+      "type": "message",
+      "role": "user",
+      "content": [
+       {
+        "type": "input_text",
+        "text": "q"
+       }
+      ]
+     }
+    ],
+    "instructions": "a"
+   },
+   "input_after": {}
+  },
+  "system_other_type_ignored": {
+   "result": {
+    "input": []
+   },
+   "input_after": {}
+  },
+  "system_empty_string": {
+   "result": {
+    "input": []
+   },
+   "input_after": {}
+  },
+  "stored_output_items": {
+   "result": {
+    "input": [
+     {
+      "type": "message",
+      "role": "assistant",
+      "content": []
+     },
+     {
+      "type": "function_call",
+      "call_id": "c",
+      "name": "f",
+      "arguments": "{}",
+      "id": "i"
+     },
+     {
+      "type": "function_call_output",
+      "call_id": "c",
+      "output": "o"
+     },
+     {
+      "type": "reasoning",
+      "summary": [],
+      "extra": true
+     },
+     {
+      "no_type": true
+     },
+     {
+      "type": "message",
+      "role": "user",
+      "content": [
+       {
+        "type": "input_text",
+        "text": "next"
+       }
+      ]
+     },
+     {
+      "type": "message",
+      "role": "user",
+      "content": [
+       {
+        "type": "input_text",
+        "text": "next2"
+       }
+      ]
+     }
+    ]
+   },
+   "input_after": {}
+  },
+  "assistant_tool_calls": {
+   "result": {
+    "input": [
+     {
+      "type": "message",
+      "role": "assistant",
+      "content": [
+       {
+        "type": "output_text",
+        "text": "calling"
+       }
+      ]
+     },
+     {
+      "type": "function_call",
+      "call_id": "t1",
+      "name": "f",
+      "arguments": "{\"a\": 1}"
+     },
+     {
+      "type": "function_call",
+      "call_id": "",
+      "name": "",
+      "arguments": "{}"
+     },
+     {
+      "type": "function_call",
+      "call_id": "",
+      "name": "",
+      "arguments": "{}"
+     },
+     {
+      "type": "message",
+      "role": "assistant",
+      "content": [
+       {
+        "type": "output_text",
+        "text": "part\ntwo"
+       }
+      ]
+     },
+     {
+      "type": "function_call",
+      "call_id": "t2",
+      "name": "g",
+      "arguments": "{}"
+     },
+     {
+      "type": "function_call",
+      "call_id": "t3",
+      "name": "",
+      "arguments": "{}"
+     },
+     {
+      "type": "function_call",
+      "call_id": "t4",
+      "name": "",
+      "arguments": "{}"
+     },
+     {
+      "type": "function_call",
+      "call_id": "t5",
+      "name": "",
+      "arguments": "{}"
+     },
+     {
+      "type": "function_call",
+      "call_id": "t6",
+      "name": "",
+      "arguments": "{}"
+     },
+     {
+      "type": "message",
+      "role": "assistant",
+      "content": [
+       {
+        "type": "output_text",
+        "text": "no calls"
+       }
+      ]
+     }
+    ]
+   },
+   "input_after": {}
+  },
+  "tool_results": {
+   "result": {
+    "input": [
+     {
+      "type": "function_call_output",
+      "call_id": "t1",
+      "output": "result"
+     },
+     {
+      "type": "function_call_output",
+      "call_id": "",
+      "output": [
+       {
+        "type": "text",
+        "text": "x"
+       }
+      ]
+     },
+     {
+      "type": "function_call_output",
+      "call_id": "",
+      "output": ""
+     }
+    ]
+   },
+   "input_after": {}
+  },
+  "content_parts": {
+   "result": {
+    "input": [
+     {
+      "type": "message",
+      "role": "user",
+      "content": [
+       {
+        "type": "input_text",
+        "text": "look"
+       },
+       {
+        "type": "input_text",
+        "text": ""
+       },
+       {
+        "type": "input_image",
+        "image_url": "u1",
+        "detail": "high"
+       },
+       {
+        "type": "input_image",
+        "image_url": "u2",
+        "detail": "auto"
+       },
+       {
+        "type": "input_image",
+        "image_url": "",
+        "detail": "auto"
+       },
+       {
+        "type": "input_image",
+        "image_url": "plain-url",
+        "detail": "auto"
+       },
+       {
+        "type": "input_image",
+        "image_url": "",
+        "detail": "auto"
+       },
+       {
+        "type": "input_image",
+        "image_url": "",
+        "detail": "auto"
+       },
+       {
+        "type": "input_file",
+        "file_id": "f1",
+        "filename": "a.pdf"
+       },
+       {
+        "type": "input_file",
+        "file_data": "data:...",
+        "filename": "b.pdf"
+       }
+      ]
+     },
+     {
+      "type": "message",
+      "role": "assistant",
+      "content": [
+       {
+        "type": "output_text",
+        "text": "reply"
+       }
+      ]
+     },
+     {
+      "type": "message",
+      "role": "assistant",
+      "content": [
+       {
+        "type": "output_text",
+        "text": "plain reply"
+       }
+      ]
+     },
+     {
+      "type": "message",
+      "role": "developer",
+      "content": [
+       {
+        "type": "input_text",
+        "text": "dev"
+       }
+      ]
+     }
+    ]
+   },
+   "input_after": {}
+  },
+  "previous_response_id_kept": {
+   "result": {
+    "input": [],
+    "previous_response_id": "resp_1"
+   },
+   "input_after": {
+    "previous_response_id": "resp_1"
+   }
+  },
+  "previous_response_id_empty_dropped": {
+   "result": {
+    "input": []
+   },
+   "input_after": {
+    "previous_response_id": ""
+   }
+  },
+  "previous_response_id_none_dropped": {
+   "result": {
+    "input": []
+   },
+   "input_after": {
+    "previous_response_id": null
+   }
+  },
+  "max_tokens": {
+   "result": {
+    "input": [],
+    "max_output_tokens": 10
+   },
+   "input_after": {
+    "max_tokens": 10
+   }
+  },
+  "max_completion_tokens": {
+   "result": {
+    "input": [],
+    "max_output_tokens": 20
+   },
+   "input_after": {
+    "max_completion_tokens": 20
+   }
+  },
+  "both_max_tokens": {
+   "result": {
+    "input": [],
+    "max_output_tokens": 20
+   },
+   "input_after": {
+    "max_tokens": 10,
+    "max_completion_tokens": 20
+   }
+  },
+  "unsupported_params_removed": {
+   "result": {
+    "stream": true,
+    "top_p": 0.5,
+    "input": []
+   },
+   "input_after": {
+    "stream_options": {
+     "include_usage": true
+    },
+    "logit_bias": {
+     "1": 2
+    },
+    "frequency_penalty": 0.1,
+    "presence_penalty": 0.2,
+    "stop": [
+     "x"
+    ],
+    "stream": true,
+    "top_p": 0.5
+   }
+  },
+  "tools": {
+   "result": {
+    "tools": [
+     {
+      "type": "function",
+      "name": "f",
+      "description": "d",
+      "parameters": {
+       "type": "object"
+      },
+      "strict": true
+     },
+     {
+      "type": "function",
+      "name": "g"
+     },
+     {
+      "type": "custom"
+     },
+     {
+      "type": "function",
+      "name": ""
+     },
+     {
+      "type": "function",
+      "name": "already",
+      "parameters": {}
+     },
+     "not a dict"
+    ],
+    "input": []
+   },
+   "input_after": {
+    "tools": [
+     {
+      "type": "function",
+      "function": {
+       "name": "f",
+       "description": "d",
+       "parameters": {
+        "type": "object"
+       },
+       "strict": true,
+       "extra": 1
+      }
+     },
+     {
+      "function": {
+       "name": "g"
+      }
+     },
+     {
+      "type": "custom",
+      "function": "not a dict"
+     },
+     {
+      "type": "function",
+      "function": {}
+     },
+     {
+      "type": "function",
+      "name": "already",
+      "parameters": {}
+     },
+     "not a dict"
+    ]
+   }
+  },
+  "tools_not_a_list": {
+   "result": {
+    "tools": {
+     "name": "x"
+    },
+    "input": []
+   },
+   "input_after": {
+    "tools": {
+     "name": "x"
+    }
+   }
+  }
+ },
+ "chat": {
+  "disabled": {
+   "access_checks": [],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [],
+   "request": null,
+   "outcome": {
+    "kind": "HTTPException",
+    "status": 503,
+    "detail": "OpenAI API is disabled"
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ]
+   }
+  },
+  "basic": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"m\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}], \"temperature\": 0.2}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "c1",
+     "choices": [
+      {
+       "message": {
+        "content": "hi"
+       }
+      }
+     ]
+    }
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "temperature": 0.2
+   }
+  },
+  "metadata_is_not_sent": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"m\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}]}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "c1",
+     "choices": [
+      {
+       "message": {
+        "content": "hi"
+       }
+      }
+     ]
+    }
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "metadata": {
+     "chat_id": "c"
+    }
+   }
+  },
+  "model_discovered_when_not_cached": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 1,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"m2\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}]}",
+    "headers": {
+     "Authorization": "Bearer key-1",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "c1",
+     "choices": [
+      {
+       "message": {
+        "content": "hi"
+       }
+      }
+     ]
+    }
+   },
+   "form_data_after": {
+    "model": "m2",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ]
+   }
+  },
+  "model_not_found": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 1,
+   "failures": [],
+   "cleaned_up": [],
+   "request": null,
+   "outcome": {
+    "kind": "HTTPException",
+    "status": 404,
+    "detail": "Model '' was not found"
+   },
+   "form_data_after": {
+    "model": "missing",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ]
+   }
+  },
+  "model_info_with_base_model_params_and_system": {
+   "access_checks": [
+    {
+     "model": "custom",
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"m\", \"messages\": [{\"role\": \"system\", \"content\": \"Be brief, Ada.\"}, {\"role\": \"user\", \"content\": \"hi\"}], \"temperature\": 0.7, \"max_tokens\": 50}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "c1",
+     "choices": [
+      {
+       "message": {
+        "content": "hi"
+       }
+      }
+     ]
+    }
+   },
+   "form_data_after": {
+    "model": "custom",
+    "messages": [
+     {
+      "role": "system",
+      "content": "Be brief, Ada."
+     },
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "metadata": {
+     "variables": {
+      "{{NAME}}": "Ada"
+     }
+    }
+   }
+  },
+  "request_base_model_id_and_bypass_system_prompt": {
+   "access_checks": [
+    {
+     "model": "custom",
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"m\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}]}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "c1",
+     "choices": [
+      {
+       "message": {
+        "content": "hi"
+       }
+      }
+     ]
+    }
+   },
+   "form_data_after": {
+    "model": "custom",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ]
+   }
+  },
+  "model_info_without_base_model_or_params": {
+   "access_checks": [
+    {
+     "model": "m",
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"m\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}]}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "c1",
+     "choices": [
+      {
+       "message": {
+        "content": "hi"
+       }
+      }
+     ]
+    }
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ]
+   }
+  },
+  "bypass_filter_from_state": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": true
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"m\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}]}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "c1",
+     "choices": [
+      {
+       "message": {
+        "content": "hi"
+       }
+      }
+     ]
+    }
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ]
+   }
+  },
+  "bypass_filter_from_env": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": true
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"m\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}]}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "c1",
+     "choices": [
+      {
+       "message": {
+        "content": "hi"
+       }
+      }
+     ]
+    }
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ]
+   }
+  },
+  "pipeline_model_gets_user": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"m\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}], \"user\": {\"name\": \"Ada Lovelace\", \"id\": \"u1\", \"email\": \"ada@example.invalid\", \"role\": \"user\"}}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "c1",
+     "choices": [
+      {
+       "message": {
+        "content": "hi"
+       }
+      }
+     ]
+    }
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ]
+   }
+  },
+  "prefix_is_stripped": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"m\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}]}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "c1",
+     "choices": [
+      {
+       "message": {
+        "content": "hi"
+       }
+      }
+     ]
+    }
+   },
+   "form_data_after": {
+    "model": "or.m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ]
+   }
+  },
+  "reasoning_model": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://api.openai.com/v1/chat/completions",
+    "data": "{\"model\": \"o3\", \"messages\": [{\"role\": \"developer\", \"content\": \"s\"}, {\"role\": \"user\", \"content\": \"hi\"}], \"max_completion_tokens\": 9}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "c1",
+     "choices": [
+      {
+       "message": {
+        "content": "hi"
+       }
+      }
+     ]
+    }
+   },
+   "form_data_after": {
+    "model": "o3",
+    "messages": [
+     {
+      "role": "developer",
+      "content": "s"
+     },
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "max_tokens": 9
+   }
+  },
+  "legacy_reasoning_model": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"o1-mini\", \"messages\": [{\"role\": \"user\", \"content\": \"s\"}, {\"role\": \"user\", \"content\": \"hi\"}]}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "c1",
+     "choices": [
+      {
+       "message": {
+        "content": "hi"
+       }
+      }
+     ]
+    }
+   },
+   "form_data_after": {
+    "model": "o1-mini",
+    "messages": [
+     {
+      "role": "user",
+      "content": "s"
+     },
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ]
+   }
+  },
+  "non_openai_url_uses_max_tokens": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"m\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}], \"max_tokens\": 30}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "c1",
+     "choices": [
+      {
+       "message": {
+        "content": "hi"
+       }
+      }
+     ]
+    }
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "max_completion_tokens": 30
+   }
+  },
+  "openai_url_keeps_max_completion_tokens": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://api.openai.com/v1/chat/completions",
+    "data": "{\"model\": \"m\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}], \"max_completion_tokens\": 30}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "c1",
+     "choices": [
+      {
+       "message": {
+        "content": "hi"
+       }
+      }
+     ]
+    }
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "max_tokens": 10,
+    "max_completion_tokens": 30
+   }
+  },
+  "non_openai_url_with_both_max_tokens": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"m\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}], \"max_tokens\": 30}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "c1",
+     "choices": [
+      {
+       "message": {
+        "content": "hi"
+       }
+      }
+     ]
+    }
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "max_tokens": 10,
+    "max_completion_tokens": 30
+   }
+  },
+  "logit_bias_converted": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"m\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}], \"logit_bias\": {\"50256\": -100, \"11\": 5}}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "c1",
+     "choices": [
+      {
+       "message": {
+        "content": "hi"
+       }
+      }
+     ]
+    }
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "logit_bias": "50256:-100, 11:5"
+   }
+  },
+  "logit_bias_empty": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"m\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}], \"logit_bias\": \"\"}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "c1",
+     "choices": [
+      {
+       "message": {
+        "content": "hi"
+       }
+      }
+     ]
+    }
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "logit_bias": ""
+   }
+  },
+  "logit_bias_dict": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"m\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}], \"logit_bias\": {\"50256\": -100}}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "c1",
+     "choices": [
+      {
+       "message": {
+        "content": "hi"
+       }
+      }
+     ]
+    }
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "logit_bias": {
+     "50256": -100
+    }
+   }
+  },
+  "logit_bias_clamped": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"m\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}], \"logit_bias\": {\"1\": 100, \"2\": -100}}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "c1",
+     "choices": [
+      {
+       "message": {
+        "content": "hi"
+       }
+      }
+     ]
+    }
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "logit_bias": "1:500, 2:-500"
+   }
+  },
+  "logit_bias_invalid": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [],
+   "request": null,
+   "outcome": {
+    "kind": "raised",
+    "type": "ValueError",
+    "message": "not enough values to unpack (expected 2, got 1)"
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "logit_bias": "nonsense"
+   }
+  },
+  "azure_deployment_chat": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://res.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-10-21",
+    "data": "{\"messages\": [{\"role\": \"user\", \"content\": \"hi\"}], \"temperature\": 0.5}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json",
+     "api-key": "key-0",
+     "api-version": "2024-10-21"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "c1",
+     "choices": [
+      {
+       "message": {
+        "content": "hi"
+       }
+      }
+     ]
+    }
+   },
+   "form_data_after": {
+    "model": "gpt-4o",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "temperature": 0.5,
+    "unsupported": 1
+   }
+  },
+  "azure_deployment_default_version_entra_id": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://res.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2023-03-15-preview",
+    "data": "{\"messages\": [{\"role\": \"user\", \"content\": \"hi\"}]}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json",
+     "api-version": "2023-03-15-preview"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "c1",
+     "choices": [
+      {
+       "message": {
+        "content": "hi"
+       }
+      }
+     ]
+    }
+   },
+   "form_data_after": {
+    "model": "gpt-4o",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ]
+   }
+  },
+  "azure_deployment_responses": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://res.openai.azure.com/openai/deployments/o4-mini/responses?api-version=2025-04-01-preview",
+    "data": "{\"input\": [{\"type\": \"message\", \"role\": \"user\", \"content\": [{\"type\": \"input_text\", \"text\": \"hi\"}]}], \"max_output_tokens\": 5}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json",
+     "api-version": "2025-04-01-preview"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "c1",
+     "object": "chat.completion",
+     "model": "",
+     "choices": [
+      {
+       "index": 0,
+       "message": {
+        "role": "assistant",
+        "content": ""
+       },
+       "finish_reason": "stop"
+      }
+     ],
+     "usage": {}
+    }
+   },
+   "form_data_after": {
+    "model": "o4-mini",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "max_tokens": 5,
+    "temperature": 0.5
+   }
+  },
+  "azure_bad_deployment_name": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [],
+   "request": null,
+   "outcome": {
+    "kind": "HTTPException",
+    "status": 400,
+    "detail": "Invalid model name: must not be empty or contain path separators or traversal sequences"
+   },
+   "form_data_after": {
+    "model": "../x",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ]
+   }
+  },
+  "azure_v1_chat": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://res.openai.azure.com/openai/v1/chat/completions",
+    "data": "{\"model\": \"gpt-4o\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}]}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json",
+     "api-key": "key-0"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "c1",
+     "choices": [
+      {
+       "message": {
+        "content": "hi"
+       }
+      }
+     ]
+    }
+   },
+   "form_data_after": {
+    "model": "gpt-4o",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ]
+   }
+  },
+  "azure_v1_responses": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://res.openai.azure.com/openai/v1/responses",
+    "data": "{\"model\": \"gpt-4o\", \"input\": [{\"type\": \"message\", \"role\": \"user\", \"content\": [{\"type\": \"input_text\", \"text\": \"hi\"}]}]}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json",
+     "api-key": "key-0"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "c1",
+     "object": "chat.completion",
+     "model": "",
+     "choices": [
+      {
+       "index": 0,
+       "message": {
+        "role": "assistant",
+        "content": ""
+       },
+       "finish_reason": "stop"
+      }
+     ],
+     "usage": {}
+    }
+   },
+   "form_data_after": {
+    "model": "gpt-4o",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ]
+   }
+  },
+  "responses_api": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/responses",
+    "data": "{\"model\": \"m\", \"input\": [{\"type\": \"message\", \"role\": \"user\", \"content\": [{\"type\": \"input_text\", \"text\": \"hi\"}]}], \"instructions\": \"s\", \"max_output_tokens\": 7}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "resp_1",
+     "object": "chat.completion",
+     "model": "m",
+     "choices": [
+      {
+       "index": 0,
+       "message": {
+        "role": "assistant",
+        "content": "answer"
+       },
+       "finish_reason": "stop"
+      }
+     ],
+     "usage": {
+      "input_tokens": 3
+     }
+    }
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "system",
+      "content": "s"
+     },
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "max_tokens": 7
+   }
+  },
+  "responses_api_non_dict_result": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/responses",
+    "data": "{\"model\": \"m\", \"input\": [{\"type\": \"message\", \"role\": \"user\", \"content\": [{\"type\": \"input_text\", \"text\": \"hi\"}]}]}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "list",
+    "value": [
+     "a",
+     "list"
+    ]
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ]
+   }
+  },
+  "tool_message_images_stripped_for_chat": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"m\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}, {\"role\": \"tool\", \"tool_call_id\": \"t1\", \"content\": \"ab\"}, {\"role\": \"tool\", \"tool_call_id\": \"t2\", \"content\": \"plain\"}, {\"role\": \"user\", \"content\": [{\"type\": \"text\", \"text\": \"kept\"}, {\"type\": \"image_url\", \"image_url\": {\"url\": \"data:image/png;base64,AAAA\"}}]}]}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "c1",
+     "choices": [
+      {
+       "message": {
+        "content": "hi"
+       }
+      }
+     ]
+    }
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     },
+     {
+      "role": "tool",
+      "tool_call_id": "t1",
+      "content": "ab"
+     },
+     {
+      "role": "tool",
+      "tool_call_id": "t2",
+      "content": "plain"
+     },
+     {
+      "role": "user",
+      "content": [
+       {
+        "type": "text",
+        "text": "kept"
+       },
+       {
+        "type": "image_url",
+        "image_url": {
+         "url": "data:image/png;base64,AAAA"
+        }
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "tool_message_images_kept_for_responses": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/responses",
+    "data": "{\"model\": \"m\", \"input\": [{\"type\": \"function_call_output\", \"call_id\": \"t1\", \"output\": [{\"type\": \"text\", \"text\": \"a\"}, {\"type\": \"image_url\", \"image_url\": {\"url\": \"data:image/png;base64,AAAA\"}}]}]}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "c1",
+     "object": "chat.completion",
+     "model": "",
+     "choices": [
+      {
+       "index": 0,
+       "message": {
+        "role": "assistant",
+        "content": ""
+       },
+       "finish_reason": "stop"
+      }
+     ],
+     "usage": {}
+    }
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "tool",
+      "tool_call_id": "t1",
+      "content": [
+       {
+        "type": "text",
+        "text": "a"
+       },
+       {
+        "type": "image_url",
+        "image_url": {
+         "url": "data:image/png;base64,AAAA"
+        }
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "streaming": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"m\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}], \"stream\": true, \"stream_options\": {\"include_usage\": true}}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=True)"
+   },
+   "outcome": {
+    "kind": "StreamingResponse",
+    "status": 200,
+    "headers": {
+     "content-type": "text/event-stream",
+     "x-request-id": "r1"
+    }
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": true,
+    "stream_options": {
+     "include_usage": true
+    }
+   }
+  },
+  "stream_options_dropped_when_not_streaming": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"m\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}], \"stream\": false}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "dict",
+    "value": {
+     "id": "c1",
+     "choices": [
+      {
+       "message": {
+        "content": "hi"
+       }
+      }
+     ]
+    }
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": false,
+    "stream_options": {
+     "include_usage": true
+    }
+   }
+  },
+  "sse_error_with_json_body": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [
+    {
+     "provider": "openai-compatible",
+     "base_url": "https://openrouter.ai/api/v1",
+     "api_key": "key-0",
+     "status": 429,
+     "requested_model": "m",
+     "upstream_error": {
+      "error": {
+       "message": "slow down"
+      }
+     }
+    }
+   ],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"m\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}], \"stream\": true}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=True)"
+   },
+   "outcome": {
+    "kind": "JSONResponse",
+    "status": 429,
+    "body": {
+     "error": {
+      "message": "slow down"
+     }
+    }
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": true
+   }
+  },
+  "sse_error_with_text_body": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [
+    {
+     "provider": "openai-compatible",
+     "base_url": "https://openrouter.ai/api/v1",
+     "api_key": "key-0",
+     "status": 502,
+     "requested_model": "m",
+     "upstream_error": "bad gateway"
+    }
+   ],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"m\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}], \"stream\": true}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=True)"
+   },
+   "outcome": {
+    "kind": "JSONResponse",
+    "status": 502,
+    "body": {
+     "error": {
+      "message": "bad gateway",
+      "code": 502
+     }
+    }
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ],
+    "stream": true
+   }
+  },
+  "json_error": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [
+    {
+     "provider": "openai-compatible",
+     "base_url": "https://openrouter.ai/api/v1",
+     "api_key": "key-0",
+     "status": 400,
+     "requested_model": "m",
+     "upstream_error": {
+      "error": {
+       "message": "bad request"
+      }
+     }
+    }
+   ],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"m\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}]}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "JSONResponse",
+    "status": 400,
+    "body": {
+     "error": {
+      "message": "bad request"
+     }
+    }
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ]
+   }
+  },
+  "json_error_list_body": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [
+    {
+     "provider": "openai-compatible",
+     "base_url": "https://openrouter.ai/api/v1",
+     "api_key": "key-0",
+     "status": 400,
+     "requested_model": "m",
+     "upstream_error": [
+      {
+       "error": "x"
+      }
+     ]
+    }
+   ],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"m\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}]}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "JSONResponse",
+    "status": 400,
+    "body": [
+     {
+      "error": "x"
+     }
+    ]
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ]
+   }
+  },
+  "text_error": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [
+    {
+     "provider": "openai-compatible",
+     "base_url": "https://openrouter.ai/api/v1",
+     "api_key": "key-0",
+     "status": 503,
+     "requested_model": "m",
+     "upstream_error": "<h1>down</h1>"
+    }
+   ],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"m\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}]}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "PlainTextResponse",
+    "status": 503,
+    "body": "<h1>down</h1>"
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ]
+   }
+  },
+  "text_success": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"m\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}]}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "str",
+    "value": "plain text body"
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ]
+   }
+  },
+  "connection_fails": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    false
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"m\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}]}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "HTTPException",
+    "status": 500,
+    "detail": "Local LLM: Server Connection Error"
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ]
+   }
+  },
+  "reading_the_body_fails": {
+   "access_checks": [
+    {
+     "model": null,
+     "bypass_filter": false
+    }
+   ],
+   "discovery_calls": 0,
+   "failures": [],
+   "cleaned_up": [
+    true
+   ],
+   "request": {
+    "method": "POST",
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "data": "{\"model\": \"m\", \"messages\": [{\"role\": \"user\", \"content\": \"hi\"}]}",
+    "headers": {
+     "Authorization": "Bearer key-0",
+     "Content-Type": "application/json"
+    },
+    "cookies": {
+     "session": "c"
+    },
+    "timeout": "timeout(stream=False)"
+   },
+   "outcome": {
+    "kind": "HTTPException",
+    "status": 200,
+    "detail": "Local LLM: Server Connection Error"
+   },
+   "form_data_after": {
+    "model": "m",
+    "messages": [
+     {
+      "role": "user",
+      "content": "hi"
+     }
+    ]
+   }
+  }
+ }
+}
