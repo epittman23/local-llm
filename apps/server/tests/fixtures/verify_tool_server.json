@@ -1,0 +1,725 @@
+{
+ "mcp_oauth_first_document": {
+  "discovery_fetched": [
+   "https://auth.example/.well-known/oauth-authorization-server"
+  ],
+  "mcp": [],
+  "openapi_fetch": null,
+  "oauth_lookups": [],
+  "discovery_server_url": "https://tools.example",
+  "returned": {
+   "status": true,
+   "oauth_server_metadata": {
+    "issuer": "https://auth.example",
+    "authorization_endpoint": "https://auth.example/authorize",
+    "token_endpoint": "https://auth.example/token",
+    "registration_endpoint": null,
+    "scopes_supported": null,
+    "response_types_supported": [
+     "code"
+    ],
+    "response_modes_supported": null,
+    "grant_types_supported": null,
+    "token_endpoint_auth_methods_supported": null,
+    "token_endpoint_auth_signing_alg_values_supported": null,
+    "service_documentation": null,
+    "ui_locales_supported": null,
+    "op_policy_uri": null,
+    "op_tos_uri": null,
+    "revocation_endpoint": null,
+    "revocation_endpoint_auth_methods_supported": null,
+    "revocation_endpoint_auth_signing_alg_values_supported": null,
+    "introspection_endpoint": null,
+    "introspection_endpoint_auth_methods_supported": null,
+    "introspection_endpoint_auth_signing_alg_values_supported": null,
+    "code_challenge_methods_supported": null,
+    "client_id_metadata_document_supported": null,
+    "authorization_response_iss_parameter_supported": null,
+    "authorization_grant_profiles_supported": null
+   }
+  }
+ },
+ "mcp_oauth_second_document": {
+  "discovery_fetched": [
+   "https://auth.example/.well-known/oauth-authorization-server",
+   "https://auth.example/.well-known/openid-configuration"
+  ],
+  "mcp": [],
+  "openapi_fetch": null,
+  "oauth_lookups": [],
+  "discovery_server_url": "https://tools.example",
+  "returned": {
+   "status": true,
+   "oauth_server_metadata": {
+    "issuer": "https://auth.example",
+    "authorization_endpoint": "https://auth.example/authorize",
+    "token_endpoint": "https://auth.example/token",
+    "registration_endpoint": null,
+    "scopes_supported": null,
+    "response_types_supported": [
+     "code"
+    ],
+    "response_modes_supported": null,
+    "grant_types_supported": null,
+    "token_endpoint_auth_methods_supported": null,
+    "token_endpoint_auth_signing_alg_values_supported": null,
+    "service_documentation": null,
+    "ui_locales_supported": null,
+    "op_policy_uri": null,
+    "op_tos_uri": null,
+    "revocation_endpoint": null,
+    "revocation_endpoint_auth_methods_supported": null,
+    "revocation_endpoint_auth_signing_alg_values_supported": null,
+    "introspection_endpoint": null,
+    "introspection_endpoint_auth_methods_supported": null,
+    "introspection_endpoint_auth_signing_alg_values_supported": null,
+    "code_challenge_methods_supported": null,
+    "client_id_metadata_document_supported": null,
+    "authorization_response_iss_parameter_supported": null,
+    "authorization_grant_profiles_supported": null
+   }
+  }
+ },
+ "mcp_oauth_static": {
+  "discovery_fetched": [
+   "https://auth.example/.well-known/oauth-authorization-server"
+  ],
+  "mcp": [],
+  "openapi_fetch": null,
+  "oauth_lookups": [],
+  "discovery_server_url": "https://tools.example",
+  "returned": {
+   "status": true,
+   "oauth_server_metadata": {
+    "issuer": "https://auth.example",
+    "authorization_endpoint": "https://auth.example/authorize",
+    "token_endpoint": "https://auth.example/token",
+    "registration_endpoint": null,
+    "scopes_supported": null,
+    "response_types_supported": [
+     "code"
+    ],
+    "response_modes_supported": null,
+    "grant_types_supported": null,
+    "token_endpoint_auth_methods_supported": null,
+    "token_endpoint_auth_signing_alg_values_supported": null,
+    "service_documentation": null,
+    "ui_locales_supported": null,
+    "op_policy_uri": null,
+    "op_tos_uri": null,
+    "revocation_endpoint": null,
+    "revocation_endpoint_auth_methods_supported": null,
+    "revocation_endpoint_auth_signing_alg_values_supported": null,
+    "introspection_endpoint": null,
+    "introspection_endpoint_auth_methods_supported": null,
+    "introspection_endpoint_auth_signing_alg_values_supported": null,
+    "code_challenge_methods_supported": null,
+    "client_id_metadata_document_supported": null,
+    "authorization_response_iss_parameter_supported": null,
+    "authorization_grant_profiles_supported": null
+   }
+  }
+ },
+ "mcp_oauth_server_url_from_info": {
+  "discovery_fetched": [
+   "https://auth.example/.well-known/oauth-authorization-server"
+  ],
+  "mcp": [],
+  "openapi_fetch": null,
+  "oauth_lookups": [],
+  "discovery_server_url": "https://other-auth.example",
+  "returned": {
+   "status": true,
+   "oauth_server_metadata": {
+    "issuer": "https://auth.example",
+    "authorization_endpoint": "https://auth.example/authorize",
+    "token_endpoint": "https://auth.example/token",
+    "registration_endpoint": null,
+    "scopes_supported": null,
+    "response_types_supported": [
+     "code"
+    ],
+    "response_modes_supported": null,
+    "grant_types_supported": null,
+    "token_endpoint_auth_methods_supported": null,
+    "token_endpoint_auth_signing_alg_values_supported": null,
+    "service_documentation": null,
+    "ui_locales_supported": null,
+    "op_policy_uri": null,
+    "op_tos_uri": null,
+    "revocation_endpoint": null,
+    "revocation_endpoint_auth_methods_supported": null,
+    "revocation_endpoint_auth_signing_alg_values_supported": null,
+    "introspection_endpoint": null,
+    "introspection_endpoint_auth_methods_supported": null,
+    "introspection_endpoint_auth_signing_alg_values_supported": null,
+    "code_challenge_methods_supported": null,
+    "client_id_metadata_document_supported": null,
+    "authorization_response_iss_parameter_supported": null,
+    "authorization_grant_profiles_supported": null
+   }
+  }
+ },
+ "mcp_oauth_info_without_server_url": {
+  "discovery_fetched": [
+   "https://auth.example/.well-known/oauth-authorization-server"
+  ],
+  "mcp": [],
+  "openapi_fetch": null,
+  "oauth_lookups": [],
+  "discovery_server_url": "https://tools.example",
+  "returned": {
+   "status": true,
+   "oauth_server_metadata": {
+    "issuer": "https://auth.example",
+    "authorization_endpoint": "https://auth.example/authorize",
+    "token_endpoint": "https://auth.example/token",
+    "registration_endpoint": null,
+    "scopes_supported": null,
+    "response_types_supported": [
+     "code"
+    ],
+    "response_modes_supported": null,
+    "grant_types_supported": null,
+    "token_endpoint_auth_methods_supported": null,
+    "token_endpoint_auth_signing_alg_values_supported": null,
+    "service_documentation": null,
+    "ui_locales_supported": null,
+    "op_policy_uri": null,
+    "op_tos_uri": null,
+    "revocation_endpoint": null,
+    "revocation_endpoint_auth_methods_supported": null,
+    "revocation_endpoint_auth_signing_alg_values_supported": null,
+    "introspection_endpoint": null,
+    "introspection_endpoint_auth_methods_supported": null,
+    "introspection_endpoint_auth_signing_alg_values_supported": null,
+    "code_challenge_methods_supported": null,
+    "client_id_metadata_document_supported": null,
+    "authorization_response_iss_parameter_supported": null,
+    "authorization_grant_profiles_supported": null
+   }
+  }
+ },
+ "mcp_oauth_invalid_document": {
+  "discovery_fetched": [
+   "https://auth.example/.well-known/oauth-authorization-server"
+  ],
+  "mcp": [],
+  "openapi_fetch": null,
+  "oauth_lookups": [],
+  "discovery_server_url": "https://tools.example",
+  "http_error": 400,
+  "detail": "Failed to parse OAuth 2.1 discovery document from https://auth.example/.well-known/oauth-authorization-server"
+ },
+ "mcp_oauth_no_document": {
+  "discovery_fetched": [
+   "https://auth.example/.well-known/oauth-authorization-server",
+   "https://auth.example/.well-known/openid-configuration"
+  ],
+  "mcp": [],
+  "openapi_fetch": null,
+  "oauth_lookups": [],
+  "discovery_server_url": "https://tools.example",
+  "http_error": 400,
+  "detail": "Failed to fetch OAuth 2.1 discovery document from ['https://auth.example/.well-known/oauth-authorization-server', 'https://auth.example/.well-known/openid-configuration']"
+ },
+ "mcp_oauth_no_discovery_urls": {
+  "discovery_fetched": [],
+  "mcp": [],
+  "openapi_fetch": null,
+  "oauth_lookups": [],
+  "discovery_server_url": "https://tools.example",
+  "http_error": 400,
+  "detail": "Failed to fetch OAuth 2.1 discovery document from []"
+ },
+ "mcp_no_auth": {
+  "discovery_fetched": [],
+  "mcp": [
+   {
+    "connect": "https://tools.example",
+    "headers": null
+   },
+   "disconnect"
+  ],
+  "openapi_fetch": null,
+  "oauth_lookups": [],
+  "returned": {
+   "status": true,
+   "specs": [
+    {
+     "name": "search"
+    }
+   ]
+  }
+ },
+ "mcp_bearer": {
+  "discovery_fetched": [],
+  "mcp": [
+   {
+    "connect": "https://tools.example",
+    "headers": {
+     "Authorization": "Bearer secret"
+    }
+   },
+   "disconnect"
+  ],
+  "openapi_fetch": null,
+  "oauth_lookups": [],
+  "returned": {
+   "status": true,
+   "specs": [
+    {
+     "name": "search"
+    }
+   ]
+  }
+ },
+ "mcp_bearer_without_key": {
+  "discovery_fetched": [],
+  "mcp": [
+   {
+    "connect": "https://tools.example",
+    "headers": null
+   },
+   "disconnect"
+  ],
+  "openapi_fetch": null,
+  "oauth_lookups": [],
+  "returned": {
+   "status": true,
+   "specs": [
+    {
+     "name": "search"
+    }
+   ]
+  }
+ },
+ "mcp_session": {
+  "discovery_fetched": [],
+  "mcp": [
+   {
+    "connect": "https://tools.example",
+    "headers": {
+     "Authorization": "Bearer session-token"
+    }
+   },
+   "disconnect"
+  ],
+  "openapi_fetch": null,
+  "oauth_lookups": [],
+  "returned": {
+   "status": true,
+   "specs": [
+    {
+     "name": "search"
+    }
+   ]
+  }
+ },
+ "mcp_system_oauth": {
+  "discovery_fetched": [],
+  "mcp": [
+   {
+    "connect": "https://tools.example",
+    "headers": {
+     "Authorization": "Bearer oauth-token"
+    }
+   },
+   "disconnect"
+  ],
+  "openapi_fetch": null,
+  "oauth_lookups": [
+   [
+    "u1",
+    "sess-1"
+   ]
+  ],
+  "returned": {
+   "status": true,
+   "specs": [
+    {
+     "name": "search"
+    }
+   ]
+  }
+ },
+ "mcp_system_oauth_no_token": {
+  "discovery_fetched": [],
+  "mcp": [
+   {
+    "connect": "https://tools.example",
+    "headers": null
+   },
+   "disconnect"
+  ],
+  "openapi_fetch": null,
+  "oauth_lookups": [
+   [
+    "u1",
+    "sess-1"
+   ]
+  ],
+  "returned": {
+   "status": true,
+   "specs": [
+    {
+     "name": "search"
+    }
+   ]
+  }
+ },
+ "mcp_system_oauth_lookup_fails": {
+  "discovery_fetched": [],
+  "mcp": [
+   {
+    "connect": "https://tools.example",
+    "headers": null
+   },
+   "disconnect"
+  ],
+  "openapi_fetch": null,
+  "oauth_lookups": [
+   [
+    "u1",
+    "sess-1"
+   ]
+  ],
+  "returned": {
+   "status": true,
+   "specs": [
+    {
+     "name": "search"
+    }
+   ]
+  }
+ },
+ "mcp_system_oauth_no_cookie": {
+  "discovery_fetched": [],
+  "mcp": [
+   {
+    "connect": "https://tools.example",
+    "headers": null
+   },
+   "disconnect"
+  ],
+  "openapi_fetch": null,
+  "oauth_lookups": [],
+  "returned": {
+   "status": true,
+   "specs": [
+    {
+     "name": "search"
+    }
+   ]
+  }
+ },
+ "mcp_custom_headers": {
+  "discovery_fetched": [],
+  "mcp": [
+   {
+    "connect": "https://tools.example",
+    "headers": {
+     "X-team": "a for u1"
+    }
+   },
+   "disconnect"
+  ],
+  "openapi_fetch": null,
+  "oauth_lookups": [],
+  "returned": {
+   "status": true,
+   "specs": [
+    {
+     "name": "search"
+    }
+   ]
+  }
+ },
+ "mcp_custom_headers_with_token": {
+  "discovery_fetched": [],
+  "mcp": [
+   {
+    "connect": "https://tools.example",
+    "headers": {
+     "Authorization": "Bearer secret",
+     "X-team": "a for u1"
+    }
+   },
+   "disconnect"
+  ],
+  "openapi_fetch": null,
+  "oauth_lookups": [],
+  "returned": {
+   "status": true,
+   "specs": [
+    {
+     "name": "search"
+    }
+   ]
+  }
+ },
+ "mcp_string_headers_ignored": {
+  "discovery_fetched": [],
+  "mcp": [
+   {
+    "connect": "https://tools.example",
+    "headers": {
+     "Authorization": "Bearer secret"
+    }
+   },
+   "disconnect"
+  ],
+  "openapi_fetch": null,
+  "oauth_lookups": [],
+  "returned": {
+   "status": true,
+   "specs": [
+    {
+     "name": "search"
+    }
+   ]
+  }
+ },
+ "mcp_connect_fails": {
+  "discovery_fetched": [],
+  "mcp": [
+   {
+    "connect": "https://tools.example",
+    "headers": {
+     "Authorization": "Bearer secret"
+    }
+   },
+   "disconnect"
+  ],
+  "openapi_fetch": null,
+  "oauth_lookups": [],
+  "http_error": 400,
+  "detail": "Failed to create MCP client"
+ },
+ "mcp_listing_fails": {
+  "discovery_fetched": [],
+  "mcp": [
+   {
+    "connect": "https://tools.example",
+    "headers": null
+   },
+   "disconnect"
+  ],
+  "openapi_fetch": null,
+  "oauth_lookups": [],
+  "http_error": 400,
+  "detail": "Failed to create MCP client"
+ },
+ "mcp_client_cannot_be_created": {
+  "discovery_fetched": [],
+  "mcp": [],
+  "openapi_fetch": null,
+  "oauth_lookups": [],
+  "http_error": 400,
+  "detail": "Failed to connect to the tool server"
+ },
+ "openapi_no_auth": {
+  "discovery_fetched": [],
+  "mcp": [],
+  "openapi_fetch": {
+   "url": "https://tools.example/openapi.json",
+   "headers": null
+  },
+  "oauth_lookups": [],
+  "returned": {
+   "openapi": "3.1.0",
+   "paths": {}
+  }
+ },
+ "openapi_type_none": {
+  "discovery_fetched": [],
+  "mcp": [],
+  "openapi_fetch": {
+   "url": "https://tools.example/openapi.json",
+   "headers": null
+  },
+  "oauth_lookups": [],
+  "returned": {
+   "openapi": "3.1.0",
+   "paths": {}
+  }
+ },
+ "openapi_bearer": {
+  "discovery_fetched": [],
+  "mcp": [],
+  "openapi_fetch": {
+   "url": "https://tools.example/openapi.json",
+   "headers": {
+    "Authorization": "Bearer secret"
+   }
+  },
+  "oauth_lookups": [],
+  "returned": {
+   "openapi": "3.1.0",
+   "paths": {}
+  }
+ },
+ "openapi_session": {
+  "discovery_fetched": [],
+  "mcp": [],
+  "openapi_fetch": {
+   "url": "https://tools.example/openapi.json",
+   "headers": {
+    "Authorization": "Bearer session-token"
+   }
+  },
+  "oauth_lookups": [],
+  "returned": {
+   "openapi": "3.1.0",
+   "paths": {}
+  }
+ },
+ "openapi_system_oauth": {
+  "discovery_fetched": [],
+  "mcp": [],
+  "openapi_fetch": {
+   "url": "https://tools.example/openapi.json",
+   "headers": {
+    "Authorization": "Bearer oauth-token"
+   }
+  },
+  "oauth_lookups": [
+   [
+    "u1",
+    "sess-1"
+   ]
+  ],
+  "returned": {
+   "openapi": "3.1.0",
+   "paths": {}
+  }
+ },
+ "openapi_system_oauth_no_token": {
+  "discovery_fetched": [],
+  "mcp": [],
+  "openapi_fetch": {
+   "url": "https://tools.example/openapi.json",
+   "headers": null
+  },
+  "oauth_lookups": [
+   [
+    "u1",
+    "sess-1"
+   ]
+  ],
+  "returned": {
+   "openapi": "3.1.0",
+   "paths": {}
+  }
+ },
+ "openapi_system_oauth_lookup_fails": {
+  "discovery_fetched": [],
+  "mcp": [],
+  "openapi_fetch": {
+   "url": "https://tools.example/openapi.json",
+   "headers": null
+  },
+  "oauth_lookups": [
+   [
+    "u1",
+    "sess-1"
+   ]
+  ],
+  "returned": {
+   "openapi": "3.1.0",
+   "paths": {}
+  }
+ },
+ "openapi_system_oauth_no_cookie": {
+  "discovery_fetched": [],
+  "mcp": [],
+  "openapi_fetch": {
+   "url": "https://tools.example/openapi.json",
+   "headers": null
+  },
+  "oauth_lookups": [],
+  "returned": {
+   "openapi": "3.1.0",
+   "paths": {}
+  }
+ },
+ "openapi_custom_headers": {
+  "discovery_fetched": [],
+  "mcp": [],
+  "openapi_fetch": {
+   "url": "https://tools.example/openapi.json",
+   "headers": {
+    "X-team": "a for u1"
+   }
+  },
+  "oauth_lookups": [],
+  "returned": {
+   "openapi": "3.1.0",
+   "paths": {}
+  }
+ },
+ "openapi_custom_headers_with_token": {
+  "discovery_fetched": [],
+  "mcp": [],
+  "openapi_fetch": {
+   "url": "https://tools.example/openapi.json",
+   "headers": {
+    "Authorization": "Bearer secret",
+    "X-team": "a for u1"
+   }
+  },
+  "oauth_lookups": [],
+  "returned": {
+   "openapi": "3.1.0",
+   "paths": {}
+  }
+ },
+ "openapi_full_url_path": {
+  "discovery_fetched": [],
+  "mcp": [],
+  "openapi_fetch": {
+   "url": "https://elsewhere.example/spec.json",
+   "headers": null
+  },
+  "oauth_lookups": [],
+  "returned": {
+   "openapi": "3.1.0",
+   "paths": {}
+  }
+ },
+ "openapi_url_trailing_slash": {
+  "discovery_fetched": [],
+  "mcp": [],
+  "openapi_fetch": {
+   "url": "https://tools.example/openapi.json",
+   "headers": null
+  },
+  "oauth_lookups": [],
+  "returned": {
+   "openapi": "3.1.0",
+   "paths": {}
+  }
+ },
+ "openapi_fetch_http_error": {
+  "discovery_fetched": [],
+  "mcp": [],
+  "openapi_fetch": {
+   "url": "https://tools.example/openapi.json",
+   "headers": null
+  },
+  "oauth_lookups": [],
+  "http_error": 418,
+  "detail": "teapot"
+ },
+ "openapi_fetch_fails": {
+  "discovery_fetched": [],
+  "mcp": [],
+  "openapi_fetch": {
+   "url": "https://tools.example/openapi.json",
+   "headers": null
+  },
+  "oauth_lookups": [],
+  "http_error": 400,
+  "detail": "Failed to connect to the tool server"
+ }
+}
