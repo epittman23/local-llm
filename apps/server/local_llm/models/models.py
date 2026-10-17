@@ -5,15 +5,16 @@ import time
 from copy import deepcopy
 from typing import Any
 
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from sqlalchemy import BigInteger, Boolean, Column, String, Text, cast, delete, func, or_, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from local_llm.internal.db import Base, JSONField, get_async_db_context
 from local_llm.models.access_grants import AccessGrantModel, AccessGrants
 from local_llm.models.groups import Groups
 from local_llm.models.users import User, UserModel, UserResponse, Users
 from local_llm.utils.misc import json_text_variants
 from local_llm.utils.validate import validate_profile_image_url
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from sqlalchemy import BigInteger, Boolean, Column, String, Text, cast, delete, func, or_, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
 
 log = logging.getLogger(__name__)
 

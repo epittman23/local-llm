@@ -2,6 +2,8 @@ import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from local_llm.constants import ERROR_MESSAGES
 from local_llm.events import EVENTS, publish_event
 from local_llm.internal.db import get_async_session
@@ -26,7 +28,6 @@ from local_llm.utils.automations import (
     rrule_interval_seconds,
     validate_rrule,
 )
-from sqlalchemy.ext.asyncio import AsyncSession
 
 log = logging.getLogger(__name__)
 

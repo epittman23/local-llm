@@ -5,6 +5,8 @@ import logging
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Request
 from mcp.shared.auth import OAuthMetadata
+from pydantic import BaseModel, ConfigDict
+
 from local_llm.config import BannerModel
 from local_llm.env import AIOHTTP_CLIENT_SESSION_SSL, AIOHTTP_CLIENT_TIMEOUT
 from local_llm.events import EVENTS, publish_event
@@ -28,7 +30,6 @@ from local_llm.utils.tools import (
     set_terminal_servers,
     set_tool_servers,
 )
-from pydantic import BaseModel, ConfigDict
 
 router = APIRouter()
 

@@ -10,6 +10,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
+
 from local_llm.migrations.util import get_existing_tables
 
 revision: str = 'a1b2c3d4e5f6'

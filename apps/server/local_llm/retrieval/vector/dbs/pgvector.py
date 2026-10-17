@@ -1,6 +1,30 @@
 import logging
 from typing import Any
 
+from pgvector.sqlalchemy import HALFVEC, Vector
+from sqlalchemy import (
+    Column,
+    Integer,
+    LargeBinary,
+    MetaData,
+    Table,
+    Text,
+    cast,
+    column,
+    create_engine,
+    func,
+    literal,
+    select,
+    text,
+    values,
+)
+from sqlalchemy.dialects.postgresql import JSONB, array
+from sqlalchemy.exc import NoSuchTableError
+from sqlalchemy.ext.mutable import MutableDict
+from sqlalchemy.orm import declarative_base, scoped_session, sessionmaker
+from sqlalchemy.pool import NullPool, QueuePool
+from sqlalchemy.sql import true
+
 from local_llm.config import (
     PGVECTOR_CREATE_EXTENSION,
     PGVECTOR_DB_URL,
@@ -27,29 +51,6 @@ from local_llm.retrieval.vector.main import (
 from local_llm.retrieval.vector.utils import merge_hybrid_search_results, process_metadata
 from local_llm.utils.json_codec import JSONCodec
 from local_llm.utils.misc import sanitize_text_for_db
-from pgvector.sqlalchemy import HALFVEC, Vector
-from sqlalchemy import (
-    Column,
-    Integer,
-    LargeBinary,
-    MetaData,
-    Table,
-    Text,
-    cast,
-    column,
-    create_engine,
-    func,
-    literal,
-    select,
-    text,
-    values,
-)
-from sqlalchemy.dialects.postgresql import JSONB, array
-from sqlalchemy.exc import NoSuchTableError
-from sqlalchemy.ext.mutable import MutableDict
-from sqlalchemy.orm import declarative_base, scoped_session, sessionmaker
-from sqlalchemy.pool import NullPool, QueuePool
-from sqlalchemy.sql import true
 
 VECTOR_LENGTH = PGVECTOR_INITIALIZE_MAX_VECTOR_LENGTH
 USE_HALFVEC = PGVECTOR_USE_HALFVEC

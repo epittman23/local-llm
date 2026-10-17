@@ -7,6 +7,7 @@ from typing import Any
 
 import requests
 from langchain_core.documents import Document
+
 from local_llm.env import ENABLE_FORWARD_USER_INFO_HEADERS, GLOBAL_LOG_LEVEL
 from local_llm.utils.headers import include_user_info_headers
 

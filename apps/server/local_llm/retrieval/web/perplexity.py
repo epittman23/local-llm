@@ -2,6 +2,7 @@ import logging
 from typing import Literal
 
 import requests
+
 from local_llm.env import VERSION
 from local_llm.retrieval.web.main import SearchResult, get_filtered_results
 

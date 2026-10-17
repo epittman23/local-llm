@@ -7,13 +7,14 @@ import logging
 import logging.config
 
 import alembic.context
+from sqlalchemy import create_engine, engine_from_config, pool
+
 from local_llm.env import DATABASE_PASSWORD, DATABASE_URL, LOG_FORMAT
 from local_llm.internal.db import enable_iam_token_auth, extract_ssl_params_from_url, reattach_ssl_params_to_url
 from local_llm.models.auths import Auth
 from local_llm.models.calendar import Calendar, CalendarEvent, CalendarEventAttendee  # noqa: F401
 from local_llm.models.chat_messages import ChatMessage  # noqa: F401
 from local_llm.models.chats import Chat  # noqa: F401
-from sqlalchemy import create_engine, engine_from_config, pool
 
 alembic_config = alembic.context.config
 if alembic_config.config_file_name:

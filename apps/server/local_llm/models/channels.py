@@ -2,14 +2,6 @@ import secrets
 import time
 import uuid
 
-from local_llm.internal.db import Base, get_async_db_context
-from local_llm.models.access_grants import (
-    AccessGrantModel,
-    AccessGrants,
-)
-from local_llm.models.groups import Groups
-from local_llm.models.users import User
-from local_llm.utils.validate import validate_profile_image_url
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import (
     JSON,
@@ -27,6 +19,15 @@ from sqlalchemy import (
     select,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from local_llm.internal.db import Base, get_async_db_context
+from local_llm.models.access_grants import (
+    AccessGrantModel,
+    AccessGrants,
+)
+from local_llm.models.groups import Groups
+from local_llm.models.users import User
+from local_llm.utils.validate import validate_profile_image_url
 
 ####################
 # Channel DB Schema

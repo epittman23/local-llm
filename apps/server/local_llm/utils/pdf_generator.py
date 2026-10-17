@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from fpdf import FPDF
+
 from local_llm.env import FONTS_DIR, STATIC_DIR
 from local_llm.models.chats import ChatTitleMessagesForm
 

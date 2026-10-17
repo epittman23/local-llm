@@ -12,6 +12,9 @@ import sys
 from contextlib import contextmanager
 from typing import Any
 
+from sqlalchemy import create_engine
+from sqlalchemy.pool import NullPool, QueuePool
+
 from local_llm.config import (
     MARIADB_VECTOR_DB_URL,
     MARIADB_VECTOR_DISTANCE_STRATEGY,
@@ -30,8 +33,6 @@ from local_llm.retrieval.vector.main import (
 )
 from local_llm.retrieval.vector.utils import process_metadata
 from local_llm.utils.json_codec import JSONCodec
-from sqlalchemy import create_engine
-from sqlalchemy.pool import NullPool, QueuePool
 
 log = logging.getLogger(__name__)
 

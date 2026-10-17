@@ -12,6 +12,9 @@ from urllib.parse import unquote
 import aiohttp
 from fastapi import APIRouter, Depends, Request, Response, WebSocket
 from fastapi.responses import JSONResponse, StreamingResponse
+from starlette.background import BackgroundTask
+from starlette.requests import ClientDisconnect
+
 from local_llm.config import TERMINAL_PROXY_HEADERS
 from local_llm.env import AIOHTTP_CLIENT_SESSION_SSL
 from local_llm.events import EVENTS, publish_event
@@ -31,8 +34,6 @@ from local_llm.utils.terminals import (
     terminal_context_id,
     terminal_contexts,
 )
-from starlette.background import BackgroundTask
-from starlette.requests import ClientDisconnect
 
 log = logging.getLogger(__name__)
 

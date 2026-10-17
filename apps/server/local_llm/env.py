@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-
 ####################################
 # Load .env file
 ####################################

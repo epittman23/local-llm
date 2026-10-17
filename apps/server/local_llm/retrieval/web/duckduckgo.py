@@ -4,6 +4,7 @@ import logging
 import urllib.request
 
 from ddgs import DDGS
+
 from local_llm.retrieval.web.main import SearchResult, get_filtered_results
 
 log = logging.getLogger(__name__)

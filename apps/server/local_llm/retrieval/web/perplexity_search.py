@@ -1,6 +1,7 @@
 import logging
 
 import requests
+
 from local_llm.env import VERSION
 from local_llm.retrieval.web.main import SearchResult
 from local_llm.utils.headers import include_user_info_headers

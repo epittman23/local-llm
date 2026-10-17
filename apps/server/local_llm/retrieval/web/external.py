@@ -2,6 +2,7 @@ import logging
 
 import requests
 from fastapi import Request
+
 from local_llm.env import FORWARD_SESSION_INFO_HEADER_CHAT_ID
 from local_llm.retrieval.web.main import SearchResult, get_filtered_results
 from local_llm.utils.headers import include_user_info_headers

@@ -29,6 +29,9 @@ from langchain_text_splitters import (
     RecursiveCharacterTextSplitter,
     TokenTextSplitter,
 )
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from local_llm.config import (
     DEFAULT_LOCALE,
     ENV,
@@ -120,8 +123,6 @@ from local_llm.utils.misc import (
     calculate_sha256_string,
     sanitize_text_for_db,
 )
-from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 
 log = logging.getLogger(__name__)
 

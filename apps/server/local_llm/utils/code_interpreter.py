@@ -4,9 +4,10 @@ import uuid
 
 import aiohttp
 import websockets
+from pydantic import BaseModel
+
 from local_llm.env import AIOHTTP_CLIENT_ALLOW_REDIRECTS
 from local_llm.utils.json_codec import JSONCodec
-from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 

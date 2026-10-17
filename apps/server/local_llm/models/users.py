@@ -5,10 +5,6 @@ from __future__ import annotations
 import datetime
 import time
 
-from local_llm.env import DATABASE_USER_ACTIVE_STATUS_UPDATE_INTERVAL
-from local_llm.internal.db import Base, get_async_db_context
-from local_llm.utils.misc import throttle
-from local_llm.utils.validate import validate_profile_image_url
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import (
     JSON,
@@ -26,6 +22,11 @@ from sqlalchemy import (
     update,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from local_llm.env import DATABASE_USER_ACTIVE_STATUS_UPDATE_INTERVAL
+from local_llm.internal.db import Base, get_async_db_context
+from local_llm.utils.misc import throttle
+from local_llm.utils.validate import validate_profile_image_url
 
 ####################
 # User DB Schema

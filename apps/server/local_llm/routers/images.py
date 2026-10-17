@@ -14,6 +14,9 @@ import aiofiles
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
+from PIL import Image, ImageOps
+from pydantic import BaseModel
+
 from local_llm.config import (
     CACHE_DIR,
     ENABLE_OPENAI_IMAGE_EDIT_NORMALIZATION,
@@ -40,8 +43,6 @@ from local_llm.utils.images.comfyui import (
 )
 from local_llm.utils.json_codec import JSONCodec
 from local_llm.utils.session_pool import get_session
-from PIL import Image, ImageOps
-from pydantic import BaseModel
 
 log = logging.getLogger(__name__)
 

@@ -17,9 +17,9 @@ from local_llm.env import (
     ENABLE_DB_MIGRATIONS,
     ENV,
     FRONTEND_BUILD_DIR,
+    LLLM_AUTH,
     OFFLINE_MODE,
     PACKAGE_DIR,
-    LLLM_AUTH,
     legacy_name,
     log,
 )

@@ -6,6 +6,10 @@ import logging
 import re
 from typing import Any
 
+from pymilvus import DataType
+from pymilvus import MilvusClient as Client
+from pymilvus.exceptions import MilvusException
+
 from local_llm.config import (
     MILVUS_COLLECTION_PREFIX,
     MILVUS_DB,
@@ -24,9 +28,6 @@ from local_llm.retrieval.vector.main import (
     VectorDBBase,
     VectorItem,
 )
-from pymilvus import DataType
-from pymilvus import MilvusClient as Client
-from pymilvus.exceptions import MilvusException
 
 log = logging.getLogger(__name__)
 

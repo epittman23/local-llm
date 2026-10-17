@@ -15,8 +15,9 @@ import time
 from typing import Any, ClassVar
 
 from fastapi.encoders import jsonable_encoder
-from local_llm.internal.db import Base, get_async_db
 from sqlalchemy import JSON, BigInteger, Column, Text, delete, select
+
+from local_llm.internal.db import Base, get_async_db
 
 log = logging.getLogger(__name__)
 

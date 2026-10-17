@@ -6,6 +6,10 @@ import logging
 import re
 from typing import Any
 
+from pymilvus import DataType
+from pymilvus import MilvusClient as Client
+from pymilvus.exceptions import MilvusException
+
 from local_llm.config import (
     MILVUS_DB,
     MILVUS_DISKANN_MAX_DEGREE,
@@ -26,9 +30,6 @@ from local_llm.retrieval.vector.main import (
 )
 from local_llm.retrieval.vector.utils import iter_filter_conditions, process_metadata
 from local_llm.utils.json_codec import JSONCodec
-from pymilvus import DataType
-from pymilvus import MilvusClient as Client
-from pymilvus.exceptions import MilvusException
 
 log = logging.getLogger(__name__)
 

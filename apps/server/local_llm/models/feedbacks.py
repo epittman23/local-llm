@@ -2,11 +2,12 @@ import logging
 import time
 import uuid
 
-from local_llm.internal.db import Base, get_async_db_context
-from local_llm.models.users import User
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import JSON, BigInteger, Column, Text, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from local_llm.internal.db import Base, get_async_db_context
+from local_llm.models.users import User
 
 log = logging.getLogger(__name__)
 

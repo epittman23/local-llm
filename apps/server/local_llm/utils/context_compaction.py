@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from fastapi.responses import JSONResponse
+
 from local_llm.models.chats import Chats
 from local_llm.models.config import Config
 from local_llm.utils.chat_id import is_saved_chat_id

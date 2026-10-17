@@ -1,10 +1,11 @@
 import logging
 import time
 
-from local_llm.internal.db import Base, get_async_db_context
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import BigInteger, Column, Float, ForeignKey, Integer, Text, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from local_llm.internal.db import Base, get_async_db_context
 
 log = logging.getLogger(__name__)
 

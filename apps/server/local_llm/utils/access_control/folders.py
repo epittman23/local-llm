@@ -1,6 +1,7 @@
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from local_llm.models.access_grants import AccessGrants
 from local_llm.models.folders import FolderModel, Folders
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def has_folder_access(user_id: str, folder: FolderModel, permission: str, db: AsyncSession | None) -> bool:

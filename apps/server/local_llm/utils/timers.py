@@ -12,6 +12,9 @@ from typing import Literal
 from uuid import uuid4
 
 from fastapi import Request
+from sqlalchemy import select
+from starlette.datastructures import Headers
+
 from local_llm.internal.db import get_async_db
 from local_llm.models.chat_messages import ChatMessages
 from local_llm.models.chats import Chat, ChatForm, Chats
@@ -19,8 +22,6 @@ from local_llm.models.users import UserModel, Users
 from local_llm.tasks import has_active_tasks
 from local_llm.utils.json_codec import JSONCodec
 from local_llm.utils.misc import get_message_list
-from sqlalchemy import select
-from starlette.datastructures import Headers
 
 log = logging.getLogger(__name__)
 

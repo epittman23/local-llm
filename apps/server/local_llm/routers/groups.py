@@ -2,6 +2,8 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from local_llm.constants import ERROR_MESSAGES
 from local_llm.events import EVENTS, publish_event
 from local_llm.internal.db import get_async_session
@@ -19,7 +21,6 @@ from local_llm.models.models import Models
 from local_llm.models.tools import Tools
 from local_llm.models.users import UserInfoResponse, Users
 from local_llm.utils.auth import get_admin_user, get_verified_user
-from sqlalchemy.ext.asyncio import AsyncSession
 
 log = logging.getLogger(__name__)
 

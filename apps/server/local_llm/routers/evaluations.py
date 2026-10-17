@@ -2,6 +2,9 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.concurrency import run_in_threadpool
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from local_llm.constants import ERROR_MESSAGES
 from local_llm.events import EVENTS, publish_event
 from local_llm.internal.db import get_async_session
@@ -16,8 +19,6 @@ from local_llm.models.feedbacks import (
     ModelHistoryResponse,
 )
 from local_llm.utils.auth import get_admin_user, get_verified_user
-from pydantic import BaseModel
-from sqlalchemy.ext.asyncio import AsyncSession
 
 log = logging.getLogger(__name__)
 

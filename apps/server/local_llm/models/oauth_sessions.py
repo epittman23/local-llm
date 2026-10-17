@@ -5,12 +5,13 @@ import time
 import uuid
 
 from cryptography.fernet import Fernet
-from local_llm.env import OAUTH_SESSION_TOKEN_ENCRYPTION_KEY
-from local_llm.internal.db import Base, get_async_db_context
-from local_llm.utils.json_codec import JSONCodec
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import BigInteger, Column, Index, Text, delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from local_llm.env import OAUTH_SESSION_TOKEN_ENCRYPTION_KEY
+from local_llm.internal.db import Base, get_async_db_context
+from local_llm.utils.json_codec import JSONCodec
 
 log = logging.getLogger(__name__)
 

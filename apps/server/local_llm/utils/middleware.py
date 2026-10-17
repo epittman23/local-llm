@@ -15,6 +15,8 @@ from uuid import uuid4
 
 from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
+from starlette.responses import JSONResponse, StreamingResponse
+
 from local_llm.config import (
     CODE_INTERPRETER_BLOCKED_MODULES,
     CODE_INTERPRETER_PYODIDE_PROMPT,
@@ -127,7 +129,6 @@ from local_llm.utils.tools import (
     get_tools,
     get_updated_tool_function,
 )
-from starlette.responses import JSONResponse, StreamingResponse
 
 logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
 log = logging.getLogger(__name__)

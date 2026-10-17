@@ -14,11 +14,12 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, ConfigDict
+
 from local_llm.benchmarks.analysis import report as report_logic
 from local_llm.constants import ERROR_MESSAGES
 from local_llm.env import DATA_DIR
 from local_llm.utils.auth import get_admin_user
-from pydantic import BaseModel, ConfigDict
 
 router = APIRouter()
 

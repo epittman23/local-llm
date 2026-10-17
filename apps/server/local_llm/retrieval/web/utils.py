@@ -24,6 +24,8 @@ from fastapi.concurrency import run_in_threadpool
 from langchain_community.document_loaders import PlaywrightURLLoader, WebBaseLoader
 from langchain_community.document_loaders.base import BaseLoader
 from langchain_core.documents import Document
+from requests.adapters import HTTPAdapter
+
 from local_llm.config import (
     ENABLE_LOCAL_WEB_FETCH,
     EXTERNAL_WEB_LOADER_API_KEY,
@@ -55,7 +57,6 @@ from local_llm.retrieval.loaders.microsoft_web_iq import MicrosoftWebIQLoader
 from local_llm.retrieval.loaders.tavily import TavilyLoader
 from local_llm.retrieval.web.firecrawl import scrape_firecrawl_url
 from local_llm.utils.misc import is_host_allowed, is_host_blocked
-from requests.adapters import HTTPAdapter
 
 log = logging.getLogger(__name__)
 

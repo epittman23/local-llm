@@ -27,6 +27,8 @@ from zoneinfo import ZoneInfo
 from dateutil.rrule import HOURLY, MINUTELY, SECONDLY, rruleset, rrulestr
 from fastapi import Request
 from fastapi.security import HTTPAuthorizationCredentials
+from starlette.datastructures import Headers
+
 from local_llm.constants import ERROR_MESSAGES
 from local_llm.events import EVENTS, publish_event
 from local_llm.internal.db import get_async_db
@@ -40,7 +42,6 @@ from local_llm.utils.auth import create_token
 from local_llm.utils.misc import parse_duration
 from local_llm.utils.task import prompt_template
 from local_llm.utils.terminals import get_terminal_server_url
-from starlette.datastructures import Headers
 
 log = logging.getLogger(__name__)
 
@@ -343,6 +344,7 @@ async def _set_terminal_cwd(app, server_id: str, user, cwd: str, chat_id: str) -
     handled correctly — same path the frontend uses.
     """
     import aiohttp
+
     from local_llm.env import AIOHTTP_CLIENT_SESSION_SSL
 
     connections = getattr(getattr(app, 'state', None), 'config', None)

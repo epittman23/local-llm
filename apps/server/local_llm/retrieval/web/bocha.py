@@ -1,6 +1,7 @@
 import logging
 
 import requests
+
 from local_llm.retrieval.web.main import SearchResult, get_filtered_results
 from local_llm.utils.json_codec import JSONCodec
 

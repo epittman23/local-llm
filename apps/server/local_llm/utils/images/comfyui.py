@@ -3,10 +3,11 @@ import random
 import urllib.parse
 
 import aiohttp
+from pydantic import BaseModel
+
 from local_llm.env import AIOHTTP_CLIENT_SESSION_SSL
 from local_llm.utils.json_codec import JSONCodec
 from local_llm.utils.session_pool import get_session
-from pydantic import BaseModel
 
 log = logging.getLogger(__name__)
 

@@ -31,6 +31,8 @@ from mcp.shared.auth import (
 from mcp.shared.auth import (
     OAuthMetadata,
 )
+from starlette.responses import RedirectResponse
+
 from local_llm.config import (
     DEFAULT_USER_ROLE,
     ENABLE_OAUTH,
@@ -70,10 +72,10 @@ from local_llm.env import (
     AIOHTTP_CLIENT_SESSION_SSL,
     ENABLE_OAUTH_EMAIL_FALLBACK,
     ENABLE_OAUTH_ID_TOKEN_COOKIE,
-    OAUTH_CLIENT_INFO_ENCRYPTION_KEY,
-    OAUTH_MAX_SESSIONS_PER_USER,
     LLLM_AUTH_COOKIE_SAME_SITE,
     LLLM_AUTH_COOKIE_SECURE,
+    OAUTH_CLIENT_INFO_ENCRYPTION_KEY,
+    OAUTH_MAX_SESSIONS_PER_USER,
 )
 from local_llm.events import EVENTS, publish_event
 from local_llm.models.auths import Auths
@@ -92,7 +94,6 @@ from local_llm.utils.auth import (
 from local_llm.utils.groups import apply_default_group_assignment
 from local_llm.utils.misc import parse_duration
 from local_llm.utils.validate import validate_profile_image_url
-from starlette.responses import RedirectResponse
 
 # Some IdPs put private params in ID token JOSE headers (CAS: client_id, CyberArk: app_id).
 # Authlib exposes no way to pass a registry, so relax it globally; crit, alg and signature checks still apply.

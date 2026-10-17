@@ -4,6 +4,7 @@ from typing import Any
 from urllib.parse import quote
 
 import jwt
+
 from local_llm.env import (
     FORWARD_USER_INFO_HEADER_JWT,
     FORWARD_USER_INFO_HEADER_JWT_EXPIRES_SECONDS,

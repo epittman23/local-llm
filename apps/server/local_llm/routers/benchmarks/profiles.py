@@ -18,11 +18,12 @@ from __future__ import annotations
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, ConfigDict, field_validator
+
 from local_llm.benchmarks.serving.profiles import ProfileError
 from local_llm.constants import ERROR_MESSAGES
 from local_llm.models.benchmarks.profiles import BenchmarkProfileEntry, BenchmarkProfiles
 from local_llm.utils.auth import get_admin_user
-from pydantic import BaseModel, ConfigDict, field_validator
 
 router = APIRouter()
 
