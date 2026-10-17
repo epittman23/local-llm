@@ -1,0 +1,894 @@
+{
+ "ollama_cloud": {
+  "calls": [
+   {
+    "provider": "search_ollama_cloud",
+    "via": "thread",
+    "args": [
+     "https://ollama.com",
+     "<OLLAMA_CLOUD_WEB_SEARCH_API_KEY>",
+     "the query",
+     5,
+     [
+      "example.com"
+     ]
+    ],
+    "kwargs": {}
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_ollama_cloud.example",
+    "title": "search_ollama_cloud"
+   }
+  ]
+ },
+ "perplexity_search": {
+  "calls": [
+   {
+    "provider": "search_perplexity_search",
+    "via": "thread",
+    "args": [
+     "<PERPLEXITY_API_KEY>",
+     "the query",
+     5,
+     [
+      "example.com"
+     ],
+     "<PERPLEXITY_SEARCH_API_URL>",
+     "<user>"
+    ],
+    "kwargs": {}
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_perplexity_search.example",
+    "title": "search_perplexity_search"
+   }
+  ]
+ },
+ "searxng": {
+  "calls": [
+   {
+    "provider": "search_searxng",
+    "via": "await",
+    "args": [
+     "<SEARXNG_QUERY_URL>",
+     "the query",
+     5,
+     [
+      "example.com"
+     ]
+    ],
+    "kwargs": {
+     "language": "<SEARXNG_LANGUAGE>"
+    }
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_searxng.example",
+    "title": "search_searxng"
+   }
+  ]
+ },
+ "openserp": {
+  "calls": [
+   {
+    "provider": "search_openserp",
+    "via": "await",
+    "args": [
+     "<OPENSERP_BASE_URL>",
+     "the query",
+     5,
+     [
+      "example.com"
+     ]
+    ],
+    "kwargs": {}
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_openserp.example",
+    "title": "search_openserp"
+   }
+  ]
+ },
+ "yacy": {
+  "calls": [
+   {
+    "provider": "search_yacy",
+    "via": "thread",
+    "args": [
+     "<YACY_QUERY_URL>",
+     "<YACY_USERNAME>",
+     "<YACY_PASSWORD>",
+     "the query",
+     5,
+     [
+      "example.com"
+     ]
+    ],
+    "kwargs": {}
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_yacy.example",
+    "title": "search_yacy"
+   }
+  ]
+ },
+ "google_pse": {
+  "calls": [
+   {
+    "provider": "search_google_pse",
+    "via": "await",
+    "args": [
+     "<GOOGLE_PSE_API_KEY>",
+     "<GOOGLE_PSE_ENGINE_ID>",
+     "the query",
+     5,
+     [
+      "example.com"
+     ]
+    ],
+    "kwargs": {
+     "referer": "<WEBUI_URL>"
+    }
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_google_pse.example",
+    "title": "search_google_pse"
+   }
+  ]
+ },
+ "brave": {
+  "calls": [
+   {
+    "provider": "search_brave",
+    "via": "await",
+    "args": [
+     "<BRAVE_SEARCH_API_KEY>",
+     "the query",
+     5,
+     [
+      "example.com"
+     ]
+    ],
+    "kwargs": {}
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_brave.example",
+    "title": "search_brave"
+   }
+  ]
+ },
+ "brave_llm_context": {
+  "calls": [
+   {
+    "provider": "search_brave_llm_context",
+    "via": "thread",
+    "args": [
+     "<BRAVE_SEARCH_API_KEY>",
+     "the query",
+     5,
+     [
+      "example.com"
+     ],
+     "<BRAVE_SEARCH_CONTEXT_TOKENS>"
+    ],
+    "kwargs": {}
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_brave_llm_context.example",
+    "title": "search_brave_llm_context"
+   }
+  ]
+ },
+ "kagi": {
+  "calls": [
+   {
+    "provider": "search_kagi",
+    "via": "thread",
+    "args": [
+     "<KAGI_SEARCH_API_KEY>",
+     "the query",
+     5,
+     [
+      "example.com"
+     ]
+    ],
+    "kwargs": {}
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_kagi.example",
+    "title": "search_kagi"
+   }
+  ]
+ },
+ "mojeek": {
+  "calls": [
+   {
+    "provider": "search_mojeek",
+    "via": "thread",
+    "args": [
+     "<MOJEEK_SEARCH_API_KEY>",
+     "the query",
+     5,
+     [
+      "example.com"
+     ]
+    ],
+    "kwargs": {}
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_mojeek.example",
+    "title": "search_mojeek"
+   }
+  ]
+ },
+ "bocha": {
+  "calls": [
+   {
+    "provider": "search_bocha",
+    "via": "thread",
+    "args": [
+     "<BOCHA_SEARCH_API_KEY>",
+     "the query",
+     5,
+     [
+      "example.com"
+     ]
+    ],
+    "kwargs": {}
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_bocha.example",
+    "title": "search_bocha"
+   }
+  ]
+ },
+ "serpstack": {
+  "calls": [
+   {
+    "provider": "search_serpstack",
+    "via": "await",
+    "args": [
+     "<SERPSTACK_API_KEY>",
+     "the query",
+     5,
+     [
+      "example.com"
+     ]
+    ],
+    "kwargs": {
+     "https_enabled": "<SERPSTACK_HTTPS>"
+    }
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_serpstack.example",
+    "title": "search_serpstack"
+   }
+  ]
+ },
+ "serper": {
+  "calls": [
+   {
+    "provider": "search_serper",
+    "via": "await",
+    "args": [
+     "<SERPER_API_KEY>",
+     "the query",
+     5,
+     [
+      "example.com"
+     ]
+    ],
+    "kwargs": {}
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_serper.example",
+    "title": "search_serper"
+   }
+  ]
+ },
+ "serphouse": {
+  "calls": [
+   {
+    "provider": "search_serphouse",
+    "via": "await",
+    "args": [
+     "<SERPHOUSE_API_KEY>",
+     "<SERPHOUSE_DOMAIN>",
+     "the query",
+     5,
+     [
+      "example.com"
+     ]
+    ],
+    "kwargs": {}
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_serphouse.example",
+    "title": "search_serphouse"
+   }
+  ]
+ },
+ "serply": {
+  "calls": [
+   {
+    "provider": "search_serply",
+    "via": "thread",
+    "args": [
+     "<SERPLY_API_KEY>",
+     "the query",
+     5
+    ],
+    "kwargs": {
+     "filter_list": [
+      "example.com"
+     ]
+    }
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_serply.example",
+    "title": "search_serply"
+   }
+  ]
+ },
+ "duckduckgo": {
+  "calls": [
+   {
+    "provider": "search_duckduckgo",
+    "via": "thread",
+    "args": [
+     "the query",
+     5,
+     [
+      "example.com"
+     ]
+    ],
+    "kwargs": {
+     "concurrent_requests": "<WEB_SEARCH_CONCURRENT_REQUESTS>",
+     "backend": "<DDGS_BACKEND>"
+    }
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_duckduckgo.example",
+    "title": "search_duckduckgo"
+   }
+  ]
+ },
+ "tavily": {
+  "calls": [
+   {
+    "provider": "search_tavily",
+    "via": "thread",
+    "args": [
+     "<TAVILY_API_KEY>",
+     "the query",
+     5,
+     [
+      "example.com"
+     ]
+    ],
+    "kwargs": {}
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_tavily.example",
+    "title": "search_tavily"
+   }
+  ]
+ },
+ "exa": {
+  "calls": [
+   {
+    "provider": "search_exa",
+    "via": "thread",
+    "args": [
+     "<EXA_API_KEY>",
+     "the query",
+     5,
+     [
+      "example.com"
+     ]
+    ],
+    "kwargs": {}
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_exa.example",
+    "title": "search_exa"
+   }
+  ]
+ },
+ "searchapi": {
+  "calls": [
+   {
+    "provider": "search_searchapi",
+    "via": "thread",
+    "args": [
+     "<SEARCHAPI_API_KEY>",
+     "<SEARCHAPI_ENGINE>",
+     "the query",
+     5,
+     [
+      "example.com"
+     ]
+    ],
+    "kwargs": {}
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_searchapi.example",
+    "title": "search_searchapi"
+   }
+  ]
+ },
+ "serpapi": {
+  "calls": [
+   {
+    "provider": "search_serpapi",
+    "via": "thread",
+    "args": [
+     "<SERPAPI_API_KEY>",
+     "<SERPAPI_ENGINE>",
+     "the query",
+     5,
+     [
+      "example.com"
+     ]
+    ],
+    "kwargs": {}
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_serpapi.example",
+    "title": "search_serpapi"
+   }
+  ]
+ },
+ "jina": {
+  "calls": [
+   {
+    "provider": "search_jina",
+    "via": "thread",
+    "args": [
+     "<JINA_API_KEY>",
+     "the query",
+     5,
+     "<JINA_API_BASE_URL>"
+    ],
+    "kwargs": {}
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_jina.example",
+    "title": "search_jina"
+   }
+  ]
+ },
+ "bing": {
+  "calls": [
+   {
+    "provider": "search_bing",
+    "via": "thread",
+    "args": [
+     "<BING_SEARCH_V7_SUBSCRIPTION_KEY>",
+     "<BING_SEARCH_V7_ENDPOINT>",
+     "",
+     "the query",
+     5,
+     [
+      "example.com"
+     ]
+    ],
+    "kwargs": {}
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_bing.example",
+    "title": "search_bing"
+   }
+  ]
+ },
+ "azure": {
+  "calls": [
+   {
+    "provider": "search_azure",
+    "via": "thread",
+    "args": [
+     "<AZURE_AI_SEARCH_API_KEY>",
+     "<AZURE_AI_SEARCH_ENDPOINT>",
+     "<AZURE_AI_SEARCH_INDEX_NAME>",
+     "the query",
+     5,
+     [
+      "example.com"
+     ]
+    ],
+    "kwargs": {}
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_azure.example",
+    "title": "search_azure"
+   }
+  ]
+ },
+ "perplexity": {
+  "calls": [
+   {
+    "provider": "search_perplexity",
+    "via": "thread",
+    "args": [
+     "<PERPLEXITY_API_KEY>",
+     "the query",
+     5,
+     [
+      "example.com"
+     ]
+    ],
+    "kwargs": {
+     "model": "<PERPLEXITY_MODEL>",
+     "search_context_usage": "<PERPLEXITY_SEARCH_CONTEXT_USAGE>"
+    }
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_perplexity.example",
+    "title": "search_perplexity"
+   }
+  ]
+ },
+ "microsoft_web_iq": {
+  "calls": [
+   {
+    "provider": "search_microsoft_web_iq",
+    "via": "thread",
+    "args": [
+     "<MICROSOFT_WEB_IQ_API_BASE_URL>",
+     "<MICROSOFT_WEB_IQ_API_KEY>",
+     "the query",
+     5,
+     [
+      "example.com"
+     ],
+     "<MICROSOFT_WEB_IQ_LANGUAGE>",
+     "<user>"
+    ],
+    "kwargs": {}
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_microsoft_web_iq.example",
+    "title": "search_microsoft_web_iq"
+   }
+  ]
+ },
+ "sougou": {
+  "calls": [
+   {
+    "provider": "search_sougou",
+    "via": "thread",
+    "args": [
+     "<SOUGOU_API_SID>",
+     "<SOUGOU_API_SK>",
+     "the query",
+     5,
+     [
+      "example.com"
+     ]
+    ],
+    "kwargs": {}
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_sougou.example",
+    "title": "search_sougou"
+   }
+  ]
+ },
+ "firecrawl": {
+  "calls": [
+   {
+    "provider": "search_firecrawl",
+    "via": "thread",
+    "args": [
+     "<FIRECRAWL_API_BASE_URL>",
+     "<FIRECRAWL_API_KEY>",
+     "the query",
+     5,
+     [
+      "example.com"
+     ]
+    ],
+    "kwargs": {}
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_firecrawl.example",
+    "title": "search_firecrawl"
+   }
+  ]
+ },
+ "external": {
+  "calls": [
+   {
+    "provider": "search_external",
+    "via": "thread",
+    "args": [
+     "<request>",
+     "<EXTERNAL_WEB_SEARCH_URL>",
+     "<EXTERNAL_WEB_SEARCH_API_KEY>",
+     "the query",
+     5,
+     [
+      "example.com"
+     ]
+    ],
+    "kwargs": {
+     "user": "<user>"
+    }
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_external.example",
+    "title": "search_external"
+   }
+  ]
+ },
+ "yandex": {
+  "calls": [
+   {
+    "provider": "search_yandex",
+    "via": "thread",
+    "args": [
+     "<request>",
+     "<YANDEX_WEB_SEARCH_URL>",
+     "<YANDEX_WEB_SEARCH_API_KEY>",
+     "<YANDEX_WEB_SEARCH_CONFIG>",
+     "the query",
+     5,
+     [
+      "example.com"
+     ]
+    ],
+    "kwargs": {
+     "user": "<user>"
+    }
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_yandex.example",
+    "title": "search_yandex"
+   }
+  ]
+ },
+ "youcom": {
+  "calls": [
+   {
+    "provider": "search_youcom",
+    "via": "thread",
+    "args": [
+     "<YOUCOM_API_KEY>",
+     "the query",
+     5,
+     [
+      "example.com"
+     ]
+    ],
+    "kwargs": {}
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_youcom.example",
+    "title": "search_youcom"
+   }
+  ]
+ },
+ "linkup": {
+  "calls": [
+   {
+    "provider": "search_linkup",
+    "via": "thread",
+    "args": [],
+    "kwargs": {
+     "api_key": "<LINKUP_API_KEY>",
+     "query": "the query",
+     "count": 5,
+     "filter_list": [
+      "example.com"
+     ],
+     "params": "<LINKUP_SEARCH_PARAMS>"
+    }
+   }
+  ],
+  "returned": [
+   {
+    "link": "https://search_linkup.example",
+    "title": "search_linkup"
+   }
+  ]
+ },
+ "perplexity_search_without_perplexity_api_key": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "No PERPLEXITY_API_KEY found in environment variables"
+ },
+ "searxng_without_searxng_query_url": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "No SEARXNG_QUERY_URL found in environment variables"
+ },
+ "openserp_without_openserp_base_url": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "No OPENSERP_BASE_URL found in environment variables"
+ },
+ "yacy_without_yacy_query_url": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "No YACY_QUERY_URL found in environment variables"
+ },
+ "google_pse_without_google_pse_api_key": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "No GOOGLE_PSE_API_KEY or GOOGLE_PSE_ENGINE_ID found in environment variables"
+ },
+ "google_pse_without_google_pse_engine_id": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "No GOOGLE_PSE_API_KEY or GOOGLE_PSE_ENGINE_ID found in environment variables"
+ },
+ "brave_without_brave_search_api_key": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "No BRAVE_SEARCH_API_KEY found in environment variables"
+ },
+ "brave_llm_context_without_brave_search_api_key": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "No BRAVE_SEARCH_API_KEY found in environment variables"
+ },
+ "kagi_without_kagi_search_api_key": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "No KAGI_SEARCH_API_KEY found in environment variables"
+ },
+ "mojeek_without_mojeek_search_api_key": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "No MOJEEK_SEARCH_API_KEY found in environment variables"
+ },
+ "bocha_without_bocha_search_api_key": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "No BOCHA_SEARCH_API_KEY found in environment variables"
+ },
+ "serpstack_without_serpstack_api_key": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "No SERPSTACK_API_KEY found in environment variables"
+ },
+ "serper_without_serper_api_key": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "No SERPER_API_KEY found in environment variables"
+ },
+ "serphouse_without_serphouse_api_key": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "No SERPHOUSE_API_KEY found in environment variables"
+ },
+ "serply_without_serply_api_key": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "No SERPLY_API_KEY found in environment variables"
+ },
+ "tavily_without_tavily_api_key": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "No TAVILY_API_KEY found in environment variables"
+ },
+ "exa_without_exa_api_key": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "No EXA_API_KEY found in environment variables"
+ },
+ "searchapi_without_searchapi_api_key": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "No SEARCHAPI_API_KEY found in environment variables"
+ },
+ "serpapi_without_serpapi_api_key": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "No SERPAPI_API_KEY found in environment variables"
+ },
+ "azure_without_azure_ai_search_api_key": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "AZURE_AI_SEARCH_API_KEY, AZURE_AI_SEARCH_ENDPOINT, and AZURE_AI_SEARCH_INDEX_NAME are required for Azure AI Search"
+ },
+ "azure_without_azure_ai_search_endpoint": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "AZURE_AI_SEARCH_API_KEY, AZURE_AI_SEARCH_ENDPOINT, and AZURE_AI_SEARCH_INDEX_NAME are required for Azure AI Search"
+ },
+ "azure_without_azure_ai_search_index_name": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "AZURE_AI_SEARCH_API_KEY, AZURE_AI_SEARCH_ENDPOINT, and AZURE_AI_SEARCH_INDEX_NAME are required for Azure AI Search"
+ },
+ "microsoft_web_iq_without_microsoft_web_iq_api_key": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "No MICROSOFT_WEB_IQ_API_KEY found in environment variables"
+ },
+ "sougou_without_sougou_api_sid": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "No SOUGOU_API_SID or SOUGOU_API_SK found in environment variables"
+ },
+ "sougou_without_sougou_api_sk": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "No SOUGOU_API_SID or SOUGOU_API_SK found in environment variables"
+ },
+ "linkup_without_linkup_api_key": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "No LINKUP_API_KEY found in environment variables"
+ },
+ "unknown_engine": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "No search engine API key found in environment variables"
+ },
+ "empty_engine": {
+  "calls": [],
+  "raised": "Exception",
+  "message": "No search engine API key found in environment variables"
+ }
+}
