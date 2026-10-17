@@ -1,0 +1,579 @@
+{
+ "none": [],
+ "empty_list": [],
+ "not_a_list": [],
+ "one_message": [
+  {
+   "role": "assistant",
+   "content": "Hello world"
+  }
+ ],
+ "message_parts": [
+  {
+   "role": "assistant",
+   "content": "kept"
+  }
+ ],
+ "messages_join_with_newline": [
+  {
+   "role": "assistant",
+   "content": "first\nsecond\nthird"
+  }
+ ],
+ "tool_round": [
+  {
+   "role": "assistant",
+   "content": "calling",
+   "tool_calls": [
+    {
+     "id": "c1",
+     "type": "function",
+     "function": {
+      "name": "f",
+      "arguments": "{\"q\": 1}"
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "c1",
+   "content": "result"
+  }
+ ],
+ "tool_round_then_message": [
+  {
+   "role": "assistant",
+   "content": "calling",
+   "tool_calls": [
+    {
+     "id": "c1",
+     "type": "function",
+     "function": {
+      "name": "f",
+      "arguments": "{\"q\": 1}"
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "c1",
+   "content": "result"
+  },
+  {
+   "role": "assistant",
+   "content": "done"
+  }
+ ],
+ "arguments_forms": [
+  {
+   "role": "assistant",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "c1",
+     "type": "function",
+     "function": {
+      "name": "f",
+      "arguments": "{\"a\": [1, 2]}"
+     }
+    },
+    {
+     "id": "c2",
+     "type": "function",
+     "function": {
+      "name": "f",
+      "arguments": "{}"
+     }
+    },
+    {
+     "id": "c3",
+     "type": "function",
+     "function": {
+      "name": "f",
+      "arguments": "[1]"
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "c1",
+   "content": "one"
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "c2",
+   "content": "two"
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "c3",
+   "content": "three"
+  }
+ ],
+ "call_statuses": [
+  {
+   "role": "assistant",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "done",
+     "type": "function",
+     "function": {
+      "name": "f",
+      "arguments": "{}"
+     }
+    },
+    {
+     "id": "failed",
+     "type": "function",
+     "function": {
+      "name": "f",
+      "arguments": "{}"
+     }
+    },
+    {
+     "id": "rejected",
+     "type": "function",
+     "function": {
+      "name": "f",
+      "arguments": "{}"
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "done",
+   "content": "a"
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "failed",
+   "content": "b"
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "rejected",
+   "content": "c"
+  }
+ ],
+ "unpaired_calls_and_outputs_are_dropped": [
+  {
+   "role": "assistant",
+   "content": "before"
+  }
+ ],
+ "tool_output_parts": [
+  {
+   "role": "assistant",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "c1",
+     "type": "function",
+     "function": {
+      "name": "f",
+      "arguments": "{}"
+     }
+    },
+    {
+     "id": "c2",
+     "type": "function",
+     "function": {
+      "name": "f",
+      "arguments": "{}"
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "c1",
+   "content": [
+    {
+     "type": "input_text",
+     "text": "a42"
+    },
+    {
+     "type": "input_image",
+     "image_url": "u1"
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "c2",
+   "content": ""
+  }
+ ],
+ "tool_images_kept_in_tool_message": [
+  {
+   "role": "assistant",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "c1",
+     "type": "function",
+     "function": {
+      "name": "f",
+      "arguments": "{}"
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "c1",
+   "content": [
+    {
+     "type": "input_text",
+     "text": "see"
+    },
+    {
+     "type": "input_image",
+     "image_url": "u1"
+    },
+    {
+     "type": "input_image",
+     "image_url": "u2"
+    }
+   ]
+  },
+  {
+   "role": "assistant",
+   "content": "after"
+  }
+ ],
+ "tool_images_flattened": [
+  {
+   "role": "assistant",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "c1",
+     "type": "function",
+     "function": {
+      "name": "f",
+      "arguments": "{}"
+     }
+    },
+    {
+     "id": "c2",
+     "type": "function",
+     "function": {
+      "name": "f",
+      "arguments": "{}"
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "c1",
+   "content": "see"
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "c2",
+   "content": ""
+  },
+  {
+   "role": "user",
+   "content": [
+    {
+     "type": "text",
+     "text": "Here are the images from the tool results above. Please analyze them."
+    },
+    {
+     "type": "image_url",
+     "image_url": {
+      "url": "u1"
+     }
+    },
+    {
+     "type": "image_url",
+     "image_url": {
+      "url": "u2"
+     }
+    }
+   ]
+  },
+  {
+   "role": "assistant",
+   "content": "after",
+   "tool_calls": [
+    {
+     "id": "c3",
+     "type": "function",
+     "function": {
+      "name": "f",
+      "arguments": "{}"
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "c3",
+   "content": ""
+  },
+  {
+   "role": "user",
+   "content": [
+    {
+     "type": "text",
+     "text": "Here are the images from the tool results above. Please analyze them."
+    },
+    {
+     "type": "image_url",
+     "image_url": {
+      "url": "u3"
+     }
+    }
+   ]
+  }
+ ],
+ "tool_outputs_flush_before_other_items": [
+  {
+   "role": "assistant",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "c1",
+     "type": "function",
+     "function": {
+      "name": "f",
+      "arguments": "{}"
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "c1",
+   "content": "r1"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "c2",
+     "type": "function",
+     "function": {
+      "name": "f",
+      "arguments": "{}"
+     }
+    }
+   ],
+   "reasoning_content": "think"
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "c2",
+   "content": "r2"
+  },
+  {
+   "role": "assistant",
+   "content": "end"
+  }
+ ],
+ "reasoning_skipped_without_format": [
+  {
+   "role": "assistant",
+   "content": "answer"
+  }
+ ],
+ "reasoning_thinking_field": [
+  {
+   "role": "assistant",
+   "content": "answer",
+   "thinking": "ab\nfrom content"
+  }
+ ],
+ "reasoning_content_field": [
+  {
+   "role": "assistant",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "c1",
+     "type": "function",
+     "function": {
+      "name": "f",
+      "arguments": "{}"
+     }
+    }
+   ],
+   "reasoning_content": "only content"
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "c1",
+   "content": "r"
+  }
+ ],
+ "reasoning_think_tags": [
+  {
+   "role": "assistant",
+   "content": "<think>default tags</think>\n<reasoning>custom</reasoning>\nanswer"
+  }
+ ],
+ "reasoning_unknown_format": [
+  {
+   "role": "assistant",
+   "content": "answer"
+  }
+ ],
+ "reasoning_details_need_raw": [
+  {
+   "role": "assistant",
+   "content": "a"
+  }
+ ],
+ "reasoning_details_raw_without_format": [
+  {
+   "role": "assistant",
+   "content": "a",
+   "reasoning_details": [
+    {
+     "type": "reasoning.text",
+     "format": "anthropic-claude-v1",
+     "text": "t",
+     "signature": "s"
+    },
+    {
+     "type": "reasoning.encrypted",
+     "format": "openai-responses-v1",
+     "data": "x"
+    },
+    {
+     "type": "reasoning.text",
+     "format": "anthropic-claude-v1",
+     "text": "t",
+     "signature": "s"
+    }
+   ]
+  }
+ ],
+ "reasoning_details_raw_with_format": [
+  {
+   "role": "assistant",
+   "content": "",
+   "tool_calls": [
+    {
+     "id": "c1",
+     "type": "function",
+     "function": {
+      "name": "f",
+      "arguments": "{}"
+     }
+    }
+   ],
+   "thinking": "x",
+   "reasoning_details": [
+    {
+     "type": "reasoning.encrypted",
+     "format": "openai-responses-v1",
+     "data": "x"
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "c1",
+   "content": "r"
+  }
+ ],
+ "reasoning_only_message": [
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "just thinking"
+  }
+ ],
+ "code_interpreter": [
+  {
+   "role": "assistant",
+   "content": "<code_interpreter>\nprint(1)\n</code_interpreter>\n<code_interpreter_output>\n1\n\n</code_interpreter_output>\n<code_interpreter_output>\nonly result\n</code_interpreter_output>\n<code_interpreter>\nx\n</code_interpreter>\n<code_interpreter>\ny\n</code_interpreter>\n<code_interpreter_output>\nplain output\n</code_interpreter_output>\n<code_interpreter_output>\n5\n</code_interpreter_output>\nafter"
+  }
+ ],
+ "code_interpreter_raw": [
+  {
+   "role": "assistant",
+   "content": "<code_interpreter>\nz\n</code_interpreter>\n<code_interpreter_output>\no\n</code_interpreter_output>"
+  }
+ ],
+ "other_extension_items_skipped": [
+  {
+   "role": "assistant",
+   "content": "a\nb"
+  }
+ ],
+ "item_without_type": [
+  {
+   "role": "assistant",
+   "content": "a"
+  }
+ ],
+ "interleaved_rounds": [
+  {
+   "role": "assistant",
+   "content": "step 1",
+   "tool_calls": [
+    {
+     "id": "c1",
+     "type": "function",
+     "function": {
+      "name": "search",
+      "arguments": "{\"q\": \"a\"}"
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "c1",
+   "content": "found a"
+  },
+  {
+   "role": "assistant",
+   "content": "step 2",
+   "tool_calls": [
+    {
+     "id": "c2",
+     "type": "function",
+     "function": {
+      "name": "search",
+      "arguments": "{\"q\": \"b\"}"
+     }
+    },
+    {
+     "id": "c3",
+     "type": "function",
+     "function": {
+      "name": "fetch",
+      "arguments": "{\"u\": \"x\"}"
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "c2",
+   "content": "found b"
+  },
+  {
+   "role": "tool",
+   "tool_call_id": "c3",
+   "content": "error"
+  },
+  {
+   "role": "assistant",
+   "content": "final"
+  }
+ ]
+}
