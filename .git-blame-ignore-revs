@@ -22,3 +22,8 @@ f19bb6b50147d2635c6be54036b0b045f7c37712
 # The directory move plus 1,460 word-boundary replacements of the package
 # name in 247 files; nothing else rode along.
 69c243c34ff32fabbf0f5cd8249bb9ddac1d8485
+
+# style(server): sort the backend's imports with ruff (#79).
+# ruff's I001 fix across local_llm/: 166 import blocks in 165 files; nothing
+# else rode along.
+0e0ef1c4bc7215bafcf8a1f5e70cbfea65b9b3a5
