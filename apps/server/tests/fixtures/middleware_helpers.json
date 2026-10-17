@@ -1884,21 +1884,28 @@
   ],
   "embeds": [],
   "given_after": [
+   "data:text/plain;base64,QQ==",
    "keep",
+   "data:image/png;base64,Qg==",
    "also"
   ],
   "calls": []
  },
  "tool:openapi_list_consecutive_data": {
-  "result": "{\n  \"results\": [\n    \"data:b\",\n    \"keep\"\n  ]\n}",
+  "result": "{\n  \"results\": [\n    \"keep\"\n  ]\n}",
   "files": [
    {
     "type": "data",
     "content": "data:a"
+   },
+   {
+    "type": "data",
+    "content": "data:b"
    }
   ],
   "embeds": [],
   "given_after": [
+   "data:a",
    "data:b",
    "keep"
   ],

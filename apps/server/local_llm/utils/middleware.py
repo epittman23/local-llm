@@ -1029,7 +1029,9 @@ async def _mcp_list_result(request, tool_result: list, metadata, user, tool_resu
     return tool_response[0] if len(tool_response) == 1 else tool_response
 
 
-def _move_openapi_data_items(tool_result: list, tool_result_files: list) -> None:
+def _split_openapi_data_items(tool_result: list, tool_result_files: list) -> list:
+    """The result without its data: items, which become files; the tool's own list is left as it was."""
+    kept = []
     for item in tool_result:
         if isinstance(item, str) and item.startswith('data:'):
             tool_result_files.append(
@@ -1038,7 +1040,9 @@ def _move_openapi_data_items(tool_result: list, tool_result_files: list) -> None
                     'content': item,
                 }
             )
-            tool_result.remove(item)
+        else:
+            kept.append(item)
+    return kept
 
 
 def _tool_result_text(tool_result):
@@ -1101,7 +1105,7 @@ async def process_tool_result(
         if tool_type == 'mcp':
             tool_result = await _mcp_list_result(request, tool_result, metadata, user, tool_result_files)
         else:  # OpenAPI
-            _move_openapi_data_items(tool_result, tool_result_files)
+            tool_result = _split_openapi_data_items(tool_result, tool_result_files)
 
     return _tool_result_text(tool_result), tool_result_files, tool_result_embeds
 
