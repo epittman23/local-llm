@@ -984,14 +984,19 @@ async def _edit_openai(request, image_config, form_data, model, size, metadata, 
     return await _store_openai_images(request, res, headers, {**data, **metadata}, user)
 
 
+def _gemini_inline_image(data_url: str) -> dict:
+    header, encoded = data_url.split(',', 1)
+    mime_type = header.split(';')[0].removeprefix('data:') or 'image/png'
+    return {'inline_data': {'mime_type': mime_type, 'data': encoded}}
+
+
 async def _edit_gemini(request, image_config, form_data, model, size, metadata, user) -> list[dict]:
     headers = {
         'Content-Type': 'application/json',
         'x-goog-api-key': image_config.IMAGES_EDIT_GEMINI_API_KEY,
     }
     images = [form_data.image] if isinstance(form_data.image, str) else form_data.image
-    image_parts = [{'inline_data': {'mime_type': 'image/png', 'data': image.split(',', 1)[1]}} for image in images]
-    data = {'contents': [{'parts': [{'text': form_data.prompt}, *image_parts]}]}
+    data = {'contents': [{'parts': [{'text': form_data.prompt}, *map(_gemini_inline_image, images)]}]}
 
     res = await _post_engine_json(
         f'{image_config.IMAGES_EDIT_GEMINI_API_BASE_URL}/models/{model}:generateContent', headers, json=data

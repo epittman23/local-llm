@@ -2070,7 +2070,7 @@
          },
          {
           "inline_data": {
-           "mime_type": "image/png",
+           "mime_type": "image/jpeg",
            "data": "ZmlsZS10d28="
           }
          }
@@ -2097,7 +2097,7 @@
         },
         {
          "inline_data": {
-          "mime_type": "image/png",
+          "mime_type": "image/jpeg",
           "data": "ZmlsZS10d28="
          }
         }
@@ -2528,7 +2528,7 @@
          },
          {
           "inline_data": {
-           "mime_type": "image/png",
+           "mime_type": "image/jpeg",
            "data": "anBlZy1vbmU="
           }
          }
@@ -2561,7 +2561,7 @@
         },
         {
          "inline_data": {
-          "mime_type": "image/png",
+          "mime_type": "image/jpeg",
           "data": "anBlZy1vbmU="
          }
         }
