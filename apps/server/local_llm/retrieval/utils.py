@@ -1545,9 +1545,6 @@ async def _collection_item(item: dict, ctx: _SourceContext):
         return query_result, []
 
     if item.get('context') == 'full' or ctx.bypass_embedding_and_retrieval:
-        # Access is checked again here, as it always has been (the check above already passed).
-        if not await _knowledge_readable(knowledge_base, item, ctx.user, ctx.folder_items):
-            return None, []
         files = await Knowledges.get_files_by_id(knowledge_base.id)
         return {
             'documents': [[file.data.get('content', '') for file in files]],

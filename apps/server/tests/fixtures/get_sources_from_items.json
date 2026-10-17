@@ -1233,13 +1233,6 @@
     "read"
    ],
    [
-    "grant",
-    "u1",
-    "knowledge",
-    "kb_shared",
-    "read"
-   ],
-   [
     "kb_files",
     "kb_shared"
    ]
