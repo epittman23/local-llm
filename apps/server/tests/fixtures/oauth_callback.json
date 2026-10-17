@@ -1,0 +1,4655 @@
+{
+ "callback:oauth_disabled": {
+  "http_error": [
+   404,
+   "Not Found"
+  ],
+  "calls": []
+ },
+ "callback:unknown_provider": {
+  "http_error": [
+   404,
+   "Not Found"
+  ],
+  "calls": []
+ },
+ "callback:signup_first_user": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth"
+    ],
+    [
+     "set-cookie",
+     "token=jwt-u-new; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_id_token=idtok; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_session_id=sess-new; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "user_by_email",
+    "ada@example.com",
+    "<db>"
+   ],
+   [
+    "process_picture",
+    "https://idp.test/ada.png",
+    "at-1"
+   ],
+   [
+    "get_user_role",
+    null,
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png"
+    }
+   ],
+   [
+    "insert_new_auth",
+    "ada@example.com",
+    "hash:uuid-fixed",
+    "Ada",
+    "processed:https://idp.test/ada.png",
+    "pending",
+    {
+     "oidc": {
+      "sub": "sub-1"
+     }
+    },
+    "<db>"
+   ],
+   [
+    "num_users",
+    "<db>"
+   ],
+   [
+    "update_role",
+    "u-new",
+    "admin",
+    "<db>"
+   ],
+   [
+    "user_by_id",
+    "u-new",
+    "<db>"
+   ],
+   [
+    "config_get",
+    "ui.default_group_id"
+   ],
+   [
+    "default_group",
+    "g-default",
+    "u-new",
+    "<db>"
+   ],
+   [
+    "event",
+    "name='user.created' description='A user account was created.' message='User created'",
+    "u-new",
+    "u-new",
+    {
+     "source": "oauth",
+     "data": {
+      "role": "admin",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-new"
+    },
+    2419200.0
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ],
+   [
+    "event",
+    "name='auth.login' description='A user successfully logged in.' message='User logged in'",
+    "u-new",
+    "u-new",
+    {
+     "subject_type": "user",
+     "source": "oauth",
+     "data": {
+      "auth_method": "oauth",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "sessions_by_user",
+    "u-new",
+    "<db>"
+   ],
+   [
+    "create_session",
+    "u-new",
+    "oidc",
+    {
+     "access_token": "at-1",
+     "id_token": "idtok",
+     "expires_in": 3600,
+     "userinfo": {
+      "sub": "sub-1",
+      "email": "Ada@Example.com",
+      "name": "Ada",
+      "picture": "https://idp.test/ada.png"
+     },
+     "issued_at": 1792238400.0,
+     "expires_at": 1792242000
+    },
+    "<db>"
+   ]
+  ]
+ },
+ "callback:signup_no_picture_claim_no_name": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth"
+    ],
+    [
+     "set-cookie",
+     "token=jwt-u-new; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_id_token=idtok; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_session_id=sess-new; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "userinfo",
+    "at-1"
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "user_by_email",
+    "ada@example.com",
+    "<db>"
+   ],
+   [
+    "get_user_role",
+    null,
+    {
+     "sub": "sub-1",
+     "email": "ada@example.com"
+    }
+   ],
+   [
+    "insert_new_auth",
+    "ada@example.com",
+    "hash:uuid-fixed",
+    "ada@example.com",
+    "/user.png",
+    "pending",
+    {
+     "oidc": {
+      "sub": "sub-1"
+     }
+    },
+    "<db>"
+   ],
+   [
+    "num_users",
+    "<db>"
+   ],
+   [
+    "config_get",
+    "ui.default_group_id"
+   ],
+   [
+    "default_group",
+    "g-default",
+    "u-new",
+    "<db>"
+   ],
+   [
+    "event",
+    "name='user.created' description='A user account was created.' message='User created'",
+    "u-new",
+    "u-new",
+    {
+     "source": "oauth",
+     "data": {
+      "role": "pending",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-new"
+    },
+    2419200.0
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ],
+   [
+    "event",
+    "name='auth.login' description='A user successfully logged in.' message='User logged in'",
+    "u-new",
+    "u-new",
+    {
+     "subject_type": "user",
+     "source": "oauth",
+     "data": {
+      "auth_method": "oauth",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "sessions_by_user",
+    "u-new",
+    "<db>"
+   ],
+   [
+    "create_session",
+    "u-new",
+    "oidc",
+    {
+     "access_token": "at-1",
+     "id_token": "idtok",
+     "expires_in": 3600,
+     "userinfo": {
+      "sub": "sub-1",
+      "email": "ada@example.com"
+     },
+     "issued_at": 1792238400.0,
+     "expires_at": 1792242000
+    },
+    "<db>"
+   ]
+  ]
+ },
+ "callback:signup_disabled": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth?error=You+do+not+have+permission+to+access+this+resource.+Please+contact+your+administrator+for+assistance."
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ]
+  ]
+ },
+ "callback:signup_email_taken": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth?error=Uh-oh%21+This+email+is+already+registered.+Sign+in+with+your+existing+account+or+choose+another+email+to+start+anew."
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "user_by_email",
+    "ada@example.com",
+    "<db>"
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ]
+  ]
+ },
+ "callback:signup_insert_fails": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth?error=Oops%21+Something+went+wrong+while+creating+your+account.+Please+try+again+later.+If+the+issue+persists%2C+contact+support+for+assistance."
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "user_by_email",
+    "ada@example.com",
+    "<db>"
+   ],
+   [
+    "process_picture",
+    "https://idp.test/ada.png",
+    "at-1"
+   ],
+   [
+    "get_user_role",
+    null,
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png"
+    }
+   ],
+   [
+    "insert_new_auth",
+    "ada@example.com",
+    "hash:uuid-fixed",
+    "Ada",
+    "processed:https://idp.test/ada.png",
+    "pending",
+    {
+     "oidc": {
+      "sub": "sub-1"
+     }
+    },
+    "<db>"
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ]
+  ]
+ },
+ "callback:existing_user_groups_and_pruning": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth"
+    ],
+    [
+     "set-cookie",
+     "token=jwt-u-ada; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_id_token=idtok; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_session_id=sess-new; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "update_role_from_oauth",
+    "u-ada",
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png"
+    },
+    "oidc",
+    "<db>"
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-ada"
+    },
+    2419200.0
+   ],
+   [
+    "config_get",
+    "user.permissions"
+   ],
+   [
+    "update_user_groups",
+    "u-ada",
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png"
+    },
+    {
+     "chat": 1
+    },
+    "<db>"
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ],
+   [
+    "event",
+    "name='auth.login' description='A user successfully logged in.' message='User logged in'",
+    "u-ada",
+    "u-ada",
+    {
+     "subject_type": "user",
+     "source": "oauth",
+     "data": {
+      "auth_method": "oauth",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "sessions_by_user",
+    "u-ada",
+    "<db>"
+   ],
+   [
+    "delete_session",
+    "s-old",
+    "<db>"
+   ],
+   [
+    "create_session",
+    "u-ada",
+    "oidc",
+    {
+     "access_token": "at-1",
+     "id_token": "idtok",
+     "expires_in": 3600,
+     "userinfo": {
+      "sub": "sub-1",
+      "email": "Ada@Example.com",
+      "name": "Ada",
+      "picture": "https://idp.test/ada.png"
+     },
+     "issued_at": 1792238400.0,
+     "expires_at": 1792242000
+    },
+    "<db>"
+   ]
+  ]
+ },
+ "callback:existing_user_updates_email_taken": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth"
+    ],
+    [
+     "set-cookie",
+     "token=jwt-u-ada; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_id_token=idtok; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_session_id=sess-new; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "update_role_from_oauth",
+    "u-ada",
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png"
+    },
+    "oidc",
+    "<db>"
+   ],
+   [
+    "update_user",
+    "u-ada",
+    {
+     "name": "Ada"
+    },
+    "<db>"
+   ],
+   [
+    "user_by_email",
+    "Ada@Example.com",
+    "<db>"
+   ],
+   [
+    "process_picture",
+    "https://idp.test/ada.png",
+    "at-1"
+   ],
+   [
+    "update_profile_image",
+    "u-ada",
+    "processed:https://idp.test/ada.png",
+    "<db>"
+   ],
+   [
+    "event",
+    "name='user.updated' description='A user account was updated.' message='User updated'",
+    "u-ada",
+    "u-ada",
+    {
+     "source": "oauth",
+     "data": {
+      "updated_fields": [
+       "name",
+       "profile_image_url"
+      ],
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-ada"
+    },
+    2419200.0
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ],
+   [
+    "event",
+    "name='auth.login' description='A user successfully logged in.' message='User logged in'",
+    "u-ada",
+    "u-ada",
+    {
+     "subject_type": "user",
+     "source": "oauth",
+     "data": {
+      "auth_method": "oauth",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "sessions_by_user",
+    "u-ada",
+    "<db>"
+   ],
+   [
+    "create_session",
+    "u-ada",
+    "oidc",
+    {
+     "access_token": "at-1",
+     "id_token": "idtok",
+     "expires_in": 3600,
+     "userinfo": {
+      "sub": "sub-1",
+      "email": "Ada@Example.com",
+      "name": "Ada",
+      "picture": "https://idp.test/ada.png"
+     },
+     "issued_at": 1792238400.0,
+     "expires_at": 1792242000
+    },
+    "<db>"
+   ]
+  ]
+ },
+ "callback:existing_user_updates_email": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth"
+    ],
+    [
+     "set-cookie",
+     "token=jwt-u-ada; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_id_token=idtok; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_session_id=sess-new; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "update_role_from_oauth",
+    "u-ada",
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png"
+    },
+    "oidc",
+    "<db>"
+   ],
+   [
+    "user_by_email",
+    "Ada@Example.com",
+    "<db>"
+   ],
+   [
+    "update_email",
+    "u-ada",
+    "ada@example.com",
+    "<db>"
+   ],
+   [
+    "user_by_id",
+    "u-ada",
+    "<db>"
+   ],
+   [
+    "process_picture",
+    "https://idp.test/ada.png",
+    "at-1"
+   ],
+   [
+    "event",
+    "name='user.updated' description='A user account was updated.' message='User updated'",
+    "u-ada",
+    "u-ada",
+    {
+     "source": "oauth",
+     "data": {
+      "updated_fields": [
+       "email"
+      ],
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-ada"
+    },
+    2419200.0
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ],
+   [
+    "event",
+    "name='auth.login' description='A user successfully logged in.' message='User logged in'",
+    "u-ada",
+    "u-ada",
+    {
+     "subject_type": "user",
+     "source": "oauth",
+     "data": {
+      "auth_method": "oauth",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "sessions_by_user",
+    "u-ada",
+    "<db>"
+   ],
+   [
+    "create_session",
+    "u-ada",
+    "oidc",
+    {
+     "access_token": "at-1",
+     "id_token": "idtok",
+     "expires_in": 3600,
+     "userinfo": {
+      "sub": "sub-1",
+      "email": "Ada@Example.com",
+      "name": "Ada",
+      "picture": "https://idp.test/ada.png"
+     },
+     "issued_at": 1792238400.0,
+     "expires_at": 1792242000
+    },
+    "<db>"
+   ]
+  ]
+ },
+ "callback:existing_user_updates_fail": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth"
+    ],
+    [
+     "set-cookie",
+     "token=jwt-u-ada; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_id_token=idtok; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_session_id=sess-new; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "update_role_from_oauth",
+    "u-ada",
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png"
+    },
+    "oidc",
+    "<db>"
+   ],
+   [
+    "update_user",
+    "u-ada",
+    {
+     "name": "Ada"
+    },
+    "<db>"
+   ],
+   [
+    "user_by_email",
+    "Ada@Example.com",
+    "<db>"
+   ],
+   [
+    "update_email",
+    "u-ada",
+    "ada@example.com",
+    "<db>"
+   ],
+   [
+    "process_picture",
+    "https://idp.test/ada.png",
+    "at-1"
+   ],
+   [
+    "update_profile_image",
+    "u-ada",
+    "processed:https://idp.test/ada.png",
+    "<db>"
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-ada"
+    },
+    2419200.0
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ],
+   [
+    "event",
+    "name='auth.login' description='A user successfully logged in.' message='User logged in'",
+    "u-ada",
+    "u-ada",
+    {
+     "subject_type": "user",
+     "source": "oauth",
+     "data": {
+      "auth_method": "oauth",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "sessions_by_user",
+    "u-ada",
+    "<db>"
+   ],
+   [
+    "create_session",
+    "u-ada",
+    "oidc",
+    {
+     "access_token": "at-1",
+     "id_token": "idtok",
+     "expires_in": 3600,
+     "userinfo": {
+      "sub": "sub-1",
+      "email": "Ada@Example.com",
+      "name": "Ada",
+      "picture": "https://idp.test/ada.png"
+     },
+     "issued_at": 1792238400.0,
+     "expires_at": 1792242000
+    },
+    "<db>"
+   ]
+  ]
+ },
+ "callback:existing_user_update_claims_unset": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth"
+    ],
+    [
+     "set-cookie",
+     "token=jwt-u-ada; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_id_token=idtok; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_session_id=sess-new; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "update_role_from_oauth",
+    "u-ada",
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png",
+     "": "x"
+    },
+    "oidc",
+    "<db>"
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-ada"
+    },
+    2419200.0
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ],
+   [
+    "event",
+    "name='auth.login' description='A user successfully logged in.' message='User logged in'",
+    "u-ada",
+    "u-ada",
+    {
+     "subject_type": "user",
+     "source": "oauth",
+     "data": {
+      "auth_method": "oauth",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "sessions_by_user",
+    "u-ada",
+    "<db>"
+   ],
+   [
+    "create_session",
+    "u-ada",
+    "oidc",
+    {
+     "access_token": "at-1",
+     "id_token": "idtok",
+     "expires_in": 3600,
+     "userinfo": {
+      "sub": "sub-1",
+      "email": "Ada@Example.com",
+      "name": "Ada",
+      "picture": "https://idp.test/ada.png",
+      "": "x"
+     },
+     "issued_at": 1792238400.0,
+     "expires_at": 1792242000
+    },
+    "<db>"
+   ]
+  ]
+ },
+ "callback:merge_by_email": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth"
+    ],
+    [
+     "set-cookie",
+     "token=jwt-u-bob; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_id_token=idtok; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_session_id=sess-new; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "user_by_email",
+    "ada@example.com",
+    "<db>"
+   ],
+   [
+    "update_user_oauth",
+    "u-bob",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "update_role_from_oauth",
+    "u-bob",
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png"
+    },
+    "oidc",
+    "<db>"
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-bob"
+    },
+    2419200.0
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ],
+   [
+    "event",
+    "name='auth.login' description='A user successfully logged in.' message='User logged in'",
+    "u-bob",
+    "u-bob",
+    {
+     "subject_type": "user",
+     "source": "oauth",
+     "data": {
+      "auth_method": "oauth",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "sessions_by_user",
+    "u-bob",
+    "<db>"
+   ],
+   [
+    "create_session",
+    "u-bob",
+    "oidc",
+    {
+     "access_token": "at-1",
+     "id_token": "idtok",
+     "expires_in": 3600,
+     "userinfo": {
+      "sub": "sub-1",
+      "email": "Ada@Example.com",
+      "name": "Ada",
+      "picture": "https://idp.test/ada.png"
+     },
+     "issued_at": 1792238400.0,
+     "expires_at": 1792242000
+    },
+    "<db>"
+   ]
+  ]
+ },
+ "callback:merge_by_email_update_returns_none": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth"
+    ],
+    [
+     "set-cookie",
+     "token=jwt-u-bob; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_id_token=idtok; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_session_id=sess-new; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "user_by_email",
+    "ada@example.com",
+    "<db>"
+   ],
+   [
+    "update_user_oauth",
+    "u-bob",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "update_role_from_oauth",
+    "u-bob",
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png"
+    },
+    "oidc",
+    "<db>"
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-bob"
+    },
+    2419200.0
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ],
+   [
+    "event",
+    "name='auth.login' description='A user successfully logged in.' message='User logged in'",
+    "u-bob",
+    "u-bob",
+    {
+     "subject_type": "user",
+     "source": "oauth",
+     "data": {
+      "auth_method": "oauth",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "sessions_by_user",
+    "u-bob",
+    "<db>"
+   ],
+   [
+    "create_session",
+    "u-bob",
+    "oidc",
+    {
+     "access_token": "at-1",
+     "id_token": "idtok",
+     "expires_in": 3600,
+     "userinfo": {
+      "sub": "sub-1",
+      "email": "Ada@Example.com",
+      "name": "Ada",
+      "picture": "https://idp.test/ada.png"
+     },
+     "issued_at": 1792238400.0,
+     "expires_at": 1792242000
+    },
+    "<db>"
+   ]
+  ]
+ },
+ "callback:merge_by_email_no_match": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth"
+    ],
+    [
+     "set-cookie",
+     "token=jwt-u-new; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_id_token=idtok; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_session_id=sess-new; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "user_by_email",
+    "ada@example.com",
+    "<db>"
+   ],
+   [
+    "user_by_email",
+    "ada@example.com",
+    "<db>"
+   ],
+   [
+    "process_picture",
+    "https://idp.test/ada.png",
+    "at-1"
+   ],
+   [
+    "get_user_role",
+    null,
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png"
+    }
+   ],
+   [
+    "insert_new_auth",
+    "ada@example.com",
+    "hash:uuid-fixed",
+    "Ada",
+    "processed:https://idp.test/ada.png",
+    "pending",
+    {
+     "oidc": {
+      "sub": "sub-1"
+     }
+    },
+    "<db>"
+   ],
+   [
+    "num_users",
+    "<db>"
+   ],
+   [
+    "config_get",
+    "ui.default_group_id"
+   ],
+   [
+    "default_group",
+    "g-default",
+    "u-new",
+    "<db>"
+   ],
+   [
+    "event",
+    "name='user.created' description='A user account was created.' message='User created'",
+    "u-new",
+    "u-new",
+    {
+     "source": "oauth",
+     "data": {
+      "role": "pending",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-new"
+    },
+    2419200.0
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ],
+   [
+    "event",
+    "name='auth.login' description='A user successfully logged in.' message='User logged in'",
+    "u-new",
+    "u-new",
+    {
+     "subject_type": "user",
+     "source": "oauth",
+     "data": {
+      "auth_method": "oauth",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "sessions_by_user",
+    "u-new",
+    "<db>"
+   ],
+   [
+    "create_session",
+    "u-new",
+    "oidc",
+    {
+     "access_token": "at-1",
+     "id_token": "idtok",
+     "expires_in": 3600,
+     "userinfo": {
+      "sub": "sub-1",
+      "email": "Ada@Example.com",
+      "name": "Ada",
+      "picture": "https://idp.test/ada.png"
+     },
+     "issued_at": 1792238400.0,
+     "expires_at": 1792242000
+    },
+    "<db>"
+   ]
+  ]
+ },
+ "callback:legacy_numeric_sub_repaired": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth"
+    ],
+    [
+     "set-cookie",
+     "token=jwt-u-ada; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_id_token=idtok; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_session_id=sess-new; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "update_user_oauth",
+    "u-ada",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "update_role_from_oauth",
+    "u-ada",
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png"
+    },
+    "oidc",
+    "<db>"
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-ada"
+    },
+    2419200.0
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ],
+   [
+    "event",
+    "name='auth.login' description='A user successfully logged in.' message='User logged in'",
+    "u-ada",
+    "u-ada",
+    {
+     "subject_type": "user",
+     "source": "oauth",
+     "data": {
+      "auth_method": "oauth",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "sessions_by_user",
+    "u-ada",
+    "<db>"
+   ],
+   [
+    "create_session",
+    "u-ada",
+    "oidc",
+    {
+     "access_token": "at-1",
+     "id_token": "idtok",
+     "expires_in": 3600,
+     "userinfo": {
+      "sub": "sub-1",
+      "email": "Ada@Example.com",
+      "name": "Ada",
+      "picture": "https://idp.test/ada.png"
+     },
+     "issued_at": 1792238400.0,
+     "expires_at": 1792242000
+    },
+    "<db>"
+   ]
+  ]
+ },
+ "callback:user_oauth_not_a_dict": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth"
+    ],
+    [
+     "set-cookie",
+     "token=jwt-u-ada; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_id_token=idtok; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_session_id=sess-new; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "update_role_from_oauth",
+    "u-ada",
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png"
+    },
+    "oidc",
+    "<db>"
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-ada"
+    },
+    2419200.0
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ],
+   [
+    "event",
+    "name='auth.login' description='A user successfully logged in.' message='User logged in'",
+    "u-ada",
+    "u-ada",
+    {
+     "subject_type": "user",
+     "source": "oauth",
+     "data": {
+      "auth_method": "oauth",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "sessions_by_user",
+    "u-ada",
+    "<db>"
+   ],
+   [
+    "create_session",
+    "u-ada",
+    "oidc",
+    {
+     "access_token": "at-1",
+     "id_token": "idtok",
+     "expires_in": 3600,
+     "userinfo": {
+      "sub": "sub-1",
+      "email": "Ada@Example.com",
+      "name": "Ada",
+      "picture": "https://idp.test/ada.png"
+     },
+     "issued_at": 1792238400.0,
+     "expires_at": 1792242000
+    },
+    "<db>"
+   ]
+  ]
+ },
+ "callback:authorize_fails": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth?error=The+email+or+password+provided+is+incorrect.+Please+check+for+typos+and+try+logging+in+again."
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ]
+  ]
+ },
+ "callback:bad_signature_then_ok": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth"
+    ],
+    [
+     "set-cookie",
+     "token=jwt-u-ada; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_id_token=idtok; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_session_id=sess-new; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": false
+    }
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "update_role_from_oauth",
+    "u-ada",
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png"
+    },
+    "oidc",
+    "<db>"
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-ada"
+    },
+    2419200.0
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ],
+   [
+    "event",
+    "name='auth.login' description='A user successfully logged in.' message='User logged in'",
+    "u-ada",
+    "u-ada",
+    {
+     "subject_type": "user",
+     "source": "oauth",
+     "data": {
+      "auth_method": "oauth",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "sessions_by_user",
+    "u-ada",
+    "<db>"
+   ],
+   [
+    "create_session",
+    "u-ada",
+    "oidc",
+    {
+     "access_token": "at-1",
+     "id_token": "idtok",
+     "expires_in": 3600,
+     "userinfo": {
+      "sub": "sub-1",
+      "email": "Ada@Example.com",
+      "name": "Ada",
+      "picture": "https://idp.test/ada.png"
+     },
+     "issued_at": 1792238400.0,
+     "expires_at": 1792242000
+    },
+    "<db>"
+   ]
+  ]
+ },
+ "callback:bad_signature_twice": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth?error=The+email+or+password+provided+is+incorrect.+Please+check+for+typos+and+try+logging+in+again."
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": false
+    }
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ]
+  ]
+ },
+ "callback:bad_signature_no_metadata": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth"
+    ],
+    [
+     "set-cookie",
+     "token=jwt-u-ada; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_id_token=idtok; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_session_id=sess-new; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": false
+    }
+   ],
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": false
+    }
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "update_role_from_oauth",
+    "u-ada",
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png"
+    },
+    "oidc",
+    "<db>"
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-ada"
+    },
+    2419200.0
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ],
+   [
+    "event",
+    "name='auth.login' description='A user successfully logged in.' message='User logged in'",
+    "u-ada",
+    "u-ada",
+    {
+     "subject_type": "user",
+     "source": "oauth",
+     "data": {
+      "auth_method": "oauth",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "sessions_by_user",
+    "u-ada",
+    "<db>"
+   ],
+   [
+    "create_session",
+    "u-ada",
+    "oidc",
+    {
+     "access_token": "at-1",
+     "id_token": "idtok",
+     "expires_in": 3600,
+     "userinfo": {
+      "sub": "sub-1",
+      "email": "Ada@Example.com",
+      "name": "Ada",
+      "picture": "https://idp.test/ada.png"
+     },
+     "issued_at": 1792238400.0,
+     "expires_at": 1792242000
+    },
+    "<db>"
+   ]
+  ]
+ },
+ "callback:client_id_sent": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth"
+    ],
+    [
+     "set-cookie",
+     "token=jwt-u-ada; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_id_token=idtok; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_session_id=sess-new; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {
+     "client_id": "cid"
+    },
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "update_role_from_oauth",
+    "u-ada",
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png"
+    },
+    "oidc",
+    "<db>"
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-ada"
+    },
+    2419200.0
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ],
+   [
+    "event",
+    "name='auth.login' description='A user successfully logged in.' message='User logged in'",
+    "u-ada",
+    "u-ada",
+    {
+     "subject_type": "user",
+     "source": "oauth",
+     "data": {
+      "auth_method": "oauth",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "sessions_by_user",
+    "u-ada",
+    "<db>"
+   ],
+   [
+    "create_session",
+    "u-ada",
+    "oidc",
+    {
+     "access_token": "at-1",
+     "id_token": "idtok",
+     "expires_in": 3600,
+     "userinfo": {
+      "sub": "sub-1",
+      "email": "Ada@Example.com",
+      "name": "Ada",
+      "picture": "https://idp.test/ada.png"
+     },
+     "issued_at": 1792238400.0,
+     "expires_at": 1792242000
+    },
+    "<db>"
+   ]
+  ]
+ },
+ "callback:client_missing": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth?error=The+email+or+password+provided+is+incorrect.+Please+check+for+typos+and+try+logging+in+again."
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "config_get",
+    "webui.url"
+   ]
+  ]
+ },
+ "callback:userinfo_merges_id_claims": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth"
+    ],
+    [
+     "set-cookie",
+     "token=jwt-u-ada; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_id_token=idtok; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_session_id=sess-new; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "userinfo",
+    "at-1"
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "update_role_from_oauth",
+    "u-ada",
+    {
+     "sub": "sub-1",
+     "email": "ada@idp.example.com",
+     "name": "Ada L",
+     "roles": [
+      "admin"
+     ]
+    },
+    "oidc",
+    "<db>"
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-ada"
+    },
+    2419200.0
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ],
+   [
+    "event",
+    "name='auth.login' description='A user successfully logged in.' message='User logged in'",
+    "u-ada",
+    "u-ada",
+    {
+     "subject_type": "user",
+     "source": "oauth",
+     "data": {
+      "auth_method": "oauth",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "sessions_by_user",
+    "u-ada",
+    "<db>"
+   ],
+   [
+    "create_session",
+    "u-ada",
+    "oidc",
+    {
+     "access_token": "at-1",
+     "id_token": "idtok",
+     "expires_in": 3600,
+     "userinfo": {
+      "sub": "sub-1",
+      "roles": [
+       "admin"
+      ],
+      "email": "ada@example.com"
+     },
+     "issued_at": 1792238400.0,
+     "expires_at": 1792242000
+    },
+    "<db>"
+   ]
+  ]
+ },
+ "callback:userinfo_without_id_claims": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth"
+    ],
+    [
+     "set-cookie",
+     "token=jwt-u-ada; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_id_token=None; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_session_id=sess-new; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "userinfo",
+    "at-1"
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "update_role_from_oauth",
+    "u-ada",
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png"
+    },
+    "oidc",
+    "<db>"
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-ada"
+    },
+    2419200.0
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ],
+   [
+    "event",
+    "name='auth.login' description='A user successfully logged in.' message='User logged in'",
+    "u-ada",
+    "u-ada",
+    {
+     "subject_type": "user",
+     "source": "oauth",
+     "data": {
+      "auth_method": "oauth",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "sessions_by_user",
+    "u-ada",
+    "<db>"
+   ],
+   [
+    "create_session",
+    "u-ada",
+    "oidc",
+    {
+     "access_token": "at-1",
+     "issued_at": 1792238400.0,
+     "expires_at": 253402300799
+    },
+    "<db>"
+   ]
+  ]
+ },
+ "callback:userinfo_missing": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth?error=The+email+or+password+provided+is+incorrect.+Please+check+for+typos+and+try+logging+in+again."
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "userinfo",
+    "at-1"
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ]
+  ]
+ },
+ "callback:feishu_unwraps_data": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth"
+    ],
+    [
+     "set-cookie",
+     "token=jwt-u-new; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_id_token=None; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_session_id=sess-new; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "userinfo",
+    "at-1"
+   ],
+   [
+    "user_by_oauth_sub",
+    "feishu",
+    "f-1",
+    "<db>"
+   ],
+   [
+    "user_by_email",
+    "ada@example.com",
+    "<db>"
+   ],
+   [
+    "process_picture",
+    "https://idp.test/ada.png",
+    "at-1"
+   ],
+   [
+    "get_user_role",
+    null,
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png",
+     "open_id": "f-1"
+    }
+   ],
+   [
+    "insert_new_auth",
+    "ada@example.com",
+    "hash:uuid-fixed",
+    "Ada",
+    "processed:https://idp.test/ada.png",
+    "pending",
+    {
+     "feishu": {
+      "sub": "f-1"
+     }
+    },
+    "<db>"
+   ],
+   [
+    "num_users",
+    "<db>"
+   ],
+   [
+    "config_get",
+    "ui.default_group_id"
+   ],
+   [
+    "default_group",
+    "g-default",
+    "u-new",
+    "<db>"
+   ],
+   [
+    "event",
+    "name='user.created' description='A user account was created.' message='User created'",
+    "u-new",
+    "u-new",
+    {
+     "source": "oauth",
+     "data": {
+      "role": "pending",
+      "provider": "feishu"
+     }
+    }
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-new"
+    },
+    2419200.0
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ],
+   [
+    "event",
+    "name='auth.login' description='A user successfully logged in.' message='User logged in'",
+    "u-new",
+    "u-new",
+    {
+     "subject_type": "user",
+     "source": "oauth",
+     "data": {
+      "auth_method": "oauth",
+      "provider": "feishu"
+     }
+    }
+   ],
+   [
+    "sessions_by_user",
+    "u-new",
+    "<db>"
+   ],
+   [
+    "create_session",
+    "u-new",
+    "feishu",
+    {
+     "access_token": "at-1",
+     "issued_at": 1792238400.0,
+     "expires_at": 253402300799
+    },
+    "<db>"
+   ]
+  ]
+ },
+ "callback:custom_sub_claim": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth"
+    ],
+    [
+     "set-cookie",
+     "token=jwt-u-new; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_id_token=idtok; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_session_id=sess-new; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "42",
+    "<db>"
+   ],
+   [
+    "user_by_email",
+    "ada@example.com",
+    "<db>"
+   ],
+   [
+    "process_picture",
+    "https://idp.test/ada.png",
+    "at-1"
+   ],
+   [
+    "get_user_role",
+    null,
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png",
+     "oid": 42
+    }
+   ],
+   [
+    "insert_new_auth",
+    "ada@example.com",
+    "hash:uuid-fixed",
+    "Ada",
+    "processed:https://idp.test/ada.png",
+    "pending",
+    {
+     "oidc": {
+      "sub": "42"
+     }
+    },
+    "<db>"
+   ],
+   [
+    "num_users",
+    "<db>"
+   ],
+   [
+    "config_get",
+    "ui.default_group_id"
+   ],
+   [
+    "default_group",
+    "g-default",
+    "u-new",
+    "<db>"
+   ],
+   [
+    "event",
+    "name='user.created' description='A user account was created.' message='User created'",
+    "u-new",
+    "u-new",
+    {
+     "source": "oauth",
+     "data": {
+      "role": "pending",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-new"
+    },
+    2419200.0
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ],
+   [
+    "event",
+    "name='auth.login' description='A user successfully logged in.' message='User logged in'",
+    "u-new",
+    "u-new",
+    {
+     "subject_type": "user",
+     "source": "oauth",
+     "data": {
+      "auth_method": "oauth",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "sessions_by_user",
+    "u-new",
+    "<db>"
+   ],
+   [
+    "create_session",
+    "u-new",
+    "oidc",
+    {
+     "access_token": "at-1",
+     "id_token": "idtok",
+     "expires_in": 3600,
+     "userinfo": {
+      "sub": "sub-1",
+      "email": "Ada@Example.com",
+      "name": "Ada",
+      "picture": "https://idp.test/ada.png",
+      "oid": 42
+     },
+     "issued_at": 1792238400.0,
+     "expires_at": 1792242000
+    },
+    "<db>"
+   ]
+  ]
+ },
+ "callback:sub_missing": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth?error=The+email+or+password+provided+is+incorrect.+Please+check+for+typos+and+try+logging+in+again."
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ]
+  ]
+ },
+ "callback:github_primary_email": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth"
+    ],
+    [
+     "set-cookie",
+     "token=jwt-u-new; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_id_token=None; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_session_id=sess-new; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "userinfo",
+    "gh-at"
+   ],
+   [
+    "github_get",
+    "https://api.github.com/user/emails",
+    {
+     "Authorization": "Bearer gh-at"
+    },
+    true
+   ],
+   [
+    "github_reply_ok",
+    true
+   ],
+   [
+    "user_by_oauth_sub",
+    "github",
+    "7",
+    "<db>"
+   ],
+   [
+    "user_by_email",
+    "ada@gh.io",
+    "<db>"
+   ],
+   [
+    "process_picture",
+    "https://github.test/default.png",
+    "gh-at"
+   ],
+   [
+    "get_user_role",
+    null,
+    {
+     "id": 7,
+     "name": "Ada",
+     "email": null
+    }
+   ],
+   [
+    "insert_new_auth",
+    "ada@gh.io",
+    "hash:uuid-fixed",
+    "Ada",
+    "processed:https://github.test/default.png",
+    "pending",
+    {
+     "github": {
+      "sub": "7"
+     }
+    },
+    "<db>"
+   ],
+   [
+    "num_users",
+    "<db>"
+   ],
+   [
+    "config_get",
+    "ui.default_group_id"
+   ],
+   [
+    "default_group",
+    "g-default",
+    "u-new",
+    "<db>"
+   ],
+   [
+    "event",
+    "name='user.created' description='A user account was created.' message='User created'",
+    "u-new",
+    "u-new",
+    {
+     "source": "oauth",
+     "data": {
+      "role": "pending",
+      "provider": "github"
+     }
+    }
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-new"
+    },
+    2419200.0
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ],
+   [
+    "event",
+    "name='auth.login' description='A user successfully logged in.' message='User logged in'",
+    "u-new",
+    "u-new",
+    {
+     "subject_type": "user",
+     "source": "oauth",
+     "data": {
+      "auth_method": "oauth",
+      "provider": "github"
+     }
+    }
+   ],
+   [
+    "sessions_by_user",
+    "u-new",
+    "<db>"
+   ],
+   [
+    "create_session",
+    "u-new",
+    "github",
+    {
+     "access_token": "gh-at",
+     "userinfo": {
+      "id": 7,
+      "name": "Ada"
+     },
+     "issued_at": 1792238400.0,
+     "expires_at": 253402300799
+    },
+    "<db>"
+   ]
+  ]
+ },
+ "callback:github_no_primary_email": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth?error=The+email+or+password+provided+is+incorrect.+Please+check+for+typos+and+try+logging+in+again."
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "userinfo",
+    "gh-at"
+   ],
+   [
+    "github_get",
+    "https://api.github.com/user/emails",
+    {
+     "Authorization": "Bearer gh-at"
+    },
+    true
+   ],
+   [
+    "github_reply_ok",
+    true
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ]
+  ]
+ },
+ "callback:github_email_request_fails": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth?error=The+email+or+password+provided+is+incorrect.+Please+check+for+typos+and+try+logging+in+again."
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "userinfo",
+    "gh-at"
+   ],
+   [
+    "github_get",
+    "https://api.github.com/user/emails",
+    {
+     "Authorization": "Bearer gh-at"
+    },
+    true
+   ],
+   [
+    "github_reply_ok",
+    false
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ]
+  ]
+ },
+ "callback:email_fallback": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth"
+    ],
+    [
+     "set-cookie",
+     "token=jwt-u-new; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_id_token=idtok; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_session_id=sess-new; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "userinfo",
+    "at-1"
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "s9",
+    "<db>"
+   ],
+   [
+    "user_by_email",
+    "oidc@s9.local",
+    "<db>"
+   ],
+   [
+    "process_picture",
+    "",
+    "at-1"
+   ],
+   [
+    "get_user_role",
+    null,
+    {
+     "sub": "s9",
+     "name": "N"
+    }
+   ],
+   [
+    "insert_new_auth",
+    "oidc@s9.local",
+    "hash:uuid-fixed",
+    "N",
+    "processed:",
+    "pending",
+    {
+     "oidc": {
+      "sub": "s9"
+     }
+    },
+    "<db>"
+   ],
+   [
+    "num_users",
+    "<db>"
+   ],
+   [
+    "config_get",
+    "ui.default_group_id"
+   ],
+   [
+    "default_group",
+    "g-default",
+    "u-new",
+    "<db>"
+   ],
+   [
+    "event",
+    "name='user.created' description='A user account was created.' message='User created'",
+    "u-new",
+    "u-new",
+    {
+     "source": "oauth",
+     "data": {
+      "role": "pending",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-new"
+    },
+    2419200.0
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ],
+   [
+    "event",
+    "name='auth.login' description='A user successfully logged in.' message='User logged in'",
+    "u-new",
+    "u-new",
+    {
+     "subject_type": "user",
+     "source": "oauth",
+     "data": {
+      "auth_method": "oauth",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "sessions_by_user",
+    "u-new",
+    "<db>"
+   ],
+   [
+    "create_session",
+    "u-new",
+    "oidc",
+    {
+     "access_token": "at-1",
+     "id_token": "idtok",
+     "expires_in": 3600,
+     "userinfo": {
+      "sub": "s9",
+      "name": "N"
+     },
+     "issued_at": 1792238400.0,
+     "expires_at": 1792242000
+    },
+    "<db>"
+   ]
+  ]
+ },
+ "callback:email_missing": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth?error=The+email+or+password+provided+is+incorrect.+Please+check+for+typos+and+try+logging+in+again."
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "userinfo",
+    "at-1"
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ]
+  ]
+ },
+ "callback:domain_not_allowed": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth?error=The+email+or+password+provided+is+incorrect.+Please+check+for+typos+and+try+logging+in+again."
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ]
+  ]
+ },
+ "callback:domain_allowed_email_unchanged": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth"
+    ],
+    [
+     "set-cookie",
+     "token=jwt-u-ada; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_id_token=idtok; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_session_id=sess-new; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "update_role_from_oauth",
+    "u-ada",
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png"
+    },
+    "oidc",
+    "<db>"
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-ada"
+    },
+    2419200.0
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ],
+   [
+    "event",
+    "name='auth.login' description='A user successfully logged in.' message='User logged in'",
+    "u-ada",
+    "u-ada",
+    {
+     "subject_type": "user",
+     "source": "oauth",
+     "data": {
+      "auth_method": "oauth",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "sessions_by_user",
+    "u-ada",
+    "<db>"
+   ],
+   [
+    "create_session",
+    "u-ada",
+    "oidc",
+    {
+     "access_token": "at-1",
+     "id_token": "idtok",
+     "expires_in": 3600,
+     "userinfo": {
+      "sub": "sub-1",
+      "email": "Ada@Example.com",
+      "name": "Ada",
+      "picture": "https://idp.test/ada.png"
+     },
+     "issued_at": 1792238400.0,
+     "expires_at": 1792242000
+    },
+    "<db>"
+   ]
+  ]
+ },
+ "callback:session_not_created": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth"
+    ],
+    [
+     "set-cookie",
+     "token=jwt-u-ada; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_id_token=idtok; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "update_role_from_oauth",
+    "u-ada",
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png"
+    },
+    "oidc",
+    "<db>"
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-ada"
+    },
+    2419200.0
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ],
+   [
+    "event",
+    "name='auth.login' description='A user successfully logged in.' message='User logged in'",
+    "u-ada",
+    "u-ada",
+    {
+     "subject_type": "user",
+     "source": "oauth",
+     "data": {
+      "auth_method": "oauth",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "sessions_by_user",
+    "u-ada",
+    "<db>"
+   ],
+   [
+    "create_session",
+    "u-ada",
+    "oidc",
+    {
+     "access_token": "at-1",
+     "id_token": "idtok",
+     "expires_in": 3600,
+     "userinfo": {
+      "sub": "sub-1",
+      "email": "Ada@Example.com",
+      "name": "Ada",
+      "picture": "https://idp.test/ada.png"
+     },
+     "issued_at": 1792238400.0,
+     "expires_at": 1792242000
+    },
+    "<db>"
+   ]
+  ]
+ },
+ "callback:session_storage_fails": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth"
+    ],
+    [
+     "set-cookie",
+     "token=jwt-u-ada; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_id_token=idtok; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "update_role_from_oauth",
+    "u-ada",
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png"
+    },
+    "oidc",
+    "<db>"
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-ada"
+    },
+    2419200.0
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ],
+   [
+    "event",
+    "name='auth.login' description='A user successfully logged in.' message='User logged in'",
+    "u-ada",
+    "u-ada",
+    {
+     "subject_type": "user",
+     "source": "oauth",
+     "data": {
+      "auth_method": "oauth",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "sessions_by_user",
+    "u-ada",
+    "<db>"
+   ],
+   [
+    "create_session",
+    "u-ada",
+    "oidc",
+    {
+     "access_token": "at-1",
+     "id_token": "idtok",
+     "expires_in": 3600,
+     "userinfo": {
+      "sub": "sub-1",
+      "email": "Ada@Example.com",
+      "name": "Ada",
+      "picture": "https://idp.test/ada.png"
+     },
+     "issued_at": 1792238400.0,
+     "expires_at": 1792242000
+    },
+    "<db>"
+   ]
+  ]
+ },
+ "callback:no_id_token_cookie": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth"
+    ],
+    [
+     "set-cookie",
+     "token=jwt-u-ada; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_session_id=sess-new; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "update_role_from_oauth",
+    "u-ada",
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png"
+    },
+    "oidc",
+    "<db>"
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-ada"
+    },
+    2419200.0
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ],
+   [
+    "event",
+    "name='auth.login' description='A user successfully logged in.' message='User logged in'",
+    "u-ada",
+    "u-ada",
+    {
+     "subject_type": "user",
+     "source": "oauth",
+     "data": {
+      "auth_method": "oauth",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "sessions_by_user",
+    "u-ada",
+    "<db>"
+   ],
+   [
+    "create_session",
+    "u-ada",
+    "oidc",
+    {
+     "access_token": "at-1",
+     "id_token": "idtok",
+     "expires_in": 3600,
+     "userinfo": {
+      "sub": "sub-1",
+      "email": "Ada@Example.com",
+      "name": "Ada",
+      "picture": "https://idp.test/ada.png"
+     },
+     "issued_at": 1792238400.0,
+     "expires_at": 1792242000
+    },
+    "<db>"
+   ]
+  ]
+ },
+ "callback:jwt_never_expires": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth"
+    ],
+    [
+     "set-cookie",
+     "token=jwt-u-ada; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_id_token=idtok; HttpOnly; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_session_id=sess-new; HttpOnly; Path=/; SameSite=lax"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "update_role_from_oauth",
+    "u-ada",
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png"
+    },
+    "oidc",
+    "<db>"
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-ada"
+    },
+    null
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ],
+   [
+    "event",
+    "name='auth.login' description='A user successfully logged in.' message='User logged in'",
+    "u-ada",
+    "u-ada",
+    {
+     "subject_type": "user",
+     "source": "oauth",
+     "data": {
+      "auth_method": "oauth",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "sessions_by_user",
+    "u-ada",
+    "<db>"
+   ],
+   [
+    "create_session",
+    "u-ada",
+    "oidc",
+    {
+     "access_token": "at-1",
+     "id_token": "idtok",
+     "expires_in": 3600,
+     "userinfo": {
+      "sub": "sub-1",
+      "email": "Ada@Example.com",
+      "name": "Ada",
+      "picture": "https://idp.test/ada.png"
+     },
+     "issued_at": 1792238400.0,
+     "expires_at": 1792242000
+    },
+    "<db>"
+   ]
+  ]
+ },
+ "callback:webui_url_redirect": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "https://chat.example.com/auth"
+    ],
+    [
+     "set-cookie",
+     "token=jwt-u-ada; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_id_token=idtok; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ],
+    [
+     "set-cookie",
+     "oauth_session_id=sess-new; HttpOnly; Max-Age=2419200; Path=/; SameSite=lax"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "update_role_from_oauth",
+    "u-ada",
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png"
+    },
+    "oidc",
+    "<db>"
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-ada"
+    },
+    2419200.0
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ],
+   [
+    "event",
+    "name='auth.login' description='A user successfully logged in.' message='User logged in'",
+    "u-ada",
+    "u-ada",
+    {
+     "subject_type": "user",
+     "source": "oauth",
+     "data": {
+      "auth_method": "oauth",
+      "provider": "oidc"
+     }
+    }
+   ],
+   [
+    "sessions_by_user",
+    "u-ada",
+    "<db>"
+   ],
+   [
+    "create_session",
+    "u-ada",
+    "oidc",
+    {
+     "access_token": "at-1",
+     "id_token": "idtok",
+     "expires_in": 3600,
+     "userinfo": {
+      "sub": "sub-1",
+      "email": "Ada@Example.com",
+      "name": "Ada",
+      "picture": "https://idp.test/ada.png"
+     },
+     "issued_at": 1792238400.0,
+     "expires_at": 1792242000
+    },
+    "<db>"
+   ]
+  ]
+ },
+ "callback:group_sync_fails": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth?error=%5BERROR%3A+Error+during+OAuth+process%5D"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "update_role_from_oauth",
+    "u-ada",
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png"
+    },
+    "oidc",
+    "<db>"
+   ],
+   [
+    "create_token",
+    {
+     "id": "u-ada"
+    },
+    2419200.0
+   ],
+   [
+    "config_get",
+    "user.permissions"
+   ],
+   [
+    "update_user_groups",
+    "u-ada",
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png"
+    },
+    {
+     "chat": 1
+    },
+    "<db>"
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ]
+  ]
+ },
+ "callback:invalid_jwt_lifetime": {
+  "redirect": {
+   "status": 307,
+   "headers": [
+    [
+     "x-request-id",
+     "req-1"
+    ],
+    [
+     "content-length",
+     "0"
+    ],
+    [
+     "location",
+     "http://app.local/auth?error=%5BERROR%3A+Error+during+OAuth+process%5D"
+    ]
+   ]
+  },
+  "calls": [
+   [
+    "authorize_access_token",
+    {},
+    {
+     "jwks_cached": true
+    }
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "update_role_from_oauth",
+    "u-ada",
+    {
+     "sub": "sub-1",
+     "email": "Ada@Example.com",
+     "name": "Ada",
+     "picture": "https://idp.test/ada.png"
+    },
+    "oidc",
+    "<db>"
+   ],
+   [
+    "config_get",
+    "webui.url"
+   ]
+  ]
+ },
+ "logout:form_unreadable": {
+  "response": [
+   400,
+   {
+    "error": "invalid_request",
+    "error_description": "Missing logout_token parameter"
+   }
+  ],
+  "calls": []
+ },
+ "logout:token_missing": {
+  "response": [
+   400,
+   {
+    "error": "invalid_request",
+    "error_description": "Missing logout_token parameter"
+   }
+  ],
+  "calls": []
+ },
+ "logout:token_malformed": {
+  "response": [
+   400,
+   {
+    "error": "invalid_request",
+    "error_description": "Malformed logout_token"
+   }
+  ],
+  "calls": []
+ },
+ "logout:issuer_missing": {
+  "response": [
+   400,
+   {
+    "error": "invalid_request",
+    "error_description": "logout_token missing iss claim"
+   }
+  ],
+  "calls": []
+ },
+ "logout:issuer_unknown": {
+  "response": [
+   400,
+   {
+    "error": "invalid_request",
+    "error_description": "No configured provider matches token issuer"
+   }
+  ],
+  "calls": [
+   [
+    "load_server_metadata",
+    "broken"
+   ],
+   [
+    "load_server_metadata",
+    "other"
+   ],
+   [
+    "load_server_metadata",
+    "cid"
+   ]
+  ]
+ },
+ "logout:provider_without_jwks_uri": {
+  "response": [
+   400,
+   {
+    "error": "invalid_request",
+    "error_description": "No configured provider matches token issuer"
+   }
+  ],
+  "calls": [
+   [
+    "load_server_metadata",
+    "broken"
+   ],
+   [
+    "load_server_metadata",
+    "other"
+   ],
+   [
+    "load_server_metadata",
+    "cid"
+   ]
+  ]
+ },
+ "logout:provider_without_client_id": {
+  "response": [
+   400,
+   {
+    "error": "invalid_request",
+    "error_description": "No configured provider matches token issuer"
+   }
+  ],
+  "calls": [
+   [
+    "load_server_metadata",
+    "broken"
+   ],
+   [
+    "load_server_metadata",
+    "other"
+   ],
+   [
+    "load_server_metadata",
+    ""
+   ]
+  ]
+ },
+ "logout:kid_missing": {
+  "response": [
+   400,
+   {
+    "error": "invalid_request",
+    "error_description": "Invalid logout_token"
+   }
+  ],
+  "calls": [
+   [
+    "load_server_metadata",
+    "broken"
+   ],
+   [
+    "load_server_metadata",
+    "other"
+   ],
+   [
+    "load_server_metadata",
+    "cid"
+   ]
+  ]
+ },
+ "logout:jwks_empty": {
+  "response": [
+   400,
+   {
+    "error": "invalid_request",
+    "error_description": "Invalid logout_token"
+   }
+  ],
+  "calls": [
+   [
+    "load_server_metadata",
+    "broken"
+   ],
+   [
+    "load_server_metadata",
+    "other"
+   ],
+   [
+    "load_server_metadata",
+    "cid"
+   ],
+   [
+    "fetch_jwk_set",
+    "cid"
+   ]
+  ]
+ },
+ "logout:jwks_fetch_fails": {
+  "response": [
+   400,
+   {
+    "error": "invalid_request",
+    "error_description": "Failed to validate logout_token"
+   }
+  ],
+  "calls": [
+   [
+    "load_server_metadata",
+    "broken"
+   ],
+   [
+    "load_server_metadata",
+    "other"
+   ],
+   [
+    "load_server_metadata",
+    "cid"
+   ],
+   [
+    "fetch_jwk_set",
+    "cid"
+   ]
+  ]
+ },
+ "logout:kid_unknown": {
+  "response": [
+   400,
+   {
+    "error": "invalid_request",
+    "error_description": "Invalid logout_token"
+   }
+  ],
+  "calls": [
+   [
+    "load_server_metadata",
+    "broken"
+   ],
+   [
+    "load_server_metadata",
+    "other"
+   ],
+   [
+    "load_server_metadata",
+    "cid"
+   ],
+   [
+    "fetch_jwk_set",
+    "cid"
+   ]
+  ]
+ },
+ "logout:key_for_encryption_only": {
+  "response": [
+   400,
+   {
+    "error": "invalid_request",
+    "error_description": "Invalid logout_token"
+   }
+  ],
+  "calls": [
+   [
+    "load_server_metadata",
+    "broken"
+   ],
+   [
+    "load_server_metadata",
+    "other"
+   ],
+   [
+    "load_server_metadata",
+    "cid"
+   ],
+   [
+    "fetch_jwk_set",
+    "cid"
+   ]
+  ]
+ },
+ "logout:key_without_use": {
+  "response": [
+   200,
+   {}
+  ],
+  "calls": [
+   [
+    "load_server_metadata",
+    "broken"
+   ],
+   [
+    "load_server_metadata",
+    "other"
+   ],
+   [
+    "load_server_metadata",
+    "cid"
+   ],
+   [
+    "fetch_jwk_set",
+    "cid"
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "sessions_by_user",
+    "u-ada",
+    "<db>"
+   ],
+   [
+    "revoke_user_tokens",
+    "u-ada"
+   ]
+  ]
+ },
+ "logout:signature_wrong_key": {
+  "response": [
+   400,
+   {
+    "error": "invalid_request",
+    "error_description": "Invalid logout_token"
+   }
+  ],
+  "calls": [
+   [
+    "load_server_metadata",
+    "broken"
+   ],
+   [
+    "load_server_metadata",
+    "other"
+   ],
+   [
+    "load_server_metadata",
+    "cid"
+   ],
+   [
+    "fetch_jwk_set",
+    "cid"
+   ]
+  ]
+ },
+ "logout:audience_wrong": {
+  "response": [
+   400,
+   {
+    "error": "invalid_request",
+    "error_description": "Invalid logout_token"
+   }
+  ],
+  "calls": [
+   [
+    "load_server_metadata",
+    "broken"
+   ],
+   [
+    "load_server_metadata",
+    "other"
+   ],
+   [
+    "load_server_metadata",
+    "cid"
+   ],
+   [
+    "fetch_jwk_set",
+    "cid"
+   ]
+  ]
+ },
+ "logout:events_claim_missing": {
+  "response": [
+   400,
+   {
+    "error": "invalid_request",
+    "error_description": "Invalid logout_token"
+   }
+  ],
+  "calls": [
+   [
+    "load_server_metadata",
+    "broken"
+   ],
+   [
+    "load_server_metadata",
+    "other"
+   ],
+   [
+    "load_server_metadata",
+    "cid"
+   ],
+   [
+    "fetch_jwk_set",
+    "cid"
+   ]
+  ]
+ },
+ "logout:logout_event_missing": {
+  "response": [
+   400,
+   {
+    "error": "invalid_request",
+    "error_description": "Missing backchannel-logout event claim"
+   }
+  ],
+  "calls": [
+   [
+    "load_server_metadata",
+    "broken"
+   ],
+   [
+    "load_server_metadata",
+    "other"
+   ],
+   [
+    "load_server_metadata",
+    "cid"
+   ],
+   [
+    "fetch_jwk_set",
+    "cid"
+   ]
+  ]
+ },
+ "logout:nonce_present": {
+  "response": [
+   400,
+   {
+    "error": "invalid_request",
+    "error_description": "logout_token must not contain nonce"
+   }
+  ],
+  "calls": [
+   [
+    "load_server_metadata",
+    "broken"
+   ],
+   [
+    "load_server_metadata",
+    "other"
+   ],
+   [
+    "load_server_metadata",
+    "cid"
+   ],
+   [
+    "fetch_jwk_set",
+    "cid"
+   ]
+  ]
+ },
+ "logout:sub_and_sid_missing": {
+  "response": [
+   400,
+   {
+    "error": "invalid_request",
+    "error_description": "logout_token must contain sub or sid"
+   }
+  ],
+  "calls": [
+   [
+    "load_server_metadata",
+    "broken"
+   ],
+   [
+    "load_server_metadata",
+    "other"
+   ],
+   [
+    "load_server_metadata",
+    "cid"
+   ],
+   [
+    "fetch_jwk_set",
+    "cid"
+   ]
+  ]
+ },
+ "logout:sid_only": {
+  "response": [
+   200,
+   {}
+  ],
+  "calls": [
+   [
+    "load_server_metadata",
+    "broken"
+   ],
+   [
+    "load_server_metadata",
+    "other"
+   ],
+   [
+    "load_server_metadata",
+    "cid"
+   ],
+   [
+    "fetch_jwk_set",
+    "cid"
+   ]
+  ]
+ },
+ "logout:sub_unknown": {
+  "response": [
+   200,
+   {}
+  ],
+  "calls": [
+   [
+    "load_server_metadata",
+    "broken"
+   ],
+   [
+    "load_server_metadata",
+    "other"
+   ],
+   [
+    "load_server_metadata",
+    "cid"
+   ],
+   [
+    "fetch_jwk_set",
+    "cid"
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ]
+  ]
+ },
+ "logout:sub_numeric": {
+  "response": [
+   400,
+   {
+    "error": "invalid_request",
+    "error_description": "Invalid logout_token"
+   }
+  ],
+  "calls": [
+   [
+    "load_server_metadata",
+    "broken"
+   ],
+   [
+    "load_server_metadata",
+    "other"
+   ],
+   [
+    "load_server_metadata",
+    "cid"
+   ],
+   [
+    "fetch_jwk_set",
+    "cid"
+   ]
+  ]
+ },
+ "logout:user_logged_out": {
+  "response": [
+   200,
+   {}
+  ],
+  "calls": [
+   [
+    "load_server_metadata",
+    "broken"
+   ],
+   [
+    "load_server_metadata",
+    "other"
+   ],
+   [
+    "load_server_metadata",
+    "cid"
+   ],
+   [
+    "fetch_jwk_set",
+    "cid"
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "sessions_by_user",
+    "u-ada",
+    "<db>"
+   ],
+   [
+    "delete_session",
+    "s1",
+    "<db>"
+   ],
+   [
+    "delete_session",
+    "s2",
+    "<db>"
+   ],
+   [
+    "revoke_user_tokens",
+    "u-ada"
+   ]
+  ]
+ },
+ "logout:user_logged_out_without_redis": {
+  "response": [
+   200,
+   {}
+  ],
+  "calls": [
+   [
+    "load_server_metadata",
+    "broken"
+   ],
+   [
+    "load_server_metadata",
+    "other"
+   ],
+   [
+    "load_server_metadata",
+    "cid"
+   ],
+   [
+    "fetch_jwk_set",
+    "cid"
+   ],
+   [
+    "user_by_oauth_sub",
+    "oidc",
+    "sub-1",
+    "<db>"
+   ],
+   [
+    "sessions_by_user",
+    "u-ada",
+    "<db>"
+   ],
+   [
+    "delete_session",
+    "s1",
+    "<db>"
+   ]
+  ]
+ }
+}
