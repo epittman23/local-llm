@@ -20,16 +20,16 @@
     "post",
     "https://oai.test/v1/images/generations",
     {
+     "headers": {
+      "Authorization": "Bearer sk-gen",
+      "Content-Type": "application/json"
+     },
      "json": {
       "model": "dall-e-3",
       "prompt": "a cat",
       "n": 2,
       "size": "1024x1024",
       "response_format": "b64_json"
-     },
-     "headers": {
-      "Authorization": "Bearer sk-gen",
-      "Content-Type": "application/json"
      }
     },
     {
@@ -83,16 +83,16 @@
     "post",
     "https://oai.test/v1/images/generations",
     {
+     "headers": {
+      "Authorization": "Bearer sk-gen",
+      "Content-Type": "application/json"
+     },
      "json": {
       "model": "dall-e-3",
       "prompt": "p",
       "n": 1,
       "size": "256x256",
       "response_format": "b64_json"
-     },
-     "headers": {
-      "Authorization": "Bearer sk-gen",
-      "Content-Type": "application/json"
      }
     },
     {
@@ -143,17 +143,17 @@
     "post",
     "https://oai.test/v1/images/generations?api-version=2024-02-01",
     {
+     "headers": {
+      "Authorization": "Bearer sk-gen",
+      "Content-Type": "application/json",
+      "X-User-Id": "u1"
+     },
      "json": {
       "model": "gpt-image-1",
       "prompt": "p",
       "n": 1,
       "size": "1024x1024",
       "quality": "high"
-     },
-     "headers": {
-      "Authorization": "Bearer sk-gen",
-      "Content-Type": "application/json",
-      "X-User-Id": "u1"
      }
     },
     {
@@ -216,15 +216,15 @@
     "post",
     "https://oai.test/v1/images/generations",
     {
+     "headers": {
+      "Authorization": "Bearer sk-gen",
+      "Content-Type": "application/json"
+     },
      "json": {
       "model": "dall-e-3",
       "prompt": "p",
       "n": 1,
       "response_format": "b64_json"
-     },
-     "headers": {
-      "Authorization": "Bearer sk-gen",
-      "Content-Type": "application/json"
      }
     },
     {
@@ -282,16 +282,16 @@
     "post",
     "https://oai.test/v1/images/generations",
     {
+     "headers": {
+      "Authorization": "Bearer sk-gen",
+      "Content-Type": "application/json"
+     },
      "json": {
       "model": "dall-e-3",
       "prompt": "p",
       "n": 1,
       "size": "auto",
       "response_format": "b64_json"
-     },
-     "headers": {
-      "Authorization": "Bearer sk-gen",
-      "Content-Type": "application/json"
      }
     },
     {
@@ -351,16 +351,16 @@
     "post",
     "https://oai.test/v1/images/generations",
     {
+     "headers": {
+      "Authorization": "Bearer sk-gen",
+      "Content-Type": "application/json"
+     },
      "json": {
       "model": "dall-e-2",
       "prompt": "p",
       "n": 1,
       "size": "1024x1024",
       "response_format": "b64_json"
-     },
-     "headers": {
-      "Authorization": "Bearer sk-gen",
-      "Content-Type": "application/json"
      }
     },
     {
@@ -410,16 +410,16 @@
     "post",
     "https://oai.test/v1/images/generations",
     {
+     "headers": {
+      "Authorization": "Bearer sk-gen",
+      "Content-Type": "application/json"
+     },
      "json": {
       "model": "dall-e-3",
       "prompt": "p",
       "n": 1,
       "size": "1024x1024",
       "response_format": "b64_json"
-     },
-     "headers": {
-      "Authorization": "Bearer sk-gen",
-      "Content-Type": "application/json"
      }
     },
     {
@@ -456,16 +456,16 @@
     "post",
     "https://oai.test/v1/images/generations",
     {
+     "headers": {
+      "Authorization": "Bearer sk-gen",
+      "Content-Type": "application/json"
+     },
      "json": {
       "model": "dall-e-3",
       "prompt": "p",
       "n": 1,
       "size": "1024x1024",
       "response_format": "b64_json"
-     },
-     "headers": {
-      "Authorization": "Bearer sk-gen",
-      "Content-Type": "application/json"
      }
     },
     {
@@ -485,16 +485,16 @@
     "post",
     "https://oai.test/v1/images/generations",
     {
+     "headers": {
+      "Authorization": "Bearer sk-gen",
+      "Content-Type": "application/json"
+     },
      "json": {
       "model": "dall-e-3",
       "prompt": "p",
       "n": 1,
       "size": "1024x1024",
       "response_format": "b64_json"
-     },
-     "headers": {
-      "Authorization": "Bearer sk-gen",
-      "Content-Type": "application/json"
      }
     },
     {
@@ -531,6 +531,10 @@
     "post",
     "https://gem.test/v1beta/models/imagen-3.0-generate-002:predict",
     {
+     "headers": {
+      "Content-Type": "application/json",
+      "x-goog-api-key": "g-key"
+     },
      "json": {
       "instances": {
        "prompt": "p"
@@ -541,10 +545,6 @@
         "mimeType": "image/png"
        }
       }
-     },
-     "headers": {
-      "Content-Type": "application/json",
-      "x-goog-api-key": "g-key"
      }
     },
     {
@@ -606,6 +606,10 @@
     "post",
     "https://gem.test/v1beta/models/imagen-4:predict",
     {
+     "headers": {
+      "Content-Type": "application/json",
+      "x-goog-api-key": "g-key"
+     },
      "json": {
       "instances": {
        "prompt": "p"
@@ -616,10 +620,6 @@
         "mimeType": "image/png"
        }
       }
-     },
-     "headers": {
-      "Content-Type": "application/json",
-      "x-goog-api-key": "g-key"
      }
     },
     {
@@ -668,6 +668,10 @@
     "post",
     "https://gem.test/v1beta/models/gemini-img:generateContent",
     {
+     "headers": {
+      "Content-Type": "application/json",
+      "x-goog-api-key": "g-key"
+     },
      "json": {
       "contents": [
        {
@@ -678,10 +682,6 @@
         ]
        }
       ]
-     },
-     "headers": {
-      "Content-Type": "application/json",
-      "x-goog-api-key": "g-key"
      }
     },
     {
@@ -738,11 +738,11 @@
     "post",
     "https://gem.test/v1beta/models/dall-e-3",
     {
-     "json": {},
      "headers": {
       "Content-Type": "application/json",
       "x-goog-api-key": "g-key"
-     }
+     },
+     "json": {}
     },
     {
      "ssl": true
@@ -761,6 +761,10 @@
     "post",
     "https://gem.test/v1beta/models/dall-e-3:predict",
     {
+     "headers": {
+      "Content-Type": "application/json",
+      "x-goog-api-key": "g-key"
+     },
      "json": {
       "instances": {
        "prompt": "p"
@@ -771,10 +775,6 @@
         "mimeType": "image/png"
        }
       }
-     },
-     "headers": {
-      "Content-Type": "application/json",
-      "x-goog-api-key": "g-key"
      }
     },
     {
@@ -1507,12 +1507,6 @@
         null
        ],
        [
-        "response_format",
-        "b64_json",
-        null,
-        null
-       ],
-       [
         "image",
         {
          "bytes": "png-one"
@@ -1534,8 +1528,7 @@
     "image/png",
     {
      "model": "gpt-image-1",
-     "prompt": "p",
-     "response_format": "b64_json"
+     "prompt": "p"
     },
     false,
     "u1"
@@ -1547,8 +1540,7 @@
     "image/png",
     {
      "model": "gpt-image-1",
-     "prompt": "p",
-     "response_format": "b64_json"
+     "prompt": "p"
     },
     false,
     "u1"
@@ -1907,6 +1899,10 @@
     "post",
     "https://gem.test/v1beta/models/gemini-2.5-flash-image:generateContent",
     {
+     "headers": {
+      "Content-Type": "application/json",
+      "x-goog-api-key": "ge-key"
+     },
      "json": {
       "contents": [
        {
@@ -1923,10 +1919,6 @@
         ]
        }
       ]
-     },
-     "headers": {
-      "Content-Type": "application/json",
-      "x-goog-api-key": "ge-key"
      }
     },
     {
@@ -1990,6 +1982,10 @@
     "post",
     "https://gem.test/v1beta/models/gemini-2.5-flash-image:generateContent",
     {
+     "headers": {
+      "Content-Type": "application/json",
+      "x-goog-api-key": "ge-key"
+     },
      "json": {
       "contents": [
        {
@@ -2006,10 +2002,6 @@
         ]
        }
       ]
-     },
-     "headers": {
-      "Content-Type": "application/json",
-      "x-goog-api-key": "ge-key"
      }
     },
     {
@@ -2065,6 +2057,10 @@
     "post",
     "https://gem.test/v1beta/models/gemini-2.5-flash-image:generateContent",
     {
+     "headers": {
+      "Content-Type": "application/json",
+      "x-goog-api-key": "ge-key"
+     },
      "json": {
       "contents": [
        {
@@ -2081,10 +2077,6 @@
         ]
        }
       ]
-     },
-     "headers": {
-      "Content-Type": "application/json",
-      "x-goog-api-key": "ge-key"
      }
     },
     {
@@ -2400,6 +2392,10 @@
     "post",
     "https://gem.test/v1beta/models/gemini-2.5-flash-image:generateContent",
     {
+     "headers": {
+      "Content-Type": "application/json",
+      "x-goog-api-key": "ge-key"
+     },
      "json": {
       "contents": [
        {
@@ -2416,10 +2412,6 @@
         ]
        }
       ]
-     },
-     "headers": {
-      "Content-Type": "application/json",
-      "x-goog-api-key": "ge-key"
      }
     },
     {
@@ -2517,6 +2509,10 @@
     "post",
     "https://gem.test/v1beta/models/g-override:generateContent",
     {
+     "headers": {
+      "Content-Type": "application/json",
+      "x-goog-api-key": "ge-key"
+     },
      "json": {
       "contents": [
        {
@@ -2539,10 +2535,6 @@
         ]
        }
       ]
-     },
-     "headers": {
-      "Content-Type": "application/json",
-      "x-goog-api-key": "ge-key"
      }
     },
     {
@@ -2608,6 +2600,10 @@
     "post",
     "https://gem.test/v1beta/models/gemini-2.5-flash-image:generateContent",
     {
+     "headers": {
+      "Content-Type": "application/json",
+      "x-goog-api-key": "ge-key"
+     },
      "json": {
       "contents": [
        {
@@ -2624,10 +2620,6 @@
         ]
        }
       ]
-     },
-     "headers": {
-      "Content-Type": "application/json",
-      "x-goog-api-key": "ge-key"
      }
     },
     {

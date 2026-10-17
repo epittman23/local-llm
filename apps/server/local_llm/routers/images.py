@@ -970,7 +970,7 @@ async def _edit_openai(request, image_config, form_data, model, size, metadata, 
         **({'n': form_data.n} if form_data.n else {}),
         **({'size': size} if size else {}),
         **({'background': form_data.background} if form_data.background else {}),
-        **_response_format(image_config.IMAGE_EDIT_MODEL),
+        **_response_format(model),
     }
     form = _multipart_form(data, _openai_edit_files(form_data.image))
 
