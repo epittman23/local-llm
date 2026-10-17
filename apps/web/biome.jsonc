@@ -8,8 +8,19 @@
 		// The two .astro files are left out: Biome only partly parses Astro
 		// templates, and both files are short layout shells. src/components/ui
 		// is generated code (`bunx --bun shadcn add`) and is left as the CLI
-		// writes it, so neither tool rewrites the other's output.
-		"includes": ["**", "!**/*.astro", "!src/components/ui"]
+		// writes it, so neither tool rewrites the other's output. sonner.tsx is
+		// the exception: it was rewritten by hand to follow the app's own theme
+		// class instead of next-themes, so it is ours and is linted.
+		// components.json (`shadcn init`) and .vscode/launch.json (Astro's
+		// scaffold) are generated config, unedited since.
+		"includes": [
+			"**",
+			"!**/*.astro",
+			"!src/components/ui/**",
+			"src/components/ui/sonner.tsx",
+			"!components.json",
+			"!.vscode/launch.json"
+		]
 	},
 	"formatter": {
 		"indentStyle": "tab",
@@ -37,10 +48,10 @@
 	},
 	"overrides": [
 		{
-			// Files that bun, shadcn and VS Code rewrite themselves, in their own
+			// Files that bun and VS Code rewrite themselves, in their own
 			// two-space style; matching it keeps those tools and Biome from
 			// fighting over every edit.
-			"includes": ["package.json", "tsconfig.json", "components.json", ".vscode/**"],
+			"includes": ["package.json", "tsconfig.json", ".vscode/**"],
 			"formatter": { "indentStyle": "space", "indentWidth": 2 }
 		}
 	]

@@ -114,7 +114,10 @@ Generated code is not linted or formatted:
   directory anyway, because it reads `force-exclude` from the root, which
   has no ruff config.
 - `apps/web/src/components/ui/`: shadcn/ui components as
-  `bunx --bun shadcn add` writes them. Excluded in `apps/web/biome.jsonc`.
+  `bunx --bun shadcn add` writes them. `sonner.tsx` is the exception, since it
+  was rewritten by hand. The same goes for `components.json` (`shadcn init`)
+  and `.vscode/launch.json` (Astro's scaffold). All of these are excluded in
+  `apps/web/biome.jsonc`.
 - `apps/server/uv.lock`: skipped by `check-toml`; CI's `uv lock --check`
   validates it.
 

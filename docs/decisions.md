@@ -13,15 +13,24 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
   - Alembic revisions under `migrations/versions/` are excluded from ruff,
     both check and format, with `force-exclude`. This replaces the same
     day's ruff-check-only ignore.
-  - shadcn/ui's `src/components/ui/` is excluded from Biome. None of its 21
-    files was edited after `shadcn add` wrote it, apart from Biome's 2026-10-09
-    bulk format.
+  - shadcn/ui's `src/components/ui/` is excluded from Biome, except
+    `sonner.tsx`. All 21 were regenerated with the pinned CLI (4.21.4) and
+    diffed against the repo with both copies put through the same Biome
+    pass. Twenty differ only in a `'use client'` line, which the CLI
+    settles itself and which has drifted both ways between registry
+    versions. `sonner.tsx` was rewritten by hand to follow the app's own
+    theme class instead of `next-themes`, so it is ours and stays linted.
+  - `components.json` (`shadcn init`) and `.vscode/launch.json` (Astro's
+    scaffold) are excluded from Biome, since neither was edited after it was
+    generated. `package.json`, `tsconfig.json` and `.vscode/extensions.json`
+    were edited by hand and stay linted.
   - `uv.lock` is excluded from `check-toml`, since `uv lock --check`
     validates it.
   - Checked and left as they are: `migrations/env.py` (hand-customized),
     `src/env.d.ts` (hand-written declarations), the i18n `translation.json`
-    (no extractor configured), and `bun.lock`, the swagger-ui bundle and the
-    serving-baseline JSON, which no linter covers.
+    (no extractor configured), and `bun.lock` (Biome processes none of it),
+    the swagger-ui bundle and the serving-baseline JSON, which no linter
+    covers.
   - Security hooks still scan everything.
 - **2026-10-17**: ruff-check now gates the whole backend
   (`^apps/server/(local_llm|tests)/`), not just `benchmarks/` and `tests/`.
