@@ -3691,7 +3691,7 @@ async def _generate_chat_title(
         title = messages[0].get('content', user_message)
 
         await Chats.update_chat_title_by_id(metadata['chat_id'], title)
-        await event_emitter({'type': 'chat:title', 'data': message.get('content', user_message)})
+        await event_emitter({'type': 'chat:title', 'data': title})
 
 
 async def _generate_chat_tags(request, user, metadata: dict, event_emitter, model_id: str, messages: list[dict]):

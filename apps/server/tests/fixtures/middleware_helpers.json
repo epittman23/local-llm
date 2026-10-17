@@ -2693,7 +2693,7 @@
     "emit",
     {
      "type": "chat:title",
-     "data": "A monoid in the category."
+     "data": "What is  a monad?"
     }
    ],
    [
@@ -2753,7 +2753,7 @@
     "emit",
     {
      "type": "chat:title",
-     "data": "A monoid in the category."
+     "data": "What is  a monad?"
     }
    ],
    [
