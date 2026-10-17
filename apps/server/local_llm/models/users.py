@@ -272,6 +272,88 @@ class UserUpdateForm(BaseModel):
         return validate_profile_image_url(v)
 
 
+# Fields a user listing can be sorted by directly; 'group_id:<id>' sorts by membership instead.
+_USER_SORT_FIELDS = ('name', 'email', 'created_at', 'last_active_at', 'updated_at', 'role')
+
+
+def _filter_users(stmt, filter: dict):
+    """Apply get_users' filters; None when they can match no one (user_ids and group_ids both empty lists)."""
+    # Deferred imports to avoid circular dependencies
+    from local_llm.models.channels import ChannelMember
+    from local_llm.models.groups import GroupMember
+
+    query_key = filter.get('query')
+    if query_key:
+        stmt = stmt.filter(or_(User.name.ilike(f'%{query_key}%'), User.email.ilike(f'%{query_key}%')))
+
+    channel_id = filter.get('channel_id')
+    if channel_id:
+        stmt = stmt.filter(
+            exists(
+                select(ChannelMember.id).where(
+                    ChannelMember.user_id == User.id,
+                    ChannelMember.channel_id == channel_id,
+                )
+            )
+        )
+
+    user_ids = filter.get('user_ids')
+    group_ids = filter.get('group_ids')
+    if isinstance(user_ids, list) and isinstance(group_ids, list) and not user_ids and not group_ids:
+        return None
+    if user_ids:
+        stmt = stmt.filter(User.id.in_(user_ids))
+    if group_ids:
+        stmt = stmt.filter(
+            exists(
+                select(GroupMember.id).where(
+                    GroupMember.user_id == User.id,
+                    GroupMember.group_id.in_(group_ids),
+                )
+            )
+        )
+    return _filter_user_roles(stmt, filter.get('roles'))
+
+
+def _filter_user_roles(stmt, roles):
+    """Roles to include, and roles prefixed with '!' to exclude."""
+    if not roles:
+        return stmt
+    include_roles = [role for role in roles if not role.startswith('!')]
+    exclude_roles = [role[1:] for role in roles if role.startswith('!')]
+    if include_roles:
+        stmt = stmt.filter(User.role.in_(include_roles))
+    if exclude_roles:
+        stmt = stmt.filter(~User.role.in_(exclude_roles))
+    return stmt
+
+
+def _order_users(stmt, sort: dict | None, filter: dict | None):
+    """Sort by a field or by membership in a group (members first unless ascending), descending unless 'asc'.
+
+    With no recognised sort, an unfiltered listing is newest first and a filtered one is left unordered.
+    """
+    from local_llm.models.groups import GroupMember
+
+    order_by = sort.get('order_by') if sort else None
+    direction = sort.get('direction') if sort else None
+
+    if order_by and order_by.startswith('group_id:'):
+        group_id = order_by.split(':', 1)[1]
+        membership_exists = exists(
+            select(GroupMember.id).where(GroupMember.user_id == User.id, GroupMember.group_id == group_id)
+        )
+        # CASE: user in group → 1, user not in group → 0
+        group_sort = case((membership_exists, 1), else_=0)
+        return stmt.order_by(group_sort.asc() if direction == 'asc' else group_sort.desc(), User.name.asc())
+    if order_by in _USER_SORT_FIELDS:
+        column = getattr(User, order_by)
+        return stmt.order_by(column.asc() if direction == 'asc' else column.desc())
+    if not filter:
+        return stmt.order_by(User.created_at.desc())
+    return stmt
+
+
 class UsersTable:
     async def insert_new_user(
         self,
@@ -449,129 +531,17 @@ class UsersTable:
     ) -> dict:
         """Paginated user listing with optional filters and sort."""
         async with get_async_db_context(db) as session:
-            # Deferred imports to avoid circular dependencies
-            from local_llm.models.channels import ChannelMember
-            from local_llm.models.groups import GroupMember
-
-            # Join GroupMember so we can order by group_id when requested
             stmt = select(User)
-
             if filter:
-                query_key = filter.get('query')
-                if query_key:
-                    stmt = stmt.filter(
-                        or_(
-                            User.name.ilike(f'%{query_key}%'),
-                            User.email.ilike(f'%{query_key}%'),
-                        )
-                    )
-
-                channel_id = filter.get('channel_id')
-                if channel_id:
-                    stmt = stmt.filter(
-                        exists(
-                            select(ChannelMember.id).where(
-                                ChannelMember.user_id == User.id,
-                                ChannelMember.channel_id == channel_id,
-                            )
-                        )
-                    )
-
-                user_ids = filter.get('user_ids')
-                group_ids = filter.get('group_ids')
-
-                if isinstance(user_ids, list) and isinstance(group_ids, list):
-                    # If both are empty lists, return no users
-                    if not user_ids and not group_ids:
-                        return {'users': [], 'total': 0}
-
-                if user_ids:
-                    stmt = stmt.filter(User.id.in_(user_ids))
-
-                if group_ids:
-                    stmt = stmt.filter(
-                        exists(
-                            select(GroupMember.id).where(
-                                GroupMember.user_id == User.id,
-                                GroupMember.group_id.in_(group_ids),
-                            )
-                        )
-                    )
-
-                roles = filter.get('roles')
-                if roles:
-                    include_roles = [role for role in roles if not role.startswith('!')]
-                    exclude_roles = [role[1:] for role in roles if role.startswith('!')]
-
-                    if include_roles:
-                        stmt = stmt.filter(User.role.in_(include_roles))
-                    if exclude_roles:
-                        stmt = stmt.filter(~User.role.in_(exclude_roles))
-
-            order_by = sort.get('order_by') if sort else None
-            direction = sort.get('direction') if sort else None
-
-            if order_by and order_by.startswith('group_id:'):
-                group_id = order_by.split(':', 1)[1]
-
-                # Subquery that checks if the user belongs to the group
-                membership_exists = exists(
-                    select(GroupMember.id).where(
-                        GroupMember.user_id == User.id,
-                        GroupMember.group_id == group_id,
-                    )
-                )
-
-                # CASE: user in group → 1, user not in group → 0
-                group_sort = case((membership_exists, 1), else_=0)
-
-                if direction == 'asc':
-                    stmt = stmt.order_by(group_sort.asc(), User.name.asc())
-                else:
-                    stmt = stmt.order_by(group_sort.desc(), User.name.asc())
-
-            elif order_by == 'name':
-                if direction == 'asc':
-                    stmt = stmt.order_by(User.name.asc())
-                else:
-                    stmt = stmt.order_by(User.name.desc())
-
-            elif order_by == 'email':
-                if direction == 'asc':
-                    stmt = stmt.order_by(User.email.asc())
-                else:
-                    stmt = stmt.order_by(User.email.desc())
-
-            elif order_by == 'created_at':
-                if direction == 'asc':
-                    stmt = stmt.order_by(User.created_at.asc())
-                else:
-                    stmt = stmt.order_by(User.created_at.desc())
-
-            elif order_by == 'last_active_at':
-                if direction == 'asc':
-                    stmt = stmt.order_by(User.last_active_at.asc())
-                else:
-                    stmt = stmt.order_by(User.last_active_at.desc())
-
-            elif order_by == 'updated_at':
-                if direction == 'asc':
-                    stmt = stmt.order_by(User.updated_at.asc())
-                else:
-                    stmt = stmt.order_by(User.updated_at.desc())
-            elif order_by == 'role':
-                if direction == 'asc':
-                    stmt = stmt.order_by(User.role.asc())
-                else:
-                    stmt = stmt.order_by(User.role.desc())
-            elif not filter:
-                stmt = stmt.order_by(User.created_at.desc())
+                stmt = _filter_users(stmt, filter)
+                if stmt is None:
+                    return {'users': [], 'total': 0}
+            stmt = _order_users(stmt, sort, filter)
 
             # Count BEFORE pagination
             count_result = await session.execute(select(func.count()).select_from(stmt.subquery()))
             total = count_result.scalar()
 
-            # correct pagination logic
             if skip is not None:
                 stmt = stmt.offset(skip)
             if limit is not None:
