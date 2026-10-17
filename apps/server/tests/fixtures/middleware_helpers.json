@@ -1,0 +1,3369 @@
+{
+ "stream:item_added_appended": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   },
+   {
+    "type": "function_call",
+    "id": "fc1",
+    "call_id": "call1",
+    "arguments": "{\"a\""
+   }
+  ],
+  "meta": null,
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:item_added_at_index": {
+  "new_output": [
+   {
+    "type": "web_search_call",
+    "id": "ws1"
+   },
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:item_added_replaces_same_id": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ],
+    "status": "x"
+   },
+   {
+    "type": "function_call",
+    "id": "fc1",
+    "call_id": "call1",
+    "arguments": "{\"a\""
+   }
+  ],
+  "meta": null,
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   },
+   {
+    "type": "function_call",
+    "id": "fc1",
+    "call_id": "call1",
+    "arguments": "{\"a\""
+   }
+  ]
+ },
+ "stream:item_added_replaces_same_call_id": {
+  "new_output": [
+   {
+    "type": "function_call",
+    "call_id": "call1"
+   }
+  ],
+  "meta": null,
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "function_call",
+    "id": "fc1",
+    "call_id": "call1",
+    "arguments": "{\"a\""
+   }
+  ]
+ },
+ "stream:item_added_empty": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": true,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:part_added_to_message": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     },
+     {
+      "type": "output_text"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:part_added_creates_content": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg2",
+    "content": [
+     {
+      "type": "output_text"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg2"
+   }
+  ]
+ },
+ "stream:part_added_to_reasoning_ignored": {
+  "new_output": [
+   {
+    "type": "reasoning",
+    "id": "rs1",
+    "summary": [
+     {
+      "type": "summary_text",
+      "text": "Thin"
+     }
+    ],
+    "content": []
+   }
+  ],
+  "meta": null,
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "reasoning",
+    "id": "rs1",
+    "summary": [
+     {
+      "type": "summary_text",
+      "text": "Thin"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:part_added_out_of_range": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": true,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:part_added_no_output": {
+  "new_output": [],
+  "meta": null,
+  "same_list_returned": true,
+  "given_after": []
+ },
+ "stream:summary_part_added": {
+  "new_output": [
+   {
+    "type": "reasoning",
+    "id": "rs1",
+    "summary": [
+     {
+      "type": "summary_text",
+      "text": "Thin"
+     },
+     {
+      "type": "summary_text"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "reasoning",
+    "id": "rs1",
+    "summary": [
+     {
+      "type": "summary_text",
+      "text": "Thin"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:summary_part_creates_summary": {
+  "new_output": [
+   {
+    "type": "reasoning",
+    "id": "rs2",
+    "summary": [
+     {
+      "t": 1
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "reasoning",
+    "id": "rs2"
+   }
+  ]
+ },
+ "stream:summary_part_out_of_range": {
+  "new_output": [],
+  "meta": null,
+  "same_list_returned": true,
+  "given_after": []
+ },
+ "stream:args_delta": {
+  "new_output": [
+   {
+    "type": "function_call",
+    "id": "fc1",
+    "call_id": "call1",
+    "arguments": "{\"a\": 1}"
+   }
+  ],
+  "meta": null,
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "function_call",
+    "id": "fc1",
+    "call_id": "call1",
+    "arguments": "{\"a\""
+   }
+  ]
+ },
+ "stream:args_delta_not_a_call": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:text_delta_message": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hello"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:text_delta_new_part": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg2",
+    "content": [
+     {
+      "type": "text",
+      "text": ""
+     },
+     {
+      "type": "text",
+      "text": ""
+     },
+     {
+      "type": "text",
+      "text": "Hi"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg2"
+   }
+  ]
+ },
+ "stream:dict_delta_message": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg2",
+    "content": [
+     {
+      "type": "text",
+      "text": "",
+      "audio": {
+       "data": "AA"
+      }
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg2"
+   }
+  ]
+ },
+ "stream:dict_delta_merges": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg2",
+    "content": [
+     {
+      "audio": {
+       "data": "AABB"
+      }
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg2",
+    "content": [
+     {
+      "audio": {
+       "data": "AA"
+      }
+     }
+    ]
+   }
+  ]
+ },
+ "stream:reasoning_delta_on_message_skipped": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:summary_delta": {
+  "new_output": [
+   {
+    "type": "reasoning",
+    "id": "rs1",
+    "summary": [
+     {
+      "type": "summary_text",
+      "text": "Thinking"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "reasoning",
+    "id": "rs1",
+    "summary": [
+     {
+      "type": "summary_text",
+      "text": "Thin"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:summary_delta_new_index": {
+  "new_output": [
+   {
+    "type": "reasoning",
+    "id": "rs2",
+    "summary": [
+     {
+      "type": "summary_text",
+      "text": ""
+     },
+     {
+      "type": "summary_text",
+      "text": "x"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "reasoning",
+    "id": "rs2"
+   }
+  ]
+ },
+ "stream:reasoning_text_delta": {
+  "new_output": [
+   {
+    "type": "reasoning",
+    "id": "rs2",
+    "content": [
+     {
+      "type": "text",
+      "text": "step"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "reasoning",
+    "id": "rs2"
+   }
+  ]
+ },
+ "stream:reasoning_text_delta_appends": {
+  "new_output": [
+   {
+    "type": "reasoning",
+    "id": "rs2",
+    "content": [
+     {
+      "type": "text",
+      "text": "one two"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "reasoning",
+    "id": "rs2",
+    "content": [
+     {
+      "type": "text",
+      "text": "one"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:text_delta_on_reasoning_skipped": {
+  "new_output": [
+   {
+    "type": "reasoning",
+    "id": "rs1",
+    "summary": [
+     {
+      "type": "summary_text",
+      "text": "Thin"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "reasoning",
+    "id": "rs1",
+    "summary": [
+     {
+      "type": "summary_text",
+      "text": "Thin"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:unknown_delta_on_reasoning": {
+  "new_output": [
+   {
+    "type": "reasoning",
+    "id": "rs1",
+    "summary": [
+     {
+      "type": "summary_text",
+      "text": "Thin"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "reasoning",
+    "id": "rs1",
+    "summary": [
+     {
+      "type": "summary_text",
+      "text": "Thin"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:text_delta_other_item": {
+  "new_output": [
+   {
+    "type": "web_search_call",
+    "id": "ws1",
+    "text": "q"
+   }
+  ],
+  "meta": null,
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "web_search_call",
+    "id": "ws1"
+   }
+  ]
+ },
+ "stream:custom_delta_other_item": {
+  "new_output": [
+   {
+    "type": "web_search_call",
+    "id": "ws1",
+    "status": {
+     "s": 1
+    }
+   }
+  ],
+  "meta": null,
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "web_search_call",
+    "id": "ws1"
+   }
+  ]
+ },
+ "stream:text_delta_other_item_appends": {
+  "new_output": [
+   {
+    "type": "web_search_call",
+    "id": "ws1",
+    "text": "ab"
+   }
+  ],
+  "meta": null,
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "web_search_call",
+    "id": "ws1",
+    "text": "a"
+   }
+  ]
+ },
+ "stream:delta_out_of_range": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": true,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:delta_short_type": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": true,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:item_done_replaces": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ],
+    "status": "completed"
+   }
+  ],
+  "meta": {},
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:item_done_appends": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   },
+   {
+    "type": "function_call",
+    "id": "fc1",
+    "call_id": "call1",
+    "arguments": "{\"a\""
+   }
+  ],
+  "meta": {},
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:item_done_without_item": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ],
+  "meta": {},
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:content_part_done": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hello"
+     }
+    ]
+   }
+  ],
+  "meta": {},
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:content_part_done_no_content": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg2"
+   }
+  ],
+  "meta": null,
+  "same_list_returned": true,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg2"
+   }
+  ]
+ },
+ "stream:content_part_done_bad_index": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": true,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:content_part_done_no_part": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": true,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:summary_part_done": {
+  "new_output": [
+   {
+    "type": "reasoning",
+    "id": "rs1",
+    "summary": [
+     {
+      "text": "Done"
+     }
+    ]
+   }
+  ],
+  "meta": {},
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "reasoning",
+    "id": "rs1",
+    "summary": [
+     {
+      "type": "summary_text",
+      "text": "Thin"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:summary_part_done_no_summary": {
+  "new_output": [
+   {
+    "type": "reasoning",
+    "id": "rs2"
+   }
+  ],
+  "meta": null,
+  "same_list_returned": true,
+  "given_after": [
+   {
+    "type": "reasoning",
+    "id": "rs2"
+   }
+  ]
+ },
+ "stream:summary_part_done_bad_index": {
+  "new_output": [
+   {
+    "type": "reasoning",
+    "id": "rs1",
+    "summary": [
+     {
+      "type": "summary_text",
+      "text": "Thin"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": true,
+  "given_after": [
+   {
+    "type": "reasoning",
+    "id": "rs1",
+    "summary": [
+     {
+      "type": "summary_text",
+      "text": "Thin"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:summary_part_done_no_part": {
+  "new_output": [
+   {
+    "type": "reasoning",
+    "id": "rs1",
+    "summary": [
+     {
+      "type": "summary_text",
+      "text": "Thin"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": true,
+  "given_after": [
+   {
+    "type": "reasoning",
+    "id": "rs1",
+    "summary": [
+     {
+      "type": "summary_text",
+      "text": "Thin"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:text_done_message": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hello!"
+     }
+    ]
+   }
+  ],
+  "meta": {},
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:text_done_message_bad_index": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ],
+  "meta": {},
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:text_done_message_no_content": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg2"
+   }
+  ],
+  "meta": {},
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg2"
+   }
+  ]
+ },
+ "stream:args_done": {
+  "new_output": [
+   {
+    "type": "function_call",
+    "id": "fc1",
+    "call_id": "call1",
+    "arguments": "{\"a\": 1}"
+   }
+  ],
+  "meta": {},
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "function_call",
+    "id": "fc1",
+    "call_id": "call1",
+    "arguments": "{\"a\""
+   }
+  ]
+ },
+ "stream:args_done_not_a_call": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ],
+  "meta": {},
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:reasoning_text_done": {
+  "new_output": [
+   {
+    "type": "reasoning",
+    "id": "rs1",
+    "summary": [
+     {
+      "type": "summary_text",
+      "text": "Thin"
+     }
+    ],
+    "status": "completed"
+   }
+  ],
+  "meta": {},
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "reasoning",
+    "id": "rs1",
+    "summary": [
+     {
+      "type": "summary_text",
+      "text": "Thin"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:custom_done_other_item": {
+  "new_output": [
+   {
+    "type": "web_search_call",
+    "id": "ws1",
+    "status": "ok"
+   }
+  ],
+  "meta": {},
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "web_search_call",
+    "id": "ws1"
+   }
+  ]
+ },
+ "stream:done_without_value": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": true,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:done_out_of_range": {
+  "new_output": [],
+  "meta": null,
+  "same_list_returned": true,
+  "given_after": []
+ },
+ "stream:done_completed_type_ignored": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": true,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:done_short_type": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": true,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:completed_with_output": {
+  "new_output": [
+   {
+    "type": "reasoning",
+    "id": "rs2",
+    "status": "completed"
+   },
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ],
+  "meta": {
+   "usage": {
+    "t": 3
+   },
+   "done": true,
+   "response_id": "resp1"
+  },
+  "same_list_returned": false,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:completed_empty_output_keeps_current": {
+  "new_output": [
+   {
+    "type": "reasoning",
+    "id": "rs1",
+    "summary": [
+     {
+      "type": "summary_text",
+      "text": "Thin"
+     }
+    ],
+    "status": "completed"
+   },
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ],
+  "meta": {
+   "usage": null,
+   "done": true,
+   "response_id": null
+  },
+  "same_list_returned": true,
+  "given_after": [
+   {
+    "type": "reasoning",
+    "id": "rs1",
+    "summary": [
+     {
+      "type": "summary_text",
+      "text": "Thin"
+     }
+    ],
+    "status": "completed"
+   },
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:completed_without_response": {
+  "new_output": [],
+  "meta": {
+   "usage": null,
+   "done": true,
+   "response_id": null
+  },
+  "same_list_returned": true,
+  "given_after": []
+ },
+ "stream:in_progress": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": true,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:failed": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ],
+  "meta": {
+   "error": {
+    "code": "server_error"
+   }
+  },
+  "same_list_returned": true,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:failed_without_error": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ],
+  "meta": {
+   "error": {}
+  },
+  "same_list_returned": true,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:unknown_event": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": true,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "stream:no_type": {
+  "new_output": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ],
+  "meta": null,
+  "same_list_returned": true,
+  "given_after": [
+   {
+    "type": "message",
+    "id": "msg1",
+    "content": [
+     {
+      "type": "output_text",
+      "text": "Hel"
+     }
+    ]
+   }
+  ]
+ },
+ "tool:html_inline_ok": {
+  "result": "{\n  \"status\": \"success\",\n  \"code\": \"ui_component\",\n  \"message\": \"my_tool: Embedded UI result is active and visible to the user.\"\n}",
+  "files": [],
+  "embeds": [
+   "<b>ui</b>"
+  ],
+  "given_after": null,
+  "calls": []
+ },
+ "tool:html_inline_with_context": {
+  "result": "{\n  \"rows\": 3\n}",
+  "files": [],
+  "embeds": [
+   "<b>ui</b>"
+  ],
+  "given_after": null,
+  "calls": []
+ },
+ "tool:html_inline_bad_context": {
+  "result": "{\n  \"status\": \"success\",\n  \"code\": \"ui_component\",\n  \"message\": \"my_tool: Embedded UI result is active and visible to the user.\"\n}",
+  "files": [],
+  "embeds": [
+   "<b>ui</b>"
+  ],
+  "given_after": null,
+  "calls": []
+ },
+ "tool:html_inline_client_error": {
+  "result": "{\n  \"status\": \"error\",\n  \"code\": \"ui_component\",\n  \"message\": \"my_tool: Client error 404 from embedded UI result.\"\n}",
+  "files": [],
+  "embeds": [
+   "<b>ui</b>"
+  ],
+  "given_after": null,
+  "calls": []
+ },
+ "tool:html_inline_server_error": {
+  "result": "{\n  \"status\": \"error\",\n  \"code\": \"ui_component\",\n  \"message\": \"my_tool: Server error 503 from embedded UI result.\"\n}",
+  "files": [],
+  "embeds": [
+   "<b>ui</b>"
+  ],
+  "given_after": null,
+  "calls": []
+ },
+ "tool:html_inline_other_status": {
+  "result": "{\n  \"status\": \"error\",\n  \"code\": \"ui_component\",\n  \"message\": \"my_tool: Unexpected status code 302 from embedded UI result.\"\n}",
+  "files": [],
+  "embeds": [
+   "<b>ui</b>"
+  ],
+  "given_after": null,
+  "calls": []
+ },
+ "tool:html_attachment": {
+  "result": "plain body",
+  "files": [],
+  "embeds": [],
+  "given_after": null,
+  "calls": []
+ },
+ "tool:external_html_inline": {
+  "result": "{\n  \"status\": \"success\",\n  \"code\": \"ui_component\",\n  \"message\": \"my_tool: Embedded UI result is active and visible to the user.\"\n}",
+  "files": [],
+  "embeds": [
+   "<i>x</i>"
+  ],
+  "given_after": null,
+  "calls": []
+ },
+ "tool:external_html_with_context": {
+  "result": "context text",
+  "files": [],
+  "embeds": [
+   "<i>x</i>"
+  ],
+  "given_after": null,
+  "calls": []
+ },
+ "tool:external_location": {
+  "result": "{\n  \"status\": \"success\",\n  \"code\": \"ui_component\",\n  \"message\": \"my_tool: Embedded UI result is active and visible to the user.\"\n}",
+  "files": [],
+  "embeds": [
+   "https://ui.test/x"
+  ],
+  "given_after": null,
+  "calls": []
+ },
+ "tool:external_location_with_context": {
+  "result": "{\n  \"results\": [\n    \"ctx\"\n  ]\n}",
+  "files": [],
+  "embeds": [
+   "https://ui.test/y"
+  ],
+  "given_after": null,
+  "calls": []
+ },
+ "tool:external_inline_neither": {
+  "result": "{\n  \"a\": 1\n}",
+  "files": [],
+  "embeds": [],
+  "given_after": null,
+  "calls": []
+ },
+ "tool:external_attachment": {
+  "result": "{\n  \"a\": 1\n}",
+  "files": [],
+  "embeds": [],
+  "given_after": null,
+  "calls": []
+ },
+ "tool:external_headers_pairs": {
+  "result": "{\n  \"status\": \"success\",\n  \"code\": \"ui_component\",\n  \"message\": \"my_tool: Embedded UI result is active and visible to the user.\"\n}",
+  "files": [],
+  "embeds": [
+   "https://l"
+  ],
+  "given_after": null,
+  "calls": []
+ },
+ "tool:external_headers_unusable": {
+  "result": "text",
+  "files": [],
+  "embeds": [],
+  "given_after": null,
+  "calls": []
+ },
+ "tool:external_headers_none": {
+  "result": "text",
+  "files": [],
+  "embeds": [],
+  "given_after": null,
+  "calls": []
+ },
+ "tool:direct_tool_pair": {
+  "result": "{\n  \"status\": \"success\",\n  \"code\": \"ui_component\",\n  \"message\": \"my_tool: Embedded UI result is active and visible to the user.\"\n}",
+  "files": [],
+  "embeds": [
+   {
+    "a": 1
+   }
+  ],
+  "given_after": [
+   {
+    "a": 1
+   },
+   {
+    "Content-Disposition": "inline",
+    "Content-Type": "text/html"
+   }
+  ],
+  "calls": []
+ },
+ "tool:image_data_uri": {
+  "result": "my_tool: Image file read successfully.",
+  "files": [
+   {
+    "type": "image",
+    "url": "data:image/png;base64,AAAA"
+   }
+  ],
+  "embeds": [],
+  "given_after": null,
+  "calls": []
+ },
+ "tool:mcp_items": {
+  "result": "{\n  \"results\": [\n    {\n      \"x\": 1\n    },\n    \"not json\",\n    5,\n    {\n      \"r\": 2\n    },\n    \"plain resource\",\n    \"[Resource: file:///a.bin] (binary data, mimeType: application/octet-stream)\",\n    \"file:///b.txt\"\n  ]\n}",
+  "files": [
+   {
+    "type": "image",
+    "url": "/files/1"
+   },
+   {
+    "type": "audio",
+    "url": "/files/2"
+   },
+   {
+    "type": "image",
+    "url": "data:image/jpeg;base64,SU1H"
+   }
+  ],
+  "embeds": [],
+  "given_after": [
+   {
+    "type": "text",
+    "text": "{\"x\": 1}"
+   },
+   {
+    "type": "text",
+    "text": "not json"
+   },
+   {
+    "type": "text",
+    "text": 5
+   },
+   {
+    "type": "image",
+    "mimeType": "image/png",
+    "data": "QUJD"
+   },
+   {
+    "type": "audio",
+    "mimeType": "audio/wav",
+    "blob": "V0FW"
+   },
+   {
+    "type": "resource",
+    "resource": {
+     "text": "{\"r\": 2}"
+    }
+   },
+   {
+    "type": "resource",
+    "resource": {
+     "text": "plain resource"
+    }
+   },
+   {
+    "type": "resource",
+    "resource": {
+     "blob": "SU1H",
+     "mimeType": "image/jpeg"
+    }
+   },
+   {
+    "type": "resource",
+    "resource": {
+     "blob": "QklO",
+     "uri": "file:///a.bin"
+    }
+   },
+   {
+    "type": "resource",
+    "resource": {
+     "uri": "file:///b.txt"
+    }
+   },
+   {
+    "type": "resource",
+    "resource": {}
+   },
+   {
+    "type": "unknown"
+   },
+   "not a dict"
+  ],
+  "calls": [
+   [
+    "upload_base64",
+    "data:image/png;base64,QUJD",
+    {
+     "chat_id": "c1",
+     "message_id": "m1",
+     "session_id": "s1",
+     "result": {
+      "type": "image",
+      "mimeType": "image/png",
+      "data": "QUJD"
+     }
+    },
+    "<user>"
+   ],
+   [
+    "upload_base64",
+    "data:audio/wav;base64,V0FW",
+    {
+     "chat_id": "c1",
+     "message_id": "m1",
+     "session_id": "s1",
+     "result": {
+      "type": "audio",
+      "mimeType": "audio/wav",
+      "blob": "V0FW"
+     }
+    },
+    "<user>"
+   ]
+  ]
+ },
+ "tool:mcp_single_text": {
+  "result": "only",
+  "files": [],
+  "embeds": [],
+  "given_after": [
+   {
+    "type": "text",
+    "text": "only"
+   }
+  ],
+  "calls": []
+ },
+ "tool:openapi_list_with_data": {
+  "result": "{\n  \"results\": [\n    \"keep\",\n    \"also\"\n  ]\n}",
+  "files": [
+   {
+    "type": "data",
+    "content": "data:text/plain;base64,QQ=="
+   },
+   {
+    "type": "data",
+    "content": "data:image/png;base64,Qg=="
+   }
+  ],
+  "embeds": [],
+  "given_after": [
+   "keep",
+   "also"
+  ],
+  "calls": []
+ },
+ "tool:openapi_list_consecutive_data": {
+  "result": "{\n  \"results\": [\n    \"data:b\",\n    \"keep\"\n  ]\n}",
+  "files": [
+   {
+    "type": "data",
+    "content": "data:a"
+   }
+  ],
+  "embeds": [],
+  "given_after": [
+   "data:b",
+   "keep"
+  ],
+  "calls": []
+ },
+ "tool:dict_result": {
+  "result": "{\n  \"answer\": \"é\"\n}",
+  "files": [],
+  "embeds": [],
+  "given_after": null,
+  "calls": []
+ },
+ "tool:tuple_result": {
+  "result": "{\n  \"data\": 1\n}",
+  "files": [],
+  "embeds": [],
+  "given_after": null,
+  "calls": []
+ },
+ "tool:empty_tuple_result": {
+  "result": "",
+  "files": [],
+  "embeds": [],
+  "given_after": null,
+  "calls": []
+ },
+ "tool:number_result": {
+  "result": "42",
+  "files": [],
+  "embeds": [],
+  "given_after": null,
+  "calls": []
+ },
+ "tool:none_result": {
+  "result": null,
+  "files": [],
+  "embeds": [],
+  "given_after": null,
+  "calls": []
+ },
+ "tool:string_result": {
+  "result": "plain",
+  "files": [],
+  "embeds": [],
+  "given_after": null,
+  "calls": []
+ },
+ "background:saved_chat_deleted": {
+  "returned": null,
+  "form_messages_after": [],
+  "calls": [
+   [
+    "messages_map",
+    "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+   ]
+  ]
+ },
+ "background:saved_chat_all_tasks": {
+  "returned": null,
+  "form_messages_after": [],
+  "calls": [
+   [
+    "messages_map",
+    "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+   ],
+   [
+    "follow_ups",
+    {
+     "model": "m1",
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ],
+     "message_id": "a1",
+     "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+    },
+    "<user>"
+   ],
+   [
+    "emit",
+    {
+     "type": "chat:message:follow_ups",
+     "data": {
+      "follow_ups": [
+       "Why?",
+       "How?"
+      ]
+     }
+    }
+   ],
+   [
+    "chats.upsert_message_to_chat_by_id_and_message_id",
+    [
+     "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+     "a1",
+     {
+      "followUps": [
+       "Why?",
+       "How?"
+      ]
+     }
+    ],
+    {
+     "touch": false
+    }
+   ],
+   [
+    "title",
+    {
+     "model": "m1",
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ],
+     "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+    },
+    "<user>"
+   ],
+   [
+    "chats.update_chat_title_by_id",
+    [
+     "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+     "Monads"
+    ],
+    {}
+   ],
+   [
+    "emit",
+    {
+     "type": "chat:title",
+     "data": "Monads"
+    }
+   ],
+   [
+    "tags",
+    {
+     "model": "m1",
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ],
+     "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+    },
+    "<user>"
+   ],
+   [
+    "chats.update_chat_tags_by_id",
+    [
+     "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+     [
+      "math"
+     ],
+     "<user>"
+    ],
+    {}
+   ],
+   [
+    "emit",
+    {
+     "type": "chat:tags",
+     "data": [
+      "math"
+     ]
+    }
+   ],
+   [
+    "review_memory_after_turn",
+    {
+     "user": "<user>",
+     "model": {
+      "id": "m1"
+     },
+     "metadata": {
+      "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+      "message_id": "a1"
+     },
+     "form_data": {
+      "model": "form-model",
+      "messages": []
+     },
+     "assistant_message": {
+      "content": "final"
+     },
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ "background:saved_chat_replies_unusable": {
+  "returned": null,
+  "form_messages_after": [],
+  "calls": [
+   [
+    "messages_map",
+    "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+   ],
+   [
+    "follow_ups",
+    {
+     "model": "m1",
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ],
+     "message_id": "a1",
+     "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+    },
+    "<user>"
+   ],
+   [
+    "title",
+    {
+     "model": "m1",
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ],
+     "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+    },
+    "<user>"
+   ],
+   [
+    "chats.update_chat_title_by_id",
+    [
+     "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+     "What is  a monad?"
+    ],
+    {}
+   ],
+   [
+    "emit",
+    {
+     "type": "chat:title",
+     "data": "What is  a monad?"
+    }
+   ],
+   [
+    "tags",
+    {
+     "model": "m1",
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ],
+     "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+    },
+    "<user>"
+   ],
+   [
+    "review_memory_after_turn",
+    {
+     "user": "<user>",
+     "model": {
+      "id": "m1"
+     },
+     "metadata": {
+      "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+      "message_id": "a1"
+     },
+     "form_data": {
+      "model": "form-model",
+      "messages": []
+     },
+     "assistant_message": {
+      "content": "final"
+     },
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ "background:saved_chat_two_choices": {
+  "returned": null,
+  "form_messages_after": [],
+  "calls": [
+   [
+    "messages_map",
+    "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+   ],
+   [
+    "follow_ups",
+    {
+     "model": "m1",
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ],
+     "message_id": "a1",
+     "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+    },
+    "<user>"
+   ],
+   [
+    "title",
+    {
+     "model": "m1",
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ],
+     "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+    },
+    "<user>"
+   ],
+   [
+    "chats.update_chat_title_by_id",
+    [
+     "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+     "What is  a monad?"
+    ],
+    {}
+   ],
+   [
+    "emit",
+    {
+     "type": "chat:title",
+     "data": "What is  a monad?"
+    }
+   ],
+   [
+    "tags",
+    {
+     "model": "m1",
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ],
+     "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+    },
+    "<user>"
+   ],
+   [
+    "review_memory_after_turn",
+    {
+     "user": "<user>",
+     "model": {
+      "id": "m1"
+     },
+     "metadata": {
+      "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+      "message_id": "a1"
+     },
+     "form_data": {
+      "model": "form-model",
+      "messages": []
+     },
+     "assistant_message": {
+      "content": "final"
+     },
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ "background:saved_chat_title_falls_back_to_reasoning": {
+  "returned": null,
+  "form_messages_after": [],
+  "calls": [
+   [
+    "messages_map",
+    "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+   ],
+   [
+    "title",
+    {
+     "model": "m1",
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ],
+     "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+    },
+    "<user>"
+   ],
+   [
+    "chats.update_chat_title_by_id",
+    [
+     "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+     "From reasoning"
+    ],
+    {}
+   ],
+   [
+    "emit",
+    {
+     "type": "chat:title",
+     "data": "From reasoning"
+    }
+   ],
+   [
+    "review_memory_after_turn",
+    {
+     "user": "<user>",
+     "model": {
+      "id": "m1"
+     },
+     "metadata": {
+      "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+      "message_id": "a1"
+     },
+     "form_data": {
+      "model": "form-model",
+      "messages": []
+     },
+     "assistant_message": {
+      "content": "final"
+     },
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ "background:saved_chat_title_from_message_content": {
+  "returned": null,
+  "form_messages_after": [],
+  "calls": [
+   [
+    "messages_map",
+    "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+   ],
+   [
+    "title",
+    {
+     "model": "m1",
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "Answer {\"title\": \"Embedded\"}",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ],
+     "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+    },
+    "<user>"
+   ],
+   [
+    "chats.update_chat_title_by_id",
+    [
+     "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+     "Embedded"
+    ],
+    {}
+   ],
+   [
+    "emit",
+    {
+     "type": "chat:title",
+     "data": "Embedded"
+    }
+   ],
+   [
+    "review_memory_after_turn",
+    {
+     "user": "<user>",
+     "model": {
+      "id": "m1"
+     },
+     "metadata": {
+      "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+      "message_id": "a1"
+     },
+     "form_data": {
+      "model": "form-model",
+      "messages": []
+     },
+     "assistant_message": {
+      "content": "final"
+     },
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "Answer {\"title\": \"Embedded\"}",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ "background:saved_chat_title_unparseable": {
+  "returned": null,
+  "form_messages_after": [],
+  "calls": [
+   [
+    "messages_map",
+    "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+   ],
+   [
+    "title",
+    {
+     "model": "m1",
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ],
+     "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+    },
+    "<user>"
+   ],
+   [
+    "chats.update_chat_title_by_id",
+    [
+     "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+     "What is  a monad?"
+    ],
+    {}
+   ],
+   [
+    "emit",
+    {
+     "type": "chat:title",
+     "data": "What is  a monad?"
+    }
+   ],
+   [
+    "review_memory_after_turn",
+    {
+     "user": "<user>",
+     "model": {
+      "id": "m1"
+     },
+     "metadata": {
+      "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+      "message_id": "a1"
+     },
+     "form_data": {
+      "model": "form-model",
+      "messages": []
+     },
+     "assistant_message": {
+      "content": "final"
+     },
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ "background:saved_chat_title_request_fails": {
+  "returned": null,
+  "form_messages_after": [],
+  "calls": [
+   [
+    "messages_map",
+    "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+   ],
+   [
+    "title",
+    {
+     "model": "m1",
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ],
+     "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+    },
+    "<user>"
+   ],
+   [
+    "chats.update_chat_title_by_id",
+    [
+     "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+     "What is  a monad?"
+    ],
+    {}
+   ],
+   [
+    "emit",
+    {
+     "type": "chat:title",
+     "data": "A monoid in the category."
+    }
+   ],
+   [
+    "review_memory_after_turn",
+    {
+     "user": "<user>",
+     "model": {
+      "id": "m1"
+     },
+     "metadata": {
+      "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+      "message_id": "a1"
+     },
+     "form_data": {
+      "model": "form-model",
+      "messages": []
+     },
+     "assistant_message": {
+      "content": "final"
+     },
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ "background:saved_chat_title_disabled_first_turn": {
+  "returned": null,
+  "form_messages_after": [],
+  "calls": [
+   [
+    "messages_map",
+    "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+   ],
+   [
+    "chats.update_chat_title_by_id",
+    [
+     "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+     "What is  a monad?"
+    ],
+    {}
+   ],
+   [
+    "emit",
+    {
+     "type": "chat:title",
+     "data": "A monoid in the category."
+    }
+   ],
+   [
+    "review_memory_after_turn",
+    {
+     "user": "<user>",
+     "model": {
+      "id": "m1"
+     },
+     "metadata": {
+      "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+      "message_id": "a1"
+     },
+     "form_data": {
+      "model": "form-model",
+      "messages": []
+     },
+     "assistant_message": {
+      "content": "final"
+     },
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ "background:saved_chat_title_disabled_later_turn": {
+  "returned": null,
+  "form_messages_after": [],
+  "calls": [
+   [
+    "messages_map",
+    "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+   ],
+   [
+    "review_memory_after_turn",
+    {
+     "user": "<user>",
+     "model": {
+      "id": "m1"
+     },
+     "metadata": {
+      "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+      "message_id": "a1"
+     },
+     "form_data": {
+      "model": "form-model",
+      "messages": []
+     },
+     "assistant_message": {
+      "content": "final"
+     },
+     "messages": [
+      {
+       "id": "u0",
+       "role": "user",
+       "content": "Hi",
+       "parentId": null
+      },
+      {
+       "id": "a0",
+       "content": "Hello",
+       "parentId": "u0",
+       "model": "m1",
+       "role": "assistant"
+      },
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "More",
+       "parentId": "a0"
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "Sure",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ "background:saved_chat_follow_ups_disabled": {
+  "returned": null,
+  "form_messages_after": [],
+  "calls": [
+   [
+    "messages_map",
+    "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+   ],
+   [
+    "review_memory_after_turn",
+    {
+     "user": "<user>",
+     "model": {
+      "id": "m1"
+     },
+     "metadata": {
+      "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+      "message_id": "a1"
+     },
+     "form_data": {
+      "model": "form-model",
+      "messages": []
+     },
+     "assistant_message": {
+      "content": "final"
+     },
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ "background:saved_chat_follow_up_emit_fails": {
+  "returned": null,
+  "form_messages_after": [],
+  "calls": [
+   [
+    "messages_map",
+    "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+   ],
+   [
+    "follow_ups",
+    {
+     "model": "m1",
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ],
+     "message_id": "a1",
+     "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+    },
+    "<user>"
+   ],
+   [
+    "emit",
+    {
+     "type": "chat:message:follow_ups",
+     "data": {
+      "follow_ups": [
+       "a"
+      ]
+     }
+    }
+   ],
+   [
+    "review_memory_after_turn",
+    {
+     "user": "<user>",
+     "model": {
+      "id": "m1"
+     },
+     "metadata": {
+      "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+      "message_id": "a1"
+     },
+     "form_data": {
+      "model": "form-model",
+      "messages": []
+     },
+     "assistant_message": {
+      "content": "final"
+     },
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ "background:saved_chat_no_tasks": {
+  "returned": null,
+  "form_messages_after": [],
+  "calls": [
+   [
+    "messages_map",
+    "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+   ],
+   [
+    "review_memory_after_turn",
+    {
+     "user": "<user>",
+     "model": {
+      "id": "m1"
+     },
+     "metadata": {
+      "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+      "message_id": "a1"
+     },
+     "form_data": {
+      "model": "form-model",
+      "messages": []
+     },
+     "assistant_message": {
+      "content": "final"
+     },
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ "background:saved_chat_follow_up_reply_all_none": {
+  "raised": [
+   "AttributeError",
+   "'NoneType' object has no attribute 'find'"
+  ],
+  "form_messages_after": [],
+  "calls": [
+   [
+    "messages_map",
+    "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+   ],
+   [
+    "follow_ups",
+    {
+     "model": "m1",
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ],
+     "message_id": "a1",
+     "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+    },
+    "<user>"
+   ]
+  ]
+ },
+ "background:saved_chat_tags_reply_all_none": {
+  "raised": [
+   "AttributeError",
+   "'NoneType' object has no attribute 'find'"
+  ],
+  "form_messages_after": [],
+  "calls": [
+   [
+    "messages_map",
+    "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+   ],
+   [
+    "tags",
+    {
+     "model": "m1",
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": "A monoid in the category.",
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ],
+     "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+    },
+    "<user>"
+   ]
+  ]
+ },
+ "background:saved_chat_title_reply_and_message_empty": {
+  "raised": [
+   "AttributeError",
+   "'NoneType' object has no attribute 'find'"
+  ],
+  "form_messages_after": [],
+  "calls": [
+   [
+    "messages_map",
+    "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+   ],
+   [
+    "title",
+    {
+     "model": "m1",
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": "What is  a monad?",
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": null,
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ],
+     "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+    },
+    "<user>"
+   ]
+  ]
+ },
+ "background:saved_chat_odd_contents_and_no_replies": {
+  "returned": null,
+  "form_messages_after": [],
+  "calls": [
+   [
+    "messages_map",
+    "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+   ],
+   [
+    "follow_ups",
+    {
+     "model": "m1",
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": [
+        {
+         "type": "image_url"
+        }
+       ],
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": null,
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ],
+     "message_id": "a1",
+     "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+    },
+    "<user>"
+   ],
+   [
+    "tags",
+    {
+     "model": "m1",
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": [
+        {
+         "type": "image_url"
+        }
+       ],
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": null,
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ],
+     "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+    },
+    "<user>"
+   ],
+   [
+    "review_memory_after_turn",
+    {
+     "user": "<user>",
+     "model": {
+      "id": "m1"
+     },
+     "metadata": {
+      "chat_id": "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10",
+      "message_id": "a1"
+     },
+     "form_data": {
+      "model": "form-model",
+      "messages": []
+     },
+     "assistant_message": {
+      "content": "final"
+     },
+     "messages": [
+      {
+       "id": "u1",
+       "role": "user",
+       "content": [
+        {
+         "type": "image_url"
+        }
+       ],
+       "parentId": null
+      },
+      {
+       "id": "a1",
+       "role": "assistant",
+       "content": null,
+       "parentId": "u1",
+       "model": "m1"
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ "background:saved_chat_message_missing": {
+  "returned": null,
+  "form_messages_after": [],
+  "calls": [
+   [
+    "messages_map",
+    "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+   ]
+  ]
+ },
+ "background:saved_chat_message_without_model": {
+  "returned": null,
+  "form_messages_after": [],
+  "calls": [
+   [
+    "messages_map",
+    "7f1c0d9e-3b5a-4c1e-9a2f-0b8d6e4c2a10"
+   ]
+  ]
+ },
+ "background:local_chat": {
+  "returned": null,
+  "form_messages_after": [
+   {
+    "role": "user",
+    "content": "hi"
+   },
+   {
+    "role": "assistant",
+    "content": "yo"
+   },
+   {
+    "role": "user",
+    "content": "q",
+    "model": "form-model"
+   }
+  ],
+  "calls": [
+   [
+    "follow_ups",
+    {
+     "model": "form-model",
+     "messages": [
+      {
+       "role": "user",
+       "content": "hi"
+      },
+      {
+       "role": "assistant",
+       "content": "yo"
+      },
+      {
+       "role": "user",
+       "content": "q",
+       "model": "form-model"
+      }
+     ],
+     "message_id": "a1",
+     "chat_id": "local:abc"
+    },
+    "<user>"
+   ],
+   [
+    "emit",
+    {
+     "type": "chat:message:follow_ups",
+     "data": {
+      "follow_ups": [
+       "x"
+      ]
+     }
+    }
+   ],
+   [
+    "review_memory_after_turn",
+    {
+     "user": "<user>",
+     "model": {
+      "id": "m1"
+     },
+     "metadata": {
+      "chat_id": "local:abc",
+      "message_id": "a1"
+     },
+     "form_data": {
+      "model": "form-model",
+      "messages": [
+       {
+        "role": "user",
+        "content": "hi"
+       },
+       {
+        "role": "assistant",
+        "content": "yo"
+       },
+       {
+        "role": "user",
+        "content": "q",
+        "model": "form-model"
+       }
+      ]
+     },
+     "assistant_message": {
+      "content": "final"
+     },
+     "messages": [
+      {
+       "role": "user",
+       "content": "hi"
+      },
+      {
+       "role": "assistant",
+       "content": "yo"
+      },
+      {
+       "role": "user",
+       "content": "q",
+       "model": "form-model"
+      }
+     ]
+    }
+   ]
+  ]
+ },
+ "background:local_chat_no_messages": {
+  "returned": null,
+  "form_messages_after": [],
+  "calls": []
+ },
+ "background:local_chat_no_user_message": {
+  "returned": null,
+  "form_messages_after": [
+   {
+    "role": "assistant",
+    "content": "a"
+   }
+  ],
+  "calls": []
+ }
+}
