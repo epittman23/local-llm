@@ -379,7 +379,6 @@ async def get_tools(request: Request, tool_ids: list[str], user: UserModel, extr
                 server_id_splits = server_id.split('|')
                 if len(server_id_splits) == 2:
                     server_id = server_id_splits[0]
-                    function_names = server_id_splits[1].split(',')
 
                 if type == 'openapi':
                     tool_server_data = None

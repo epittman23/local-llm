@@ -498,7 +498,6 @@ async def ldap_auth(
         raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
 
     # NOW load LDAP config variables
-    LDAP_SERVER_LABEL = await Config.get('ldap.server.label')
     LDAP_SERVER_HOST = await Config.get('ldap.server.host')
     LDAP_SERVER_PORT = await Config.get('ldap.server.port')
     LDAP_ATTRIBUTE_FOR_MAIL = await Config.get('ldap.server.attribute_for_mail')

@@ -149,7 +149,6 @@ def _parse_pipeline(command: str) -> list[list[str]]:
     """Split command on pipes, then tokenize each segment."""
     # Split on | but not inside quotes
     segments = []
-    current = []
     in_single = False
     in_double = False
     buf = []

@@ -2608,7 +2608,7 @@ async def process_chat_payload(request, form_data, user, metadata, model):
         files.extend(knowledge_files)
         form_data['files'] = files
 
-    variables = form_data.pop('variables', None)
+    form_data.pop('variables', None)
     payload_tools = form_data.get('tools', None)  # snapshot before filters
 
     # Process the form_data through the pipeline
@@ -4241,7 +4241,6 @@ async def streaming_chat_response_handler(response, ctx):
     # event_caller is optional — only needed for direct (client-side) tools
     # and pyodide code interpreter. Server-side tools work without it.
     if event_emitter:
-        task_id = str(uuid4())  # Create a unique task ID.
         model_id = form_data.get('model', '')
 
         # Handle as a background task

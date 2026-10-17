@@ -139,7 +139,7 @@ class MessageTable:
         db: AsyncSession | None = None,
     ) -> MessageModel | None:
         async with get_async_db_context(db) as db:
-            channel_member = await Channels.join_channel(channel_id, user_id)
+            await Channels.join_channel(channel_id, user_id)
 
             id = str(uuid.uuid4())
             ts = int(time.time_ns())

@@ -2467,7 +2467,6 @@ class ChatTable:
             async with get_async_db_context(db) as session:
                 await self.delete_shared_chats_by_user_id(user_id, db=session)
 
-                chat_id_subquery = select(Chat.id).filter_by(user_id=user_id).scalar_subquery()
                 await session.execute(
                     update(AutomationRun)
                     .filter(AutomationRun.chat_id.in_(select(Chat.id).filter_by(user_id=user_id)))

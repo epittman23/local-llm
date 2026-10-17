@@ -519,11 +519,7 @@ class S3VectorClient(VectorDBBase):
 
                 for vector in vectors:
                     vector_id = vector.get('key')
-                    vector_data = vector.get('data', {})
                     vector_metadata = vector.get('metadata', {})
-
-                    # Extract the actual vector array
-                    vector_array = vector_data.get('float32', [])
 
                     # For documents, we try to extract text from metadata or use the vector ID
                     document_text = ''

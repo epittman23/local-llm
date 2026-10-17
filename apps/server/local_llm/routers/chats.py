@@ -376,8 +376,6 @@ async def get_session_user_chat_usage_stats(
                                     models[model] = 0
                                 models[model] += 1
 
-                            annotation = message.get('annotation', {})
-
                     chat_stats.append(
                         {
                             'id': chat.id,

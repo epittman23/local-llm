@@ -1139,7 +1139,7 @@ async def chat_completion(
         #   value  → follow-up (user message's parentId = prev assistant)
         #   absent → legacy caller, no chat management
         is_new_chat = 'parent_id' in form_data and form_data['parent_id'] is None and not form_data.get('chat_id')
-        parent_id = form_data.pop('parent_id', None)
+        form_data.pop('parent_id', None)
         form_data.pop('new_chat', None)  # Legacy field
 
         # Multi-model message_ids: list of {model_id, message_id} entries.
