@@ -11,8 +11,9 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
   (`^apps/server/(local_llm|tests)/`), not just `benchmarks/` and `tests/`.
   The ungated code had drifted: the `local_llm` rename alone left 166
   import blocks unsorted.
-  - **Fixed, not exempted.** About 690 findings were fixed by hand, one
-    commit per rule. SQLAlchemy comparisons use `== true()` / `.is_(None)`,
+  - **Fixed, not exempted.** #79 sorted 166 import blocks. #80 fixed the
+    other 323 findings, one commit per rule. Raising max-complexity from 10
+    to 25 cleared about 193 more without any edit. SQLAlchemy comparisons use `== true()` / `.is_(None)`,
     since ruff's own fix (`is True`, `is None`) silently breaks a query, and
     the compiled SQL is identical. Long strings were split into adjacent
     literals with identical ASTs. Text a model reads (default task prompts,

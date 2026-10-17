@@ -48,7 +48,7 @@ timeline
       2026-10-09 : Moved from WSL2 to native Fedora 44 on the same laptop : Docker Engine replaces Docker Desktop : Python 3.12 via uv, backend venv and frontend rebuilt : llama.cpp CUDA build and the old Postgres data still to restore : WSL2-era benchmark numbers marked historical
       2026-10-10 : Repository restructured into one project, Local LLM : docs and agent guide consolidated at the root : backend flattened, package renamed local_llm, WEBUI_* env vars renamed LLLM_* : upstream hub, update check and license server removed : make check mirrors CI : the old Postgres data confirmed lost (no dump existed)
       2026-10-11 : Old plugin source aliased to local_llm at import time instead of rewritten, so every import form and the renamed WEBUI_* names still load
-      2026-10-17 : ruff-check gates the whole backend, not just benchmarks/ and tests/ : about 690 findings fixed by hand, with SQL and string values verified unchanged : max-complexity 25, the 35 inherited functions above it to be refactored rather than exempted : applied migrations excluded
+      2026-10-17 : ruff-check gates the whole backend, not just benchmarks/ and tests/ : 166 import blocks sorted and 323 other findings fixed rule by rule, with SQL and string values verified unchanged : max-complexity 25, the 35 inherited functions above it to be refactored rather than exempted : applied migrations excluded
     section Near-Term
       "~1 week" : Resolve the blocking rack hole-type question : confirm riser and PSU questions : re-verify current component pricing
     section Short-Term
