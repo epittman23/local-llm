@@ -51,6 +51,7 @@ timeline
       2026-10-17 : ruff-check gates the whole backend, not just benchmarks/ and tests/ : 166 import blocks sorted and 323 other findings fixed rule by rule, with SQL and string values verified unchanged : max-complexity 25, the 35 inherited functions above it to be refactored rather than exempted : applied migrations excluded
       2026-10-17 (later) : Generated code excluded from linting and formatting : Alembic revisions (ruff), shadcn/ui components (Biome), uv.lock (check-toml) : security scans still cover everything
       2026-10-17 (later still) : The twelve unused vector stores removed, pgvector the only one : their settings and dependencies (opensearch-py, mariadb, elasticsearch, weaviate, pinecone, oracledb) gone : external knowledge connections to Qdrant and Milvus kept
+      2026-10-17 (latest) : LDAP sign-in removed : the /ldap route, admin LDAP settings, the sign-in form's LDAP mode and ldap3 gone : unused, and local accounts cover a household install
     section Near-Term
       "~1 week" : Resolve the blocking rack hole-type question : confirm riser and PSU questions : re-verify current component pricing
     section Short-Term

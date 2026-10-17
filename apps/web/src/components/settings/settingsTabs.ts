@@ -144,7 +144,7 @@ export const adminTabs: SettingsTab[] = [
 		id: 'admin:authentication',
 		title: 'Authentication',
 		group: 'System',
-		keywords: ['authentication', 'auth', 'login', 'signup', 'ldap', 'oauth', 'oidc', 'sso', 'roles']
+		keywords: ['authentication', 'auth', 'login', 'signup', 'oauth', 'oidc', 'sso', 'roles']
 	},
 	{
 		id: 'admin:connections',

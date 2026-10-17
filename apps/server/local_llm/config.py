@@ -2535,44 +2535,6 @@ def load_oauth_providers():
 
 load_oauth_providers()
 
-####################################
-# LDAP
-####################################
-
-ENABLE_LDAP = os.getenv('ENABLE_LDAP', 'false').lower() == 'true'
-
-LDAP_SERVER_LABEL = os.getenv('LDAP_SERVER_LABEL', 'LDAP Server')
-
-LDAP_SERVER_HOST = os.getenv('LDAP_SERVER_HOST', 'localhost')
-
-LDAP_SERVER_PORT = int(os.getenv('LDAP_SERVER_PORT', '389'))
-
-LDAP_ATTRIBUTE_FOR_MAIL = os.getenv('LDAP_ATTRIBUTE_FOR_MAIL', 'mail')
-
-LDAP_ATTRIBUTE_FOR_USERNAME = os.getenv('LDAP_ATTRIBUTE_FOR_USERNAME', 'uid')
-
-LDAP_APP_DN = os.getenv('LDAP_APP_DN', '')
-
-LDAP_APP_PASSWORD = os.getenv('LDAP_APP_PASSWORD', '')
-
-LDAP_SEARCH_BASE = os.getenv('LDAP_SEARCH_BASE', '')
-
-LDAP_SEARCH_FILTERS = os.getenv('LDAP_SEARCH_FILTER', os.getenv('LDAP_SEARCH_FILTERS', ''))
-
-LDAP_USE_TLS = os.getenv('LDAP_USE_TLS', 'True').lower() == 'true'
-
-LDAP_CA_CERT_FILE = os.getenv('LDAP_CA_CERT_FILE', '')
-
-LDAP_VALIDATE_CERT = os.getenv('LDAP_VALIDATE_CERT', 'True').lower() == 'true'
-
-LDAP_CIPHERS = os.getenv('LDAP_CIPHERS', 'ALL')
-
-ENABLE_LDAP_GROUP_MANAGEMENT = os.getenv('ENABLE_LDAP_GROUP_MANAGEMENT', 'False').lower() == 'true'
-
-ENABLE_LDAP_GROUP_CREATION = os.getenv('ENABLE_LDAP_GROUP_CREATION', 'False').lower() == 'true'
-
-LDAP_ATTRIBUTE_FOR_GROUPS = os.getenv('LDAP_ATTRIBUTE_FOR_GROUPS', 'memberOf')
-
 DEFAULT_CONFIG = {
     'direct.enable': ENABLE_DIRECT_CONNECTIONS,
     'ollama.enable': ENABLE_OLLAMA_API,
@@ -2955,23 +2917,6 @@ DEFAULT_CONFIG = {
     'oauth.update_name_on_login': OAUTH_UPDATE_NAME_ON_LOGIN,
     'oauth.update_email_on_login': OAUTH_UPDATE_EMAIL_ON_LOGIN,
     'oauth.audience': OAUTH_AUDIENCE,
-    'ldap.enable': ENABLE_LDAP,
-    'ldap.server.label': LDAP_SERVER_LABEL,
-    'ldap.server.host': LDAP_SERVER_HOST,
-    'ldap.server.port': LDAP_SERVER_PORT,
-    'ldap.server.attribute_for_mail': LDAP_ATTRIBUTE_FOR_MAIL,
-    'ldap.server.attribute_for_username': LDAP_ATTRIBUTE_FOR_USERNAME,
-    'ldap.server.app_dn': LDAP_APP_DN,
-    'ldap.server.app_password': LDAP_APP_PASSWORD,
-    'ldap.server.users_dn': LDAP_SEARCH_BASE,
-    'ldap.server.search_filter': LDAP_SEARCH_FILTERS,
-    'ldap.server.use_tls': LDAP_USE_TLS,
-    'ldap.server.ca_cert_file': LDAP_CA_CERT_FILE,
-    'ldap.server.validate_cert': LDAP_VALIDATE_CERT,
-    'ldap.server.ciphers': LDAP_CIPHERS,
-    'ldap.group.enable_management': ENABLE_LDAP_GROUP_MANAGEMENT,
-    'ldap.group.enable_creation': ENABLE_LDAP_GROUP_CREATION,
-    'ldap.server.attribute_for_groups': LDAP_ATTRIBUTE_FOR_GROUPS,
 }
 
 

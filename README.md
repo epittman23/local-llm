@@ -115,7 +115,7 @@ Anything marked *admin* also needs `role === 'admin'`.
 
 | Path | What you get |
 |---|---|
-| `/auth` | Sign in / sign up / LDAP / OAuth / onboarding. Query: `?redirect=<path>` (where to go afterwards), `?form=<any>` (shows the login fields and skips the SSO auto-redirect), `?state=logout`, `?error=<msg>` |
+| `/auth` | Sign in / sign up / OAuth / onboarding. Query: `?redirect=<path>` (where to go afterwards), `?form=<any>` (shows the login fields and skips the SSO auto-redirect), `?state=logout`, `?error=<msg>` |
 | `/error` | The "Backend Required" page. Redirects home once the backend config has loaded, so you only *stay* here when the backend is down |
 | `/watch?v=<id>` | Redirects to `/?youtube=<id>`, which attaches that video to a new chat |
 | `/s/<share-id>` | Read-only shared chat. The id comes from a chat's Share dialog (sidebar chat menu > Share) |

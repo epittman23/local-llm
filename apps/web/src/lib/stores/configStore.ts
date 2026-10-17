@@ -30,7 +30,6 @@ export type BackendConfig = {
 		auth?: boolean;
 		auth_trusted_header?: boolean;
 		enable_signup_password_confirmation?: boolean;
-		enable_ldap?: boolean;
 		enable_signup?: boolean;
 		enable_login_form?: boolean;
 		[key: string]: unknown;

@@ -7,6 +7,29 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-17**: LDAP sign-in is removed. It was never enabled: on this
+  date the app's Postgres had no tables and no saved settings existed
+  anywhere, and the environment default was off. Local accounts cover a
+  household install, and the owner chose deleting unused features over
+  refactoring them. `ldap_auth` was one of the 35 functions above the
+  complexity limit, so `routers/auths.py` leaves the temporary C901 list.
+  - **Backend:** the `/api/v1/auths/ldap` sign-in route, the four admin
+    LDAP settings endpoints, the DN-parsing helpers, `LdapForm`, the
+    `ldap.*` defaults and `LDAP_*` settings in `config.py`, the
+    `enable_ldap` flag in `/api/config`, and the `ldap3` dependency.
+  - **Frontend:** the LDAP section of Admin Settings > Authentication, the
+    sign-in page's LDAP mode and "Continue with LDAP" switch, the API
+    client calls, and the tests for them.
+  - **Verified on a real backend** (a throwaway pgvector container and data
+    directory, not the owner's database):
+    - first-run sign-up and email sign-in work;
+    - Authentication settings load and save without LDAP;
+    - no request fails;
+    - the old route no longer exists.
+  - **Left alone:** stored `ldap.*` rows, of which there are none, and the
+    i18n `translation.json`. That file is an inherited key dump (3,094 keys)
+    that the React app does not read through `t()`, so pruning only the
+    LDAP keys would mean nothing on its own.
 - **2026-10-17**: pgvector is the only vector store. The inherited code
   supported twelve others: Chroma, Milvus (and a multi-tenant variant),
   Qdrant (likewise), Pinecone, Weaviate, Elasticsearch, OpenSearch,

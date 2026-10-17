@@ -1,39 +1,25 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { Tip } from '@/components/common/Tip';
 import { BoundSecret as Secret, BoundText as Text, BoundToggle as Toggle } from '@/components/settings/boundFields';
 import {
 	SettingField,
-	SettingNumber,
 	SettingRow,
 	SettingSelect,
-	SettingSwitch,
 	SettingTextarea,
 	SettingsForm,
 	SettingsSection
 } from '@/components/settings/controls';
-import {
-	getAdminConfig,
-	getLdapConfig,
-	getLdapServer,
-	getOAuthConfig,
-	updateAdminConfig,
-	updateLdapConfig,
-	updateLdapServer,
-	updateOAuthConfig
-} from '@/lib/apis/auths';
+import { getAdminConfig, getOAuthConfig, updateAdminConfig, updateOAuthConfig } from '@/lib/apis/auths';
 import { getGroups } from '@/lib/apis/groups';
 import { useAdminConfigSaved } from '@/lib/settings/useAdminSaved';
 import { useConfigDraft } from '@/lib/settings/useConfigDraft';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { type LdapServer, isOAuthEditable, ldapForSave, mergeLdapServer } from './authentication';
+import { isOAuthEditable } from './authentication';
 
 type Rec = Record<string, any>;
 type Draft = {
 	admin: Rec;
 	groups: { id: string; name: string }[];
-	ldapEnabled: boolean;
-	ldap: LdapServer;
 	oauth: Rec | null;
 };
 
@@ -185,190 +171,6 @@ function PendingAccounts({ admin, set }: { admin: Rec; set: (p: Rec) => void }) 
 	);
 }
 
-function Ldap({
-	enabled,
-	setEnabled,
-	ldap,
-	set
-}: {
-	enabled: boolean;
-	setEnabled: (v: boolean) => void;
-	ldap: LdapServer;
-	set: (p: Partial<LdapServer>) => void;
-}) {
-	return (
-		<SettingsSection title="LDAP">
-			<SettingRow label="LDAP" description="Allow users to authenticate with an LDAP directory.">
-				{(id) => <SettingSwitch checked={enabled} onChange={setEnabled} labelledBy={id} />}
-			</SettingRow>
-
-			{enabled && (
-				<>
-					<div className={grid}>
-						<Text
-							config={ldap}
-							set={set}
-							name="label"
-							required
-							label="Label"
-							description="Display name for this LDAP connection."
-							placeholder="Enter server label"
-						/>
-					</div>
-					<div className={grid}>
-						<Text
-							config={ldap}
-							set={set}
-							name="host"
-							required
-							label="Host"
-							description="LDAP server hostname or IP address."
-							placeholder="Enter server host"
-						/>
-						<SettingField label="Port" description="LDAP server port." htmlFor="auth-port">
-							<Tip content="Default to 389 or 636 if TLS is enabled">
-								<SettingNumber
-									id="auth-port"
-									placeholder="Enter server port"
-									value={ldap.port}
-									onChange={(v) => set({ port: v === '' ? null : v })}
-								/>
-							</Tip>
-						</SettingField>
-					</div>
-					<div className={grid}>
-						<Text
-							config={ldap}
-							set={set}
-							name="app_dn"
-							label="Application DN"
-							description="Bind DN used for directory search."
-							placeholder="Enter Application DN"
-							tip="The Application Account DN you bind with for search"
-						/>
-						<Secret
-							config={ldap}
-							set={set}
-							name="app_dn_password"
-							label="Application DN Password"
-							description="Password for the bind DN."
-							placeholder="Enter Application DN Password"
-						/>
-					</div>
-					<div className={grid}>
-						<Text
-							config={ldap}
-							set={set}
-							name="attribute_for_mail"
-							required
-							label="Attribute for Mail"
-							description="LDAP attribute used as the user email address."
-							placeholder="Example: mail"
-							tip="The LDAP attribute that maps to the mail that users use to sign in."
-						/>
-						<Text
-							config={ldap}
-							set={set}
-							name="attribute_for_username"
-							required
-							label="Attribute for Username"
-							description="LDAP attribute used as the username."
-							placeholder="Example: sAMAccountName or uid or userPrincipalName"
-							tip="The LDAP attribute that maps to the username that users use to sign in."
-						/>
-					</div>
-					<Text
-						config={ldap}
-						set={set}
-						name="search_base"
-						required
-						label="Search Base"
-						description="Base DN used when searching for users."
-						placeholder="Example: ou=users,dc=foo,dc=example"
-						tip="The base to search for users"
-					/>
-					<Text
-						config={ldap}
-						set={set}
-						name="search_filters"
-						label="Search Filters"
-						description="LDAP filter used to match signing-in users."
-						placeholder="Example: (&(objectClass=inetOrgPerson)(uid=%s))"
-					>
-						<a className={linkClass} href="https://ldap.com/ldap-filters/" {...externalLink}>
-							Click here for filter guides.
-						</a>
-					</Text>
-
-					<Toggle
-						config={ldap}
-						set={set}
-						name="use_tls"
-						label="TLS"
-						description="Use TLS when connecting to the LDAP server."
-					/>
-					{ldap.use_tls && (
-						<>
-							<Text
-								config={ldap}
-								set={set}
-								name="certificate_path"
-								label="Certificate Path"
-								description="Certificate file used for TLS verification."
-								placeholder="Enter certificate path"
-							/>
-							<Toggle
-								config={ldap}
-								set={set}
-								name="validate_cert"
-								label="Validate Certificate"
-								description="Verify the LDAP server certificate when TLS is enabled."
-							/>
-							<Text
-								config={ldap}
-								set={set}
-								name="ciphers"
-								label="Ciphers"
-								description="TLS cipher list for LDAP connections."
-								placeholder="Example: ALL"
-								tip="Default to ALL"
-							/>
-						</>
-					)}
-
-					<Toggle
-						config={ldap}
-						set={set}
-						name="enable_group_management"
-						label="Group Mapping"
-						description="Map LDAP groups to Local LLM groups."
-					/>
-					{ldap.enable_group_management && (
-						<>
-							<Toggle
-								config={ldap}
-								set={set}
-								name="enable_group_creation"
-								label="Auto-Create Groups"
-								description="Create missing groups from LDAP groups."
-							/>
-							<Text
-								config={ldap}
-								set={set}
-								name="attribute_for_groups"
-								label="Group Attribute"
-								description="LDAP attribute containing the user group memberships."
-								placeholder="memberOf"
-								tip="Default to memberOf"
-							/>
-						</>
-					)}
-				</>
-			)}
-		</SettingsSection>
-	);
-}
-
 function OAuth({ oauth, set }: { oauth: Rec; set: (p: Rec) => void }) {
 	const editable = isOAuthEditable(oauth);
 	const text = (name: string, label: string, description: string, placeholder?: string) => (
@@ -500,25 +302,16 @@ export default function Authentication() {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const saved = useAdminConfigSaved();
 	const { draft, setDraft, isLoading } = useConfigDraft<Draft>(['authentication'], async () => {
-		const [admin, groups, ldap, oauth, ldapConfig] = await Promise.all([
+		const [admin, groups, oauth] = await Promise.all([
 			getAdminConfig(token),
 			getGroups(token),
-			getLdapServer(token),
-			getOAuthConfig(token).catch(() => null),
-			getLdapConfig(token)
+			getOAuthConfig(token).catch(() => null)
 		]);
-		return {
-			admin,
-			groups: groups ?? [],
-			ldapEnabled: Boolean(ldapConfig?.ENABLE_LDAP),
-			ldap: mergeLdapServer(ldap),
-			oauth
-		};
+		return { admin, groups: groups ?? [], oauth };
 	});
 	const [saving, setSaving] = useState(false);
 
 	const setAdmin = (p: Rec) => setDraft((d) => d && { ...d, admin: { ...d.admin, ...p } });
-	const setLdap = (p: Partial<LdapServer>) => setDraft((d) => d && { ...d, ldap: { ...d.ldap, ...p } });
 	const setOAuth = (p: Rec) => setDraft((d) => d && { ...d, oauth: d.oauth && { ...d.oauth, ...p } });
 
 	/** Runs one save request; a failure toasts and reports false rather than throwing. */
@@ -535,13 +328,9 @@ export default function Authentication() {
 		if (!draft) return;
 		setSaving(true);
 		try {
-			// Each part is its own request and none stops the others, so a bad LDAP
-			// server does not lose the admin config edits (and vice versa).
+			// Each part is its own request and neither stops the other, so a bad
+			// OAuth setting does not lose the admin config edits (and vice versa).
 			const adminSaved = await attempt(() => updateAdminConfig(token, draft.admin));
-			const ldapSaved = await attempt(async () => {
-				await updateLdapConfig(token, draft.ldapEnabled);
-				return draft.ldapEnabled ? updateLdapServer(token, ldapForSave(draft.ldap)) : true;
-			});
 			let oauthSaved = true;
 			if (draft.oauth && isOAuthEditable(draft.oauth)) {
 				const oauth = draft.oauth;
@@ -551,7 +340,7 @@ export default function Authentication() {
 					return res;
 				});
 			}
-			if (adminSaved && ldapSaved && oauthSaved) await saved();
+			if (adminSaved && oauthSaved) await saved();
 		} finally {
 			setSaving(false);
 		}
@@ -563,12 +352,6 @@ export default function Authentication() {
 				<>
 					<UserAccess admin={draft.admin} set={setAdmin} groups={draft.groups} />
 					<PendingAccounts admin={draft.admin} set={setAdmin} />
-					<Ldap
-						enabled={draft.ldapEnabled}
-						setEnabled={(v) => setDraft((d) => d && { ...d, ldapEnabled: v })}
-						ldap={draft.ldap}
-						set={setLdap}
-					/>
 					{draft.oauth && <OAuth oauth={draft.oauth} set={setOAuth} />}
 				</>
 			)}

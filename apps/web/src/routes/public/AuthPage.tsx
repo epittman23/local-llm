@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { getBackendConfig } from '@/lib/apis';
-import { getSessionUser, ldapUserSignIn, updateUserTimezone, userSignIn, userSignUp } from '@/lib/apis/auths';
+import { getSessionUser, updateUserTimezone, userSignIn, userSignUp } from '@/lib/apis/auths';
 import { safeRedirect } from '@/lib/auth/redirect';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ import { useConfigStore, useWebUIName } from '@/lib/stores/configStore';
 import { generateInitialsImage, getUserTimezone } from '@/lib/utils/auth-helpers';
 import { routePaths } from '@/routes/routePaths';
 
-type Mode = 'ldap' | 'signin' | 'signup';
+type Mode = 'signin' | 'signup';
 
 const OAUTH_PROVIDER_LABELS: Record<string, string> = {
 	google: 'Google',
@@ -23,7 +23,7 @@ const OAUTH_PROVIDER_LABELS: Record<string, string> = {
 };
 
 /**
- * Ports d863707:apps/openwebui/src/routes/auth/+page.svelte: sign-in/sign-up/LDAP,
+ * Ports d863707:apps/openwebui/src/routes/auth/+page.svelte: sign-in/sign-up,
  * OAuth provider buttons + callback handling, the trusted-header and
  * auto-redirect-to-SSO bypasses, onboarding, and the login footer markdown.
  *
@@ -34,6 +34,8 @@ const OAUTH_PROVIDER_LABELS: Record<string, string> = {
  * functionally identical CTA); and OAuth provider buttons are plain labeled
  * buttons instead of hand-drawn brand SVGs -- same click target, same
  * `${WEBUI_BASE_URL}/oauth/<provider>/login` destination, no per-brand icon.
+ *
+ * LDAP sign-in, which the source also had, was removed on 2026-10-17.
  *
  * Toasts are still absent everywhere in this app (see lib/auth/session.ts's
  * own note) -- errors render as an inline banner instead.
@@ -46,12 +48,11 @@ export function AuthPage() {
 	const setSession = useAuthStore((state) => state.setSession);
 	const authStatus = useAuthStore((state) => state.status);
 
-	const [mode, setMode] = useState<Mode>(config?.features?.enable_ldap ? 'ldap' : 'signin');
+	const [mode, setMode] = useState<Mode>('signin');
 	const [name, setName] = useState('');
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
 	const [confirmPassword, setConfirmPassword] = useState('');
-	const [ldapUsername, setLdapUsername] = useState('');
 	const [submitting, setSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [onboarding, setOnboarding] = useState(false);
@@ -100,22 +101,13 @@ export function AuthPage() {
 		}
 	};
 
-	const ldapSignInHandler = async () => {
-		try {
-			await finishSignIn(await ldapUserSignIn(ldapUsername, password));
-		} catch (err) {
-			setError(String(err));
-		}
-	};
-
 	const submitHandler = async (e: React.FormEvent) => {
 		e.preventDefault();
 		if (submitting) return;
 		setSubmitting(true);
 		setError(null);
 		try {
-			if (mode === 'ldap') await ldapSignInHandler();
-			else if (mode === 'signin') await signInHandler();
+			if (mode === 'signin') await signInHandler();
 			else await signUpHandler();
 		} finally {
 			setSubmitting(false);
@@ -140,12 +132,6 @@ export function AuthPage() {
 			navigate(routePaths.error, { replace: true });
 			return;
 		}
-
-		// The useState initializer above ran while config was still null, so
-		// the LDAP-first default (`$config?.features.enable_ldap ? 'ldap' :
-		// 'signin'` in the source, evaluated with config already loaded) has to
-		// be applied here, once, now that it's real.
-		setMode(config.features?.enable_ldap ? 'ldap' : 'signin');
 
 		(async () => {
 			if (authStatus === 'authenticated' && !isLogout) {
@@ -178,7 +164,7 @@ export function AuthPage() {
 
 			// Auto-redirect to SSO when OAUTH_AUTO_REDIRECT is enabled and the
 			// deployment is unambiguously SSO-only (single provider, no login
-			// form, no LDAP). Suppressed after logout, by ?form=, ?error=,
+			// form). Suppressed after logout, by ?form=, ?error=,
 			// onboarding, trusted-header auth, or an existing session/token.
 			if (config?.oauth?.auto_redirect && !isLogout && !form && !urlError) {
 				const providers = Object.keys(config?.oauth?.providers ?? {});
@@ -186,7 +172,6 @@ export function AuthPage() {
 					providers.length === 1 &&
 					config?.features?.auth !== false &&
 					config?.features?.enable_login_form === false &&
-					!config?.features?.enable_ldap &&
 					!config?.features?.auth_trusted_header &&
 					!config?.onboarding &&
 					!localStorage.token &&
@@ -207,7 +192,7 @@ export function AuthPage() {
 	}, [config, authStatus]);
 
 	const oauthProviders = Object.keys(config?.oauth?.providers ?? {});
-	const showLoginFields = config?.features?.enable_login_form || config?.features?.enable_ldap || !!form;
+	const showLoginFields = config?.features?.enable_login_form || !!form;
 	const trustedOrNoAuth = (config?.features?.auth_trusted_header ?? false) || config?.features?.auth === false;
 
 	if (authStatus === 'pending' || !config) {
@@ -229,7 +214,7 @@ export function AuthPage() {
 					<Button
 						onClick={() => {
 							setOnboarding(false);
-							setMode(config?.features?.enable_ldap ? 'ldap' : 'signup');
+							setMode('signup');
 						}}
 					>
 						Get Started
@@ -254,11 +239,9 @@ export function AuthPage() {
 					<div className="mb-4 text-center text-2xl font-normal">
 						{config?.onboarding
 							? `Get started with ${WEBUI_NAME}`
-							: mode === 'ldap'
-								? `Sign in to ${WEBUI_NAME} with LDAP`
-								: mode === 'signin'
-									? `Sign in to ${WEBUI_NAME}`
-									: `Sign up to ${WEBUI_NAME}`}
+							: mode === 'signin'
+								? `Sign in to ${WEBUI_NAME}`
+								: `Sign up to ${WEBUI_NAME}`}
 					</div>
 
 					{error && (
@@ -283,32 +266,18 @@ export function AuthPage() {
 								</div>
 							)}
 
-							{mode === 'ldap' ? (
-								<div className="flex flex-col gap-1 text-left">
-									<Label htmlFor="username">Username</Label>
-									<Input
-										id="username"
-										autoComplete="username"
-										placeholder="Enter Your Username"
-										value={ldapUsername}
-										onChange={(e) => setLdapUsername(e.target.value)}
-										required
-									/>
-								</div>
-							) : (
-								<div className="flex flex-col gap-1 text-left">
-									<Label htmlFor="email">Email</Label>
-									<Input
-										id="email"
-										type="email"
-										autoComplete="email"
-										placeholder="Enter Your Email"
-										value={email}
-										onChange={(e) => setEmail(e.target.value)}
-										required
-									/>
-								</div>
-							)}
+							<div className="flex flex-col gap-1 text-left">
+								<Label htmlFor="email">Email</Label>
+								<Input
+									id="email"
+									type="email"
+									autoComplete="email"
+									placeholder="Enter Your Email"
+									value={email}
+									onChange={(e) => setEmail(e.target.value)}
+									required
+								/>
+							</div>
 
 							<div className="flex flex-col gap-1 text-left">
 								<Label htmlFor="password">Password</Label>
@@ -346,16 +315,14 @@ export function AuthPage() {
 								<Button type="submit" className="w-full" disabled={submitting}>
 									{submitting
 										? 'Please wait…'
-										: mode === 'ldap'
-											? 'Authenticate'
-											: mode === 'signin'
-												? 'Sign in'
-												: config?.onboarding
-													? 'Create Admin Account'
-													: 'Create Account'}
+										: mode === 'signin'
+											? 'Sign in'
+											: config?.onboarding
+												? 'Create Admin Account'
+												: 'Create Account'}
 								</Button>
 
-								{mode !== 'ldap' && config?.features?.enable_signup && !config?.onboarding && (
+								{config?.features?.enable_signup && !config?.onboarding && (
 									<div className="mt-4 text-center text-sm">
 										{mode === 'signin' ? "Don't have an account?" : 'Already have an account?'}{' '}
 										<button
@@ -389,16 +356,6 @@ export function AuthPage() {
 							</Button>
 						))}
 					</div>
-				)}
-
-				{config?.features?.enable_ldap && config?.features?.enable_login_form && (
-					<button
-						type="button"
-						className="mt-2 w-full text-center text-xs underline"
-						onClick={() => setMode(mode === 'ldap' ? (config?.onboarding ? 'signup' : 'signin') : 'ldap')}
-					>
-						{mode === 'ldap' ? 'Continue with Email' : 'Continue with LDAP'}
-					</button>
 				)}
 			</div>
 		</div>

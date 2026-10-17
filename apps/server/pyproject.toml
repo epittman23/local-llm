@@ -120,7 +120,6 @@ dependencies = [
     "azure-identity==1.26.0",
     "azure-storage-blob==12.31.0",
 
-    "ldap3==2.9.1",
 
     # The vector store this install runs on (VECTOR_DB=pgvector in the Makefile).
     "psycopg2-binary==2.9.13",
@@ -263,7 +262,6 @@ pydocstyle.convention = "google"
 "local_llm/models/users.py" = ["C901"]
 "local_llm/retrieval/loaders/main.py" = ["C901"]
 "local_llm/retrieval/utils.py" = ["C901"]
-"local_llm/routers/auths.py" = ["C901"]
 "local_llm/routers/configs.py" = ["C901"]
 "local_llm/routers/images.py" = ["C901"]
 "local_llm/routers/openai.py" = ["C901"]

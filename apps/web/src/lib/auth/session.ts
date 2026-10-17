@@ -160,7 +160,7 @@ export const initAuth = async () => {
 	// backend config, so /error can show something that's not undefined").
 	// This was wrongly gated behind a successful session restore until
 	// Phase 6 needed it: main.py's own /api/config groups `auth`,
-	// `enable_login_form`, `enable_ldap`, `enable_signup`, and `oauth`/
+	// `enable_login_form`, `enable_signup`, and `oauth`/
 	// `onboarding` under "Public: required by login/signup page pre-auth"
 	// (read directly, not inferred) -- an anonymous visitor landing on
 	// /auth needs exactly these fields before any session exists, and the

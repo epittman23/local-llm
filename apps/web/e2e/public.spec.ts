@@ -104,20 +104,6 @@ test('first-run onboarding is shown once config arrives, and leads into admin si
 	await expect(page.getByRole('button', { name: 'Create Admin Account' })).toBeVisible();
 });
 
-test('LDAP-enabled deployments start in LDAP mode and can switch to email', async ({ page }) => {
-	await mockConfig(page, {
-		...baseConfig,
-		features: { ...baseConfig.features, enable_ldap: true }
-	});
-
-	await page.goto('/auth');
-
-	await expect(page.getByText('Sign in to local-llm with LDAP')).toBeVisible();
-	await expect(page.getByLabel('Username')).toBeVisible();
-	await page.getByRole('button', { name: 'Continue with Email' }).click();
-	await expect(page.getByLabel('Email')).toBeVisible();
-});
-
 test('OAuth provider buttons are listed and point at the backend login URL', async ({ page }) => {
 	await mockConfig(page, {
 		...baseConfig,

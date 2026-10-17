@@ -1,20 +1,15 @@
 from __future__ import annotations
 
-import asyncio
 import datetime as dt
 import logging
 import re
 import time
 import urllib
 import uuid
-from ssl import CERT_NONE, CERT_REQUIRED, PROTOCOL_TLS
 
 from aiohttp import BasicAuth, ClientSession
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse, Response
-from ldap3 import NONE, Connection, Server, Tls
-from ldap3.utils.conv import escape_filter_chars
-from ldap3.utils.dn import parse_dn
 from pydantic import BaseModel
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,7 +41,6 @@ from local_llm.models.auths import (
     AddUserForm,
     ApiKey,
     Auths,
-    LdapForm,
     SigninForm,
     SigninResponse,
     SignupForm,
@@ -135,25 +129,6 @@ ADMIN_CONFIG_KEYS = {
     'RESPONSE_WATERMARK': 'ui.watermark',
 }
 
-LDAP_SERVER_CONFIG_KEYS = {
-    'label': 'ldap.server.label',
-    'host': 'ldap.server.host',
-    'port': 'ldap.server.port',
-    'attribute_for_mail': 'ldap.server.attribute_for_mail',
-    'attribute_for_username': 'ldap.server.attribute_for_username',
-    'app_dn': 'ldap.server.app_dn',
-    'app_dn_password': 'ldap.server.app_password',
-    'search_base': 'ldap.server.users_dn',
-    'search_filters': 'ldap.server.search_filter',
-    'use_tls': 'ldap.server.use_tls',
-    'certificate_path': 'ldap.server.ca_cert_file',
-    'validate_cert': 'ldap.server.validate_cert',
-    'ciphers': 'ldap.server.ciphers',
-    'enable_group_management': 'ldap.group.enable_management',
-    'enable_group_creation': 'ldap.group.enable_creation',
-    'attribute_for_groups': 'ldap.server.attribute_for_groups',
-}
-
 
 async def get_config_values(key_map: dict[str, str]) -> dict:
     values = await Config.get_many(*key_map.values())
@@ -174,7 +149,7 @@ async def create_session_response(
 ) -> dict:
     """
     Create JWT token and build session response for a user.
-    Shared helper for signin, signup, ldap_auth, add_user, and token_exchange endpoints.
+    Shared helper for signin, signup, add_user, and token_exchange endpoints.
 
     Args:
         request: FastAPI request object
@@ -421,291 +396,6 @@ async def update_password(
             raise HTTPException(400, detail=ERROR_MESSAGES.INCORRECT_PASSWORD)
     else:
         raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
-
-
-def _unescape_ldap_dn_value(value: str) -> str:
-    """Resolve RFC 4514 escapes in a DN value, e.g. ``CN=Sales\\, EMEA`` -> ``Sales, EMEA``.
-
-    Consecutive ``\\XX`` hex escapes encode UTF-8 bytes and are decoded together.
-    """
-    hexdigits = '0123456789abcdefABCDEF'
-    result = []
-    pos = 0
-    length = len(value)
-    while pos < length:
-        char = value[pos]
-        if char == '\\' and pos + 1 < length:
-            if pos + 2 < length and value[pos + 1] in hexdigits and value[pos + 2] in hexdigits:
-                byte_values = bytearray()
-                while (
-                    pos + 2 < length
-                    and value[pos] == '\\'
-                    and value[pos + 1] in hexdigits
-                    and value[pos + 2] in hexdigits
-                ):
-                    byte_values.append(int(value[pos + 1 : pos + 3], 16))
-                    pos += 3
-                result.append(byte_values.decode('utf-8', errors='replace'))
-            else:
-                # Backslash escaping a literal special char, e.g. "\," or "\+".
-                result.append(value[pos + 1])
-                pos += 2
-        else:
-            result.append(char)
-            pos += 1
-    return ''.join(result)
-
-
-def extract_group_cn_from_dn(group_dn: str) -> str | None:
-    """Return the first CN component of an LDAP group DN, or None.
-
-    Uses ``parse_dn`` so escaped separators inside a value (e.g. a group whose
-    name contains a comma) are handled correctly instead of naively splitting
-    on ``,``.
-    """
-    for attr_type, attr_value, _ in parse_dn(group_dn):
-        if attr_type.upper() == 'CN':
-            return _unescape_ldap_dn_value(attr_value)
-    return None
-
-
-############################
-# LDAP Authentication
-############################
-@router.post('/ldap', response_model=SessionUserResponse)
-async def ldap_auth(
-    request: Request,
-    response: Response,
-    form_data: LdapForm,
-    db: AsyncSession = Depends(get_async_session),
-):
-    # Security checks FIRST - before loading any config
-    if not await Config.get('ldap.enable'):
-        raise HTTPException(400, detail='LDAP authentication is not enabled')
-
-    if not ENABLE_PASSWORD_AUTH:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=ERROR_MESSAGES.ACTION_PROHIBITED,
-        )
-
-    # Reject empty passwords before attempting the LDAP bind.
-    # Per RFC 4513 §5.1.2, a Simple Bind with a non-empty DN but empty
-    # password is "unauthenticated simple authentication" — many LDAP
-    # servers (OpenLDAP default, some AD configs) return success for these,
-    # which would grant access without valid credentials.
-    if not form_data.password or not form_data.password.strip():
-        raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
-
-    # NOW load LDAP config variables
-    LDAP_SERVER_HOST = await Config.get('ldap.server.host')
-    LDAP_SERVER_PORT = await Config.get('ldap.server.port')
-    LDAP_ATTRIBUTE_FOR_MAIL = await Config.get('ldap.server.attribute_for_mail')
-    LDAP_ATTRIBUTE_FOR_USERNAME = await Config.get('ldap.server.attribute_for_username')
-    LDAP_SEARCH_BASE = await Config.get('ldap.server.users_dn')
-    LDAP_SEARCH_FILTERS = await Config.get('ldap.server.search_filter')
-    LDAP_APP_DN = await Config.get('ldap.server.app_dn')
-    LDAP_APP_PASSWORD = await Config.get('ldap.server.app_password')
-    LDAP_USE_TLS = await Config.get('ldap.server.use_tls')
-    LDAP_CA_CERT_FILE = await Config.get('ldap.server.ca_cert_file')
-    LDAP_VALIDATE_CERT = CERT_REQUIRED if await Config.get('ldap.server.validate_cert') else CERT_NONE
-    LDAP_CIPHERS = await Config.get('ldap.server.ciphers') if await Config.get('ldap.server.ciphers') else 'ALL'
-
-    try:
-        tls = Tls(
-            validate=LDAP_VALIDATE_CERT,
-            version=PROTOCOL_TLS,
-            ca_certs_file=LDAP_CA_CERT_FILE,
-            ciphers=LDAP_CIPHERS,
-        )
-    except Exception as e:
-        log.error(f'TLS configuration error: {str(e)}')
-        raise HTTPException(400, detail='Failed to configure TLS for LDAP connection.')
-
-    try:
-        server = Server(
-            host=LDAP_SERVER_HOST,
-            port=LDAP_SERVER_PORT,
-            get_info=NONE,
-            use_ssl=LDAP_USE_TLS,
-            tls=tls,
-        )
-        connection_app = Connection(
-            server,
-            LDAP_APP_DN,
-            LDAP_APP_PASSWORD,
-            auto_bind='NONE',
-            authentication='SIMPLE' if LDAP_APP_DN else 'ANONYMOUS',
-        )
-        if not await asyncio.to_thread(connection_app.bind):
-            raise HTTPException(400, detail='Application account bind failed')
-
-        ENABLE_LDAP_GROUP_MANAGEMENT = await Config.get('ldap.group.enable_management')
-        ENABLE_LDAP_GROUP_CREATION = await Config.get('ldap.group.enable_creation')
-        LDAP_ATTRIBUTE_FOR_GROUPS = await Config.get('ldap.server.attribute_for_groups')
-
-        search_attributes = [
-            f'{LDAP_ATTRIBUTE_FOR_USERNAME}',
-            f'{LDAP_ATTRIBUTE_FOR_MAIL}',
-            'cn',
-        ]
-        if ENABLE_LDAP_GROUP_MANAGEMENT:
-            search_attributes.append(f'{LDAP_ATTRIBUTE_FOR_GROUPS}')
-            log.info('LDAP Group Management enabled. Adding %s to search attributes', LDAP_ATTRIBUTE_FOR_GROUPS)
-        log.info('LDAP search attributes: %s', search_attributes)
-
-        search_success = await asyncio.to_thread(
-            connection_app.search,
-            search_base=LDAP_SEARCH_BASE,
-            search_filter=f'(&({LDAP_ATTRIBUTE_FOR_USERNAME}={escape_filter_chars(form_data.user.lower())}){LDAP_SEARCH_FILTERS})',
-            attributes=search_attributes,
-        )
-        if not search_success or not connection_app.entries:
-            raise HTTPException(400, detail='User not found in the LDAP server')
-
-        entry = connection_app.entries[0]
-        entry_username = entry[f'{LDAP_ATTRIBUTE_FOR_USERNAME}'].value
-        email = entry[f'{LDAP_ATTRIBUTE_FOR_MAIL}'].value  # retrieve the Attribute value
-
-        username_list = []  # list of usernames from LDAP attribute
-        if isinstance(entry_username, list):
-            username_list = [str(name).lower() for name in entry_username]
-        else:
-            username_list = [str(entry_username).lower()]
-
-        # TODO: support multiple emails if LDAP returns a list
-        if not email:
-            raise HTTPException(400, 'User does not have a valid email address.')
-        elif isinstance(email, str):
-            email = email.lower()
-        elif isinstance(email, list):
-            email = email[0].lower()
-        else:
-            email = str(email).lower()
-
-        cn = str(entry['cn'])  # common name
-        user_dn = entry.entry_dn  # user distinguished name
-
-        user_groups = []
-        if ENABLE_LDAP_GROUP_MANAGEMENT and LDAP_ATTRIBUTE_FOR_GROUPS in entry:
-            group_dns = entry[LDAP_ATTRIBUTE_FOR_GROUPS]
-            log.info('LDAP raw group DNs for user %s: %s', username_list, group_dns)
-
-            if group_dns:
-                log.info('LDAP group_dns original: %s', group_dns)
-                log.info('LDAP group_dns type: %s', type(group_dns))
-                log.info('LDAP group_dns length: %s', len(group_dns))
-
-                if hasattr(group_dns, 'value'):
-                    group_dns = group_dns.value
-                    log.info('Extracted .value property: %s', group_dns)
-                elif hasattr(group_dns, '__iter__') and not isinstance(group_dns, (str, bytes)):
-                    group_dns = list(group_dns)
-                    log.info('Converted to list: %s', group_dns)
-
-                if isinstance(group_dns, list):
-                    group_dns = [str(item) for item in group_dns]
-                else:
-                    group_dns = [str(group_dns)]
-
-                log.info('LDAP group_dns after processing - type: %s, length: %s', type(group_dns), len(group_dns))
-
-                for group_idx, group_dn in enumerate(group_dns):
-                    group_dn = str(group_dn)
-                    log.info('Processing group DN #%s: %s', group_idx + 1, group_dn)
-
-                    try:
-                        group_cn = extract_group_cn_from_dn(group_dn)
-
-                        if group_cn:
-                            user_groups.append(group_cn)
-                        else:
-                            log.warning(f'Could not extract CN from group DN: {group_dn}')
-                    except Exception as e:
-                        log.warning(f'Failed to extract group name from DN {group_dn}: {e}')
-
-                log.info('LDAP groups for user %s: %s (total: %s)', username_list, user_groups, len(user_groups))
-            else:
-                log.info('No groups found for user %s', username_list)
-        elif ENABLE_LDAP_GROUP_MANAGEMENT:
-            log.warning(
-                f'LDAP Group Management enabled but {LDAP_ATTRIBUTE_FOR_GROUPS} attribute not found in user entry'
-            )
-
-        if username_list and form_data.user.lower() in username_list:
-            connection_user = Connection(
-                server,
-                user_dn,
-                form_data.password,
-                auto_bind='NONE',
-                authentication='SIMPLE',
-            )
-            if not await asyncio.to_thread(connection_user.bind):
-                raise HTTPException(400, 'Authentication failed.')
-
-            user = await Users.get_user_by_email(email, db=db)
-            if not user:
-                try:
-                    # Insert with default role first to avoid TOCTOU race on
-                    # first-user registration.  Matches signup_handler pattern.
-                    user = await Auths.insert_new_auth(
-                        email=email,
-                        password=str(uuid.uuid4()),
-                        name=cn,
-                        role=await Config.get('ui.default_user_role'),
-                        db=db,
-                    )
-
-                    if not user:
-                        raise HTTPException(500, detail=ERROR_MESSAGES.CREATE_USER_ERROR)
-
-                    # Atomically check if this is the only user *after* the
-                    # insert.  Only the single user present should become admin.
-                    if await Users.get_num_users(db=db) == 1:
-                        await Users.update_user_role_by_id(user.id, 'admin', db=db)
-                        user = await Users.get_user_by_id(user.id, db=db)
-
-                    await apply_default_group_assignment(
-                        await Config.get('ui.default_group_id'),
-                        user.id,
-                        db=db,
-                    )
-
-                    await publish_event(
-                        request,
-                        EVENTS.USER_CREATED,
-                        actor=user,
-                        subject_id=user.id,
-                        source='ldap',
-                        data={'role': user.role},
-                    )
-
-                except HTTPException:
-                    raise
-                except Exception as err:
-                    log.error(f'LDAP user creation error: {str(err)}')
-                    raise HTTPException(500, detail='Internal error occurred during LDAP user creation.')
-
-            user = await Auths.authenticate_user_by_email(email, db=db)
-
-            if user:
-                if ENABLE_LDAP_GROUP_MANAGEMENT and user_groups:
-                    try:
-                        if ENABLE_LDAP_GROUP_CREATION:
-                            await Groups.create_groups_by_group_names(user.id, user_groups, db=db)
-                        await Groups.sync_groups_by_group_names(user.id, user_groups, db=db)
-                        log.info('Successfully synced groups for user %s: %s', user.id, user_groups)
-                    except Exception as e:
-                        log.error(f'Failed to sync groups for user {user.id}: {e}')
-
-                return await create_session_response(request, user, db, response, set_cookie=True, source='ldap')
-            else:
-                raise HTTPException(400, detail=ERROR_MESSAGES.INVALID_CRED)
-        else:
-            raise HTTPException(400, 'User record mismatch.')
-    except Exception as e:
-        log.error(f'LDAP authentication error: {str(e)}')
-        raise HTTPException(400, detail='LDAP authentication failed.')
 
 
 ############################
@@ -1261,71 +951,6 @@ async def update_admin_config(request: Request, form_data: AdminConfig, user=Dep
 
     await Config.upsert(updates)
     return await get_config_values(ADMIN_CONFIG_KEYS)
-
-
-class LdapServerConfig(BaseModel):
-    label: str
-    host: str
-    port: int | None = None
-    attribute_for_mail: str = 'mail'
-    attribute_for_username: str = 'uid'
-    app_dn: str
-    app_dn_password: str
-    search_base: str
-    search_filters: str = ''
-    use_tls: bool = True
-    certificate_path: str | None = None
-    validate_cert: bool = True
-    ciphers: str | None = 'ALL'
-    enable_group_management: bool = False
-    enable_group_creation: bool = False
-    attribute_for_groups: str = 'memberOf'
-
-
-@router.get('/admin/config/ldap/server', response_model=LdapServerConfig)
-async def get_ldap_server(request: Request, user=Depends(get_admin_user)):
-    return await get_config_values(LDAP_SERVER_CONFIG_KEYS)
-
-
-@router.post('/admin/config/ldap/server')
-async def update_ldap_server(request: Request, form_data: LdapServerConfig, user=Depends(get_admin_user)):
-    required_fields = [
-        'label',
-        'host',
-        'attribute_for_mail',
-        'attribute_for_username',
-        'search_base',
-    ]
-    for key in required_fields:
-        value = getattr(form_data, key)
-        if not value:
-            raise HTTPException(400, detail=ERROR_MESSAGES.REQUIRED_FIELD_EMPTY(key))
-
-    # The group attribute is what group management reads from the directory
-    # entry; an empty value would make group sync silently do nothing.
-    if form_data.enable_group_management and not (form_data.attribute_for_groups or '').strip():
-        raise HTTPException(400, detail=ERROR_MESSAGES.REQUIRED_FIELD_EMPTY('attribute_for_groups'))
-
-    updates = config_updates(form_data.model_dump(), LDAP_SERVER_CONFIG_KEYS)
-    updates['ldap.server.app_dn'] = form_data.app_dn or ''
-    updates['ldap.server.app_password'] = form_data.app_dn_password or ''
-    await Config.upsert(updates)
-    return await get_config_values(LDAP_SERVER_CONFIG_KEYS)
-
-
-@router.get('/admin/config/ldap')
-async def get_ldap_config(request: Request, user=Depends(get_admin_user)):
-    return {'ENABLE_LDAP': await Config.get('ldap.enable')}
-
-
-class LdapConfigForm(BaseModel):
-    enable_ldap: bool | None = None
-
-
-@router.post('/admin/config/ldap')
-async def update_ldap_config(request: Request, form_data: LdapConfigForm, user=Depends(get_admin_user)):
-    await Config.upsert({'ldap.enable': form_data.enable_ldap})
-    return {'ENABLE_LDAP': await Config.get('ldap.enable')}
 
 
 ############################
