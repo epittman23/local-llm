@@ -337,3 +337,12 @@ def test_record_golden(monkeypatch, tmp_path):
     golden = json.loads(json.dumps(golden).replace(str(tmp_path) + '/', '<tmp>/'))
     GOLDEN.parent.mkdir(exist_ok=True)
     GOLDEN.write_text(json.dumps(golden, indent=1, ensure_ascii=False) + '\n', encoding='utf-8')
+
+
+def test_a_missing_community_loader_is_an_import_error():
+    """New with the refactor: the lookup helper mirrors `from ... import`, so callers' fallbacks still apply."""
+    with pytest.raises(ImportError):
+        loaders._community_loader('NoSuchLoaderAnywhere')
+    with pytest.raises(ValueError, match=r"Processing \.x files requires the 'unstructured' package"):
+        loaders._unstructured_required('NoSuchLoaderAnywhere', 'f.x', '.x')
+    assert loaders._unstructured_or_fallback('NoSuchLoaderAnywhere', 'f.x', lambda: 'fell back', 'note') == 'fell back'

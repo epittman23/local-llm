@@ -1,5 +1,6 @@
 import asyncio
 import csv
+import importlib
 import logging
 import os
 import sys
@@ -99,6 +100,51 @@ known_archive_content_types = {
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 }
+
+
+DEFAULT_ARCHIVE_LIMIT = 100 * 1024 * 1024
+DATALAB_MARKER_EXTENSIONS = [
+    'pdf', 'xls', 'xlsx', 'ods', 'doc', 'docx', 'odt', 'ppt', 'pptx', 'odp',
+    'html', 'epub', 'png', 'jpeg', 'jpg', 'webp', 'gif', 'tiff',
+]  # fmt: skip
+DOCX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+PPTX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+DOCUMENT_INTELLIGENCE_EXTENSIONS = ['pdf', 'docx', 'ppt', 'pptx']
+DOCUMENT_INTELLIGENCE_CONTENT_TYPES = [DOCX_CONTENT_TYPE, 'application/vnd.ms-powerpoint', PPTX_CONTENT_TYPE]
+EXCEL_CONTENT_TYPES = ['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']
+POWERPOINT_CONTENT_TYPES = ['application/vnd.ms-powerpoint', PPTX_CONTENT_TYPE]
+
+
+def _community_loader(name: str):
+    """A langchain_community loader class, looked up when first needed.
+
+    Like a `from langchain_community.document_loaders import <name>` inside
+    the function: ImportError when it can't be had, so callers can fall back.
+    """
+    try:
+        return getattr(importlib.import_module('langchain_community.document_loaders'), name)
+    except AttributeError as e:
+        raise ImportError(f'cannot import name {name!r} from langchain_community.document_loaders') from e
+
+
+def _unstructured_or_fallback(class_name: str, file_path: str, fallback, note: str, **kwargs):
+    """An unstructured-based loader, or fallback() with a warning when the package isn't installed."""
+    try:
+        return _community_loader(class_name)(file_path, **kwargs)
+    except ImportError:
+        log.warning("The 'unstructured' package is not installed. " + note)
+        return fallback()
+
+
+def _unstructured_required(class_name: str, file_path: str, file_type: str, **kwargs):
+    """An unstructured-based loader for a file type nothing else can read; ValueError without the package."""
+    try:
+        return _community_loader(class_name)(file_path, **kwargs)
+    except ImportError:
+        raise ValueError(
+            f"Processing {file_type} files requires the 'unstructured' package. "
+            'Install it with: pip install unstructured'
+        )
 
 
 class ExcelLoader:
@@ -485,309 +531,240 @@ class Loader:
         return (cjk_count / total) >= threshold
 
     def _get_loader(self, filename: str, file_content_type: str, file_path: str):
+        """The loader for this file: the configured engine's, when it applies, else one chosen by file type."""
         file_ext = filename.split('.')[-1].lower()
-
         if file_ext in known_archive_ext or file_content_type in known_archive_content_types:
-            max_file_size = self.kwargs.get('FILE_MAX_SIZE')
+            self._check_archive_size(file_path)
+
+        engine_loader = {
+            'external': self._external_loader,
+            'tika': self._tika_loader,
+            'datalab_marker': self._datalab_marker_loader,
+            'docling': self._docling_loader,
+            'document_intelligence': self._document_intelligence_loader,
+            'mineru': self._mineru_loader,
+            'mistral_ocr': self._mistral_ocr_loader,
+            'paddleocr_vl': self._paddleocr_vl_loader,
+        }.get(self.engine)
+        loader = engine_loader(filename, file_ext, file_content_type, file_path) if engine_loader else None
+        if loader is not None:
+            return loader
+        return self._file_type_loader(filename, file_ext, file_content_type, file_path)
+
+    def _check_archive_size(self, file_path: str) -> None:
+        """Rejects a zip-based document that decompresses to far more than its size (a zip bomb)."""
+        max_file_size = self.kwargs.get('FILE_MAX_SIZE')
+        try:
+            max_file_size_bytes = int(max_file_size) * 1024 * 1024 if max_file_size else DEFAULT_ARCHIVE_LIMIT
+        except (TypeError, ValueError):
+            max_file_size_bytes = DEFAULT_ARCHIVE_LIMIT
+        if max_file_size_bytes <= 0:
+            return
+        try:
+            with zipfile.ZipFile(file_path) as archive:
+                uncompressed_size = sum(entry.file_size for entry in archive.infolist())
+        except (zipfile.BadZipFile, OSError):
+            return
+        max_bytes = min(max(10 * 1024 * 1024, os.path.getsize(file_path) * 100), max_file_size_bytes)
+        if uncompressed_size > max_bytes:
+            raise ValueError('Document archive is too large after decompression')
+
+    def _text_loader(self, file_path: str):
+        return TextLoader(file_path, encoding=self._detect_text_encoding(file_path))
+
+    # Each engine's loader returns None when its configuration or the file
+    # type doesn't apply; the file then goes to _file_type_loader.
+
+    def _external_loader(self, filename, file_ext, file_content_type, file_path):
+        if not (
+            self.kwargs.get('EXTERNAL_DOCUMENT_LOADER_URL') and self.kwargs.get('EXTERNAL_DOCUMENT_LOADER_API_KEY')
+        ):
+            return None
+        return ExternalDocumentLoader(
+            file_path=file_path,
+            url=self.kwargs.get('EXTERNAL_DOCUMENT_LOADER_URL'),
+            api_key=self.kwargs.get('EXTERNAL_DOCUMENT_LOADER_API_KEY'),
+            mime_type=file_content_type,
+            user=self.user,
+            user_groups=self.user_groups,
+            headers=self.kwargs.get('EXTERNAL_DOCUMENT_LOADER_HEADERS'),
+            metadata={**self.metadata, 'file_name': filename, 'file_content_type': file_content_type},
+        )
+
+    def _tika_loader(self, filename, file_ext, file_content_type, file_path):
+        if not self.kwargs.get('TIKA_SERVER_URL'):
+            return None
+        if self._is_text_file(file_ext, file_content_type):
+            return self._text_loader(file_path)
+        return TikaLoader(
+            url=self.kwargs.get('TIKA_SERVER_URL'),
+            file_path=file_path,
+            server_version=self.kwargs.get('TIKA_SERVER_VERSION'),
+            extract_images=self.kwargs.get('PDF_EXTRACT_IMAGES'),
+        )
+
+    def _datalab_marker_loader(self, filename, file_ext, file_content_type, file_path):
+        if not (self.kwargs.get('DATALAB_MARKER_API_KEY') and file_ext in DATALAB_MARKER_EXTENSIONS):
+            return None
+        api_base_url = self.kwargs.get('DATALAB_MARKER_API_BASE_URL', '')
+        if not api_base_url or api_base_url.strip() == '':
+            api_base_url = 'https://www.datalab.to/api/v1/marker'  # https://github.com/open-webui/open-webui/pull/16867#issuecomment-3218424349
+        return DatalabMarkerLoader(
+            file_path=file_path,
+            api_key=self.kwargs['DATALAB_MARKER_API_KEY'],
+            api_base_url=api_base_url,
+            additional_config=self.kwargs.get('DATALAB_MARKER_ADDITIONAL_CONFIG'),
+            use_llm=self.kwargs.get('DATALAB_MARKER_USE_LLM', False),
+            skip_cache=self.kwargs.get('DATALAB_MARKER_SKIP_CACHE', False),
+            force_ocr=self.kwargs.get('DATALAB_MARKER_FORCE_OCR', False),
+            paginate=self.kwargs.get('DATALAB_MARKER_PAGINATE', False),
+            strip_existing_ocr=self.kwargs.get('DATALAB_MARKER_STRIP_EXISTING_OCR', False),
+            disable_image_extraction=self.kwargs.get('DATALAB_MARKER_DISABLE_IMAGE_EXTRACTION', False),
+            format_lines=self.kwargs.get('DATALAB_MARKER_FORMAT_LINES', False),
+            output_format=self.kwargs.get('DATALAB_MARKER_OUTPUT_FORMAT', 'markdown'),
+        )
+
+    def _docling_loader(self, filename, file_ext, file_content_type, file_path):
+        if not self.kwargs.get('DOCLING_SERVER_URL'):
+            return None
+        if self._is_text_file(file_ext, file_content_type):
+            return self._text_loader(file_path)
+        params = self.kwargs.get('DOCLING_PARAMS', {})
+        if not isinstance(params, dict):
             try:
-                max_file_size_bytes = int(max_file_size) * 1024 * 1024 if max_file_size else 100 * 1024 * 1024
-            except (TypeError, ValueError):
-                max_file_size_bytes = 100 * 1024 * 1024
+                params = JSONCodec.loads(params)
+            except JSONCodec.JSONDecodeError:
+                log.error('Invalid DOCLING_PARAMS format, expected JSON object')
+                params = {}
+        return DoclingLoader(
+            url=self.kwargs.get('DOCLING_SERVER_URL'),
+            api_key=self.kwargs.get('DOCLING_API_KEY', None),
+            file_path=file_path,
+            mime_type=file_content_type,
+            params=params,
+        )
 
-            if max_file_size_bytes > 0:
-                try:
-                    with zipfile.ZipFile(file_path) as archive:
-                        uncompressed_size = sum(entry.file_size for entry in archive.infolist())
-                except (zipfile.BadZipFile, OSError):
-                    pass
-                else:
-                    max_bytes = min(
-                        max(10 * 1024 * 1024, os.path.getsize(file_path) * 100),
-                        max_file_size_bytes,
-                    )
-                    if uncompressed_size > max_bytes:
-                        raise ValueError('Document archive is too large after decompression')
+    def _document_intelligence_loader(self, filename, file_ext, file_content_type, file_path):
+        # Only an empty endpoint disables it; an unset one (None) does not.
+        if self.kwargs.get('DOCUMENT_INTELLIGENCE_ENDPOINT') == '' or not (
+            file_ext in DOCUMENT_INTELLIGENCE_EXTENSIONS or file_content_type in DOCUMENT_INTELLIGENCE_CONTENT_TYPES
+        ):
+            return None
+        if self.kwargs.get('DOCUMENT_INTELLIGENCE_KEY') != '':
+            credentials = {'api_key': self.kwargs.get('DOCUMENT_INTELLIGENCE_KEY')}
+        else:
+            credentials = {'azure_credential': DefaultAzureCredential()}
+        return AzureAIDocumentIntelligenceLoader(
+            file_path=file_path,
+            api_endpoint=self.kwargs.get('DOCUMENT_INTELLIGENCE_ENDPOINT'),
+            **credentials,
+            api_model=self.kwargs.get('DOCUMENT_INTELLIGENCE_MODEL'),
+        )
 
-        if (
-            self.engine == 'external'
-            and self.kwargs.get('EXTERNAL_DOCUMENT_LOADER_URL')
-            and self.kwargs.get('EXTERNAL_DOCUMENT_LOADER_API_KEY')
-        ):
-            loader = ExternalDocumentLoader(
-                file_path=file_path,
-                url=self.kwargs.get('EXTERNAL_DOCUMENT_LOADER_URL'),
-                api_key=self.kwargs.get('EXTERNAL_DOCUMENT_LOADER_API_KEY'),
-                mime_type=file_content_type,
-                user=self.user,
-                user_groups=self.user_groups,
-                headers=self.kwargs.get('EXTERNAL_DOCUMENT_LOADER_HEADERS'),
-                metadata={
-                    **self.metadata,
-                    'file_name': filename,
-                    'file_content_type': file_content_type,
-                },
-            )
-        elif self.engine == 'tika' and self.kwargs.get('TIKA_SERVER_URL'):
-            if self._is_text_file(file_ext, file_content_type):
-                loader = TextLoader(file_path, encoding=self._detect_text_encoding(file_path))
-            else:
-                loader = TikaLoader(
-                    url=self.kwargs.get('TIKA_SERVER_URL'),
-                    file_path=file_path,
-                    server_version=self.kwargs.get('TIKA_SERVER_VERSION'),
-                    extract_images=self.kwargs.get('PDF_EXTRACT_IMAGES'),
-                )
-        elif (
-            self.engine == 'datalab_marker'
-            and self.kwargs.get('DATALAB_MARKER_API_KEY')
-            and file_ext
-            in [
-                'pdf',
-                'xls',
-                'xlsx',
-                'ods',
-                'doc',
-                'docx',
-                'odt',
-                'ppt',
-                'pptx',
-                'odp',
-                'html',
-                'epub',
-                'png',
-                'jpeg',
-                'jpg',
-                'webp',
-                'gif',
-                'tiff',
-            ]
-        ):
-            api_base_url = self.kwargs.get('DATALAB_MARKER_API_BASE_URL', '')
-            if not api_base_url or api_base_url.strip() == '':
-                api_base_url = 'https://www.datalab.to/api/v1/marker'  # https://github.com/open-webui/open-webui/pull/16867#issuecomment-3218424349
+    def _mineru_loader(self, filename, file_ext, file_content_type, file_path):
+        if file_ext not in self.kwargs.get('MINERU_FILE_EXTENSIONS', ['pdf']):
+            return None
+        mineru_timeout = self.kwargs.get('MINERU_API_TIMEOUT', 300)
+        if mineru_timeout:
+            try:
+                mineru_timeout = int(mineru_timeout)
+            except ValueError:
+                mineru_timeout = 300
+        return MinerULoader(
+            file_path=file_path,
+            api_mode=self.kwargs.get('MINERU_API_MODE', 'local'),
+            api_url=self.kwargs.get('MINERU_API_URL', 'http://localhost:8000'),
+            api_key=self.kwargs.get('MINERU_API_KEY', ''),
+            params=self.kwargs.get('MINERU_PARAMS', {}),
+            timeout=mineru_timeout,
+            max_markdown_bytes=MINERU_MAX_MARKDOWN_BYTES,
+        )
 
-            loader = DatalabMarkerLoader(
-                file_path=file_path,
-                api_key=self.kwargs['DATALAB_MARKER_API_KEY'],
-                api_base_url=api_base_url,
-                additional_config=self.kwargs.get('DATALAB_MARKER_ADDITIONAL_CONFIG'),
-                use_llm=self.kwargs.get('DATALAB_MARKER_USE_LLM', False),
-                skip_cache=self.kwargs.get('DATALAB_MARKER_SKIP_CACHE', False),
-                force_ocr=self.kwargs.get('DATALAB_MARKER_FORCE_OCR', False),
-                paginate=self.kwargs.get('DATALAB_MARKER_PAGINATE', False),
-                strip_existing_ocr=self.kwargs.get('DATALAB_MARKER_STRIP_EXISTING_OCR', False),
-                disable_image_extraction=self.kwargs.get('DATALAB_MARKER_DISABLE_IMAGE_EXTRACTION', False),
-                format_lines=self.kwargs.get('DATALAB_MARKER_FORMAT_LINES', False),
-                output_format=self.kwargs.get('DATALAB_MARKER_OUTPUT_FORMAT', 'markdown'),
-            )
-        elif self.engine == 'docling' and self.kwargs.get('DOCLING_SERVER_URL'):
-            if self._is_text_file(file_ext, file_content_type):
-                loader = TextLoader(file_path, encoding=self._detect_text_encoding(file_path))
-            else:
-                # Build params for DoclingLoader
-                params = self.kwargs.get('DOCLING_PARAMS', {})
-                if not isinstance(params, dict):
-                    try:
-                        params = JSONCodec.loads(params)
-                    except JSONCodec.JSONDecodeError:
-                        log.error('Invalid DOCLING_PARAMS format, expected JSON object')
-                        params = {}
+    def _mistral_ocr_loader(self, filename, file_ext, file_content_type, file_path):
+        # Mistral OCR currently only supports PDF and images. Only an empty
+        # key disables it; an unset one (None) does not.
+        if self.kwargs.get('MISTRAL_OCR_API_KEY') == '' or file_ext not in ['pdf']:
+            return None
+        return MistralLoader(
+            base_url=self.kwargs.get('MISTRAL_OCR_API_BASE_URL'),
+            api_key=self.kwargs.get('MISTRAL_OCR_API_KEY'),
+            file_path=file_path,
+            use_base64=self.kwargs.get('MISTRAL_OCR_USE_BASE64', False),
+            user=self.user,
+        )
 
-                loader = DoclingLoader(
-                    url=self.kwargs.get('DOCLING_SERVER_URL'),
-                    api_key=self.kwargs.get('DOCLING_API_KEY', None),
-                    file_path=file_path,
-                    mime_type=file_content_type,
-                    params=params,
-                )
-        elif (
-            self.engine == 'document_intelligence'
-            and self.kwargs.get('DOCUMENT_INTELLIGENCE_ENDPOINT') != ''
-            and (
-                file_ext in ['pdf', 'docx', 'ppt', 'pptx']
-                or file_content_type
-                in [
-                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                    'application/vnd.ms-powerpoint',
-                    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-                ]
-            )
-        ):
-            if self.kwargs.get('DOCUMENT_INTELLIGENCE_KEY') != '':
-                loader = AzureAIDocumentIntelligenceLoader(
-                    file_path=file_path,
-                    api_endpoint=self.kwargs.get('DOCUMENT_INTELLIGENCE_ENDPOINT'),
-                    api_key=self.kwargs.get('DOCUMENT_INTELLIGENCE_KEY'),
-                    api_model=self.kwargs.get('DOCUMENT_INTELLIGENCE_MODEL'),
-                )
-            else:
-                loader = AzureAIDocumentIntelligenceLoader(
-                    file_path=file_path,
-                    api_endpoint=self.kwargs.get('DOCUMENT_INTELLIGENCE_ENDPOINT'),
-                    azure_credential=DefaultAzureCredential(),
-                    api_model=self.kwargs.get('DOCUMENT_INTELLIGENCE_MODEL'),
-                )
-        elif self.engine == 'mineru' and file_ext in self.kwargs.get('MINERU_FILE_EXTENSIONS', ['pdf']):
-            mineru_timeout = self.kwargs.get('MINERU_API_TIMEOUT', 300)
-            if mineru_timeout:
-                try:
-                    mineru_timeout = int(mineru_timeout)
-                except ValueError:
-                    mineru_timeout = 300
-            loader = MinerULoader(
-                file_path=file_path,
-                api_mode=self.kwargs.get('MINERU_API_MODE', 'local'),
-                api_url=self.kwargs.get('MINERU_API_URL', 'http://localhost:8000'),
-                api_key=self.kwargs.get('MINERU_API_KEY', ''),
-                params=self.kwargs.get('MINERU_PARAMS', {}),
-                timeout=mineru_timeout,
-                max_markdown_bytes=MINERU_MAX_MARKDOWN_BYTES,
-            )
-        elif (
-            self.engine == 'mistral_ocr'
-            and self.kwargs.get('MISTRAL_OCR_API_KEY') != ''
-            and file_ext in ['pdf']  # Mistral OCR currently only supports PDF and images
-        ):
-            loader = MistralLoader(
-                base_url=self.kwargs.get('MISTRAL_OCR_API_BASE_URL'),
-                api_key=self.kwargs.get('MISTRAL_OCR_API_KEY'),
-                file_path=file_path,
-                use_base64=self.kwargs.get('MISTRAL_OCR_USE_BASE64', False),
-                user=self.user,
-            )
-        elif (
-            self.engine == 'paddleocr_vl'
-            and self.kwargs.get('PADDLEOCR_VL_BASE_URL')
+    def _paddleocr_vl_loader(self, filename, file_ext, file_content_type, file_path):
+        if not (
+            self.kwargs.get('PADDLEOCR_VL_BASE_URL')
             and self.kwargs.get('PADDLEOCR_VL_TOKEN')
             and file_ext in PADDLEOCR_VL_SUPPORTED_EXTENSIONS
         ):
-            loader = PaddleOCRVLLoader(
-                api_url=self.kwargs.get('PADDLEOCR_VL_BASE_URL'),
-                token=self.kwargs.get('PADDLEOCR_VL_TOKEN'),
-                file_path=file_path,
+            return None
+        return PaddleOCRVLLoader(
+            api_url=self.kwargs.get('PADDLEOCR_VL_BASE_URL'),
+            token=self.kwargs.get('PADDLEOCR_VL_TOKEN'),
+            file_path=file_path,
+        )
+
+    def _file_type_loader(self, filename, file_ext, file_content_type, file_path):
+        """The built-in loader for a file type, used when no engine applies; plain text for anything unknown."""
+        if file_ext == 'pdf':
+            return PyPDFLoader(
+                file_path,
+                extract_images=self.kwargs.get('PDF_EXTRACT_IMAGES'),
+                mode=self.kwargs.get('PDF_LOADER_MODE', 'page'),
             )
-        else:
-            if file_ext == 'pdf':
-                loader = PyPDFLoader(
-                    file_path,
-                    extract_images=self.kwargs.get('PDF_EXTRACT_IMAGES'),
-                    mode=self.kwargs.get('PDF_LOADER_MODE', 'page'),
-                )
-            elif file_ext == 'csv':
-                loader = CSVLoaderWithSummary(
-                    file_path,
-                    filename,
-                    self._detect_text_encoding(file_path),
-                )
-            elif file_ext == 'rst':
-                try:
-                    from langchain_community.document_loaders import UnstructuredRSTLoader
+        if file_ext == 'csv':
+            return CSVLoaderWithSummary(file_path, filename, self._detect_text_encoding(file_path))
+        if file_ext == 'rst':
+            return _unstructured_or_fallback(
+                'UnstructuredRSTLoader',
+                file_path,
+                lambda: self._text_loader(file_path),
+                'Falling back to plain text loading for .rst file. Install it with: pip install unstructured',
+                mode='elements',
+            )
+        if file_ext == 'xml':
+            return _unstructured_or_fallback(
+                'UnstructuredXMLLoader',
+                file_path,
+                lambda: self._text_loader(file_path),
+                'Falling back to plain text loading for .xml file. Install it with: pip install unstructured',
+            )
+        if file_ext in ['htm', 'html']:
+            return BSHTMLLoader(file_path, open_encoding='unicode_escape')
+        if file_ext == 'md':
+            return self._text_loader(file_path)
+        office_loader = self._office_loader(file_ext, file_content_type, file_path)
+        return office_loader if office_loader is not None else self._text_loader(file_path)
 
-                    loader = UnstructuredRSTLoader(file_path, mode='elements')
-                except ImportError:
-                    log.warning(
-                        "The 'unstructured' package is not installed. "
-                        'Falling back to plain text loading for .rst file. '
-                        'Install it with: pip install unstructured'
-                    )
-                    loader = TextLoader(file_path, encoding=self._detect_text_encoding(file_path))
-            elif file_ext == 'xml':
-                try:
-                    from langchain_community.document_loaders import UnstructuredXMLLoader
-
-                    loader = UnstructuredXMLLoader(file_path)
-                except ImportError:
-                    log.warning(
-                        "The 'unstructured' package is not installed. "
-                        'Falling back to plain text loading for .xml file. '
-                        'Install it with: pip install unstructured'
-                    )
-                    loader = TextLoader(file_path, encoding=self._detect_text_encoding(file_path))
-            elif file_ext in ['htm', 'html']:
-                loader = BSHTMLLoader(file_path, open_encoding='unicode_escape')
-            elif file_ext == 'md':
-                loader = TextLoader(file_path, encoding=self._detect_text_encoding(file_path))
-            elif file_content_type == 'application/epub+zip':
-                try:
-                    from langchain_community.document_loaders import UnstructuredEPubLoader
-
-                    loader = UnstructuredEPubLoader(file_path)
-                except ImportError:
-                    raise ValueError(
-                        "Processing .epub files requires the 'unstructured' package. "
-                        'Install it with: pip install unstructured'
-                    )
-            elif (
-                file_content_type == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-                or file_ext == 'docx'
-            ):
-                loader = Docx2txtLoader(file_path)
-            elif file_ext == 'doc' or file_content_type == 'application/msword':
-                try:
-                    from langchain_community.document_loaders import UnstructuredWordDocumentLoader
-
-                    loader = UnstructuredWordDocumentLoader(file_path)
-                except ImportError:
-                    raise ValueError(
-                        "Processing .doc files requires the 'unstructured' package. "
-                        'Install it with: pip install unstructured'
-                    )
-            elif file_content_type in [
-                'application/vnd.ms-excel',
-                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            ] or file_ext in ['xls', 'xlsx']:
-                try:
-                    from langchain_community.document_loaders import UnstructuredExcelLoader
-
-                    loader = UnstructuredExcelLoader(file_path)
-                except ImportError:
-                    log.warning(
-                        "The 'unstructured' package is not installed. "
-                        'Falling back to pandas for Excel file loading. '
-                        'Install unstructured for better results: pip install unstructured'
-                    )
-                    loader = ExcelLoader(file_path)
-            elif file_content_type in [
-                'application/vnd.ms-powerpoint',
-                'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-            ] or file_ext in ['ppt', 'pptx']:
-                try:
-                    from langchain_community.document_loaders import UnstructuredPowerPointLoader
-
-                    loader = UnstructuredPowerPointLoader(file_path)
-                except ImportError:
-                    log.warning(
-                        "The 'unstructured' package is not installed. "
-                        'Falling back to python-pptx for PowerPoint file loading. '
-                        'Install unstructured for better results: pip install unstructured'
-                    )
-                    loader = PptxLoader(file_path)
-            elif file_ext == 'msg':
-                try:
-                    from langchain_community.document_loaders import (
-                        UnstructuredEmailLoader,
-                    )
-
-                    # unstructured parses .msg via python-oxmsg; avoids extract_msg's beautifulsoup4<4.14 conflict
-                    loader = UnstructuredEmailLoader(file_path, process_attachments=False)
-                except ImportError:
-                    raise ValueError(
-                        "Processing .msg files requires the 'unstructured' package. "
-                        'Install it with: pip install unstructured'
-                    )
-            elif file_ext == 'odt':
-                try:
-                    from langchain_community.document_loaders import UnstructuredODTLoader
-
-                    loader = UnstructuredODTLoader(file_path)
-                except ImportError:
-                    raise ValueError(
-                        "Processing .odt files requires the 'unstructured' package. "
-                        'Install it with: pip install unstructured'
-                    )
-            elif self._is_text_file(file_ext, file_content_type):
-                loader = TextLoader(file_path, encoding=self._detect_text_encoding(file_path))
-            else:
-                loader = TextLoader(file_path, encoding=self._detect_text_encoding(file_path))
-
-        return loader
+    def _office_loader(self, file_ext, file_content_type, file_path):
+        """Loaders for e-books, Office and OpenDocument files, and email; None for anything else."""
+        if file_content_type == 'application/epub+zip':
+            return _unstructured_required('UnstructuredEPubLoader', file_path, '.epub')
+        if file_content_type == DOCX_CONTENT_TYPE or file_ext == 'docx':
+            return Docx2txtLoader(file_path)
+        if file_ext == 'doc' or file_content_type == 'application/msword':
+            return _unstructured_required('UnstructuredWordDocumentLoader', file_path, '.doc')
+        if file_content_type in EXCEL_CONTENT_TYPES or file_ext in ['xls', 'xlsx']:
+            return _unstructured_or_fallback(
+                'UnstructuredExcelLoader',
+                file_path,
+                lambda: ExcelLoader(file_path),
+                'Falling back to pandas for Excel file loading. '
+                'Install unstructured for better results: pip install unstructured',
+            )
+        if file_content_type in POWERPOINT_CONTENT_TYPES or file_ext in ['ppt', 'pptx']:
+            return _unstructured_or_fallback(
+                'UnstructuredPowerPointLoader',
+                file_path,
+                lambda: PptxLoader(file_path),
+                'Falling back to python-pptx for PowerPoint file loading. '
+                'Install unstructured for better results: pip install unstructured',
+            )
+        if file_ext == 'msg':
+            # unstructured parses .msg via python-oxmsg; avoids extract_msg's beautifulsoup4<4.14 conflict
+            return _unstructured_required('UnstructuredEmailLoader', file_path, '.msg', process_attachments=False)
+        if file_ext == 'odt':
+            return _unstructured_required('UnstructuredODTLoader', file_path, '.odt')
+        return None

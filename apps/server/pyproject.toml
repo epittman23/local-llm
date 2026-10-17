@@ -260,7 +260,6 @@ pydocstyle.convention = "google"
 "local_llm/functions.py" = ["C901"]
 "local_llm/main.py" = ["C901"]
 "local_llm/models/users.py" = ["C901"]
-"local_llm/retrieval/loaders/main.py" = ["C901"]
 "local_llm/retrieval/utils.py" = ["C901"]
 "local_llm/routers/configs.py" = ["C901"]
 "local_llm/routers/images.py" = ["C901"]
