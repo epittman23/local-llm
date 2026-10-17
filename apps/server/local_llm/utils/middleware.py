@@ -4264,25 +4264,2093 @@ async def non_streaming_chat_response_handler(response, ctx):
     return response
 
 
-async def streaming_chat_response_handler(response, ctx):
+_NO_DELTA = object()
+
+
+def _message_output_item(text: str = '', **extra) -> dict:
+    return {
+        'type': 'message',
+        'id': output_id('msg'),
+        'status': 'in_progress',
+        'role': 'assistant',
+        'content': [{'type': 'output_text', 'text': text}],
+        **extra,
+    }
+
+
+def _tag_attributes(tag_content: str) -> dict:
+    """Extract attributes from a tag if they exist."""
+    attributes = {}
+    if not tag_content:
+        return attributes
+    matches = re.findall(r'(\w+)\s*=\s*"([^"]+)"', tag_content)
+    for key, value in matches:
+        attributes[key] = value
+    return attributes
+
+
+def _last_output_text(output: list) -> str:
+    """Get text from last message item, or empty string."""
+    if output and output[-1].get('type') == 'message':
+        parts = output[-1].get('content', [])
+        if parts and parts[-1].get('type') == 'output_text':
+            return parts[-1].get('text', '')
+    return ''
+
+
+def _set_last_output_text(output: list, text: str) -> None:
+    """Set text on last message item's output_text."""
+    if output and output[-1].get('type') == 'message':
+        parts = output[-1].get('content', [])
+        if parts and parts[-1].get('type') == 'output_text':
+            parts[-1]['text'] = text
+
+
+# Map content_type to output item type
+_TAG_OUTPUT_TYPES = {
+    'reasoning': 'reasoning',
+    'solution': 'message',  # solution tags just produce text
+    'code_interpreter': 'open_webui:code_interpreter',
+}
+
+
+def _tag_block_item(output_item_type: str, content_type: str, start_tag: str, end_tag: str, attributes: dict) -> dict:
+    """The in-progress output item a start tag opens."""
+    if output_item_type == 'reasoning':
+        return {
+            'type': 'reasoning',
+            'id': output_id('r'),
+            'status': 'in_progress',
+            'start_tag': start_tag,
+            'end_tag': end_tag,
+            'attributes': attributes,
+            'content': [],
+            'summary': None,
+            'started_at': time.time(),
+        }
+    if output_item_type == 'open_webui:code_interpreter':
+        return {
+            'type': 'open_webui:code_interpreter',
+            'id': output_id('ci'),
+            'status': 'in_progress',
+            'start_tag': start_tag,
+            'end_tag': end_tag,
+            'attributes': attributes,
+            'lang': attributes.get('lang', 'python'),
+            'code': '',
+            'output': None,
+            'started_at': time.time(),
+        }
+    # solution or other text-producing tag
+    return {
+        'type': 'message',
+        'id': output_id('msg'),
+        'status': 'in_progress',
+        'role': 'assistant',
+        'content': [{'type': 'output_text', 'text': ''}],
+        '_tag_type': content_type,
+        'start_tag': start_tag,
+        'end_tag': end_tag,
+        'attributes': attributes,
+        'started_at': time.time(),
+    }
+
+
+class _TagScanner:
+    """
+    Detect special tags (reasoning, solution, code_interpreter) in streaming
+    content and create corresponding OR-aligned output items directly.
+    Operates on output items instead of content_blocks.
+
+    Uses the text from the output items themselves for tag detection,
+    eliminating state divergence between accumulated content and items.
+    Remembers, per item and tag kind, how much text it has scanned, so each
+    chunk only searches what is new.
+    """
+
+    def __init__(self):
+        self.scan_positions = {}
+        self.boundary_positions = {}
+
+    def _scanned_length(self, item: dict, content_type: str, text: str) -> int:
+        item_id = item.get('id')
+        if not item_id:
+            return 0
+
+        scanned_length = self.scan_positions.get((item_id, content_type), 0)
+        return scanned_length if scanned_length <= len(text) else 0
+
+    def _save_scanned_length(self, item: dict, content_type: str, text: str) -> None:
+        item_id = item.get('id')
+        if item_id:
+            self.scan_positions[(item_id, content_type)] = len(text)
+
+    def _clear_scanned_length(self, item: dict, content_type: str) -> None:
+        item_id = item.get('id')
+        if item_id:
+            self.scan_positions.pop((item_id, content_type), None)
+            self.boundary_positions.pop((item_id, content_type), None)
+
+    def _tag_boundaries(self, item: dict, content_type: str, text: str, scanned_length: int) -> tuple[int, int]:
+        """Index of the last '<', and of the last '>' or newline, before scanned_length."""
+        key = (item.get('id'), content_type)
+        scanned, last_open, last_boundary = self.boundary_positions.get(key, (0, -1, -1))
+        if scanned > scanned_length:  # the item was rewritten, so the cached positions are stale
+            scanned, last_open, last_boundary = 0, -1, -1
+
+        if scanned < scanned_length:
+            # only text added since the last call can move either position
+            open_tag = text.rfind('<', scanned, scanned_length)
+            if open_tag != -1:
+                last_open = open_tag
+            boundary = max(
+                text.rfind('>', scanned, scanned_length),
+                text.rfind('\n', scanned, scanned_length),
+            )
+            if boundary != -1:
+                last_boundary = boundary
+            self.boundary_positions[key] = (scanned_length, last_open, last_boundary)
+
+        return last_open, last_boundary
+
+    def scan(self, content_type: str, tags: list, output: list) -> tuple[list, bool]:
+        """Open a block at a start tag in the last message, or close the open block at its end tag.
+
+        Returns the output and whether a block was closed."""
+        last_type = output[-1].get('type', '') if output else ''
+        if last_type == 'message':
+            return self._open_block(content_type, tags, output)
+        if (
+            (last_type == 'reasoning' and content_type == 'reasoning')
+            or (last_type == 'open_webui:code_interpreter' and content_type == 'code_interpreter')
+            or (last_type == 'message' and output[-1].get('_tag_type') == content_type)
+        ):
+            return output, self._close_block(content_type, output, last_type)
+        return output, False
+
+    def _open_block(self, content_type: str, tags: list, output: list) -> tuple[list, bool]:
+        # Use the output item's own text for tag detection
+        item = output[-1]
+        item_text = _last_output_text(output)
+        scanned_length = self._scanned_length(item, content_type, item_text)
+        max_start_tag_length = max((len(start_tag) for start_tag, _ in tags), default=1)
+        search_start = max(0, scanned_length - max_start_tag_length + 1)
+
+        if scanned_length and any(start_tag.startswith('<') and start_tag.endswith('>') for start_tag, _ in tags):
+            open_tag_start, last_tag_boundary = self._tag_boundaries(item, content_type, item_text, scanned_length)
+            if open_tag_start > last_tag_boundary:
+                search_start = min(search_start, open_tag_start)
+
+        for start_tag, end_tag in tags:
+            match = re.compile(_start_tag_pattern(start_tag)).search(item_text, search_start)
+            if match:
+                return output, self._split_at_start_tag(
+                    content_type, tags, output, item, item_text, match, start_tag, end_tag
+                )
+
+        self._save_scanned_length(item, content_type, item_text)
+        return output, False
+
+    def _split_at_start_tag(self, content_type, tags, output, item, item_text, match, start_tag, end_tag) -> bool:
+        """Keep the text before the tag in the message and open the tag's block with the text after it."""
+        self._clear_scanned_length(item, content_type)
+        try:
+            attr_content = match.group(1) if match.group(1) else ''
+        except Exception:
+            attr_content = ''
+
+        attributes = _tag_attributes(attr_content)
+
+        before_tag = item_text[: match.start()]
+        after_tag = item_text[match.end() :]
+
+        # Keep only text before the tag in the message
+        _set_last_output_text(output, before_tag)
+
+        if not before_tag.strip():
+            # Remove empty message item
+            if output and output[-1].get('type') == 'message':
+                output.pop()
+
+        output_item_type = _TAG_OUTPUT_TYPES.get(content_type, content_type)
+        output.append(_tag_block_item(output_item_type, content_type, start_tag, end_tag, attributes))
+
+        if not after_tag:
+            return False
+        # Set the after_tag content on the new item
+        if output_item_type == 'reasoning':
+            output[-1]['content'] = [{'type': 'output_text', 'text': after_tag}]
+        elif output_item_type == 'open_webui:code_interpreter':
+            output[-1]['code'] = after_tag
+        else:
+            _set_last_output_text(output, after_tag)
+
+        _, recursive_end = self.scan(content_type, tags, output)
+        return bool(recursive_end)
+
+    def _close_block(self, content_type: str, output: list, last_type: str) -> bool:
+        item = output[-1]
+        start_tag = item.get('start_tag', '')
+        end_tag = item.get('end_tag', '')
+
+        # Get the block content from the item itself
+        if last_type == 'reasoning':
+            parts = item.get('content', [])
+            block_content = ''
+            if parts and parts[-1].get('type') == 'output_text':
+                block_content = parts[-1].get('text', '')
+        elif last_type == 'open_webui:code_interpreter':
+            block_content = item.get('code', '')
+        else:
+            block_content = _last_output_text(output)
+
+        scanned_length = self._scanned_length(item, content_type, block_content)
+        end_tag_search_start = max(0, scanned_length - max(len(end_tag), 1) + 1)
+
+        if block_content.find(end_tag, end_tag_search_start) == -1:
+            self._save_scanned_length(item, content_type, block_content)
+            return False
+
+        self._clear_scanned_length(item, content_type)
+
+        # Strip start and end tags from content
+        block_content = re.sub(_start_tag_pattern(start_tag), '', block_content).strip()
+
+        end_tag_regex = re.compile(rf'{re.escape(end_tag)}', re.DOTALL)
+        split_content = end_tag_regex.split(block_content, maxsplit=1)
+
+        block_content = split_content[0].strip() if split_content else ''
+        leftover_content = split_content[1].strip() if len(split_content) > 1 else ''
+
+        if block_content:
+            # Update the item with final content
+            if last_type == 'reasoning':
+                item['content'] = [{'type': 'output_text', 'text': block_content}]
+                item['ended_at'] = time.time()
+                item['duration'] = int(item['ended_at'] - item['started_at'])
+                item['status'] = 'completed'
+            elif last_type == 'open_webui:code_interpreter':
+                item['code'] = block_content
+                item['ended_at'] = time.time()
+                item['duration'] = int(item['ended_at'] - item['started_at'])
+            else:
+                _set_last_output_text(output, block_content)
+                item['ended_at'] = time.time()
+        else:
+            # Remove the block if content is empty
+            output.pop()
+
+        # Reset by appending a new message item for leftover
+        output.append(_message_output_item(leftover_content))
+        return True
+
+
+def _message_error_content(error):
+    if isinstance(error, HTTPException):
+        error = error.detail
+    elif isinstance(error, dict):
+        error = error.get('detail', error)
+    else:
+        error = str(error)
+
+    return error if isinstance(error, (str, dict)) else str(error)
+
+
+def _response_delta_key(delta_data: dict):
+    event_type = delta_data.get('type', '')
+    if not event_type.startswith('response.') or not event_type.endswith('.delta'):
+        return None
+    return (
+        event_type,
+        delta_data.get('item_id'),
+        delta_data.get('output_index'),
+        delta_data.get('content_index'),
+        delta_data.get('summary_index'),
+    )
+
+
+class _DeltaBuffer:
+    """Coalesces consecutive deltas for the same field into one event, flushing every chunk_size of them."""
+
+    def __init__(self, event_emitter, save_stream, chunk_size: int):
+        self.event_emitter = event_emitter
+        self.save_stream = save_stream
+        self.chunk_size = chunk_size
+        self.count = 0
+        self.data = None
+        self.type = None
+        self.key = None
+
+    async def flush(self, threshold: int = 0) -> None:
+        if self.count >= threshold and self.data:
+            await self.event_emitter(
+                {
+                    'type': 'response:completion',
+                    'data': self.data,
+                }
+            )
+            await self.save_stream()
+            self.count = 0
+            self.data = None
+            self.type = None
+            self.key = None
+
+    async def queue(self, delta_data: dict, delta_type: str) -> None:
+        delta_key = _response_delta_key(delta_data)
+        if (
+            self.data
+            and self.key == delta_key
+            and isinstance(self.data.get('delta'), str)
+            and isinstance(delta_data.get('delta'), str)
+        ):
+            self.data['delta'] += delta_data['delta']
+            self.count += 1
+        else:
+            if self.data and (self.type != delta_type or self.key != delta_key):
+                await self.flush()
+
+            self.count += 1
+            self.data = delta_data
+            self.type = delta_type
+            self.key = delta_key
+
+        if self.count >= self.chunk_size:
+            await self.flush(self.chunk_size)
+
+
+def _url_citation_source(title: str, url: str) -> dict:
+    return {
+        'type': 'source',
+        'data': {
+            'source': {
+                'name': title,
+                'url': url,
+            },
+            'document': [title],
+            'metadata': [
+                {
+                    'source': url,
+                    'name': title,
+                }
+            ],
+        },
+    }
+
+
+def _parse_tool_params(tool_call: dict) -> dict | None:
+    """The call's arguments as a dict (JSON, or a Python literal), written back onto it as JSON.
+
+    None when they can't be read."""
+    tool_args = tool_call.get('function', {}).get('arguments', '{}')
+    params = {}
+    if tool_args and tool_args.strip():
+        try:
+            params = JSONCodec.loads(tool_args)
+        except Exception:
+            try:
+                params = ast.literal_eval(tool_args)
+            except Exception as e:
+                log.debug(e)
+                return None
+    tool_call.setdefault('function', {})['arguments'] = JSONCodec.dumps(params)
+    return params
+
+
+_CITATION_TOOLS = [
+    'search_web',
+    'fetch_url',
+    'view_file',
+    'view_knowledge_file',
+    'query_knowledge_files',
+    'query_chat_files',
+]
+
+
+def _merge_tool_call_delta(current_response_tool_call: dict, delta_tool_call: dict) -> None:
+    """Fold a later delta of a streamed tool call into the call: a new name, more arguments."""
+    delta_name = delta_tool_call.get('function', {}).get('name')
+    delta_arguments = delta_tool_call.get('function', {}).get('arguments')
+
+    if delta_name:
+        current_response_tool_call['function']['name'] = delta_name
+
+    if delta_arguments is not None:
+        if not isinstance(delta_arguments, str):
+            delta_arguments = JSONCodec.dumps(delta_arguments)
+        current_response_tool_call.setdefault('function', {})
+        if not isinstance(current_response_tool_call['function'].get('arguments'), str):
+            current_response_tool_call['function']['arguments'] = ''
+        current_response_tool_call['function']['arguments'] += delta_arguments
+
+
+class _StreamingReply:
+    """One streamed reply: its output items, the tool-call and code-interpreter rounds after it, and the save."""
+
+    def __init__(self, ctx: dict, extra_params: dict, filter_functions: list):
+        self.ctx = ctx
+        self.request = ctx['request']
+        self.form_data = ctx['form_data']
+        self.user = ctx['user']
+        self.model = ctx['model']
+        self.metadata = ctx['metadata']
+        self.event_emitter = ctx['event_emitter']
+        self.event_caller = ctx['event_caller']
+        self.chat_id = self.metadata.get('chat_id') or ''
+        self.save_to_chat = is_saved_chat_id(self.chat_id)
+        self.extra_params = extra_params
+        self.filter_functions = filter_functions
+        self.model_id = self.form_data.get('model', '')
+
+        self.filter_context = FilterContext()
+        self.tags = _TagScanner()
+        self.response_stream_task_id = self.metadata.get('task_id') or self.metadata.get('message_id')
+
+        self.tool_calls = []
+        self.content_parts = []
+        self.output = []
+        self.prior_output = []
+        self.usage = None
+        self.last_response_id = None
+
+        # Joined content_parts, cached until content_parts grows
+        self.joined_content = ''
+        self.joined_part_count = 0
+
+    def full_output(self) -> list:
+        return self.prior_output + self.output if self.prior_output else self.output
+
+    async def emit_message_error(self, error_content) -> None:
+        if self.save_to_chat:
+            await Chats.upsert_message_to_chat_by_id_and_message_id(
+                self.metadata['chat_id'],
+                self.metadata['message_id'],
+                {'error': {'content': error_content}},
+            )
+        await self.event_emitter(
+            {
+                'type': 'chat:message:error',
+                'data': {'error': {'content': error_content}},
+            }
+        )
+
+    async def _load_starting_output(self) -> None:
+        """Start from the stored message when continuing one, else from a trailing assistant message, else empty."""
+        message = (
+            await Chats.get_message_by_id_and_message_id(self.metadata['chat_id'], self.metadata['message_id'])
+            if self.save_to_chat
+            else None
+        )
+
+        last_assistant_message = None
+        try:
+            if self.form_data['messages'][-1]['role'] == 'assistant':
+                last_assistant_message = get_last_assistant_message(self.form_data['messages'])
+        except Exception:
+            pass
+
+        initial_content = (
+            message.get('content', '') if message else last_assistant_message if last_assistant_message else ''
+        )
+        self.content_parts = [initial_content] if initial_content else []
+
+        # Initialize output: use existing from message if continuing, else create new
+        existing_output = message.get('output') if message else None
+        if existing_output and self.metadata.get('assistant_message_id'):
+            self.prior_output = list(existing_output)
+            self._trim_empty_trailing_message(self.prior_output)
+            self.output = []
+            self.content_parts = []
+        elif existing_output:
+            self.output = existing_output
+        elif initial_content:
+            # Only create an initial message item if there is content to initialize with
+            self.output = [_message_output_item(initial_content)]
+        else:
+            self.output = []
+
+    @staticmethod
+    def _trim_empty_trailing_message(output: list) -> None:
+        # A trailing in-progress message with no text would persist as a ghost item.
+        if output and output[-1].get('type') == 'message' and output[-1].get('status') == 'in_progress':
+            msg_parts = output[-1].get('content', [])
+            if not msg_parts or (len(msg_parts) == 1 and not msg_parts[0].get('text', '').strip()):
+                output.pop()
+
+    async def _detect_code_interpreter(self) -> bool:
+        # Legacy tool-calling only: native FC gets execute_code as a builtin tool.
+        # Same five authz gates as utils/tools.py get_builtin_tools.
+        features = self.metadata.get('features', {}) or {}
+        model_capabilities = self.model.get('info', {}).get('meta', {}).get('capabilities') or {}
+        builtin_tools_meta = self.model.get('info', {}).get('meta', {}).get('builtinTools', {})
+        return (
+            self.metadata.get('params', {}).get('function_calling') == 'legacy'
+            and bool(features.get('code_interpreter'))
+            and builtin_tools_meta.get('code_interpreter', True)
+            and await Config.get('code_interpreter.enable')
+            and model_capabilities.get('code_interpreter', True)
+            and (
+                getattr(self.user, 'role', None) == 'admin'
+                or await has_permission(
+                    getattr(self.user, 'id', ''),
+                    'features.code_interpreter',
+                    await Config.get('user.permissions'),
+                )
+            )
+        )
+
+    def _reasoning_tags(self) -> list:
+        if not self.detect_reasoning_tags:
+            return []
+        if isinstance(self.reasoning_tags_param, list) and len(self.reasoning_tags_param) == 2:
+            return [(self.reasoning_tags_param[0], self.reasoning_tags_param[1])]
+        return DEFAULT_REASONING_TAGS
+
+    async def save_stream(self, stream_output: list | None = None) -> None:
+        """Snapshot the reply so far for clients that reconnect mid-stream."""
+        if not self.chat_id or not self.metadata.get('message_id'):
+            return
+
+        # content_parts is append-only, so its length tells us when the join is stale
+        if self.joined_part_count != len(self.content_parts):
+            self.joined_content = ''.join(self.content_parts)
+            self.joined_part_count = len(self.content_parts)
+
+        current_stream_output = stream_output if stream_output is not None else self.full_output()
+        await save_response_stream(
+            self.request.app.state.redis,
+            self.response_stream_task_id,
+            self.chat_id,
+            self.metadata.get('message_id'),
+            self.joined_content or get_output_text(current_stream_output),
+            current_stream_output,
+        )
+
+    def _with_full_output_index(self, response_data: dict) -> dict:
+        if self.prior_output and isinstance(response_data.get('output_index'), int):
+            return {
+                **response_data,
+                'output_index': response_data['output_index'] + len(self.prior_output),
+            }
+        return response_data
+
+    async def _queue_delta(self, stream: '_StreamPass', delta_data: dict, delta_type: str) -> None:
+        await stream.deltas.queue(self._with_full_output_index(delta_data), delta_type)
+
+    async def emit_response_event(self, stream: '_StreamPass', response_data: dict, stream_output: list | None = None):
+        if response_data.get('type', '').endswith('.delta'):
+            await self._queue_delta(stream, response_data, response_data.get('type', 'response.delta'))
+            return
+
+        response_data = self._with_full_output_index(response_data)
+        await stream.deltas.flush()
+        await self.event_emitter(
+            {
+                'type': 'response:completion',
+                'data': get_response_completion_event_data(response_data),
+            }
+        )
+        await self.save_stream(stream_output)
+
+    # --- consuming one stream ---------------------------------------------------
+
+    async def consume(self, response, form_data: dict) -> None:
+        """Read one streamed response into the output, then queue the tool calls it asked for."""
+        stream = _StreamPass(self, form_data)
+
+        async for line in response.body_iterator:
+            line = line.decode('utf-8', 'replace') if isinstance(line, bytes) else line
+            # Skip empty lines
+            if not line or line.isspace():
+                continue
+            if not line.startswith('data:'):
+                await self._handle_plain_line(line)
+                continue
+            try:
+                if await self._handle_data_line(stream, line[5:].strip()):
+                    break
+            except (asyncio.CancelledError, KeyboardInterrupt):
+                raise
+            except Exception as e:
+                if 'data: [DONE]' not in line:
+                    log.debug('Error: %s', e)
+        await stream.deltas.flush()
+
+        self._finish_stream_output()
+        await self._queue_tool_calls(stream)
+
+    async def _handle_plain_line(self, data: str) -> None:
+        # Some upstreams return plain JSON error lines in a streaming response
+        # (without SSE `data:` prefix). Try to normalize these into standard
+        # error events so frontend and DB paths still receive them.
+        try:
+            raw_obj = JSONCodec.loads(data)
+            raw_error = raw_obj.get('error') if isinstance(raw_obj, dict) else None
+            if raw_error:
+                await self._save_error(raw_error)
+                await self.event_emitter({'type': 'chat:completion', 'data': {'error': raw_error}})
+        except Exception:
+            pass
+
+    async def _save_error(self, error) -> None:
+        if self.save_to_chat:
+            try:
+                await Chats.upsert_message_to_chat_by_id_and_message_id(
+                    self.metadata['chat_id'],
+                    self.metadata['message_id'],
+                    {
+                        'error': {'content': error},
+                    },
+                )
+            except Exception:
+                pass
+
+    async def _handle_data_line(self, stream: '_StreamPass', payload: str) -> bool:
+        """Handle one SSE data payload; True when the stream must stop (a code block closed)."""
+        data = JSONCodec.loads(payload)
+
+        if self.filter_functions:
+            data, _ = await process_filter_functions(
+                request=self.request,
+                filter_context=self.filter_context,
+                filter_functions=self.filter_functions,
+                filter_type='stream',
+                form_data=data,
+                extra_params=stream.filter_extra_params,
+            )
+
+        if not data:
+            return False
+
+        if 'event' in data and not getattr(self.request.state, 'direct', False):
+            await self.event_emitter(data.get('event', {}))
+
+        if 'selected_model_id' in data:
+            await self._handle_selected_model(data)
+            await self._resend_after_previous_delta(stream, data)
+            return False
+        # Check for Responses API events (type field starts with "response.")
+        if data.get('type', '').startswith('response.'):
+            await self._handle_responses_event(stream, data)
+            return False
+        return await self._handle_chat_chunk(stream, data)
+
+    async def _handle_selected_model(self, data: dict) -> None:
+        if self.save_to_chat:
+            await Chats.upsert_message_to_chat_by_id_and_message_id(
+                self.metadata['chat_id'],
+                self.metadata['message_id'],
+                {
+                    'selectedModelId': data['selected_model_id'],
+                },
+                touch=False,
+            )
+        await self.event_emitter(
+            {
+                'type': 'chat:completion',
+                'data': data,
+            }
+        )
+
+    async def _resend_after_previous_delta(self, stream: '_StreamPass', data: dict) -> None:
+        # The chunk is sent again the way the previous chat chunk's delta was: queued as a delta,
+        # or as a chat:completion event. With no previous chat chunk, nothing more is sent.
+        if stream.last_delta is _NO_DELTA:
+            return
+        if stream.last_delta and data:
+            await self._queue_delta(stream, data, stream.last_delta_type)
+        elif data:
+            await self.event_emitter(
+                {
+                    'type': 'chat:completion',
+                    'data': data,
+                }
+            )
+
+    async def _handle_responses_event(self, stream: '_StreamPass', data: dict) -> None:
+        response_data_type = data.get('type', '')
+        self.output, response_metadata = handle_responses_streaming_event(data, self.output)
+
+        if not response_data_type.endswith('.delta'):
+            await stream.deltas.flush()
+
+        # Emit citation sources from finalized output items
+        # (mirrors Chat Completions annotation handling at delta level)
+        if response_data_type == 'response.output_item.done':
+            await self._emit_item_citations(data.get('item', {}))
+
+        # Merge any metadata (usage, etc.)
+        # Strip 'done' — response.completed emits
+        # it but we may still need to execute tool
+        # calls. The outer middleware manages the
+        # actual completion signal.
+        if response_metadata:
+            if ENABLE_RESPONSES_API_STATEFUL:
+                response_id = response_metadata.pop('response_id', None)
+                if response_id:
+                    self.last_response_id = response_id
+
+            # Normalize and capture usage for DB persistence
+            if response_metadata.get('usage'):
+                self.usage = merge_usage(self.usage, response_metadata['usage'])
+                response_metadata['usage'] = self.usage
+
+            if response_metadata.get('error'):
+                await self.event_emitter(
+                    {
+                        'type': 'chat:completion',
+                        'data': {'error': response_metadata['error']},
+                    }
+                )
+
+        await self.emit_response_event(stream, data)
+
+        if response_metadata and response_metadata.get('usage'):
+            await self.event_emitter(
+                {
+                    'type': 'chat:completion',
+                    'data': {'usage': self.usage},
+                }
+            )
+
+    async def _emit_item_citations(self, item: dict) -> None:
+        if item.get('type') != 'message':
+            return
+        for part in item.get('content', []):
+            for annotation in part.get('annotations', []):
+                if annotation.get('type') == 'url_citation':
+                    # Handle both flat (Responses API) and nested (Chat Completions) formats
+                    url_citation = annotation.get('url_citation', annotation)
+
+                    url = url_citation.get('url', '')
+                    title = url_citation.get('title', url)
+
+                    if url:
+                        await self.event_emitter(_url_citation_source(title, url))
+
+    async def _handle_chat_chunk(self, stream: '_StreamPass', data: dict) -> bool:
+        """A Chat Completions chunk: usage, errors, then its delta. True when the stream must stop."""
+        choices = data.get('choices', [])
+
+        # Normalize usage data to standard format
+        raw_usage = data.get('usage', {}) or {}
+        raw_usage.update(data.get('timings', {}))  # llama.cpp
+        if raw_usage:
+            self.usage = merge_usage(self.usage, raw_usage)
+            await self.event_emitter(
+                {
+                    'type': 'chat:completion',
+                    'data': {
+                        'usage': self.usage,
+                    },
+                }
+            )
+
+        if not choices:
+            error = data.get('error', {})
+            if error:
+                log.error('Provider returned error (streaming): %s', error)
+                await self._save_error(error)
+                await self.event_emitter(
+                    {
+                        'type': 'chat:completion',
+                        'data': {
+                            'error': error,
+                        },
+                    }
+                )
+            return False
+
+        delta = choices[0].get('delta', {})
+        stream.last_delta, stream.last_delta_type = delta, 'content'
+        await self._emit_delta_citations(delta.get('annotations'))
+
+        event_data, delta_type = data, 'content'
+        delta_tool_calls = delta.get('tool_calls', None)
+        if delta_tool_calls:
+            if await self._track_tool_call_deltas(stream, delta_tool_calls):
+                event_data, delta_type = None, 'tool_call'
+
+        await self._handle_delta_images(delta.get('images'))
+
+        event_data, delta_type = await self._handle_reasoning_delta(delta, event_data, delta_type)
+
+        # content deltas are raw JSON: a stream filter can make them any type
+        value = delta.get('content')
+        if value and not isinstance(value, str):
+            value = f'{value}'
+        stream.last_delta_type = delta_type
+        if value:
+            content_event = await self._handle_content(value)
+            if content_event is None:
+                return True
+            event_data, delta_type = content_event
+            stream.last_delta_type = delta_type
+
+        if delta and event_data:
+            await self._queue_delta(stream, event_data, delta_type)
+        elif event_data:
+            await self.event_emitter(
+                {
+                    'type': 'chat:completion',
+                    'data': event_data,
+                }
+            )
+        return False
+
+    async def _emit_delta_citations(self, annotations) -> None:
+        for annotation in annotations or []:
+            if annotation.get('type') == 'url_citation' and 'url_citation' in annotation:
+                url_citation = annotation['url_citation']
+
+                url = url_citation.get('url', '')
+                title = url_citation.get('title', url)
+
+                await self.event_emitter(_url_citation_source(title, url))
+
+    async def _track_tool_call_deltas(self, stream: '_StreamPass', delta_tool_calls: list) -> bool:
+        """Accumulate streamed tool calls and show them as function_call items. True once any are pending."""
+        for delta_tool_call in delta_tool_calls:
+            tool_call_index = delta_tool_call.get('index')
+            if tool_call_index is None:
+                continue
+
+            # Check if the tool call already exists
+            current_response_tool_call = next(
+                (tc for tc in stream.response_tool_calls if tc.get('index') == tool_call_index), None
+            )
+            if current_response_tool_call is None:
+                # Add the new tool call
+                delta_tool_call.setdefault('function', {})
+                delta_tool_call['function'].setdefault('name', '')
+                delta_tool_call['id'] = delta_tool_call.get('id') or output_id('fc')
+                delta_arguments = delta_tool_call['function'].get('arguments')
+                if not isinstance(delta_arguments, str):
+                    delta_tool_call['function']['arguments'] = (
+                        '' if delta_arguments is None else JSONCodec.dumps(delta_arguments)
+                    )
+                stream.response_tool_calls.append(delta_tool_call)
+            else:
+                _merge_tool_call_delta(current_response_tool_call, delta_tool_call)
+
+        if not stream.response_tool_calls:
+            return False
+
+        # Emit pending tool calls in real-time as Responses events.
+        output_by_call_id = await self._show_pending_tool_calls(stream)
+        for delta_tool_call in delta_tool_calls:
+            tool_call_index = delta_tool_call.get('index')
+            current_response_tool_call = next(
+                (tc for tc in stream.response_tool_calls if tc.get('index') == tool_call_index),
+                None,
+            )
+            if not current_response_tool_call:
+                continue
+            call_id = current_response_tool_call.get('id')
+            output_index, _ = output_by_call_id.get(call_id, (len(self.output) - 1, {}))
+            delta_arguments = delta_tool_call.get('function', {}).get('arguments')
+            if delta_arguments is not None:
+                if not isinstance(delta_arguments, str):
+                    delta_arguments = JSONCodec.dumps(delta_arguments)
+                await self.emit_response_event(
+                    stream,
+                    {
+                        'type': 'response.function_call_arguments.delta',
+                        'item_id': call_id,
+                        'output_index': output_index,
+                        'delta': delta_arguments,
+                    },
+                )
+
+        await self.save_stream()
+        return True
+
+    async def _show_pending_tool_calls(self, stream: '_StreamPass') -> dict:
+        """A function_call item per pending call (added on first sight); returns them by call id."""
+        output_by_call_id = {
+            item.get('call_id'): (idx, item)
+            for idx, item in enumerate(self.output)
+            if item.get('type') == 'function_call'
+        }
+
+        for tc in stream.response_tool_calls:
+            call_id = tc.get('id') or output_id('fc')
+            tc['id'] = call_id
+            func = tc.get('function', {})
+            if call_id in output_by_call_id:
+                output_index, item = output_by_call_id[call_id]
+                item['name'] = func.get('name', item.get('name', ''))
+                item['arguments'] = func.get('arguments', item.get('arguments', ''))
+                item['status'] = 'in_progress'
+            else:
+                output_index = len(self.output)
+                item = {
+                    'type': 'function_call',
+                    'id': call_id,
+                    'call_id': call_id,
+                    'name': func.get('name', ''),
+                    'arguments': '',
+                    'status': 'in_progress',
+                }
+                self.output.append(item)
+                output_by_call_id[call_id] = (output_index, item)
+                await self.emit_response_event(
+                    stream,
+                    {
+                        'type': 'response.output_item.added',
+                        'output_index': output_index,
+                        'item': item.copy(),
+                    },
+                )
+                item['arguments'] = func.get('arguments', '')
+        return output_by_call_id
+
+    async def _handle_delta_images(self, delta_images) -> None:
+        image_urls = await get_image_urls(delta_images, self.request, self.metadata, self.user) if delta_images else []
+        if not image_urls:
+            return
+        image_file_list = [{'type': 'image', 'url': url} for url in image_urls]
+        message_files = image_file_list
+        if self.save_to_chat:
+            message_files = await Chats.add_message_files_by_id_and_message_id(
+                self.metadata['chat_id'],
+                self.metadata['message_id'],
+                image_file_list,
+            )
+            if message_files is None:
+                message_files = image_file_list
+
+        await self.event_emitter(
+            {
+                'type': 'files',
+                'data': {'files': message_files},
+            }
+        )
+
+    async def _handle_reasoning_delta(self, delta: dict, event_data, delta_type):
+        """Reasoning text and details go to a reasoning item; returns the event to send for this chunk."""
+        # reasoning deltas are raw JSON: a stream filter can make them any type
+        reasoning_content = delta.get('reasoning_content') or delta.get('reasoning') or delta.get('thinking')
+        if reasoning_content and not isinstance(reasoning_content, str):
+            reasoning_content = f'{reasoning_content}'
+        reasoning_details = get_reasoning_details(delta)
+        reasoning_detail_items = (
+            [item for item in reasoning_details if isinstance(item, dict)]
+            if isinstance(reasoning_details, list)
+            else [reasoning_details]
+            if isinstance(reasoning_details, dict)
+            else []
+        )
+        existing_reasoning_item = next(
+            (item for item in reversed(self.output) if item.get('type') == 'reasoning'),
+            None,
+        )
+        message_index = next(
+            (i for i, item in enumerate(self.output) if item.get('type') == 'message'),
+            None,
+        )
+        if not (
+            reasoning_content
+            or (
+                reasoning_detail_items
+                and (
+                    existing_reasoning_item
+                    or any(
+                        item.get('text') or item.get('summary') or item.get('data') for item in reasoning_detail_items
+                    )
+                )
+            )
+        ):
+            return event_data, delta_type
+
+        reasoning_item = (
+            existing_reasoning_item
+            if (reasoning_detail_items and not reasoning_content) or message_index is not None
+            else None
+        )
+        if reasoning_item is None:
+            reasoning_item = self._open_reasoning_item(message_index)
+
+        if reasoning_content:
+            # Append to reasoning content
+            parts = reasoning_item.get('content', [])
+            if parts and parts[-1].get('type') == 'output_text':
+                parts[-1]['text'] += reasoning_content
+            else:
+                reasoning_item['content'] = [
+                    {
+                        'type': 'output_text',
+                        'text': reasoning_content,
+                    }
+                ]
+
+            event_data = {
+                'type': 'response.reasoning_text.delta',
+                'item_id': reasoning_item.get('id'),
+                'output_index': self.output.index(reasoning_item),
+                'content_index': max(
+                    len(reasoning_item.get('content', [])) - 1,
+                    0,
+                ),
+                'delta': reasoning_content,
+            }
+            delta_type = 'response.reasoning_text.delta'
+
+        if reasoning_detail_items:
+            merge_streamed_reasoning_details(
+                reasoning_item.setdefault('reasoning_details', []),
+                reasoning_detail_items,
+            )
+            await self.save_stream()
+            # Providers such as OpenRouter send reasoning_details
+            # alongside the reasoning text: only drop the event when
+            # the details were all there was to report, otherwise the
+            # reasoning delta never reaches the client.
+            if not reasoning_content:
+                event_data = None
+        return event_data, delta_type
+
+    def _open_reasoning_item(self, message_index):
+        """The reasoning item to stream into: the open last one, or a new one (completed if a message began)."""
+        if self.output and self.output[-1].get('type') == 'reasoning':
+            return self.output[-1]
+        reasoning_item = {
+            'type': 'reasoning',
+            'id': output_id('r'),
+            'status': 'in_progress',
+            'start_tag': '<think>',
+            'end_tag': '</think>',
+            'attributes': {'type': 'reasoning_content'},
+            'content': [],
+            'summary': None,
+            'started_at': time.time(),
+        }
+        if message_index is not None:
+            reasoning_item['ended_at'] = time.time()
+            reasoning_item['duration'] = 0
+            reasoning_item['status'] = 'completed'
+            self.output.insert(message_index, reasoning_item)
+        else:
+            self.output.append(reasoning_item)
+        return reasoning_item
+
+    async def _handle_content(self, value: str):
+        """Append streamed text to the output and scan it for tags.
+
+        Returns the delta event and its type, or None when a code block closed and the stream must stop."""
+        self._close_streamed_reasoning()
+
+        if ENABLE_CHAT_RESPONSE_BASE64_IMAGE_URL_CONVERSION:
+            value = await convert_markdown_base64_images(
+                self.request,
+                value,
+                {
+                    'chat_id': self.metadata.get('chat_id', None),
+                    'message_id': self.metadata.get('message_id', None),
+                },
+                self.user,
+            )
+
+        # closure-cell str += recopies per chunk; append + join once at read is O(n)
+        self.content_parts.append(value)
+        self._append_text(value)
+
+        if self.detect_reasoning_tags:
+            self.output, _ = self.tags.scan('reasoning', self.reasoning_tags, self.output)
+            self.output, _ = self.tags.scan('solution', DEFAULT_SOLUTION_TAGS, self.output)
+
+        if self.detect_code_interpreter:
+            self.output, end = self.tags.scan('code_interpreter', DEFAULT_CODE_INTERPRETER_TAGS, self.output)
+            if end:
+                return None
+
+        target_index = len(self.output) - 1
+        target_item = self.output[target_index] if target_index >= 0 else {}
+        target_content = target_item.get('content', [])
+        delta_event_type = (
+            'response.reasoning_text.delta' if target_item.get('type') == 'reasoning' else 'response.output_text.delta'
+        )
+        return (
+            {
+                'type': delta_event_type,
+                'item_id': target_item.get('id'),
+                'output_index': target_index,
+                'content_index': max(len(target_content) - 1, 0),
+                'delta': value,
+            },
+            delta_event_type,
+        )
+
+    def _close_streamed_reasoning(self) -> None:
+        # Text after reasoning_content ends the reasoning item and starts the answer.
+        if (
+            self.output
+            and self.output[-1].get('type') == 'reasoning'
+            and self.output[-1].get('attributes', {}).get('type') == 'reasoning_content'
+        ):
+            reasoning_item = self.output[-1]
+            reasoning_item['ended_at'] = time.time()
+            reasoning_item['duration'] = int(reasoning_item['ended_at'] - reasoning_item['started_at'])
+            reasoning_item['status'] = 'completed'
+            self.output.append(_message_output_item())
+
+    def _append_text(self, value: str) -> None:
+        # Inside a tag-based block (reasoning, code_interpreter, or solution), append
+        # to the in-progress item instead of starting a message — otherwise the
+        # tag scanner re-detects the start tag on every chunk and fragments the output.
+        last_item = self.output[-1] if self.output else None
+        last_item_type = last_item.get('type', '') if last_item else ''
+        inside_tag_block = (
+            last_item is not None
+            and last_item.get('status') == 'in_progress'
+            and last_item.get('attributes', {}).get('type') != 'reasoning_content'
+            and (
+                last_item_type == 'reasoning'
+                or last_item_type == 'open_webui:code_interpreter'
+                or (last_item_type == 'message' and last_item.get('_tag_type') is not None)
+            )
+        )
+
+        if inside_tag_block and last_item_type == 'open_webui:code_interpreter':
+            last_item['code'] = last_item.get('code', '') + value
+            return
+        if not inside_tag_block and (not self.output or self.output[-1].get('type') != 'message'):
+            self.output.append(_message_output_item())
+
+        # The reasoning item, the tagged message, or the last message gets the text.
+        item = last_item if inside_tag_block else self.output[-1]
+        parts = item.get('content', [])
+        if parts and parts[-1].get('type') == 'output_text':
+            parts[-1]['text'] += value
+        else:
+            item['content'] = [{'type': 'output_text', 'text': value}]
+
+    def _finish_stream_output(self) -> None:
+        if not self.output:
+            return
+        # Clean up the last message item
+        if self.output[-1].get('type') == 'message':
+            parts = self.output[-1].get('content', [])
+            if parts and parts[-1].get('type') == 'output_text':
+                parts[-1]['text'] = parts[-1]['text'].strip()
+
+                if not parts[-1]['text']:
+                    self.output.pop()
+
+                    if not self.output:
+                        self.output.append(_message_output_item())
+
+        if self.output[-1].get('type') == 'reasoning':
+            reasoning_item = self.output[-1]
+            if reasoning_item.get('ended_at') is None:
+                reasoning_item['ended_at'] = time.time()
+                if reasoning_item.get('started_at') is not None:
+                    reasoning_item['duration'] = int(reasoning_item['ended_at'] - reasoning_item['started_at'])
+                reasoning_item['status'] = 'completed'
+
+    async def _queue_tool_calls(self, stream: '_StreamPass') -> None:
+        """Finish the streamed function_call items and queue their calls; or, for the Responses API, queue
+        the function_call items that have no output yet."""
+        if stream.response_tool_calls:
+            for tc in stream.response_tool_calls:
+                call_id = tc.get('id', '')
+                arguments = tc.get('function', {}).get('arguments', '{}')
+                for output_index, item in enumerate(self.output):
+                    if item.get('type') == 'function_call' and item.get('call_id') == call_id:
+                        item['arguments'] = arguments
+                        item['status'] = 'completed'
+                        await self.emit_response_event(
+                            stream,
+                            {
+                                'type': 'response.function_call_arguments.done',
+                                'item_id': item.get('id'),
+                                'output_index': output_index,
+                                'arguments': arguments,
+                            },
+                        )
+                        await self.emit_response_event(
+                            stream,
+                            {
+                                'type': 'response.output_item.done',
+                                'output_index': output_index,
+                                'item': item.copy(),
+                            },
+                        )
+                        break
+            self.tool_calls.append(_split_tool_calls(stream.response_tool_calls))
+            return
+
+        if not self.output:
+            return
+        # Collect call_ids that already have results, including those from
+        # prior_output so we don't re-process tool calls from a previous turn.
+        handled_call_ids = {
+            item.get('call_id')
+            for item in (self.prior_output + self.output)
+            if item.get('type') == 'function_call_output'
+        }
+        responses_api_tool_calls = []
+        for item in self.output:
+            call_id = item.get('call_id') or item.get('id') or output_id('fc')
+            if item.get('type') == 'function_call' and call_id not in handled_call_ids:
+                arguments = item.get('arguments', '{}')
+                responses_api_tool_calls.append(
+                    {
+                        'id': call_id,
+                        'index': len(responses_api_tool_calls),
+                        'function': {
+                            'name': item.get('name', ''),
+                            'arguments': (arguments if isinstance(arguments, str) else JSONCodec.dumps(arguments)),
+                        },
+                    }
+                )
+        if responses_api_tool_calls:
+            self.tool_calls.append(_split_tool_calls(responses_api_tool_calls))
+
+    # --- the reply ------------------------------------------------------------
+
+    async def run(self, response, events: list) -> None:
+        await self._load_starting_output()
+
+        self.reasoning_tags_param = self.metadata.get('params', {}).get('reasoning_tags')
+        self.detect_reasoning_tags = self.reasoning_tags_param is not False
+        self.detect_code_interpreter = await self._detect_code_interpreter()
+        self.reasoning_tags = self._reasoning_tags()
+
+        try:
+            await self._emit_events(events)
+
+            try:
+                await self.consume(response, self.form_data)
+            finally:
+                if response.background:
+                    await response.background()
+
+            if not await self._run_tool_calls():
+                return
+            if self.detect_code_interpreter:
+                await self._run_code_interpreter()
+            await self._finish()
+        except asyncio.CancelledError:
+            log.warning('Task was cancelled!')
+            await self._save_cancelled_state(response)
+            raise  # re-raise CancelledError for proper propagation
+
+        if response.background is not None:
+            await response.background()
+
+    async def _emit_events(self, events: list) -> None:
+        for event in events:
+            await self.event_emitter(
+                {
+                    'type': 'chat:completion',
+                    'data': event,
+                }
+            )
+
+            # Save message in the database
+            if self.save_to_chat:
+                await Chats.upsert_message_to_chat_by_id_and_message_id(
+                    self.metadata['chat_id'],
+                    self.metadata['message_id'],
+                    {
+                        **event,
+                    },
+                )
+
+    async def _finish(self) -> None:
+        # Mark all in-progress items as completed
+        for item in self.output:
+            if item.get('status') == 'in_progress':
+                item['status'] = 'completed'
+
+        current_output = self.full_output()
+        title = await Chats.get_chat_title_by_id(self.metadata['chat_id']) if self.save_to_chat else ''
+        data = {
+            'done': True,
+            'output': current_output,
+            'title': title,
+            **({'usage': self.usage} if self.usage else {}),
+        }
+
+        if self.save_to_chat:
+            # Save final output once. The delta path keeps in-progress
+            # state in response_streams instead of writing tokens to DB.
+            await Chats.upsert_message_to_chat_by_id_and_message_id(
+                self.metadata['chat_id'],
+                self.metadata['message_id'],
+                {
+                    'done': True,
+                    'output': current_output,
+                    **({'usage': self.usage} if self.usage else {}),
+                },
+            )
+
+        await clear_response_stream(self.request.app.state.redis, self.response_stream_task_id)
+        await publish_chat_finished_event(
+            self.request, self.user, self.metadata, title, ''.join(self.content_parts), current_output
+        )
+
+        await self.event_emitter(
+            {
+                'type': 'chat:completion',
+                'data': data,
+            }
+        )
+
+        self.ctx['assistant_message'] = {
+            'content': ''.join(self.content_parts) or get_output_text(current_output),
+            'output': current_output,
+            **({'usage': self.usage} if self.usage else {}),
+        }
+        await outlet_filter_handler(self.ctx)
+        await background_tasks_handler(self.ctx)
+
+    async def _save_cancelled_state(self, response) -> None:
+        # Close the response body iterator to trigger cleanup
+        # in stream_wrapper's finally block and release the
+        # upstream connection.  Without this, the async
+        # generator is orphaned and may spin in anyio internals.
+        if hasattr(response, 'body_iterator') and hasattr(response.body_iterator, 'aclose'):
+            try:
+                await asyncio.shield(response.body_iterator.aclose())
+            except (asyncio.CancelledError, Exception):
+                pass
+
+        async def save_cancelled_state():
+            await self.event_emitter({'type': 'chat:tasks:cancel'})
+            if self.save_to_chat:
+                await Chats.upsert_message_to_chat_by_id_and_message_id(
+                    self.metadata['chat_id'],
+                    self.metadata['message_id'],
+                    {
+                        'done': True,
+                        'output': self.full_output(),
+                    },
+                )
+            await clear_response_stream(self.request.app.state.redis, self.response_stream_task_id)
+
+        try:
+            await asyncio.shield(save_cancelled_state())
+        except (asyncio.CancelledError, Exception):
+            pass
+
+    # --- tool calls -------------------------------------------------------------
+
+    async def _run_tool_calls(self) -> bool:
+        """Run each round of tool calls and continue the reply with their results.
+
+        Returns False when the reply paused for the user (approval or ask_user)."""
+        tool_call_iterations = 0
+        max_tool_call_iterations = getattr(
+            self.request.state,
+            'max_tool_call_iterations',
+            CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS,
+        )
+        rounds = _ToolCallRounds(self)
+
+        while self.tool_calls and (max_tool_call_iterations is None or tool_call_iterations < max_tool_call_iterations):
+            tool_call_iterations += 1
+
+            response_tool_calls = self.tool_calls.pop(0)
+            response_tool_calls, paused = await rounds.stage(response_tool_calls)
+            if paused:
+                return False
+
+            await self.event_emitter(
+                {
+                    'type': 'chat:completion',
+                    'data': {
+                        'output': self.full_output(),
+                    },
+                }
+            )
+
+            results = await rounds.execute(response_tool_calls)
+            rounds.record_results(results, response_tool_calls)
+            await rounds.apply_sources()
+            await self._emit_frontend_output()
+
+            if not await self._continue_after_tools():
+                break
+
+        if (
+            max_tool_call_iterations is not None
+            and self.tool_calls
+            and tool_call_iterations >= max_tool_call_iterations
+        ):
+            log.warning('Tool-call iteration limit reached (%s)', max_tool_call_iterations)
+            error_content = f'Tool-call limit reached ({max_tool_call_iterations} iterations).'
+            await self.emit_message_error(error_content)
+        return True
+
+    async def _emit_frontend_output(self) -> None:
+        # Strip input_image parts (large base64 data URIs) from the
+        # output sent to the frontend — they're only for LLM consumption
+        # via convert_output_to_messages.
+        frontend_output = []
+        for item in self.full_output():
+            if item.get('type') == 'function_call_output':
+                parts = item.get('output', [])
+                if any(p.get('type') == 'input_image' for p in parts):
+                    item = {**item, 'output': [p for p in parts if p.get('type') != 'input_image']}
+            frontend_output.append(item)
+
+        await self.event_emitter(
+            {
+                'type': 'chat:completion',
+                'data': {
+                    'output': frontend_output,
+                },
+            }
+        )
+
+    def _continuation_form_data(self) -> dict:
+        new_form_data = {
+            **self.form_data,
+            'model': self.model_id,
+            'stream': True,
+            'metadata': self.metadata,
+        }
+
+        if ENABLE_RESPONSES_API_STATEFUL and self.last_response_id:
+            system_message = get_system_message(self.form_data['messages'])
+            new_form_data['messages'] = ([system_message] if system_message else []) + convert_output_to_messages(
+                self.output, raw=True, reasoning_format=get_reasoning_format(self.model)
+            )
+            new_form_data['previous_response_id'] = self.last_response_id
+        else:
+            # Tool images are flattened into a user message after the tool
+            # messages, since Chat Completions tool messages are text-only.
+            new_form_data['messages'] = [
+                *self.form_data['messages'],
+                *convert_output_to_messages(
+                    self.output,
+                    raw=True,
+                    reasoning_format=get_reasoning_format(self.model),
+                    flatten_tool_images=True,
+                ),
+            ]
+        return new_form_data
+
+    async def _request_continuation(self, new_form_data: dict):
+        if self.filter_functions:
+            new_form_data, _ = await process_filter_functions(
+                request=self.request,
+                filter_context=self.filter_context,
+                filter_functions=self.filter_functions,
+                filter_type='request',
+                form_data=new_form_data,
+                extra_params=self.extra_params,
+            )
+
+        new_form_data = normalize_messages_for_model(new_form_data)
+
+        res = await generate_chat_completion(
+            self.request,
+            new_form_data,
+            self.user,
+            bypass_system_prompt=True,
+        )
+        return res, new_form_data
+
+    async def _continue_after_tools(self) -> bool:
+        """Ask the model to carry on from the tool results. False when the reply ends here."""
+        try:
+            res, new_form_data = await self._request_continuation(self._continuation_form_data())
+
+            if isinstance(res, StreamingResponse):
+                # Save accumulated output and start fresh.
+                # Responses API output_index values are relative
+                # to the current response — a clean output list
+                # keeps indices aligned. The display prefix
+                # ensures the UI shows tool history during
+                # streaming.
+                self.prior_output = list(self.full_output())
+                # Trim the trailing empty placeholder message
+                # so it doesn't persist as a ghost item once
+                # the new stream produces real content.
+                self._trim_empty_trailing_message(self.prior_output)
+                self.output = []
+                await self.consume(res, new_form_data)
+                self.output[:0] = self.prior_output
+                self.prior_output = []
+                return True
+            if getattr(res, 'status_code', 200) >= 400:
+                await self.emit_message_error(_message_error_content(get_response_error_detail(res)))
+            return False
+        except Exception as e:
+            error_content = _message_error_content(e)
+            log.exception('Tool-call continuation failed: %s', error_content)
+            await self.emit_message_error(error_content)
+            return False
+
+    # --- code interpreter -------------------------------------------------------
+
+    async def _run_code_interpreter(self) -> None:
+        MAX_RETRIES = 5
+        retries = 0
+        while self.output and self.output[-1].get('type') == 'open_webui:code_interpreter' and retries < MAX_RETRIES:
+            await self.event_emitter(
+                {
+                    'type': 'chat:completion',
+                    'data': {
+                        'output': self.full_output(),
+                    },
+                }
+            )
+
+            retries += 1
+            log.debug('Attempt count: %s', retries)
+
+            ci_item = self.output[-1]
+            try:
+                ci_output = (
+                    await self._execute_code(ci_item) if ci_item.get('attributes', {}).get('type') == 'code' else ''
+                )
+            except Exception as e:
+                ci_output = str(e)
+
+            ci_item['output'] = ci_output
+            ci_item['status'] = 'completed'
+
+            self.output.append(_message_output_item())
+
+            await self.event_emitter(
+                {
+                    'type': 'chat:completion',
+                    'data': {
+                        'output': self.full_output(),
+                    },
+                }
+            )
+
+            if not await self._continue_after_code():
+                break
+
+    async def _execute_code(self, ci_item: dict):
+        # Sanitize code (strips ANSI codes and markdown fences)
+        code = sanitize_code(ci_item.get('code', ''))
+
+        if CODE_INTERPRETER_BLOCKED_MODULES:
+            blocking_code = textwrap.dedent(f"""
+                import builtins
+
+                BLOCKED_MODULES = {CODE_INTERPRETER_BLOCKED_MODULES}
+
+                _real_import = builtins.__import__
+                def restricted_import(name, globals=None, locals=None, fromlist=(), level=0):
+                    if name.split('.')[0] in BLOCKED_MODULES:
+                        importer_name = globals.get('__name__') if globals else None
+                        if importer_name == '__main__':
+                            raise ImportError(
+                                f"Direct import of module {{name}} is restricted."
+                            )
+                    return _real_import(name, globals, locals, fromlist, level)
+
+                builtins.__import__ = restricted_import
+            """)
+            code = blocking_code + '\n' + code
+
+        ci_engine = await Config.get('code_interpreter.engine')
+        if ci_engine == 'pyodide':
+            ci_output = await self.event_caller(
+                {
+                    'type': 'execute:python',
+                    'data': {
+                        'id': str(uuid4()),
+                        'code': code,
+                        'session_id': self.metadata.get('session_id', None),
+                        'files': self.metadata.get('files', []),
+                    },
+                }
+            )
+        elif ci_engine == 'jupyter':
+            ci_output = await execute_code_jupyter(
+                await Config.get('code_interpreter.jupyter.url'),
+                code,
+                (
+                    await Config.get('code_interpreter.jupyter.auth_token')
+                    if await Config.get('code_interpreter.jupyter.auth') == 'token'
+                    else None
+                ),
+                (
+                    await Config.get('code_interpreter.jupyter.auth_password')
+                    if await Config.get('code_interpreter.jupyter.auth') == 'password'
+                    else None
+                ),
+                await Config.get('code_interpreter.jupyter.timeout'),
+            )
+        else:
+            ci_output = {'stdout': 'Code interpreter engine not configured.'}
+
+        log.debug('Code interpreter output: %s', ci_output)
+
+        # Handle error responses from event_caller
+        # (e.g. session disconnected, timeout)
+        if isinstance(ci_output, dict) and ci_output.get('error'):
+            ci_output = {'stderr': ci_output['error']}
+
+        if isinstance(ci_output, dict):
+            await self._inline_output_images(ci_output)
+        return ci_output
+
+    async def _inline_output_images(self, ci_output: dict) -> None:
+        """Replace base64 image lines in stdout and the result with uploaded images."""
+        stdout = ci_output.get('stdout', '')
+        if isinstance(stdout, str):
+            stdout_lines = stdout.split('\n')
+            for idx, line in enumerate(stdout_lines):
+                if re.match(r'data:image/\w+;base64', line):
+                    image_url = await get_image_url_from_base64(self.request, line, self.metadata, self.user)
+                    if image_url:
+                        stdout_lines[idx] = f'![Output Image]({image_url})'
+            ci_output['stdout'] = '\n'.join(stdout_lines)
+
+        result = ci_output.get('result', '')
+        if isinstance(result, str):
+            result_lines = result.split('\n')
+            for idx, line in enumerate(result_lines):
+                if re.match(r'data:image/\w+;base64', line):
+                    image_url = await get_image_url_from_base64(self.request, line, self.metadata, self.user)
+                    result_lines[idx] = f'![Output Image]({image_url})'
+            ci_output['result'] = '\n'.join(result_lines)
+
+    async def _continue_after_code(self) -> bool:
+        """Ask the model to carry on from the code's output. False when the reply ends here."""
+        try:
+            res, new_form_data = await self._request_continuation(
+                {
+                    **self.form_data,
+                    'model': self.model_id,
+                    'stream': True,
+                    'metadata': self.metadata,
+                    'messages': [
+                        *self.form_data['messages'],
+                        *convert_output_to_messages(
+                            self.output,
+                            raw=True,
+                            reasoning_format=get_reasoning_format(self.model),
+                            flatten_tool_images=True,
+                        ),
+                    ],
+                }
+            )
+
+            if isinstance(res, StreamingResponse):
+                await self.consume(res, new_form_data)
+                return True
+            if getattr(res, 'status_code', 200) >= 400:
+                await self.emit_message_error(_message_error_content(get_response_error_detail(res)))
+            return False
+        except Exception as e:
+            error_content = _message_error_content(e)
+            log.exception('Code interpreter continuation failed: %s', error_content)
+            await self.emit_message_error(error_content)
+            return False
+
+
+class _StreamPass:
+    """State for reading one streamed response: its tool calls and its pending deltas."""
+
+    def __init__(self, reply: _StreamingReply, form_data: dict):
+        self.response_tool_calls = []
+        # The last chat chunk's delta and delta type
+        self.last_delta = _NO_DELTA
+        self.last_delta_type = None
+        self.deltas = _DeltaBuffer(
+            reply.event_emitter,
+            reply.save_stream,
+            max(
+                CHAT_RESPONSE_STREAM_DELTA_CHUNK_SIZE,
+                int(reply.metadata.get('params', {}).get('stream_delta_chunk_size') or 1),
+            ),
+        )
+        self.filter_extra_params = {'__body__': form_data, **reply.extra_params} if reply.filter_functions else None
+
+
+class _ToolCallRounds:
+    """Running the reply's tool calls, round by round, and feeding their results and citations back."""
+
+    def __init__(self, reply: _StreamingReply):
+        self.reply = reply
+        self.tool_call_sources = []  # Track citation sources from tool results
+        self.all_tool_call_sources = []  # Accumulated sources across all iterations
+        self.user_message = get_last_user_message(reply.form_data['messages'])
+
+        # Check if citations are enabled for this model
+        self.citations_enabled = (reply.model.get('info', {}).get('meta', {}).get('capabilities') or {}).get(
+            'citations', True
+        )
+
+        # Use the pre-RAG system content captured before the
+        # initial file-source injection in process_chat_payload.
+        # This ensures restore truly undoes the RAG template.
+        self.original_system_content = reply.metadata.get('system_prompt')
+        if self.original_system_content is None:
+            original_system_message = get_system_message(reply.form_data['messages'])
+            self.original_system_content = (
+                get_content_from_message(original_system_message) if original_system_message else None
+            )
+
+    async def _pause(self) -> None:
+        reply = self.reply
+        if is_saved_chat_id(reply.metadata.get('chat_id')) and reply.metadata.get('message_id'):
+            await pause_for_tool_approval(
+                reply.metadata['chat_id'],
+                reply.metadata['message_id'],
+                reply.full_output(),
+                reply.form_data,
+                reply.metadata,
+            )
+        await reply.event_emitter({'type': 'chat:completion', 'data': {'output': reply.full_output()}})
+
+    async def stage(self, response_tool_calls: list) -> tuple[list, bool]:
+        """Add the round's function_call items; pause for ask_user or tool approval. Returns the calls to run
+        and whether the reply paused."""
+        reply = self.reply
+        ask_user_staged, ask_user_error = stage_ask_user_tool_calls(response_tool_calls, reply.output, output_id)
+        if ask_user_error:
+            response_tool_calls = [
+                tool_call
+                for tool_call in response_tool_calls
+                if tool_call.get('function', {}).get('name') != 'ask_user'
+            ]
+        elif ask_user_staged:
+            await self._pause()
+            return response_tool_calls, True
+
+        # Append function_call items for each tool call
+        # (Responses API already has them from streaming, so skip duplicates)
+        existing_call_ids = {item.get('call_id') for item in reply.output if item.get('type') == 'function_call'}
+        for tc in response_tool_calls:
+            call_id = tc.get('id', '')
+            if call_id not in existing_call_ids:
+                func = tc.get('function', {})
+                reply.output.append(
+                    {
+                        'type': 'function_call',
+                        'id': call_id or output_id('fc'),
+                        'call_id': call_id,
+                        'name': func.get('name', ''),
+                        'arguments': func.get('arguments', '{}'),
+                        'status': 'in_progress',
+                    }
+                )
+
+        tool_approval_mode = reply.metadata.get('params', {}).get('tool_approval_mode', 'full')
+        if (
+            response_tool_calls
+            and tool_approval_mode == 'ask'
+            and is_saved_chat_id(reply.metadata.get('chat_id'))
+            and reply.metadata.get('message_id')
+        ):
+            await self._pause()
+            return response_tool_calls, True
+        return response_tool_calls, False
+
+    async def _execute_tool_call(self, tools: dict, tool_call: dict):
+        reply = self.reply
+        name = tool_call.get('function', {}).get('name', '')
+        params = _parse_tool_params(tool_call)
+        if params is None:
+            return {}, None, None, None, False
+        tool = tools.get(name)
+        if not tool:
+            return params, f'Error: Tool "{name}" not found.', None, None, False
+        spec = tool.get('spec', {})
+        tool_type = tool.get('type', '')
+        direct_tool = tool.get('direct', False)
+        allowed_params = spec.get('parameters', {}).get('properties', {}).keys()
+        params = {key: value for key, value in params.items() if key in allowed_params}
+        try:
+            if direct_tool:
+                result = await reply.event_caller(
+                    {
+                        'type': 'execute:tool',
+                        'data': {
+                            'id': str(uuid4()),
+                            'name': name,
+                            'params': params,
+                            'server': tool.get('server', {}),
+                            'session_id': reply.metadata.get('session_id'),
+                        },
+                    }
+                )
+            else:
+                function = await get_updated_tool_function(
+                    function=tool['callable'],
+                    extra_params={
+                        '__messages__': reply.form_data.get('messages', []),
+                        '__files__': reply.metadata.get('files', []),
+                    },
+                )
+                result = await function(**params)
+        except Exception as e:
+            result = {'error': str(e)}
+        return params, result, tool, tool_type, direct_tool
+
+    async def execute(self, response_tool_calls: list) -> list[dict]:
+        """Run the round's calls (delegate_task calls together, the rest in order) and return their results."""
+        tools = self.reply.metadata.get('tools', {})
+        delegate_calls = [
+            tool_call
+            for tool_call in response_tool_calls
+            if tool_call.get('function', {}).get('name') == 'delegate_task'
+        ]
+        tool_results = {}
+        for tool_call in response_tool_calls:
+            if tool_call.get('function', {}).get('name') != 'delegate_task':
+                tool_results[id(tool_call)] = await self._execute_tool_call(tools, tool_call)
+        tool_results.update(
+            zip(
+                [id(tool_call) for tool_call in delegate_calls],
+                await asyncio.gather(*(self._execute_tool_call(tools, tool_call) for tool_call in delegate_calls)),
+            )
+        )
+
+        results = []
+        for tool_call in response_tool_calls:
+            results.append(await self._tool_call_result(tool_call, tool_results[id(tool_call)]))
+        return results
+
+    async def _tool_call_result(self, tool_call: dict, tool_execution) -> dict:
+        reply = self.reply
+        tool_call_id = tool_call.get('id', '')
+        tool_function_name = tool_call.get('function', {}).get('name', '')
+        tool_function_params, tool_result, tool, tool_type, direct_tool = tool_execution
+        if tool_result is None:
+            return {
+                'tool_call_id': tool_call_id,
+                'content': (
+                    'Error: Tool call arguments could not be parsed. The model generated '
+                    f'malformed or incomplete JSON for `{tool_function_name}`. Please try again.'
+                ),
+            }
+
+        terminal_file_result = build_terminal_file_tool_result(
+            tool_function_name,
+            tool_function_params,
+            tool_result,
+            tool,
+            reply.metadata,
+        )
+        if terminal_file_result:
+            tool_result = terminal_file_result
+
+        tool_result, tool_result_files, tool_result_embeds = await process_tool_result(
+            reply.request,
+            tool_function_name,
+            tool_result,
+            tool_type,
+            direct_tool,
+            reply.metadata,
+            reply.user,
+        )
+
+        await terminal_event_handler(
+            tool_function_name,
+            tool_function_params,
+            tool_result,
+            reply.event_emitter,
+        )
+
+        # Extract citation sources from tool results
+        if self.citations_enabled and tool_function_name in _CITATION_TOOLS and tool_result:
+            try:
+                citation_sources = get_citation_source_from_tool_result(
+                    tool_name=tool_function_name,
+                    tool_params=tool_function_params,
+                    tool_result=tool_result,
+                    tool_id=tool.get('tool_id', '') if tool else '',
+                )
+                self.tool_call_sources.extend(citation_sources)
+            except Exception as e:
+                log.exception(f'Error extracting citation source: {e}')
+
+        return {
+            'tool_call_id': tool_call_id,
+            'content': tool_result_content(tool_result),
+            **({'files': tool_result_files} if tool_result_files else {}),
+            **({'embeds': tool_result_embeds} if tool_result_embeds else {}),
+        }
+
+    def record_results(self, results: list[dict], response_tool_calls: list) -> None:
+        """A function_call_output per result, and the round's function_call items marked done or failed."""
+        output = self.reply.output
+        result_status_by_call_id = {}
+        for result in results:
+            output_parts = [{'type': 'input_text', 'text': result.get('content', '')}]
+            local_output_status = 'failed' if _is_tool_result_error(result.get('content', '')) else 'completed'
+            result_status_by_call_id[result.get('tool_call_id', '')] = local_output_status
+
+            # Separate image data URIs (for LLM via input_image) from
+            # other files (for frontend display via files attribute).
+            display_files = []
+            for file_item in result.get('files', []):
+                if file_item.get('type') == 'image' and file_item.get('url', '').startswith('data:'):
+                    # LLM-only: add as input_image part, not frontend display output.
+                    output_parts.append({'type': 'input_image', 'image_url': file_item['url']})
+                else:
+                    # Frontend display (MCP images, audio, etc.)
+                    display_files.append(file_item)
+
+            output.append(
+                {
+                    'type': 'function_call_output',
+                    'id': output_id('fco'),
+                    'call_id': result.get('tool_call_id', ''),
+                    'output': output_parts,
+                    'status': local_output_status,
+                    **({'files': display_files} if display_files else {}),
+                    **({'embeds': result.get('embeds')} if result.get('embeds') else {}),
+                }
+            )
+
+        # Update function_call statuses and parsed/sanitized arguments.
+        for tc in response_tool_calls:
+            call_id = tc.get('id', '')
+            for item in output:
+                if item.get('type') == 'function_call' and item.get('call_id') == call_id:
+                    item['status'] = result_status_by_call_id.get(call_id, 'completed')
+                    item['arguments'] = tc.get('function', {}).get('arguments', '{}')
+                    break
+
+    async def apply_sources(self) -> None:
+        """Show the round's citations and rebuild the RAG context in the messages for the next request."""
+        if not self.citations_enabled:
+            return
+        reply = self.reply
+        for source in self.tool_call_sources:
+            await reply.event_emitter({'type': 'source', 'data': source})
+
+        # Apply tool source context to messages for the model.
+        # Restoring to pre-RAG original prevents duplicating
+        # the RAG template across file and tool sources.
+        self.all_tool_call_sources.extend(self.tool_call_sources)
+        if self.all_tool_call_sources and self.user_message:
+            self._restore_original_prompts()
+            await self._add_source_context()
+        self.tool_call_sources.clear()
+
+    def _restore_original_prompts(self) -> None:
+        # Restore pre-RAG message state before re-applying to prevent RAG template duplication.
+        form_data = self.reply.form_data
+        original_user_message = self.reply.metadata.get('user_prompt') or self.user_message
+        set_last_user_message_content(original_user_message, form_data['messages'])
+        if self.original_system_content is None:
+            replace_system_message_content('', form_data['messages'])
+        elif get_system_message(form_data['messages']):
+            replace_system_message_content(self.original_system_content, form_data['messages'])
+        else:
+            form_data['messages'] = add_or_update_system_message(self.original_system_content, form_data['messages'])
+
+    async def _add_source_context(self) -> None:
+        # Build context: file sources with content, tool sources as citation markers only.
+        form_data = self.reply.form_data
+        source_ids = {}
+        source_context = get_source_context(self.reply.metadata.get('sources', []), source_ids) + get_source_context(
+            self.all_tool_call_sources,
+            source_ids,
+            include_content=False,
+        )
+        source_context = source_context.strip()
+        if not source_context:
+            return
+        rag_content = await rag_template(
+            await Config.get('rag.template'),
+            source_context,
+            self.user_message,
+        )
+        if RAG_SYSTEM_CONTEXT:
+            form_data['messages'] = add_or_update_system_message(rag_content, form_data['messages'], append=True)
+        else:
+            form_data['messages'] = add_or_update_user_message(rag_content, form_data['messages'], append=False)
+
+
+async def _passthrough_stream(response, ctx: dict, events: list, filter_functions: list, extra_params: dict):
+    """Without an event emitter (direct API callers), relay the stream as is, through any stream filters,
+    and run the outlet filters on the assembled reply."""
     request = ctx['request']
-
-    form_data = ctx['form_data']
-
-    user = ctx['user']
     model = ctx['model']
 
-    metadata = ctx['metadata']
-    events = ctx['events']
+    def wrap_item(item):
+        return f'data: {item}\n\n'
 
-    event_emitter = ctx['event_emitter']
-    event_caller = ctx['event_caller']
-    chat_id = metadata.get('chat_id') or ''
-    save_to_chat = is_saved_chat_id(chat_id)
+    assistant_message = {}
+    filter_context = FilterContext()
+    has_api_outlet_filters = ENABLE_API_OUTLET_FILTERS and bool(filter_functions)
+    if ENABLE_API_OUTLET_FILTERS and not has_api_outlet_filters:
+        try:
+            model_id = model.get('id') if isinstance(model, dict) else model
+            has_api_outlet_filters = bool(
+                (isinstance(model, dict) and 'pipeline' in model)
+                or get_sorted_filters(model_id, request.app.state.MODELS)
+            )
+        except Exception:
+            has_api_outlet_filters = True
+
+    for event in events:
+        event, _ = await process_filter_functions(
+            request=request,
+            filter_context=filter_context,
+            filter_functions=filter_functions,
+            filter_type='stream',
+            form_data=event,
+            extra_params=extra_params,
+        )
+
+        if event:
+            yield wrap_item(JSONCodec.dumps(event))
+
+    async for data in response.body_iterator:
+        if filter_functions:
+            data = await _filter_stream_line(request, filter_context, filter_functions, extra_params, data, wrap_item)
+
+        if data:
+            if has_api_outlet_filters:
+                update_assistant_message_from_stream(assistant_message, data)
+            yield data
+
+    if has_api_outlet_filters and assistant_message:
+        ctx['assistant_message'] = assistant_message
+        await outlet_filter_handler(ctx)
+
+
+async def _filter_stream_line(request, filter_context, filter_functions, extra_params, data, wrap_item):
+    """A data line after the stream filters (None when they drop it); other lines pass unchanged."""
+    line = data.decode('utf-8', 'replace') if isinstance(data, bytes) else data
+    if not (isinstance(line, str) and line.startswith('data:')):
+        return data
+    payload = line.removeprefix('data:').strip()
+    if not payload or payload == '[DONE]':
+        return data
+    try:
+        event = JSONCodec.loads(payload)
+    except JSONCodec.JSONDecodeError:
+        event = None
+
+    if not isinstance(event, dict):
+        return data
+    event, _ = await process_filter_functions(
+        request=request,
+        filter_context=filter_context,
+        filter_functions=filter_functions,
+        filter_type='stream',
+        form_data=event,
+        extra_params=extra_params,
+    )
+    return wrap_item(JSONCodec.dumps(event)) if event else None
+
+
+async def streaming_chat_response_handler(response, ctx):
+    request = ctx['request']
+    user = ctx['user']
+    model = ctx['model']
+    metadata = ctx['metadata']
 
     extra_params = {
-        '__event_emitter__': event_emitter,
-        '__event_call__': event_caller,
+        '__event_emitter__': ctx['event_emitter'],
+        '__event_call__': ctx['event_caller'],
         '__user__': user.model_dump() if isinstance(user, UserModel) else {},
         '__metadata__': metadata,
         '__oauth_token__': await get_system_oauth_token(request, user),
@@ -4299,2142 +6367,15 @@ async def streaming_chat_response_handler(response, ctx):
     # Standard streaming response handler
     # event_caller is optional — only needed for direct (client-side) tools
     # and pyodide code interpreter. Server-side tools work without it.
-    if event_emitter:
-        model_id = form_data.get('model', '')
-
-        # Handle as a background task
-        async def response_handler(response, events):
-            filter_context = FilterContext()
-            tag_scan_positions = {}
-            tag_boundary_positions = {}
-            response_stream_task_id = metadata.get('task_id') or metadata.get('message_id')
-
-            def tag_output_handler(content_type, tags, output):
-                """
-                Detect special tags (reasoning, solution, code_interpreter) in streaming
-                content and create corresponding OR-aligned output items directly.
-                Operates on output items instead of content_blocks.
-
-                Uses the text from the output items themselves for tag detection,
-                eliminating state divergence between accumulated content and items.
-                """
-                end_flag = False
-
-                def extract_attributes(tag_content):
-                    """Extract attributes from a tag if they exist."""
-                    attributes = {}
-                    if not tag_content:
-                        return attributes
-                    matches = re.findall(r'(\w+)\s*=\s*"([^"]+)"', tag_content)
-                    for key, value in matches:
-                        attributes[key] = value
-                    return attributes
-
-                def get_last_text(out):
-                    """Get text from last message item, or empty string."""
-                    if out and out[-1].get('type') == 'message':
-                        parts = out[-1].get('content', [])
-                        if parts and parts[-1].get('type') == 'output_text':
-                            return parts[-1].get('text', '')
-                    return ''
-
-                def set_last_text(out, text):
-                    """Set text on last message item's output_text."""
-                    if out and out[-1].get('type') == 'message':
-                        parts = out[-1].get('content', [])
-                        if parts and parts[-1].get('type') == 'output_text':
-                            parts[-1]['text'] = text
-
-                def get_scanned_length(item, text):
-                    item_id = item.get('id')
-                    if not item_id:
-                        return 0
-
-                    scanned_length = tag_scan_positions.get((item_id, content_type), 0)
-                    return scanned_length if scanned_length <= len(text) else 0
-
-                def save_scanned_length(item, text):
-                    item_id = item.get('id')
-                    if item_id:
-                        tag_scan_positions[(item_id, content_type)] = len(text)
-
-                def clear_scanned_length(item):
-                    item_id = item.get('id')
-                    if item_id:
-                        tag_scan_positions.pop((item_id, content_type), None)
-                        tag_boundary_positions.pop((item_id, content_type), None)
-
-                def get_tag_boundaries(item, text, scanned_length):
-                    """Index of the last '<', and of the last '>' or newline, before scanned_length."""
-                    key = (item.get('id'), content_type)
-                    scanned, last_open, last_boundary = tag_boundary_positions.get(key, (0, -1, -1))
-                    if scanned > scanned_length:  # the item was rewritten, so the cached positions are stale
-                        scanned, last_open, last_boundary = 0, -1, -1
-
-                    if scanned < scanned_length:
-                        # only text added since the last call can move either position
-                        open_tag = text.rfind('<', scanned, scanned_length)
-                        if open_tag != -1:
-                            last_open = open_tag
-                        boundary = max(
-                            text.rfind('>', scanned, scanned_length),
-                            text.rfind('\n', scanned, scanned_length),
-                        )
-                        if boundary != -1:
-                            last_boundary = boundary
-                        tag_boundary_positions[key] = (scanned_length, last_open, last_boundary)
-
-                    return last_open, last_boundary
-
-                # Map content_type to output item type
-                output_type_map = {
-                    'reasoning': 'reasoning',
-                    'solution': 'message',  # solution tags just produce text
-                    'code_interpreter': 'open_webui:code_interpreter',
-                }
-                output_item_type = output_type_map.get(content_type, content_type)
-
-                last_type = output[-1].get('type', '') if output else ''
-
-                if last_type == 'message':
-                    # Use the output item's own text for tag detection
-                    item = output[-1]
-                    item_text = get_last_text(output)
-                    scanned_length = get_scanned_length(item, item_text)
-                    max_start_tag_length = max((len(start_tag) for start_tag, _ in tags), default=1)
-                    search_start = max(0, scanned_length - max_start_tag_length + 1)
-
-                    if scanned_length and any(
-                        start_tag.startswith('<') and start_tag.endswith('>') for start_tag, _ in tags
-                    ):
-                        open_tag_start, last_tag_boundary = get_tag_boundaries(item, item_text, scanned_length)
-                        if open_tag_start > last_tag_boundary:
-                            search_start = min(search_start, open_tag_start)
-
-                    for start_tag, end_tag in tags:
-                        match = re.compile(_start_tag_pattern(start_tag)).search(item_text, search_start)
-                        if match:
-                            clear_scanned_length(item)
-                            try:
-                                attr_content = match.group(1) if match.group(1) else ''
-                            except Exception:
-                                attr_content = ''
-
-                            attributes = extract_attributes(attr_content)
-
-                            before_tag = item_text[: match.start()]
-                            after_tag = item_text[match.end() :]
-
-                            # Keep only text before the tag in the message
-                            set_last_text(output, before_tag)
-
-                            if not before_tag.strip():
-                                # Remove empty message item
-                                if output and output[-1].get('type') == 'message':
-                                    output.pop()
-
-                            # Append the new output item
-                            if output_item_type == 'reasoning':
-                                output.append(
-                                    {
-                                        'type': 'reasoning',
-                                        'id': output_id('r'),
-                                        'status': 'in_progress',
-                                        'start_tag': start_tag,
-                                        'end_tag': end_tag,
-                                        'attributes': attributes,
-                                        'content': [],
-                                        'summary': None,
-                                        'started_at': time.time(),
-                                    }
-                                )
-                            elif output_item_type == 'open_webui:code_interpreter':
-                                output.append(
-                                    {
-                                        'type': 'open_webui:code_interpreter',
-                                        'id': output_id('ci'),
-                                        'status': 'in_progress',
-                                        'start_tag': start_tag,
-                                        'end_tag': end_tag,
-                                        'attributes': attributes,
-                                        'lang': attributes.get('lang', 'python'),
-                                        'code': '',
-                                        'output': None,
-                                        'started_at': time.time(),
-                                    }
-                                )
-                            else:
-                                # solution or other text-producing tag
-                                output.append(
-                                    {
-                                        'type': 'message',
-                                        'id': output_id('msg'),
-                                        'status': 'in_progress',
-                                        'role': 'assistant',
-                                        'content': [{'type': 'output_text', 'text': ''}],
-                                        '_tag_type': content_type,
-                                        'start_tag': start_tag,
-                                        'end_tag': end_tag,
-                                        'attributes': attributes,
-                                        'started_at': time.time(),
-                                    }
-                                )
-
-                            if after_tag:
-                                # Set the after_tag content on the new item
-                                if output_item_type == 'reasoning':
-                                    output[-1]['content'] = [{'type': 'output_text', 'text': after_tag}]
-                                elif output_item_type == 'open_webui:code_interpreter':
-                                    output[-1]['code'] = after_tag
-                                else:
-                                    set_last_text(output, after_tag)
-
-                                _, recursive_end = tag_output_handler(content_type, tags, output)
-                                if recursive_end:
-                                    end_flag = True
-
-                            break
-                    else:
-                        save_scanned_length(item, item_text)
-
-                elif (
-                    (last_type == 'reasoning' and content_type == 'reasoning')
-                    or (last_type == 'open_webui:code_interpreter' and content_type == 'code_interpreter')
-                    or (last_type == 'message' and output[-1].get('_tag_type') == content_type)
-                ):
-                    item = output[-1]
-                    start_tag = item.get('start_tag', '')
-                    end_tag = item.get('end_tag', '')
-
-                    # Get the block content from the item itself
-                    if last_type == 'reasoning':
-                        parts = item.get('content', [])
-                        block_content = ''
-                        if parts and parts[-1].get('type') == 'output_text':
-                            block_content = parts[-1].get('text', '')
-                    elif last_type == 'open_webui:code_interpreter':
-                        block_content = item.get('code', '')
-                    else:
-                        block_content = get_last_text(output)
-
-                    scanned_length = get_scanned_length(item, block_content)
-                    end_tag_search_start = max(0, scanned_length - max(len(end_tag), 1) + 1)
-
-                    if block_content.find(end_tag, end_tag_search_start) != -1:
-                        clear_scanned_length(item)
-                        end_flag = True
-
-                        # Strip start and end tags from content
-                        start_tag_pattern = _start_tag_pattern(start_tag)
-                        block_content = re.sub(start_tag_pattern, '', block_content).strip()
-
-                        end_tag_pattern = rf'{re.escape(end_tag)}'
-                        end_tag_regex = re.compile(end_tag_pattern, re.DOTALL)
-                        split_content = end_tag_regex.split(block_content, maxsplit=1)
-
-                        block_content = split_content[0].strip() if split_content else ''
-                        leftover_content = split_content[1].strip() if len(split_content) > 1 else ''
-
-                        if block_content:
-                            # Update the item with final content
-                            if last_type == 'reasoning':
-                                item['content'] = [{'type': 'output_text', 'text': block_content}]
-                                item['ended_at'] = time.time()
-                                item['duration'] = int(item['ended_at'] - item['started_at'])
-                                item['status'] = 'completed'
-                            elif last_type == 'open_webui:code_interpreter':
-                                item['code'] = block_content
-                                item['ended_at'] = time.time()
-                                item['duration'] = int(item['ended_at'] - item['started_at'])
-                            else:
-                                set_last_text(output, block_content)
-                                item['ended_at'] = time.time()
-
-                            # Reset by appending a new message item for leftover
-                            output.append(
-                                {
-                                    'type': 'message',
-                                    'id': output_id('msg'),
-                                    'status': 'in_progress',
-                                    'role': 'assistant',
-                                    'content': [
-                                        {
-                                            'type': 'output_text',
-                                            'text': leftover_content,
-                                        }
-                                    ],
-                                }
-                            )
-                        else:
-                            # Remove the block if content is empty
-                            output.pop()
-                            output.append(
-                                {
-                                    'type': 'message',
-                                    'id': output_id('msg'),
-                                    'status': 'in_progress',
-                                    'role': 'assistant',
-                                    'content': [
-                                        {
-                                            'type': 'output_text',
-                                            'text': leftover_content,
-                                        }
-                                    ],
-                                }
-                            )
-                    else:
-                        save_scanned_length(item, block_content)
-
-                return output, end_flag
-
-            message = (
-                await Chats.get_message_by_id_and_message_id(metadata['chat_id'], metadata['message_id'])
-                if save_to_chat
-                else None
-            )
-
-            tool_calls = []
-
-            last_assistant_message = None
-            try:
-                if form_data['messages'][-1]['role'] == 'assistant':
-                    last_assistant_message = get_last_assistant_message(form_data['messages'])
-            except Exception:
-                pass
-
-            initial_content = (
-                message.get('content', '') if message else last_assistant_message if last_assistant_message else ''
-            )
-            content_parts = [initial_content] if initial_content else []
-
-            # Initialize output: use existing from message if continuing, else create new
-            existing_output = message.get('output') if message else None
-            prior_output = []
-            if existing_output and metadata.get('assistant_message_id'):
-                prior_output = list(existing_output)
-                if (
-                    prior_output
-                    and prior_output[-1].get('type') == 'message'
-                    and prior_output[-1].get('status') == 'in_progress'
-                ):
-                    msg_parts = prior_output[-1].get('content', [])
-                    if not msg_parts or (len(msg_parts) == 1 and not msg_parts[0].get('text', '').strip()):
-                        prior_output.pop()
-                output = []
-                content_parts = []
-            elif existing_output:
-                output = existing_output
-            else:
-                # Only create an initial message item if there is content to initialize with
-                if initial_content:
-                    output = [
-                        {
-                            'type': 'message',
-                            'id': output_id('msg'),
-                            'status': 'in_progress',
-                            'role': 'assistant',
-                            'content': [{'type': 'output_text', 'text': initial_content}],
-                        }
-                    ]
-                else:
-                    output = []
-
-            usage = None
-            last_response_id = None
-
-            def full_output():
-                return prior_output + output if prior_output else output
-
-            def get_message_error_content(error):
-                if isinstance(error, HTTPException):
-                    error = error.detail
-                elif isinstance(error, dict):
-                    error = error.get('detail', error)
-                else:
-                    error = str(error)
-
-                return error if isinstance(error, (str, dict)) else str(error)
-
-            async def emit_message_error(error_content):
-                if save_to_chat:
-                    await Chats.upsert_message_to_chat_by_id_and_message_id(
-                        metadata['chat_id'],
-                        metadata['message_id'],
-                        {'error': {'content': error_content}},
-                    )
-                await event_emitter(
-                    {
-                        'type': 'chat:message:error',
-                        'data': {'error': {'content': error_content}},
-                    }
-                )
-
-            reasoning_tags_param = metadata.get('params', {}).get('reasoning_tags')
-            DETECT_REASONING_TAGS = reasoning_tags_param is not False
-
-            # Legacy tool-calling only: native FC gets execute_code as a builtin tool.
-            # Same five authz gates as utils/tools.py get_builtin_tools.
-            features = metadata.get('features', {}) or {}
-            model_capabilities = model.get('info', {}).get('meta', {}).get('capabilities') or {}
-            builtin_tools_meta = model.get('info', {}).get('meta', {}).get('builtinTools', {})
-            DETECT_CODE_INTERPRETER = (
-                metadata.get('params', {}).get('function_calling') == 'legacy'
-                and bool(features.get('code_interpreter'))
-                and builtin_tools_meta.get('code_interpreter', True)
-                and await Config.get('code_interpreter.enable')
-                and model_capabilities.get('code_interpreter', True)
-                and (
-                    getattr(user, 'role', None) == 'admin'
-                    or await has_permission(
-                        getattr(user, 'id', ''),
-                        'features.code_interpreter',
-                        await Config.get('user.permissions'),
-                    )
-                )
-            )
-
-            reasoning_tags = []
-            if DETECT_REASONING_TAGS:
-                if isinstance(reasoning_tags_param, list) and len(reasoning_tags_param) == 2:
-                    reasoning_tags = [(reasoning_tags_param[0], reasoning_tags_param[1])]
-                else:
-                    reasoning_tags = DEFAULT_REASONING_TAGS
-
-            try:
-                for event in events:
-                    await event_emitter(
-                        {
-                            'type': 'chat:completion',
-                            'data': event,
-                        }
-                    )
-
-                    # Save message in the database
-                    if save_to_chat:
-                        await Chats.upsert_message_to_chat_by_id_and_message_id(
-                            metadata['chat_id'],
-                            metadata['message_id'],
-                            {
-                                **event,
-                            },
-                        )
-
-                async def stream_body_handler(response, form_data):
-                    nonlocal usage
-                    nonlocal output
-                    nonlocal prior_output
-                    nonlocal last_response_id
-
-                    response_tool_calls = []
-
-                    delta_count = 0
-                    delta_chunk_size = max(
-                        CHAT_RESPONSE_STREAM_DELTA_CHUNK_SIZE,
-                        int(metadata.get('params', {}).get('stream_delta_chunk_size') or 1),
-                    )
-                    last_delta_data = None
-                    last_delta_type = None
-                    last_delta_key = None
-
-                    joined_content = ''
-                    joined_part_count = 0
-
-                    async def save_current_response_stream(stream_output: list | None = None):
-                        nonlocal joined_content
-                        nonlocal joined_part_count
-
-                        if not chat_id or not metadata.get('message_id'):
-                            return
-
-                        # content_parts is append-only, so its length tells us when the join is stale
-                        if joined_part_count != len(content_parts):
-                            joined_content = ''.join(content_parts)
-                            joined_part_count = len(content_parts)
-
-                        current_stream_output = stream_output if stream_output is not None else full_output()
-                        await save_response_stream(
-                            request.app.state.redis,
-                            response_stream_task_id,
-                            chat_id,
-                            metadata.get('message_id'),
-                            joined_content or get_output_text(current_stream_output),
-                            current_stream_output,
-                        )
-
-                    def get_response_delta_key(delta_data: dict):
-                        event_type = delta_data.get('type', '')
-                        if not event_type.startswith('response.') or not event_type.endswith('.delta'):
-                            return None
-                        return (
-                            event_type,
-                            delta_data.get('item_id'),
-                            delta_data.get('output_index'),
-                            delta_data.get('content_index'),
-                            delta_data.get('summary_index'),
-                        )
-
-                    def get_response_data_with_full_output_index(response_data: dict):
-                        if prior_output and isinstance(response_data.get('output_index'), int):
-                            return {
-                                **response_data,
-                                'output_index': response_data['output_index'] + len(prior_output),
-                            }
-                        return response_data
-
-                    async def flush_pending_delta_data(threshold: int = 0):
-                        nonlocal delta_count
-                        nonlocal last_delta_data
-                        nonlocal last_delta_type
-                        nonlocal last_delta_key
-
-                        if delta_count >= threshold and last_delta_data:
-                            await event_emitter(
-                                {
-                                    'type': 'response:completion',
-                                    'data': last_delta_data,
-                                }
-                            )
-                            await save_current_response_stream()
-                            delta_count = 0
-                            last_delta_data = None
-                            last_delta_type = None
-                            last_delta_key = None
-
-                    async def queue_pending_delta_data(delta_data: dict, delta_type: str):
-                        nonlocal delta_count
-                        nonlocal last_delta_data
-                        nonlocal last_delta_type
-                        nonlocal last_delta_key
-
-                        delta_data = get_response_data_with_full_output_index(delta_data)
-                        delta_key = get_response_delta_key(delta_data)
-                        if (
-                            last_delta_data
-                            and last_delta_key == delta_key
-                            and isinstance(last_delta_data.get('delta'), str)
-                            and isinstance(delta_data.get('delta'), str)
-                        ):
-                            last_delta_data['delta'] += delta_data['delta']
-                            delta_count += 1
-                        else:
-                            if last_delta_data and (last_delta_type != delta_type or last_delta_key != delta_key):
-                                await flush_pending_delta_data()
-
-                            delta_count += 1
-                            last_delta_data = delta_data
-                            last_delta_type = delta_type
-                            last_delta_key = delta_key
-
-                        if delta_count >= delta_chunk_size:
-                            await flush_pending_delta_data(delta_chunk_size)
-
-                    async def emit_response_completion_event(response_data: dict, stream_output: list | None = None):
-                        if response_data.get('type', '').endswith('.delta'):
-                            await queue_pending_delta_data(
-                                response_data,
-                                response_data.get('type', 'response.delta'),
-                            )
-                            return
-
-                        response_data = get_response_data_with_full_output_index(response_data)
-                        await flush_pending_delta_data()
-                        await event_emitter(
-                            {
-                                'type': 'response:completion',
-                                'data': get_response_completion_event_data(response_data),
-                            }
-                        )
-                        await save_current_response_stream(stream_output)
-
-                    filter_extra_params = {'__body__': form_data, **extra_params} if filter_functions else None
-
-                    async for line in response.body_iterator:
-                        line = line.decode('utf-8', 'replace') if isinstance(line, bytes) else line
-                        data = line
-
-                        # Skip empty lines
-                        if not data or data.isspace():
-                            continue
-
-                        # "data:" is the prefix for each event
-                        if not data.startswith('data:'):
-                            # Some upstreams return plain JSON error lines in a streaming response
-                            # (without SSE `data:` prefix). Try to normalize these into standard
-                            # error events so frontend and DB paths still receive them.
-                            try:
-                                raw_obj = JSONCodec.loads(data)
-                                raw_error = raw_obj.get('error') if isinstance(raw_obj, dict) else None
-                                if raw_error:
-                                    if save_to_chat:
-                                        try:
-                                            await Chats.upsert_message_to_chat_by_id_and_message_id(
-                                                metadata['chat_id'],
-                                                metadata['message_id'],
-                                                {
-                                                    'error': {'content': raw_error},
-                                                },
-                                            )
-                                        except Exception:
-                                            pass
-                                    await event_emitter({'type': 'chat:completion', 'data': {'error': raw_error}})
-                            except Exception:
-                                pass
-                            continue
-
-                        # Remove the "data:" prefix
-                        data = data[5:].strip()
-
-                        try:
-                            data = JSONCodec.loads(data)
-
-                            if filter_functions:
-                                data, _ = await process_filter_functions(
-                                    request=request,
-                                    filter_context=filter_context,
-                                    filter_functions=filter_functions,
-                                    filter_type='stream',
-                                    form_data=data,
-                                    extra_params=filter_extra_params,
-                                )
-
-                            if data:
-                                if 'event' in data and not getattr(request.state, 'direct', False):
-                                    await event_emitter(data.get('event', {}))
-
-                                if 'selected_model_id' in data:
-                                    model_id = data['selected_model_id']
-                                    if save_to_chat:
-                                        await Chats.upsert_message_to_chat_by_id_and_message_id(
-                                            metadata['chat_id'],
-                                            metadata['message_id'],
-                                            {
-                                                'selectedModelId': model_id,
-                                            },
-                                            touch=False,
-                                        )
-                                    await event_emitter(
-                                        {
-                                            'type': 'chat:completion',
-                                            'data': data,
-                                        }
-                                    )
-                                # Check for Responses API events (type field starts with "response.")
-                                elif data.get('type', '').startswith('response.'):
-                                    response_data_type = data.get('type', '')
-                                    response_data_is_delta = response_data_type.endswith('.delta')
-                                    output, response_metadata = handle_responses_streaming_event(data, output)
-
-                                    if not response_data_is_delta:
-                                        await flush_pending_delta_data()
-
-                                    # Emit citation sources from finalized output items
-                                    # (mirrors Chat Completions annotation handling at delta level)
-                                    if response_data_type == 'response.output_item.done':
-                                        item = data.get('item', {})
-                                        if item.get('type') == 'message':
-                                            for part in item.get('content', []):
-                                                for annotation in part.get('annotations', []):
-                                                    if annotation.get('type') == 'url_citation':
-                                                        # Handle both flat (Responses API) and nested (Chat Completions)
-                                                        # formats
-                                                        url_citation = annotation.get('url_citation', annotation)
-
-                                                        url = url_citation.get('url', '')
-                                                        title = url_citation.get('title', url)
-
-                                                        if url:
-                                                            await event_emitter(
-                                                                {
-                                                                    'type': 'source',
-                                                                    'data': {
-                                                                        'source': {
-                                                                            'name': title,
-                                                                            'url': url,
-                                                                        },
-                                                                        'document': [title],
-                                                                        'metadata': [
-                                                                            {
-                                                                                'source': url,
-                                                                                'name': title,
-                                                                            }
-                                                                        ],
-                                                                    },
-                                                                }
-                                                            )
-
-                                    # Merge any metadata (usage, etc.)
-                                    # Strip 'done' — response.completed emits
-                                    # it but we may still need to execute tool
-                                    # calls. The outer middleware manages the
-                                    # actual completion signal.
-                                    if response_metadata:
-                                        if ENABLE_RESPONSES_API_STATEFUL:
-                                            response_id = response_metadata.pop('response_id', None)
-                                            if response_id:
-                                                last_response_id = response_id
-
-                                        # Normalize and capture usage for DB persistence
-                                        if response_metadata.get('usage'):
-                                            usage = merge_usage(usage, response_metadata['usage'])
-                                            response_metadata['usage'] = usage
-
-                                        if response_metadata.get('error'):
-                                            await event_emitter(
-                                                {
-                                                    'type': 'chat:completion',
-                                                    'data': {'error': response_metadata['error']},
-                                                }
-                                            )
-
-                                    await emit_response_completion_event(data)
-
-                                    if response_metadata and response_metadata.get('usage'):
-                                        await event_emitter(
-                                            {
-                                                'type': 'chat:completion',
-                                                'data': {'usage': usage},
-                                            }
-                                        )
-                                    continue
-                                else:
-                                    choices = data.get('choices', [])
-
-                                    # Normalize usage data to standard format
-                                    raw_usage = data.get('usage', {}) or {}
-                                    raw_usage.update(data.get('timings', {}))  # llama.cpp
-                                    if raw_usage:
-                                        usage = merge_usage(usage, raw_usage)
-                                        await event_emitter(
-                                            {
-                                                'type': 'chat:completion',
-                                                'data': {
-                                                    'usage': usage,
-                                                },
-                                            }
-                                        )
-
-                                    if not choices:
-                                        error = data.get('error', {})
-                                        if error:
-                                            log.error('Provider returned error (streaming): %s', error)
-                                            if save_to_chat:
-                                                try:
-                                                    await Chats.upsert_message_to_chat_by_id_and_message_id(
-                                                        metadata['chat_id'],
-                                                        metadata['message_id'],
-                                                        {
-                                                            'error': {'content': error},
-                                                        },
-                                                    )
-                                                except Exception:
-                                                    pass
-                                            await event_emitter(
-                                                {
-                                                    'type': 'chat:completion',
-                                                    'data': {
-                                                        'error': error,
-                                                    },
-                                                }
-                                            )
-                                        continue
-
-                                    delta = choices[0].get('delta', {})
-                                    delta_type = 'content'
-
-                                    # Handle delta annotations
-                                    annotations = delta.get('annotations')
-                                    if annotations:
-                                        for annotation in annotations:
-                                            if (
-                                                annotation.get('type') == 'url_citation'
-                                                and 'url_citation' in annotation
-                                            ):
-                                                url_citation = annotation['url_citation']
-
-                                                url = url_citation.get('url', '')
-                                                title = url_citation.get('title', url)
-
-                                                await event_emitter(
-                                                    {
-                                                        'type': 'source',
-                                                        'data': {
-                                                            'source': {
-                                                                'name': title,
-                                                                'url': url,
-                                                            },
-                                                            'document': [title],
-                                                            'metadata': [
-                                                                {
-                                                                    'source': url,
-                                                                    'name': title,
-                                                                }
-                                                            ],
-                                                        },
-                                                    }
-                                                )
-
-                                    delta_tool_calls = delta.get('tool_calls', None)
-                                    if delta_tool_calls:
-                                        for delta_tool_call in delta_tool_calls:
-                                            tool_call_index = delta_tool_call.get('index')
-
-                                            if tool_call_index is not None:
-                                                # Check if the tool call already exists
-                                                current_response_tool_call = None
-                                                for response_tool_call in response_tool_calls:
-                                                    if response_tool_call.get('index') == tool_call_index:
-                                                        current_response_tool_call = response_tool_call
-                                                        break
-
-                                                if current_response_tool_call is None:
-                                                    # Add the new tool call
-                                                    delta_tool_call.setdefault('function', {})
-                                                    delta_tool_call['function'].setdefault('name', '')
-                                                    delta_tool_call['id'] = delta_tool_call.get('id') or output_id('fc')
-                                                    delta_arguments = delta_tool_call['function'].get('arguments')
-                                                    if not isinstance(delta_arguments, str):
-                                                        delta_tool_call['function']['arguments'] = (
-                                                            ''
-                                                            if delta_arguments is None
-                                                            else JSONCodec.dumps(delta_arguments)
-                                                        )
-                                                    response_tool_calls.append(delta_tool_call)
-                                                else:
-                                                    # Update the existing tool call
-                                                    delta_name = delta_tool_call.get('function', {}).get('name')
-                                                    delta_arguments = delta_tool_call.get('function', {}).get(
-                                                        'arguments'
-                                                    )
-
-                                                    if delta_name:
-                                                        current_response_tool_call['function']['name'] = delta_name
-
-                                                    if delta_arguments is not None:
-                                                        if not isinstance(delta_arguments, str):
-                                                            delta_arguments = JSONCodec.dumps(delta_arguments)
-                                                        current_response_tool_call.setdefault('function', {})
-                                                        if not isinstance(
-                                                            current_response_tool_call['function'].get('arguments'),
-                                                            str,
-                                                        ):
-                                                            current_response_tool_call['function']['arguments'] = ''
-                                                        current_response_tool_call['function']['arguments'] += (
-                                                            delta_arguments
-                                                        )
-
-                                        # Emit pending tool calls in real-time as Responses events.
-                                        if response_tool_calls:
-                                            output_by_call_id = {
-                                                item.get('call_id'): (idx, item)
-                                                for idx, item in enumerate(output)
-                                                if item.get('type') == 'function_call'
-                                            }
-
-                                            for tc in response_tool_calls:
-                                                call_id = tc.get('id') or output_id('fc')
-                                                tc['id'] = call_id
-                                                func = tc.get('function', {})
-                                                if call_id in output_by_call_id:
-                                                    output_index, item = output_by_call_id[call_id]
-                                                    item['name'] = func.get('name', item.get('name', ''))
-                                                    item['arguments'] = func.get('arguments', item.get('arguments', ''))
-                                                    item['status'] = 'in_progress'
-                                                else:
-                                                    output_index = len(output)
-                                                    item = {
-                                                        'type': 'function_call',
-                                                        'id': call_id,
-                                                        'call_id': call_id,
-                                                        'name': func.get('name', ''),
-                                                        'arguments': '',
-                                                        'status': 'in_progress',
-                                                    }
-                                                    output.append(item)
-                                                    output_by_call_id[call_id] = (output_index, item)
-                                                    await emit_response_completion_event(
-                                                        {
-                                                            'type': 'response.output_item.added',
-                                                            'output_index': output_index,
-                                                            'item': item.copy(),
-                                                        }
-                                                    )
-                                                    item['arguments'] = func.get('arguments', '')
-
-                                            for delta_tool_call in delta_tool_calls:
-                                                tool_call_index = delta_tool_call.get('index')
-                                                current_response_tool_call = next(
-                                                    (
-                                                        tc
-                                                        for tc in response_tool_calls
-                                                        if tc.get('index') == tool_call_index
-                                                    ),
-                                                    None,
-                                                )
-                                                if not current_response_tool_call:
-                                                    continue
-                                                call_id = current_response_tool_call.get('id')
-                                                output_index, _ = output_by_call_id.get(call_id, (len(output) - 1, {}))
-                                                delta_arguments = delta_tool_call.get('function', {}).get('arguments')
-                                                if delta_arguments is not None:
-                                                    if not isinstance(delta_arguments, str):
-                                                        delta_arguments = JSONCodec.dumps(delta_arguments)
-                                                    await emit_response_completion_event(
-                                                        {
-                                                            'type': 'response.function_call_arguments.delta',
-                                                            'item_id': call_id,
-                                                            'output_index': output_index,
-                                                            'delta': delta_arguments,
-                                                        }
-                                                    )
-
-                                            await save_current_response_stream()
-                                            data = None
-                                            delta_type = 'tool_call'
-
-                                    delta_images = delta.get('images')
-                                    image_urls = (
-                                        await get_image_urls(delta_images, request, metadata, user)
-                                        if delta_images
-                                        else []
-                                    )
-                                    if image_urls:
-                                        image_file_list = [{'type': 'image', 'url': url} for url in image_urls]
-                                        message_files = image_file_list
-                                        if save_to_chat:
-                                            message_files = await Chats.add_message_files_by_id_and_message_id(
-                                                metadata['chat_id'],
-                                                metadata['message_id'],
-                                                image_file_list,
-                                            )
-                                            if message_files is None:
-                                                message_files = image_file_list
-
-                                        await event_emitter(
-                                            {
-                                                'type': 'files',
-                                                'data': {'files': message_files},
-                                            }
-                                        )
-
-                                    # content and reasoning deltas are raw JSON: a stream filter can make them any type
-                                    value = delta.get('content')
-                                    if value and not isinstance(value, str):
-                                        value = f'{value}'
-
-                                    reasoning_content = (
-                                        delta.get('reasoning_content')
-                                        or delta.get('reasoning')
-                                        or delta.get('thinking')
-                                    )
-                                    if reasoning_content and not isinstance(reasoning_content, str):
-                                        reasoning_content = f'{reasoning_content}'
-                                    reasoning_details = get_reasoning_details(delta)
-                                    reasoning_detail_items = (
-                                        [item for item in reasoning_details if isinstance(item, dict)]
-                                        if isinstance(reasoning_details, list)
-                                        else [reasoning_details]
-                                        if isinstance(reasoning_details, dict)
-                                        else []
-                                    )
-                                    existing_reasoning_item = next(
-                                        (item for item in reversed(output) if item.get('type') == 'reasoning'),
-                                        None,
-                                    )
-                                    message_index = next(
-                                        (i for i, item in enumerate(output) if item.get('type') == 'message'),
-                                        None,
-                                    )
-                                    if reasoning_content or (
-                                        reasoning_detail_items
-                                        and (
-                                            existing_reasoning_item
-                                            or any(
-                                                item.get('text') or item.get('summary') or item.get('data')
-                                                for item in reasoning_detail_items
-                                            )
-                                        )
-                                    ):
-                                        reasoning_item = (
-                                            existing_reasoning_item
-                                            if (reasoning_detail_items and not reasoning_content)
-                                            or message_index is not None
-                                            else None
-                                        )
-
-                                        if reasoning_item is None:
-                                            if not output or output[-1].get('type') != 'reasoning':
-                                                reasoning_item = {
-                                                    'type': 'reasoning',
-                                                    'id': output_id('r'),
-                                                    'status': 'in_progress',
-                                                    'start_tag': '<think>',
-                                                    'end_tag': '</think>',
-                                                    'attributes': {'type': 'reasoning_content'},
-                                                    'content': [],
-                                                    'summary': None,
-                                                    'started_at': time.time(),
-                                                }
-                                                if message_index is not None:
-                                                    reasoning_item['ended_at'] = time.time()
-                                                    reasoning_item['duration'] = 0
-                                                    reasoning_item['status'] = 'completed'
-                                                    output.insert(message_index, reasoning_item)
-                                                else:
-                                                    output.append(reasoning_item)
-                                            else:
-                                                reasoning_item = output[-1]
-
-                                        if reasoning_content:
-                                            # Append to reasoning content
-                                            parts = reasoning_item.get('content', [])
-                                            if parts and parts[-1].get('type') == 'output_text':
-                                                parts[-1]['text'] += reasoning_content
-                                            else:
-                                                reasoning_item['content'] = [
-                                                    {
-                                                        'type': 'output_text',
-                                                        'text': reasoning_content,
-                                                    }
-                                                ]
-
-                                            reasoning_index = output.index(reasoning_item)
-                                            data = {
-                                                'type': 'response.reasoning_text.delta',
-                                                'item_id': reasoning_item.get('id'),
-                                                'output_index': reasoning_index,
-                                                'content_index': max(
-                                                    len(reasoning_item.get('content', [])) - 1,
-                                                    0,
-                                                ),
-                                                'delta': reasoning_content,
-                                            }
-                                            delta_type = 'response.reasoning_text.delta'
-
-                                        if reasoning_detail_items:
-                                            merge_streamed_reasoning_details(
-                                                reasoning_item.setdefault('reasoning_details', []),
-                                                reasoning_detail_items,
-                                            )
-                                            await save_current_response_stream()
-                                            # Providers such as OpenRouter send reasoning_details
-                                            # alongside the reasoning text: only drop the event when
-                                            # the details were all there was to report, otherwise the
-                                            # reasoning delta never reaches the client.
-                                            if not reasoning_content:
-                                                data = None
-
-                                    if value:
-                                        if (
-                                            output
-                                            and output[-1].get('type') == 'reasoning'
-                                            and output[-1].get('attributes', {}).get('type') == 'reasoning_content'
-                                        ):
-                                            reasoning_item = output[-1]
-                                            reasoning_item['ended_at'] = time.time()
-                                            reasoning_item['duration'] = int(
-                                                reasoning_item['ended_at'] - reasoning_item['started_at']
-                                            )
-                                            reasoning_item['status'] = 'completed'
-
-                                            output.append(
-                                                {
-                                                    'type': 'message',
-                                                    'id': output_id('msg'),
-                                                    'status': 'in_progress',
-                                                    'role': 'assistant',
-                                                    'content': [
-                                                        {
-                                                            'type': 'output_text',
-                                                            'text': '',
-                                                        }
-                                                    ],
-                                                }
-                                            )
-
-                                        if ENABLE_CHAT_RESPONSE_BASE64_IMAGE_URL_CONVERSION:
-                                            value = await convert_markdown_base64_images(
-                                                request,
-                                                value,
-                                                {
-                                                    'chat_id': metadata.get('chat_id', None),
-                                                    'message_id': metadata.get('message_id', None),
-                                                },
-                                                user,
-                                            )
-
-                                        # closure-cell str += recopies per chunk; append + join once at read is O(n)
-                                        content_parts.append(value)
-
-                                        # Check if we're inside a tag-based block
-                                        # (reasoning, code_interpreter, or solution).
-                                        # If so, append to the existing in-progress
-                                        # item instead of creating a new message —
-                                        # otherwise tag_output_handler re-detects the
-                                        # start tag on every chunk and fragments the
-                                        # output.
-                                        last_item = output[-1] if output else None
-                                        last_item_type = last_item.get('type', '') if last_item else ''
-                                        inside_tag_block = (
-                                            last_item is not None
-                                            and last_item.get('status') == 'in_progress'
-                                            and last_item.get('attributes', {}).get('type') != 'reasoning_content'
-                                            and (
-                                                last_item_type == 'reasoning'
-                                                or last_item_type == 'open_webui:code_interpreter'
-                                                or (
-                                                    last_item_type == 'message'
-                                                    and last_item.get('_tag_type') is not None
-                                                )
-                                            )
-                                        )
-
-                                        if inside_tag_block:
-                                            # Append to the existing tag-based item
-                                            if last_item_type == 'open_webui:code_interpreter':
-                                                last_item['code'] = last_item.get('code', '') + value
-                                            elif last_item_type == 'reasoning':
-                                                parts = last_item.get('content', [])
-                                                if parts and parts[-1].get('type') == 'output_text':
-                                                    parts[-1]['text'] += value
-                                                else:
-                                                    last_item['content'] = [
-                                                        {
-                                                            'type': 'output_text',
-                                                            'text': value,
-                                                        }
-                                                    ]
-                                            else:
-                                                # solution or other _tag_type message
-                                                msg_parts = last_item.get('content', [])
-                                                if msg_parts and msg_parts[-1].get('type') == 'output_text':
-                                                    msg_parts[-1]['text'] += value
-                                                else:
-                                                    last_item['content'] = [
-                                                        {
-                                                            'type': 'output_text',
-                                                            'text': value,
-                                                        }
-                                                    ]
-                                        else:
-                                            if not output or output[-1].get('type') != 'message':
-                                                output.append(
-                                                    {
-                                                        'type': 'message',
-                                                        'id': output_id('msg'),
-                                                        'status': 'in_progress',
-                                                        'role': 'assistant',
-                                                        'content': [
-                                                            {
-                                                                'type': 'output_text',
-                                                                'text': '',
-                                                            }
-                                                        ],
-                                                    }
-                                                )
-
-                                            # Append value to last message item's text
-                                            msg_parts = output[-1].get('content', [])
-                                            if msg_parts and msg_parts[-1].get('type') == 'output_text':
-                                                msg_parts[-1]['text'] += value
-                                            else:
-                                                output[-1]['content'] = [
-                                                    {
-                                                        'type': 'output_text',
-                                                        'text': value,
-                                                    }
-                                                ]
-
-                                        if DETECT_REASONING_TAGS:
-                                            output, _ = tag_output_handler(
-                                                'reasoning',
-                                                reasoning_tags,
-                                                output,
-                                            )
-
-                                            output, _ = tag_output_handler(
-                                                'solution',
-                                                DEFAULT_SOLUTION_TAGS,
-                                                output,
-                                            )
-
-                                        if DETECT_CODE_INTERPRETER:
-                                            output, end = tag_output_handler(
-                                                'code_interpreter',
-                                                DEFAULT_CODE_INTERPRETER_TAGS,
-                                                output,
-                                            )
-
-                                            if end:
-                                                break
-
-                                        target_index = len(output) - 1
-                                        target_item = output[target_index] if target_index >= 0 else {}
-                                        target_content = target_item.get('content', [])
-                                        content_index = max(len(target_content) - 1, 0)
-                                        delta_event_type = (
-                                            'response.reasoning_text.delta'
-                                            if target_item.get('type') == 'reasoning'
-                                            else 'response.output_text.delta'
-                                        )
-                                        data = {
-                                            'type': delta_event_type,
-                                            'item_id': target_item.get('id'),
-                                            'output_index': target_index,
-                                            'content_index': content_index,
-                                            'delta': value,
-                                        }
-                                        delta_type = delta_event_type
-
-                                if delta and data:
-                                    await queue_pending_delta_data(data, delta_type)
-                                elif data:
-                                    await event_emitter(
-                                        {
-                                            'type': 'chat:completion',
-                                            'data': data,
-                                        }
-                                    )
-                        except (asyncio.CancelledError, KeyboardInterrupt):
-                            raise
-                        except Exception as e:
-                            done = 'data: [DONE]' in line
-                            if done:
-                                pass
-                            else:
-                                log.debug('Error: %s', e)
-                                continue
-                    await flush_pending_delta_data()
-
-                    if output:
-                        # Clean up the last message item
-                        if output[-1].get('type') == 'message':
-                            parts = output[-1].get('content', [])
-                            if parts and parts[-1].get('type') == 'output_text':
-                                parts[-1]['text'] = parts[-1]['text'].strip()
-
-                                if not parts[-1]['text']:
-                                    output.pop()
-
-                                    if not output:
-                                        output.append(
-                                            {
-                                                'type': 'message',
-                                                'id': output_id('msg'),
-                                                'status': 'in_progress',
-                                                'role': 'assistant',
-                                                'content': [{'type': 'output_text', 'text': ''}],
-                                            }
-                                        )
-
-                        if output[-1].get('type') == 'reasoning':
-                            reasoning_item = output[-1]
-                            if reasoning_item.get('ended_at') is None:
-                                reasoning_item['ended_at'] = time.time()
-                                if reasoning_item.get('started_at') is not None:
-                                    reasoning_item['duration'] = int(
-                                        reasoning_item['ended_at'] - reasoning_item['started_at']
-                                    )
-                                reasoning_item['status'] = 'completed'
-
-                    if response_tool_calls:
-                        for tc in response_tool_calls:
-                            call_id = tc.get('id', '')
-                            arguments = tc.get('function', {}).get('arguments', '{}')
-                            for output_index, item in enumerate(output):
-                                if item.get('type') == 'function_call' and item.get('call_id') == call_id:
-                                    item['arguments'] = arguments
-                                    item['status'] = 'completed'
-                                    await emit_response_completion_event(
-                                        {
-                                            'type': 'response.function_call_arguments.done',
-                                            'item_id': item.get('id'),
-                                            'output_index': output_index,
-                                            'arguments': arguments,
-                                        }
-                                    )
-                                    await emit_response_completion_event(
-                                        {
-                                            'type': 'response.output_item.done',
-                                            'output_index': output_index,
-                                            'item': item.copy(),
-                                        }
-                                    )
-                                    break
-                        tool_calls.append(_split_tool_calls(response_tool_calls))
-
-                    # Responses API path: extract function_call items from output
-                    if not response_tool_calls and output:
-                        # Collect call_ids that already have results,
-                        # including those from prior_output so we don't
-                        # re-process tool calls from a previous turn.
-                        handled_call_ids = {
-                            item.get('call_id')
-                            for item in (prior_output + output)
-                            if item.get('type') == 'function_call_output'
-                        }
-                        responses_api_tool_calls = []
-                        for item in output:
-                            call_id = item.get('call_id') or item.get('id') or output_id('fc')
-                            if item.get('type') == 'function_call' and call_id not in handled_call_ids:
-                                arguments = item.get('arguments', '{}')
-                                responses_api_tool_calls.append(
-                                    {
-                                        'id': call_id,
-                                        'index': len(responses_api_tool_calls),
-                                        'function': {
-                                            'name': item.get('name', ''),
-                                            'arguments': (
-                                                arguments if isinstance(arguments, str) else JSONCodec.dumps(arguments)
-                                            ),
-                                        },
-                                    }
-                                )
-                        if responses_api_tool_calls:
-                            tool_calls.append(_split_tool_calls(responses_api_tool_calls))
-
-                try:
-                    await stream_body_handler(response, form_data)
-                finally:
-                    if response.background:
-                        await response.background()
-
-                tool_call_iterations = 0
-                max_tool_call_iterations = getattr(
-                    request.state,
-                    'max_tool_call_iterations',
-                    CHAT_RESPONSE_MAX_TOOL_CALL_ITERATIONS,
-                )
-                tool_call_sources = []  # Track citation sources from tool results
-                all_tool_call_sources = []  # Accumulated sources across all iterations
-                user_message = get_last_user_message(form_data['messages'])
-
-                # Check if citations are enabled for this model
-                citations_enabled = (model.get('info', {}).get('meta', {}).get('capabilities') or {}).get(
-                    'citations', True
-                )
-
-                # Use the pre-RAG system content captured before the
-                # initial file-source injection in process_chat_payload.
-                # This ensures restore truly undoes the RAG template.
-                original_system_content = metadata.get('system_prompt')
-                if original_system_content is None:
-                    original_system_message = get_system_message(form_data['messages'])
-                    original_system_content = (
-                        get_content_from_message(original_system_message) if original_system_message else None
-                    )
-
-                while tool_calls and (
-                    max_tool_call_iterations is None or tool_call_iterations < max_tool_call_iterations
-                ):
-                    tool_call_iterations += 1
-
-                    response_tool_calls = tool_calls.pop(0)
-                    ask_user_staged, ask_user_error = stage_ask_user_tool_calls(response_tool_calls, output, output_id)
-                    if ask_user_error:
-                        response_tool_calls = [
-                            tool_call
-                            for tool_call in response_tool_calls
-                            if tool_call.get('function', {}).get('name') != 'ask_user'
-                        ]
-                    elif ask_user_staged:
-                        if is_saved_chat_id(metadata.get('chat_id')) and metadata.get('message_id'):
-                            await pause_for_tool_approval(
-                                metadata['chat_id'],
-                                metadata['message_id'],
-                                full_output(),
-                                form_data,
-                                metadata,
-                            )
-                        await event_emitter({'type': 'chat:completion', 'data': {'output': full_output()}})
-                        return
-
-                    # Append function_call items for each tool call
-                    # (Responses API already has them from streaming, so skip duplicates)
-                    existing_call_ids = {item.get('call_id') for item in output if item.get('type') == 'function_call'}
-                    for tc in response_tool_calls:
-                        call_id = tc.get('id', '')
-                        if call_id not in existing_call_ids:
-                            func = tc.get('function', {})
-                            output.append(
-                                {
-                                    'type': 'function_call',
-                                    'id': call_id or output_id('fc'),
-                                    'call_id': call_id,
-                                    'name': func.get('name', ''),
-                                    'arguments': func.get('arguments', '{}'),
-                                    'status': 'in_progress',
-                                }
-                            )
-
-                    tool_approval_mode = metadata.get('params', {}).get('tool_approval_mode', 'full')
-                    if (
-                        response_tool_calls
-                        and tool_approval_mode == 'ask'
-                        and is_saved_chat_id(metadata.get('chat_id'))
-                        and metadata.get('message_id')
-                    ):
-                        await pause_for_tool_approval(
-                            metadata['chat_id'],
-                            metadata['message_id'],
-                            full_output(),
-                            form_data,
-                            metadata,
-                        )
-                        await event_emitter(
-                            {
-                                'type': 'chat:completion',
-                                'data': {
-                                    'output': full_output(),
-                                },
-                            }
-                        )
-                        return
-
-                    await event_emitter(
-                        {
-                            'type': 'chat:completion',
-                            'data': {
-                                'output': full_output(),
-                            },
-                        }
-                    )
-
-                    tools = metadata.get('tools', {})
-
-                    results = []
-
-                    def parse_tool_params(tool_call):
-                        tool_args = tool_call.get('function', {}).get('arguments', '{}')
-                        params = {}
-                        if tool_args and tool_args.strip():
-                            try:
-                                params = JSONCodec.loads(tool_args)
-                            except Exception:
-                                try:
-                                    params = ast.literal_eval(tool_args)
-                                except Exception as e:
-                                    log.debug(e)
-                                    return None
-                        tool_call.setdefault('function', {})['arguments'] = JSONCodec.dumps(params)
-                        return params
-
-                    async def execute_tool_call(tool_call):
-                        name = tool_call.get('function', {}).get('name', '')
-                        params = parse_tool_params(tool_call)
-                        if params is None:
-                            return {}, None, None, None, False
-                        tool = tools.get(name)
-                        if not tool:
-                            return params, f'Error: Tool "{name}" not found.', None, None, False
-                        spec = tool.get('spec', {})
-                        tool_type = tool.get('type', '')
-                        direct_tool = tool.get('direct', False)
-                        allowed_params = spec.get('parameters', {}).get('properties', {}).keys()
-                        params = {key: value for key, value in params.items() if key in allowed_params}
-                        try:
-                            if direct_tool:
-                                result = await event_caller(
-                                    {
-                                        'type': 'execute:tool',
-                                        'data': {
-                                            'id': str(uuid4()),
-                                            'name': name,
-                                            'params': params,
-                                            'server': tool.get('server', {}),
-                                            'session_id': metadata.get('session_id'),
-                                        },
-                                    }
-                                )
-                            else:
-                                function = await get_updated_tool_function(
-                                    function=tool['callable'],
-                                    extra_params={
-                                        '__messages__': form_data.get('messages', []),
-                                        '__files__': metadata.get('files', []),
-                                    },
-                                )
-                                result = await function(**params)
-                        except Exception as e:
-                            result = {'error': str(e)}
-                        return params, result, tool, tool_type, direct_tool
-
-                    delegate_calls = [
-                        tool_call
-                        for tool_call in response_tool_calls
-                        if tool_call.get('function', {}).get('name') == 'delegate_task'
-                    ]
-                    tool_results = {}
-                    for tool_call in response_tool_calls:
-                        if tool_call.get('function', {}).get('name') != 'delegate_task':
-                            tool_results[id(tool_call)] = await execute_tool_call(tool_call)
-                    tool_results.update(
-                        zip(
-                            [id(tool_call) for tool_call in delegate_calls],
-                            await asyncio.gather(*(execute_tool_call(tool_call) for tool_call in delegate_calls)),
-                        )
-                    )
-
-                    for tool_call in response_tool_calls:
-                        tool_call_id = tool_call.get('id', '')
-                        tool_function_name = tool_call.get('function', {}).get('name', '')
-                        tool_function_params, tool_result, tool, tool_type, direct_tool = tool_results[id(tool_call)]
-                        if tool_result is None:
-                            results.append(
-                                {
-                                    'tool_call_id': tool_call_id,
-                                    'content': (
-                                        'Error: Tool call arguments could not be parsed. The model generated '
-                                        f'malformed or incomplete JSON for `{tool_function_name}`. Please try again.'
-                                    ),
-                                }
-                            )
-                            continue
-
-                        terminal_file_result = build_terminal_file_tool_result(
-                            tool_function_name,
-                            tool_function_params,
-                            tool_result,
-                            tool,
-                            metadata,
-                        )
-                        if terminal_file_result:
-                            tool_result = terminal_file_result
-
-                        tool_result, tool_result_files, tool_result_embeds = await process_tool_result(
-                            request,
-                            tool_function_name,
-                            tool_result,
-                            tool_type,
-                            direct_tool,
-                            metadata,
-                            user,
-                        )
-
-                        await terminal_event_handler(
-                            tool_function_name,
-                            tool_function_params,
-                            tool_result,
-                            event_emitter,
-                        )
-
-                        # Extract citation sources from tool results
-                        if (
-                            citations_enabled
-                            and tool_function_name
-                            in [
-                                'search_web',
-                                'fetch_url',
-                                'view_file',
-                                'view_knowledge_file',
-                                'query_knowledge_files',
-                                'query_chat_files',
-                            ]
-                            and tool_result
-                        ):
-                            try:
-                                citation_sources = get_citation_source_from_tool_result(
-                                    tool_name=tool_function_name,
-                                    tool_params=tool_function_params,
-                                    tool_result=tool_result,
-                                    tool_id=tool.get('tool_id', '') if tool else '',
-                                )
-                                tool_call_sources.extend(citation_sources)
-                            except Exception as e:
-                                log.exception(f'Error extracting citation source: {e}')
-
-                        results.append(
-                            {
-                                'tool_call_id': tool_call_id,
-                                'content': tool_result_content(tool_result),
-                                **({'files': tool_result_files} if tool_result_files else {}),
-                                **({'embeds': tool_result_embeds} if tool_result_embeds else {}),
-                            }
-                        )
-
-                    result_status_by_call_id = {}
-                    for result in results:
-                        output_parts = [{'type': 'input_text', 'text': result.get('content', '')}]
-                        local_output_status = (
-                            'failed' if _is_tool_result_error(result.get('content', '')) else 'completed'
-                        )
-                        result_status_by_call_id[result.get('tool_call_id', '')] = local_output_status
-
-                        # Separate image data URIs (for LLM via input_image) from
-                        # other files (for frontend display via files attribute).
-                        display_files = []
-                        for file_item in result.get('files', []):
-                            if file_item.get('type') == 'image' and file_item.get('url', '').startswith('data:'):
-                                # LLM-only: add as input_image part, not frontend display output.
-                                output_parts.append({'type': 'input_image', 'image_url': file_item['url']})
-                            else:
-                                # Frontend display (MCP images, audio, etc.)
-                                display_files.append(file_item)
-
-                        output.append(
-                            {
-                                'type': 'function_call_output',
-                                'id': output_id('fco'),
-                                'call_id': result.get('tool_call_id', ''),
-                                'output': output_parts,
-                                'status': local_output_status,
-                                **({'files': display_files} if display_files else {}),
-                                **({'embeds': result.get('embeds')} if result.get('embeds') else {}),
-                            }
-                        )
-
-                    # Update function_call statuses and parsed/sanitized arguments.
-                    for tc in response_tool_calls:
-                        call_id = tc.get('id', '')
-                        for item in output:
-                            if item.get('type') == 'function_call' and item.get('call_id') == call_id:
-                                item['status'] = result_status_by_call_id.get(call_id, 'completed')
-                                item['arguments'] = tc.get('function', {}).get('arguments', '{}')
-                                break
-
-                    # Emit citation sources to the frontend for display
-                    if citations_enabled:
-                        for source in tool_call_sources:
-                            await event_emitter({'type': 'source', 'data': source})
-
-                        # Apply tool source context to messages for the model.
-                        # Restoring to pre-RAG original prevents duplicating
-                        # the RAG template across file and tool sources.
-                        all_tool_call_sources.extend(tool_call_sources)
-                        if all_tool_call_sources and user_message:
-                            # Restore pre-RAG message state before re-applying
-                            # to prevent RAG template duplication.
-                            original_user_message = metadata.get('user_prompt') or user_message
-                            set_last_user_message_content(
-                                original_user_message,
-                                form_data['messages'],
-                            )
-                            if original_system_content is not None:
-                                if get_system_message(form_data['messages']):
-                                    replace_system_message_content(
-                                        original_system_content,
-                                        form_data['messages'],
-                                    )
-                                else:
-                                    form_data['messages'] = add_or_update_system_message(
-                                        original_system_content,
-                                        form_data['messages'],
-                                    )
-                            else:
-                                replace_system_message_content('', form_data['messages'])
-
-                            # Build context: file sources with content,
-                            # tool sources as citation markers only.
-                            source_ids = {}
-                            source_context = get_source_context(
-                                metadata.get('sources', []), source_ids
-                            ) + get_source_context(
-                                all_tool_call_sources,
-                                source_ids,
-                                include_content=False,
-                            )
-                            source_context = source_context.strip()
-                            if source_context:
-                                rag_content = await rag_template(
-                                    await Config.get('rag.template'),
-                                    source_context,
-                                    user_message,
-                                )
-                                if RAG_SYSTEM_CONTEXT:
-                                    form_data['messages'] = add_or_update_system_message(
-                                        rag_content,
-                                        form_data['messages'],
-                                        append=True,
-                                    )
-                                else:
-                                    form_data['messages'] = add_or_update_user_message(
-                                        rag_content,
-                                        form_data['messages'],
-                                        append=False,
-                                    )
-                        tool_call_sources.clear()
-
-                    # Strip input_image parts (large base64 data URIs) from the
-                    # output sent to the frontend — they're only for LLM consumption
-                    # via convert_output_to_messages.
-                    frontend_output = []
-                    for item in full_output():
-                        if item.get('type') == 'function_call_output':
-                            parts = item.get('output', [])
-                            if any(p.get('type') == 'input_image' for p in parts):
-                                item = {**item, 'output': [p for p in parts if p.get('type') != 'input_image']}
-                        frontend_output.append(item)
-
-                    await event_emitter(
-                        {
-                            'type': 'chat:completion',
-                            'data': {
-                                'output': frontend_output,
-                            },
-                        }
-                    )
-
-                    try:
-                        new_form_data = {
-                            **form_data,
-                            'model': model_id,
-                            'stream': True,
-                            'metadata': metadata,
-                        }
-
-                        if ENABLE_RESPONSES_API_STATEFUL and last_response_id:
-                            system_message = get_system_message(form_data['messages'])
-                            new_form_data['messages'] = (
-                                [system_message] if system_message else []
-                            ) + convert_output_to_messages(
-                                output, raw=True, reasoning_format=get_reasoning_format(model)
-                            )
-                            new_form_data['previous_response_id'] = last_response_id
-                        else:
-                            tool_messages = convert_output_to_messages(
-                                output,
-                                raw=True,
-                                reasoning_format=get_reasoning_format(model),
-                                flatten_tool_images=True,
-                            )
-
-                            # Chat Completions providers don't support multimodal
-                            # tool messages.  Extract images into a user message.
-                            image_urls = []
-                            for message in tool_messages:
-                                if message.get('role') == 'tool' and isinstance(message.get('content'), list):
-                                    text_parts = []
-                                    for part in message['content']:
-                                        if part.get('type') == 'input_text':
-                                            text_parts.append(part.get('text', ''))
-                                        elif part.get('type') == 'input_image':
-                                            image_urls.append(part.get('image_url', ''))
-                                    message['content'] = ''.join(text_parts)
-
-                            new_form_data['messages'] = [
-                                *form_data['messages'],
-                                *tool_messages,
-                            ]
-
-                            if image_urls:
-                                new_form_data['messages'].append(
-                                    {
-                                        'role': 'user',
-                                        'content': [
-                                            {
-                                                'type': 'text',
-                                                'text': (
-                                                    'Here are the images from the tool results above. Please analyze '
-                                                    'them.'
-                                                ),
-                                            },
-                                            *[{'type': 'image_url', 'image_url': {'url': url}} for url in image_urls],
-                                        ],
-                                    }
-                                )
-
-                        if filter_functions:
-                            new_form_data, _ = await process_filter_functions(
-                                request=request,
-                                filter_context=filter_context,
-                                filter_functions=filter_functions,
-                                filter_type='request',
-                                form_data=new_form_data,
-                                extra_params=extra_params,
-                            )
-
-                        new_form_data = normalize_messages_for_model(new_form_data)
-
-                        res = await generate_chat_completion(
-                            request,
-                            new_form_data,
-                            user,
-                            bypass_system_prompt=True,
-                        )
-
-                        if isinstance(res, StreamingResponse):
-                            # Save accumulated output and start fresh.
-                            # Responses API output_index values are relative
-                            # to the current response — a clean output list
-                            # keeps indices aligned. The display prefix
-                            # ensures the UI shows tool history during
-                            # streaming.
-                            prior_output = list(full_output())
-                            # Trim the trailing empty placeholder message
-                            # so it doesn't persist as a ghost item once
-                            # the new stream produces real content.
-                            if (
-                                prior_output
-                                and prior_output[-1].get('type') == 'message'
-                                and prior_output[-1].get('status') == 'in_progress'
-                            ):
-                                msg_parts = prior_output[-1].get('content', [])
-                                if not msg_parts or (len(msg_parts) == 1 and not msg_parts[0].get('text', '').strip()):
-                                    prior_output.pop()
-                            output = []
-                            await stream_body_handler(res, new_form_data)
-                            output[:0] = prior_output
-                            prior_output = []
-                        elif getattr(res, 'status_code', 200) >= 400:
-                            await emit_message_error(get_message_error_content(get_response_error_detail(res)))
-                            break
-                        else:
-                            break
-                    except Exception as e:
-                        error_content = get_message_error_content(e)
-                        log.exception('Tool-call continuation failed: %s', error_content)
-                        await emit_message_error(error_content)
-                        break
-
-                if (
-                    max_tool_call_iterations is not None
-                    and tool_calls
-                    and tool_call_iterations >= max_tool_call_iterations
-                ):
-                    log.warning('Tool-call iteration limit reached (%s)', max_tool_call_iterations)
-                    error_content = f'Tool-call limit reached ({max_tool_call_iterations} iterations).'
-                    await emit_message_error(error_content)
-
-                if DETECT_CODE_INTERPRETER:
-                    MAX_RETRIES = 5
-                    retries = 0
-
-                    while output and output[-1].get('type') == 'open_webui:code_interpreter' and retries < MAX_RETRIES:
-                        await event_emitter(
-                            {
-                                'type': 'chat:completion',
-                                'data': {
-                                    'output': full_output(),
-                                },
-                            }
-                        )
-
-                        retries += 1
-                        log.debug('Attempt count: %s', retries)
-
-                        ci_item = output[-1]
-                        ci_output = ''
-                        try:
-                            if ci_item.get('attributes', {}).get('type') == 'code':
-                                code = ci_item.get('code', '')
-                                # Sanitize code (strips ANSI codes and markdown fences)
-                                code = sanitize_code(code)
-
-                                if CODE_INTERPRETER_BLOCKED_MODULES:
-                                    blocking_code = textwrap.dedent(f"""
-                                        import builtins
-
-                                        BLOCKED_MODULES = {CODE_INTERPRETER_BLOCKED_MODULES}
-
-                                        _real_import = builtins.__import__
-                                        def restricted_import(name, globals=None, locals=None, fromlist=(), level=0):
-                                            if name.split('.')[0] in BLOCKED_MODULES:
-                                                importer_name = globals.get('__name__') if globals else None
-                                                if importer_name == '__main__':
-                                                    raise ImportError(
-                                                        f"Direct import of module {{name}} is restricted."
-                                                    )
-                                            return _real_import(name, globals, locals, fromlist, level)
-
-                                        builtins.__import__ = restricted_import
-                                    """)
-                                    code = blocking_code + '\n' + code
-
-                                ci_engine = await Config.get('code_interpreter.engine')
-                                if ci_engine == 'pyodide':
-                                    ci_output = await event_caller(
-                                        {
-                                            'type': 'execute:python',
-                                            'data': {
-                                                'id': str(uuid4()),
-                                                'code': code,
-                                                'session_id': metadata.get('session_id', None),
-                                                'files': metadata.get('files', []),
-                                            },
-                                        }
-                                    )
-                                elif ci_engine == 'jupyter':
-                                    ci_output = await execute_code_jupyter(
-                                        await Config.get('code_interpreter.jupyter.url'),
-                                        code,
-                                        (
-                                            await Config.get('code_interpreter.jupyter.auth_token')
-                                            if await Config.get('code_interpreter.jupyter.auth') == 'token'
-                                            else None
-                                        ),
-                                        (
-                                            await Config.get('code_interpreter.jupyter.auth_password')
-                                            if await Config.get('code_interpreter.jupyter.auth') == 'password'
-                                            else None
-                                        ),
-                                        await Config.get('code_interpreter.jupyter.timeout'),
-                                    )
-                                else:
-                                    ci_output = {'stdout': 'Code interpreter engine not configured.'}
-
-                                log.debug('Code interpreter output: %s', ci_output)
-
-                                # Handle error responses from event_caller
-                                # (e.g. session disconnected, timeout)
-                                if isinstance(ci_output, dict) and ci_output.get('error'):
-                                    ci_output = {'stderr': ci_output['error']}
-
-                                if isinstance(ci_output, dict):
-                                    stdout = ci_output.get('stdout', '')
-
-                                    if isinstance(stdout, str):
-                                        stdoutLines = stdout.split('\n')
-                                        for idx, line in enumerate(stdoutLines):
-                                            if re.match(r'data:image/\w+;base64', line):
-                                                image_url = await get_image_url_from_base64(
-                                                    request,
-                                                    line,
-                                                    metadata,
-                                                    user,
-                                                )
-                                                if image_url:
-                                                    stdoutLines[idx] = f'![Output Image]({image_url})'
-
-                                        ci_output['stdout'] = '\n'.join(stdoutLines)
-
-                                    result = ci_output.get('result', '')
-
-                                    if isinstance(result, str):
-                                        resultLines = result.split('\n')
-                                        for idx, line in enumerate(resultLines):
-                                            if re.match(r'data:image/\w+;base64', line):
-                                                image_url = await get_image_url_from_base64(
-                                                    request,
-                                                    line,
-                                                    metadata,
-                                                    user,
-                                                )
-                                                resultLines[idx] = f'![Output Image]({image_url})'
-                                        ci_output['result'] = '\n'.join(resultLines)
-                        except Exception as e:
-                            ci_output = str(e)
-
-                        ci_item['output'] = ci_output
-                        ci_item['status'] = 'completed'
-
-                        output.append(
-                            {
-                                'type': 'message',
-                                'id': output_id('msg'),
-                                'status': 'in_progress',
-                                'role': 'assistant',
-                                'content': [{'type': 'output_text', 'text': ''}],
-                            }
-                        )
-
-                        await event_emitter(
-                            {
-                                'type': 'chat:completion',
-                                'data': {
-                                    'output': full_output(),
-                                },
-                            }
-                        )
-
-                        try:
-                            new_form_data = {
-                                **form_data,
-                                'model': model_id,
-                                'stream': True,
-                                'metadata': metadata,
-                                'messages': [
-                                    *form_data['messages'],
-                                    *convert_output_to_messages(
-                                        output,
-                                        raw=True,
-                                        reasoning_format=get_reasoning_format(model),
-                                        flatten_tool_images=True,
-                                    ),
-                                ],
-                            }
-
-                            if filter_functions:
-                                new_form_data, _ = await process_filter_functions(
-                                    request=request,
-                                    filter_context=filter_context,
-                                    filter_functions=filter_functions,
-                                    filter_type='request',
-                                    form_data=new_form_data,
-                                    extra_params=extra_params,
-                                )
-
-                            new_form_data = normalize_messages_for_model(new_form_data)
-
-                            res = await generate_chat_completion(
-                                request,
-                                new_form_data,
-                                user,
-                                bypass_system_prompt=True,
-                            )
-
-                            if isinstance(res, StreamingResponse):
-                                await stream_body_handler(res, new_form_data)
-                            elif getattr(res, 'status_code', 200) >= 400:
-                                await emit_message_error(get_message_error_content(get_response_error_detail(res)))
-                                break
-                            else:
-                                break
-                        except Exception as e:
-                            error_content = get_message_error_content(e)
-                            log.exception('Code interpreter continuation failed: %s', error_content)
-                            await emit_message_error(error_content)
-                            break
-
-                # Mark all in-progress items as completed
-                for item in output:
-                    if item.get('status') == 'in_progress':
-                        item['status'] = 'completed'
-
-                current_output = full_output()
-                title = await Chats.get_chat_title_by_id(metadata['chat_id']) if save_to_chat else ''
-                data = {
-                    'done': True,
-                    'output': current_output,
-                    'title': title,
-                    **({'usage': usage} if usage else {}),
-                }
-
-                if save_to_chat:
-                    # Save final output once. The delta path keeps in-progress
-                    # state in response_streams instead of writing tokens to DB.
-                    await Chats.upsert_message_to_chat_by_id_and_message_id(
-                        metadata['chat_id'],
-                        metadata['message_id'],
-                        {
-                            'done': True,
-                            'output': current_output,
-                            **({'usage': usage} if usage else {}),
-                        },
-                    )
-
-                await clear_response_stream(request.app.state.redis, response_stream_task_id)
-                await publish_chat_finished_event(
-                    request, user, metadata, title, ''.join(content_parts), current_output
-                )
-
-                await event_emitter(
-                    {
-                        'type': 'chat:completion',
-                        'data': data,
-                    }
-                )
-
-                ctx['assistant_message'] = {
-                    'content': ''.join(content_parts) or get_output_text(current_output),
-                    'output': current_output,
-                    **({'usage': usage} if usage else {}),
-                }
-                await outlet_filter_handler(ctx)
-                await background_tasks_handler(ctx)
-            except asyncio.CancelledError:
-                log.warning('Task was cancelled!')
-
-                # Close the response body iterator to trigger cleanup
-                # in stream_wrapper's finally block and release the
-                # upstream connection.  Without this, the async
-                # generator is orphaned and may spin in anyio internals.
-                if hasattr(response, 'body_iterator') and hasattr(response.body_iterator, 'aclose'):
-                    try:
-                        await asyncio.shield(response.body_iterator.aclose())
-                    except (asyncio.CancelledError, Exception):
-                        pass
-
-                async def save_cancelled_state():
-                    await event_emitter({'type': 'chat:tasks:cancel'})
-                    if save_to_chat:
-                        await Chats.upsert_message_to_chat_by_id_and_message_id(
-                            metadata['chat_id'],
-                            metadata['message_id'],
-                            {
-                                'done': True,
-                                'output': full_output(),
-                            },
-                        )
-                    await clear_response_stream(request.app.state.redis, response_stream_task_id)
-
-                try:
-                    await asyncio.shield(save_cancelled_state())
-                except (asyncio.CancelledError, Exception):
-                    pass
-                raise  # re-raise CancelledError for proper propagation
-
-            if response.background is not None:
-                await response.background()
-
-        return await response_handler(response, events)
-
-    else:
-        # Fallback to the original response
-        async def stream_wrapper(original_generator, events):
-            def wrap_item(item):
-                return f'data: {item}\n\n'
-
-            assistant_message = {}
-            filter_context = FilterContext()
-            has_api_outlet_filters = ENABLE_API_OUTLET_FILTERS and bool(filter_functions)
-            if ENABLE_API_OUTLET_FILTERS and not has_api_outlet_filters:
-                try:
-                    model_id = model.get('id') if isinstance(model, dict) else model
-                    has_api_outlet_filters = bool(
-                        (isinstance(model, dict) and 'pipeline' in model)
-                        or get_sorted_filters(model_id, request.app.state.MODELS)
-                    )
-                except Exception:
-                    has_api_outlet_filters = True
-
-            for event in events:
-                event, _ = await process_filter_functions(
-                    request=request,
-                    filter_context=filter_context,
-                    filter_functions=filter_functions,
-                    filter_type='stream',
-                    form_data=event,
-                    extra_params=extra_params,
-                )
-
-                if event:
-                    yield wrap_item(JSONCodec.dumps(event))
-
-            async for data in original_generator:
-                if filter_functions:
-                    line = data.decode('utf-8', 'replace') if isinstance(data, bytes) else data
-                    if isinstance(line, str) and line.startswith('data:'):
-                        payload = line.removeprefix('data:').strip()
-                        if payload and payload != '[DONE]':
-                            try:
-                                event = JSONCodec.loads(payload)
-                            except JSONCodec.JSONDecodeError:
-                                event = None
-
-                            if isinstance(event, dict):
-                                event, _ = await process_filter_functions(
-                                    request=request,
-                                    filter_context=filter_context,
-                                    filter_functions=filter_functions,
-                                    filter_type='stream',
-                                    form_data=event,
-                                    extra_params=extra_params,
-                                )
-                                data = wrap_item(JSONCodec.dumps(event)) if event else None
-
-                if data:
-                    if has_api_outlet_filters:
-                        update_assistant_message_from_stream(assistant_message, data)
-                    yield data
-
-            if has_api_outlet_filters and assistant_message:
-                ctx['assistant_message'] = assistant_message
-                await outlet_filter_handler(ctx)
-
-        return StreamingResponse(
-            stream_wrapper(response.body_iterator, events),
-            headers=dict(response.headers),
-            background=response.background,
-        )
+    if ctx['event_emitter']:
+        return await _StreamingReply(ctx, extra_params, filter_functions).run(response, ctx['events'])
+
+    # Fallback to the original response
+    return StreamingResponse(
+        _passthrough_stream(response, ctx, ctx['events'], filter_functions, extra_params),
+        headers=dict(response.headers),
+        background=response.background,
+    )
 
 
 async def process_chat_response(response, ctx):
