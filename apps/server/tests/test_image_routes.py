@@ -284,7 +284,7 @@ EDIT_CASES = [
     (
         'size_without_x',
         {'form': {'image': PNG, 'prompt': 'p', 'size': 'auto'}},
-        {'config': {'IMAGE_EDIT_SIZE': '1024x1024'}},
+        {'config': {'IMAGE_EDIT_SIZE': '1024x1024'}, 'routes': [('post', '/images/edits', OAI_B64)]},
     ),
     (
         'size_form_only',

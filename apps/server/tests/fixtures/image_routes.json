@@ -1692,11 +1692,103 @@
   ]
  },
  "edit:size_without_x": {
-  "raised": [
-   "ValueError",
-   "invalid literal for int() with base 10: 'auto'"
+  "returned": [
+   {
+    "id": "file:out-1",
+    "url": "/api/v1/files/file:out-1/content",
+    "name": "out-1.out",
+    "content_type": "image/out"
+   },
+   {
+    "id": "file:out-2",
+    "url": "/api/v1/files/file:out-2/content",
+    "name": "out-2.out",
+    "content_type": "image/out"
+   }
   ],
-  "calls": []
+  "calls": [
+   [
+    "normalize",
+    "data:image/png;base64,cG5nLW9uZQ=="
+   ],
+   [
+    "session",
+    "post",
+    "https://oai.test/v1/images/edits",
+    {
+     "headers": {
+      "Authorization": "Bearer sk-edit"
+     },
+     "data": {
+      "form": [
+       [
+        "model",
+        "dall-e-2",
+        null,
+        null
+       ],
+       [
+        "prompt",
+        "p",
+        null,
+        null
+       ],
+       [
+        "size",
+        "1024x1024",
+        null,
+        null
+       ],
+       [
+        "response_format",
+        "b64_json",
+        null,
+        null
+       ],
+       [
+        "image",
+        {
+         "bytes": "png-one"
+        },
+        "uuid-1.png",
+        "image/png"
+       ]
+      ]
+     }
+    },
+    {
+     "ssl": true
+    }
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "out-1",
+    "image/png",
+    {
+     "model": "dall-e-2",
+     "prompt": "p",
+     "size": "1024x1024",
+     "response_format": "b64_json"
+    },
+    false,
+    "u1"
+   ],
+   [
+    "upload",
+    "generated-image.png",
+    "out-2",
+    "image/png",
+    {
+     "model": "dall-e-2",
+     "prompt": "p",
+     "size": "1024x1024",
+     "response_format": "b64_json"
+    },
+    false,
+    "u1"
+   ]
+  ]
  },
  "edit:size_form_only": {
   "returned": [],

@@ -859,13 +859,12 @@ async def edit_images(request: Request, form_data: EditImageForm, user=Depends(g
 
 
 def _edit_size(image_config, form_data: EditImageForm) -> tuple[str | None, int | None, int | None]:
-    if (image_config.IMAGE_EDIT_SIZE and 'x' in image_config.IMAGE_EDIT_SIZE) or (
-        form_data.size and 'x' in form_data.size
-    ):
-        size = form_data.size if form_data.size else image_config.IMAGE_EDIT_SIZE
-        width, height = tuple(map(int, size.split('x')))
-        return size, width, height
-    return None, None, None
+    # The requested size wins when it is WidthxHeight; otherwise the configured one, if it is.
+    size = next((s for s in (form_data.size, image_config.IMAGE_EDIT_SIZE) if s and 'x' in s), None)
+    if size is None:
+        return None, None, None
+    width, height = tuple(map(int, size.split('x')))
+    return size, width, height
 
 
 def _is_own_file_url(parsed, request: Request) -> bool:
