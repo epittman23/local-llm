@@ -30,7 +30,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
-from sqlalchemy.sql import case, exists
+from sqlalchemy.sql import case
 from sqlalchemy.sql.expression import bindparam
 
 # local imports

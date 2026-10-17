@@ -105,7 +105,6 @@ class YoutubeLoader:
         try:
             from youtube_transcript_api import (
                 NoTranscriptFound,
-                TranscriptsDisabled,
                 YouTubeTranscriptApi,
             )
             from youtube_transcript_api.proxies import GenericProxyConfig

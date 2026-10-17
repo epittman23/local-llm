@@ -2618,7 +2618,7 @@ def oauth_client_kwargs(scope: str, **kwargs):
         client_kwargs['code_challenge_method'] = 'S256'
     elif OAUTH_CODE_CHALLENGE_METHOD:
         raise Exception(
-            'Code challenge methods other than "%s" not supported. Given: "%s"' % ('S256', OAUTH_CODE_CHALLENGE_METHOD)
+            f'Code challenge methods other than "S256" not supported. Given: "{OAUTH_CODE_CHALLENGE_METHOD}"'
         )
 
     return client_kwargs

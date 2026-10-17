@@ -14,7 +14,7 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse
 from starlette.responses import JSONResponse, StreamingResponse
 
 from local_llm.config import (

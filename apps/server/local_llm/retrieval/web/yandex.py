@@ -54,7 +54,7 @@ def search_yandex(
 
         payload = {} if yandex_search_config == '' else JSONCodec.loads(yandex_search_config)
 
-        if type(payload.get('query', None)) != dict:
+        if not isinstance(payload.get('query'), dict):
             payload['query'] = {}
 
         if 'searchType' not in payload['query']:
@@ -62,7 +62,7 @@ def search_yandex(
 
         payload['query']['queryText'] = query
 
-        if type(payload.get('groupSpec', None)) != dict:
+        if not isinstance(payload.get('groupSpec'), dict):
             payload['groupSpec'] = {}
 
         if 'groupMode' not in payload['groupSpec']:
