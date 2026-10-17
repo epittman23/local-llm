@@ -250,7 +250,7 @@ async def generate_chat_completion(
                     await check_model_access(user, selected_model)
 
         if selected_model_id:
-            if form_data.get('stream') == True:
+            if form_data.get('stream') is True:
 
                 async def stream_wrapper(stream):
                     yield f'data: {JSONCodec.dumps({"selected_model_id": selected_model_id})}\n\n'

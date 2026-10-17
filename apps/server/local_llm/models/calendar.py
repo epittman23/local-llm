@@ -12,9 +12,11 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     delete,
+    false,
     func,
     or_,
     select,
+    true,
     update,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -394,7 +396,7 @@ class CalendarTable:
             # Clear all defaults for this user
             await db.execute(
                 update(Calendar)
-                .where(Calendar.user_id == user_id, Calendar.is_default == True)
+                .where(Calendar.user_id == user_id, Calendar.is_default == true())
                 .values(is_default=False)
             )
             # Set the new default
@@ -555,7 +557,7 @@ class CalendarEventTable:
                 select(CalendarEvent, User)
                 .outerjoin(User, User.id == CalendarEvent.user_id)
                 .filter(
-                    CalendarEvent.is_cancelled == False,
+                    CalendarEvent.is_cancelled == false(),
                     or_(*conditions),
                     or_(
                         # Non-recurring: overlaps the range
@@ -635,7 +637,7 @@ class CalendarEventTable:
                 select(CalendarEvent, User)
                 .outerjoin(User, User.id == CalendarEvent.user_id)
                 .filter(
-                    CalendarEvent.is_cancelled == False,
+                    CalendarEvent.is_cancelled == false(),
                     CalendarEvent.calendar_id.in_(accessible_cal_ids),
                 )
             )
@@ -756,7 +758,7 @@ class CalendarEventTable:
                 select(CalendarEvent, UserRow.timezone)
                 .outerjoin(UserRow, UserRow.id == CalendarEvent.user_id)
                 .filter(
-                    CalendarEvent.is_cancelled == False,
+                    CalendarEvent.is_cancelled == false(),
                     CalendarEvent.start_at >= now_ns - grace_ns,
                     CalendarEvent.start_at <= upper,
                 )

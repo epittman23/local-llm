@@ -4,7 +4,23 @@ from typing import Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import JSON, BigInteger, Boolean, Column, Index, String, Text, cast, delete, func, or_, select, update
+from sqlalchemy import (
+    JSON,
+    BigInteger,
+    Boolean,
+    Column,
+    Index,
+    String,
+    Text,
+    cast,
+    delete,
+    false,
+    func,
+    or_,
+    select,
+    true,
+    update,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from local_llm.internal.db import Base, get_async_db_context
@@ -201,9 +217,9 @@ class AutomationTable:
                 )
 
             if status == 'active':
-                stmt = stmt.filter(Automation.is_active == True)
+                stmt = stmt.filter(Automation.is_active == true())
             elif status == 'paused':
-                stmt = stmt.filter(Automation.is_active == False)
+                stmt = stmt.filter(Automation.is_active == false())
 
             stmt = stmt.order_by(Automation.created_at.desc())
 
@@ -299,7 +315,7 @@ class AutomationTable:
             stmt = (
                 select(Automation)
                 .where(
-                    Automation.is_active == True,
+                    Automation.is_active == true(),
                     Automation.next_run_at <= now_ns,
                 )
                 .order_by(Automation.next_run_at)

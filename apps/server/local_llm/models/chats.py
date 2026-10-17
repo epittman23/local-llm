@@ -22,6 +22,7 @@ from sqlalchemy import (
     and_,
     delete,
     exists,
+    false,
     func,
     or_,
     select,
@@ -785,7 +786,7 @@ class ChatTable:
                 .where(
                     Chat.user_id == user_id,
                     Chat.folder_id.in_(folder_ids),
-                    Chat.archived == False,
+                    Chat.archived == false(),
                     Chat.meta['internal'].as_boolean().is_not(True),
                 )
                 .values(last_read_at=Chat.updated_at)
@@ -799,7 +800,7 @@ class ChatTable:
                 update(Chat)
                 .where(
                     Chat.user_id == user_id,
-                    Chat.archived == False,
+                    Chat.archived == false(),
                     Chat.meta['internal'].as_boolean().is_not(True),
                 )
                 .values(last_read_at=Chat.updated_at)
@@ -1524,7 +1525,7 @@ class ChatTable:
                 stmt = stmt.filter_by(folder_id=None)
 
             if not include_pinned:
-                stmt = stmt.filter(or_(Chat.pinned == False, Chat.pinned == None))
+                stmt = stmt.filter(or_(Chat.pinned == false(), Chat.pinned.is_(None)))
 
             if not include_archived:
                 stmt = stmt.filter_by(archived=False)
@@ -1795,7 +1796,7 @@ class ChatTable:
                 .where(
                     Chat.user_id == user_id,
                     Chat.folder_id.in_(folder_ids),
-                    Chat.archived == False,
+                    Chat.archived == false(),
                     Chat.updated_at > func.coalesce(Chat.last_read_at, 0),
                     ~unfinished_assistant,
                 )
@@ -1985,7 +1986,7 @@ class ChatTable:
             if is_archived is not None:
                 stmt = stmt.filter(Chat.archived == is_archived)
             elif not include_archived:
-                stmt = stmt.filter(Chat.archived == False)
+                stmt = stmt.filter(Chat.archived == false())
 
             if is_pinned is not None:
                 stmt = stmt.filter(Chat.pinned == is_pinned)
@@ -2128,7 +2129,7 @@ class ChatTable:
             stmt = (
                 select(Chat.id, Chat.title, Chat.updated_at, Chat.created_at, Chat.last_read_at)
                 .filter_by(folder_id=folder_id, user_id=user_id)
-                .filter(or_(Chat.pinned == False, Chat.pinned == None))
+                .filter(or_(Chat.pinned == false(), Chat.pinned.is_(None)))
                 .filter_by(archived=False)
                 .where(Chat.meta['internal'].as_boolean().is_not(True))
             )
@@ -2169,7 +2170,7 @@ class ChatTable:
             stmt = (
                 select(Chat.id, Chat.title, Chat.user_id, Chat.updated_at, Chat.created_at, Chat.last_read_at)
                 .filter_by(folder_id=folder_id)
-                .filter(or_(Chat.pinned == False, Chat.pinned == None))
+                .filter(or_(Chat.pinned == false(), Chat.pinned.is_(None)))
                 .filter_by(archived=False)
                 .where(Chat.meta['internal'].as_boolean().is_not(True))
             )
@@ -2203,7 +2204,7 @@ class ChatTable:
             stmt = (
                 select(func.count(Chat.id))
                 .filter_by(folder_id=folder_id)
-                .filter(or_(Chat.pinned == False, Chat.pinned == None))
+                .filter(or_(Chat.pinned == false(), Chat.pinned.is_(None)))
                 .filter_by(archived=False)
                 .where(Chat.meta['internal'].as_boolean().is_not(True))
             )
@@ -2217,7 +2218,7 @@ class ChatTable:
             stmt = (
                 select(Chat)
                 .filter(Chat.folder_id.in_(folder_ids), Chat.user_id == user_id)
-                .filter(or_(Chat.pinned == False, Chat.pinned == None))
+                .filter(or_(Chat.pinned == false(), Chat.pinned.is_(None)))
                 .filter_by(archived=False)
                 .where(Chat.meta['internal'].as_boolean().is_not(True))
                 .order_by(Chat.updated_at.desc())

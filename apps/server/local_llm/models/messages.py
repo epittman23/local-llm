@@ -436,7 +436,7 @@ class MessageTable:
         async with get_async_db_context(db) as db:
             stmt = select(func.count(Message.id)).filter(
                 Message.channel_id == channel_id,
-                Message.parent_id == None,  # only count top-level messages
+                Message.parent_id.is_(None),  # only count top-level messages
                 Message.created_at > (last_read_at if last_read_at else 0),
             )
             if user_id:

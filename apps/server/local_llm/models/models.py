@@ -252,7 +252,7 @@ class ModelsTable:
         self, writable_by_user_id: str | None = None, db: AsyncSession | None = None
     ) -> list[ModelUserResponse]:
         async with get_async_db_context(db) as db:
-            stmt = select(Model).filter(Model.base_model_id != None)
+            stmt = select(Model).filter(Model.base_model_id.is_not(None))
 
             if writable_by_user_id:
                 user_group_ids = {
@@ -355,7 +355,7 @@ class ModelsTable:
     ) -> ModelListResponse:
         async with get_async_db_context(db) as db:
             stmt = select(Model, User).outerjoin(User, User.id == Model.user_id)
-            stmt = stmt.filter(Model.base_model_id != None)
+            stmt = stmt.filter(Model.base_model_id.is_not(None))
 
             if filter:
                 query_key = filter.get('query')

@@ -785,7 +785,7 @@ async def signin(
                 elif trusted_role:
                     log.warning(f'Ignoring invalid trusted role header value: {trusted_role}')
 
-    elif LLLM_AUTH == False:
+    elif not LLLM_AUTH:
         auth_source = 'system'
         admin_email = 'admin@localhost'
         admin_password = 'admin'

@@ -213,7 +213,7 @@ class TikaLoader:
         else:
             headers = {}
 
-        if self.extract_images == True:
+        if self.extract_images is True:
             headers['X-Tika-PDFextractInlineImages'] = 'true'
 
         endpoint_path = 'tika/json/text' if self.server_version == '4' else 'tika/text'

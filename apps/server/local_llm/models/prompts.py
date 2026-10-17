@@ -9,7 +9,7 @@ import uuid
 log = logging.getLogger(__name__)
 
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import JSON, BigInteger, Boolean, Column, String, Text, cast, func, or_, select, text
+from sqlalchemy import JSON, BigInteger, Boolean, Column, String, Text, cast, func, or_, select, text, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from local_llm.internal.db import Base, get_async_db_context
@@ -244,7 +244,7 @@ class PromptsTable:
             user_groups = await Groups.get_groups_by_member_id(user_id, db=session)
             user_group_ids = [group.id for group in user_groups]
 
-            query = select(Prompt).filter(Prompt.is_active == True).order_by(Prompt.updated_at.desc())
+            query = select(Prompt).filter(Prompt.is_active == true()).order_by(Prompt.updated_at.desc())
             query = AccessGrants.has_permission_filter(
                 db=db,
                 query=query,
@@ -680,7 +680,7 @@ class PromptsTable:
     async def get_tags(self, db: AsyncSession | None = None) -> list[str]:
         try:
             async with get_async_db_context(db) as session:
-                result = await session.execute(select(Prompt.tags).filter(Prompt.is_active == True))
+                result = await session.execute(select(Prompt.tags).filter(Prompt.is_active == true()))
                 tags = set()
                 for (tag_list,) in result.all():
                     if tag_list:
@@ -697,7 +697,7 @@ class PromptsTable:
                 user_groups = await Groups.get_groups_by_member_id(user_id, db=session)
                 user_group_ids = [group.id for group in user_groups]
 
-                query = select(Prompt.tags).filter(Prompt.is_active == True)
+                query = select(Prompt.tags).filter(Prompt.is_active == true())
                 query = AccessGrants.has_permission_filter(
                     db=db,
                     query=query,
