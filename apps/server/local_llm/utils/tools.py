@@ -1762,13 +1762,16 @@ async def execute_tool_server(
             raise Exception(f'No matching route found for operationId: {name}')
         route_path, methods, http_method, operation = matching_operation
 
-        path_params, query_params = _route_params(_operation_parameters(methods, operation), params)
+        parameters = _operation_parameters(methods, operation)
+        path_params, query_params = _route_params(parameters, params)
         final_url = _operation_url(url, route_path, path_params, query_params)
 
         body_params = {}
         if operation.get('requestBody', {}).get('content'):
-            if params:
-                body_params = params
+            # The tool's arguments flatten the body's fields together with the operation's
+            # parameters; those go in the path, query, header or cookie, not in the body too.
+            parameter_names = {param['name'] for param in parameters}
+            body_params = {key: value for key, value in params.items() if key not in parameter_names}
 
         # Methods that may carry a body always send one, empty when the operation takes none.
         body = {'json': body_params} if http_method in ['post', 'put', 'patch', 'delete'] else {}

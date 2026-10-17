@@ -6518,7 +6518,6 @@
     "https://inv.test/items/7",
     {
      "json": {
-      "item_id": 7,
       "name": "new"
      },
      "headers": {
@@ -6557,7 +6556,6 @@
     "https://inv.test/items?dry_run=yes",
     {
      "json": {
-      "dry_run": "yes",
       "name": "n"
      },
      "headers": {
