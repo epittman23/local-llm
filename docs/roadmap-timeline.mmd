@@ -37,6 +37,7 @@ timeline
       2026-10-17 (later) : Generated code excluded from linting and formatting : Alembic revisions (ruff), shadcn/ui components (Biome), uv.lock (check-toml) : security scans still cover everything
       2026-10-17 (later still) : The twelve unused vector stores removed, pgvector the only one : their settings and dependencies (opensearch-py, mariadb, elasticsearch, weaviate, pinecone, oracledb) gone : external knowledge connections to Qdrant and Milvus kept
       2026-10-17 (latest) : LDAP sign-in removed : the /ldap route, admin LDAP settings, the sign-in form's LDAP mode and ldap3 gone : unused, and local accounts cover a household install
+      2026-10-17 (final) : All 35 functions above the complexity limit dealt with : 33 refactored behind characterization tests (#86 to #124), two deleted with their features : the bugs the tests exposed fixed in separate PRs : the temporary C901 list removed, so max-complexity 25 applies everywhere
     section Near-Term
       "~1 week" : Resolve the blocking rack hole-type question : confirm riser and PSU questions : re-verify current component pricing
     section Short-Term

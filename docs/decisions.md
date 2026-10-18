@@ -7,6 +7,19 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-17**: Every function above the complexity limit has been
+  refactored, and the temporary C901 list in `pyproject.toml` is gone.
+  `max-complexity = 25` now applies to all of `local_llm` and `tests`, with
+  no per-file exemptions.
+  - **Of the original 35:** two were deleted with their features (the S3
+    Vectors store and LDAP sign-in). The other 33 were refactored in
+    PRs #86 to #124, one module group at a time.
+  - **Behaviour was pinned first.** Each refactor added characterization
+    tests and a golden file recorded from the untouched code. The refactor
+    had to pass them unchanged.
+  - **Bugs fixed separately.** Where the tests exposed a bug, it was fixed
+    in its own PR on top of the refactor, so the refactor itself changes no
+    behaviour.
 - **2026-10-17**: LDAP sign-in is removed. It was never enabled: on this
   date the app's Postgres had no tables and no saved settings existed
   anywhere, and the environment default was off. Local accounts cover a
