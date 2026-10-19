@@ -532,6 +532,7 @@ async def update_folder_access_by_id(
         form_data.access_grants,
         None,
         db=db,
+        sharing_permission_key='sharing.folders',
     )
 
     await AccessGrants.set_access_grants('folder', id, form_data.access_grants, db=db)

@@ -218,6 +218,25 @@ def migrate_access_control(data: dict, ac_key: str = 'access_control', grants_ke
     data.pop(ac_key, None)
 
 
+def _grant_field(grant, name: str):
+    return grant.get(name) if isinstance(grant, dict) else getattr(grant, name, None)
+
+
+def _is_named_principal_grant(grant) -> bool:
+    """A grant to a particular user or group, as opposed to the public '*' grant."""
+    principal_type = _grant_field(grant, 'principal_type')
+    return principal_type == 'group' or (principal_type == 'user' and _grant_field(grant, 'principal_id') != '*')
+
+
+def _sharing_key_for(public_permission_key: str | None, default_permissions: dict[str, Any]) -> str | None:
+    """`sharing.public_notes` -> `sharing.notes`, when that permission exists."""
+    prefix = 'sharing.public_'
+    if not public_permission_key or not public_permission_key.startswith(prefix):
+        return None
+    name = public_permission_key.removeprefix(prefix)
+    return f'sharing.{name}' if name in ((default_permissions or {}).get('sharing') or {}) else None
+
+
 async def filter_allowed_access_grants(
     default_permissions: dict[str, Any],
     user_id: str,
@@ -226,10 +245,18 @@ async def filter_allowed_access_grants(
     public_permission_key: str,
     anyone_permission_key: str | None = None,
     db: AsyncSession | None = None,
+    sharing_permission_key: str | None = None,
 ) -> list:
     """
     Checks if the user has the required permissions to grant access to a resource.
     Returns the filtered list of access grants if permissions are missing.
+
+    Besides the public key, a resource's non-public sharing permission
+    (`sharing.notes`, `sharing.models`, ...) is enforced here: without it, no
+    grant to a named user or group survives. It is `sharing_permission_key`
+    when given, else derived from `sharing.public_<x>` as `sharing.<x>` when
+    that permission exists. Until this was enforced server-side, the switch
+    only hid the UI, and the access/update routes stored such grants anyway.
     """
     if not access_grants:
         return access_grants
@@ -250,6 +277,14 @@ async def filter_allowed_access_grants(
 
     if user_role == 'admin':
         return access_grants
+
+    sharing_key = sharing_permission_key or _sharing_key_for(public_permission_key, default_permissions)
+    if (
+        sharing_key
+        and any(_is_named_principal_grant(grant) for grant in access_grants)
+        and not await has_permission(user_id, sharing_key, default_permissions, db=db)
+    ):
+        access_grants = [grant for grant in access_grants if not _is_named_principal_grant(grant)]
 
     # Check if user can share publicly
     if (
