@@ -109,13 +109,17 @@ def flags_of(config_lines: list[str]) -> dict[str, str]:
         if value is not None:
             out[key] = value
     cache = config_value(config_lines, 'cache') or ''
-    # `fa` shares the cache line and so is extracted here rather than
-    # through FLAG_KEYS. It is a flag a tuning grid can set, and a flag this
-    # warning cannot see reads as an all-clear.
-    for name, pattern in (('cache-k', r'k=(\S+)'), ('cache-v', r'v=(\S+)'), ('fa', r'fa: (\S+)')):
+    for name, pattern in (('cache-k', r'k=(\S+)'), ('cache-v', r'v=(\S+)')):
         hit = re.search(pattern, cache)
         if hit:
             out[name] = hit.group(1)
+    # `fa` is its own pipe-separated field on the cache line, so it is read
+    # as one: config_value(lines, 'cache') stops at the first ` | ` and never
+    # contains it (#131). It is a flag a tuning grid can set, and a flag this
+    # warning cannot see reads as an all-clear.
+    fa = config_value(config_lines, 'fa')
+    if fa is not None:
+        out['fa'] = fa
     out['spec'] = short_spec(config_value(config_lines, 'speculative'))
     out['-ot'] = short_ot(config_value(config_lines, 'override-tensors'))
     return out
