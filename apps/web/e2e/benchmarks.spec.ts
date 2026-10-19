@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test';
 import { expect, test } from './test';
 
 const adminUser = {
@@ -258,7 +259,7 @@ test('Tests runs a suite and streams per-item outcomes to completion', async ({ 
 });
 
 // The Tests page's dataset actions (#141): each POSTs, then follows the one Tests stream.
-async function mockTestsJob(page, path: string, events: object[], { fetched: fetchedFirst = false } = {}) {
+async function mockTestsJob(page: Page, path: string, events: object[], { fetched: fetchedFirst = false } = {}) {
 	const seen: { body: unknown } = { body: undefined };
 	await page.route('**/api/v1/benchmarks/tests/options', (route) =>
 		route.fulfill({
