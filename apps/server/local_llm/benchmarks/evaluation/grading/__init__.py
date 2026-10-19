@@ -141,8 +141,30 @@ def build_program(adapter: dict, item: dict, code: str) -> str | None:
     return _harness(adapter).build_program(item, code)
 
 
+def grader_env(workdir: str) -> dict[str, str]:
+    """The whole environment graded code runs with: enough to start Python, nothing else.
+
+    Not the backend's own environment, which holds DATABASE_URL, the session
+    secret and the provider API keys -- model-written code has no business
+    reading any of them. HOME and TMPDIR point at the per-run temporary
+    directory, so libraries that write caches (matplotlib, numba) write there
+    and the directory's removal takes them along.
+    """
+    return {
+        'PATH': os.environ.get('PATH', '/usr/bin:/bin'),
+        'LANG': 'C.UTF-8',
+        'LC_ALL': 'C.UTF-8',
+        'HOME': workdir,
+        'TMPDIR': workdir,
+    }
+
+
 def run_program(source: str, timeout: int, isolated: bool) -> tuple[str, str]:
-    """Execute a grading program. Returns (outcome, reason)."""
+    """Execute a grading program. Returns (outcome, reason).
+
+    stdin is /dev/null, so graded code can never read the terminal the
+    backend was started from, and the environment is grader_env()'s.
+    """
     with tempfile.TemporaryDirectory(prefix='llama-grade.') as tmp:
         path = Path(tmp) / 'grade.py'
         path.write_text(source)
@@ -153,7 +175,15 @@ def run_program(source: str, timeout: int, isolated: bool) -> tuple[str, str]:
             argv.append('-S')
         argv.append(str(path))
         try:
-            proc = subprocess.run(argv, cwd=tmp, capture_output=True, text=True, timeout=timeout)
+            proc = subprocess.run(
+                argv,
+                cwd=tmp,
+                stdin=subprocess.DEVNULL,
+                env=grader_env(tmp),
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
         except subprocess.TimeoutExpired:
             return FAIL_TIMEOUT, f'no result within {timeout}s'
         except OSError as exc:
