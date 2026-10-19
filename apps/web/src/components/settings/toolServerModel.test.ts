@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	blankToolServerFields,
 	buildToolServer,
+	directVerifyToken,
 	exportToolServer,
 	importToolServer,
 	registrationPayload,
@@ -201,5 +202,17 @@ describe('export / import', () => {
 		expect(() => importToolServer('[]', fields())).toThrow();
 		expect(() => importToolServer('"x"', fields())).toThrow();
 		expect(() => importToolServer('{', fields())).toThrow();
+	});
+});
+
+describe('directVerifyToken', () => {
+	const fields = (authType: string) => ({ ...blankToolServerFields(), authType, key: 'server-key' });
+	it('sends the server key for bearer and the session only for session', () => {
+		expect(directVerifyToken(fields('bearer'), 'app-session')).toBe('server-key');
+		expect(directVerifyToken(fields('session'), 'app-session')).toBe('app-session');
+	});
+	it('sends nothing for no authentication or OAuth', () => {
+		for (const type of ['none', 'system_oauth', 'oauth_2.1', 'oauth_2.1_static'])
+			expect(directVerifyToken(fields(type), 'app-session')).toBe('');
 	});
 });

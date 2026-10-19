@@ -173,6 +173,19 @@ export function buildToolServer(f: ToolServerFields, headers: Record<string, unk
 }
 
 /** Checks the Verify button makes before it sends anything; the message to toast, or null. */
+/**
+ * The token a direct (browser-side) Verify sends to the tool server: the
+ * server's own key for Bearer, the app session only when the user chose
+ * Session, and nothing otherwise. Sending the session for every type but
+ * Bearer handed the user's app credential to whatever URL was typed in, even
+ * with "No authentication" selected. Mirrors getToolServersData's choice.
+ */
+export function directVerifyToken(f: ToolServerFields, sessionToken: string): string {
+	if (f.authType === 'bearer') return f.key;
+	if (f.authType === 'session') return sessionToken;
+	return '';
+}
+
 export function verifyProblem(f: ToolServerFields): string | null {
 	if (!f.url) return 'Please enter a valid URL';
 	if (f.type === 'openapi') {

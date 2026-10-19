@@ -20,6 +20,7 @@ import {
 	type ToolServerFields,
 	blankToolServerFields,
 	buildToolServer,
+	directVerifyToken,
 	exportToolServer,
 	importToolServer,
 	isOAuth21,
@@ -102,12 +103,10 @@ export function AddToolServerModal({
 		const headers = headersOrToast();
 		if (!headers.ok) return;
 		if (direct) {
-			const res = await getToolServerData(f.authType === 'bearer' ? f.key : token, specRequestUrl(f.url, f.path)).catch(
-				() => {
-					toast.error('Connection failed');
-					return null;
-				}
-			);
+			const res = await getToolServerData(directVerifyToken(f, token), specRequestUrl(f.url, f.path)).catch(() => {
+				toast.error('Connection failed');
+				return null;
+			});
 			if (res) toast.success('Connection successful');
 			return;
 		}
