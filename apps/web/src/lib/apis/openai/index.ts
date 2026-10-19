@@ -1,18 +1,7 @@
 import { OPENAI_API_BASE_URL, WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '@/lib/constants';
-import { errorBody, errorDetail, requestError } from '@/lib/apis/errors';
+import { errorBody, errorMessage, requestError } from '@/lib/apis/errors';
 
-export const getErrorMessage = (err: any, fallback = 'Server connection failed') => {
-	const detail = err?.detail;
-	if (typeof detail === 'string') return detail;
-
-	return (
-		detail?.error?.message ??
-		detail?.message ??
-		err?.error?.message ??
-		err?.message ??
-		(typeof err === 'string' ? err : fallback)
-	);
-};
+export const getErrorMessage = (err: unknown, fallback = 'Server connection failed') => errorMessage(err, fallback);
 
 export const getOpenAIConfig = async (token: string = '') => {
 	let error = null;
@@ -96,7 +85,7 @@ export const getOpenAIModelsDirect = async (url: string, key: string) => {
 			return res.json();
 		})
 		.catch((err) => {
-			error = `OpenAI: ${err?.error?.message ?? errorDetail(err)}`;
+			error = `OpenAI: ${errorMessage(err)}`;
 			return [];
 		});
 
@@ -123,7 +112,7 @@ export const getOpenAIModels = async (token: string, urlIdx?: number) => {
 			return res.json();
 		})
 		.catch((err) => {
-			error = `OpenAI: ${err?.error?.message ?? errorDetail(err)}`;
+			error = `OpenAI: ${errorMessage(err)}`;
 			return [];
 		});
 
@@ -333,7 +322,7 @@ export const verifyOpenAIConnection = async (
 				return res.json();
 			})
 			.catch((err) => {
-				error = `OpenAI: ${err?.error?.message ?? errorDetail(err)}`;
+				error = `OpenAI: ${errorMessage(err)}`;
 				return [];
 			});
 
@@ -359,7 +348,7 @@ export const verifyOpenAIConnection = async (
 				return res.json();
 			})
 			.catch((err) => {
-				error = `OpenAI: ${err?.error?.message ?? errorDetail(err)}`;
+				error = `OpenAI: ${errorMessage(err)}`;
 				return [];
 			});
 

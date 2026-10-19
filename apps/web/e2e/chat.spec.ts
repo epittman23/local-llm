@@ -96,6 +96,18 @@ test('an error from the model shows on the reply', async ({ page }) => {
 	await expect(page.getByRole('alert').filter({ hasText: 'Model is overloaded' })).toBeVisible();
 });
 
+test('a send that cannot reach the server fails the reply and stops generating (#240)', async ({ page }) => {
+	const chat = await mockChat(page);
+	await page.route('**/api/chat/completions', (route) => route.abort('failed'));
+	await page.goto('/');
+	await chat.socket.connected;
+	await page.getByRole('textbox', { name: 'Message' }).fill('anyone there?');
+	await page.keyboard.press('Enter');
+	await expect(page.getByTestId('user-message')).toContainText('anyone there?');
+	await expect(page.getByTestId('response-message').getByRole('alert')).toContainText('Could not reach the server');
+	await expect(page.getByRole('button', { name: 'Stop' })).toHaveCount(0);
+});
+
 test('status, sources and follow-ups arrive with the reply', async ({ page }) => {
 	const chat = await mockChat(page);
 	await page.goto('/');

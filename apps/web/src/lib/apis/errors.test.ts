@@ -1,6 +1,14 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { errorBody, errorDetail, isAbort, isServerUnreachable, requestError, ServerUnreachableError } from './errors';
+import {
+	errorBody,
+	errorDetail,
+	errorMessage,
+	isAbort,
+	isServerUnreachable,
+	requestError,
+	ServerUnreachableError
+} from './errors';
 
 const htmlBadGateway = () =>
 	new Response('<html><body><h1>502 Bad Gateway</h1>nginx</body></html>', {
@@ -59,6 +67,21 @@ describe('errorDetail and requestError', () => {
 		const body = { detail: 'Not allowed', code: 7 };
 		expect(requestError(body)).toBe(body);
 		expect(requestError(new TypeError('x'))).toBeInstanceOf(ServerUnreachableError);
+	});
+});
+
+describe('errorMessage', () => {
+	it('reads every error shape as one line of text, never an object', () => {
+		expect(errorMessage(new TypeError('Failed to fetch'))).toBe('Could not reach the server');
+		expect(errorMessage({ detail: 'Not allowed' })).toBe('Not allowed');
+		expect(errorMessage({ detail: [{ msg: 'field required' }] })).toBe('field required');
+		expect(errorMessage({ error: { message: 'Rate limited' } })).toBe('Rate limited');
+		expect(errorMessage({ error: 'model "x" not found' })).toBe('model "x" not found');
+		expect(errorMessage({ message: 'Bad request' })).toBe('Bad request');
+		expect(errorMessage({ detail: { error: { message: 'Upstream failed' } } })).toBe('Upstream failed');
+		expect(errorMessage('Plain text')).toBe('Plain text');
+		expect(errorMessage({}, 'Fallback')).toBe('Fallback');
+		expect(errorMessage(null)).toBe('Request failed');
 	});
 });
 

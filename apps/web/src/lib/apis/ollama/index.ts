@@ -5,7 +5,7 @@
 // verbatim port covers -- the same call the migration plan made for the Python side's
 // pre-existing Optional-typing debt (docs/decisions.md, 2026-09-15 entry).
 import { OLLAMA_API_BASE_URL } from '@/lib/constants';
-import { errorBody, errorDetail, requestError } from '@/lib/apis/errors';
+import { errorBody, errorDetail, errorMessage, requestError } from '@/lib/apis/errors';
 
 export const verifyOllamaConnection = async (token: string = '', connection: dict = {}) => {
 	let error = null;
@@ -26,7 +26,7 @@ export const verifyOllamaConnection = async (token: string = '', connection: dic
 			return res.json();
 		})
 		.catch((err) => {
-			error = `Ollama: ${err?.error?.message ?? errorDetail(err)}`;
+			error = `Ollama: ${errorMessage(err)}`;
 			return [];
 		});
 

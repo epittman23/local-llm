@@ -78,3 +78,26 @@ export function errorDetail(err: unknown): unknown {
 	if (detail !== undefined && detail !== null && detail !== '') return detail;
 	return requestError(err);
 }
+
+/**
+ * A failure as one line of text, whatever shape it came in: a network
+ * failure, FastAPI's `detail` (string or validation list), an OpenAI-style
+ * `{ error: { message } }`, Ollama's `{ error: '...' }`, or a bare `message`.
+ * For messages built around it, where an object would print as
+ * "[object Object]".
+ */
+export function errorMessage(err: unknown, fallback = 'Request failed'): string {
+	if (err instanceof TypeError || isServerUnreachable(err)) return new ServerUnreachableError(err).message;
+	const e = err as Record<string, any> | null | undefined;
+	const detail = errorDetail(err);
+	const candidates = [
+		typeof detail === 'string' ? detail : undefined,
+		e?.detail?.error?.message,
+		e?.detail?.message,
+		typeof e?.error === 'string' ? e.error : undefined,
+		e?.error?.message,
+		e?.message,
+		typeof err === 'string' ? err : undefined
+	];
+	return candidates.find((c): c is string => typeof c === 'string' && c !== '') ?? fallback;
+}
