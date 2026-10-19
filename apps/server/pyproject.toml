@@ -39,7 +39,6 @@ dependencies = [
     "psycopg[binary]==3.3.6",
     "alembic==1.20.0",
 
-    "pycrdt==0.14.8",
     "redis==8.1.0",
     "hiredis==3.4.2",
 
