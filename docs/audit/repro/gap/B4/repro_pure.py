@@ -41,7 +41,7 @@ from local_llm.utils import filter as flt
 class FA:
     class UserValves:
         def __init__(self, **kw):
-            self.secret = 'A-user-secret'
+            self.marker = 'value-set-by-filter-A'
 
     @staticmethod
     def inlet(body, __user__):
@@ -81,6 +81,6 @@ async def run6():
         await flt.process_filter_functions(None, None, [Fn('a'), Fn('b')], 'inlet', {'messages': []},
                                            {'__user__': {'id': 'u1'}})
     print("filter B (no UserValves) saw __user__['valves'] =", type(FB.seen).__name__,
-          getattr(FB.seen, 'secret', None))
+          getattr(FB.seen, 'marker', None))
 
 asyncio.run(run6())

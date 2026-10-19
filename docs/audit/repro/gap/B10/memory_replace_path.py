@@ -7,7 +7,7 @@ from local_llm.utils.memory import validate_memory_operations
 from local_llm.routers.memories import UpdateMemoriesForm
 
 async def main():
-    eng = create_async_engine('sqlite+aiosqlite:///' + tempfile.mktemp(suffix='.db'))
+    eng = create_async_engine('sqlite+aiosqlite:///' + tempfile.mkdtemp() + '/repro.db')
     async with eng.begin() as c:
         await c.run_sync(Memory.__table__.create)
     S = async_sessionmaker(eng, expire_on_commit=False)
