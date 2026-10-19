@@ -704,20 +704,10 @@ class UsersTable:
             return UserModel.model_validate(user)
 
     async def delete_user_by_id(self, id: str, db: AsyncSession | None = None) -> bool:
-        from local_llm.models.chats import Chats
-        from local_llm.models.groups import Groups
+        """Delete the user and everything they own (utils/user_purge.py states what happens to what)."""
+        from local_llm.utils.user_purge import purge_user
 
-        # Remove User from Groups
-        await Groups.remove_user_from_all_groups(id)
-
-        # Delete User Chats
-        async with get_async_db_context(db) as session:
-            deleted_chats = await Chats.delete_chats_by_user_id(id, db=session)
-            if not deleted_chats:
-                return False  # chats deletion failed
-            await session.execute(delete(User).where(User.id == id))
-            await session.commit()
-            return True
+        return await purge_user(id, db=db)
 
     async def get_user_api_key_by_id(self, id: str, db: AsyncSession | None = None) -> str | None:
         async with get_async_db_context(db) as session:
