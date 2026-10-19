@@ -113,6 +113,17 @@ for file_path in FRONTEND_STATIC_DIR.glob('**/*'):
         except Exception as e:
             logging.error(f'An error occurred: {e}')
 
+# The default avatar (profile/image falls back to {STATIC_DIR}/user.png) lives
+# at the frontend's root, not under static/, so the loop above never copied it
+# and every default avatar was a 500 (#299). The build first, then the source.
+for default_avatar in (FRONTEND_BUILD_DIR / 'user.png', FRONTEND_BUILD_DIR.parent / 'public' / 'user.png'):
+    if default_avatar.exists():
+        try:
+            shutil.copyfile(default_avatar, STATIC_DIR / 'user.png')
+        except Exception as e:
+            logging.error(f'An error occurred: {e}')
+        break
+
 frontend_favicon = FRONTEND_STATIC_DIR / 'favicon.png'
 
 if frontend_favicon.exists():
