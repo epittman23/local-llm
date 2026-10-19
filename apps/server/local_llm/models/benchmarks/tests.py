@@ -119,6 +119,10 @@ class BenchmarkResult(Base):
     system_name = Column(Text, nullable=True)
     system_sha = Column(Text, nullable=True)
     adapter_sha = Column(Text, nullable=True)
+    # The problem's cluster for cluster-robust standard errors (DS-1000: its
+    # library and original StackOverflow question). NULL means the problem is
+    # treated as independent of every other.
+    cluster = Column(Text, nullable=True)
 
 
 class BenchmarkResultModel(BaseModel):
@@ -144,6 +148,7 @@ class BenchmarkResultModel(BaseModel):
     system_name: str | None = None
     system_sha: str | None = None
     adapter_sha: str | None = None
+    cluster: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -326,6 +331,7 @@ class BenchmarkResultTable:
                 # NULL means the adapter was not fingerprinted (a real
                 # unknown), not a default.
                 adapter_sha=record.get('adapter_sha') or None,
+                cluster=record.get('cluster') or None,
             )
             stmt = pg_insert(BenchmarkResult).values(**values)
             update_cols = {
@@ -342,6 +348,7 @@ class BenchmarkResultTable:
                 'system_name': stmt.excluded.system_name,
                 'system_sha': stmt.excluded.system_sha,
                 'adapter_sha': stmt.excluded.adapter_sha,
+                'cluster': stmt.excluded.cluster,
             }
             stmt = stmt.on_conflict_do_update(
                 index_elements=['suite_run_id', 'benchmark', 'item_id'], set_=update_cols

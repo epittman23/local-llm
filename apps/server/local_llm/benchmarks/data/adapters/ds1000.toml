@@ -44,6 +44,13 @@ split   = "test"
 [item]
 id_field     = "metadata.problem_id"
 prompt_field = "prompt"
+# The cluster for cluster-robust standard errors: the StackOverflow question a
+# problem was perturbed from. Perturbations of one question (Surface, Semantic,
+# Difficult-Rewrite) share most of their difficulty, so they are not
+# independent observations. perturbation_origin_id is numbered per library,
+# hence both fields. Clustering by library alone would leave two clusters in
+# the Pandas/Numpy slice, too few for a cluster-robust error to mean anything.
+cluster_fields = ["metadata.library", "metadata.perturbation_origin_id"]
 
 # Default slice: libraries the backend's default install (pyproject.toml)
 # can import. Anything outside it is recorded as skipped, never failed, so

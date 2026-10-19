@@ -67,7 +67,7 @@ from collections.abc import Awaitable, Callable
 
 import aiohttp
 
-from local_llm.benchmarks.evaluation.adapters import load_adapters, render_prompt
+from local_llm.benchmarks.evaluation.adapters import item_cluster, load_adapters, render_prompt
 from local_llm.benchmarks.evaluation.datasets import read_manifest
 from local_llm.benchmarks.evaluation.grading import calibration_stale, grade
 from local_llm.benchmarks.evaluation.suites import (
@@ -376,6 +376,9 @@ async def run_item(session: aiohttp.ClientSession, row: dict, ctx: dict) -> dict
         # covers the item; this covers the prompt_template and grading config
         # that turn it into a request.
         'adapter_sha': adapter.get('_sha', ''),
+        # Recorded with the result rather than looked up at analysis time, so
+        # the statistics never depend on the dataset file being present.
+        'cluster': item_cluster(adapter, item),
         'reasoning_chars': len(ans.reasoning),
     }
     # The answer is stored as three fields rather than one rendered blob, so

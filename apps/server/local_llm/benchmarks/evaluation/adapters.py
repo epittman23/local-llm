@@ -57,6 +57,19 @@ def adapter_sha(adapter: dict) -> str:
     return hashlib.sha1(canonical.encode('utf-8')).hexdigest()[:12]
 
 
+def item_cluster(adapter: dict, item: dict) -> str | None:
+    """The cluster an item belongs to, from the adapter's `[item] cluster_fields`.
+
+    None when the adapter names no cluster fields, which means its items are
+    treated as independent. The values are joined with '/', so a cluster
+    identified by two fields stays one string on the result row.
+    """
+    fields = adapter.get('item', {}).get('cluster_fields') or []
+    if not fields:
+        return None
+    return '/'.join(str(dotted(item, f)) for f in fields)
+
+
 # ---------------------------------------------------------------------------
 # prompts
 # ---------------------------------------------------------------------------
