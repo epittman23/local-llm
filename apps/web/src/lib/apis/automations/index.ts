@@ -1,4 +1,5 @@
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
+import { errorBody, errorDetail } from '@/lib/apis/errors';
 
 export type AutomationTerminalConfig = {
 	server_id: string;
@@ -89,11 +90,11 @@ export const getAutomationItems = async (
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -118,11 +119,11 @@ export const createAutomation = async (token: string, form: AutomationForm) => {
 		body: JSON.stringify(form)
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -146,11 +147,11 @@ export const getAutomationById = async (token: string, id: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -175,11 +176,11 @@ export const updateAutomationById = async (token: string, id: string, form: Auto
 		body: JSON.stringify(form)
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -203,11 +204,11 @@ export const toggleAutomationById = async (token: string, id: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -231,11 +232,11 @@ export const runAutomationById = async (token: string, id: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -259,11 +260,11 @@ export const deleteAutomationById = async (token: string, id: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -287,11 +288,11 @@ export const getAutomationRuns = async (token: string, id: string, skip: number 
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});

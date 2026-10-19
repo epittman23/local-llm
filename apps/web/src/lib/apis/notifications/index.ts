@@ -1,4 +1,5 @@
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
+import { errorBody, errorDetail } from '@/lib/apis/errors';
 
 export type NotificationTarget = {
 	id: string;
@@ -34,12 +35,12 @@ const jsonRequest = async (url: string, token: string, method = 'GET', body?: ob
 		...(body ? { body: JSON.stringify(body) } : {})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 

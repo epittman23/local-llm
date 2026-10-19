@@ -1,6 +1,7 @@
 import { EventSourceParserStream } from 'eventsource-parser/stream';
 
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
+import { errorBody, errorDetail } from '@/lib/apis/errors';
 
 // -----------------------------------------------------------------------------
 // SSE consumption helper
@@ -73,11 +74,11 @@ export const getServeProfiles = async (token: string = '') => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -101,11 +102,11 @@ export const getServeProfile = async (token: string = '', name: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -141,11 +142,11 @@ export const startServe = async (token: string = '', form: ServeStartForm = {}) 
 		body: JSON.stringify(form)
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -169,11 +170,11 @@ export const stopServe = async (token: string = '') => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -197,11 +198,11 @@ export const checkServe = async (token: string = '') => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -262,11 +263,11 @@ export const getLive = async (token: string = '') => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -290,11 +291,11 @@ export const killLive = async (token: string = '') => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -322,11 +323,11 @@ export const getTestOptions = async (token: string = '') => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -360,11 +361,11 @@ export const startTestRun = async (token: string = '', form: TestRunForm) => {
 		body: JSON.stringify(form)
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -388,11 +389,11 @@ export const cancelTestRun = async (token: string = '') => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -537,11 +538,11 @@ export const getCompare = async (
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -566,11 +567,11 @@ export const exportAnswers = async (token: string = '', run: string) => {
 		body: JSON.stringify({ run })
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -601,11 +602,11 @@ export const getAnswerRuns = async (token: string = '', limit: number = 20) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -633,11 +634,11 @@ export const getAnswers = async (token: string = '', run: string, filter: 'failu
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -670,11 +671,11 @@ export const getAnswerOne = async (
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -710,11 +711,11 @@ export const generateReport = async (token: string = '', form: ReportForm = {}) 
 		body: JSON.stringify({ figures: true, ...form })
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -814,11 +815,11 @@ export const startTune = async (token: string = '', form: TuneStartForm = {}) =>
 		body: JSON.stringify(body)
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -845,11 +846,11 @@ export const resumeTune = async (token: string = '', sweepId: string | null = nu
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -873,11 +874,11 @@ export const stopTune = async (token: string = '') => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -904,11 +905,11 @@ export const getTuneStatus = async (token: string = '', sweepId: string | null =
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -932,11 +933,11 @@ export const getTuneGrids = async (token: string = '') => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -963,11 +964,11 @@ export const getRecentSweeps = async (token: string = '', limit: number = 20) =>
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});

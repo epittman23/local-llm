@@ -1,4 +1,5 @@
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
+import { errorBody, errorDetail } from '@/lib/apis/errors';
 
 export const getModelAnalytics = async (
 	token: string = '',
@@ -22,11 +23,11 @@ export const getModelAnalytics = async (
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -62,11 +63,11 @@ export const getUserAnalytics = async (
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -108,11 +109,11 @@ export const getMessages = async (
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -146,11 +147,11 @@ export const getSummary = async (
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -186,11 +187,11 @@ export const getDailyStats = async (
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -224,11 +225,11 @@ export const getTokenUsage = async (
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -272,11 +273,11 @@ export const getModelChats = async (
 		}
 	)
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -306,11 +307,11 @@ export const getModelOverview = async (token: string = '', modelId: string, days
 		}
 	)
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});

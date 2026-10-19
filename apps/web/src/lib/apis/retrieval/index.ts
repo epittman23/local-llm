@@ -1,4 +1,5 @@
 import { RETRIEVAL_API_BASE_URL } from '@/lib/constants';
+import { errorBody, errorDetail } from '@/lib/apis/errors';
 
 export const getRAGConfig = async (token: string) => {
 	let error = null;
@@ -11,12 +12,12 @@ export const getRAGConfig = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -67,12 +68,12 @@ export const updateRAGConfig = async (token: string, payload: RAGConfigForm) => 
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -94,12 +95,12 @@ export const getEmbeddingConfig = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -148,12 +149,12 @@ export const updateEmbeddingConfig = async (token: string, payload: EmbeddingMod
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -185,11 +186,11 @@ export const processYoutubeVideo = async (token: string, url: string) => {
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -227,11 +228,11 @@ export const processUrl = async (
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -265,11 +266,11 @@ export const processWeb = async (token: string, collection_name: string, url: st
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -300,12 +301,12 @@ export const processWebSearch = async (
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -333,11 +334,11 @@ export const queryDoc = async (token: string, collection_name: string, query: st
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -370,11 +371,11 @@ export const queryCollection = async (
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -396,11 +397,11 @@ export const resetUploadDir = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -422,11 +423,11 @@ export const resetVectorDB = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 

@@ -5,6 +5,7 @@
 // verbatim port covers -- the same call the migration plan made for the Python side's
 // pre-existing Optional-typing debt (docs/decisions.md, 2026-09-15 entry).
 import { OLLAMA_API_BASE_URL } from '@/lib/constants';
+import { errorBody, errorDetail } from '@/lib/apis/errors';
 
 export const verifyOllamaConnection = async (token: string = '', connection: dict = {}) => {
 	let error = null;
@@ -21,7 +22,7 @@ export const verifyOllamaConnection = async (token: string = '', connection: dic
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -48,13 +49,13 @@ export const getOllamaConfig = async (token: string = '') => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
 			if ('detail' in err) {
-				error = err.detail;
+				error = errorDetail(err);
 			} else {
 				error = 'Server connection failed';
 			}
@@ -89,13 +90,13 @@ export const updateOllamaConfig = async (token: string = '', config: OllamaConfi
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
 			if ('detail' in err) {
-				error = err.detail;
+				error = errorDetail(err);
 			} else {
 				error = 'Server connection failed';
 			}
@@ -121,13 +122,13 @@ export const getOllamaVersion = async (token: string, urlIdx?: number) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
 			if ('detail' in err) {
-				error = err.detail;
+				error = errorDetail(err);
 			} else {
 				error = 'Server connection failed';
 			}
@@ -153,13 +154,13 @@ export const getOllamaModels = async (token: string = '', urlIdx: null | number 
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
 			if ('detail' in err) {
-				error = err.detail;
+				error = errorDetail(err);
 			} else {
 				error = 'Server connection failed';
 			}
@@ -204,7 +205,7 @@ export const generatePrompt = async (token: string = '', model: string, conversa
 	}).catch((err) => {
 		console.error(err);
 		if ('detail' in err) {
-			error = err.detail;
+			error = errorDetail(err);
 		}
 		return null;
 	});
@@ -357,7 +358,7 @@ export const deleteModel = async (token: string, tagName: string, urlIdx: string
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.then((json) => {
@@ -369,7 +370,7 @@ export const deleteModel = async (token: string, tagName: string, urlIdx: string
 			error = err;
 
 			if ('detail' in err) {
-				error = err.detail;
+				error = errorDetail(err);
 			}
 
 			return null;
@@ -402,7 +403,7 @@ export const pullModel = async (token: string, tagName: string, urlIdx: number |
 		error = err;
 
 		if ('detail' in err) {
-			error = err.detail;
+			error = errorDetail(err);
 		}
 
 		return null;
@@ -431,7 +432,7 @@ export const downloadModel = async (token: string, download_url: string, urlIdx:
 		error = err;
 
 		if ('detail' in err) {
-			error = err.detail;
+			error = errorDetail(err);
 		}
 
 		return null;
@@ -459,7 +460,7 @@ export const uploadModel = async (token: string, file: File, urlIdx: string | nu
 		error = err;
 
 		if ('detail' in err) {
-			error = err.detail;
+			error = errorDetail(err);
 		}
 
 		return null;

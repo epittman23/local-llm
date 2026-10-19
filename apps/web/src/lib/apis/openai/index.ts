@@ -1,4 +1,5 @@
 import { OPENAI_API_BASE_URL, WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '@/lib/constants';
+import { errorBody } from '@/lib/apis/errors';
 
 export const getErrorMessage = (err: any, fallback = 'Server connection failed') => {
 	const detail = err?.detail;
@@ -25,7 +26,7 @@ export const getOpenAIConfig = async (token: string = '') => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -63,7 +64,7 @@ export const updateOpenAIConfig = async (token: string = '', config: OpenAIConfi
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -91,7 +92,7 @@ export const getOpenAIModelsDirect = async (url: string, key: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -118,7 +119,7 @@ export const getOpenAIModels = async (token: string, urlIdx?: number) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -145,7 +146,7 @@ export const getProviderModelCatalog = async (token: string, urlIdx: number) => 
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -174,7 +175,7 @@ export const downloadProviderModel = async (token: string, urlIdx: number, model
 		body: JSON.stringify({ model })
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -207,7 +208,7 @@ export const getProviderModelDownloadStatus = async (
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -235,7 +236,7 @@ export const loadProviderModel = async (token: string, urlIdx: number, model: st
 		body: JSON.stringify({ model })
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -263,7 +264,7 @@ export const unloadProviderModel = async (token: string, urlIdx: number, model: 
 		body: JSON.stringify({ model, ...(instanceId ? { instance_id: instanceId } : {}) })
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -290,7 +291,7 @@ export const deleteProviderModel = async (token: string, urlIdx: number, model: 
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -328,7 +329,7 @@ export const verifyOpenAIConnection = async (
 			}
 		})
 			.then(async (res) => {
-				if (!res.ok) throw await res.json();
+				if (!res.ok) throw await errorBody(res);
 				return res.json();
 			})
 			.catch((err) => {
@@ -354,7 +355,7 @@ export const verifyOpenAIConnection = async (
 			})
 		})
 			.then(async (res) => {
-				if (!res.ok) throw await res.json();
+				if (!res.ok) throw await errorBody(res);
 				return res.json();
 			})
 			.catch((err) => {
@@ -416,7 +417,7 @@ export const generateOpenAIChatCompletion = async (
 		body: JSON.stringify(body)
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {

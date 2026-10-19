@@ -1,5 +1,6 @@
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { getUserPosition } from '@/lib/utils/api-helpers';
+import { errorBody, errorDetail } from '@/lib/apis/errors';
 
 export const getUserGroups = async (token: string) => {
 	let error = null;
@@ -12,12 +13,12 @@ export const getUserGroups = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -39,12 +40,12 @@ export const getUserDefaultPermissions = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -69,12 +70,12 @@ export const updateUserDefaultPermissions = async (token: string, permissions: o
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -96,12 +97,12 @@ export const getUserDefaultPermissionsDefaults = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -140,12 +141,12 @@ export const getUsers = async (token: string, query?: string, orderBy?: string, 
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -192,13 +193,13 @@ export const searchUsers = async (
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			if (signal?.aborted) return null;
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -221,12 +222,12 @@ export const getAllUsers = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -247,7 +248,7 @@ export const getUserSettings = async (token: string, raw = false) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -277,12 +278,12 @@ export const updateUserSettings = async (token: string, settings: object) => {
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -304,12 +305,12 @@ export const getUserInfoById = async (token: string, userId: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -334,12 +335,12 @@ export const updateUserStatus = async (token: string, formData: object) => {
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -360,12 +361,12 @@ export const getUserInfo = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -390,12 +391,12 @@ export const updateUserInfo = async (token: string, info: object) => {
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -416,12 +417,12 @@ export const getUserVariables = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -446,12 +447,12 @@ export const updateUserVariables = async (token: string, variables: Record<strin
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -488,12 +489,12 @@ export const getUserActiveStatusById = async (token: string, userId: string) => 
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -515,12 +516,12 @@ export const deleteUserById = async (token: string, userId: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -557,12 +558,12 @@ export const updateUserById = async (token: string, userId: string, user: UserUp
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -584,12 +585,12 @@ export const getUserGroupsById = async (token: string, userId: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -611,12 +612,12 @@ export const getUserPreview = async (token: string, userId: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -695,12 +696,12 @@ export const getUserUsage = async (
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 

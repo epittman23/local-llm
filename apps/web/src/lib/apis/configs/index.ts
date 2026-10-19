@@ -1,5 +1,6 @@
 import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '@/lib/constants';
 import type { Banner } from '@/lib/types';
+import { errorBody, errorDetail } from '@/lib/apis/errors';
 
 export const importConfig = async (token: string, config: object) => {
 	let error = null;
@@ -15,12 +16,12 @@ export const importConfig = async (token: string, config: object) => {
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -42,12 +43,12 @@ export const exportConfig = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -69,12 +70,12 @@ export const getConnectionsConfig = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -99,12 +100,12 @@ export const setConnectionsConfig = async (token: string, config: object) => {
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -126,12 +127,12 @@ export const getToolServerConnections = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -156,12 +157,12 @@ export const setToolServerConnections = async (token: string, connections: objec
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -183,12 +184,12 @@ export const getTerminalServerConnections = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -213,12 +214,12 @@ export const setTerminalServerConnections = async (token: string, connections: o
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -295,12 +296,12 @@ export const putOrchestratorPolicy = async (
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -363,12 +364,12 @@ export const putOrchestratorLifecycle = async (
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -436,12 +437,12 @@ export const refreshOrchestratorTerminals = async (
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -470,12 +471,12 @@ export const verifyTerminalServerConnection = async (token: string, connection: 
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -500,12 +501,12 @@ export const verifyToolServerConnection = async (token: string, connection: obje
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -544,12 +545,12 @@ export const registerOAuthClient = async (
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -583,12 +584,12 @@ export const getCodeExecutionConfig = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -613,12 +614,12 @@ export const setCodeExecutionConfig = async (token: string, config: object) => {
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -640,12 +641,12 @@ export const getModelsDefaults = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -667,12 +668,12 @@ export const getModelsConfig = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -697,12 +698,12 @@ export const setModelsConfig = async (token: string, config: object) => {
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -721,7 +722,7 @@ export const getSubagentsConfig = async (token: string) => {
 			Authorization: `Bearer ${token}`
 		}
 	});
-	if (!res.ok) throw await res.json();
+	if (!res.ok) throw await errorBody(res);
 	return res.json();
 };
 
@@ -734,7 +735,7 @@ export const setSubagentsConfig = async (token: string, config: object) => {
 		},
 		body: JSON.stringify(config)
 	});
-	if (!res.ok) throw await res.json();
+	if (!res.ok) throw await errorBody(res);
 	return res.json();
 };
 
@@ -752,12 +753,12 @@ export const setDefaultPromptSuggestions = async (token: string, promptSuggestio
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -779,12 +780,12 @@ export const getBanners = async (token: string): Promise<Banner[]> => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -809,12 +810,12 @@ export const setBanners = async (token: string, banners: Banner[]) => {
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail;
+			error = errorDetail(err);
 			return null;
 		});
 

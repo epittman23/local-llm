@@ -5,6 +5,7 @@
 // verbatim port covers -- the same call the migration plan made for the Python side's
 // pre-existing Optional-typing debt (docs/decisions.md, 2026-09-15 entry).
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
+import { errorBody, errorDetail } from '@/lib/apis/errors';
 
 export const getModelItems = async (token: string = '', query, viewOption, selectedTag, orderBy, direction, page) => {
 	let error = null;
@@ -38,7 +39,7 @@ export const getModelItems = async (token: string = '', query, viewOption, selec
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.then((json) => {
@@ -69,7 +70,7 @@ export const getModelTags = async (token: string = '') => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.then((json) => {
@@ -100,7 +101,7 @@ export const getBaseModelTags = async (token: string = '') => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.then((json) => {
@@ -131,7 +132,7 @@ export const importModels = async (token: string, models: object[]) => {
 		body: JSON.stringify({ models: models })
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -164,7 +165,7 @@ export const getBaseModels = async (token: string = '', tag: string = '') => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.then((json) => {
@@ -199,11 +200,11 @@ export const createNewModel = async (token: string, model: object) => {
 		body: JSON.stringify(payload)
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -230,7 +231,7 @@ export const getModelById = async (token: string, id: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.then((json) => {
@@ -265,7 +266,7 @@ export const toggleModelById = async (token: string, id: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.then((json) => {
@@ -301,7 +302,7 @@ export const updateModelById = async (token: string, id: string, model: object) 
 		body: JSON.stringify(payload)
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.then((json) => {
@@ -334,7 +335,7 @@ export const updateModelAccessGrants = async (token: string, id: string, name: s
 		body: JSON.stringify({ id, name, access_grants: accessGrants })
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -363,14 +364,14 @@ export const deleteModelById = async (token: string, id: string) => {
 		body: JSON.stringify({ id })
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.then((json) => {
 			return json;
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 
 			console.error(err);
 			return null;
@@ -395,7 +396,7 @@ export const deleteAllModels = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.then((json) => {

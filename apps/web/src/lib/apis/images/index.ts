@@ -1,4 +1,5 @@
 import { IMAGES_API_BASE_URL } from '@/lib/constants';
+import { errorBody, errorDetail } from '@/lib/apis/errors';
 
 export const getConfig = async (token: string = '') => {
 	let error = null;
@@ -12,13 +13,13 @@ export const getConfig = async (token: string = '') => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
 			if ('detail' in err) {
-				error = err.detail;
+				error = errorDetail(err);
 			} else {
 				error = 'Server connection failed';
 			}
@@ -47,13 +48,13 @@ export const updateConfig = async (token: string = '', config: object) => {
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
 			if ('detail' in err) {
-				error = err.detail;
+				error = errorDetail(err);
 			} else {
 				error = 'Server connection failed';
 			}
@@ -79,13 +80,13 @@ export const verifyConfigUrl = async (token: string = '') => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
 			if ('detail' in err) {
-				error = err.detail;
+				error = errorDetail(err);
 			} else {
 				error = 'Server connection failed';
 			}
@@ -111,13 +112,13 @@ export const getImageGenerationModels = async (token: string = '') => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
 			console.error(err);
 			if ('detail' in err) {
-				error = err.detail;
+				error = errorDetail(err);
 			} else {
 				error = 'Server connection failed';
 			}
@@ -146,7 +147,7 @@ export const imageGenerations = async (token: string = '', prompt: string) => {
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -155,7 +156,7 @@ export const imageGenerations = async (token: string = '', prompt: string) => {
 				if (Array.isArray(err.detail)) {
 					error = err.detail.map((e: { msg?: string }) => e.msg || JSON.stringify(e)).join(', ');
 				} else {
-					error = err.detail;
+					error = errorDetail(err);
 				}
 			} else {
 				error = 'Server connection failed';
@@ -200,7 +201,7 @@ export const imageEdits = async (
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -209,7 +210,7 @@ export const imageEdits = async (
 				if (Array.isArray(err.detail)) {
 					error = err.detail.map((e: { msg?: string }) => e.msg || JSON.stringify(e)).join(', ');
 				} else {
-					error = err.detail;
+					error = errorDetail(err);
 				}
 			} else {
 				error = 'Server connection failed';

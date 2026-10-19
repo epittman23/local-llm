@@ -61,6 +61,7 @@ export type TerminalCwd = {
 };
 
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
+import { errorBody } from '@/lib/apis/errors';
 
 const bearerHeaders = (apiKey: string): Record<string, string> => ({
 	Authorization: `Bearer ${apiKey.trim()}`
@@ -140,7 +141,7 @@ export const listFiles = async (
 	if (sessionId) headers['X-Session-Id'] = sessionId;
 	const res = await fetch(url, { headers })
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -356,7 +357,7 @@ export const uploadToTerminal = async (
 		body
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -384,7 +385,7 @@ export const createDirectory = async (
 		body: JSON.stringify({ path })
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -408,7 +409,7 @@ export const deleteEntry = async (
 		headers
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -436,7 +437,7 @@ export const setCwd = async (
 		body: JSON.stringify({ path })
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -465,7 +466,7 @@ export const moveEntry = async (
 		body: JSON.stringify({ source, destination })
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {

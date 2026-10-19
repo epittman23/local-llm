@@ -6,6 +6,7 @@
 // pre-existing Optional-typing debt (docs/decisions.md, 2026-09-15 entry).
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { splitStream } from '@/lib/utils/api-helpers';
+import { errorBody, errorDetail } from '@/lib/apis/errors';
 
 export const uploadFile = async (
 	token: string,
@@ -36,7 +37,7 @@ export const uploadFile = async (
 		body: data
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -110,7 +111,7 @@ export const getFileProcessStatus = async (token: string, id: string) => {
 			authorization: `Bearer ${token}`
 		}
 	}).catch((err) => {
-		error = err.detail;
+		error = errorDetail(err);
 		console.error(err);
 		return null;
 	});
@@ -137,14 +138,14 @@ export const getFiles = async (token: string = '', content: boolean = false) => 
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.then((json) => {
 			return json;
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -180,11 +181,11 @@ export const searchFiles = async (
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return [];
 		});
@@ -208,7 +209,7 @@ export const getFileCount = async (token: string = '') => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
@@ -236,14 +237,14 @@ export const getFileById = async (token: string, id: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.then((json) => {
 			return json;
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -270,14 +271,14 @@ export const updateFileDataContentById = async (token: string, id: string, conte
 		})
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.then((json) => {
 			return json;
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -300,11 +301,11 @@ export const getFileContentById = async (id: string) => {
 		credentials: 'include'
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return await res.arrayBuffer();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 
 			return null;
@@ -330,11 +331,11 @@ export const renameFileById = async (token: string, id: string, filename: string
 		body: JSON.stringify({ filename })
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -358,14 +359,14 @@ export const deleteFileById = async (token: string, id: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.then((json) => {
 			return json;
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -389,14 +390,14 @@ export const deleteAllFiles = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json();
+			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
 		.then((json) => {
 			return json;
 		})
 		.catch((err) => {
-			error = err.detail;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
