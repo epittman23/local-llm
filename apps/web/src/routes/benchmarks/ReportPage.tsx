@@ -2,6 +2,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import { useEffect, useRef, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -42,6 +43,7 @@ export function ReportPage() {
 	const [model, setModel] = useState('');
 	const [benchmark, setBenchmark] = useState(DEFAULT_OPTION);
 	const [figures, setFigures] = useState(true);
+	const [windows, setWindows] = useState<string[]>([]);
 	const [markdownHtml, setMarkdownHtml] = useState<string | null>(null);
 	const [figureUrls, setFigureUrls] = useState<{ url: string; objectUrl: string }[]>([]);
 	const [error, setError] = useState<string | null>(null);
@@ -109,17 +111,22 @@ export function ReportPage() {
 				entries = fetched.filter((e): e is { url: string; objectUrl: string } => e !== null);
 			}
 
-			return { html, entries };
+			// Release-date windows in scope: shown above the document, since two
+			// windows are two pools of problems and a reader must not miss it.
+			const windows: string[] = Array.isArray(res.windows) ? res.windows : [];
+			return { html, entries, windows };
 		},
 		onMutate: () => {
 			setError(null);
 			setMarkdownHtml(null);
+			setWindows([]);
 			for (const entry of figureUrlsRef.current) URL.revokeObjectURL(entry.objectUrl);
 			setFigureUrls([]);
 		},
-		onSuccess: ({ html, entries }) => {
+		onSuccess: ({ html, entries, windows }) => {
 			setMarkdownHtml(html);
 			setFigureUrls(entries);
+			setWindows(windows);
 		},
 		onError: (err: unknown) => setError(err instanceof Error ? err.message : String(err))
 	});
@@ -203,6 +210,13 @@ export function ReportPage() {
 				</div>
 			) : markdownHtml ? (
 				<>
+					{windows.length > 0 && (
+						<div className="flex flex-wrap items-center gap-1.5">
+							{windows.map((w) => (
+								<Badge key={w}>Release-date window: {w}</Badge>
+							))}
+						</div>
+					)}
 					{figureUrls.length > 0 && (
 						<div className="grid gap-3 sm:grid-cols-2">
 							{figureUrls.map((entry) => (

@@ -28,8 +28,8 @@ async def get_compare(
 ):
     if by == 'serving':
         facts = await compare_logic.serving_summary()
-        derived_columns, derived, notes = compare_logic.serving_rows(facts)
-        return {'derived_columns': derived_columns, 'derived': derived, 'notes': notes}
+        rows, derived, notes = compare_logic.serving_rows(facts)
+        return {'rows': rows, 'derived': derived, 'notes': notes}
 
     records = await compare_logic.fetch_results(tier=tier)
     blocks = await compare_logic.fetch_config_blocks()

@@ -257,47 +257,193 @@ test('Tests runs a suite and streams per-item outcomes to completion', async ({ 
 	await expect(page.getByText('1 / 2 passed')).toBeVisible();
 });
 
-test('Compare renders rows generically and sorts on header click', async ({ page }) => {
-	await page.route('**/api/v1/benchmarks/tests/options', (route) =>
-		route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({ tiers: ['smoke'], benchmarks: ['humaneval'], systems: [] })
+const compareOptions = { tiers: ['smoke'], benchmarks: ['ds1000'], systems: [] };
+
+const compareRow = (over: Record<string, unknown>) => ({
+	block: 'tier smoke | ds1000 | adapter abc | system -',
+	model: 'qwen38',
+	config_id: 'aaa111',
+	tier: 'smoke',
+	benchmark: 'ds1000',
+	system: '-',
+	adapter: 'abc',
+	item_window: null,
+	flags: { ngl: '20', fa: 'on' },
+	dataset_revision: 'rev1',
+	group: 'a',
+	passed: 8,
+	attempted: 8,
+	n_problems: 8,
+	n_samples: 8,
+	n_clusters: null,
+	se_kind: 'iid',
+	pass_rate: 1,
+	pass_rate_se: 0,
+	pass_rate_ci: [0.6756, 1],
+	prefill_tps: 50,
+	gen_tps: 3,
+	acceptance: null,
+	passes_per_minute: 0.4123,
+	passes_per_minute_ci: [0.3011, 0.5634],
+	note: '',
+	last_run: '2026-10-19T00:00:00Z',
+	...over
+});
+
+// The real by=config shape (routers/benchmarks/compare.py): rows plus blocks
+// with their pairs. A mock in an older shape is how #129 and #130 shipped.
+const compareConfigBody = {
+	rows: [
+		compareRow({}),
+		compareRow({
+			config_id: 'bbb222',
+			group: 'b',
+			passed: 2,
+			pass_rate: 0.25,
+			pass_rate_ci: [0.072, 0.5907],
+			passes_per_minute: 0.1
 		})
+	],
+	blocks: [
+		{
+			key: 'tier smoke | ds1000 | adapter abc | system -',
+			tier: 'smoke',
+			benchmark: 'ds1000',
+			adapter: 'abc',
+			system: '-',
+			item_window: '2025-01-01..2025-04-06',
+			dataset_revision: 'rev1',
+			levels: ['qwen38 @ aaa111', 'qwen38 @ bbb222'],
+			letters: { 'qwen38 @ aaa111': 'a', 'qwen38 @ bbb222': 'b' },
+			holm_m: 1,
+			alpha: 0.05,
+			pairs: [
+				{
+					a: 'qwen38 @ aaa111',
+					b: 'qwen38 @ bbb222',
+					n_shared: 8,
+					mean_diff: 0.75,
+					se: 0.16,
+					ci: [0.37, 1.13],
+					corr: null,
+					test: 'exact McNemar',
+					statistic: 0,
+					discordant: [6, 0],
+					p: 0.03125,
+					p_holm: 0.03125,
+					significant: true,
+					mde: 0.45,
+					mde_holm: 0.45,
+					underpowered: false,
+					n_clusters: null,
+					note: ''
+				}
+			]
+		}
+	],
+	notes: ['> warning: `aaa111` and `bbb222` differ in 2 flags (fa, ngl).']
+};
+
+test('Compare shows each block with intervals, groups and paired tests', async ({ page }) => {
+	await page.route('**/api/v1/benchmarks/tests/options', (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(compareOptions) })
 	);
 	await page.route(/\/api\/v1\/benchmarks\/compare\/\?/, (route) =>
-		route.fulfill({
-			status: 200,
-			contentType: 'application/json',
-			body: JSON.stringify({
-				rows: [
-					{ model: 'qwen38', config_id: 'aaa111', pass_rate: 0.72 },
-					{ model: 'qwen25c', config_id: 'bbb222', pass_rate: 0.91 }
-				],
-				notes: ['warning: two configurations differ in --n-cpu-moe']
-			})
-		})
+		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(compareConfigBody) })
 	);
 
 	await page.goto('/benchmarks/compare');
 
 	await expect(page.getByRole('heading', { name: 'Compare' })).toBeVisible();
+	await expect(page.getByText('Release-date window: 2025-01-01..2025-04-06')).toBeVisible();
+	await expect(page.getByText('100% [67.6, 100.0]')).toBeVisible();
+	await expect(page.getByText('25% [7.2, 59.1]')).toBeVisible();
+	await expect(page.getByText('0.412 [0.301, 0.563]')).toBeVisible();
+	await expect(page.getByText('Holm across 1 test(s)', { exact: false })).toBeVisible();
+	await expect(page.getByText('exact McNemar')).toBeVisible();
+	await expect(page.getByText('different', { exact: true })).toBeVisible();
+	await expect(page.getByText('differ in 2 flags', { exact: false })).toBeVisible();
+});
+
+test('Compare benchmark view renders flat per-benchmark columns and sorts on header click', async ({ page }) => {
+	await page.route('**/api/v1/benchmarks/tests/options', (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(compareOptions) })
+	);
+	await page.route(/\/api\/v1\/benchmarks\/compare\/\?by=config/, (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(compareConfigBody) })
+	);
+	await page.route(/\/api\/v1\/benchmarks\/compare\/\?by=benchmark/, (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				columns: ['model', 'config_id', 'tier', 'system', 'ds1000_passed', 'ds1000_pass_rate'],
+				rows: [
+					{
+						model: 'qwen38',
+						config_id: 'aaa111',
+						tier: 'smoke',
+						system: '-',
+						ds1000_passed: '18/25',
+						ds1000_pass_rate: 0.72
+					},
+					{
+						model: 'qwen25c',
+						config_id: 'bbb222',
+						tier: 'smoke',
+						system: '-',
+						ds1000_passed: '23/25',
+						ds1000_pass_rate: 0.92
+					}
+				],
+				notes: []
+			})
+		})
+	);
+
+	await page.goto('/benchmarks/compare');
+	await page.getByRole('combobox').first().click();
+	await page.getByRole('option', { name: 'Benchmark' }).click();
+
 	await expect(page.getByText('72%')).toBeVisible();
-	await expect(page.getByText('91%')).toBeVisible();
-	await expect(page.getByText('warning: two configurations differ', { exact: false })).toBeVisible();
+	await expect(page.getByText('18/25')).toBeVisible();
 
 	// TanStack Table defaults a numeric column's first click to descending
-	// (highest first) -- a real, deliberate difference from Compare.svelte's
-	// own hand-rolled sort, which always started ascending regardless of
-	// column type. Kept rather than fought, since "best result first" is the
-	// more useful default for a rate column and the checklist asked for
-	// TanStack Table specifically (docs/history/migration-plan.md).
+	// (highest first), which is the more useful default for a rate column.
 	const firstDataRow = page.getByRole('row').nth(1);
-	await page.getByRole('columnheader', { name: 'Pass Rate' }).click();
+	await page.getByRole('columnheader', { name: 'Ds1000 Pass Rate' }).click();
 	await expect(firstDataRow).toContainText('bbb222');
-
-	await page.getByRole('columnheader', { name: 'Pass Rate' }).click();
+	await page.getByRole('columnheader', { name: 'Ds1000 Pass Rate' }).click();
 	await expect(firstDataRow).toContainText('aaa111');
+});
+
+test('Compare serving view renders the serving rows and the derived table', async ({ page }) => {
+	await page.route('**/api/v1/benchmarks/tests/options', (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(compareOptions) })
+	);
+	await page.route(/\/api\/v1\/benchmarks\/compare\/\?by=config/, (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(compareConfigBody) })
+	);
+	await page.route(/\/api\/v1\/benchmarks\/compare\/\?by=serving/, (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({
+				rows: [{ config_id: 'aaa111', model: 'qwen38', gen_tps: 2.97, build: '10597' }],
+				derived: [{ config_id: 'aaa111', cpu_resident_layers: 45, ms_per_token: 336.7 }],
+				notes: []
+			})
+		})
+	);
+
+	await page.goto('/benchmarks/compare');
+	await page.getByRole('combobox').first().click();
+	await page.getByRole('option', { name: 'Serving' }).click();
+
+	await expect(page.getByRole('columnheader', { name: 'Gen Tps' })).toBeVisible();
+	await expect(page.getByText('2.97')).toBeVisible();
+	await expect(page.getByRole('columnheader', { name: 'Ms Per Token' })).toBeVisible();
+	await expect(page.getByText('336.7')).toBeVisible();
 });
 
 test('Answers lists results and renders a selected transcript', async ({ page }) => {
@@ -382,7 +528,8 @@ test('Report generates and renders sanitized markdown plus a figure', async ({ p
 			contentType: 'application/json',
 			body: JSON.stringify({
 				markdown_url: '/api/v1/benchmarks/report/files/2026-01-01-abc123/report.md',
-				figures: ['/api/v1/benchmarks/report/files/2026-01-01-abc123/fig1.png']
+				figures: ['/api/v1/benchmarks/report/files/2026-01-01-abc123/fig1.png'],
+				windows: ['2025-01-01..2025-04-06']
 			})
 		})
 	);
@@ -410,6 +557,7 @@ test('Report generates and renders sanitized markdown plus a figure', async ({ p
 
 	await expect(page.getByRole('heading', { name: 'Serving comparison' })).toBeVisible();
 	await expect(page.getByText('qwen38 leads on pass rate.')).toBeVisible();
+	await expect(page.getByText('Release-date window: 2025-01-01..2025-04-06')).toBeVisible();
 	await expect(page.locator('img[alt$="fig1.png"]')).toBeVisible();
 	// DOMPurify stripped the <script> tag -- its text must not appear as
 	// literal markup, and it must not have actually executed.

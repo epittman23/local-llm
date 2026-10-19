@@ -1,36 +1,20 @@
-import {
-	createSortedRowModel,
-	flexRender,
-	rowSortingFeature,
-	sortFn_alphanumeric,
-	sortFn_datetime,
-	sortFn_text,
-	tableFeatures,
-	useTable,
-	type ColumnDef,
-	type SortingState
-} from '@tanstack/react-table';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ChevronDown, ChevronUp } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { exportAnswers, getCompare, getTestOptions, type CompareBy } from '@/lib/apis/benchmarks';
+import {
+	exportAnswers,
+	getCompare,
+	getTestOptions,
+	type CompareBy,
+	type CompareConfigResponse
+} from '@/lib/apis/benchmarks';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { CompareBlocks } from './CompareBlocks';
+import { CompareDataTable } from './CompareDataTable';
 
 const ALL_TIER = '__all__';
-
-// TanStack Table v9 bundles only the features a table declares. Sorting is
-// the only one this page uses; the three sort functions are the ones v9's
-// 'auto' sort picks between (anything else sorts with its built-in `basic`),
-// which keeps v8's automatic per-column sorting.
-const features = tableFeatures({
-	rowSortingFeature,
-	sortedRowModel: createSortedRowModel(),
-	sortFns: { alphanumeric: sortFn_alphanumeric, datetime: sortFn_datetime, text: sortFn_text }
-});
 
 const byOptions: { value: CompareBy; label: string }[] = [
 	{ value: 'config', label: 'Config' },
@@ -39,53 +23,24 @@ const byOptions: { value: CompareBy; label: string }[] = [
 	{ value: 'serving', label: 'Serving' }
 ];
 
-const humanizeHeader = (col: string): string => col.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+const isWarningNote = (note: string): boolean => /^\s*(>\s*)?warning\b/i.test(note);
 
-const isRateColumn = (col: string): boolean => /(^|_)(pass_rate|rate)$/i.test(col);
-const formatRate = (value: number): string => `${(value * 100).toFixed(1).replace(/\.0$/, '')}%`;
-
-const formatObject = (value: Record<string, unknown>): string => {
-	const entries = Object.entries(value);
-	if (!entries.length) return '—';
-	return entries
-		.map(([key, val]) => {
-			if (val && typeof val === 'object' && !Array.isArray(val)) {
-				const cell = val as Record<string, unknown>;
-				if ('passed' in cell && 'attempted' in cell) return `${key} ${cell.passed}/${cell.attempted}`;
-				return `${key}: ${formatObject(cell)}`;
-			}
-			return `${key}=${formatCell(val)}`;
-		})
-		.join(', ');
-};
-
-function formatCell(value: unknown, col: string = ''): string {
-	if (value === null || value === undefined || value === '') return '—';
-	if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-	if (typeof value === 'number') {
-		if (isRateColumn(col) && value >= 0 && value <= 1) return formatRate(value);
-		return Number.isInteger(value) ? value.toString() : value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
-	}
-	if (Array.isArray(value)) return value.length ? value.map((v) => formatCell(v)).join(', ') : '—';
-	if (typeof value === 'object') return formatObject(value as Record<string, unknown>);
-	return String(value);
-}
-
-const isWarningNote = (note: string): boolean => /^\s*warning\b/i.test(note);
+const columnsOf = (rows: Record<string, unknown>[] | undefined): string[] => (rows?.[0] ? Object.keys(rows[0]) : []);
 
 /**
- * Ports Compare.svelte's generic column/row rendering onto TanStack Table
- * (per Phase 5's own checklist wording, docs/history/migration-plan.md), rather than
- * a hand-rolled sort. The response shape genuinely varies with `by` -- see
- * that file's own comment, ported verbatim below -- normalized into one
- * (columns, rows) shape before it ever reaches the table.
+ * Four views of the same results. The config view is per block, with the
+ * intervals, group letters and paired comparisons the backend computes
+ * (analysis/estimators.py); the other three are plain tables, whose columns
+ * come from the backend rather than a hardcoded list:
+ *   - benchmark -> { columns, rows, notes }, flat per-benchmark columns
+ *   - failures  -> { rows, notes }
+ *   - serving   -> { rows, derived, notes }, two tables
  */
 export function ComparePage() {
 	const token = useAuthStore((state) => state.token) ?? '';
 	const [by, setBy] = useState<CompareBy>('config');
 	const [tier, setTier] = useState(ALL_TIER);
 	const [baseline, setBaseline] = useState('');
-	const [sorting, setSorting] = useState<SortingState>([]);
 	const [exportRun, setExportRun] = useState('');
 
 	const tierOptionsQuery = useQuery({
@@ -106,49 +61,32 @@ export function ComparePage() {
 		enabled: !!token
 	});
 
-	// The response shape genuinely varies with `by`:
-	//   - config / failures -> { rows, notes }
-	//   - benchmark         -> { columns, rows, notes }
-	//   - serving           -> { derived_columns, derived, notes }
-	// Normalized into one generic (columns: string[], rows: object[]) shape
-	// the table renders without caring which mode produced it. For
-	// config/failures there's no explicit column list from the backend, so
-	// columns come from the first row's own keys, in the order the backend
-	// returned them, rather than a hardcoded list.
 	const data = compareQuery.data;
-	const columns: string[] =
-		by === 'benchmark'
-			? (data?.columns ?? [])
-			: by === 'serving'
-				? (data?.derived_columns ?? [])
-				: data?.rows?.[0]
-					? Object.keys(data.rows[0])
-					: [];
-	const rows: Record<string, unknown>[] = by === 'serving' ? (data?.derived ?? []) : (data?.rows ?? []);
 	const notes: string[] = [...new Set<string>(data?.notes ?? [])];
-
-	const columnDefs = useMemo<ColumnDef<typeof features, Record<string, unknown>>[]>(
-		() =>
-			columns.map((col) => ({
-				id: col,
-				header: humanizeHeader(col),
-				accessorFn: (row) => row[col],
-				cell: (info) => formatCell(info.getValue(), col)
-			})),
-		[columns]
-	);
-
-	const table = useTable({
-		features,
-		data: rows,
-		columns: columnDefs,
-		state: { sorting },
-		onSortingChange: setSorting
-	});
 
 	const exportMutation = useMutation({
 		mutationFn: () => exportAnswers(token, exportRun.trim())
 	});
+
+	const renderView = () => {
+		if (by === 'config') {
+			const config = (data ?? { rows: [], blocks: [], notes: [] }) as CompareConfigResponse;
+			return <CompareBlocks blocks={config.blocks ?? []} rows={config.rows ?? []} baseline={!!baseline.trim()} />;
+		}
+		if (by === 'benchmark') {
+			return <CompareDataTable columns={data?.columns ?? []} rows={data?.rows ?? []} />;
+		}
+		if (by === 'serving') {
+			return (
+				<div className="flex flex-col gap-4">
+					<CompareDataTable columns={columnsOf(data?.rows)} rows={data?.rows ?? []} />
+					<div className="text-sm">Derived</div>
+					<CompareDataTable columns={columnsOf(data?.derived)} rows={data?.derived ?? []} />
+				</div>
+			);
+		}
+		return <CompareDataTable columns={columnsOf(data?.rows)} rows={data?.rows ?? []} />;
+	};
 
 	return (
 		<div className="flex flex-col gap-2">
@@ -202,45 +140,7 @@ export function ComparePage() {
 				<div className="text-destructive px-0.5 py-4 text-xs">Failed to load comparison</div>
 			) : (
 				<>
-					<div className="overflow-x-auto">
-						<Table>
-							<TableHeader>
-								{table.getHeaderGroups().map((headerGroup) => (
-									<TableRow key={headerGroup.id}>
-										{headerGroup.headers.map((header) => (
-											<TableHead
-												key={header.id}
-												className="cursor-pointer select-none"
-												onClick={header.column.getToggleSortingHandler()}
-											>
-												<div className="flex items-center gap-1.5">
-													{flexRender(header.column.columnDef.header, header.getContext())}
-													{header.column.getIsSorted() === 'asc' && <ChevronUp className="size-3" />}
-													{header.column.getIsSorted() === 'desc' && <ChevronDown className="size-3" />}
-												</div>
-											</TableHead>
-										))}
-									</TableRow>
-								))}
-							</TableHeader>
-							<TableBody>
-								{table.getRowModel().rows.map((row) => (
-									<TableRow key={row.id}>
-										{row.getAllCells().map((cell) => (
-											<TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
-										))}
-									</TableRow>
-								))}
-								{rows.length === 0 && (
-									<TableRow>
-										<TableCell colSpan={Math.max(columns.length, 1)} className="text-muted-foreground text-center">
-											No data
-										</TableCell>
-									</TableRow>
-								)}
-							</TableBody>
-						</Table>
-					</div>
+					{renderView()}
 
 					{notes.length > 0 && (
 						<ul className="mt-2 space-y-1 px-0.5">

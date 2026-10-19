@@ -226,6 +226,14 @@ def test_config_response_has_rows_blocks_and_notes(client):
     assert body['rows'][1]['vs_baseline'] == pytest.approx(-1 / 3)
 
 
+def test_serving_response_puts_rows_under_rows(client):
+    # #129: the rows used to arrive under `derived_columns`.
+    body = client.get('/compare/', params={'by': 'serving'}).json()
+    assert set(body) == {'rows', 'derived', 'notes'}
+    assert body['rows'][0]['gen_tps'] == 5.0
+    assert body['derived'][0]['config_id'] == 'aaaa'
+
+
 def test_benchmark_response_has_columns(client):
     body = client.get('/compare/', params={'by': 'benchmark'}).json()
     assert body['columns'][:4] == ['model', 'config_id', 'tier', 'system']

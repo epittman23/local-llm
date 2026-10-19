@@ -440,9 +440,83 @@ export const streamTestRun = async (
 
 export type CompareBy = 'config' | 'benchmark' | 'failures' | 'serving';
 
-// Response shape varies with `by` (rows-based for config/failures, columns +
-// rows for benchmark, derived_columns/derived for serving) — left untyped so
-// the caller narrows it based on the `by` it passed.
+/** One configuration on one block (`by=config`). Rates are fractions; intervals are `[lo, hi]`. */
+export type CompareRow = {
+	block: string;
+	model: string;
+	config_id: string;
+	tier: string;
+	benchmark: string;
+	system: string;
+	adapter: string;
+	item_window: string | null;
+	flags: Record<string, string>;
+	dataset_revision: string;
+	group: string;
+	passed: number;
+	attempted: number;
+	n_problems: number;
+	n_samples: number;
+	n_clusters: number | null;
+	se_kind: 'iid' | 'cluster';
+	pass_rate: number | null;
+	pass_rate_se: number | null;
+	pass_rate_ci: [number, number] | null;
+	prefill_tps: number | null;
+	gen_tps: number | null;
+	acceptance: number | null;
+	passes_per_minute: number | null;
+	passes_per_minute_ci: [number, number] | null;
+	note: string;
+	last_run: string;
+	vs_baseline?: number | null;
+	vs_baseline_note?: string;
+};
+
+/** Two configurations of one block, compared on the problems both answered. */
+export type ComparePair = {
+	a: string;
+	b: string;
+	n_shared: number;
+	mean_diff: number | null;
+	se: number | null;
+	ci: [number, number] | null;
+	corr: number | null;
+	test: string;
+	statistic: number | null;
+	discordant: [number, number] | null;
+	p: number | null;
+	p_holm: number | null;
+	significant: boolean;
+	mde: number | null;
+	mde_holm: number | null;
+	underpowered: boolean | null;
+	n_clusters: number | null;
+	note: string;
+};
+
+/** One tier/benchmark/adapter/system/window/revision: the unit comparisons are made in. */
+export type CompareBlock = {
+	key: string;
+	tier: string;
+	benchmark: string;
+	adapter: string;
+	system: string;
+	item_window: string | null;
+	dataset_revision: string | null;
+	levels: string[];
+	letters: Record<string, string>;
+	holm_m: number;
+	alpha: number;
+	pairs: ComparePair[];
+};
+
+export type CompareConfigResponse = { rows: CompareRow[]; blocks: CompareBlock[]; notes: string[] };
+
+// Response shape varies with `by`: { rows, blocks, notes } for config
+// (CompareConfigResponse), { rows, notes } for failures, { columns, rows,
+// notes } for benchmark, { rows, derived, notes } for serving. Left untyped
+// here so the caller narrows it based on the `by` it passed.
 export const getCompare = async (
 	token: string = '',
 	{ by, tier = null, baseline = null }: { by: CompareBy; tier?: string | null; baseline?: string | null }
