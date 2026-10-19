@@ -13,7 +13,7 @@ rather than merely believed to be.
 `config_id` is an 8-character fingerprint of a serving configuration,
 computed today by `_vramlog_config` in `scripts/shell/vram-log.sh:122-153`.
 Every row in the `benchmark_*` Postgres tables is keyed by it, and
-`benchmarks/stats.py:parse_config_text` parses the six fingerprinted
+`benchmarks/stats.py:parse_config_text` parses the (then six) fingerprinted
 lines back into typed columns.
 
 That means a single character of drift in the Python port does not raise
@@ -28,6 +28,7 @@ safety net.
 | File | What it is |
 |---|---|
 | `fingerprints.json` | 24 `config-id` captures: four profile baselines plus every override branch, with the resulting `config_id`, `alias` and all six config lines verbatim. |
+| `fingerprints-v2.json` | The same 24 cases plus three, in the nine-line form #127 introduced on 2026-10-19, generated from `serving/fingerprint.py` then (see below). |
 | `profiles.json` | The four profiles' resolved settings, as seed data for the `benchmark_profile_version` table. |
 | `profile-rationale.txt` | The verbatim source slices from `main.sh` carrying each profile's rationale comments. |
 
@@ -51,6 +52,30 @@ behaviour that is easy to lose in a port:
 
 A port that passes the 24 individual fingerprints but breaks an invariant
 has almost certainly hard-coded its way to the right answers.
+
+## Since #127 (2026-10-19): nine lines
+
+The fingerprint gained three lines after the shell's six: `model` (the
+weights file's basename), `extra` (the profile's free-form arguments) and
+`fit` (`off`; the launcher passes `-fit off`). Every `config_id` changed once.
+
+`fingerprints.json` is **not rewritten**: it is the record of what the shell
+produced. The tests check the first six lines, and the hash over the alias
+and those six, against it, invariants included. In that form
+`model-path-not-fingerprinted` still holds; in the nine-line form it cannot,
+because that case points at a different weights file, which is now a
+different configuration.
+
+`fingerprints-v2.json` pins the nine-line form. It was generated from the
+implementation, with each profile built as the seed migration stores it
+(qwen38's thinking budget as `reasoning_effort_default`, not an `extra`
+argument), so it is a guard against later drift rather than an independent
+capture; the seed migration's own literal reproduces every case in it.
+It adds three cases (`model-other-directory`, `model-other-quant`,
+`extra-arg`), keeps the three shell invariants that still hold, replaces
+`model-path-not-fingerprinted` with `model-directory-not-fingerprinted` (the
+same file in another directory keeps its id), and lists `distinct` pairs that
+must differ: another quant, another file, and an extra argument.
 
 ## `profiles.json`
 

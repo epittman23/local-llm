@@ -5,7 +5,7 @@ Ported from `_vramlog_config` in local-llm's scripts/shell/vram-log.sh (lines
 
 **This module's output is load-bearing in a way that fails silently.** Every
 row in the benchmark_* tables is keyed by `config_id`, and
-`benchmarks/analysis/stats.py:parse_config_text` parses the six lines below back into
+`benchmarks/analysis/stats.py:parse_config_text` parses the lines below back into
 the typed columns beside it. Change a separator, a default spelling, or the
 order of a field, and nothing raises: the same serving configuration is simply
 filed under a new id from then on, and every historical measurement stops
@@ -14,9 +14,18 @@ with the wrong answer.
 
 `docs/serving-baseline/fingerprints.json` in the repo root holds 24 captures
 taken from the shell implementation before it was retired, including four
-cases that are expected to *collide* with another case. The test in
-apps/server/tests/test_serving_fingerprint.py checks this module against all of
-them. Do not change anything here without re-running it.
+cases that are expected to *collide* with another case. The shell hashed six
+lines; on 2026-10-19 three more were added (#127), so every id changed once:
+`model` (the weights file's basename), `extra` (the profile's free-form
+arguments) and `fit` (llama.cpp's automatic offload fitting, which the
+launcher turns off). The test in apps/server/tests/test_serving_fingerprint.py
+checks the first six lines and their hash against the shell's captures, and
+the nine-line form against `fingerprints-v2.json`. Do not change anything here
+without re-running it.
+
+The model is its file's basename, not its path: moving the weights directory
+must not change the id, while two quants served under one alias must not
+share one.
 
 Two things are deliberately excluded from the hash, and both exclusions are
 load-bearing:
@@ -39,6 +48,8 @@ different configuration from one that did.
 from __future__ import annotations
 
 import hashlib
+import shlex
+from pathlib import PurePosixPath
 
 from local_llm.benchmarks.serving.profiles import ResolvedConfig
 
@@ -52,6 +63,14 @@ DEFAULT_SAMPLERS = 'llama.cpp defaults'
 
 #: Length of the truncated sha1. Every config_id ever recorded is this wide.
 CONFIG_ID_LENGTH = 8
+
+#: What the launcher passes as `-fit`. llama.cpp can rewrite the GPU offload
+#: to fit the free memory; every profile sets it explicitly, so fitting is
+#: turned off, and fingerprinted so a future change to it changes the id.
+FIT = 'off'
+
+#: How many of config_lines() the shell hashed, before #127 added the rest.
+SHELL_LINES = 6
 
 
 def _format_samplers(samplers: tuple[str, ...]) -> str:
@@ -74,7 +93,10 @@ def _format_samplers(samplers: tuple[str, ...]) -> str:
 
 
 def config_lines(config: ResolvedConfig) -> list[str]:
-    """The six human-readable configuration lines that the id is hashed over.
+    """The human-readable configuration lines that the id is hashed over.
+
+    The first SHELL_LINES are the shell's, unchanged; the rest were appended,
+    never inserted, so the parser and older text read the same way.
 
     These are stored verbatim in benchmark_config.config_text, because that
     text is what the hash covers.
@@ -93,18 +115,22 @@ def config_lines(config: ResolvedConfig) -> list[str]:
         ),
         f'reasoning effort: {config.reasoning_effort or UNSET}',
         f'samplers: {_format_samplers(config.samplers)}',
+        f'model: {PurePosixPath(config.model_path).name}',
+        # Shell-quoted, so ['--x', 'a b'] and ['--x', 'a', 'b'] differ.
+        f'extra: {shlex.join(config.extra) if config.extra else UNSET}',
+        f'fit: {FIT}',
     ]
 
 
 def config_id(config: ResolvedConfig, lines: list[str] | None = None) -> str:
-    """The 8-character fingerprint: sha1 over the alias followed by the six lines.
+    """The 8-character fingerprint: sha1 over the alias followed by the lines.
 
     Every value is newline-terminated, including the last -- the shell built
     this with `printf '%s\\n' "$alias" "${lines[@]}" | sha1sum`, which appends a
     newline after each argument. A missing trailing newline changes the digest.
 
-    The alias is hashed but is not one of the six lines: it identifies *what*
-    is being served, while the lines describe how.
+    The alias is hashed but is not one of the lines: it identifies *what* is
+    being served, while the lines describe how.
     """
     lines = config_lines(config) if lines is None else lines
     payload = ''.join(f'{value}\n' for value in [config.alias, *lines])

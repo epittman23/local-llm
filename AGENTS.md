@@ -64,7 +64,10 @@ Fedora machine yet (2026-10-09).
 - **Profiles** are versioned rows in Postgres (`benchmark_profile`,
   `benchmark_profile_version`), resolved by
   `apps/server/local_llm/benchmarks/serving/profiles.py`. Every
-  profile serves one slot (`--parallel 1`), passed unconditionally.
+  profile serves one slot (`--parallel 1`) with llama.cpp's automatic
+  offload fitting off (`-fit off`, since 2026-10-19), both passed
+  unconditionally. The `config_id` fingerprint covers the weights file's
+  basename and a profile's `extra` arguments too (#127).
 - **Serving** starts from Benchmarks > Serve (`/benchmarks/serve`).
   `serving/launcher.py`'s `ServeProcess` spawns `llama-server` and the GPU
   telemetry recorder, which writes every sample, `/metrics` scrape and

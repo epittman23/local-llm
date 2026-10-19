@@ -35,7 +35,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from local_llm.benchmarks.serving.build_info import llama_server_build
-from local_llm.benchmarks.serving.fingerprint import config_id, config_lines
+from local_llm.benchmarks.serving.fingerprint import FIT, config_id, config_lines
 from local_llm.benchmarks.serving.model_name import split_model
 from local_llm.benchmarks.serving.profiles import ARCH_DENSE, ResolvedConfig
 
@@ -135,6 +135,10 @@ def build_argv(
         host,
         '--port',
         str(port),
+        # Every profile sets its offload; llama.cpp's automatic fitting must
+        # not rewrite it (fingerprinted as `fit:`).
+        '-fit',
+        FIT,
     ]
     args += flash_attn_args(config.flash_attn)
 

@@ -148,6 +148,20 @@ is invalid, in the direction that flatters speculation. Passing `--parallel`
 inside the `spec` override is refused for the same reason; use the
 `parallel` field.
 
+Every profile is also served with `-fit off` (since 2026-10-19, #127).
+llama.cpp can rewrite the GPU offload at startup to fit the free memory; today
+it backs off whenever `-ngl`, `--n-cpu-moe` or `-ot` is set, which every
+profile does, but that leaves a profile's offload one llama.cpp change, or one
+profile without `-ngl`, away from being rewritten without the fingerprint
+noticing, and it costs a memory-measurement pass at every start. The reasoning
+is in [docs/plans/benchmark-upgrade.md](../plans/benchmark-upgrade.md) (D10).
+`fit: off` is one of the fingerprinted lines, and a profile's own `-fit` (in
+`extra` or a `spec` override) is refused, as `--parallel` is. The flag is
+`-fit`/`--fit [on|off]` in llama.cpp's `common/arg.cpp` at build `95b8e33e1`
+(10597), checked in its source on 2026-10-19; no build is on this machine yet,
+so it has not been run here. A build older than the flag would refuse to start
+with an unknown-argument error in the server log.
+
 What the old shell functions became, now that `scripts/` is gone (Phase 2c,
 2026-09-18):
 

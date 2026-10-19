@@ -144,6 +144,13 @@ def flags_of(config_lines: list[str]) -> dict[str, str]:
         out['fa'] = fa
     out['spec'] = short_spec(config_value(config_lines, 'speculative'))
     out['-ot'] = short_ot(config_value(config_lines, 'override-tensors'))
+    # The weights file and the free-form arguments (#127): two configurations
+    # that differ in either are a multi-flag comparison like any other. `fit`
+    # is always off, so it is left out rather than shown on every row.
+    for key in ('model', 'extra'):
+        value = config_value(config_lines, key, rest=True)
+        if value is not None:
+            out[key] = value
     return out
 
 

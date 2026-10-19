@@ -26,6 +26,7 @@ from pathlib import Path
 import pytest
 
 from local_llm.benchmarks.serving.build_info import parse_build
+from local_llm.benchmarks.serving.fingerprint import FIT, config_id, config_lines
 from local_llm.benchmarks.serving.launcher import (
     IMPORT_ROOT,
     LauncherError,
@@ -187,6 +188,14 @@ def test_build_argv_matches_resolved_config(case, profiles):
         assert '--chat-template-kwargs' not in argv
 
 
+def test_build_argv_turns_off_automatic_fitting(profiles):
+    """Every profile sets its offload; llama.cpp must not refit it (#127, D10)."""
+    for name in profiles:
+        argv = build_argv(resolve(profiles[name], Overrides()))
+        assert argv[argv.index('-fit') + 1] == FIT == 'off'
+        assert config_lines(resolve(profiles[name], Overrides()))[-1] == 'fit: off'
+
+
 def test_build_argv_moe_on_dense_never_emits_n_cpu_moe(profiles):
     """moe-on-dense: resolve() already dropped the override with a warning;
     build_argv must not resurrect it from anywhere else."""
@@ -290,7 +299,10 @@ def test_telemetry_argv_carries_the_fingerprint_and_model_split(profiles):
 
     assert argv[0] == '-m'
     assert argv[1] == 'local_llm.benchmarks.serving.telemetry_recorder'
-    assert value_after('--config-id') == case['config_id']
+    # The configuration's own fingerprint (nine lines since #127, so not the
+    # shell's captured id), with every line it was hashed over.
+    assert value_after('--config-id') == config_id(config)
+    assert [argv[i + 1] for i, a in enumerate(argv) if a == '--config-line'] == config_lines(config)
     assert value_after('--alias') == config.alias
     name, quant = split_model('Qwen3.8-27B-UD-Q3_K_XL')
     assert value_after('--model') == name
@@ -299,7 +311,6 @@ def test_telemetry_argv_carries_the_fingerprint_and_model_split(profiles):
     assert value_after('--port') == '8090'
     assert value_after('--ngl') == str(config.ngl)
     assert value_after('--server-log') == '/tmp/does-not-matter.log'
-    assert argv.count('--config-line') == len(case['lines'])
 
 
 # ---------------------------------------------------------------------------

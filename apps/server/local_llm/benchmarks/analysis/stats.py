@@ -301,7 +301,10 @@ def _clean(value: str | None) -> str | None:
 
 
 def parse_config_text(text: str) -> dict:
-    """The six fingerprinted lines, as typed columns.
+    """The fingerprinted lines, as typed columns.
+
+    `model`, `extra` and `fit` are absent (None) from text recorded before
+    #127 added them on 2026-10-19.
 
     Never the other direction: config_text is authoritative and these are
     read out of it, so a column cannot disagree with the hash that names the
@@ -329,6 +332,9 @@ def parse_config_text(text: str) -> dict:
         'ubatch': _as_int(config_value(lines, 'ubatch')),
         'reasoning_effort': _clean(config_value(lines, 'reasoning effort')),
         'samplers': _clean(config_value(lines, 'samplers', rest=True)),
+        'model': _clean(config_value(lines, 'model', rest=True)),
+        'extra': _clean(config_value(lines, 'extra', rest=True)),
+        'fit': _clean(config_value(lines, 'fit')),
     }
 
 

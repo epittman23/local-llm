@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from local_llm.benchmarks.serving.fingerprint import config_id, config_lines
+from local_llm.benchmarks.serving.fingerprint import SHELL_LINES, config_id, config_lines
 from local_llm.benchmarks.serving.profiles import (
     Overrides,
     ProfileError,
@@ -70,7 +70,22 @@ def test_seed_holds_exactly_the_shell_profiles(seed):
 
 @pytest.mark.parametrize('case', _golden_cases(), ids=lambda c: c['case'])
 def test_seed_reproduces_golden_fingerprints(case, seed):
-    """Every captured shell case, recomputed from the seed literal."""
+    """Every captured shell case, recomputed from the seed literal: the shell's lines and hash."""
+    profile = ServingProfile.from_definition(case['profile'], seed[case['profile']]['definition'])
+    resolved = resolve(profile, Overrides.from_env(case['env']))
+    lines = config_lines(resolved)[:SHELL_LINES]
+    assert lines == case['lines'], case['note']
+    assert config_id(resolved, lines=lines) == case['config_id'], case['note']
+
+
+def _v2_cases() -> list[dict]:
+    path = REPO_ROOT / 'docs' / 'serving-baseline' / 'fingerprints-v2.json'
+    return [c for c in json.loads(path.read_text())['cases'] if 'profile_extra' not in c] if path.exists() else []
+
+
+@pytest.mark.parametrize('case', _v2_cases(), ids=lambda c: c['case'])
+def test_seed_reproduces_the_nine_line_fingerprints(case, seed):
+    """The same cases in the form #127 introduced, from the seed literal rather than the captures."""
     profile = ServingProfile.from_definition(case['profile'], seed[case['profile']]['definition'])
     resolved = resolve(profile, Overrides.from_env(case['env']))
     assert config_lines(resolved) == case['lines'], case['note']
@@ -80,8 +95,9 @@ def test_seed_reproduces_golden_fingerprints(case, seed):
 def test_seed_matches_captured_profiles_field_by_field(seed):
     """Everything outside the fingerprint, too: hf_repo, pattern, model path.
 
-    The fingerprint test above cannot see a wrong weights path or Hugging Face
-    pattern, because neither is fingerprinted. This one can.
+    The fingerprint tests above cannot see a wrong weights directory or
+    Hugging Face pattern, because neither is fingerprinted (only the weights
+    file's basename is). This one can.
     """
     captured = {row['name']: row for row in _load_json('profiles.json')}
     assert set(captured) == set(seed)

@@ -7,6 +7,23 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-19**: The serving fingerprint covers **the model file, the
+  profile's extra arguments and offload fitting** (#127), and the launcher
+  passes `-fit off` (the benchmark plan's D10, landed with this change so
+  every `config_id` changes once, not twice). Before, a new profile version
+  with another quant under the same alias, or any `extra` argument, kept the
+  old id, so different launches were filed as one configuration. The model is
+  fingerprinted by its file's basename: two quants under one alias differ,
+  while moving the weights directory does not. llama.cpp's automatic fitting
+  backs off today because every profile sets `-ngl`, but it was one llama.cpp
+  change or one profile without `-ngl` away from rewriting the offload unseen.
+  **Every config_id changed**; a `benchmark_schema_note` row says so, and the
+  database held no benchmark results. The shell's captured fingerprints stay
+  the record of the six-line form; `fingerprints-v2.json` pins the nine-line
+  one. `extra` is rendered shell-quoted, so differently split arguments do
+  not share an id, and a profile's own `-fit` is refused. `-fit off` was
+  checked in llama.cpp's source at build `95b8e33e1` but not yet run here,
+  since no build is on this machine.
 - **2026-10-19**: The Tests page fetches datasets, runs the graders'
   selfcheck and runs one item, as the guide said it did (#141); all three were
   lost in the move from the CLI to the app. Choices made with them:

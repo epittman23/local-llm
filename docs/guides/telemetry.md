@@ -83,19 +83,29 @@ answers, requests or configurations.
 The `config_id` is a `sha1[:8]` over the serving flags, computed by
 `serving/fingerprint.py`'s `config_id()` — a Python port of the shell's
 `_vramlog_config` (Phase 2a of the migration, 2026-09-14), golden-tested
-against 24 fingerprints captured from the shell before the port and matching
-all of them exactly, over the same six lines. Config ids are therefore
-unchanged: an id quoted in an older log names the same configuration it
-always did.
+against 24 fingerprints captured from the shell before the port. The shell
+hashed six lines; on 2026-10-19 three more were appended (#127), so **every
+config_id changed once** then, and an id recorded before that date does not
+name the same configuration under the same id now (a `benchmark_schema_note`
+row records it):
 
 ```
 arch: dense | ngl: 20 | ctx: 16384 (total) | parallel: 1 | threads: 12 | moe: n/a
 override-tensors: output\.weight=CUDA0,blk\.64\..*=CUDA0
 speculative: --spec-type draft-mtp --spec-draft-n-max 2
-cache: k=q8_0 v=q8_0 | fa: 1 | batch: 512 | ubatch: 512
+cache: k=q8_0 v=q8_0 | fa: on | batch: 512 | ubatch: 512
 reasoning effort: medium
-samplers: temp 1.0 | top-p 0.95
+samplers: temp 1.0 | top-p 0.95 | top-k 20 | min-p 0.0
+model: Qwen3.8-27B-UD-Q3_K_XL.gguf
+extra: n/a
+fit: off
 ```
+
+The model is the weights file's **basename**: two quants served under one
+alias are different configurations, while moving the weights directory is not.
+`extra` is the profile's free-form arguments, shell-quoted (so
+`--x 'a b'` and `--x a b` differ), which reach `llama-server` unchanged. `fit` is llama.cpp's automatic offload fitting, which the launcher
+turns off.
 
 Changing any of them makes a new `benchmark_config` row instead of mixing
 incomparable runs. Rebuilding llama.cpp does not: the build string is a

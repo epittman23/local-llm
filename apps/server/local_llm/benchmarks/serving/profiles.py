@@ -145,6 +145,15 @@ def _has_parallel(args) -> bool:
     return any(a in PARALLEL_FLAGS or a.startswith('--parallel=') for a in args)
 
 
+#: The launcher always passes `-fit off` and fingerprints it; a profile's own
+#: -fit would contradict the fingerprint's `fit:` line.
+FIT_FLAGS = frozenset({'-fit', '--fit'})
+
+
+def _has_fit(args) -> bool:
+    return any(a in FIT_FLAGS or a.startswith(('-fit=', '--fit=')) for a in args)
+
+
 def validate_definition(definition: Mapping[str, Any]) -> dict[str, Any]:
     """Check a profile definition before it is stored, and normalise its lists.
 
@@ -175,6 +184,8 @@ def validate_definition(definition: Mapping[str, Any]) -> dict[str, Any]:
     extra = list(definition.get('extra') or [])
     if _has_parallel(spec) or _has_parallel(extra):
         raise ProfileError('--parallel is its own field; it does not belong in the speculative or extra arguments')
+    if _has_fit(spec) or _has_fit(extra):
+        raise ProfileError('-fit is always off and is set by the launcher; it does not belong in a profile')
     # The thinking budget is a field, and the launcher builds
     # --chat-template-kwargs from the *resolved* effort. A literal here would
     # be fingerprinted as the override but launched as the literal.
@@ -301,6 +312,8 @@ def resolve(profile: ServingProfile, overrides: Overrides | None = None) -> Reso
     spec = profile.spec if overrides.spec is None else overrides.spec
     if _has_parallel(spec):
         raise ProfileError('--parallel does not belong in a speculative override; set the parallel field instead')
+    if _has_fit(spec) or _has_fit(profile.extra):
+        raise ProfileError('-fit is always off and is set by the launcher; it does not belong in a profile')
 
     moe = profile.moe if overrides.moe is None else overrides.moe
     if profile.arch == ARCH_DENSE and moe is not None:

@@ -1,7 +1,9 @@
 """Golden-value tests for the serving-configuration fingerprint.
 
 These check the Python serving layer against values captured from the bash
-implementation it replaced, before that implementation was deleted. See
+implementation it replaced, before that implementation was deleted: the first
+SHELL_LINES lines and their hash. Since #127 (2026-10-19) the fingerprint has
+three more lines, pinned by fingerprints-v2.json. See
 docs/serving-baseline/README.md at the repo root for what each case pins and
 why this matters more than a normal regression test: a drifting fingerprint
 does not raise, it silently refiles a serving configuration under a new id and
@@ -14,13 +16,15 @@ Run from apps/server:
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from pathlib import Path
 
 import pytest
 
-from local_llm.benchmarks.serving.fingerprint import config_id, config_lines
-from local_llm.benchmarks.serving.profiles import Overrides, ProfileError, ServingProfile, resolve
+from local_llm.benchmarks.analysis import compare, stats
+from local_llm.benchmarks.serving.fingerprint import SHELL_LINES, config_id, config_lines
+from local_llm.benchmarks.serving.profiles import Overrides, ProfileError, ServingProfile, resolve, validate_definition
 
 #: apps/server/tests/ -> apps/server/ -> apps/ -> repo root
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -56,6 +60,10 @@ def profiles() -> dict[str, ServingProfile]:
         # capability as a field instead; derive it here the way the seed
         # migration will.
         reasoning_default = 'medium' if any('reasoning_effort' in arg for arg in extra) else None
+        # And, as the seed migration stores it, the budget is not an extra
+        # argument: the launcher builds that flag from the field.
+        if reasoning_default:
+            extra = ()
         out[row['name']] = ServingProfile(
             name=row['name'],
             arch=row['arch'],
@@ -95,11 +103,16 @@ def test_baseline_is_present(baseline):
     assert baseline['invariants']
 
 
+def _shell_id(resolved) -> str:
+    """The id over the shell's lines alone, as it hashed them."""
+    return config_id(resolved, lines=config_lines(resolved)[:SHELL_LINES])
+
+
 @pytest.mark.parametrize('case_name', [c['case'] for c in _load('fingerprints.json')['cases']])
 def test_config_id_matches_shell(case_name, baseline, profiles):
     case = _cases(baseline)[case_name]
     resolved = _resolved(case, profiles)
-    assert config_id(resolved) == case['config_id'], case['note']
+    assert _shell_id(resolved) == case['config_id'], case['note']
 
 
 @pytest.mark.parametrize('case_name', [c['case'] for c in _load('fingerprints.json')['cases']])
@@ -107,7 +120,7 @@ def test_config_lines_match_shell(case_name, baseline, profiles):
     """The lines matter as much as the digest: stats.py parses them back."""
     case = _cases(baseline)[case_name]
     resolved = _resolved(case, profiles)
-    assert config_lines(resolved) == case['lines'], case['note']
+    assert config_lines(resolved)[:SHELL_LINES] == case['lines'], case['note']
 
 
 @pytest.mark.parametrize('case_name', [c['case'] for c in _load('fingerprints.json')['cases']])
@@ -126,7 +139,7 @@ def test_invariants_hold(invariant, baseline, profiles):
     about what the fingerprint covers, not just a value it happens to produce.
     """
     cases = _cases(baseline)
-    ids = {config_id(_resolved(cases[name], profiles)) for name in invariant['cases']}
+    ids = {_shell_id(_resolved(cases[name], profiles)) for name in invariant['cases']}
     assert len(ids) == 1, f'{invariant["id"]}: {invariant["why"]}'
 
 
@@ -141,8 +154,86 @@ def test_parallel_in_spec_override_is_refused(profiles):
         resolve(profiles['qwen38'], Overrides(spec=('--parallel', '4')))
 
 
+@pytest.mark.parametrize('flag', ['-fit', '--fit', '--fit=on'])
+def test_fit_in_a_profile_is_refused(profiles, flag):
+    """The launcher passes -fit off and fingerprints it; a profile's own would contradict that line."""
+    args = (flag,) if '=' in flag else (flag, 'on')
+    with pytest.raises(ProfileError, match='-fit'):
+        resolve(profiles['qwen36'], Overrides(spec=args))
+    with pytest.raises(ProfileError, match='-fit'):
+        resolve(dataclasses.replace(profiles['qwen36'], extra=args), Overrides())
+    with pytest.raises(ProfileError, match='-fit'):
+        validate_definition(
+            {'arch': 'moe', 'alias': 'a', 'model_path': 'm.gguf', 'ctx': 1, 'threads': 1, 'ngl': 1, 'extra': list(args)}
+        )
+
+
 def test_moe_override_on_dense_is_dropped_not_refused(profiles):
     """The other guard rail corrects quietly, because a dense profile should still serve."""
     resolved = resolve(profiles['qwen38'], Overrides(moe=30))
     assert resolved.moe is None
     assert 'moe: n/a' in config_lines(resolved)[0]
+
+
+# ---------------------------------------------------------------------------
+# the nine-line form (#127): model basename, extra arguments, fit
+# ---------------------------------------------------------------------------
+def _v2_resolved(case, profiles):
+    profile = profiles[case['profile']]
+    if 'profile_extra' in case:
+        profile = dataclasses.replace(profile, extra=tuple(case['profile_extra']))
+    return resolve(profile, Overrides.from_env(case['env']))
+
+
+@pytest.fixture(scope='module')
+def v2():
+    data = _load('fingerprints-v2.json')
+    return data, {case['case']: case for case in data['cases']}
+
+
+def test_v2_covers_every_shell_case(baseline, v2):
+    assert set(_cases(baseline)) <= set(v2[1])
+
+
+@pytest.mark.parametrize('case_name', [c['case'] for c in _load('fingerprints-v2.json')['cases']])
+def test_config_id_and_lines_match_v2(case_name, v2, profiles):
+    case = v2[1][case_name]
+    resolved = _v2_resolved(case, profiles)
+    assert config_lines(resolved) == case['lines'], case['note']
+    assert config_id(resolved) == case['config_id'], case['note']
+
+
+@pytest.mark.parametrize('invariant', _load('fingerprints-v2.json')['invariants'], ids=lambda i: i['id'])
+def test_v2_invariants_hold(invariant, v2, profiles):
+    ids = {config_id(_v2_resolved(v2[1][name], profiles)) for name in invariant['cases']}
+    assert len(ids) == 1, f'{invariant["id"]}: {invariant["why"]}'
+
+
+@pytest.mark.parametrize('pair', _load('fingerprints-v2.json')['distinct'], ids=lambda i: i['id'])
+def test_v2_distinct_cases_differ(pair, v2, profiles):
+    ids = {config_id(_v2_resolved(v2[1][name], profiles)) for name in pair['cases']}
+    assert len(ids) == len(pair['cases']), f'{pair["id"]}: {pair["why"]}'
+
+
+def test_the_new_lines_parse_back_and_count_as_flags(v2, profiles):
+    lines = config_lines(_v2_resolved(v2[1]['extra-arg'], profiles))
+    fields = stats.parse_config_text('\n'.join(lines))
+    assert (fields['model'], fields['extra'], fields['fit']) == ('Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf', '--no-mmap', 'off')
+    base = config_lines(_v2_resolved(v2[1]['base-qwen36'], profiles))
+    assert compare.differing(compare.flags_of(base), compare.flags_of(lines)) == ['extra']
+    quant = config_lines(_v2_resolved(v2[1]['model-other-quant'], profiles))
+    qwen38 = config_lines(_v2_resolved(v2[1]['base-qwen38'], profiles))
+    assert compare.differing(compare.flags_of(qwen38), compare.flags_of(quant)) == ['model']
+
+
+def test_text_recorded_before_the_new_lines_still_parses(baseline):
+    fields = stats.parse_config_text('\n'.join(_cases(baseline)['base-qwen38']['lines']))
+    assert fields['ngl'] == 20 and fields['model'] is None and fields['extra'] is None and fields['fit'] is None
+
+
+def test_extra_arguments_are_quoted_so_different_splits_differ(profiles):
+    one = dataclasses.replace(profiles['qwen36'], extra=('--override-kv', 'a b'))
+    two = dataclasses.replace(profiles['qwen36'], extra=('--override-kv', 'a', 'b'))
+    lines = config_lines(resolve(one, Overrides()))
+    assert "extra: --override-kv 'a b'" in lines
+    assert config_id(resolve(one, Overrides())) != config_id(resolve(two, Overrides()))

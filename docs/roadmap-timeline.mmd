@@ -43,6 +43,7 @@ timeline
       2026-10-19 (latest) : The frontend makes UUIDs without crypto.randomUUID, which plain-HTTP pages from the LAN lack : falls back to crypto.getRandomValues
       2026-10-19 (final) : A graded answer passes only when its tests ran to the end : a per-run nonce instead of the exit status, the model's __main__ block no longer run : earlier pass rates not comparable : nothing a grade starts outlives it, grading off the event loop
       2026-10-19 (night) : The Tests page fetches datasets, calibrates the graders and runs one item : one Tests job at a time, never alongside a tune sweep : datasets fetched, DS-1000 456 of 511 gradeable here, every reference verdict unchanged by the new grader
+      2026-10-19 (last) : The fingerprint covers the model file, extra arguments and fitting, and llama-server runs with -fit off : every config_id changed once, noted in the database
     section Near-Term
       "~1 week" : Resolve the blocking rack hole-type question : confirm riser and PSU questions : re-verify current component pricing
       "~2-4 weeks" : Finish the benchmark upgrade : HumanEval+ and MBPP+ replace HumanEval and MBPP : a LiveCodeBench slice with a per-run release-date window : a llama-bench pre-screen driven by Optuna

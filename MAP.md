@@ -106,7 +106,8 @@ Start here for "how do I run/use this."
 - **`serving-baseline/`** — test input, not prose: `config-id` fingerprints,
   profile seed data and the verbatim profile rationale, captured from
   `scripts/shell/main.sh` on 2026-09-14 before the shell layer was ported to
-  Python. Its own `README.md` explains what each file pins and why. It is
+  Python, plus `fingerprints-v2.json` for the nine-line fingerprint of
+  2026-10-19. Its own `README.md` explains what each file pins and why. It is
   also the record of what the shell layer meant.
 
 ## `infra/`
