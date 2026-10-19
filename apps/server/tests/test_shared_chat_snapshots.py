@@ -23,13 +23,16 @@ SNAPSHOT_CHAT = {
         'messages': {
             'm1': {'files': [{'type': 'file', 'id': 'f-shared'}]},
             'm2': {'files': [{'type': 'image', 'file': {'id': 'f-nested'}}, 'junk']},
+            'm3': {'files': [{'type': 'image', 'url': '/api/v1/files/f-generated/content'}]},
+            'm4': {'content': 'Here: ![plot](/api/v1/files/f-inline/content)', 'files': []},
+            'm5': {'files': [{'type': 'image', 'url': 'https://example.com/elsewhere.png'}]},
         }
     }
 }
 
 
 def test_snapshot_file_ids():
-    assert snapshot_file_ids(SNAPSHOT_CHAT) == {'f-shared', 'f-nested'}
+    assert snapshot_file_ids(SNAPSHOT_CHAT) == {'f-shared', 'f-nested', 'f-generated', 'f-inline'}
     assert snapshot_file_ids(None) == set()
 
 

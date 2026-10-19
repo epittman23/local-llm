@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 import uuid
 
@@ -52,12 +53,20 @@ class SharedChatResponse(BaseModel):
     created_at: int
 
 
+# A file served by the app, as generated images are stored: url-only items
+# ({'type': 'image', 'url': '/api/v1/files/<id>/content'}) and markdown images
+# written into the message text.
+_FILE_URL = re.compile(r'/api/v1/files/([A-Za-z0-9_-]+)')
+
+
 def snapshot_file_ids(chat: dict | None) -> set[str]:
     """The ids of the files a chat snapshot's messages carry.
 
     Message files are items like {'type': 'file', 'id': ...}, sometimes with
-    the record nested under 'file'. Only these are visible through a share;
-    files attached to the live chat after it was shared are not.
+    the record nested under 'file', or only a url to the file's content; a
+    message's text can also link a file's content. Only these are visible
+    through a share; files attached to the live chat after it was shared are
+    not.
     """
     out: set[str] = set()
     history = (chat or {}).get('history') or {}
@@ -65,6 +74,8 @@ def snapshot_file_ids(chat: dict | None) -> set[str]:
     for message in messages:
         if not isinstance(message, dict):
             continue
+        if isinstance(message.get('content'), str):
+            out.update(_FILE_URL.findall(message['content']))
         for item in message.get('files') or []:
             if not isinstance(item, dict):
                 continue
@@ -74,6 +85,8 @@ def snapshot_file_ids(chat: dict | None) -> set[str]:
             ):
                 if isinstance(candidate, str) and candidate:
                     out.add(candidate)
+            if isinstance(item.get('url'), str):
+                out.update(_FILE_URL.findall(item['url']))
     return out
 
 
