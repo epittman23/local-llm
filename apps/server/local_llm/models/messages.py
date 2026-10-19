@@ -84,6 +84,21 @@ class MessageModel(BaseModel):
 ####################
 
 
+#: Message meta keys only the server writes: the webhook a message came
+#: through, and the model a reply is from. A client that sets them makes its
+#: message display as that webhook or model, so they are stripped from what
+#: clients send (client_meta) and a webhook is believed only when it belongs
+#: to the message's own channel (_resolve_user_info).
+RESERVED_MESSAGE_META_KEYS = ('webhook', 'model_id', 'model_name')
+
+
+def client_meta(meta: dict | None) -> dict | None:
+    """A client-supplied meta dict without the server-reserved keys."""
+    if not meta:
+        return meta
+    return {k: v for k, v in meta.items() if k not in RESERVED_MESSAGE_META_KEYS}
+
+
 class MessageForm(BaseModel):
     temp_id: str | None = None
     content: str
@@ -191,25 +206,9 @@ class MessageTable:
             if include_thread_replies:
                 thread_replies = await self.get_thread_replies_by_message_id(id, db=db)
 
-            # Check if message was sent by webhook (webhook info in meta takes precedence)
-            webhook_info = message.meta.get('webhook') if message.meta else None
-            if webhook_info and webhook_info.get('id'):
-                # Look up webhook by ID to get current name
-                webhook = await Channels.get_webhook_by_id(webhook_info.get('id'), db=db)
-                if webhook:
-                    user_info = {
-                        'id': webhook.id,
-                        'name': webhook.name,
-                        'role': 'webhook',
-                    }
-                else:
-                    # Webhook was deleted, use placeholder
-                    user_info = {
-                        'id': webhook_info.get('id'),
-                        'name': 'Deleted Webhook',
-                        'role': 'webhook',
-                    }
-            else:
+            # A webhook author (only one from this message's own channel), else the real author.
+            user_info = await self._resolve_user_info(message, db)
+            if user_info is None:
                 user = await Users.get_user_by_id(message.user_id, db=db)
                 user_info = user.model_dump() if user else None
 
@@ -225,10 +224,18 @@ class MessageTable:
             )
 
     async def _resolve_user_info(self, message: Message, db: AsyncSession) -> dict | None:
-        """Resolve user info from message, handling webhook messages."""
+        """Resolve user info from message, handling webhook messages.
+
+        A webhook from another channel is not believed: its id is visible on
+        genuine webhook messages, and naming it is how a member would make a
+        message display as that webhook. The message then shows its real
+        author.
+        """
         webhook_info = message.meta.get('webhook') if message.meta else None
         if webhook_info and webhook_info.get('id'):
             webhook = await Channels.get_webhook_by_id(webhook_info.get('id'), db=db)
+            if webhook and webhook.channel_id != message.channel_id:
+                return None
             if webhook:
                 return {
                     'id': webhook.id,

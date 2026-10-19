@@ -29,6 +29,7 @@ from local_llm.models.messages import (
     MessageResponse,
     Messages,
     MessageWithReactionsResponse,
+    client_meta,
 )
 from local_llm.models.users import (
     UserIdNameStatusResponse,
@@ -905,14 +906,11 @@ async def get_pinned_channel_messages(
 
     messages = []
     for message in message_list:
-        # Check for webhook identity in meta
-        webhook_info = message.meta.get('webhook') if message.meta else None
-        if webhook_info:
-            user_info = UserNameResponse(
-                id=webhook_info.get('id') or '',
-                name=webhook_info.get('name') or 'Webhook',
-                role='webhook',
-            )
+        # Webhook identity: the webhook's own record, and only one belonging to
+        # this channel (Messages._resolve_user_info), never a name in the meta.
+        webhook_user = await Messages._resolve_user_info(message, db) if message.meta else None
+        if webhook_user:
+            user_info = UserNameResponse(**webhook_user)
         elif message.user_id in fetched_users:
             user_info = UserNameResponse(**fetched_users[message.user_id].model_dump())
         else:
@@ -1233,6 +1231,7 @@ async def post_new_message(
     db: AsyncSession = Depends(get_async_session),
 ):
     await check_channels_access(request, user)
+    form_data.meta = client_meta(form_data.meta)
 
     try:
         message, channel = await new_message_handler(request, id, form_data, user, db)
@@ -1537,6 +1536,7 @@ async def update_message_by_id(
         if user.role != 'admin' and message.user_id != user.id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.DEFAULT())
 
+    form_data.meta = client_meta(form_data.meta)
     try:
         await Messages.update_message_by_id(message_id, form_data, db=db)
         message = await Messages.get_message_by_id(message_id, db=db)
