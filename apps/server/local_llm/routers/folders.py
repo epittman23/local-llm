@@ -397,6 +397,25 @@ async def update_folder_parent_id_by_id(
                 detail=ERROR_MESSAGES.DEFAULT('Folder already exists'),
             )
 
+        # The same rule create applies: the new parent has to exist, and one
+        # owned by someone else needs write access to it.
+        if form_data.parent_id:
+            parent = await Folders.get_folder_by_id(form_data.parent_id, db=db)
+            if parent is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=ERROR_MESSAGES.NOT_FOUND,
+                )
+            if (
+                parent.user_id != user.id
+                and user.role != 'admin'
+                and not await _has_folder_access(user.id, parent, 'write', db)
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+                )
+
         if form_data.parent_id and form_data.parent_id in await Folders.get_folder_ids_by_id_and_user_id_in_subtree(
             id, user.id, db=db
         ):
