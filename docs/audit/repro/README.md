@@ -30,3 +30,25 @@ The `u3/` scripts also need their own directory on the path (they import
 | `u9/norm.test.ts` | A-25 | from `u9/`: `bun test --preload ./pre.ts ./norm.test.ts` passes, showing a non-current reply stays `done: false` |
 | `u10_automation_rrule.test.ts` | A-34 | copy into `apps/web/src/`, fix the import to `./routes/automations/automationModel`, `bunx vitest run`; logs each rule rewritten (`BYDAY=1MO` → `BYMONTHDAY=1`, `9,17` → `9`, `UNTIL` dropped) |
 | `u9_chatfiles.test.ts` | A-35 | copy into `apps/web/src/` with imports rewritten to `./lib/chat/...`, `bunx vitest run`: passes, showing a file not on the conversation path is still sent |
+
+## Gap review repros (`gap/`)
+
+Repros for the second-session findings A-36 onward, grouped by review package
+(`gap/B1`..`gap/B10` backend, `gap/F1`..`gap/F9` frontend). Each finding's
+"Trigger / reproduction" names its script and the output it printed on the
+audited commit.
+
+- Python: run from `apps/server` as above, e.g.
+  `PYTHONPATH=. .venv/bin/python ../../docs/audit/repro/gap/B6/repro.py`.
+  `gap/B3/repro_rrule.py` expects `TZ=UTC`; `gap/B10/nonexpiring.py` expects a
+  `TZ` east of UTC (e.g. `Europe/Berlin`); `gap/B10/tags_dup.py` and the
+  `gap/B7` scripts build their own SQLite tables (`gap/B7` with
+  `ENABLE_DB_MIGRATIONS=false`, `gap/B10` with
+  `DATABASE_ENABLE_SESSION_SHARING=true`).
+- Frontend: run from `apps/web` with the config beside this README, which
+  reuses apps/web's happy-dom setup without copying anything into apps/web:
+  `bunx vitest run --config ../../docs/audit/repro/vitest.repro.config.mts ../../docs/audit/repro/gap/F7/model.test.ts`.
+  Some print their observations to `/tmp/audit-<package>-<name>.out`.
+- These tests pass on the audited commit because they assert the buggy
+  behaviour; a fix should make them fail, after which they are replaced by
+  real regression tests in the fixing PR.

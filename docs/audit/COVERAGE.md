@@ -49,3 +49,29 @@ a finding).
   - Status: partially reviewed: refactors #98, #118, #123/#124 diffed against their originals and found equivalent; env parsing, pgvector client, usage handling, chats pagination read; not reviewed line by line: most of utils/* (25k lines), models/*, routers/openai.py error paths, socket/* beyond authz, tools/*; findings A-29, A-30.
 
 Totals in scope: roughly 230k lines across ~780 files (backend ~105k, frontend ~120k, tests reviewed alongside their units).
+
+## Gap review (2026-10-19, second session)
+
+The partly reviewed areas of U8-U11 were split into 19 bounded packages and
+read line by line on the owner's laptop. Every package reported the files it
+fully read; all listed files were fully read except where noted.
+
+- [x] B1 `utils/middleware.py` (6371)
+- [x] B2 `utils/{tools,misc,anthropic,subagents}.py` (4821)
+- [x] B3 `utils/{automations,memory,models,plugin,payload,context_compaction,timers,task}.py` (4275)
+- [x] B4 the remaining small `utils/*` modules (about 5300)
+- [x] B5 `utils/oauth.py` 1-1019 and 1821-2360, `tools/knowledge_fs.py`, `socket/main.py`, `socket/utils.py` (oauth.py 1019-1820 and 2360-2438 partly read)
+- [x] B6 `tools/builtin.py` (4542)
+- [x] B7 `routers/openai.py`, `models/chats.py` (4701)
+- [x] B8 `models/{knowledge,chat_messages,channels,access_grants,calendar,users}.py` (5747)
+- [x] B9 `models/{prompts,models,groups,messages,feedbacks,folders,automations,files,functions,notes}.py` (5670)
+- [x] B10 `models/{config,skills,oauth_sessions,tools,memories,auths,prompt_history,shared_chats,tags}.py`, and `config.py`'s persistent-config machinery (config.py partly read)
+- [x] F1 chat session, history, attachments, with `d863707` parity
+- [x] F2 `routes/workspace/{models,skills,tools,prompts}`
+- [x] F3 `routes/workspace/knowledge`, `routes/admin/users`, workspace layout
+- [x] F4 admin evaluations/functions/analytics/top level, notes, playground, public, home, layout
+- [x] F5 admin settings: Documents, Events, Audio, Images, External Knowledge, Connections
+- [x] F6 admin settings: models/, Interface, Web Search, Authentication, General, Pipelines, Arena, Integrations, Code Execution, Subagents, Evaluations, Database, Banners
+- [x] F7 `routes/channels`, `lib/{utils,settings,query}`
+- [x] F8 `components/common`, `lib/access`
+- [x] F9 `components/settings`
