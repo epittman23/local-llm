@@ -126,6 +126,19 @@ def _calculate_elo(feedbacks: list[LeaderboardFeedbackData], similarities: dict 
     return model_stats
 
 
+def _tags(data: dict | None) -> list[str]:
+    """A feedback's tags, keeping only strings.
+
+    Rows written before RatingData declared `tags` can hold null, a dict or a
+    list of objects; one of those used to raise TypeError here and take the
+    whole leaderboard down until the row was deleted.
+    """
+    tags = (data or {}).get('tags')
+    if not isinstance(tags, list):
+        return []
+    return [t for t in tags if isinstance(t, str)]
+
+
 def _get_top_tags(feedbacks: list[LeaderboardFeedbackData], limit: int = 5) -> dict:
     """
     Count tag occurrences per model and return the most frequent ones.
@@ -144,7 +157,7 @@ def _get_top_tags(feedbacks: list[LeaderboardFeedbackData], limit: int = 5) -> d
         data = feedback.data or {}
         model_id = data.get('model_id')
         if model_id:
-            for tag in data.get('tags', []):
+            for tag in _tags(data):
                 tag_counts[model_id][tag] += 1
 
     return {
@@ -172,7 +185,7 @@ def _compute_similarities(feedbacks: list[LeaderboardFeedbackData], query: str) 
     if not embedding_model:
         return {}
 
-    all_tags = list({tag for feedback in feedbacks if feedback.data for tag in feedback.data.get('tags', [])})
+    all_tags = list({tag for feedback in feedbacks for tag in _tags(feedback.data)})
     if not all_tags:
         return {}
 
@@ -191,7 +204,7 @@ def _compute_similarities(feedbacks: list[LeaderboardFeedbackData], query: str) 
 
     return {
         feedback.id: max(
-            (tag_similarity_map.get(tag, 0) for tag in (feedback.data or {}).get('tags', [])),
+            (tag_similarity_map.get(tag, 0) for tag in _tags(feedback.data)),
             default=0,
         )
         for feedback in feedbacks

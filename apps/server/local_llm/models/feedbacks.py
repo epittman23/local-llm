@@ -81,6 +81,9 @@ class RatingData(BaseModel):
     sibling_model_ids: list[str] | None = None
     reason: str | None = None
     comment: str | None = None
+    # Declared so a null, a dict or a list of objects is rejected at
+    # submission: the leaderboard counts and embeds these as strings.
+    tags: list[str] | None = None
     model_config = ConfigDict(extra='allow', protected_namespaces=())
 
 
