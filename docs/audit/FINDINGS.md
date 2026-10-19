@@ -6,42 +6,45 @@ Security findings are intentionally excluded from this public file and were repo
 
 | ID | Issue | Severity | Area | Status | Unit | Title |
 |---|---|---|---|---|---|---|
-| A-01 | pending | Critical | benchmarks | Confirmed | U2 | Grader scores a wrong answer as pass when the model code exits 0 before the dataset tests run, and fails correct answers whose __main__ block reads stdin |
-| A-02 | pending | Critical | benchmarks | Confirmed | U1 | config_id fingerprint ignores the profile's extra args and model file, so different launches share one configuration |
-| A-03 | pending | Critical | benchmarks | Confirmed | U3 | Report headline always says no system prompt differs and that every difference is noise, whatever the statistics show |
-| A-04 | pending | High | benchmarks | Confirmed | U3/U7 | Compare "by serving" response puts the serving rows under derived_columns, and the page crashes the app |
-| A-06 | pending | High | benchmarks | Confirmed | U3 | Compare never extracts the fa flag, so a two-flag difference is reported as a clean comparison |
-| A-09 | pending | High | benchmarks | Confirmed | U4 | Tune sweep adopts (and refines around) a candidate that is slower than the profile defaults |
-| A-15 | pending | High | benchmarks | Confirmed | U2 | Test runs block the backend's event loop: grading and suite preparation run blocking subprocesses inside async code |
-| A-16 | pending | High | benchmarks | Confirmed | U2 | No endpoint fetches datasets, runs selfcheck or runs one item, although the guide documents all three as Tests page actions |
-| A-05 | pending | Medium | benchmarks | Confirmed | U7 | Compare "by benchmark" table is empty: per-benchmark values are nested but the page reads them top-level |
-| A-07 | pending | Medium | benchmarks | Confirmed | U3 | Compare ranks rows across tiers together and binds the baseline delta to the first matching group only |
-| A-08 | pending | Medium | benchmarks | Suspected | U3 | Report power section computes the minimum detectable effect from a pooled item count no single test uses, at an uncorrected alpha |
-| A-10 | pending | Medium | benchmarks | Confirmed | U4 | Tune elimination ranks a candidate exactly tied with the baseline below every slower candidate |
-| A-11 | pending | Medium | benchmarks | Confirmed | U4 | Tune's uncertain-cut sign test pairs mismatched items and treats n=0 as a supported cut |
-| A-12 | pending | Medium | benchmarks | Confirmed | U4 | Cooldown time accounting overwrites the running total, so max_cooldown_share is not enforced across pauses |
-| A-13 | pending | Medium | benchmarks | Suspected | U4 | Stopping a sweep during a visit's teardown or a cooldown can skip ServeProcess.stop and leave visit/pause rows running forever |
-| A-17 | pending | Medium | benchmarks | Suspected | U2 | Grading timeouts kill only the direct child; processes spawned by model code survive |
-| A-20 | pending | Medium | infra | Confirmed | U6 | make frontend ignores a failed bun install, starts the dev server anyway and never sets its cleanup trap |
-| A-25 | pending | Medium | web | Confirmed | U9 | A reply left unfinished on a non-current branch stays "generating" forever after reload |
-| A-26 | pending | Medium | web | Suspected | U9 | Stop pressed before the backend creates the task in an existing chat cancels nothing; the reply keeps streaming after the UI shows stopped |
-| A-31 | pending | Medium | benchmarks | Suspected | U1 | Telemetry recorder attaches a new run to whatever server already answers on the port |
-| A-14 | pending | Low | benchmarks | Suspected | U4 | A sweep whose baseline fails to load never narrows and does not say why |
-| A-18 | pending | Low | benchmarks | Confirmed | U7/U10 | Benchmarks pages show "[object Object]" or a generic message instead of the server error, and Serve treats network failures as success |
-| A-19 | pending | Low | benchmarks | Confirmed | U10 | Tune page live-status stream can outlive the page or run twice (the L17 fix was not applied to Tune) |
-| A-21 | pending | Low | infra | Confirmed | U6 | make test-e2e does not run Playwright as CI does (workers, CI env), although the docs say it mirrors CI |
-| A-22 | pending | Low | infra | Suspected | U6 | make test-backend runs pytest even if its Postgres never became ready, and the readiness probe can pass before TCP is up |
-| A-23 | pending | Low | infra | Suspected | U6 | make backend does not wait for Postgres before the app runs migrations at import |
-| A-24 | pending | Low | docs | Confirmed | U6 | Stale documentation: pre-commit header claims ruff-check covers only part of the backend, and MAP.md omits tracked top-level files |
-| A-27 | pending | Low | benchmarks | Suspected | U5 | Concurrent archive and set-default can leave the default serving profile archived |
-| A-28 | pending | Low | benchmarks | Suspected | U5 | Concurrent profile create/clone/version edit returns 500 instead of 409 |
-| A-29 | pending | Low | backend | Suspected | U11 | Chat list endpoints turn page < 1 into a negative OFFSET and fail instead of validating |
-| A-30 | pending | Low | backend | Suspected | U11 | Streaming usage is merged on every usage-bearing chunk, double-counting when a provider repeats usage |
-| A-32 | pending | Low | web | Suspected | U10 | Flaky e2e assertion in the knowledge list search test |
+| A-01 | #126 | Critical | benchmarks | Confirmed | U2 | Grader scores a wrong answer as pass when the model code exits 0 before the dataset tests run, and fails correct answers whose __main__ block reads stdin |
+| A-02 | #127 | Critical | benchmarks | Confirmed | U1 | config_id fingerprint ignores the profile's extra args and model file, so different launches share one configuration |
+| A-03 | #128 | Critical | benchmarks | Confirmed | U3 | Report headline always says no system prompt differs and that every difference is noise, whatever the statistics show |
+| A-04 | #129 | High | benchmarks | Confirmed | U3/U7 | Compare "by serving" response puts the serving rows under derived_columns, and the page crashes the app |
+| A-06 | #131 | High | benchmarks | Confirmed | U3 | Compare never extracts the fa flag, so a two-flag difference is reported as a clean comparison |
+| A-09 | #134 | High | benchmarks | Confirmed | U4 | Tune sweep adopts (and refines around) a candidate that is slower than the profile defaults |
+| A-15 | #140 | High | benchmarks | Confirmed | U2 | Test runs block the backend's event loop: grading and suite preparation run blocking subprocesses inside async code |
+| A-16 | #141 | High | benchmarks | Confirmed | U2 | No endpoint fetches datasets, runs selfcheck or runs one item, although the guide documents all three as Tests page actions |
+| A-05 | #130 | Medium | benchmarks | Confirmed | U7 | Compare "by benchmark" table is empty: per-benchmark values are nested but the page reads them top-level |
+| A-07 | #132 | Medium | benchmarks | Confirmed | U3 | Compare ranks rows across tiers together and binds the baseline delta to the first matching group only |
+| A-08 | #133 | Medium | benchmarks | Suspected | U3 | Report power section computes the minimum detectable effect from a pooled item count no single test uses, at an uncorrected alpha |
+| A-10 | #135 | Medium | benchmarks | Confirmed | U4 | Tune elimination ranks a candidate exactly tied with the baseline below every slower candidate |
+| A-11 | #136 | Medium | benchmarks | Confirmed | U4 | Tune's uncertain-cut sign test pairs mismatched items and treats n=0 as a supported cut |
+| A-12 | #137 | Medium | benchmarks | Confirmed | U4 | Cooldown time accounting overwrites the running total, so max_cooldown_share is not enforced across pauses |
+| A-13 | #138 | Medium | benchmarks | Suspected | U4 | Stopping a sweep during a visit's teardown or a cooldown can skip ServeProcess.stop and leave visit/pause rows running forever |
+| A-17 | #142 | Medium | benchmarks | Suspected | U2 | Grading timeouts kill only the direct child; processes spawned by model code survive |
+| A-20 | #145 | Medium | infra | Confirmed | U6 | make frontend ignores a failed bun install, starts the dev server anyway and never sets its cleanup trap |
+| A-25 | #150 | Medium | web | Confirmed | U9 | A reply left unfinished on a non-current branch stays "generating" forever after reload |
+| A-26 | #151 | Medium | web | Suspected | U9 | Stop pressed before the backend creates the task in an existing chat cancels nothing; the reply keeps streaming after the UI shows stopped |
+| A-31 | #156 | Medium | benchmarks | Suspected | U1 | Telemetry recorder attaches a new run to whatever server already answers on the port |
+| A-33 | #158 | Medium | web | Confirmed | U10 | Editing a calendar event cannot remove its repeat rule, description or location |
+| A-34 | #159 | Medium | web | Confirmed | U10 | Automation schedule picker silently rewrites RRULEs it cannot represent and mislabels them |
+| A-35 | #160 | Medium | web | Confirmed | U9 | Chat documents are not pruned to the current conversation path, so a file from a deleted message or another branch is still sent as context |
+| A-14 | #139 | Low | benchmarks | Suspected | U4 | A sweep whose baseline fails to load never narrows and does not say why |
+| A-18 | #143 | Low | benchmarks | Confirmed | U7/U10 | Benchmarks pages show "[object Object]" or a generic message instead of the server error, and Serve treats network failures as success |
+| A-19 | #144 | Low | benchmarks | Confirmed | U10 | Tune page live-status stream can outlive the page or run twice (the L17 fix was not applied to Tune) |
+| A-21 | #146 | Low | infra | Confirmed | U6 | make test-e2e does not run Playwright as CI does (workers, CI env), although the docs say it mirrors CI |
+| A-22 | #147 | Low | infra | Suspected | U6 | make test-backend runs pytest even if its Postgres never became ready, and the readiness probe can pass before TCP is up |
+| A-23 | #148 | Low | infra | Suspected | U6 | make backend does not wait for Postgres before the app runs migrations at import |
+| A-24 | #149 | Low | docs | Confirmed | U6 | Stale documentation: pre-commit header claims ruff-check covers only part of the backend, and MAP.md omits tracked top-level files |
+| A-27 | #152 | Low | benchmarks | Suspected | U5 | Concurrent archive and set-default can leave the default serving profile archived |
+| A-28 | #153 | Low | benchmarks | Suspected | U5 | Concurrent profile create/clone/version edit returns 500 instead of 409 |
+| A-29 | #154 | Low | backend | Suspected | U11 | Chat list endpoints turn page < 1 into a negative OFFSET and fail instead of validating |
+| A-30 | #155 | Low | backend | Suspected | U11 | Streaming usage is merged on every usage-bearing chunk, double-counting when a provider repeats usage |
+| A-32 | #157 | Low | web | Suspected | U10 | Flaky e2e assertion in the knowledge list search test |
 
 ## A-01: Grader scores a wrong answer as pass when the model code exits 0 before the dataset tests run, and fails correct answers whose __main__ block reads stdin
 
-Issue: pending. Severity: Critical. Area: benchmarks. Status: Confirmed. Unit: U2.
+Issue: #126. Severity: Critical. Area: benchmarks. Status: Confirmed. Unit: U2.
 
 - **Location**: [`apps/server/local_llm/benchmarks/evaluation/grading/__init__.py:140-160`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/evaluation/grading/__init__.py#L140-L160); [`apps/server/local_llm/benchmarks/evaluation/grading/mbpp.py:15-25`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/evaluation/grading/mbpp.py#L15-L25); [`apps/server/local_llm/benchmarks/evaluation/grading/humaneval.py:25-32`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/evaluation/grading/humaneval.py#L25-L32)
 - **Description**: `run_program` returns PASS whenever the grading process exits 0. The harnesses place the model's code before the dataset's asserts/`check()` and run the file as `__main__`, with stdin inherited from the backend. A model answer ending in `if __name__ == "__main__": unittest.main()` or `sys.exit(0)` therefore ends the process before any dataset test runs and is scored PASS; a correct answer whose `__main__` block calls `input()` fails (EOFError, or blocks until `fail_timeout` when the backend runs on a terminal). PASS should mean the dataset's own tests ran to completion.
@@ -57,7 +60,7 @@ Found by the repository bug audit of `7a4088b` (finding A-01, unit U2); see `doc
 
 ## A-02: config_id fingerprint ignores the profile's extra args and model file, so different launches share one configuration
 
-Issue: pending. Severity: Critical. Area: benchmarks. Status: Confirmed. Unit: U1.
+Issue: #127. Severity: Critical. Area: benchmarks. Status: Confirmed. Unit: U1.
 
 - **Location**: [`apps/server/local_llm/benchmarks/serving/fingerprint.py:76-111`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/serving/fingerprint.py#L76-L111); [`apps/server/local_llm/benchmarks/serving/launcher.py:107`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/serving/launcher.py#L107); [`apps/server/local_llm/benchmarks/serving/launcher.py:146`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/serving/launcher.py#L146); [`apps/server/local_llm/benchmarks/serving/profiles.py:329`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/serving/profiles.py#L329); [`apps/server/local_llm/benchmarks/serving/profiles.py:344`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/serving/profiles.py#L344)
 - **Description**: `build_argv` passes the resolved model path (`-m`) and `config.extra` to llama-server, but `config_lines`/`config_id` hash only the alias and six lines that cover neither. AGENTS.md requires the fingerprint to cover exactly the flags the launcher passes (`--metrics` and `-lv` are documented exclusions; `extra` and the model file are not).
@@ -73,7 +76,7 @@ Found by the repository bug audit of `7a4088b` (finding A-02, unit U1); see `doc
 
 ## A-03: Report headline always says no system prompt differs and that every difference is noise, whatever the statistics show
 
-Issue: pending. Severity: Critical. Area: benchmarks. Status: Confirmed. Unit: U3.
+Issue: #128. Severity: Critical. Area: benchmarks. Status: Confirmed. Unit: U3.
 
 - **Location**: [`apps/server/local_llm/benchmarks/analysis/report.py:1895-1925`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/analysis/report.py#L1895-L1925); [`apps/server/local_llm/benchmarks/analysis/report.py:1500-1510`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/analysis/report.py#L1500-L1510)
 - **Description**: `headline` prints "No system prompt differs from any other" unconditionally (never reads `p_perm` or the Holm p-values) and, when a reliability floor exists, always adds "Every difference in this document is smaller than that" without comparing any difference to the floor. It also summarises only the pooled family or `per_block[0]`. Lines near 1504 similarly always call the floor "the largest number in this document".
@@ -89,7 +92,7 @@ Found by the repository bug audit of `7a4088b` (finding A-03, unit U3); see `doc
 
 ## A-04: Compare "by serving" response puts the serving rows under derived_columns, and the page crashes the app
 
-Issue: pending. Severity: High. Area: benchmarks. Status: Confirmed. Unit: U3/U7.
+Issue: #129. Severity: High. Area: benchmarks. Status: Confirmed. Unit: U3/U7.
 
 - **Location**: [`apps/server/local_llm/routers/benchmarks/compare.py:27-30`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/benchmarks/compare.py#L27-L30); [`apps/server/local_llm/benchmarks/analysis/compare.py:654`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/analysis/compare.py#L654); [`apps/server/local_llm/benchmarks/analysis/compare.py:727`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/analysis/compare.py#L727); [`apps/web/src/routes/benchmarks/ComparePage.tsx:42`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/benchmarks/ComparePage.tsx#L42); [`apps/web/src/routes/benchmarks/ComparePage.tsx:119-137`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/benchmarks/ComparePage.tsx#L119-L137)
 - **Description**: `serving_rows` returns `(rows, derived, notes)`; the router unpacks it as `derived_columns, derived, notes` and returns the row dicts as `derived_columns`. ComparePage uses `derived_columns` as column ids and calls `humanizeHeader(col)` (`col.replace`) on a dict, which throws during render; there is no error boundary, so the SPA goes blank. The main serving table (gen_tps, prefill, VRAM) is never shown under any key.
@@ -105,7 +108,7 @@ Found by the repository bug audit of `7a4088b` (finding A-04, unit U3/U7); see `
 
 ## A-05: Compare "by benchmark" table is empty: per-benchmark values are nested but the page reads them top-level
 
-Issue: pending. Severity: Medium. Area: benchmarks. Status: Confirmed. Unit: U7.
+Issue: #130. Severity: Medium. Area: benchmarks. Status: Confirmed. Unit: U7.
 
 - **Location**: [`apps/server/local_llm/benchmarks/analysis/compare.py:416-438`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/analysis/compare.py#L416-L438); [`apps/server/local_llm/routers/benchmarks/compare.py:37-39`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/benchmarks/compare.py#L37-L39); [`apps/web/src/routes/benchmarks/ComparePage.tsx:119-137`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/benchmarks/ComparePage.tsx#L119-L137)
 - **Description**: `benchmark_rows` returns benchmark names as `columns` and nests each value under `row.per_benchmark[name]`; ComparePage uses `row[col]`, so every cell is undefined, and model/config/tier columns are absent, so rows cannot be identified.
@@ -121,7 +124,7 @@ Found by the repository bug audit of `7a4088b` (finding A-05, unit U7); see `doc
 
 ## A-06: Compare never extracts the fa flag, so a two-flag difference is reported as a clean comparison
 
-Issue: pending. Severity: High. Area: benchmarks. Status: Confirmed. Unit: U3.
+Issue: #131. Severity: High. Area: benchmarks. Status: Confirmed. Unit: U3.
 
 - **Location**: [`apps/server/local_llm/benchmarks/analysis/compare.py:108-120`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/analysis/compare.py#L108-L120); [`apps/server/local_llm/benchmarks/serving/fingerprint.py:89-92`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/serving/fingerprint.py#L89-L92)
 - **Description**: `flags_of` searches `fa: (\S+)` inside `config_value(lines, 'cache')`, but `config_value` stops at the first " | ", so the cache value is only `k=.. v=..` and `fa` is never found. The code comment says the warning covers `fa`.
@@ -137,7 +140,7 @@ Found by the repository bug audit of `7a4088b` (finding A-06, unit U3); see `doc
 
 ## A-07: Compare ranks rows across tiers together and binds the baseline delta to the first matching group only
 
-Issue: pending. Severity: Medium. Area: benchmarks. Status: Confirmed. Unit: U3.
+Issue: #132. Severity: Medium. Area: benchmarks. Status: Confirmed. Unit: U3.
 
 - **Location**: [`apps/server/local_llm/benchmarks/analysis/compare.py:358-380`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/analysis/compare.py#L358-L380)
 - **Description**: `rows_for` sorts all groups globally by pass rate, so a 24-item smoke row ranks among 1000-item full rows (docs/guides/benchmarks.md says tiers are never ranked against each other), and picks `base` as the first group with the baseline config_id, so rows in other tiers get `vs_baseline=None` ("different tier") even when the baseline has a group in that tier.
@@ -153,7 +156,7 @@ Found by the repository bug audit of `7a4088b` (finding A-07, unit U3); see `doc
 
 ## A-08: Report power section computes the minimum detectable effect from a pooled item count no single test uses, at an uncorrected alpha
 
-Issue: pending. Severity: Medium. Area: benchmarks. Status: Suspected. Unit: U3.
+Issue: #133. Severity: Medium. Area: benchmarks. Status: Suspected. Unit: U3.
 
 - **Location**: [`apps/server/local_llm/benchmarks/analysis/report.py:1413`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/analysis/report.py#L1413); [`apps/server/local_llm/benchmarks/analysis/report.py:1445`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/analysis/report.py#L1445); [`apps/server/local_llm/benchmarks/analysis/report.py:1462`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/analysis/report.py#L1462); [`apps/server/local_llm/benchmarks/analysis/report.py:1490`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/analysis/report.py#L1490)
 - **Description**: `items_now` sums items over all complete blocks and is used as n for a single paired McNemar MDE, while each McNemar test runs on one block; alpha stays 0.05 although the pairwise tests are Holm-adjusted over k-1 comparisons. The MDE is understated and "a null here is informative" can be printed when it is not.
@@ -169,7 +172,7 @@ Found by the repository bug audit of `7a4088b` (finding A-08, unit U3); see `doc
 
 ## A-09: Tune sweep adopts (and refines around) a candidate that is slower than the profile defaults
 
-Issue: pending. Severity: High. Area: benchmarks. Status: Confirmed. Unit: U4.
+Issue: #134. Severity: High. Area: benchmarks. Status: Confirmed. Unit: U4.
 
 - **Location**: [`apps/server/local_llm/benchmarks/tuning/tune.py:1282-1285`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/tuning/tune.py#L1282-L1285); [`apps/server/local_llm/benchmarks/tuning/tune.py:1328-1335`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/tuning/tune.py#L1328-L1335); [`apps/server/local_llm/benchmarks/tuning/tune.py:1405-1449`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/tuning/tune.py#L1405-L1449)
 - **Description**: `best()` returns the highest-scoring non-baseline candidate even when its score (median log-ratio vs baseline) is negative. `finish()` rejects only when `best()` is None, so a slower winner is "adopted"; `refine()`'s "nothing beat the profile's own defaults" branch (`best.baseline`) can never be true because `best()` excludes the baseline.
@@ -185,7 +188,7 @@ Found by the repository bug audit of `7a4088b` (finding A-09, unit U4); see `doc
 
 ## A-10: Tune elimination ranks a candidate exactly tied with the baseline below every slower candidate
 
-Issue: pending. Severity: Medium. Area: benchmarks. Status: Confirmed. Unit: U4.
+Issue: #135. Severity: Medium. Area: benchmarks. Status: Confirmed. Unit: U4.
 
 - **Location**: [`apps/server/local_llm/benchmarks/tuning/tune.py:1175-1179`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/tuning/tune.py#L1175-L1179)
 - **Description**: The sort key `scored.get(c.sha,(None,0))[0] or -math.inf` maps a score of exactly 0.0 to -inf, so a tie with the baseline is eliminated ahead of slower candidates.
@@ -201,7 +204,7 @@ Found by the repository bug audit of `7a4088b` (finding A-10, unit U4); see `doc
 
 ## A-11: Tune's uncertain-cut sign test pairs mismatched items and treats n=0 as a supported cut
 
-Issue: pending. Severity: Medium. Area: benchmarks. Status: Confirmed. Unit: U4.
+Issue: #136. Severity: Medium. Area: benchmarks. Status: Confirmed. Unit: U4.
 
 - **Location**: [`apps/server/local_llm/benchmarks/tuning/tune.py:1194-1206`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/tuning/tune.py#L1194-L1206)
 - **Description**: It zips `log_ratios(lowest)` with `log_ratios(highest)`, each of which has already dropped items lacking timings for that candidate or the baseline, so the i-th entries can refer to different items; and `if n and p > 0.20` treats n=0 as "supported".
@@ -217,7 +220,7 @@ Found by the repository bug audit of `7a4088b` (finding A-11, unit U4); see `doc
 
 ## A-12: Cooldown time accounting overwrites the running total, so max_cooldown_share is not enforced across pauses
 
-Issue: pending. Severity: Medium. Area: benchmarks. Status: Confirmed. Unit: U4.
+Issue: #137. Severity: Medium. Area: benchmarks. Status: Confirmed. Unit: U4.
 
 - **Location**: [`apps/server/local_llm/benchmarks/tuning/tune.py:515-529`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/tuning/tune.py#L515-L529)
 - **Description**: Inside the retry loop `self.total_seconds = time.time() - started` replaces the accumulated total of earlier pauses with this pause's elapsed time; after the loop the elapsed time is added again.
@@ -233,7 +236,7 @@ Found by the repository bug audit of `7a4088b` (finding A-12, unit U4); see `doc
 
 ## A-13: Stopping a sweep during a visit's teardown or a cooldown can skip ServeProcess.stop and leave visit/pause rows running forever
 
-Issue: pending. Severity: Medium. Area: benchmarks. Status: Suspected. Unit: U4.
+Issue: #138. Severity: Medium. Area: benchmarks. Status: Suspected. Unit: U4.
 
 - **Location**: [`apps/server/local_llm/benchmarks/tuning/tune.py:942-950`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/tuning/tune.py#L942-L950); [`apps/server/local_llm/benchmarks/tuning/tune.py:255-265`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/tuning/tune.py#L255-L265); [`apps/server/local_llm/benchmarks/tuning/tune_probe.py:195-222`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/tuning/tune_probe.py#L195-L222); [`apps/server/local_llm/routers/benchmarks/tune.py:112-120`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/benchmarks/tune.py#L112-L120)
 - **Description**: `/stop` cancels the task. If the cancellation lands inside `finally: await server.stop()` or the following `close_visit`, teardown is interrupted (the recorder and temp log may be orphaned) and the visit stays `running`; `finish()` then sets `ended_at`, and `reclaim_stale_sweeps` skips ended sweeps. A cancellation during `Cooldown.run` leaves the pause row open likewise.
@@ -249,7 +252,7 @@ Found by the repository bug audit of `7a4088b` (finding A-13, unit U4); see `doc
 
 ## A-14: A sweep whose baseline fails to load never narrows and does not say why
 
-Issue: pending. Severity: Low. Area: benchmarks. Status: Suspected. Unit: U4.
+Issue: #139. Severity: Low. Area: benchmarks. Status: Suspected. Unit: U4.
 
 - **Location**: [`apps/server/local_llm/benchmarks/tuning/tune.py:1112`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/tuning/tune.py#L1112); [`apps/server/local_llm/benchmarks/tuning/tune.py:1193`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/tuning/tune.py#L1193)
 - **Description**: `run_round` drops infeasible candidates, but `eliminate` re-adds `self.baseline`; with an infeasible baseline every candidate has 0 paired items, is "thin", and is kept forever, and the final verdict omits the cause.
@@ -265,7 +268,7 @@ Found by the repository bug audit of `7a4088b` (finding A-14, unit U4); see `doc
 
 ## A-15: Test runs block the backend's event loop: grading and suite preparation run blocking subprocesses inside async code
 
-Issue: pending. Severity: High. Area: benchmarks. Status: Confirmed. Unit: U2.
+Issue: #140. Severity: High. Area: benchmarks. Status: Confirmed. Unit: U2.
 
 - **Location**: [`apps/server/local_llm/benchmarks/evaluation/runner.py:352`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/evaluation/runner.py#L352); [`apps/server/local_llm/benchmarks/evaluation/runner.py:492-545`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/evaluation/runner.py#L492-L545); [`apps/server/local_llm/routers/benchmarks/tests.py:55-100`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/benchmarks/tests.py#L55-L100)
 - **Description**: `run_item` calls `grade()` (which uses `subprocess.run`, up to 60 s for DS-1000) directly in async code; `prepare_suite` parses large JSON and runs `missing_libraries`/`env_fingerprint` subprocesses synchronously; all of it runs in a task on the server loop.
@@ -281,7 +284,7 @@ Found by the repository bug audit of `7a4088b` (finding A-15, unit U2); see `doc
 
 ## A-16: No endpoint fetches datasets, runs selfcheck or runs one item, although the guide documents all three as Tests page actions
 
-Issue: pending. Severity: High. Area: benchmarks. Status: Confirmed. Unit: U2.
+Issue: #141. Severity: High. Area: benchmarks. Status: Confirmed. Unit: U2.
 
 - **Location**: [`apps/server/local_llm/benchmarks/evaluation/datasets.py:90-95`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/evaluation/datasets.py#L90-L95); [`apps/server/local_llm/benchmarks/evaluation/datasets.py:229`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/evaluation/datasets.py#L229); [`apps/server/local_llm/benchmarks/evaluation/grading/__init__.py:273-320`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/evaluation/grading/__init__.py#L273-L320); [`apps/server/local_llm/routers/benchmarks/tests.py:1-120`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/benchmarks/tests.py#L1-L120); [`docs/guides/benchmarks.md:128-137`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/docs/guides/benchmarks.md#L128-L137); [`docs/guides/benchmarks.md:336`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/docs/guides/benchmarks.md#L336)
 - **Description**: `datasets.fetch_one` and `grading.calibrate`/`write_calibration` have no callers in the backend or frontend; the tests router exposes only options, run, cancel and stream. On a fresh machine (the 2026-10-09 Fedora move) every run fails with "not downloaded yet (see datasets.fetch_one)", and calibration-based exclusions never exist, so items whose own reference fails are scored as model failures.
@@ -297,7 +300,7 @@ Found by the repository bug audit of `7a4088b` (finding A-16, unit U2); see `doc
 
 ## A-17: Grading timeouts kill only the direct child; processes spawned by model code survive
 
-Issue: pending. Severity: Medium. Area: benchmarks. Status: Suspected. Unit: U2.
+Issue: #142. Severity: Medium. Area: benchmarks. Status: Suspected. Unit: U2.
 
 - **Location**: [`apps/server/local_llm/benchmarks/evaluation/grading/__init__.py:146-150`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/evaluation/grading/__init__.py#L146-L150)
 - **Description**: On `TimeoutExpired`, `subprocess.run` kills only the immediate child; anything the code forked keeps running, consuming CPU and skewing later timing.
@@ -313,7 +316,7 @@ Found by the repository bug audit of `7a4088b` (finding A-17, unit U2); see `doc
 
 ## A-18: Benchmarks pages show "[object Object]" or a generic message instead of the server error, and Serve treats network failures as success
 
-Issue: pending. Severity: Low. Area: benchmarks. Status: Confirmed. Unit: U7/U10.
+Issue: #143. Severity: Low. Area: benchmarks. Status: Confirmed. Unit: U7/U10.
 
 - **Location**: [`apps/web/src/lib/apis/benchmarks/index.ts:131-185`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/lib/apis/benchmarks/index.ts#L131-L185); [`apps/web/src/lib/apis/benchmarks/index.ts:720-790`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/lib/apis/benchmarks/index.ts#L720-L790); [`apps/web/src/routes/benchmarks/ServePage.tsx:171`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/benchmarks/ServePage.tsx#L171); [`apps/web/src/routes/benchmarks/ServePage.tsx:181`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/benchmarks/ServePage.tsx#L181); [`apps/web/src/routes/benchmarks/TunePage.tsx:146-180`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/benchmarks/TunePage.tsx#L146-L180); [`apps/web/src/routes/benchmarks/TunePage.tsx:229`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/benchmarks/TunePage.tsx#L229); [`apps/web/src/routes/benchmarks/TunePage.tsx:467`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/benchmarks/TunePage.tsx#L467); [`apps/web/src/routes/benchmarks/TunePage.tsx:526`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/benchmarks/TunePage.tsx#L526)
 - **Description**: The API helpers throw `err.detail` (a string, or a 422 array). ServePage renders `err?.detail ?? String(err)`, so a 422 shows "[object Object]"; TunePage reads `.detail` of the string, so 409 "a sweep is already running" and the 404s always show the generic fallback. On a network error `err.detail` is undefined, so `startServe`/`stopServe` resolve `null` and `onSuccess` runs. The L7 fix of the 2026-09-27 review went into profiles.ts only.
@@ -329,7 +332,7 @@ Found by the repository bug audit of `7a4088b` (finding A-18, unit U7/U10); see 
 
 ## A-19: Tune page live-status stream can outlive the page or run twice (the L17 fix was not applied to Tune)
 
-Issue: pending. Severity: Low. Area: benchmarks. Status: Confirmed. Unit: U10.
+Issue: #144. Severity: Low. Area: benchmarks. Status: Confirmed. Unit: U10.
 
 - **Location**: [`apps/web/src/routes/benchmarks/TunePage.tsx:132-194`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/benchmarks/TunePage.tsx#L132-L194); [`apps/web/src/lib/apis/benchmarks/index.ts:910-939`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/lib/apis/benchmarks/index.ts#L910-L939)
 - **Description**: `streamTuneLog` creates its AbortController internally; `startStreaming` stores it only after the await, and the `finally` clears the ref without checking ownership. Unmounting or switching sweeps while the request is pending aborts nothing; the old stream then takes over the ref and interleaves `setStatus` with the new one.
@@ -345,7 +348,7 @@ Found by the repository bug audit of `7a4088b` (finding A-19, unit U10); see `do
 
 ## A-20: make frontend ignores a failed bun install, starts the dev server anyway and never sets its cleanup trap
 
-Issue: pending. Severity: Medium. Area: infra. Status: Confirmed. Unit: U6.
+Issue: #145. Severity: Medium. Area: infra. Status: Confirmed. Unit: U6.
 
 - **Location**: [`Makefile:118-124`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/Makefile#L118-L124)
 - **Description**: The recipe `cd ... && bun install --frozen-lockfile && trap ... EXIT; ... astro dev --background; ... logs --follow` relies on `-e`, but a failure in a non-final command of an `&&` list does not exit the shell: the trap is skipped and the daemon starts with stale or missing dependencies and no `astro dev stop` on exit.
@@ -361,7 +364,7 @@ Found by the repository bug audit of `7a4088b` (finding A-20, unit U6); see `doc
 
 ## A-21: make test-e2e does not run Playwright as CI does (workers, CI env), although the docs say it mirrors CI
 
-Issue: pending. Severity: Low. Area: infra. Status: Confirmed. Unit: U6.
+Issue: #146. Severity: Low. Area: infra. Status: Confirmed. Unit: U6.
 
 - **Location**: [`Makefile:175-182`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/Makefile#L175-L182); [`.github/workflows/ci.yml:108-109`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/.github/workflows/ci.yml#L108-L109); [`apps/web/playwright.config.ts:1-30`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/playwright.config.ts#L1-L30); [`docs/guides/testing.md:17-24`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/docs/guides/testing.md#L17-L24); [`docs/guides/testing.md:52-56`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/docs/guides/testing.md#L52-L56)
 - **Description**: Make runs `bunx playwright test --workers=2` ("CI's count"), CI runs `bun run test:e2e` with no workers setting (Playwright's default, half the runner's cores). CI also sets `CI=true`, enabling `retries: 2` and `forbidOnly` and disabling server reuse; Make does not, so a stray `test.only` passes `make check` and fails CI.
@@ -377,7 +380,7 @@ Found by the repository bug audit of `7a4088b` (finding A-21, unit U6); see `doc
 
 ## A-22: make test-backend runs pytest even if its Postgres never became ready, and the readiness probe can pass before TCP is up
 
-Issue: pending. Severity: Low. Area: infra. Status: Suspected. Unit: U6.
+Issue: #147. Severity: Low. Area: infra. Status: Suspected. Unit: U6.
 
 - **Location**: [`Makefile:145-166`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/Makefile#L145-L166)
 - **Description**: The 60-iteration readiness loop has no failure branch, and probes with `psql` over the container's Unix socket, which can succeed during the image's init phase before the server listens on TCP. The port pre-check greps only `127.0.0.1:PORT`.
@@ -393,7 +396,7 @@ Found by the repository bug audit of `7a4088b` (finding A-22, unit U6); see `doc
 
 ## A-23: make backend does not wait for Postgres before the app runs migrations at import
 
-Issue: pending. Severity: Low. Area: infra. Status: Suspected. Unit: U6.
+Issue: #148. Severity: Low. Area: infra. Status: Suspected. Unit: U6.
 
 - **Location**: [`Makefile:92`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/Makefile#L92); [`infra/docker-compose.yml:25-41`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/infra/docker-compose.yml#L25-L41); [`apps/server/local_llm/config.py:52-70`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/config.py#L52-L70)
 - **Description**: `compose up -d postgres` returns on container creation; Compose has no healthcheck; migrations run at import with no retry. On a fresh volume with an existing venv the import can hit connection refused and the reload worker dies.
@@ -409,7 +412,7 @@ Found by the repository bug audit of `7a4088b` (finding A-23, unit U6); see `doc
 
 ## A-24: Stale documentation: pre-commit header claims ruff-check covers only part of the backend, and MAP.md omits tracked top-level files
 
-Issue: pending. Severity: Low. Area: docs. Status: Confirmed. Unit: U6.
+Issue: #149. Severity: Low. Area: docs. Status: Confirmed. Unit: U6.
 
 - **Location**: [`.pre-commit-config.yaml:10-14`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/.pre-commit-config.yaml#L10-L14); [`.pre-commit-config.yaml:49`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/.pre-commit-config.yaml#L49); [`MAP.md:14-30`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/MAP.md#L14-L30); [`MAP.md:336-342`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/MAP.md#L336-L342)
 - **Description**: The `.pre-commit-config.yaml` comment says ruff-check covers only `benchmarks/` and `tests/`, but the hook matches all of `apps/server/(local_llm|tests)/` since #80. MAP.md's tree omits `.github/`, `.pre-commit-config.yaml` and `.git-blame-ignore-revs`, and points to per-module detail in AGENTS.md "Conventions" that is not there. Both violate the maintenance policy.
@@ -425,7 +428,7 @@ Found by the repository bug audit of `7a4088b` (finding A-24, unit U6); see `doc
 
 ## A-25: A reply left unfinished on a non-current branch stays "generating" forever after reload
 
-Issue: pending. Severity: Medium. Area: web. Status: Confirmed. Unit: U9.
+Issue: #150. Severity: Medium. Area: web. Status: Confirmed. Unit: U9.
 
 - **Location**: [`apps/web/src/lib/chat/history.ts:220-232`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/lib/chat/history.ts#L220-L232); [`apps/web/src/routes/chat/useChatSession.ts:166-190`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/chat/useChatSession.ts#L166-L190)
 - **Description**: `normalizeHistory` marks non-current assistant replies done only when `done !== false`, so a stored `done: false` sibling stays unfinished; `loadChat` finalises only `currentId` when no tasks are pending. Switching to that branch makes `isGenerating` true, and queued prompts never send until Stop is pressed.
@@ -441,7 +444,7 @@ Found by the repository bug audit of `7a4088b` (finding A-25, unit U9); see `doc
 
 ## A-26: Stop pressed before the backend creates the task in an existing chat cancels nothing; the reply keeps streaming after the UI shows stopped
 
-Issue: pending. Severity: Medium. Area: web. Status: Suspected. Unit: U9.
+Issue: #151. Severity: Medium. Area: web. Status: Suspected. Unit: U9.
 
 - **Location**: [`apps/web/src/routes/chat/useChatSession.ts:455-470`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/chat/useChatSession.ts#L455-L470); [`apps/server/local_llm/main.py:1714`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/main.py#L1714)
 - **Description**: `stop` calls `stopTasksByChatId` when the chat has an id and sets `stopPendingRef` only for new chats. In a saved chat, during the POST's pre-task phase no task exists yet, so nothing is stopped; the replies are marked done locally, then the task starts and its events append to a "done" reply, and the user can start a second generation. `continueReply` ignores the pending-stop flag entirely.
@@ -457,7 +460,7 @@ Found by the repository bug audit of `7a4088b` (finding A-26, unit U9); see `doc
 
 ## A-27: Concurrent archive and set-default can leave the default serving profile archived
 
-Issue: pending. Severity: Low. Area: benchmarks. Status: Suspected. Unit: U5.
+Issue: #152. Severity: Low. Area: benchmarks. Status: Suspected. Unit: U5.
 
 - **Location**: [`apps/server/local_llm/models/benchmarks/profiles.py:341-368`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/benchmarks/profiles.py#L341-L368); [`apps/server/local_llm/routers/benchmarks/profiles.py:257-274`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/benchmarks/profiles.py#L257-L274)
 - **Description**: `set_default` and `archive` each read the other flag then write their own without a row lock; interleaved, a profile ends up both default and archived. `get_default()` then returns None, so `/profiles/default` and `/serve/start` without a name return 404.
@@ -473,7 +476,7 @@ Found by the repository bug audit of `7a4088b` (finding A-27, unit U5); see `doc
 
 ## A-28: Concurrent profile create/clone/version edit returns 500 instead of 409
 
-Issue: pending. Severity: Low. Area: benchmarks. Status: Suspected. Unit: U5.
+Issue: #153. Severity: Low. Area: benchmarks. Status: Suspected. Unit: U5.
 
 - **Location**: [`apps/server/local_llm/models/benchmarks/profiles.py:298-330`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/benchmarks/profiles.py#L298-L330); [`apps/server/local_llm/routers/benchmarks/profiles.py:167-222`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/benchmarks/profiles.py#L167-L222)
 - **Description**: The name-exists 409 check precedes the insert, and `add_version` computes max(version)+1 relying on a unique constraint; the resulting `IntegrityError` is not caught (only `ProfileError` is), so the loser gets a 500 although the docstring promises it "fails loudly" in a handled way.
@@ -489,7 +492,7 @@ Found by the repository bug audit of `7a4088b` (finding A-28, unit U5); see `doc
 
 ## A-29: Chat list endpoints turn page < 1 into a negative OFFSET and fail instead of validating
 
-Issue: pending. Severity: Low. Area: backend. Status: Suspected. Unit: U11.
+Issue: #154. Severity: Low. Area: backend. Status: Suspected. Unit: U11.
 
 - **Location**: [`apps/server/local_llm/routers/chats.py:250-262`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/chats.py#L250-L262); [`apps/server/local_llm/routers/chats.py:306-315`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/chats.py#L306-L315); [`apps/server/local_llm/routers/chats.py:440-453`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/chats.py#L440-L453); [`apps/server/local_llm/models/chats.py:1409`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/chats.py#L1409); [`apps/server/local_llm/models/chats.py:1486`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/chats.py#L1486)
 - **Description**: `skip = (page - 1) * limit` with no lower bound; `if skip:` is true for negatives, so Postgres raises "OFFSET must not be negative", surfaced as 400 or 500. The same pattern recurs in several chats routes.
@@ -505,7 +508,7 @@ Found by the repository bug audit of `7a4088b` (finding A-29, unit U11); see `do
 
 ## A-30: Streaming usage is merged on every usage-bearing chunk, double-counting when a provider repeats usage
 
-Issue: pending. Severity: Low. Area: backend. Status: Suspected. Unit: U11.
+Issue: #155. Severity: Low. Area: backend. Status: Suspected. Unit: U11.
 
 - **Location**: [`apps/server/local_llm/utils/middleware.py:4977`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/utils/middleware.py#L4977); [`apps/server/local_llm/utils/middleware.py:5021`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/utils/middleware.py#L5021); [`apps/server/local_llm/utils/response.py:100-141`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/utils/response.py#L100-L141)
 - **Description**: Each chunk carrying `usage` or `timings` is merged into the running total, which sums summable keys; a provider emitting cumulative usage on several chunks inflates totals and makes them inconsistent.
@@ -521,7 +524,7 @@ Found by the repository bug audit of `7a4088b` (finding A-30, unit U11); see `do
 
 ## A-31: Telemetry recorder attaches a new run to whatever server already answers on the port
 
-Issue: pending. Severity: Medium. Area: benchmarks. Status: Suspected. Unit: U1.
+Issue: #156. Severity: Medium. Area: benchmarks. Status: Suspected. Unit: U1.
 
 - **Location**: [`apps/server/local_llm/benchmarks/serving/telemetry_recorder.py:109-117`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/serving/telemetry_recorder.py#L109-L117); [`apps/server/local_llm/benchmarks/serving/telemetry_recorder.py:403-412`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/benchmarks/serving/telemetry_recorder.py#L403-L412)
 - **Description**: The recorder waits only for something to answer on the serving port. If an orphaned or hand-started llama-server already holds 8090 (the documented `--reload` orphan case), the new server fails to bind but the recorder opens a run against the old server under the new config_id.
@@ -537,7 +540,7 @@ Found by the repository bug audit of `7a4088b` (finding A-31, unit U1); see `doc
 
 ## A-32: Flaky e2e assertion in the knowledge list search test
 
-Issue: pending. Severity: Low. Area: web. Status: Suspected. Unit: U10.
+Issue: #157. Severity: Low. Area: web. Status: Suspected. Unit: U10.
 
 - **Location**: [`apps/web/e2e/workspace-knowledge.spec.ts:156-172`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/e2e/workspace-knowledge.spec.ts#L156-L172)
 - **Description**: After the list filters, the test asserts synchronously that a `/search?query=Base+2` call was recorded. The UI can hide "Base 1" before the final debounced request is recorded, so the non-retrying `expect(...)` fails intermittently.
@@ -550,3 +553,51 @@ Issue: pending. Severity: Low. Area: web. Status: Suspected. Unit: U10.
 - **Confidence**: Suspected (medium): observed once; cause inferred from the test code.
 
 Found by the repository bug audit of `7a4088b` (finding A-32, unit U10); see `docs/audit/FINDINGS.md` on branch `audit/bug-review`.
+
+## A-33: Editing a calendar event cannot remove its repeat rule, description or location
+
+Issue: #158. Severity: Medium. Area: web. Status: Confirmed. Unit: U10.
+
+- **Location**: [`apps/web/src/routes/calendar/calendarModel.ts:196-207`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/calendar/calendarModel.ts#L196-L207); [`apps/web/src/lib/apis/calendar/index.ts:319-334`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/lib/apis/calendar/index.ts#L319-L334); [`apps/server/local_llm/models/calendar.py:703-716`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/calendar.py#L703-L716)
+- **Description**: `eventPayload` maps an empty repeat, description or location to `undefined`; `JSON.stringify` drops those keys; the update path uses `model_dump(exclude_unset=True)` and only sets fields that are present. Clearing any of them on an existing event therefore keeps the old value while the dialog reports success. Create is unaffected.
+- **Root cause**: "Unset" and "cleared" are both encoded as an absent key.
+- **Trigger / reproduction**: Edit a weekly event, set Repeat to none (or clear the description/location), save: the event still recurs and the old text returns.
+- **Impact**: A recurring event cannot be made non-recurring from the UI; text fields cannot be cleared.
+- **Suggested fix** (approach only): When editing, send explicit `null` for cleared fields (the backend form already accepts `None` for rrule; verify description/location); keep omitting an rrule the form cannot express so it is preserved.
+- **Docs affected under the maintenance policy**: None.
+- **Related issues and PRs**: None known.
+- **Confidence**: Confirmed: traced in the code at the audited SHA, both sides quoted above
+
+Found by the repository bug audit of `7a4088b` (finding A-33, unit U10); see `docs/audit/FINDINGS.md` on branch `audit/bug-review`.
+
+## A-34: Automation schedule picker silently rewrites RRULEs it cannot represent and mislabels them
+
+Issue: #159. Severity: Medium. Area: web. Status: Confirmed. Unit: U10.
+
+- **Location**: [`apps/web/src/routes/automations/automationModel.ts:64-75`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/automations/automationModel.ts#L64-L75); [`apps/web/src/routes/automations/automationModel.ts:86-99`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/automations/automationModel.ts#L86-L99); [`apps/web/src/routes/automations/automationModel.ts:122-138`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/automations/automationModel.ts#L122-L138)
+- **Description**: `parseRrule` treats any HOURLY/DAILY/WEEKLY/MONTHLY rule as representable, discarding unknown keys and all but the first value of multi-value keys; saving rebuilds the rule from the picker state, and `formatSchedule` labels the lossy version. The doc comment says unrepresentable rules should become CUSTOM.
+- **Root cause**: Representability is decided from FREQ alone.
+- **Trigger / reproduction**: `docs/audit/repro/u10_automation_rrule.test.ts`: `FREQ=MONTHLY;BYDAY=1MO` becomes `BYMONTHDAY=1` ("Monthly on the 1st"); `BYHOUR=9,17` becomes `BYHOUR=9`; `UNTIL=...` is dropped.
+- **Impact**: Automations run on a different schedule than the user set (lost runs, never-ending schedules), and the list shows the wrong schedule.
+- **Suggested fix** (approach only): Return CUSTOM (keeping the text verbatim) when any key/value is outside what the picker expresses, for example by requiring `buildRrule(parseRrule(r))` to equal the normalised input; use the same test in `formatSchedule`.
+- **Docs affected under the maintenance policy**: None.
+- **Related issues and PRs**: None known.
+- **Confidence**: Confirmed: reproduced (see trigger)
+
+Found by the repository bug audit of `7a4088b` (finding A-34, unit U10); see `docs/audit/FINDINGS.md` on branch `audit/bug-review`.
+
+## A-35: Chat documents are not pruned to the current conversation path, so a file from a deleted message or another branch is still sent as context
+
+Issue: #160. Severity: Medium. Area: web. Status: Confirmed. Unit: U9.
+
+- **Location**: [`apps/web/src/lib/chat/request.ts:142-147`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/lib/chat/request.ts#L142-L147); [`apps/web/src/lib/chat/request.ts:181`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/lib/chat/request.ts#L181); [`apps/web/src/routes/chat/useChatSession.ts:352`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/chat/useChatSession.ts#L352); [`apps/web/src/routes/chat/useChatSession.ts:406`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/chat/useChatSession.ts#L406); [`apps/web/src/routes/chat/useChatSession.ts:499`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/chat/useChatSession.ts#L499)
+- **Description**: The SvelteKit original (`d863707:apps/openwebui/src/lib/components/chat/Chat.svelte:3420-3428`) filtered `chatFiles` to files attached to messages on the path being answered before every send. The port's `turnFiles` merges the whole accumulated `chatFiles` list with the user message's files, and `chatFiles` is only appended to, so every document ever attached in the session is sent and saved back to the chat.
+- **Root cause**: The pruning step was lost in the port (an undocumented behaviour change).
+- **Trigger / reproduction**: Attach a file to a message, then delete that message or switch to a sibling branch without it, and send. `docs/audit/repro/u9_chatfiles.test.ts`: a history with no files on its path and `chatFiles=[X]` yields `files == [X]`.
+- **Impact**: Answers are grounded in, and cite, a document the visible conversation no longer contains; the stale list persists across reloads.
+- **Suggested fix** (approach only): Before `turnFiles`, filter `chatFiles` by id to files of `messagesList(history, responseId)`, and write the filtered list back with `setChatFiles`, as the original did.
+- **Docs affected under the maintenance policy**: None.
+- **Related issues and PRs**: None known.
+- **Confidence**: Confirmed: reproduced (see trigger)
+
+Found by the repository bug audit of `7a4088b` (finding A-35, unit U9); see `docs/audit/FINDINGS.md` on branch `audit/bug-review`.

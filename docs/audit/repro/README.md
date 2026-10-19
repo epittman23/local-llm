@@ -28,3 +28,5 @@ The `u3/` scripts also need their own directory on the path (they import
 | `u6_frontend_recipe.mk` | A-20 | `make -f u6_frontend_recipe.mk` starts "the server" after the install step fails, without the trap |
 | `u7_humanize_header.js` | A-04 | `node u7_humanize_header.js` throws `col.replace is not a function` |
 | `u9/norm.test.ts` | A-25 | from `u9/`: `bun test --preload ./pre.ts ./norm.test.ts` passes, showing a non-current reply stays `done: false` |
+| `u10_automation_rrule.test.ts` | A-34 | copy into `apps/web/src/`, fix the import to `./routes/automations/automationModel`, `bunx vitest run`; logs each rule rewritten (`BYDAY=1MO` → `BYMONTHDAY=1`, `9,17` → `9`, `UNTIL` dropped) |
+| `u9_chatfiles.test.ts` | A-35 | copy into `apps/web/src/` with imports rewritten to `./lib/chat/...`, `bunx vitest run`: passes, showing a file not on the conversation path is still sent |
