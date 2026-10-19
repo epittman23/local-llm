@@ -18,7 +18,13 @@ export function useConfigDraft<T extends object>(
 ) {
 	const query = useQuery({
 		queryKey: ['admin-settings', ...key],
-		queryFn: async () => (await fetcher()) ?? null,
+		// A load that resolves to nothing is a failure, not an empty config:
+		// otherwise the tab waits on a spinner for a draft that never comes.
+		queryFn: async () => {
+			const data = await fetcher();
+			if (data === null || data === undefined) throw new Error('Could not load these settings');
+			return data;
+		},
 		gcTime: 0,
 		staleTime: Infinity,
 		refetchOnWindowFocus: false,
@@ -34,7 +40,7 @@ export function useConfigDraft<T extends object>(
 		}
 	}, [query.data]);
 	useEffect(() => {
-		if (query.isError) toast.error(`${query.error}`);
+		if (query.isError) toast.error(query.error instanceof Error ? query.error.message : `${query.error}`);
 	}, [query.isError, query.error]);
 
 	const patch = useCallback((changes: Partial<T>) => setDraft((d) => (d ? { ...d, ...changes } : d)), []);

@@ -1,5 +1,5 @@
 import { OPENAI_API_BASE_URL, WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '@/lib/constants';
-import { errorBody } from '@/lib/apis/errors';
+import { errorBody, errorDetail, requestError } from '@/lib/apis/errors';
 
 export const getErrorMessage = (err: any, fallback = 'Server connection failed') => {
 	const detail = err?.detail;
@@ -96,7 +96,7 @@ export const getOpenAIModelsDirect = async (url: string, key: string) => {
 			return res.json();
 		})
 		.catch((err) => {
-			error = `OpenAI: ${err?.error?.message ?? 'Network Problem'}`;
+			error = `OpenAI: ${err?.error?.message ?? errorDetail(err)}`;
 			return [];
 		});
 
@@ -123,7 +123,7 @@ export const getOpenAIModels = async (token: string, urlIdx?: number) => {
 			return res.json();
 		})
 		.catch((err) => {
-			error = `OpenAI: ${err?.error?.message ?? 'Network Problem'}`;
+			error = `OpenAI: ${err?.error?.message ?? errorDetail(err)}`;
 			return [];
 		});
 
@@ -333,7 +333,7 @@ export const verifyOpenAIConnection = async (
 				return res.json();
 			})
 			.catch((err) => {
-				error = `OpenAI: ${err?.error?.message ?? 'Network Problem'}`;
+				error = `OpenAI: ${err?.error?.message ?? errorDetail(err)}`;
 				return [];
 			});
 
@@ -359,7 +359,7 @@ export const verifyOpenAIConnection = async (
 				return res.json();
 			})
 			.catch((err) => {
-				error = `OpenAI: ${err?.error?.message ?? 'Network Problem'}`;
+				error = `OpenAI: ${err?.error?.message ?? errorDetail(err)}`;
 				return [];
 			});
 
@@ -389,7 +389,7 @@ export const chatCompletion = async (
 		body: JSON.stringify(body)
 	}).catch((err) => {
 		console.error(err);
-		error = err;
+		error = requestError(err);
 		return null;
 	});
 
@@ -453,7 +453,7 @@ export const synthesizeOpenAISpeech = async (
 		})
 	}).catch((err) => {
 		console.error(err);
-		error = err;
+		error = requestError(err);
 		return null;
 	});
 

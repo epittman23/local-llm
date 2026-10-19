@@ -333,6 +333,43 @@ test('a sent message keeps its author and quote when the response beats the echo
 	await expect(page.getByText('Unknown User')).toHaveCount(0);
 });
 
+test('a message that fails to send comes back to the composer with its reply, and says why (#240)', async ({
+	page
+}) => {
+	await mockWorkspaceBackend(page, { role: 'user', ...enabled });
+	const seen = await mockChannels(page, { messages: [message('m1', 'hello from Ann')] });
+	let answer: 'network' | '502' | 'ok' = 'network';
+	await page.route('**/api/v1/channels/c1/messages/post', (route) => {
+		if (answer === 'network') return route.abort('failed');
+		if (answer === '502')
+			return route.fulfill({ status: 502, contentType: 'text/html', body: '<html><h1>502 Bad Gateway</h1></html>' });
+		return route.fallback();
+	});
+	await page.goto('/channels/c1');
+	const first = page.getByTestId('channel-message').first();
+	await first.hover();
+	await first.getByRole('button', { name: 'Reply', exact: true }).click();
+	const box = page.getByRole('textbox', { name: 'Message' });
+	await box.fill('my answer');
+	await page.keyboard.press('Enter');
+
+	await expect(page.getByText('Could not reach the server')).toBeVisible();
+	await expect(box).toHaveValue('my answer');
+	await expect(page.getByText('Replying to')).toContainText('Ann');
+	await expect(page.getByTestId('channel-message').filter({ hasText: 'my answer' })).toHaveCount(0);
+
+	answer = '502';
+	await page.keyboard.press('Enter');
+	await expect(page.getByText('502 Bad Gateway')).toBeVisible();
+	await expect(box).toHaveValue('my answer');
+
+	answer = 'ok';
+	await page.keyboard.press('Enter');
+	await expect.poll(() => seen.posted.length).toBe(1);
+	expect(seen.posted[0]).toMatchObject({ content: 'my answer', reply_to_id: 'm1' });
+	await expect(box).toHaveValue('');
+});
+
 test('deleting the root from inside its thread closes the thread', async ({ page }) => {
 	await mockWorkspaceBackend(page, { role: 'user', ...enabled });
 	const mine = { user_id: me.id, user: me };

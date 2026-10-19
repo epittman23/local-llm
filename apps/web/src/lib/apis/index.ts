@@ -8,7 +8,7 @@ import { WEBUI_BASE_URL } from '@/lib/constants';
 import { convertOpenApiToToolPayload } from '@/lib/utils/api-helpers';
 import { normalizeTags } from '@/lib/utils/tags';
 import { getOpenAIModelsDirect } from './openai';
-import { errorBody, errorDetail } from '@/lib/apis/errors';
+import { errorBody, errorDetail, requestError } from '@/lib/apis/errors';
 
 const TOOL_SERVER_FETCH_TIMEOUT = 10000;
 
@@ -43,7 +43,7 @@ export const getModels = async (
 			return res.json();
 		})
 		.catch((err) => {
-			error = err;
+			error = requestError(err);
 			console.error(err);
 			return null;
 		});
@@ -196,7 +196,7 @@ export const unloadModel = async (token: string, model: string) => {
 			if ('detail' in err) {
 				error = errorDetail(err);
 			} else {
-				error = err;
+				error = requestError(err);
 			}
 			return null;
 		});
@@ -239,7 +239,7 @@ export const chatCompleted = async (token: string, body: ChatCompletedForm) => {
 			if ('detail' in err) {
 				error = errorDetail(err);
 			} else {
-				error = err;
+				error = requestError(err);
 			}
 			return null;
 		});
@@ -283,7 +283,7 @@ export const chatAction = async (token: string, action_id: string, body: ChatAct
 			if ('detail' in err) {
 				error = errorDetail(err);
 			} else {
-				error = err;
+				error = requestError(err);
 			}
 			return null;
 		});
@@ -315,7 +315,7 @@ export const stopTask = async (token: string, id: string) => {
 			if ('detail' in err) {
 				error = errorDetail(err);
 			} else {
-				error = err;
+				error = requestError(err);
 			}
 			return null;
 		});
@@ -347,7 +347,7 @@ export const stopTasksByChatId = async (token: string, chat_id: string) => {
 			if ('detail' in err) {
 				error = errorDetail(err);
 			} else {
-				error = err;
+				error = requestError(err);
 			}
 			return null;
 		});
@@ -379,7 +379,7 @@ export const getTaskIdsByChatId = async (token: string, chat_id: string) => {
 			if ('detail' in err) {
 				error = errorDetail(err);
 			} else {
-				error = err;
+				error = requestError(err);
 			}
 			return null;
 		});
@@ -421,7 +421,7 @@ export const getToolServerData = async (token: string, url: string) => {
 			} else if ('detail' in err) {
 				error = errorDetail(err);
 			} else {
-				error = err;
+				error = requestError(err);
 			}
 			return null;
 		});
@@ -463,7 +463,7 @@ export const getToolServersData = async (servers: object[]) => {
 								? server?.path
 								: `${server?.url}${(server?.path ?? '').startsWith('/') ? '' : '/'}${server?.path}`
 						).catch((err) => {
-							error = err;
+							error = requestError(err);
 							return null;
 						});
 					} else if ((specType === 'json' && server?.spec) ?? null) {
@@ -703,7 +703,7 @@ export const getTaskConfig = async (token: string = '') => {
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err;
+			error = requestError(err);
 			return null;
 		});
 
@@ -735,7 +735,7 @@ export const updateTaskConfig = async (token: string, config: object) => {
 			if ('detail' in err) {
 				error = errorDetail(err);
 			} else {
-				error = err;
+				error = requestError(err);
 			}
 			return null;
 		});
@@ -1088,7 +1088,7 @@ export const generateMoACompletion = async (token: string = '', model: string, p
 		})
 	}).catch((err) => {
 		console.error(err);
-		error = err;
+		error = requestError(err);
 		return null;
 	});
 
@@ -1116,7 +1116,7 @@ export const getPipelinesList = async (token: string = '') => {
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err;
+			error = requestError(err);
 			return null;
 		});
 
@@ -1153,7 +1153,7 @@ export const uploadPipeline = async (token: string, file: File, urlIdx: string) 
 			if ('detail' in err) {
 				error = errorDetail(err);
 			} else {
-				error = err;
+				error = requestError(err);
 			}
 			return null;
 		});
@@ -1189,7 +1189,7 @@ export const downloadPipeline = async (token: string, url: string, urlIdx: strin
 			if ('detail' in err) {
 				error = errorDetail(err);
 			} else {
-				error = err;
+				error = requestError(err);
 			}
 			return null;
 		});
@@ -1225,7 +1225,7 @@ export const deletePipeline = async (token: string, id: string, urlIdx: string) 
 			if ('detail' in err) {
 				error = errorDetail(err);
 			} else {
-				error = err;
+				error = requestError(err);
 			}
 			return null;
 		});
@@ -1259,7 +1259,7 @@ export const getPipelines = async (token: string, urlIdx?: string) => {
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err;
+			error = requestError(err);
 			return null;
 		});
 
@@ -1293,7 +1293,7 @@ export const getPipelineValves = async (token: string, pipeline_id: string, urlI
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err;
+			error = requestError(err);
 			return null;
 		});
 
@@ -1326,7 +1326,7 @@ export const getPipelineValvesSpec = async (token: string, pipeline_id: string, 
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err;
+			error = requestError(err);
 			return null;
 		});
 
@@ -1367,7 +1367,7 @@ export const updatePipelineValves = async (token: string = '', pipeline_id: stri
 			if ('detail' in err) {
 				error = errorDetail(err);
 			} else {
-				error = err;
+				error = requestError(err);
 			}
 			return null;
 		});
@@ -1395,7 +1395,7 @@ export const getUsage = async (token: string = '') => {
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err;
+			error = requestError(err);
 			return null;
 		});
 
@@ -1422,7 +1422,7 @@ export const getBackendConfig = async () => {
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err;
+			error = requestError(err);
 			return null;
 		});
 
@@ -1472,7 +1472,7 @@ export const getVersion = async (token: string) => {
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err;
+			error = requestError(err);
 			return null;
 		});
 
@@ -1521,7 +1521,7 @@ export const getEvents = async (token: string): Promise<{ schema: string; events
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err;
+			error = requestError(err);
 			return null;
 		});
 
@@ -1548,7 +1548,7 @@ export const getEventWebhooks = async (token: string): Promise<EventWebhook[]> =
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err;
+			error = requestError(err);
 			return null;
 		});
 
@@ -1576,7 +1576,7 @@ export const createEventWebhook = async (token: string, webhook: Partial<EventWe
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err;
+			error = requestError(err);
 			return null;
 		});
 
@@ -1608,7 +1608,7 @@ export const updateEventWebhook = async (
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err;
+			error = requestError(err);
 			return null;
 		});
 
@@ -1635,7 +1635,7 @@ export const deleteEventWebhook = async (token: string, id: string) => {
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err;
+			error = requestError(err);
 			return null;
 		});
 

@@ -1,5 +1,5 @@
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
-import { errorBody, errorDetail } from '@/lib/apis/errors';
+import { errorBody, errorDetail, requestError } from '@/lib/apis/errors';
 
 export const getGravatarUrl = async (token: string, email: string) => {
 	let error = null;
@@ -17,7 +17,7 @@ export const getGravatarUrl = async (token: string, email: string) => {
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err.detail ?? err;
+			error = errorDetail(err);
 			return null;
 		});
 
@@ -48,7 +48,7 @@ export const executeCode = async (token: string, code: string) => {
 		.catch((err) => {
 			console.error(err);
 
-			error = err;
+			error = requestError(err);
 			if (err.detail) {
 				error = errorDetail(err);
 			}
@@ -82,7 +82,7 @@ export const formatPythonCode = async (token: string, code: string) => {
 		.catch((err) => {
 			console.error(err);
 
-			error = err;
+			error = requestError(err);
 			if (err.detail) {
 				error = errorDetail(err);
 			}
@@ -116,9 +116,11 @@ export const downloadChatAsPDF = async (token: string, title: string, messages: 
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err;
+			error = requestError(err);
 			return null;
 		});
+
+	if (error) throw error;
 
 	return blob;
 };
@@ -135,7 +137,7 @@ export const downloadDatabase = async (token: string) => {
 	})
 		.then(async (response) => {
 			if (!response.ok) {
-				throw await response.json();
+				throw await errorBody(response);
 			}
 			return response.blob();
 		})

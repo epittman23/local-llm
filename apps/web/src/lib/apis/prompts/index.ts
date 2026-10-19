@@ -1,5 +1,5 @@
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
-import { errorBody, errorDetail } from '@/lib/apis/errors';
+import { errorBody, errorDetail, requestError } from '@/lib/apis/errors';
 
 type PromptItem = {
 	id?: string; // Prompt ID
@@ -184,7 +184,7 @@ export const getPromptItems = async (
 			return json;
 		})
 		.catch((err) => {
-			error = err;
+			error = requestError(err);
 			console.error(err);
 			return null;
 		});

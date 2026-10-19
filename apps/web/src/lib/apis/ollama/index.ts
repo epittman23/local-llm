@@ -5,7 +5,7 @@
 // verbatim port covers -- the same call the migration plan made for the Python side's
 // pre-existing Optional-typing debt (docs/decisions.md, 2026-09-15 entry).
 import { OLLAMA_API_BASE_URL } from '@/lib/constants';
-import { errorBody, errorDetail } from '@/lib/apis/errors';
+import { errorBody, errorDetail, requestError } from '@/lib/apis/errors';
 
 export const verifyOllamaConnection = async (token: string = '', connection: dict = {}) => {
 	let error = null;
@@ -26,7 +26,7 @@ export const verifyOllamaConnection = async (token: string = '', connection: dic
 			return res.json();
 		})
 		.catch((err) => {
-			error = `Ollama: ${err?.error?.message ?? 'Network Problem'}`;
+			error = `Ollama: ${err?.error?.message ?? errorDetail(err)}`;
 			return [];
 		});
 
@@ -232,7 +232,7 @@ export const generateEmbeddings = async (token: string = '', model: string, text
 			prompt: text
 		})
 	}).catch((err) => {
-		error = err;
+		error = requestError(err);
 		return null;
 	});
 
@@ -259,7 +259,7 @@ export const generateTextCompletion = async (token: string = '', model: string, 
 			stream: true
 		})
 	}).catch((err) => {
-		error = err;
+		error = requestError(err);
 		return null;
 	});
 
@@ -284,7 +284,7 @@ export const generateChatCompletion = async (token: string = '', body: object) =
 		},
 		body: JSON.stringify(body)
 	}).catch((err) => {
-		error = err;
+		error = requestError(err);
 		return null;
 	});
 
@@ -309,7 +309,7 @@ export const unloadModel = async (token: string, tagName: string) => {
 			model: tagName
 		})
 	}).catch((err) => {
-		error = err;
+		error = requestError(err);
 		return null;
 	});
 
@@ -332,7 +332,7 @@ export const createModel = async (token: string, payload: object, urlIdx: string
 		},
 		body: JSON.stringify(payload)
 	}).catch((err) => {
-		error = err;
+		error = requestError(err);
 		return null;
 	});
 
@@ -367,7 +367,7 @@ export const deleteModel = async (token: string, tagName: string, urlIdx: string
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err;
+			error = requestError(err);
 
 			if ('detail' in err) {
 				error = errorDetail(err);
@@ -400,7 +400,7 @@ export const pullModel = async (token: string, tagName: string, urlIdx: number |
 		})
 	}).catch((err) => {
 		console.error(err);
-		error = err;
+		error = requestError(err);
 
 		if ('detail' in err) {
 			error = errorDetail(err);
@@ -429,7 +429,7 @@ export const downloadModel = async (token: string, download_url: string, urlIdx:
 		})
 	}).catch((err) => {
 		console.error(err);
-		error = err;
+		error = requestError(err);
 
 		if ('detail' in err) {
 			error = errorDetail(err);
@@ -457,7 +457,7 @@ export const uploadModel = async (token: string, file: File, urlIdx: string | nu
 		body: formData
 	}).catch((err) => {
 		console.error(err);
-		error = err;
+		error = requestError(err);
 
 		if ('detail' in err) {
 			error = errorDetail(err);

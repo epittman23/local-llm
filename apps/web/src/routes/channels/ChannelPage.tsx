@@ -237,8 +237,12 @@ function ChannelView({ id }: { id: string }) {
 								}}
 								onSubmit={(v) => {
 									atEnd.current = true;
-									void feed.submit(v, replyTo);
+									const reply = replyTo;
 									setReplyTo(null);
+									return feed.submit(v, reply).then((res) => {
+										if (!res) setReplyTo((cur) => cur ?? reply);
+										return !!res;
+									});
 								}}
 							/>
 						</div>

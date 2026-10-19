@@ -65,7 +65,8 @@ export const MessageComposer = forwardRef<
 		replyTo: ChannelMessage | null;
 		onCancelReply: () => void;
 		onTyping: () => void;
-		onSubmit: (value: ComposerSubmit) => void;
+		/** Resolves false when the message was not sent: the composer then puts it back. */
+		onSubmit: (value: ComposerSubmit) => void | Promise<boolean>;
 	}
 >(function MessageComposer(
 	{ channel, disabled, placeholder, typingUsers, replyTo, onCancelReply, onTyping, onSubmit },
@@ -80,6 +81,8 @@ export const MessageComposer = forwardRef<
 	const [selected, setSelected] = useState(0);
 	const [dismissed, setDismissed] = useState<number | null>(null);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
+	const textRef = useRef(text);
+	textRef.current = text;
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const lastTyping = useRef(0);
 
@@ -207,7 +210,15 @@ export const MessageComposer = forwardRef<
 		if (disabled || uploading) return;
 		const content = encodeMentions(text.trim(), mentions);
 		if (!content && files.length === 0) return;
-		onSubmit({ content, data: { files } });
+		const sent = { text, mentions, files };
+		void Promise.resolve(onSubmit({ content, data: { files } })).then((ok) => {
+			// A failed send gives the message back, unless something new was typed meanwhile.
+			if (ok === false && textRef.current === '') {
+				setText(sent.text);
+				setMentions(sent.mentions);
+				setFiles(sent.files);
+			}
+		});
 		setText('');
 		setMentions([]);
 		setFiles([]);

@@ -12,6 +12,7 @@ import { getSessionUser, userSignOut } from '@/lib/apis/auths';
 import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
+import { isServerUnreachable } from '@/lib/apis/errors';
 
 const TOKEN_EXPIRY_BUFFER = 60; // seconds
 const TOKEN_CHECK_INTERVAL_MS = 15000;
@@ -193,7 +194,10 @@ export const initAuth = async () => {
 	} catch (error) {
 		console.error('Failed to restore session:', error);
 		useAuthStore.getState().clearSession();
-		localStorage.removeItem('token');
+		// A server that could not be reached said nothing about the token:
+		// keep it, so the next load (the error page's Check Again) signs
+		// straight back in. Only a refusal ends the session.
+		if (!isServerUnreachable(error)) localStorage.removeItem('token');
 		return () => stopTokenTimer();
 	}
 

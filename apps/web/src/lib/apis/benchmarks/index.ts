@@ -1,7 +1,7 @@
 import { EventSourceParserStream } from 'eventsource-parser/stream';
 
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
-import { errorBody, errorDetail } from '@/lib/apis/errors';
+import { errorBody, errorDetail, requestError } from '@/lib/apis/errors';
 
 // -----------------------------------------------------------------------------
 // SSE consumption helper
@@ -236,7 +236,7 @@ export const streamServe = async (
 		}
 	}).catch((err) => {
 		console.error(err);
-		error = err;
+		error = requestError(err);
 		return null;
 	});
 
@@ -424,7 +424,7 @@ export const streamTestRun = async (
 		}
 	}).catch((err) => {
 		console.error(err);
-		error = err;
+		error = requestError(err);
 		return null;
 	});
 
@@ -759,11 +759,11 @@ export const getReportFileText = async (token: string = '', runDir: string, file
 		}
 	})
 		.then(async (res) => {
-			if (!res.ok) throw await res.json().catch(() => ({ detail: res.statusText }));
+			if (!res.ok) throw await errorBody(res);
 			return res.text();
 		})
 		.catch((err) => {
-			error = err?.detail ?? err;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -1002,7 +1002,7 @@ export const streamTuneLog = async (
 		}
 	}).catch((err) => {
 		console.error(err);
-		error = err;
+		error = requestError(err);
 		return null;
 	});
 

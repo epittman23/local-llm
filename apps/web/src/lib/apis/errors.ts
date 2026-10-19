@@ -43,12 +43,24 @@ export async function errorBody(res: Response): Promise<unknown> {
 		// not JSON
 	}
 	const status = `${res.status} ${res.statusText}`.trim();
-	const snippet = text
+	let snippet = text
 		.replace(/<[^>]*>/g, ' ')
 		.replace(/\s+/g, ' ')
-		.trim()
-		.slice(0, 200);
-	return { detail: snippet && !snippet.startsWith(status) ? `${status}: ${snippet}` : status };
+		.trim();
+	// A proxy's error page usually repeats the status as its heading.
+	if (snippet.startsWith(status)) snippet = snippet.slice(status.length).trim();
+	snippet = snippet.slice(0, 200);
+	return { detail: snippet ? `${status}: ${snippet}` : status };
+}
+
+/**
+ * The failure itself, with a network failure made recognisable: for helpers
+ * whose callers read the thrown error body as an object (`err.detail`), so
+ * it stays as it is, but `fetch`'s TypeError becomes ServerUnreachableError.
+ */
+export function requestError(err: unknown): unknown {
+	if (err instanceof TypeError) return new ServerUnreachableError(err);
+	return err ?? new Error('Request failed');
 }
 
 /**
@@ -58,12 +70,11 @@ export async function errorBody(res: Response): Promise<unknown> {
  * `if (error) throw error` always throws.
  */
 export function errorDetail(err: unknown): unknown {
-	if (isAbort(err)) return err;
-	if (err instanceof TypeError) return new ServerUnreachableError(err);
+	if (isAbort(err) || err instanceof TypeError) return requestError(err);
 	const detail = (err as { detail?: unknown } | null | undefined)?.detail;
 	if (Array.isArray(detail)) {
 		return detail.map((e: { msg?: string }) => e?.msg || JSON.stringify(e)).join(', ');
 	}
 	if (detail !== undefined && detail !== null && detail !== '') return detail;
-	return err ?? new Error('Request failed');
+	return requestError(err);
 }

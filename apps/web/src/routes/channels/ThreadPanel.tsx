@@ -75,8 +75,12 @@ export function ThreadPanel({
 					onCancelReply={() => setReplyTo(null)}
 					onTyping={feed.emitTyping}
 					onSubmit={(v) => {
-						void feed.submit(v, replyTo);
+						const reply = replyTo;
 						setReplyTo(null);
+						return feed.submit(v, reply).then((res) => {
+							if (!res) setReplyTo((cur) => cur ?? reply);
+							return !!res;
+						});
 					}}
 				/>
 			</div>

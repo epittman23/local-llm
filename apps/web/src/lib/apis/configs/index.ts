@@ -333,7 +333,7 @@ export const getOrchestratorPolicy = async (
 		})
 	});
 	if (!res.ok) {
-		const body = await res.json();
+		const body = (await errorBody(res)) as { detail?: string };
 		throw Object.assign(new Error(body.detail || 'Failed to read policy'), { status: res.status });
 	}
 	return res.json();
@@ -401,7 +401,7 @@ export const getOrchestratorLifecycle = async (
 		})
 	});
 	if (!res.ok) {
-		const body = await res.json();
+		const body = (await errorBody(res)) as { detail?: string };
 		throw Object.assign(new Error(body.detail || 'Failed to read lifecycle'), {
 			status: res.status
 		});

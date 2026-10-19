@@ -6,7 +6,7 @@
 // pre-existing Optional-typing debt (docs/decisions.md, 2026-09-15 entry).
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { splitStream } from '@/lib/utils/api-helpers';
-import { errorBody, errorDetail } from '@/lib/apis/errors';
+import { errorBody, errorDetail, requestError } from '@/lib/apis/errors';
 
 export const uploadFile = async (
 	token: string,
@@ -41,7 +41,7 @@ export const uploadFile = async (
 			return res.json();
 		})
 		.catch((err) => {
-			error = err.detail || err.message;
+			error = errorDetail(err);
 			console.error(err);
 			return null;
 		});
@@ -213,7 +213,7 @@ export const getFileCount = async (token: string = '') => {
 			return res.json();
 		})
 		.catch((err) => {
-			error = err;
+			error = requestError(err);
 			console.error(err);
 			return null;
 		});

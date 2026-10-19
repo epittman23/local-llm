@@ -253,7 +253,7 @@ export const getUserSettings = async (token: string, raw = false) => {
 		})
 		.catch((err) => {
 			console.error(err);
-			error = err?.detail ?? err;
+			error = errorDetail(err);
 			return null;
 		});
 
