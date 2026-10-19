@@ -90,3 +90,77 @@ issue; each is a candidate for a deliberate decision or a cleanup PR.
 - No GPU, CUDA, llama.cpp or OpenRouter access: serving, telemetry and tuning had static review
   plus unit-level repros only.
 - The clone was shallow; `git fetch --unshallow` was run to check migration history and `d863707`.
+
+## Gap review (2026-10-19, second session)
+
+Non-bug observations from packages B1-B10 and F1-F9 (security observations
+are kept out of this file).
+
+### Checked and sound
+
+- Middleware refactors #118-#124, the #95 users query, the #100 model list and
+  the #101/#102 retrieval and web-search dispatch match their pre-refactor code.
+- User settings saves do not overwrite other tabs: patches merge into the full
+  loaded `ui` and the backend merges top-level keys.
+- `permissionRows.ts` and `DEFAULT_PERMISSIONS` match `d863707`'s permissions
+  UI and constants exactly (65 rows, in order); backend permission models carry
+  the same keys.
+- All 381 persistent-config defaults are JSON-native and round-trip unchanged;
+  no key is a dotted prefix of another.
+- Every Web Search engine field exists in the backend form and every
+  Svelte-bound field is present in the port; Connections config indices stay
+  aligned on delete.
+- `lib/utils` behaviour matches `d863707` except the documented
+  `getTimeRange` change; `lib/chat/importChats.ts`, `sources.ts`,
+  `knowledgeFiles.ts` and `accessGrants.ts` match their originals.
+- Shared-chat snapshots do not leak later edits; knowledge_fs has no
+  filesystem underneath (paths are database names).
+
+### Design questions and minor inherited behaviour
+
+- Persistent config: once a key is seeded, the database value wins over
+  `infra/.env` on every later start; editing `.env` has no effect after first
+  boot (PersistentConfig semantics).
+- Chat history `merge_history` unions stored and incoming history so stale
+  writers do not drop messages; as a consequence a deleted message can return.
+- Several list queries and LIKE searches across models (prompts, models,
+  automations, messages, notes, knowledge) do not escape `%`/`_` and lack an
+  id tiebreaker; the filed issues cover the user-visible cases.
+- Prompt history picks the latest entry by `created_at` with one-second
+  resolution.
+- Leaderboard: Elo ignores draws although the Feedback table shows them; the
+  model history chart and the leaderboard count different feedback sets.
+- Notes search defaults to `permission='write'`.
+- Evaluations and analytics bucket days in server-local time while the
+  frontend labels some dates in UTC; consistent on a single host.
+- Timer and sub-agent lock dictionaries grow by one entry per chat (tiny).
+- `prompt_template` renders unset profile fields as "None" and uses
+  server-local time for `{{CURRENT_DATE}}`; `[-0:]` slicing makes
+  `{{prompt:end:0}}` return the whole prompt.
+- Context compaction counts the last reply's reasoning tokens towards the
+  threshold.
+- The Database tab's database export button always fails on Postgres
+  (`DB_NOT_SQLITE`) but is shown.
+- `SensitiveInput` masks with `type=password`, so password managers may offer
+  to save API keys; its comment about the original's masking is wrong.
+- Client-side image compression and STT language metadata for channel uploads
+  were dropped in the port; only the former is documented.
+- `ydoc:*`/`join-note` socket handlers are not used by the React frontend
+  (Yjs was not ported).
+
+### Dead code
+
+- `getToolServersData`, `convertMessagesToHistory`, `createMessagesList`,
+  `getUserTimezone` (frontend); `update_prompt_by_command`,
+  `delete_prompt_by_command`, `groups.search_groups`,
+  `get_chat_list_by_chat_ids`, the `logit_bias` branch in
+  `apply_params_to_form_data`, `telemetry/instrumentors._uninstrument` (backend).
+- `chat_message.last_message_at` is set from a field the backend never sends.
+
+### Coverage notes
+
+- `apps/web/src/components/ui/` (generated shadcn/ui primitives) was not
+  reviewed line by line.
+- `apps/web/src/lib/apis/**`: paths and methods of every call were checked in
+  U7; request and response shapes were checked where a page package used them,
+  not exhaustively.

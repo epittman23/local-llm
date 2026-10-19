@@ -11,8 +11,9 @@ handles them through private security advisories.
 - **Audited commit**: `7a4088b20f3aa27cf35abb07689e68b19408c003` (`main`,
   "fix(server): search knowledge even when a hit has no metadata (#108)").
   Every line reference here and in the issues refers to it; re-locate lines on
-  current `main` before editing, since PRs have landed since (open at audit
-  time: #125, a ruff configuration chore that touches none of these files).
+  current `main` before editing, since PRs have landed since. #125 (merged
+  as `3b754d1`) changed only `apps/server/pyproject.toml` outside application
+  code, so the permalinks stay valid for every application file.
 - **Environment setup that worked** (Claude Code cloud container):
   1. `infra/.env` with placeholder values for `OPENROUTER_API_KEY`,
      `POSTGRES_PASSWORD`, `LLLM_SECRET_KEY` (never commit it).
@@ -26,7 +27,19 @@ handles them through private security advisories.
      older Chromium, link the expected revision directory to it (outside the
      repo) and run `cd apps/web && bunx playwright test --workers=2`.
   6. If `git show d863707:...` fails, run `git fetch --unshallow origin main`.
-- **Baseline results at the audited commit**:
+- **Baseline on the owner's laptop** (2026-10-19, Fedora 44, Docker 29.8.2,
+  Node 26.10, working tree `3b754d1` plus docs), each Make target run on its own:
+
+  | Check | Result |
+  |---|---|
+  | `make lint` | pass, no files changed |
+  | `make test-backend` | pass: 1618 passed, 21 skipped, 0 failed (`test_the_app_imports` ran against the throwaway pgvector Postgres) |
+  | `make test-web` | pass: `astro check` 0 errors, 0 warnings, 13 hints; Vitest 580/580 in 78 files; build OK |
+  | `make test-e2e` | pass: 341/341 (9.3 min); the flaky spec in #157 did not fail here |
+
+  Nothing in the working tree changed after the four targets.
+
+- **Baseline in the first (cloud) session**, kept as history:
 
   | Check | Result |
   |---|---|
@@ -75,11 +88,152 @@ handles them through private security advisories.
 | [#155](https://github.com/epittman23/local-llm/issues/155) | A-30 | Streaming usage is merged on every usage-bearing chunk, double-counting when a provider repeats usage | Low | backend | Suspected | `middleware.py:4977` | S |
 | [#157](https://github.com/epittman23/local-llm/issues/157) | A-32 | Flaky e2e assertion in the knowledge list search test | Low | web | Suspected | `workspace-knowledge.spec.ts:156` | S |
 
+### Gap review findings (A-36 onward)
+
+| Issue | Finding | Title | Severity | Area | Status | Location | Effort |
+|---|---|---|---|---|---|---|---|
+| [#241](https://github.com/epittman23/local-llm/issues/241) | A-115 | crypto.randomUUID is unavailable over plain-HTTP LAN access, so sending a chat message throws there | High | web | Confirmed | `history.ts:59` | S |
+| [#242](https://github.com/epittman23/local-llm/issues/242) | A-116 | JWT expiry accepts negative durations, locking every user out, and silently drops invalid values while the tab reports saved | High | backend | Confirmed | `auths.py:946` | S |
+| [#162](https://github.com/epittman23/local-llm/issues/162) | A-36 | OpenRouter's mid-stream error chunk is ignored, so a cut-off reply is saved and shown as a complete answer | High | backend | Confirmed | `middleware.py:5031` | S |
+| [#176](https://github.com/epittman23/local-llm/issues/176) | A-50 | The calendar search tool returns unexpanded recurring events that push real in-range events out of the results | High | backend | Confirmed | `builtin.py:4184` | S |
+| [#177](https://github.com/epittman23/local-llm/issues/177) | A-51 | query_chat_files without a file id returns only the first attached file's chunks | High | backend | Confirmed | `builtin.py:2593` | S |
+| [#195](https://github.com/epittman23/local-llm/issues/195) | A-69 | Deleting a knowledge directory with its contents leaves the files' chunks in the vector collection, so chat keeps answering from deleted files | High | backend | Confirmed | `knowledge.py:1003` | M |
+| [#211](https://github.com/epittman23/local-llm/issues/211) | A-85 | Editing a reply or "Save As Copy" changes only what is displayed; the model keeps receiving the original text | High | web | Confirmed | `history.ts:470` | S |
+| [#221](https://github.com/epittman23/local-llm/issues/221) | A-95 | Saving a prompt with "Set as Production" unchecked still puts the new content live | High | backend | Confirmed | `prompts.py:509` | S |
+| [#226](https://github.com/epittman23/local-llm/issues/226) | A-100 | Editing any prompt suggestion truncates all others to 2000 characters and drops their other fields | Medium | web | Confirmed | `PromptSuggestionsEditor.tsx:8` | S |
+| [#227](https://github.com/epittman23/local-llm/issues/227) | A-101 | Saving a skill re-enables it if disabled and clears its tags | Medium | web | Confirmed | `SkillEditor.tsx:79` | S |
+| [#228](https://github.com/epittman23/local-llm/issues/228) | A-102 | Debounced autosaves are cancelled on unmount, so edits made just before leaving a page are lost | Medium | web | Confirmed | `PromptEditView.tsx:76` | S |
+| [#229](https://github.com/epittman23/local-llm/issues/229) | A-103 | Knowledge-base actions can leave the user on an empty later page with no pagination to get back | Medium | web | Confirmed | `KnowledgeBasePage.tsx:215` | S |
+| [#231](https://github.com/epittman23/local-llm/issues/231) | A-105 | Dropping a folder together with other items skips every item after the first folder | Medium | web | Suspected | `KnowledgeBasePage.tsx:286` | S |
+| [#232](https://github.com/epittman23/local-llm/issues/232) | A-106 | Hybrid search is silently switched off when the reranker fails to load, while Documents reports it saved and on | Medium | backend | Confirmed | `retrieval.py:164` | S |
+| [#235](https://github.com/epittman23/local-llm/issues/235) | A-109 | Admin Documents accepts chunk size 0 or an overlap larger than the chunk size, after which every upload fails | Medium | web | Confirmed | `Documents.tsx:258` | S |
+| [#240](https://github.com/epittman23/local-llm/issues/240) | A-114 | API client helpers resolve null on network or non-JSON errors, so failures are reported as success or lost silently | Medium | web | Confirmed | `index.ts:389` | M |
+| [#243](https://github.com/epittman23/local-llm/issues/243) | A-117 | Admin banners are saved but never displayed anywhere (the port lost the banner display and dismissal) | Medium | web | Confirmed | `General.tsx:151` | M |
+| [#244](https://github.com/epittman23/local-llm/issues/244) | A-118 | Cancelling an Ollama pull deletes an installed model of the same name | Medium | web | Confirmed | `ollamaDownloads.ts:113` | S |
+| [#245](https://github.com/epittman23/local-llm/issues/245) | A-119 | An Ollama pull whose stream errors spins forever and freezes the admin tab | Medium | web | Confirmed | `ollamaDownloads.ts:81` | S |
+| [#247](https://github.com/epittman23/local-llm/issues/247) | A-121 | Clearing the Jupyter timeout in admin Code Execution makes the tab unsaveable | Medium | web | Confirmed | `CodeExecution.tsx:110` | S |
+| [#252](https://github.com/epittman23/local-llm/issues/252) | A-126 | Failed channel message edits, pins, reactions and deletes stay on screen as if saved | Medium | web | Confirmed | `useMessageFeed.ts:211` | S |
+| [#253](https://github.com/epittman23/local-llm/issues/253) | A-127 | A failed channel history load is shown as "the very beginning of the channel" | Medium | web | Confirmed | `useMessageFeed.ts:76` | S |
+| [#259](https://github.com/epittman23/local-llm/issues/259) | A-133 | Account tab: a failed load is silent, and Save then wipes user variables and profile fields | Medium | web | Confirmed | `Account.tsx:79` | S |
+| [#264](https://github.com/epittman23/local-llm/issues/264) | A-138 | Automation runs are recorded as successful as soon as they are dispatched, so model and provider failures never reach the run history | Medium | backend | Confirmed | `automations.py:468` | M |
+| [#265](https://github.com/epittman23/local-llm/issues/265) | A-139 | Automation runs fired before the model list is loaded drop the model's default tools, filters, features and terminal | Medium | backend | Confirmed | `automations.py:308` | S |
+| [#266](https://github.com/epittman23/local-llm/issues/266) | A-140 | Daily, weekly and monthly automation rules skip occurrences when the user's timezone is behind the server's, and fire a few seconds late | Medium | backend | Confirmed | `automations.py:84` | S |
+| [#268](https://github.com/epittman23/local-llm/issues/268) | A-142 | The app has no handler for the calendar:alert socket event, so in-app calendar reminders are never shown | Medium | web | Confirmed | `automations.py:736` | S |
+| [#277](https://github.com/epittman23/local-llm/issues/277) | A-151 | Deleting a thread's parent message leaves its replies, pins and reactions reachable | Medium | backend | Confirmed | `messages.py:574` | S |
+| [#278](https://github.com/epittman23/local-llm/issues/278) | A-152 | Leaderboard counts a thumbs-up on a regenerated reply as both a win and a loss for the same model | Medium | backend | Confirmed | `evaluations.py:111` | S |
+| [#282](https://github.com/epittman23/local-llm/issues/282) | A-156 | Batch memory replace clears the memory's path unless the caller repeats it | Medium | backend | Confirmed | `memory.py:264` | S |
+| [#283](https://github.com/epittman23/local-llm/issues/283) | A-157 | Generated tags that differ only by case or spacing make the whole tag batch fail, leaving chat tags unindexed and unarchive returning 500 | Medium | backend | Confirmed | `tags.py:121` | S |
+| [#284](https://github.com/epittman23/local-llm/issues/284) | A-158 | Every failed OAuth token refresh deletes the session, and refresh has no lock despite its docstring | Medium | backend | Confirmed | `oauth.py:1055` | S |
+| [#289](https://github.com/epittman23/local-llm/issues/289) | A-163 | Postgres chat search silently excludes chats whose title contains "x00" or whose content contains a literal \u0000 | Medium | backend | Confirmed | `chats.py:2066` | S |
+| [#290](https://github.com/epittman23/local-llm/issues/290) | A-164 | Files added to a message by tools or streamed images are written only to the chat JSON, so they are duplicated on save and lost on fork | Medium | backend | Confirmed | `chats.py:1201` | S |
+| [#163](https://github.com/epittman23/local-llm/issues/163) | A-37 | If the upstream connection drops mid-stream, the partial reply is discarded and the stream snapshot is never cleared | Medium | backend | Confirmed | `middleware.py:4859` | S |
+| [#164](https://github.com/epittman23/local-llm/issues/164) | A-38 | Resuming after a tool approval rebuilds messages from the database, dropping the system prompt, injected context and the user's images | Medium | backend | Confirmed | `middleware.py:3438` | M |
+| [#165](https://github.com/epittman23/local-llm/issues/165) | A-39 | A non-streaming reply with only tool calls, or with empty content, is never finished and spins forever | Medium | backend | Confirmed | `middleware.py:4139` | S |
+| [#169](https://github.com/epittman23/local-llm/issues/169) | A-43 | Connected MCP clients leak when listing tools fails or a later tool-setup step raises | Medium | backend | Suspected | `middleware.py:2260` | S |
+| [#170](https://github.com/epittman23/local-llm/issues/170) | A-44 | One failing notification webhook stops delivery to the user's other notification targets | Medium | backend | Confirmed | `notifications.py:395` | S |
+| [#171](https://github.com/epittman23/local-llm/issues/171) | A-45 | Recurring calendar occurrences that start before the viewed range are dropped, unlike one-off events with the same times | Medium | backend | Confirmed | `calendar.py:44` | S |
+| [#178](https://github.com/epittman23/local-llm/issues/178) | A-52 | Paging view_file / view_knowledge_file with line numbers skips content | Medium | backend | Confirmed | `builtin.py:2820` | S |
+| [#179](https://github.com/epittman23/local-llm/issues/179) | A-53 | query_knowledge_files lets attached notes and internal hits crowd out more relevant external knowledge hits | Medium | backend | Confirmed | `builtin.py:3357` | S |
+| [#180](https://github.com/epittman23/local-llm/issues/180) | A-54 | One failing external knowledge base makes query_knowledge_files fail and discards every internal result | Medium | backend | Confirmed | `builtin.py:3369` | S |
+| [#181](https://github.com/epittman23/local-llm/issues/181) | A-55 | search_notes and search_chats apply date filters after fetching only the newest matches, so older ranges return nothing | Medium | backend | Confirmed | `builtin.py:1153` | M |
+| [#182](https://github.com/epittman23/local-llm/issues/182) | A-56 | Creating an event without a calendar picks the first shared calendar flagged default, which can be another user's | Medium | backend | Confirmed | `builtin.py:4277` | S |
+| [#183](https://github.com/epittman23/local-llm/issues/183) | A-57 | Rescheduling an event never re-arms its reminder, and recurring events alert only once | Medium | backend | Confirmed | `builtin.py:4446` | S |
+| [#187](https://github.com/epittman23/local-llm/issues/187) | A-61 | merge_system_messages keeps only the first text part of a list-content system message | Medium | backend | Confirmed | `misc.py:641` | S |
+| [#188](https://github.com/epittman23/local-llm/issues/188) | A-62 | The Anthropic-compatible endpoint reports upstream failures as a successful end_turn | Medium | backend | Confirmed | `anthropic.py:526` | S |
+| [#189](https://github.com/epittman23/local-llm/issues/189) | A-63 | OpenAPI tool servers: body fields that share a name with a path or query parameter are removed from the body (regression from #117) | Medium | backend | Confirmed | `tools.py:1769` | M |
+| [#196](https://github.com/epittman23/local-llm/issues/196) | A-70 | Every chat save re-adds a continued reply's usage to its chat_message row, inflating stored token usage without bound | Medium | backend | Confirmed | `chat_messages.py:243` | S |
+| [#197](https://github.com/epittman23/local-llm/issues/197) | A-71 | The Knowledge page's "local" source filter matches no knowledge base created in the app | Medium | backend | Confirmed | `knowledge.py:206` | S |
+| [#200](https://github.com/epittman23/local-llm/issues/200) | A-74 | Clearing a custom number parameter in chat controls stores "" and every later request sends it upstream as the value | Medium | web | Confirmed | `AdvancedParams.tsx:49` | S |
+| [#202](https://github.com/epittman23/local-llm/issues/202) | A-76 | The note access dialog lost the original's permission props: no write grants, and a Public option that is silently stripped while the UI shows it applied | Medium | web | Confirmed | `NoteEditorPage.tsx:200` | S |
+| [#203](https://github.com/epittman23/local-llm/issues/203) | A-77 | Leaderboard Elo ratings depend on database row order rather than time | Medium | backend | Confirmed | `feedbacks.py:315` | S |
+| [#212](https://github.com/epittman23/local-llm/issues/212) | A-86 | With the message queue off, sending while a reply streams does not stop that reply | Medium | web | Confirmed | `useChatSession.ts:436` | S |
+| [#213](https://github.com/epittman23/local-llm/issues/213) | A-87 | A queued prompt is silently discarded when the reply it waited for fails with no content | Medium | web | Confirmed | `useChatSession.ts:447` | S |
+| [#214](https://github.com/epittman23/local-llm/issues/214) | A-88 | A reply whose done event was missed (socket drop, sleep, backend reload) stays "generating" forever | Medium | web | Confirmed | `history.ts:292` | M |
+| [#215](https://github.com/epittman23/local-llm/issues/215) | A-89 | An async message action or rating that finishes while another chat loads saves the old chat's history into the new chat | Medium | web | Confirmed | `useChatSession.ts:618` | S |
+| [#224](https://github.com/epittman23/local-llm/issues/224) | A-98 | Importing a model JSON over an existing model deletes its sharing grants, re-enables it, and replaces its meta | Medium | web | Confirmed | `ModelsPage.tsx:285` | S |
+| [#225](https://github.com/epittman23/local-llm/issues/225) | A-99 | Bulk Enable/Disable/Show/Hide on the Models page act on read-only models and can wipe their params | Medium | web | Confirmed | `ModelsPage.tsx:239` | S |
+| [#230](https://github.com/epittman23/local-llm/issues/230) | A-104 | The knowledge base detail page starts filtered by the list pages' shared View setting | Low | web | Confirmed | `KnowledgeBasePage.tsx:150` | S |
+| [#233](https://github.com/epittman23/local-llm/issues/233) | A-107 | Admin Documents: the BM25 weight "Default" option can never be saved | Low | web | Confirmed | `Documents.tsx:594` | S |
+| [#234](https://github.com/epittman23/local-llm/issues/234) | A-108 | Admin Documents: JSON options pass validation then fail the save after the embedding change was already applied | Low | web | Confirmed | `documents.ts:50` | S |
+| [#236](https://github.com/epittman23/local-llm/issues/236) | A-110 | Admin Images: Verify for the edit ComfyUI URL checks the generation server instead | Low | web | Confirmed | `Images.tsx:269` | S |
+| [#237](https://github.com/epittman23/local-llm/issues/237) | A-111 | Admin Images: a cleared Steps field is sent as "" and fails the whole save | Low | web | Confirmed | `Images.tsx:371` | S |
+| [#238](https://github.com/epittman23/local-llm/issues/238) | A-112 | "Max Upload Size" 0 means unlimited to the server but rejects every file in the chat and channel composers | Low | web | Confirmed | `Documents.tsx:661` | S |
+| [#239](https://github.com/epittman23/local-llm/issues/239) | A-113 | Admin Connections Save shows "Settings saved" after both saves failed | Low | web | Confirmed | `Connections.tsx:247` | S |
+| [#246](https://github.com/epittman23/local-llm/issues/246) | A-120 | Ollama "Update All Models" reports success even when every pull failed | Low | web | Confirmed | `ManageOllama.tsx:164` | S |
+| [#248](https://github.com/epittman23/local-llm/issues/248) | A-122 | Clearing number fields in admin Interface settings fails the save and can half-apply it | Low | web | Confirmed | `Interface.tsx:122` | S |
+| [#249](https://github.com/epittman23/local-llm/issues/249) | A-123 | After hiding a connection model with no stored record, further toggles on it fail until the tab is reopened | Low | web | Confirmed | `AdminModels.tsx:228` | S |
+| [#250](https://github.com/epittman23/local-llm/issues/250) | A-124 | GGUF upload creates the model twice in file mode and never in URL mode, and stream errors are swallowed | Low | web | Suspected | `ManageOllama.tsx:259` | S |
+| [#251](https://github.com/epittman23/local-llm/issues/251) | A-125 | Pipelines: an unset list valve loads as an empty required Custom field, blocking Save; its test cannot catch it | Low | web | Confirmed | `pipelineValves.ts:10` | S |
+| [#254](https://github.com/epittman23/local-llm/issues/254) | A-128 | Every open tab shows its own desktop notification and sound for each channel message | Low | web | Confirmed | `useChannels.ts:117` | S |
+| [#255](https://github.com/epittman23/local-llm/issues/255) | A-129 | Channel unread badges count thread replies and model replies that the server does not count | Low | web | Confirmed | `channelModel.ts:410` | S |
+| [#256](https://github.com/epittman23/local-llm/issues/256) | A-130 | Pressing Enter on a mention suggestion that dropped out of the list throws and inserts nothing | Low | web | Confirmed | `MessageComposer.tsx:143` | S |
+| [#257](https://github.com/epittman23/local-llm/issues/257) | A-131 | The reaction tooltip omits the fourth person when exactly four users reacted | Low | web | Confirmed | `channelModel.ts:486` | S |
+| [#258](https://github.com/epittman23/local-llm/issues/258) | A-132 | The pure-JS SHA-256 fallback is wrong for files of 512 MiB or more, so knowledge sync re-uploads them every time over plain HTTP | Low | web | Confirmed | `hash.ts:167` | S |
+| [#260](https://github.com/epittman23/local-llm/issues/260) | A-134 | Enter in a password field on the Account tab runs the profile save instead of the password change | Low | web | Confirmed | `Account.tsx:292` | S |
+| [#261](https://github.com/epittman23/local-llm/issues/261) | A-135 | A font typed and submitted with Enter on the Interface tab is not saved | Low | web | Confirmed | `InterfaceSettings.tsx:266` | S |
+| [#262](https://github.com/epittman23/local-llm/issues/262) | A-136 | Personal settings switches fail silently, and the interface permission blocks every settings save while only one tab is hidden | Low | web | Confirmed | `Audio.tsx:118` | S |
+| [#263](https://github.com/epittman23/local-llm/issues/263) | A-137 | A personal tool server saved without a name is listed as a blank row | Low | web | Confirmed | `Integrations.tsx:60` | S |
+| [#267](https://github.com/epittman23/local-llm/issues/267) | A-141 | Sub-daily rules with an old DTSTART are rebuilt from the epoch, reviving exhausted COUNT rules and shifting run times | Low | backend | Confirmed | `automations.py:109` | S |
+| [#269](https://github.com/epittman23/local-llm/issues/269) | A-143 | Plugin import rewriting matches substrings, corrupting imports such as configparser and saving the corrupted source | Low | backend | Confirmed | `plugin.py:228` | S |
+| [#270](https://github.com/epittman23/local-llm/issues/270) | A-144 | A chat timer stays "running" forever if anything fails before completion or the process restarts mid-claim | Low | backend | Confirmed | `timers.py:171` | S |
+| [#271](https://github.com/epittman23/local-llm/issues/271) | A-145 | The stop-sequence mapping corrupts non-ASCII stop strings and splits a string stop into characters | Low | backend | Confirmed | `payload.py:191` | S |
+| [#272](https://github.com/epittman23/local-llm/issues/272) | A-146 | With default model metadata set, admins lose base models that have no workspace row when admin bypass is off | Low | backend | Confirmed | `models.py:297` | S |
+| [#273](https://github.com/epittman23/local-llm/issues/273) | A-147 | MCP OAuth client registration picks a token auth method the client cannot use | Low | backend | Confirmed | `oauth.py:541` | S |
+| [#274](https://github.com/epittman23/local-llm/issues/274) | A-148 | OAuth groups in a dotted claim name (Auth0-style URL claims) never resolve | Low | backend | Confirmed | `oauth.py:1948` | S |
+| [#275](https://github.com/epittman23/local-llm/issues/275) | A-149 | OAuth group sync removes a new user from the default group immediately after adding them | Low | backend | Confirmed | `oauth.py:2023` | S |
+| [#276](https://github.com/epittman23/local-llm/issues/276) | A-150 | kb_exec ls lists a model's directly attached files inside every knowledge base | Low | backend | Confirmed | `knowledge_fs.py:402` | S |
+| [#279](https://github.com/epittman23/local-llm/issues/279) | A-153 | Adding several users to a group silently drops new members when one is already a member | Low | backend | Confirmed | `groups.py:586` | S |
+| [#280](https://github.com/epittman23/local-llm/issues/280) | A-154 | The workspace model tag filter matches models whose meta merely contains the tag word | Low | backend | Confirmed | `models.py:387` | S |
+| [#281](https://github.com/epittman23/local-llm/issues/281) | A-155 | Folder delete commits child deletions one by one and reports a mid-way failure as success | Low | backend | Suspected | `folders.py:394` | S |
+| [#285](https://github.com/epittman23/local-llm/issues/285) | A-159 | Non-expiring OAuth tokens become unusable on servers east of UTC | Low | backend | Confirmed | `oauth.py:201` | S |
+| [#286](https://github.com/epittman23/local-llm/issues/286) | A-160 | OAuth provider settings saved in Admin > Authentication are never used for login | Low | backend | Confirmed | `auths.py:1037` | S |
+| [#287](https://github.com/epittman23/local-llm/issues/287) | A-161 | A 44-character LLLM_SECRET_KEY that is not a Fernet key stops the backend from starting | Low | backend | Confirmed | `oauth_sessions.py:72` | S |
+| [#288](https://github.com/epittman23/local-llm/issues/288) | A-162 | Tool valve saves report success when the database write failed | Low | backend | Confirmed | `tools.py:257` | S |
+| [#291](https://github.com/epittman23/local-llm/issues/291) | A-165 | Chat search ignores a folder: filter that matches no folder and returns every chat | Low | backend | Confirmed | `chats.py:1953` | S |
+| [#292](https://github.com/epittman23/local-llm/issues/292) | A-166 | LIKE wildcards in chat search text are not escaped, so % or _ matches every chat | Low | backend | Confirmed | `chats.py:2016` | S |
+| [#293](https://github.com/epittman23/local-llm/issues/293) | A-167 | Linking an already-linked file to a chat makes the whole chat_file batch fail, so new files are never linked | Low | backend | Confirmed | `chats.py:2549` | S |
+| [#294](https://github.com/epittman23/local-llm/issues/294) | A-168 | Chat export pages by OFFSET over updated_at, so a chat updated during export is skipped and another exported twice | Low | backend | Confirmed | `chats.py:1845` | S |
+| [#295](https://github.com/epittman23/local-llm/issues/295) | A-169 | Imported chats all show as unread | Low | backend | Confirmed | `chats.py:601` | S |
+| [#166](https://github.com/epittman23/local-llm/issues/166) | A-40 | Tool arguments that are valid JSON but not an object crash the whole reply | Low | backend | Confirmed | `middleware.py:4645` | S |
+| [#167](https://github.com/epittman23/local-llm/issues/167) | A-41 | A Responses API `response.failed` event is shown live but not saved, so the reply looks successful after reload | Low | backend | Confirmed | `middleware.py:4980` | S |
+| [#168](https://github.com/epittman23/local-llm/issues/168) | A-42 | Task-model JSON is located with rfind('{'), so generated search queries or prompts containing a brace are mangled | Low | backend | Confirmed | `middleware.py:1438` | S |
+| [#172](https://github.com/epittman23/local-llm/issues/172) | A-46 | One invalid chat-variable value silently blanks every chat variable in the system prompt | Low | backend | Confirmed | `chat_variables.py:243` | S |
+| [#173](https://github.com/epittman23/local-llm/issues/173) | A-47 | A filter's user valves leak to later filters through the shared `__user__` dict | Low | backend | Confirmed | `filter.py:135` | S |
+| [#174](https://github.com/epittman23/local-llm/issues/174) | A-48 | Resolving a tool approval twice can run the tool twice | Low | backend | Suspected | `tool_approval.py:55` | S |
+| [#175](https://github.com/epittman23/local-llm/issues/175) | A-49 | Custom connection headers with user-name or file-name placeholders break MCP connections for non-ASCII values | Low | backend | Confirmed | `headers.py:137` | S |
+| [#184](https://github.com/epittman23/local-llm/issues/184) | A-58 | Calendar reminders longer than 60 minutes fire 60 minutes before, although the tool offers them | Low | backend | Confirmed | `builtin.py:4389` | S |
+| [#185](https://github.com/epittman23/local-llm/issues/185) | A-59 | view_channel_thread returns user_name null for every reply not posted by a webhook | Low | backend | Confirmed | `builtin.py:2003` | S |
+| [#186](https://github.com/epittman23/local-llm/issues/186) | A-60 | Knowledge listing tools load every file's full text just to count files | Low | backend | Confirmed | `builtin.py:2075` | S |
+| [#190](https://github.com/epittman23/local-llm/issues/190) | A-64 | OpenAPI tool servers: header and cookie parameters are offered to the model but never sent | Low | backend | Confirmed | `tools.py:1180` | M |
+| [#191](https://github.com/epittman23/local-llm/issues/191) | A-65 | OpenAPI tool servers: an operation whose JSON body is an array produces an unusable tool | Low | backend | Confirmed | `tools.py:1220` | M |
+| [#192](https://github.com/epittman23/local-llm/issues/192) | A-66 | Without Redis, every tool-server and terminal-server lookup refetches every server spec | Low | backend | Confirmed | `tools.py:1246` | S |
+| [#193](https://github.com/epittman23/local-llm/issues/193) | A-67 | Sub-agent limit -1 ("unlimited") breaks max_iterations and max_output | Low | backend | Confirmed | `subagents.py:271` | S |
+| [#194](https://github.com/epittman23/local-llm/issues/194) | A-68 | Anthropic-to-OpenAI conversion drops top-level document and search_result blocks and ignores tool_choice none | Low | backend | Confirmed | `anthropic.py:255` | S |
+| [#198](https://github.com/epittman23/local-llm/issues/198) | A-72 | The Analytics 24-hour chart ignores the group filter | Low | backend | Confirmed | `analytics.py:208` | S |
+| [#199](https://github.com/epittman23/local-llm/issues/199) | A-73 | Paginated listings (users, group members, models, feedback) have no deterministic ORDER BY, so pages can repeat or skip rows | Low | backend | Suspected | `users.py:331` | S |
+| [#201](https://github.com/epittman23/local-llm/issues/201) | A-75 | A numeric enum valve sends its option as a string, so the backend rejects the save | Low | web | Confirmed | `Valves.tsx:111` | S |
+| [#204](https://github.com/epittman23/local-llm/issues/204) | A-78 | Topic-weighted Elo uses raw cosine similarity, so a negative weight reverses a result | Low | backend | Suspected | `evaluations.py:109` | S |
+| [#205](https://github.com/epittman23/local-llm/issues/205) | A-79 | Sorting the Feedback table by User sends a key the backend ignores, leaving pages unordered | Low | web | Confirmed | `Feedbacks.tsx:35` | S |
+| [#206](https://github.com/epittman23/local-llm/issues/206) | A-80 | A ?redirect= value with a control character passes safeRedirect, and the signed-in user is left on the sign-in form | Low | web | Confirmed | `redirect.ts:8` | S |
+| [#207](https://github.com/epittman23/local-llm/issues/207) | A-81 | Playground Cancel and leaving the page cannot abort a request before response headers arrive | Low | web | Confirmed | `PlaygroundPages.tsx:114` | S |
+| [#208](https://github.com/epittman23/local-llm/issues/208) | A-82 | Playground parameters are spread at the top level of the request, so custom parameters never apply and app-only keys reach the provider | Low | web | Confirmed | `playgroundModel.ts:66` | S |
+| [#209](https://github.com/epittman23/local-llm/issues/209) | A-83 | Functions "Import JSON" reports success even when every create failed | Low | web | Confirmed | `FunctionsPage.tsx:207` | S |
+| [#210](https://github.com/epittman23/local-llm/issues/210) | A-84 | A /notes?title=&content= link whose note creation fails leaves an endless spinner | Low | web | Confirmed | `NotesPage.tsx:74` | S |
+| [#216](https://github.com/epittman23/local-llm/issues/216) | A-90 | When the request fails in a multi-model chat, only the first column is marked failed and the input stays generating | Low | web | Confirmed | `useChatSession.ts:359` | S |
+| [#217](https://github.com/epittman23/local-llm/issues/217) | A-91 | Attachments and the typed draft carry over when switching chats | Low | web | Confirmed | `useAttachments.ts:68` | S |
+| [#218](https://github.com/epittman23/local-llm/issues/218) | A-92 | Queued prompts are discarded when switching chats | Low | web | Confirmed | `useChatSession.ts:221` | S |
+| [#219](https://github.com/epittman23/local-llm/issues/219) | A-93 | Image uploads to a non-vision model are no longer refused | Low | web | Confirmed | `useAttachments.ts:201` | S |
+| [#220](https://github.com/epittman23/local-llm/issues/220) | A-94 | HEIC images are uploaded unconverted | Low | web | Confirmed | `useAttachments.ts:139` | S |
+| [#222](https://github.com/epittman23/local-llm/issues/222) | A-96 | Switching the production prompt version reverts name and tags edited through the metadata path | Low | backend | Confirmed | `prompts.py:556` | S |
+| [#223](https://github.com/epittman23/local-llm/issues/223) | A-97 | The prompt version diff endpoint is unreachable | Low | backend | Confirmed | `prompts.py:636` | S |
+
 ## 3. Execution order
 
 Batches are ordered by dependency first and severity second. One branch and one pull request per batch (a batch may be split into consecutive PRs where noted).
 
-- **B0 Security fixes**: tracked in the repository's private security advisories, not here. Owner decision (2026-10-19): fix these **before** any batch below. Their details are deliberately not in this public file; read them from the advisories (repository Security tab). See the execution-time note in section 6 about where to do the work.
+Recommended sequence: **B0**, then **B12** (it changes how every page handles errors and fixes chat sending in LAN mode), then B1-B11 from the first session, then B13-B19 from the gap review. B13-B19 are independent of B1-B11 except where a batch says otherwise. B0's OAuth and calendar advisories touch the same functions as B15 and B17, so coordinate those.
+
+- **B0 Security fixes**: 21 findings, tracked in the repository's private security advisories (drafts), not here. Owner decision (2026-10-19): fix these **before** any batch below. Their details are deliberately not in this public file; read them from the advisories (repository Security tab). See the execution-time note in section 6 about where to do the work.
 
 - **B1 Grading correctness**: [#126](https://github.com/epittman23/local-llm/issues/126) A-01, [#142](https://github.com/epittman23/local-llm/issues/142) A-17, [#140](https://github.com/epittman23/local-llm/issues/140) A-15. First: every pass rate recorded before it is suspect (A-01), and later batches measure with the grader. A-15 moves grading off the event loop; A-17 touches the same subprocess call, so the three share one PR.
 - **B2 Dataset fetch and selfcheck**: [#141](https://github.com/epittman23/local-llm/issues/141) A-16. After B1: the new endpoints call the grader (selfcheck) and must use the non-blocking pattern from A-15. Owner decision: build the endpoints and Tests page actions properly (section 6).
@@ -92,6 +246,17 @@ Batches are ordered by dependency first and severity second. One branch and one 
 - **B9 Benchmark profile concurrency**: [#152](https://github.com/epittman23/local-llm/issues/152) A-27, [#153](https://github.com/epittman23/local-llm/issues/153) A-28. Suspected; confirm with a two-session test against Postgres. A CHECK constraint needs a new Alembic revision.
 - **B10 Backend minor**: [#154](https://github.com/epittman23/local-llm/issues/154) A-29, [#155](https://github.com/epittman23/local-llm/issues/155) A-30. Suspected; independent.
 - **B11 Build, CI and docs hygiene**: [#145](https://github.com/epittman23/local-llm/issues/145) A-20, [#146](https://github.com/epittman23/local-llm/issues/146) A-21, [#147](https://github.com/epittman23/local-llm/issues/147) A-22, [#148](https://github.com/epittman23/local-llm/issues/148) A-23, [#149](https://github.com/epittman23/local-llm/issues/149) A-24, [#157](https://github.com/epittman23/local-llm/issues/157) A-32. Last, or in parallel at any time: no code dependencies. A-21 changes how `make check` runs e2e, so land it before the other batches if possible to avoid surprises.
+
+### Gap review batches (A-36 onward)
+
+- **B12 Frontend foundations: UUIDs and API error handling** (2 issues): [#241](https://github.com/epittman23/local-llm/issues/241) A-115, [#240](https://github.com/epittman23/local-llm/issues/240) A-114. Do first after B0: `crypto.randomUUID` breaks sending in the documented LAN mode (High), and the API-helper change alters how every page sees errors, so page-level fixes in later batches should build on it. One PR per issue; the helper change touches many files, so land it before B14-B18 to avoid conflicts.
+- **B13 Chat backend: streaming, persistence and provider conversion** (16 issues): [#162](https://github.com/epittman23/local-llm/issues/162) A-36, [#163](https://github.com/epittman23/local-llm/issues/163) A-37, [#164](https://github.com/epittman23/local-llm/issues/164) A-38, [#165](https://github.com/epittman23/local-llm/issues/165) A-39, [#166](https://github.com/epittman23/local-llm/issues/166) A-40, [#167](https://github.com/epittman23/local-llm/issues/167) A-41, [#168](https://github.com/epittman23/local-llm/issues/168) A-42, [#187](https://github.com/epittman23/local-llm/issues/187) A-61, [#188](https://github.com/epittman23/local-llm/issues/188) A-62, [#194](https://github.com/epittman23/local-llm/issues/194) A-68, [#290](https://github.com/epittman23/local-llm/issues/290) A-164, [#196](https://github.com/epittman23/local-llm/issues/196) A-70, [#271](https://github.com/epittman23/local-llm/issues/271) A-145, [#174](https://github.com/epittman23/local-llm/issues/174) A-48, [#172](https://github.com/epittman23/local-llm/issues/172) A-46, [#173](https://github.com/epittman23/local-llm/issues/173) A-47. The streaming and persistence code in utils/middleware.py and models/chat_messages.py; the characterization fixtures pin current behaviour, so update them deliberately in each PR. The first two issues are the day-to-day OpenRouter path: start there.
+- **B14 Chat frontend** (11 issues): [#211](https://github.com/epittman23/local-llm/issues/211) A-85, [#212](https://github.com/epittman23/local-llm/issues/212) A-86, [#213](https://github.com/epittman23/local-llm/issues/213) A-87, [#214](https://github.com/epittman23/local-llm/issues/214) A-88, [#215](https://github.com/epittman23/local-llm/issues/215) A-89, [#216](https://github.com/epittman23/local-llm/issues/216) A-90, [#217](https://github.com/epittman23/local-llm/issues/217) A-91, [#218](https://github.com/epittman23/local-llm/issues/218) A-92, [#219](https://github.com/epittman23/local-llm/issues/219) A-93, [#220](https://github.com/epittman23/local-llm/issues/220) A-94, [#200](https://github.com/epittman23/local-llm/issues/200) A-74. All in useChatSession.ts / useAttachments.ts / history.ts and AdvancedParams; after B12 and alongside B7 (A-25, A-26, A-35), which touch the same hook: merge B7 first or fold its issues into this batch.
+- **B15 Calendar, reminders and automations** (11 issues): [#171](https://github.com/epittman23/local-llm/issues/171) A-45, [#176](https://github.com/epittman23/local-llm/issues/176) A-50, [#183](https://github.com/epittman23/local-llm/issues/183) A-57, [#184](https://github.com/epittman23/local-llm/issues/184) A-58, [#268](https://github.com/epittman23/local-llm/issues/268) A-142, [#182](https://github.com/epittman23/local-llm/issues/182) A-56, [#264](https://github.com/epittman23/local-llm/issues/264) A-138, [#265](https://github.com/epittman23/local-llm/issues/265) A-139, [#266](https://github.com/epittman23/local-llm/issues/266) A-140, [#267](https://github.com/epittman23/local-llm/issues/267) A-141, [#270](https://github.com/epittman23/local-llm/issues/270) A-144. Shares utils/calendar.py, utils/automations.py and models/calendar.py with B8 (A-33, A-34); do after B8 or merge them. Reminder fixes need the calendar:alert handler to be visible in the app.
+- **B16 Knowledge, retrieval and files** (17 issues): [#195](https://github.com/epittman23/local-llm/issues/195) A-69, [#197](https://github.com/epittman23/local-llm/issues/197) A-71, [#177](https://github.com/epittman23/local-llm/issues/177) A-51, [#179](https://github.com/epittman23/local-llm/issues/179) A-53, [#180](https://github.com/epittman23/local-llm/issues/180) A-54, [#178](https://github.com/epittman23/local-llm/issues/178) A-52, [#186](https://github.com/epittman23/local-llm/issues/186) A-60, [#276](https://github.com/epittman23/local-llm/issues/276) A-150, [#229](https://github.com/epittman23/local-llm/issues/229) A-103, [#230](https://github.com/epittman23/local-llm/issues/230) A-104, [#231](https://github.com/epittman23/local-llm/issues/231) A-105, [#232](https://github.com/epittman23/local-llm/issues/232) A-106, [#233](https://github.com/epittman23/local-llm/issues/233) A-107, [#234](https://github.com/epittman23/local-llm/issues/234) A-108, [#235](https://github.com/epittman23/local-llm/issues/235) A-109, [#238](https://github.com/epittman23/local-llm/issues/238) A-112, [#258](https://github.com/epittman23/local-llm/issues/258) A-132. Retrieval correctness first (directory delete, chat-file ranking), then the admin Documents settings, which share documents.ts.
+- **B17 Tool servers, MCP, OAuth and plugins** (17 issues): [#189](https://github.com/epittman23/local-llm/issues/189) A-63, [#190](https://github.com/epittman23/local-llm/issues/190) A-64, [#191](https://github.com/epittman23/local-llm/issues/191) A-65, [#192](https://github.com/epittman23/local-llm/issues/192) A-66, [#175](https://github.com/epittman23/local-llm/issues/175) A-49, [#169](https://github.com/epittman23/local-llm/issues/169) A-43, [#273](https://github.com/epittman23/local-llm/issues/273) A-147, [#274](https://github.com/epittman23/local-llm/issues/274) A-148, [#275](https://github.com/epittman23/local-llm/issues/275) A-149, [#284](https://github.com/epittman23/local-llm/issues/284) A-158, [#285](https://github.com/epittman23/local-llm/issues/285) A-159, [#286](https://github.com/epittman23/local-llm/issues/286) A-160, [#287](https://github.com/epittman23/local-llm/issues/287) A-161, [#288](https://github.com/epittman23/local-llm/issues/288) A-162, [#269](https://github.com/epittman23/local-llm/issues/269) A-143, [#193](https://github.com/epittman23/local-llm/issues/193) A-67, [#272](https://github.com/epittman23/local-llm/issues/272) A-146. utils/tools.py and utils/oauth.py; after B0, whose OAuth advisories touch the same functions (coordinate to avoid conflicts).
+- **B18 Workspace and admin pages** (41 issues): [#221](https://github.com/epittman23/local-llm/issues/221) A-95, [#222](https://github.com/epittman23/local-llm/issues/222) A-96, [#223](https://github.com/epittman23/local-llm/issues/223) A-97, [#224](https://github.com/epittman23/local-llm/issues/224) A-98, [#225](https://github.com/epittman23/local-llm/issues/225) A-99, [#226](https://github.com/epittman23/local-llm/issues/226) A-100, [#227](https://github.com/epittman23/local-llm/issues/227) A-101, [#228](https://github.com/epittman23/local-llm/issues/228) A-102, [#203](https://github.com/epittman23/local-llm/issues/203) A-77, [#204](https://github.com/epittman23/local-llm/issues/204) A-78, [#278](https://github.com/epittman23/local-llm/issues/278) A-152, [#205](https://github.com/epittman23/local-llm/issues/205) A-79, [#198](https://github.com/epittman23/local-llm/issues/198) A-72, [#199](https://github.com/epittman23/local-llm/issues/199) A-73, [#242](https://github.com/epittman23/local-llm/issues/242) A-116, [#243](https://github.com/epittman23/local-llm/issues/243) A-117, [#244](https://github.com/epittman23/local-llm/issues/244) A-118, [#245](https://github.com/epittman23/local-llm/issues/245) A-119, [#246](https://github.com/epittman23/local-llm/issues/246) A-120, [#247](https://github.com/epittman23/local-llm/issues/247) A-121, [#248](https://github.com/epittman23/local-llm/issues/248) A-122, [#249](https://github.com/epittman23/local-llm/issues/249) A-123, [#250](https://github.com/epittman23/local-llm/issues/250) A-124, [#251](https://github.com/epittman23/local-llm/issues/251) A-125, [#236](https://github.com/epittman23/local-llm/issues/236) A-110, [#237](https://github.com/epittman23/local-llm/issues/237) A-111, [#239](https://github.com/epittman23/local-llm/issues/239) A-113, [#201](https://github.com/epittman23/local-llm/issues/201) A-75, [#202](https://github.com/epittman23/local-llm/issues/202) A-76, [#209](https://github.com/epittman23/local-llm/issues/209) A-83, [#210](https://github.com/epittman23/local-llm/issues/210) A-84, [#206](https://github.com/epittman23/local-llm/issues/206) A-80, [#207](https://github.com/epittman23/local-llm/issues/207) A-81, [#208](https://github.com/epittman23/local-llm/issues/208) A-82, [#259](https://github.com/epittman23/local-llm/issues/259) A-133, [#260](https://github.com/epittman23/local-llm/issues/260) A-134, [#261](https://github.com/epittman23/local-llm/issues/261) A-135, [#262](https://github.com/epittman23/local-llm/issues/262) A-136, [#263](https://github.com/epittman23/local-llm/issues/263) A-137, [#280](https://github.com/epittman23/local-llm/issues/280) A-154, [#279](https://github.com/epittman23/local-llm/issues/279) A-153. Independent page-level fixes; after B12. JWT expiry (High) and the prompt production bug (High) first. The interface-permission scope question needs the owner (see section 6).
+- **B19 Channels, notifications and chat data** (19 issues): [#252](https://github.com/epittman23/local-llm/issues/252) A-126, [#253](https://github.com/epittman23/local-llm/issues/253) A-127, [#254](https://github.com/epittman23/local-llm/issues/254) A-128, [#255](https://github.com/epittman23/local-llm/issues/255) A-129, [#256](https://github.com/epittman23/local-llm/issues/256) A-130, [#257](https://github.com/epittman23/local-llm/issues/257) A-131, [#277](https://github.com/epittman23/local-llm/issues/277) A-151, [#185](https://github.com/epittman23/local-llm/issues/185) A-59, [#170](https://github.com/epittman23/local-llm/issues/170) A-44, [#289](https://github.com/epittman23/local-llm/issues/289) A-163, [#291](https://github.com/epittman23/local-llm/issues/291) A-165, [#292](https://github.com/epittman23/local-llm/issues/292) A-166, [#293](https://github.com/epittman23/local-llm/issues/293) A-167, [#294](https://github.com/epittman23/local-llm/issues/294) A-168, [#295](https://github.com/epittman23/local-llm/issues/295) A-169, [#283](https://github.com/epittman23/local-llm/issues/283) A-157, [#282](https://github.com/epittman23/local-llm/issues/282) A-156, [#181](https://github.com/epittman23/local-llm/issues/181) A-55, [#281](https://github.com/epittman23/local-llm/issues/281) A-155. Channel fixes after B12 (they depend on helpers throwing); the chat-data fixes are independent model-layer changes.
 
 ## 4. Per-bug detail
 
@@ -516,6 +681,1503 @@ Batches are ordered by dependency first and severity second. One branch and one 
 - Acceptance criteria: The spec passes repeatedly under `--repeat-each=20 --workers=2`.
 - Before fixing: write the reproduction first; if it does not reproduce, comment on the issue with the evidence and ask before closing it.
 
+### B12 Frontend foundations: UUIDs and API error handling
+
+#### A-115 [#241](https://github.com/epittman23/local-llm/issues/241): crypto.randomUUID is unavailable over plain-HTTP LAN access, so sending a chat message throws there
+
+- Severity / status / effort: High / Confirmed / S
+- Locations: `apps/web/src/lib/chat/history.ts:59`; `apps/web/src/lib/chat/history.ts:98`; `apps/web/src/lib/chat/history.ts:130`; `apps/web/src/lib/chat/history.ts:483`; `apps/web/src/routes/chat/useChatSession.ts:437`; `apps/web/src/lib/utils/auth-helpers.ts:84`; `apps/web/src/routes/channels/MessageComposer.tsx:169`; `apps/web/src/routes/channels/useMessageFeed.ts:158`; `apps/web/src/routes/admin/settings/banners.ts:6`; `apps/web/src/routes/admin/settings/Integrations.tsx:160`
+- Root cause: `crypto.randomUUID` is secure-context only and was adopted without a fallback.
+- Recommended fix: Add a small UUID helper that falls back to a `getRandomValues`-based v4 and use it everywhere.
+- Files likely to change: apps/web/src/lib/chat/history.ts, apps/web/src/routes/chat/useChatSession.ts, apps/web/src/lib/utils/auth-helpers.ts, apps/web/src/routes/channels/MessageComposer.tsx, apps/web/src/routes/channels/useMessageFeed.ts, apps/web/src/routes/admin/settings/banners.ts, apps/web/src/routes/admin/settings/Integrations.tsx
+- Regression risks: Ids must stay RFC 4122 v4 so the backend and existing data accept them.
+- Docs to update: docs/decisions.md (a dated entry replacing the 2026-09 choice of `crypto.randomUUID`); README.md LAN note under "Running it".
+- Acceptance criteria: Vitest with `crypto.randomUUID` deleted: sending a message still works; a grep shows no direct `crypto.randomUUID` calls.
+
+#### A-114 [#240](https://github.com/epittman23/local-llm/issues/240): API client helpers resolve null on network or non-JSON errors, so failures are reported as success or lost silently
+
+- Severity / status / effort: Medium / Confirmed / M
+- Locations: `apps/web/src/lib/apis/channels/index.ts:389-396`; `apps/web/src/lib/apis/channels/index.ts:532-539`; `apps/web/src/routes/channels/useMessageFeed.ts:181-185`; `apps/web/src/routes/channels/MessageComposer.tsx:209-212`; `apps/web/src/lib/apis/retrieval/index.ts:56-81`; `apps/web/src/lib/apis/retrieval/index.ts:137-162`; `apps/web/src/routes/admin/settings/Documents.tsx:131-132`; `apps/web/src/routes/admin/settings/Documents.tsx:162-163`; `apps/web/src/lib/settings/useConfigDraft.ts:21`; `apps/web/src/lib/settings/useConfigDraft.ts:46`
+- Root cause: The shared helper pattern reads `err.detail`, which network and non-JSON errors lack.
+- Recommended fix: Change the shared pattern to `throw err?.detail ?? err` (or a readable fallback) and treat `null` as an error where callers rely on it; fix `useConfigDraft` to surface a null load as an error.
+- Files likely to change: apps/web/src/lib/apis/channels/index.ts, apps/web/src/routes/channels/useMessageFeed.ts, apps/web/src/routes/channels/MessageComposer.tsx, apps/web/src/lib/apis/retrieval/index.ts, apps/web/src/routes/admin/settings/Documents.tsx, apps/web/src/lib/settings/useConfigDraft.ts
+- Regression risks: Callers that treat null as "not found" must be checked one by one; this touches many files.
+- Docs to update: None.
+- Acceptance criteria: Vitest: a failing fetch rejects for each touched helper; channel send keeps the text and shows an error.
+
+### B13 Chat backend: streaming, persistence and provider conversion
+
+#### A-36 [#162](https://github.com/epittman23/local-llm/issues/162): OpenRouter's mid-stream error chunk is ignored, so a cut-off reply is saved and shown as a complete answer
+
+- Severity / status / effort: High / Confirmed / S
+- Locations: `apps/server/local_llm/utils/middleware.py:5031-5044`; `apps/server/local_llm/utils/middleware.py:5049-5070`
+- Root cause: The error branch is gated on an empty `choices` list.
+- Recommended fix: Check for a top-level `error` (or `finish_reason == 'error'`) before branching on `choices`; call `_save_error` and emit the error; add a characterization case.
+- Files likely to change: apps/server/local_llm/utils/middleware.py
+- Regression risks: Chunks with a null `error` key must not be treated as failures; the characterization fixtures pin the current stream handling.
+- Docs to update: None.
+- Acceptance criteria: Characterization test: the OpenRouter error chunk after a partial delta saves an error and emits `chat:completion {error}`.
+
+#### A-37 [#163](https://github.com/epittman23/local-llm/issues/163): If the upstream connection drops mid-stream, the partial reply is discarded and the stream snapshot is never cleared
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/server/local_llm/utils/middleware.py:4859-4874`; `apps/server/local_llm/utils/middleware.py:5499-5516`; `apps/server/local_llm/main.py:1506-1531`; `apps/server/local_llm/main.py:1650-1662`; `apps/server/local_llm/utils/middleware.py:5568`; `apps/server/local_llm/utils/middleware.py:5610`
+- Root cause: Only `CancelledError` is handled around the body iterator.
+- Recommended fix: Catch non-cancellation exceptions in `run` like `_save_cancelled_state`: save the partial output with `done: true` plus the error, clear the stream, then report.
+- Files likely to change: apps/server/local_llm/utils/middleware.py, apps/server/local_llm/main.py
+- Regression risks: Must not double-report errors already saved by the error branch; keep cancellation behaviour unchanged.
+- Docs to update: None.
+- Acceptance criteria: Test: a body iterator that raises after one delta leaves the partial text and an error saved, and the stream cleared.
+
+#### A-38 [#164](https://github.com/epittman23/local-llm/issues/164): Resuming after a tool approval rebuilds messages from the database, dropping the system prompt, injected context and the user's images
+
+- Severity / status / effort: Medium / Confirmed / M
+- Locations: `apps/server/local_llm/utils/middleware.py:3438-3458`; `apps/server/local_llm/utils/tool_approval.py:162-164`; `apps/server/local_llm/main.py:1627`
+- Root cause: The resume path replaces the built message list with a database replay instead of extending it.
+- Recommended fix: Keep the already-built system message and re-apply `_inline_message_images` (as `_replay_history_from_db` does), or splice the stored output into the built messages instead of replacing them.
+- Files likely to change: apps/server/local_llm/utils/middleware.py, apps/server/local_llm/utils/tool_approval.py, apps/server/local_llm/main.py
+- Regression risks: Tool outputs must still be spliced in order; check the tool-approval characterization fixtures.
+- Docs to update: None.
+- Acceptance criteria: Test: after an approved tool call the resumed request still carries the system message and the image part.
+
+#### A-39 [#165](https://github.com/epittman23/local-llm/issues/165): A non-streaming reply with only tool calls, or with empty content, is never finished and spins forever
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/server/local_llm/utils/middleware.py:4139-4141`; `apps/server/local_llm/utils/middleware.py:4249-4252`
+- Root cause: Finalization is conditional on non-empty content or output.
+- Recommended fix: Always finalize: save `done: true` with whatever output exists (reasoning item, or an error explaining tools need streaming).
+- Files likely to change: apps/server/local_llm/utils/middleware.py
+- Regression risks: Do not save an empty reply as a successful answer; mark it with an explanatory error.
+- Docs to update: None.
+- Acceptance criteria: Test: both non-streaming cases save `done: true`.
+
+#### A-40 [#166](https://github.com/epittman23/local-llm/issues/166): Tool arguments that are valid JSON but not an object crash the whole reply
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/utils/middleware.py:4645-4655`; `apps/server/local_llm/utils/middleware.py:6040-6042`; `apps/server/local_llm/utils/middleware.py:3213-3238`
+- Root cause: `_parse_tool_params` accepts any JSON value and callers assume a dict.
+- Recommended fix: Treat any non-dict as unparseable in both places.
+- Files likely to change: apps/server/local_llm/utils/middleware.py
+- Regression risks: None (null arguments) must keep working as no arguments.
+- Docs to update: None.
+- Acceptance criteria: Test: `[]` arguments yield a tool error output and the reply continues.
+
+#### A-41 [#167](https://github.com/epittman23/local-llm/issues/167): A Responses API `response.failed` event is shown live but not saved, so the reply looks successful after reload
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/utils/middleware.py:4980-4986`; `apps/server/local_llm/utils/middleware.py:811-812`
+- Root cause: The Responses API failure branch emits but does not persist the error.
+- Recommended fix: Call `_save_error` in that branch; handle an empty error object.
+- Files likely to change: apps/server/local_llm/utils/middleware.py
+- Regression risks: Avoid emitting the error twice.
+- Docs to update: None.
+- Acceptance criteria: Test: `response.failed` saves the error.
+
+#### A-42 [#168](https://github.com/epittman23/local-llm/issues/168): Task-model JSON is located with rfind('{'), so generated search queries or prompts containing a brace are mangled
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/utils/middleware.py:1438`; `apps/server/local_llm/utils/middleware.py:1816`; `apps/server/local_llm/utils/middleware.py:1926`
+- Root cause: JSON extraction uses `rfind('{')`.
+- Recommended fix: Use `find('{')` / `json.JSONDecoder.raw_decode`, or reuse `_task_reply_json`.
+- Files likely to change: apps/server/local_llm/utils/middleware.py
+- Regression risks: Task models that wrap JSON in prose must still parse.
+- Docs to update: None.
+- Acceptance criteria: Test: a query containing braces round-trips intact.
+
+#### A-61 [#187](https://github.com/epittman23/local-llm/issues/187): merge_system_messages keeps only the first text part of a list-content system message
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/server/local_llm/utils/misc.py:641-665`; `apps/server/local_llm/utils/misc.py:248-258`; `apps/server/local_llm/utils/middleware.py:179-182`; `apps/server/local_llm/utils/middleware.py:3170`; `apps/server/local_llm/utils/anthropic.py:158-172`
+- Root cause: `get_content_from_message` returns only the first text part.
+- Recommended fix: Join all text parts; pass a single system message through unchanged.
+- Files likely to change: apps/server/local_llm/utils/misc.py, apps/server/local_llm/utils/middleware.py, apps/server/local_llm/utils/anthropic.py
+- Regression risks: String system prompts must be unchanged; preserve cache_control where possible.
+- Docs to update: None.
+- Acceptance criteria: Test: a two-part system message keeps both parts.
+
+#### A-62 [#188](https://github.com/epittman23/local-llm/issues/188): The Anthropic-compatible endpoint reports upstream failures as a successful end_turn
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/server/local_llm/utils/anthropic.py:526-530`; `apps/server/local_llm/utils/anthropic.py:659-660`; `apps/server/local_llm/utils/anthropic.py:884-896`; `apps/server/local_llm/utils/anthropic.py:403-425`
+- Root cause: Unknown finish reasons map to end_turn and stream exceptions close the stream normally.
+- Recommended fix: Emit Anthropic's `event: error` (`{type: error, error: {type: api_error, ...}}`), or at least not `end_turn`, when the chunk carries `error`/`finish_reason: error` or the source raises; return an error for the non-stream case.
+- Files likely to change: apps/server/local_llm/utils/anthropic.py
+- Regression risks: The stream must stay well-formed for clients (PR #87).
+- Docs to update: None.
+- Acceptance criteria: Tests for the three repro cases.
+
+#### A-68 [#194](https://github.com/epittman23/local-llm/issues/194): Anthropic-to-OpenAI conversion drops top-level document and search_result blocks and ignores tool_choice none
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/utils/anthropic.py:255-286`; `apps/server/local_llm/utils/anthropic.py:343-354`
+- Root cause: The converter handles only five block types and maps `none` to omission.
+- Recommended fix: Convert top-level documents/search results with the existing helpers; map `none` to `"none"`.
+- Files likely to change: apps/server/local_llm/utils/anthropic.py
+- Regression risks: Unknown block types should still be dropped or rejected consistently.
+- Docs to update: None.
+- Acceptance criteria: Tests for both cases.
+
+#### A-164 [#290](https://github.com/epittman23/local-llm/issues/290): Files added to a message by tools or streamed images are written only to the chat JSON, so they are duplicated on save and lost on fork
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/server/local_llm/models/chats.py:1201-1268`; `apps/server/local_llm/models/chats.py:1077-1099`; `apps/server/local_llm/models/chats.py:1013-1064`; `apps/server/local_llm/utils/middleware.py:5187-5207`; `apps/server/local_llm/socket/main.py:1144-1157`; `apps/server/local_llm/routers/chats.py:1392`; `apps/server/local_llm/routers/chats.py:1410`
+- Root cause: Two write paths update only the chat JSON while reads prefer chat_message rows.
+- Recommended fix: Dual-write files and status_history through `ChatMessages.upsert_message`, fall back to the blob when the column is NULL, and emit only new files (or replace instead of extend).
+- Files likely to change: apps/server/local_llm/models/chats.py, apps/server/local_llm/utils/middleware.py, apps/server/local_llm/socket/main.py, apps/server/local_llm/routers/chats.py
+- Regression risks: The reconcile path must stay idempotent.
+- Docs to update: None.
+- Acceptance criteria: Tests for both repro cases.
+
+#### A-70 [#196](https://github.com/epittman23/local-llm/issues/196): Every chat save re-adds a continued reply's usage to its chat_message row, inflating stored token usage without bound
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/server/local_llm/models/chat_messages.py:243-246`; `apps/server/local_llm/models/chat_messages.py:297-323`; `apps/server/local_llm/models/chats.py:942-948`; `apps/server/local_llm/models/chats.py:988-1009`; `apps/server/local_llm/models/chats.py:1144`; `apps/server/local_llm/routers/chats.py:1077-1081`; `apps/server/local_llm/utils/middleware.py:4711`; `apps/server/local_llm/utils/middleware.py:5546-5565`; `apps/web/src/lib/chat/request.ts:212`
+- Root cause: The chat_message upsert merges usage instead of replacing it, and continue starts from zero usage.
+- Recommended fix: Overwrite usage on upsert (last writer wins) and accumulate only in the middleware, seeding `self.usage` from the stored message on continue.
+- Files likely to change: apps/server/local_llm/models/chat_messages.py, apps/server/local_llm/models/chats.py, apps/server/local_llm/routers/chats.py, apps/server/local_llm/utils/middleware.py, apps/web/src/lib/chat/request.ts
+- Regression risks: Multi-pass tool loops still need summed usage within one reply.
+- Docs to update: None.
+- Acceptance criteria: Test: repeated saves leave usage unchanged; a continue stores the cumulative usage in both places.
+
+#### A-145 [#271](https://github.com/epittman23/local-llm/issues/271): The stop-sequence mapping corrupts non-ASCII stop strings and splits a string stop into characters
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/utils/payload.py:191`; `apps/server/local_llm/utils/payload.py:245`; `apps/server/local_llm/routers/openai.py:1474`
+- Root cause: The unescape step round-trips through latin-1 and treats strings as iterables.
+- Recommended fix: Accept str or list and unescape only literal escape sequences (or drop the unescape).
+- Files likely to change: apps/server/local_llm/utils/payload.py, apps/server/local_llm/routers/openai.py
+- Regression risks: Escaped sequences like `\n` must still be unescaped.
+- Docs to update: None.
+- Acceptance criteria: Test: non-ASCII stops round-trip; a string stop stays one sequence.
+
+#### A-48 [#174](https://github.com/epittman23/local-llm/issues/174): Resolving a tool approval twice can run the tool twice
+
+- Severity / status / effort: Low / Suspected / S
+- Locations: `apps/server/local_llm/utils/tool_approval.py:55-64`; `apps/server/local_llm/main.py:1868-1879`; `apps/server/local_llm/utils/middleware.py:3309-3316`
+- Root cause: The resolve endpoint treats `queued` as unresolved, and approval is not compare-and-set.
+- Recommended fix: Treat `approved is True` as resolved in the 409 check, or make approval a compare-and-set.
+- Files likely to change: apps/server/local_llm/utils/tool_approval.py, apps/server/local_llm/main.py, apps/server/local_llm/utils/middleware.py
+- Regression risks: A legitimate retry after a failed resume must still work.
+- Docs to update: None.
+- Acceptance criteria: Test: a second resolve of an approved call returns 409.
+- Before fixing: write the reproduction first; if it does not reproduce, comment on the issue with the evidence and ask before closing it.
+
+#### A-46 [#172](https://github.com/epittman23/local-llm/issues/172): One invalid chat-variable value silently blanks every chat variable in the system prompt
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/utils/chat_variables.py:243-253`; `apps/server/local_llm/utils/chat_variables.py:269-272`; `apps/server/local_llm/utils/payload.py:25-30`; `apps/server/local_llm/main.py:1139-1143`; `apps/server/local_llm/routers/chats.py:1066-1075`
+- Root cause: Variables are validated as a set and any error discards the whole set.
+- Recommended fix: Validate per field and drop (and log) only the offending variable; optionally validate on save.
+- Files likely to change: apps/server/local_llm/utils/chat_variables.py, apps/server/local_llm/utils/payload.py, apps/server/local_llm/main.py, apps/server/local_llm/routers/chats.py
+- Regression risks: Required-variable errors on send must still be reported.
+- Docs to update: None.
+- Acceptance criteria: Test: an invalid select value blanks only that variable.
+
+#### A-47 [#173](https://github.com/epittman23/local-llm/issues/173): A filter's user valves leak to later filters through the shared `__user__` dict
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/utils/filter.py:135-156`
+- Root cause: The `__user__` dict is shared and mutated across filters.
+- Recommended fix: Give each filter a copy: `{**params['__user__'], 'valves': ...}`.
+- Files likely to change: apps/server/local_llm/utils/filter.py
+- Regression risks: Filters that intentionally read `__user__` fields must still see them.
+- Docs to update: None.
+- Acceptance criteria: Test: filter B sees no valves.
+
+### B14 Chat frontend
+
+#### A-85 [#211](https://github.com/epittman23/local-llm/issues/211): Editing a reply or "Save As Copy" changes only what is displayed; the model keeps receiving the original text
+
+- Severity / status / effort: High / Confirmed / S
+- Locations: `apps/web/src/lib/chat/history.ts:470-493`; `apps/web/src/lib/chat/history.ts:424`; `apps/web/src/lib/chat/history.ts:270-271`; `apps/web/src/routes/chat/useChatSession.ts:565`; `apps/web/src/routes/chat/useChatSession.ts:604`; `apps/server/local_llm/utils/middleware.py:2069`; `apps/server/local_llm/utils/middleware.py:2113-2133`
+- Root cause: Edits write `content` while every consumer prefers `output`.
+- Recommended fix: When the message has `output`, rewrite it (one message item holding the edited text) or drop it on edit; same for Save As Copy.
+- Files likely to change: apps/web/src/lib/chat/history.ts, apps/web/src/routes/chat/useChatSession.ts, apps/server/local_llm/utils/middleware.py
+- Regression risks: Messages without `output` must keep editing `content`; preserve reasoning items if rewriting output.
+- Docs to update: None.
+- Acceptance criteria: Vitest: after an edit, `toApiMessages` carries the edited text.
+
+#### A-86 [#212](https://github.com/epittman23/local-llm/issues/212): With the message queue off, sending while a reply streams does not stop that reply
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/web/src/routes/chat/useChatSession.ts:436-441`; `apps/web/src/components/settings/interfaceSettingDefs.ts:143-146`; `apps/web/src/routes/chat/ChatInput.tsx:409`
+- Root cause: The interrupt (stop before send) step of the original was not ported.
+- Recommended fix: `await stop()` before `send` in that branch.
+- Files likely to change: apps/web/src/routes/chat/useChatSession.ts, apps/web/src/components/settings/interfaceSettingDefs.ts, apps/web/src/routes/chat/ChatInput.tsx
+- Regression risks: Stop must settle before the new request to avoid two tasks.
+- Docs to update: None.
+- Acceptance criteria: Vitest: sending while generating with the queue off stops the current task first.
+
+#### A-87 [#213](https://github.com/epittman23/local-llm/issues/213): A queued prompt is silently discarded when the reply it waited for fails with no content
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/web/src/routes/chat/useChatSession.ts:447-453`; `apps/web/src/routes/chat/useChatSession.ts:393-396`; `apps/server/local_llm/main.py:1506-1530`
+- Root cause: The queue item is removed before `send` decides whether to proceed.
+- Recommended fix: Keep (or re-queue) the item when `send` declines, or skip the check for queued sends.
+- Files likely to change: apps/web/src/routes/chat/useChatSession.ts, apps/server/local_llm/main.py
+- Regression risks: Do not resend prompts the user cleared.
+- Docs to update: None.
+- Acceptance criteria: Vitest: a queued prompt survives a failed reply.
+
+#### A-88 [#214](https://github.com/epittman23/local-llm/issues/214): A reply whose done event was missed (socket drop, sleep, backend reload) stays "generating" forever
+
+- Severity / status / effort: Medium / Confirmed / M
+- Locations: `apps/web/src/lib/chat/history.ts:292-294`; `apps/web/src/routes/chat/useChatSession.ts:259-262`; `apps/web/src/lib/socket/SocketProvider.tsx`
+- Root cause: The reconnect and inactive reconciliation of the original were not ported.
+- Recommended fix: On inactive, reload the chat if the current leaf is not done; on reconnect, reload when a leaf is pending and the server reports no tasks.
+- Files likely to change: apps/web/src/lib/chat/history.ts, apps/web/src/routes/chat/useChatSession.ts, apps/web/src/lib/socket/SocketProvider.tsx
+- Regression risks: Reloading must not discard a reply that is still streaming.
+- Docs to update: None.
+- Acceptance criteria: Vitest: inactive with a pending leaf triggers a reload.
+
+#### A-89 [#215](https://github.com/epittman23/local-llm/issues/215): An async message action or rating that finishes while another chat loads saves the old chat's history into the new chat
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/web/src/routes/chat/useChatSession.ts:618-628`; `apps/web/src/routes/chat/useChatSession.ts:668-673`; `apps/web/src/routes/chat/useChatSession.ts:490-499`; `apps/web/src/routes/chat/useChatSession.ts:217-233`
+- Root cause: Async actions save to the chat id current at save time, not the one they started in.
+- Recommended fix: Capture the chat id at the start and bail or save to it explicitly; make `save` take the chat id.
+- Files likely to change: apps/web/src/routes/chat/useChatSession.ts
+- Regression risks: Actions that create a new chat must still adopt its id.
+- Docs to update: None.
+- Acceptance criteria: Vitest: an action completing after a chat switch does not save into the new chat.
+
+#### A-90 [#216](https://github.com/epittman23/local-llm/issues/216): When the request fails in a multi-model chat, only the first column is marked failed and the input stays generating
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/routes/chat/useChatSession.ts:359-363`; `apps/web/src/lib/chat/history.ts:120-146`
+- Root cause: The catch path fails only the primary target.
+- Recommended fix: Fail every target (or move `currentId` to the primary).
+- Files likely to change: apps/web/src/routes/chat/useChatSession.ts, apps/web/src/lib/chat/history.ts
+- Regression risks: Single-model behaviour must be unchanged.
+- Docs to update: None.
+- Acceptance criteria: Vitest: after a failed multi-model POST nothing is generating.
+
+#### A-91 [#217](https://github.com/epittman23/local-llm/issues/217): Attachments and the typed draft carry over when switching chats
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/routes/chat/useAttachments.ts:68`; `apps/web/src/routes/chat/ChatPage.tsx:194-196`
+- Root cause: Attachment state is not keyed by chat.
+- Recommended fix: Clear attachments and text on a route change, except when adopting a new chat id.
+- Files likely to change: apps/web/src/routes/chat/useAttachments.ts, apps/web/src/routes/chat/ChatPage.tsx
+- Regression risks: The new-chat adoption flow must keep its attachments.
+- Docs to update: None.
+- Acceptance criteria: Vitest: switching chats clears attachments.
+
+#### A-92 [#218](https://github.com/epittman23/local-llm/issues/218): Queued prompts are discarded when switching chats
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/routes/chat/useChatSession.ts:221`
+- Root cause: The queue is a single list reset on navigation.
+- Recommended fix: Key the queue by chat id (or warn before dropping).
+- Files likely to change: apps/web/src/routes/chat/useChatSession.ts
+- Regression risks: Queued prompts must not be sent into the wrong chat.
+- Docs to update: None.
+- Acceptance criteria: Vitest: a queued prompt survives a round trip to another chat.
+
+#### A-93 [#219](https://github.com/epittman23/local-llm/issues/219): Image uploads to a non-vision model are no longer refused
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/routes/chat/useAttachments.ts:201-202`
+- Root cause: The capability check was downgraded to a warning.
+- Recommended fix: Restore the refusal (or block send).
+- Files likely to change: apps/web/src/routes/chat/useAttachments.ts
+- Regression risks: Multi-model chats where one model has vision must still accept images.
+- Docs to update: None.
+- Acceptance criteria: Vitest: the image is refused.
+
+#### A-94 [#220](https://github.com/epittman23/local-llm/issues/220): HEIC images are uploaded unconverted
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/routes/chat/useAttachments.ts:139-150`
+- Root cause: The conversion step was not ported.
+- Recommended fix: Restore HEIC conversion (or reject HEIC with a message).
+- Files likely to change: apps/web/src/routes/chat/useAttachments.ts
+- Regression risks: Conversion library size; lazy-load it.
+- Docs to update: None.
+- Acceptance criteria: Vitest: a HEIC file is converted or rejected.
+
+#### A-74 [#200](https://github.com/epittman23/local-llm/issues/200): Clearing a custom number parameter in chat controls stores "" and every later request sends it upstream as the value
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/web/src/components/common/AdvancedParams.tsx:49`; `apps/web/src/components/common/AdvancedParams.tsx:91`; `apps/web/src/routes/chat/ChatControls.tsx:79`; `apps/web/src/lib/chat/request.ts:192-196`; `apps/server/local_llm/utils/payload.py:118-121`
+- Root cause: An empty number box is stored as "" rather than null, and chat params are not stripped before sending.
+- Recommended fix: Map an empty number box to `null`, or strip `""`/`null` in `completionBody` and when chat params are saved.
+- Files likely to change: apps/web/src/components/common/AdvancedParams.tsx, apps/web/src/routes/chat/ChatControls.tsx, apps/web/src/lib/chat/request.ts, apps/server/local_llm/utils/payload.py
+- Regression risks: Explicit 0 values must still be sent.
+- Docs to update: None.
+- Acceptance criteria: Vitest: clearing the box yields no parameter in the request body.
+
+### B15 Calendar, reminders and automations
+
+#### A-45 [#171](https://github.com/epittman23/local-llm/issues/171): Recurring calendar occurrences that start before the viewed range are dropped, unlike one-off events with the same times
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/server/local_llm/utils/calendar.py:44`; `apps/server/local_llm/utils/calendar.py:69`; `apps/server/local_llm/models/calendar.py:562-571`; `apps/server/local_llm/utils/calendar.py:64-77`
+- Root cause: Expansion keeps occurrences by start time instead of overlap.
+- Recommended fix: Keep occurrences with start < range_end and start + duration > range_start; scan back by at least the event duration.
+- Files likely to change: apps/server/local_llm/utils/calendar.py, apps/server/local_llm/models/calendar.py
+- Regression risks: Week and month views must not show an occurrence twice when it spans the boundary.
+- Docs to update: None.
+- Acceptance criteria: Test: the Saturday view contains the weekend occurrence; the day view contains the overnight one.
+
+#### A-50 [#176](https://github.com/epittman23/local-llm/issues/176): The calendar search tool returns unexpanded recurring events that push real in-range events out of the results
+
+- Severity / status / effort: High / Confirmed / S
+- Locations: `apps/server/local_llm/tools/builtin.py:4184-4217`; `apps/server/local_llm/tools/builtin.py:4128-4145`; `apps/server/local_llm/models/calendar.py:577-579`; `apps/server/local_llm/routers/calendar.py:177-193`
+- Root cause: The tool calls the range query without expanding recurring rows, unlike the router.
+- Recommended fix: Expand recurring rows with `expand_recurring_event(..., tz=user tz)` as the router does, then filter, sort and count; include `rrule`.
+- Files likely to change: apps/server/local_llm/tools/builtin.py, apps/server/local_llm/models/calendar.py, apps/server/local_llm/routers/calendar.py
+- Regression risks: Expansion must honour the user timezone; keep the result count bounded.
+- Docs to update: None.
+- Acceptance criteria: Test: the in-range one-off event and the expanded occurrences in range are returned; nothing from 2020.
+
+#### A-57 [#183](https://github.com/epittman23/local-llm/issues/183): Rescheduling an event never re-arms its reminder, and recurring events alert only once
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/server/local_llm/tools/builtin.py:4446-4469`; `apps/server/local_llm/models/calendar.py:719-720`; `apps/server/local_llm/utils/automations.py:719-721`; `apps/server/local_llm/utils/automations.py:749-752`; `apps/server/local_llm/models/calendar.py:731-787`; `apps/web/src/routes/calendar/calendarModel.ts:206`
+- Root cause: Alert state is stored per event row, not per occurrence or start time.
+- Recommended fix: Clear `alerted_at` when `start_at` changes, or store and compare the alerted occurrence start; alert per occurrence for recurring events.
+- Files likely to change: apps/server/local_llm/tools/builtin.py, apps/server/local_llm/models/calendar.py, apps/server/local_llm/utils/automations.py, apps/web/src/routes/calendar/calendarModel.ts
+- Regression risks: Do not re-alert an unchanged event on every poll.
+- Docs to update: None.
+- Acceptance criteria: Test: moving an alerted event re-arms its alert.
+
+#### A-58 [#184](https://github.com/epittman23/local-llm/issues/184): Calendar reminders longer than 60 minutes fire 60 minutes before, although the tool offers them
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/tools/builtin.py:4389`; `apps/server/local_llm/models/calendar.py:752-753`
+- Root cause: The alert poll window is capped at 60 minutes.
+- Recommended fix: Widen the poll window to the largest alert, or cap the tool at 60 and fix the docstring.
+- Files likely to change: apps/server/local_llm/tools/builtin.py, apps/server/local_llm/models/calendar.py
+- Regression risks: A wider window must not fire alerts early.
+- Docs to update: None.
+- Acceptance criteria: Test: a 120-minute alert is selected 120 minutes before.
+
+#### A-142 [#268](https://github.com/epittman23/local-llm/issues/268): The app has no handler for the calendar:alert socket event, so in-app calendar reminders are never shown
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/server/local_llm/utils/automations.py:736-745`; `apps/web/src/routes/chat/useChatSession.ts:304`
+- Root cause: The app-level listener of the original was not ported.
+- Recommended fix: Add an app-level `events` listener for `calendar:alert` showing a toast and an optional Notification.
+- Files likely to change: apps/server/local_llm/utils/automations.py, apps/web/src/routes/chat/useChatSession.ts
+- Regression risks: Do not duplicate toasts across tabs (see the channel notification issue).
+- Docs to update: None.
+- Acceptance criteria: e2e with the fake socket: a calendar:alert event shows a toast.
+
+#### A-56 [#182](https://github.com/epittman23/local-llm/issues/182): Creating an event without a calendar picks the first shared calendar flagged default, which can be another user's
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/server/local_llm/tools/builtin.py:4277-4284`; `apps/server/local_llm/models/calendar.py:310-333`; `apps/web/src/routes/calendar/calendarModel.ts:210-211`
+- Root cause: `is_default` is the calendar owner's flag, but the lookup does not check ownership.
+- Recommended fix: Prefer `c.user_id == user_id and c.is_default`, then the first owned calendar, in both places.
+- Files likely to change: apps/server/local_llm/tools/builtin.py, apps/server/local_llm/models/calendar.py, apps/web/src/routes/calendar/calendarModel.ts
+- Regression risks: Users with no own calendar still need a sensible fallback.
+- Docs to update: None.
+- Acceptance criteria: Test: the user's own default is chosen when a shared default exists.
+
+#### A-138 [#264](https://github.com/epittman23/local-llm/issues/264): Automation runs are recorded as successful as soon as they are dispatched, so model and provider failures never reach the run history
+
+- Severity / status / effort: Medium / Confirmed / M
+- Locations: `apps/server/local_llm/utils/automations.py:468-491`; `apps/server/local_llm/utils/automations.py:654-678`; `apps/server/local_llm/main.py:1714-1720`; `apps/server/local_llm/main.py:1846-1847`
+- Root cause: A synchronous success is assumed for an asynchronous handler.
+- Recommended fix: Record the outcome from the background task (pass the automation id through metadata), or run automations as internal requests and inspect the result; record started at dispatch.
+- Files likely to change: apps/server/local_llm/utils/automations.py, apps/server/local_llm/main.py
+- Regression risks: Webhooks consumers may rely on the current event order.
+- Docs to update: None.
+- Acceptance criteria: Test with a failing handler: the run is recorded as error.
+
+#### A-139 [#265](https://github.com/epittman23/local-llm/issues/265): Automation runs fired before the model list is loaded drop the model's default tools, filters, features and terminal
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/server/local_llm/utils/automations.py:308-318`; `apps/server/local_llm/utils/automations.py:440-466`; `apps/server/local_llm/utils/automations.py:623-650`; `apps/server/local_llm/main.py:365-369`; `apps/server/local_llm/config.py:326`; `apps/server/local_llm/routers/openai.py:350-358`
+- Root cause: Model defaults are read from an in-memory list that is empty until a user request.
+- Recommended fix: Call `get_all_models` when the model is missing from MODELS; consider starting the scheduler after the prefetch.
+- Files likely to change: apps/server/local_llm/utils/automations.py, apps/server/local_llm/main.py, apps/server/local_llm/config.py, apps/server/local_llm/routers/openai.py
+- Regression risks: Loading models at scheduler time must not block the event loop for long.
+- Docs to update: None.
+- Acceptance criteria: Test: with empty MODELS the defaults are still resolved.
+
+#### A-140 [#266](https://github.com/epittman23/local-llm/issues/266): Daily, weekly and monthly automation rules skip occurrences when the user's timezone is behind the server's, and fire a few seconds late
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/server/local_llm/utils/automations.py:84`; `apps/server/local_llm/utils/automations.py:101-103`; `apps/server/local_llm/utils/automations.py:124-177`; `apps/server/local_llm/models/automations.py:345`; `apps/web/src/routes/automations/automationModel.ts:68-74`
+- Root cause: rrulestr without DTSTART anchors at server-local now.
+- Recommended fix: Pass an explicit dtstart in the user timezone (e.g. the anchor day) and default BYSECOND to 0.
+- Files likely to change: apps/server/local_llm/utils/automations.py, apps/server/local_llm/models/automations.py, apps/web/src/routes/automations/automationModel.ts
+- Regression risks: Rules that carry DTSTART must be unchanged.
+- Docs to update: None.
+- Acceptance criteria: Test: the repro case yields today 10:00:00.
+
+#### A-141 [#267](https://github.com/epittman23/local-llm/issues/267): Sub-daily rules with an old DTSTART are rebuilt from the epoch, reviving exhausted COUNT rules and shifting run times
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/utils/automations.py:109-121`
+- Root cause: Old rules are rebuilt from an epoch-aligned dtstart.
+- Recommended fix: Keep the original dtstart for COUNT rules; otherwise realign by stepping from DTSTART.
+- Files likely to change: apps/server/local_llm/utils/automations.py
+- Regression risks: Performance of very old minutely rules must stay bounded.
+- Docs to update: None.
+- Acceptance criteria: Test: the exhausted rule has no next run.
+
+#### A-144 [#270](https://github.com/epittman23/local-llm/issues/270): A chat timer stays "running" forever if anything fails before completion or the process restarts mid-claim
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/utils/timers.py:171-199`; `apps/server/local_llm/utils/timers.py:230-414`
+- Root cause: The timer body has no exception handling and nothing recovers stale running timers.
+- Recommended fix: Wrap the body and mark errors; at startup re-pend or fail timers stuck in running.
+- Files likely to change: apps/server/local_llm/utils/timers.py
+- Regression risks: Do not refire timers whose run actually completed.
+- Docs to update: None.
+- Acceptance criteria: Test: an exception in the body marks the timer as error.
+
+### B16 Knowledge, retrieval and files
+
+#### A-69 [#195](https://github.com/epittman23/local-llm/issues/195): Deleting a knowledge directory with its contents leaves the files' chunks in the vector collection, so chat keeps answering from deleted files
+
+- Severity / status / effort: High / Confirmed / M
+- Locations: `apps/server/local_llm/models/knowledge.py:1003-1041`; `apps/server/local_llm/models/knowledge.py:1059-1069`; `apps/server/local_llm/routers/knowledge.py:2302-2341`; `apps/web/src/routes/workspace/knowledge/KnowledgeBasePage.tsx:265`; `apps/web/src/routes/workspace/knowledge/KnowledgeBasePage.tsx:487`; `apps/server/local_llm/routers/knowledge.py:1637-1655`
+- Root cause: The directory delete path removes link rows only and does not run the file removal path.
+- Recommended fix: Collect the subtree's file ids before deleting and run the single-file remove path for each (vectors by file_id and hash, File rows under the same retention rule).
+- Files likely to change: apps/server/local_llm/models/knowledge.py, apps/server/local_llm/routers/knowledge.py, apps/web/src/routes/workspace/knowledge/KnowledgeBasePage.tsx
+- Regression risks: Files shared with other bases must not lose their vectors there; respect the retention setting.
+- Docs to update: None.
+- Acceptance criteria: Router test with a fake vector client: deleting a directory with contents deletes vectors for every contained file.
+
+#### A-71 [#197](https://github.com/epittman23/local-llm/issues/197): The Knowledge page's "local" source filter matches no knowledge base created in the app
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/server/local_llm/models/knowledge.py:206-218`; `apps/server/local_llm/models/knowledge.py:296-302`; `apps/web/src/routes/workspace/knowledge/KnowledgePage.tsx:83-95`; `apps/web/src/routes/workspace/knowledge/KnowledgePage.tsx:212`
+- Root cause: JSON null is stored for meta and the filter tests SQL NULL.
+- Recommended fix: Use `coalesce(meta->>'source', '') != 'external'`, or declare the column `JSON(none_as_null=True)` for new rows.
+- Files likely to change: apps/server/local_llm/models/knowledge.py, apps/web/src/routes/workspace/knowledge/KnowledgePage.tsx
+- Regression risks: External bases must still be excluded from local.
+- Docs to update: None.
+- Acceptance criteria: Test: a newly created base appears under local.
+
+#### A-51 [#177](https://github.com/epittman23/local-llm/issues/177): query_chat_files without a file id returns only the first attached file's chunks
+
+- Severity / status / effort: High / Confirmed / S
+- Locations: `apps/server/local_llm/tools/builtin.py:2593-2611`; `apps/server/local_llm/retrieval/utils.py:1685-1699`
+- Root cause: Sources are concatenated per file in attachment order and truncated without ranking.
+- Recommended fix: Flatten all chunks, sort by score (higher is better for pgvector), then slice; keep per-file order only in full-context mode.
+- Files likely to change: apps/server/local_llm/tools/builtin.py, apps/server/local_llm/retrieval/utils.py
+- Regression risks: Full-context mode must keep per-file order.
+- Docs to update: None.
+- Acceptance criteria: Test: the higher-scoring file B chunks come first.
+
+#### A-53 [#179](https://github.com/epittman23/local-llm/issues/179): query_knowledge_files lets attached notes and internal hits crowd out more relevant external knowledge hits
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/server/local_llm/tools/builtin.py:3357-3382`; `apps/server/local_llm/retrieval/external.py:300-321`
+- Root cause: Results are concatenated by source type and truncated without ranking.
+- Recommended fix: Merge internal and external hits by score before slicing and give notes their own budget.
+- Files likely to change: apps/server/local_llm/tools/builtin.py, apps/server/local_llm/retrieval/external.py
+- Regression risks: Notes attached explicitly must still be included.
+- Docs to update: None.
+- Acceptance criteria: Test: the 0.99 external hit is returned first.
+
+#### A-54 [#180](https://github.com/epittman23/local-llm/issues/180): One failing external knowledge base makes query_knowledge_files fail and discards every internal result
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/server/local_llm/tools/builtin.py:3369-3382`; `apps/server/local_llm/retrieval/external.py:300-321`
+- Root cause: No per-source error isolation.
+- Recommended fix: Wrap each external retrieval in try/except, log, and continue.
+- Files likely to change: apps/server/local_llm/tools/builtin.py, apps/server/local_llm/retrieval/external.py
+- Regression risks: Report partial failures to the model so it does not over-trust the results.
+- Docs to update: None.
+- Acceptance criteria: Test: a failing external base still returns internal hits.
+
+#### A-52 [#178](https://github.com/epittman23/local-llm/issues/178): Paging view_file / view_knowledge_file with line numbers skips content
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/server/local_llm/tools/builtin.py:2820-2842`; `apps/server/local_llm/tools/builtin.py:2963-2988`
+- Root cause: The offset is computed from the line-numbered string instead of the raw slice.
+- Recommended fix: Compute offsets from the raw slice before adding prefixes.
+- Files likely to change: apps/server/local_llm/tools/builtin.py
+- Regression risks: Pages without line numbers must be unchanged.
+- Docs to update: None.
+- Acceptance criteria: Test: consecutive pages cover every line exactly once.
+
+#### A-60 [#186](https://github.com/epittman23/local-llm/issues/186): Knowledge listing tools load every file's full text just to count files
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/tools/builtin.py:2075-2076`; `apps/server/local_llm/tools/builtin.py:2135-2136`; `apps/server/local_llm/tools/builtin.py:3073-3074`; `apps/server/local_llm/models/knowledge.py:331-354`; `apps/server/local_llm/models/knowledge.py:636-647`
+- Root cause: The tool loads full File rows to count them.
+- Recommended fix: Use `file_count` (or metadata-only queries) and add an ORDER BY before paging.
+- Files likely to change: apps/server/local_llm/tools/builtin.py, apps/server/local_llm/models/knowledge.py
+- Regression risks: Counts must match what the UI shows.
+- Docs to update: None.
+- Acceptance criteria: Test or query count showing no File.data load.
+
+#### A-150 [#276](https://github.com/epittman23/local-llm/issues/276): kb_exec ls lists a model's directly attached files inside every knowledge base
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/tools/knowledge_fs.py:402-421`; `apps/server/local_llm/tools/knowledge_fs.py:609-612`
+- Root cause: Attached files are appended regardless of the requested knowledge id.
+- Recommended fix: Skip direct attachments when `knowledge_id` is given.
+- Files likely to change: apps/server/local_llm/tools/knowledge_fs.py
+- Regression risks: Listing attached files alone must still work.
+- Docs to update: None.
+- Acceptance criteria: Test: a base listing contains only its own files.
+
+#### A-103 [#229](https://github.com/epittman23/local-llm/issues/229): Knowledge-base actions can leave the user on an empty later page with no pagination to get back
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/web/src/routes/workspace/knowledge/KnowledgeBasePage.tsx:215-218`; `apps/web/src/routes/workspace/knowledge/KnowledgeBasePage.tsx:344-354`; `apps/web/src/routes/workspace/knowledge/KnowledgeBasePage.tsx:390-406`; `apps/web/src/routes/workspace/knowledge/KnowledgeBasePage.tsx:501-510`; `apps/web/src/routes/workspace/knowledge/KnowledgeBasePage.tsx:702`; `apps/web/src/routes/workspace/knowledge/useKnowledgeUploads.ts:69-82`
+- Root cause: `init()` (reset to page 1) was ported as reload-only.
+- Recommended fix: Call `setPage(1)` wherever the original called `init()`; clamp `page` to the last page when data arrives.
+- Files likely to change: apps/web/src/routes/workspace/knowledge/KnowledgeBasePage.tsx, apps/web/src/routes/workspace/knowledge/useKnowledgeUploads.ts
+- Regression risks: Keep the current page when it still has items.
+- Docs to update: None.
+- Acceptance criteria: Vitest: both repro cases show page 1 content.
+
+#### A-104 [#230](https://github.com/epittman23/local-llm/issues/230): The knowledge base detail page starts filtered by the list pages' shared View setting
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/routes/workspace/knowledge/KnowledgeBasePage.tsx:150`; `apps/web/src/routes/workspace/knowledge/KnowledgePage.tsx:205`
+- Root cause: The port reads a localStorage key the original did not read on this page.
+- Recommended fix: Initialise the filter to '' as the original did.
+- Files likely to change: apps/web/src/routes/workspace/knowledge/KnowledgeBasePage.tsx, apps/web/src/routes/workspace/knowledge/KnowledgePage.tsx
+- Regression risks: The list pages must keep remembering their filter.
+- Docs to update: None.
+- Acceptance criteria: Vitest: the first files query is unfiltered.
+
+#### A-105 [#231](https://github.com/epittman23/local-llm/issues/231): Dropping a folder together with other items skips every item after the first folder
+
+- Severity / status / effort: Medium / Suspected / S
+- Locations: `apps/web/src/routes/workspace/knowledge/KnowledgeBasePage.tsx:286-308`
+- Root cause: DataTransfer items are read lazily after an await.
+- Recommended fix: Collect all entries and files synchronously before the first await.
+- Files likely to change: apps/web/src/routes/workspace/knowledge/KnowledgeBasePage.tsx
+- Regression risks: Single-folder drops must be unchanged.
+- Docs to update: None.
+- Acceptance criteria: A browser test dropping a folder plus a file uploads both.
+- Before fixing: write the reproduction first; if it does not reproduce, comment on the issue with the evidence and ask before closing it.
+
+#### A-106 [#232](https://github.com/epittman23/local-llm/issues/232): Hybrid search is silently switched off when the reranker fails to load, while Documents reports it saved and on
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/server/local_llm/routers/retrieval.py:164-220`; `apps/server/local_llm/routers/retrieval.py:1180-1197`; `apps/server/local_llm/routers/retrieval.py:1338`; `apps/web/src/routes/admin/settings/Documents.tsx:162-163`
+- Root cause: A reranker load failure is turned into a silent flag change and the tab ignores the response.
+- Recommended fix: Return an error or warning instead of silently flipping the flag; have Documents reload from the response and warn when a flag came back different.
+- Files likely to change: apps/server/local_llm/routers/retrieval.py, apps/web/src/routes/admin/settings/Documents.tsx
+- Regression risks: Saving without hybrid search must not try to load the reranker.
+- Docs to update: None.
+- Acceptance criteria: Router test: a failing reranker load is reported; Vitest: the toggle reflects the response.
+
+#### A-107 [#233](https://github.com/epittman23/local-llm/issues/233): Admin Documents: the BM25 weight "Default" option can never be saved
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/routes/admin/settings/Documents.tsx:594`; `apps/web/src/routes/admin/settings/Documents.tsx:624`; `apps/web/src/routes/admin/settings/documents.ts:83-101`; `apps/server/local_llm/routers/retrieval.py:976-978`
+- Root cause: null means "keep" on the server but "default" in the UI.
+- Recommended fix: Send 0.5 for Default, or drop the toggle since the server has no null state.
+- Files likely to change: apps/web/src/routes/admin/settings/Documents.tsx, apps/web/src/routes/admin/settings/documents.ts, apps/server/local_llm/routers/retrieval.py
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Vitest: Default sends 0.5.
+
+#### A-108 [#234](https://github.com/epittman23/local-llm/issues/234): Admin Documents: JSON options pass validation then fail the save after the embedding change was already applied
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/routes/admin/settings/documents.ts:50-77`; `apps/web/src/routes/admin/settings/Documents.tsx:161-162`
+- Root cause: Validation depends on the current engine and the embedding is applied first.
+- Recommended fix: Validate every JSON box as an object regardless of engine and build the payload before applying the embedding.
+- Files likely to change: apps/web/src/routes/admin/settings/documents.ts, apps/web/src/routes/admin/settings/Documents.tsx
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Vitest: invalid JSON blocks the save before any request.
+
+#### A-109 [#235](https://github.com/epittman23/local-llm/issues/235): Admin Documents accepts chunk size 0 or an overlap larger than the chunk size, after which every upload fails
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/web/src/routes/admin/settings/Documents.tsx:258-273`; `apps/server/local_llm/routers/retrieval.py:926-928`; `apps/server/local_llm/routers/retrieval.py:1212-1216`; `apps/server/local_llm/routers/retrieval.py:1713-1740`
+- Root cause: No validation of chunk parameters.
+- Recommended fix: Require chunk size >= 1 and overlap < size in the form and the server.
+- Files likely to change: apps/web/src/routes/admin/settings/Documents.tsx, apps/server/local_llm/routers/retrieval.py
+- Regression risks: Existing stored invalid values need a clear error.
+- Docs to update: None.
+- Acceptance criteria: Router test: invalid values return 400.
+
+#### A-112 [#238](https://github.com/epittman23/local-llm/issues/238): "Max Upload Size" 0 means unlimited to the server but rejects every file in the chat and channel composers
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/routes/admin/settings/Documents.tsx:661-668`; `apps/server/local_llm/routers/files.py:382-383`; `apps/server/local_llm/routers/files.py:719-720`; `apps/web/src/routes/chat/useAttachments.ts:81-83`; `apps/web/src/routes/channels/MessageComposer.tsx:161-162`
+- Root cause: Client and server give 0 different meanings.
+- Recommended fix: Give 0 one meaning (treat as unlimited on the client, or require >= 1).
+- Files likely to change: apps/web/src/routes/admin/settings/Documents.tsx, apps/server/local_llm/routers/files.py, apps/web/src/routes/chat/useAttachments.ts, apps/web/src/routes/channels/MessageComposer.tsx
+- Regression risks: Existing deployments with 0 configured change behaviour on the client; note it.
+- Docs to update: None.
+- Acceptance criteria: Vitest: maxSize 0 allows uploads (or the form rejects 0).
+
+#### A-132 [#258](https://github.com/epittman23/local-llm/issues/258): The pure-JS SHA-256 fallback is wrong for files of 512 MiB or more, so knowledge sync re-uploads them every time over plain HTTP
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/lib/utils/hash.ts:167-175`; `apps/web/src/routes/workspace/knowledge/knowledgeFiles.ts:27`; `apps/server/local_llm/routers/knowledge.py:1913`
+- Root cause: The fallback writes only the low 32 bits of the length.
+- Recommended fix: Also write the high word: `setUint32(padLen-8, Math.floor(bitLen / 2**32))`.
+- Files likely to change: apps/web/src/lib/utils/hash.ts, apps/web/src/routes/workspace/knowledge/knowledgeFiles.ts, apps/server/local_llm/routers/knowledge.py
+- Regression risks: Digests for files under 512 MiB must be unchanged.
+- Docs to update: None.
+- Acceptance criteria: Unit test of the padding for a length above 2^32 bits (e.g. by testing the length-encoding helper).
+
+### B17 Tool servers, MCP, OAuth and plugins
+
+#### A-63 [#189](https://github.com/epittman23/local-llm/issues/189): OpenAPI tool servers: body fields that share a name with a path or query parameter are removed from the body (regression from #117)
+
+- Severity / status / effort: Medium / Confirmed / M
+- Locations: `apps/server/local_llm/utils/tools.py:1769-1774`; `apps/server/local_llm/utils/tools.py:1214-1219`
+- Root cause: The #117 parameter filter removes every parameter name from the body.
+- Recommended fix: Drop a name from the body only when it is not a property of the request-body schema; send it in both places when it is in both.
+- Files likely to change: apps/server/local_llm/utils/tools.py
+- Regression risks: Parameters that are not body properties must still be stripped.
+- Docs to update: None.
+- Acceptance criteria: Test: the stub server receives `id` in the body.
+
+#### A-64 [#190](https://github.com/epittman23/local-llm/issues/190): OpenAPI tool servers: header and cookie parameters are offered to the model but never sent
+
+- Severity / status / effort: Low / Confirmed / M
+- Locations: `apps/server/local_llm/utils/tools.py:1180-1204`; `apps/server/local_llm/utils/tools.py:1705-1723`; `apps/server/local_llm/utils/tools.py:1771-1774`
+- Root cause: Parameter routing ignores header and cookie locations.
+- Recommended fix: Send `in: header` params as headers and `in: cookie` params as cookies.
+- Files likely to change: apps/server/local_llm/utils/tools.py
+- Regression risks: Do not let model-supplied headers override auth headers.
+- Docs to update: None.
+- Acceptance criteria: Test: the stub server receives the header.
+
+#### A-65 [#191](https://github.com/epittman23/local-llm/issues/191): OpenAPI tool servers: an operation whose JSON body is an array produces an unusable tool
+
+- Severity / status / effort: Low / Confirmed / M
+- Locations: `apps/server/local_llm/utils/tools.py:1220-1221`; `apps/server/local_llm/utils/tools.py:1774-1777`
+- Root cause: Array request bodies are used directly as the parameters schema.
+- Recommended fix: Wrap the array in an object property and unwrap it when sending.
+- Files likely to change: apps/server/local_llm/utils/tools.py
+- Regression risks: Strict providers may reject the whole request today; verify after the fix.
+- Docs to update: None.
+- Acceptance criteria: Test: the server receives a JSON array.
+
+#### A-66 [#192](https://github.com/epittman23/local-llm/issues/192): Without Redis, every tool-server and terminal-server lookup refetches every server spec
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/utils/tools.py:1246-1264`; `apps/server/local_llm/utils/tools.py:1391-1412`; `apps/server/local_llm/utils/tools.py:382`; `apps/server/local_llm/routers/tools.py:104`; `apps/server/local_llm/main.py:413`
+- Root cause: The in-process cache is ignored when Redis is absent.
+- Recommended fix: Use the in-process cache when Redis is absent (it is already refreshed on config change).
+- Files likely to change: apps/server/local_llm/utils/tools.py, apps/server/local_llm/routers/tools.py, apps/server/local_llm/main.py
+- Regression risks: The cache must still refresh when tool-server config changes.
+- Docs to update: None.
+- Acceptance criteria: Test: repeated calls do not refetch.
+
+#### A-49 [#175](https://github.com/epittman23/local-llm/issues/175): Custom connection headers with user-name or file-name placeholders break MCP connections for non-ASCII values
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/utils/headers.py:137-151`; `apps/server/local_llm/utils/headers.py:72`; `apps/server/local_llm/utils/tools.py:171`; `apps/server/local_llm/utils/mcp/client.py`
+- Root cause: Header placeholders are substituted without encoding.
+- Recommended fix: Percent-encode substituted values (or RFC 8187).
+- Files likely to change: apps/server/local_llm/utils/headers.py, apps/server/local_llm/utils/tools.py, apps/server/local_llm/utils/mcp/client.py
+- Regression risks: Servers that expect the raw value need decoding guidance; keep ASCII values unchanged.
+- Docs to update: None.
+- Acceptance criteria: Test: a non-ASCII name yields an ASCII-safe header.
+
+#### A-43 [#169](https://github.com/epittman23/local-llm/issues/169): Connected MCP clients leak when listing tools fails or a later tool-setup step raises
+
+- Severity / status / effort: Medium / Suspected / S
+- Locations: `apps/server/local_llm/utils/middleware.py:2260-2273`; `apps/server/local_llm/utils/middleware.py:2662-2673`; `apps/server/local_llm/utils/middleware.py:2708-2720`; `apps/server/local_llm/utils/middleware.py:2726`; `apps/server/local_llm/utils/middleware.py:2770`; `apps/server/local_llm/utils/middleware.py:2872-2881`; `apps/server/local_llm/main.py:1549-1552`; `apps/server/local_llm/utils/mcp/client.py:84-87`
+- Root cause: Clients are registered for cleanup only after every later setup step succeeds.
+- Recommended fix: Disconnect on any failure after connect inside `connect_mcp_server`; register clients in metadata as soon as they connect, or clean up in try/finally.
+- Files likely to change: apps/server/local_llm/utils/middleware.py, apps/server/local_llm/main.py, apps/server/local_llm/utils/mcp/client.py
+- Regression risks: Disconnect must be idempotent; do not disconnect clients still in use by a concurrent request.
+- Docs to update: None.
+- Acceptance criteria: Test with a fake MCP client whose list_tools raises: disconnect is called.
+- Before fixing: write the reproduction first; if it does not reproduce, comment on the issue with the evidence and ask before closing it.
+
+#### A-147 [#273](https://github.com/epittman23/local-llm/issues/273): MCP OAuth client registration picks a token auth method the client cannot use
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/utils/oauth.py:541-549`; `apps/server/local_llm/utils/oauth.py:680-686`
+- Root cause: The fallback ignores the supported set.
+- Recommended fix: Pick the first offered method in the supported set, preferring a secret method when a secret exists.
+- Files likely to change: apps/server/local_llm/utils/oauth.py
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Test: `client_secret_basic` is chosen.
+
+#### A-148 [#274](https://github.com/epittman23/local-llm/issues/274): OAuth groups in a dotted claim name (Auth0-style URL claims) never resolve
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/utils/oauth.py:1948-1953`; `apps/server/local_llm/utils/oauth.py:1852-1854`
+- Root cause: Missing flat-key fallback.
+- Recommended fix: Mirror the roles fallback.
+- Files likely to change: apps/server/local_llm/utils/oauth.py
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Test: a URL claim name resolves.
+
+#### A-149 [#275](https://github.com/epittman23/local-llm/issues/275): OAuth group sync removes a new user from the default group immediately after adding them
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/utils/oauth.py:2023-2039`; `apps/server/local_llm/utils/oauth.py:2270-2271`; `apps/server/local_llm/utils/oauth.py:2309-2316`
+- Root cause: Sync treats every app group as IdP-managed.
+- Recommended fix: Exclude the default (and locally managed) groups from OAuth removal, or apply the default after sync.
+- Files likely to change: apps/server/local_llm/utils/oauth.py
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Test: a new OAuth user stays in the default group.
+
+#### A-158 [#284](https://github.com/epittman23/local-llm/issues/284): Every failed OAuth token refresh deletes the session, and refresh has no lock despite its docstring
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/server/local_llm/utils/oauth.py:1055-1064`; `apps/server/local_llm/utils/oauth.py:1071-1180`; `apps/server/local_llm/utils/oauth.py:1694-1735`; `apps/server/local_llm/models/oauth_sessions.py:259-294`
+- Root cause: Any refresh failure deletes the session, and refresh is not serialized.
+- Recommended fix: Delete only on a definitive invalid_grant/400/401; keep the session on transient errors; serialise refresh per session.
+- Files likely to change: apps/server/local_llm/utils/oauth.py, apps/server/local_llm/models/oauth_sessions.py
+- Regression risks: Revoked refresh tokens must still clear the session.
+- Docs to update: None.
+- Acceptance criteria: Test: a network error during refresh keeps the session.
+
+#### A-159 [#285](https://github.com/epittman23/local-llm/issues/285): Non-expiring OAuth tokens become unusable on servers east of UTC
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/utils/oauth.py:201`; `apps/server/local_llm/utils/oauth.py:230-247`; `apps/server/local_llm/utils/oauth.py:1050-1053`; `apps/server/local_llm/utils/oauth.py:1689-1692`; `apps/server/local_llm/models/oauth_sessions.py:123`
+- Root cause: A naive local-time conversion of a far-future sentinel.
+- Recommended fix: Compare epoch integers, or use an aware UTC conversion.
+- Files likely to change: apps/server/local_llm/utils/oauth.py, apps/server/local_llm/models/oauth_sessions.py
+- Regression risks: Normal expiring tokens must be unchanged.
+- Docs to update: None.
+- Acceptance criteria: Test under TZ=Europe/Berlin.
+
+#### A-160 [#286](https://github.com/epittman23/local-llm/issues/286): OAuth provider settings saved in Admin > Authentication are never used for login
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/routers/auths.py:1037-1046`; `apps/server/local_llm/routers/auths.py:1100-1103`; `apps/server/local_llm/config.py:2390-2536`; `apps/server/local_llm/utils/oauth.py:829`; `apps/server/local_llm/routers/auths.py:699`; `apps/web/src/routes/admin/settings/Authentication.tsx:174-215`
+- Root cause: Providers are registered once from environment values.
+- Recommended fix: Build providers from the stored config at startup and after updates, or remove the fields from the form.
+- Files likely to change: apps/server/local_llm/routers/auths.py, apps/server/local_llm/config.py, apps/server/local_llm/utils/oauth.py, apps/web/src/routes/admin/settings/Authentication.tsx
+- Regression risks: Changing providers at runtime needs re-registration of the OIDC client.
+- Docs to update: None.
+- Acceptance criteria: Test: a saved provider URL is used to register the client.
+
+#### A-161 [#287](https://github.com/epittman23/local-llm/issues/287): A 44-character LLLM_SECRET_KEY that is not a Fernet key stops the backend from starting
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/models/oauth_sessions.py:72-83`; `apps/server/local_llm/models/oauth_sessions.py:343`; `apps/server/local_llm/utils/oauth.py:253-263`; `apps/server/local_llm/env.py:777-779`
+- Root cause: A 44-character key is assumed to be a Fernet key.
+- Recommended fix: Try `Fernet(key)` and fall back to the SHA-256 derivation on ValueError (keeps working keys unchanged).
+- Files likely to change: apps/server/local_llm/models/oauth_sessions.py, apps/server/local_llm/utils/oauth.py, apps/server/local_llm/env.py
+- Regression risks: Keys that work today must derive the same Fernet key (stored ciphertext).
+- Docs to update: None.
+- Acceptance criteria: Test: a 44-character hex key starts.
+
+#### A-162 [#288](https://github.com/epittman23/local-llm/issues/288): Tool valve saves report success when the database write failed
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/models/tools.py:257-309`; `apps/server/local_llm/routers/tools.py:836-843`; `apps/server/local_llm/routers/tools.py:975-983`
+- Root cause: Model methods swallow exceptions and routes ignore the result.
+- Recommended fix: Check the result and return an error; fix the annotation.
+- Files likely to change: apps/server/local_llm/models/tools.py, apps/server/local_llm/routers/tools.py
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Test: a failing write returns an error.
+
+#### A-143 [#269](https://github.com/epittman23/local-llm/issues/269): Plugin import rewriting matches substrings, corrupting imports such as configparser and saving the corrupted source
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/utils/plugin.py:228-242`; `apps/server/local_llm/utils/plugin.py:259-260`; `apps/server/local_llm/utils/plugin.py:357`; `apps/server/local_llm/utils/plugin.py:397-401`; `apps/server/local_llm/utils/plugin.py:438-442`; `apps/server/local_llm/routers/tools.py:396`; `apps/server/local_llm/routers/tools.py:538`; `apps/server/local_llm/routers/functions.py:176`; `apps/server/local_llm/routers/functions.py:222`; `apps/server/local_llm/routers/functions.py:392`
+- Root cause: The rewrite uses substring replacement.
+- Recommended fix: Match whole module names at line start, or drop the legacy rewrites now that the package alias exists.
+- Files likely to change: apps/server/local_llm/utils/plugin.py, apps/server/local_llm/routers/tools.py, apps/server/local_llm/routers/functions.py
+- Regression risks: Legacy plugins that import the old top-level names must still load.
+- Docs to update: None.
+- Acceptance criteria: Test: `from configparser import ConfigParser` is unchanged.
+
+#### A-67 [#193](https://github.com/epittman23/local-llm/issues/193): Sub-agent limit -1 ("unlimited") breaks max_iterations and max_output
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/utils/subagents.py:271-281`; `apps/server/local_llm/utils/subagents.py:563-564`; `apps/server/local_llm/utils/middleware.py:5631`; `apps/server/local_llm/utils/middleware.py:5656-5662`
+- Root cause: Only the concurrency limits honour -1.
+- Recommended fix: Treat -1 as unlimited for both, or reject it and fix the docstring.
+- Files likely to change: apps/server/local_llm/utils/subagents.py, apps/server/local_llm/utils/middleware.py
+- Regression risks: Positive limits must behave as before.
+- Docs to update: None.
+- Acceptance criteria: Test: -1 runs tools and keeps full output.
+
+#### A-146 [#272](https://github.com/epittman23/local-llm/issues/272): With default model metadata set, admins lose base models that have no workspace row when admin bypass is off
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/utils/models.py:297-300`; `apps/server/local_llm/utils/models.py:495-497`; `apps/server/local_llm/utils/models.py:525-536`
+- Root cause: "Configured" is decided by `info` being truthy instead of a DB row existing.
+- Recommended fix: Decide "configured" by whether a DB row exists, not by `info` being truthy.
+- Files likely to change: apps/server/local_llm/utils/models.py
+- Regression risks: Default bypass behaviour must be unchanged.
+- Docs to update: None.
+- Acceptance criteria: Test: an admin sees a base model with default metadata.
+
+### B18 Workspace and admin pages
+
+#### A-95 [#221](https://github.com/epittman23/local-llm/issues/221): Saving a prompt with "Set as Production" unchecked still puts the new content live
+
+- Severity / status / effort: High / Confirmed / S
+- Locations: `apps/server/local_llm/models/prompts.py:509-524`; `apps/server/local_llm/models/prompts.py:547-550`; `apps/server/local_llm/models/prompts.py:441-475`; `apps/web/src/routes/workspace/prompts/PromptEditView.tsx:168`; `apps/web/src/routes/workspace/prompts/PromptEditView.tsx:185-194`; `apps/web/src/routes/chat/ChatInput.tsx:143`
+- Root cause: Row fields are assigned before and regardless of the `is_production` check.
+- Recommended fix: With `is_production` false, write only the history entry and leave the prompt row unchanged.
+- Files likely to change: apps/server/local_llm/models/prompts.py, apps/web/src/routes/workspace/prompts/PromptEditView.tsx, apps/web/src/routes/chat/ChatInput.tsx
+- Regression risks: Production saves must still update content immediately.
+- Docs to update: None.
+- Acceptance criteria: Test: a non-production save leaves `content` at the production snapshot.
+
+#### A-96 [#222](https://github.com/epittman23/local-llm/issues/222): Switching the production prompt version reverts name and tags edited through the metadata path
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/models/prompts.py:556-583`; `apps/server/local_llm/models/prompts.py:606-613`; `apps/web/src/routes/workspace/prompts/PromptEditView.tsx:206-218`
+- Root cause: Version restore copies name and tags from the snapshot while metadata edits bypass snapshots.
+- Recommended fix: Restore only content (and data/meta) from the snapshot, or snapshot metadata edits; refresh the editor after a switch.
+- Files likely to change: apps/server/local_llm/models/prompts.py, apps/web/src/routes/workspace/prompts/PromptEditView.tsx
+- Regression risks: Restoring must still restore content.
+- Docs to update: None.
+- Acceptance criteria: Test: a version switch keeps the current name and tags.
+
+#### A-97 [#223](https://github.com/epittman23/local-llm/issues/223): The prompt version diff endpoint is unreachable
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/routers/prompts.py:636`; `apps/server/local_llm/routers/prompts.py:729`; `apps/web/src/lib/apis/prompts/index.ts:549`
+- Root cause: Route registration order lets the history-entry route match first.
+- Recommended fix: Register the diff route first, or delete it and its client.
+- Files likely to change: apps/server/local_llm/routers/prompts.py, apps/web/src/lib/apis/prompts/index.ts
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Router test: the diff route matches.
+
+#### A-98 [#224](https://github.com/epittman23/local-llm/issues/224): Importing a model JSON over an existing model deletes its sharing grants, re-enables it, and replaces its meta
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/web/src/routes/workspace/models/ModelsPage.tsx:285-292`; `apps/web/src/routes/workspace/models/modelImport.ts:33-43`; `apps/web/src/lib/apis/models/index.ts:291-292`; `apps/server/local_llm/utils/access_control/__init__.py:234-235`; `apps/server/local_llm/models/models.py:183`; `apps/server/local_llm/models/models.py:547-553`; `apps/server/local_llm/models/access_grants.py:452-458`
+- Root cause: The import sanitizer always sends empty grants and omits is_active on the update path.
+- Recommended fix: Use the existing `importModels` client (`/models/import`), or omit `access_grants` and carry `is_active`.
+- Files likely to change: apps/web/src/routes/workspace/models/ModelsPage.tsx, apps/web/src/routes/workspace/models/modelImport.ts, apps/web/src/lib/apis/models/index.ts, apps/server/local_llm/utils/access_control/__init__.py, apps/server/local_llm/models/models.py, apps/server/local_llm/models/access_grants.py
+- Regression risks: New-model imports must keep sanitizing.
+- Docs to update: None.
+- Acceptance criteria: Vitest: re-importing an existing model sends no `access_grants` and keeps `is_active`; update `modelImport.test.ts:31`.
+
+#### A-99 [#225](https://github.com/epittman23/local-llm/issues/225): Bulk Enable/Disable/Show/Hide on the Models page act on read-only models and can wipe their params
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/web/src/routes/workspace/models/ModelsPage.tsx:239-272`; `apps/server/local_llm/routers/models.py:166-170`; `apps/server/local_llm/routers/models.py:192-193`; `apps/server/local_llm/routers/models.py:795`; `apps/server/local_llm/models/models.py:547-549`
+- Root cause: Bulk handlers ignore write_access and send list rows as full bodies.
+- Recommended fix: Act only on `write_access` rows and send full models (or a meta-only update).
+- Files likely to change: apps/web/src/routes/workspace/models/ModelsPage.tsx, apps/server/local_llm/routers/models.py, apps/server/local_llm/models/models.py
+- Regression risks: Admins must still be able to bulk-manage models they own.
+- Docs to update: None.
+- Acceptance criteria: Vitest: bulk actions skip read-only rows.
+
+#### A-100 [#226](https://github.com/epittman23/local-llm/issues/226): Editing any prompt suggestion truncates all others to 2000 characters and drops their other fields
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/web/src/routes/workspace/models/PromptSuggestionsEditor.tsx:8`; `apps/web/src/routes/workspace/models/PromptSuggestionsEditor.tsx:15-24`; `apps/web/src/routes/workspace/models/PromptSuggestionsEditor.tsx:41-43`
+- Root cause: Import normalization runs on every render and edit.
+- Recommended fix: Apply limits only when importing.
+- Files likely to change: apps/web/src/routes/workspace/models/PromptSuggestionsEditor.tsx
+- Regression risks: Imports must still be capped.
+- Docs to update: None.
+- Acceptance criteria: Vitest: editing one suggestion leaves the others unchanged.
+
+#### A-101 [#227](https://github.com/epittman23/local-llm/issues/227): Saving a skill re-enables it if disabled and clears its tags
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/web/src/routes/workspace/skills/SkillEditor.tsx:79-80`; `apps/web/src/routes/workspace/skills/SkillPages.tsx:92-99`; `apps/server/local_llm/routers/skills.py:316-318`; `apps/server/local_llm/models/skills.py:92`; `apps/server/local_llm/models/skills.py:316-320`
+- Root cause: The editor hardcodes is_active and meta and the backend writes the whole form.
+- Recommended fix: Carry `is_active` and `meta` through, or have the backend leave unset fields alone.
+- Files likely to change: apps/web/src/routes/workspace/skills/SkillEditor.tsx, apps/web/src/routes/workspace/skills/SkillPages.tsx, apps/server/local_llm/routers/skills.py, apps/server/local_llm/models/skills.py
+- Regression risks: New skills must still default to active.
+- Docs to update: None.
+- Acceptance criteria: Vitest: saving keeps is_active false and the tags.
+
+#### A-102 [#228](https://github.com/epittman23/local-llm/issues/228): Debounced autosaves are cancelled on unmount, so edits made just before leaving a page are lost
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/web/src/routes/workspace/prompts/PromptEditView.tsx:76`; `apps/web/src/routes/workspace/prompts/PromptEditView.tsx:137-163`; `apps/web/src/routes/workspace/knowledge/KnowledgeBasePage.tsx:230-250`
+- Root cause: Timers are cleared on unmount instead of flushed.
+- Recommended fix: Flush pending saves on unmount instead of cancelling them.
+- Files likely to change: apps/web/src/routes/workspace/prompts/PromptEditView.tsx, apps/web/src/routes/workspace/knowledge/KnowledgeBasePage.tsx
+- Regression risks: A flushed save must not run after the item was deleted.
+- Docs to update: None.
+- Acceptance criteria: Vitest: editing then leaving immediately still saves, for both pages.
+
+#### A-77 [#203](https://github.com/epittman23/local-llm/issues/203): Leaderboard Elo ratings depend on database row order rather than time
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/server/local_llm/models/feedbacks.py:315-319`; `apps/server/local_llm/routers/evaluations.py:79-126`; `apps/server/local_llm/routers/evaluations.py:221-227`
+- Root cause: The leaderboard query has no ORDER BY and Elo is order dependent.
+- Recommended fix: Order the query by `created_at, id`.
+- Files likely to change: apps/server/local_llm/models/feedbacks.py, apps/server/local_llm/routers/evaluations.py
+- Regression risks: Ratings change once (to chronological order); note it in the PR.
+- Docs to update: None.
+- Acceptance criteria: Test: ratings are identical for any input row order when sorted by time.
+
+#### A-78 [#204](https://github.com/epittman23/local-llm/issues/204): Topic-weighted Elo uses raw cosine similarity, so a negative weight reverses a result
+
+- Severity / status / effort: Low / Suspected / S
+- Locations: `apps/server/local_llm/routers/evaluations.py:109`; `apps/server/local_llm/routers/evaluations.py:116-117`; `apps/server/local_llm/routers/evaluations.py:189-198`
+- Root cause: Similarity weights are used unclamped.
+- Recommended fix: Clamp the weight to `max(0, sim)`.
+- Files likely to change: apps/server/local_llm/routers/evaluations.py
+- Regression risks: Positive weights must behave as before.
+- Docs to update: None.
+- Acceptance criteria: Test: a negative similarity contributes nothing.
+- Before fixing: write the reproduction first; if it does not reproduce, comment on the issue with the evidence and ask before closing it.
+
+#### A-152 [#278](https://github.com/epittman23/local-llm/issues/278): Leaderboard counts a thumbs-up on a regenerated reply as both a win and a loss for the same model
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/server/local_llm/routers/evaluations.py:111-124`; `apps/web/src/lib/chat/feedback.ts:72-86`
+- Root cause: Opponent ids include the winner and empty ids.
+- Recommended fix: Skip opponents equal to the winner or empty, on both sides of the seam.
+- Files likely to change: apps/server/local_llm/routers/evaluations.py, apps/web/src/lib/chat/feedback.ts
+- Regression risks: Arena feedback with distinct models must be unchanged.
+- Docs to update: None.
+- Acceptance criteria: Test: a self-sibling feedback changes nothing.
+
+#### A-79 [#205](https://github.com/epittman23/local-llm/issues/205): Sorting the Feedback table by User sends a key the backend ignores, leaving pages unordered
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/routes/admin/evaluations/Feedbacks.tsx:35`; `apps/web/src/routes/admin/evaluations/Feedbacks.tsx:62-64`; `apps/web/src/lib/apis/evaluations/index.ts:168`; `apps/server/local_llm/models/feedbacks.py:238`; `apps/server/local_llm/models/feedbacks.py:260`
+- Root cause: The frontend column key 'user' does not match the backend's 'username'.
+- Recommended fix: Use matching names and add `Feedback.id` as a secondary sort key.
+- Files likely to change: apps/web/src/routes/admin/evaluations/Feedbacks.tsx, apps/web/src/lib/apis/evaluations/index.ts, apps/server/local_llm/models/feedbacks.py
+- Regression risks: Other sort keys must be unchanged.
+- Docs to update: None.
+- Acceptance criteria: Router test: order_by=user sorts by username.
+
+#### A-72 [#198](https://github.com/epittman23/local-llm/issues/198): The Analytics 24-hour chart ignores the group filter
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/routers/analytics.py:208-209`; `apps/server/local_llm/models/chat_messages.py:1012-1053`; `apps/web/src/routes/admin/analytics/Analytics.tsx:134-139`
+- Root cause: The hourly query has no group parameter.
+- Recommended fix: Add `group_id` to the hourly query (same GroupMember subquery as daily) and pass it through.
+- Files likely to change: apps/server/local_llm/routers/analytics.py, apps/server/local_llm/models/chat_messages.py, apps/web/src/routes/admin/analytics/Analytics.tsx
+- Regression risks: Daily and hourly series must use the same group semantics.
+- Docs to update: None.
+- Acceptance criteria: Router test: the hourly series respects group_id.
+
+#### A-73 [#199](https://github.com/epittman23/local-llm/issues/199): Paginated listings (users, group members, models, feedback) have no deterministic ORDER BY, so pages can repeat or skip rows
+
+- Severity / status / effort: Low / Suspected / S
+- Locations: `apps/server/local_llm/models/users.py:331-354`; `apps/server/local_llm/routers/users.py:115`; `apps/server/local_llm/routers/users.py:170`; `apps/server/local_llm/routers/channels.py:563`; `apps/server/local_llm/models/models.py:398-418`; `apps/web/src/routes/workspace/models/ModelsPage.tsx:226-238`; `apps/server/local_llm/models/feedbacks.py:230-262`; `apps/web/src/routes/admin/users/UserList.tsx:62-66`; `apps/web/src/routes/admin/users/GroupUsers.tsx:71-77`
+- Root cause: ORDER BY columns are not unique and no primary-key tiebreaker is appended.
+- Recommended fix: Append the primary key to every ORDER BY used with OFFSET paging (users, group members, models, feedback) and give filtered queries a default order.
+- Files likely to change: apps/server/local_llm/models/users.py, apps/server/local_llm/routers/users.py, apps/server/local_llm/routers/channels.py, apps/server/local_llm/models/models.py, apps/web/src/routes/workspace/models/ModelsPage.tsx, apps/server/local_llm/models/feedbacks.py, apps/web/src/routes/admin/users/UserList.tsx, apps/web/src/routes/admin/users/GroupUsers.tsx
+- Regression risks: Characterization fixtures pin the current SQL (#95); update them deliberately.
+- Docs to update: None.
+- Acceptance criteria: Characterization test shows the tiebreaker in the SQL.
+- Before fixing: write the reproduction first; if it does not reproduce, comment on the issue with the evidence and ask before closing it.
+
+#### A-116 [#242](https://github.com/epittman23/local-llm/issues/242): JWT expiry accepts negative durations, locking every user out, and silently drops invalid values while the tab reports saved
+
+- Severity / status / effort: High / Confirmed / S
+- Locations: `apps/server/local_llm/routers/auths.py:946-950`; `apps/server/local_llm/utils/misc.py:1026-1054`; `apps/server/local_llm/routers/auths.py:161-175`; `apps/server/local_llm/utils/auth.py:119-130`; `apps/web/src/routes/admin/settings/Authentication.tsx:103-120`; `apps/web/src/routes/admin/settings/Authentication.tsx:333`
+- Root cause: The pattern allows negative numbers and invalid values are dropped silently.
+- Recommended fix: Require a positive number (or exactly -1/0), return 400 for invalid values, treat zero durations explicitly, and have the tab re-seed from the response or validate before sending.
+- Files likely to change: apps/server/local_llm/routers/auths.py, apps/server/local_llm/utils/misc.py, apps/server/local_llm/utils/auth.py, apps/web/src/routes/admin/settings/Authentication.tsx
+- Regression risks: Existing stored values like `-1` (no expiry) and `0` must keep their meaning.
+- Docs to update: The field hint text in the Authentication tab.
+- Acceptance criteria: Router test: `-1h` and `1 hour` return 400; `0s` is handled explicitly.
+
+#### A-117 [#243](https://github.com/epittman23/local-llm/issues/243): Admin banners are saved but never displayed anywhere (the port lost the banner display and dismissal)
+
+- Severity / status / effort: Medium / Confirmed / M
+- Locations: `apps/web/src/routes/admin/settings/General.tsx:151`; `apps/web/src/routes/admin/settings/General.tsx:163`; `apps/web/src/routes/admin/settings/Banners.tsx:66-71`; `apps/web/src/routes/admin/settings/banners.ts`
+- Root cause: The banner display was deferred during the migration and never ported.
+- Recommended fix: Render banners on the chat screen with remembered dismissal, or remove the editor and record the removal in docs/decisions.md.
+- Files likely to change: apps/web/src/routes/admin/settings/General.tsx, apps/web/src/routes/admin/settings/Banners.tsx, apps/web/src/routes/admin/settings/banners.ts
+- Regression risks: Banners must not cover the chat input on small screens.
+- Docs to update: docs/decisions.md (a dated entry if banners are removed instead of displayed).
+- Acceptance criteria: e2e: a saved banner appears on the chat page and stays dismissed after reload.
+
+#### A-118 [#244](https://github.com/epittman23/local-llm/issues/244): Cancelling an Ollama pull deletes an installed model of the same name
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/web/src/routes/admin/settings/models/ollamaDownloads.ts:113-123`; `apps/server/local_llm/routers/ollama.py:807-812`
+- Root cause: Cancel deletes by name without an instance, and the backend resolves names to any instance.
+- Recommended fix: Drop the delete (Ollama discards partial layers), or pass the pull's urlIdx and delete only if the tag was absent before the pull.
+- Files likely to change: apps/web/src/routes/admin/settings/models/ollamaDownloads.ts, apps/server/local_llm/routers/ollama.py
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Vitest: cancelling a pull issues no delete for a previously installed tag.
+
+#### A-119 [#245](https://github.com/epittman23/local-llm/issues/245): An Ollama pull whose stream errors spins forever and freezes the admin tab
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/web/src/routes/admin/settings/models/ollamaDownloads.ts:81-101`
+- Root cause: Read errors and parse errors share one catch that continues.
+- Recommended fix: Break on reader errors; continue only on a JSON parse error of one line.
+- Files likely to change: apps/web/src/routes/admin/settings/models/ollamaDownloads.ts
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Vitest: an errored stream ends with one error toast.
+
+#### A-120 [#246](https://github.com/epittman23/local-llm/issues/246): Ollama "Update All Models" reports success even when every pull failed
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/routes/admin/settings/models/ManageOllama.tsx:164-185`
+- Root cause: Errors are swallowed and success is unconditional.
+- Recommended fix: Count failures and report them.
+- Files likely to change: apps/web/src/routes/admin/settings/models/ManageOllama.tsx
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Vitest: failed pulls produce an error toast.
+
+#### A-121 [#247](https://github.com/epittman23/local-llm/issues/247): Clearing the Jupyter timeout in admin Code Execution makes the tab unsaveable
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/web/src/routes/admin/settings/CodeExecution.tsx:110-113`; `apps/server/local_llm/routers/configs.py:661`; `apps/server/local_llm/routers/configs.py:669`
+- Root cause: Port regression: empty number stored as a string.
+- Recommended fix: Map empty to null (use BoundNumber).
+- Files likely to change: apps/web/src/routes/admin/settings/CodeExecution.tsx, apps/server/local_llm/routers/configs.py
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Vitest: clearing the field saves null.
+
+#### A-122 [#248](https://github.com/epittman23/local-llm/issues/248): Clearing number fields in admin Interface settings fails the save and can half-apply it
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/routes/admin/settings/Interface.tsx:122`; `apps/web/src/routes/admin/settings/Interface.tsx:128-131`; `apps/web/src/routes/admin/settings/Interface.tsx:148`; `apps/server/local_llm/routers/tasks.py:119`; `apps/server/local_llm/routers/chats.py:160-162`
+- Root cause: Form allows empty values the backend forms reject.
+- Recommended fix: Require or default these fields in the form (or accept null as default on the server); render errors readably.
+- Files likely to change: apps/web/src/routes/admin/settings/Interface.tsx, apps/server/local_llm/routers/tasks.py, apps/server/local_llm/routers/chats.py
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Vitest: clearing the fields shows a validation message and sends nothing.
+
+#### A-123 [#249](https://github.com/epittman23/local-llm/issues/249): After hiding a connection model with no stored record, further toggles on it fail until the tab is reopened
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/routes/admin/settings/models/AdminModels.tsx:228-235`; `apps/web/src/routes/admin/settings/models/adminModels.ts:221-232`; `apps/server/local_llm/routers/models.py:272-277`
+- Root cause: toggleHidden does not refresh recordIds after a create.
+- Recommended fix: Call `init()` (or record the id) after a create in toggleHidden.
+- Files likely to change: apps/web/src/routes/admin/settings/models/AdminModels.tsx, apps/web/src/routes/admin/settings/models/adminModels.ts, apps/server/local_llm/routers/models.py
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Vitest: the second toggle plans an update.
+
+#### A-124 [#250](https://github.com/epittman23/local-llm/issues/250): GGUF upload creates the model twice in file mode and never in URL mode, and stream errors are swallowed
+
+- Severity / status / effort: Low / Suspected / S
+- Locations: `apps/web/src/routes/admin/settings/models/ManageOllama.tsx:259-297`; `apps/server/local_llm/routers/ollama.py:1605`; `apps/server/local_llm/routers/ollama.py:1702-1718`
+- Root cause: The client always creates a model after upload regardless of mode.
+- Recommended fix: Skip the client create when `model_created` is present, create via `files`/`from` in URL mode, and toast stream errors.
+- Files likely to change: apps/web/src/routes/admin/settings/models/ManageOllama.tsx, apps/server/local_llm/routers/ollama.py
+- Regression risks: Experimental path; verify against a current Ollama.
+- Docs to update: None.
+- Acceptance criteria: Vitest: file mode issues no client create.
+- Before fixing: write the reproduction first; if it does not reproduce, comment on the issue with the evidence and ask before closing it.
+
+#### A-125 [#251](https://github.com/epittman23/local-llm/issues/251): Pipelines: an unset list valve loads as an empty required Custom field, blocking Save; its test cannot catch it
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/routes/admin/settings/pipelineValves.ts:10-11`; `apps/web/src/routes/admin/settings/Pipelines.tsx:269-318`; `apps/web/src/routes/admin/settings/pipelineValves.test.ts`
+- Root cause: `valvesToForm` maps null to an empty string.
+- Recommended fix: Keep null in `valvesToForm` and test the load-save round trip.
+- Files likely to change: apps/web/src/routes/admin/settings/pipelineValves.ts, apps/web/src/routes/admin/settings/Pipelines.tsx, apps/web/src/routes/admin/settings/pipelineValves.test.ts
+- Regression risks: Arrays with values must round-trip unchanged.
+- Docs to update: None.
+- Acceptance criteria: Vitest: load then save of a null valve yields null.
+
+#### A-110 [#236](https://github.com/epittman23/local-llm/issues/236): Admin Images: Verify for the edit ComfyUI URL checks the generation server instead
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/routes/admin/settings/Images.tsx:269-273`; `apps/web/src/routes/admin/settings/Images.tsx:503-510`; `apps/server/local_llm/routers/images.py:329-360`
+- Root cause: One verify endpoint serves two different settings.
+- Recommended fix: Add a generation/edit target to the verify endpoint.
+- Files likely to change: apps/web/src/routes/admin/settings/Images.tsx, apps/server/local_llm/routers/images.py
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Router test: edit verification checks the edit URL.
+
+#### A-111 [#237](https://github.com/epittman23/local-llm/issues/237): Admin Images: a cleared Steps field is sent as "" and fails the whole save
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/routes/admin/settings/Images.tsx:371-376`; `apps/web/src/routes/admin/settings/images.ts:107-131`; `apps/server/local_llm/routers/images.py:231`; `apps/server/local_llm/routers/images.py:292`
+- Root cause: Empty number input stored as a string.
+- Recommended fix: Store null for an empty box, validate before sending, and handle None on the server.
+- Files likely to change: apps/web/src/routes/admin/settings/Images.tsx, apps/web/src/routes/admin/settings/images.ts, apps/server/local_llm/routers/images.py
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Vitest: an empty Steps box is not sent as a string.
+
+#### A-113 [#239](https://github.com/epittman23/local-llm/issues/239): Admin Connections Save shows "Settings saved" after both saves failed
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/routes/admin/settings/Connections.tsx:247`; `apps/web/src/routes/admin/settings/Connections.tsx:261`; `apps/web/src/routes/admin/settings/Connections.tsx:290-293`
+- Root cause: The save helpers swallow errors and the success toast is unconditional.
+- Recommended fix: Return success from the helpers and call `saved()` only when both succeed.
+- Files likely to change: apps/web/src/routes/admin/settings/Connections.tsx
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Vitest: no success toast when a save fails.
+
+#### A-75 [#201](https://github.com/epittman23/local-llm/issues/201): A numeric enum valve sends its option as a string, so the backend rejects the save
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/components/common/Valves.tsx:111-119`; `apps/server/local_llm/routers/tools.py:832-834`
+- Root cause: The select stores the DOM string value instead of the enum value.
+- Recommended fix: Map the selected value back to the original `p.enum` entry before `set`.
+- Files likely to change: apps/web/src/components/common/Valves.tsx, apps/server/local_llm/routers/tools.py
+- Regression risks: String enums must be unchanged.
+- Docs to update: None.
+- Acceptance criteria: Vitest: selecting 2 yields the number 2.
+
+#### A-76 [#202](https://github.com/epittman23/local-llm/issues/202): The note access dialog lost the original's permission props: no write grants, and a Public option that is silently stripped while the UI shows it applied
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/web/src/routes/notes/NoteEditorPage.tsx:200-203`; `apps/web/src/routes/notes/NoteEditorPage.tsx:224-230`; `apps/web/src/components/common/AccessControlModal.tsx:11-15`; `apps/server/local_llm/routers/notes.py:643-649`
+- Root cause: The port omitted the permission props the original passed and caches sent grants instead of the response.
+- Recommended fix: Pass the same four props as the original and update the cache from the response.
+- Files likely to change: apps/web/src/routes/notes/NoteEditorPage.tsx, apps/web/src/components/common/AccessControlModal.tsx, apps/server/local_llm/routers/notes.py
+- Regression risks: Other AccessControlModal callers must keep their behaviour.
+- Docs to update: None.
+- Acceptance criteria: Vitest/e2e: the note access dialog offers write, hides Public without permission, and reflects the server response.
+
+#### A-83 [#209](https://github.com/epittman23/local-llm/issues/209): Functions "Import JSON" reports success even when every create failed
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/routes/admin/functions/FunctionsPage.tsx:207-214`
+- Root cause: Per-item failures are caught and the success toast is unconditional.
+- Recommended fix: Count successes and report "imported k of n" or an error.
+- Files likely to change: apps/web/src/routes/admin/functions/FunctionsPage.tsx
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Vitest: all-failed import shows no success toast.
+
+#### A-84 [#210](https://github.com/epittman23/local-llm/issues/210): A /notes?title=&content= link whose note creation fails leaves an endless spinner
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/routes/notes/NotesPage.tsx:74-82`; `apps/web/src/routes/notes/NotesPage.tsx:149-155`
+- Root cause: The create promise has no rejection or undefined-id handling.
+- Recommended fix: Add the catch and undefined-id handling with a toast and a replace-navigation to /notes.
+- Files likely to change: apps/web/src/routes/notes/NotesPage.tsx
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Vitest: a failed create navigates back with an error toast.
+
+#### A-80 [#206](https://github.com/epittman23/local-llm/issues/206): A ?redirect= value with a control character passes safeRedirect, and the signed-in user is left on the sign-in form
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/lib/auth/redirect.ts:8-10`; `apps/web/src/routes/public/AuthPage.tsx:62`; `apps/web/src/routes/public/AuthPage.tsx:79-81`; `apps/web/src/routes/public/AuthPage.tsx:138`; `apps/web/src/routes/public/AuthPage.tsx:157`
+- Root cause: `safeRedirect` checks a denylist of prefixes instead of resolving the URL.
+- Recommended fix: Resolve with `new URL(target, location.origin)` and accept only same-origin results (or reject control characters and backslashes); handle the navigate promise.
+- Files likely to change: apps/web/src/lib/auth/redirect.ts, apps/web/src/routes/public/AuthPage.tsx
+- Regression risks: Legitimate same-origin paths with query strings must still work.
+- Docs to update: None.
+- Acceptance criteria: Vitest: control-character targets fall back to `/`.
+
+#### A-81 [#207](https://github.com/epittman23/local-llm/issues/207): Playground Cancel and leaving the page cannot abort a request before response headers arrive
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/routes/playground/PlaygroundPages.tsx:114-128`; `apps/web/src/lib/apis/openai/index.ts:378-399`
+- Root cause: The controller is created inside the API helper after the fetch resolves.
+- Recommended fix: Create the AbortController before the fetch and pass its signal in.
+- Files likely to change: apps/web/src/routes/playground/PlaygroundPages.tsx, apps/web/src/lib/apis/openai/index.ts
+- Regression risks: Abort must not show an error toast.
+- Docs to update: None.
+- Acceptance criteria: Vitest: aborting before headers aborts the fetch.
+
+#### A-82 [#208](https://github.com/epittman23/local-llm/issues/208): Playground parameters are spread at the top level of the request, so custom parameters never apply and app-only keys reach the provider
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/routes/playground/playgroundModel.ts:66-81`; `apps/web/src/routes/playground/PlaygroundPages.tsx:184`; `apps/server/local_llm/utils/payload.py:85-113`; `apps/server/local_llm/main.py:1093`; `apps/server/local_llm/routers/openai.py:1642`
+- Root cause: Playground params are spread into the body instead of nested under `params`.
+- Recommended fix: Send `params: {...}` like the chat page.
+- Files likely to change: apps/web/src/routes/playground/playgroundModel.ts, apps/web/src/routes/playground/PlaygroundPages.tsx, apps/server/local_llm/utils/payload.py, apps/server/local_llm/main.py, apps/server/local_llm/routers/openai.py
+- Regression risks: Standard params must still reach the provider.
+- Docs to update: None.
+- Acceptance criteria: Vitest: the playground body nests params.
+
+#### A-133 [#259](https://github.com/epittman23/local-llm/issues/259): Account tab: a failed load is silent, and Save then wipes user variables and profile fields
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/web/src/components/settings/personal/Account.tsx:79-95`; `apps/web/src/components/settings/personal/Account.tsx:102-129`; `apps/server/local_llm/routers/users.py:651-671`; `apps/server/local_llm/routers/auths.py:195-205`
+- Root cause: Load errors are swallowed and Save is always enabled.
+- Recommended fix: Track a load-error state, toast it, and disable Save until both loads succeed; never fall back to the store user for fields it lacks.
+- Files likely to change: apps/web/src/components/settings/personal/Account.tsx, apps/server/local_llm/routers/users.py, apps/server/local_llm/routers/auths.py
+- Regression risks: A genuinely empty variables list must still be savable.
+- Docs to update: None.
+- Acceptance criteria: Vitest: after a failed load, Save is disabled and nothing is posted.
+
+#### A-134 [#260](https://github.com/epittman23/local-llm/issues/260): Enter in a password field on the Account tab runs the profile save instead of the password change
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/components/settings/personal/Account.tsx:292-330`
+- Root cause: Port regression: the separate form was merged into the tab form.
+- Recommended fix: Give the password section its own (sibling) form.
+- Files likely to change: apps/web/src/components/settings/personal/Account.tsx
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Vitest: Enter in the password fields posts the password change.
+
+#### A-135 [#261](https://github.com/epittman23/local-llm/issues/261): A font typed and submitted with Enter on the Interface tab is not saved
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/components/settings/InterfaceSettings.tsx:266-277`; `apps/web/src/components/settings/personal/Interface.tsx:42-50`; `apps/web/src/components/settings/controls.tsx:40-49`
+- Root cause: Value committed on blur only.
+- Recommended fix: Commit the font on change or flush it on submit.
+- Files likely to change: apps/web/src/components/settings/InterfaceSettings.tsx, apps/web/src/components/settings/personal/Interface.tsx, apps/web/src/components/settings/controls.tsx
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Vitest: Enter saves the typed font.
+
+#### A-136 [#262](https://github.com/epittman23/local-llm/issues/262): Personal settings switches fail silently, and the interface permission blocks every settings save while only one tab is hidden
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/components/settings/personal/Audio.tsx:118`; `apps/web/src/components/settings/personal/Personalization.tsx:147`; `apps/web/src/components/settings/personal/Notifications.tsx:109`; `apps/web/src/components/settings/personal/Shortcuts.tsx:64`; `apps/server/local_llm/routers/users.py:504-510`; `apps/web/src/components/settings/settingsTabs.ts:126-127`
+- Root cause: Unhandled promise plus mismatched permission scope.
+- Recommended fix: Catch and toast; decide the permission scope and align tab visibility with the backend gate.
+- Files likely to change: apps/web/src/components/settings/personal/Audio.tsx, apps/web/src/components/settings/personal/Personalization.tsx, apps/web/src/components/settings/personal/Notifications.tsx, apps/web/src/components/settings/personal/Shortcuts.tsx, apps/server/local_llm/routers/users.py, apps/web/src/components/settings/settingsTabs.ts
+- Regression risks: Changing the permission scope affects existing deployments; ask the owner.
+- Docs to update: None.
+- Acceptance criteria: Vitest: a 403 on save shows an error.
+
+#### A-137 [#263](https://github.com/epittman23/local-llm/issues/263): A personal tool server saved without a name is listed as a blank row
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/components/settings/personal/Integrations.tsx:60`; `apps/web/src/components/settings/toolServerModel.ts:158-161`
+- Root cause: Nullish coalescing on an empty string.
+- Recommended fix: Use `||`.
+- Files likely to change: apps/web/src/components/settings/personal/Integrations.tsx, apps/web/src/components/settings/toolServerModel.ts
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Vitest: an unnamed server shows its URL.
+
+#### A-154 [#280](https://github.com/epittman23/local-llm/issues/280): The workspace model tag filter matches models whose meta merely contains the tag word
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/models/models.py:387-396`
+- Root cause: Substring match over serialized JSON.
+- Recommended fix: Match within `meta.tags[*].name` only.
+- Files likely to change: apps/server/local_llm/models/models.py
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Test: only the tagged model matches.
+
+#### A-153 [#279](https://github.com/epittman23/local-llm/issues/279): Adding several users to a group silently drops new members when one is already a member
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/models/groups.py:586-600`; `apps/server/local_llm/models/groups.py:368-389`
+- Root cause: Per-row flush with whole-transaction rollback.
+- Recommended fix: Insert only non-members (or ON CONFLICT DO NOTHING).
+- Files likely to change: apps/server/local_llm/models/groups.py
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Test: all new members are added.
+
+### B19 Channels, notifications and chat data
+
+#### A-126 [#252](https://github.com/epittman23/local-llm/issues/252): Failed channel message edits, pins, reactions and deletes stay on screen as if saved
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/web/src/routes/channels/useMessageFeed.ts:211-238`; `apps/web/src/routes/channels/ChannelDialogs.tsx:99-103`; `apps/web/src/routes/channels/SidebarChannels.tsx:107-110`
+- Root cause: Optimistic updates without rollback.
+- Recommended fix: Keep the previous message and restore it on failure.
+- Files likely to change: apps/web/src/routes/channels/useMessageFeed.ts, apps/web/src/routes/channels/ChannelDialogs.tsx, apps/web/src/routes/channels/SidebarChannels.tsx
+- Regression risks: Live socket events arriving during the request must not be overwritten by the rollback.
+- Docs to update: None.
+- Acceptance criteria: Vitest: rejected actions roll back.
+
+#### A-127 [#253](https://github.com/epittman23/local-llm/issues/253): A failed channel history load is shown as "the very beginning of the channel"
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/web/src/routes/channels/useMessageFeed.ts:76-87`; `apps/web/src/routes/channels/useMessageFeed.ts:98-100`; `apps/web/src/routes/channels/MessageList.tsx:38-70`
+- Root cause: Errors are mapped to an empty page.
+- Recommended fix: Show an error and leave `top` false so a later scroll retries.
+- Files likely to change: apps/web/src/routes/channels/useMessageFeed.ts, apps/web/src/routes/channels/MessageList.tsx
+- Regression risks: Avoid tight retry loops.
+- Docs to update: None.
+- Acceptance criteria: Vitest: a failed loadMore can be retried.
+
+#### A-128 [#254](https://github.com/epittman23/local-llm/issues/254): Every open tab shows its own desktop notification and sound for each channel message
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/routes/channels/useChannels.ts:117-128`
+- Root cause: The last-active-tab guard was not ported.
+- Recommended fix: Restore a last-active-tab guard (BroadcastChannel) or set a notification tag.
+- Files likely to change: apps/web/src/routes/channels/useChannels.ts
+- Regression risks: The single remaining tab must still notify.
+- Docs to update: None.
+- Acceptance criteria: Vitest: only the active tab notifies.
+
+#### A-129 [#255](https://github.com/epittman23/local-llm/issues/255): Channel unread badges count thread replies and model replies that the server does not count
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/routes/channels/channelModel.ts:410-425`; `apps/web/src/routes/channels/useChannels.ts:117-124`; `apps/server/local_llm/models/messages.py:437-440`
+- Root cause: Client and server count different message sets.
+- Recommended fix: Skip events with `parent_id` (or count them on purpose and align the server).
+- Files likely to change: apps/web/src/routes/channels/channelModel.ts, apps/web/src/routes/channels/useChannels.ts, apps/server/local_llm/models/messages.py
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Vitest: a thread reply does not change the badge.
+
+#### A-130 [#256](https://github.com/epittman23/local-llm/issues/256): Pressing Enter on a mention suggestion that dropped out of the list throws and inserts nothing
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/routes/channels/MessageComposer.tsx:143`; `apps/web/src/routes/channels/MessageComposer.tsx:218-232`
+- Root cause: Selection index not clamped.
+- Recommended fix: Clamp `selected` to the list length or skip a missing item.
+- Files likely to change: apps/web/src/routes/channels/MessageComposer.tsx
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Vitest: Enter after the list shrinks picks a valid item.
+
+#### A-131 [#257](https://github.com/epittman23/local-llm/issues/257): The reaction tooltip omits the fourth person when exactly four users reacted
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/web/src/routes/channels/channelModel.ts:486-495`
+- Root cause: Off-by-one threshold.
+- Recommended fix: Use `total > 3` or list all four.
+- Files likely to change: apps/web/src/routes/channels/channelModel.ts
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Vitest: four reactors are all represented.
+
+#### A-151 [#277](https://github.com/epittman23/local-llm/issues/277): Deleting a thread's parent message leaves its replies, pins and reactions reachable
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/server/local_llm/models/messages.py:574-594`; `apps/server/local_llm/routers/channels.py:1771`; `apps/server/local_llm/tools/builtin.py:1845`
+- Root cause: Delete removes only the message and its own reactions.
+- Recommended fix: Delete replies and their reactions in the same transaction.
+- Files likely to change: apps/server/local_llm/models/messages.py, apps/server/local_llm/routers/channels.py, apps/server/local_llm/tools/builtin.py
+- Regression risks: Large threads: delete in one statement.
+- Docs to update: None.
+- Acceptance criteria: Test: after deleting a parent, its replies are gone from pins and search.
+
+#### A-59 [#185](https://github.com/epittman23/local-llm/issues/185): view_channel_thread returns user_name null for every reply not posted by a webhook
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/tools/builtin.py:2003-2013`; `apps/server/local_llm/models/messages.py:229-244`; `apps/server/local_llm/models/messages.py:261`; `apps/server/local_llm/routers/channels.py:1469-1482`
+- Root cause: The model method resolves user info only for webhook messages.
+- Recommended fix: Batch-load users as the router does.
+- Files likely to change: apps/server/local_llm/tools/builtin.py, apps/server/local_llm/models/messages.py, apps/server/local_llm/routers/channels.py
+- Regression risks: Keep webhook authors as they are.
+- Docs to update: None.
+- Acceptance criteria: Test: thread replies carry user names.
+
+#### A-44 [#170](https://github.com/epittman23/local-llm/issues/170): One failing notification webhook stops delivery to the user's other notification targets
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/server/local_llm/utils/notifications.py:395-406`; `apps/server/local_llm/utils/notifications.py:259-260`
+- Root cause: The try/except wraps the whole per-user target loop instead of each target.
+- Recommended fix: Move the try/except inside the `for target` loop.
+- Files likely to change: apps/server/local_llm/utils/notifications.py
+- Regression risks: Keep one log line per failed target.
+- Docs to update: None.
+- Acceptance criteria: Test: a failing first target still lets the second receive the event.
+
+#### A-163 [#289](https://github.com/epittman23/local-llm/issues/289): Postgres chat search silently excludes chats whose title contains "x00" or whose content contains a literal \u0000
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/server/local_llm/models/chats.py:2066-2071`
+- Root cause: The LIKE patterns are written as if they were C escapes.
+- Recommended fix: Delete both filters (writes already sanitize), or use `strpos(title, chr(0)) = 0`.
+- Files likely to change: apps/server/local_llm/models/chats.py
+- Regression risks: None (writes already strip null bytes).
+- Docs to update: None.
+- Acceptance criteria: Test against Postgres: a title containing 0x00 is found.
+
+#### A-165 [#291](https://github.com/epittman23/local-llm/issues/291): Chat search ignores a folder: filter that matches no folder and returns every chat
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/models/chats.py:1953-1957`; `apps/server/local_llm/models/chats.py:2000-2001`
+- Root cause: Empty resolution treated as no filter.
+- Recommended fix: Return nothing when a folder token resolves to no folder.
+- Files likely to change: apps/server/local_llm/models/chats.py
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Test: an unknown folder returns no chats.
+
+#### A-166 [#292](https://github.com/epittman23/local-llm/issues/292): LIKE wildcards in chat search text are not escaped, so % or _ matches every chat
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/models/chats.py:2016-2017`; `apps/server/local_llm/models/chats.py:68-99`; `apps/server/local_llm/models/chats.py:1391`; `apps/server/local_llm/models/chats.py:1471`
+- Root cause: Unescaped user input in LIKE patterns.
+- Recommended fix: Escape `\`, `%`, `_` and use an ESCAPE clause (or `autoescape=True`).
+- Files likely to change: apps/server/local_llm/models/chats.py
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Test: `%` matches only chats containing a percent sign.
+
+#### A-167 [#293](https://github.com/epittman23/local-llm/issues/293): Linking an already-linked file to a chat makes the whole chat_file batch fail, so new files are never linked
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/models/chats.py:2549-2553`; `apps/server/local_llm/models/chats.py:2578-2602`; `apps/server/local_llm/utils/access_control/files.py:95`
+- Root cause: Wrong field used for de-duplication.
+- Recommended fix: De-duplicate on file_id across the chat, or ON CONFLICT DO NOTHING per row.
+- Files likely to change: apps/server/local_llm/models/chats.py, apps/server/local_llm/utils/access_control/files.py
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Test: G is linked.
+
+#### A-168 [#294](https://github.com/epittman23/local-llm/issues/294): Chat export pages by OFFSET over updated_at, so a chat updated during export is skipped and another exported twice
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/models/chats.py:1845-1892`; `apps/server/local_llm/routers/chats.py:686-703`
+- Root cause: OFFSET paging over a column that changes during the export.
+- Recommended fix: Keyset-page on an immutable key, or snapshot ids first.
+- Files likely to change: apps/server/local_llm/models/chats.py, apps/server/local_llm/routers/chats.py
+- Regression risks: Export order may change; document it.
+- Docs to update: None.
+- Acceptance criteria: Test: concurrent update during export still exports every chat once.
+
+#### A-169 [#295](https://github.com/epittman23/local-llm/issues/295): Imported chats all show as unread
+
+- Severity / status / effort: Low / Confirmed / S
+- Locations: `apps/server/local_llm/models/chats.py:601-618`; `apps/server/local_llm/models/chats.py:120`; `apps/server/local_llm/models/chats.py:526`; `apps/server/local_llm/models/chats.py:1800`
+- Root cause: The import path never sets last_read_at.
+- Recommended fix: Set `last_read_at = updated_at` on import.
+- Files likely to change: apps/server/local_llm/models/chats.py
+- Regression risks: None.
+- Docs to update: None.
+- Acceptance criteria: Test: imported chats are read.
+
+#### A-157 [#283](https://github.com/epittman23/local-llm/issues/283): Generated tags that differ only by case or spacing make the whole tag batch fail, leaving chat tags unindexed and unarchive returning 500
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/server/local_llm/models/tags.py:121-134`; `apps/server/local_llm/models/chats.py:840-849`; `apps/server/local_llm/utils/middleware.py:3854-3860`; `apps/server/local_llm/routers/chats.py:1615`
+- Root cause: Names are normalized to ids without de-duplication.
+- Recommended fix: De-duplicate by normalised id in `ensure_tags_exist` and in `update_chat_tags_by_id`.
+- Files likely to change: apps/server/local_llm/models/tags.py, apps/server/local_llm/models/chats.py, apps/server/local_llm/utils/middleware.py, apps/server/local_llm/routers/chats.py
+- Regression risks: Keep the first display name.
+- Docs to update: None.
+- Acceptance criteria: Test: duplicate-normalising names create one tag.
+
+#### A-156 [#282](https://github.com/epittman23/local-llm/issues/282): Batch memory replace clears the memory's path unless the caller repeats it
+
+- Severity / status / effort: Medium / Confirmed / S
+- Locations: `apps/server/local_llm/utils/memory.py:264-270`; `apps/server/local_llm/models/memories.py:227-228`; `apps/server/local_llm/routers/memories.py:86-91`; `apps/server/local_llm/routers/memories.py:243-256`; `apps/server/local_llm/tools/builtin.py:962-997`; `apps/server/local_llm/utils/memory.py:545-547`
+- Root cause: model_dump without exclude_unset and an unconditional path assignment.
+- Recommended fix: Use `model_dump(exclude_unset=True)` and normalise path only when present.
+- Files likely to change: apps/server/local_llm/utils/memory.py, apps/server/local_llm/models/memories.py, apps/server/local_llm/routers/memories.py, apps/server/local_llm/tools/builtin.py
+- Regression risks: Explicitly clearing a path must still be possible.
+- Docs to update: None.
+- Acceptance criteria: Test: a replace without path keeps the existing path.
+
+#### A-55 [#181](https://github.com/epittman23/local-llm/issues/181): search_notes and search_chats apply date filters after fetching only the newest matches, so older ranges return nothing
+
+- Severity / status / effort: Medium / Confirmed / M
+- Locations: `apps/server/local_llm/tools/builtin.py:1153-1175`; `apps/server/local_llm/tools/builtin.py:1533-1551`; `apps/server/local_llm/models/notes.py:269`; `apps/server/local_llm/models/chats.py:2101-2104`
+- Root cause: Date filters are applied in Python after a newest-first LIMIT.
+- Recommended fix: Push the date range into the SQL queries (add parameters to the model methods).
+- Files likely to change: apps/server/local_llm/tools/builtin.py, apps/server/local_llm/models/notes.py, apps/server/local_llm/models/chats.py
+- Regression risks: Text search ranking must stay the same.
+- Docs to update: None.
+- Acceptance criteria: Test: the 5 older matches are returned.
+
+#### A-155 [#281](https://github.com/epittman23/local-llm/issues/281): Folder delete commits child deletions one by one and reports a mid-way failure as success
+
+- Severity / status / effort: Low / Suspected / S
+- Locations: `apps/server/local_llm/models/folders.py:394-415`; `apps/server/local_llm/routers/folders.py:692-704`
+- Root cause: Each child is committed separately and exceptions are swallowed.
+- Recommended fix: One transaction for the subtree; let exceptions propagate.
+- Files likely to change: apps/server/local_llm/models/folders.py, apps/server/local_llm/routers/folders.py
+- Regression risks: Very large trees: keep one transaction bounded.
+- Docs to update: None.
+- Acceptance criteria: Test with an injected failure: nothing is deleted and the route errors.
+- Before fixing: write the reproduction first; if it does not reproduce, comment on the issue with the evidence and ask before closing it.
+
 ## 5. Rules for the fixing session (from AGENTS.md)
 
 - One branch and one pull request per batch; `main` takes squash-merged PRs
@@ -563,6 +2225,15 @@ re-test everything once the fixes land.
    fixed first (batch B0), before any bug-fix batch.
 
 ### Still open at execution time
+
+- **Scope of the "Interface Settings Access" permission** (gap finding in B18,
+  "Personal settings switches fail silently ..."): the backend uses it to gate
+  every personal settings write, while the UI hides only the Interface tab.
+  Decide whether it covers all personal settings (hide every tab) or only the
+  interface keys (narrow the backend check).
+- **Removing the unported Yjs socket handlers** (part of B0): the React
+  frontend never emits these events; deleting them is the simplest fix but
+  removes a code path, so it counts as an architectural decision.
 
 - **Where to fix B0.** A normal pull request in this public repository
   discloses the vulnerability before the advisory is published. GitHub's
