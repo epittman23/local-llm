@@ -796,7 +796,8 @@ app.add_middleware(
     allow_origins=CORS_ALLOW_ORIGIN,
     # Never with '*': Starlette answers a credentialed request from any origin
     # by echoing that origin back, which is the same as trusting all of them.
-    allow_credentials=CORS_ALLOW_ORIGIN != ['*'],
+    # And not with no origins either, which would only add a stray header.
+    allow_credentials=bool(CORS_ALLOW_ORIGIN) and CORS_ALLOW_ORIGIN != ['*'],
     allow_methods=['*'],
     allow_headers=['*'],
 )

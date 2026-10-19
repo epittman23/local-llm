@@ -21,7 +21,7 @@ def _client(origins: list[str]) -> TestClient:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=origins,
-        allow_credentials=origins != ['*'],
+        allow_credentials=bool(origins) and origins != ['*'],
         allow_methods=['*'],
         allow_headers=['*'],
     )
@@ -38,7 +38,7 @@ def test_the_default_grants_no_origin(monkeypatch):
     assert config.cors_origins('') == []
     assert config.CORS_ALLOW_ORIGIN == []
     r = _client([]).get('/api/x', headers={'Origin': 'http://localhost:9999'}, cookies={'token': 't'})
-    assert 'access-control-allow-origin' not in r.headers
+    assert not [h for h in r.headers if h.lower().startswith('access-control-')]
 
 
 def test_listed_origins_get_credentialed_access_and_others_do_not():
