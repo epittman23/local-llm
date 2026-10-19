@@ -69,7 +69,6 @@ export function CompareBlocks({
 										Group
 									</TableHead>
 									<TableHead>Configuration</TableHead>
-									<TableHead>Flags</TableHead>
 									<TableHead>Passed / attempted</TableHead>
 									<TableHead>Problems</TableHead>
 									<TableHead>Pass rate [95% CI]</TableHead>
@@ -79,6 +78,7 @@ export function CompareBlocks({
 									<TableHead>Prefill t/s</TableHead>
 									{baseline && <TableHead>Vs baseline</TableHead>}
 									<TableHead>Note</TableHead>
+									<TableHead>Flags</TableHead>
 								</TableRow>
 							</TableHeader>
 							<TableBody>
@@ -88,7 +88,6 @@ export function CompareBlocks({
 										<TableCell>
 											{row.model} @ <span className="font-mono">{row.config_id}</span>
 										</TableCell>
-										<TableCell className="text-muted-foreground text-xs">{flagText(row.flags)}</TableCell>
 										<TableCell>
 											{row.passed}/{row.attempted}
 										</TableCell>
@@ -114,6 +113,9 @@ export function CompareBlocks({
 											</TableCell>
 										)}
 										<TableCell className="text-muted-foreground text-xs">{row.note || ''}</TableCell>
+										<TableCell className="text-muted-foreground min-w-64 text-xs whitespace-normal">
+											{flagText(row.flags)}
+										</TableCell>
 									</TableRow>
 								))}
 							</TableBody>
