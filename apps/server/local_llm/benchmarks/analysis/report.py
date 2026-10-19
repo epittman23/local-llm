@@ -2117,6 +2117,7 @@ def headline(
     lines = [h(2, 'Headline'), '']
     complete = [b for b in blocks if b.complete()]
     per_block = [r for r in results if not r.get('pooled')]
+    found = [r for r in per_block if r['p_perm'] < ALPHA or any(p < ALPHA for p in r.get('p_holm', []))]
 
     if not complete:
         lines += [
@@ -2125,7 +2126,6 @@ def headline(
             'what would produce one.',
         ]
     elif per_block:
-        found = [r for r in per_block if r['p_perm'] < ALPHA or any(p < ALPHA for p in r.get('p_holm', []))]
         if found:
             named = '; '.join(
                 f'{r["block"].label()} (permutation p = {pv(r["p_perm"])}, smallest Holm p = '
@@ -2149,12 +2149,23 @@ def headline(
             ]
     if floor is not None and per_block:
         largest = max(r.get('max_delta', 0.0) for r in per_block)
-        if largest < floor:
+        if largest < floor and not found:
             lines += [
                 f'- **Re-running an identical condition changes the verdict '
                 f'{100 * floor:.0f}% of the time.** Every system-prompt difference in '
                 f'this document (the largest is {100 * largest:.0f} pp) is smaller '
                 f'than that, so none of them is distinguishable from noise.'
+            ]
+        elif largest < floor:
+            # A paired test can find a difference smaller than the share of
+            # verdicts that flip on a re-run (the pairing removes item
+            # difficulty; the floor does not), but a reader should not act on
+            # it unconfirmed.
+            lines += [
+                f'- **Re-running an identical condition changes the verdict '
+                f'{100 * floor:.0f}% of the time**, more than the largest '
+                f'system-prompt difference here ({100 * largest:.0f} pp). Confirm '
+                f'the difference above with a re-run before acting on it.'
             ]
         else:
             lines += [

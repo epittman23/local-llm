@@ -97,6 +97,20 @@ def test_floor_sentence_appears_only_when_every_difference_is_below_the_floor():
     assert 'none of them is distinguishable from noise' not in head
 
 
+def test_a_significant_difference_below_the_floor_asks_for_confirmation_not_dismissal():
+    # Floor 50% from ten repeated items; 30 items where the prompt loses 9
+    # (30 pp): significant after correction, but below the floor.
+    rows = Rows()
+    rows.run([True] * 10)
+    rows.run([i < 5 for i in range(10)])
+    rows.run([True] * 30, benchmark='ds1000')
+    rows.run([i >= 9 for i in range(30)], benchmark='ds1000', system='sha1')
+    head = section(build(rows).markdown, '## Headline')
+    assert 'System prompts differ' in head
+    assert 'Confirm the difference above with a re-run' in head
+    assert 'none of them is distinguishable from noise' not in head
+
+
 def test_headline_reports_configuration_groups():
     rows = Rows()
     rows.run([True] * 30)
