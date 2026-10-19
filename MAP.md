@@ -95,6 +95,11 @@ Start here for "how do I run/use this."
   component landed) and `icons-mapping.md`; and `restructure-plan.md`, the
   2026-10 restructure into one project (plan, decisions, and each phase's
   PRs and verification).
+- **`audit/`** — the 2026-10-19 full-repository bug audit of `7a4088b`:
+  `COVERAGE.md` (review units and what was covered), `FINDINGS.md` (each
+  non-security finding with its issue number), `FIX_PLAN.md` (batches and
+  acceptance criteria for the fixing sessions), `NOTES.md` (non-bug
+  observations and invariants checked) and `repro/` (minimal reproductions).
 - **`serving-baseline/`** — test input, not prose: `config-id` fingerprints,
   profile seed data and the verbatim profile rationale, captured from
   `scripts/shell/main.sh` on 2026-09-14 before the shell layer was ported to
