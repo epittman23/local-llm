@@ -594,6 +594,12 @@ async def signup(
 ):
     has_users = await Users.has_users(db=db)
 
+    # Sign-up creates a password account and a session, so it honours the
+    # same switch as sign-in: an SSO-only instance gets no password accounts,
+    # its first admin included (that one signs in through the provider).
+    if LLLM_AUTH and not ENABLE_PASSWORD_AUTH:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.ACTION_PROHIBITED)
+
     if LLLM_AUTH:
         if has_users:
             if not await Config.get('ui.enable_signup') or not await Config.get('ui.enable_login_form'):
