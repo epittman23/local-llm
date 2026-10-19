@@ -11,10 +11,11 @@ which helper existed:
   Deleted, because nobody else can see or relies on it:
     sign-in credential, API key, OAuth sessions, memories (and their vector
     collection), feedback, prompt history, tags, pinned notes, chats and their
-    messages and shares, folders, automations and their runs, calendar
-    attendance, group and channel memberships, reactions, grants naming the
-    user, notes and calendars shared with no one, and the user's files that
-    nothing else references (row, stored object and vector collection).
+    messages, shares and file links, folders, automations and their runs,
+    calendar attendance, group and channel memberships, reactions, grants
+    naming the user, notes and calendars shared with no one, and the user's
+    files that nothing else references (row, stored object and vector
+    collection).
 
   Reassigned to an administrator, because other users may rely on it:
     notes and calendars someone was granted, knowledge bases (with their
@@ -76,7 +77,7 @@ async def purge_user(user_id: str, db: AsyncSession | None = None) -> bool:
     from local_llm.models.automations import Automation, AutomationRun
     from local_llm.models.calendar import Calendar, CalendarEvent, CalendarEventAttendee
     from local_llm.models.channels import Channel, ChannelFile, ChannelMember, ChannelWebhook
-    from local_llm.models.chats import Chats
+    from local_llm.models.chats import ChatFile, Chats
     from local_llm.models.feedbacks import Feedback
     from local_llm.models.files import File
     from local_llm.models.folders import Folder
@@ -104,7 +105,7 @@ async def purge_user(user_id: str, db: AsyncSession | None = None) -> bool:
         successor = await _successor_id(user_id, session)
 
         # Private records.
-        for table in (ApiKey, OAuthSession, Memory, Feedback, PromptHistory, Tag, PinnedNote, Folder):
+        for table in (ApiKey, OAuthSession, Memory, Feedback, PromptHistory, Tag, PinnedNote, Folder, ChatFile):
             await session.execute(delete(table).where(table.user_id == user_id))
         for table in (CalendarEventAttendee, ChannelMember, MessageReaction):
             await session.execute(delete(table).where(table.user_id == user_id))

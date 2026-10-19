@@ -18,6 +18,7 @@ from sqlalchemy import JSON, BigInteger, Boolean, Date, DateTime, Integer, selec
 from local_llm.internal.db import get_async_db_context
 from local_llm.models.access_grants import AccessGrant
 from local_llm.models.auths import Auth
+from local_llm.models.chats import Chat, ChatFile
 from local_llm.models.files import File
 from local_llm.models.knowledge import Knowledge, KnowledgeFile
 from local_llm.models.memories import Memory
@@ -92,6 +93,8 @@ def test_purge_deletes_private_data_and_reassigns_shared(monkeypatch):
             ),  # fmt: skip
             _row(Knowledge, id=f'kb-{gone}', user_id=gone),
             _row(File, id=f'loose-{gone}', user_id=gone),
+            _row(Chat, id=f'c-{gone}', user_id=gone, title='t', chat={}),
+            _row(ChatFile, id=f'cf-{gone}', user_id=gone, chat_id=f'c-{gone}', file_id=f'loose-{gone}'),
             _row(File, id=f'inkb-{gone}', user_id=gone),
             _row(KnowledgeFile, id=f'kf-{gone}', knowledge_id=f'kb-{gone}', file_id=f'inkb-{gone}', user_id=gone),
         )
@@ -99,7 +102,7 @@ def test_purge_deletes_private_data_and_reassigns_shared(monkeypatch):
 
     assert _run(Users.delete_user_by_id(gone)) is True
 
-    for table in (User, ApiKey, OAuthSession, Memory):
+    for table in (User, ApiKey, OAuthSession, Memory, Chat, ChatFile):
         assert _run(_get(table, **({'id': gone} if table is User else {'user_id': gone}))) == [], table
     assert _run(_get(Auth, id=gone)) == []
     assert _run(_get(Note, id=f'private-{gone}')) == []
