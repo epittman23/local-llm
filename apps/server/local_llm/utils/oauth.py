@@ -499,8 +499,7 @@ async def get_oauth_client_info_with_dynamic_client_registration(
         oauth_server_metadata = None
         oauth_server_metadata_url = None
 
-        webui_url = await Config.get('webui.url')
-        redirect_base_url = (str(webui_url or request.base_url)).rstrip('/')
+        redirect_base_url = await stored_redirect_base_url(request)
 
         oauth_client_metadata = OAuthClientMetadata(
             client_name='Local LLM',
@@ -648,8 +647,7 @@ async def get_oauth_client_info_with_static_credentials(
         oauth_server_metadata = None
         oauth_server_metadata_url = None
 
-        webui_url = await Config.get('webui.url')
-        redirect_base_url = (str(webui_url or request.base_url)).rstrip('/')
+        redirect_base_url = await stored_redirect_base_url(request)
         redirect_uri = f'{redirect_base_url}/oauth/clients/{client_id}/callback'
 
         # Discover server metadata (authorization endpoint, token endpoint, scopes, etc.)
@@ -1625,6 +1623,33 @@ async def _log_out_users(request, users: list, provider: str, db=None) -> None:
         )
 
     log.info('Back-channel logout: completed for %s user(s), %s revocation(s) set', len(users), revoked_count)
+
+
+async def stored_redirect_base_url(request) -> str:
+    """The base URL for a redirect URI that is stored and used for every later user.
+
+    The configured app URL (webui.url) when there is one. Otherwise the
+    request's own origin, but only when it is loopback or a configured CORS
+    origin: the Host header is the client's to choose, and a redirect URI
+    saved from a forged one sends every user's authorization codes to that
+    host. Anything else is refused with instructions to set the app URL.
+    """
+    from local_llm.config import CORS_ALLOW_ORIGIN
+
+    webui_url = await Config.get('webui.url')
+    if webui_url:
+        return str(webui_url).rstrip('/')
+    base = str(request.base_url).rstrip('/')
+    host = (request.url.hostname or '').lower()
+    if host in ('localhost', '127.0.0.1', '::1') or base in CORS_ALLOW_ORIGIN:
+        return base
+    raise HTTPException(
+        status.HTTP_400_BAD_REQUEST,
+        detail=(
+            "Set the app's URL (Admin Settings > General > WebUI URL) before registering an OAuth client, "
+            'so its redirect address does not depend on the request.'
+        ),
+    )
 
 
 _MISSING = object()

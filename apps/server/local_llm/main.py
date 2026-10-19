@@ -2704,6 +2704,13 @@ async def oauth_client_authorize(
         raise HTTPException(status.HTTP_404_NOT_FOUND)
 
     if not await oauth_client_manager._preflight_authorization_url(client, client_info):
+        # Re-registration rewrites a client every user shares, so it is an
+        # admin's action; anyone else is told to ask for it.
+        if user.role != 'admin':
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail='This integration needs to be registered again. Ask an administrator to open it once.',
+            )
         log.info(
             'Detected invalid OAuth client %s; attempting re-registration',
             client_id,
