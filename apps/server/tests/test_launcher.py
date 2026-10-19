@@ -494,3 +494,13 @@ def test_telemetry_recorder_module_resolves_from_import_root():
     )
     assert result.returncode == 0, result.stderr
     assert (IMPORT_ROOT / 'pyproject.toml').is_file()
+
+
+def test_serve_process_binds_loopback_unless_llama_host_says_otherwise(monkeypatch):
+    from local_llm.benchmarks.serving.launcher import DEFAULT_HOST, ServeProcess
+
+    monkeypatch.delenv('LLAMA_HOST', raising=False)
+    assert DEFAULT_HOST == '127.0.0.1'
+    assert ServeProcess(config=None).host == '127.0.0.1'
+    monkeypatch.setenv('LLAMA_HOST', '0.0.0.0')
+    assert ServeProcess(config=None).host == '0.0.0.0'

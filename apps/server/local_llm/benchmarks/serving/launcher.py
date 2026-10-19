@@ -48,7 +48,11 @@ log = logging.getLogger(__name__)
 #: neither is part of the fingerprint (see fingerprint.py).
 DEFAULT_LOG_VERBOSITY = 4
 
-DEFAULT_HOST = '0.0.0.0'
+#: Loopback: the telemetry recorder, the Tests page and the app's own
+#: connection all reach llama-server on 127.0.0.1, and llama-server takes no
+#: API key here, so binding every interface would hand the GPU to anyone on
+#: the network. LLAMA_HOST=0.0.0.0 is the explicit opt-in.
+DEFAULT_HOST = '127.0.0.1'
 DEFAULT_PORT = 8090
 
 

@@ -40,6 +40,13 @@ under `scripts/` were deleted in Phase 2c of the migration, 2026-09-18; see the 
 a profile from the app's own **Serve** page at `/benchmarks/serve` (admin
 only) once `make backend` is running — see [benchmarks.md](benchmarks.md) for
 what that page and its siblings do.
+
+`llama-server` listens on `127.0.0.1` only. It runs with no API key, so binding
+every interface would let anyone on the network use the GPU and skew the
+measurements; everything in this repo reaches it on loopback. To expose it to
+the LAN anyway, export `LLAMA_HOST=0.0.0.0` before `make backend`, the
+counterpart of `LLLM_BACKEND_HOST` for the backend. (Until 2026-10-19 it bound
+every interface.)
 GPU telemetry while a server runs is the **Live** page, `/benchmarks/live`.
 
 Serving settings are grouped into profiles rather than scattered across env
