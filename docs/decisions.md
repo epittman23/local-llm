@@ -9,8 +9,10 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
   to re-derive it.
 - **2026-10-19**: The 34 security findings of the 2026-10-19 audit (batch B0,
   kept as private draft advisories) are fixed in one public pull request, at
-  the owner's choice, before any other batch. Each fix is its own commit
-  naming its advisory. Four of them needed the owner's decision:
+  the owner's choice, before any other batch. Each commit names the
+  advisories it fixes; most fix one, but the two OAuth claim findings share
+  a commit, as do the three SCIM findings. Four of them needed the owner's
+  decision:
   - **Chat shares are snapshots.** A share's grant covers the snapshot and
     the files in it, never the live chat; it used to expose messages sent
     after sharing.
