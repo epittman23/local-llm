@@ -42,8 +42,8 @@ async def get_compare(
     if by == 'failures':
         return {'rows': compare_logic.failure_rows(groups), 'notes': notes}
 
-    rows = compare_logic.rows_for(groups, blocks, baseline=baseline)
-    return {'rows': rows, 'notes': notes}
+    rows, compared = compare_logic.rows_for(groups, blocks, baseline=baseline)
+    return {'rows': rows, 'blocks': compared, 'notes': notes}
 
 
 class ExportAnswersForm(BaseModel):

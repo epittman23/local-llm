@@ -7,19 +7,23 @@ question that decides whether local inference can replace OpenRouter -- a
 configuration that generates faster and answers worse has not improved
 anything.
 
-Groups results by (model, config-id, tier, system prompt, adapter) and joins
-each group to the configuration that produced it, using the flag helpers
+Groups results by configuration (model, config-id) within a *block* (tier,
+benchmark, adapter, system prompt, release-date window, dataset revision) and
+joins each group to the configuration that produced it, using the flag helpers
 already ported 1:1 into stats.py (short_spec, short_ot, config_value) rather
-than reimplemented, so a row here reads the same as it always did.
+than reimplemented, so a row here reads the same as it always did. The
+statistics -- intervals, paired comparisons, Holm, the letter groups -- come
+from estimators.py, which Report uses too.
 
-Three rules the output obeys, each of them learned from a mistake recorded in
+Rules the output obeys, each of them learned from a mistake recorded in
 docs/decisions.md:
 
   * Counts, never bare percentages. At the smoke tier one item is about four
     points, and `88%` invites a comparison that 24 items cannot support.
-  * Tiers do not mix. A 24-item pass rate and a 164-item one are not
-    comparable, so rows from different tiers are never ranked against each
-    other.
+    Every rate also carries its interval.
+  * Blocks do not mix. Two blocks asked different problems, so rows are only
+    ordered and compared within a block, and configurations that are not
+    significantly different share a group letter instead of being ranked.
   * A pair of configurations differing in more than one flag is flagged as
     such. This repo lost a measurement to exactly that (the 2026-08-23
     `--parallel` entry): three flags changed at once and the comparison meant
@@ -42,6 +46,7 @@ from __future__ import annotations
 import datetime as dt
 import re
 
+from local_llm.benchmarks.analysis import estimators as est
 from local_llm.benchmarks.analysis.stats import (
     config_value,
     effective_bandwidth,
@@ -146,9 +151,26 @@ def _iso(ts: int | None) -> str:
 
 
 class Group:
-    """One (model, config-id, tier, system prompt, adapter)."""
+    """One configuration's results on one block: the unit Compare reports.
 
-    def __init__(self, model: str, config_id: str, tier: str, system: str, adapter: str):
+    The key is (model, config-id, tier, system prompt, adapter, benchmark,
+    release-date window, dataset revision). Everything after the first two
+    is the *block*: the question the configuration was asked. Two groups are
+    compared only when their blocks are equal, because then the problems are
+    the same and the difference is the configuration.
+    """
+
+    def __init__(
+        self,
+        model: str,
+        config_id: str,
+        tier: str,
+        system: str,
+        adapter: str,
+        benchmark: str = '',
+        item_window: str = '',
+        revision: str = '',
+    ):
         self.model = model
         self.config_id = config_id
         self.tier = tier
@@ -162,11 +184,36 @@ class Group:
         # rather than "none", so an empty one is labelled `?` and never
         # silently pooled with a known adapter.
         self.adapter = adapter
+        self.benchmark = benchmark
+        # The release-date window a windowed benchmark's problems were drawn
+        # from, or "" for a benchmark with none. Two windows are two pools of
+        # problems, so they are two blocks.
+        self.item_window = item_window
+        self.revision_id = revision
         self.records: list[dict] = []
+        self._summary: est.Summary | None = None
 
     @property
     def key(self):
-        return (self.model, self.config_id, self.tier, self.system, self.adapter)
+        return (
+            self.model,
+            self.config_id,
+            self.tier,
+            self.system,
+            self.adapter,
+            self.benchmark,
+            self.item_window,
+            self.revision_id,
+        )
+
+    @property
+    def block_key(self) -> tuple:
+        return (self.tier, self.benchmark, self.adapter, self.system, self.item_window, self.revision_id)
+
+    @property
+    def level(self) -> str:
+        """How this configuration is named inside its block."""
+        return f'{self.model} @ {self.config_id}'
 
     def system_label(self) -> str:
         """name@sha for a prompt, "-" for none.
@@ -189,14 +236,14 @@ class Group:
         return graded(self.records)
 
     def rate(self):
+        """(passed, attempted, rate) over samples -- the counts printed beside every rate."""
         return pass_rate(self.records)
 
-    def by_benchmark(self) -> dict[str, tuple[int, int, float | None]]:
-        out = {}
-        for name in sorted({r.get('benchmark', '') for r in self.records}):
-            subset = [r for r in self.records if r.get('benchmark') == name]
-            out[name] = pass_rate(subset)
-        return out
+    def summary(self) -> est.Summary:
+        """Per-problem scores, the pass rate with its interval, passes per minute."""
+        if self._summary is None:
+            self._summary = est.summarise(self.records)
+        return self._summary
 
     def timing(self, field: str) -> list[float]:
         vals = []
@@ -233,42 +280,25 @@ class Group:
         accepted = sum(self.timing('draft_n_accepted'))
         return accepted / drafted if drafted else None
 
-    def wall_minutes(self) -> float:
-        return sum(float(r.get('wall_ms') or 0) for r in self.graded()) / 60000
-
     def passes_per_minute(self) -> float | None:
         """The honest combined metric on this hardware.
 
         Pass rate alone would rank a configuration that answers correctly
         at one token a second above a usable one; throughput alone is what
         the serving log already reports. This is the quantity being
-        optimised: correct answers per unit of wall clock.
+        optimised: correct answers per unit of wall clock -- the per-problem
+        mean passes over the per-problem mean minutes, so a problem asked
+        twice weighs what a problem asked once does. Its interval is in
+        `summary().ppm`.
         """
-        minutes = self.wall_minutes()
-        if minutes <= 0:
-            return None
-        return self.rate()[0] / minutes
+        return self.summary().ppm.value
 
     def revision(self) -> str:
-        revs = {r.get('dataset_revision', '') for r in self.records if r.get('dataset_revision')}
-        return sorted(revs)[0][:12] if len(revs) == 1 else ('mixed' if revs else '-')
+        return self.revision_id[:12] if self.revision_id else '-'
 
     def revision_map(self) -> dict[str, str]:
-        """benchmark -> dataset revision, for the disagreement check.
-
-        The `revision` property collapses to "mixed" whenever a row spans
-        more than one benchmark, which every tier does. Comparing that
-        collapsed string between rows would report a disagreement whenever
-        a single-benchmark row sits beside a tier -- so the check is made
-        per benchmark instead, and only fires when two rows asked the same
-        benchmark at different revisions.
-        """
-        out: dict[str, str] = {}
-        for r in self.records:
-            rev = r.get('dataset_revision')
-            if rev:
-                out[r.get('benchmark', '')] = rev[:12]
-        return out
+        """benchmark -> dataset revision, for the disagreement note."""
+        return {self.benchmark: self.revision_id[:12]} if self.revision_id else {}
 
     def when(self) -> str:
         stamps = [r.get('at') for r in self.records if r.get('at')]
@@ -276,7 +306,7 @@ class Group:
 
 
 def group_records(records: list[dict], by_benchmark: bool = False) -> list[Group]:
-    """Group graded records by (model, config-id, tier, system, adapter).
+    """Group graded records by configuration and block.
 
     `by_benchmark` is accepted for signature parity with the original (which
     never used it either) rather than dropped -- a future caller that reads
@@ -298,9 +328,30 @@ def group_records(records: list[dict], by_benchmark: bool = False) -> list[Group
             r.get('tier', '?'),
             r.get('system_sha') or '',
             r.get('adapter_sha') or '',
+            r.get('benchmark', '') or '',
+            r.get('item_window') or '',
+            r.get('dataset_revision') or '',
         )
         groups.setdefault(key, Group(*key)).records.append(r)
     return list(groups.values())
+
+
+def blocks_of(groups: list[Group]) -> dict[tuple, list[Group]]:
+    """block key -> the configurations measured on it, in block-key order."""
+    out: dict[tuple, list[Group]] = {}
+    for g in sorted(groups, key=lambda g: g.block_key):
+        out.setdefault(g.block_key, []).append(g)
+    return out
+
+
+def block_label(key: tuple) -> str:
+    tier, benchmark, adapter, system, window, revision = key
+    parts = [f'tier {tier}', benchmark or '?', f'adapter {adapter or "?"}', f'system {system or "-"}']
+    if window:
+        parts.append(f'window {window}')
+    if revision:
+        parts.append(f'revision {revision[:12]}')
+    return ' | '.join(parts)
 
 
 # ---------------------------------------------------------------------------
@@ -359,87 +410,197 @@ async def exclusion_note() -> list[str]:
 # ---------------------------------------------------------------------------
 # row builders -- pure, structured data for a router to shape
 # ---------------------------------------------------------------------------
-def rows_for(groups: list[Group], blocks: dict[str, list[str]], baseline: str | None = None) -> list[dict]:
-    """One row per group, ranked. Groups with nothing graded sort last.
+def _sort_key(g: Group):
+    """Within a block: highest pass rate first, then fastest; nothing graded last.
 
-    Sorting them last rather than as zero matches the serving comparison: a
-    configuration with no measurement is not a configuration that scored
-    nothing.
-
-    `baseline`, when given, is a config-id to add a `vs_baseline` pass-rate
-    delta against -- computed only within a tier (see the original's
-    `_with_deltas`): across tiers the difference of two pass rates is not a
-    delta, it is a category error.
+    Sorting unmeasured groups last rather than as zero matches the serving
+    comparison: a configuration with no measurement is not a configuration
+    that scored nothing.
     """
-
-    def sort_key(g: Group):
-        passed, attempted, rate = g.rate()
-        if attempted == 0:
-            return (1, 0.0, 0.0)
-        return (0, -(rate or 0), -(g.gen_tps() or 0))
-
-    ordered = sorted(groups, key=sort_key)
-    base = next((g for g in groups if g.config_id == baseline), None) if baseline else None
-    brate = base.rate()[2] if base is not None else None
-
-    rows = []
-    for g in ordered:
-        passed, attempted, rate = g.rate()
-        row = {
-            'model': g.model,
-            'config_id': g.config_id,
-            'tier': g.tier,
-            'system': g.system_label(),
-            'adapter': g.adapter_label(),
-            'flags': flags_of(blocks.get(g.config_id, [])),
-            'dataset_revision': g.revision(),
-            'passed': passed,
-            'attempted': attempted,
-            'pass_rate': rate,
-            'per_benchmark': {
-                name: {'passed': p, 'attempted': a, 'pass_rate': r} for name, (p, a, r) in g.by_benchmark().items()
-            },
-            'prefill_tps': g.prefill_tps(),
-            'gen_tps': g.gen_tps(),
-            'acceptance': g.acceptance(),
-            'passes_per_minute': g.passes_per_minute(),
-            'last_run': g.when(),
-        }
-        if base is not None:
-            if g.tier != base.tier:
-                row['vs_baseline'] = None
-                row['vs_baseline_note'] = 'different tier'
-            elif rate is None or brate is None:
-                row['vs_baseline'] = None
-            else:
-                row['vs_baseline'] = rate - brate
-        rows.append(row)
-    return rows
+    mean = g.summary().rate.mean
+    if mean is None:
+        return (1, 0.0, 0.0)
+    return (0, -mean, -(g.gen_tps() or 0))
 
 
-def benchmark_rows(groups: list[Group]) -> tuple[list[str], list[dict]]:
-    """The pass rate per benchmark, pivoted: (benchmark names seen, one row per group)."""
-    names = sorted({r.get('benchmark', '') for g in groups for r in g.records if r.get('benchmark')})
-    rows = []
-    for g in sorted(groups, key=lambda x: -(x.rate()[2] or 0)):
-        per = g.by_benchmark()
-        passed, attempted, rate = g.rate()
-        rows.append(
+def _round(value: float | None, digits: int = 6) -> float | None:
+    return None if value is None else round(float(value), digits)
+
+
+def _pair(value: tuple[float, float] | None) -> list[float] | None:
+    return None if value is None else [_round(value[0]), _round(value[1])]
+
+
+def compare_block(groups: list[Group]) -> dict:
+    """Every configuration in one block against every other, on shared problems.
+
+    Pairwise paired comparisons (estimators.paired), Holm across every test
+    that ran, and a compact letter display in place of a strict ranking:
+    configurations that share a letter are not distinguishable at the
+    corrected level. Pairs with no shared problem are reported and left out
+    of the Holm family, so `holm_m` counts only the tests actually made.
+    """
+    ordered = sorted(groups, key=_sort_key)
+    raw: list[tuple[Group, Group, est.Paired]] = []
+    for i, a in enumerate(ordered):
+        for b in ordered[i + 1 :]:
+            raw.append((a, b, est.paired(a.summary().scores, b.summary().scores)))
+    tested = [t for t in raw if t[2].tested]
+    adjusted = dict(zip((id(t[2]) for t in tested), est.holm([t[2].p for t in tested])))
+    m = len(tested)
+
+    pairs, different = [], set()
+    for a, b, pr in raw:
+        p_holm = adjusted.get(id(pr))
+        significant = p_holm is not None and p_holm < est.ALPHA
+        if significant:
+            different.add(frozenset({a.level, b.level}))
+        mde = est.mde(pr.se)
+        mde_holm = est.mde(pr.se, m=m)
+        if not pr.tested or significant:
+            underpowered = None if not pr.tested else False
+        else:
+            underpowered = None if mde_holm is None else abs(pr.mean_diff or 0) < mde_holm
+        pairs.append(
             {
+                'a': a.level,
+                'b': b.level,
+                'n_shared': pr.n_shared,
+                'mean_diff': _round(pr.mean_diff),
+                'se': _round(pr.se),
+                'ci': _pair(pr.ci),
+                'corr': _round(pr.corr),
+                'test': pr.test,
+                'statistic': None
+                if pr.statistic is None or abs(pr.statistic) == float('inf')
+                else _round(pr.statistic),
+                'discordant': list(pr.discordant) if pr.discordant else None,
+                'p': _round(pr.p),
+                'p_holm': _round(p_holm),
+                'significant': significant,
+                'mde': _round(mde),
+                'mde_holm': _round(mde_holm),
+                'underpowered': underpowered,
+                'n_clusters': pr.n_clusters,
+                'note': pr.note
+                or ('no discordant problems: the variance of the difference is not observable' if pr.se == 0 else ''),
+            }
+        )
+
+    key = ordered[0].block_key
+    tier, benchmark, adapter, system, window, revision = key
+    return {
+        'key': block_label(key),
+        'tier': tier,
+        'benchmark': benchmark,
+        'adapter': adapter or '?',
+        'system': ordered[0].system_label(),
+        'item_window': window or None,
+        'dataset_revision': revision[:12] if revision else None,
+        'levels': [g.level for g in ordered],
+        'letters': est.letters([g.level for g in ordered], different),
+        'holm_m': m,
+        'alpha': est.ALPHA,
+        'pairs': pairs,
+    }
+
+
+def rows_for(
+    groups: list[Group], blocks: dict[str, list[str]], baseline: str | None = None
+) -> tuple[list[dict], list[dict]]:
+    """One row per configuration per block, ordered within each block, plus the blocks.
+
+    Returns (rows, blocks). Rows are never ranked across blocks: two blocks
+    asked different questions (another tier, benchmark, system prompt,
+    window or dataset revision), and a rate from one is not comparable with
+    a rate from the other (#132).
+
+    `baseline`, when given, is a config-id; each row gets `vs_baseline`, its
+    pass rate minus the baseline's pass rate *in the same block*, or None
+    with a note when the baseline was not measured on that block.
+    """
+    rows: list[dict] = []
+    out_blocks: list[dict] = []
+    for _key, members in blocks_of(groups).items():
+        block = compare_block(members)
+        out_blocks.append(block)
+        ordered = sorted(members, key=_sort_key)
+        base = next((g for g in ordered if g.config_id == baseline), None) if baseline else None
+        base_mean = base.summary().rate.mean if base is not None else None
+        for g in ordered:
+            s = g.summary()
+            passed, attempted, _ = g.rate()
+            row = {
+                'block': block['key'],
                 'model': g.model,
                 'config_id': g.config_id,
                 'tier': g.tier,
+                'benchmark': g.benchmark,
                 'system': g.system_label(),
                 'adapter': g.adapter_label(),
-                'per_benchmark': {
-                    name: dict(zip(('passed', 'attempted', 'pass_rate'), per.get(name, (0, 0, None)))) for name in names
-                },
+                'item_window': g.item_window or None,
+                'flags': flags_of(blocks.get(g.config_id, [])),
+                'dataset_revision': g.revision(),
+                'group': block['letters'].get(g.level, ''),
                 'passed': passed,
                 'attempted': attempted,
-                'pass_rate': rate,
+                'n_problems': s.rate.n,
+                'n_samples': s.n_samples,
+                'n_clusters': s.rate.n_clusters,
+                'se_kind': s.rate.kind,
+                'pass_rate': _round(s.rate.mean),
+                'pass_rate_se': _round(s.rate.se),
+                'pass_rate_ci': _pair(s.ci),
+                'prefill_tps': g.prefill_tps(),
+                'gen_tps': g.gen_tps(),
+                'acceptance': g.acceptance(),
+                'passes_per_minute': _round(s.ppm.value),
+                'passes_per_minute_ci': _pair(s.ppm.ci),
+                'note': '; '.join(n for n in (s.rate.note, s.ppm.note) if n),
+                'last_run': g.when(),
             }
-        )
-    return names, rows
+            if baseline:
+                if base is None:
+                    row['vs_baseline'] = None
+                    row['vs_baseline_note'] = 'baseline not measured on this block'
+                elif s.rate.mean is None or base_mean is None:
+                    row['vs_baseline'] = None
+                else:
+                    row['vs_baseline'] = _round(s.rate.mean - base_mean)
+            rows.append(row)
+    return rows, out_blocks
+
+
+def benchmark_rows(groups: list[Group]) -> tuple[list[str], list[dict]]:
+    """The pass rate per benchmark, flattened: (column names, one row per configuration).
+
+    One row per (model, config-id, tier, system prompt); one pair of columns
+    per benchmark -- `<benchmark>_passed` ("passed/attempted", never a bare
+    rate) and `<benchmark>_pass_rate` -- at the top level of the row, which
+    is what the page's generic table renders (#130).
+    """
+    names = sorted({g.benchmark for g in groups if g.benchmark})
+    by_config: dict[tuple, dict[str, Group]] = {}
+    for g in groups:
+        by_config.setdefault((g.model, g.config_id, g.tier, g.system), {})[g.benchmark] = g
+    columns = ['model', 'config_id', 'tier', 'system']
+    for name in names:
+        columns += [f'{name}_passed', f'{name}_pass_rate']
+    rows = []
+    for (model, config_id, tier, _system), per in sorted(by_config.items()):
+        first = next(iter(per.values()))
+        row: dict = {'model': model, 'config_id': config_id, 'tier': tier, 'system': first.system_label()}
+        for name in names:
+            g = per.get(name)
+            if g is None:
+                row[f'{name}_passed'] = None
+                row[f'{name}_pass_rate'] = None
+                continue
+            passed, attempted, _ = g.rate()
+            row[f'{name}_passed'] = f'{passed}/{attempted}'
+            row[f'{name}_pass_rate'] = _round(g.summary().rate.mean)
+        rows.append(row)
+    return columns, rows
 
 
 def failure_rows(groups: list[Group]) -> list[dict]:
@@ -476,12 +637,12 @@ def failure_rows(groups: list[Group]) -> list[dict]:
 def caveats(groups: list[Group], blocks: dict[str, list[str]]) -> list[str]:
     """The warnings that keep a table from being read as more than it is."""
     out: list[str] = []
-    tiers = {g.tier for g in groups}
-    if len(tiers) > 1:
+    grouped = blocks_of(groups)
+    if len(grouped) > 1:
         out.append(
-            f'> note: rows span {len(tiers)} tiers ({", ".join(sorted(tiers))}). '
-            f'Pass rates are only comparable within a tier -- the tiers '
-            f'ask different questions of different item counts.'
+            f'> note: {len(grouped)} blocks. A block is one tier, benchmark, adapter, '
+            f'system prompt, release-date window and dataset revision; rates are '
+            f'compared only inside a block, because outside one the problems differ.'
         )
 
     by_name: dict[str, set] = {}
@@ -499,12 +660,14 @@ def caveats(groups: list[Group], blocks: dict[str, list[str]]) -> list[str]:
             f"the file's current text is only the most recent one."
         )
 
-    small = sorted({g.tier for g in groups if 0 < g.rate()[1] < 50})
+    small = sorted(
+        {block_label(k) for k, members in grouped.items() if any(0 < g.summary().rate.n < 50 for g in members)}
+    )
     if small:
         out.append(
-            f'> note: {", ".join(small)} has fewer than 50 graded items, '
-            f'so one item moves the rate by more than two points. Read '
-            f'the counts, not the percentage.'
+            f'> note: fewer than 50 problems in {"; ".join(small)}, so one problem '
+            f'moves the rate by more than two points. Read the intervals and the '
+            f'groups, not the order of the rows.'
         )
 
     seen: dict[str, set[str]] = {}
@@ -514,34 +677,17 @@ def caveats(groups: list[Group], blocks: dict[str, list[str]]) -> list[str]:
     split = sorted(f'{b} ({", ".join(sorted(revs))})' for b, revs in seen.items() if len(revs) > 1)
     if split:
         out.append(
-            '> warning: rows were measured against different dataset '
-            'revisions of ' + '; '.join(split) + '. They are not the '
-            'same test.'
+            '> warning: these benchmarks were measured at more than one dataset '
+            'revision: ' + '; '.join(split) + '. Each revision is its own block and '
+            'is never compared with the other: they are not the same test.'
         )
 
-    # Within one tier, two rows can still have been asked different
-    # questions: `--benchmark humaneval` records tier "smoke" while
-    # covering a third of it. The tier label alone would hide that, so the
-    # benchmark sets are compared too.
-    for tier in sorted(tiers):
-        peers = [g for g in groups if g.tier == tier and g.rate()[1] > 0]
-        sets = {frozenset(g.revision_map()) for g in peers}
-        if len(sets) > 1:
-            shown = sorted('/'.join(sorted(s_)) or 'none' for s_ in sets)
-            out.append(
-                f'> warning: rows in tier `{tier}` cover different '
-                f'benchmarks ({"; ".join(shown)}), so their pass rates '
-                f'are over different items. Use --by benchmark.'
-            )
-
-    # The multi-flag warning, per tier: a comparison is only a comparison
-    # when one thing changed. Groups are keyed by (model, config_id, tier,
-    # system_sha, adapter_sha), so several groups can share a config_id
-    # within one tier -- dedup by config-id pair so a differing flag set
-    # is reported once per tier, not once per group pairing.
-    for tier in sorted(tiers):
-        peers = [g for g in groups if g.tier == tier and g.rate()[1] > 0]
-        warned_pairs: set[frozenset[str]] = set()
+    # The multi-flag warning, per block: a comparison is only a comparison
+    # when one thing changed. Deduplicated by config-id pair, so a differing
+    # flag set is reported once however many blocks the pair shares.
+    warned_pairs: set[frozenset[str]] = set()
+    for members in grouped.values():
+        peers = [g for g in members if g.rate()[1] > 0]
         for i, a in enumerate(peers):
             for b in peers[i + 1 :]:
                 if a.config_id == b.config_id:
