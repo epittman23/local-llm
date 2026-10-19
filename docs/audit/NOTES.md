@@ -113,8 +113,7 @@ are kept out of this file).
 - `lib/utils` behaviour matches `d863707` except the documented
   `getTimeRange` change; `lib/chat/importChats.ts`, `sources.ts`,
   `knowledgeFiles.ts` and `accessGrants.ts` match their originals.
-- Shared-chat snapshots do not leak later edits; knowledge_fs has no
-  filesystem underneath (paths are database names).
+- knowledge_fs has no filesystem underneath (paths are database names).
 
 ### Design questions and minor inherited behaviour
 
@@ -145,8 +144,6 @@ are kept out of this file).
   to save API keys; its comment about the original's masking is wrong.
 - Client-side image compression and STT language metadata for channel uploads
   were dropped in the port; only the former is documented.
-- `ydoc:*`/`join-note` socket handlers are not used by the React frontend
-  (Yjs was not ported).
 
 ### Dead code
 

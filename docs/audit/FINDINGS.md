@@ -2994,7 +2994,7 @@ Issue: #297. Severity: High. Area: infra. Status: Confirmed. Package: W10.
 - **Root cause**: The origin allow-list is fixed to loopback origins while the bind host is configurable.
 - **Trigger / reproduction**: `docs/audit/repro/gap/W10/lan_origin.py` with the Makefile's origin list: `http://localhost:4000` passes the origin check, `http://192.168.1.20:4000 -> 400 "is not an accepted origin"`.
 - **Impact**: The documented LAN mode cannot chat even after the crypto.randomUUID issue is fixed.
-- **Suggested fix** (approach only): Accept same-origin socket connections (engineio's own default) in addition to the configured list, or have the Makefile add the LAN origin when the host is not loopback; do not fall back to `*`.
+- **Suggested fix** (approach only): Accept same-origin socket connections (engineio's own default) in addition to the configured list, or have the Makefile add the LAN origin when the host is not loopback; keep the HTTP API's origin list as it is.
 - **Docs affected under the maintenance policy**: README.md "Running it" LAN note and the AGENTS.md Commands line for `LLLM_BACKEND_HOST=0.0.0.0`.
 - **Related issues and PRs**: #241
 - **Confidence**: Confirmed: reproduced (see trigger) and re-run by the auditing session.
@@ -3586,7 +3586,7 @@ Issue: #334. Severity: Medium. Area: web. Status: Confirmed. Package: W4.
 - **Root cause**: Port regression, undocumented.
 - **Trigger / reproduction**: User A copies a share link; user B opens `/s/{id}`, gets 401 and is sent home (both sides quoted; Playwright mocks the backend).
 - **Impact**: Chat sharing works for nobody but the sharer.
-- **Suggested fix** (approach only): Port the AccessControl panel (read-only roles, public/open sharing permissions); fix the live-chat exposure advisory first or together.
+- **Suggested fix** (approach only): Port the AccessControl panel (read-only roles, public/open sharing permissions); coordinate with B0 (see the advisories).
 - **Docs affected under the maintenance policy**: None.
 - **Related issues and PRs**: None known.
 - **Confidence**: Confirmed: traced in the code at the audited SHA by the auditing session.
