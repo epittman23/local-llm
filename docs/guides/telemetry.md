@@ -49,7 +49,7 @@ either way.
 | `benchmark_metrics_scrape` | counter, per scrape | the server's own `/metrics` counters, the whole series |
 | `benchmark_run_load_info` | run | what the server said about the model it loaded: the layer split, slot configuration, per-device buffer sizes, `fused_gdn`, the MTP head, unused tensors, warnings, `DEPRECATED` lines |
 | `benchmark_request` | request | llama.cpp's raw `timings` fields as columns, the measured wall clock, the request parameters, and the whole `timings` object as JSON |
-| `benchmark_result` | graded item | the verdict, with foreign keys to the `benchmark_request` that produced it, the `benchmark_run` it belongs to, and the `benchmark_config` it was measured under |
+| `benchmark_result` | graded item | the verdict and the problem's `cluster` (for cluster-robust errors; NULL when independent), with foreign keys to the `benchmark_request` that produced it, the `benchmark_run` it belongs to, and the `benchmark_config` it was measured under |
 | `benchmark_answer` | result | prompt, answer, and reasoning as three fields, not one rendered blob |
 | `benchmark_suite_exclusion` | item | what no run can attempt, recorded once against a dataset revision rather than once per run |
 | `benchmark_schema_note` | discontinuity | append-only provenance: what changed, and on what date, when it changed the meaning of rows either side of it |

@@ -37,8 +37,12 @@ What the default install includes, and what it leaves out:
 Two dependencies exist for the Benchmarks section: `scikit-learn` widens the
 DS-1000 slice, and `pyyaml` is needed for DS-1000 items that round-trip through
 YAML. scipy is a hard dependency (the Report page's request fails outright
-without it); matplotlib is installed by default but optional in code (the
-report falls back to unicode plots).
+without it), and so is statsmodels (added 2026-10-19), which supplies the
+cluster-robust errors, Wilson intervals, exact McNemar and Holm behind Compare
+and Report. The estimators that use it are imported on first use rather than
+at backend startup, since statsmodels and the parts of scipy it loads take
+about three seconds to import. matplotlib is installed by
+default but optional in code (the report falls back to unicode plots).
 
 ## Runtime data (`DATA_DIR`)
 

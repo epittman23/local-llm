@@ -384,7 +384,7 @@ files.
 
 | table | one row per | holds |
 | --- | --- | --- |
-| `benchmark_result` | attempted item | `suite_run_id`, timestamp, model, profile, benchmark, `item_id`, dataset revision, tier, seed, outcome, reason, `reasoning_chars`, `wall_ms`, the `system_name`/`system_sha` of the system prompt sent (NULL when none was), the `adapter_sha` of the adapter it was asked under (NULL when it predates the fingerprint, which here means *unknown*), the request `params` and the full llama.cpp `timings` — plus foreign keys to the `benchmark_request`, the `benchmark_run` and the `benchmark_config` it was measured under |
+| `benchmark_result` | attempted item | `suite_run_id`, timestamp, model, profile, benchmark, `item_id`, dataset revision, tier, seed, outcome, reason, `reasoning_chars`, `wall_ms`, the `system_name`/`system_sha` of the system prompt sent (NULL when none was), the `adapter_sha` of the adapter it was asked under (NULL when it predates the fingerprint, which here means *unknown*), the `cluster` the problem belongs to (NULL when the benchmark's problems are independent), the request `params` and the full llama.cpp `timings` — plus foreign keys to the `benchmark_request`, the `benchmark_run` and the `benchmark_config` it was measured under |
 | `benchmark_answer` | result | the prompt, the answer that was graded, and the reasoning that was not, as three fields rather than one rendered blob |
 | `benchmark_suite_exclusion` | item | what no run can attempt: outside an adapter's library filter, or marked ungradeable by calibration |
 
@@ -450,33 +450,86 @@ rather than left to whether the viewer happens to expand an element.
 
 ## Comparing — the Compare page
 
-Groups results by (model, config-id, tier, system prompt, adapter) and ranks by
-pass rate, then by generation throughput. Columns: the flag summary (`ngl`,
-`parallel`, `spec`, `-ot`) joined from `benchmark_config` with the same helpers
-that render the serving comparison, the `system` column (`<name>@<sha>`, or `-`
-for a run that sent none), the `adapter` column (the adapter sha, or `?` for a
-row recorded before adapters were fingerprinted), dataset revision, `passed/attempted`, pass rate, cold
-prefill t/s, generation t/s, draft acceptance, and **passes per minute**.
+Results are grouped into **blocks**: one tier, benchmark, adapter, system
+prompt, release-date window and dataset revision. Inside a block every
+configuration was asked the same problems, so a difference is the
+configuration's; across blocks it is not, and rows are never ordered or
+compared across them. Each block is one table, headed by what defines it (the
+release-date window first, when the benchmark has one), with one row per
+configuration (model, config-id).
+
+Columns: the group letter (below), the configuration, `passed/attempted`, the
+problem count (and cluster count), the pass rate with its 95% interval, its
+standard error and whether it is `iid` or `cluster`-robust, **passes per
+minute** with its interval, generation and cold prefill t/s, and the flag
+summary (`ngl`, `parallel`, `spec`, `-ot`, `fa`, ...) joined from
+`benchmark_config` with the same helpers that render the serving comparison.
+A baseline config-id adds each row's difference from the baseline's rate *in
+the same block*.
+
+The statistics follow Evan Miller, "Adding Error Bars to Evals"
+(arXiv:2411.00640), in `local_llm/benchmarks/analysis/estimators.py`, which
+Report uses too:
+
+- **Per problem first.** A problem asked in several suite runs (the only way
+  this store gets more than one sample, since temperature is pinned to 0) is
+  averaged before anything else, so it counts once. `passed/attempted` still
+  counts samples.
+- **Interval:** Wilson. With one sample per problem and independent problems
+  it is plain Wilson at n; otherwise it is Wilson at the design-effect sample
+  size n_eff = p(1-p)/SE^2, falling back to n problems (or G clusters) at 0%
+  and 100%, where the variance estimate is zero. Wilson because the normal
+  interval collapses at 0% and 100%, which is where a good configuration on
+  an easy benchmark sits.
+- **Clusters.** Problems are not always independent: DS-1000's 511
+  Pandas/Numpy problems are perturbations of 195 StackOverflow questions, and
+  perturbations of one question share most of their difficulty. An adapter
+  names its cluster with `[item] cluster_fields`, the runner writes it to
+  `benchmark_result.cluster`, and the standard error is then cluster-robust
+  (CR1). DS-1000 clusters by `(library, perturbation_origin_id)`; library
+  alone would give two clusters, too few for the estimator to mean anything.
+  Fewer than 20 clusters is reported with a warning.
+- **Pairs.** Every two configurations in a block are compared as paired
+  differences on the problems both answered: the mean difference, its
+  interval, and the correlation of their per-problem scores. The test is
+  exact McNemar when every shared problem is one pass/fail sample and the
+  problems are independent, and otherwise a paired t test with the matching
+  standard error (n-1 or G-1 degrees of freedom). Holm corrects across every
+  pair tested in the block; a pair with no shared problems is reported and
+  left out of the family.
+- **Groups, not a ranking.** Configurations that are not significantly
+  different after Holm share a letter (a compact letter display, Piepho
+  2004). `a` is the best group. Read the letters rather than the row order.
+- **Power.** Each pair carries its minimum detectable difference,
+  (z_{1-a/2} + z_{0.80}) x SE of the paired difference, at alpha 0.05 and at
+  the Holm worst case alpha/m. A pair that is not significant and whose
+  observed difference is below that is marked **underpowered**: the design
+  could not have found it.
 
 `passes/min` is the honest combined metric on this hardware: pass rate alone would
 rank a configuration that answers correctly at one token a second above a usable
 one, and throughput alone is what the **by serving** view already reports.
+It is the per-problem mean passes over the per-problem mean wall-clock minutes
+(`wall_ms`, measured around the HTTP request, so grading time is excluded). A
+ratio of two sums is not a mean, so its interval comes from the **delta
+method**, clustered like the standard error and formed on the log scale so it
+stays positive.
 
-Four things the output refuses to do, each learned from a mistake in this
+Things the output refuses to do, each learned from a mistake in this
 project's decisions log ([docs/decisions.md](../decisions.md)):
 
-- **Never a bare percentage.** `passed/attempted` is printed beside every rate.
-- **Tiers never mix.** A 24-item pass rate and a 164-item one are not comparable,
-  and the baseline selector reports `n/a (different tier)` rather than a delta.
+- **Never a bare percentage.** `passed/attempted` and an interval are printed
+  beside every rate.
+- **Blocks never mix.** A 24-item `smoke` rate and a 164-item `full` one, two
+  benchmarks, two dataset revisions or two release-date windows are different
+  questions, so they are different blocks; the baseline difference reads
+  `baseline not measured on this block` rather than crossing one. (Until
+  2026-10-19 the rows of every tier were ranked together, #132.)
+- **No strict ranking.** Two configurations that are not significantly
+  different after Holm share a group letter, however their rates happen to
+  order.
 - **A pair of configs differing in more than one flag is flagged as such.** This
   project lost a measurement to exactly that (the 2026-08-23 `--parallel` entry).
-- **Same tier is not the same test.** Restricting a `smoke` run to one
-  benchmark on the Tests page still records tier `smoke` while covering a
-  third of it, and two rows are warned about when their
-  benchmark sets differ or when the same benchmark was asked at two dataset
-  revisions. The `revision` column reads `mixed` for any row spanning more than
-  one benchmark, so the disagreement check is made per benchmark rather than on
-  that collapsed string.
 - **A system prompt is not a footnote.** Rows sent one are grouped separately
   from rows sent none, and a name appearing under two shas is called out: the
   file was edited between the runs, so the two rows are different prompts
@@ -491,13 +544,15 @@ What each row could not attempt is reported once beneath the table, split by
 reason, rather than as a per-configuration column — the exclusion set is identical
 across every configuration, so a column for it said nothing.
 
-Four views: **by config** (the default), **by benchmark**, **by failures**
-(every item that did not pass, with its reason and the size of its reasoning,
-newest first), and **by serving** (throughput and GPU telemetry per
-configuration, with no test run involved). Filters on the page: tier, and a
-baseline config to diff against. There is no built-in table export any more
-(see above) — a measured table pasted into these guides, per the maintenance
-policy, is copied out of the rendered page by hand.
+Four views: **by config** (the default, the block tables above, each followed
+by its pairs), **by benchmark** (one row per configuration, with a
+`passed/attempted` and a pass-rate column per benchmark), **by failures** (every
+item that did not pass, with its reason and the size of its reasoning, newest
+first), and **by serving** (throughput and GPU telemetry per configuration,
+with no test run involved, and the derived table beneath it). Filters on the
+page: tier, and a baseline config to diff against. There is no built-in table
+export any more (see above) — a measured table pasted into these guides, per the
+maintenance policy, is copied out of the rendered page by hand.
 
 ## Reporting — the Report page
 
@@ -519,11 +574,25 @@ which matters because the tiers are seeded so every configuration draws the same
 items and a test that ignores the pairing throws away the only thing that makes
 8 items informative.
 
-Seven sections, ordered so each gates the next: **provenance** (which database,
-which rows, which revisions — the app's Postgres is not something a reader
-can casually open elsewhere, so a number without this is not checkable),
-**design audit**, **reliability floor**, **paired accuracy**,
-**power/MDE**, **throughput**, **throttle audit**.
+Eight sections after a headline, ordered so each gates the next:
+**provenance** (which database, which rows, which revisions and release-date
+windows — the app's Postgres is not something a reader can casually open
+elsewhere, so a number without this is not checkable), **design audit**,
+**reliability floor**, **paired accuracy** (system prompts), **configuration
+comparison**, **power/MDE**, **throughput**, **throttle audit**.
+
+The **configuration comparison** (section 5, added 2026-10-19) is the Compare
+page's statistics written out with their methods: per block, every
+configuration's rate with its Wilson interval and standard error, passes per
+minute with its delta-method interval, every pair's paired difference, test,
+Holm p and minimum detectable difference, the group letters, and one sentence
+per underpowered pair saying how large a difference it could have found. The
+**headline** is derived from the tests: a system-prompt or configuration
+difference that survives Holm is reported as one, and the reliability-floor
+sentence dismisses differences as noise only when none survived and all are
+below the floor (until 2026-10-19 the headline was fixed text that always
+reported no difference, #128). The page shows the release-date windows in scope
+above the document.
 
 The design audit is the part that earns the report. It is mechanical, and
 against the current store it finds:
@@ -580,12 +649,20 @@ therefore "run this next" — re-run one condition unchanged first, since **noth
 in this store measures run-to-run variability at all** and there is currently no
 noise floor to read any difference against.
 
-Statistics: scipy for the standard tests; Cochran's Q, its permutation p (exact
-by enumeration when the arrangement count allows, Monte Carlo with the `+1`
-correction otherwise), Wilson intervals, Holm correction and the MDE search are
-written out in `local_llm/benchmarks/analysis/report.py` (a direct port of
-the original `scripts/llama_report.py`, unchanged statistics), and were
-cross-checked against statsmodels. Every test prints its `n` and its
+That figure pooled the items of every block into one count (32), which no test
+in the report actually ran on (#133). Since 2026-10-19 the power section
+assesses each block at its own item count and at the Holm worst-case level
+alpha/m, m being the number of levels compared with that block's baseline.
+
+Statistics: the configuration comparison uses `analysis/estimators.py`, with
+statsmodels for the cluster-robust errors, Wilson intervals, exact McNemar and
+Holm, and scipy for the distributions; each estimator is tested against values
+worked by hand (`tests/test_estimators.py`). The system-prompt sections keep
+their own implementations: Cochran's Q, its permutation p (exact by enumeration
+when the arrangement count allows, Monte Carlo with the `+1` correction
+otherwise), Wilson intervals, Holm correction and the MDE search are written
+out in `local_llm/benchmarks/analysis/report.py` (a direct port of the original
+`scripts/llama_report.py`), and were cross-checked against statsmodels. Every test prints its `n` and its
 assumption check; a test whose assumptions fail is printed as refused with
 the reason, never dropped silently.
 

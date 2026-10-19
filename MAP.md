@@ -188,8 +188,11 @@ than a second app glued on by a userscript. See `docs/decisions.md` for the migr
   record loop, `prepare_suite`/`run_items`, callback-driven so a router can
   stream live progress), and `grading/` (the HumanEval/MBPP/DS-1000 harnesses).
 - **`analysis/`** — `compare.py`, `report.py` + `report_figures.py` (config
-  comparison and the design-audited statistical report: Wilson intervals,
-  Cochran's Q, exact McNemar, power/MDE; reads the DB read-only) and
+  comparison by block and the design-audited statistical report: Wilson
+  intervals, Cochran's Q, exact McNemar, power/MDE; reads the DB read-only),
+  `estimators.py` (the error bars both use: per-problem averaging,
+  cluster-robust errors, paired comparisons, Holm, letter groups, the
+  passes-per-minute delta method; pure functions) and
   `stats.py` (percentiles, GPU throttle-bitmask decoding, config-text and
   load-log parsing; pure functions shared with serving and tuning).
 - **`tuning/`** — `tune.py` + `tune_schedule.py` + `tune_probe.py` (the

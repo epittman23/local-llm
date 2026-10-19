@@ -7,6 +7,50 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-19**: Compare and Report now put error bars on every pass rate
+  and compare configurations statistically, following Evan Miller's "Adding
+  Error Bars to Evals" (arXiv:2411.00640). This is PR 4 of
+  `docs/plans/benchmark-upgrade.md`. The database held no benchmark rows,
+  so nothing was recomputed.
+  - **Blocks.** Rates are compared only inside a block: one tier,
+    benchmark, adapter, system prompt, release-date window and dataset
+    revision. Before this, Compare ranked rows from different tiers against
+    each other (#132).
+  - **Per-problem first.** A problem asked in several suite runs is
+    averaged before anything else, so it counts once.
+  - **Intervals.** Wilson, at the design-effect sample size
+    n_eff = p(1-p)/SE^2 when samples repeat or problems cluster, and plain
+    Wilson otherwise. Chosen over the normal interval because that one
+    collapses at 0% and 100%, where a good configuration on an easy
+    benchmark sits.
+  - **Clusters.** Standard errors are cluster-robust (CR1) when a result
+    row carries a cluster, a new `benchmark_result.cluster` column written
+    from the adapter. DS-1000 clusters by library and
+    `perturbation_origin_id`, the question a problem was perturbed from:
+    195 clusters in the Pandas/Numpy slice. The task proposed clustering by
+    library, which gives two, too few for a cluster-robust error to mean
+    anything.
+  - **Pairs.** Configurations are compared as paired differences on shared
+    problems. The test is exact McNemar for single-sample, unclustered
+    pass/fail data, and a paired t test with the matching standard error
+    otherwise, with Holm across each block. Configurations that do not
+    differ share a letter (a compact letter display) instead of being
+    ranked.
+  - **Passes per minute** gets a delta-method interval, clustered the same
+    way and formed on the log scale. Delta method over bootstrap: it is
+    deterministic, cheap and consistent with the clustered errors. A
+    bootstrap is the test oracle.
+  - **Power.** Report gives every pair its minimum detectable difference,
+    (z_{1-a/2} + z_{0.80}) x SE, at alpha 0.05 and at the Holm worst case.
+    Its system-prompt power section now uses each block's own n at alpha/m
+    rather than a pooled count no test runs on (#133). The headline is
+    derived from the tests rather than fixed text (#128).
+  - **Libraries.** statsmodels (new dependency) for cluster-robust errors,
+    Wilson, McNemar and Holm; scipy for the distributions. Each estimator
+    is tested against values worked by hand.
+  - **Fixed in the same PR:** the Compare page's serving view crash (#129),
+    the empty by-benchmark table (#130), and the fa flag missing from the
+    multi-flag warning (#131).
 - **2026-10-17**: Every function above the complexity limit has been
   refactored, and the temporary C901 list in `pyproject.toml` is gone.
   `max-complexity = 25` now applies to all of `local_llm` and `tests`, with
