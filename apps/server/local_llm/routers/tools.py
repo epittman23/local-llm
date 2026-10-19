@@ -341,10 +341,16 @@ async def export_tools(
         )
 
     bypass_access_control = user.role == 'admin' and BYPASS_ADMIN_ACCESS_CONTROL
-    return await Tools.get_tools(
+    tools = await Tools.get_tools(
         db=db,
         user_id=None if bypass_access_control else user.id,
     )
+    if bypass_access_control:
+        return tools
+    # Source is writer-only, as on the single-tool route: a tool shared with
+    # this user read-only is exported without its content.
+    writable = {t.id for t in await Tools.get_tools(db=db, user_id=user.id, permission='write', defer_content=True)}
+    return [t if t.id in writable else t.model_copy(update={'content': None}) for t in tools]
 
 
 ############################
