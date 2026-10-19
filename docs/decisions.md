@@ -7,6 +7,23 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-19**: The Tests page fetches datasets, runs the graders'
+  selfcheck and runs one item, as the guide said it did (#141); all three were
+  lost in the move from the CLI to the app. Choices made with them:
+  **a one-item run is not recorded** (it would land in every comparison that
+  spans tiers; it is a diagnostic, and says when a suite here would leave the
+  item out); **one Tests job at a time, and none alongside a tune sweep**, nor
+  a sweep alongside one (a fetch would change the datasets under a run, and
+  any of them competes for the server and CPU a sweep measures); a refetch
+  replaces items and then the manifest only once both are written, keeping
+  the calibration file; and selfcheck grades several references at once
+  (half the CPUs, at most eight). The dataset code raises an ordinary
+  `DatasetError` instead of the CLI's `SystemExit`, which, raised in a worker
+  thread, would have reached the event loop and stopped the server. Datasets
+  were fetched and calibrated on this machine the same day: HumanEval 164/164,
+  MBPP 427/427, DS-1000 456/511 reference solutions pass (the guide has the
+  environment), each with the same verdict under the grader before and after
+  that day's verdict change.
 - **2026-10-19**: A graded answer passes when its program **ran to the
   end**, not when it exited 0 (#126). The grader runs each program through a
   driver that prints a random per-run nonce after the model's code and the

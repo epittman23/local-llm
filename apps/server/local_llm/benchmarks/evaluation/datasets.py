@@ -56,6 +56,16 @@ from pathlib import Path
 
 from local_llm.env import DATA_DIR
 
+
+class DatasetError(Exception):
+    """A dataset that is missing, malformed, or could not be fetched.
+
+    An ordinary exception, not the SystemExit the CLI this came from raised:
+    raised in a worker thread of the backend, a SystemExit would reach the
+    event loop and stop the server.
+    """
+
+
 UA = {'User-Agent': 'local-llm/benchmarks (https://github.com/epittman23/local-llm)'}
 TIMEOUT = 60
 
@@ -90,7 +100,7 @@ def read_manifest(bench: str, base: Path | None = None) -> dict | None:
 def read_items(bench: str, base: Path | None = None) -> list[dict]:
     path = items_path(bench, base)
     if not path.exists():
-        raise SystemExit(f'benchmarks: {bench} is not downloaded yet.\n  fetch it first (see datasets.fetch_one)')
+        raise DatasetError(f'{bench} is not downloaded yet: fetch it from the Tests page (Datasets, Fetch)')
     out = []
     for line in path.read_text().splitlines():
         line = line.strip()
@@ -167,7 +177,7 @@ def fetch_github_raw(spec: dict) -> tuple[list[dict], str, str, bytes]:
     else:
         rows = json.loads(text)
         if not isinstance(rows, list):
-            raise SystemExit(f'benchmarks: {url} is not a list of records')
+            raise DatasetError(f'{url} is not a list of records')
 
     return rows, github_revision(repo, ref, path), url, raw
 
@@ -205,7 +215,7 @@ def fetch_hf_rows(spec: dict) -> tuple[list[dict], str, str, bytes]:
                     raise
                 time.sleep(2 * (attempt + 1))
         else:  # pragma: no cover - loop always breaks
-            raise SystemExit('benchmarks: gave up on the datasets-server')
+            raise DatasetError('gave up on the datasets-server')
 
         batch = payload.get('rows', [])
         if not batch:
@@ -245,40 +255,53 @@ def fetch_one(adapter: dict, force: bool = False, base: Path | None = None) -> d
     spec = adapter['fetch']
     fetcher = FETCHERS.get(spec['kind'])
     if fetcher is None:
-        raise SystemExit(f"benchmarks: unknown fetch kind '{spec['kind']}'")
+        raise DatasetError(f"unknown fetch kind '{spec['kind']}'")
 
     print(f'{bench}: downloading', file=sys.stderr)
     rows, revision, url, raw = fetcher(spec)
     if not rows:
-        raise SystemExit(f'benchmarks: {bench} returned no rows')
+        raise DatasetError(f'{bench} returned no rows')
 
+    # Written beside the old files and swapped in with os.replace, items first
+    # and the manifest last: the manifest is the commit point, so a fetch that
+    # fails partway leaves the previous dataset whole, and the directory's
+    # other files (CALIBRATION.json) are kept.
     out.mkdir(parents=True, exist_ok=True)
-    (out / 'items.jsonl').write_text(''.join(json.dumps(r, sort_keys=True) + '\n' for r in rows))
+    items_tmp = out / 'items.jsonl.tmp'
+    manifest_tmp = out / 'MANIFEST.json.tmp'
+    try:
+        items_tmp.write_text(''.join(json.dumps(r, sort_keys=True) + '\n' for r in rows))
 
-    # Recorded even though nothing filters at fetch time: the filter is applied
-    # when a suite is built, so widening it later must not require a refetch.
-    counts: dict[str, int] = {}
-    spec_filter = adapter.get('filter')
-    if spec_filter:
-        for row in rows:
-            key = str(dotted(row, spec_filter['field']))
-            counts[key] = counts.get(key, 0) + 1
+        # Recorded even though nothing filters at fetch time: the filter is applied
+        # when a suite is built, so widening it later must not require a refetch.
+        counts: dict[str, int] = {}
+        spec_filter = adapter.get('filter')
+        if spec_filter:
+            for row in rows:
+                key = str(dotted(row, spec_filter['field']))
+                counts[key] = counts.get(key, 0) + 1
 
-    record = {
-        'benchmark': bench,
-        'name': adapter.get('name', bench),
-        'license': adapter.get('license', 'unknown'),
-        'homepage': adapter.get('homepage', ''),
-        'citation': adapter.get('citation', ''),
-        'source_url': url,
-        'revision': revision,
-        'content_sha256': hashlib.sha256(raw).hexdigest(),
-        'fetched_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
-        'n_items': len(rows),
-    }
-    if counts:
-        record['by_' + spec_filter['field'].split('.')[-1]] = dict(sorted(counts.items()))
+        record = {
+            'benchmark': bench,
+            'name': adapter.get('name', bench),
+            'license': adapter.get('license', 'unknown'),
+            'homepage': adapter.get('homepage', ''),
+            'citation': adapter.get('citation', ''),
+            'source_url': url,
+            'revision': revision,
+            'content_sha256': hashlib.sha256(raw).hexdigest(),
+            'fetched_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+            'n_items': len(rows),
+        }
+        if counts:
+            record['by_' + spec_filter['field'].split('.')[-1]] = dict(sorted(counts.items()))
 
-    manifest.write_text(json.dumps(record, indent=2) + '\n')
+        manifest_tmp.write_text(json.dumps(record, indent=2) + '\n')
+        os.replace(items_tmp, out / 'items.jsonl')
+        os.replace(manifest_tmp, manifest)
+    finally:
+        # Only left behind by a failure: the old files are untouched then.
+        items_tmp.unlink(missing_ok=True)
+        manifest_tmp.unlink(missing_ok=True)
     print(f'{bench}: {len(rows)} items -> {out}', file=sys.stderr)
     return record

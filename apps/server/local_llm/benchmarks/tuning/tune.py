@@ -147,6 +147,7 @@ import aiohttp
 from local_llm.benchmarks.analysis import report
 from local_llm.benchmarks.evaluation import runner
 from local_llm.benchmarks.evaluation.adapters import load_adapters, render_prompt
+from local_llm.benchmarks.evaluation.datasets import DatasetError
 from local_llm.benchmarks.evaluation.runner import SuiteLoadError
 from local_llm.benchmarks.evaluation.suites import build_suite, interleave, load_suite
 from local_llm.benchmarks.evaluation.suites import order_sha as order_sha_of
@@ -1480,7 +1481,7 @@ def _guard(fn, *args, **kwargs):
     """
     try:
         return fn(*args, **kwargs)
-    except SystemExit as exc:
+    except (SystemExit, DatasetError) as exc:
         raise SuiteLoadError(str(exc)) from exc
 
 

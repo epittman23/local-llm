@@ -393,34 +393,54 @@ def ungradeable(bench: str, base: Path | None = None) -> dict[str, str]:
     return dict(cal.get('ungradeable', {}))
 
 
-def calibrate(bench: str, adapter: dict, items: list[dict], on_item=None, base: Path | None = None) -> dict:
+def calibration_workers() -> int:
+    """How many reference solutions selfcheck grades at once: half the CPUs, at most eight.
+
+    Each is its own subprocess, and DS-1000's take a second or more to import
+    pandas, so one at a time made a selfcheck take a quarter of an hour.
+    """
+    return max(1, min(8, (os.cpu_count() or 2) // 2))
+
+
+def calibrate(
+    bench: str, adapter: dict, items: list[dict], on_item=None, base: Path | None = None, workers: int | None = None
+) -> dict:
     """Grade every reference solution and record which ones this box can verify.
 
     Returns the calibration record; the caller writes it. Every item is pushed
     through the same extract_code/build_program/run_program path a model
     answer takes, so this tests the harness end to end and not just the exec
-    call.
+    call. Items are graded `workers` at a time and reported to on_item in
+    their own order; an exception from on_item stops the calibration (the
+    Tests page's cancel) and propagates, with nothing returned to write.
     """
+    from concurrent.futures import ThreadPoolExecutor
+
     from local_llm.benchmarks.evaluation.datasets import item_id
 
-    ungradeable_: dict[str, str] = {}
-    checked = 0
-    for item in items:
+    def check(item: dict) -> tuple[str, str, str]:
         ref = reference_answer(adapter, item)
-        iid = item_id(adapter, item)
-        # Counted before the early return, not after: `n_checked` is the pool
-        # this calibration covers and `n_checked - n_ungradeable` is read as
-        # the gradeable count, so an item that lands in `ungradeable_` without
-        # landing in `checked` makes that subtraction go negative.
-        checked += 1
         if ref is None:
-            ungradeable_[iid] = 'the dataset ships no reference solution'
-            continue
-        outcome, reason = grade(adapter, item, ref)
-        if outcome != PASS:
-            ungradeable_[iid] = f'{outcome}: {reason}'[:200]
-        if on_item:
-            on_item(iid, outcome, reason)
+            return item_id(adapter, item), 'no_reference', 'the dataset ships no reference solution'
+        return (item_id(adapter, item), *grade(adapter, item, ref))
+
+    ungradeable_: dict[str, str] = {}
+    # Every item is counted: `n_checked` is the pool this calibration covers
+    # and `n_checked - n_ungradeable` is read as the gradeable count, so an
+    # item in `ungradeable_` but not in `checked` makes that go negative.
+    checked = 0
+    pool = ThreadPoolExecutor(max_workers=workers or calibration_workers())
+    try:
+        for iid, outcome, reason in pool.map(check, items):
+            checked += 1
+            if outcome == 'no_reference':
+                ungradeable_[iid] = reason
+            elif outcome != PASS:
+                ungradeable_[iid] = f'{outcome}: {reason}'[:200]
+            if on_item:
+                on_item(iid, outcome, reason)
+    finally:
+        pool.shutdown(wait=True, cancel_futures=True)
 
     manifest = read_manifest(bench, base) or {}
     return {

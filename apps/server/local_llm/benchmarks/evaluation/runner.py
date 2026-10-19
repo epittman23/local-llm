@@ -68,10 +68,11 @@ from collections.abc import Awaitable, Callable
 import aiohttp
 
 from local_llm.benchmarks.evaluation.adapters import item_cluster, load_adapters, render_prompt
-from local_llm.benchmarks.evaluation.datasets import read_manifest
-from local_llm.benchmarks.evaluation.grading import calibration_stale, grade
+from local_llm.benchmarks.evaluation.datasets import DatasetError, item_id, read_items, read_manifest
+from local_llm.benchmarks.evaluation.grading import calibration_stale, grade, ungradeable
 from local_llm.benchmarks.evaluation.suites import (
     build_suite,
+    filter_items,
     interleave,
     load_suite,
     missing_libraries,
@@ -105,7 +106,7 @@ def _guard(fn, *args, **kwargs):
     """
     try:
         return fn(*args, **kwargs)
-    except SystemExit as exc:
+    except (SystemExit, DatasetError) as exc:
         raise SuiteLoadError(str(exc)) from exc
 
 
@@ -389,6 +390,66 @@ async def run_item(session: aiohttp.ClientSession, row: dict, ctx: dict) -> dict
     answer = None if ans.error else {'prompt': prompt, 'content': ans.content, 'reasoning': ans.reasoning}
     record['result_id'] = await BenchmarkResults.add_result(record, answer)
     return record
+
+
+def _find_item(benchmark: str, wanted: str) -> tuple[dict, dict, str]:
+    """(adapter, item, why it is not part of a suite here) for one item id."""
+    adapter = load_adapters()[benchmark]
+    items = _guard(read_items, benchmark)
+    item = next((it for it in items if item_id(adapter, it) == wanted), None)
+    if item is None:
+        raise SuiteLoadError(f'{benchmark} has no item {wanted!r}')
+    kept, _ = filter_items(adapter, [item])
+    why = '' if kept else "outside this benchmark's library filter"
+    return adapter, item, why or ungradeable(benchmark).get(wanted, '')
+
+
+async def run_one(
+    session: aiohttp.ClientSession,
+    *,
+    benchmark: str,
+    item: str,
+    profile_name: str | None = None,
+    system_name: str | None = None,
+) -> dict:
+    """Ask and grade one item, as a suite run would, and record nothing.
+
+    A diagnostic, for looking at what a model does with one problem: a
+    recorded one-item run would land in every comparison that spans tiers.
+    `excluded` is why a suite here would leave the item out (the library
+    filter, or a reference solution that fails here), so a failure on such an
+    item is not read as the model's.
+    """
+    adapter, row, excluded = await asyncio.to_thread(_find_item, benchmark, item)
+    ctx = await context(
+        session, profile_name=profile_name, tier='item', seed=0, benches=[benchmark], system_name=system_name
+    )
+    ans = await ask(
+        session,
+        render_prompt(adapter, row),
+        ctx['model'],
+        ctx['profile'],
+        ctx['port'],
+        stream=ctx['stream'],
+        system=ctx.get('system'),
+    )
+    if ans.gone:
+        raise ServerGone(ans.error)
+    if ans.error:
+        outcome, reason = 'fail_error', ans.error
+    else:
+        outcome, reason = await asyncio.to_thread(grade, adapter, row, ans.content)
+    return {
+        'benchmark': benchmark,
+        'item_id': item,
+        'model': ctx['model'],
+        'outcome': outcome,
+        'reason': reason[:400],
+        'excluded': excluded,
+        'wall_ms': round(ans.wall_ms),
+        'content': ans.content,
+        'reasoning_chars': len(ans.reasoning),
+    }
 
 
 RecordCallback = Callable[[dict], None | Awaitable[None]] | None

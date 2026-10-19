@@ -81,17 +81,28 @@ class TuneStartForm(BaseModel):
         return tune.SweepOptions(**{**self.model_dump(), **overrides})
 
 
-def _running() -> bool:
+def running() -> bool:
+    """Whether a sweep is running; the Tests page refuses its jobs meanwhile."""
     return _task is not None and not _task.done()
+
+
+def _refuse_alongside_tests() -> None:
+    from local_llm.routers.benchmarks import tests as tests_router
+
+    if tests_router.active():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=ERROR_MESSAGES.DEFAULT('a test job is running')
+        )
 
 
 @router.post('/start')
 async def start_tune(form_data: TuneStartForm, user=Depends(get_admin_user)):
     global _task, _last_error
-    if _running():
+    if running():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail=ERROR_MESSAGES.DEFAULT('a sweep is already running')
         )
+    _refuse_alongside_tests()
     opts = form_data.to_options()
     _last_error = None
     _task = asyncio.create_task(_run_sweep(lambda session: tune.start_sweep(opts, session)))
@@ -101,10 +112,11 @@ async def start_tune(form_data: TuneStartForm, user=Depends(get_admin_user)):
 @router.post('/resume')
 async def resume_tune(sweep_id: str | None = None, user=Depends(get_admin_user)):
     global _task, _last_error
-    if _running():
+    if running():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail=ERROR_MESSAGES.DEFAULT('a sweep is already running')
         )
+    _refuse_alongside_tests()
     defaults = tune.SweepOptions()
     _last_error = None
     _task = asyncio.create_task(_run_sweep(lambda session: tune.resume_sweep(sweep_id, defaults, session)))
@@ -113,7 +125,7 @@ async def resume_tune(sweep_id: str | None = None, user=Depends(get_admin_user))
 
 @router.post('/stop')
 async def stop_tune(user=Depends(get_admin_user)):
-    if not _running():
+    if not running():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
     _task.cancel()
     return {'stopping': True}
@@ -129,9 +141,9 @@ async def get_status(sweep_id: str | None = Query(None), user=Depends(get_admin_
         # for sweep_status() to find -- surface the failure instead of a
         # bare 404 the frontend has no sweep-shaped state to show alongside.
         if _last_error is not None:
-            return {'running': _running(), 'last_error': _last_error}
+            return {'running': running(), 'last_error': _last_error}
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    result['running'] = _running()
+    result['running'] = running()
     result['last_error'] = _last_error
     result['current_visit'] = tune.current_visit_progress(result['sweep_id']) if result.get('sweep_id') else None
     return result
@@ -160,7 +172,7 @@ async def stream_status(sweep_id: str | None = Query(None), user=Depends(get_adm
         while True:
             try:
                 report = await tune.sweep_status(sweep_id)
-                report['running'] = _running()
+                report['running'] = running()
                 report['last_error'] = _last_error
                 report['current_visit'] = (
                     tune.current_visit_progress(report['sweep_id']) if report.get('sweep_id') else None
@@ -168,10 +180,10 @@ async def stream_status(sweep_id: str | None = Query(None), user=Depends(get_adm
                 yield f'data: {json.dumps(report, default=str)}\n\n'
             except TuneRefused as exc:
                 if _last_error is not None:
-                    yield f'data: {json.dumps({"running": _running(), "last_error": _last_error})}\n\n'
+                    yield f'data: {json.dumps({"running": running(), "last_error": _last_error})}\n\n'
                 else:
                     yield f'data: {json.dumps({"error": str(exc)})}\n\n'
-            if not _running():
+            if not running():
                 yield 'event: done\ndata: {}\n\n'
                 return
             await asyncio.sleep(2)

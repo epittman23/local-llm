@@ -248,13 +248,147 @@ test('Tests runs a suite and streams per-item outcomes to completion', async ({ 
 	await page.goto('/benchmarks/tests');
 
 	await expect(page.getByRole('heading', { name: 'Tests' })).toBeVisible();
-	await page.getByRole('button', { name: 'Run' }).click();
+	await page.getByRole('button', { name: 'Run', exact: true }).click();
 
 	await expect(page.getByText('20260101T000000Z-abc123')).toBeVisible();
 	await expect(page.getByText('HumanEval/0')).toBeVisible();
 	await expect(page.getByText('HumanEval/1')).toBeVisible();
 	await expect(page.getByText('AssertionError')).toBeVisible();
 	await expect(page.getByText('1 / 2 passed')).toBeVisible();
+});
+
+// The Tests page's dataset actions (#141): each POSTs, then follows the one Tests stream.
+async function mockTestsJob(page, path: string, events: object[], { fetched: fetchedFirst = false } = {}) {
+	const seen: { body: unknown } = { body: undefined };
+	await page.route('**/api/v1/benchmarks/tests/options', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ tiers: ['smoke'], benchmarks: ['humaneval', 'mbpp'], systems: [] })
+		})
+	);
+	let datasetCalls = 0;
+	await page.route('**/api/v1/benchmarks/tests/datasets', (route) => {
+		datasetCalls += 1;
+		const fetched = fetchedFirst || datasetCalls > 1;
+		return route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify([
+				{
+					benchmark: 'humaneval',
+					name: 'HumanEval',
+					fetched,
+					n_items: fetched ? 164 : null,
+					revision: fetched ? '463c980b59e8' : null,
+					fetched_at: null,
+					calibrated_at: null,
+					n_checked: fetched ? 164 : null,
+					n_ungradeable: fetched ? 1 : null,
+					calibration_stale: fetched ? '' : 'not calibrated yet'
+				}
+			])
+		});
+	});
+	await page.route(`**/api/v1/benchmarks/tests/${path}`, (route) => {
+		seen.body = route.request().postDataJSON();
+		return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ started: true }) });
+	});
+	await page.route('**/api/v1/benchmarks/tests/stream', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'text/event-stream',
+			body: events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('')
+		})
+	);
+	return seen;
+}
+
+test('Tests fetches the datasets and shows what was downloaded', async ({ page }) => {
+	const seen = await mockTestsJob(page, 'fetch', [
+		{ type: 'progress', benchmark: 'humaneval', message: 'fetching' },
+		{ type: 'dataset', benchmark: 'humaneval', n_items: 164, revision: '463c980b59e8', fetched: true },
+		{ type: 'done', cancelled: false }
+	]);
+	await page.goto('/benchmarks/tests');
+	const panel = page.getByRole('region', { name: 'Datasets' });
+	await expect(panel.getByText('not fetched')).toBeVisible();
+	// Nothing to check before anything is fetched.
+	await expect(panel.getByRole('button', { name: 'Selfcheck' })).toBeDisabled();
+	await panel.getByRole('button', { name: 'Fetch', exact: true }).click();
+	await expect(page.getByText('humaneval: fetched, 164 items, revision 463c980b59e8')).toBeVisible();
+	expect(seen.body).toEqual({});
+	// The table is read again once the job ends.
+	await expect(panel.getByText('163/164 gradeable')).toBeVisible();
+});
+
+test('Tests force-refetches only after confirming', async ({ page }) => {
+	const seen = await mockTestsJob(page, 'fetch', [{ type: 'done', cancelled: false }]);
+	await page.goto('/benchmarks/tests');
+	page.once('dialog', (dialog) => dialog.accept());
+	await page.getByRole('button', { name: 'Force refetch' }).click();
+	await expect.poll(() => seen.body).toEqual({ force: true });
+});
+
+test('Tests selfcheck streams each reference solution and reports the calibration', async ({ page }) => {
+	const seen = await mockTestsJob(
+		page,
+		'selfcheck',
+		[
+			{ type: 'progress', benchmark: 'humaneval', message: 'checking', total: 2 },
+			{ type: 'reference', benchmark: 'humaneval', item_id: 'HumanEval/0', outcome: 'pass', i: 1, total: 2, passed: 1 },
+			{
+				type: 'reference',
+				benchmark: 'humaneval',
+				item_id: 'HumanEval/1',
+				outcome: 'fail_error',
+				reason: 'ImportError',
+				i: 2,
+				total: 2,
+				passed: 1
+			},
+			{ type: 'calibrated', benchmark: 'humaneval', n_checked: 2, n_ungradeable: 1 },
+			{ type: 'done', cancelled: false }
+		],
+		{ fetched: true }
+	);
+	await page.goto('/benchmarks/tests');
+	await page.getByRole('button', { name: 'Selfcheck' }).click();
+	await expect(page.getByText('HumanEval/1')).toBeVisible();
+	await expect(page.getByText('ImportError')).toBeVisible();
+	await expect(page.getByText('humaneval: calibrated, 1/2 gradeable here')).toBeVisible();
+	expect(seen.body).toEqual({});
+});
+
+test('Tests runs one item and shows its answer without recording it', async ({ page }) => {
+	const seen = await mockTestsJob(page, 'item', [
+		{
+			type: 'result',
+			benchmark: 'mbpp',
+			item_id: '2',
+			model: 'qwen',
+			outcome: 'fail_assert',
+			reason: 'AssertionError',
+			excluded: 'fail_assert: its own reference fails here',
+			wall_ms: 2300,
+			content: '```python\ndef neg(a):\n    return a\n```'
+		},
+		{ type: 'done', cancelled: false }
+	]);
+	await page.goto('/benchmarks/tests');
+	const form = page.getByRole('region', { name: 'Run one item' });
+	await expect(form.getByRole('button', { name: 'Run item' })).toBeDisabled();
+	await form.getByRole('combobox', { name: 'Item benchmark' }).click();
+	await page.getByRole('option', { name: 'mbpp' }).click();
+	await form.getByLabel('Item id').fill('2');
+	await form.getByRole('button', { name: 'Run item' }).click();
+	const card = page.getByTestId('item-result');
+	await expect(card).toContainText('mbpp/2');
+	await expect(card).toContainText('fail_assert');
+	await expect(card).toContainText('A suite here leaves this item out: fail_assert: its own reference fails here');
+	await expect(card).toContainText('def neg(a):');
+	await expect(card).toContainText('2.3s');
+	expect(seen.body).toEqual({ benchmark: 'mbpp', item_id: '2' });
 });
 
 const compareOptions = { tiers: ['smoke'], benchmarks: ['ds1000'], systems: [] };
@@ -693,7 +827,7 @@ test('Tests Run settles while the run is still streaming', async ({ page }) => {
 	await page.route('**/api/v1/benchmarks/tests/stream', () => {});
 
 	await page.goto('/benchmarks/tests');
-	await page.getByRole('button', { name: 'Run' }).click();
+	await page.getByRole('button', { name: 'Run', exact: true }).click();
 	await expect(page.getByRole('button', { name: 'Cancel' })).toBeEnabled();
 	await expect(page.getByRole('button', { name: 'Starting…' })).toHaveCount(0);
 });

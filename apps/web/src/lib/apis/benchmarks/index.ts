@@ -377,6 +377,53 @@ export const startTestRun = async (token: string = '', form: TestRunForm) => {
 	return res;
 };
 
+/** One of the Tests page's dataset requests; rejects with the server's reason. */
+const testsRequest = async (token: string, path: string, body?: object) => {
+	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/tests/${path}`, {
+		method: body === undefined ? 'GET' : 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		},
+		...(body === undefined ? {} : { body: JSON.stringify(body) })
+	}).catch((err) => {
+		throw requestError(err);
+	});
+	if (!res.ok) throw errorDetail(await errorBody(res));
+	return res.json();
+};
+
+/** A benchmark's dataset as GET /benchmarks/tests/datasets reports it. */
+export type DatasetStatus = {
+	benchmark: string;
+	name: string;
+	fetched: boolean;
+	n_items: number | null;
+	revision: string | null;
+	fetched_at: string | null;
+	calibrated_at: string | null;
+	n_checked: number | null;
+	n_ungradeable: number | null;
+	/** Why the calibration no longer applies; '' when it does. */
+	calibration_stale: string;
+};
+
+export const getDatasets = (token: string = ''): Promise<DatasetStatus[]> => testsRequest(token, 'datasets');
+
+/** Download the datasets (all when `benchmarks` is omitted); progress arrives on the Tests stream. */
+export const fetchDatasets = (token: string = '', form: { benchmarks?: string[]; force?: boolean } = {}) =>
+	testsRequest(token, 'fetch', form);
+
+/** Grade the datasets' own reference solutions and write the calibrations; streamed like a run. */
+export const runSelfcheck = (token: string = '', form: { benchmarks?: string[] } = {}) =>
+	testsRequest(token, 'selfcheck', form);
+
+export type OneItemForm = { benchmark: string; item_id: string; profile?: string; system?: string };
+
+/** Ask and grade one item against what is being served; nothing is recorded. */
+export const runOneItem = (token: string = '', form: OneItemForm) => testsRequest(token, 'item', form);
+
 export const cancelTestRun = async (token: string = '') => {
 	let error = null;
 

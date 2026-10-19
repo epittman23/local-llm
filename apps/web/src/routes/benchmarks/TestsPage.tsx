@@ -8,8 +8,13 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
 	cancelTestRun,
+	type DatasetStatus,
+	fetchDatasets,
+	getDatasets,
 	getTestOptions,
 	parseBenchmarksEventStream,
+	runOneItem,
+	runSelfcheck,
 	startTestRun,
 	streamTestRun,
 	type TestRunForm
@@ -28,7 +33,49 @@ type ItemEvent = {
 	attempted: number;
 };
 
+/** What the one-item action reports: graded like a run item, recorded nowhere. */
+type ItemResult = {
+	benchmark: string;
+	item_id: string;
+	model?: string;
+	outcome: string;
+	reason?: string;
+	/** Why a suite here would leave this item out; '' when it would not. */
+	excluded?: string;
+	wall_ms?: number;
+	content?: string;
+};
+
+/** The events every Tests job streams: a suite run, a fetch, a selfcheck, or one item. */
+type JobEvent =
+	| { type: 'start'; suite_run_id: string; total: number; skipped: number }
+	| ItemEvent
+	| {
+			type: 'reference';
+			benchmark: string;
+			item_id: string;
+			outcome: string;
+			reason?: string;
+			i: number;
+			total: number;
+			passed: number;
+	  }
+	| { type: 'progress'; benchmark: string; message: string; total?: number }
+	| { type: 'dataset'; benchmark: string; n_items: number; revision: string; fetched: boolean }
+	| { type: 'calibrated'; benchmark: string; n_checked: number; n_ungradeable: number }
+	| ({ type: 'result' } & ItemResult)
+	| { type: 'done'; passed?: number; attempted?: number; cancelled: boolean }
+	| { type: 'error'; message: string };
+
+type Job = 'run' | 'fetch' | 'selfcheck' | 'item';
+
 const ALL_OPTION = '__all__';
+
+const calibrationText = (d: DatasetStatus) => {
+	if (!d.fetched) return '-';
+	if (d.calibration_stale) return d.calibration_stale;
+	return `${(d.n_checked ?? 0) - (d.n_ungradeable ?? 0)}/${d.n_checked} gradeable`;
+};
 
 const outcomeBadgeVariant = (outcome: string): 'default' | 'destructive' | 'secondary' | 'outline' => {
 	const o = (outcome ?? '').toLowerCase();
@@ -72,7 +119,19 @@ export function TestsPage() {
 	const [skipped, setSkipped] = useState(0);
 	const [latest, setLatest] = useState<ItemEvent | null>(null);
 	const [items, setItems] = useState<ItemEvent[]>([]);
-	const [done, setDone] = useState<{ passed: number; attempted: number; cancelled: boolean } | null>(null);
+	const [done, setDone] = useState<{ passed?: number; attempted?: number; cancelled: boolean } | null>(null);
+	const [job, setJob] = useState<Job>('run');
+	const [notes, setNotes] = useState<string[]>([]);
+	const [result, setResult] = useState<ItemResult | null>(null);
+	const [itemBenchmark, setItemBenchmark] = useState('');
+	const [itemId, setItemId] = useState('');
+
+	const datasetsQuery = useQuery({
+		queryKey: ['test-datasets'],
+		queryFn: () => getDatasets(token),
+		enabled: !!token
+	});
+	const datasets = datasetsQuery.data ?? [];
 	const [streamError, setStreamError] = useState<string | null>(null);
 	const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -96,13 +155,9 @@ export function TestsPage() {
 			return;
 		}
 
+		const note = (line: string) => setNotes((prev) => [...prev, line]);
 		try {
-			for await (const { event, data } of parseBenchmarksEventStream<
-				| { type: 'start'; suite_run_id: string; total: number; skipped: number }
-				| ItemEvent
-				| { type: 'done'; passed: number; attempted: number; cancelled: boolean }
-				| { type: 'error'; message: string }
-			>(res.body)) {
+			for await (const { event, data } of parseBenchmarksEventStream<JobEvent>(res.body)) {
 				if (event === 'done') break;
 				if (!data) continue;
 
@@ -113,6 +168,23 @@ export function TestsPage() {
 				} else if (data.type === 'item') {
 					setLatest(data);
 					setItems((prev) => [...prev, data]);
+				} else if (data.type === 'reference') {
+					const row: ItemEvent = { ...data, type: 'item', attempted: data.i };
+					setLatest(row);
+					setItems((prev) => [...prev, row]);
+				} else if (data.type === 'progress') {
+					note(`${data.benchmark}: ${data.message}${data.total ? ` ${data.total} reference solutions` : ''}`);
+				} else if (data.type === 'dataset') {
+					note(
+						`${data.benchmark}: ${data.fetched ? 'fetched' : 'already downloaded'}, ${data.n_items} items, revision ${data.revision}`
+					);
+				} else if (data.type === 'calibrated') {
+					note(
+						`${data.benchmark}: calibrated, ${data.n_checked - data.n_ungradeable}/${data.n_checked} gradeable here`
+					);
+				} else if (data.type === 'result') {
+					const { type: _type, ...rest } = data;
+					setResult(rest);
 				} else if (data.type === 'done') {
 					setDone({ passed: data.passed, attempted: data.attempted, cancelled: data.cancelled });
 				} else if (data.type === 'error') {
@@ -123,14 +195,36 @@ export function TestsPage() {
 		} catch (err) {
 			console.error(err);
 		}
+		void datasetsQuery.refetch();
 		if (abortControllerRef.current === controller) setRunning(false);
 	};
 
 	// Abort the SSE connection when leaving the page.
 	useEffect(() => () => abortControllerRef.current?.abort(), []);
 
-	const runMutation = useMutation({
-		mutationFn: () => {
+	const reset = (next: Job) => {
+		setJob(next);
+		setDone(null);
+		setItems([]);
+		setNotes([]);
+		setResult(null);
+		setLatest(null);
+		setSuiteRunId(null);
+		setTotal(0);
+		setSkipped(0);
+		setStreamError(null);
+	};
+
+	// Each job is started with a POST and followed on the one Tests stream.
+	// Not awaited in onSuccess: see ServePage's startMutation.
+	const jobMutation = useMutation({
+		mutationFn: async (next: { job: Job; force?: boolean }) => {
+			if (next.job === 'fetch') return fetchDatasets(token, next.force ? { force: true } : {});
+			if (next.job === 'selfcheck') return runSelfcheck(token);
+			if (next.job === 'item') {
+				const form = { benchmark: itemBenchmark || benchmarks[0], item_id: itemId.trim() };
+				return runOneItem(token, system !== ALL_OPTION ? { ...form, system } : form);
+			}
 			const form: TestRunForm = { suite: effectiveSuite };
 			if (benchmark !== ALL_OPTION) form.benchmark = benchmark;
 			if (system !== ALL_OPTION) form.system = system;
@@ -138,32 +232,73 @@ export function TestsPage() {
 			if (resume) form.resume = true;
 			return startTestRun(token, form);
 		},
-		onMutate: () => {
-			setDone(null);
-			setItems([]);
-			setLatest(null);
-			setSuiteRunId(null);
-			setTotal(0);
-			setSkipped(0);
-			setStreamError(null);
-		},
-		// Not awaited: see ServePage's startMutation.
+		onMutate: (next) => reset(next.job),
 		onSuccess: () => {
 			void startStream();
 		}
 	});
-
 	const cancelMutation = useMutation({ mutationFn: () => cancelTestRun(token) });
+	const busy = jobMutation.isPending || running;
 
 	return (
 		<div className="flex flex-col gap-4">
 			<h2 className="text-lg font-medium">Tests</h2>
 
-			{(runMutation.isError || cancelMutation.isError) && (
+			{(jobMutation.isError || cancelMutation.isError) && (
 				<div className="border-destructive/20 bg-destructive/10 text-destructive rounded-lg border px-3 py-2 text-xs">
-					{runMutation.error ? 'Failed to start test run' : 'Failed to cancel test run'}
+					{jobMutation.error ? `Could not start: ${jobMutation.error}` : 'Failed to cancel test run'}
 				</div>
 			)}
+
+			<section aria-label="Datasets" className="flex flex-col gap-2 rounded-lg border px-3 py-2.5">
+				<div className="flex flex-wrap items-center gap-2">
+					<div className="mr-auto text-sm font-medium">Datasets</div>
+					<Button size="sm" variant="secondary" disabled={busy} onClick={() => jobMutation.mutate({ job: 'fetch' })}>
+						Fetch
+					</Button>
+					<Button
+						size="sm"
+						variant="secondary"
+						disabled={busy}
+						onClick={() => {
+							if (window.confirm('Download every dataset again, replacing the copies on disk?'))
+								jobMutation.mutate({ job: 'fetch', force: true });
+						}}
+					>
+						Force refetch
+					</Button>
+					<Button
+						size="sm"
+						variant="secondary"
+						disabled={busy || !datasets.some((d) => d.fetched)}
+						onClick={() => jobMutation.mutate({ job: 'selfcheck' })}
+					>
+						Selfcheck
+					</Button>
+				</div>
+				<table className="text-xs">
+					<thead className="text-muted-foreground text-left">
+						<tr>
+							<th className="font-normal">Benchmark</th>
+							<th className="font-normal">Items</th>
+							<th className="font-normal">Revision</th>
+							<th className="font-normal">Calibration</th>
+						</tr>
+					</thead>
+					<tbody>
+						{datasets.map((d) => (
+							<tr key={d.benchmark}>
+								<td>{d.name}</td>
+								<td>{d.fetched ? d.n_items : 'not fetched'}</td>
+								<td className="font-mono">{d.revision ?? '-'}</td>
+								<td className={d.calibration_stale ? 'text-amber-600 dark:text-amber-400' : ''}>
+									{calibrationText(d)}
+								</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</section>
 
 			{optionsQuery.isLoading ? (
 				<div className="flex justify-center py-4">
@@ -238,8 +373,8 @@ export function TestsPage() {
 			)}
 
 			<div className="flex items-center gap-2">
-				<Button onClick={() => runMutation.mutate()} disabled={runMutation.isPending || running || !effectiveSuite}>
-					{runMutation.isPending ? 'Starting…' : 'Run'}
+				<Button onClick={() => jobMutation.mutate({ job: 'run' })} disabled={busy || !effectiveSuite}>
+					{jobMutation.isPending && job === 'run' ? 'Starting…' : 'Run'}
 				</Button>
 				<Button
 					variant="secondary"
@@ -251,10 +386,71 @@ export function TestsPage() {
 
 				{running && (
 					<div className="text-muted-foreground ml-2 text-xs">
-						{latest ? `${latest.i}/${latest.total || total} - ${latest.passed} passed` : 'Starting…'}
+						{latest
+							? `${latest.i}/${latest.total || total} - ${latest.passed} ${job === 'selfcheck' ? 'reference solutions pass' : 'passed'}`
+							: 'Starting…'}
 					</div>
 				)}
 			</div>
+
+			<section aria-label="Run one item" className="flex flex-wrap items-end gap-2">
+				<div className="flex flex-col gap-1">
+					<Label htmlFor="tests-item-benchmark">Item benchmark</Label>
+					<Select value={itemBenchmark || benchmarks[0] || ''} onValueChange={setItemBenchmark}>
+						<SelectTrigger id="tests-item-benchmark" className="w-40">
+							<SelectValue />
+						</SelectTrigger>
+						<SelectContent>
+							{benchmarks.map((b) => (
+								<SelectItem key={b} value={b}>
+									{b}
+								</SelectItem>
+							))}
+						</SelectContent>
+					</Select>
+				</div>
+				<div className="flex flex-col gap-1">
+					<Label htmlFor="tests-item-id">Item id</Label>
+					<Input
+						id="tests-item-id"
+						className="w-48"
+						placeholder="e.g. HumanEval/0"
+						value={itemId}
+						onChange={(e) => setItemId(e.target.value)}
+					/>
+				</div>
+				<Button
+					variant="secondary"
+					disabled={busy || !itemId.trim() || !benchmarks.length}
+					onClick={() => jobMutation.mutate({ job: 'item' })}
+				>
+					Run item
+				</Button>
+				<span className="text-muted-foreground text-xs">Graded like a run item; not recorded.</span>
+			</section>
+
+			{result && (
+				<div className="flex flex-col gap-2 rounded-lg border px-3 py-2.5 text-xs" data-testid="item-result">
+					<div className="flex flex-wrap items-center gap-2">
+						<span className="text-sm font-medium">
+							{result.benchmark}/{result.item_id}
+						</span>
+						<Badge variant={outcomeBadgeVariant(result.outcome)}>{result.outcome}</Badge>
+						{result.reason && <span className="text-muted-foreground">{result.reason}</span>}
+						{result.wall_ms !== undefined && (
+							<span className="text-muted-foreground ml-auto">{(result.wall_ms / 1000).toFixed(1)}s</span>
+						)}
+					</div>
+					{result.excluded && (
+						<div className="text-amber-600 dark:text-amber-400">
+							A suite here leaves this item out: {result.excluded}
+						</div>
+					)}
+					{result.content && (
+						<pre className="bg-muted max-h-72 overflow-auto rounded p-2 whitespace-pre-wrap">{result.content}</pre>
+					)}
+				</div>
+			)}
 
 			{streamError && (
 				<div className="border-destructive/20 bg-destructive/10 text-destructive rounded-lg border px-3 py-2 text-xs">
@@ -266,6 +462,14 @@ export function TestsPage() {
 				<div className="text-muted-foreground text-xs">
 					Suite run: <span className="text-foreground">{suiteRunId}</span> · Total: {total} · Skipped: {skipped}
 				</div>
+			)}
+
+			{notes.length > 0 && (
+				<ul className="text-muted-foreground flex flex-col gap-0.5 text-xs" aria-label="Job notes">
+					{notes.map((line, idx) => (
+						<li key={idx}>{line}</li>
+					))}
+				</ul>
 			)}
 
 			<div className="flex flex-col gap-1">
@@ -287,9 +491,11 @@ export function TestsPage() {
 			{done && (
 				<div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border px-3 py-2.5 text-xs">
 					<span className="text-sm font-medium">Done</span>
-					<span className="text-muted-foreground">
-						{done.passed} / {done.attempted} passed
-					</span>
+					{done.attempted !== undefined && (
+						<span className="text-muted-foreground">
+							{done.passed} / {done.attempted} passed
+						</span>
+					)}
 					{done.cancelled && <Badge variant="secondary">Cancelled</Badge>}
 				</div>
 			)}

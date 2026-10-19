@@ -128,17 +128,22 @@ in-filter items); rows recorded before that carry a NULL `adapter_sha`, show as
 
 | Page / action | What it does |
 | --- | --- |
-| Tests → run one item | One item, streamed over SSE. Pick a benchmark and an item id (e.g. `humaneval/HumanEval/0`) |
+| Tests → run one item | Ask and grade one item against what is being served, with the run's system prompt, and show the outcome and the answer. Pick a benchmark and an item id (e.g. `HumanEval/0`). **Not recorded**: a one-item run would land in every comparison that spans tiers. It says when a suite here would leave the item out (the library filter, or a reference solution that fails here) |
 | Tests → run a tier | A whole `smoke`/`standard`/`full` tier. A benchmark filter restricts it, a resume action continues the most recent run of that tier |
 | Tests → system prompt | Send the selected system prompt with every item of that run — see below |
-| Tests → benchmark list | The benchmarks, their pinned revisions, the tiers, what is calibrated, and the defined system prompts with their shas |
-| Tests → fetch datasets | Download and pin the datasets (a force-refetch option is available) |
-| Tests → selfcheck | Grade the datasets' own reference solutions and write the calibration |
+| Tests → Datasets panel | Each benchmark's dataset: fetched or not, its item count and pinned revision, and its calibration (gradeable items, or why it is stale) |
+| Tests → Fetch / Force refetch | Download and pin every dataset; Fetch keeps one already on disk, Force refetch (after a confirmation) downloads it again. A refetch replaces the files only once it has them all, and keeps the calibration file |
+| Tests → Selfcheck | Grade every fetched dataset's own reference solutions, several at a time, streaming each verdict, and write the calibrations; cancelling writes none |
 | Compare | Rank models and configurations — see below |
 | Compare → export answers | Write a whole suite run's stored answers back out as flat markdown files, for grepping/diffing/archiving outside the app |
 | Answers → view one | Render one stored answer as markdown directly in the browser |
 | Report | The statistical comparison, rendered to the page, without running anything new |
 | `psql` (or any Postgres client) against `DATABASE_URL` | Raw access to the app's own database (the `benchmark_*` tables) |
+
+The Tests page runs one job at a time (a tier run, a fetch, a selfcheck or one
+item), and none while a tune sweep runs, nor a sweep while one of them does: a
+fetch would change the datasets under a run, and each competes with a sweep for
+the server and the CPU it measures.
 
 The profile picker on the Serve page names the serving profile whose alias
 and `reasoning_effort` are used; the model name itself is read from the
@@ -286,7 +291,7 @@ the math and statistics work this assistant is also for.
 | --- | --- | --- |
 | `smoke` | 8 per benchmark, 24 items | The tuning loop: fast enough to run between two serving configurations |
 | `standard` | 100 per benchmark, 300 items | An overnight run |
-| `full` | Every gradeable item (164 + 427 + 439 = 1030) | The only tier comparable to a published score |
+| `full` | Every gradeable item (164 + 427 + 456 = 1047 on 2026-10-19; DS-1000's count depends on the grading environment) | The only tier comparable to a published score |
 
 Sampling is seeded (`seed = 20260830`, recorded in each result) and sorted by the
 dataset's own id before sampling, so `smoke` is the same 24 items on every run
@@ -358,15 +363,24 @@ server answered, and a 400 can be specific to one item.
 The selfcheck action grades every benchmark's **own reference solution**
 (`canonical_solution`, `code`, `reference_code`). No model is involved, so a
 correct harness scores 100%; anything less is a bug in the grader. Measured on
-2026-08-30 (Python 3.14.7, numpy 2.5.2, pandas 3.0.5, pyyaml 6.0.3), under WSL2
-and under the harness before the 2026-10-19 verdict change, so historical until
-re-measured:
+2026-10-19 on the NVIDIA GeForce RTX 3060 Laptop machine under native Fedora 44
+(grading runs on the CPU), with harness version 2, dataset revisions HumanEval
+`463c980b59e8`, MBPP `f82046ba5aab` and DS-1000 `4416080ac5cb`, and the grading
+environment Python 3.12.14, numpy 2.5.3, pandas 3.0.6, scipy 1.18.1,
+scikit-learn 1.9.1, pyyaml 6.0.3:
 
 | Benchmark | Reference solutions passing | Ungradeable here |
 | --- | --- | --- |
 | HumanEval | 164/164 | 0 |
 | MBPP | 427/427 | 0 |
-| DS-1000 | 439/511 | 72 |
+| DS-1000 | 456/511 | 55 |
+
+Every reference solution got the same verdict under the harness before the
+2026-10-19 verdict change and under the one after it, item for item. The
+historical figure, measured on 2026-08-30 under WSL2 with Python 3.14.7, numpy
+2.5.2 and pandas 3.0.5, was 439/511 for DS-1000 (72 ungradeable); the
+environments differ in those three versions, and which difference moved the 17
+items was not established.
 
 **What calibration cannot catch**, stated because this repo has already been
 bitten by it: it runs the reference solutions, so it never sees the
@@ -376,13 +390,14 @@ scores a correct answer wrong, and calibration reports 100% throughout, because
 the reference solution uses the variable the problem actually names. Only
 reading the failures finds that class of bug.
 
-The 72 are not a grader bug. **DS-1000 was published in 2022 against pandas 1.x**,
+The ungradeable DS-1000 items are not a grader bug. **DS-1000 was published in 2022 against pandas 1.x**,
 and on pandas 3 a chunk of it fails before any model is involved:
 `DataFrame.append` was removed in pandas 2.0, `replace(method=)` and
 `read_csv(delim_whitespace=)` in 3.0, and the string dtype changed. Grading a
 model against a test the dataset's own answer cannot pass measures the library
-versions, not the model — it would have understated every model by about 14
-points on that benchmark.
+versions, not the model — it would understate every model by about 11 points
+on that benchmark here (55 of 511), and did by about 14 under the 2026-08-30
+environment.
 
 So selfcheck writes `<DATA_DIR>/benchmarks/datasets/<benchmark>/CALIBRATION.json`,
 and those items are **skipped** when a suite runs, with the benchmark's own
@@ -396,7 +411,7 @@ Re-run selfcheck from the Tests page after upgrading pandas or refetching a
 dataset.
 
 Note the consequence for comparability: a `full` DS-1000 pass rate from this box
-is over 439 items, not 511, so it is not directly comparable to a published
+is over the gradeable items (456 here on 2026-10-19), not 511, so it is not directly comparable to a published
 DS-1000 number. The excluded items are in `benchmark_suite_exclusion`, and
 their counts are reported beneath every comparison table.
 
