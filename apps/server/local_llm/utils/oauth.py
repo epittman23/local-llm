@@ -1919,16 +1919,12 @@ class OAuthManager:
                     # roles are configured; otherwise an existing admin stays one.
                     role = 'admin' if (not oauth_admin_roles and current == 'admin') else 'user'
                 else:
-                    log.warning(
-                        'OAuth role management: user roles %s match no allowed or admin role (allowed: %s, admin: %s)',
-                        oauth_roles,
-                        oauth_allowed_roles,
-                        oauth_admin_roles,
-                    )
+                    # The roles and the configured lists are in the debug lines above.
+                    log.warning('OAuth role management: the user has no allowed or admin role')
                     raise HTTPException(status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.ACCESS_PROHIBITED)
             elif gated:
                 # No roles claim at all cannot satisfy an allowed-roles gate.
-                log.warning('OAuth role management: no %r claim, and allowed roles are required', oauth_claim)
+                log.warning('OAuth role management: no roles claim, and allowed roles are required')
                 raise HTTPException(status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.ACCESS_PROHIBITED)
             # A missing claim with no gate changes nothing (documented choice).
         else:
