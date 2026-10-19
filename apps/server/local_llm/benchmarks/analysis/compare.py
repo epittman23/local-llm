@@ -45,8 +45,8 @@ from __future__ import annotations
 
 import datetime as dt
 import re
+from typing import TYPE_CHECKING
 
-from local_llm.benchmarks.analysis import estimators as est
 from local_llm.benchmarks.analysis.stats import (
     config_value,
     effective_bandwidth,
@@ -59,6 +59,23 @@ from local_llm.benchmarks.analysis.stats import (
 from local_llm.models.benchmarks.configs import BenchmarkConfigs, BenchmarkRunLoadInfos, BenchmarkRuns
 from local_llm.models.benchmarks.telemetry import BenchmarkGpuSamples, BenchmarkMetricsScrapes
 from local_llm.models.benchmarks.tests import BenchmarkRequests, BenchmarkResults, BenchmarkSuiteExclusions
+
+if TYPE_CHECKING:  # pragma: no cover - typing only
+    from local_llm.benchmarks.analysis.estimators import Paired, Summary
+
+
+def _est():
+    """The estimators module, imported on first use.
+
+    scipy and statsmodels take about three seconds to import, and the
+    Compare router imports this module when the backend starts. Deferring
+    the import keeps that cost on the first comparison rather than on every
+    startup.
+    """
+    from local_llm.benchmarks.analysis import estimators
+
+    return estimators
+
 
 # ---------------------------------------------------------------------------
 # outcomes -- ported from llama_results.py, which this app has no equivalent
@@ -191,7 +208,7 @@ class Group:
         self.item_window = item_window
         self.revision_id = revision
         self.records: list[dict] = []
-        self._summary: est.Summary | None = None
+        self._summary: Summary | None = None
 
     @property
     def key(self):
@@ -239,10 +256,10 @@ class Group:
         """(passed, attempted, rate) over samples -- the counts printed beside every rate."""
         return pass_rate(self.records)
 
-    def summary(self) -> est.Summary:
+    def summary(self) -> Summary:
         """Per-problem scores, the pass rate with its interval, passes per minute."""
         if self._summary is None:
-            self._summary = est.summarise(self.records)
+            self._summary = _est().summarise(self.records)
         return self._summary
 
     def timing(self, field: str) -> list[float]:
@@ -441,22 +458,22 @@ def compare_block(groups: list[Group]) -> dict:
     of the Holm family, so `holm_m` counts only the tests actually made.
     """
     ordered = sorted(groups, key=_sort_key)
-    raw: list[tuple[Group, Group, est.Paired]] = []
+    raw: list[tuple[Group, Group, Paired]] = []
     for i, a in enumerate(ordered):
         for b in ordered[i + 1 :]:
-            raw.append((a, b, est.paired(a.summary().scores, b.summary().scores)))
+            raw.append((a, b, _est().paired(a.summary().scores, b.summary().scores)))
     tested = [t for t in raw if t[2].tested]
-    adjusted = dict(zip((id(t[2]) for t in tested), est.holm([t[2].p for t in tested])))
+    adjusted = dict(zip((id(t[2]) for t in tested), _est().holm([t[2].p for t in tested])))
     m = len(tested)
 
     pairs, different = [], set()
     for a, b, pr in raw:
         p_holm = adjusted.get(id(pr))
-        significant = p_holm is not None and p_holm < est.ALPHA
+        significant = p_holm is not None and p_holm < _est().ALPHA
         if significant:
             different.add(frozenset({a.level, b.level}))
-        mde = est.mde(pr.se)
-        mde_holm = est.mde(pr.se, m=m)
+        mde = _est().mde(pr.se)
+        mde_holm = _est().mde(pr.se, m=m)
         if not pr.tested or significant:
             underpowered = None if not pr.tested else False
         else:
@@ -498,9 +515,9 @@ def compare_block(groups: list[Group]) -> dict:
         'item_window': window or None,
         'dataset_revision': revision[:12] if revision else None,
         'levels': [g.level for g in ordered],
-        'letters': est.letters([g.level for g in ordered], different),
+        'letters': _est().letters([g.level for g in ordered], different),
         'holm_m': m,
-        'alpha': est.ALPHA,
+        'alpha': _est().ALPHA,
         'pairs': pairs,
     }
 
