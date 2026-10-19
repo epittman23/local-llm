@@ -37,7 +37,6 @@ from sqlalchemy.sql.expression import bindparam
 # local imports
 from local_llm.env import ENABLE_ADMIN_CHAT_ACCESS
 from local_llm.internal.db import Base, get_async_db_context
-from local_llm.models.access_grants import AccessGrants
 from local_llm.models.automations import AutomationRun
 from local_llm.models.chat_messages import ChatMessage, ChatMessages
 from local_llm.models.folders import Folders
@@ -1730,14 +1729,10 @@ class ChatTable:
         if user.role == 'admin' and (ENABLE_ADMIN_CHAT_ACCESS or is_internal_chat(chat.meta)):
             return chat
 
-        if await AccessGrants.has_access(
-            user_id=user.id,
-            resource_type='shared_chat',
-            resource_id=id,
-            permission='read',
-            db=db,
-        ):
-            return chat
+        # A shared_chat grant is deliberately not consulted here. A share is a
+        # snapshot (/s/{share_id}); its grant covers that snapshot and the
+        # files in it, never the live chat, which goes on to hold messages
+        # sent after sharing, every branch and its variables.
 
         if chat.folder_id:
             from local_llm.utils.access_control.folders import has_folder_access

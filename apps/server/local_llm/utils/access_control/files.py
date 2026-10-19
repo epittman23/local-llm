@@ -91,8 +91,17 @@ async def has_access_to_file(
     if access_type == 'read' and channels:
         return True
 
-    # Check if the file is associated with any chats the user has access to
-    shared_chat_ids = await Chats.get_shared_chat_ids_by_file_id(file_id, db=db)
+    # Check if the file is in a shared chat snapshot the user may read. The
+    # snapshot's own files only: a file attached to the live chat after it
+    # was shared is not part of what was shared.
+    shared_chat_ids = []
+    if access_type == 'read':
+        from local_llm.models.shared_chats import SharedChats, snapshot_file_ids
+
+        for chat_id in await Chats.get_shared_chat_ids_by_file_id(file_id, db=db):
+            snapshot = await SharedChats.get_by_chat_id(chat_id, db=db)
+            if snapshot and file_id in snapshot_file_ids(snapshot.chat):
+                shared_chat_ids.append(chat_id)
     if access_type == 'read' and shared_chat_ids:
         accessible_ids = await AccessGrants.get_accessible_resource_ids(
             user_id=user.id,

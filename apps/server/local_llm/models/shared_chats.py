@@ -52,6 +52,31 @@ class SharedChatResponse(BaseModel):
     created_at: int
 
 
+def snapshot_file_ids(chat: dict | None) -> set[str]:
+    """The ids of the files a chat snapshot's messages carry.
+
+    Message files are items like {'type': 'file', 'id': ...}, sometimes with
+    the record nested under 'file'. Only these are visible through a share;
+    files attached to the live chat after it was shared are not.
+    """
+    out: set[str] = set()
+    history = (chat or {}).get('history') or {}
+    messages = list((history.get('messages') or {}).values()) + list((chat or {}).get('messages') or [])
+    for message in messages:
+        if not isinstance(message, dict):
+            continue
+        for item in message.get('files') or []:
+            if not isinstance(item, dict):
+                continue
+            for candidate in (
+                item.get('id'),
+                (item.get('file') or {}).get('id') if isinstance(item.get('file'), dict) else None,
+            ):
+                if isinstance(candidate, str) and candidate:
+                    out.add(candidate)
+    return out
+
+
 ####################
 # Table Operations
 ####################

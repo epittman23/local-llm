@@ -1723,7 +1723,9 @@ async def update_shared_chat_access_by_id(
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    if user.role == 'admin':
+    # Another user's chat only with admin chat access on: otherwise an admin
+    # could grant themselves a share of any chat and read it that way.
+    if user.role == 'admin' and ENABLE_ADMIN_CHAT_ACCESS:
         chat = await Chats.get_chat_by_id(id, db=db)
     else:
         chat = await Chats.get_chat_by_id_and_user_id(id, user.id, db=db)
@@ -1759,7 +1761,7 @@ async def get_shared_chat_access_by_id(
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
-    if user.role == 'admin':
+    if user.role == 'admin' and ENABLE_ADMIN_CHAT_ACCESS:
         chat = await Chats.get_chat_by_id(id, db=db)
     else:
         chat = await Chats.get_chat_by_id_and_user_id(id, user.id, db=db)
