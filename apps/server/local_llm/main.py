@@ -308,6 +308,36 @@ if LOG_FORMAT != 'json':
     print(f'Local LLM v{VERSION}{f" (commit {LLLM_BUILD_HASH})" if LLLM_BUILD_HASH != "dev-build" else ""}')
 
 
+async def require_redis(client, attempts: int = 20, delay: float = 0.5):
+    """The Redis client, reachable, or a startup failure saying why.
+
+    Redis holds session revocation: signing out, changing a password and an
+    admin's password reset all record there which tokens stop working, and
+    without it every issued token stays valid until it expires (four weeks by
+    default) while the UI says "please sign in again". So the backend refuses
+    to start without it rather than run with revocation silently off.
+    `make backend` starts it (infra/docker-compose.yml) and sets REDIS_URL;
+    the retries cover the moment between the container starting and
+    accepting connections.
+    """
+    if client is None:
+        raise RuntimeError(
+            'REDIS_URL is not set. Redis is required: it holds session revocation, without which signing out '
+            'and password changes revoke nothing. `make backend` starts it and sets REDIS_URL; a backend '
+            'started by hand needs REDIS_URL=redis://127.0.0.1:6379/0 and the redis service in '
+            'infra/docker-compose.yml running.'
+        )
+    last_error = None
+    for _ in range(attempts):
+        try:
+            await client.ping()
+            return client
+        except Exception as e:  # connection refused while Redis starts
+            last_error = e
+            await asyncio.sleep(delay)
+    raise RuntimeError(f'Redis at REDIS_URL is not reachable: {last_error}')
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Store reference to main event loop for sync->async calls (e.g., embedding generation)
@@ -354,7 +384,7 @@ async def lifespan(app: FastAPI):
     log.info('Installing external dependencies of functions and tools...')
     await install_tool_and_function_dependencies()
 
-    app.state.redis = get_redis_client(async_mode=True)
+    app.state.redis = await require_redis(get_redis_client(async_mode=True))
 
     if app.state.redis is not None:
         app.state.redis_task_command_listener = asyncio.create_task(redis_task_command_listener(app))

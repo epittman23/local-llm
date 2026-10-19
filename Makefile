@@ -48,7 +48,7 @@ LLLM_TEST_PG_PORT ?= 55432
 .PHONY: help backend frontend astro lint test test-backend test-web test-e2e check
 
 help:
-	@echo "make backend   Postgres + the backend (uvicorn --reload, $(LLLM_BACKEND_HOST):$(LLLM_BACKEND_PORT))"
+	@echo "make backend   Postgres + Redis + the backend (uvicorn --reload, $(LLLM_BACKEND_HOST):$(LLLM_BACKEND_PORT))"
 	@echo "make frontend  Astro + React + shadcn/ui dev server (astro dev, :5174; alias: make astro)"
 	@echo "make lint      pre-commit over every file, as CI runs it"
 	@echo "make test      test-backend + test-web + test-e2e, as CI runs them"
@@ -89,7 +89,7 @@ backend:
 		exit 1; \
 	fi; \
 	trap '$(COMPOSE) down' EXIT; \
-	$(COMPOSE) up -d postgres; \
+	$(COMPOSE) up -d postgres redis; \
 	if ! command -v uv >/dev/null 2>&1; then \
 		echo "make backend: uv not found -- install it (https://docs.astral.sh/uv/, e.g. \`curl -LsSf https://astral.sh/uv/install.sh | sh\`)" >&2; \
 		exit 1; \
@@ -101,6 +101,7 @@ backend:
 	CORS_ALLOW_ORIGIN="http://localhost:$(LLLM_BACKEND_PORT);http://127.0.0.1:$(LLLM_BACKEND_PORT);http://localhost:5174;http://127.0.0.1:5174" \
 	LLLM_SECRET_KEY="$$LLLM_SECRET_KEY" \
 	DATABASE_URL="$$database_url" \
+	REDIS_URL="redis://127.0.0.1:6379/0" \
 	DATA_DIR="$(DATA_DIR)" \
 	VECTOR_DB=pgvector \
 	OPENAI_API_BASE_URL="https://openrouter.ai/api/v1" \

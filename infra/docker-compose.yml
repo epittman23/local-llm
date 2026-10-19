@@ -1,4 +1,4 @@
-# Postgres + pgvector for the backend (apps/server). The backend itself is not
+# Postgres + pgvector, and Redis, for the backend (apps/server). The backend itself is not
 # a container: it runs as a host process so it can start and stop
 # llama-server on this machine's GPU. Postgres has no such constraint, so it
 # stays the simplest option: containerized.
@@ -39,5 +39,21 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
 
+  # Required since 2026-10-19: session revocation (sign-out, password changes,
+  # admin resets) is stored here, and without it a revoked session stayed
+  # valid until it expired. Append-only persistence, because a restart that
+  # forgot the revocations would bring those sessions back. Loopback only,
+  # for the same reason as Postgres.
+  redis:
+    image: redis:7.4.2-alpine
+    container_name: local-llm-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", ""]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+
 volumes:
   postgres-data:
+  redis-data:

@@ -73,9 +73,11 @@ then, in one terminal:
 make backend
 ```
 
-which brings up Postgres (`infra/docker-compose.yml`) and the
-backend (`uvicorn`, port `4000`) together, and tears Postgres back down when
-the backend stops (Ctrl-C included). The backend listens on `127.0.0.1` only;
+which brings up Postgres and Redis (`infra/docker-compose.yml`) and the
+backend (`uvicorn`, port `4000`) together, and tears them back down when the
+backend stops (Ctrl-C included). Redis is required: it holds session
+revocation (sign-out, password changes), and the backend refuses to start
+without `REDIS_URL`, which `make backend` sets. The backend listens on `127.0.0.1` only;
 to reach it from another machine, start it with
 `make backend LLLM_BACKEND_HOST=0.0.0.0`. Cross-origin API access is granted
 only to the origins in `CORS_ALLOW_ORIGIN` (semicolon-separated): `make

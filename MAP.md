@@ -27,7 +27,7 @@ local-llm/
 │   ├── server/                FastAPI backend (package local_llm)
 │   └── web/                   Astro + React + shadcn/ui frontend
 ├── docs/                      decisions log, roadmap, guides, proposals, history
-└── infra/                     docker-compose for Postgres + pgvector
+└── infra/                     docker-compose for Postgres + pgvector and Redis
 ```
 
 `scripts/` (the shell orchestrator plus the `llama-console` CLI helpers) and
@@ -113,7 +113,8 @@ Start here for "how do I run/use this."
 
 Infrastructure this repo runs but does not write.
 
-- **`docker-compose.yml`** — Postgres + pgvector service backing the backend.
+- **`docker-compose.yml`** — Postgres + pgvector and Redis (session
+  revocation, required since 2026-10-19) backing the backend.
   Its Compose project name is **pinned** to `local-llm` rather than
   inherited from this directory's name; the volume name derives from the
   project name, so the pin keeps the data in `local-llm_postgres-data`

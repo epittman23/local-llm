@@ -26,7 +26,7 @@ Those are the whole port table — there is nothing new to add one for:
 | Chat + Benchmarks UI and API (uvicorn, serving `apps/web/dist`) | `4000` | `make backend` |
 | UI dev server with hot reload (optional) | `5174` | `make frontend` |
 
-`make backend` still owns Postgres's lifecycle (`infra/docker-compose.yml`),
+`make backend` still owns Postgres's (and Redis's) lifecycle (`infra/docker-compose.yml`),
 starting it before uvicorn and tearing it down via a trap when uvicorn stops,
 Ctrl-C included. See [Running it](../../README.md#running-it) for the full command sequence.
 
