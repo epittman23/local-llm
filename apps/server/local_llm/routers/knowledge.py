@@ -1455,6 +1455,10 @@ async def add_file_to_knowledge_by_id(
                 detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
             )
 
+    # Before embedding: a directory from another base, or none that exists,
+    # used to fail the link silently after the file was embedded.
+    await _require_directory_in(id, form_data.directory_id, db)
+
     # Add content to the vector database
     try:
         await process_file(
@@ -2228,6 +2232,23 @@ async def _verify_knowledge_write_access(id: str, user, db: AsyncSession):
     return knowledge
 
 
+async def _require_directory_in(knowledge_id: str, directory_id: str | None, db: AsyncSession) -> None:
+    """404 unless directory_id is None or a directory of this knowledge base.
+
+    A parent or target from another base attaches this base's tree under it:
+    the directory vanishes from its own tree, breadcrumbs walk into the other
+    base, and deleting there cascades here.
+    """
+    if directory_id is None:
+        return
+    directory = await Knowledges.get_directory_by_id(directory_id, db=db)
+    if not directory or directory.knowledge_id != knowledge_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Directory not found in this knowledge base.',
+        )
+
+
 @router.post('/{id}/dirs/create', response_model=KnowledgeDirectoryModel)
 async def create_knowledge_directory(
     request: Request,
@@ -2237,6 +2258,7 @@ async def create_knowledge_directory(
     db: AsyncSession = Depends(get_async_session),
 ):
     await _verify_knowledge_write_access(id, user, db)
+    await _require_directory_in(id, form_data.parent_id, db)
 
     directory = await Knowledges.create_directory(
         knowledge_id=id,
@@ -2278,6 +2300,9 @@ async def update_knowledge_directory(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
+
+    if form_data.parent_id != '__unset__':
+        await _require_directory_in(id, form_data.parent_id, db)
 
     result = await Knowledges.update_directory(
         directory_id=dir_id,
