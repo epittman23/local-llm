@@ -83,6 +83,9 @@ Start here for "how do I run/use this."
   venv and offline model cache), `frontend.md` (`apps/web` dev server,
   build, rough edges), `model-downloads.md` (`hf download` commands for the
   GGUF weights).
+- **`plans/`** — implementation plans awaiting or under execution:
+  `benchmark-upgrade.md` (EvalPlus datasets, LiveCodeBench, the llama-bench
+  pre-screen, and error bars in Compare and Report).
 - **`proposals/`** — not yet built: `proposed-inference-server.md`, a
   hardware proposal (Dell R730 + Tesla V100) for a dedicated inference
   server.
