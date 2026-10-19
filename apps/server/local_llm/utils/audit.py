@@ -1,3 +1,4 @@
+import json
 import re
 import uuid
 from collections.abc import AsyncGenerator, MutableMapping
@@ -111,6 +112,62 @@ class AuditContext:
     def add_response_chunk(self, chunk: bytes):
         if len(self.response_body) < self.max_body_size:
             self.response_body.extend(chunk[: self.max_body_size - len(self.response_body)])
+
+
+REDACTED = '********'
+
+# A key is sensitive when its name, lowercased, contains one of these, or is
+# exactly 'key' or ends in '_key'/'_keys' (OPENAI_API_KEYS, api_key, ...).
+_SENSITIVE_PARTS = (
+    'password',
+    'passwd',
+    'secret',
+    'token',
+    'apikey',
+    'api_key',
+    'authorization',
+    'credential',
+    'cookie',
+    'private_key',
+)
+
+
+def is_sensitive_key(key: str) -> bool:
+    k = str(key).lower()
+    return k == 'key' or k.endswith(('_key', '_keys', '-key')) or any(part in k for part in _SENSITIVE_PARTS)
+
+
+def _redact_value(value):
+    if isinstance(value, dict):
+        return {k: (REDACTED if is_sensitive_key(k) else _redact_value(v)) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_redact_value(v) for v in value]
+    return value
+
+
+# For bodies that are not valid JSON (cut at the size limit, or form-encoded):
+# a sensitive "key": "value" pair, where the value may be cut off before its
+# closing quote, and a sensitive key=value form field.
+_JSON_PAIR = re.compile(r'("(?P<key>[^"\\]{1,64})"\s*:\s*)("(?:[^"\\]|\\.)*(?:"|$)|\[[^\]]*(?:\]|$)|[^,}\s]+)')
+_FORM_PAIR = re.compile(r'(?P<prefix>(?:^|&)(?P<key>[^=&]{1,64})=)(?P<value>[^&]*)')
+
+
+def redact_body(text: str) -> str:
+    """The body with every sensitive value replaced, JSON or not."""
+    if not text:
+        return text
+    try:
+        return json.dumps(_redact_value(json.loads(text)), ensure_ascii=False)
+    except (ValueError, TypeError):
+        pass
+
+    def json_pair(match: re.Match) -> str:
+        return f'{match.group(1)}"{REDACTED}"' if is_sensitive_key(match.group('key')) else match.group(0)
+
+    def form_pair(match: re.Match) -> str:
+        return f'{match.group("prefix")}{REDACTED}' if is_sensitive_key(match.group('key')) else match.group(0)
+
+    return _FORM_PAIR.sub(form_pair, _JSON_PAIR.sub(json_pair, text))
 
 
 class AuditLoggingMiddleware:
@@ -280,16 +337,11 @@ class AuditLoggingMiddleware:
 
             user = user.model_dump(include={'id', 'name', 'email', 'role'}) if user else {}
 
-            request_body = context.request_body.decode('utf-8', errors='replace')
-            response_body = context.response_body.decode('utf-8', errors='replace')
-
-            # Redact sensitive information
-            if 'password' in request_body:
-                request_body = re.sub(
-                    r'"password":\s*"(.*?)"',
-                    '"password": "********"',
-                    request_body,
-                )
+            # Credentials never reach the log: passwords, session tokens, API
+            # keys and secrets, in requests and responses alike (sign-in returns
+            # the session token, POST /auths/api_key the new key).
+            request_body = redact_body(context.request_body.decode('utf-8', errors='replace'))
+            response_body = redact_body(context.response_body.decode('utf-8', errors='replace'))
 
             entry = AuditLogEntry(
                 id=str(uuid.uuid4()),
