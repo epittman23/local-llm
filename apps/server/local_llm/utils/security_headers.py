@@ -1,5 +1,8 @@
+import logging
 import os
 import re
+
+log = logging.getLogger(__name__)
 
 
 def set_security_headers() -> dict[str, str]:
@@ -59,12 +62,20 @@ def set_security_headers() -> dict[str, str]:
 
 
 # Set HTTP Strict Transport Security(HSTS) response header
+HSTS_FALLBACK = 'max-age=31536000; includeSubDomains'
+
+
 def set_hsts(value: str):
-    pattern = r'^max-age=(\d+)(;includeSubDomains)?(;preload)?$'
+    # Directives may be separated by whitespace after the semicolon, which is
+    # how they are usually written (`max-age=63072000; includeSubDomains;
+    # preload`). Rejecting that spelling silently replaced a stronger policy
+    # with the fallback.
+    pattern = r'^\s*max-age=(\d+)(\s*;\s*includeSubDomains)?(\s*;\s*preload)?\s*;?\s*$'
     match = re.match(pattern, value, re.IGNORECASE)
     if not match:
-        value = 'max-age=31536000;includeSubDomains'
-    return {'Strict-Transport-Security': value}
+        log.warning('HSTS=%r is not a valid Strict-Transport-Security value; sending %r instead', value, HSTS_FALLBACK)
+        value = HSTS_FALLBACK
+    return {'Strict-Transport-Security': value.strip()}
 
 
 # Set X-Frame-Options response header
@@ -77,15 +88,23 @@ def set_xframe(value: str):
 
 
 # Set Permissions-Policy response header
+#
+# One directive: a feature name, then `*` or an allowlist in parentheses of
+# `self`, `src`, `*` or quoted origins (RFC 8941 structured-field syntax as the
+# spec uses it): `camera=(), geolocation=(self "https://maps.example")`.
+_PERMISSIONS_DIRECTIVE = re.compile(
+    r'^\s*[a-z][a-z0-9-]*\s*=\s*(\*|\(\s*((self|src|\*|"[^"\s]+")\s*)*\))\s*$', re.IGNORECASE
+)
+
+
 def set_permissions_policy(value: str):
-    pattern = (
-        r'^(?:(accelerometer|autoplay|camera|clipboard-read|clipboard-write|fullscreen|geolocation|gyroscope|'
-        r'magnetometer|microphone|midi|payment|picture-in-picture|sync-xhr|usb|xr-spatial-tracking)=\((self)?\),?)*$'
-    )
-    match = re.match(pattern, value, re.IGNORECASE)
-    if not match:
-        value = 'none'
-    return {'Permissions-Policy': value}
+    directives = value.split(',')
+    if not value.strip() or not all(_PERMISSIONS_DIRECTIVE.match(d) for d in directives):
+        # No fallback: the old one, `none`, is not valid syntax, so browsers
+        # ignored the header while the configuration looked applied.
+        log.warning('PERMISSIONS_POLICY=%r is not a valid Permissions-Policy value; the header is not sent', value)
+        return {}
+    return {'Permissions-Policy': ', '.join(d.strip() for d in directives)}
 
 
 # Set Referrer-Policy response header
