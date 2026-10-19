@@ -8,6 +8,8 @@ import io
 import logging
 import mimetypes
 import os
+import shutil
+import tempfile
 import uuid
 from pathlib import Path
 
@@ -1059,6 +1061,20 @@ async def _transcribe_mistral(request, file_path, filename, metadata, file_dir, 
 
 
 async def transcribe(request: Request, file_path: str, metadata: dict | None = None, user=None):
+    """Transcribe an audio file, leaving nothing behind but the transcript returned.
+
+    The work happens on a copy in a temporary directory: the mp3 conversion,
+    compressed copy, chunks and the per-chunk transcript JSON the handlers
+    write all land there and are removed with it. They used to be written
+    beside the upload, where deleting the file left them behind.
+    """
+    with tempfile.TemporaryDirectory(prefix='lllm-transcribe-') as workdir:
+        work_path = os.path.join(workdir, os.path.basename(file_path))
+        await asyncio.to_thread(shutil.copyfile, file_path, work_path)
+        return await _transcribe_work_copy(request, work_path, metadata, user)
+
+
+async def _transcribe_work_copy(request: Request, file_path: str, metadata: dict | None = None, user=None):
     log.info('transcribe: %s %s', file_path, metadata)
 
     if BYPASS_PYDUB_PREPROCESSING:
@@ -1211,8 +1227,11 @@ async def transcription(
         filename = f'{id}.{ext}'
         contents = await file.read()
 
-        file_dir = os.path.join(CACHE_DIR, 'audio', 'transcriptions')
-        os.makedirs(file_dir, exist_ok=True)
+        # A voice-input recording is needed only for this request: it goes in a
+        # temporary directory removed on the way out, never the cache, where
+        # every recording used to be kept indefinitely.
+        workdir = tempfile.mkdtemp(prefix='lllm-voice-')
+        file_dir = workdir
         file_path = os.path.join(file_dir, filename)
 
         # Defense-in-depth: ensure resolved path stays within intended directory
@@ -1255,6 +1274,8 @@ async def transcription(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail='Transcription failed.',
             )
+        finally:
+            shutil.rmtree(workdir, ignore_errors=True)
 
     except HTTPException:
         raise
