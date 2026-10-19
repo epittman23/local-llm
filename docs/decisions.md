@@ -7,6 +7,30 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-19**: The 34 security findings of the 2026-10-19 audit (batch B0,
+  kept as private draft advisories) are fixed in one public pull request, at
+  the owner's choice, before any other batch. Each fix is its own commit
+  naming its advisory. Four of them needed the owner's decision:
+  - **Chat shares are snapshots.** A share's grant covers the snapshot and
+    the files in it, never the live chat; it used to expose messages sent
+    after sharing.
+  - **The Yjs collaborative-editing socket handlers are removed**, with
+    `pycrdt`. The React frontend never used them, and they let any user
+    cancel another user's generation. Notes save through the REST API.
+  - **Redis is required.** Session revocation lives there, and without it
+    sign-out and password changes revoked nothing. `infra/docker-compose.yml`
+    runs it (loopback, append-only persistence), `make backend` sets
+    `REDIS_URL`, and the backend refuses to start without it. Chosen over a
+    database-backed revocation store.
+  - **Profile image forwarding is off by default**
+    (`ENABLE_PROFILE_IMAGE_URL_FORWARDING=false`): an external avatar URL
+    shows the default image instead of redirecting every viewer.
+  - Other defaults that changed: `CORS_ALLOW_ORIGIN` grants no origin unless
+    set (and never credentials to `*`); `llama-server` binds `127.0.0.1`
+    unless `LLAMA_HOST` says otherwise; graded model code runs with no stdin
+    and a minimal environment; deleting a user deletes their private data and
+    reassigns what others rely on to an administrator
+    (`utils/user_purge.py` states the policy).
 - **2026-10-19**: Compare and Report now put error bars on every pass rate
   and compare configurations statistically, following Evan Miller's "Adding
   Error Bars to Evals" (arXiv:2411.00640). This is PR 4 of
