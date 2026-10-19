@@ -843,9 +843,9 @@ async def unarchive_all_chats(
 async def unshare_all_chats(
     request: Request, user=Depends(get_verified_user), db: AsyncSession = Depends(get_async_session)
 ):
-    # Collect chat_ids that have shares so we can clear share_id and access grants
-    shared_list = await SharedChats.get_by_user_id(user.id, db=db)
-    chat_ids = [s.chat_id for s in shared_list]
+    # Every shared chat, not the listing's first page: get_by_user_id stops at
+    # 50, and a chat left out kept its grants, which a later re-share revived.
+    chat_ids = await SharedChats.get_chat_ids_by_user_id(user.id, db=db)
 
     # Delete all shared_chat rows for this user
     result = await SharedChats.delete_all_by_user_id(user.id, db=db)
@@ -1657,7 +1657,9 @@ async def share_chat_by_id(
             )
             return ChatResponse.model_validate(chat, from_attributes=True)
 
-    # Create a new share
+    # Create a new share. It starts with no grants: any left on this chat
+    # belong to an earlier share the user removed, and must not carry over.
+    await AccessGrants.set_access_grants('shared_chat', id, [], db=db)
     shared = await SharedChats.create(id, user.id, db=db)
     if not shared:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, detail=ERROR_MESSAGES.DEFAULT())

@@ -181,6 +181,12 @@ class SharedChatsTable:
                 for sc in result.scalars().all()
             ]
 
+    async def get_chat_ids_by_user_id(self, user_id: str, db: AsyncSession | None = None) -> list[str]:
+        """Every original chat id this user has shared, without the listing's page limit."""
+        async with get_async_db_context(db) as db:
+            result = await db.execute(select(SharedChat.chat_id).filter_by(user_id=user_id).distinct())
+            return [row[0] for row in result.all()]
+
     async def delete_by_id(self, share_id: str, db: AsyncSession | None = None) -> bool:
         """Delete a shared chat by its share token."""
         try:
