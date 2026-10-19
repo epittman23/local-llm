@@ -1627,6 +1627,40 @@ async def _log_out_users(request, users: list, provider: str, db=None) -> None:
     log.info('Back-channel logout: completed for %s user(s), %s revocation(s) set', len(users), revoked_count)
 
 
+_MISSING = object()
+
+
+def read_claim_values(user_data: dict, claim: str | None, separator: str | None) -> tuple[bool, list[str]]:
+    """(present, values) for a roles or groups claim, nested ('a.b.c') or flat.
+
+    `present` is whether the provider sent the claim at all. A claim that is
+    present is authoritative even when empty: an empty list means "no roles"
+    or "no groups", and must revoke what the user had. Only a missing claim
+    leaves things as they are (Entra ID, for one, omits `roles` when the user
+    has none, which is why role management treats that case separately).
+    """
+    if not claim:
+        return False, []
+    data = user_data
+    for part in claim.split('.'):
+        data = data.get(part, _MISSING) if isinstance(data, dict) else _MISSING
+        if data is _MISSING:
+            break
+    if data is _MISSING:
+        data = user_data.get(claim, _MISSING)
+    if data is _MISSING or data is None:
+        return False, []
+    if isinstance(data, list):
+        return True, [str(v) for v in data]
+    if isinstance(data, str):
+        if not data:
+            return True, []
+        return True, data.split(separator) if separator and separator in data else [data]
+    if isinstance(data, int):
+        return True, [str(data)]
+    return True, []
+
+
 class OAuthManager:
     def __init__(self, app):
         self.oauth = OAuth()
@@ -1836,65 +1870,42 @@ class OAuthManager:
         if auth_config.ENABLE_OAUTH_ROLE_MANAGEMENT:
             log.debug('Running OAUTH Role management')
             oauth_claim = auth_config.OAUTH_ROLES_CLAIM
-            oauth_allowed_roles = auth_config.OAUTH_ALLOWED_ROLES
-            oauth_admin_roles = auth_config.OAUTH_ADMIN_ROLES
-            oauth_roles = []
-            # Keep existing users at their current role unless the provider sent roles.
-            role = user.role if user else auth_config.DEFAULT_USER_ROLE
+            oauth_allowed_roles = auth_config.OAUTH_ALLOWED_ROLES or []
+            oauth_admin_roles = auth_config.OAUTH_ADMIN_ROLES or []
+            current = user.role if user else auth_config.DEFAULT_USER_ROLE
+            role = current
 
-            # Next block extracts the roles from the user data, accepting nested claims of any depth
-            if oauth_claim and oauth_allowed_roles and oauth_admin_roles:
-                claim_data = user_data
-                nested_claims = oauth_claim.split('.')
-                for nested_claim in nested_claims:
-                    claim_data = claim_data.get(nested_claim, {})
-
-                # Try flat claim structure as alternative
-                if not claim_data:
-                    claim_data = user_data.get(oauth_claim, {})
-
-                oauth_roles = []
-
-                if isinstance(claim_data, list):
-                    oauth_roles = claim_data
-                elif isinstance(claim_data, str):
-                    # Split by the configured separator if present
-                    if OAUTH_ROLES_SEPARATOR and OAUTH_ROLES_SEPARATOR in claim_data:
-                        oauth_roles = claim_data.split(OAUTH_ROLES_SEPARATOR)
-                    else:
-                        oauth_roles = [claim_data]
-                elif isinstance(claim_data, int):
-                    oauth_roles = [str(claim_data)]
-
-            log.debug('Oauth Roles claim: %s', oauth_claim)
+            # Read whenever a claim is configured: the allowed-roles gate must
+            # run even when no admin roles are set.
+            present, oauth_roles = read_claim_values(user_data, oauth_claim, OAUTH_ROLES_SEPARATOR)
+            log.debug('Oauth Roles claim: %s (present: %s)', oauth_claim, present)
             log.debug('User roles from oauth: %s', oauth_roles)
             log.debug('Accepted user roles: %s', oauth_allowed_roles)
             log.debug('Accepted admin roles: %s', oauth_admin_roles)
 
-            # If roles are present in the token, they must match; otherwise deny access
-            if oauth_roles:
-                matched = False
-                for allowed_role in oauth_allowed_roles:
-                    if allowed_role == '*' or allowed_role in oauth_roles:
-                        log.debug('Assigned user the user role')
-                        role = 'user'
-                        matched = True
-                        break
-                for admin_role in oauth_admin_roles:
-                    if admin_role in oauth_roles:
-                        log.debug('Assigned user the admin role')
-                        role = 'admin'
-                        matched = True
-                        break
-                if not matched:
+            gated = bool(oauth_allowed_roles) and '*' not in oauth_allowed_roles
+            if present:
+                # Authoritative, even when empty: a role the provider stopped
+                # sending is a role the user no longer has.
+                if oauth_admin_roles and any(r in oauth_roles for r in oauth_admin_roles):
+                    role = 'admin'
+                elif not gated or any(r in oauth_roles for r in oauth_allowed_roles):
+                    # Admin status is the provider's to grant only when admin
+                    # roles are configured; otherwise an existing admin stays one.
+                    role = 'admin' if (not oauth_admin_roles and current == 'admin') else 'user'
+                else:
                     log.warning(
-                        f'OAuth role management enabled but user roles do not match any allowed/admin roles. '
-                        f'User roles: {oauth_roles}, allowed: {oauth_allowed_roles}, admin: {oauth_admin_roles}'
+                        'OAuth role management: user roles %s match no allowed or admin role (allowed: %s, admin: %s)',
+                        oauth_roles,
+                        oauth_allowed_roles,
+                        oauth_admin_roles,
                     )
-                    raise HTTPException(
-                        status.HTTP_403_FORBIDDEN,
-                        detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
-                    )
+                    raise HTTPException(status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.ACCESS_PROHIBITED)
+            elif gated:
+                # No roles claim at all cannot satisfy an allowed-roles gate.
+                log.warning('OAuth role management: no %r claim, and allowed roles are required', oauth_claim)
+                raise HTTPException(status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.ACCESS_PROHIBITED)
+            # A missing claim with no gate changes nothing (documented choice).
         else:
             if not user:
                 # If role management is disabled, use the default role for new users
@@ -1943,24 +1954,9 @@ class OAuthManager:
             log.exception(f'Error loading OAUTH_BLOCKED_GROUPS: {e}')
             blocked_groups = []
 
-        user_oauth_groups = []
-        # Nested claim search for groups claim
-        if oauth_claim:
-            claim_data = user_data
-            nested_claims = oauth_claim.split('.')
-            for nested_claim in nested_claims:
-                claim_data = claim_data.get(nested_claim, {})
-
-            if isinstance(claim_data, list):
-                user_oauth_groups = claim_data
-            elif isinstance(claim_data, str):
-                # Split by the configured separator if present
-                if OAUTH_GROUPS_SEPARATOR in claim_data:
-                    user_oauth_groups = claim_data.split(OAUTH_GROUPS_SEPARATOR)
-                else:
-                    user_oauth_groups = [claim_data]
-            else:
-                user_oauth_groups = []
+        # A groups claim that is present (even empty) is authoritative for
+        # membership; a missing one changes nothing.
+        groups_claim_present, user_oauth_groups = read_claim_values(user_data, oauth_claim, OAUTH_GROUPS_SEPARATOR)
 
         user_current_groups: list[GroupModel] = await Groups.get_groups_by_member_id(user.id, db=db)
         all_available_groups: list[GroupModel] = await Groups.get_all_groups(db=db)
@@ -2022,7 +2018,7 @@ class OAuthManager:
         # Remove groups that user is no longer a part of
         for group_model in user_current_groups:
             if (
-                user_oauth_groups
+                groups_claim_present
                 and group_model.name not in user_oauth_groups
                 and not is_in_blocked_groups(group_model.name, blocked_groups)
             ):
