@@ -251,9 +251,3 @@ flake8-import-conventions.aliases = { datetime = "dt" }
 flake8-quotes.inline-quotes = "single"
 mccabe.max-complexity = 25
 pydocstyle.convention = "google"
-
-# These entries are temporary. Each file holds an inherited function
-# above max-complexity that is being refactored (behind characterization
-# tests) rather than exempted; a file leaves this list in the PR that
-# refactors its last such function, and the list is deleted when empty.
-[tool.ruff.lint.per-file-ignores]
