@@ -1,3 +1,4 @@
+import asyncio
 import datetime as dt
 import logging
 import time
@@ -186,7 +187,8 @@ async def get_events(
     for event in events:
         event_dict = event.model_dump()
         if event_dict.get('rrule'):
-            instances = expand_recurring_event(event_dict, start_ns, end_ns, tz=user.timezone)
+            # Off the event loop: expansion iterates the rule from its start.
+            instances = await asyncio.to_thread(expand_recurring_event, event_dict, start_ns, end_ns, tz=user.timezone)
             for inst in instances:
                 expanded.append(CalendarEventUserResponse(**{**inst, 'user': event.user}))
         else:
@@ -203,7 +205,10 @@ async def get_events(
             active_automations = await Automations.get_active_by_user(user.id)
             for auto in active_automations:
                 rrule_str = auto.data.get('rrule', '') if auto.data else ''
-                if not rrule_str:
+                # No next run means the rule is finished: there is nothing in
+                # the future to show, and anchoring it at 0 made the expansion
+                # walk every occurrence since 1970.
+                if not rrule_str or not auto.next_run_at:
                     continue
 
                 virtual = {
@@ -212,7 +217,7 @@ async def get_events(
                     'user_id': user.id,
                     'title': auto.name,
                     'description': auto.data.get('prompt', '') if auto.data else '',
-                    'start_at': auto.next_run_at or 0,
+                    'start_at': auto.next_run_at,
                     'end_at': None,
                     'all_day': False,
                     'rrule': rrule_str,
@@ -230,7 +235,9 @@ async def get_events(
                 # Only expand into the future — past runs are handled below
                 now_ns = int(time.time_ns())
                 rrule_start = max(start_ns, now_ns)
-                instances = expand_recurring_event(virtual, rrule_start, end_ns, tz=user.timezone)
+                instances = await asyncio.to_thread(
+                    expand_recurring_event, virtual, rrule_start, end_ns, tz=user.timezone
+                )
                 for inst in instances:
                     expanded.append(CalendarEventUserResponse(**inst))
 

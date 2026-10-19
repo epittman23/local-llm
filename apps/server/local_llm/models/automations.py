@@ -289,6 +289,9 @@ class AutomationTable:
             if not row:
                 return None
             row.is_active = not row.is_active
+            if row.is_active and next_run_at is None:
+                # A rule with no future occurrence cannot be switched back on.
+                row.is_active = False
             row.next_run_at = next_run_at if row.is_active else None
             row.updated_at = int(time.time_ns())
             await db.commit()
@@ -343,6 +346,10 @@ class AutomationTable:
             for row in rows:
                 row.last_run_at = now_ns
                 row.next_run_at = next_run_ns(row.data.get('rrule', ''), tz=timezone_by_user_id.get(row.user_id))
+                if row.next_run_at is None:
+                    # The rule has run its last occurrence. Left active with no
+                    # next run, it was expanded by the calendar from the epoch.
+                    row.is_active = False
 
             await db.commit()
 
