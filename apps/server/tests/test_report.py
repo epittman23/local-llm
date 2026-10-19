@@ -152,6 +152,24 @@ def test_a_clustered_underpowered_pair_reports_its_cluster_robust_se():
     assert 'SD of the paired difference' not in body
 
 
+def test_design_audit_includes_a_power_check():
+    rows = Rows()
+    rows.run([True, True, True, True, False, True, True, False])
+    rows.run([True, True, True, False, True, True, False, False], config='bbbb')
+    audit = section(build(rows).markdown, '## 2. Design audit')
+    assert 'Power check: configuration comparisons' in audit
+    table_row = next(line for line in audit.splitlines() if line.startswith('| tier smoke, mbpp'))
+    cells = [c.strip() for c in table_row.strip('|').split('|')]
+    assert cells[1:] == ['2', '1/1', '8', '63 pp', '1/1']
+
+
+def test_design_audit_power_check_with_nothing_to_compare():
+    rows = Rows()
+    rows.run([True, False])
+    audit = section(build(rows).markdown, '## 2. Design audit')
+    assert 'No block has two configurations' in audit
+
+
 def test_one_configuration_per_block_has_nothing_to_compare():
     rows = Rows()
     rows.run([True, False])

@@ -581,6 +581,12 @@ elsewhere, so a number without this is not checkable), **design audit**,
 **reliability floor**, **paired accuracy** (system prompts), **configuration
 comparison**, **power/MDE**, **throughput**, **throttle audit**.
 
+The design audit ends with a **power check** (added 2026-10-19): per block,
+how many shared problems the configuration comparisons rest on, the smallest
+difference they could detect at 80% power after Holm, and how many of them are
+underpowered, so a comparison the design cannot resolve is known before its
+result is read.
+
 The **configuration comparison** (section 5, added 2026-10-19) is the Compare
 page's statistics written out with their methods: per block, every
 configuration's rate with its Wilson interval and standard error, passes per

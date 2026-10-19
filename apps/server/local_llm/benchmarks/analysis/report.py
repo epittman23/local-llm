@@ -1397,6 +1397,56 @@ def _span(ci: list[float] | None, scale: float = 100.0, unit: str = '%', digits:
     return f'[{scale * ci[0]:.{digits}f}, {scale * ci[1]:.{digits}f}]{unit}'
 
 
+def _range_pp(values: list[float]) -> str:
+    lo, hi = round(100 * min(values)), round(100 * max(values))
+    return f'{lo} pp' if lo == hi else f'{lo}-{hi} pp'
+
+
+def design_power_check(config_blocks: list[dict]) -> str:
+    """The design audit's power check: could each configuration comparison find anything?
+
+    A summary per block of what section 5 reports pair by pair: how many
+    shared problems the pairs rest on, the smallest difference they could
+    detect at 80% power after Holm, and how many are underpowered. Placed in
+    the audit because it is a property of the design (the item count and the
+    observed variance), and a comparison the design cannot resolve should be
+    known before its result is read.
+    """
+    out = [h(3, 'Power check: configuration comparisons'), '']
+    compared = [b for b in config_blocks if len(b['levels']) > 1]
+    if not compared:
+        return '\n'.join(out + ['No block has two configurations, so there is no comparison to check.', ''])
+    rows = []
+    for b in compared:
+        tested = [p for p in b['pairs'] if p['p'] is not None]
+        shared = [p['n_shared'] for p in tested]
+        mdes = [p['mde_holm'] for p in tested if p['mde_holm'] is not None]
+        weak = sum(1 for p in tested if p['underpowered'])
+        rows.append(
+            [
+                # The key's ' | ' separators would split a markdown table cell.
+                b['key'].replace(' | ', ', '),
+                str(len(b['levels'])),
+                f'{len(tested)}/{len(b["pairs"])}',
+                (f'{min(shared)}-{max(shared)}' if min(shared) != max(shared) else str(shared[0])) if shared else '-',
+                _range_pp(mdes) if mdes else 'not observable',
+                f'{weak}/{len(tested)}',
+            ]
+        )
+    out += [
+        table(
+            ['block', 'configurations', 'pairs tested', 'shared problems', 'MDE after Holm', 'underpowered'],
+            rows,
+        ),
+        '',
+        'The minimum detectable difference is (z_{1-a/2} + z_{0.80}) x SE of each paired difference, at',
+        'the Holm worst case alpha/m. A pair is underpowered when it is not significant and its observed',
+        'difference is below that: the design could not have found it. Section 5 has each pair.',
+        '',
+    ]
+    return '\n'.join(out)
+
+
 def section_configurations(records: list[dict]) -> tuple[str, list[dict]]:
     """Every configuration against every other, block by block (Compare's numbers).
 
@@ -2302,6 +2352,7 @@ def _assemble(
     reliability, floor = section_reliability(records)
     accuracy, section_results = section_accuracy(blocks, figs, audit)
     configurations, config_blocks = section_configurations(records)
+    design = design + '\n' + design_power_check(config_blocks)
 
     now = dt.datetime.now(dt.UTC).strftime(TS)
     used = ', '.join(f'{k}={v}' for k, v in filters.items() if v) or 'none'

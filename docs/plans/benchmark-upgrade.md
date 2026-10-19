@@ -1,9 +1,10 @@
 # Plan: upgrade the benchmark pipeline (datasets, pre-screen, statistics)
 
-Status: **awaiting the owner's approval** (written 2026-10-19, Phase 0 of the
-task; no code has changed). Section 2 lists the decisions that need an answer
-before any upgrade starts. Everything else is a recommendation that stands
-unless the owner says otherwise.
+Status: **approved by the owner on 2026-10-19**, with two decisions changed from
+the recommendations below: Optuna and optuna-dashboard are used for the
+pre-screen (D9), and Optuna's studies live in a dedicated `optuna` Postgres
+schema (D13). PR 4 (statistics) is the first to be implemented. Whether the
+security batch B0 must land before the dataset PRs (D0) is still open.
 
 Scope: four upgrades to `apps/server/local_llm/benchmarks/` and the
 Benchmarks pages in `apps/web`:
