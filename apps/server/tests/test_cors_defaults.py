@@ -57,5 +57,7 @@ def test_a_wildcard_never_reflects_an_origin_with_credentials():
 
 
 def test_socketio_stays_same_origin_by_default():
-    # None is python-socketio's same-origin check; [] would disable the check.
-    assert socket_main.SOCKETIO_CORS_ORIGINS is None
+    # A same-origin check, never [] (which python-socketio reads as no check).
+    check = socket_main.socket_cors_origins([])
+    assert check('http://lan-host:4000', {'HTTP_HOST': 'lan-host:4000'})
+    assert not check('http://evil.localhost:1', {'HTTP_HOST': 'lan-host:4000'})

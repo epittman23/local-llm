@@ -81,7 +81,8 @@ without `REDIS_URL`, which `make backend` sets. The backend listens on `127.0.0.
 to reach it from another machine, start it with
 `make backend LLLM_BACKEND_HOST=0.0.0.0`. A page opened that way is plain
 HTTP, where browsers withhold `crypto.randomUUID`; the app makes its ids
-without it. Cross-origin API access is granted
+without it. Its chat socket accepts the address the page was opened at, so
+nothing needs adding to `CORS_ALLOW_ORIGIN` for that. Cross-origin API access is granted
 only to the origins in `CORS_ALLOW_ORIGIN` (semicolon-separated): `make
 backend` lists its own address and the `make frontend` dev server, and a
 backend started by hand grants none, which the app itself never needs. A `*`

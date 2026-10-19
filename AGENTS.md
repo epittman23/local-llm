@@ -141,7 +141,9 @@ shadcn/ui frontend, `infra/` holds the Postgres + pgvector and Redis Compose fil
   `127.0.0.1:4000`), which also serves the last build of `apps/web` at `/`.
   It owns their lifecycle: up before uvicorn, down on exit, Ctrl-C
   included. The backend refuses to start without Redis (`REDIS_URL`), which
-  holds session revocation. `make backend LLLM_BACKEND_HOST=0.0.0.0` exposes it to the LAN.
+  holds session revocation. `make backend LLLM_BACKEND_HOST=0.0.0.0` exposes it to the LAN;
+  the chat socket accepts the page's own origin, so a LAN page needs no
+  `CORS_ALLOW_ORIGIN` entry.
 - `make frontend`: the hot-reloading dev server on `:5174`, proxying the API
   to `:4000`. Only needed while editing the UI.
 - `cd apps/web && bun run build`: rebuild the UI that `make backend` serves.

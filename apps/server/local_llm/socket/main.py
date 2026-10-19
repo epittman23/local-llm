@@ -5,6 +5,7 @@ import logging
 import random
 import sys
 import time
+from urllib.parse import urlsplit
 
 import socketio
 from socketio.packet import Packet
@@ -56,10 +57,47 @@ log = logging.getLogger(__name__)
 # cause, and let every message find the room it was meant for.
 REDIS = None
 
-# Configure CORS for Socket.IO. No configured origins means None (same-origin
-# only), never []: python-socketio reads an empty list as "do not check the
-# origin at all".
-SOCKETIO_CORS_ORIGINS = '*' if CORS_ALLOW_ORIGIN == ['*'] else (CORS_ALLOW_ORIGIN or None)
+
+def socket_cors_origins(configured: list[str] | None):
+    """Socket.IO's origin check: the page's own origin, plus the configured ones.
+
+    The configured list (`CORS_ALLOW_ORIGIN`) names other sites, such as the
+    `make frontend` dev server, and never the address a page was opened at:
+    `make backend` lists only loopback origins, so with
+    `LLLM_BACKEND_HOST=0.0.0.0` a page opened from the LAN had its socket
+    refused and never saw a reply (#297). Same-origin is decided the way
+    engine.io's own default decides it, by the Origin's host and port against
+    the request's Host header, but not from X-Forwarded-* headers, which the
+    client controls. The HTTP API's CORS list is unchanged: a page talks to
+    its own origin without CORS.
+
+    Never [] (python-socketio reads an empty list as "do not check the
+    origin at all"), and never raising: engine.io retries a callable that
+    raises TypeError with one argument.
+    """
+    if configured == ['*']:
+        return '*'
+    allowed = frozenset(configured or ())
+
+    def origin_allowed(origin, environ=None) -> bool:
+        try:
+            if origin in allowed:
+                return True
+            host = (environ or {}).get('HTTP_HOST') or ''
+            parts = urlsplit(origin or '')
+            return (
+                parts.scheme in ('http', 'https')
+                and bool(parts.netloc)
+                and ',' not in host
+                and parts.netloc.lower() == host.strip().lower()
+            )
+        except Exception:
+            return False
+
+    return origin_allowed
+
+
+SOCKETIO_CORS_ORIGINS = socket_cors_origins(CORS_ALLOW_ORIGIN)
 
 
 def get_room_sid_map(manager, namespace: str, room: str):
