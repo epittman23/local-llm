@@ -56,6 +56,7 @@ timeline
       2026-10-19 : Error bars in Compare and Report (Miller, arXiv:2411.00640) : per-problem averaging, Wilson intervals, cluster-robust errors (DS-1000 by original question) : paired comparisons with exact McNemar or paired t, Holm, and letter groups instead of a ranking : delta-method interval on passes per minute, minimum detectable difference per pair
       2026-10-19 (later) : The audit's 34 security findings fixed in one PR : chat shares are snapshots only, Yjs socket handlers removed, Redis required for session revocation : no cross-origin access by default, llama-server on loopback, deleted users' data purged
       2026-10-19 (latest) : The frontend makes UUIDs without crypto.randomUUID, which plain-HTTP pages from the LAN lack : falls back to crypto.getRandomValues
+      2026-10-19 (final) : A graded answer passes only when its tests ran to the end : a per-run nonce instead of the exit status, the model's __main__ block no longer run : earlier pass rates not comparable : nothing a grade starts outlives it, grading off the event loop
     section Near-Term
       "~1 week" : Resolve the blocking rack hole-type question : confirm riser and PSU questions : re-verify current component pricing
       "~2-4 weeks" : Finish the benchmark upgrade : HumanEval+ and MBPP+ replace HumanEval and MBPP : a LiveCodeBench slice with a per-run release-date window : a llama-bench pre-screen driven by Optuna

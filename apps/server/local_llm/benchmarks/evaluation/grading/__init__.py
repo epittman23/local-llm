@@ -24,6 +24,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import secrets
+import signal
 import subprocess
 import sys
 import tempfile
@@ -159,41 +161,130 @@ def grader_env(workdir: str) -> dict[str, str]:
     }
 
 
+# Bumped whenever a change to how programs are run can change a verdict, so
+# a calibration made under an older harness reads as stale (calibration_stale).
+HARNESS_VERSION = 2
+
+# The program that runs a grading program. It is the subprocess's main script;
+# the graded program is executed by it, never run directly, for three reasons:
+#
+#   - The verdict is a per-run nonce it prints only after the program, the
+#     model's code and the dataset's tests together, ran to the end. Exit
+#     status alone said PASS for code that called sys.exit(0) or
+#     unittest.main() before any test ran (#126).
+#   - The program runs as module `__graded__`, not `__main__`, so a model's
+#     `if __name__ == '__main__':` block (often an input() loop) does not run,
+#     as it would not when the dataset's own runner imports a solution.
+#   - The nonce arrives on stdin, which is then replaced with /dev/null before
+#     any graded code runs: it is in no file, argument or environment variable
+#     the program could read, and lives only in main()'s frame.
+#
+# SystemExit is caught to say why the run ended early; every other exception
+# propagates, so the traceback's last line still tells an assertion from an
+# error.
+DRIVER = """\
+import os, sys, types
+
+
+def main():
+    nonce = sys.stdin.readline().strip()
+    fd = os.open(os.devnull, os.O_RDONLY)
+    os.dup2(fd, 0)
+    os.close(fd)
+    sys.stdin = sys.__stdin__ = open(os.devnull)
+
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'graded.py')
+    module = types.ModuleType('__graded__')
+    module.__file__ = path
+    sys.modules['__graded__'] = module
+    with open(path) as f:
+        code = compile(f.read(), path, 'exec', dont_inherit=True)
+    try:
+        exec(code, module.__dict__)
+    except SystemExit as exc:
+        sys.stderr.write('SystemExit: the program exited (%r) before its tests finished\\n' % (exc.code,))
+        sys.stderr.flush()
+        os._exit(1)
+    for stream in (sys.__stdout__, sys.__stderr__):
+        try:
+            stream.flush()
+        except Exception:
+            pass
+    os.write(1, ('\\n' + nonce + '\\n').encode())
+
+
+main()
+"""
+
+
+def _kill_group(proc: subprocess.Popen) -> None:
+    """Kill everything the run started: the program and anything it forked."""
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except (ProcessLookupError, PermissionError):
+        pass
+
+
+def _verdict(nonce: str, stdout: str | bytes | None) -> bool:
+    if isinstance(stdout, bytes):
+        stdout = stdout.decode(errors='replace')
+    return nonce in (stdout or '').splitlines()
+
+
 def run_program(source: str, timeout: int, isolated: bool) -> tuple[str, str]:
     """Execute a grading program. Returns (outcome, reason).
 
-    stdin is /dev/null, so graded code can never read the terminal the
-    backend was started from, and the environment is grader_env()'s.
+    PASS means the program ran to its end: the driver printed this run's
+    nonce. The run is its own session, so on every exit, a timeout included,
+    the whole process group is killed and nothing the program started
+    outlives it (#142). A program whose tests finished but left a child
+    holding stdout open still passes, on the nonce, when the timeout ends the
+    wait. Graded code sees /dev/null on stdin and grader_env()'s environment.
     """
+    nonce = secrets.token_hex(16)
     with tempfile.TemporaryDirectory(prefix='llama-grade.') as tmp:
-        path = Path(tmp) / 'grade.py'
-        path.write_text(source)
+        Path(tmp, 'graded.py').write_text(source)
+        driver = Path(tmp, 'grade.py')
+        driver.write_text(DRIVER)
         argv = [grader_python(), '-I']
         if isolated:
             # -S keeps site-packages out, so a HumanEval solution cannot pass by
             # importing something the benchmark never assumed was there.
             argv.append('-S')
-        argv.append(str(path))
+        argv.append(str(driver))
         try:
-            proc = subprocess.run(
+            proc = subprocess.Popen(
                 argv,
                 cwd=tmp,
-                stdin=subprocess.DEVNULL,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 env=grader_env(tmp),
-                capture_output=True,
                 text=True,
-                timeout=timeout,
+                start_new_session=True,
             )
-        except subprocess.TimeoutExpired:
-            return FAIL_TIMEOUT, f'no result within {timeout}s'
         except OSError as exc:
             return FAIL_ERROR, f'could not run grader: {exc}'
+        try:
+            stdout, stderr = proc.communicate(nonce + '\n', timeout=timeout)
+        except subprocess.TimeoutExpired as exc:
+            _kill_group(proc)
+            # What it printed before the deadline: finished tests count even
+            # when something they left behind kept the pipe open.
+            finished = _verdict(nonce, exc.stdout)
+            try:
+                proc.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
+            return (PASS, '') if finished else (FAIL_TIMEOUT, f'no result within {timeout}s')
+        finally:
+            _kill_group(proc)
 
-    if proc.returncode == 0:
+    if _verdict(nonce, stdout):
         return PASS, ''
 
-    err = (proc.stderr or '').strip()
-    tail = err.splitlines()[-1] if err else f'exit {proc.returncode}'
+    err = (stderr or '').strip()
+    tail = err.splitlines()[-1] if err else f'exit {proc.returncode} before its tests finished'
     if 'AssertionError' in err:
         return FAIL_ASSERT, tail
     return FAIL_ERROR, tail
@@ -275,6 +366,8 @@ def calibration_stale(bench: str, base: Path | None = None) -> str:
     manifest = read_manifest(bench, base) or {}
     if cal.get('content_sha256') != manifest.get('content_sha256'):
         return 'the dataset was refetched since it was calibrated'
+    if cal.get('harness_version') != HARNESS_VERSION:
+        return 'the grader changed how it runs programs since it was calibrated'
     if cal.get('environment') != env_fingerprint():
         return 'the grading environment changed since it was calibrated'
     return ''
@@ -336,6 +429,7 @@ def calibrate(bench: str, adapter: dict, items: list[dict], on_item=None, base: 
         'content_sha256': manifest.get('content_sha256', ''),
         'revision': manifest.get('revision', ''),
         'environment': env_fingerprint(),
+        'harness_version': HARNESS_VERSION,
         'grader_python': grader_python(),
         'n_checked': checked,
         'n_ungradeable': len(ungradeable_),

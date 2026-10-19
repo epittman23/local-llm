@@ -7,6 +7,21 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-19**: A graded answer passes when its program **ran to the
+  end**, not when it exited 0 (#126). The grader runs each program through a
+  driver that prints a random per-run nonce after the model's code and the
+  dataset's tests finish, and `pass` requires that nonce. It runs the program
+  as module `__graded__`, so a model's `__main__` block no longer runs, and
+  gives it `/dev/null` on stdin. Before, an answer that called `sys.exit(0)`
+  or `unittest.main()` ahead of the tests passed, and a correct answer whose
+  `__main__` block read stdin failed. **Pass rates recorded before this are
+  not comparable with later ones**; the database held no benchmark results on
+  this date, and stored answers are not re-graded (owner decision, the
+  audit's fix plan). Each grade now also runs in its own session whose
+  process group is killed when it ends (#142), and grading and suite
+  preparation run off the event loop (#140). Calibrations carry a harness
+  version, so one made by the old grader reads as stale: re-run selfcheck
+  once datasets are fetched.
 - **2026-10-19**: The frontend makes its UUIDs with `uuid()`
   (`apps/web/src/lib/utils/uuid.ts`) instead of calling
   `crypto.randomUUID()`, reversing the 2026-09 choice to use it directly

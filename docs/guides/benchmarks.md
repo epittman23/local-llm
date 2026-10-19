@@ -310,6 +310,20 @@ Each harness uses the benchmark's own evaluation logic:
   is called with the extracted code as a string literal; `test_string(solution)`
   too when the item defines it.
 
+**How a verdict is reached.** The program is not run directly: a small
+driver (`DRIVER` in `evaluation/grading/__init__.py`) runs it as the module
+`__graded__`, then prints a random per-run nonce, and **`pass` means that
+nonce was printed** — the model's code and the dataset's tests ran to the
+end. Until 2026-10-19 the verdict was the exit status, so code that called
+`sys.exit(0)`, `os._exit(0)` or a bare `unittest.main()` before the tests
+ran passed (#126). Running as `__graded__` rather than `__main__` means a
+model's `if __name__ == '__main__':` block does not run, as it would not when
+a benchmark's own runner imports a solution; such a block that read stdin
+used to fail a correct answer. The nonce reaches the driver on stdin, which
+is replaced with `/dev/null` before any graded code runs, so the program has
+no file, argument or environment variable to read it from. A program that
+exits early fails with `fail_error`, "exited before its tests finished".
+
 Outcomes are `pass`, `fail_assert`, `fail_error`, `fail_timeout`, `no_code`, and
 `skipped`. `reasoning_content` is never graded — it is chain of thought, not the
 answer. **`skipped` is not a failure** and is excluded from every rate; counting
@@ -328,6 +342,12 @@ server answered, and a 400 can be specific to one item.
 > **The Tests page executes model-generated Python.** It runs in a
 > subprocess, in a temporary working directory, under a timeout, and with
 > `-I` (and `-S` for HumanEval/MBPP, which need only the standard library).
+> It has no stdin and an environment of `PATH`, `LANG`, `LC_ALL`, `HOME`
+> and `TMPDIR` only (the latter two pointing at the temporary directory),
+> never the backend's own. It runs in its own session, and the whole
+> process group is killed when it ends or times out, so nothing it starts
+> outlives the grade (#142). Grading runs in a worker thread, so a slow
+> grade does not stall the backend's other requests (#140).
 > That is **process isolation, not a sandbox.** It is what the upstream
 > benchmark runners do and is acceptable on a single-user local box; it is
 > not safe against adversarial output. Do not point this at a model you do
@@ -338,7 +358,9 @@ server answered, and a 400 can be specific to one item.
 The selfcheck action grades every benchmark's **own reference solution**
 (`canonical_solution`, `code`, `reference_code`). No model is involved, so a
 correct harness scores 100%; anything less is a bug in the grader. Measured on
-2026-08-30 (Python 3.14.7, numpy 2.5.2, pandas 3.0.5, pyyaml 6.0.3):
+2026-08-30 (Python 3.14.7, numpy 2.5.2, pandas 3.0.5, pyyaml 6.0.3), under WSL2
+and under the harness before the 2026-10-19 verdict change, so historical until
+re-measured:
 
 | Benchmark | Reference solutions passing | Ungradeable here |
 | --- | --- | --- |
@@ -364,9 +386,12 @@ points on that benchmark.
 
 So selfcheck writes `<DATA_DIR>/benchmarks/datasets/<benchmark>/CALIBRATION.json`,
 and those items are **skipped** when a suite runs, with the benchmark's own
-verdict as the evidence. The calibration records the dataset hash and the
-grading environment's library versions, and reports itself stale when either
-changes — a calibration is only valid for the environment that produced it.
+verdict as the evidence. The calibration records the dataset hash, the
+grading environment's library versions and the grader's `HARNESS_VERSION`,
+and reports itself stale when any of them changes — a calibration is only
+valid for the environment and the grader that produced it. Bump
+`HARNESS_VERSION` with any change to how programs are run that can change a
+verdict.
 Re-run selfcheck from the Tests page after upgrading pandas or refetching a
 dataset.
 
