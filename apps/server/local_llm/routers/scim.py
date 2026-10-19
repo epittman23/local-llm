@@ -6,8 +6,10 @@ NOTE: This is an experimental implementation and may not fully comply with SCIM 
 """
 
 import datetime as dt
+import functools
 import hmac
 import logging
+import re
 import uuid
 from typing import Any
 
@@ -19,8 +21,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from local_llm.env import SCIM_AUTH_PROVIDER
 from local_llm.events import EVENTS, publish_event
 from local_llm.internal.db import get_async_session
+from local_llm.models.auths import Auths
 from local_llm.models.groups import GroupModel, Groups
 from local_llm.models.users import UserModel, Users
+from local_llm.utils.validate import validate_profile_image_url
 
 log = logging.getLogger(__name__)
 
@@ -219,6 +223,90 @@ class SCIMPatchRequest(BaseModel):
 
     schemas: list[str] = ['urn:ietf:params:scim:api:messages:2.0:PatchOp']
     Operations: list[SCIMPatchOperation]
+
+
+class SCIMRequestError(Exception):
+    """A request this SCIM implementation will not carry out, answered with a SCIM 400."""
+
+    def __init__(self, detail: str, scim_type: str):
+        super().__init__(detail)
+        self.detail = detail
+        self.scim_type = scim_type
+
+
+_FILTER = re.compile(r'^\s*(?P<attr>[A-Za-z][\w.]*(?:\[\s*value\s+eq\s+"(?P<inner>(?:[^"\\]|\\.)*)"\s*\])?)'
+                     r'(?:\s+(?P<op>eq)\s+"(?P<value>(?:[^"\\]|\\.)*)")?\s*$', re.IGNORECASE)  # fmt: skip
+
+
+def parse_scim_filter(text: str, supported: dict[str, str]) -> tuple[str, str]:
+    """(attribute, value) for an `attr eq "value"` filter; SCIMRequestError otherwise.
+
+    Attribute and operator are case-insensitive, as RFC 7644 requires, and
+    `emails[value eq "x"]` is read like `emails.value eq "x"`. `supported` maps
+    lowercased attribute spellings to the name the caller acts on. Anything
+    else is refused rather than ignored: an unsupported filter used to return
+    every resource, and an identity provider would then update the wrong one.
+    """
+    match = _FILTER.match(text or '')
+    if not match:
+        raise SCIMRequestError(f'Unsupported filter: {text}', 'invalidFilter')
+    attr = match.group('attr').lower()
+    if match.group('inner') is not None and match.group('op') is None:
+        attr, value = attr.split('[', 1)[0] + '.value', match.group('inner')
+    elif match.group('op') is not None and '[' not in attr:
+        value = match.group('value')
+    else:
+        raise SCIMRequestError(f'Unsupported filter: {text}', 'invalidFilter')
+    if attr not in supported:
+        raise SCIMRequestError(f'Unsupported filter attribute: {attr}', 'invalidFilter')
+    return supported[attr], value.replace('\\"', '"').replace('\\\\', '\\')
+
+
+def scim_errors(route):
+    """Answer a SCIMRequestError with a SCIM error body: 409 for uniqueness, else 400."""
+
+    @functools.wraps(route)
+    async def wrapper(*args, **kwargs):
+        try:
+            return await route(*args, **kwargs)
+        except SCIMRequestError as e:
+            return scim_error(409 if e.scim_type == 'uniqueness' else 400, e.detail, e.scim_type)
+
+    return wrapper
+
+
+def scim_bool(value) -> bool:
+    """SCIM's `active`, which some providers send as the string "False"."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str) and value.strip().lower() in ('true', 'false'):
+        return value.strip().lower() == 'true'
+    raise SCIMRequestError(f'active must be a boolean, got {value!r}', 'invalidValue')
+
+
+async def apply_scim_user_update(user_id: str, user, update_data: dict, db) -> object:
+    """Write SCIM user fields with the checks the admin update route applies.
+
+    The email is lowercased and refused when another account has it (a 409,
+    not a 500 from the unique index), and the sign-in record's email follows
+    it, so trusted-header sign-in keeps working for a renamed user. A profile
+    image URL is validated like everywhere else (no SVG or arbitrary
+    schemes rendered for every viewer).
+    """
+    if 'email' in update_data:
+        email = str(update_data['email']).strip().lower()
+        if email != user.email:
+            other = await Users.get_user_by_email(email, db=db)
+            if other and other.id != user_id:
+                raise SCIMRequestError(f'Email {email} is already in use', 'uniqueness')
+            await Auths.update_email_by_id(user_id, email, db=db)
+        update_data['email'] = email
+    if 'profile_image_url' in update_data:
+        try:
+            update_data['profile_image_url'] = validate_profile_image_url(update_data['profile_image_url'] or '')
+        except ValueError as e:
+            raise SCIMRequestError(f'Invalid photo URL: {e}', 'invalidValue')
+    return await Users.update_user_by_id(user_id, update_data, db=db) if update_data else user
 
 
 def get_scim_auth(request: Request, authorization: str | None = Header(None)) -> bool:
@@ -488,6 +576,7 @@ async def get_schemas():
 
 # Users endpoints
 @router.get('/Users', response_model=SCIMListResponse)
+@scim_errors
 async def get_users(
     request: Request,
     startIndex: int = Query(1),
@@ -506,26 +595,22 @@ async def get_users(
 
     # Get users from database
     if filter:
-        # Simple filter parsing - supports userName eq, externalId eq
-        if 'userName eq' in filter:
-            email = filter.split('"')[1]
-            response = await Users.get_scim_users(filter={'email': email}, limit=1, db=db)
+        attr, value = parse_scim_filter(
+            filter,
+            {'username': 'email', 'emails.value': 'email', 'externalid': 'externalId', 'id': 'id'},
+        )
+        if attr == 'email':
+            response = await Users.get_scim_users(filter={'email': value.lower()}, limit=1, db=db)
             users_list = response['users']
             total = response['total']
-        elif 'externalId eq' in filter:
-            external_id = filter.split('"')[1]
-            user = await find_user_by_external_id(external_id, db=db)
+        elif attr == 'externalId':
+            user = await find_user_by_external_id(value, db=db)
             users_list = [user] if user else []
             total = 1 if user else 0
         else:
-            response = await Users.get_scim_users(
-                sort={'order_by': 'created_at'},
-                skip=skip,
-                limit=limit,
-                db=db,
-            )
-            users_list = response['users']
-            total = response['total']
+            user = await Users.get_scim_user_by_id(value, db=db)
+            users_list = [user] if user else []
+            total = 1 if user else 0
     else:
         response = await Users.get_scim_users(
             sort={'order_by': 'created_at'},
@@ -649,6 +734,7 @@ async def create_user(
 
 
 @router.put('/Users/{user_id}', response_model=SCIMUser)
+@scim_errors
 async def update_user(
     user_id: str,
     request: Request,
@@ -685,12 +771,12 @@ async def update_user(
     # must not silently strip a locally-provisioned admin's role and lock the instance out. Admin
     # role changes go through the dedicated admin endpoints, not SCIM provisioning.
     if user_data.active is not None and user.role != 'admin':
-        update_data['role'] = 'user' if user_data.active else 'pending'
+        update_data['role'] = 'user' if scim_bool(user_data.active) else 'pending'
 
     if user_data.photos and len(user_data.photos) > 0:
         update_data['profile_image_url'] = user_data.photos[0].value
 
-    updated_user = await Users.update_user_by_id(user_id, update_data, db=db)
+    updated_user = await apply_scim_user_update(user_id, user, update_data, db)
     if not updated_user:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -729,6 +815,7 @@ async def update_user(
 
 
 @router.patch('/Users/{user_id}', response_model=SCIMUser)
+@scim_errors
 async def patch_user(
     user_id: str,
     request: Request,
@@ -746,38 +833,51 @@ async def patch_user(
 
     update_data = {}
 
+    def set_attribute(path: str, value) -> None:
+        key = path.lower()
+        if key == 'active':
+            # Same guard as update_user: never demote an existing admin via SCIM.
+            if user.role != 'admin':
+                update_data['role'] = 'user' if scim_bool(value) else 'pending'
+        elif key in ('username', 'emails[primary eq true].value'):
+            update_data['email'] = value
+        elif key == 'emails' and isinstance(value, list) and value:
+            primary = next((e for e in value if isinstance(e, dict) and e.get('primary')), value[0])
+            update_data['email'] = primary.get('value') if isinstance(primary, dict) else primary
+        elif key in ('displayname', 'name.formatted'):
+            update_data['name'] = value
+        elif key == 'name' and isinstance(value, dict) and value.get('formatted'):
+            update_data['name'] = value['formatted']
+        elif key == 'externalid':
+            pending_external_ids.append(value)
+        elif key in ('photos', 'photos[type eq "photo"].value') and value:
+            update_data['profile_image_url'] = value[0].get('value') if isinstance(value, list) else value
+        else:
+            raise SCIMRequestError(f'Unsupported attribute: {path}', 'invalidPath')
+
+    pending_external_ids: list[str] = []
     for operation in patch_data.Operations:
         op = operation.op.lower()
-        path = operation.path
-        value = operation.value
+        if op not in ('replace', 'add'):
+            raise SCIMRequestError(f'Unsupported operation on a user: {operation.op}', 'invalidValue')
+        if operation.path:
+            set_attribute(operation.path, operation.value)
+        elif isinstance(operation.value, dict):
+            # Pathless form (Okta): {"op": "replace", "value": {"active": false}}
+            for attribute, value in operation.value.items():
+                set_attribute(attribute, value)
+        else:
+            raise SCIMRequestError('A pathless operation needs an object value', 'invalidValue')
 
-        if op == 'replace':
-            if path == 'active':
-                # Same guard as update_user: never demote an existing admin via SCIM.
-                if user.role != 'admin':
-                    update_data['role'] = 'user' if value else 'pending'
-            elif path == 'userName':
-                update_data['email'] = value
-            elif path == 'displayName':
-                update_data['name'] = value
-            elif path == 'emails[primary eq true].value':
-                update_data['email'] = value
-            elif path == 'name.formatted':
-                update_data['name'] = value
-            elif path == 'externalId':
-                provider = get_scim_provider()
-                await Users.update_user_scim_by_id(user_id, provider, value, db=db)
+    for external_id in pending_external_ids:
+        await Users.update_user_scim_by_id(user_id, get_scim_provider(), external_id, db=db)
 
-    # Update user
-    if update_data:
-        updated_user = await Users.update_user_by_id(user_id, update_data, db=db)
-        if not updated_user:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail='Failed to update user',
-            )
-    else:
-        updated_user = user
+    updated_user = await apply_scim_user_update(user_id, user, update_data, db)
+    if not updated_user:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail='Failed to update user',
+        )
 
     role_changed = updated_user.role != user.role
     user_updated_fields = [field for field in update_data.keys() if field != 'role']
@@ -838,6 +938,7 @@ async def delete_user(
 
 # Groups endpoints
 @router.get('/Groups', response_model=SCIMListResponse)
+@scim_errors
 async def get_groups(
     request: Request,
     startIndex: int = Query(1),
@@ -854,13 +955,13 @@ async def get_groups(
 
     # Get groups, applying filter if provided
     if filter:
-        if 'displayName eq' in filter:
-            display_name = filter.split('"')[1]
-            group = await Groups.get_group_by_name(display_name, db=db)
-            groups_list = [group] if group else []
-        else:
-            # Unrecognized filter — fall back to all groups
-            groups_list = await Groups.get_all_groups(db=db)
+        attr, value = parse_scim_filter(filter, {'displayname': 'displayName', 'id': 'id'})
+        group = (
+            await Groups.get_group_by_name(value, db=db)
+            if attr == 'displayName'
+            else await Groups.get_group_by_id(value, db=db)
+        )
+        groups_list = [group] if group else []
     else:
         groups_list = await Groups.get_all_groups(db=db)
 
@@ -1040,6 +1141,7 @@ async def update_group(
 
 
 @router.patch('/Groups/{group_id}', response_model=SCIMGroup)
+@scim_errors
 async def patch_group(
     group_id: str,
     request: Request,
@@ -1064,37 +1166,47 @@ async def patch_group(
     added_member_ids = []
     removed_member_ids = []
 
+    def member_ids(value) -> list[str]:
+        items = value if isinstance(value, list) else [value]
+        return [str(m['value']) if isinstance(m, dict) else str(m) for m in items if m]
+
+    async def apply(op: str, path: str, value) -> None:
+        key = path.lower()
+        if key == 'displayname' and op in ('replace', 'add'):
+            update_form.name = value
+        elif key == 'members' and op == 'replace':
+            old_member_ids = set(await Groups.get_group_user_ids_by_id(group_id, db) or [])
+            new_member_ids = member_ids(value or [])
+            await Groups.set_group_user_ids_by_id(group_id, new_member_ids, db=db)
+            added_member_ids.extend(sorted(set(new_member_ids) - old_member_ids))
+            removed_member_ids.extend(sorted(old_member_ids - set(new_member_ids)))
+        elif key == 'members' and op == 'add':
+            for member_id in member_ids(value or []):
+                await Groups.add_users_to_group(group_id, [member_id], db=db)
+                added_member_ids.append(member_id)
+        elif key == 'members' and op == 'remove':
+            # Entra sends the members to remove as the value; no value means all.
+            targets = member_ids(value) if value else list(await Groups.get_group_user_ids_by_id(group_id, db) or [])
+            if targets:
+                await Groups.remove_users_from_group(group_id, targets, db=db)
+                removed_member_ids.extend(targets)
+        elif op == 'remove' and (m := re.match(r'^members\[\s*value\s+eq\s+"([^"]+)"\s*\]$', path, re.IGNORECASE)):
+            await Groups.remove_users_from_group(group_id, [m.group(1)], db=db)
+            removed_member_ids.append(m.group(1))
+        else:
+            raise SCIMRequestError(f'Unsupported operation on a group: {op} {path}', 'invalidPath')
+
     for operation in patch_data.Operations:
         op = operation.op.lower()
-        path = operation.path
-        value = operation.value
-
-        if op == 'replace':
-            if path == 'displayName':
-                update_form.name = value
-            elif path == 'members':
-                # Replace all members
-                old_member_ids = set(await Groups.get_group_user_ids_by_id(group_id, db) or [])
-                new_member_ids = [member['value'] for member in value]
-                await Groups.set_group_user_ids_by_id(group_id, new_member_ids, db=db)
-                new_member_ids_set = set(new_member_ids)
-                added_member_ids.extend(sorted(new_member_ids_set - old_member_ids))
-                removed_member_ids.extend(sorted(old_member_ids - new_member_ids_set))
-
-        elif op == 'add':
-            if path == 'members':
-                # Add members
-                if isinstance(value, list):
-                    for member in value:
-                        if isinstance(member, dict) and 'value' in member:
-                            await Groups.add_users_to_group(group_id, [member['value']], db=db)
-                            added_member_ids.append(member['value'])
-        elif op == 'remove':
-            if path and path.startswith('members[value eq'):
-                # Remove specific member
-                member_id = path.split('"')[1]
-                await Groups.remove_users_from_group(group_id, [member_id], db=db)
-                removed_member_ids.append(member_id)
+        if op not in ('replace', 'add', 'remove'):
+            raise SCIMRequestError(f'Unsupported operation: {operation.op}', 'invalidValue')
+        if operation.path:
+            await apply(op, operation.path, operation.value)
+        elif isinstance(operation.value, dict) and op != 'remove':
+            for attribute, value in operation.value.items():
+                await apply(op, attribute, value)
+        else:
+            raise SCIMRequestError('A pathless operation needs an object value', 'invalidValue')
 
     # Update group
     updated_group = await Groups.update_group_by_id(group_id, update_form, db=db)
