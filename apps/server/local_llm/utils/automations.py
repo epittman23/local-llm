@@ -17,6 +17,7 @@ Environment:
 
 import asyncio
 import datetime as dt
+import itertools
 import logging
 import os
 import random
@@ -177,24 +178,31 @@ def next_n_runs_ns(s: str, n: int = 5, tz: str = None) -> list[int]:
     return result
 
 
-def rrule_interval_seconds(s: str) -> int | None:
-    """Approximate interval between recurrences in seconds.
+def rrule_interval_seconds(s: str, sample: int = 50) -> int | None:
+    """The shortest gap between consecutive occurrences, in seconds.
 
-    Returns None for one-shot (COUNT=1) schedules or rules
-    with fewer than two future occurrences.
+    None for a one-shot rule (COUNT=1) or one with fewer than two
+    occurrences. The COUNT is read from the parsed rule: matching the text
+    'COUNT=1' also matched COUNT=10, 100 and 1440 and waved every one of them
+    through the minimum-interval checks. The gap is measured over the rule's
+    own first `sample` occurrences rather than the next two after now, since a
+    COUNT-bounded sub-daily rule's occurrences can all lie before now when it
+    is parsed against the clock-aligned epoch start, and a rule such as
+    BYHOUR=9,10 has a short gap that the first pair may not show.
     """
-    if 'COUNT=1' in s:
+    parsed = rrulestr(s, ignoretz=True)
+    rules = parsed._rrule if isinstance(parsed, rruleset) else [parsed]
+    if not rules:
         return None
-    s = '\n'.join(line for line in s.splitlines() if not line.upper().startswith('DTSTART')) or s
-    now = dt.datetime.now()
-    rule = _parse_rule(s, now)
-    first = rule.after(now)
-    if first is None:
+    if len(rules) > 1:
+        raise ValueError('only one RRULE is supported per recurrence rule')
+    rule = rules[0]
+    if rule._count == 1:
         return None
-    second = rule.after(first)
-    if second is None:
+    occurrences = list(itertools.islice(rule, sample))
+    if len(occurrences) < 2:
         return None
-    return int((second - first).total_seconds())
+    return int(min((b - a).total_seconds() for a, b in itertools.pairwise(occurrences)))
 
 
 ############################
