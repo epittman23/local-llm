@@ -8,7 +8,10 @@ import { cn } from '@/lib/utils';
  * strip script but keep `<style>` (which restyles the whole page), forms and
  * inputs (a fake sign-in that posts elsewhere), and `style`/`class`
  * attributes (a full-screen overlay, written inline or with the app's own
- * utility classes). docs/history/code-review.md H1.
+ * utility classes). docs/history/code-review.md H1. Media goes too: an
+ * `<img src>`, `srcset`, `<video>`/`<audio>` (autoplaying, looping) or an
+ * inline SVG makes every viewer's browser fetch or play something a stranger
+ * chose, which leaks their address and timing to a third party.
  */
 export const SAFE_MARKDOWN_PURIFY = {
 	FORBID_TAGS: [
@@ -27,9 +30,17 @@ export const SAFE_MARKDOWN_PURIFY = {
 		'frameset',
 		'object',
 		'embed',
-		'dialog'
+		'dialog',
+		'img',
+		'picture',
+		'source',
+		'video',
+		'audio',
+		'track',
+		'svg',
+		'math'
 	],
-	FORBID_ATTR: ['style', 'class', 'id']
+	FORBID_ATTR: ['style', 'class', 'id', 'srcset', 'width', 'height', 'autoplay', 'loop', 'poster', 'background']
 };
 
 /** Markdown from another user, as HTML that can only format text: no styles, forms, embeds or layout. */

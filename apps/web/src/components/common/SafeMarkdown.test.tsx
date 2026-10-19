@@ -22,6 +22,22 @@ describe('SafeMarkdown', () => {
 		expect(root.querySelector('[style], [class], [id], [onerror]')).toBeNull();
 		expect(root.textContent).toContain('overlay');
 	});
+	it('drops media that would make a viewer fetch or play something', () => {
+		const html = safeMarkdownHtml(
+			[
+				'![pixel](https://tracker.example/p.png)',
+				'<img src="https://tracker.example/a.png" srcset="https://tracker.example/b.png 2x" width="9999">',
+				'<video autoplay loop src="https://tracker.example/v.mp4"><source src="https://tracker.example/s.mp4"></video>',
+				'<audio autoplay src="https://tracker.example/a.mp3"></audio>',
+				'<picture><source srcset="https://tracker.example/c.png"></picture>',
+				'<svg width="5000" height="5000"><circle r="9"/></svg>',
+				'after'
+			].join('\n\n')
+		);
+		expect(html).not.toMatch(/<(img|video|audio|source|picture|svg)\b/);
+		expect(html).not.toContain('tracker.example');
+		expect(html).toContain('after');
+	});
 	it('keeps links and code', () => {
 		const html = safeMarkdownHtml('[docs](https://example.com) and `code`');
 		expect(html).toContain('<a href="https://example.com">docs</a>');
