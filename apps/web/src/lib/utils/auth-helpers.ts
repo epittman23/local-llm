@@ -4,6 +4,7 @@
 // now, not the whole file for fields nothing here reads.
 
 import { WEBUI_BASE_URL } from '@/lib/constants';
+import { uuid } from '@/lib/utils/uuid';
 
 // Test a 1x1 pixel to potentially identify browser/plugin fingerprint
 // blocking or spoofing. Inspiration:
@@ -70,9 +71,9 @@ type History = {
 	currentId: string | null;
 };
 
-// `uuidv4()` in the source -- crypto.randomUUID() is the same RFC 4122 v4
-// UUID without adding the `uuid` package for the one call site that needs
-// it (the fallback path for a legacy shared chat with no `history`, only a
+// `uuidv4()` in the source -- `uuid()` is the same RFC 4122 v4 UUID
+// without adding the `uuid` package for the one call site that needs it
+// (the fallback path for a legacy shared chat with no `history`, only a
 // flat `messages` array).
 export const convertMessagesToHistory = (messages: ChatMessage[]): History => {
 	const history: History = { messages: {}, currentId: null };
@@ -81,7 +82,7 @@ export const convertMessagesToHistory = (messages: ChatMessage[]): History => {
 	let messageId: string | null = null;
 
 	for (const message of messages) {
-		messageId = message?.id ?? crypto.randomUUID();
+		messageId = message?.id ?? uuid();
 		const parentId = message?.parentId ?? parentMessageId;
 
 		history.messages[messageId] = {

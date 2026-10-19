@@ -22,6 +22,7 @@ import {
 	mentionText
 } from './channelModel';
 import { useChannelList } from './useChannels';
+import { uuid } from '@/lib/utils/uuid';
 
 export type ComposerFile = {
 	itemId: string;
@@ -166,7 +167,7 @@ export const MessageComposer = forwardRef<
 				toast.error('You cannot upload an empty file.');
 				continue;
 			}
-			const itemId = crypto.randomUUID();
+			const itemId = uuid();
 			setFiles((fs) => [
 				...fs,
 				{ itemId, type: 'file', id: null, url: '', name: file.name, size: file.size, status: 'uploading' }

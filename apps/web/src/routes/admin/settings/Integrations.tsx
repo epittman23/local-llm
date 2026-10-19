@@ -17,6 +17,7 @@ import {
 } from '@/lib/apis/configs';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { ExternalKnowledge } from './ExternalKnowledge';
+import { uuid } from '@/lib/utils/uuid';
 
 const iconButton = 'text-muted-foreground hover:text-foreground rounded p-1 transition';
 const hint = 'text-muted-foreground/70 text-[0.6875rem]';
@@ -157,7 +158,7 @@ export default function Integrations() {
 				connection={editedTerminal}
 				onSubmit={(c) => {
 					const idx = terminalModal?.idx;
-					if (idx == null) return saveTerminals([...terminals, { ...c, id: c.id ?? crypto.randomUUID() }]);
+					if (idx == null) return saveTerminals([...terminals, { ...c, id: c.id ?? uuid() }]);
 					return saveTerminals(terminals.map((t, i) => (i === idx ? { ...t, ...c, id: c.id ?? t.id } : t)));
 				}}
 				onDelete={() => saveTerminals(terminals.filter((_, i) => i !== terminalModal?.idx))}

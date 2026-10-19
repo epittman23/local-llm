@@ -1,5 +1,6 @@
 import { processDetails } from '@/lib/markdown/content';
 import { type OutputItem, applyResponseStreamEvent, getOutputText } from './structuredOutput';
+import { uuid } from '@/lib/utils/uuid';
 
 // A chat is a tree of messages (edits and regenerations are siblings), and
 // `currentId` is the leaf being shown. Everything here is pure: each function
@@ -56,7 +57,6 @@ export type History = { messages: Record<string, Message>; currentId: string | n
 
 export const emptyHistory = (): History => ({ messages: {}, currentId: null });
 const now = () => Math.floor(Date.now() / 1000);
-const uuid = () => crypto.randomUUID();
 
 /** The path from the root to `id`, oldest first. */
 export function messagesList(history: History, id: string | null | undefined): Message[] {
@@ -480,7 +480,7 @@ export function saveReplyAsCopy(history: History, id: string, content: string): 
 	if (!m) return history;
 	const copy: Message = {
 		...m,
-		id: crypto.randomUUID(),
+		id: uuid(),
 		childrenIds: [],
 		files: undefined,
 		content,

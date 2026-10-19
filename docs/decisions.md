@@ -7,6 +7,17 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-19**: The frontend makes its UUIDs with `uuid()`
+  (`apps/web/src/lib/utils/uuid.ts`) instead of calling
+  `crypto.randomUUID()`, reversing the 2026-09 choice to use it directly
+  (#241). Browsers offer `crypto.randomUUID` only in secure contexts, HTTPS
+  or a loopback host, so a page opened over plain HTTP from another machine,
+  the documented `LLLM_BACKEND_HOST=0.0.0.0` mode, threw on sending a chat
+  message, among 14 other places. `uuid()` uses `crypto.randomUUID` when it
+  exists and otherwise builds the same version 4 UUID from
+  `crypto.getRandomValues`, which every context has. A Vitest test fails on
+  any direct `crypto.randomUUID()` call in `src/`; the one left in the build
+  is mermaid's bundled `uuid` package, which checks for it first.
 - **2026-10-19**: The 34 security findings of the 2026-10-19 audit (batch B0,
   kept as private draft advisories) are fixed in one public pull request, at
   the owner's choice, before any other batch. Each commit names the

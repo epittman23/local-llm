@@ -1,9 +1,10 @@
 import type { Banner } from '@/lib/types';
+import { uuid } from '@/lib/utils/uuid';
 
 export const BANNER_TYPES = ['info', 'warning', 'error', 'success'] as const;
 
 export const newBanner = (): Banner => ({
-	id: crypto.randomUUID(),
+	id: uuid(),
 	type: '',
 	title: '',
 	content: '',

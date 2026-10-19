@@ -3,6 +3,8 @@
 // formats. The Svelte Chat and Completions pages each carry their own copy of
 // the stream loop; here it is one function both use.
 
+import { uuid } from '@/lib/utils/uuid';
+
 export type PlaygroundMessage = { role: 'user' | 'assistant'; content: string };
 
 /**
@@ -112,7 +114,7 @@ export function chatToExport(
 	messages: PlaygroundMessage[],
 	modelId: string,
 	now = Math.floor(Date.now() / 1000),
-	newId: () => string = () => crypto.randomUUID()
+	newId: () => string = () => uuid()
 ) {
 	const map: Record<
 		string,

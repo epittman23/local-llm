@@ -24,6 +24,7 @@ import {
 } from './channelModel';
 import type { ComposerSubmit } from './MessageComposer';
 import type { MessageActions } from './ChannelMessageView';
+import { uuid } from '@/lib/utils/uuid';
 
 const PAGE = 50;
 const TYPING_EXPIRES_MS = 5000;
@@ -155,7 +156,7 @@ export function useMessageFeed(
 	 * as Thread.svelte does.
 	 */
 	const submit = async ({ content, data }: ComposerSubmit, replyTo: ChannelMessage | null) => {
-		const tempId = crypto.randomUUID();
+		const tempId = uuid();
 		const form = {
 			temp_id: tempId,
 			content,

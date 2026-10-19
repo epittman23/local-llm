@@ -46,6 +46,7 @@ import { useConfigStore } from '@/lib/stores/configStore';
 import { copyToClipboard } from '@/lib/utils';
 import { patchCachedChat } from './sidebar/useChatList';
 import type { ChatModel } from './useModels';
+import { uuid } from '@/lib/utils/uuid';
 
 export const CHAT_LIST_KEY = ['chats'] as const;
 
@@ -434,7 +435,7 @@ export function useChatSession({
 				return false;
 			}
 			if (isGenerating(historyRef.current) && (l.settings?.enableMessageQueue ?? true)) {
-				setQueue((q) => [...q, { id: crypto.randomUUID(), prompt, files, modelId }]);
+				setQueue((q) => [...q, { id: uuid(), prompt, files, modelId }]);
 				return true;
 			}
 			void send(prompt, files, modelId);

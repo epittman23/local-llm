@@ -8,6 +8,7 @@ import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import type { ChatModel } from './useModels';
+import { uuid } from '@/lib/utils/uuid';
 
 const readAsDataUrl = (file: Blob) =>
 	new Promise<string>((resolve, reject) => {
@@ -87,7 +88,7 @@ export function useAttachments({
 				toast.error('You cannot upload an empty file.');
 				return;
 			}
-			const itemId = crypto.randomUUID();
+			const itemId = uuid();
 			const image = file.type.startsWith('image/');
 			if (!image && temporary) {
 				if (!TEXT_TYPES.test(file.type) && !/\.(md|txt|csv|json|py|js|ts|html|css|ya?ml|xml|log)$/i.test(file.name)) {
@@ -98,7 +99,7 @@ export function useAttachments({
 					...fs,
 					{
 						itemId,
-						id: crypto.randomUUID(),
+						id: uuid(),
 						type: 'text',
 						name: file.name,
 						size: file.size,
@@ -212,7 +213,7 @@ export function useAttachments({
 				return;
 			}
 			for (const url of urls) {
-				const itemId = crypto.randomUUID();
+				const itemId = uuid();
 				setFiles((fs) => [
 					...fs,
 					{ itemId, type: 'text', name: url, collection_name: '', status: 'uploading', context: 'full', url, error: '' }
@@ -253,7 +254,7 @@ export function useAttachments({
 	const addItem = useCallback(
 		(item: ChatFile) => {
 			if (ref.current.some((f) => f.id && f.id === item.id)) return;
-			setFiles((fs) => [...fs, { ...item, itemId: crypto.randomUUID(), status: 'processed' }]);
+			setFiles((fs) => [...fs, { ...item, itemId: uuid(), status: 'processed' }]);
 		},
 		[setFiles]
 	);
