@@ -1510,13 +1510,16 @@ def section_configurations(records: list[dict]) -> tuple[str, list[dict]]:
                 ]
             )
             if p['underpowered']:
-                sd = (p['se'] or 0) * math.sqrt(p['n_shared'])
+                if p['n_clusters'] is not None:
+                    # A cluster-robust SE is not s/sqrt(n), so no SD is implied.
+                    spread = f'cluster-robust SE of the paired difference {p["se"]:.3f} ({p["n_clusters"]} clusters)'
+                else:
+                    spread = f'SD of the paired difference {(p["se"] or 0) * math.sqrt(p["n_shared"]):.2f}'
                 lines.append(
-                    f'- `{p["a"]}` vs `{p["b"]}`: n = {p["n_shared"]} shared problems, SD of the '
-                    f'paired difference {sd:.2f}: differences under {100 * (p["mde"] or 0):.0f} pp '
-                    f'are undetectable at 80% power and alpha 0.05 ({100 * p["mde_holm"]:.0f} pp '
-                    f'after Holm); the observed {_pp(p["mean_diff"])} is inside that, so this '
-                    f'comparison is underpowered.'
+                    f'- `{p["a"]}` vs `{p["b"]}`: n = {p["n_shared"]} shared problems, {spread}: '
+                    f'differences under {100 * (p["mde"] or 0):.0f} pp are undetectable at 80% power and '
+                    f'alpha 0.05 ({100 * p["mde_holm"]:.0f} pp after Holm); the observed '
+                    f'{_pp(p["mean_diff"])} is inside that, so this comparison is underpowered.'
                 )
         out += [
             h(4, f'Pairs, Holm across {b["holm_m"]} test(s)'),

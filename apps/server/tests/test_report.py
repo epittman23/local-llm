@@ -22,7 +22,7 @@ class Rows:
     def __init__(self):
         self.rows: list[dict] = []
 
-    def add(self, item, ok, *, config='aaaa', system=None, benchmark='mbpp', window=None, wall_ms=30000):
+    def add(self, item, ok, *, config='aaaa', system=None, benchmark='mbpp', window=None, wall_ms=30000, cluster=None):
         self.rows.append(
             {
                 'tier': 'smoke',
@@ -41,6 +41,7 @@ class Rows:
                 'wall_ms': wall_ms,
                 'dataset_revision': 'rev',
                 'item_window': window,
+                'cluster': cluster(item) if callable(cluster) else cluster,
             }
         )
 
@@ -139,6 +140,16 @@ def test_underpowered_comparison_is_explained():
     rows.run([True, True, True, False, True, True, False, False], config='bbbb')
     body = section(build(rows).markdown, '## 5. Configuration comparison')
     assert 'n = 8 shared problems' in body and 'this comparison is underpowered' in body
+
+
+def test_a_clustered_underpowered_pair_reports_its_cluster_robust_se():
+    rows = Rows()
+    by_three = lambda item: f'q{int(item) // 3}'  # noqa: E731
+    rows.run([i % 4 != 0 for i in range(30)], benchmark='ds1000', cluster=by_three)
+    rows.run([i % 5 != 0 for i in range(30)], benchmark='ds1000', config='bbbb', cluster=by_three)
+    body = section(build(rows).markdown, '## 5. Configuration comparison')
+    assert 'cluster-robust SE of the paired difference' in body and '(10 clusters)' in body
+    assert 'SD of the paired difference' not in body
 
 
 def test_one_configuration_per_block_has_nothing_to_compare():
