@@ -231,7 +231,7 @@ class Figures:
         ax.set_ylim(bottom=0, top=max(v for v in values if v) * 1.28)
 
         # The cliff, named with the moment it happened and the medians
-        # either side of it. Section 6's refusals rest on this event, and a
+        # either side of it. Section 7's refusals rest on this event, and a
         # reader who has to infer it from the shape of the line has to take
         # the prose on trust.
         cut = self._cliff(values)
@@ -459,10 +459,10 @@ class Figures:
         )
 
     # -- figure 4: the MDE curve ------------------------------------------
-    def mde_curve(self, psi: float, ci: tuple[float, float], now: int, out: list[str]):
+    def mde_curve(self, psi: float, ci: tuple[float, float], now: int, out: list[str], alpha: float = 0.05):
         ns = [n for n in (8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384, 512)]
-        mde = [detectable_effect(n, psi) for n in ns]
-        title = f'Smallest detectable difference at 80% power, alpha 0.05, discordance psi = {psi:.3f}'
+        mde = [detectable_effect(n, psi, alpha=alpha) for n in ns]
+        title = f'Smallest detectable difference at 80% power, alpha {alpha:.3g}, discordance psi = {psi:.3f}'
         if not self.png:
             self._skip(
                 out,
@@ -502,7 +502,7 @@ class Figures:
 
         # The ceiling. A paired difference cannot exceed the discordance
         # rate, since every unit of it has to come from an item that
-        # changed, so this line is where section 5's `impossible` comes
+        # changed, so this line is where section 6's `impossible` comes
         # from.
         ax.axhline(100 * psi, color=MUTED, linewidth=1.2, linestyle=(0, (5, 4)), zorder=1)
         ax.annotate(
@@ -520,12 +520,12 @@ class Figures:
         # is exactly None when nothing is reachable at 80% power -- so the
         # figure dropped its own subject in the one case this section
         # exists to report.
-        here = detectable_effect(now, psi)
+        here = detectable_effect(now, psi, alpha=alpha)
         ax.axvline(now, color=FLAG, linewidth=1.4, linestyle=(0, (4, 3)), zorder=2)
         if here is not None:
             note = f'this experiment:\n{now} items, {100 * here:.0f} pp'
         else:
-            ceiling = mcnemar_power(now, psi, psi * 0.999)
+            ceiling = mcnemar_power(now, psi, psi * 0.999, alpha=alpha)
             note = (
                 f'this experiment: {now} items.\nNo effect is reachable at\n80% power -- '
                 f'even {100 * psi:.1f} pp is found only {100 * ceiling:.0f}% of the time.'

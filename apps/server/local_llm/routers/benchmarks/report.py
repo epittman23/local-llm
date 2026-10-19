@@ -61,6 +61,7 @@ async def generate_report(form_data: ReportForm, user=Depends(get_admin_user)):
         'markdown_url': f'{base}/report.md',
         'figures': [f'{base}/{fig.name}' for fig in result.figures],
         'date': run_dir,
+        'windows': result.windows,
     }
 
 

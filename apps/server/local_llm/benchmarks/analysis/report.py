@@ -134,6 +134,7 @@ class NoBenchmarkResults(RuntimeError):
 
 TS = '%Y-%m-%dT%H:%M:%SZ'
 Z95 = 1.959963984540054
+ALPHA = 0.05
 
 
 def _iso(ts: int | None) -> str:
@@ -902,6 +903,11 @@ def audit_design(records: list[dict], blocks: list[Block], regimes: Regimes) -> 
 # ---------------------------------------------------------------------------
 # section 1: provenance
 # ---------------------------------------------------------------------------
+def windows_of(records: list[dict]) -> list[str]:
+    """The release-date windows present: two windows are two pools of problems."""
+    return sorted({r['item_window'] for r in records if r.get('item_window')})
+
+
 def section_provenance(
     records: list[dict], filters: dict, runs_by_id: dict[int, dict], schema_notes: list[dict]
 ) -> str:
@@ -945,6 +951,7 @@ def section_provenance(
                 ['models', ', '.join(models) or '-'],
                 ['llama.cpp builds', ', '.join(builds) or '-'],
                 ['dataset revisions', ', '.join(revisions) or '-'],
+                ['release-date windows', ', '.join(windows_of(records)) or 'none'],
             ],
         ),
         '',
@@ -1186,7 +1193,7 @@ def block_accuracy(b: Block, figs: Figures, audit: Audit) -> tuple[str, dict]:
             'permutation test has nothing to permute. This is not evidence '
             'that the levels agree -- it is the same result a broken '
             'harness would produce, and the two are told apart by the '
-            'manipulation check in section 6, not by this table.',
+            'manipulation check in section 7, not by this table.',
             '',
         ]
     if n_eff < 5:
@@ -1235,6 +1242,11 @@ def block_accuracy(b: Block, figs: Figures, audit: Audit) -> tuple[str, dict]:
         )
     out += [f'**Verdict.** {verdict}', '']
 
+    # The largest pass-rate difference from the baseline, for the headline's
+    # comparison with the reliability floor.
+    base_rate = sum(row[bi] for row in matrix) / len(items)
+    deltas = [abs(sum(row[j] for row in matrix) / len(items) - base_rate) for j in range(k) if j != bi]
+
     return (
         '\n'.join(out),
         {
@@ -1245,6 +1257,8 @@ def block_accuracy(b: Block, figs: Figures, audit: Audit) -> tuple[str, dict]:
             'baseline': bi,
             'q': q,
             'p_perm': p_perm,
+            'p_holm': adjusted,
+            'max_delta': max(deltas, default=0.0),
             'n_eff': n_eff,
             'discordant': len(discordant),
         },
@@ -1367,19 +1381,218 @@ def section_accuracy(blocks: list[Block], figs: Figures, audit: Audit) -> tuple[
 
 
 # ---------------------------------------------------------------------------
-# section 5: power, and what to run next
+# section 5: configuration comparison
+# ---------------------------------------------------------------------------
+def _pct(value: float | None, digits: int = 1) -> str:
+    return '-' if value is None else f'{100 * value:.{digits}f}%'
+
+
+def _pp(value: float | None) -> str:
+    return '-' if value is None else f'{100 * value:+.1f} pp'
+
+
+def _span(ci: list[float] | None, scale: float = 100.0, unit: str = '%', digits: int = 1) -> str:
+    if not ci:
+        return 'n/a'
+    return f'[{scale * ci[0]:.{digits}f}, {scale * ci[1]:.{digits}f}]{unit}'
+
+
+def section_configurations(records: list[dict]) -> tuple[str, list[dict]]:
+    """Every configuration against every other, block by block (Compare's numbers).
+
+    The same estimators and the same blocks the Compare page uses
+    (compare.rows_for), rendered with the method written beside each number,
+    so the page and the document cannot disagree.
+    """
+    from local_llm.benchmarks.analysis import compare
+
+    rows, blocks = compare.rows_for(compare.group_records(records), {})
+    out = [
+        h(2, '5. Configuration comparison'),
+        '',
+        'Configurations are compared only inside a **block**: one tier, benchmark,',
+        'adapter, system prompt, release-date window and dataset revision, so the',
+        'problems are the same and the difference is the configuration. The methods',
+        'follow Miller, "Adding Error Bars to Evals" (arXiv:2411.00640):',
+        '',
+        "- **Pass rate** is the mean over problems of each problem's mean over its",
+        '  samples (suite runs), so a problem asked twice weighs what a problem asked',
+        '  once does.',
+        '- **Interval:** Wilson. With one sample per problem and independent',
+        '  problems it is plain Wilson at n; otherwise it is Wilson at the',
+        '  design-effect sample size n_eff = p(1-p)/SE^2. Wilson does not collapse',
+        '  at 0% or 100%, where an easy benchmark puts a good configuration.',
+        '- **Standard error:** s/sqrt(n) over problems, or cluster-robust (CR1)',
+        '  when the problems are clustered (DS-1000 by the question a problem was',
+        '  perturbed from).',
+        '- **Pairs:** paired differences on the problems both configurations',
+        '  answered, with the correlation of their per-problem scores. Exact',
+        '  McNemar when every shared problem is one pass/fail sample and the',
+        '  problems are independent; otherwise a paired t test with the matching',
+        '  standard error. Holm across every pair in the block.',
+        '- **Groups:** a compact letter display. Configurations sharing a letter',
+        '  are not distinguishable at the Holm-corrected level, so the table is',
+        '  read as groups, not as a ranking.',
+        '- **Passes per minute** is a ratio of sums, with a **delta-method**',
+        '  interval (clustered like the standard error), formed on the log scale.',
+        '- **Power:** for each pair, the minimum detectable difference',
+        '  (z_{1-a/2} + z_{0.80}) x SE of the paired difference, at alpha 0.05 and',
+        '  at the Holm worst case alpha/m.',
+        '',
+    ]
+    multi = [b for b in blocks if len(b['levels']) > 1]
+    if not multi:
+        out += [
+            '**No block in scope has more than one configuration**, so there is no '
+            'comparison to make. The per-configuration intervals are still on the '
+            'Compare page.',
+            '',
+        ]
+        return '\n'.join(out), blocks
+
+    by_block: dict[str, list[dict]] = {}
+    for row in rows:
+        by_block.setdefault(row['block'], []).append(row)
+
+    for b in multi:
+        out += [h(3, b['key']), '']
+        if b['item_window']:
+            out += [f'**Release-date window: {b["item_window"]}.**', '']
+        table_rows = []
+        for row in by_block.get(b['key'], []):
+            se = '-' if row['pass_rate_se'] is None else f'{100 * row["pass_rate_se"]:.1f} pp ({row["se_kind"]})'
+            ppm = '-' if row['passes_per_minute'] is None else f'{row["passes_per_minute"]:.3f}'
+            table_rows.append(
+                [
+                    row['group'],
+                    f'{row["model"]} @ {row["config_id"]}',
+                    f'{row["passed"]}/{row["attempted"]}',
+                    str(row['n_problems']),
+                    f'{_pct(row["pass_rate"])} {_span(row["pass_rate_ci"])}',
+                    se,
+                    f'{ppm} {_span(row["passes_per_minute_ci"], 1.0, "", 3)}',
+                    row['note'] or '',
+                ]
+            )
+        out += [
+            table(
+                [
+                    'group',
+                    'configuration',
+                    'passed/attempted',
+                    'problems',
+                    'pass rate [95% CI]',
+                    'SE',
+                    'passes/min [95% CI]',
+                    'note',
+                ],
+                table_rows,
+            ),
+            '',
+        ]
+        pair_rows, lines = [], []
+        for p in b['pairs']:
+            if p['p'] is None:
+                pair_rows.append([p['a'], p['b'], str(p['n_shared']), '-', '-', '-', '-', '-', '-', p['note']])
+                continue
+            pair_rows.append(
+                [
+                    p['a'],
+                    p['b'],
+                    str(p['n_shared']),
+                    f'{_pp(p["mean_diff"])} {_span(p["ci"], 100.0, " pp")}',
+                    '-' if p['corr'] is None else f'{p["corr"]:.2f}',
+                    p['test'],
+                    pv(p['p']),
+                    pv(p['p_holm']),
+                    '-' if p['mde_holm'] is None else f'{100 * p["mde_holm"]:.1f} pp',
+                    'different' if p['significant'] else ('underpowered' if p['underpowered'] else 'not different'),
+                ]
+            )
+            if p['underpowered']:
+                sd = (p['se'] or 0) * math.sqrt(p['n_shared'])
+                lines.append(
+                    f'- `{p["a"]}` vs `{p["b"]}`: n = {p["n_shared"]} shared problems, SD of the '
+                    f'paired difference {sd:.2f}: differences under {100 * (p["mde"] or 0):.0f} pp '
+                    f'are undetectable at 80% power and alpha 0.05 ({100 * p["mde_holm"]:.0f} pp '
+                    f'after Holm); the observed {_pp(p["mean_diff"])} is inside that, so this '
+                    f'comparison is underpowered.'
+                )
+        out += [
+            h(4, f'Pairs, Holm across {b["holm_m"]} test(s)'),
+            '',
+            table(
+                [
+                    'a',
+                    'b',
+                    'shared',
+                    'a - b [95% CI]',
+                    'r',
+                    'test',
+                    'p',
+                    'Holm p',
+                    'MDE (Holm)',
+                    'verdict',
+                ],
+                pair_rows,
+            ),
+            '',
+        ]
+        if lines:
+            out += ['**Underpowered comparisons.**', ''] + lines + ['']
+    return '\n'.join(out), blocks
+
+
+# ---------------------------------------------------------------------------
+# section 6: power, and what to run next
 # ---------------------------------------------------------------------------
 EFFECTS = [0.05, 0.10, 0.15, 0.20]
 
 
+def _block_power(r: dict) -> dict:
+    """One system-prompt block's discordance and detectable effect.
+
+    Per block, because each block's McNemar tests run on that block's items
+    and nothing else; and at the Holm worst-case level alpha/m, m = k - 1
+    comparisons against the baseline, because that is the level the first
+    of them is held to (#133). A pooled item count describes no test this
+    report runs.
+    """
+    matrix, bi = r['matrix'], r['baseline']
+    k = len(r['levels'])
+    m = max(k - 1, 1)
+    pairs = disc = 0
+    for row in matrix:
+        for j in range(len(row)):
+            if j == bi:
+                continue
+            pairs += 1
+            disc += 1 if row[j] != row[bi] else 0
+    n = len(r['items'])
+    psi = disc / pairs if pairs else 0.0
+    alpha_holm = ALPHA / m
+    return {
+        'r': r,
+        'n': n,
+        'm': m,
+        'pairs': pairs,
+        'disc': disc,
+        'psi': psi,
+        'alpha_holm': alpha_holm,
+        'mde': detectable_effect(n, psi) if psi > 0 else None,
+        'mde_holm': detectable_effect(n, psi, alpha=alpha_holm) if psi > 0 else None,
+    }
+
+
 def section_power(results: list[dict], figs: Figures, floor: float | None) -> str:
     out = [
-        h(2, '5. Power, and what to run next'),
+        h(2, '6. Power, and what to run next'),
         '',
         'A null result is only informative if the experiment could have found',
         'something. This section answers the question section 4 raises and',
-        'cannot settle: how large an effect would this design have detected,',
-        'and how many items would it take to detect a smaller one.',
+        'cannot settle: how large an effect would each block have detected,',
+        'and how many items would it take to detect a smaller one. (Section 5',
+        'reports the same thing for configurations, pair by pair.)',
         '',
         'For a paired binary test the sample size depends on the **discordance',
         'rate** -- the share of items that change verdict between two',
@@ -1388,65 +1601,68 @@ def section_power(results: list[dict], figs: Figures, floor: float | None) -> st
         'the same answer under every prompt is an expensive way to learn very',
         'little, however many items it has.',
         '',
+        'Each block is assessed at its own item count and at the Holm worst-case',
+        'level alpha/m, where m is the number of levels compared with its',
+        'baseline: the level the first of those McNemar tests is held to.',
+        '',
     ]
 
-    per_block = [r for r in results if not r.get('pooled')]
+    per_block = [_block_power(r) for r in results if not r.get('pooled')]
+    per_block = [p for p in per_block if p['pairs']]
     if not per_block:
         out += ['No complete block, so no discordance rate to estimate and no power calculation to make.', '']
         return '\n'.join(out)
 
-    pairs = disc = 0
-    for r in per_block:
-        matrix, bi = r['matrix'], r['baseline']
-        for row in matrix:
-            for j in range(len(row)):
-                if j == bi:
-                    continue
-                pairs += 1
-                disc += 1 if row[j] != row[bi] else 0
-    if pairs == 0:
-        out += ['No baseline comparison exists in scope.', '']
-        return '\n'.join(out)
+    def fmt(value):
+        return 'none reachable' if value is None else f'{100 * value:.0f} pp'
 
-    psi = disc / pairs
-    ci = wilson(disc, pairs) or (0.0, 1.0)
-    items_now = sum(len(r['items']) for r in per_block)
     out += [
         table(
-            ['field', 'value'],
+            ['block', 'items', 'discordant / comparisons', 'psi', 'm', 'MDE at alpha 0.05', 'MDE at Holm alpha'],
             [
-                ['baseline-vs-level item comparisons', str(pairs)],
-                ['of those, discordant', rate(disc, pairs)],
-                ['discordance rate psi', f'{psi:.3f}'],
-                ['95% Wilson interval on psi', f'[{ci[0]:.3f}, {ci[1]:.3f}]'],
-                ['items entering a baseline comparison', str(items_now)],
+                [
+                    p['r']['block'].label(),
+                    str(p['n']),
+                    f'{p["disc"]}/{p["pairs"]}',
+                    f'{p["psi"]:.3f}',
+                    str(p['m']),
+                    fmt(p['mde']),
+                    f'{fmt(p["mde_holm"])} (alpha {p["alpha_holm"]:.3g})',
+                ]
+                for p in per_block
             ],
         ),
         '',
     ]
 
+    focus = max(per_block, key=lambda p: (p['n'], p['psi']))
+    psi = focus['psi']
+    label = focus['r']['block'].label()
     if psi <= 0:
         out += [
-            '**Discordance is zero.** Not one item changed verdict between '
-            'the baseline and any other level. No paired test can detect '
-            'anything at any sample size under that estimate, because there '
-            'is nothing for it to count. What that means practically is that '
-            'these items are saturated -- they answer the same way whatever '
-            'is put in front of them -- and the next experiment should change '
-            'the items, not add more of them.',
+            f'**Discordance is zero in {label}**, the largest block. Not one item '
+            'changed verdict between the baseline and any other level. No paired '
+            'test can detect anything at any sample size under that estimate, '
+            'because there is nothing for it to count. These items are saturated '
+            '-- they answer the same way whatever is put in front of them -- and '
+            'the next experiment should change the items, not add more of them.',
             '',
         ]
         return '\n'.join(out)
 
+    ci = wilson(focus['disc'], focus['pairs']) or (0.0, 1.0)
+    alpha_holm = focus['alpha_holm']
     rows = []
     for effect in EFFECTS:
         cells = []
-        for label, p in (('psi', psi), ('psi lo', ci[0]), ('psi hi', ci[1])):
-            n = items_needed(p, effect)
+        for p in (psi, ci[0], ci[1]):
+            n = items_needed(p, effect, alpha=alpha_holm)
             cells.append('impossible' if effect > p else ('> 100k' if n is None else str(n)))
         rows.append([f'{100 * effect:.0f} pp'] + cells)
     out += [
-        h(3, 'Items needed for 80% power at alpha 0.05'),
+        h(3, f'Items needed for 80% power in {label}, at alpha {alpha_holm:.3g}'),
+        '',
+        f'The largest block, with its discordance psi = {psi:.3f} (95% Wilson [{ci[0]:.3f}, {ci[1]:.3f}]).',
         '',
         table(['effect to detect', 'at psi', 'at psi low', 'at psi high'], rows),
         '',
@@ -1459,24 +1675,24 @@ def section_power(results: list[dict], figs: Figures, floor: float | None) -> st
         '',
     ]
 
-    mde = detectable_effect(items_now, psi)
+    n_now, mde = focus['n'], focus['mde_holm']
     out += [h(3, 'What this experiment could have found'), '']
     if mde is None:
-        ceiling = mcnemar_power(items_now, psi, psi * 0.999)
+        ceiling = mcnemar_power(n_now, psi, psi * 0.999, alpha=alpha_holm)
         out += [
-            f'**Nothing.** At {items_now} items and psi = {psi:.3f}, even a '
-            f'difference of {100 * psi:.1f} percentage points -- the largest '
-            f'one that can exist under this discordance rate -- would be '
-            f'detected only {100 * ceiling:.0f}% of the time. There is no '
-            f'effect size this experiment had an 80% chance of finding, so '
-            f'its null result is a statement about the experiment and not '
-            f'about the prompts.',
+            f'**Nothing, in {label}.** At {n_now} items, psi = {psi:.3f} and alpha '
+            f'{alpha_holm:.3g}, even a difference of {100 * psi:.1f} percentage points '
+            f'-- the largest one that can exist under this discordance rate -- would be '
+            f'detected only {100 * ceiling:.0f}% of the time. There is no effect size '
+            f'this block had an 80% chance of finding, so its null result is a '
+            f'statement about the experiment and not about the prompts.',
             '',
         ]
     else:
         out += [
-            f'With {items_now} items and psi = {psi:.3f}, the smallest '
-            f'difference detectable at 80% power is **about {100 * mde:.0f} percentage points**.',
+            f'In {label}, with {n_now} items, psi = {psi:.3f} and alpha {alpha_holm:.3g}, '
+            f'the smallest difference detectable at 80% power is **about {100 * mde:.0f} '
+            f'percentage points**.',
             '',
         ]
     if floor is not None:
@@ -1491,7 +1707,7 @@ def section_power(results: list[dict], figs: Figures, floor: float | None) -> st
             ),
             '',
         ]
-    figs.mde_curve(psi, ci, items_now, out)
+    figs.mde_curve(psi, ci, n_now, out, alpha=alpha_holm)
     out += [
         h(3, 'What to run'),
         '',
@@ -1511,15 +1727,15 @@ def section_power(results: list[dict], figs: Figures, floor: float | None) -> st
         'at a small one.',
         '- Cheaper alternative: drop the levels that are indistinguishable '
         'from the baseline and spend the runs on two levels with more items. '
-        'Six levels at 8 items has less power than two levels at 24 for the '
-        'same number of requests.',
+        'Fewer levels also loosen the Holm correction: six levels at 8 items '
+        'have less power than two levels at 24 for the same number of requests.',
         '',
     ]
     return '\n'.join(out)
 
 
 # ---------------------------------------------------------------------------
-# section 6: throughput
+# section 7: throughput
 # ---------------------------------------------------------------------------
 def timing(record: dict, field: str) -> float | None:
     value = (record.get('timings') or {}).get(field)
@@ -1557,13 +1773,13 @@ def kruskal_and_anova(samples: list[list[float]]) -> tuple[str, str]:
 
 def section_throughput(records: list[dict], blocks: list[Block], regimes: Regimes, audit: Audit, figs: Figures) -> str:
     out = [
-        h(2, '6. Throughput'),
+        h(2, '7. Throughput'),
         '',
         'Two of the four responses below are rates, and a rate measured on a',
         'machine that changed speed partway through the experiment is a',
         'measurement of the machine. Levels that ran sequentially -- one whole',
         'suite per system prompt -- have anything that drifted with time',
-        'confounded with the level by construction, and section 7 is where any',
+        'confounded with the level by construction, and section 8 is where any',
         "drift in the GPU's power state shows up.",
         '',
         'So each contrast is shown twice: once as the naive one-way test a',
@@ -1739,13 +1955,13 @@ def section_throughput(records: list[dict], blocks: list[Block], regimes: Regime
 
 
 # ---------------------------------------------------------------------------
-# section 7: throttle audit
+# section 8: throttle audit
 # ---------------------------------------------------------------------------
 def section_throttle(
     records: list[dict], regimes: Regimes, blocks: list[Block], samples_by_run: dict[int, list[dict]]
 ) -> str:
     out = [
-        h(2, '7. Throttle audit'),
+        h(2, '8. Throttle audit'),
         '',
         'Every serving run records GPU telemetry on a fixed interval, and every',
         'sample carries `clocks_throttle_reasons.active` as a bitmask. This',
@@ -1865,7 +2081,7 @@ def section_throttle(
             '',
             'Any throughput difference between levels listed under different',
             'regimes is a difference between regimes. The design audit refused',
-            'those contrasts and section 6 shows what the naive test would have',
+            'those contrasts and section 7 shows what the naive test would have',
             'claimed instead.',
             '',
         ]
@@ -1882,16 +2098,24 @@ def section_throttle(
 # ---------------------------------------------------------------------------
 # assembly
 # ---------------------------------------------------------------------------
-def headline(results: list[dict], floor: float | None, audit: Audit, blocks: list[Block]) -> str:
+def headline(
+    results: list[dict],
+    floor: float | None,
+    audit: Audit,
+    blocks: list[Block],
+    config_blocks: list[dict] | None = None,
+) -> str:
     """What the document concludes, before the reader has to earn it.
 
     Placed first because the sections are ordered by what gates what, not by
     what matters, and a reader who stops after one screen should still leave
-    with the finding rather than a row count.
+    with the finding rather than a row count. Every sentence is derived from
+    the tests below it (#128): a difference that survives correction is
+    reported as one, and the noise-floor sentence appears only when every
+    difference really is below the floor.
     """
     lines = [h(2, 'Headline'), '']
     complete = [b for b in blocks if b.complete()]
-    pooled = next((r for r in results if r.get('pooled')), None)
     per_block = [r for r in results if not r.get('pooled')]
 
     if not complete:
@@ -1899,32 +2123,77 @@ def headline(results: list[dict], floor: float | None, audit: Audit, blocks: lis
             '- No block in scope is complete enough for a paired test, so '
             'no comparison of system prompts is made here. Section 4 says '
             'what would produce one.',
-            '',
         ]
-    else:
-        best = pooled or (per_block[0] if per_block else None)
-        if best:
-            varied = best['n_eff']
-            total = len(best['items'])
+    elif per_block:
+        found = [r for r in per_block if r['p_perm'] < ALPHA or any(p < ALPHA for p in r.get('p_holm', []))]
+        if found:
+            named = '; '.join(
+                f'{r["block"].label()} (permutation p = {pv(r["p_perm"])}, smallest Holm p = '
+                f'{pv(min(r.get("p_holm") or [1.0]))})'
+                for r in found
+            )
             lines += [
-                f"- **No system prompt differs from any other.** Cochran's Q "
-                f'= {best["q"]:.3f} on {len(best["levels"]) - 1} df, '
-                f'permutation p = {pv(best["p_perm"])}, over {total} items of '
-                f'which **{varied} vary at all**. The comparison rests on '
-                f'those {varied} items and nothing else.'
+                f'- **System prompts differ in {len(found)} of {len(per_block)} block(s)** '
+                f'after correction: {named}. Section 4 has the contrasts.'
             ]
-    if floor is not None:
-        lines += [
-            f'- **Re-running an identical condition changes the verdict '
-            f'{100 * floor:.0f}% of the time.** Every difference in this '
-            f'document is smaller than that, so none of them is '
-            f'distinguishable from noise.'
-        ]
+        else:
+            best = max(per_block, key=lambda r: len(r['items']))
+            smallest = min(min(r.get('p_holm') or [1.0]) for r in per_block)
+            lines += [
+                f'- **No system prompt differs from another in any of the {len(per_block)} '
+                f'block(s) tested** (smallest permutation p = '
+                f'{pv(min(r["p_perm"] for r in per_block))}, smallest Holm-corrected '
+                f'McNemar p = {pv(smallest)}). The largest block has {len(best["items"])} '
+                f'items, of which **{best["n_eff"]} vary at all**; the comparison rests on '
+                f'those.'
+            ]
+    if floor is not None and per_block:
+        largest = max(r.get('max_delta', 0.0) for r in per_block)
+        if largest < floor:
+            lines += [
+                f'- **Re-running an identical condition changes the verdict '
+                f'{100 * floor:.0f}% of the time.** Every system-prompt difference in '
+                f'this document (the largest is {100 * largest:.0f} pp) is smaller '
+                f'than that, so none of them is distinguishable from noise.'
+            ]
+        else:
+            lines += [
+                f'- Re-running an identical condition changes the verdict '
+                f'{100 * floor:.0f}% of the time, and the largest system-prompt '
+                f'difference here ({100 * largest:.0f} pp) is above that floor.'
+            ]
+
+    compared = [b for b in (config_blocks or []) if len(b['levels']) > 1]
+    if compared:
+        differ = [b for b in compared if any(p['significant'] for p in b['pairs'])]
+        tested = [p for b in compared for p in b['pairs'] if p['p'] is not None]
+        weak = [p for p in tested if p['underpowered']]
+        if differ:
+            tops = '; '.join(
+                f'{b["key"]}: group a = {", ".join(lv for lv in b["levels"] if "a" in b["letters"].get(lv, ""))}'
+                for b in differ[:3]
+            )
+            lines += [
+                f'- **Configurations differ in {len(differ)} of {len(compared)} block(s)** '
+                f'(Holm-corrected). Best group per block: {tops}. Section 5.'
+            ]
+        else:
+            lines += [
+                f'- **No configuration differs significantly from another** in any of the '
+                f'{len(compared)} block(s) with more than one (Holm-corrected). Section 5.'
+            ]
+        if weak:
+            lines += [
+                f'- {len(weak)} of {len(tested)} configuration comparison(s) are '
+                f'**underpowered**: the observed difference is below what the design '
+                f'could detect. Section 5 says how far below.'
+            ]
+
     refused = [k for k in audit.vetoes if k.startswith('throughput:')]
     if refused:
         lines += [
             f'- **{len(refused)} throughput contrast(s) are refused**, not '
-            'computed and caveated. Section 6 shows what the naive test '
+            'computed and caveated. Section 7 shows what the naive test '
             'would have claimed.'
         ]
     aliases = sorted({k.split(':', 1)[1] for k in audit.vetoes if k.startswith('factor:')})
@@ -1967,6 +2236,9 @@ class ReportResult:
 
     markdown: str
     figures: list[Figure] = field(default_factory=list)
+    #: The release-date windows present in scope, so the page can show them
+    #: above the document as well as in its provenance.
+    windows: list[str] = field(default_factory=list)
 
 
 async def _fetch(tier: str | None, model: str | None, benchmark: str | None):
@@ -2015,6 +2287,7 @@ def _assemble(
     design, audit = audit_design(records, blocks, regimes)
     reliability, floor = section_reliability(records)
     accuracy, section_results = section_accuracy(blocks, figs, audit)
+    configurations, config_blocks = section_configurations(records)
 
     now = dt.datetime.now(dt.UTC).strftime(TS)
     used = ', '.join(f'{k}={v}' for k, v in filters.items() if v) or 'none'
@@ -2036,21 +2309,25 @@ def _assemble(
         'the sample cannot support.',
         '',
     ]
+    windows = windows_of(records)
+    if windows:
+        head += [f'**Release-date windows in scope: {", ".join(windows)}.**', '']
     if figs.reason:
         head += [f'> Figures are rendered as text plots in fenced blocks: {figs.reason}.', '']
 
     body = [
-        headline(section_results, floor, audit, blocks),
+        headline(section_results, floor, audit, blocks, config_blocks),
         section_provenance(records, filters, runs_by_id, schema_notes),
         design,
         reliability,
         accuracy,
+        configurations,
         section_power(section_results, figs, floor),
         section_throughput(records, blocks, regimes, audit, figs),
         section_throttle(records, regimes, blocks, samples_by_run),
     ]
     markdown = '\n'.join(head) + '\n' + '\n\n'.join(body) + '\n'
-    return ReportResult(markdown=markdown, figures=list(figs.figures))
+    return ReportResult(markdown=markdown, figures=list(figs.figures), windows=windows_of(records))
 
 
 async def build_report(
