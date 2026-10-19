@@ -349,7 +349,9 @@ async def run_item(session: aiohttp.ClientSession, row: dict, ctx: dict) -> dict
     if ans.error:
         outcome, reason = 'fail_error', ans.error
     else:
-        outcome, reason = grade(adapter, item, ans.content)
+        # A grade runs a subprocess for up to the item's timeout; in a thread,
+        # so the event loop keeps serving every other request (#140).
+        outcome, reason = await asyncio.to_thread(grade, adapter, item, ans.content)
 
     record = {
         'suite_run_id': ctx['suite_run_id'],
@@ -492,25 +494,13 @@ async def context(
     }
 
 
-async def prepare_suite(
-    session: aiohttp.ClientSession,
-    *,
-    suite_name: str,
-    profile_name: str | None = None,
-    benchmark: str | None = None,
-    item_slice: str | None = None,
-    system_name: str | None = None,
-    resume: bool = False,
-    suite_run_id: str | None = None,
-) -> tuple[dict, list[dict], list[dict]]:
-    """Resolve a suite into (ctx, todo, skipped). No items are run.
+def _select(suite_name: str, benchmark: str | None, item_slice: str | None) -> tuple[dict, list[dict], list[dict]]:
+    """prepare_suite's synchronous part: (suite, selected, skipped).
 
-    Mirrors the original CLI's prepare_suite() exactly, so a router endpoint
-    resolves the same todo list (interleaving, slice, missing-library
-    exclusion, calibration warnings, resume diffing) that the original
-    dashboard already relied on this function to produce -- a second
-    implementation of this setup would eventually disagree with this one
-    about what a tier actually contains.
+    It reads the suite and dataset files and starts the grading interpreter
+    (library probes, the environment fingerprint behind every calibration
+    check), so prepare_suite runs it in a thread rather than on the event
+    loop, which serves every other request meanwhile (#140).
     """
     adapters = load_adapters()
     suite = _guard(load_suite, suite_name)
@@ -538,17 +528,39 @@ async def prepare_suite(
             b, iid = key.split('/', 1)
             skipped.append({'benchmark': b, 'item_id': iid, 'reason': why})
 
-    stale: dict[str, str] = {}
     for name in sorted({r['benchmark'] for r in selected}):
         why = calibration_stale(name)
         if why:
-            stale[name] = why
             log.warning(
                 '%s is not calibrated for this environment (%s); items its own '
                 'reference solutions cannot pass here will be scored as failures.',
                 name,
                 why,
             )
+    return suite, selected, skipped
+
+
+async def prepare_suite(
+    session: aiohttp.ClientSession,
+    *,
+    suite_name: str,
+    profile_name: str | None = None,
+    benchmark: str | None = None,
+    item_slice: str | None = None,
+    system_name: str | None = None,
+    resume: bool = False,
+    suite_run_id: str | None = None,
+) -> tuple[dict, list[dict], list[dict]]:
+    """Resolve a suite into (ctx, todo, skipped). No items are run.
+
+    Mirrors the original CLI's prepare_suite() exactly, so a router endpoint
+    resolves the same todo list (interleaving, slice, missing-library
+    exclusion, calibration warnings, resume diffing) that the original
+    dashboard already relied on this function to produce -- a second
+    implementation of this setup would eventually disagree with this one
+    about what a tier actually contains.
+    """
+    suite, selected, skipped = await asyncio.to_thread(_select, suite_name, benchmark, item_slice)
 
     ctx = await context(
         session,

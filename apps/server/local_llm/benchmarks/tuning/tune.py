@@ -691,9 +691,14 @@ class Sweep:
         sweep.grid = load_grid(opts.grid, sweep.profile_name)
         sweep.system = runner.load_system(opts.system)
 
-        sweep.adapters = load_adapters()
-        sweep.suite = _guard(load_suite, opts.tier)
-        selected, sweep.skipped = _guard(build_suite, sweep.suite, sweep.adapters, only=opts.benchmark)
+        # File reads and grading-interpreter probes (build_suite checks
+        # calibrations), so off the event loop (#140).
+        def select():
+            adapters = load_adapters()
+            suite = _guard(load_suite, opts.tier)
+            return (adapters, suite, *_guard(build_suite, suite, adapters, only=opts.benchmark))
+
+        sweep.adapters, sweep.suite, selected, sweep.skipped = await asyncio.to_thread(select)
         if not selected:
             raise TuneRefused(f"llama-tune: tier '{opts.tier}' selected no items")
         sweep.items = interleave(selected)
