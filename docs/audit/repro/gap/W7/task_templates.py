@@ -14,7 +14,9 @@ user = types.SimpleNamespace(model_dump=lambda: {'id': 'u1', 'name': 'Eli', 'ema
 async def main():
     out = await title_generation_template('Title for: {{prompt}}', msgs, user)
     print('--- title task prompt built from the last user message ---')
-    print(out)
+    # Report what was inlined rather than printing the (fake) email itself.
+    print('user email expanded into the prompt:', 'eli@example.com' in out)
+    print('whole conversation inlined:', 'ASSISTANT: first answer' in out)
     print('--- END:0 / prompt:end:0 ---')
     print(repr(replace_messages_variable('{{MESSAGES:END:0}}', msgs)))
     print(repr(replace_prompt_variable('{{prompt:end:0}}', 'abcdef')))
