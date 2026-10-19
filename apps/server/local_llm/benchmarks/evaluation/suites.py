@@ -18,11 +18,18 @@ from local_llm.benchmarks.evaluation.datasets import dotted, item_id, read_items
 from local_llm.benchmarks.paths import SUITES_DIR
 
 
+def suite_names() -> list[str]:
+    return sorted(p.stem for p in SUITES_DIR.glob('*.toml'))
+
+
 def load_suite(name: str) -> dict:
+    # Only a name the suites directory lists, never a path built from the
+    # request: `../../x` would otherwise read any .toml file the server can,
+    # the same rule load_system() applies to system prompts.
+    known = suite_names()
+    if name not in known:
+        raise SystemExit(f"benchmarks: no suite '{name}' (known: {', '.join(known)})")
     path = SUITES_DIR / f'{name}.toml'
-    if not path.exists():
-        known = ', '.join(sorted(p.stem for p in SUITES_DIR.glob('*.toml')))
-        raise SystemExit(f"benchmarks: no suite '{name}' (known: {known})")
     with open(path, 'rb') as fh:
         return tomllib.load(fh)
 
