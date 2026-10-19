@@ -127,6 +127,8 @@ dependencies = [
 
     # Benchmarks > Report (benchmarks/report*.py) and utils/tools.py.
     "scipy==1.18.1",
+    # Benchmarks > Compare and Report: cluster-robust errors, Wilson, McNemar, Holm.
+    "statsmodels==0.15.0",
     "matplotlib==3.11.2",
     "pyyaml==6.0.3",
 
