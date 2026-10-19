@@ -2899,79 +2899,79 @@ the i18n and emoji code. Every finding was re-verified by the auditing session; 
 
 | ID | Issue | Severity | Area | Status | Package | Title |
 |---|---|---|---|---|---|---|
-| A-171 | pending | High | infra | Confirmed | W10 | With LLLM_BACKEND_HOST=0.0.0.0, Socket.IO refuses every connection from a LAN origin, so chat replies never reach the page |
-| A-181 | pending | High | backend | Confirmed | W2+W1 | Saving a knowledge file's edited content reports success when nothing, or only part of it, was saved |
-| A-192 | pending | High | web | Confirmed | W11+W8 | Saving any occurrence of a repeating calendar event moves the whole series to start there; deleting an occurrence deletes the series |
-| A-201 | pending | High | backend | Confirmed | W3 | Direct-message and group channel messages never send channel.message notifications |
-| A-214 | pending | High | backend | Confirmed | W5 | A model downloaded by URL is hashed and pushed to Ollama before its last bytes are flushed, so a truncated blob is reported as done |
-| A-172 | pending | Medium | backend | Confirmed | W10 | Stopping a chat's tasks skips some when three or more are running, but reports all stopped |
-| A-176 | pending | Medium | backend | Confirmed | W7 | A function edit whose code fails to load switches off the live function while the API reports the update was rejected |
-| A-177 | pending | Medium | backend | Confirmed | W7 | Memory routes write the database before embedding, so a failed embedding leaves stale or missing memories in chat context |
-| A-182 | pending | Medium | backend | Confirmed | W2 | "Reindex knowledge" deletes every vector up front and reports success even when files fail to re-embed |
-| A-183 | pending | Medium | backend | Confirmed | W2 | Knowledge files whose processing is interrupted stay "uploading" forever |
-| A-184 | pending | Medium | backend | Confirmed | W2 | A failed knowledge-base step leaves an orphan file, so folder sync leaks a file on every run for identical-content files |
-| A-193 | pending | Medium | web | Confirmed | W11 | Calendar day and week views show an event only in its starting hour, so multi-day and all-day events vanish on later days |
-| A-194 | pending | Medium | web | Confirmed | W11 | Clicking a channel automation's run in the calendar opens /c/channel:<id>, which bounces to a blank chat |
-| A-202 | pending | Medium | backend | Confirmed | W3 | In channel (inline) response mode the model gets no conversation context, not even the message being replied to |
-| A-203 | pending | Medium | backend | Confirmed | W3 | A channel model reply stays on "Thinking" forever when the completion fails before its task starts or ends with no text |
-| A-208 | pending | Medium | web | Confirmed | W4 | Share links open only for the owner and admins: the React share dialog lost the access-control panel |
-| A-209 | pending | Medium | backend | Confirmed | W4 | Saving a model, prompt or skill as a non-admin strips existing public, user or group grants |
-| A-210 | pending | Medium | backend | Confirmed | W4 | Cloning or sharing a chat while a reply streams copies the unfinished placeholder (fork is guarded, clone and share are not) |
-| A-215 | pending | Medium | backend | Confirmed | W5 | URL model downloads ignore the HTTP status, resume blindly, and are capped at 10 minutes (30 s for the push) |
-| A-216 | pending | Medium | backend | Confirmed | W5 | Saving Admin > Audio with local Whisper fails after persisting whenever the model cannot load, and the page shows nothing |
-| A-217 | pending | Medium | backend | Confirmed | W5 | With the "Web API" speech-to-text engine selected, every uploaded audio file fails processing with a TypeError |
-| A-220 | pending | Medium | backend | Confirmed | W1 | An embedding model that fails to load is saved and reported as updated, after which every upload and query fails |
-| A-221 | pending | Medium | backend | Confirmed | W1 | Native pgvector hybrid search requires every query word to match, so keyword ranking rarely contributes and weight 1.0 returns nothing |
-| A-222 | pending | Medium | backend | Confirmed | W1 | The external reranker has no default timeout, and its failures silently skip reranking, top-k and the relevance threshold |
-| A-223 | pending | Medium | backend | Confirmed | W1 | External knowledge bases answer only the first of several generated queries |
-| A-224 | pending | Medium | backend | Suspected | W1 | The external pgvector provider sends the query vector as double precision[], so queries likely fail |
-| A-225 | pending | Medium | backend | Confirmed | W1+W8 | In chat, one failing attachment or external knowledge base silently drops the context of every attachment |
-| A-226 | pending | Medium | backend | Confirmed | W1 | pgvector query, get and search leave the thread's session in an open transaction when nothing matches |
-| A-233 | pending | Medium | backend | Confirmed | W9 | In multi-model chats every column after the first runs with the first model's parameters and system prompt state |
-| A-234 | pending | Medium | backend | Confirmed | W9 | The custom-model fallback setting does nothing for UI chats, because the fan-out restores the broken model |
-| A-235 | pending | Medium | backend | Confirmed | W9 | SAFE_MODE does not stop event functions from running at startup |
-| A-236 | pending | Medium | backend | Suspected | W9 | Shutdown closes the HTTP pool without stopping running chat tasks, so in-flight replies are cut instead of saved as cancelled |
-| A-170 | pending | Low | backend | Confirmed | W6 | Admin password reset for a SCIM-created user silently does nothing but reports success |
-| A-173 | pending | Low | backend | Confirmed | W10 | The default avatar endpoint returns 500 because user.png is never seeded into the static directory |
-| A-174 | pending | Low | backend | Confirmed | W10 | /openai/audio/speech returns 500 because an error-message function is passed uncalled |
-| A-175 | pending | Low | backend | Confirmed | W10 | An empty RAG_FILE_MAX_SIZE crashes startup, and the metadata cap ignores the admin upload limit |
-| A-178 | pending | Low | backend | Confirmed | W7 | The Pipelines server's error details never reach the client, and valve reads publish a valves-updated event while updates publish none |
-| A-179 | pending | Low | backend | Confirmed | W7 | Task prompt templates re-expand template variables inside the user's own messages |
-| A-180 | pending | Low | web | Confirmed | W7 | generateTags turns every apostrophe into a double quote before parsing, so one tag with an apostrophe empties the list |
-| A-185 | pending | Low | backend | Suspected | W2 | The upload status stream can report completed before the knowledge-base step and link finish |
-| A-186 | pending | Low | backend | Confirmed | W2 | Knowledge directories at the root can share a name, and sync then ignores one of them |
-| A-187 | pending | Low | backend | Confirmed | W2 | Removing a file from one knowledge base (or resetting one) deletes it even when another base uses it |
-| A-188 | pending | Low | backend | Confirmed | W2+W1 | Adding an already-linked file to a knowledge base duplicates its chunks and reports success; batch-add warnings are dropped |
-| A-189 | pending | Low | backend | Confirmed | W2 | Deleting a shared chat folder leaves other users' chats pointing at it, hidden from their sidebars |
-| A-190 | pending | Low | backend | Confirmed | W2 | Deleting a folder while keeping its chats still requires the chat delete permission |
-| A-191 | pending | Low | web | Confirmed | W2 | Folder sync removes the old copy of a modified file before the new one has uploaded |
-| A-195 | pending | Low | web | Confirmed | W11 | Calendar hour rows mis-bucket events on daylight-saving days: duplicated on spring-forward, missing on fall-back |
-| A-196 | pending | Low | web | Confirmed | W11 | Clearing the time in the automation schedule picker sends BYMINUTE=undefined, or runs a one-time automation at midnight |
-| A-197 | pending | Low | web | Confirmed | W11 | Automation JSON import stops at the first rejected item, keeping earlier items and giving no count |
-| A-198 | pending | Low | web | Confirmed | W11 | Calendar display details: unknown reminder values show as None, month cells are not in time order, paused automations show a next run, and the user timezone is synced only at sign-in |
-| A-199 | pending | Low | web | Confirmed | W11 | 207 emoji shortcodes (heart, warning, v, point_up, check marks) produce text-style characters without the emoji variation selector |
-| A-200 | pending | Low | web | Confirmed | W11 | {{USER_LANGUAGE}} is always en-US, and the stored locale is overwritten |
-| A-204 | pending | Low | backend | Confirmed | W3 | Pinning a webhook message relabels it as the webhook owner, and the pinned list names every webhook "Webhook" |
-| A-205 | pending | Low | backend | Confirmed | W3 | A group channel's Public setting is saved but never enforced |
-| A-206 | pending | Low | backend | Confirmed | W3 | Note delete reports success when it failed, and a failed pin returns 500 |
-| A-207 | pending | Low | backend | Confirmed | W3 | Deleting a channel leaves its messages, reactions, memberships and webhooks; deleting a note leaves its chats |
-| A-211 | pending | Low | backend | Confirmed | W4 | POST /models/import reports success when entries were skipped or failed to save |
-| A-212 | pending | Low | backend | Confirmed | W4 | Deleting another user's chat as an admin runs orphan-tag cleanup against the admin's own tags |
-| A-213 | pending | Low | backend | Confirmed | W4 | Chat search snippets can miss the match when the text contains characters that lengthen when lowercased |
-| A-218 | pending | Low | backend | Confirmed | W5 | A malformed image edit size is accepted on save and then makes every image edit fail |
-| A-219 | pending | Low | backend | Confirmed | W5 | Ollama API proxy routes: prefixed model ids are sent unstripped, an inverted message validator rejects tool-call turns, and failed uploads leave multi-GB files |
-| A-227 | pending | Low | backend | Confirmed | W1 | An embedding batch size of 0 or less is accepted and breaks every embedding |
-| A-228 | pending | Low | backend | Confirmed | W1 | The collection query API ignores hybrid=false, and r=0 or k_reranker=0 cannot override the configuration |
-| A-229 | pending | Low | backend | Suspected | W1 | Full-context reads of a vector collection return chunks in arbitrary order |
-| A-230 | pending | Low | backend | Confirmed | W8 | The Scheduled Tasks calendar shows runs that will never happen for COUNT rules |
-| A-231 | pending | Low | backend | Confirmed | W8 | With enriched texts on, hybrid search returns the BM25 scoring text as the chunk content |
-| A-232 | pending | Low | backend | Confirmed | W8 | Notes shared through a readable folder are left out of RAG, unlike files and knowledge bases in the same folder |
-| A-237 | pending | Low | backend | Confirmed | W9 | A tool-server connection saved with config null stops the backend from starting |
-| A-238 | pending | Low | backend | Confirmed | W9 | Upstream failures on the direct API path all become HTTP 400 |
+| A-171 | #297 | High | infra | Confirmed | W10 | With LLLM_BACKEND_HOST=0.0.0.0, Socket.IO refuses every connection from a LAN origin, so chat replies never reach the page |
+| A-181 | #307 | High | backend | Confirmed | W2+W1 | Saving a knowledge file's edited content reports success when nothing, or only part of it, was saved |
+| A-192 | #318 | High | web | Confirmed | W11+W8 | Saving any occurrence of a repeating calendar event moves the whole series to start there; deleting an occurrence deletes the series |
+| A-201 | #327 | High | backend | Confirmed | W3 | Direct-message and group channel messages never send channel.message notifications |
+| A-214 | #340 | High | backend | Confirmed | W5 | A model downloaded by URL is hashed and pushed to Ollama before its last bytes are flushed, so a truncated blob is reported as done |
+| A-172 | #298 | Medium | backend | Confirmed | W10 | Stopping a chat's tasks skips some when three or more are running, but reports all stopped |
+| A-176 | #302 | Medium | backend | Confirmed | W7 | A function edit whose code fails to load switches off the live function while the API reports the update was rejected |
+| A-177 | #303 | Medium | backend | Confirmed | W7 | Memory routes write the database before embedding, so a failed embedding leaves stale or missing memories in chat context |
+| A-182 | #308 | Medium | backend | Confirmed | W2 | "Reindex knowledge" deletes every vector up front and reports success even when files fail to re-embed |
+| A-183 | #309 | Medium | backend | Confirmed | W2 | Knowledge files whose processing is interrupted stay "uploading" forever |
+| A-184 | #310 | Medium | backend | Confirmed | W2 | A failed knowledge-base step leaves an orphan file, so folder sync leaks a file on every run for identical-content files |
+| A-193 | #319 | Medium | web | Confirmed | W11 | Calendar day and week views show an event only in its starting hour, so multi-day and all-day events vanish on later days |
+| A-194 | #320 | Medium | web | Confirmed | W11 | Clicking a channel automation's run in the calendar opens /c/channel:<id>, which bounces to a blank chat |
+| A-202 | #328 | Medium | backend | Confirmed | W3 | In channel (inline) response mode the model gets no conversation context, not even the message being replied to |
+| A-203 | #329 | Medium | backend | Confirmed | W3 | A channel model reply stays on "Thinking" forever when the completion fails before its task starts or ends with no text |
+| A-208 | #334 | Medium | web | Confirmed | W4 | Share links open only for the owner and admins: the React share dialog lost the access-control panel |
+| A-209 | #335 | Medium | backend | Confirmed | W4 | Saving a model, prompt or skill as a non-admin strips existing public, user or group grants |
+| A-210 | #336 | Medium | backend | Confirmed | W4 | Cloning or sharing a chat while a reply streams copies the unfinished placeholder (fork is guarded, clone and share are not) |
+| A-215 | #341 | Medium | backend | Confirmed | W5 | URL model downloads ignore the HTTP status, resume blindly, and are capped at 10 minutes (30 s for the push) |
+| A-216 | #342 | Medium | backend | Confirmed | W5 | Saving Admin > Audio with local Whisper fails after persisting whenever the model cannot load, and the page shows nothing |
+| A-217 | #343 | Medium | backend | Confirmed | W5 | With the "Web API" speech-to-text engine selected, every uploaded audio file fails processing with a TypeError |
+| A-220 | #346 | Medium | backend | Confirmed | W1 | An embedding model that fails to load is saved and reported as updated, after which every upload and query fails |
+| A-221 | #347 | Medium | backend | Confirmed | W1 | Native pgvector hybrid search requires every query word to match, so keyword ranking rarely contributes and weight 1.0 returns nothing |
+| A-222 | #348 | Medium | backend | Confirmed | W1 | The external reranker has no default timeout, and its failures silently skip reranking, top-k and the relevance threshold |
+| A-223 | #349 | Medium | backend | Confirmed | W1 | External knowledge bases answer only the first of several generated queries |
+| A-224 | #350 | Medium | backend | Suspected | W1 | The external pgvector provider sends the query vector as double precision[], so queries likely fail |
+| A-225 | #351 | Medium | backend | Confirmed | W1+W8 | In chat, one failing attachment or external knowledge base silently drops the context of every attachment |
+| A-226 | #352 | Medium | backend | Confirmed | W1 | pgvector query, get and search leave the thread's session in an open transaction when nothing matches |
+| A-233 | #359 | Medium | backend | Confirmed | W9 | In multi-model chats every column after the first runs with the first model's parameters and system prompt state |
+| A-234 | #360 | Medium | backend | Confirmed | W9 | The custom-model fallback setting does nothing for UI chats, because the fan-out restores the broken model |
+| A-235 | #361 | Medium | backend | Confirmed | W9 | SAFE_MODE does not stop event functions from running at startup |
+| A-236 | #362 | Medium | backend | Suspected | W9 | Shutdown closes the HTTP pool without stopping running chat tasks, so in-flight replies are cut instead of saved as cancelled |
+| A-170 | #296 | Low | backend | Confirmed | W6 | Admin password reset for a SCIM-created user silently does nothing but reports success |
+| A-173 | #299 | Low | backend | Confirmed | W10 | The default avatar endpoint returns 500 because user.png is never seeded into the static directory |
+| A-174 | #300 | Low | backend | Confirmed | W10 | /openai/audio/speech returns 500 because an error-message function is passed uncalled |
+| A-175 | #301 | Low | backend | Confirmed | W10 | An empty RAG_FILE_MAX_SIZE crashes startup, and the metadata cap ignores the admin upload limit |
+| A-178 | #304 | Low | backend | Confirmed | W7 | The Pipelines server's error details never reach the client, and valve reads publish a valves-updated event while updates publish none |
+| A-179 | #305 | Low | backend | Confirmed | W7 | Task prompt templates re-expand template variables inside the user's own messages |
+| A-180 | #306 | Low | web | Confirmed | W7 | generateTags turns every apostrophe into a double quote before parsing, so one tag with an apostrophe empties the list |
+| A-185 | #311 | Low | backend | Suspected | W2 | The upload status stream can report completed before the knowledge-base step and link finish |
+| A-186 | #312 | Low | backend | Confirmed | W2 | Knowledge directories at the root can share a name, and sync then ignores one of them |
+| A-187 | #313 | Low | backend | Confirmed | W2 | Removing a file from one knowledge base (or resetting one) deletes it even when another base uses it |
+| A-188 | #314 | Low | backend | Confirmed | W2+W1 | Adding an already-linked file to a knowledge base duplicates its chunks and reports success; batch-add warnings are dropped |
+| A-189 | #315 | Low | backend | Confirmed | W2 | Deleting a shared chat folder leaves other users' chats pointing at it, hidden from their sidebars |
+| A-190 | #316 | Low | backend | Confirmed | W2 | Deleting a folder while keeping its chats still requires the chat delete permission |
+| A-191 | #317 | Low | web | Confirmed | W2 | Folder sync removes the old copy of a modified file before the new one has uploaded |
+| A-195 | #321 | Low | web | Confirmed | W11 | Calendar hour rows mis-bucket events on daylight-saving days: duplicated on spring-forward, missing on fall-back |
+| A-196 | #322 | Low | web | Confirmed | W11 | Clearing the time in the automation schedule picker sends BYMINUTE=undefined, or runs a one-time automation at midnight |
+| A-197 | #323 | Low | web | Confirmed | W11 | Automation JSON import stops at the first rejected item, keeping earlier items and giving no count |
+| A-198 | #324 | Low | web | Confirmed | W11 | Calendar display details: unknown reminder values show as None, month cells are not in time order, paused automations show a next run, and the user timezone is synced only at sign-in |
+| A-199 | #325 | Low | web | Confirmed | W11 | 207 emoji shortcodes (heart, warning, v, point_up, check marks) produce text-style characters without the emoji variation selector |
+| A-200 | #326 | Low | web | Confirmed | W11 | {{USER_LANGUAGE}} is always en-US, and the stored locale is overwritten |
+| A-204 | #330 | Low | backend | Confirmed | W3 | Pinning a webhook message relabels it as the webhook owner, and the pinned list names every webhook "Webhook" |
+| A-205 | #331 | Low | backend | Confirmed | W3 | A group channel's Public setting is saved but never enforced |
+| A-206 | #332 | Low | backend | Confirmed | W3 | Note delete reports success when it failed, and a failed pin returns 500 |
+| A-207 | #333 | Low | backend | Confirmed | W3 | Deleting a channel leaves its messages, reactions, memberships and webhooks; deleting a note leaves its chats |
+| A-211 | #337 | Low | backend | Confirmed | W4 | POST /models/import reports success when entries were skipped or failed to save |
+| A-212 | #338 | Low | backend | Confirmed | W4 | Deleting another user's chat as an admin runs orphan-tag cleanup against the admin's own tags |
+| A-213 | #339 | Low | backend | Confirmed | W4 | Chat search snippets can miss the match when the text contains characters that lengthen when lowercased |
+| A-218 | #344 | Low | backend | Confirmed | W5 | A malformed image edit size is accepted on save and then makes every image edit fail |
+| A-219 | #345 | Low | backend | Confirmed | W5 | Ollama API proxy routes: prefixed model ids are sent unstripped, an inverted message validator rejects tool-call turns, and failed uploads leave multi-GB files |
+| A-227 | #353 | Low | backend | Confirmed | W1 | An embedding batch size of 0 or less is accepted and breaks every embedding |
+| A-228 | #354 | Low | backend | Confirmed | W1 | The collection query API ignores hybrid=false, and r=0 or k_reranker=0 cannot override the configuration |
+| A-229 | #355 | Low | backend | Suspected | W1 | Full-context reads of a vector collection return chunks in arbitrary order |
+| A-230 | #356 | Low | backend | Confirmed | W8 | The Scheduled Tasks calendar shows runs that will never happen for COUNT rules |
+| A-231 | #357 | Low | backend | Confirmed | W8 | With enriched texts on, hybrid search returns the BM25 scoring text as the chunk content |
+| A-232 | #358 | Low | backend | Confirmed | W8 | Notes shared through a readable folder are left out of RAG, unlike files and knowledge bases in the same folder |
+| A-237 | #363 | Low | backend | Confirmed | W9 | A tool-server connection saved with config null stops the backend from starting |
+| A-238 | #364 | Low | backend | Confirmed | W9 | Upstream failures on the direct API path all become HTTP 400 |
 
 ### A-170: Admin password reset for a SCIM-created user silently does nothing but reports success
 
-Issue: pending. Severity: Low. Area: backend. Status: Confirmed. Package: W6.
+Issue: #296. Severity: Low. Area: backend. Status: Confirmed. Package: W6.
 
 - **Location**: [`apps/server/local_llm/routers/scim.py:614-621`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/scim.py#L614-L621); [`apps/server/local_llm/routers/users.py:969`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/users.py#L969); [`apps/server/local_llm/routers/users.py:1015-1023`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/users.py#L1015-L1023)
 - **Description**: SCIM create inserts only a User row (every other creation path also creates an Auth row), so `update_user_password_by_id` affects no row and returns False, which the route ignores before publishing AUTH_PASSWORD_CHANGED and returning 200.
@@ -2987,7 +2987,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-171: With LLLM_BACKEND_HOST=0.0.0.0, Socket.IO refuses every connection from a LAN origin, so chat replies never reach the page
 
-Issue: pending. Severity: High. Area: infra. Status: Confirmed. Package: W10.
+Issue: #297. Severity: High. Area: infra. Status: Confirmed. Package: W10.
 
 - **Location**: [`Makefile:101`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/Makefile#L101); [`apps/server/local_llm/config.py:1889`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/config.py#L1889); [`apps/server/local_llm/socket/main.py:63`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/socket/main.py#L63); [`apps/server/local_llm/socket/main.py:91`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/socket/main.py#L91); [`apps/server/local_llm/socket/main.py:106`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/socket/main.py#L106); [`apps/server/local_llm/main.py:1855-1859`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/main.py#L1855-L1859); [`apps/web/src/routes/chat/useChatSession.ts:348`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/chat/useChatSession.ts#L348)
 - **Description**: `make backend` pins `CORS_ALLOW_ORIGIN` to localhost/127.0.0.1 on ports 4000 and 5174 whatever `LLLM_BACKEND_HOST` is, and Socket.IO uses that list for its origin check, so a page loaded from `http://<lan-ip>:4000` gets 400 "not an accepted origin" on every transport. Without a socket the frontend sends no `session_id`, the backend takes the synchronous branch, and the React chat (which expects task ids and socket events) never shows replies, channel updates or stop signals. Same mistake as the 2026-09-27 CORS fix, which added only localhost origins.
@@ -3003,7 +3003,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-172: Stopping a chat's tasks skips some when three or more are running, but reports all stopped
 
-Issue: pending. Severity: Medium. Area: backend. Status: Confirmed. Package: W10.
+Issue: #298. Severity: Medium. Area: backend. Status: Confirmed. Package: W10.
 
 - **Location**: [`apps/server/local_llm/tasks.py:114-139`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/tasks.py#L114-L139); [`apps/server/local_llm/tasks.py:163-169`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/tasks.py#L163-L169); [`apps/server/local_llm/tasks.py:257-282`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/tasks.py#L257-L282); [`apps/server/local_llm/main.py:1714`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/main.py#L1714); [`apps/server/local_llm/main.py:2139`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/main.py#L2139); [`apps/server/local_llm/routers/chats.py:1294`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/chats.py#L1294); [`apps/server/local_llm/routers/chats.py:1299`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/chats.py#L1299); [`apps/server/local_llm/routers/chats.py:1610`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/chats.py#L1610)
 - **Description**: Without Redis, `list_task_ids_by_item_id` returns the live list, and `stop_item_tasks` loops over it while each `await task` lets the finished task's cleanup remove its id, so the loop skips an entry; it still returns "All tasks ... stopped". Used by Stop, chat delete and archive.
@@ -3019,7 +3019,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-173: The default avatar endpoint returns 500 because user.png is never seeded into the static directory
 
-Issue: pending. Severity: Low. Area: backend. Status: Confirmed. Package: W10.
+Issue: #299. Severity: Low. Area: backend. Status: Confirmed. Package: W10.
 
 - **Location**: [`apps/server/local_llm/routers/users.py:876`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/users.py#L876); [`apps/server/local_llm/routers/users.py:888`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/users.py#L888); [`apps/server/local_llm/config.py:103-138`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/config.py#L103-L138); [`apps/server/local_llm/models/users.py:363`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/users.py#L363); [`apps/server/local_llm/models/auths.py:79`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/auths.py#L79)
 - **Description**: The fallback serves `{STATIC_DIR}/user.png`, but static seeding copies only `apps/web/{dist,public}/static`, while the file lives at `apps/web/public/user.png`; every default user has `profile_image_url='/user.png'`. Recorded in the restructure plan as pre-existing but never filed.
@@ -3035,7 +3035,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-174: /openai/audio/speech returns 500 because an error-message function is passed uncalled
 
-Issue: pending. Severity: Low. Area: backend. Status: Confirmed. Package: W10.
+Issue: #300. Severity: Low. Area: backend. Status: Confirmed. Package: W10.
 
 - **Location**: [`apps/server/local_llm/routers/openai.py:612`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/openai.py#L612); [`apps/server/local_llm/routers/openai.py:671`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/openai.py#L671); [`apps/server/local_llm/constants.py:124`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/constants.py#L124)
 - **Description**: `detail=ERROR_MESSAGES.OPENAI_NOT_FOUND` puts a function into the HTTPException, which fails to serialise; with no api.openai.com connection the `.index()` always raises, so every call is a 500. (The web UI uses `/audio/speech`.) An AST scan found no other misuse.
@@ -3051,7 +3051,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-175: An empty RAG_FILE_MAX_SIZE crashes startup, and the metadata cap ignores the admin upload limit
 
-Issue: pending. Severity: Low. Area: backend. Status: Confirmed. Package: W10.
+Issue: #301. Severity: Low. Area: backend. Status: Confirmed. Package: W10.
 
 - **Location**: [`apps/server/local_llm/env.py:745-752`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/env.py#L745-L752); [`apps/server/local_llm/config.py:707`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/config.py#L707); [`apps/server/local_llm/retrieval/vector/utils.py:28`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/vector/utils.py#L28); [`apps/server/local_llm/retrieval/vector/utils.py:50`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/vector/utils.py#L50)
 - **Description**: env.py parses `int(os.getenv('RAG_FILE_MAX_SIZE', '0'))`, so a set-but-empty value (or `0.5`) raises ValueError at import, while config.py treats empty as unset; the derived metadata cap reads only the env var, never the persisted Admin > Documents limit, so it is always None here despite its comment.
@@ -3067,7 +3067,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-176: A function edit whose code fails to load switches off the live function while the API reports the update was rejected
 
-Issue: pending. Severity: Medium. Area: backend. Status: Confirmed. Package: W7.
+Issue: #302. Severity: Medium. Area: backend. Status: Confirmed. Package: W7.
 
 - **Location**: [`apps/server/local_llm/routers/functions.py:391-428`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/functions.py#L391-L428); [`apps/server/local_llm/routers/functions.py:167-196`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/functions.py#L167-L196); [`apps/server/local_llm/utils/plugin.py:352-358`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/utils/plugin.py#L352-L358)
 - **Description**: The update route validates the new content with `load_function_module_by_id(id, content=...)`, whose failure branch commits `is_active=False` for the stored function; the route then answers 400 and keeps the old content, so a working (possibly global) filter is silently disabled by a save the user was told failed. `/functions/sync` behaves the same.
@@ -3083,7 +3083,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-177: Memory routes write the database before embedding, so a failed embedding leaves stale or missing memories in chat context
 
-Issue: pending. Severity: Medium. Area: backend. Status: Confirmed. Package: W7.
+Issue: #303. Severity: Medium. Area: backend. Status: Confirmed. Package: W7.
 
 - **Location**: [`apps/server/local_llm/routers/memories.py:136-157`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/memories.py#L136-L157); [`apps/server/local_llm/routers/memories.py:200-223`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/memories.py#L200-L223); [`apps/server/local_llm/routers/memories.py:256-290`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/memories.py#L256-L290); [`apps/server/local_llm/routers/memories.py:449-470`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/memories.py#L449-L470); [`apps/server/local_llm/routers/memories.py:565-593`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/memories.py#L565-L593); [`apps/server/local_llm/routers/memories.py:619-622`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/memories.py#L619-L622); [`apps/server/local_llm/utils/memory.py:315-339`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/utils/memory.py#L315-L339); [`apps/server/local_llm/utils/memory.py:400-435`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/utils/memory.py#L400-L435)
 - **Description**: When embedding fails (e.g. the default model missing from the cache under `HF_HUB_OFFLINE=1`): add keeps the row with no vector (retry duplicates it); update saves new content while the vector keeps the old text, and chat context injects the vector's text, not the DB row; batch updates skip pending vector deletes; reindex deletes the collection before embedding and `/reindex` stops at the first failing user.
@@ -3099,7 +3099,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-178: The Pipelines server's error details never reach the client, and valve reads publish a valves-updated event while updates publish none
 
-Issue: pending. Severity: Low. Area: backend. Status: Confirmed. Package: W7.
+Issue: #304. Severity: Low. Area: backend. Status: Confirmed. Package: W7.
 
 - **Location**: [`apps/server/local_llm/routers/pipelines.py:92-117`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/pipelines.py#L92-L117); [`apps/server/local_llm/routers/pipelines.py:158-183`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/pipelines.py#L158-L183); [`apps/server/local_llm/routers/pipelines.py:283-570`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/pipelines.py#L283-L570); [`apps/server/local_llm/routers/pipelines.py:463-469`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/pipelines.py#L463-L469); [`apps/server/local_llm/routers/pipelines.py:530-552`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/pipelines.py#L530-L552)
 - **Description**: The response body is read after the `async with` has released it, so every failure becomes "Pipeline not found" (or a bare reason phrase for inlet/outlet filters, hiding e.g. a rate-limit message). Separately, `PIPELINE_VALVES_UPDATED` is published from the GET handler and not from the update handler, firing webhooks and notifications on reads.
@@ -3115,7 +3115,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-179: Task prompt templates re-expand template variables inside the user's own messages
 
-Issue: pending. Severity: Low. Area: backend. Status: Confirmed. Package: W7.
+Issue: #305. Severity: Low. Area: backend. Status: Confirmed. Package: W7.
 
 - **Location**: [`apps/server/local_llm/utils/task.py:331-389`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/utils/task.py#L331-L389); [`apps/server/local_llm/routers/tasks.py:177`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/tasks.py#L177); [`apps/server/local_llm/routers/tasks.py:245`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/tasks.py#L245); [`apps/server/local_llm/routers/tasks.py:446`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/tasks.py#L446)
 - **Description**: Each task template substitutes the prompt and messages first, then runs `prompt_template` over the combined text, so user text containing `{{USER_EMAIL}}` or `{{MESSAGES}}` (common in Jinja questions) is expanded; `{{MESSAGES}}` duplicates the conversation into title/tag/follow-up prompts.
@@ -3131,7 +3131,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-180: generateTags turns every apostrophe into a double quote before parsing, so one tag with an apostrophe empties the list
 
-Issue: pending. Severity: Low. Area: web. Status: Confirmed. Package: W7.
+Issue: #306. Severity: Low. Area: web. Status: Confirmed. Package: W7.
 
 - **Location**: [`apps/web/src/lib/apis/index.ts:853-879`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/lib/apis/index.ts#L853-L879); [`apps/web/src/routes/chat/useChatSession.ts:675`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/chat/useChatSession.ts#L675)
 - **Description**: The client normalises quotes before `JSON.parse`, so `{"tags": ["Student's t-test", "Statistics"]}` fails and returns `[]` (used for feedback annotation tags). (Inherited.)
@@ -3147,7 +3147,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-181: Saving a knowledge file's edited content reports success when nothing, or only part of it, was saved
 
-Issue: pending. Severity: High. Area: backend. Status: Confirmed. Package: W2+W1.
+Issue: #307. Severity: High. Area: backend. Status: Confirmed. Package: W2+W1.
 
 - **Location**: [`apps/server/local_llm/routers/files.py:718-766`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/files.py#L718-L766); [`apps/server/local_llm/routers/retrieval.py:1864-1867`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/retrieval.py#L1864-L1867); [`apps/server/local_llm/routers/retrieval.py:1886`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/retrieval.py#L1886); [`apps/server/local_llm/routers/retrieval.py:1989-2017`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/retrieval.py#L1989-L2017); [`apps/server/local_llm/routers/retrieval.py:2080-2117`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/retrieval.py#L2080-L2117); [`apps/server/local_llm/utils/access_control/files.py:50-63`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/utils/access_control/files.py#L50-L63); [`apps/web/src/routes/workspace/knowledge/KnowledgeBasePage.tsx:390-405`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/workspace/knowledge/KnowledgeBasePage.tsx#L390-L405); [`apps/web/src/routes/workspace/knowledge/KnowledgeBasePage.tsx:732-733`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/workspace/knowledge/KnowledgeBasePage.tsx#L732-L733); [`apps/server/local_llm/routers/knowledge.py:1549-1564`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/knowledge.py#L1549-L1564); [`apps/server/local_llm/routers/knowledge.py:1451-1465`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/knowledge.py#L1451-L1465); [`apps/server/local_llm/routers/retrieval.py:3183-3191`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/retrieval.py#L3183-L3191); [`apps/server/local_llm/routers/retrieval.py:1880`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/retrieval.py#L1880)
 - **Description**: `POST /files/{id}/data/content/update` swallows every `process_file` and per-base re-add failure and returns 200 with the stale pre-update content, which the page toasts as success. A knowledge-base write grantee passes the route's access check but `process_file` looks non-admins up by owner only and 404s, so nothing is written. For the owner, any processing failure (embedding down, duplicate content) leaves the new text stored, the file's own collection emptied and the base still answering from old chunks. The same owner-only lookup makes `/knowledge/{id}/file/update` delete the file's chunks before failing for a grantee (API-only), and the knowledge add routes accept readable-but-not-owned files that `process_file` then rejects. Separately, saving empty content restores the originally extracted text (`if form_data.content:` at retrieval.py:1880).
@@ -3163,7 +3163,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-182: "Reindex knowledge" deletes every vector up front and reports success even when files fail to re-embed
 
-Issue: pending. Severity: Medium. Area: backend. Status: Confirmed. Package: W2.
+Issue: #308. Severity: Medium. Area: backend. Status: Confirmed. Package: W2.
 
 - **Location**: [`apps/server/local_llm/routers/knowledge.py:380-443`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/knowledge.py#L380-L443); [`apps/web/src/routes/admin/settings/Documents.tsx:171-179`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/admin/settings/Documents.tsx#L171-L179)
 - **Description**: Each base collection and file collection is deleted, then files are re-processed; per-file failures are only logged and the endpoint always returns True, which the admin page shows as Success.
@@ -3179,7 +3179,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-183: Knowledge files whose processing is interrupted stay "uploading" forever
 
-Issue: pending. Severity: Medium. Area: backend. Status: Confirmed. Package: W2.
+Issue: #309. Severity: Medium. Area: backend. Status: Confirmed. Package: W2.
 
 - **Location**: [`apps/server/local_llm/routers/files.py:226`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/files.py#L226); [`apps/server/local_llm/routers/files.py:404`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/files.py#L404); [`apps/server/local_llm/routers/files.py:424-434`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/files.py#L424-L434); [`apps/server/local_llm/models/files.py:408-444`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/files.py#L408-L444); [`apps/web/src/routes/workspace/knowledge/KnowledgeBasePage.tsx:173`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/workspace/knowledge/KnowledgeBasePage.tsx#L173); [`apps/web/src/routes/workspace/knowledge/KnowledgeBasePage.tsx:187-199`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/workspace/knowledge/KnowledgeBasePage.tsx#L187-L199); [`apps/server/local_llm/routers/knowledge.py:1633`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/knowledge.py#L1633)
 - **Description**: Upload processing runs as an in-memory background task; if the worker restarts (any backend save under `uvicorn --reload`), nothing moves the file out of pending/processing, so the base page keeps a spinner row and polls forever, and the row cannot be removed from the page because it was never linked.
@@ -3195,7 +3195,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-184: A failed knowledge-base step leaves an orphan file, so folder sync leaks a file on every run for identical-content files
 
-Issue: pending. Severity: Medium. Area: backend. Status: Confirmed. Package: W2.
+Issue: #310. Severity: Medium. Area: backend. Status: Confirmed. Package: W2.
 
 - **Location**: [`apps/server/local_llm/routers/files.py:191-256`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/files.py#L191-L256); [`apps/server/local_llm/routers/retrieval.py:1661-1679`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/retrieval.py#L1661-L1679); [`apps/server/local_llm/routers/knowledge.py:1890-1926`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/knowledge.py#L1890-L1926); [`apps/web/src/routes/workspace/knowledge/useKnowledgeUploads.ts:214`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/workspace/knowledge/useKnowledgeUploads.ts#L214); [`apps/web/src/routes/workspace/knowledge/useKnowledgeUploads.ts:248`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/workspace/knowledge/useKnowledgeUploads.ts#L248)
 - **Description**: When the base step fails after the file was indexed (most often DUPLICATE_CONTENT for files with identical text), the file row, stored upload and file collection remain unlinked; sync diff sees only linked files, so every sync re-uploads it and leaks another copy. Re-uploading an already-uploaded folder fails and leaks every unchanged file.
@@ -3211,7 +3211,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-185: The upload status stream can report completed before the knowledge-base step and link finish
 
-Issue: pending. Severity: Low. Area: backend. Status: Suspected. Package: W2.
+Issue: #311. Severity: Low. Area: backend. Status: Suspected. Package: W2.
 
 - **Location**: [`apps/server/local_llm/routers/retrieval.py:2054-2058`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/retrieval.py#L2054-L2058); [`apps/server/local_llm/routers/files.py:224-241`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/files.py#L224-L241); [`apps/server/local_llm/routers/files.py:630-644`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/files.py#L630-L644)
 - **Description**: Both `process_file` calls commit `completed` before the next step (the comment says the stream waits for the link), so the 1 s poller can report success before a later duplicate or link failure, and briefly the file is neither pending nor linked.
@@ -3227,7 +3227,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-186: Knowledge directories at the root can share a name, and sync then ignores one of them
 
-Issue: pending. Severity: Low. Area: backend. Status: Confirmed. Package: W2.
+Issue: #312. Severity: Low. Area: backend. Status: Confirmed. Package: W2.
 
 - **Location**: [`apps/server/local_llm/models/knowledge.py:74-76`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/knowledge.py#L74-L76); [`apps/server/local_llm/routers/knowledge.py:2241-2252`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/knowledge.py#L2241-L2252); [`apps/server/local_llm/routers/knowledge.py:1875-1888`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/knowledge.py#L1875-L1888); [`apps/server/local_llm/routers/knowledge.py:1936-1939`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/knowledge.py#L1936-L1939)
 - **Description**: Uniqueness relies on `UniqueConstraint('knowledge_id','parent_id','name')`, and Postgres treats NULL parents as distinct, so two root folders named "docs" are accepted; sync maps the path to one id and never removes or uses the other.
@@ -3243,7 +3243,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-187: Removing a file from one knowledge base (or resetting one) deletes it even when another base uses it
 
-Issue: pending. Severity: Low. Area: backend. Status: Confirmed. Package: W2.
+Issue: #313. Severity: Low. Area: backend. Status: Confirmed. Package: W2.
 
 - **Location**: [`apps/server/local_llm/routers/knowledge.py:1656-1657`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/knowledge.py#L1656-L1657); [`apps/server/local_llm/routers/knowledge.py:1807`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/knowledge.py#L1807); [`apps/server/local_llm/routers/knowledge.py:1815-1817`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/knowledge.py#L1815-L1817); [`apps/server/local_llm/routers/knowledge.py:1993-1999`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/knowledge.py#L1993-L1999)
 - **Description**: `/file/remove` (default delete_file) and `/reset` delete the File without the linked-bases check that `sync/cleanup` applies; the other base's link cascades away but its vectors keep the chunks.
@@ -3259,7 +3259,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-188: Adding an already-linked file to a knowledge base duplicates its chunks and reports success; batch-add warnings are dropped
 
-Issue: pending. Severity: Low. Area: backend. Status: Confirmed. Package: W2+W1.
+Issue: #314. Severity: Low. Area: backend. Status: Confirmed. Package: W2+W1.
 
 - **Location**: [`apps/server/local_llm/routers/knowledge.py:1459-1474`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/knowledge.py#L1459-L1474); [`apps/server/local_llm/routers/knowledge.py:2076-2081`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/knowledge.py#L2076-L2081); [`apps/server/local_llm/routers/knowledge.py:2118-2127`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/knowledge.py#L2118-L2127); [`apps/server/local_llm/models/knowledge.py:695-705`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/knowledge.py#L695-L705)
 - **Description**: The single add has no `has_file` guard (the batch route has one), so chunks are re-inserted and the duplicate link insert fails silently with 200. The batch route passes `warnings=` to a response model with no such field, so per-file failures never reach the client.
@@ -3275,7 +3275,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-189: Deleting a shared chat folder leaves other users' chats pointing at it, hidden from their sidebars
 
-Issue: pending. Severity: Low. Area: backend. Status: Confirmed. Package: W2.
+Issue: #315. Severity: Low. Area: backend. Status: Confirmed. Package: W2.
 
 - **Location**: [`apps/server/local_llm/routers/folders.py:692-701`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/folders.py#L692-L701); [`apps/server/local_llm/models/chats.py:2486-2519`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/chats.py#L2486-L2519); [`apps/server/local_llm/models/chats.py:1524-1525`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/chats.py#L1524-L1525)
 - **Description**: Folder delete moves or deletes only the owner's chats; write grantees' chats in the folder keep the dangling folder id and vanish from the sidebar (which lists `folder_id IS NULL`). Folder sharing is API-only in this frontend.
@@ -3291,7 +3291,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-190: Deleting a folder while keeping its chats still requires the chat delete permission
 
-Issue: pending. Severity: Low. Area: backend. Status: Confirmed. Package: W2.
+Issue: #316. Severity: Low. Area: backend. Status: Confirmed. Package: W2.
 
 - **Location**: [`apps/server/local_llm/routers/folders.py:675-684`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/folders.py#L675-L684)
 - **Description**: The `chat.delete` permission is checked whenever the subtree has chats, even with `delete_contents=false`, which only moves them to root. (Inherited.)
@@ -3307,7 +3307,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-191: Folder sync removes the old copy of a modified file before the new one has uploaded
 
-Issue: pending. Severity: Low. Area: web. Status: Confirmed. Package: W2.
+Issue: #317. Severity: Low. Area: web. Status: Confirmed. Package: W2.
 
 - **Location**: [`apps/web/src/routes/workspace/knowledge/useKnowledgeUploads.ts:242-250`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/workspace/knowledge/useKnowledgeUploads.ts#L242-L250); [`apps/web/src/routes/workspace/knowledge/knowledgeFiles.ts:50-53`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/workspace/knowledge/knowledgeFiles.ts#L50-L53)
 - **Description**: Stale ids include modified files' old ids and cleanup runs before uploads, so a failed replacement upload leaves the file missing until a later successful sync. (Inherited.)
@@ -3323,7 +3323,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-192: Saving any occurrence of a repeating calendar event moves the whole series to start there; deleting an occurrence deletes the series
 
-Issue: pending. Severity: High. Area: web. Status: Confirmed. Package: W11+W8.
+Issue: #318. Severity: High. Area: web. Status: Confirmed. Package: W11+W8.
 
 - **Location**: [`apps/web/src/routes/calendar/CalendarPage.tsx:198-202`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/calendar/CalendarPage.tsx#L198-L202); [`apps/web/src/routes/calendar/calendarModel.ts:150-163`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/calendar/calendarModel.ts#L150-L163); [`apps/web/src/routes/calendar/calendarModel.ts:186-208`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/calendar/calendarModel.ts#L186-L208); [`apps/web/src/routes/calendar/CalendarDialogs.tsx:69`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/calendar/CalendarDialogs.tsx#L69); [`apps/web/src/routes/calendar/CalendarDialogs.tsx:82-83`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/calendar/CalendarDialogs.tsx#L82-L83); [`apps/web/src/routes/calendar/CalendarDialogs.tsx:101`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/calendar/CalendarDialogs.tsx#L101); [`apps/server/local_llm/utils/calendar.py:68-74`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/utils/calendar.py#L68-L74); [`apps/server/local_llm/models/calendar.py:703-717`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/calendar.py#L703-L717)
 - **Description**: Expanded occurrences carry the parent's id with the occurrence's own times; the dialog seeds its form from them and posts them to `/events/{parent id}/update`, so renaming the 20 Oct occurrence of a daily series that began 1 Oct moves the series start to 20 Oct (earlier occurrences vanish, COUNT restarts). Delete removes the whole series with a generic confirmation. (Inherited.)
@@ -3339,7 +3339,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-193: Calendar day and week views show an event only in its starting hour, so multi-day and all-day events vanish on later days
 
-Issue: pending. Severity: Medium. Area: web. Status: Confirmed. Package: W11.
+Issue: #319. Severity: Medium. Area: web. Status: Confirmed. Package: W11.
 
 - **Location**: [`apps/web/src/routes/calendar/CalendarViews.tsx:166`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/calendar/CalendarViews.tsx#L166); [`apps/web/src/routes/calendar/CalendarViews.tsx:202`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/calendar/CalendarViews.tsx#L202); [`apps/web/src/routes/calendar/calendarModel.ts:88-91`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/calendar/calendarModel.ts#L88-L91); [`apps/server/local_llm/models/calendar.py:562-569`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/calendar.py#L562-L569)
 - **Description**: The month grid lists events on every day they touch, but day and week rows match the start hour on the start day only; continuing, overnight and all-day events are absent from later days, and "+N more" opens a day view missing the events it counted. (Inherited.)
@@ -3355,7 +3355,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-194: Clicking a channel automation's run in the calendar opens /c/channel:<id>, which bounces to a blank chat
 
-Issue: pending. Severity: Medium. Area: web. Status: Confirmed. Package: W11.
+Issue: #320. Severity: Medium. Area: web. Status: Confirmed. Package: W11.
 
 - **Location**: [`apps/web/src/routes/calendar/calendarModel.ts:216-219`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/calendar/calendarModel.ts#L216-L219); [`apps/web/src/routes/calendar/CalendarPage.tsx:198-200`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/calendar/CalendarPage.tsx#L198-L200); [`apps/server/local_llm/utils/automations.py:484`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/utils/automations.py#L484); [`apps/server/local_llm/routers/calendar.py:244-256`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/calendar.py#L244-L256); [`apps/web/src/routes/automations/automationModel.ts:192-193`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/automations/automationModel.ts#L192-L193)
 - **Description**: Channel runs are recorded with `chat_id=channel:<id>`; the calendar navigates to `/c/<chat_id>`, the chat fails to load and the route is replaced with `/`. The Automations page already maps this with `runTarget`. (Inherited.)
@@ -3371,7 +3371,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-195: Calendar hour rows mis-bucket events on daylight-saving days: duplicated on spring-forward, missing on fall-back
 
-Issue: pending. Severity: Low. Area: web. Status: Confirmed. Package: W11.
+Issue: #321. Severity: Low. Area: web. Status: Confirmed. Package: W11.
 
 - **Location**: [`apps/web/src/routes/calendar/calendarModel.ts:88-99`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/calendar/calendarModel.ts#L88-L99); [`apps/web/src/routes/calendar/CalendarViews.tsx:189-207`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/calendar/CalendarViews.tsx#L189-L207)
 - **Description**: Each row ends at `from + 3600000` from a local `Date` start, so on 8 Mar the 2 AM row (really 03:00) and 3 AM row both include a 03:30 event, and on 1 Nov the second 01:30 matches no row; clicking the 2 AM row creates the event at 3 AM.
@@ -3387,7 +3387,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-196: Clearing the time in the automation schedule picker sends BYMINUTE=undefined, or runs a one-time automation at midnight
 
-Issue: pending. Severity: Low. Area: web. Status: Confirmed. Package: W11.
+Issue: #322. Severity: Low. Area: web. Status: Confirmed. Package: W11.
 
 - **Location**: [`apps/web/src/routes/automations/AutomationDialog.tsx:118-137`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/automations/AutomationDialog.tsx#L118-L137); [`apps/web/src/routes/automations/automationModel.ts:64-74`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/automations/automationModel.ts#L64-L74); [`apps/web/src/routes/automations/automationModel.ts:145-146`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/automations/automationModel.ts#L145-L146)
 - **Description**: A cleared time input yields `''`, which `split(':').map(Number)` turns into `[0]`, passing the NaN guard; daily/weekly/monthly then build `BYMINUTE=undefined` (400 on save), and Once with a future date sends `DTSTART:20261201T00`, accepted as midnight.
@@ -3403,7 +3403,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-197: Automation JSON import stops at the first rejected item, keeping earlier items and giving no count
 
-Issue: pending. Severity: Low. Area: web. Status: Confirmed. Package: W11.
+Issue: #323. Severity: Low. Area: web. Status: Confirmed. Package: W11.
 
 - **Location**: [`apps/web/src/routes/automations/AutomationsPage.tsx:145-160`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/automations/AutomationsPage.tsx#L145-L160); [`apps/web/src/lib/apis/automations/index.ts:108-135`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/lib/apis/automations/index.ts#L108-L135); [`apps/server/local_llm/routers/automations.py:217-223`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/automations.py#L217-L223)
 - **Description**: Items are created sequentially inside one try; an exhausted one-time automation (always present in an export after it ran) is rejected with 400 and the loop stops, so re-importing duplicates the earlier items. (Inherited.)
@@ -3419,7 +3419,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-198: Calendar display details: unknown reminder values show as None, month cells are not in time order, paused automations show a next run, and the user timezone is synced only at sign-in
 
-Issue: pending. Severity: Low. Area: web. Status: Confirmed. Package: W11.
+Issue: #324. Severity: Low. Area: web. Status: Confirmed. Package: W11.
 
 - **Location**: [`apps/web/src/routes/calendar/CalendarDialogs.tsx:23-31`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/calendar/CalendarDialogs.tsx#L23-L31); [`apps/web/src/routes/calendar/CalendarDialogs.tsx:226-237`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/calendar/CalendarDialogs.tsx#L226-L237); [`apps/server/local_llm/routers/calendar.py:186-268`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/calendar.py#L186-L268); [`apps/web/src/routes/calendar/calendarModel.ts:77-85`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/calendar/calendarModel.ts#L77-L85); [`apps/web/src/routes/automations/AutomationPage.tsx:183`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/automations/AutomationPage.tsx#L183); [`apps/server/local_llm/routers/automations.py:146-153`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/automations.py#L146-L153); [`apps/web/src/routes/public/AuthPage.tsx:74-77`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/public/AuthPage.tsx#L74-L77); [`apps/web/src/lib/auth/session.ts`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/lib/auth/session.ts)
 - **Description**: (1) A reminder not among the options (e.g. 120 set by the model's tool) renders as "None" and picking None changes nothing. (2) Calendar responses are not sorted, so month cells can hide earlier events behind "+N more". (3) A paused automation's page shows a next run computed from the rule. (4) The timezone is sent only at sign-in, while the original synced it on every load, so a restored session keeps a stale zone for recurring expansion and schedules.
@@ -3435,7 +3435,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-199: 207 emoji shortcodes (heart, warning, v, point_up, check marks) produce text-style characters without the emoji variation selector
 
-Issue: pending. Severity: Low. Area: web. Status: Confirmed. Package: W11.
+Issue: #325. Severity: Low. Area: web. Status: Confirmed. Package: W11.
 
 - **Location**: [`apps/web/src/lib/emoji/emoji.ts:89`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/lib/emoji/emoji.ts#L89); [`apps/web/src/lib/emoji/emoji.ts:97-107`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/lib/emoji/emoji.ts#L97-L107)
 - **Description**: The shortcode map is keyed by code points without U+FE0F (e.g. `2764`), while the groups list the FE0F forms; `char` is built from the bare form, so reactions like heart render as monochrome text glyphs on many platforms. The original drew SVGs by code.
@@ -3451,7 +3451,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-200: {{USER_LANGUAGE}} is always en-US, and the stored locale is overwritten
 
-Issue: pending. Severity: Low. Area: web. Status: Confirmed. Package: W11.
+Issue: #326. Severity: Low. Area: web. Status: Confirmed. Package: W11.
 
 - **Location**: [`apps/web/src/lib/i18n/index.ts:24-29`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/lib/i18n/index.ts#L24-L29); [`apps/web/src/lib/chat/request.ts:17-20`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/lib/chat/request.ts#L17-L20); [`apps/web/src/lib/chat/request.ts:32`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/lib/chat/request.ts#L32)
 - **Description**: `supportedLngs: ['en-US']` makes the detector resolve and cache `en-US` in `localStorage.locale`, which `promptVariables` reads, so the prompt variable never reflects the browser language; the original passed it through.
@@ -3467,7 +3467,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-201: Direct-message and group channel messages never send channel.message notifications
 
-Issue: pending. Severity: High. Area: backend. Status: Confirmed. Package: W3.
+Issue: #327. Severity: High. Area: backend. Status: Confirmed. Package: W3.
 
 - **Location**: [`apps/server/local_llm/routers/channels.py:81-89`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/channels.py#L81-L89); [`apps/server/local_llm/routers/channels.py:943-950`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/channels.py#L943-L950); [`apps/server/local_llm/models/access_grants.py:701-718`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/access_grants.py#L701-L718); [`apps/server/local_llm/models/channels.py:373`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/channels.py#L373); [`apps/server/local_llm/routers/channels.py:261-269`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/channels.py#L261-L269); [`apps/web/src/routes/channels/channelModel.ts:461`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/channels/channelModel.ts#L461)
 - **Description**: `send_notification` takes recipients from the channel's access grants and keeps only members; DM and group channels carry no grants (membership lives in channel_member), so the recipient list is always empty and offline members never get webhooks or notifications. Standard channels work. (Inherited.)
@@ -3483,7 +3483,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-202: In channel (inline) response mode the model gets no conversation context, not even the message being replied to
 
-Issue: pending. Severity: Medium. Area: backend. Status: Confirmed. Package: W3.
+Issue: #328. Severity: Medium. Area: backend. Status: Confirmed. Package: W3.
 
 - **Location**: [`apps/server/local_llm/routers/channels.py:983-989`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/channels.py#L983-L989); [`apps/server/local_llm/routers/channels.py:1006-1019`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/channels.py#L1006-L1019); [`apps/server/local_llm/routers/channels.py:1047-1058`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/channels.py#L1047-L1058); [`apps/server/local_llm/routers/channels.py:1087`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/channels.py#L1087); [`apps/server/local_llm/models/messages.py:317-343`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/messages.py#L317-L343)
 - **Description**: History is `get_messages_by_parent_id(message.parent_id or message.id)`; in `channels.model_response_mode='channel'` a top-level trigger has no replies, so the history is the trigger alone, and the replied-to model message is never included. In both modes the trigger appears twice, a second mentioned model sees the first model's empty placeholder, and threads with 50+ replies drop the root question. (Inherited.)
@@ -3499,7 +3499,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-203: A channel model reply stays on "Thinking" forever when the completion fails before its task starts or ends with no text
 
-Issue: pending. Severity: Medium. Area: backend. Status: Confirmed. Package: W3.
+Issue: #329. Severity: Medium. Area: backend. Status: Confirmed. Package: W3.
 
 - **Location**: [`apps/server/local_llm/routers/channels.py:1021-1037`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/channels.py#L1021-L1037); [`apps/server/local_llm/routers/channels.py:1139-1142`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/channels.py#L1139-L1142); [`apps/server/local_llm/main.py:1062-1074`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/main.py#L1062-L1074); [`apps/server/local_llm/main.py:1846-1851`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/main.py#L1846-L1851); [`apps/server/local_llm/socket/main.py:999-1004`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/socket/main.py#L999-L1004); [`apps/web/src/routes/channels/ChannelMessageView.tsx:325-326`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/channels/ChannelMessageView.tsx#L325-L326)
 - **Description**: The empty placeholder is inserted first and any later exception is only logged; a "Model not found" raised before the task starts never reaches the channel emitter. The frontend shows the skeleton whenever content is empty and `model_id` is set, ignoring `meta.done`, so reasoning-only replies also spin forever.
@@ -3515,7 +3515,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-204: Pinning a webhook message relabels it as the webhook owner, and the pinned list names every webhook "Webhook"
 
-Issue: pending. Severity: Low. Area: backend. Status: Confirmed. Package: W3.
+Issue: #330. Severity: Low. Area: backend. Status: Confirmed. Package: W3.
 
 - **Location**: [`apps/server/local_llm/routers/channels.py:1399-1421`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/channels.py#L1399-L1421); [`apps/server/local_llm/routers/channels.py:909-915`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/channels.py#L909-L915); [`apps/server/local_llm/routers/channels.py:2015`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/channels.py#L2015); [`apps/server/local_llm/routers/channels.py:1315-1321`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/channels.py#L1315-L1321); [`apps/server/local_llm/models/messages.py:194-214`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/messages.py#L194-L214)
 - **Description**: The pin route overwrites the resolved webhook identity with `Users.get_user_by_id(message.user_id)` (the creator), which the page merges live; the pinned list reads `meta.webhook.name`, which is never stored.
@@ -3531,7 +3531,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-205: A group channel's Public setting is saved but never enforced
 
-Issue: pending. Severity: Low. Area: backend. Status: Confirmed. Package: W3.
+Issue: #331. Severity: Low. Area: backend. Status: Confirmed. Package: W3.
 
 - **Location**: [`apps/web/src/routes/channels/ChannelDialogs.tsx:689-703`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/channels/ChannelDialogs.tsx#L689-L703); [`apps/web/src/routes/channels/channelModel.ts:460`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/channels/channelModel.ts#L460); [`apps/server/local_llm/models/channels.py:836`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/channels.py#L836); [`apps/server/local_llm/models/channels.py:395-405`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/channels.py#L395-L405)
 - **Description**: The dialog offers "Visible to all users" and sends `is_private`, but nothing reads it; listing and access require membership. (Inherited.)
@@ -3547,7 +3547,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-206: Note delete reports success when it failed, and a failed pin returns 500
 
-Issue: pending. Severity: Low. Area: backend. Status: Confirmed. Package: W3.
+Issue: #332. Severity: Low. Area: backend. Status: Confirmed. Package: W3.
 
 - **Location**: [`apps/server/local_llm/routers/notes.py:701-703`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/notes.py#L701-L703); [`apps/server/local_llm/routers/notes.py:750-758`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/notes.py#L750-L758); [`apps/server/local_llm/models/notes.py:370-393`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/notes.py#L370-L393); [`apps/server/local_llm/models/notes.py:419-428`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/notes.py#L419-L428)
 - **Description**: The delete route ignores the False return of `delete_note_by_id` (which swallows exceptions) and publishes NOTE_DELETED; the pin route dereferences None on error.
@@ -3563,7 +3563,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-207: Deleting a channel leaves its messages, reactions, memberships and webhooks; deleting a note leaves its chats
 
-Issue: pending. Severity: Low. Area: backend. Status: Confirmed. Package: W3.
+Issue: #333. Severity: Low. Area: backend. Status: Confirmed. Package: W3.
 
 - **Location**: [`apps/server/local_llm/models/channels.py:907-912`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/channels.py#L907-L912); [`apps/server/local_llm/models/channels.py:160`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/channels.py#L160); [`apps/server/local_llm/models/notes.py:419-428`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/notes.py#L419-L428); [`apps/server/local_llm/routers/notes.py:364-388`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/notes.py#L364-L388); [`apps/server/local_llm/routers/notes.py:488-512`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/notes.py#L488-L512)
 - **Description**: Channel delete removes grants and the channel row only (only channel_file cascades); note delete leaves the hidden note chats. The rows become unreachable but are never removed.
@@ -3579,7 +3579,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-208: Share links open only for the owner and admins: the React share dialog lost the access-control panel
 
-Issue: pending. Severity: Medium. Area: web. Status: Confirmed. Package: W4.
+Issue: #334. Severity: Medium. Area: web. Status: Confirmed. Package: W4.
 
 - **Location**: [`apps/web/src/routes/chat/sidebar/ChatDialogs.tsx:38-90`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/chat/sidebar/ChatDialogs.tsx#L38-L90); [`apps/web/src/lib/apis/chats/index.ts:1194`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/lib/apis/chats/index.ts#L1194); [`apps/web/src/lib/apis/chats/index.ts:1229`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/lib/apis/chats/index.ts#L1229); [`apps/server/local_llm/routers/chats.py:1632-1676`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/chats.py#L1632-L1676); [`apps/server/local_llm/routers/chats.py:907-923`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/chats.py#L907-L923); [`apps/server/local_llm/routers/chats.py:110-123`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/chats.py#L110-L123)
 - **Description**: Sharing creates a snapshot with no grant, and the shared-chat route serves it only with a grant; the original share modal (`d863707:apps/openwebui/src/lib/components/chat/ShareChatModal.svelte:158-167`) had an AccessControl panel to add one, which the port dropped (the access-grant API helpers have no callers), while the dialog still says users with the URL can view it.
@@ -3595,7 +3595,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-209: Saving a model, prompt or skill as a non-admin strips existing public, user or group grants
 
-Issue: pending. Severity: Medium. Area: backend. Status: Confirmed. Package: W4.
+Issue: #335. Severity: Medium. Area: backend. Status: Confirmed. Package: W4.
 
 - **Location**: [`apps/server/local_llm/routers/models.py:824-832`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/models.py#L824-L832); [`apps/server/local_llm/routers/prompts.py:290-299`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/prompts.py#L290-L299); [`apps/server/local_llm/routers/skills.py:310-323`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/skills.py#L310-L323); [`apps/server/local_llm/routers/models.py:904-912`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/models.py#L904-L912); [`apps/server/local_llm/routers/prompts.py:470-478`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/prompts.py#L470-L478); [`apps/server/local_llm/routers/skills.py:388-396`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/skills.py#L388-L396); [`apps/server/local_llm/utils/access_control/__init__.py:221-300`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/utils/access_control/__init__.py#L221-L300); [`apps/server/local_llm/models/access_grants.py:442-458`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/access_grants.py#L442-L458); [`apps/web/src/routes/workspace/models/modelEditorLogic.ts:188`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/workspace/models/modelEditorLogic.ts#L188)
 - **Description**: The editors echo the full grant list on every save and the routers run `filter_allowed_access_grants` over it, which for a non-admin removes `user:*` grants without `sharing.public_*` (off by default) and user/group grants without the allow permissions; the model layer then replaces all grants with the filtered list.
@@ -3611,7 +3611,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-210: Cloning or sharing a chat while a reply streams copies the unfinished placeholder (fork is guarded, clone and share are not)
 
-Issue: pending. Severity: Medium. Area: backend. Status: Confirmed. Package: W4.
+Issue: #336. Severity: Medium. Area: backend. Status: Confirmed. Package: W4.
 
 - **Location**: [`apps/server/local_llm/routers/chats.py:1462-1513`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/chats.py#L1462-L1513); [`apps/server/local_llm/routers/chats.py:1521-1588`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/chats.py#L1521-L1588); [`apps/server/local_llm/routers/chats.py:1385-1401`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/chats.py#L1385-L1401); [`apps/server/local_llm/main.py:1210-1220`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/main.py#L1210-L1220); [`apps/web/src/routes/chat/useChatSession.ts:181-186`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/chat/useChatSession.ts#L181-L186)
 - **Description**: Clone copies the chat verbatim including the empty `done: false` placeholder with no task; on load the frontend marks it done, so the clone shows an empty or truncated reply as finished. Share snapshots the same way. Fork already returns 409 in this case.
@@ -3627,7 +3627,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-211: POST /models/import reports success when entries were skipped or failed to save
 
-Issue: pending. Severity: Low. Area: backend. Status: Confirmed. Package: W4.
+Issue: #337. Severity: Low. Area: backend. Status: Confirmed. Package: W4.
 
 - **Location**: [`apps/server/local_llm/routers/models.py:418-541`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/models.py#L418-L541); [`apps/server/local_llm/models/models.py:212-235`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/models.py#L212-L235); [`apps/server/local_llm/models/models.py:543-558`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/models.py#L543-L558); [`apps/web/src/routes/admin/settings/models/AdminModels.tsx:373`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/admin/settings/models/AdminModels.tsx#L373)
 - **Description**: Invalid or unauthorized entries are skipped silently, failed inserts/updates (None) are still counted, and a validation error after earlier commits returns 500 for a partial import.
@@ -3643,7 +3643,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-212: Deleting another user's chat as an admin runs orphan-tag cleanup against the admin's own tags
 
-Issue: pending. Severity: Low. Area: backend. Status: Confirmed. Package: W4.
+Issue: #338. Severity: Low. Area: backend. Status: Confirmed. Package: W4.
 
 - **Location**: [`apps/server/local_llm/routers/chats.py:1295`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/chats.py#L1295); [`apps/server/local_llm/models/chats.py:2376-2396`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/chats.py#L2376-L2396)
 - **Description**: `delete_orphan_tags_for_user(chat.meta['tags'], user.id, ...)` uses the caller's id instead of the chat owner's.
@@ -3659,7 +3659,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-213: Chat search snippets can miss the match when the text contains characters that lengthen when lowercased
 
-Issue: pending. Severity: Low. Area: backend. Status: Confirmed. Package: W4.
+Issue: #339. Severity: Low. Area: backend. Status: Confirmed. Package: W4.
 
 - **Location**: [`apps/server/local_llm/routers/chats.py:175-209`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/chats.py#L175-L209)
 - **Description**: The match index is found in `content.lower()` and used to slice `content`; characters like U+0130 lowercase to two code points and shift the window.
@@ -3675,7 +3675,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-214: A model downloaded by URL is hashed and pushed to Ollama before its last bytes are flushed, so a truncated blob is reported as done
 
-Issue: pending. Severity: High. Area: backend. Status: Confirmed. Package: W5.
+Issue: #340. Severity: High. Area: backend. Status: Confirmed. Package: W5.
 
 - **Location**: [`apps/server/local_llm/routers/ollama.py:1576-1607`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/ollama.py#L1576-L1607)
 - **Description**: Hashing, the blob push and the file delete run inside the `async with aiofiles.open(..., "ab")` block, so the final buffered bytes are missing from both; Ollama accepts the blob because the digest matches the truncated bytes, and the local file is deleted.
@@ -3691,7 +3691,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-215: URL model downloads ignore the HTTP status, resume blindly, and are capped at 10 minutes (30 s for the push)
 
-Issue: pending. Severity: Medium. Area: backend. Status: Confirmed. Package: W5.
+Issue: #341. Severity: Medium. Area: backend. Status: Confirmed. Package: W5.
 
 - **Location**: [`apps/server/local_llm/routers/ollama.py:1564-1583`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/ollama.py#L1564-L1583); [`apps/server/local_llm/routers/ollama.py:1572`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/ollama.py#L1572); [`apps/server/local_llm/routers/ollama.py:1601`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/ollama.py#L1601); [`apps/server/local_llm/routers/ollama.py:1626-1634`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/ollama.py#L1626-L1634)
 - **Description**: No status check: a 404/401/416 body is saved, pushed and reported done. Resume sends a Range and appends whatever comes back (a 200 full body, or a 416 error body), and partial files are keyed only by the URL's last path segment. `ClientTimeout(total=600)` and `total=30` cap the whole download and push.
@@ -3707,7 +3707,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-216: Saving Admin > Audio with local Whisper fails after persisting whenever the model cannot load, and the page shows nothing
 
-Issue: pending. Severity: Medium. Area: backend. Status: Confirmed. Package: W5.
+Issue: #342. Severity: Medium. Area: backend. Status: Confirmed. Package: W5.
 
 - **Location**: [`apps/server/local_llm/routers/audio.py:211-230`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/audio.py#L211-L230); [`apps/server/local_llm/routers/audio.py:284-296`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/audio.py#L284-L296); [`apps/web/src/lib/apis/audio/index.ts:43-51`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/lib/apis/audio/index.ts#L43-L51); [`apps/web/src/routes/admin/settings/Audio.tsx:113-129`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/admin/settings/Audio.tsx#L113-L129)
 - **Description**: Every save with the default local STT engine reloads the Whisper model synchronously after `Config.upsert`, even for TTS-only changes; under `HF_HUB_OFFLINE=1` with no cached model it raises, returning a plain-text 500 after the settings were saved, which the helper turns into a silent null.
@@ -3723,7 +3723,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-217: With the "Web API" speech-to-text engine selected, every uploaded audio file fails processing with a TypeError
 
-Issue: pending. Severity: Medium. Area: backend. Status: Confirmed. Package: W5.
+Issue: #343. Severity: Medium. Area: backend. Status: Confirmed. Package: W5.
 
 - **Location**: [`apps/server/local_llm/routers/audio.py:906-916`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/audio.py#L906-L916); [`apps/server/local_llm/routers/audio.py:1113`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/audio.py#L1113); [`apps/server/local_llm/routers/files.py:150-162`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/files.py#L150-L162); [`apps/web/src/routes/admin/settings/Audio.tsx:225`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/admin/settings/Audio.tsx#L225)
 - **Description**: `transcription_handler` has no branch for `web` and returns None, which `transcribe` subscripts; uploads with audio MIME types are still routed to server transcription. (Inherited.)
@@ -3739,7 +3739,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-218: A malformed image edit size is accepted on save and then makes every image edit fail
 
-Issue: pending. Severity: Low. Area: backend. Status: Confirmed. Package: W5.
+Issue: #344. Severity: Low. Area: backend. Status: Confirmed. Package: W5.
 
 - **Location**: [`apps/server/local_llm/routers/images.py:275-296`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/images.py#L275-L296); [`apps/server/local_llm/routers/images.py:861-867`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/images.py#L861-L867); [`apps/server/local_llm/routers/images.py:1093`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/images.py#L1093)
 - **Description**: Only `IMAGE_SIZE` is validated; `IMAGE_EDIT_SIZE` like `1024x` or `1024 x 1024 px` makes `_edit_size` raise ValueError before the try, so `/images/edit` returns 500; `1024X1024` is silently ignored.
@@ -3755,7 +3755,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-219: Ollama API proxy routes: prefixed model ids are sent unstripped, an inverted message validator rejects tool-call turns, and failed uploads leave multi-GB files
 
-Issue: pending. Severity: Low. Area: backend. Status: Confirmed. Package: W5.
+Issue: #345. Severity: Low. Area: backend. Status: Confirmed. Package: W5.
 
 - **Location**: [`apps/server/local_llm/routers/ollama.py:433-455`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/ollama.py#L433-L455); [`apps/server/local_llm/routers/ollama.py:703-710`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/ollama.py#L703-L710); [`apps/server/local_llm/routers/ollama.py:775-780`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/ollama.py#L775-L780); [`apps/server/local_llm/routers/ollama.py:817-823`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/ollama.py#L817-L823); [`apps/server/local_llm/routers/ollama.py:860-865`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/ollama.py#L860-L865); [`apps/server/local_llm/routers/ollama.py:1029-1043`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/ollama.py#L1029-L1043); [`apps/server/local_llm/routers/ollama.py:1655-1726`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/ollama.py#L1655-L1726)
 - **Description**: (1) show/copy/delete/push look models up by their prefixed id but send that id to Ollama, so they never succeed for prefixed connections without url_idx. (2) The `ChatMessage` pre-validator runs before `tool_calls` is known, rejecting `content: null` with tool calls and accepting messages with neither. (3) `/ollama/models/upload` removes the uploaded file only after a successful push.
@@ -3771,7 +3771,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-220: An embedding model that fails to load is saved and reported as updated, after which every upload and query fails
 
-Issue: pending. Severity: Medium. Area: backend. Status: Confirmed. Package: W1.
+Issue: #346. Severity: Medium. Area: backend. Status: Confirmed. Package: W1.
 
 - **Location**: [`apps/server/local_llm/routers/retrieval.py:141-161`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/retrieval.py#L141-L161); [`apps/server/local_llm/routers/retrieval.py:530-617`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/retrieval.py#L530-L617); [`apps/server/local_llm/retrieval/utils.py:1109-1116`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/utils.py#L1109-L1116)
 - **Description**: `get_ef` logs a load failure and returns None; `update_embedding_config` unloads the working model first, saves the new one and returns success, and every later embedding raises "No embedding model is loaded". Documents calls this route on every save, so the unload window also breaks concurrent requests. Likely here because `make backend` sets `HF_HUB_OFFLINE=1`.
@@ -3780,14 +3780,14 @@ Issue: pending. Severity: Medium. Area: backend. Status: Confirmed. Package: W1.
 - **Impact**: Knowledge uploads and RAG stop working while the admin was told the model was updated.
 - **Suggested fix** (approach only): Load the new model before unloading the old one, return an error on failure, and save only on success.
 - **Docs affected under the maintenance policy**: None.
-- **Related issues and PRs**: #232, A-182 (pending)
+- **Related issues and PRs**: #232, #308
 - **Confidence**: Confirmed: reproduced (see trigger) and re-run by the auditing session.
 
 Found by the final review wave of the repository bug audit of `7a4088b` (finding A-220, package W1); see `docs/audit/FINDINGS.md` on branch `audit/bug-review`.
 
 ### A-221: Native pgvector hybrid search requires every query word to match, so keyword ranking rarely contributes and weight 1.0 returns nothing
 
-Issue: pending. Severity: Medium. Area: backend. Status: Confirmed. Package: W1.
+Issue: #347. Severity: Medium. Area: backend. Status: Confirmed. Package: W1.
 
 - **Location**: [`apps/server/local_llm/retrieval/vector/dbs/pgvector.py:566`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/vector/dbs/pgvector.py#L566); [`apps/server/local_llm/retrieval/vector/dbs/pgvector.py:570-596`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/vector/dbs/pgvector.py#L570-L596); [`apps/server/local_llm/retrieval/vector/utils.py:64-121`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/vector/utils.py#L64-L121); [`apps/server/local_llm/retrieval/utils.py:420-450`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/utils.py#L420-L450); [`apps/server/local_llm/retrieval/utils.py:497-509`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/utils.py#L497-L509)
 - **Description**: `plainto_tsquery('simple', query)` ANDs every word with no stop words or stemming, so a natural-language question matches almost no chunk; at the default BM25 weight hybrid is effectively vector-only, and at weight 1.0 vector search is skipped, full-text returns nothing, and the empty result is not a fallback trigger, so chat gets no context.
@@ -3803,7 +3803,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-222: The external reranker has no default timeout, and its failures silently skip reranking, top-k and the relevance threshold
 
-Issue: pending. Severity: Medium. Area: backend. Status: Confirmed. Package: W1.
+Issue: #348. Severity: Medium. Area: backend. Status: Confirmed. Package: W1.
 
 - **Location**: [`apps/server/local_llm/retrieval/models/external.py:253`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/models/external.py#L253); [`apps/server/local_llm/retrieval/models/external.py:283-303`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/models/external.py#L283-L303); [`apps/server/local_llm/config.py:776`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/config.py#L776); [`apps/server/local_llm/routers/retrieval.py:174`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/retrieval.py#L174); [`apps/server/local_llm/retrieval/utils.py:1789-1812`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/utils.py#L1789-L1812)
 - **Description**: `RAG_EXTERNAL_RERANKER_TIMEOUT` defaults to empty, which becomes `timeout=None`, so a hanging reranker blocks retrieval forever; any error returns None, and the compressor then passes every candidate through unreranked, ignoring `top_n` and the threshold.
@@ -3819,7 +3819,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-223: External knowledge bases answer only the first of several generated queries
 
-Issue: pending. Severity: Medium. Area: backend. Status: Confirmed. Package: W1.
+Issue: #349. Severity: Medium. Area: backend. Status: Confirmed. Package: W1.
 
 - **Location**: [`apps/server/local_llm/retrieval/external.py:327-364`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/external.py#L327-L364); [`apps/server/local_llm/utils/middleware.py:1910-1952`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/utils/middleware.py#L1910-L1952); [`apps/server/local_llm/retrieval/utils.py:1537-1545`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/utils.py#L1537-L1545)
 - **Description**: For each query the connection function appends up to `count` hits, then cuts the combined list to `count`, so the first query fills the budget and the others are discarded unmerged.
@@ -3835,7 +3835,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-224: The external pgvector provider sends the query vector as double precision[], so queries likely fail
 
-Issue: pending. Severity: Medium. Area: backend. Status: Suspected. Package: W1.
+Issue: #350. Severity: Medium. Area: backend. Status: Suspected. Package: W1.
 
 - **Location**: [`apps/server/local_llm/retrieval/external.py:233`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/external.py#L233); [`apps/server/local_llm/retrieval/external.py:256-278`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/external.py#L256-L278)
 - **Description**: The embedding is passed as a Python list, which psycopg adapts as `float8[]`; `vector <=> double precision[]` has no operator (pgvector's cast from arrays is an assignment cast). The provider also returns raw cosine distance where other providers return similarity, so the best hit shows the lowest relevance.
@@ -3851,7 +3851,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-225: In chat, one failing attachment or external knowledge base silently drops the context of every attachment
 
-Issue: pending. Severity: Medium. Area: backend. Status: Confirmed. Package: W1+W8.
+Issue: #351. Severity: Medium. Area: backend. Status: Confirmed. Package: W1+W8.
 
 - **Location**: [`apps/server/local_llm/retrieval/utils.py:1530-1545`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/utils.py#L1530-L1545); [`apps/server/local_llm/retrieval/utils.py:1685-1697`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/utils.py#L1685-L1697); [`apps/server/local_llm/retrieval/external.py:299-321`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/external.py#L299-L321); [`apps/server/local_llm/retrieval/external.py:361-362`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/external.py#L361-L362); [`apps/server/local_llm/utils/middleware.py:1953-1987`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/utils/middleware.py#L1953-L1987)
 - **Description**: `get_sources_from_items` has no per-item guard; an external base that raises (disabled, unreachable) or an embedding failure aborts the whole call, and the middleware logs it and continues with no sources, so the model answers without any of the attached files or bases. (A different code path from the knowledge tool issue.)
@@ -3867,7 +3867,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-226: pgvector query, get and search leave the thread's session in an open transaction when nothing matches
 
-Issue: pending. Severity: Medium. Area: backend. Status: Confirmed. Package: W1.
+Issue: #352. Severity: Medium. Area: backend. Status: Confirmed. Package: W1.
 
 - **Location**: [`apps/server/local_llm/retrieval/vector/dbs/pgvector.py:522-539`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/vector/dbs/pgvector.py#L522-L539); [`apps/server/local_llm/retrieval/vector/dbs/pgvector.py:641-648`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/vector/dbs/pgvector.py#L641-L648); [`apps/server/local_llm/retrieval/vector/dbs/pgvector.py:680-687`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/vector/dbs/pgvector.py#L680-L687)
 - **Description**: Early returns on empty results skip the read-only `rollback()`, so the scoped session stays idle-in-transaction and holds a pooled connection until that worker thread does something else. Empty results are the normal case for the duplicate-hash check and new collections.
@@ -3883,7 +3883,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-227: An embedding batch size of 0 or less is accepted and breaks every embedding
 
-Issue: pending. Severity: Low. Area: backend. Status: Confirmed. Package: W1.
+Issue: #353. Severity: Low. Area: backend. Status: Confirmed. Package: W1.
 
 - **Location**: [`apps/server/local_llm/routers/retrieval.py:509`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/retrieval.py#L509); [`apps/server/local_llm/routers/retrieval.py:538`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/retrieval.py#L538); [`apps/server/local_llm/retrieval/utils.py:1121`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/utils.py#L1121); [`apps/server/local_llm/retrieval/utils.py:1147`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/utils.py#L1147); [`apps/web/src/routes/admin/settings/Documents.tsx:429`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/web/src/routes/admin/settings/Documents.tsx#L429)
 - **Description**: The form allows `min={-2}` (inherited) and the server does not validate; 0 raises on every call and -1 returns no embeddings, then an IndexError.
@@ -3899,7 +3899,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-228: The collection query API ignores hybrid=false, and r=0 or k_reranker=0 cannot override the configuration
 
-Issue: pending. Severity: Low. Area: backend. Status: Confirmed. Package: W1.
+Issue: #354. Severity: Low. Area: backend. Status: Confirmed. Package: W1.
 
 - **Location**: [`apps/server/local_llm/routers/retrieval.py:2898-2899`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/retrieval.py#L2898-L2899); [`apps/server/local_llm/routers/retrieval.py:2950-2985`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/retrieval.py#L2950-L2985); [`apps/server/local_llm/retrieval/utils.py:710-729`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/utils.py#L710-L729)
 - **Description**: The non-hybrid branch calls `query_collection`, which re-reads the global hybrid flag and runs hybrid anyway; falsy `or` checks replace explicit zeros with the configured values. API-only.
@@ -3915,7 +3915,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-229: Full-context reads of a vector collection return chunks in arbitrary order
 
-Issue: pending. Severity: Low. Area: backend. Status: Suspected. Package: W1.
+Issue: #355. Severity: Low. Area: backend. Status: Suspected. Package: W1.
 
 - **Location**: [`apps/server/local_llm/retrieval/vector/dbs/pgvector.py:611-692`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/vector/dbs/pgvector.py#L611-L692); [`apps/server/local_llm/retrieval/utils.py:678-692`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/utils.py#L678-L692); [`apps/server/local_llm/retrieval/utils.py:1603-1625`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/utils.py#L1603-L1625)
 - **Description**: pgvector `get`/`query` have no ORDER BY and ids are random UUIDs, so after deletes and VACUUM a file's chunks can come back out of document order in full-context mode.
@@ -3931,7 +3931,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-230: The Scheduled Tasks calendar shows runs that will never happen for COUNT rules
 
-Issue: pending. Severity: Low. Area: backend. Status: Confirmed. Package: W8.
+Issue: #356. Severity: Low. Area: backend. Status: Confirmed. Package: W8.
 
 - **Location**: [`apps/server/local_llm/routers/calendar.py:209-235`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/calendar.py#L209-L235); [`apps/server/local_llm/utils/calendar.py:46-52`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/utils/calendar.py#L46-L52)
 - **Description**: The virtual event uses `start_at = next_run_at` with the full rule, and expansion strips DTSTART and re-anchors, so COUNT restarts from the next run.
@@ -3947,7 +3947,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-231: With enriched texts on, hybrid search returns the BM25 scoring text as the chunk content
 
-Issue: pending. Severity: Low. Area: backend. Status: Confirmed. Package: W8.
+Issue: #357. Severity: Low. Area: backend. Status: Confirmed. Package: W8.
 
 - **Location**: [`apps/server/local_llm/retrieval/utils.py:540-545`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/utils.py#L540-L545); [`apps/server/local_llm/retrieval/utils.py:568-572`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/utils.py#L568-L572); [`apps/server/local_llm/retrieval/utils.py:585-589`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/utils.py#L585-L589)
 - **Description**: BM25 indexes enriched texts (filename, title, source appended) meant only for scoring; the ensemble keeps the BM25 copy of each chunk, so the reranker, the model and citations receive the enrichment.
@@ -3963,7 +3963,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-232: Notes shared through a readable folder are left out of RAG, unlike files and knowledge bases in the same folder
 
-Issue: pending. Severity: Low. Area: backend. Status: Confirmed. Package: W8.
+Issue: #358. Severity: Low. Area: backend. Status: Confirmed. Package: W8.
 
 - **Location**: [`apps/server/local_llm/retrieval/utils.py:1392-1404`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/utils.py#L1392-L1404); [`apps/server/local_llm/retrieval/utils.py:1448-1457`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/utils.py#L1448-L1457); [`apps/server/local_llm/retrieval/utils.py:1497-1511`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/retrieval/utils.py#L1497-L1511); [`apps/server/local_llm/utils/access_control/files.py:17`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/utils/access_control/files.py#L17)
 - **Description**: `_note_item` checks only admin, owner or a direct grant and ignores folder items; files and bases honour them. Folder sharing is API-only here.
@@ -3979,7 +3979,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-233: In multi-model chats every column after the first runs with the first model's parameters and system prompt state
 
-Issue: pending. Severity: Medium. Area: backend. Status: Confirmed. Package: W9.
+Issue: #359. Severity: Medium. Area: backend. Status: Confirmed. Package: W9.
 
 - **Location**: [`apps/server/local_llm/main.py:1085-1096`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/main.py#L1085-L1096); [`apps/server/local_llm/main.py:1698-1705`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/main.py#L1698-L1705); [`apps/server/local_llm/main.py:1769`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/main.py#L1769); [`apps/server/local_llm/main.py:1799-1828`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/main.py#L1799-L1828); [`apps/server/local_llm/utils/payload.py:69-121`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/utils/payload.py#L69-L121); [`apps/server/local_llm/routers/openai.py:1471-1476`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/openai.py#L1471-L1476); [`apps/server/local_llm/utils/middleware.py:2959-2961`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/utils/middleware.py#L2959-L2961)
 - **Description**: `chat_completion` merges only the primary model's workspace params into `form_data['params']`, and `_fan_out_chat` shallow-copies it per model; the target model's own params are then applied only if missing, so B never gets its own temperature/max_tokens. The shared params object is also mutated by the first task (system, custom_params popped), so later tasks see no system prompt in metadata.
@@ -3995,7 +3995,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-234: The custom-model fallback setting does nothing for UI chats, because the fan-out restores the broken model
 
-Issue: pending. Severity: Medium. Area: backend. Status: Confirmed. Package: W9.
+Issue: #360. Severity: Medium. Area: backend. Status: Confirmed. Package: W9.
 
 - **Location**: [`apps/server/local_llm/main.py:1698-1705`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/main.py#L1698-L1705); [`apps/server/local_llm/main.py:1757`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/main.py#L1757); [`apps/server/local_llm/main.py:1772-1790`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/main.py#L1772-L1790); [`apps/server/local_llm/main.py:1859-1860`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/main.py#L1859-L1860); [`apps/server/local_llm/routers/openai.py:1463-1467`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/openai.py#L1463-L1467)
 - **Description**: With `ENABLE_CUSTOM_MODEL_FALLBACK`, `chat_completion` swaps the model, but `_fan_out_chat` sets each copy back to the entry's original custom id, which still resolves (presets stay listed when their base is gone), so the request fails with model not found. Only the legacy no-session path honours the fallback.
@@ -4011,7 +4011,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-235: SAFE_MODE does not stop event functions from running at startup
 
-Issue: pending. Severity: Medium. Area: backend. Status: Confirmed. Package: W9.
+Issue: #361. Severity: Medium. Area: backend. Status: Confirmed. Package: W9.
 
 - **Location**: [`apps/server/local_llm/main.py:341-350`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/main.py#L341-L350); [`apps/server/local_llm/events.py:1101-1166`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/events.py#L1101-L1166); [`apps/server/local_llm/models/functions.py:418-430`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/models/functions.py#L418-L430)
 - **Description**: The startup event is published, and event-function dispatch scheduled, before `deactivate_all_functions()`; when admin env vars are set (create_admin_user awaits first) the dispatch always sees the functions still active, loads their modules and calls them, which is exactly what SAFE_MODE is for. Without the env vars it is a race; deactivation errors are swallowed.
@@ -4027,7 +4027,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-236: Shutdown closes the HTTP pool without stopping running chat tasks, so in-flight replies are cut instead of saved as cancelled
 
-Issue: pending. Severity: Medium. Area: backend. Status: Suspected. Package: W9.
+Issue: #362. Severity: Medium. Area: backend. Status: Suspected. Package: W9.
 
 - **Location**: [`apps/server/local_llm/main.py:430-442`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/main.py#L430-L442); [`apps/server/local_llm/utils/session_pool.py:86-92`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/utils/session_pool.py#L86-L92); [`apps/server/local_llm/utils/middleware.py:5513-5515`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/utils/middleware.py#L5513-L5515); [`apps/server/local_llm/utils/middleware.py:5588-5615`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/utils/middleware.py#L5588-L5615)
 - **Description**: Lifespan shutdown calls `close_session()` first and never cancels or awaits the chat tasks, so their upstream read breaks and takes the error path rather than `_save_cancelled_state`. `make backend` reloads on every backend save.
@@ -4043,7 +4043,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-237: A tool-server connection saved with config null stops the backend from starting
 
-Issue: pending. Severity: Low. Area: backend. Status: Confirmed. Package: W9.
+Issue: #363. Severity: Low. Area: backend. Status: Confirmed. Package: W9.
 
 - **Location**: [`apps/server/local_llm/main.py:559`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/main.py#L559); [`apps/server/local_llm/main.py:594`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/main.py#L594); [`apps/server/local_llm/routers/configs.py:220`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/configs.py#L220); [`apps/server/local_llm/routers/configs.py:256-258`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/routers/configs.py#L256-L258); [`apps/server/local_llm/utils/tools.py:1228-1233`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/utils/tools.py#L1228-L1233)
 - **Description**: `c.get('config', {})` returns None when the key is present, and `'access_control' in None` raises during lifespan; the save itself reports success. Same pattern for an arena model with `meta: null`.
@@ -4059,7 +4059,7 @@ Found by the final review wave of the repository bug audit of `7a4088b` (finding
 
 ### A-238: Upstream failures on the direct API path all become HTTP 400
 
-Issue: pending. Severity: Low. Area: backend. Status: Confirmed. Package: W9.
+Issue: #364. Severity: Low. Area: backend. Status: Confirmed. Package: W9.
 
 - **Location**: [`apps/server/local_llm/main.py:1637-1638`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/main.py#L1637-L1638); [`apps/server/local_llm/main.py:1650-1661`](https://github.com/epittman23/local-llm/blob/7a4088b20f3aa27cf35abb07689e68b19408c003/apps/server/local_llm/main.py#L1650-L1661)
 - **Description**: Without chat/message ids, a provider error response (429, 401, 5xx) is re-raised as an exception and returned as 400; router HTTPExceptions (404, connection errors) are relabelled too.

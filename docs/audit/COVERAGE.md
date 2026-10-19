@@ -75,3 +75,29 @@ fully read; all listed files were fully read except where noted.
 - [x] F7 `routes/channels`, `lib/{utils,settings,query}`
 - [x] F8 `components/common`, `lib/access`
 - [x] F9 `components/settings`
+
+## Final review wave (2026-10-19, second session)
+
+Areas no earlier package covered, read line by line:
+
+- [x] W1 `routers/retrieval.py`, `retrieval/external.py`, `retrieval/vector/**`, `retrieval/models/**`
+- [x] W2 `routers/{knowledge,files,folders}.py`
+- [x] W3 `routers/{channels,notes,groups,notifications,utils}.py`
+- [x] W4 `routers/{chats,models,prompts,skills}.py`
+- [x] W5 `routers/{ollama,audio,images}.py`
+- [x] W6 `routers/{auths,users,scim,analytics}.py`
+- [x] W7 `routers/{tools,configs,functions,tasks,memories,pipelines}.py`
+- [x] W8 `routers/{evaluations,calendar,terminals,automations}.py`, `retrieval/utils.py`
+- [x] W9 `main.py`, `events.py`
+- [x] W10 `config.py` (all of it), `env.py`, `functions.py`, `tasks.py`, `constants.py`
+- [x] W11 `routes/calendar/**`, `routes/automations/**`, the code in `lib/i18n/` and `lib/emoji/` (their data files checked for consistency only)
+
+### Still not read line by line
+
+- `apps/web/src/components/ui/` (generated shadcn/ui primitives).
+- `apps/server/local_llm/utils/oauth.py` lines 1019-1820 and 2360-2438
+  (OAuth provider registration helpers and session plumbing; partly read).
+- `apps/web/src/lib/apis/**` request and response shapes for calls no page
+  package exercised (paths and methods of every call were checked in U7).
+- Test files were read where a package judged whether a test could fail, not
+  exhaustively.

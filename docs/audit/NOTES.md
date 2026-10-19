@@ -164,3 +164,27 @@ are kept out of this file).
 - `apps/web/src/lib/apis/**`: paths and methods of every call were checked in
   U7; request and response shapes were checked where a page package used them,
   not exhaustively.
+
+## Final review wave (2026-10-19)
+
+- i18n is initialised but no code calls `t()`; the 3096-line en-US locale and
+  the i18next packages are unused, so no key can render raw.
+- Emoji data is consistent with `buildEmojiIndex` apart from the filed
+  variation-selector issue; the picker caps results at 400 by design.
+- `ChannelMember.role == 'manager'` is never assigned, so webhooks are
+  effectively owner/admin only.
+- Several routers return 401 for not-found and 400 for authorization failures
+  (inherited); the filed issues cover the user-visible cases.
+- Analytics and evaluations bucket by server-local time; the custom-range end
+  day can be left unfilled when the end time is earlier in the day than the
+  start.
+- The channel system prompt is missing a space ("conversational.Here's").
+- `get_sources_from_items` ignores the reranking/hybrid arguments the
+  middleware passes and re-reads configuration instead.
+- The terminal proxy routes have no frontend caller; only `GET /terminals/`
+  is used.
+- `/utils/pdf` and `/utils/code/execute` have no caller in the port.
+- The Ollama port probe runs at every import (two one-second connects) even
+  though Ollama is unused.
+- Many `int()` environment parses are unguarded and fail fast at import;
+  only the empty `RAG_FILE_MAX_SIZE` case is filed.
