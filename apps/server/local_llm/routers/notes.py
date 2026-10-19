@@ -23,7 +23,7 @@ from local_llm.models.notes import (
     NoteUserResponse,
 )
 from local_llm.models.users import UserResponse, Users
-from local_llm.socket.main import sio
+from local_llm.socket.main import close_room, prune_room, sio
 from local_llm.utils.access_control import (
     filter_allowed_access_grants,
     has_permission,
@@ -608,6 +608,21 @@ class NoteAccessGrantsForm(BaseModel):
     access_grants: list[dict]
 
 
+async def prune_note_room(note) -> None:
+    """Drop live sessions of users who can no longer read this note (join-note's rule)."""
+
+    async def may_stay(user: dict) -> bool:
+        return (
+            user.get('role') == 'admin'
+            or user['id'] == note.user_id
+            or await AccessGrants.has_access(
+                user_id=user['id'], resource_type='note', resource_id=note.id, permission='read'
+            )
+        )
+
+    await prune_room(f'note:{note.id}', may_stay)
+
+
 @router.post('/{id}/access/update', response_model=NoteModel | None)
 async def update_note_access_by_id(
     request: Request,
@@ -649,6 +664,7 @@ async def update_note_access_by_id(
     )
 
     await AccessGrants.set_access_grants('note', id, form_data.access_grants, db=db)
+    await prune_note_room(note)
 
     note = await Notes.get_note_by_id(id, db=db)
     pinned_note_ids = await Notes.get_pinned_note_ids(user.id, db=db)
@@ -749,6 +765,7 @@ async def delete_note_by_id(
 
     try:
         note = await Notes.delete_note_by_id(id, db=db)
+        await close_room(f'note:{id}')
         await publish_event(
             request,
             EVENTS.NOTE_DELETED,

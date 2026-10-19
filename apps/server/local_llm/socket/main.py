@@ -358,6 +358,36 @@ async def enter_room_for_users(room: str, user_ids: list[str]):
         log.debug('Failed to make users %s join room %s: %s', user_ids, room, e)
 
 
+async def prune_room(room: str, may_stay) -> list[str]:
+    """Remove from a room every session whose user no longer passes `may_stay(user)`.
+
+    Rooms are where live events go (message bodies, edits, model streams),
+    and joining one is the only check: removing a member, revoking a grant or
+    changing a channel's access changes the database, not the room. Callers
+    run this after any such change, with the same rule the join used.
+    `may_stay` receives the session's user dict (id, role) and is awaited.
+    Returns the session ids removed.
+    """
+    removed = []
+    for sid in get_session_ids_from_room(room):
+        user = SESSION_POOL.get(sid) or {}
+        try:
+            stays = bool(user.get('id')) and await may_stay(user)
+        except Exception as e:
+            log.debug('Access check for room %s failed, removing session %s: %s', room, sid, e)
+            stays = False
+        if not stays:
+            await sio.leave_room(sid, room)
+            removed.append(sid)
+    return removed
+
+
+async def close_room(room: str) -> None:
+    """Remove every session from a room whose resource no longer exists."""
+    for sid in get_session_ids_from_room(room):
+        await sio.leave_room(sid, room)
+
+
 async def disconnect_user_sessions(user_id: str):
     """Disconnect all Socket.IO sessions belonging to a user.
 

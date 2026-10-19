@@ -38,9 +38,11 @@ from local_llm.models.users import (
     Users,
 )
 from local_llm.socket.main import (
+    close_room,
     emit_to_users,
     enter_room_for_users,
     get_user_ids_from_room,
+    prune_room,
     sio,
 )
 from local_llm.utils.access_control import filter_allowed_access_grants, has_permission
@@ -128,6 +130,19 @@ async def get_channel_member_user_ids(
             user_ids.extend(member_ids)
 
     return list(dict.fromkeys([*user_ids, channel.user_id]))
+
+
+async def prune_channel_room(channel_id: str) -> None:
+    """Drop live sessions of users who can no longer read this channel.
+
+    The rule is the one join-channels used to put them there: the channel is
+    among Channels.get_channels_by_user_id for that user.
+    """
+
+    async def may_stay(user: dict) -> bool:
+        return any(c.id == channel_id for c in await Channels.get_channels_by_user_id(user['id']))
+
+    await prune_room(f'channel:{channel_id}', may_stay)
 
 
 ############################
@@ -686,6 +701,7 @@ async def remove_members_by_id(
 
     try:
         deleted = await Channels.remove_members_from_channel(channel.id, form_data.user_ids, db=db)
+        await prune_channel_room(channel.id)
 
         await publish_event(
             request,
@@ -732,6 +748,7 @@ async def update_channel_by_id(
 
     try:
         channel = await Channels.update_channel_by_id(id, form_data, db=db)
+        await prune_channel_room(id)
         await publish_event(
             request,
             EVENTS.CHANNEL_UPDATED,
@@ -768,6 +785,7 @@ async def delete_channel_by_id(
 
     try:
         await Channels.delete_channel_by_id(id, db=db)
+        await close_room(f'channel:{id}')
         await publish_event(
             request,
             EVENTS.CHANNEL_DELETED,
