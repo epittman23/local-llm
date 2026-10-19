@@ -79,9 +79,11 @@ handles them through private security advisories.
 
 Batches are ordered by dependency first and severity second. One branch and one pull request per batch (a batch may be split into consecutive PRs where noted).
 
+- **B0 Security fixes**: tracked in the repository's private security advisories, not here. Owner decision (2026-10-19): fix these **before** any batch below. Their details are deliberately not in this public file; read them from the advisories (repository Security tab). See the execution-time note in section 6 about where to do the work.
+
 - **B1 Grading correctness**: [#126](https://github.com/epittman23/local-llm/issues/126) A-01, [#142](https://github.com/epittman23/local-llm/issues/142) A-17, [#140](https://github.com/epittman23/local-llm/issues/140) A-15. First: every pass rate recorded before it is suspect (A-01), and later batches measure with the grader. A-15 moves grading off the event loop; A-17 touches the same subprocess call, so the three share one PR.
-- **B2 Dataset fetch and selfcheck**: [#141](https://github.com/epittman23/local-llm/issues/141) A-16. After B1: the new endpoints call the grader (selfcheck) and must use the non-blocking pattern from A-15. Needs the open-question decision (endpoints or docs).
-- **B3 Fingerprint coverage**: [#127](https://github.com/epittman23/local-llm/issues/127) A-02. Needs the open-question decision on whether existing config_ids change. Independent of B1/B2 in code, but do it before re-measuring anything so new runs are fingerprinted correctly.
+- **B2 Dataset fetch and selfcheck**: [#141](https://github.com/epittman23/local-llm/issues/141) A-16. After B1: the new endpoints call the grader (selfcheck) and must use the non-blocking pattern from A-15. Owner decision: build the endpoints and Tests page actions properly (section 6).
+- **B3 Fingerprint coverage**: [#127](https://github.com/epittman23/local-llm/issues/127) A-02. Owner decision: take the best fix, changing every existing id (section 6). Independent of B1/B2 in code, but do it before re-measuring anything so new runs are fingerprinted correctly.
 - **B4 Compare and Report correctness**: [#129](https://github.com/epittman23/local-llm/issues/129) A-04, [#130](https://github.com/epittman23/local-llm/issues/130) A-05, [#131](https://github.com/epittman23/local-llm/issues/131) A-06, [#132](https://github.com/epittman23/local-llm/issues/132) A-07, [#128](https://github.com/epittman23/local-llm/issues/128) A-03, [#133](https://github.com/epittman23/local-llm/issues/133) A-08. A-04 and A-05 change the same response contract between the router and ComparePage, so they go together; A-06/A-07 are in the same module. A-03/A-08 are Report-only and can be a second PR in this batch.
 - **B5 Tuning decisions**: [#134](https://github.com/epittman23/local-llm/issues/134) A-09, [#135](https://github.com/epittman23/local-llm/issues/135) A-10, [#136](https://github.com/epittman23/local-llm/issues/136) A-11, [#137](https://github.com/epittman23/local-llm/issues/137) A-12, [#138](https://github.com/epittman23/local-llm/issues/138) A-13, [#139](https://github.com/epittman23/local-llm/issues/139) A-14. All in tuning/tune.py; A-09 to A-12 share the ranking/cooldown code and its new test module. A-13 and A-14 are suspected: confirm first.
 - **B6 Benchmarks frontend robustness**: [#143](https://github.com/epittman23/local-llm/issues/143) A-18, [#144](https://github.com/epittman23/local-llm/issues/144) A-19, [#156](https://github.com/epittman23/local-llm/issues/156) A-31. After B4, which edits ComparePage and lib/apis/benchmarks/index.ts types; A-18/A-19 edit the same API module. A-31 (backend, suspected) fits here as serving robustness.
@@ -100,10 +102,10 @@ Batches are ordered by dependency first and severity second. One branch and one 
 - Severity / status / effort: Critical / Confirmed / M
 - Locations: `apps/server/local_llm/benchmarks/evaluation/grading/__init__.py:140-160`; `apps/server/local_llm/benchmarks/evaluation/grading/mbpp.py:15-25`; `apps/server/local_llm/benchmarks/evaluation/grading/humaneval.py:25-32`
 - Root cause: Outcome inferred from exit status alone; the model's code runs as `__main__` with an inherited stdin.
-- Recommended fix: Have the harness print a random per-run sentinel after the tests and require it in stdout for PASS; run the model code under a non-`__main__` module name (or strip/neutralise its main block); pass `stdin=subprocess.DEVNULL`. Consider whether existing results need re-grading (answers are stored).
+- Recommended fix: Have the harness print a random per-run sentinel after the tests and require it in stdout for PASS; run the model code under a non-`__main__` module name (or strip/neutralise its main block); pass `stdin=subprocess.DEVNULL`. Do not re-grade stored answers (owner decision, section 6).
 - Files likely to change: grading/__init__.py, grading/mbpp.py, grading/humaneval.py, grading/ds1000.py, tests/test_grading*.py
 - Regression risks: DS-1000 harness structure differs; sentinel must not be forgeable by printing it from model code (use a nonce generated per run). Calibration results may shift.
-- Docs to update: docs/guides/benchmarks.md (grading section); docs/decisions.md entry, since stored pass rates change meaning.
+- Docs to update: docs/guides/benchmarks.md (grading section); docs/decisions.md entry recording the changed meaning of PASS (any results recorded before the fix are not comparable; the database held none on 2026-10-19).
 - Acceptance criteria: New pytest cases: a wrong answer with `unittest.main()`/`sys.exit(0)` grades as fail; a correct answer with an `input()` main block grades as pass; existing grading tests stay green.
 
 #### A-17 [#142](https://github.com/epittman23/local-llm/issues/142): Grading timeouts kill only the direct child; processes spawned by model code survive
@@ -136,11 +138,11 @@ Batches are ordered by dependency first and severity second. One branch and one 
 - Severity / status / effort: High / Confirmed / M
 - Locations: `apps/server/local_llm/benchmarks/evaluation/datasets.py:90-95`; `apps/server/local_llm/benchmarks/evaluation/datasets.py:229`; `apps/server/local_llm/benchmarks/evaluation/grading/__init__.py:273-320`; `apps/server/local_llm/routers/benchmarks/tests.py:1-120`; `docs/guides/benchmarks.md:128-137`; `docs/guides/benchmarks.md:336`
 - Root cause: Functionality lost in the CLI-to-app migration; docs not updated.
-- Recommended fix: Add admin endpoints and Tests page actions for fetch (with force), selfcheck and single-item run, or correct the docs and provide a documented command. This is a product decision (see FIX_PLAN open questions).
+- Recommended fix: Build admin endpoints (`get_admin_user`) and Tests page actions for dataset fetch (with a force-refetch option), selfcheck (grade the references and write the calibration) and single-item run, as docs/guides/benchmarks.md already describes them. Owner decision: these are approved interface additions (section 6). Run downloads and grading off the event loop (A-15's pattern) and stream progress the way the existing run endpoint does. Make the refetch atomic (write items and manifest to a temp directory, then rename), see NOTES.md.
 - Files likely to change: routers/benchmarks/tests.py, routes/benchmarks/TestsPage.tsx, lib/apis/benchmarks/index.ts, tests
 - Regression risks: Long-running downloads need the same non-blocking treatment as A-15.
 - Docs to update: docs/guides/benchmarks.md; README "Pages and URLs" if UI changes; docs/decisions.md.
-- Acceptance criteria: Router tests for the new endpoints, or a docs-only fix with no remaining references to missing actions.
+- Acceptance criteria: Router tests for each new endpoint (admin required, success, error); a Vitest/Playwright test for each Tests page action; `datasets.py`'s "not downloaded yet" message names the Tests page action instead of `datasets.fetch_one`.
 
 ### B3 Fingerprint coverage
 
@@ -149,11 +151,12 @@ Batches are ordered by dependency first and severity second. One branch and one 
 - Severity / status / effort: Critical / Confirmed / M
 - Locations: `apps/server/local_llm/benchmarks/serving/fingerprint.py:76-111`; `apps/server/local_llm/benchmarks/serving/launcher.py:107`; `apps/server/local_llm/benchmarks/serving/launcher.py:146`; `apps/server/local_llm/benchmarks/serving/profiles.py:329`; `apps/server/local_llm/benchmarks/serving/profiles.py:344`
 - Root cause: `extra` is a free-form profile field (only `--parallel` and reasoning flags are rejected) with no fingerprint line; the model is identified by alias only, so a new profile version with a different `model_path` and the same alias collides.
-- Recommended fix: Add fingerprint coverage for `extra` and the model file (basename or sha), or reject inference-changing `extra` args. To avoid changing every existing id, append the new line only when non-empty/non-default, and decide that explicitly. Update `stats.parse_config_text`, docs/serving-baseline fixtures and their test.
+- Recommended fix (owner decision, section 6: no data exists, take the best fix): add two fingerprint lines, always present, so every id changes once: `model: <basename of the resolved model file>` and `extra: <args joined with spaces, or n/a>`. Use the **basename**, not the path: results are grouped by the server's alias (`env_profile.served_model` reads `/v1/models`), so two quants under one alias are merged today, while relocating the weights directory must not change the id. Update `stats.parse_config_text` and `compare.flags_of` so the new lines parse and count in the multi-flag warning.
+- Serving baseline: `docs/serving-baseline/` is the record of what the shell produced, so do not rewrite its captured ids. Keep the shell-parity test for the six-line form (for example by testing the six lines and the legacy hash separately), add new expected cases for the eight-line form, and replace the `model-path-not-fingerprinted` invariant with `model-directory-not-fingerprinted` (same basename, different directory, same id). Explain the change in its README.
 - Files likely to change: serving/fingerprint.py, analysis/stats.py, docs/serving-baseline/*, tests/test_fingerprint*.py, a new migration
-- Regression risks: Changing every existing config_id would make old and new rows incomparable; the baseline fingerprints test pins current ids.
-- Docs to update: fingerprint.py docstring; docs/guides/llama-cpp.md; docs/guides/telemetry.md; docs/serving-baseline/README.md; docs/decisions.md; a `benchmark_schema_note` row via a new Alembic revision if any id changes.
-- Acceptance criteria: A new test asserts different `extra` or model file give different ids, and the serving-baseline fingerprint test still passes for profiles with empty `extra`.
+- Regression risks: every config_id changes (accepted: the database held no benchmark data on 2026-10-19); the baseline fingerprint test pins the six-line ids and must keep passing for them.
+- Docs to update: fingerprint.py docstring; docs/guides/llama-cpp.md; docs/guides/telemetry.md; docs/serving-baseline/README.md; docs/decisions.md (dated entry) and the matching roadmap milestone; a `benchmark_schema_note` row in a new Alembic revision (AGENTS.md requires it even with no data).
+- Acceptance criteria: new tests: different `extra` gives a different id; a different model basename gives a different id; the same basename in another directory gives the same id; the legacy six-line cases in `fingerprints.json` still hash to their captured ids; `parse_config_text` round-trips the new lines.
 
 ### B4 Compare and Report correctness
 
@@ -460,7 +463,7 @@ Batches are ordered by dependency first and severity second. One branch and one 
 - Severity / status / effort: Low / Confirmed / S
 - Locations: `Makefile:175-182`; `.github/workflows/ci.yml:108-109`; `apps/web/playwright.config.ts:1-30`; `docs/guides/testing.md:17-24`; `docs/guides/testing.md:52-56`
 - Root cause: Worker count pinned in the Makefile only; behaviour switched by the CI env var.
-- Recommended fix: Pin `workers: 2` in playwright.config.ts and run the Make target as `CI=1 bun run test:e2e`, or document the differences.
+- Recommended fix (owner decision: use `CI=1`): pin `workers: 2` in playwright.config.ts and run the Make target as `CI=1 bun run test:e2e`, so retries, `forbidOnly` and server reuse match CI. Note in the Makefile comment and testing.md that `CI=1` disables dev-server reuse, so a running `make frontend` must be stopped first (it already must be).
 - Files likely to change: Makefile, playwright.config.ts, docs
 - Regression risks: CI=1 locally disables dev-server reuse.
 - Docs to update: docs/guides/testing.md, Makefile comment, AGENTS.md Commands.
@@ -538,27 +541,34 @@ Batches are ordered by dependency first and severity second. One branch and one 
 - No co-author lines and no "Generated with Claude Code" text in commits or PRs.
 - Stop and ask the owner before changing a public interface (API routes or
   response shapes beyond what the issue describes) or making an architectural
-  decision; the open questions below are already known to need one.
+  decision; section 6 records the decisions already made.
 - Reference the issue in each PR (`Fixes #N`) and do not touch issues outside
   the batch.
 
-## 6. Open questions for the owner
+## 6. Owner decisions (2026-10-19)
 
-1. **A-02 fingerprint ([#127](https://github.com/epittman23/local-llm/issues/127))**: should adding `extra`/model-file coverage
-   change every existing `config_id` (clean, but old and new rows become
-   incomparable), or should the new line be appended only when non-empty so
-   current ids stay stable? Or should inference-changing `extra` args simply be
-   rejected?
-2. **A-16 dataset fetch and selfcheck ([#141](https://github.com/epittman23/local-llm/issues/141))**: build the missing admin
-   endpoints and Tests page actions, or correct the guide and document another
-   way to fetch and calibrate?
-3. **A-01 grader ([#126](https://github.com/epittman23/local-llm/issues/126))**: after the fix, should stored answers be re-graded
-   (they are kept in the database), or should earlier results be marked
-   historical in `docs/decisions.md`?
-4. **A-09 tuning verdicts ([#134](https://github.com/epittman23/local-llm/issues/134))**: should past `adopted` sweeps be reviewed,
-   given that a slower candidate could have been adopted?
-5. **A-21 ([#146](https://github.com/epittman23/local-llm/issues/146))**: run `make test-e2e` with `CI=1` (retries, `forbidOnly`, no
-   server reuse), or keep local behaviour and document the differences?
-6. **Security findings**: reported privately at the end of the audit session;
-   decide which become advisories and whether any should be fixed before the
-   batches above (several are small defaults changes).
+The owner answered the audit's open questions on 2026-10-19. Context for all
+of them: the database held no benchmark data that day, and the owner plans to
+re-test everything once the fixes land.
+
+1. **A-02 fingerprint ([#127](https://github.com/epittman23/local-llm/issues/127))**: take the best fix, even though every
+   `config_id` changes. See A-02 in section 4 (model basename and `extra`
+   lines, always present; a `benchmark_schema_note` row still required).
+2. **A-16 dataset fetch and selfcheck ([#141](https://github.com/epittman23/local-llm/issues/141))**: build the endpoints and Tests
+   page actions properly; do not settle for a docs-only fix.
+3. **A-01 grader ([#126](https://github.com/epittman23/local-llm/issues/126))**: do not re-grade stored answers.
+4. **A-09 tuning verdicts ([#134](https://github.com/epittman23/local-llm/issues/134))**: do not review past `adopted` sweeps.
+5. **A-21 ([#146](https://github.com/epittman23/local-llm/issues/146))**: run `make test-e2e` with `CI=1`.
+6. **Security findings**: filed as private draft security advisories, to be
+   fixed first (batch B0), before any bug-fix batch.
+
+### Still open at execution time
+
+- **Where to fix B0.** A normal pull request in this public repository
+  discloses the vulnerability before the advisory is published. GitHub's
+  temporary private fork (an advisory's "Start a temporary private fork")
+  avoids that, but check before relying on it that GitHub Actions run there
+  and that the required `CI passed` check is satisfied; if not, run
+  `make check` locally and ask the owner how to merge. The B0 findings are
+  small default and validation changes, so the window a public PR opens is
+  short either way; the owner chooses.
