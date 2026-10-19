@@ -764,7 +764,9 @@ app.add_middleware(AppHTTPMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ALLOW_ORIGIN,
-    allow_credentials=True,
+    # Never with '*': Starlette answers a credentialed request from any origin
+    # by echoing that origin back, which is the same as trusting all of them.
+    allow_credentials=CORS_ALLOW_ORIGIN != ['*'],
     allow_methods=['*'],
     allow_headers=['*'],
 )

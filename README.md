@@ -77,7 +77,11 @@ which brings up Postgres (`infra/docker-compose.yml`) and the
 backend (`uvicorn`, port `4000`) together, and tears Postgres back down when
 the backend stops (Ctrl-C included). The backend listens on `127.0.0.1` only;
 to reach it from another machine, start it with
-`make backend LLLM_BACKEND_HOST=0.0.0.0`. The backend also serves the frontend
+`make backend LLLM_BACKEND_HOST=0.0.0.0`. Cross-origin API access is granted
+only to the origins in `CORS_ALLOW_ORIGIN` (semicolon-separated): `make
+backend` lists its own address and the `make frontend` dev server, and a
+backend started by hand grants none, which the app itself never needs. A `*`
+there is accepted but never with cookies. The backend also serves the frontend
 (`apps/web/`, Astro + React + shadcn/ui) from its last build, so build it
 once, and again after pulling UI changes:
 

@@ -59,8 +59,10 @@ log = logging.getLogger(__name__)
 # cause, and let every message find the room it was meant for.
 REDIS = None
 
-# Configure CORS for Socket.IO
-SOCKETIO_CORS_ORIGINS = '*' if CORS_ALLOW_ORIGIN == ['*'] else CORS_ALLOW_ORIGIN
+# Configure CORS for Socket.IO. No configured origins means None (same-origin
+# only), never []: python-socketio reads an empty list as "do not check the
+# origin at all".
+SOCKETIO_CORS_ORIGINS = '*' if CORS_ALLOW_ORIGIN == ['*'] else (CORS_ALLOW_ORIGIN or None)
 
 
 def get_room_sid_map(manager, namespace: str, room: str):
