@@ -4361,6 +4361,29 @@ async def create_calendar_event(
         return JSONCodec.dumps({'error': str(e)})
 
 
+async def _can_write_event_calendar(event, user: dict) -> bool:
+    """Whether this user may change or delete an event: the router's rule, exactly."""
+    from local_llm.models.access_grants import AccessGrants
+    from local_llm.models.calendar import Calendars
+    from local_llm.models.groups import Groups
+
+    if user.get('role') == 'admin':
+        return True
+    cal = await Calendars.get_calendar_by_id(event.calendar_id)
+    if not cal:
+        return False
+    if cal.user_id == user.get('id'):
+        return True
+    group_ids = [g.id for g in await Groups.get_groups_by_member_id(user.get('id'))]
+    return await AccessGrants.has_access(
+        user_id=user.get('id'),
+        resource_type='calendar',
+        resource_id=cal.id,
+        permission='write',
+        user_group_ids=set(group_ids),
+    )
+
+
 async def update_calendar_event(
     event_id: str,
     title: str | None = None,
@@ -4396,30 +4419,17 @@ async def update_calendar_event(
         return JSONCodec.dumps({'error': 'User context not available'})
 
     try:
-        from local_llm.models.access_grants import AccessGrants
-        from local_llm.models.calendar import CalendarEvents, CalendarEventUpdateForm, Calendars
-        from local_llm.models.groups import Groups
-
-        user_id = __user__.get('id')
+        from local_llm.models.calendar import CalendarEvents, CalendarEventUpdateForm
 
         event = await CalendarEvents.get_event_by_id(event_id)
         if not event:
             return JSONCodec.dumps({'error': 'Event not found'})
 
-        # Check write access to the event's calendar
-        if event.user_id != user_id and __user__.get('role') != 'admin':
-            cal = await Calendars.get_calendar_by_id(event.calendar_id)
-            if not cal:
-                return JSONCodec.dumps({'error': 'Access denied'})
-            user_group_ids = [g.id for g in await Groups.get_groups_by_member_id(user_id)]
-            if not await AccessGrants.has_access(
-                user_id=user_id,
-                resource_type='calendar',
-                resource_id=cal.id,
-                permission='write',
-                user_group_ids=set(user_group_ids),
-            ):
-                return JSONCodec.dumps({'error': 'Access denied'})
+        # The router's rule (routers/calendar.py _check_calendar_access): the
+        # calendar's owner, an admin, or a write grant on the event's calendar.
+        # Having created the event is not enough once the grant is revoked.
+        if not await _can_write_event_calendar(event, __user__):
+            return JSONCodec.dumps({'error': 'Access denied'})
 
         # Coerce boolean strings from LLM
         if isinstance(all_day, str):
@@ -4500,30 +4510,14 @@ async def delete_calendar_event(
         return JSONCodec.dumps({'error': 'User context not available'})
 
     try:
-        from local_llm.models.access_grants import AccessGrants
-        from local_llm.models.calendar import CalendarEvents, Calendars
-        from local_llm.models.groups import Groups
-
-        user_id = __user__.get('id')
+        from local_llm.models.calendar import CalendarEvents
 
         event = await CalendarEvents.get_event_by_id(event_id)
         if not event:
             return JSONCodec.dumps({'error': 'Event not found'})
 
-        # Check write access
-        if event.user_id != user_id and __user__.get('role') != 'admin':
-            cal = await Calendars.get_calendar_by_id(event.calendar_id)
-            if not cal:
-                return JSONCodec.dumps({'error': 'Access denied'})
-            user_group_ids = [g.id for g in await Groups.get_groups_by_member_id(user_id)]
-            if not await AccessGrants.has_access(
-                user_id=user_id,
-                resource_type='calendar',
-                resource_id=cal.id,
-                permission='write',
-                user_group_ids=set(user_group_ids),
-            ):
-                return JSONCodec.dumps({'error': 'Access denied'})
+        if not await _can_write_event_calendar(event, __user__):
+            return JSONCodec.dumps({'error': 'Access denied'})
 
         title = event.title
         result = await CalendarEvents.delete_event_by_id(event_id)
