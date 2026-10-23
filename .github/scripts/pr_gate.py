@@ -323,7 +323,9 @@ def tripwire(pr: PullRequest, read_file: ReadFile) -> list[str]:
                 findings.append(f'The test file `{change.previous_filename}` was moved out of the test suites.')
 
         lang = language(path)
-        if lang is None:
+        # .github/ already trips as a whole, and this script's own patterns
+        # and fixtures would read as suppressions.
+        if lang is None or path.startswith('.github/'):
             continue
         if change.patch is None and status not in ('removed', 'renamed'):
             findings.append(f'`{path}`: GitHub did not return its diff (too large), so it could not be inspected.')

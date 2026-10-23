@@ -204,6 +204,11 @@ class SuppressionTests(unittest.TestCase):
         patch = '+def skip_header(rows):\n+    return rows[1:]\n+const only = items.filter(Boolean);\n'
         self.assertEqual(g.tripwire(pr([change('apps/server/local_llm/a.py', patch=patch)]), no_files), [])
 
+    def test_the_gate_scripts_report_once_as_gate_files(self):
+        patch = "+    (re.compile(r'#\\s*noqa'), 'noqa comments'),\n"
+        findings = g.tripwire(pr([change('.github/scripts/pr_gate.py', patch=patch)]), no_files)
+        self.assertEqual(findings, ['`.github/scripts/pr_gate.py` is a CI gate file (modified).'])
+
     def test_a_missing_diff_trips(self):
         self.assertTrue(g.tripwire(pr([change('apps/server/local_llm/huge.py', patch=None)]), no_files))
 
