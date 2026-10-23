@@ -162,13 +162,16 @@ shadcn/ui frontend, `apps/desktop/` is the Electron desktop app, `infra/` holds 
   and `LLLM_SECRET_KEY`. Backend settings use the `LLLM_` prefix
   (`LLLM_SECRET_KEY`, `LLLM_AUTH`, `LLLM_NAME`, ...; `WEBUI_*` until
   2026-10-10).
-- `make check`: everything CI runs (`make lint`, then `make test`, which is
-  `test-backend` + `test-web` + `test-e2e`), with the same commands, so a
-  green `make check` predicts a green `CI passed`. Run it before opening a
+- `make check`: everything CI runs (`make lint`, `make secrets`, then
+  `make test`, which is `test-backend` + `test-web` + `test-e2e` +
+  `test-desktop`), with the same commands, so a green `make check` predicts
+  a green `CI passed`. Run it before opening a
   PR. The pieces run on their own too; see
   [docs/guides/testing.md](docs/guides/testing.md).
 - Lint and format: `make lint` (`pre-commit run --all-files`;
   `.pre-commit-config.yaml` is the only definition, and CI runs the same file).
+  It lints the workflows too (actionlint, zizmor). `make secrets` runs
+  gitleaks over the git history; known non-secrets go in `.gitleaksignore`.
 - Requirements: native Linux (Fedora 44 since 2026-10-09), Docker Engine with
   the Compose plugin and the user in the `docker` group, `make`, Bun,
   Node ≥ 22.12, and **uv**, which builds the backend venv from

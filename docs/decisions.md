@@ -7,6 +7,23 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-23** (evening): **CI scans commits for secrets, and lints the
+  workflows and the Dependabot configuration.** Nobody reviews pull requests
+  before they merge, so CI is the only check, and a 2026-10-23 review of it
+  found a gate that did nothing: the gitleaks pre-commit hook scans staged
+  changes only, so under CI's `pre-commit run --all-files` it reported
+  "0 commits scanned" even with keys planted in a commit. A new
+  `Secrets (gitleaks)` job (`make secrets`) scans a pull request's own
+  commits and, on main, the whole history; the one historical finding, a
+  placeholder key in the audit's repro instructions, is in
+  `.gitleaksignore`. The workflows are now linted by actionlint and zizmor
+  through pre-commit. zizmor's findings were fixed rather than suppressed:
+  two template expansions in `run:` blocks moved into `env:`, and every
+  Dependabot ecosystem got a 7-day cooldown, because its version updates
+  merge themselves on green and a compromised release would otherwise land
+  the day it ships (security updates skip the cooldown). The ruff hook moved
+  to v0.17.0, the version `uv.lock` pins. A pre-commit hook now checks that
+  `docs/ROADMAP.md`'s mermaid block matches `docs/roadmap-timeline.mmd`.
 - **2026-10-23** (latest): **llama.cpp is built on the Fedora machine**:
   build 10597 (`95b8e33e1`, the build behind the recorded measurements),
   with CUDA 13.4.3 and GCC 16.2.1. The toolkit comes from NVIDIA's Fedora 44

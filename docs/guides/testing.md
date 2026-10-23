@@ -19,12 +19,13 @@ The root Makefile mirrors CI job for job, with the same commands:
 | Target | CI job | What it runs |
 |---|---|---|
 | `make lint` | Lint and format (pre-commit) | `pre-commit run --all-files` (pinned to CI's pre-commit version) |
+| `make secrets` | Secrets (gitleaks) | gitleaks over the whole git history (CI scans a pull request's own commits, and main's whole history) |
 | `make test-backend` | Backend (pytest) | `uv lock --check`, `uv sync --frozen --group dev`, then pytest with a throwaway pgvector Postgres on `127.0.0.1:55432` (`LLLM_TEST_PG_PORT`), so `test_the_app_imports` runs instead of skipping |
 | `make test-web` | Web (astro check, vitest, build) | `bunx astro check`, `bun run test:unit`, `bun run build` |
 | `make test-e2e` | Web e2e (Playwright) | `bunx playwright test --workers=2` |
 | `make test-desktop` | Desktop (typecheck, vitest, package smoke) | `bun run typecheck`, `bun run test:unit`, `bun run package:dir` (an unpacked package, no `.rpm`) |
 | `make test` | all four test jobs | the four above |
-| `make check` | `CI passed` | `make lint`, then `make test` |
+| `make check` | `CI passed` | `make lint`, `make secrets`, then `make test` |
 
 `make test-backend` removes its Postgres container on exit (Ctrl-C included),
 so it never touches the `make backend` database. Any pytest run, `make` or
@@ -156,6 +157,18 @@ Generated code is not linted or formatted:
 - `apps/server/uv.lock`: skipped by `check-toml`; CI's `uv lock --check`
   validates it.
 
-The security hooks (gitleaks, private keys, large files, merge markers) still
-scan everything, generated or not. If a generated file is ever edited by
+The security checks (gitleaks, private keys, large files, merge markers) still
+scan everything, generated or not.
+
+The pre-commit file also lints the workflows under `.github/workflows/`
+(actionlint, through its Docker image so shellcheck runs the same
+everywhere, and zizmor for security issues), and checks that the mermaid block in
+`docs/ROADMAP.md` is a byte-identical copy of `docs/roadmap-timeline.mmd`.
+
+The gitleaks hook scans staged changes only, so it guards `git commit` and
+does nothing under `--all-files`: CI and `make lint` skip it. The commits
+themselves are scanned by CI's Secrets job and `make secrets`. A finding that
+is not a secret goes in `.gitleaksignore` by fingerprint, with the reason
+above it. GitHub's push protection blocks recognized provider keys
+separately. If a generated file is ever edited by
 hand, it is no longer generated: take it off its exclusion list.

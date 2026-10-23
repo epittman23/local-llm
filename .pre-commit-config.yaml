@@ -9,14 +9,12 @@
 # `--all-files`, so a skipped hook (`git commit --no-verify`) is still caught
 # before merge. Run it yourself with `pre-commit run --all-files`.
 #
-# Rolling out in stages (docs/decisions.md, 2026-10-09). Formatting covers all
-# of apps/web and apps/server. Linting does not yet:
-#   - ruff-check covers only apps/server/local_llm/benchmarks/ and tests/ until
-#     the rest of the backend's ~2.8k existing findings are fixed;
-#   - Biome only formats until apps/web's ~800 existing lint findings are
-#     fixed, then the hook becomes `biome check --write --error-on-warnings`.
-# Both are temporary gaps being closed, not boundaries: all of this code is
-# this repo's own.
+# Linting is complete except for one stage still rolling out
+# (docs/decisions.md, 2026-10-09): Biome only formats apps/web until its
+# existing lint findings are fixed, then the hook becomes
+# `biome check --write --error-on-warnings`. ruff-check covers the whole
+# backend (since 2026-10-17). That is a temporary gap being closed, not a
+# boundary: all of this code is this repo's own.
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -36,20 +34,25 @@ repos:
         exclude: ^apps/server/uv\.lock$
 
   # Scans the staged diff for API keys, tokens and passwords
-  # (infra/.env holds real ones and must never be committed).
+  # (infra/.env holds real ones and must never be committed). It only sees
+  # staged changes, so under `--all-files` on a clean checkout it scans
+  # nothing: CI and `make lint` skip it, and CI's "Secrets (gitleaks)" job
+  # (`make secrets`) scans the commits themselves instead.
   - repo: https://github.com/gitleaks/gitleaks
     rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e # v8.30.1
     hooks:
       - id: gitleaks
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: f12be1ebaa5351c1fc76472de98db2c3446c8253 # v0.16.10
+    # The version uv.lock pins for the dev group's ruff, so the hook and the
+    # editor agree; bump both together.
+    rev: 44b5042edab9382aba712eed4f9c7bab7a3d6a3e # v0.17.0
     hooks:
       - id: ruff-check
         args: [--fix]
-        files: ^apps/server/(local_llm|tests)/
+        files: ^(apps/server/(local_llm|tests)|\.github/scripts)/
       - id: ruff-format
-        files: ^apps/server/(local_llm|tests)/
+        files: ^(apps/server/(local_llm|tests)|\.github/scripts)/
 
   # Biome from apps/web/node_modules, so the hook, CI and the editor all run
   # the exact version package.json pins (Dependabot keeps it current). Runs
@@ -75,3 +78,28 @@ repos:
           bash -c 'cd apps/desktop
           && { [ -x node_modules/.bin/biome ] || { echo "biome missing: run bun install in apps/desktop" >&2; exit 1; }; }
           && exec node_modules/.bin/biome check --write --error-on-warnings --no-errors-on-unmatched --files-ignore-unknown=true "${@/#apps\/desktop\//}"' --
+
+  # The workflows themselves: actionlint for syntax, expressions and the
+  # shellcheck of every `run:` block (the Docker image bundles shellcheck, so
+  # a machine without it checks the same as CI), zizmor for security
+  # (template injection, untrusted checkouts, over-broad permissions).
+  - repo: https://github.com/rhysd/actionlint
+    rev: 914e7df21a07ef503a81201c76d2b11c789d3fca # v1.7.12
+    hooks:
+      - id: actionlint-docker
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: fa412071e4f5d44d44f9e365f4676f9df92456a2 # v1.30.1
+    hooks:
+      - id: zizmor
+        args: [--offline]
+
+  - repo: local
+    hooks:
+      # AGENTS.md's maintenance policy: docs/roadmap-timeline.mmd is the
+      # canonical timeline and docs/ROADMAP.md embeds a byte-identical copy.
+      - id: roadmap-timeline
+        name: roadmap timeline matches its copy in ROADMAP.md
+        language: system
+        files: ^docs/(roadmap-timeline\.mmd|ROADMAP\.md)$
+        pass_filenames: false
+        entry: python3 .github/scripts/check_roadmap_timeline.py
