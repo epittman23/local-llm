@@ -75,7 +75,11 @@ make backend
 
 which brings up Postgres and Redis (`infra/docker-compose.yml`) and the
 backend (`uvicorn`, port `4000`) together, and tears them back down when the
-backend stops (Ctrl-C included). Redis is required: it holds session
+backend stops (Ctrl-C included). Each stage prints a `==> ` line as it
+starts. uvicorn runs with `--reload` unless `LLLM_UVICORN_FLAGS` replaces it:
+`make backend LLLM_UVICORN_FLAGS='--timeout-graceful-shutdown 10'` gives a
+backend that doesn't reload and whose shutdown can't hang on an open stream.
+Redis is required: it holds session
 revocation (sign-out, password changes), and the backend refuses to start
 without `REDIS_URL`, which `make backend` sets. The backend listens on `127.0.0.1` only;
 to reach it from another machine, start it with

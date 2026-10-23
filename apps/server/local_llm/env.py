@@ -180,6 +180,13 @@ FONTS_DIR = Path(os.getenv('FONTS_DIR', PACKAGE_DIR / 'static' / 'fonts'))
 # docs/history/migration-plan.md.
 FRONTEND_BUILD_DIR = Path(os.getenv('FRONTEND_BUILD_DIR', default_frontend_build_dir())).resolve()
 
+# A served llama-server, a tune sweep and a Tests job outlive the backend by
+# default: llama-server runs in its own session so that a `--reload` restart
+# doesn't take the model down with the worker. Set this for a backend that
+# should leave nothing behind when it exits (routers/benchmarks/__init__.py's
+# shutdown()).
+LLLM_STOP_JOBS_ON_SHUTDOWN = os.getenv('LLLM_STOP_JOBS_ON_SHUTDOWN', 'False').lower() == 'true'
+
 ####################################
 # Database
 ####################################

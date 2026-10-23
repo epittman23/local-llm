@@ -20,6 +20,7 @@ from __future__ import annotations
 import asyncio
 import collections
 import json
+import logging
 
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -33,6 +34,8 @@ from local_llm.constants import ERROR_MESSAGES
 from local_llm.models.benchmarks.configs import BenchmarkRuns
 from local_llm.models.benchmarks.profiles import BenchmarkProfiles
 from local_llm.utils.auth import get_admin_user
+
+log = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -169,6 +172,19 @@ async def stop_serve(user=Depends(get_admin_user)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
     await _job.stop()
     return {'stopped': True}
+
+
+async def shutdown() -> None:
+    """Stop the served model when the backend itself is shutting down.
+
+    Only for LLLM_STOP_JOBS_ON_SHUTDOWN (see routers/benchmarks/__init__.py).
+    The `==>` lines are the markers the desktop app's progress dialog follows.
+    """
+    if _job is None or not _job.running:
+        return
+    log.info('==> Stopping the served model')
+    await _job.stop()
+    log.info('==> Stopped the served model')
 
 
 @router.get('/check')
