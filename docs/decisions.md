@@ -7,6 +7,17 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-23** (latest): **llama.cpp is built on the Fedora machine**:
+  build 10597 (`95b8e33e1`, the build behind the recorded measurements),
+  with CUDA 13.4.3 and GCC 16.2.1. The toolkit comes from NVIDIA's Fedora 44
+  repository, with that repository's driver packages excluded so they never
+  touch RPM Fusion's driver (615.71, which runs CUDA up to 13.4). It is
+  installed by its versioned name, `cuda-toolkit-13-4`, so an update can't
+  outrun the driver. CUDA 13.4's `host_config.h` accepts GCC 16, so no older
+  compiler was needed. The build sees the RTX 3060 (`--list-devices`) and
+  accepts `-fit off`, which the 2026-10-19 entry could only check in the
+  source. Nothing has been served or measured on native Linux yet; the
+  WSL2-era numbers stay historical.
 - **2026-10-23** (later): **A desktop app**, `apps/desktop` (Electron,
   Linux, packaged as an `.rpm`), so the assistant can be used without a
   terminal. It loads the backend's own URL rather than carrying a copy of
