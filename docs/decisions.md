@@ -7,6 +7,27 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-23** (late night): **CI boots the real backend, and checks the
+  models against the migrations.** Before this, nothing in CI started the
+  app: pytest imports it and Playwright mocks it.
+
+  A new `Boot (real stack)` job (`make test-boot`) starts it as
+  `make backend` does, with Postgres, Redis, migrations on an empty
+  database and the built frontend, and a stub in place of OpenRouter. It
+  then signs up the admin, gets a chat completion and sweeps all 149
+  parameter-free GET routes for server errors, and checks that SIGINT shuts
+  it down cleanly.
+
+  A new `test_schema_drift.py` compares every model against a freshly
+  migrated database. It found 108 inherited differences, all cosmetic or
+  legacy: unique flags on primary keys, indexes the migrations create but
+  the models don't declare, nullability, and three legacy tables. Fixing
+  them first would have held up the check, so they are recorded as a
+  baseline that may only shrink, and any new difference fails.
+
+  The first boot found one route, `/ollama/api/version`, that answers 500
+  when no Ollama server runs. The install doesn't use Ollama. The route is
+  left out of the sweep, with that reason, until it is fixed.
 - **2026-10-23** (night): **A CI tripwire guards the gates themselves.**
   The owner relies on CI alone, without reviewing pull requests. That makes
   the gates the weak point: the agent writing a change could make CI pass by

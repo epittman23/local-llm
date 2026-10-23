@@ -24,7 +24,8 @@ The root Makefile mirrors CI job for job, with the same commands:
 | `make test-web` | Web (astro check, vitest, build) | `bunx astro check`, `bun run test:unit`, `bun run build` |
 | `make test-e2e` | Web e2e (Playwright) | `bunx playwright test --workers=2` |
 | `make test-desktop` | Desktop (typecheck, vitest, package smoke) | `bun run typecheck`, `bun run test:unit`, `bun run package:dir` (an unpacked package, no `.rpm`) |
-| `make test` | all four test jobs | the four above |
+| `make test-boot` | Boot (real stack) | builds `apps/web`, then `tests/boot_smoke.py` against a throwaway Postgres (`:55433`) and Redis (`:56379`) |
+| `make test` | all five test jobs | the five above |
 | `make check` | `CI passed` | `make lint`, `make secrets`, then `make test` |
 
 `make test-backend` removes its Postgres container on exit (Ctrl-C included),
@@ -169,6 +170,39 @@ TEST_DATABASE_URL=postgresql://local_llm:throwaway@127.0.0.1:55432/local_llm
 
 Without it the test skips locally; CI provides one and fails rather than
 skips.
+
+`tests/test_schema_drift.py` also needs `TEST_DATABASE_URL`. It migrates
+a fresh database on that server, then compares every SQLAlchemy model
+against the result with Alembic's autogenerate. Without it, a model change
+with no migration passes every other test and then fails against the real
+database. The comparison is checked against
+`tests/fixtures/schema_drift.json`, which lists the 108 differences
+inherited from upstream when the check was added on 2026-10-23. Any new
+difference fails. The file may only shrink:
+
+1. Fix a model to match its migration, or add a migration.
+2. Record the smaller list with `SCHEMA_DRIFT_RECORD=1`.
+3. Since the file is a golden file, that edit trips the PR gate, so say
+   why in the PR.
+
+## Boot smoke: the real backend, started and used
+
+`tests/boot_smoke.py` (`make test-boot`, CI's Boot job) starts the backend
+the way `make backend` does: uvicorn, Postgres with pgvector, Redis,
+migrations on an empty database and the built frontend. A stub
+OpenAI-compatible server stands in for OpenRouter, so no request leaves
+the machine. The smoke then uses the running backend:
+
+1. Waits for `/ready`.
+2. Signs up the first user (the admin) and signs in.
+3. Gets a chat completion back from the stub.
+4. Calls every GET route that takes no path parameter, failing on any 5xx.
+5. Checks that the API refuses a request without a token.
+6. Stops it with SIGINT and expects a clean exit.
+
+Nothing else in CI starts the app: pytest imports it, and Playwright mocks
+it. `SWEEP_SKIP` in the script lists the routes the sweep leaves out, each
+with its reason. On failure the script prints the end of the backend's log.
 
 `tests/test_serving_fingerprint.py` is the guard on the serving fingerprint:
 it checks `serving/fingerprint.py` against the golden values in
