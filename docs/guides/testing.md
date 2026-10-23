@@ -109,6 +109,11 @@ stops it afterward, which is not. Stop `make frontend` first.
 
 Because Playwright mocks the backend, a change that touches the
 frontend/backend seam also needs a real run against `make backend`.
+`tests/test_frontend_contract.py` (backend pytest) covers one part of that
+seam automatically: every `fetch()` in `apps/web/src` must match a route
+the backend serves, by method and path. The mocks follow the frontend, so
+without that check a renamed or removed backend route would leave both
+suites green.
 
 ## Desktop (`apps/desktop`)
 
@@ -184,6 +189,16 @@ difference fails. The file may only shrink:
 2. Record the smaller list with `SCHEMA_DRIFT_RECORD=1`.
 3. Since the file is a golden file, that edit trips the PR gate, so say
    why in the PR.
+
+`tests/test_frontend_contract.py` reads every `fetch(...)` in
+`apps/web/src` (tests excluded) whose URL is a template on one of the base
+paths in `lib/constants.ts`. It checks each call's method and path against
+the app's route table. A URL segment taken from a helper's parameter, such
+as `testsRequest(token, 'datasets')`, is checked once per literal the
+helper is called with. Calls it cannot resolve are mostly terminal servers
+and direct OpenAI connections. It counts them, and fails if the count grows
+past `UNRESOLVED_LIMIT` (38 on 2026-10-23). It checks paths and methods
+only, not request or response bodies.
 
 ## Boot smoke: the real backend, started and used
 
