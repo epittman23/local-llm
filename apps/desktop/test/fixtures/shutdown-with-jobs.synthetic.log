@@ -1,0 +1,15 @@
+2026-10-23 11:37:43.101 | INFO     | local_llm.routers.benchmarks:shutdown:44 - ==> Stopping benchmark jobs
+2026-10-23 11:37:43.912 | INFO     | local_llm.routers.benchmarks:shutdown:48 - ==> Stopped benchmark jobs
+2026-10-23 11:37:43.913 | INFO     | local_llm.routers.benchmarks.serve:shutdown:185 - ==> Stopping the served model
+2026-10-23 11:37:43.988 | INFO     | local_llm.routers.benchmarks.serve:shutdown:187 - ==> Stopped the served model
+==> Stopping Postgres and Redis
+ Container local-llm-redis Stopping 
+ Container local-llm-postgres Stopping 
+ Container local-llm-redis Stopped 
+ Container local-llm-redis Removing 
+ Container local-llm-postgres Stopped 
+ Container local-llm-postgres Removing 
+ Container local-llm-redis Removed 
+ Container local-llm-postgres Removed 
+ Network local-llm_default Removing 
+ Network local-llm_default Removed 

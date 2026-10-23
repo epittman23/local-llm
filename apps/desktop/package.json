@@ -1,0 +1,31 @@
+{
+  "name": "local-llm-desktop",
+  "productName": "Local LLM",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Desktop app for Local LLM: runs the local stack and opens it in its own window",
+  "author": "epittman23",
+  "homepage": "https://github.com/epittman23/local-llm",
+  "main": "dist/main.js",
+  "desktopName": "local-llm.desktop",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node scripts/build-info.mjs",
+    "typecheck": "tsc -p tsconfig.json",
+    "package": "bun run build && electron-builder --linux rpm",
+    "package:dir": "bun run build && electron-builder --linux dir",
+    "test:unit": "vitest run",
+    "lint": "biome check",
+    "format": "biome check --write"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@types/node": "^26.6.5",
+    "electron": "^45.0.0",
+    "electron-builder": "^26.15.3",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}

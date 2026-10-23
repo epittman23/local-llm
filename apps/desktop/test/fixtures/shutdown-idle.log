@@ -1,0 +1,11 @@
+==> Stopping Postgres and Redis
+ Container local-llm-redis Stopping 
+ Container local-llm-postgres Stopping 
+ Container local-llm-redis Stopped 
+ Container local-llm-redis Removing 
+ Container local-llm-postgres Stopped 
+ Container local-llm-postgres Removing 
+ Container local-llm-redis Removed 
+ Container local-llm-postgres Removed 
+ Network local-llm_default Removing 
+ Network local-llm_default Removed 

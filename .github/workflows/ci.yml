@@ -49,9 +49,12 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
-      # The Biome hook runs apps/web's own pinned Biome.
-      - name: bun install
+      # The Biome hooks run apps/web's and apps/desktop's own pinned Biome.
+      - name: bun install (web)
         working-directory: apps/web
+        run: bun install --frozen-lockfile
+      - name: bun install (desktop)
+        working-directory: apps/desktop
         run: bun install --frozen-lockfile
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -115,6 +118,31 @@ jobs:
           path: apps/web/test-results/
           retention-days: 7
 
+  desktop:
+    name: Desktop (typecheck, vitest, package smoke)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/desktop
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run test:unit
+      # An unpacked package, no .rpm (that needs rpm-build): it catches an
+      # electron-builder bump that breaks packaging, which Dependabot would
+      # otherwise auto-merge on green.
+      - run: bun run package:dir
+
   backend:
     name: Backend (pytest)
     runs-on: ubuntu-latest
@@ -167,7 +195,7 @@ jobs:
   ci-ok:
     name: CI passed
     if: always()
-    needs: [pre-commit, web, e2e, backend]
+    needs: [pre-commit, web, e2e, desktop, backend]
     runs-on: ubuntu-latest
     steps:
       - name: Every job succeeded

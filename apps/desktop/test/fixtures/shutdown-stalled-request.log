@@ -1,0 +1,72 @@
+Cancel 1 running task(s), timeout graceful shutdown exceeded
+Exception in ASGI application
+Traceback (most recent call last):
+  File "/home/user/local-llm/apps/server/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 422, in run_asgi
+    result = await app(  # type: ignore[func-returns-value]
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/local-llm/apps/server/.venv/lib/python3.12/site-packages/uvicorn/middleware/proxy_headers.py", line 63, in __call__
+    return await self.app(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/local-llm/apps/server/.venv/lib/python3.12/site-packages/fastapi/applications.py", line 1159, in __call__
+    await super().__call__(scope, receive, send)
+  File "/home/user/local-llm/apps/server/.venv/lib/python3.12/site-packages/starlette/applications.py", line 96, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/user/local-llm/apps/server/.venv/lib/python3.12/site-packages/starlette/middleware/errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "/home/user/local-llm/apps/server/.venv/lib/python3.12/site-packages/starlette/middleware/sessions.py", line 91, in __call__
+    await self.app(scope, receive, send_wrapper)
+  File "/home/user/local-llm/apps/server/.venv/lib/python3.12/site-packages/starlette/middleware/cors.py", line 91, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/home/user/local-llm/apps/server/.venv/lib/python3.12/site-packages/starlette/middleware/cors.py", line 149, in simple_response
+    await self.app(scope, receive, send)
+  File "/home/user/local-llm/apps/server/local_llm/utils/asgi_middleware.py", line 120, in __call__
+    await self.app(scope, receive, send_with_headers)
+  File "/home/user/local-llm/apps/server/.venv/lib/python3.12/site-packages/starlette_compress/__init__.py", line 120, in __call__
+    return await self._identity(scope, receive, send)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/local-llm/apps/server/.venv/lib/python3.12/site-packages/starlette_compress/_identity.py", line 91, in __call__
+    await self.app(scope, receive, wrapper)
+  File "/home/user/local-llm/apps/server/.venv/lib/python3.12/site-packages/starlette/middleware/exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/home/user/local-llm/apps/server/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/user/local-llm/apps/server/.venv/lib/python3.12/site-packages/fastapi/middleware/asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "/home/user/local-llm/apps/server/.venv/lib/python3.12/site-packages/starlette/routing.py", line 676, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/home/user/local-llm/apps/server/.venv/lib/python3.12/site-packages/starlette/routing.py", line 697, in app
+    await route.handle(scope, receive, send)
+  File "/home/user/local-llm/apps/server/.venv/lib/python3.12/site-packages/starlette/routing.py", line 282, in handle
+    await self.app(scope, receive, send)
+  File "/home/user/local-llm/apps/server/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 134, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/home/user/local-llm/apps/server/.venv/lib/python3.12/site-packages/starlette/_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "/home/user/local-llm/apps/server/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 120, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "/home/user/local-llm/apps/server/.venv/lib/python3.12/site-packages/fastapi/routing.py", line 409, in app
+    body_bytes = await request.body()
+                 ^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/local-llm/apps/server/.venv/lib/python3.12/site-packages/starlette/requests.py", line 257, in body
+    async for chunk in self.stream():
+  File "/home/user/local-llm/apps/server/.venv/lib/python3.12/site-packages/starlette/requests.py", line 242, in stream
+    message = await self._receive()
+              ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/user/local-llm/apps/server/.venv/lib/python3.12/site-packages/uvicorn/protocols/http/httptools_impl.py", line 574, in receive
+    await self.message_event.wait()
+  File "/home/user/.local/share/uv/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/asyncio/locks.py", line 212, in wait
+    await fut
+asyncio.exceptions.CancelledError: Task cancelled, timeout graceful shutdown exceeded
+2026-10-23 11:39:53.248 | INFO     | uvicorn.protocols.http.httptools_impl:send:482 - 127.0.0.1:52384 - "POST /api/v1/auths/signin HTTP/1.1" 500
+==> Stopping Postgres and Redis
+ Container local-llm-postgres Stopping 
+ Container local-llm-redis Stopping 
+ Container local-llm-redis Stopped 
+ Container local-llm-redis Removing 
+ Container local-llm-postgres Stopped 
+ Container local-llm-postgres Removing 
+ Container local-llm-redis Removed 
+ Container local-llm-postgres Removed 
+ Network local-llm_default Removing 
+ Network local-llm_default Removed 

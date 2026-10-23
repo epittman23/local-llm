@@ -1,0 +1,19 @@
+{
+  // Type-checks everything, tests included (`bun run typecheck`);
+  // tsconfig.build.json emits the app without them. CommonJS on purpose: a
+  // sandboxed preload cannot be an ES module, and without "type": "module"
+  // in package.json NodeNext emits CommonJS.
+  "compilerOptions": {
+    "target": "es2024",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "rootDir": "src",
+    "outDir": "dist",
+    "noEmit": true
+  },
+  "include": ["src"]
+}

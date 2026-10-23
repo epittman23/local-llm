@@ -7,6 +7,37 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-23** (later): **A desktop app**, `apps/desktop` (Electron,
+  Linux, packaged as an `.rpm`), so the assistant can be used without a
+  terminal. It loads the backend's own URL rather than carrying a copy of
+  `apps/web`. The desktop app and the browser then run the same pages from
+  the same origin (the token in `localStorage`, the socket's own-origin
+  rule), and no frontend change was needed. A UI or backend change never
+  needs a desktop rebuild either. On a loopback server it manages the stack
+  through the Makefile's own `make backend`, rather than a second copy of
+  that lifecycle:
+  - it starts the stack when nothing answers, building `apps/web` first if
+    any source is newer than `dist/`;
+  - it **attaches** to a stack started from a terminal and leaves it
+    running, because the owner wanted a terminal start never restarted;
+  - it **stops only what it started**: one SIGINT to `make`'s process group,
+    then a wait until the group is gone, with a 90 s budget before it
+    forces;
+  - it adopts its own stack after a crash, identifying it by pid and start
+    time;
+  - it loads `make frontend`'s dev server when one is up.
+
+  A progress dialog follows the stack's `==> ` markers, so startup and
+  shutdown are visible step by step. With any other server address, the
+  future remote server, it only connects; moving there is one setting.
+  The only seam for desktop-only features is the preload bridge, which
+  exposes `window.lllmDesktop`. The planned local coding-agent tools must
+  check the sender's origin there, and refuse anything but https or
+  loopback. `rpm-build` alone was not enough: electron-builder's bundled
+  `fpm` needs `libxcrypt-compat`, which was not installed, so the `.rpm` has
+  not been built on this machine yet. The unpacked package built, and the
+  app's start, stop, attach, crash recovery and cancel were all run against
+  a real stack.
 - **2026-10-23**: A backend can be told to **stop everything it started when
   it exits**: `LLLM_STOP_JOBS_ON_SHUTDOWN=true` makes the lifespan teardown
   stop a running Tests job, a tune sweep (which stops its own candidate
