@@ -12,6 +12,8 @@
 #                    starts the stack above itself when nothing is running.
 #   make lint       pre-commit over every file (CI's "Lint and format").
 #   make secrets    gitleaks over the whole git history (CI's "Secrets").
+#   make pr-gate PR=<n>  the PR gate's title, attribution and tripwire
+#                    checks on pull request <n>, read-only.
 #   make test       backend pytest + web checks + Playwright + desktop checks
 #                    (CI's other jobs).
 #   make check      lint, secrets, then test: one command that predicts
@@ -58,7 +60,7 @@ GITLEAKS_IMAGE := zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb
 # so it never collides with `make backend`'s database.
 LLLM_TEST_PG_PORT ?= 55432
 
-.PHONY: help backend frontend astro desktop lint secrets test test-backend test-web test-e2e test-desktop check
+.PHONY: help backend frontend astro desktop lint secrets pr-gate test test-backend test-web test-e2e test-desktop check
 
 help:
 	@echo "make backend   Postgres + Redis + the backend (uvicorn --reload, $(LLLM_BACKEND_HOST):$(LLLM_BACKEND_PORT))"
@@ -66,6 +68,7 @@ help:
 	@echo "make desktop   the desktop app from this checkout (it starts and stops the stack itself)"
 	@echo "make lint      pre-commit over every file, as CI runs it"
 	@echo "make secrets   gitleaks over the whole git history"
+	@echo "make pr-gate PR=<n>  the PR gate's checks on pull request <n> (read-only)"
 	@echo "make test      test-backend + test-web + test-e2e + test-desktop, as CI runs them"
 	@echo "make check     lint, secrets, then test (predicts CI's 'CI passed')"
 
@@ -177,6 +180,14 @@ lint:
 # about 20 s. Known non-secrets are in .gitleaksignore.
 secrets:
 	docker run --rm -v "$(REPO_ROOT):/repo:ro" -w /repo $(GITLEAKS_IMAGE) git --no-banner --redact --verbose /repo
+
+# The PR gate workflow (.github/workflows/pr-gate.yml) on one pull request,
+# read-only: it never removes a label. It reads the PR through the API, so it
+# checks what is pushed, not the working tree. Its unit tests run in
+# `make lint`. See AGENTS.md, "The CI tripwire".
+pr-gate:
+	@[ -n "$(PR)" ] || { echo "make pr-gate: set PR=<number>" >&2; exit 1; }
+	python3 .github/scripts/pr_gate.py --pr $(PR)
 
 # CI's "Backend (pytest)", including the throwaway pgvector Postgres that
 # tests/test_imports.py needs (without it that test skips locally, while CI
