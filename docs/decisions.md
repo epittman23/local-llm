@@ -7,6 +7,20 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-23** (last): **The frontend's API calls are checked against
+  the backend's routes.** Playwright's mocks follow the frontend's API
+  client, so a backend route that is renamed, removed or given another
+  method left every suite green.
+
+  `test_frontend_contract.py` reads all 437 statically resolvable `fetch()`
+  calls in `apps/web/src` and checks each against the app's route table, by
+  method and path. Renaming one route by hand made it fail at the call
+  site. All current calls match. The 38 it cannot resolve (terminal
+  servers, direct OpenAI connections, URLs held in variables) are capped
+  at that count.
+
+  It checks paths and methods only. Request and response shapes are still
+  covered only by a real run.
 - **2026-10-23** (late night): **CI boots the real backend, and checks the
   models against the migrations.** Before this, nothing in CI started the
   app: pytest imports it and Playwright mocks it.
