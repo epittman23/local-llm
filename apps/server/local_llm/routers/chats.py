@@ -107,6 +107,15 @@ async def is_open_shared_chat(shared, db: AsyncSession) -> bool:
     )
 
 
+def can_access_chat(user, chat) -> bool:
+    """The chat's owner, or an admin while ENABLE_ADMIN_CHAT_ACCESS is on.
+
+    Every route that reads or changes another user's chat goes through this
+    rule, so turning admin chat access off keeps admins out of all of them.
+    """
+    return chat.user_id == user.id or (user.role == 'admin' and ENABLE_ADMIN_CHAT_ACCESS)
+
+
 async def can_read_shared_chat(user, shared, db: AsyncSession) -> bool:
     if user.role == 'pending':
         return False
@@ -1119,7 +1128,7 @@ async def update_chat_message_by_id(
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
 
-    if chat.user_id != user.id and user.role != 'admin':
+    if not can_access_chat(user, chat):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
@@ -1180,7 +1189,7 @@ async def delete_chat_message_by_id(
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
 
-    if chat.user_id != user.id and user.role != 'admin':
+    if not can_access_chat(user, chat):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
@@ -1228,7 +1237,7 @@ async def send_chat_message_event_by_id(
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
         )
 
-    if chat.user_id != user.id and user.role != 'admin':
+    if not can_access_chat(user, chat):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
@@ -1539,9 +1548,10 @@ async def clone_shared_chat_by_id(
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    # Enforce access grants (owner and admins bypass)
+    # Enforce access grants. The owner, and admins only while admin chat
+    # access is on, need none: otherwise an admin could copy any private share.
     shared = await SharedChats.get_by_id(id, db=db)
-    if shared and user.role != 'admin' and shared.user_id != user.id:
+    if shared and shared.user_id != user.id and not (user.role == 'admin' and ENABLE_ADMIN_CHAT_ACCESS):
         has_grant = await is_open_shared_chat(shared, db=db) or await AccessGrants.has_access(
             user_id=user.id,
             resource_type='shared_chat',
