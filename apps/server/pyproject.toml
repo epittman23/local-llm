@@ -201,6 +201,7 @@ packages = ["local_llm"]
 dev = [
     "pytest",
     "pytest-asyncio>=1.0.0",
+    "pytest-cov>=7.1.0",
     "ruff>=0.17.1",
 ]
 
@@ -220,6 +221,28 @@ explicit = true
 
 [tool.uv.sources]
 torch = { index = "pytorch-cpu" }
+
+# Coverage for CI's diff-coverage check (diff-cover on the lines a pull
+# request changes; docs/guides/testing.md). Applied migrations are
+# generated, and they run in subprocesses (test_imports, test_schema_drift,
+# the boot smoke) that coverage doesn't follow.
+[tool.coverage.run]
+source = ["local_llm"]
+omit = ["local_llm/migrations/versions/*"]
+relative_files = true
+
+# Type checking (CI's "Backend types" job, `make test-types`). Standard mode:
+# the inherited code had about 1,900 errors under it on 2026-10-23, kept in
+# basedpyright-baseline.json, which may only shrink (.github/scripts/
+# lint_ratchet.py); new code is checked in full. Applied migrations are
+# generated and excluded, as from ruff.
+[tool.basedpyright]
+include = ["local_llm"]
+exclude = ["local_llm/migrations/versions", "**/__pycache__"]
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "standard"
 
 [tool.ruff]
 line-length = 120

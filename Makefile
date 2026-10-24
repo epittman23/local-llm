@@ -14,6 +14,8 @@
 #   make secrets    gitleaks over the whole git history (CI's "Secrets").
 #   make pr-gate PR=<n>  the PR gate's title, attribution and tripwire
 #                    checks on pull request <n>, read-only.
+#   make baselines  record fewer basedpyright / Biome findings in their
+#                    baselines (they only shrink).
 #   make test       backend pytest + web checks + Playwright + desktop checks
 #                    + the real-stack boot smoke (CI's other jobs).
 #   make check      lint, secrets, then test: one command that predicts
@@ -54,6 +56,14 @@ LLLM_BACKEND_HOST ?= 127.0.0.1
 LLLM_UVICORN_FLAGS ?= --reload
 # Keep in sync with PRE_COMMIT_VERSION in .github/workflows/ci.yml.
 PRE_COMMIT_VERSION := 4.6.2
+# Keep in sync with DIFF_COVER_VERSION and DIFF_COVER_FAIL_UNDER in
+# .github/workflows/ci.yml. DIFF_BASE is what the changed lines are measured
+# against: CI uses the pull request's base commit.
+DIFF_COVER_VERSION := 10.6.0
+DIFF_COVER_FAIL_UNDER := 80
+DIFF_BASE ?= origin/main
+# Keep in sync with BASEDPYRIGHT_VERSION in .github/workflows/ci.yml.
+BASEDPYRIGHT_VERSION := 1.40.2
 # Keep in sync with GITLEAKS_IMAGE in .github/workflows/ci.yml.
 GITLEAKS_IMAGE := zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
 # Host port for the throwaway Postgres `make test-backend` starts; not 5432,
@@ -63,7 +73,7 @@ LLLM_TEST_PG_PORT ?= 55432
 LLLM_BOOT_PG_PORT ?= 55433
 LLLM_BOOT_REDIS_PORT ?= 56379
 
-.PHONY: help backend frontend astro desktop lint secrets pr-gate test test-backend test-boot test-web test-e2e test-desktop check
+.PHONY: help backend frontend astro desktop lint secrets pr-gate baselines test test-backend test-types test-boot test-web test-e2e test-desktop check
 
 help:
 	@echo "make backend   Postgres + Redis + the backend (uvicorn --reload, $(LLLM_BACKEND_HOST):$(LLLM_BACKEND_PORT))"
@@ -72,7 +82,7 @@ help:
 	@echo "make lint      pre-commit over every file, as CI runs it"
 	@echo "make secrets   gitleaks over the whole git history"
 	@echo "make pr-gate PR=<n>  the PR gate's checks on pull request <n> (read-only)"
-	@echo "make test      test-backend + test-web + test-e2e + test-desktop + test-boot, as CI runs them"
+	@echo "make test      test-backend + test-types + test-web + test-e2e + test-desktop + test-boot, as CI runs them"
 	@echo "make check     lint, secrets, then test (predicts CI's 'CI passed')"
 
 # --reload caveat: a code change restarts the uvicorn worker, and with it the
@@ -219,7 +229,31 @@ test-backend:
 	done; \
 	LLLM_SECRET_KEY=test-only-not-a-secret-0123456789abcdef0123456789abcdef \
 	TEST_DATABASE_URL="postgresql://local_llm:test-only-not-a-secret@127.0.0.1:$(LLLM_TEST_PG_PORT)/local_llm" \
-	uv run --frozen python -m pytest tests -q
+	uv run --frozen python -m pytest tests -q --cov --cov-report=xml; \
+	uvx "diff-cover@$(DIFF_COVER_VERSION)" coverage.xml \
+		--compare-branch="$(DIFF_BASE)" --fail-under="$(DIFF_COVER_FAIL_UNDER)"
+
+# CI's "Backend types (basedpyright)": the backend's types, held to
+# apps/server/basedpyright-baseline.json (.github/scripts/lint_ratchet.py).
+test-types:
+	@cd "$(SERVER_DIR)"; \
+	export UV_PROJECT_ENVIRONMENT="$(SERVER_DIR)/.venv"; \
+	uv sync --frozen --no-install-project --group dev; \
+	report="$$(mktemp)"; trap 'rm -f "$$report"' EXIT; \
+	uvx "basedpyright@$(BASEDPYRIGHT_VERSION)" --outputjson > "$$report" || [ -s "$$report" ]; \
+	python3 "$(REPO_ROOT)/.github/scripts/lint_ratchet.py" check basedpyright "$$report" basedpyright-baseline.json
+
+# Record fewer findings in the basedpyright and Biome baselines, after fixing
+# some. Refuses to grow either one: fix new findings instead.
+baselines:
+	@cd "$(SERVER_DIR)"; \
+	report="$$(mktemp)"; trap 'rm -f "$$report"' EXIT; \
+	uvx "basedpyright@$(BASEDPYRIGHT_VERSION)" --outputjson > "$$report" || [ -s "$$report" ]; \
+	python3 "$(REPO_ROOT)/.github/scripts/lint_ratchet.py" update basedpyright "$$report" basedpyright-baseline.json
+	@cd "$(WEB_DIR)"; \
+	report="$$(mktemp)"; trap 'rm -f "$$report"' EXIT; \
+	node_modules/.bin/biome lint --reporter=json --max-diagnostics=none . > "$$report" || true; \
+	python3 "$(REPO_ROOT)/.github/scripts/lint_ratchet.py" update biome "$$report" biome-baseline.json --prefix apps/web
 
 # CI's "Boot (real stack)": the backend started as `make backend` starts it,
 # against a throwaway Postgres and Redis (infra/docker-compose.yml's images)
@@ -253,12 +287,16 @@ test-boot:
 	REDIS_URL="redis://127.0.0.1:$(LLLM_BOOT_REDIS_PORT)/0" \
 	uv run --frozen python tests/boot_smoke.py
 
-# CI's "Web (astro check, vitest, build)".
+# CI's "Web (astro check, vitest, build)", with the same coverage of the
+# changed lines as CI (against DIFF_BASE).
 test-web:
 	@cd "$(WEB_DIR)" && \
 	bun install --frozen-lockfile && \
 	bunx astro check && \
-	bun run test:unit && \
+	bun run test:coverage && \
+	sed 's#^SF:#SF:apps/web/#' coverage/lcov.info > coverage/lcov-repo.info && \
+	(cd "$(REPO_ROOT)" && uvx "diff-cover@$(DIFF_COVER_VERSION)" apps/web/coverage/lcov-repo.info \
+		--compare-branch="$(DIFF_BASE)" --fail-under="$(DIFF_COVER_FAIL_UNDER)") && \
 	bun run build
 
 # CI's "Web e2e (Playwright, mocked backend)". Two workers, CI's count: at the
@@ -280,7 +318,7 @@ test-desktop:
 	bun run test:unit && \
 	bun run package:dir
 
-test: test-backend test-web test-e2e test-desktop test-boot
+test: test-backend test-types test-web test-e2e test-desktop test-boot
 
 check: lint secrets test
 
