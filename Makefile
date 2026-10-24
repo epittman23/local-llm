@@ -119,9 +119,17 @@ backend:
 		echo "make backend: infra/.env is missing:$$missing (WEBUI_SECRET_KEY was renamed LLLM_SECRET_KEY on 2026-10-10)" >&2; \
 		exit 1; \
 	fi; \
-	trap 'echo "==> Stopping Postgres and Redis"; $(COMPOSE) down' EXIT; \
-	echo "==> Starting Postgres and Redis"; \
-	$(COMPOSE) up -d postgres redis; \
+	for key in JUPYTER_TOKEN SEARXNG_SECRET; do \
+		if ! grep -q "^$$key=." "$$envfile"; then \
+			[ -z "$$(tail -c1 "$$envfile")" ] || echo >> "$$envfile"; \
+			echo "$$key=$$(openssl rand -hex 32)" >> "$$envfile"; \
+			echo "make backend: generated $$key in infra/.env" >&2; \
+		fi; \
+	done; \
+	set -a; source "$$envfile"; set +a; \
+	trap 'echo "==> Stopping Postgres and Redis, Jupyter and SearXNG"; $(COMPOSE) down' EXIT; \
+	echo "==> Starting Postgres and Redis, Jupyter and SearXNG"; \
+	$(COMPOSE) up -d postgres redis jupyter searxng; \
 	if ! command -v uv >/dev/null 2>&1; then \
 		echo "make backend: uv not found -- install it (https://docs.astral.sh/uv/, e.g. \`curl -LsSf https://astral.sh/uv/install.sh | sh\`)" >&2; \
 		exit 1; \

@@ -1,5 +1,5 @@
 // Starting, finding and stopping the local stack. The app runs the root
-// Makefile's own `make backend`, which already brings Postgres and Redis up
+// Makefile's own `make backend`, which already brings the Compose services up
 // and back down around uvicorn; this module decides whether to run it at
 // all, runs it in its own process group, and stops that group the way Ctrl-C
 // would. The decisions and the stop sequence are pure or take their effects

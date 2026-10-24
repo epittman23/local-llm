@@ -7,6 +7,26 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-24** (night): **`make backend` also runs a Jupyter server and
+  SearXNG.** The inherited code interpreter ran Python in the browser
+  (Pyodide), so it could not run without a page open, could not use
+  packages Pyodide lacks, and could not be measured from a benchmark. The
+  Jupyter engine runs it on the server instead. SearXNG gives web search
+  without an API key or an account.
+  - Both are Compose services on loopback, started and stopped with
+    Postgres and Redis. `make backend` generates their secrets
+    (`JUPYTER_TOKEN`, `SEARXNG_SECRET`) in `infra/.env` when missing, so an
+    existing `infra/.env` keeps working.
+  - Jupyter runs model-written code, so it has its own network (it cannot
+    reach Postgres or Redis, whose revocation list a wipe would undo), no
+    capabilities, `no-new-privileges`, and memory and process caps. It
+    keeps internet access for `pip install`; one Compose line removes it.
+  - SearXNG still sends each query to upstream search engines from this
+    machine's IP. That is less exposure than a search API tied to an
+    account, not none.
+
+  Pointing the app at them is a settings change in Admin Settings, which
+  stays in the database. Details: `docs/guides/assistant-tools.md`.
 - **2026-10-24** (evening): **Pull requests from this repository's
   branches merge themselves once green, and are kept up to date with
   `main`.** Until now only Dependabot's PRs had auto-merge, and the owner
