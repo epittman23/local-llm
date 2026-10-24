@@ -5,6 +5,8 @@ import requests
 from langchain_core.document_loaders import BaseLoader
 from langchain_core.documents import Document
 
+from local_llm.env import REQUESTS_TIMEOUT_SLOW_API
+
 log = logging.getLogger(__name__)
 
 
@@ -36,6 +38,7 @@ class ExternalWebLoader(BaseLoader):
                     json={
                         'urls': urls,
                     },
+                    timeout=REQUESTS_TIMEOUT_SLOW_API,
                 )
                 response.raise_for_status()
                 results = response.json()

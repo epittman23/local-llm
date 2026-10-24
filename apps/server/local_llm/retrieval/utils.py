@@ -37,6 +37,7 @@ from local_llm.env import (
     ENABLE_FORWARD_USER_INFO_HEADERS,
     ENABLE_RETRIEVAL_UNSCOPED_COLLECTIONS,
     OFFLINE_MODE,
+    REQUESTS_TIMEOUT_PROCESSING,
 )
 from local_llm.models.access_grants import AccessGrants
 from local_llm.models.chats import Chats
@@ -898,6 +899,7 @@ def generate_openai_batch_embeddings(
         f'{url}/embeddings',
         headers=headers,
         json=json_data,
+        timeout=REQUESTS_TIMEOUT_PROCESSING,
     )
     r.raise_for_status()
     data = r.json()
@@ -969,6 +971,7 @@ def generate_azure_openai_batch_embeddings(
             url,
             headers=headers,
             json=json_data,
+            timeout=REQUESTS_TIMEOUT_PROCESSING,
         )
         if r.status_code == 429:
             retry = float(r.headers.get('Retry-After', '1'))
@@ -1044,6 +1047,7 @@ def generate_ollama_batch_embeddings(
         f'{url}/api/embed',
         headers=headers,
         json=json_data,
+        timeout=REQUESTS_TIMEOUT_PROCESSING,
     )
     if r.status_code != 200:
         error_detail = r.json().get('error', r.text)

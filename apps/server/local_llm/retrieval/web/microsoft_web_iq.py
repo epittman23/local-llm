@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 
 import requests
 
+from local_llm.env import REQUESTS_TIMEOUT_API
 from local_llm.retrieval.web.main import SearchResult, get_filtered_results
 from local_llm.utils.headers import include_user_info_headers
 
@@ -39,6 +40,7 @@ def search_microsoft_web_iq(
                 'contentFormat': 'passage',
             },
             headers=headers,
+            timeout=REQUESTS_TIMEOUT_API,
         )
         response.raise_for_status()
 

@@ -2,6 +2,7 @@ import logging
 
 import requests
 
+from local_llm.env import REQUESTS_TIMEOUT_API
 from local_llm.retrieval.web.main import SearchResult, get_filtered_results
 
 log = logging.getLogger(__name__)
@@ -28,7 +29,7 @@ def search_ollama_cloud(
     payload = {'query': query, 'max_results': count}
 
     try:
-        response = requests.post(f'{url}/api/web_search', headers=headers, json=payload)
+        response = requests.post(f'{url}/api/web_search', headers=headers, json=payload, timeout=REQUESTS_TIMEOUT_API)
         response.raise_for_status()
         data = response.json()
 

@@ -4,6 +4,7 @@ import logging
 
 import requests
 
+from local_llm.env import REQUESTS_TIMEOUT_API
 from local_llm.retrieval.web.main import SearchResult, get_filtered_results
 
 log = logging.getLogger(__name__)
@@ -22,7 +23,7 @@ def search_mojeek(api_key: str, query: str, count: int, filter_list: list[str] |
     }
     params = {'q': query, 'api_key': api_key, 'fmt': 'json', 't': count}
 
-    response = requests.get(url, headers=headers, params=params)
+    response = requests.get(url, headers=headers, params=params, timeout=REQUESTS_TIMEOUT_API)
     response.raise_for_status()
     json_response = response.json()
     results = json_response.get('response', {}).get('results', [])

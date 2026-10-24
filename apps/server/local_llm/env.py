@@ -520,6 +520,22 @@ def _parse_ssl_env(value: str) -> 'bool | _ssl.SSLContext':
 
 REQUESTS_VERIFY = os.getenv('REQUESTS_VERIFY', 'True').lower() == 'true'
 
+# Timeouts for outbound `requests` calls, as (connect, read) in seconds.
+# requests waits forever by default, so a service that accepts the
+# connection and never answers would hold its worker thread for good. The
+# read timeout is the longest silence between bytes; a service that answers
+# only once it has finished (converting a document, embedding a batch) is
+# silent for the whole job, so its read timeout bounds the job.
+# - API: search APIs and status polls, which answer in seconds.
+# - SLOW_API: calls that do real work before answering: an answer generated
+#   by a search model, the admin's own search or scrape endpoint, a batch
+#   URL extraction.
+# - PROCESSING: document conversion and OCR, and embedding, on whatever
+#   hardware the admin runs them on.
+REQUESTS_TIMEOUT_API = (10, 60)
+REQUESTS_TIMEOUT_SLOW_API = (10, 300)
+REQUESTS_TIMEOUT_PROCESSING = (10, 1800)
+
 TAVILY_API_BASE_URL = os.getenv('TAVILY_API_BASE_URL', 'https://api.tavily.com').rstrip('/')
 
 _aiohttp_timeout_raw = os.getenv('AIOHTTP_CLIENT_TIMEOUT', '')

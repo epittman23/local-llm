@@ -3,6 +3,7 @@ from dataclasses import dataclass
 
 import requests
 
+from local_llm.env import REQUESTS_TIMEOUT_API
 from local_llm.retrieval.web.main import SearchResult
 
 log = logging.getLogger(__name__)
@@ -44,7 +45,7 @@ def search_exa(
     }
 
     try:
-        response = requests.post(f'{EXA_API_BASE}/search', headers=headers, json=payload)
+        response = requests.post(f'{EXA_API_BASE}/search', headers=headers, json=payload, timeout=REQUESTS_TIMEOUT_API)
         response.raise_for_status()
         data = response.json()
 

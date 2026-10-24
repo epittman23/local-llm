@@ -2,7 +2,7 @@ import logging
 
 import requests
 
-from local_llm.env import VERSION
+from local_llm.env import REQUESTS_TIMEOUT_API, VERSION
 from local_llm.retrieval.web.main import SearchResult
 from local_llm.utils.headers import include_user_info_headers
 
@@ -52,7 +52,7 @@ def search_perplexity_search(
             headers = include_user_info_headers(headers, user)
 
         # Make the API request
-        response = requests.request('POST', url, json=payload, headers=headers)
+        response = requests.request('POST', url, json=payload, headers=headers, timeout=REQUESTS_TIMEOUT_API)
         # Parse the JSON response
         json_response = response.json()
 

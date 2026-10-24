@@ -3,6 +3,7 @@ import logging
 import requests
 from requests.auth import HTTPDigestAuth
 
+from local_llm.env import REQUESTS_TIMEOUT_API
 from local_llm.retrieval.web.main import SearchResult, get_filtered_results
 
 log = logging.getLogger(__name__)
@@ -66,6 +67,7 @@ def search_yacy(
             'Connection': 'keep-alive',
         },
         params=params,
+        timeout=REQUESTS_TIMEOUT_API,
     )
 
     response.raise_for_status()  # Raise an exception for HTTP errors.
