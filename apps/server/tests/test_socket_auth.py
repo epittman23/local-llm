@@ -25,15 +25,18 @@ Run from apps/server:
 from __future__ import annotations
 
 import asyncio
+import copy
 import datetime as dt
 import uuid
 from types import SimpleNamespace
 
 import pytest
 
+from local_llm.config import DEFAULT_USER_PERMISSIONS
 from local_llm.env import REDIS_KEY_PREFIX
 from local_llm.models.access_grants import AccessGrants
 from local_llm.models.chats import ChatForm, Chats
+from local_llm.models.config import Config
 from local_llm.models.users import Users
 from local_llm.socket import main as socket_main
 from local_llm.utils.auth import create_token, decode_token
@@ -167,7 +170,22 @@ def test_a_revoked_token_is_refused_at_connect(sio, people):
 
 @pytest.fixture
 def channels(monkeypatch):
+    """Channel memberships, by user, with channels enabled and permitted.
+
+    The socket joins channel rooms only under the channel routes' rule
+    (socket/main.py may_join_channels), which test_socket_channel_permission.py
+    pins; here channels are on, so these tests are about the tokens.
+    """
     by_user: dict[str, list] = {}
+    permissions = copy.deepcopy(DEFAULT_USER_PERMISSIONS)
+    permissions['features']['channels'] = True
+    settings = {'channels.enable': True, 'user.permissions': permissions}
+    real_get = Config.get
+
+    async def get(key, default=None):
+        return settings[key] if key in settings else await real_get(key, default)
+
+    monkeypatch.setattr(Config, 'get', get)
 
     async def get_channels_by_user_id(user_id, db=None):
         return [SimpleNamespace(id=channel_id) for channel_id in by_user.get(user_id, [])]
