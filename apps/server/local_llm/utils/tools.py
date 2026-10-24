@@ -1639,7 +1639,7 @@ async def get_tool_servers_data(servers: list[dict[str, Any]]) -> list[dict[str,
 
     # Build final results with index and server metadata
     results = []
-    for (id, idx, server, url, info, _), response in zip(server_entries, responses):
+    for (id, idx, server, url, info, _), response in zip(server_entries, responses, strict=True):
         if isinstance(response, Exception):
             log.error(f'Failed to connect to {url} OpenAPI tool server')
             continue

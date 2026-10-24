@@ -1648,7 +1648,7 @@ async def plan_sweep(sweep: Sweep) -> dict:
                 'candidates': n,
                 'item_visits': n * (hi - lo),
             }
-            for i, (n, (lo, hi)) in enumerate(zip(s.survivors, s.slices))
+            for i, (n, (lo, hi)) in enumerate(zip(s.survivors, s.slices, strict=True))
         ],
         'winner_items': s.winner_items,
         'estimated_hours': (wall / 3600) if wall else 0.0,

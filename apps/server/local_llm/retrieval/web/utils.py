@@ -998,7 +998,7 @@ class SafeWebBaseLoader(WebBaseLoader):
     async def alazy_load(self) -> AsyncIterator[Document]:
         """Async lazy load text from the url(s) in web_path."""
         results = await self.fetch_all(self.web_paths)
-        for path, html in zip(self.web_paths, results):
+        for path, html in zip(self.web_paths, results, strict=True):
             # parsing a large page costs hundreds of ms, keep it off the event loop
             yield await asyncio.to_thread(self._document_from_html, html, path)
 

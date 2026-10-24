@@ -274,6 +274,7 @@ select = [
   "B008", # flake8-bugbear: function call in argument default
   "B023", # flake8-bugbear: closure binds a loop variable late
   "B034", # flake8-bugbear: re.sub/split/subn count or flags passed positionally
+  "B905", # flake8-bugbear: zip() without strict=
 ]
 
 # Plugin configs:

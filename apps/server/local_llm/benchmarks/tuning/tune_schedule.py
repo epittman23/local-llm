@@ -145,12 +145,12 @@ class Schedule:
 
     @property
     def item_visits(self) -> int:
-        return sum(n * (hi - lo) for n, (lo, hi) in zip(self.survivors, self.slices))
+        return sum(n * (hi - lo) for n, (lo, hi) in zip(self.survivors, self.slices, strict=True))
 
     def rows(self) -> list[list[str]]:
         return [
             [str(i + 1), f'{lo}:{hi}', str(hi - lo), str(n), str(n * (hi - lo))]
-            for i, (n, (lo, hi)) in enumerate(zip(self.survivors, self.slices))
+            for i, (n, (lo, hi)) in enumerate(zip(self.survivors, self.slices, strict=True))
         ]
 
 
@@ -181,7 +181,7 @@ def plan_schedule(tier_size: int, candidates: int, round_items: int, eta: int = 
     if lo > tier_size:
         rows = '\n'.join(
             f'  round {i + 1}: items {a}:{b} ({b - a}), {n} candidates'
-            for i, (n, (a, b)) in enumerate(zip(survivors, slices))
+            for i, (n, (a, b)) in enumerate(zip(survivors, slices, strict=True))
         )
         raise TuneRefused(
             f'llama-tune: this tier cannot carry that search.\n'

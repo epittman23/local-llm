@@ -3448,7 +3448,7 @@ async def query_knowledge_bases(
                 result_ids = search_results.ids[0]
                 result_distances = search_results.distances[0] if search_results.distances else [0] * len(result_ids)
 
-                for knowledge_base_id, distance in zip(result_ids, result_distances):
+                for knowledge_base_id, distance in zip(result_ids, result_distances, strict=True):
                     if knowledge_base_id in seen_ids:
                         continue
                     seen_ids.add(knowledge_base_id)

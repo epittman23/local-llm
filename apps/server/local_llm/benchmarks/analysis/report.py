@@ -1216,7 +1216,7 @@ def block_accuracy(b: Block, figs: Figures, audit: Audit) -> tuple[str, dict]:
         raw.append(p)
         detail.append([lv, str(bb), str(cc), str(ndisc), pv(p)])
     adjusted = holm(raw)
-    for row, a in zip(detail, adjusted):
+    for row, a in zip(detail, adjusted, strict=True):
         row.append(pv(a))
     if detail:
         out += [

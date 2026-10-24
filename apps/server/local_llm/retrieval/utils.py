@@ -462,11 +462,11 @@ async def query_doc_with_native_hybrid_search(
         metadatas = [d.metadata for d in compressed]
 
         if k < k_reranker:
-            sorted_items = sorted(zip(distances, documents, metadatas), key=lambda x: x[0], reverse=True)
+            sorted_items = sorted(zip(distances, documents, metadatas, strict=True), key=lambda x: x[0], reverse=True)
             sorted_items = sorted_items[:k]
 
             if sorted_items:
-                distances, documents, metadatas = map(list, zip(*sorted_items))
+                distances, documents, metadatas = map(list, zip(*sorted_items, strict=True))
             else:
                 distances, documents, metadatas = [], [], []
 
@@ -590,11 +590,11 @@ async def query_doc_with_hybrid_search(
 
         # retrieve only min(k, k_reranker) items, sort and cut by distance if k < k_reranker
         if k < k_reranker:
-            sorted_items = sorted(zip(distances, documents, metadatas), key=lambda x: x[0], reverse=True)
+            sorted_items = sorted(zip(distances, documents, metadatas, strict=True), key=lambda x: x[0], reverse=True)
             sorted_items = sorted_items[:k]
 
             if sorted_items:
-                distances, documents, metadatas = map(list, zip(*sorted_items))
+                distances, documents, metadatas = map(list, zip(*sorted_items, strict=True))
             else:
                 distances, documents, metadatas = [], [], []
 
@@ -648,7 +648,7 @@ def merge_and_sort_query_results(query_results: list[dict], k: int) -> dict:
         documents = data['documents'][0]
         metadatas = data['metadatas'][0]
 
-        for distance, document, metadata in zip(distances, documents, metadatas):
+        for distance, document, metadata in zip(distances, documents, metadatas, strict=True):
             if isinstance(document, str):
                 doc_hash = (metadata or {}).get(CHUNK_HASH_KEY) or _content_hash(document)
 
@@ -665,7 +665,7 @@ def merge_and_sort_query_results(query_results: list[dict], k: int) -> dict:
     combined.sort(key=lambda x: x[0], reverse=True)
 
     # Slice to keep only the top k elements
-    sorted_distances, sorted_documents, sorted_metadatas = zip(*combined[:k]) if combined else ([], [], [])
+    sorted_distances, sorted_documents, sorted_metadatas = zip(*combined[:k], strict=True) if combined else ([], [], [])
 
     # Create and return the output dictionary
     return {
@@ -1791,6 +1791,7 @@ class RerankCompressor(BaseDocumentCompressor):
                 zip(
                     documents,
                     scores.tolist() if not isinstance(scores, list) else scores,
+                    strict=True,
                 )
             )
             if self.r_score:

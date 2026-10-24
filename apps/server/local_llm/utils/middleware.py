@@ -859,7 +859,7 @@ def get_source_context(sources: list, source_ids: dict = None, include_content: 
     if source_ids is None:
         source_ids = {}
     for source in sources:
-        for doc, meta in zip(source.get('document', []), source.get('metadata', [])):
+        for doc, meta in zip(source.get('document', []), source.get('metadata', []), strict=False):
             source_id = meta.get('source') or source.get('source', {}).get('id') or 'N/A'
             if source_id not in source_ids:
                 source_ids[source_id] = len(source_ids) + 1
@@ -1635,7 +1635,7 @@ async def add_file_context(messages: list, chat_id: str, user) -> list:
     user_messages = [m for m in messages if m.get('role') == 'user']
     stored_user_messages = [m for m in stored_messages if m.get('role') == 'user']
 
-    for message, stored_message in zip(user_messages, stored_user_messages):
+    for message, stored_message in zip(user_messages, stored_user_messages, strict=False):
         # Chat references carry no url - they are addressed by id via view_chat.
         attached_files = [
             file
@@ -6082,6 +6082,7 @@ class _ToolCallRounds:
             zip(
                 [id(tool_call) for tool_call in delegate_calls],
                 await asyncio.gather(*(self._execute_tool_call(tools, tool_call) for tool_call in delegate_calls)),
+                strict=True,
             )
         )
 
