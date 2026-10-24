@@ -268,12 +268,29 @@ select = [
   "Q",    # flake8-quotes
   "ICN",  # flake8-import-conventions
   # Bug-finding rules, chosen one by one rather than by whole family:
+  "B006", # flake8-bugbear: mutable argument default
   "B007", # flake8-bugbear: unused loop control variable
+  "B008", # flake8-bugbear: function call in argument default
+  "B023", # flake8-bugbear: closure binds a loop variable late
+  "B034", # flake8-bugbear: re.sub/split/subn count or flags passed positionally
 ]
 
 # Plugin configs:
 flake8-import-conventions.banned-from = [ "ast", "datetime" ]
 flake8-import-conventions.aliases = { datetime = "dt" }
 flake8-quotes.inline-quotes = "single"
+# FastAPI's declarative parameter defaults are markers FastAPI reads, not
+# values computed once and shared between calls.
+flake8-bugbear.extend-immutable-calls = [
+  "fastapi.Body",
+  "fastapi.Cookie",
+  "fastapi.Depends",
+  "fastapi.File",
+  "fastapi.Form",
+  "fastapi.Header",
+  "fastapi.Path",
+  "fastapi.Query",
+  "fastapi.Security",
+]
 mccabe.max-complexity = 25
 pydocstyle.convention = "google"

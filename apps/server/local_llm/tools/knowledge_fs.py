@@ -1009,6 +1009,26 @@ async def _kb_sed(
 # =============================================================================
 
 
+def _render_tree(tree, parent_id, prefix='  '):
+    """The `tree` command's lines for everything under parent_id in one knowledge base's tree."""
+    items = []
+    subdirs = _get_subdirs(tree, parent_id)
+    files = _get_files_in_dir(tree, parent_id)
+    entries = [('dir', d) for d in subdirs] + [('file', f) for f in files]
+
+    for idx, (etype, entry) in enumerate(entries):
+        is_last = idx == len(entries) - 1
+        connector = '└── ' if is_last else '├── '
+        child_prefix = prefix + ('    ' if is_last else '│   ')
+
+        if etype == 'dir':
+            items.append(f'{prefix}{connector}📁 {entry["name"]}/')
+            items.extend(_render_tree(tree, entry['id'], child_prefix))
+        else:
+            items.append(f'{prefix}{connector}{entry["filename"]}')
+    return items
+
+
 async def _kb_tree(args: list[str], flags: set[str], user: dict, model_knowledge: list[dict] | None) -> str:
     """Show directory tree structure."""
     kb_ids = await _get_accessible_kb_ids(user, model_knowledge)
@@ -1040,25 +1060,7 @@ async def _kb_tree(args: list[str], flags: set[str], user: dict, model_knowledge
                 continue
             output.append(f'  {dir_scope}/')
 
-        def _render_tree(parent_id, prefix='  '):
-            items = []
-            subdirs = _get_subdirs(tree, parent_id)
-            files = _get_files_in_dir(tree, parent_id)
-            entries = [('dir', d) for d in subdirs] + [('file', f) for f in files]
-
-            for idx, (etype, entry) in enumerate(entries):
-                is_last = idx == len(entries) - 1
-                connector = '└── ' if is_last else '├── '
-                child_prefix = prefix + ('    ' if is_last else '│   ')
-
-                if etype == 'dir':
-                    items.append(f'{prefix}{connector}📁 {entry["name"]}/')
-                    items.extend(_render_tree(entry['id'], child_prefix))
-                else:
-                    items.append(f'{prefix}{connector}{entry["filename"]}')
-            return items
-
-        output.extend(_render_tree(root_dir_id))
+        output.extend(_render_tree(tree, root_dir_id))
 
         # Summary
         total_dirs = len(tree['dirs'])

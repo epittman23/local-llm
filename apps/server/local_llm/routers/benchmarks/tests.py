@@ -251,10 +251,11 @@ async def start_selfcheck(form_data: SelfcheckForm, user=Depends(get_admin_user)
                     break
                 adapter = adapters[name]
                 items, _ = filter_items(adapter, await asyncio.to_thread(read_items, name))
-                await queue.put({'type': 'progress', 'benchmark': name, 'message': 'checking', 'total': len(items)})
+                total = len(items)
+                await queue.put({'type': 'progress', 'benchmark': name, 'message': 'checking', 'total': total})
                 counts = {'i': 0, 'passed': 0}
 
-                def on_item(iid: str, outcome: str, reason: str, name=name, total=len(items), counts=counts) -> None:
+                def on_item(iid: str, outcome: str, reason: str, name=name, total=total, counts=counts) -> None:
                     # In the grading thread: stop on cancel, before anything is written.
                     if _cancel:
                         raise _Cancelled()
