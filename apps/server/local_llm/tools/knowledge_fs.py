@@ -562,7 +562,7 @@ async def _kb_ls(args: list[str], flags: set[str], user: dict, model_knowledge: 
     target_kb_id = None
     dir_path = None
     if path_arg:
-        for kb_id, kb_name, _ in kb_ids:
+        for kb_id, _kb_name, _ in kb_ids:
             if kb_id == path_arg:
                 target_kb_id = kb_id
                 break

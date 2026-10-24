@@ -405,7 +405,7 @@ class Figures:
                     va='center',
                 )
                 continue
-            for k, i in enumerate(lost[j]):
+            for k in range(len(lost[j])):
                 ax.plot(
                     [-(k + 1)],
                     [y],
@@ -416,7 +416,7 @@ class Figures:
                     markeredgewidth=1.2,
                     zorder=3,
                 )
-            for k, i in enumerate(gained[j]):
+            for k in range(len(gained[j])):
                 ax.plot(
                     [k + 1],
                     [y],

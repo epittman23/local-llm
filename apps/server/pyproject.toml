@@ -267,6 +267,8 @@ select = [
   "C90",  # mccabe
   "Q",    # flake8-quotes
   "ICN",  # flake8-import-conventions
+  # Bug-finding rules, chosen one by one rather than by whole family:
+  "B007", # flake8-bugbear: unused loop control variable
 ]
 
 # Plugin configs:

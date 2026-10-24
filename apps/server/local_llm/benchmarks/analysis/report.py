@@ -1874,7 +1874,7 @@ def section_throughput(records: list[dict], blocks: list[Block], regimes: Regime
             out += ['**This contrast is refused.** ' + ' '.join(f'{r[0].upper()}{r[1:]}.' for r in blocked), '']
 
         rows = []
-        for field_, name, why in RESPONSES:
+        for field_, name, _why in RESPONSES:
             samples = [[v for r in by_level.get(lv, []) if (v := timing(r, field_)) is not None] for lv in levels]
             kr, fr = kruskal_and_anova(samples)
             rows.append([name, kr, fr])

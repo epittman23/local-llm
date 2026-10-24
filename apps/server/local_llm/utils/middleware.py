@@ -1493,8 +1493,8 @@ async def chat_web_search_handler(request: Request, form_data: dict, extra_param
         if results:
             files = form_data.get('files', [])
 
-            if results.get('collection_names'):
-                for col_idx, collection_name in enumerate(results.get('collection_names')):
+            if collection_names := results.get('collection_names'):
+                for collection_name in collection_names:
                     files.append(
                         {
                             'collection_name': collection_name,

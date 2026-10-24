@@ -1562,7 +1562,7 @@ async def search_chats(
             needles = list(dict.fromkeys([lower_query, *chat_search_terms(lower_query)])) if lower_query else []
 
             for needle in needles:
-                for msg_id, msg in messages.items():
+                for msg in messages.values():
                     content = msg.get('content', '') if isinstance(msg, dict) else ''
                     if isinstance(content, str) and needle in content.lower():
                         idx = content.lower().find(needle)

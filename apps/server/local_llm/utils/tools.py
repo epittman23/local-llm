@@ -989,7 +989,7 @@ def clean_properties(schema: dict):
         schema['type'] = 'string'
 
     if 'properties' in schema:
-        for prop_name, prop_schema in schema['properties'].items():
+        for prop_schema in schema['properties'].values():
             clean_properties(prop_schema)
 
     if 'items' in schema:
@@ -1138,7 +1138,7 @@ def convert_openapi_to_tool_payload(openapi_spec):
     """
     tool_payload = []
 
-    for path, methods in openapi_spec.get('paths', {}).items():
+    for methods in openapi_spec.get('paths', {}).values():
         if not isinstance(methods, dict):
             continue
 

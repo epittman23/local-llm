@@ -723,7 +723,7 @@ async def _check_calendar_alerts(app) -> None:
     if not upcoming:
         return
 
-    for event, user_tz in upcoming:
+    for event, _user_tz in upcoming:
         # Skip if already alerted for this start time
         if event.meta and event.meta.get('alerted_at'):
             continue
