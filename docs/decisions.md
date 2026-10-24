@@ -7,7 +7,7 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
-- **2026-10-24** (latest): **Tests can answer items through the app's chat
+- **2026-10-24** (towards midnight): **Tests can answer items through the app's chat
   pipeline (harness mode), the first step of the approved plan in
   `docs/plans/benchmarks-through-the-app.md`.** Until now every benchmark
   measured the bare model, straight from `llama-server`. Harness mode

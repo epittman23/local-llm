@@ -474,6 +474,16 @@ class BenchmarkResultTable:
             row = result.scalars().first()
             return row
 
+    async def harness_sha_of(self, suite_run_id: str, db: AsyncSession | None = None) -> str | None:
+        """The harness sha a suite run was recorded under, or None for a bare run."""
+        async with get_async_db_context(db) as db:
+            result = await db.execute(
+                select(BenchmarkResult.harness_sha)
+                .filter(BenchmarkResult.suite_run_id == suite_run_id, BenchmarkResult.harness_sha.is_not(None))
+                .limit(1)
+            )
+            return result.scalars().first()
+
     async def suite_runs(self, limit: int = 20, db: AsyncSession | None = None) -> list[dict]:
         """Recent suite runs, newest first, with what each of them scored.
 

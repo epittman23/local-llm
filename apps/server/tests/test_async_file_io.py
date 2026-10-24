@@ -236,6 +236,7 @@ def test_execute_code_jupyter_passes_the_idle_timeout_to_the_executor(monkeypatc
     class Executor:
         def __init__(self, base_url, code, token, password, timeout, files=None):
             made.append((base_url, code, token, password, timeout))
+            self.failure = ''
 
         async def __aenter__(self):
             return self

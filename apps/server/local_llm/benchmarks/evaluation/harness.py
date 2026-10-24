@@ -56,8 +56,9 @@ TOOLS = ('execute_code',)
 #: Upstream calls an item may make before the tool loop stops; one confused
 #: item would otherwise spend the whole per-item timeout (256 by default).
 MAX_TOOL_ROUNDS = 8
-#: Request params read back from the upstream body into the record.
-PARAM_KEYS = ('temperature', 'top_p', 'top_k', 'max_tokens', 'max_completion_tokens', 'seed', 'stream')
+#: Body keys that are not params: the conversation and the tool list, which
+#: the spec covers as the system message's sha and the tool names.
+NOT_PARAMS = ('messages', 'tools')
 
 LOCAL_HOSTS = {'127.0.0.1', 'localhost', '::1'}
 CODE_INTERPRETER_ITEM = 'open_webui:code_interpreter'
@@ -116,6 +117,9 @@ def _request_for(source: Request, user) -> Request:
     request.state.enable_api_keys = False
     request.state.internal = True
     request.state.max_tool_call_iterations = MAX_TOOL_ROUNDS
+    # Read by tools/builtin.py's execute_code: a plot a code run prints is
+    # kept inline instead of being stored as a file in the owner's Files.
+    request.state.benchmark_harness = True
     return request
 
 
@@ -137,6 +141,7 @@ async def prepare(source: Request, user, model_entry: str, port: int) -> dict:
     from local_llm import main
     from local_llm.models.config import Config
     from local_llm.routers.openai import get_openai_connection
+    from local_llm.utils.misc import merge_model_params
     from local_llm.utils.models import get_all_models
 
     request = _request_for(source, user)
@@ -167,7 +172,12 @@ async def prepare(source: Request, user, model_entry: str, port: int) -> dict:
     if api_config.get('api_type') == 'responses' or api_config.get('azure'):
         raise HarnessRefused('the connection must use the chat completions API')
 
-    params = model_info.params.model_dump() if model_info.params else {}
+    # The params the pipeline will use: the global defaults with the
+    # entry's own on top (main._merge_chat_params), not the entry's alone.
+    params = merge_model_params(
+        await Config.get('models.default_params', {}) or {},
+        model_info.params.model_dump() if model_info.params else {},
+    )
     if params.get('stream_response') is False:
         raise HarnessRefused(f"'{model_entry}' turns streaming off, and the code interpreter only runs streaming")
     if params.get('function_calling') == 'legacy':
@@ -175,9 +185,17 @@ async def prepare(source: Request, user, model_entry: str, port: int) -> dict:
     if params.get('max_completion_tokens') is not None:
         raise HarnessRefused(f"'{model_entry}' sets max_completion_tokens, which would replace the item's token cap")
 
-    ci = await Config.get_many('code_interpreter.enable', 'code_interpreter.engine')
+    ci = await Config.get_many(
+        'code_interpreter.enable',
+        'code_interpreter.engine',
+        'code_interpreter.jupyter.url',
+        'code_interpreter.jupyter.auth',
+        'code_interpreter.jupyter.auth_token',
+    )
     if not ci.get('code_interpreter.enable') or ci.get('code_interpreter.engine') != 'jupyter':
         raise HarnessRefused('the code interpreter must be on, on the Jupyter engine (Admin Settings > Code Execution)')
+    if not await _jupyter_alive(ci):
+        raise HarnessRefused(f'the Jupyter server at {ci.get("code_interpreter.jupyter.url")} does not answer')
 
     return {
         'request': request,
@@ -241,7 +259,10 @@ def spec_from_request(hctx: dict, body: dict) -> dict:
         'base_model': hctx['base_model'],
         'system_sha': _sha(system) if system else None,
         'tools': tools,
-        'params': {k: body[k] for k in PARAM_KEYS if body.get(k) is not None},
+        # Everything else in the body, whatever the entry, the global
+        # defaults or a custom param put there: two requests that differ in
+        # any sampling setting must not share a sha.
+        'params': {k: v for k, v in body.items() if k not in NOT_PARAMS},
         'function_calling': 'native',
         'features': ['code_interpreter'],
         'code_interpreter_engine': 'jupyter',
@@ -264,6 +285,24 @@ async def _server_alive(port: int) -> bool:
             session.get(f'http://127.0.0.1:{port}/health', timeout=aiohttp.ClientTimeout(total=5)) as resp,
         ):
             return resp.status < 500
+    except (aiohttp.ClientError, TimeoutError):
+        return False
+
+
+async def _jupyter_alive(ci: dict) -> bool:
+    """Whether the configured Jupyter server answers, with its token when one is set."""
+    url = (ci.get('code_interpreter.jupyter.url') or '').rstrip('/')
+    if not url:
+        return False
+    params = {}
+    if ci.get('code_interpreter.jupyter.auth') == 'token' and ci.get('code_interpreter.jupyter.auth_token'):
+        params['token'] = ci['code_interpreter.jupyter.auth_token']
+    try:
+        async with (
+            aiohttp.ClientSession() as session,
+            session.get(f'{url}/api/status', params=params, timeout=aiohttp.ClientTimeout(total=5)) as resp,
+        ):
+            return resp.status == 200
     except (aiohttp.ClientError, TimeoutError):
         return False
 
@@ -369,7 +408,10 @@ async def ask(hctx: dict, prompt: str) -> HarnessAnswer:
     out = HarnessAnswer()
     errors: list[str] = []
     t0 = time.monotonic()
-    with tracing() as trace:
+    port = hctx['port']
+    # A request to anywhere else is stopped before it is sent, so neither the
+    # item nor the entry's system prompt reaches that host.
+    with tracing(allow=lambda url: is_local_target(url, port)) as trace:
         try:
             assistant = await asyncio.wait_for(_run_pipeline(hctx, prompt, errors), hctx['timeout'])
         except HarnessRefused:
@@ -387,10 +429,16 @@ async def ask(hctx: dict, prompt: str) -> HarnessAnswer:
         if errors and not await _server_alive(hctx['port']):
             out.gone, out.error = True, f'no response from port {hctx["port"]} ({errors[0]})'
             return out
-        raise HarnessRefused('no upstream request was observed, so where the answer came from is unknown')
+        why = f' ({errors[0]})' if errors else ''
+        raise HarnessRefused(f'no upstream request was observed, so where the answer came from is unknown{why}')
     for url, _body in trace.requests:
         if not is_local_target(url, hctx['port']):
             raise HarnessRefused(f'a request went to {url}, not the llama-server on port {hctx["port"]}')
+
+    if trace.code_run_failures:
+        # The model answered without its code: grading that would score
+        # an outage as the model's.
+        raise HarnessRefused(f'the code interpreter failed ({trace.code_run_failures[0]})')
 
     try:
         first = json.loads(trace.requests[0][1])

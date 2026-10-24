@@ -74,7 +74,10 @@ measured on it yet.
   telemetry recorder, which writes every sample, `/metrics` scrape and
   request timing into the app's own Postgres.
 - **Measuring**: the Tests page runs scored items from HumanEval, MBPP and
-  DS-1000 against whatever is being served; Compare ranks configurations by
+  DS-1000 against whatever is being served, either straight to
+  `llama-server` or, with `harness_model` (a Workspace model entry; API only
+  so far), through the app's own chat pipeline with the entry's prompt and
+  the Jupyter code interpreter (`benchmarks/evaluation/harness.py`); Compare ranks configurations by
   pass rate and passes per minute; Report writes the statistical comparison,
   auditing the design first. Coding and data analysis are covered; math and
   statistics are not yet.

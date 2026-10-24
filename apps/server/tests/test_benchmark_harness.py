@@ -104,6 +104,8 @@ def app_with(monkeypatch):
         'api_config': {},
         'engine': 'jupyter',
         'enabled': True,
+        'defaults': {},
+        'jupyter': True,
     }
 
     async def resolve(request, model_id, model_item, user):
@@ -115,10 +117,18 @@ def app_with(monkeypatch):
     async def get_many(*keys):
         return {'code_interpreter.enable': state['enabled'], 'code_interpreter.engine': state['engine']}
 
+    async def get(key, default=None):
+        return state['defaults'] if key == 'models.default_params' else default
+
+    async def jupyter_alive(ci):
+        return state['jupyter']
+
     monkeypatch.setattr(main, '_resolve_chat_model', resolve)
     monkeypatch.setattr(openai_router, 'get_openai_connection', connection)
     monkeypatch.setattr(Config, 'get_many', get_many)
+    monkeypatch.setattr(Config, 'get', get)
     monkeypatch.setattr(harness, '_request_for', lambda source, user: source)
+    monkeypatch.setattr(harness, '_jupyter_alive', jupyter_alive)
 
     def prepare(model='coder'):
         source = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(MODELS=state['models'])))
@@ -146,6 +156,10 @@ def test_a_local_entry_is_accepted(app_with):
         ({'entry': _entry({'max_completion_tokens': 100})}, 'max_completion_tokens'),
         ({'engine': 'pyodide'}, 'Jupyter'),
         ({'enabled': False}, 'Jupyter'),
+        ({'jupyter': False}, 'does not answer'),
+        # The global defaults count too: the pipeline merges them under the entry's.
+        ({'defaults': {'stream_response': False}}, 'streaming'),
+        ({'defaults': {'max_completion_tokens': 64}}, 'max_completion_tokens'),
         ({'api_config': {'api_type': 'responses'}}, 'chat completions'),
     ],
 )
@@ -217,7 +231,8 @@ def test_an_answer_is_graded_on_its_final_message_with_stats_and_a_spec(monkeypa
     assert (ans.content, ans.error, ans.gone) == ('final', '', False)
     assert ans.stats == {'rounds': 2, 'code_runs': 2, 'code_ms': 201, 'output_tokens': 31}
     assert ans.spec['tools'] == ['execute_code']
-    assert ans.spec['params'] == {'temperature': 0, 'max_tokens': 2048, 'stream': True}
+    # Every key of the body but the conversation and the tools.
+    assert ans.spec['params'] == {'model': 'qwen25c', 'temperature': 0, 'max_tokens': 2048, 'stream': True}
     assert ans.spec['system_sha'] == harness._sha('Be precise.')
     assert ans.spec['model_entry'] == 'coder'
 
@@ -239,6 +254,71 @@ def test_no_observed_request_refuses_the_result(monkeypatch):
 
     with pytest.raises(harness.HarnessRefused, match='no upstream request'):
         asyncio.run(harness.ask(HCTX, 'item'))
+
+
+def test_the_refusal_names_the_pipelines_own_error(monkeypatch):
+    _pipeline(monkeypatch, urls=(), errors=('Model not found',))
+
+    with pytest.raises(harness.HarnessRefused, match='Model not found'):
+        asyncio.run(harness.ask(HCTX, 'item'))
+
+
+def test_a_request_elsewhere_is_stopped_before_it_is_sent():
+    sent = []
+
+    async def router(url):
+        # What routers/openai.py does: note the request, then send it.
+        upstream_trace.note_request(url, '{}')
+        sent.append(url)
+
+    async def go():
+        with upstream_trace.tracing(allow=lambda url: harness.is_local_target(url, PORT)) as trace:
+            await router(LOCAL)
+            with pytest.raises(upstream_trace.UpstreamRefused):
+                await router('https://openrouter.ai/api/v1/chat/completions')
+        return trace.requests
+
+    noted = asyncio.run(go())
+    assert sent == [LOCAL]
+    assert [url for url, _ in noted] == [LOCAL, 'https://openrouter.ai/api/v1/chat/completions']
+
+
+def test_a_failed_code_interpreter_stops_the_run(monkeypatch):
+    async def run(hctx, prompt, errs):
+        upstream_trace.note_request(LOCAL, json.dumps(BODY))
+        upstream_trace.note_code_run(5.0, failure='Cannot connect to host 127.0.0.1:8888')
+        return {'output': [_message('answered without code')]}
+
+    monkeypatch.setattr(harness, '_run_pipeline', run)
+    with pytest.raises(harness.HarnessRefused, match='code interpreter failed'):
+        asyncio.run(harness.ask(HCTX, 'item'))
+
+
+def test_the_jupyter_client_reports_its_own_failure_to_the_trace(monkeypatch):
+    from local_llm.utils import code_interpreter as ci
+
+    class Executor:
+        def __init__(self, *args):
+            self.failure = 'HTTP 403'
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        async def run(self):
+            return ci.ResultModel(stderr='Error: HTTP 403')
+
+    monkeypatch.setattr(ci, 'JupyterCodeExecuter', Executor)
+
+    async def go():
+        with upstream_trace.tracing() as trace:
+            await ci.execute_code_jupyter('http://jupyter', 'x')
+        return trace
+
+    trace = asyncio.run(go())
+    assert len(trace.code_runs_ms) == 1 and trace.code_run_failures == ['HTTP 403']
 
 
 def test_a_pipeline_error_with_the_server_up_is_the_items_failure(monkeypatch):
@@ -550,3 +630,168 @@ def test_bare_only_leaves_out_harness_rows_and_resume_stays_in_its_mode():
     # The harness run is newer; a bare resume must still pick the bare run.
     assert asyncio.run(BenchmarkResults.latest_suite_run(model=model, tier='smoke')) == f'bare-{RUN}'
     assert asyncio.run(BenchmarkResults.latest_suite_run(model=model, tier='smoke', harness=True)) == f'app-{RUN}'
+
+
+# ---------------------------------------------------------------------------
+# resume, the runner's harness paths, the router
+# ---------------------------------------------------------------------------
+def test_a_resume_continues_under_the_recorded_spec_and_stops_on_a_changed_one(monkeypatch):
+    spec = _spec()
+
+    async def sha_of(suite_run_id):
+        return 'sha-A'
+
+    async def get(sha):
+        return dict(spec) if sha == 'sha-A' else None
+
+    monkeypatch.setattr(runner.BenchmarkResults, 'harness_sha_of', sha_of)
+    monkeypatch.setattr(runner.BenchmarkHarnesses, 'get', get)
+    ctx = {'harness_spec': None, 'harness_sha': None}
+    asyncio.run(runner._resume_harness(ctx, 'run-A'))
+
+    assert (ctx['harness_spec'], ctx['harness_sha']) == (spec, 'sha-A')
+    assert asyncio.run(runner._harness_sha(ctx, _spec())) == 'sha-A'
+    with pytest.raises(harness.HarnessRefused, match='system_sha'):
+        asyncio.run(runner._harness_sha(ctx, _spec(system_sha='edited')))
+
+
+def test_a_resume_of_a_run_with_no_recorded_harness_is_refused(monkeypatch):
+    async def sha_of(suite_run_id):
+        return None
+
+    monkeypatch.setattr(runner.BenchmarkResults, 'harness_sha_of', sha_of)
+    with pytest.raises(harness.HarnessRefused, match='no recorded harness'):
+        asyncio.run(runner._resume_harness({}, 'run-A'))
+
+
+def test_a_harness_sha_and_its_spec_are_read_back_from_the_database():
+    from local_llm.models.benchmarks.tests import BenchmarkHarness, BenchmarkHarnesses
+
+    sha = f'h{RUN}'
+    _insert([_row(f'resume-{RUN}', int(time.time()), harness_sha=sha)])
+
+    async def store():
+        async with get_async_db_context() as db:
+            db.add(BenchmarkHarness(harness_sha=sha, spec=_spec(), recorded_at=0))
+            await db.commit()
+
+    asyncio.run(store())
+    assert asyncio.run(BenchmarkResults.harness_sha_of(f'resume-{RUN}')) == sha
+    assert asyncio.run(BenchmarkResults.harness_sha_of(f'bare-none-{RUN}')) is None
+    assert asyncio.run(BenchmarkHarnesses.get(sha)) == _spec()
+    assert asyncio.run(BenchmarkHarnesses.get('missing')) is None
+
+
+def _harness_ctx():
+    return {
+        'suite_run_id': 's1',
+        'run_id': None,
+        'model': 'qwen25c',
+        'config_id': 'cfg',
+        'profile': {'name': 'qwen25c'},
+        'revisions': {},
+        'tier': 'smoke',
+        'seed': 0,
+        'harness': HCTX,
+        'harness_spec': None,
+        'harness_sha': None,
+    }
+
+
+def test_run_items_sends_a_harness_run_through_the_pipeline_not_llama_server(monkeypatch):
+    asked = []
+
+    async def bare_ask(*args, **kwargs):
+        raise AssertionError('a harness item must not go straight to llama-server')
+
+    async def harness_ask(hctx, prompt):
+        asked.append(prompt)
+        return harness.HarnessAnswer(content='ok', spec=_spec(), stats={'rounds': 1})
+
+    async def add_result(record, answer):
+        return 1
+
+    async def record(sha, spec):
+        pass
+
+    monkeypatch.setattr(runner, 'ask', bare_ask)
+    monkeypatch.setattr(runner.harness, 'ask', harness_ask)
+    monkeypatch.setattr(runner, 'render_prompt', lambda adapter, item: 'the item')
+    monkeypatch.setattr(runner, 'grade', lambda adapter, item, content: ('pass', ''))
+    monkeypatch.setattr(runner, 'item_cluster', lambda adapter, item: None)
+    monkeypatch.setattr(runner.BenchmarkResults, 'add_result', add_result)
+    monkeypatch.setattr(runner.BenchmarkHarnesses, 'record', record)
+    rows = [{'adapter': {}, 'item': {}, 'benchmark': 'humaneval', 'item_id': f'HumanEval/{i}'} for i in range(2)]
+    results = asyncio.run(runner.run_items(None, rows, _harness_ctx()))
+
+    assert asked == ['the item', 'the item']
+    assert {r['harness_sha'] for r in results} == {harness.spec_sha(_spec())}
+
+
+def test_run_one_answers_through_the_pipeline_and_returns_the_harness(monkeypatch):
+    async def context(session, **kwargs):
+        assert kwargs['harness_entry'] == 'coder'
+        return _harness_ctx()
+
+    async def harness_ask(hctx, prompt):
+        return harness.HarnessAnswer(content='ok', output=[_message('ok')], spec=_spec(), stats={'rounds': 1})
+
+    monkeypatch.setattr(runner, 'context', context)
+    monkeypatch.setattr(runner, '_find_item', lambda benchmark, item: ({}, {}, ''))
+    monkeypatch.setattr(runner, 'render_prompt', lambda adapter, item: 'the item')
+    monkeypatch.setattr(runner.harness, 'ask', harness_ask)
+    monkeypatch.setattr(runner, 'grade', lambda adapter, item, content: ('pass', ''))
+    result = asyncio.run(runner.run_one(None, benchmark='humaneval', item='HumanEval/0', harness_entry='coder'))
+
+    assert result['outcome'] == 'pass'
+    assert result['harness'] == _spec() and result['output'] == [_message('ok')]
+
+
+def test_the_tests_router_reports_a_refusal_as_not_recorded(monkeypatch):
+    from local_llm.routers.benchmarks import tests as tests_router
+
+    async def refuse(session, **kwargs):
+        raise harness.HarnessRefused("'coder' is served by https://openrouter.ai/api/v1")
+
+    monkeypatch.setattr(tests_router.runner, 'prepare_suite', refuse)
+    queue: asyncio.Queue = asyncio.Queue()
+    form = tests_router.TestsRunForm(suite='smoke', harness_model='coder')
+    asyncio.run(tests_router._run_suite(form, queue, request=object(), user=object()))
+
+    message = queue.get_nowait()
+    assert message['type'] == 'error' and message['message'].startswith('not recorded: ')
+
+
+# ---------------------------------------------------------------------------
+# code-run images stay out of the owner's Files during a benchmark
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize('benchmark', [True, False])
+def test_a_benchmark_keeps_code_run_images_inline(monkeypatch, benchmark):
+    from local_llm.models.users import Users
+    from local_llm.tools import builtin
+    from local_llm.utils import code_interpreter, files
+
+    uploaded = []
+
+    async def config_get(key, default=None):
+        return {'code_interpreter.engine': 'jupyter', 'code_interpreter.jupyter.auth': 'token'}.get(key, default)
+
+    async def run_code(*args, **kwargs):
+        return {'stdout': 'data:image/png;base64,AAAA', 'stderr': '', 'result': ''}
+
+    async def user_by_id(user_id):
+        return SimpleNamespace(id=user_id)
+
+    async def upload(request, line, metadata, user):
+        uploaded.append(line)
+        return '/files/plot'
+
+    monkeypatch.setattr(builtin.Config, 'get', config_get)
+    monkeypatch.setattr(code_interpreter, 'execute_code_jupyter', run_code)
+    monkeypatch.setattr(Users, 'get_user_by_id', user_by_id)
+    monkeypatch.setattr(files, 'get_image_url_from_base64', upload)
+    request = SimpleNamespace(state=SimpleNamespace(benchmark_harness=benchmark))
+    out = json.loads(asyncio.run(builtin.execute_code('plot()', __request__=request, __user__={'id': 'u1'})))
+
+    assert uploaded == ([] if benchmark else ['data:image/png;base64,AAAA'])
+    assert ('data:image/png;base64' in out['stdout']) is benchmark

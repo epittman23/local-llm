@@ -163,7 +163,9 @@ each item is answered the way a chat answers it instead:
   only tool offered (the builtin tools that browse notes, chats and
   knowledge are cut);
 - through the app's own chat pipeline (`benchmarks/evaluation/harness.py`),
-  with a `temporary:` chat id, so no chat row, title or memory is written.
+  with a `temporary:` chat id, so no chat row, title or memory is written,
+  and a plot a code run prints stays inline rather than being stored in the
+  owner's Files.
 
 There is no switch on the Tests page yet (planned in PR 2 of
 [the plan](../plans/benchmarks-through-the-app.md)).
@@ -179,17 +181,23 @@ for where it came from. The run stops, with `not recorded: ...`, when:
 
 - the entry is served by any other URL, or its base model is missing;
 - it turns streaming off, uses legacy function calling, or sets
-  `max_completion_tokens`;
-- a single upstream request goes anywhere but `127.0.0.1:<port>`, or no
-  upstream request is seen at all;
-- the request changes between items: the system prompt, the tools or the
-  params.
+  `max_completion_tokens` (in its own params or in the global model
+  defaults);
+- the Jupyter server does not answer, or a code run fails in the
+  interpreter itself rather than in the code;
+- a single upstream request would go anywhere but `127.0.0.1:<port>`.
+  It is stopped before it is sent, so the item never reaches that host;
+- no upstream request is seen at all;
+- the request changes between items: the system prompt, the tools or any
+  param. That includes a resume, which continues under the spec its run was
+  recorded with.
 
 **What is recorded.**
 
 - **`harness_sha`.** A sha of what every item shares, read back from the
   first request actually sent upstream: the model entry, the system
-  message, the tools offered, the params, and the limits (at most 8 tool
+  message, the tools offered, every other key of the request body (the
+  sampling params, whatever their source), and the limits (at most 8 tool
   rounds, no tool approval). `benchmark_harness` holds what each sha
   stands for. NULL means a bare request.
 - **What is graded.** Only the text of the message after the last code run,

@@ -414,6 +414,21 @@ async def _harness_sha(ctx: dict, spec: dict) -> str:
     return ctx['harness_sha']
 
 
+async def _resume_harness(ctx: dict, suite_run_id: str) -> None:
+    """Continue a harness run under the spec it was recorded with.
+
+    Seeding the spec means the first new item is compared against it, so a
+    resume after the entry's prompt changed, or through another entry, stops
+    instead of filing two configurations under one suite run.
+    """
+    sha = await BenchmarkResults.harness_sha_of(suite_run_id)
+    spec = await BenchmarkHarnesses.get(sha) if sha else None
+    if not sha or spec is None:
+        raise harness.HarnessRefused(f'suite run {suite_run_id} has no recorded harness to resume under')
+    ctx['harness_spec'] = spec
+    ctx['harness_sha'] = sha
+
+
 async def _run_harness_item(row: dict, ctx: dict, prompt: str) -> dict:
     """run_item for an item answered through the app's chat pipeline (harness.ask)."""
     adapter, item = row['adapter'], row['item']
@@ -751,6 +766,8 @@ async def prepare_suite(
         )
         if prior:
             ctx['suite_run_id'] = prior
+            if ctx['harness'] is not None:
+                await _resume_harness(ctx, prior)
 
     done = await BenchmarkResults.completed(ctx['suite_run_id'])
     todo = [r for r in selected if (r['benchmark'], r['item_id']) not in done]

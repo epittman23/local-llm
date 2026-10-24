@@ -8,47 +8,64 @@ blocks ran. Inside `tracing()`, routers/openai.py notes each upstream request
 code run's duration; outside it, both notes are no-ops, so ordinary chats are
 untouched.
 
-The ContextVars hold lists, appended to and never reassigned: asyncio copies
-the context into tasks started inside the call, and a reassignment there
-would never reach the caller, while an append to the shared list does.
+The ContextVar holds one Trace, appended to and never reassigned: asyncio
+copies the context into tasks started inside the call, and a reassignment
+there would never reach the caller, while an append to the shared Trace does.
+
+`tracing(allow=...)` also stops a request before it is sent: the router
+notes it first, and an URL the predicate refuses raises UpstreamRefused, so
+the prompt never reaches that host.
 """
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 
-_requests: ContextVar[list | None] = ContextVar('upstream_requests', default=None)
-_code_runs: ContextVar[list | None] = ContextVar('code_run_ms', default=None)
+
+class UpstreamRefused(RuntimeError):
+    """An upstream request the tracing caller does not allow; raised before it is sent."""
 
 
 @dataclass
 class Trace:
-    #: (request URL, JSON body sent), one per upstream request, in order.
+    #: (request URL, JSON body), one per upstream request, in order; a
+    #: refused one is noted too, so the caller sees where it would have gone.
     requests: list[tuple[str, str]] = field(default_factory=list)
     #: Milliseconds per code run.
     code_runs_ms: list[float] = field(default_factory=list)
+    #: Code runs that failed in the code interpreter itself (Jupyter down, a
+    #: refused token), as opposed to code that raised.
+    code_run_failures: list[str] = field(default_factory=list)
+    allow: Callable[[str], bool] | None = None
+
+
+_trace: ContextVar[Trace | None] = ContextVar('upstream_trace', default=None)
 
 
 @contextmanager
-def tracing() -> Iterator[Trace]:
-    trace = Trace()
-    requests_token = _requests.set(trace.requests)
-    runs_token = _code_runs.set(trace.code_runs_ms)
+def tracing(allow: Callable[[str], bool] | None = None) -> Iterator[Trace]:
+    trace = Trace(allow=allow)
+    token = _trace.set(trace)
     try:
         yield trace
     finally:
-        _requests.reset(requests_token)
-        _code_runs.reset(runs_token)
+        _trace.reset(token)
 
 
 def note_request(url: str, body: str) -> None:
-    requests = _requests.get()
-    if requests is not None:
-        requests.append((url, body))
+    trace = _trace.get()
+    if trace is None:
+        return
+    trace.requests.append((url, body))
+    if trace.allow is not None and not trace.allow(url):
+        raise UpstreamRefused(f'refused to send a request to {url}')
 
 
-def note_code_run(ms: float) -> None:
-    runs = _code_runs.get()
-    if runs is not None:
-        runs.append(ms)
+def note_code_run(ms: float, failure: str = '') -> None:
+    trace = _trace.get()
+    if trace is None:
+        return
+    trace.code_runs_ms.append(ms)
+    if failure:
+        trace.code_run_failures.append(failure)

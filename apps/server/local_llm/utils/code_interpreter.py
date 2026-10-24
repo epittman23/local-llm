@@ -112,6 +112,7 @@ class JupyterCodeExecuter:
         self.kernel_id = ''
         self.files = files or []
         self.work_dir = ''
+        self.failure = ''
         if self.base_url[-1] != '/':
             self.base_url += '/'
         self.session = aiohttp.ClientSession(trust_env=True, base_url=self.base_url)
@@ -148,6 +149,9 @@ class JupyterCodeExecuter:
         except Exception as err:
             logger.exception('execute code failed, %s', err)
             self.result.stderr = f'Error: {err}'
+            # The interpreter failed, not the code: kept apart for a caller
+            # that must not grade an answer the model gave without its code.
+            self.failure = str(err)
         return self.result
 
     async def sign_in(self) -> None:
@@ -313,7 +317,7 @@ async def execute_code_jupyter(
     async with JupyterCodeExecuter(base_url, code, token, password, idle_timeout, files) as executor:
         result = await executor.run()
     # A no-op unless the benchmark harness is tracing this call.
-    note_code_run((time.monotonic() - started) * 1000)
+    note_code_run((time.monotonic() - started) * 1000, executor.failure)
     if notes:
         result.stderr = '\n'.join(filter(None, [result.stderr, *notes]))
     return result.model_dump()
