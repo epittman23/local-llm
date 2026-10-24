@@ -75,7 +75,11 @@ make backend
 
 which brings up Postgres and Redis (`infra/docker-compose.yml`) and the
 backend (`uvicorn`, port `4000`) together, and tears them back down when the
-backend stops (Ctrl-C included). Redis is required: it holds session
+backend stops (Ctrl-C included). Each stage prints a `==> ` line as it
+starts. uvicorn runs with `--reload` unless `LLLM_UVICORN_FLAGS` replaces it:
+`make backend LLLM_UVICORN_FLAGS='--timeout-graceful-shutdown 10'` gives a
+backend that doesn't reload and whose shutdown can't hang on an open stream.
+Redis is required: it holds session
 revocation (sign-out, password changes), and the backend refuses to start
 without `REDIS_URL`, which `make backend` sets. The backend listens on `127.0.0.1` only;
 to reach it from another machine, start it with
@@ -98,6 +102,22 @@ Chat is then at `http://localhost:4000/`. While editing the UI, run
 `make frontend` in a second terminal instead: a dev server on `:5174` with
 hot reload, proxying API/WebSocket calls to the backend (see
 [docs/guides/frontend.md](docs/guides/frontend.md)).
+
+**The desktop app** (`apps/desktop`, Linux) shows the same pages in a window
+of their own and needs no terminal. Opened from the app launcher, it starts the
+stack above when nothing is running, showing each step, and stops it again
+when it closes. With a stack already started from a terminal, it just
+connects and leaves that stack running. Build and install it once:
+
+```bash
+sudo dnf install rpm-build libxcrypt-compat
+cd apps/desktop && bun install && bun run package
+sudo dnf install ./release/local-llm-desktop-*.rpm
+```
+
+or run it from the checkout with `make desktop`. Its server address is a
+setting, so moving to a remote server is one change in File > Settings
+(see [docs/guides/desktop.md](docs/guides/desktop.md)).
 
 To run everything CI runs before opening a pull request: `make check` (lint,
 backend pytest against a throwaway Postgres, web checks and build, and
@@ -260,6 +280,7 @@ OpenAI-compatible endpoint.
 | The app's own test suites | [docs/guides/testing.md](docs/guides/testing.md) |
 | Backend dependencies and the offline model cache | [docs/guides/dependencies.md](docs/guides/dependencies.md) |
 | Frontend dev server, build, rough edges | [docs/guides/frontend.md](docs/guides/frontend.md) |
+| The desktop app: install, startup and shutdown, settings, security | [docs/guides/desktop.md](docs/guides/desktop.md) |
 | Why things are the way they are | [docs/decisions.md](docs/decisions.md) |
 | History and planned direction | [docs/ROADMAP.md](docs/ROADMAP.md) |
 

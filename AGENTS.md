@@ -58,8 +58,9 @@ Local models, all evaluation only, one serving profile each:
 Hardware: NVIDIA GeForce RTX 3060 Laptop, 6 GB VRAM, compute capability 8.6,
 on native Fedora 44 since 2026-10-09. Every recorded measurement was taken
 under WSL2 on the same laptop, so all of them are historical until
-re-measured. Neither the CUDA toolkit nor the llama.cpp build exists on the
-Fedora machine yet (2026-10-09).
+re-measured. Since 2026-10-23 the Fedora machine has the CUDA 13.4 toolkit
+and llama.cpp build 10597 (`95b8e33e1`); nothing has been served or
+measured on it yet.
 
 - **Profiles** are versioned rows in Postgres (`benchmark_profile`,
   `benchmark_profile_version`), resolved by
@@ -98,14 +99,15 @@ The project is expected to run on self-hosted hardware eventually (see
 models above were chosen because they are realistically self-hostable on a
 single high-VRAM consumer GPU (24 GB+) at Q4 or better. When that happens,
 only the connection's base URL and API key change; **do not build features
-that assume a cloud-only environment.**
+that assume a cloud-only environment.** The desktop app follows with one
+setting, its server URL.
 
 ## Repository layout
 
 [MAP.md](MAP.md) is the structural index: what lives where. In short:
 `apps/server/` is the FastAPI backend (its package is
 `apps/server/local_llm/`), `apps/web/` is the Astro + React +
-shadcn/ui frontend, `infra/` holds the Postgres + pgvector and Redis Compose file, and
+shadcn/ui frontend, `apps/desktop/` is the Electron desktop app, `infra/` holds the Postgres + pgvector and Redis Compose file, and
 `docs/` holds the decisions log, roadmap, guides, proposals and history.
 
 ## Conventions
@@ -146,10 +148,16 @@ shadcn/ui frontend, `infra/` holds the Postgres + pgvector and Redis Compose fil
   included. The backend refuses to start without Redis (`REDIS_URL`), which
   holds session revocation. `make backend LLLM_BACKEND_HOST=0.0.0.0` exposes it to the LAN;
   the chat socket accepts the page's own origin, so a LAN page needs no
-  `CORS_ALLOW_ORIGIN` entry.
+  `CORS_ALLOW_ORIGIN` entry. `LLLM_UVICORN_FLAGS` (default `--reload`)
+  replaces uvicorn's other flags. Each stage prints a `==> ` marker line,
+  which other tools may follow, so keep them stable.
 - `make frontend`: the hot-reloading dev server on `:5174`, proxying the API
   to `:4000`. Only needed while editing the UI.
 - `cd apps/web && bun run build`: rebuild the UI that `make backend` serves.
+- `make desktop`: the desktop app from this checkout. It starts the stack
+  itself when nothing answers on `:4000` and stops it on close; a stack
+  started from a terminal is attached to and left alone. The installed app
+  is `cd apps/desktop && bun run package` (an `.rpm`).
 - `infra/.env` (gitignored) holds `OPENROUTER_API_KEY`, `POSTGRES_PASSWORD`
   and `LLLM_SECRET_KEY`. Backend settings use the `LLLM_` prefix
   (`LLLM_SECRET_KEY`, `LLLM_AUTH`, `LLLM_NAME`, ...; `WEBUI_*` until
@@ -166,7 +174,8 @@ shadcn/ui frontend, `infra/` holds the Postgres + pgvector and Redis Compose fil
   Node ≥ 22.12, and **uv**, which builds the backend venv from
   `apps/server/pyproject.toml` + `uv.lock` and supplies Python 3.12
   (the system `python3` is 3.14). Local serving also needs llama.cpp built
-  with CUDA at `~/llama.cpp/build/bin` (`LLAMA_BIN`).
+  with CUDA at `~/llama.cpp/build/bin` (`LLAMA_BIN`). Packaging the desktop
+  app as an `.rpm` needs `rpm-build` and `libxcrypt-compat`.
 
 ## Backend (`apps/server`)
 
@@ -181,6 +190,12 @@ shadcn/ui frontend, `infra/` holds the Postgres + pgvector and Redis Compose fil
 - `make backend` pins `DATA_DIR` to `apps/server/data` (uploads, caches,
   benchmark datasets and reports), so the location never moves with the
   code; a hand-started backend defaults to the same place.
+- A served `llama-server`, a tune sweep and a Tests job outlive the backend
+  on purpose, so a `--reload` restart keeps the model up.
+  `LLLM_STOP_JOBS_ON_SHUTDOWN=true` makes the lifespan teardown stop all
+  three (`routers/benchmarks/__init__.py`'s `shutdown()`) for a backend that
+  should leave nothing behind; pair it with a graceful-shutdown timeout, or
+  an open stream can keep the teardown from ever running.
 - The database schema is append-only (see the maintenance policy).
 
 ## Frontend (`apps/web`)
@@ -202,6 +217,30 @@ shadcn/ui frontend, `infra/` holds the Postgres + pgvector and Redis Compose fil
   - [content](https://docs.astro.build/en/guides/content-collections/)
   - [styles or Tailwind](https://docs.astro.build/en/guides/styling/)
   - [multiple languages](https://docs.astro.build/en/guides/internationalization/)
+
+## Desktop (`apps/desktop`)
+
+- **It loads the server's own pages; it has no frontend of its own.** Any
+  feature belongs in `apps/web` or the backend, so the browser gets it too.
+  Desktop-only behaviour goes through the preload bridge (`src/preload.ts`),
+  and the frontend detects it by `window.lllmDesktop`.
+- **A native capability added to the bridge** (the planned local coding-agent
+  tools) must check `event.senderFrame.origin` against the configured server
+  in its `ipcMain` handler, and refuse unless that origin is `https:` or
+  loopback. Otherwise a page in the window could run things on this machine.
+- **The `==> ` lines** printed by `make backend` and by the backend's
+  `LLLM_STOP_JOBS_ON_SHUTDOWN` teardown drive its progress dialog
+  (`src/progress.ts`). Change their text in both places together.
+- It runs `make backend` itself (through the login shell, in its own process
+  group). Never send that group a second SIGINT: uvicorn then skips the
+  teardown that stops the served model.
+- Run it from the checkout with `make desktop`, which runs the Electron binary
+  directly with `ELECTRON_RUN_AS_NODE` unset. VS Code's integrated terminal
+  can export that variable, and then Electron starts as plain Node. Going
+  through electron's `cli.js` (`bunx electron .`) instead would forward a
+  second SIGINT on Ctrl-C, and Electron dies of a second one before it has
+  stopped the stack.
+- More: [docs/guides/desktop.md](docs/guides/desktop.md).
 
 ## Maintenance policy
 
@@ -279,7 +318,7 @@ co-author in commits or pull requests; this includes adding
 | [MAP.md](MAP.md) | where everything lives |
 | [docs/decisions.md](docs/decisions.md) | dated log of why things are the way they are |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | history and planned direction |
-| [docs/guides/](docs/guides/) | llama.cpp, telemetry, benchmarks, testing, dependencies, frontend, model downloads |
+| [docs/guides/](docs/guides/) | llama.cpp, telemetry, benchmarks, testing, dependencies, frontend, desktop, model downloads |
 | [docs/proposals/](docs/proposals/) | not yet built (the dedicated inference server) |
 | [docs/history/](docs/history/) | completed records: the migration plan, reviews, migration-era mappings |
 | [docs/serving-baseline/](docs/serving-baseline/README.md) | test input pinning the serving fingerprint |

@@ -1,0 +1,35 @@
+==> Starting Postgres and Redis
+ Network local-llm_default Creating 
+ Network local-llm_default Creating 
+ Network local-llm_default Created 
+ Network local-llm_default Created 
+ Container local-llm-redis Creating 
+ Container local-llm-postgres Creating 
+ Container local-llm-postgres Created 
+ Container local-llm-redis Created 
+ Container local-llm-redis Starting 
+ Container local-llm-postgres Starting 
+ Container local-llm-redis Started 
+ Container local-llm-postgres Started 
+==> Syncing the backend environment
+Checked 272 packages in 4ms
+==> Starting the backend on 127.0.0.1:4000
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+WARNI [langchain_community.utils.user_agent] USER_AGENT environment variable not set, consider setting it to identify your requests.
+/home/user/local-llm/apps/server/.venv/lib/python3.12/site-packages/google/auth/transport/grpc.py:43: FutureWarning: grpcio < 1.83.0 does not support Post-Quantum Cryptography (PQC). Support for non-PQC environments is deprecated. In April 2027, google-auth will raise its minimum requirements to enforce grpcio >= 1.83.0. For more details on Google Cloud's post-quantum security migration, visit: https://cloud.google.com/security/resources/post-quantum-cryptography
+  warnings.warn(
+INFO:     Started server process [83810]
+INFO:     Waiting for application startup.
+Local LLM v0.11.3
+2026-10-23 11:37:31.737 | INFO     | local_llm.utils.logger:start_logger:229 - GLOBAL_LOG_LEVEL: INFO
+2026-10-23 11:37:31.897 | INFO     | local_llm.retrieval.vector.dbs.pgvector:_ensure_text_search_index:258 - Ensured text search index 'idx_document_chunk_text_search'.
+2026-10-23 11:37:31.899 | INFO     | local_llm.retrieval.vector.dbs.pgvector:__init__:170 - Initialization complete.
+2026-10-23 11:37:40.669 | INFO     | sentence_transformers.base.model:_load_modules:1080 - Loading SentenceTransformer model from /home/user/.cache/huggingface/hub/models--sentence-transformers--all-MiniLM-L6-v2/snapshots/1110a243fdf4706b3f48f1d95db1a4f5529b4d41.
+
+Loading weights:   0%|          | 0/103 [00:00<?, ?it/s]
+Loading weights: 100%|██████████| 103/103 [00:00<00:00, 5714.92it/s]
+2026-10-23 11:37:40.939 | INFO     | local_llm.main:lifespan:385 - Installing external dependencies of functions and tools...
+2026-10-23 11:37:40.972 | INFO     | local_llm.utils.plugin:install_frontmatter_requirements:495 - No requirements found in frontmatter.
+2026-10-23 11:37:40.984 | INFO     | local_llm.utils.automations:scheduler_worker_loop:229 - Scheduler worker started (timer poll interval: 1s, scheduler poll interval: 10s)
+2026-10-23 11:37:41.619 | INFO     | uvicorn.protocols.http.httptools_impl:send:482 - 127.0.0.1:53372 - "GET /ready HTTP/1.1" 200

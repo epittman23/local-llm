@@ -7,6 +7,65 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-23** (latest): **llama.cpp is built on the Fedora machine**:
+  build 10597 (`95b8e33e1`, the build behind the recorded measurements),
+  with CUDA 13.4.3 and GCC 16.2.1. The toolkit comes from NVIDIA's Fedora 44
+  repository, with that repository's driver packages excluded so they never
+  touch RPM Fusion's driver (615.71, which runs CUDA up to 13.4). It is
+  installed by its versioned name, `cuda-toolkit-13-4`, so an update can't
+  outrun the driver. CUDA 13.4's `host_config.h` accepts GCC 16, so no older
+  compiler was needed. The build sees the RTX 3060 (`--list-devices`) and
+  accepts `-fit off`, which the 2026-10-19 entry could only check in the
+  source. Nothing has been served or measured on native Linux yet; the
+  WSL2-era numbers stay historical.
+- **2026-10-23** (later): **A desktop app**, `apps/desktop` (Electron,
+  Linux, packaged as an `.rpm`), so the assistant can be used without a
+  terminal. It loads the backend's own URL rather than carrying a copy of
+  `apps/web`. The desktop app and the browser then run the same pages from
+  the same origin (the token in `localStorage`, the socket's own-origin
+  rule), and no frontend change was needed. A UI or backend change never
+  needs a desktop rebuild either. On a loopback server it manages the stack
+  through the Makefile's own `make backend`, rather than a second copy of
+  that lifecycle:
+  - it starts the stack when nothing answers, building `apps/web` first if
+    any source is newer than `dist/`;
+  - it **attaches** to a stack started from a terminal and leaves it
+    running, because the owner wanted a terminal start never restarted;
+  - it **stops only what it started**: one SIGINT to `make`'s process group,
+    then a wait until the group is gone, with a 90 s budget before it
+    forces;
+  - it adopts its own stack after a crash, identifying it by pid and start
+    time;
+  - it loads `make frontend`'s dev server when one is up.
+
+  A progress dialog follows the stack's `==> ` markers, so startup and
+  shutdown are visible step by step. With any other server address, the
+  future remote server, it only connects; moving there is one setting.
+  The only seam for desktop-only features is the preload bridge, which
+  exposes `window.lllmDesktop`. The planned local coding-agent tools must
+  check the sender's origin there, and refuse anything but https or
+  loopback. `rpm-build` alone was not enough: electron-builder's bundled
+  `fpm` needs `libxcrypt-compat`, which was not installed, so the `.rpm` has
+  not been built on this machine yet. The unpacked package built, and the
+  app's start, stop, attach, crash recovery and cancel were all run against
+  a real stack.
+- **2026-10-23**: A backend can be told to **stop everything it started when
+  it exits**: `LLLM_STOP_JOBS_ON_SHUTDOWN=true` makes the lifespan teardown
+  stop a running Tests job, a tune sweep (which stops its own candidate
+  server) and then the served `llama-server`, each bounded by a timeout.
+  The default is unchanged: all three outlive the backend, so a `--reload`
+  restart keeps the model up. `make backend` gains `LLLM_UVICORN_FLAGS`
+  (default `--reload`), because a teardown only runs if uvicorn's shutdown
+  ends. Without `--timeout-graceful-shutdown`, uvicorn 0.54 waits on every
+  open request first, and the Serve page's log stream never finishes one.
+  A second SIGINT is no escape either: it sets uvicorn's `force_exit`, which
+  skips the teardown. The Makefile and the teardown also print stable `==> `
+  stage markers that a supervising program can follow. All of this is for
+  the planned desktop app, which starts and stops the local stack itself.
+  It was checked against a real `make backend`: one SIGINT with a request
+  held open was cancelled at 10 s, the teardown ran, and compose down
+  finished at 14 s. Stopping a real `llama-server` this way is covered only
+  by the test stub, since llama.cpp is not built on this machine yet.
 - **2026-10-19**: The serving fingerprint covers **the model file, the
   profile's extra arguments and offload fitting** (#127), and the launcher
   passes `-fit off` (the benchmark plan's D10, landed with this change so

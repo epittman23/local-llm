@@ -22,7 +22,8 @@ The root Makefile mirrors CI job for job, with the same commands:
 | `make test-backend` | Backend (pytest) | `uv lock --check`, `uv sync --frozen --group dev`, then pytest with a throwaway pgvector Postgres on `127.0.0.1:55432` (`LLLM_TEST_PG_PORT`), so `test_the_app_imports` runs instead of skipping |
 | `make test-web` | Web (astro check, vitest, build) | `bunx astro check`, `bun run test:unit`, `bun run build` |
 | `make test-e2e` | Web e2e (Playwright) | `bunx playwright test --workers=2` |
-| `make test` | all three test jobs | the three above |
+| `make test-desktop` | Desktop (typecheck, vitest, package smoke) | `bun run typecheck`, `bun run test:unit`, `bun run package:dir` (an unpacked package, no `.rpm`) |
+| `make test` | all four test jobs | the four above |
 | `make check` | `CI passed` | `make lint`, then `make test` |
 
 `make test-backend` removes its Postgres container on exit (Ctrl-C included),
@@ -63,6 +64,40 @@ stops it afterward, which is not. Stop `make frontend` first.
 Because Playwright mocks the backend, a change that touches the
 frontend/backend seam also needs a real run against `make backend`.
 
+## Desktop (`apps/desktop`)
+
+Run these from `apps/desktop/`:
+
+- `bun run test:unit`: Vitest. It covers the settings (`config.ts`), what
+  the window may open (`policy.ts`), the start decisions and the stop
+  sequence (`stack.ts`, with the process calls faked), and the progress
+  dialog (`progress.ts`). The dialog's tests replay logs captured from real
+  `make backend` runs (`test/fixtures/`, whose README says which one is not
+  captured).
+- `bun run typecheck`, and `bun run lint` / `bun run format` (Biome; the
+  pre-commit hook lints this app too, not only formats it).
+- `bun run package:dir`: the unpacked package CI builds.
+
+Launching and stopping the real stack has no automated suite, since it needs
+Docker and a display. Check it by hand when `src/main.ts` or `src/stack.ts`
+change:
+
+1. **Nothing running:** `make desktop`. The dialog ticks through every
+   startup step, and the app opens at `http://127.0.0.1:4000`.
+2. **Close it.** The dialog shows the shutdown steps. Afterwards
+   `pgrep -a -x make` and `docker compose -f infra/docker-compose.yml ps`
+   are empty. With a model served from Benchmarks > Serve and its log
+   open, "Stop the served model" runs, and `pgrep -a llama-server` is empty
+   too.
+3. **Attach:** start `make backend` in a terminal, then the app. It opens
+   with no build. After closing it, the terminal backend still runs.
+4. **Recovery:** `kill -9` the app while it owns the stack, then start it
+   again. It adopts the stack, and closing it stops everything.
+5. **Cancel** mid-startup: nothing is left running.
+
+On 2026-10-23 steps 1 to 5 were run this way, with Playwright's Electron
+driver, against a real stack (no model served: llama.cpp was not built).
+
 ## Backend (`apps/server`)
 
 From `apps/server/`:
@@ -101,7 +136,7 @@ to the serving layer.
 `.pre-commit-config.yaml` at the repo root is the only definition of the lint
 and format checks; CI runs the same file with `--all-files`. Install it once
 with `uv tool install pre-commit && pre-commit install` (and `bun install` in
-`apps/web`, since the Biome hook runs that copy), or run it by hand with
+`apps/web` and `apps/desktop`, since each Biome hook runs that app's copy), or run it by hand with
 `pre-commit run --all-files`.
 
 Generated code is not linted or formatted:

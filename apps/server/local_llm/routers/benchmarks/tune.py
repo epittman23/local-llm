@@ -131,6 +131,18 @@ async def stop_tune(user=Depends(get_admin_user)):
     return {'stopping': True}
 
 
+async def shutdown(timeout: float) -> None:
+    """Cancel a running sweep and wait for it, as /stop does but awaited.
+
+    A cancelled sweep still stops its candidate server and closes its sweep
+    row as resumable (benchmarks.tuning.tune's module docstring).
+    """
+    if not running():
+        return
+    _task.cancel()
+    await asyncio.wait({_task}, timeout=timeout)
+
+
 @router.get('/status')
 async def get_status(sweep_id: str | None = Query(None), user=Depends(get_admin_user)):
     try:

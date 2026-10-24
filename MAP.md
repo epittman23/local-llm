@@ -25,7 +25,8 @@ local-llm/
 ├── MAP.md                     this file
 ├── apps/                      the applications themselves
 │   ├── server/                FastAPI backend (package local_llm)
-│   └── web/                   Astro + React + shadcn/ui frontend
+│   ├── web/                   Astro + React + shadcn/ui frontend
+│   └── desktop/               Electron desktop app (Linux), loading the backend's pages
 ├── docs/                      decisions log, roadmap, guides, proposals, history
 └── infra/                     docker-compose for Postgres + pgvector and Redis
 ```
@@ -137,6 +138,9 @@ The applications themselves, all of it this project's own code (see
   replaced the original SvelteKit app over Phases 3-11 of
   `docs/history/migration-plan.md`; its build (`dist/`) is what the backend's
   `main.py` serves at `/`.
+- **`desktop/`**: the Electron desktop app (mapped below), added
+  2026-10-23. It shows the backend's own pages, and it starts and stops the
+  local stack through `make backend`.
 
 ### `apps/server/` (the backend)
 
@@ -333,11 +337,42 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   the workspace and admin specs; `fake-socket.ts` is a minimal Socket.IO
   server (over `page.routeWebSocket`) for specs that need live events.
 
+### `apps/desktop/` (Electron)
+
+The desktop app. `docs/guides/desktop.md` covers usage; this is a
+structural summary.
+
+- **`src/main.ts`**: the lifecycle. It holds the startup paths (attach,
+  adopt, own, remote), the app and dialog windows, shutdown, the menu, what
+  windows may open, and the dialog's IPC handlers, which check their sender.
+- **`src/stack.ts`**:
+  - the start decision and the UI-staleness check;
+  - crash adoption (`owned.json` against `/proc/<pid>/stat`);
+  - the `make backend` / build / `compose down` commands, run in a login
+    shell;
+  - `stopGroup()`, one SIGINT and a bounded wait;
+  - `probe()` and `LogTail`.
+- **`src/progress.ts`**: the progress dialog's step reducer, driven by the
+  Makefile's and the backend's `==> ` markers.
+- **`src/config.ts`** (settings in `~/.config/Local LLM/config.json`) and
+  **`src/policy.ts`** (navigation and permission rules). Both are pure.
+- **`src/preload.ts`**: the app window's bridge (`window.lllmDesktop`), the
+  seam for future native features. **`src/status-preload.ts`** is the
+  dialog's bridge.
+- **`static/`**: `status.html`/`.css`/`.js`, the progress and settings
+  dialog.
+- **`test/fixtures/`**: `make backend` logs the progress tests replay.
+- **`electron-builder.yml`**: the `.rpm` and its fuses.
+  **`scripts/build-info.mjs`** records the checkout a build came from.
+  `tsconfig.json` type-checks everything and `tsconfig.build.json` emits
+  the app.
+
 ## `Makefile`
 
 Root-level process lifecycle and CI-mirroring checks: `make lint`/`make
-test`/`make check` (the same commands as `.github/workflows/ci.yml`'s jobs;
-see `docs/guides/testing.md`), `make backend` (Postgres +
+test`/`make check` (the same commands as `.github/workflows/ci.yml`'s jobs,
+`make test-desktop` among them; see `docs/guides/testing.md`), `make desktop`
+(the desktop app from the checkout), `make backend` (Postgres +
 `apps/server`'s `uvicorn --reload` on `:4000`, with `DATA_DIR` pinned to
 `apps/server/data`, Postgres torn down
 on exit including Ctrl-C; it also serves `apps/web/dist` at `/`), and
@@ -381,4 +416,7 @@ knowing about when navigating the filesystem directly:
   and Astro's generated type cache. `bun.lock` beside them **is** tracked.
 - **`apps/web/test-results/`**, **`apps/web/playwright-report/`** — Playwright
   output from `bun run test:e2e`.
+- **`apps/desktop/node_modules/`**, **`apps/desktop/dist/`** (tsc output),
+  **`apps/desktop/release/`** (electron-builder's packages). The app's own
+  state lives outside the repo, in `~/.config/Local LLM/`.
 - **`__pycache__/`** — Python bytecode cache, scattered under `apps/server/`.

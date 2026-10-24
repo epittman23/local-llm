@@ -8,8 +8,11 @@
 #                    `make astro` is the same target under its old name.
 #                    Not needed to use the app: `make backend` also serves
 #                    the last `bun run build` of apps/web at :4000/.
+#   make desktop    the desktop app (apps/desktop) from this checkout, which
+#                    starts the stack above itself when nothing is running.
 #   make lint       pre-commit over every file (CI's "Lint and format").
-#   make test       backend pytest + web checks + Playwright (CI's other jobs).
+#   make test       backend pytest + web checks + Playwright + desktop checks
+#                    (CI's other jobs).
 #   make check      lint, then test: one command that predicts `CI passed`.
 #   make help       this text.
 #
@@ -33,25 +36,32 @@ SERVER_DIR := $(REPO_ROOT)/apps/server
 # reasoning as the pinned Compose project name in infra/docker-compose.yml.
 DATA_DIR ?= $(REPO_ROOT)/apps/server/data
 WEB_DIR := $(REPO_ROOT)/apps/web
+DESKTOP_DIR := $(REPO_ROOT)/apps/desktop
 COMPOSE := docker compose -f $(REPO_ROOT)/infra/docker-compose.yml
 LLLM_BACKEND_PORT ?= 4000
 # Loopback by default: the backend's admin API can start processes on this
 # machine, so it is not offered to the LAN unless asked for with
 # `make backend LLLM_BACKEND_HOST=0.0.0.0` (docs/history/code-review.md L13).
 LLLM_BACKEND_HOST ?= 127.0.0.1
+# uvicorn's flags beyond host and port. `--timeout-graceful-shutdown 10` in
+# place of the default gives a backend that doesn't reload and whose shutdown
+# can't hang: without a timeout, uvicorn waits on every open request first,
+# and a page streaming a log never finishes one. The desktop app runs it so.
+LLLM_UVICORN_FLAGS ?= --reload
 # Keep in sync with PRE_COMMIT_VERSION in .github/workflows/ci.yml.
 PRE_COMMIT_VERSION := 4.6.2
 # Host port for the throwaway Postgres `make test-backend` starts; not 5432,
 # so it never collides with `make backend`'s database.
 LLLM_TEST_PG_PORT ?= 55432
 
-.PHONY: help backend frontend astro lint test test-backend test-web test-e2e check
+.PHONY: help backend frontend astro desktop lint test test-backend test-web test-e2e test-desktop check
 
 help:
 	@echo "make backend   Postgres + Redis + the backend (uvicorn --reload, $(LLLM_BACKEND_HOST):$(LLLM_BACKEND_PORT))"
 	@echo "make frontend  Astro + React + shadcn/ui dev server (astro dev, :5174; alias: make astro)"
+	@echo "make desktop   the desktop app from this checkout (it starts and stops the stack itself)"
 	@echo "make lint      pre-commit over every file, as CI runs it"
-	@echo "make test      test-backend + test-web + test-e2e, as CI runs them"
+	@echo "make test      test-backend + test-web + test-e2e + test-desktop, as CI runs them"
 	@echo "make check     lint, then test (predicts CI's 'CI passed')"
 
 # --reload caveat: a code change restarts the uvicorn worker, and with it the
@@ -88,15 +98,18 @@ backend:
 		echo "make backend: infra/.env is missing:$$missing (WEBUI_SECRET_KEY was renamed LLLM_SECRET_KEY on 2026-10-10)" >&2; \
 		exit 1; \
 	fi; \
-	trap '$(COMPOSE) down' EXIT; \
+	trap 'echo "==> Stopping Postgres and Redis"; $(COMPOSE) down' EXIT; \
+	echo "==> Starting Postgres and Redis"; \
 	$(COMPOSE) up -d postgres redis; \
 	if ! command -v uv >/dev/null 2>&1; then \
 		echo "make backend: uv not found -- install it (https://docs.astral.sh/uv/, e.g. \`curl -LsSf https://astral.sh/uv/install.sh | sh\`)" >&2; \
 		exit 1; \
 	fi; \
+	echo "==> Syncing the backend environment"; \
 	UV_PROJECT_ENVIRONMENT="$(SERVER_DIR)/.venv" uv sync --frozen --no-install-project --project "$(SERVER_DIR)"; \
 	py="$(SERVER_DIR)/.venv/bin/python"; \
 	database_url="$$(PYTHONPATH="$(SERVER_DIR)" "$$py" -c 'import sys; from local_llm.benchmarks.serving.launcher import build_database_url; print(build_database_url(sys.argv[1]))' "$$POSTGRES_PASSWORD")"; \
+	echo "==> Starting the backend on $(LLLM_BACKEND_HOST):$(LLLM_BACKEND_PORT)"; \
 	cd "$(SERVER_DIR)" && \
 	CORS_ALLOW_ORIGIN="http://localhost:$(LLLM_BACKEND_PORT);http://127.0.0.1:$(LLLM_BACKEND_PORT);http://localhost:5174;http://127.0.0.1:5174" \
 	LLLM_SECRET_KEY="$$LLLM_SECRET_KEY" \
@@ -107,7 +120,7 @@ backend:
 	OPENAI_API_BASE_URL="https://openrouter.ai/api/v1" \
 	OPENAI_API_KEY="$$OPENROUTER_API_KEY" \
 	HF_HUB_OFFLINE=1 \
-	"$$py" -m uvicorn local_llm.main:app --host $(LLLM_BACKEND_HOST) --port $(LLLM_BACKEND_PORT) --reload
+	"$$py" -m uvicorn local_llm.main:app --host $(LLLM_BACKEND_HOST) --port $(LLLM_BACKEND_PORT) $(LLLM_UVICORN_FLAGS)
 
 # astro dev always daemonizes (this Astro version's own CLI design, not a
 # choice made here): even a plain `astro dev` reports its dev server as
@@ -126,6 +139,22 @@ frontend:
 # The target's name through the migration, when `frontend` was the Svelte app.
 astro: frontend
 
+# The desktop app (apps/desktop) from this checkout, for working on it; the
+# installed app is `cd apps/desktop && bun run package` (docs/guides/desktop.md).
+# It starts `make backend` itself when nothing answers on :4000, and stops it
+# when it closes. Ctrl-C here closes it the same way, once: Electron (Chromium)
+# takes a first SIGINT as "quit" and dies of a second, leaving the stack
+# running for the next launch to adopt. So the binary is exec'd directly
+# rather than through electron's cli.js, which would forward a second copy of
+# the terminal's SIGINT. `require('electron')` is its path (downloaded on first
+# use); ELECTRON_RUN_AS_NODE, which VS Code's terminal can export, is unset.
+desktop:
+	@cd "$(DESKTOP_DIR)" && \
+	bun install --frozen-lockfile && \
+	bun run build && \
+	electron="$$(node -p "require('electron')")" && \
+	exec env -u ELECTRON_RUN_AS_NODE "$$electron" .
+
 # --- Checks: the same commands as .github/workflows/ci.yml, job for job, so a
 # green `make check` predicts a green `CI passed`. If you change a CI job,
 # change its target here too.
@@ -134,6 +163,7 @@ astro: frontend
 # same reason as in CI: it guards commits, not the tree.
 lint:
 	@cd "$(WEB_DIR)" && bun install --frozen-lockfile
+	@cd "$(DESKTOP_DIR)" && bun install --frozen-lockfile
 	SKIP=no-commit-to-branch uvx pre-commit@$(PRE_COMMIT_VERSION) run --all-files --show-diff-on-failure
 
 # CI's "Backend (pytest)", including the throwaway pgvector Postgres that
@@ -182,7 +212,17 @@ test-e2e:
 	bunx playwright install chromium && \
 	bunx playwright test --workers=2
 
-test: test-backend test-web test-e2e
+# CI's "Desktop (typecheck, vitest, package smoke)". The unpacked package
+# catches an electron-builder bump that breaks packaging, which Dependabot
+# would otherwise merge on green.
+test-desktop:
+	@cd "$(DESKTOP_DIR)" && \
+	bun install --frozen-lockfile && \
+	bun run typecheck && \
+	bun run test:unit && \
+	bun run package:dir
+
+test: test-backend test-web test-e2e test-desktop
 
 check: lint test
 
