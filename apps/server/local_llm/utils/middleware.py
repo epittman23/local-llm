@@ -19,6 +19,7 @@ from starlette.responses import JSONResponse, StreamingResponse
 
 from local_llm.config import (
     CODE_INTERPRETER_BLOCKED_MODULES,
+    CODE_INTERPRETER_JUPYTER_PROMPT,
     CODE_INTERPRETER_PYODIDE_PROMPT,
     DEFAULT_CODE_INTERPRETER_PROMPT,
     DEFAULT_TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE,
@@ -77,7 +78,7 @@ from local_llm.utils.access_control.folders import has_folder_access
 from local_llm.utils.ask_user import stage_ask_user_tool_calls
 from local_llm.utils.chat import generate_chat_completion
 from local_llm.utils.chat_id import is_saved_chat_id
-from local_llm.utils.code_interpreter import execute_code_jupyter
+from local_llm.utils.code_interpreter import chat_files, execute_code_jupyter
 from local_llm.utils.context_compaction import compact_messages_for_request
 from local_llm.utils.files import (
     convert_markdown_base64_images,
@@ -2525,23 +2526,22 @@ async def _apply_code_interpreter(form_data: dict, metadata: dict) -> None:
         ci_prompt_template = await Config.get('code_interpreter.prompt_template')
         prompt = ci_prompt_template if ci_prompt_template != '' else DEFAULT_CODE_INTERPRETER_PROMPT
 
-        # Append filesystem awareness only for pyodide engine
-        if engine != 'jupyter':
-            prompt += CODE_INTERPRETER_PYODIDE_PROMPT
+        # Append the engine's own environment and filesystem notes
+        prompt += CODE_INTERPRETER_JUPYTER_PROMPT if engine == 'jupyter' else CODE_INTERPRETER_PYODIDE_PROMPT
 
         form_data['messages'] = add_or_update_user_message(
             prompt,
             form_data['messages'],
         )
-    elif engine != 'jupyter':
-        # Native FC: tool docstring can't be dynamic, so inject
-        # filesystem context into the system message for pyodide
-        # engine.  Appending to the system prompt (instead of the
+    else:
+        # Native FC: tool docstring can't be dynamic, so inject the
+        # engine's environment and filesystem notes into the system
+        # message.  Appending to the system prompt (instead of the
         # user message) keeps it in the stable cached prefix so
         # providers with prefix caching don't re-bill the full
         # conversation on every turn.
         form_data['messages'] = add_or_update_system_message(
-            CODE_INTERPRETER_PYODIDE_PROMPT,
+            CODE_INTERPRETER_JUPYTER_PROMPT if engine == 'jupyter' else CODE_INTERPRETER_PYODIDE_PROMPT,
             form_data['messages'],
             append=True,
         )
@@ -5845,6 +5845,7 @@ class _StreamingReply:
                 }
             )
         elif ci_engine == 'jupyter':
+            files, notes = await chat_files(self.metadata.get('files'), self.user)
             ci_output = await execute_code_jupyter(
                 await Config.get('code_interpreter.jupyter.url'),
                 code,
@@ -5859,6 +5860,8 @@ class _StreamingReply:
                     else None
                 ),
                 await Config.get('code_interpreter.jupyter.timeout'),
+                files=files,
+                notes=notes,
             )
         else:
             ci_output = {'stdout': 'Code interpreter engine not configured.'}

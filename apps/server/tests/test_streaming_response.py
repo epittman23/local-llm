@@ -1231,6 +1231,7 @@ def _install(m, world, log, continuations):
             'rag_template', lambda template, context, query: f'[RAG {len(context)} chars for {query}]'
         ),
         'generate_chat_completion': generate_chat_completion,
+        'chat_files': fake('chat_files', ([('sales.csv', '/data/uploads/f1_sales.csv')], [])),
         'execute_code_jupyter': fake('execute_code_jupyter', {'stdout': 'jupyter ran', 'result': ''}),
         'publish_chat_finished_event': fake('publish_chat_finished_event'),
         'outlet_filter_handler': fake('outlet_filter_handler', lambda ctx: None),

@@ -62,7 +62,8 @@ services:
   # caps. It keeps internet access so `pip install` works; set
   # `internal: true` on the `jupyter` network below to cut that off.
   # Terminals are off. Idle kernels are culled after 10 minutes, in case
-  # one is left behind.
+  # one is left behind. Each code block runs in its own lllm-uploads/<run>/
+  # directory, holding the chat's attached files, deleted with the block.
   jupyter:
     image: quay.io/jupyter/scipy-notebook:2026-10-12
     container_name: local-llm-jupyter
@@ -74,6 +75,11 @@ services:
       - --ServerApp.terminals_enabled=False
       - --MappingKernelManager.cull_idle_timeout=600
       - --MappingKernelManager.cull_interval=120
+      # The backend copies a chat's files into a directory per run and
+      # deletes it afterwards, outputs included: allow deleting a non-empty
+      # directory, and skip the trash, which would keep the copies.
+      - --FileContentsManager.always_delete_dir=True
+      - --FileContentsManager.delete_to_trash=False
     ports:
       - "127.0.0.1:8888:8888"
     volumes:
