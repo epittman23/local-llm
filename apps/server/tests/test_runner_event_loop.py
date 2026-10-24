@@ -91,9 +91,14 @@ def test_preparing_a_suite_leaves_the_event_loop_free(monkeypatch):
     assert gap < 0.5, f'the event loop stalled for {gap:.2f}s'
 
 
+def _block() -> None:
+    time.sleep(SLOW)
+
+
 def test_the_ticker_would_see_a_stall():
     # The measurement itself: a blocking call on the loop shows as a long gap.
+    # Blocking the loop is the point here, so the sleep runs on it directly.
     async def blocks():
-        time.sleep(SLOW)
+        _block()
 
     assert asyncio.run(_longest_gap_while(blocks())) > SLOW - 0.2

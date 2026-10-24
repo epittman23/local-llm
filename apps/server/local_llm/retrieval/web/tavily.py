@@ -4,7 +4,7 @@ import logging
 
 import requests
 
-from local_llm.env import TAVILY_API_BASE_URL
+from local_llm.env import REQUESTS_TIMEOUT_API, TAVILY_API_BASE_URL
 from local_llm.retrieval.web.main import SearchResult, get_filtered_results
 
 log = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ def search_tavily(
         'Authorization': f'Bearer {api_key}',
     }
     data = {'query': query, 'max_results': count}
-    response = requests.post(url, headers=headers, json=data)
+    response = requests.post(url, headers=headers, json=data, timeout=REQUESTS_TIMEOUT_API)
     response.raise_for_status()
 
     json_response = response.json()

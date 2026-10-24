@@ -247,8 +247,8 @@ def paired(a: dict[str, ProblemScore], b: dict[str, ProblemScore], alpha: float 
 
     exact_case = est.n_clusters is None and all(a[i].binary and b[i].binary for i in shared)
     if exact_case:
-        b_ = int(sum(1 for x, y in zip(xa, xb) if x == 1 and y == 0))
-        c_ = int(sum(1 for x, y in zip(xa, xb) if x == 0 and y == 1))
+        b_ = int(sum(1 for x, y in zip(xa, xb, strict=True) if x == 1 and y == 0))
+        c_ = int(sum(1 for x, y in zip(xa, xb, strict=True) if x == 0 and y == 1))
         out.test = 'exact McNemar'
         out.discordant = (b_, c_)
         if b_ + c_ == 0:
@@ -387,7 +387,7 @@ def passes_per_minute(scores: list[ProblemScore], alpha: float = ALPHA) -> Ratio
         return Ratio(r, note='not estimable (1 cluster)' if len(scores) > 1 else 'not estimable (1 problem)')
     e = p - r * w
     sums: dict[int, float] = {}
-    for code, value in zip(codes, e):
+    for code, value in zip(codes, e, strict=True):
         sums[code] = sums.get(code, 0.0) + float(value)
     var = g / (g - 1) * sum(v * v for v in sums.values()) / (total_w * total_w)
     se = math.sqrt(var)

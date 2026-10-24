@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 import re
 from typing import Any
@@ -9,6 +8,7 @@ from fastapi import HTTPException
 
 from local_llm.models.config import Config
 from local_llm.models.memories import Memories
+from local_llm.utils.background import run_in_background
 from local_llm.utils.json_codec import JSONCodec
 from local_llm.utils.misc import add_or_update_system_message, get_content_from_message
 
@@ -472,7 +472,7 @@ async def review_memory_after_turn(
     if user_turns == 0 or user_turns % interval != 0:
         return
 
-    task = asyncio.create_task(
+    task = run_in_background(
         _review_memory(
             request=request,
             user=user,

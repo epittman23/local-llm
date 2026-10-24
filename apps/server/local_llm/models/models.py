@@ -348,11 +348,12 @@ class ModelsTable:
     async def search_models(
         self,
         user_id: str,
-        filter: dict = {},
+        filter: dict | None = None,
         skip: int = 0,
         limit: int = 30,
         db: AsyncSession | None = None,
     ) -> ModelListResponse:
+        filter = filter or {}
         async with get_async_db_context(db) as db:
             stmt = select(Model, User).outerjoin(User, User.id == Model.user_id)
             stmt = stmt.filter(Model.base_model_id.is_not(None))

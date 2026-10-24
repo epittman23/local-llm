@@ -5,6 +5,11 @@
 # Security updates (enabled in the repo settings, not here) arrive as their
 # own PRs whatever the schedule, and are auto-merged the same way unless
 # they are a major bump.
+#
+# Version updates wait out a 7-day cooldown after a release is published.
+# Nobody reviews these PRs before they merge, so the cooldown is what keeps
+# a compromised release (usually found and yanked within days) from landing
+# on the day it ships. Security updates skip the cooldown.
 
 version: 2
 updates:
@@ -13,6 +18,8 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    cooldown:
+      default-days: 7
     groups:
       actions:
         patterns: ['*']
@@ -25,6 +32,8 @@ updates:
     directory: /apps/server
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 10
     groups:
       backend-minor-patch:
@@ -47,6 +56,8 @@ updates:
     directory: /apps/web
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 10
     groups:
       web-minor-patch:
@@ -68,6 +79,8 @@ updates:
     directory: /apps/desktop
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 10
     groups:
       desktop-minor-patch:

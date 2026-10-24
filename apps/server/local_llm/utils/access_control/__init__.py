@@ -73,7 +73,7 @@ async def get_permissions(
 async def has_permission(
     user_id: str,
     permission_key: str,
-    default_permissions: dict[str, Any] = {},
+    default_permissions: dict[str, Any] | None = None,
     db: AsyncSession | None = None,
 ) -> bool:
     """
@@ -101,8 +101,12 @@ async def has_permission(
         if get_permission(group.permissions or {}, permission_hierarchy):
             return True
 
-    # Check default permissions afterward if the group permissions don't allow it
-    default_permissions = fill_missing_permissions(default_permissions, DEFAULT_USER_PERMISSIONS)
+    # Check default permissions afterward if the group permissions don't allow it.
+    # fill_missing_permissions writes into its first argument, so fill a copy:
+    # the caller's dict (often the live config) must not gain the defaults.
+    default_permissions = fill_missing_permissions(
+        JSONCodec.loads(JSONCodec.dumps(default_permissions or {})), DEFAULT_USER_PERMISSIONS
+    )
     return get_permission(default_permissions, permission_hierarchy)
 
 

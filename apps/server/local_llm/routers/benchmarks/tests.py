@@ -251,10 +251,11 @@ async def start_selfcheck(form_data: SelfcheckForm, user=Depends(get_admin_user)
                     break
                 adapter = adapters[name]
                 items, _ = filter_items(adapter, await asyncio.to_thread(read_items, name))
-                await queue.put({'type': 'progress', 'benchmark': name, 'message': 'checking', 'total': len(items)})
+                total = len(items)
+                await queue.put({'type': 'progress', 'benchmark': name, 'message': 'checking', 'total': total})
                 counts = {'i': 0, 'passed': 0}
 
-                def on_item(iid: str, outcome: str, reason: str, name=name, total=len(items), counts=counts) -> None:
+                def on_item(iid: str, outcome: str, reason: str, name=name, total=total, counts=counts) -> None:
                     # In the grading thread: stop on cancel, before anything is written.
                     if _cancel:
                         raise _Cancelled()
@@ -316,20 +317,20 @@ async def start_item(form_data: ItemForm, user=Depends(get_admin_user)):
     return _start(job)
 
 
-async def shutdown(timeout: float) -> None:
+async def shutdown() -> None:
     """Cancel a running Tests job and wait for it.
 
     The cooperative flag first, so a run stops between items, then the task
     itself. A grade already in its worker thread finishes on its own timeout
     and kills its subprocess's group on the way out
-    (benchmarks.evaluation.grading).
+    (benchmarks.evaluation.grading). The caller bounds the wait.
     """
     global _cancel
     if not active():
         return
     _cancel = True
     _task.cancel()
-    await asyncio.wait({_task}, timeout=timeout)
+    await asyncio.wait({_task})
 
 
 @router.post('/cancel')

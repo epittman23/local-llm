@@ -11,9 +11,15 @@
 #   make desktop    the desktop app (apps/desktop) from this checkout, which
 #                    starts the stack above itself when nothing is running.
 #   make lint       pre-commit over every file (CI's "Lint and format").
+#   make secrets    gitleaks over the whole git history (CI's "Secrets").
+#   make pr-gate PR=<n>  the PR gate's title, attribution and tripwire
+#                    checks on pull request <n>, read-only.
+#   make baselines  record fewer basedpyright / Biome findings in their
+#                    baselines (they only shrink).
 #   make test       backend pytest + web checks + Playwright + desktop checks
-#                    (CI's other jobs).
-#   make check      lint, then test: one command that predicts `CI passed`.
+#                    + the real-stack boot smoke (CI's other jobs).
+#   make check      lint, secrets, then test: one command that predicts
+#                    `CI passed`.
 #   make help       this text.
 #
 # Replaces scripts/shell/main.sh's lllm-backend/lllm-frontend, deleted along
@@ -50,19 +56,34 @@ LLLM_BACKEND_HOST ?= 127.0.0.1
 LLLM_UVICORN_FLAGS ?= --reload
 # Keep in sync with PRE_COMMIT_VERSION in .github/workflows/ci.yml.
 PRE_COMMIT_VERSION := 4.6.2
+# Keep in sync with DIFF_COVER_VERSION and DIFF_COVER_FAIL_UNDER in
+# .github/workflows/ci.yml. DIFF_BASE is what the changed lines are measured
+# against: CI uses the pull request's base commit.
+DIFF_COVER_VERSION := 10.6.0
+DIFF_COVER_FAIL_UNDER := 80
+DIFF_BASE ?= origin/main
+# Keep in sync with BASEDPYRIGHT_VERSION in .github/workflows/ci.yml.
+BASEDPYRIGHT_VERSION := 1.40.2
+# Keep in sync with GITLEAKS_IMAGE in .github/workflows/ci.yml.
+GITLEAKS_IMAGE := zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
 # Host port for the throwaway Postgres `make test-backend` starts; not 5432,
 # so it never collides with `make backend`'s database.
 LLLM_TEST_PG_PORT ?= 55432
+# Host ports for `make test-boot`'s throwaway Postgres and Redis.
+LLLM_BOOT_PG_PORT ?= 55433
+LLLM_BOOT_REDIS_PORT ?= 56379
 
-.PHONY: help backend frontend astro desktop lint test test-backend test-web test-e2e test-desktop check
+.PHONY: help backend frontend astro desktop lint secrets pr-gate baselines test test-backend test-types test-boot test-web test-e2e test-desktop check
 
 help:
 	@echo "make backend   Postgres + Redis + the backend (uvicorn --reload, $(LLLM_BACKEND_HOST):$(LLLM_BACKEND_PORT))"
 	@echo "make frontend  Astro + React + shadcn/ui dev server (astro dev, :5174; alias: make astro)"
 	@echo "make desktop   the desktop app from this checkout (it starts and stops the stack itself)"
 	@echo "make lint      pre-commit over every file, as CI runs it"
-	@echo "make test      test-backend + test-web + test-e2e + test-desktop, as CI runs them"
-	@echo "make check     lint, then test (predicts CI's 'CI passed')"
+	@echo "make secrets   gitleaks over the whole git history"
+	@echo "make pr-gate PR=<n>  the PR gate's checks on pull request <n> (read-only)"
+	@echo "make test      test-backend + test-types + test-web + test-e2e + test-desktop + test-boot, as CI runs them"
+	@echo "make check     lint, secrets, then test (predicts CI's 'CI passed')"
 
 # --reload caveat: a code change restarts the uvicorn worker, and with it the
 # in-memory handle Benchmarks > Serve keeps on a running llama-server. The
@@ -159,12 +180,27 @@ desktop:
 # green `make check` predicts a green `CI passed`. If you change a CI job,
 # change its target here too.
 
-# CI's "Lint and format (pre-commit)". no-commit-to-branch is skipped for the
-# same reason as in CI: it guards commits, not the tree.
+# CI's "Lint and format (pre-commit)". no-commit-to-branch and gitleaks are
+# skipped for the same reasons as in CI: the first guards commits, not the
+# tree, and the second only sees staged changes (`make secrets` scans commits).
 lint:
 	@cd "$(WEB_DIR)" && bun install --frozen-lockfile
 	@cd "$(DESKTOP_DIR)" && bun install --frozen-lockfile
-	SKIP=no-commit-to-branch uvx pre-commit@$(PRE_COMMIT_VERSION) run --all-files --show-diff-on-failure
+	SKIP=no-commit-to-branch,gitleaks uvx pre-commit@$(PRE_COMMIT_VERSION) run --all-files --show-diff-on-failure
+
+# CI's "Secrets (gitleaks)". CI scans a pull request's own commits and main's
+# whole history; this scans the whole history, a superset of either, in
+# about 20 s. Known non-secrets are in .gitleaksignore.
+secrets:
+	docker run --rm -v "$(REPO_ROOT):/repo:ro" -w /repo $(GITLEAKS_IMAGE) git --no-banner --redact --verbose /repo
+
+# The PR gate workflow (.github/workflows/pr-gate.yml) on one pull request,
+# read-only: it never removes a label. It reads the PR through the API, so it
+# checks what is pushed, not the working tree. Its unit tests run in
+# `make lint`. See AGENTS.md, "The CI tripwire".
+pr-gate:
+	@[ -n "$(PR)" ] || { echo "make pr-gate: set PR=<number>" >&2; exit 1; }
+	python3 .github/scripts/pr_gate.py --pr $(PR)
 
 # CI's "Backend (pytest)", including the throwaway pgvector Postgres that
 # tests/test_imports.py needs (without it that test skips locally, while CI
@@ -193,14 +229,74 @@ test-backend:
 	done; \
 	LLLM_SECRET_KEY=test-only-not-a-secret-0123456789abcdef0123456789abcdef \
 	TEST_DATABASE_URL="postgresql://local_llm:test-only-not-a-secret@127.0.0.1:$(LLLM_TEST_PG_PORT)/local_llm" \
-	uv run --frozen python -m pytest tests -q
+	uv run --frozen python -m pytest tests -q --cov --cov-report=xml; \
+	uvx "diff-cover@$(DIFF_COVER_VERSION)" coverage.xml \
+		--compare-branch="$(DIFF_BASE)" --fail-under="$(DIFF_COVER_FAIL_UNDER)"
 
-# CI's "Web (astro check, vitest, build)".
+# CI's "Backend types (basedpyright)": the backend's types, held to
+# apps/server/basedpyright-baseline.json (.github/scripts/lint_ratchet.py).
+test-types:
+	@cd "$(SERVER_DIR)"; \
+	export UV_PROJECT_ENVIRONMENT="$(SERVER_DIR)/.venv"; \
+	uv sync --frozen --no-install-project --group dev; \
+	report="$$(mktemp)"; trap 'rm -f "$$report"' EXIT; \
+	uvx "basedpyright@$(BASEDPYRIGHT_VERSION)" --outputjson > "$$report" || [ -s "$$report" ]; \
+	python3 "$(REPO_ROOT)/.github/scripts/lint_ratchet.py" check basedpyright "$$report" basedpyright-baseline.json
+
+# Record fewer findings in the basedpyright and Biome baselines, after fixing
+# some. Refuses to grow either one: fix new findings instead.
+baselines:
+	@cd "$(SERVER_DIR)"; \
+	report="$$(mktemp)"; trap 'rm -f "$$report"' EXIT; \
+	uvx "basedpyright@$(BASEDPYRIGHT_VERSION)" --outputjson > "$$report" || [ -s "$$report" ]; \
+	python3 "$(REPO_ROOT)/.github/scripts/lint_ratchet.py" update basedpyright "$$report" basedpyright-baseline.json
+	@cd "$(WEB_DIR)"; \
+	report="$$(mktemp)"; trap 'rm -f "$$report"' EXIT; \
+	node_modules/.bin/biome lint --reporter=json --max-diagnostics=none . > "$$report" || true; \
+	python3 "$(REPO_ROOT)/.github/scripts/lint_ratchet.py" update biome "$$report" biome-baseline.json --prefix apps/web
+
+# CI's "Boot (real stack)": the backend started as `make backend` starts it,
+# against a throwaway Postgres and Redis (infra/docker-compose.yml's images)
+# and a stub in place of OpenRouter, then used; tests/boot_smoke.py has the
+# checks. Builds apps/web first, since the backend serves it. The containers
+# are removed on exit, Ctrl-C included, and nothing touches `make backend`'s
+# database.
+test-boot:
+	@cd "$(WEB_DIR)" && bun install --frozen-lockfile && bun run build
+	@cd "$(SERVER_DIR)"; \
+	export UV_PROJECT_ENVIRONMENT="$(SERVER_DIR)/.venv"; \
+	uv sync --frozen --no-install-project; \
+	for port in $(LLLM_BOOT_PG_PORT) $(LLLM_BOOT_REDIS_PORT); do \
+		if ss -ltn | grep -q "127.0.0.1:$$port "; then \
+			echo "make test-boot: port $$port is in use -- set LLLM_BOOT_PG_PORT / LLLM_BOOT_REDIS_PORT" >&2; \
+			exit 1; \
+		fi; \
+	done; \
+	pg="lllm-boot-pg-$$$$"; redis="lllm-boot-redis-$$$$"; \
+	trap 'docker rm -f "$$pg" "$$redis" >/dev/null 2>&1' EXIT; \
+	docker run --rm -d --name "$$pg" -p "127.0.0.1:$(LLLM_BOOT_PG_PORT):5432" \
+		-e POSTGRES_USER=local_llm -e POSTGRES_PASSWORD=test-only-not-a-secret -e POSTGRES_DB=local_llm \
+		pgvector/pgvector:pg16 >/dev/null; \
+	docker run --rm -d --name "$$redis" -p "127.0.0.1:$(LLLM_BOOT_REDIS_PORT):6379" redis:7.4.2-alpine >/dev/null; \
+	for i in $$(seq 1 60); do \
+		docker exec "$$pg" psql -U local_llm -d local_llm -tAc 'select 1' >/dev/null 2>&1 && break; \
+		sleep 1; \
+	done; \
+	LLLM_SECRET_KEY=test-only-not-a-secret-0123456789abcdef0123456789abcdef \
+	DATABASE_URL="postgresql://local_llm:test-only-not-a-secret@127.0.0.1:$(LLLM_BOOT_PG_PORT)/local_llm" \
+	REDIS_URL="redis://127.0.0.1:$(LLLM_BOOT_REDIS_PORT)/0" \
+	uv run --frozen python tests/boot_smoke.py
+
+# CI's "Web (astro check, vitest, build)", with the same coverage of the
+# changed lines as CI (against DIFF_BASE).
 test-web:
 	@cd "$(WEB_DIR)" && \
 	bun install --frozen-lockfile && \
 	bunx astro check && \
-	bun run test:unit && \
+	bun run test:coverage && \
+	sed 's#^SF:#SF:apps/web/#' coverage/lcov.info > coverage/lcov-repo.info && \
+	(cd "$(REPO_ROOT)" && uvx "diff-cover@$(DIFF_COVER_VERSION)" apps/web/coverage/lcov-repo.info \
+		--compare-branch="$(DIFF_BASE)" --fail-under="$(DIFF_COVER_FAIL_UNDER)") && \
 	bun run build
 
 # CI's "Web e2e (Playwright, mocked backend)". Two workers, CI's count: at the
@@ -222,7 +318,7 @@ test-desktop:
 	bun run test:unit && \
 	bun run package:dir
 
-test: test-backend test-web test-e2e test-desktop
+test: test-backend test-types test-web test-e2e test-desktop test-boot
 
-check: lint test
+check: lint secrets test
 

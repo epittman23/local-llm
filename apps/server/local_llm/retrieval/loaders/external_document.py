@@ -6,6 +6,7 @@ import requests
 from langchain_core.document_loaders import BaseLoader
 from langchain_core.documents import Document
 
+from local_llm.env import REQUESTS_TIMEOUT_PROCESSING
 from local_llm.utils.headers import include_user_info_headers, parse_custom_headers
 
 log = logging.getLogger(__name__)
@@ -61,7 +62,7 @@ class ExternalDocumentLoader(BaseLoader):
             url = url[:-1]
 
         try:
-            response = requests.put(f'{url}/process', data=data, headers=headers)
+            response = requests.put(f'{url}/process', data=data, headers=headers, timeout=REQUESTS_TIMEOUT_PROCESSING)
         except Exception as e:
             log.error(f'Error connecting to endpoint: {e}')
             raise Exception(f'Error connecting to endpoint: {e}')

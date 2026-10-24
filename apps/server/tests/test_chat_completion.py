@@ -630,7 +630,9 @@ def _install_tasks(m, w):
         w.background.append(('task', task_id, coroutine))
         return task_id, None
 
-    def asyncio_create_task(coroutine):
+    def run_in_background(coroutine):
+        # Logged under its name from before utils.background, so the golden
+        # file did not change when main stopped calling asyncio directly.
         log.append(['asyncio.create_task', coroutine.__name__])
         w.background.append(('asyncio', coroutine.__name__, coroutine))
         return SimpleNamespace(name='<task>')
@@ -656,7 +658,7 @@ def _install_tasks(m, w):
             raise RuntimeError('pending failed')
 
     m.setattr(main, 'create_task', create_task)
-    m.setattr(main.asyncio, 'create_task', asyncio_create_task)
+    m.setattr(main, 'run_in_background', run_in_background)
     m.setattr(main, 'cleanup_task', cleanup_task)
     m.setattr(main, 'has_active_tasks', has_active_tasks)
     m.setattr(timers, 'cancel_timers_for_chat', cancel_timers_for_chat)

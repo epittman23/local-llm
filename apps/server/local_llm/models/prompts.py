@@ -289,11 +289,12 @@ class PromptsTable:
     async def search_prompts(
         self,
         user_id: str,
-        filter: dict = {},
+        filter: dict | None = None,
         skip: int = 0,
         limit: int = 30,
         db: AsyncSession | None = None,
     ) -> PromptListResponse:
+        filter = filter or {}
         async with get_async_db_context(db) as session:
             # Join with User table for user filtering and sorting
             query = select(Prompt, User).outerjoin(User, User.id == Prompt.user_id)

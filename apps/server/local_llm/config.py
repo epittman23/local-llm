@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import shutil
@@ -72,11 +73,18 @@ if ENABLE_DB_MIGRATIONS:
 
 async def import_legacy_config_json():
     """Migrate legacy config.json → database on first run."""
-    if not os.path.exists(f'{DATA_DIR}/config.json'):
+    legacy = await asyncio.to_thread(_read_legacy_config_json)
+    if legacy is None:
         return
+    await Config.upsert(legacy)
+    await asyncio.to_thread(os.rename, f'{DATA_DIR}/config.json', f'{DATA_DIR}/old_config.json')
+
+
+def _read_legacy_config_json() -> dict | None:
+    if not os.path.exists(f'{DATA_DIR}/config.json'):
+        return None
     with open(f'{DATA_DIR}/config.json') as _f:
-        await Config.upsert(JSONCodec.loads(_f.read()))
-    os.rename(f'{DATA_DIR}/config.json', f'{DATA_DIR}/old_config.json')
+        return JSONCodec.loads(_f.read())
 
 
 ####################################

@@ -1,4 +1,7 @@
+import asyncio
+import contextlib
 import logging
+from collections.abc import Awaitable, Callable
 
 from fastapi import APIRouter
 
@@ -30,6 +33,17 @@ except ImportError:
 _JOB_STOP_TIMEOUT = 20.0
 
 
+async def _stop_job(stop: Callable[[], Awaitable[None]]) -> None:
+    """Wait up to _JOB_STOP_TIMEOUT for one job to stop, then go on regardless.
+
+    A job that ignores cancellation is left to finish on its own rather than
+    hold up the rest of the shutdown and its `==>` markers.
+    """
+    with contextlib.suppress(TimeoutError):
+        async with asyncio.timeout(_JOB_STOP_TIMEOUT):
+            await stop()
+
+
 async def shutdown() -> None:
     """Stop every benchmark job, then the served model, for a backend exiting for good.
 
@@ -42,8 +56,8 @@ async def shutdown() -> None:
     sweeping = tune is not None and tune.running()
     if sweeping or tests.active():
         log.info('==> Stopping benchmark jobs')
-        await tests.shutdown(_JOB_STOP_TIMEOUT)
+        await _stop_job(tests.shutdown)
         if tune is not None:
-            await tune.shutdown(_JOB_STOP_TIMEOUT)
+            await _stop_job(tune.shutdown)
         log.info('==> Stopped benchmark jobs')
     await serve.shutdown()

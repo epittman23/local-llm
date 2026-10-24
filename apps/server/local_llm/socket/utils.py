@@ -32,7 +32,7 @@ class RedisLock:
         redis_url,
         lock_name,
         timeout_secs,
-        redis_sentinels=[],
+        redis_sentinels=None,
         redis_cluster=False,
     ):
         self.lock_name = lock_name
@@ -63,7 +63,7 @@ class RedisDict:
         self,
         name,
         redis_url,
-        redis_sentinels=[],
+        redis_sentinels=None,
         redis_cluster=False,
         cache_set_signature=False,
     ):

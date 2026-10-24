@@ -126,7 +126,7 @@ def test_seed_moves_the_thinking_budget_out_of_extra(seed):
 
 
 def test_seed_definitions_are_valid(seed):
-    for name, entry in seed.items():
+    for entry in seed.values():
         validate_definition(entry['definition'])
 
 

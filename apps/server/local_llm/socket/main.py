@@ -34,6 +34,7 @@ from local_llm.env import (
 from local_llm.models.access_grants import AccessGrants
 from local_llm.models.channels import Channels
 from local_llm.models.chats import Chats
+from local_llm.models.config import Config
 from local_llm.models.folders import Folders
 from local_llm.models.notes import Notes
 from local_llm.models.users import UserNameResponse, Users
@@ -518,13 +519,25 @@ async def user_join(sid, data):
     await sio.enter_room(sid, f'user:{user.id}')
 
     # Join all the channels only if user has channels permission
-    if user.role == 'admin' or await has_permission(user.id, 'features.channels'):
+    if await may_join_channels(user):
         channels = await Channels.get_channels_by_user_id(user.id)
         log.debug('channels=%r', channels)
         for channel in channels:
             await sio.enter_room(sid, f'channel:{channel.id}')
 
     return {'id': user.id, 'name': user.name}
+
+
+async def may_join_channels(user) -> bool:
+    """The rule the channel HTTP routes apply (routers/channels.py,
+    check_channels_access): channels enabled, and the user permitted
+    `features.channels` by the admin-configured permissions, not just the
+    environment's defaults."""
+    if not await Config.get('channels.enable'):
+        return False
+    if user.role == 'admin':
+        return True
+    return await has_permission(user.id, 'features.channels', await Config.get('user.permissions'))
 
 
 @sio.on('heartbeat')
@@ -550,7 +563,7 @@ async def join_channel(sid, data):
         return
 
     # Join all the channels only if user has channels permission
-    if user.role == 'admin' or await has_permission(user.id, 'features.channels'):
+    if await may_join_channels(user):
         channels = await Channels.get_channels_by_user_id(user.id)
         log.debug('channels=%r', channels)
         for channel in channels:

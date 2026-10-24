@@ -13,6 +13,7 @@
     "lint": "biome check",
     "format": "biome check --write",
     "test:unit": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test"
   },
   "dependencies": {
@@ -84,6 +85,7 @@
     "@types/file-saver": "^2.0.7",
     "@types/katex": "^0.16.8",
     "@types/turndown": "^5.0.6",
+    "@vitest/coverage-v8": "5.0.5",
     "@vitest/ui": "^5.0.5",
     "happy-dom": "^21.0.3",
     "jsdom": "^30.1.3",

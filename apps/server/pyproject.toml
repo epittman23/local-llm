@@ -53,8 +53,8 @@ dependencies = [
     "mcp==2.3.0",
 
     "openai==3.35.1",
-    "anthropic==1.16.0",
-    "google-genai==2.31.0",
+    "anthropic==1.17.0",
+    "google-genai==2.32.0",
 
     "langchain==1.4.6",
     "langchain-community==0.4.2",
@@ -63,7 +63,7 @@ dependencies = [
 
     "fake-useragent==2.2.0",
     "PyMySQL==1.2.0",
-    "boto3==1.43.115",
+    "boto3==1.43.116",
     
     "transformers==5.20.2",
     "sentence-transformers==6.1.0",
@@ -94,7 +94,7 @@ dependencies = [
     "soundfile==0.14.0",
     "azure-ai-documentintelligence==1.0.2",
 
-    "pillow==12.3.0",
+    "pillow==13.0.0",
     "opencv-python-headless==5.0.0.93",
     "rapidocr==3.10.0",
     "rank-bm25==0.2.2",
@@ -164,7 +164,7 @@ classifiers = [
 
 [project.optional-dependencies]
 unstructured = [
-    "unstructured==0.27.30",
+    "unstructured==0.27.32",
 ]
 
 # Every optional backend the inherited code supports and this install doesn't use.
@@ -184,7 +184,7 @@ all = [
     "colbert-ai==0.2.22",
 
     "azure-search-documents==12.0.0",
-    "unstructured==0.27.30",
+    "unstructured==0.27.32",
 ]
 
 [build-system]
@@ -201,6 +201,7 @@ packages = ["local_llm"]
 dev = [
     "pytest",
     "pytest-asyncio>=1.0.0",
+    "pytest-cov>=7.1.0",
     "ruff>=0.17.1",
 ]
 
@@ -220,6 +221,28 @@ explicit = true
 
 [tool.uv.sources]
 torch = { index = "pytorch-cpu" }
+
+# Coverage for CI's diff-coverage check (diff-cover on the lines a pull
+# request changes; docs/guides/testing.md). Applied migrations are
+# generated, and they run in subprocesses (test_imports, test_schema_drift,
+# the boot smoke) that coverage doesn't follow.
+[tool.coverage.run]
+source = ["local_llm"]
+omit = ["local_llm/migrations/versions/*"]
+relative_files = true
+
+# Type checking (CI's "Backend types" job, `make test-types`). Standard mode:
+# the inherited code had about 1,900 errors under it on 2026-10-23, kept in
+# basedpyright-baseline.json, which may only shrink (.github/scripts/
+# lint_ratchet.py); new code is checked in full. Applied migrations are
+# generated and excluded, as from ruff.
+[tool.basedpyright]
+include = ["local_llm"]
+exclude = ["local_llm/migrations/versions", "**/__pycache__"]
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "standard"
 
 [tool.ruff]
 line-length = 120
@@ -244,11 +267,51 @@ select = [
   "C90",  # mccabe
   "Q",    # flake8-quotes
   "ICN",  # flake8-import-conventions
+  # Bug-finding rules, chosen one by one rather than by whole family:
+  "B005", # flake8-bugbear: strip() with a multi-character string
+  "B006", # flake8-bugbear: mutable argument default
+  "B007", # flake8-bugbear: unused loop control variable
+  "B008", # flake8-bugbear: function call in argument default
+  "B023", # flake8-bugbear: closure binds a loop variable late
+  "B034", # flake8-bugbear: re.sub/split/subn count or flags passed positionally
+  "B905", # flake8-bugbear: zip() without strict=
+  "S113", # flake8-bandit: requests call without a timeout
+  "RUF006", # asyncio task created and not stored, so it can be collected mid-run
+  # flake8-async, every stable rule but ASYNC110 (busy wait), listed one by
+  # one: utils/subagents.py polls Redis for a chat's active tasks, which may
+  # run on another instance, and no in-process event can stand in for that.
+  "ASYNC100", # cancel scope with no checkpoint
+  "ASYNC105", # trio sync call not awaited
+  "ASYNC109", # async function with a timeout parameter
+  "ASYNC115", # sleep(0) instead of a checkpoint
+  "ASYNC116", # long sleep instead of sleep_forever
+  "ASYNC210", # blocking HTTP call in an async function
+  "ASYNC212", # blocking httpx call in an async function
+  "ASYNC220", # blocking subprocess creation in an async function
+  "ASYNC221", # blocking subprocess run in an async function
+  "ASYNC222", # blocking wait for a process in an async function
+  "ASYNC230", # blocking open() in an async function
+  "ASYNC240", # blocking os.path or pathlib call in an async function
+  "ASYNC250", # blocking input() in an async function
+  "ASYNC251", # blocking time.sleep() in an async function
 ]
 
 # Plugin configs:
 flake8-import-conventions.banned-from = [ "ast", "datetime" ]
 flake8-import-conventions.aliases = { datetime = "dt" }
 flake8-quotes.inline-quotes = "single"
+# FastAPI's declarative parameter defaults are markers FastAPI reads, not
+# values computed once and shared between calls.
+flake8-bugbear.extend-immutable-calls = [
+  "fastapi.Body",
+  "fastapi.Cookie",
+  "fastapi.Depends",
+  "fastapi.File",
+  "fastapi.Form",
+  "fastapi.Header",
+  "fastapi.Path",
+  "fastapi.Query",
+  "fastapi.Security",
+]
 mccabe.max-complexity = 25
 pydocstyle.convention = "google"

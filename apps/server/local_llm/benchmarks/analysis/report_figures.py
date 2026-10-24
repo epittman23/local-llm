@@ -91,7 +91,7 @@ def unicode_bars(labels: list[str], values: list[float | None], width: int = 36,
     top = max(real) if real else 0.0
     pad = max((len(label) for label in labels), default=0)
     lines = []
-    for label, value in zip(labels, values):
+    for label, value in zip(labels, values, strict=True):
         if value is None or top <= 0:
             lines.append(f'{label:<{pad}}  {"":<{width}}  -')
             continue
@@ -405,7 +405,7 @@ class Figures:
                     va='center',
                 )
                 continue
-            for k, i in enumerate(lost[j]):
+            for k in range(len(lost[j])):
                 ax.plot(
                     [-(k + 1)],
                     [y],
@@ -416,7 +416,7 @@ class Figures:
                     markeredgewidth=1.2,
                     zorder=3,
                 )
-            for k, i in enumerate(gained[j]):
+            for k in range(len(gained[j])):
                 ax.plot(
                     [k + 1],
                     [y],
@@ -472,7 +472,7 @@ class Figures:
             return
         name = 'fig4-mde.png'
         fig, ax = self._new(name, size=(8.5, 4.4))
-        xs = [n for n, m in zip(ns, mde) if m is not None]
+        xs = [n for n, m in zip(ns, mde, strict=True) if m is not None]
         ys = [100 * m for m in mde if m is not None]
         ax.plot(
             xs,

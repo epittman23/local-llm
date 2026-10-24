@@ -1,4 +1,3 @@
-import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -28,6 +27,7 @@ from local_llm.utils.automations import (
     rrule_interval_seconds,
     validate_rrule,
 )
+from local_llm.utils.background import run_in_background
 
 log = logging.getLogger(__name__)
 
@@ -340,7 +340,7 @@ async def run_automation_by_id(
     await check_automations_permission(request, user)
     automation = await Automations.get_by_id(id, db=db)
     check_automation_access(automation, user)
-    asyncio.create_task(execute_automation(request.app, automation))
+    run_in_background(execute_automation(request.app, automation))
     await publish_event(
         request,
         EVENTS.AUTOMATION_RUN_STARTED,

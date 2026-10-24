@@ -3,6 +3,7 @@ from urllib.parse import urlencode
 
 import requests
 
+from local_llm.env import REQUESTS_TIMEOUT_API
 from local_llm.retrieval.web.main import SearchResult, get_filtered_results
 
 log = logging.getLogger(__name__)
@@ -28,7 +29,7 @@ def search_serpapi(
     payload = {'engine': engine, 'q': query, 'api_key': api_key}
 
     url = f'{url}?{urlencode(payload)}'
-    response = requests.request('GET', url)
+    response = requests.request('GET', url, timeout=REQUESTS_TIMEOUT_API)
 
     json_response = response.json()
     log.info('results from serpapi search: %s', json_response)

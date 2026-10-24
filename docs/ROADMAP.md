@@ -62,6 +62,13 @@ timeline
       2026-10-23 : A backend can stop its served model and benchmark jobs when it exits (LLLM_STOP_JOBS_ON_SHUTDOWN), off by default : make backend's uvicorn flags configurable, so shutdown can't hang on an open stream : stage markers for a supervising app
       2026-10-23 (later) : Desktop app (apps/desktop, Electron, Linux rpm) : loads the backend's own pages, so desktop and browser stay identical : starts the stack when nothing runs and stops what it started, with a step-by-step progress dialog : attaches to a terminal-started stack and leaves it running : one setting moves it to a remote server
       2026-10-23 (latest) : llama.cpp build 10597 built on Fedora with CUDA 13.4.3 and GCC 16 : toolkit from NVIDIA's repo, its driver packages excluded so RPM Fusion's driver stays : nothing served or measured on native Linux yet
+      2026-10-23 (evening) : CI scans commits for secrets (the gitleaks hook had scanned nothing in CI) : workflows linted by actionlint and zizmor : Dependabot version updates wait out a 7-day cooldown before they auto-merge
+      2026-10-23 (night) : CI tripwire (PR gate) : PRs that change CI gates, weaken tests or edit append-only files fail until the owner approves with a label and a written justification : no agent bypasses it without asking : conventional titles and no attribution enforced
+      2026-10-23 (late night) : CI boots the real backend (Postgres, Redis, a stub model) and uses it : sign-up, a chat completion, every GET route swept for server errors, a clean shutdown : models checked against the migrations, 108 inherited differences recorded as a baseline that only shrinks
+      2026-10-23 (last) : Every frontend API call checked against the backend's routes, by method and path : the mocked e2e suite can no longer hide a renamed or removed route
+      2026-10-23 (final) : 80% coverage of the lines each PR changes, backend and web (diff-cover) : coverage-ignore comments trip the PR gate
+      2026-10-23 (closing) : Backend type-checked (basedpyright) and apps/web linted (Biome), each held to a baseline of inherited findings that only shrinks : no new finding gets in
+      2026-10-24 : ruff selects bug-finding rules (bugbear, flake8-async, S113, RUF006), every finding fixed, none exempted : a data-URL prefix bug, a mispaired sign test, untimed requests and collectable background tasks among them
     section Near-Term
       "~1 week" : Resolve the blocking rack hole-type question : confirm riser and PSU questions : re-verify current component pricing
       "~2-4 weeks" : Finish the benchmark upgrade : HumanEval+ and MBPP+ replace HumanEval and MBPP : a LiveCodeBench slice with a per-run release-date window : a llama-bench pre-screen driven by Optuna
