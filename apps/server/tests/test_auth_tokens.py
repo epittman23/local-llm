@@ -28,6 +28,8 @@ import asyncio
 import base64
 import copy
 import datetime as dt
+import hashlib
+import hmac
 import json
 import re
 import time
@@ -155,8 +157,16 @@ def _token(user, minutes=5):
     return create_token({'id': user.id}, dt.timedelta(minutes=minutes))
 
 
-def _b64(data: dict) -> str:
-    return base64.urlsafe_b64encode(json.dumps(data).encode()).rstrip(b'=').decode()
+def _b64(data: dict | bytes) -> str:
+    raw = data if isinstance(data, bytes) else json.dumps(data).encode()
+    return base64.urlsafe_b64encode(raw).rstrip(b'=').decode()
+
+
+def _hs512(payload: dict) -> str:
+    """Signed with the real secret, but with HS512 (by hand: PyJWT warns on the key length)."""
+    signing_input = f'{_b64({"alg": "HS512", "typ": "JWT"})}.{_b64(payload)}'
+    key = SECRET.encode() if isinstance(SECRET, str) else SECRET
+    return f'{signing_input}.{_b64(hmac.new(key, signing_input.encode(), hashlib.sha512).digest())}'
 
 
 # --- JWTs ---------------------------------------------------------------------
@@ -182,7 +192,7 @@ def _forged(people):
     return {
         'expired': create_token({'id': user_id}, dt.timedelta(seconds=-30)),
         'other secret': jwt.encode({'id': user_id}, 'not-the-secret-' + 'x' * 32, algorithm='HS256'),
-        'other algorithm': jwt.encode({'id': user_id}, SECRET, algorithm='HS512'),
+        'other algorithm': _hs512({'id': user_id}),
         'alg none': f'{_b64({"alg": "none", "typ": "JWT"})}.{_b64({"id": user_id})}.',
         'no id claim': create_token({'sub': user_id}, dt.timedelta(minutes=5)),
         'unknown user': create_token({'id': 'no-such-user'}, dt.timedelta(minutes=5)),
