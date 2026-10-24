@@ -30968,6 +30968,14 @@
     "code_interpreter.engine"
    ],
    [
+    "chat_files",
+    [
+     null,
+     "<user u1>"
+    ],
+    {}
+   ],
+   [
     "config_get",
     "code_interpreter.jupyter.url"
    ],
@@ -30996,7 +31004,15 @@
      null,
      30
     ],
-    {}
+    {
+     "files": [
+      [
+       "sales.csv",
+       "/data/uploads/f1_sales.csv"
+      ]
+     ],
+     "notes": []
+    }
    ],
    [
     "emit",
@@ -31104,6 +31120,14 @@
     "code_interpreter.engine"
    ],
    [
+    "chat_files",
+    [
+     null,
+     "<user u1>"
+    ],
+    {}
+   ],
+   [
     "config_get",
     "code_interpreter.jupyter.url"
    ],
@@ -31132,7 +31156,15 @@
      null,
      30
     ],
-    {}
+    {
+     "files": [
+      [
+       "sales.csv",
+       "/data/uploads/f1_sales.csv"
+      ]
+     ],
+     "notes": []
+    }
    ],
    [
     "emit",
@@ -31566,6 +31598,14 @@
     "code_interpreter.engine"
    ],
    [
+    "chat_files",
+    [
+     null,
+     "<user u1>"
+    ],
+    {}
+   ],
+   [
     "config_get",
     "code_interpreter.jupyter.url"
    ],
@@ -31594,7 +31634,15 @@
      "pw",
      null
     ],
-    {}
+    {
+     "files": [
+      [
+       "sales.csv",
+       "/data/uploads/f1_sales.csv"
+      ]
+     ],
+     "notes": []
+    }
    ],
    [
     "emit",

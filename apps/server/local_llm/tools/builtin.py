@@ -721,9 +721,12 @@ async def execute_code(
                 result = str(output) if output else ''
 
         elif engine == 'jupyter':
-            from local_llm.utils.code_interpreter import execute_code_jupyter
+            from local_llm.models.users import Users
+            from local_llm.utils.code_interpreter import chat_files, execute_code_jupyter
 
             jupyter_auth = await Config.get('code_interpreter.jupyter.auth')
+            files_user = await Users.get_user_by_id(__user__['id']) if __user__ and __user__.get('id') else None
+            files, notes = await chat_files((__metadata__ or {}).get('files'), files_user)
 
             output = await execute_code_jupyter(
                 await Config.get('code_interpreter.jupyter.url'),
@@ -731,6 +734,8 @@ async def execute_code(
                 (await Config.get('code_interpreter.jupyter.auth_token') if jupyter_auth == 'token' else None),
                 (await Config.get('code_interpreter.jupyter.auth_password') if jupyter_auth == 'password' else None),
                 await Config.get('code_interpreter.jupyter.timeout'),
+                files=files,
+                notes=notes,
             )
 
             stdout = output.get('stdout', '')

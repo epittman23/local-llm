@@ -18452,7 +18452,7 @@
     },
     {
      "role": "user",
-     "content": "Use the kernel."
+     "content": "Use the kernel.\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs."
     }
    ],
    "inlet_filtered": true,
@@ -18471,7 +18471,7 @@
      "code_interpreter": true
     },
     "system_prompt": "Be brief.",
-    "user_prompt": "Use the kernel.",
+    "user_prompt": "Use the kernel.\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs.",
     "sources": []
    },
    "request_filtered": true
@@ -18491,7 +18491,7 @@
     "code_interpreter": true
    },
    "system_prompt": "Be brief.",
-   "user_prompt": "Use the kernel.",
+   "user_prompt": "Use the kernel.\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs.",
    "sources": []
   },
   "events": [],
@@ -18510,7 +18510,7 @@
     "code_interpreter": true
    },
    "system_prompt": "Be brief.",
-   "user_prompt": "Use the kernel.",
+   "user_prompt": "Use the kernel.\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs.",
    "sources": []
   },
   "calls": [
@@ -18719,7 +18719,7 @@
        },
        {
         "role": "user",
-        "content": "Use the kernel."
+        "content": "Use the kernel.\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs."
        }
       ],
       "inlet_filtered": true,
@@ -18851,7 +18851,7 @@
        },
        {
         "role": "user",
-        "content": "Use the kernel."
+        "content": "Use the kernel.\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs."
        }
       ],
       "inlet_filtered": true,
@@ -18870,7 +18870,7 @@
         "code_interpreter": true
        },
        "system_prompt": "Be brief.",
-       "user_prompt": "Use the kernel.",
+       "user_prompt": "Use the kernel.\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs.",
        "sources": []
       }
      }
@@ -19308,7 +19308,7 @@
    "messages": [
     {
      "role": "system",
-     "content": "Be brief.\n[templated Be brief.]"
+     "content": "Be brief.\n\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs.\n[templated Be brief.]"
     },
     {
      "role": "user",
@@ -19330,7 +19330,7 @@
     "features": {
      "code_interpreter": true
     },
-    "system_prompt": "Be brief.",
+    "system_prompt": "Be brief.\n\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs.",
     "user_prompt": "What is 2+2?",
     "sources": []
    },
@@ -19350,7 +19350,7 @@
    "features": {
     "code_interpreter": true
    },
-   "system_prompt": "Be brief.",
+   "system_prompt": "Be brief.\n\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs.",
    "user_prompt": "What is 2+2?",
    "sources": []
   },
@@ -19369,7 +19369,7 @@
    "features": {
     "code_interpreter": true
    },
-   "system_prompt": "Be brief.",
+   "system_prompt": "Be brief.\n\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs.",
    "user_prompt": "What is 2+2?",
    "sources": []
   },
@@ -19563,7 +19563,7 @@
       "messages": [
        {
         "role": "system",
-        "content": "Be brief."
+        "content": "Be brief.\n\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs."
        },
        {
         "role": "user",
@@ -19691,7 +19691,7 @@
       "messages": [
        {
         "role": "system",
-        "content": "Be brief."
+        "content": "Be brief.\n\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs."
        },
        {
         "role": "user",
@@ -19717,7 +19717,7 @@
        "features": {
         "code_interpreter": true
        },
-       "system_prompt": "Be brief.",
+       "system_prompt": "Be brief.\n\n\n##### Jupyter Environment\n\n- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,\n  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.\n- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next\n  block, so each block must repeat the setup it needs.\n\n##### Chat Files\n\n- Files the user attached to this chat are in the current working directory. Open them by name, for example\n  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.\n- Files written by the code are deleted when the block ends, so print the results the user needs.",
        "user_prompt": "What is 2+2?",
        "sources": []
       }

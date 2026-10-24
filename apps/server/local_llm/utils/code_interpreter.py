@@ -1,5 +1,7 @@
 import asyncio
+import base64
 import logging
+import os
 import uuid
 
 import aiohttp
@@ -10,6 +12,62 @@ from local_llm.env import AIOHTTP_CLIENT_ALLOW_REDIRECTS
 from local_llm.utils.json_codec import JSONCodec
 
 logger = logging.getLogger(__name__)
+
+#: Where each run works on the Jupyter server, relative to its root: a
+#: subdirectory per run, holding the chat's files, removed when the run ends.
+UPLOADS_DIR = 'lllm-uploads'
+#: Copied files are sent base64-encoded in one request each, so they are capped.
+MAX_FILE_BYTES = 50 * 1024 * 1024
+MAX_TOTAL_BYTES = 200 * 1024 * 1024
+
+
+async def chat_files(items: list | None, user) -> tuple[list[tuple[str, str]], list[str]]:
+    """The chat's uploaded files this user may read, as (name, local path) pairs.
+
+    `items` is the chat's `metadata['files']`. Only uploaded files count
+    (type 'file' with an id): knowledge bases, web results and images are not
+    files on disk. Each one is re-checked against the user, since the list
+    comes from the request. Also returns a note for each file left out.
+    """
+    from local_llm.models.files import Files
+    from local_llm.storage.provider import Storage
+    from local_llm.utils.access_control.files import has_access_to_file
+
+    files: list[tuple[str, str]] = []
+    notes: list[str] = []
+    names: set[str] = set()
+    total = 0
+    for item in items or []:
+        if not isinstance(item, dict) or item.get('type') != 'file' or not item.get('id'):
+            continue
+        file = await Files.get_file_by_id(item['id'])
+        if not file or not file.path or user is None:
+            continue
+        if file.user_id != user.id and not await has_access_to_file(file.id, 'read', user):
+            continue
+        name = os.path.basename((file.filename or item.get('name') or file.id).replace('\\', '/')) or file.id
+        try:
+            path = await asyncio.to_thread(Storage.get_file, file.path)
+            size = await asyncio.to_thread(os.path.getsize, path)
+        except Exception as err:
+            logger.warning('chat file %s is not readable: %s', file.id, err)
+            notes.append(f'{name}: could not be read')
+            continue
+        if size > MAX_FILE_BYTES or total + size > MAX_TOTAL_BYTES:
+            notes.append(
+                f'{name}: not copied, over the {MAX_FILE_BYTES // 2**20} MB per file'
+                f' or {MAX_TOTAL_BYTES // 2**20} MB total limit'
+            )
+            continue
+        stem, ext = os.path.splitext(name)
+        n = 1
+        while name in names:
+            n += 1
+            name = f'{stem} ({n}){ext}'
+        names.add(name)
+        total += size
+        files.append((name, path))
+    return files, notes
 
 
 class ResultModel(BaseModel):
@@ -34,6 +92,7 @@ class JupyterCodeExecuter:
         token: str = '',
         password: str = '',
         timeout: int = 60,
+        files: list[tuple[str, str]] | None = None,
     ):
         """
         :param base_url: Jupyter server URL (e.g., "http://localhost:8888")
@@ -41,6 +100,7 @@ class JupyterCodeExecuter:
         :param token: Jupyter authentication token (optional)
         :param password: Jupyter password (optional)
         :param timeout: WebSocket timeout in seconds (default: 60s)
+        :param files: (name, local path) pairs copied into the kernel's working directory
         """
         self.base_url = base_url
         self.code = code
@@ -48,6 +108,8 @@ class JupyterCodeExecuter:
         self.password = password
         self.timeout = timeout
         self.kernel_id = ''
+        self.files = files or []
+        self.work_dir = ''
         if self.base_url[-1] != '/':
             self.base_url += '/'
         self.session = aiohttp.ClientSession(trust_env=True, base_url=self.base_url)
@@ -64,11 +126,21 @@ class JupyterCodeExecuter:
                     response.raise_for_status()
             except Exception as err:
                 logger.exception('close kernel failed, %s', err)
+        if self.work_dir:
+            # The server must allow deleting a non-empty directory
+            # (FileContentsManager.always_delete_dir, set in infra/docker-compose.yml),
+            # since the code may have written files of its own beside the copies.
+            try:
+                async with self.session.delete(f'api/contents/{self.work_dir}', params=self.params) as response:
+                    response.raise_for_status()
+            except Exception as err:
+                logger.warning('removing %s from the Jupyter server failed: %s', self.work_dir, err)
         await self.session.close()
 
     async def run(self) -> ResultModel:
         try:
             await self.sign_in()
+            await self.upload_files()
             await self.init_kernel()
             await self.execute_code()
         except Exception as err:
@@ -98,8 +170,30 @@ class JupyterCodeExecuter:
         if self.token:
             self.params.update({'token': self.token})
 
+    async def upload_files(self) -> None:
+        """Make a fresh directory for this run, with the files copied in; it is the kernel's working directory.
+
+        Made even when there are no files, so whatever the code writes is
+        deleted with it instead of staying on the server for the next run.
+        """
+        work_dir = f'{UPLOADS_DIR}/{uuid.uuid4().hex}'
+        for directory in (UPLOADS_DIR, work_dir):
+            async with self.session.put(
+                f'api/contents/{directory}', params=self.params, json={'type': 'directory'}
+            ) as response:
+                response.raise_for_status()
+        self.work_dir = work_dir
+        for name, path in self.files:
+            content = base64.b64encode(await asyncio.to_thread(_read_bytes, path)).decode()
+            async with self.session.put(
+                f'api/contents/{work_dir}/{name}',
+                params=self.params,
+                json={'type': 'file', 'format': 'base64', 'content': content},
+            ) as response:
+                response.raise_for_status()
+
     async def init_kernel(self) -> None:
-        async with self.session.post(url='api/kernels', params=self.params) as response:
+        async with self.session.post(url='api/kernels', params=self.params, json={'path': self.work_dir}) as response:
             response.raise_for_status()
             kernel_data = await response.json()
             self.kernel_id = kernel_data['id']
@@ -189,15 +283,32 @@ class JupyterCodeExecuter:
         self.result.result = '\n'.join(result).strip() if result else ''
 
 
+def _read_bytes(path: str) -> bytes:
+    with open(path, 'rb') as f:
+        return f.read()
+
+
 async def execute_code_jupyter(
-    base_url: str, code: str, token: str = '', password: str = '', idle_timeout: int = 60
+    base_url: str,
+    code: str,
+    token: str = '',
+    password: str = '',
+    idle_timeout: int = 60,
+    files: list[tuple[str, str]] | None = None,
+    notes: list[str] | None = None,
 ) -> dict:
     """Run code on a Jupyter server; idle_timeout is the longest wait for any one kernel message.
 
     Not a deadline for the run: code that keeps producing output runs until
     it finishes. A silence longer than idle_timeout ends the run with
     "Execution timed out." in stderr.
+
+    `files` (from chat_files) are copied into the kernel's working directory
+    first, so the code opens them by name; `notes` say which were left out,
+    and are added to stderr so the model sees why a file is missing.
     """
-    async with JupyterCodeExecuter(base_url, code, token, password, idle_timeout) as executor:
+    async with JupyterCodeExecuter(base_url, code, token, password, idle_timeout, files) as executor:
         result = await executor.run()
+        if notes:
+            result.stderr = '\n'.join(filter(None, [result.stderr, *notes]))
         return result.model_dump()

@@ -466,6 +466,24 @@ CODE_INTERPRETER_PYODIDE_PROMPT = """
 - The file system persists across code executions within the same session.
 - Use `import os; os.listdir('/mnt/uploads')` to discover available files."""  # noqa: E501 - prompt text, kept byte for byte
 
+# The Jupyter engine's counterpart: utils/code_interpreter.py copies the
+# chat's uploaded files into each run's working directory, and every code
+# block starts a fresh kernel.
+CODE_INTERPRETER_JUPYTER_PROMPT = """
+
+##### Jupyter Environment
+
+- This Python environment runs on a Jupyter server with the scientific Python stack (pandas, numpy, scipy,
+  statsmodels, scikit-learn, matplotlib). `pip install` works if a package is missing.
+- **Each code block runs in a fresh kernel.** Variables, imports and loaded data do not carry over to the next
+  block, so each block must repeat the setup it needs.
+
+##### Chat Files
+
+- Files the user attached to this chat are in the current working directory. Open them by name, for example
+  `pd.read_csv('data.csv')`, and use `import os; os.listdir('.')` to see which are there.
+- Files written by the code are deleted when the block ends, so print the results the user needs."""
+
 
 ####################################
 # Vector Database

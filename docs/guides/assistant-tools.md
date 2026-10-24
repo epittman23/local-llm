@@ -11,7 +11,10 @@ The app's code interpreter has two engines.
 
 - **Pyodide** (the inherited default) runs Python in the browser. The
   backend only relays the code to the page and waits, so nothing runs
-  without a browser tab open, and the package set is Pyodide's.
+  without a browser tab open, and the package set is Pyodide's. **It does
+  not work in this app:** the React frontend never handles the
+  `execute:python` event the backend sends (checked 2026-10-24), so before
+  Jupyter the code interpreter had no working engine.
 - **Jupyter** runs on the server. The backend opens a kernel, runs the
   block, returns stdout, stderr and the result, and deletes the kernel.
   This is the only engine a request without a browser can use, such as a
@@ -39,14 +42,30 @@ These were checked on 2026-10-24: from inside the container, every service
 name failed to resolve and the gateway's ports 4000, 5432, 6379, 8080 and
 8090 refused connections, while `https://pypi.org` answered.
 
-Two limits of the Jupyter engine to know:
+**Chat files.** Each code block gets the files uploaded to its chat. For
+every block, the backend (`utils/code_interpreter.py`):
 
-- **No state between blocks.** Each code block gets a fresh kernel, so a
-  variable defined in one block is gone in the next. A model has to repeat
-  its setup (imports, loading data) in each block.
-- **Uploaded files do not reach it.** The Pyodide engine is given the
-  chat's attached files; the Jupyter engine is given only the code. A CSV
-  attached to a chat cannot be read from a Jupyter block yet.
+1. makes a fresh `lllm-uploads/<run>/` directory on the Jupyter server and
+   copies in each file the user may read (their own, or one shared with
+   them);
+2. starts the kernel in that directory, so code opens a file by its name
+   (`pd.read_csv('sales.csv')`);
+3. deletes the directory afterwards, with anything the code wrote there.
+
+The directory is made even when the chat has no files, so nothing one
+block writes is left on the server for the next.
+
+Only uploaded files are copied, not knowledge bases, web results or
+images. A file over 50 MB, or past 200 MB for the block, is left out, and
+a note in the block's stderr tells the model so. Two files with the same
+name become `data.csv` and `data (2).csv`. The model is told all this in
+the code interpreter's prompt (`CODE_INTERPRETER_JUPYTER_PROMPT` in
+`config.py`).
+
+**No state between blocks.** Each code block gets a fresh kernel, so a
+variable defined in one block is gone in the next, and a model has to
+repeat its setup (imports, loading data) in each block. The prompt says
+so.
 
 **Settings** (Admin Settings > Code Execution): set both the code
 interpreter's and code execution's engine to `jupyter`, the URL to
