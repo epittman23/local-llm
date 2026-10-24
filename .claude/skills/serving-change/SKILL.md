@@ -37,9 +37,10 @@ id, or two configurations under one.
    inserts a `benchmark_schema_note` row (use the `new-migration` skill;
    `f4b6d2e8a913` is the model), plus a new capture in
    `docs/serving-baseline/` as #127 did with `fingerprints-v2.json`.
-   Editing or adding files there trips the PR gate's golden-file rule, so
-   the PR needs a `## Gate changes` entry and the owner's approval (use the
-   `pr-gate` skill). Never rewrite an existing capture to make a test pass.
+   A new capture file passes the PR gate, but editing or removing an
+   existing file there trips its golden-file rule, which needs a
+   `## Gate changes` entry and the owner's approval (use the `pr-gate`
+   skill). Never rewrite an existing capture to make a test pass.
 6. Docs: AGENTS.md "Local inference" (and the profile table if a profile
    changed), `docs/guides/llama-cpp.md`, and a `docs/decisions.md` entry
    (use the `docs-sync` skill).

@@ -66,7 +66,8 @@ Agent tooling, described in `docs/guides/agent-tooling.md`:
   `config_id` fingerprint).
 - **`.claude/agents/reviewer.md`** — a pre-PR reviewer subagent (reports, never edits).
 - **`.mcp.json`** — project MCP servers; today only `codebase-memory-mcp`,
-  a local code-graph index (binary installed separately, pinned).
+  a local code-graph index (binary installed by hand
+  from the v0.12.1 release; `.mcp.json` runs whatever is on `PATH`).
 
 ## `LICENSE`, `LICENSE_HISTORY`, `NOTICE`, `CONTRIBUTOR_LICENSE_AGREEMENT`
 
@@ -417,8 +418,8 @@ knowing about when navigating the filesystem directly:
 - **`.vscode/`** — editor config (currently empty).
 - **`.claude/`**'s local state — `settings.local.json` (personal permission
   allowlists), `worktrees/` (agent
-  checkouts) and scheduled task locks. `.claude/skills/` and
-  `.claude/agents/` beside them **are** tracked (see below).
+  checkouts), both gitignored, and scheduled task locks, which are not. `.claude/skills/` and
+  `.claude/agents/` beside them **are** tracked (see above).
 - **`logs/`** — local logs. On a checkout that has one,
   `llama.db.retired-<date>` is the old SQLite store from before 2026-09-08;
   its Postgres backfill was lost with the old database on 2026-10-09, so that

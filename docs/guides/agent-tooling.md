@@ -67,8 +67,9 @@ server when asked (or under `/mcp`). Then index the repository once, either
 by asking the agent to run `index_repository` or from a shell:
 
 ```sh
-codebase-memory-mcp cli index_repository '{"repo_path":"'"$PWD"'","mode":"fast"}'
-codebase-memory-mcp cli trace_path '{"project":"home-epittman-local-llm","function_name":"config_lines","direction":"inbound","depth":2}'
+codebase-memory-mcp cli index_repository --repo-path "$PWD" --mode fast
+codebase-memory-mcp cli trace_path --project home-epittman-local-llm \
+  --function-name config_lines --direction inbound --depth 1
 ```
 
 The project name comes from the checkout's path; `list_projects` shows it.

@@ -281,6 +281,7 @@ OpenAI-compatible endpoint.
 | Backend dependencies and the offline model cache | [docs/guides/dependencies.md](docs/guides/dependencies.md) |
 | Frontend dev server, build, rough edges | [docs/guides/frontend.md](docs/guides/frontend.md) |
 | The desktop app: install, startup and shutdown, settings, security | [docs/guides/desktop.md](docs/guides/desktop.md) |
+| Agent skills, the reviewer agent, codebase-memory-mcp | [docs/guides/agent-tooling.md](docs/guides/agent-tooling.md) |
 | Why things are the way they are | [docs/decisions.md](docs/decisions.md) |
 | History and planned direction | [docs/ROADMAP.md](docs/ROADMAP.md) |
 

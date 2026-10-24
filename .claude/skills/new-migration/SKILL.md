@@ -18,8 +18,8 @@ stops `make backend`.
 
 1. Find the current head, which is the new revision's `down_revision`.
    It is the revision no other file names as its `down_revision`. This
-   needs no environment (`alembic heads` does: its `env.py` loads the
-   app's config, which requires `LLLM_SECRET_KEY`):
+   needs no environment. `alembic heads` does: three revisions import
+   `local_llm`, which loads the app's config and requires `LLLM_SECRET_KEY`.
 
    ```sh
    cd apps/server/local_llm/migrations/versions
@@ -48,6 +48,7 @@ stops `make backend`.
    locally while CI fails. For a quicker loop, see `docs/guides/testing.md`,
    which covers `TEST_DATABASE_URL` and `test_schema_drift.py`.
 6. If the change fixes an inherited drift entry, shrink
-   `tests/fixtures/schema_drift.json` with `SCHEMA_DRIFT_RECORD=1`. That
-   file is a golden file, so say why in the PR's `## Gate changes`.
+   `tests/fixtures/schema_drift.json` with `SCHEMA_DRIFT_RECORD=1`. The
+   gate lets that file shrink without approval and trips when it grows
+   (`SHRINK_ONLY` in `pr_gate.py`).
 7. Update the docs (use the `docs-sync` skill).

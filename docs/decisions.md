@@ -25,7 +25,8 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
     where they would compete with AGENTS.md and MAP.md. Its README
     says it makes no network requests of its own (not measured here), and
     its index lives outside the repo. Its binary is
-    installed by hand from the pinned release with a checksum check,
+    installed by hand from the v0.12.1 release with a checksum check
+    (`.mcp.json` runs whatever version is on `PATH`),
     rather than with its `curl | bash` installer, which also rewrites
     agent configs.
 
