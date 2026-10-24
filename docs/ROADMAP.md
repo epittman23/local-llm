@@ -61,6 +61,7 @@ timeline
       2026-10-19 (last) : The fingerprint covers the model file, extra arguments and fitting, and llama-server runs with -fit off : every config_id changed once, noted in the database
       2026-10-23 : A backend can stop its served model and benchmark jobs when it exits (LLLM_STOP_JOBS_ON_SHUTDOWN), off by default : make backend's uvicorn flags configurable, so shutdown can't hang on an open stream : stage markers for a supervising app
       2026-10-23 (later) : Desktop app (apps/desktop, Electron, Linux rpm) : loads the backend's own pages, so desktop and browser stay identical : starts the stack when nothing runs and stops what it started, with a step-by-step progress dialog : attaches to a terminal-started stack and leaves it running : one setting moves it to a remote server
+      2026-10-23 (latest) : llama.cpp build 10597 built on Fedora with CUDA 13.4.3 and GCC 16 : toolkit from NVIDIA's repo, its driver packages excluded so RPM Fusion's driver stays : nothing served or measured on native Linux yet
     section Near-Term
       "~1 week" : Resolve the blocking rack hole-type question : confirm riser and PSU questions : re-verify current component pricing
       "~2-4 weeks" : Finish the benchmark upgrade : HumanEval+ and MBPP+ replace HumanEval and MBPP : a LiveCodeBench slice with a per-run release-date window : a llama-bench pre-screen driven by Optuna

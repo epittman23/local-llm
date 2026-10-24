@@ -11,25 +11,54 @@ hardware later](../../README.md#migrating-to-local-hardware-later)).
 The Serve page runs `llama-server` from `LLAMA_BIN` (default
 `~/llama.cpp/build/bin`; see `serving/launcher.py`), so llama.cpp has to be
 built there with CUDA. That needs the NVIDIA driver, the CUDA toolkit
-(`nvcc`) and `cmake`. On Fedora the CUDA toolkit comes from NVIDIA's own
-repository, which needs sudo; check that the toolkit release accepts the
-system GCC as its host compiler, and install an older `gcc` for it if not.
-`cmake` is also available from linuxbrew without sudo. The current recorded
-serving measurements used build 10597 (`95b8e33e1`); the thread-count sweep
-is older, on 10472. Building 10597 keeps new runs comparable with the recorded
-ones:
+(`nvcc`) and `cmake`.
+
+**The driver** comes from RPM Fusion (`akmod-nvidia`, 615.71 on 2026-10-23).
+Its `nvidia-smi` header names the newest CUDA it runs ("CUDA UMD Version").
+
+**The CUDA toolkit** comes from NVIDIA's own repository; Fedora does not
+package it. That repository also carries NVIDIA's driver packages, which
+would collide with RPM Fusion's, so they are excluded. Install the toolkit
+version the driver supports, by its versioned name: plain `cuda-toolkit`
+would later move to a newer CUDA than the driver runs, and the `cuda`
+meta-package pulls in NVIDIA's driver.
+
+```bash
+sudo dnf config-manager addrepo --from-repofile=https://developer.download.nvidia.com/compute/cuda/repos/fedora44/x86_64/cuda-fedora44.repo
+sudo dnf config-manager setopt "cuda-fedora44-x86_64.excludepkgs=nvidia-driver*,nvidia-modprobe,nvidia-persistenced,nvidia-settings,nvidia-libXNVCtrl*,nvidia-xconfig,kmod-nvidia*,dkms-nvidia*"
+sudo dnf install cuda-toolkit-13-4
+```
+
+(In a Claude Code session there is no TTY for `sudo`; run them through
+`pkexec`.) It installs to `/usr/local/cuda-13.4`, which is not on `PATH`.
+CUDA 13.4 accepts GCC up to 16 as its host compiler
+(`targets/x86_64-linux/include/crt/host_config.h`), so Fedora 44's GCC 16
+needs no older `gcc`. Check that header again for a newer GCC or CUDA:
+Fedora ships `gcc15` / `gcc15-c++` for `-DCMAKE_CUDA_HOST_COMPILER`.
+
+**llama.cpp.** The current recorded serving measurements used build 10597
+(`95b8e33e1`); the thread-count sweep is older, on 10472. Building 10597
+keeps new runs comparable with the recorded ones:
 
 ```bash
 git clone https://github.com/ggml-org/llama.cpp ~/llama.cpp && cd ~/llama.cpp
 git checkout 95b8e33e1
+export PATH=/usr/local/cuda-13.4/bin:$PATH
 cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=86
 cmake --build build -j "$(nproc)"
 ```
 
-`86` is the RTX 3060 Laptop's compute capability (8.6). On 2026-10-09 the
-Fedora machine had the driver (615.71) and `cmake` but neither the CUDA
-toolkit nor a llama.cpp build, so nothing has been served on native Linux
-yet.
+`86` is the RTX 3060 Laptop's compute capability (8.6). A configure that
+failed (for example "CUDA Toolkit not found") leaves `build/` behind:
+remove it before configuring again. Check the result with
+`build/bin/llama-server --version` (build 10597, commit `95b8e33e1`) and
+`build/bin/llama-server --list-devices` (`CUDA0: NVIDIA GeForce RTX 3060
+Laptop GPU`). The runtime libraries resolve from `/usr/local/cuda`, so the
+backend needs no `PATH` change to run it.
+
+On 2026-10-23 this was built on the Fedora machine exactly as above: build
+10597 with CUDA 13.4.3 and GCC 16.2.1, which accepts `-fit off`. Nothing has
+been served or measured on native Linux yet.
 
 ## Serving
 
