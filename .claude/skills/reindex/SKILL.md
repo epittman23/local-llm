@@ -9,6 +9,10 @@ codebase-memory-mcp is described in `docs/guides/agent-tooling.md`. Its
 index lives in `~/.cache/codebase-memory-mcp/`, outside the repo, so
 reindexing never changes the working tree.
 
+While the MCP server is connected it watches the checkout through git and
+refreshes the index itself, so this is mainly for after working with the
+server off, or when an answer disagrees with the files.
+
 ## 1. Check what is indexed
 
 Prefer the MCP tools when the `codebase-memory-mcp` server is connected.

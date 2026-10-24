@@ -83,16 +83,22 @@ directly.
 **What to know:**
 
 - The index is SQLite under `~/.cache/codebase-memory-mcp/`, outside the
-  repo. It skips what `.gitignore` skips (so `infra/.env` is never read),
-  and by default `docs/`, `.github/scripts/` and `.claude/` too.
+  repo. It skips what `.gitignore` skips (so `infra/.env` is never read)
+  and `.claude/`. What else it reads depends on the mode. A `full` index
+  (the default) includes `docs/` and `.github/scripts/`, so they can be
+  searched through the graph too. A `fast` index also leaves out those two
+  directories and test files (checked on 2026-10-24).
 - Its optional shared snapshot (`.codebase-memory/graph.db.zst` in the
   repo) stays off. Turning it on would need a `.gitignore` entry, which is
   a PR-gate change.
 - It serves a graph UI on `127.0.0.1:9749` while it runs (loopback only).
   `codebase-memory-mcp config set ui_enabled false` turns that off.
 - `auto_index` is off, so a new checkout needs the index step above.
-  `auto_watch` is on by default; if answers look stale after large
-  changes, index again.
+  After that, while the server is connected, it watches the checkout
+  through git (`index_status` shows `watch: strategy: git`, polling every
+  7 s) and refreshes the index as files change. Index again (the `reindex`
+  skill) after working with the server off, or when an answer disagrees
+  with the files.
 - It answers structure, not intent. `MAP.md` and `AGENTS.md` still say
   why things are where they are.
 
