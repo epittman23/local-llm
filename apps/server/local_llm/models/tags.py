@@ -127,7 +127,9 @@ class TagTable:
             result = await db.execute(select(Tag.id).filter(Tag.id.in_(ids), Tag.user_id == user_id))
             existing = {row[0] for row in result.all()}
             new_tags = [
-                Tag(id=tag_id, name=name, user_id=user_id) for tag_id, name in zip(ids, names) if tag_id not in existing
+                Tag(id=tag_id, name=name, user_id=user_id)
+                for tag_id, name in zip(ids, names, strict=True)
+                if tag_id not in existing
             ]
             if new_tags:
                 db.add_all(new_tags)

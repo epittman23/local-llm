@@ -5,6 +5,7 @@ from pprint import pprint
 
 import requests
 
+from local_llm.env import REQUESTS_TIMEOUT_API
 from local_llm.retrieval.web.main import SearchResult, get_filtered_results
 
 log = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ def search_bing(
     headers = {'Ocp-Apim-Subscription-Key': subscription_key}
 
     try:
-        response = requests.get(endpoint, headers=headers, params=params)
+        response = requests.get(endpoint, headers=headers, params=params, timeout=REQUESTS_TIMEOUT_API)
         response.raise_for_status()
         json_response = response.json()
         results = json_response.get('webPages', {}).get('value', [])

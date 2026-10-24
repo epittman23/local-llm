@@ -14,6 +14,7 @@ import uuid
 from pathlib import Path
 
 import aiofiles
+import aiofiles.os
 import aiohttp
 from fastapi import (
     APIRouter,
@@ -776,10 +777,10 @@ async def _transcribe_deepgram(request, file_path, languages, file_dir, id):
 
 async def _transcribe_azure(request, file_path, filename, file_dir, id):
     """Transcribe audio via Azure Cognitive Services batch transcription."""
-    if not os.path.isfile(file_path):
+    if not await aiofiles.os.path.isfile(file_path):
         raise HTTPException(status_code=400, detail='Audio file not found')
 
-    audio_size = os.path.getsize(file_path)
+    audio_size = await aiofiles.os.path.getsize(file_path)
     if audio_size > AZURE_MAX_FILE_SIZE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -920,10 +921,10 @@ async def transcription_handler(request, file_path, metadata, user=None):
 
 async def _transcribe_mistral(request, file_path, filename, metadata, file_dir, id):
     """Transcribe audio via the Mistral STT API."""
-    if not os.path.isfile(file_path):
+    if not await aiofiles.os.path.isfile(file_path):
         raise HTTPException(status_code=400, detail='Audio file not found')
 
-    file_size = os.path.getsize(file_path)
+    file_size = await aiofiles.os.path.getsize(file_path)
     if file_size > MAX_FILE_SIZE:
         raise HTTPException(status_code=400, detail=f'File size exceeds limit of {MAX_FILE_SIZE_MB}MB')
 
@@ -1119,7 +1120,7 @@ async def _transcribe_work_copy(request: Request, file_path: str, metadata: dict
     finally:
         # Clean up only the temporary chunks, never the original file
         for chunk_path in chunk_paths:
-            if chunk_path != file_path and os.path.isfile(chunk_path):
+            if chunk_path != file_path and await aiofiles.os.path.isfile(chunk_path):
                 try:
                     await asyncio.to_thread(os.remove, chunk_path)
                 except Exception:
@@ -1190,6 +1191,10 @@ def split_audio(file_path, max_bytes, format='mp3', bitrate='32k'):
     return chunks
 
 
+def _resolves_within(path: str, directory: str) -> bool:
+    return os.path.realpath(path).startswith(os.path.realpath(directory))
+
+
 @router.post('/transcriptions')
 async def transcription(
     request: Request,
@@ -1230,12 +1235,12 @@ async def transcription(
         # A voice-input recording is needed only for this request: it goes in a
         # temporary directory removed on the way out, never the cache, where
         # every recording used to be kept indefinitely.
-        workdir = tempfile.mkdtemp(prefix='lllm-voice-')
+        workdir = await asyncio.to_thread(tempfile.mkdtemp, prefix='lllm-voice-')
         file_dir = workdir
         file_path = os.path.join(file_dir, filename)
 
         # Defense-in-depth: ensure resolved path stays within intended directory
-        if not os.path.realpath(file_path).startswith(os.path.realpath(file_dir)):
+        if not await asyncio.to_thread(_resolves_within, file_path, file_dir):
             raise ValueError('Invalid file path detected')
 
         async with aiofiles.open(file_path, 'wb') as f:

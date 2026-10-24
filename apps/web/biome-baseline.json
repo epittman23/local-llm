@@ -1,0 +1,776 @@
+{
+	"_comment": "biome findings allowed per file and rule; may only shrink. See .github/scripts/lint_ratchet.py.",
+	"total": 754,
+	"counts": {
+		"apps/web/biome.jsonc": {
+			"lint/suspicious/useBiomeIgnoreFolder": 1
+		},
+		"apps/web/e2e/admin-evaluations.spec.ts": {
+			"lint/suspicious/noExplicitAny": 2
+		},
+		"apps/web/e2e/admin-functions.spec.ts": {
+			"lint/style/noNonNullAssertion": 2,
+			"lint/suspicious/noExplicitAny": 3
+		},
+		"apps/web/e2e/admin-settings.spec.ts": {
+			"lint/complexity/noCommaOperator": 6,
+			"lint/correctness/noUnusedFunctionParameters": 1,
+			"lint/suspicious/noExplicitAny": 20
+		},
+		"apps/web/e2e/admin-users.spec.ts": {
+			"lint/style/noNonNullAssertion": 2,
+			"lint/suspicious/noExplicitAny": 5
+		},
+		"apps/web/e2e/automations.spec.ts": {
+			"lint/suspicious/noExplicitAny": 2
+		},
+		"apps/web/e2e/calendar.spec.ts": {
+			"lint/suspicious/noExplicitAny": 2
+		},
+		"apps/web/e2e/channels.spec.ts": {
+			"lint/suspicious/noExplicitAny": 2
+		},
+		"apps/web/e2e/chat-actions.spec.ts": {
+			"lint/style/noNonNullAssertion": 1,
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/e2e/chat-helpers.ts": {
+			"lint/style/noNonNullAssertion": 4,
+			"lint/suspicious/noExplicitAny": 2
+		},
+		"apps/web/e2e/chat-input.spec.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/e2e/chat.spec.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/e2e/fake-socket.ts": {
+			"lint/suspicious/noExplicitAny": 1,
+			"lint/suspicious/useIterableCallbackReturn": 3
+		},
+		"apps/web/e2e/notes.spec.ts": {
+			"lint/style/noNonNullAssertion": 1,
+			"lint/suspicious/noExplicitAny": 2
+		},
+		"apps/web/e2e/personal-settings.spec.ts": {
+			"lint/suspicious/noExplicitAny": 4
+		},
+		"apps/web/e2e/playground.spec.ts": {
+			"lint/suspicious/noExplicitAny": 3
+		},
+		"apps/web/e2e/test.ts": {
+			"lint/suspicious/noConfusingVoidType": 1
+		},
+		"apps/web/e2e/workspace-knowledge.spec.ts": {
+			"lint/suspicious/noExplicitAny": 6
+		},
+		"apps/web/e2e/workspace-models.spec.ts": {
+			"lint/suspicious/noExplicitAny": 4
+		},
+		"apps/web/e2e/workspace-skills.spec.ts": {
+			"lint/suspicious/noExplicitAny": 2
+		},
+		"apps/web/e2e/workspace-tools.spec.ts": {
+			"lint/suspicious/noExplicitAny": 3
+		},
+		"apps/web/src/components/chat/markdown/CodeBlock.tsx": {
+			"lint/security/noDangerouslySetInnerHtml": 2
+		},
+		"apps/web/src/components/chat/markdown/Katex.tsx": {
+			"lint/security/noDangerouslySetInnerHtml": 1
+		},
+		"apps/web/src/components/chat/markdown/Tokens.tsx": {
+			"lint/a11y/useMediaCaption": 2,
+			"lint/suspicious/noArrayIndexKey": 43
+		},
+		"apps/web/src/components/common/AccessControl.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 6
+		},
+		"apps/web/src/components/common/AccessPreview.tsx": {
+			"lint/style/noNonNullAssertion": 1,
+			"lint/suspicious/noArrayIndexKey": 2
+		},
+		"apps/web/src/components/common/ChatsModal.tsx": {
+			"lint/a11y/noSvgWithoutTitle": 1,
+			"lint/correctness/useExhaustiveDependencies": 1
+		},
+		"apps/web/src/components/common/CodeEditor.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 2
+		},
+		"apps/web/src/components/common/MemberSelector.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 7
+		},
+		"apps/web/src/components/common/RichTextEditor.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 2
+		},
+		"apps/web/src/components/common/SafeMarkdown.test.tsx": {
+			"lint/style/noNonNullAssertion": 1
+		},
+		"apps/web/src/components/common/SafeMarkdown.tsx": {
+			"lint/security/noDangerouslySetInnerHtml": 1
+		},
+		"apps/web/src/components/common/Valves.tsx": {
+			"lint/a11y/noLabelWithoutControl": 1
+		},
+		"apps/web/src/components/common/ValvesModal.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 1,
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/components/common/advancedParamDefs.test.ts": {
+			"lint/suspicious/noAssignInExpressions": 1
+		},
+		"apps/web/src/components/common/advancedParamDefs.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/components/settings/AddConnectionModal.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 2
+		},
+		"apps/web/src/components/settings/AddTerminalServerModal.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 3,
+			"lint/suspicious/noArrayIndexKey": 1,
+			"lint/suspicious/noExplicitAny": 2
+		},
+		"apps/web/src/components/settings/AddToolServerModal.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 1
+		},
+		"apps/web/src/components/settings/InterfaceManageDialogs.tsx": {
+			"lint/complexity/useOptionalChain": 1,
+			"lint/correctness/useExhaustiveDependencies": 4,
+			"lint/suspicious/noArrayIndexKey": 1
+		},
+		"apps/web/src/components/settings/SettingsModal.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 1
+		},
+		"apps/web/src/components/settings/boundFields.tsx": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/components/settings/connectionModel.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/components/settings/interfaceSettingDefs.test.ts": {
+			"lint/style/noNonNullAssertion": 2,
+			"lint/suspicious/noExplicitAny": 2
+		},
+		"apps/web/src/components/settings/interfaceSettingDefs.ts": {
+			"lint/suspicious/noExplicitAny": 2,
+			"lint/suspicious/noPrototypeBuiltins": 1
+		},
+		"apps/web/src/components/settings/personal/Account.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 2,
+			"lint/suspicious/noArrayIndexKey": 1
+		},
+		"apps/web/src/components/settings/personal/Audio.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 7,
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/components/settings/personal/Connections.tsx": {
+			"lint/suspicious/noArrayIndexKey": 1
+		},
+		"apps/web/src/components/settings/personal/Integrations.tsx": {
+			"lint/suspicious/noArrayIndexKey": 2
+		},
+		"apps/web/src/components/settings/personal/Notifications.tsx": {
+			"lint/a11y/noLabelWithoutControl": 2
+		},
+		"apps/web/src/components/settings/personal/Personalization.tsx": {
+			"lint/a11y/noLabelWithoutControl": 1
+		},
+		"apps/web/src/components/settings/personal/Shortcuts.tsx": {
+			"lint/style/noNonNullAssertion": 5,
+			"lint/style/useImportType": 1,
+			"lint/suspicious/noAssignInExpressions": 1
+		},
+		"apps/web/src/components/settings/personal/personalSettings.ts": {
+			"lint/suspicious/noPrototypeBuiltins": 1
+		},
+		"apps/web/src/components/settings/terminalServerModel.ts": {
+			"lint/suspicious/noExplicitAny": 5
+		},
+		"apps/web/src/components/settings/toolServerModel.test.ts": {
+			"lint/suspicious/noExplicitAny": 2
+		},
+		"apps/web/src/lib/apis/automations/index.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/lib/apis/benchmarks/index.ts": {
+			"lint/suspicious/noExplicitAny": 2
+		},
+		"apps/web/src/lib/apis/calendar/index.ts": {
+			"lint/suspicious/noExplicitAny": 10
+		},
+		"apps/web/src/lib/apis/configs/index.ts": {
+			"lint/suspicious/noExplicitAny": 2
+		},
+		"apps/web/src/lib/apis/errors.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/lib/apis/files/index.ts": {
+			"lint/complexity/useOptionalChain": 1,
+			"lint/style/useConst": 2
+		},
+		"apps/web/src/lib/apis/folders/index.ts": {
+			"lint/suspicious/noExplicitAny": 3
+		},
+		"apps/web/src/lib/apis/index.ts": {
+			"lint/complexity/useOptionalChain": 5,
+			"lint/correctness/noUnusedFunctionParameters": 1,
+			"lint/correctness/noUnusedVariables": 3,
+			"lint/suspicious/noEmptyInterface": 1,
+			"lint/suspicious/noExplicitAny": 19,
+			"lint/suspicious/noImplicitAnyLet": 1,
+			"lint/suspicious/noPrototypeBuiltins": 1
+		},
+		"apps/web/src/lib/apis/knowledge/index.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/lib/apis/models/index.ts": {
+			"lint/suspicious/noExplicitAny": 3
+		},
+		"apps/web/src/lib/apis/notes/index.ts": {
+			"lint/suspicious/noExplicitAny": 2
+		},
+		"apps/web/src/lib/apis/openai/index.ts": {
+			"lint/correctness/noUnusedImports": 1,
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/lib/apis/prompts/index.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/lib/apis/retrieval/index.ts": {
+			"lint/correctness/noUnusedVariables": 3,
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/lib/apis/skills/index.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/lib/apis/streaming/index.ts": {
+			"lint/suspicious/noDoubleEquals": 1,
+			"lint/suspicious/noExplicitAny": 3
+		},
+		"apps/web/src/lib/apis/terminal/index.ts": {
+			"lint/complexity/useOptionalChain": 7,
+			"lint/suspicious/noExplicitAny": 2
+		},
+		"apps/web/src/lib/apis/tools/index.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/lib/apis/utils/index.ts": {
+			"lint/correctness/noUnusedVariables": 1
+		},
+		"apps/web/src/lib/auth/redirect.ts": {
+			"lint/complexity/useOptionalChain": 1
+		},
+		"apps/web/src/lib/auth/session.ts": {
+			"lint/suspicious/noDocumentCookie": 2
+		},
+		"apps/web/src/lib/chat/attachments.test.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/lib/chat/attachments.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/lib/chat/chatList.ts": {
+			"lint/complexity/noCommaOperator": 1,
+			"lint/suspicious/noExplicitAny": 3,
+			"lint/suspicious/useIterableCallbackReturn": 1
+		},
+		"apps/web/src/lib/chat/feedback.test.ts": {
+			"lint/style/noNonNullAssertion": 2
+		},
+		"apps/web/src/lib/chat/history.test.ts": {
+			"lint/style/noNonNullAssertion": 1,
+			"lint/suspicious/noExplicitAny": 3
+		},
+		"apps/web/src/lib/chat/history.ts": {
+			"lint/style/noNonNullAssertion": 2,
+			"lint/suspicious/noExplicitAny": 3
+		},
+		"apps/web/src/lib/chat/importChats.test.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/lib/chat/importChats.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/lib/chat/permissions.test.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/lib/chat/request.test.ts": {
+			"lint/suspicious/noExplicitAny": 3
+		},
+		"apps/web/src/lib/chat/request.ts": {
+			"lint/suspicious/noExplicitAny": 3
+		},
+		"apps/web/src/lib/chat/sources.ts": {
+			"lint/suspicious/noExplicitAny": 5
+		},
+		"apps/web/src/lib/markdown/content.ts": {
+			"lint/complexity/useOptionalChain": 1
+		},
+		"apps/web/src/lib/markdown/extensions/citation-extension.ts": {
+			"lint/suspicious/noAssignInExpressions": 1,
+			"lint/suspicious/noExplicitAny": 1,
+			"lint/suspicious/noGlobalIsNan": 1
+		},
+		"apps/web/src/lib/markdown/extensions/colon-fence-extension.ts": {
+			"lint/correctness/noUnusedFunctionParameters": 1,
+			"lint/style/noNonNullAssertion": 1,
+			"lint/suspicious/noExplicitAny": 3
+		},
+		"apps/web/src/lib/markdown/extensions/extension.ts": {
+			"lint/correctness/noUnusedFunctionParameters": 1,
+			"lint/suspicious/noAssignInExpressions": 1,
+			"lint/suspicious/noExplicitAny": 7,
+			"lint/suspicious/noImplicitAnyLet": 1
+		},
+		"apps/web/src/lib/markdown/extensions/footnote-extension.ts": {
+			"lint/style/noNonNullAssertion": 1
+		},
+		"apps/web/src/lib/markdown/extensions/katex-extension.ts": {
+			"lint/correctness/noUnusedFunctionParameters": 3
+		},
+		"apps/web/src/lib/markdown/extensions/mention-extension.ts": {
+			"lint/style/noNonNullAssertion": 1,
+			"lint/suspicious/noExplicitAny": 2
+		},
+		"apps/web/src/lib/markdown/lexer.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/lib/markdown/markdownModel.test.ts": {
+			"lint/suspicious/noExplicitAny": 4
+		},
+		"apps/web/src/lib/shortcuts.ts": {
+			"lint/style/noNonNullAssertion": 1
+		},
+		"apps/web/src/lib/utils/api-helpers.ts": {
+			"lint/complexity/useOptionalChain": 2,
+			"lint/suspicious/noExplicitAny": 23,
+			"lint/suspicious/useIterableCallbackReturn": 1
+		},
+		"apps/web/src/lib/utils/textScale.ts": {
+			"lint/suspicious/noControlCharactersInRegex": 2
+		},
+		"apps/web/src/lib/utils/variables.ts": {
+			"lint/performance/noAccumulatingSpread": 2,
+			"lint/suspicious/noAssignInExpressions": 2,
+			"lint/suspicious/noExplicitAny": 5,
+			"lint/suspicious/noImplicitAnyLet": 1,
+			"lint/suspicious/noPrototypeBuiltins": 1
+		},
+		"apps/web/src/routes/admin/AdminLayout.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 1
+		},
+		"apps/web/src/routes/admin/analytics/Analytics.tsx": {
+			"lint/style/noNonNullAssertion": 1
+		},
+		"apps/web/src/routes/admin/analytics/AnalyticsModelModal.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 1,
+			"lint/style/noNonNullAssertion": 2
+		},
+		"apps/web/src/routes/admin/analytics/ChartLine.tsx": {
+			"lint/suspicious/noArrayIndexKey": 1
+		},
+		"apps/web/src/routes/admin/evaluations/FeedbackModal.tsx": {
+			"lint/style/noNonNullAssertion": 1
+		},
+		"apps/web/src/routes/admin/evaluations/Feedbacks.tsx": {
+			"lint/a11y/useKeyWithClickEvents": 1
+		},
+		"apps/web/src/routes/admin/evaluations/Leaderboard.tsx": {
+			"lint/suspicious/noArrayIndexKey": 1
+		},
+		"apps/web/src/routes/admin/evaluations/LeaderboardModal.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 1,
+			"lint/style/noNonNullAssertion": 2
+		},
+		"apps/web/src/routes/admin/evaluations/leaderboard.test.ts": {
+			"lint/style/noNonNullAssertion": 1
+		},
+		"apps/web/src/routes/admin/functions/FunctionsPage.tsx": {
+			"lint/a11y/noStaticElementInteractions": 1,
+			"lint/a11y/useKeyWithClickEvents": 1,
+			"lint/a11y/useSemanticElements": 1
+		},
+		"apps/web/src/routes/admin/functions/functionTypes.ts": {
+			"lint/complexity/useOptionalChain": 1
+		},
+		"apps/web/src/routes/admin/settings/ArenaModelModal.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 7
+		},
+		"apps/web/src/routes/admin/settings/Audio.tsx": {
+			"lint/a11y/noAmbiguousAnchorText": 2,
+			"lint/correctness/noUnusedImports": 1,
+			"lint/correctness/useExhaustiveDependencies": 1,
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/admin/settings/Authentication.tsx": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/admin/settings/CodeExecution.tsx": {
+			"lint/style/noNonNullAssertion": 1,
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/admin/settings/Connections.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 5,
+			"lint/suspicious/noArrayIndexKey": 2,
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/admin/settings/Documents.tsx": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/admin/settings/Evaluations.tsx": {
+			"lint/style/noNonNullAssertion": 1
+		},
+		"apps/web/src/routes/admin/settings/Events.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 2
+		},
+		"apps/web/src/routes/admin/settings/ExternalKnowledge.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 4
+		},
+		"apps/web/src/routes/admin/settings/ExtractionFields.tsx": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/admin/settings/General.tsx": {
+			"lint/suspicious/noExplicitAny": 4
+		},
+		"apps/web/src/routes/admin/settings/Images.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 1,
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/admin/settings/Integrations.tsx": {
+			"lint/suspicious/noArrayIndexKey": 1
+		},
+		"apps/web/src/routes/admin/settings/Interface.tsx": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/admin/settings/Pipelines.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 1,
+			"lint/style/noNonNullAssertion": 1
+		},
+		"apps/web/src/routes/admin/settings/WebSearch.tsx": {
+			"lint/a11y/useSemanticElements": 1,
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/admin/settings/audio.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/admin/settings/connectionsList.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/admin/settings/documents.test.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/admin/settings/documents.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/admin/settings/externalKnowledge.ts": {
+			"lint/suspicious/noExplicitAny": 3
+		},
+		"apps/web/src/routes/admin/settings/images.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/admin/settings/models/AdminModels.tsx": {
+			"lint/complexity/useOptionalChain": 2,
+			"lint/correctness/useExhaustiveDependencies": 1,
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/admin/settings/models/ManageModelsModal.tsx": {
+			"lint/suspicious/noArrayIndexKey": 1
+		},
+		"apps/web/src/routes/admin/settings/models/ManageOllama.tsx": {
+			"lint/a11y/noAmbiguousAnchorText": 2,
+			"lint/complexity/noCommaOperator": 1
+		},
+		"apps/web/src/routes/admin/settings/models/ModelRow.tsx": {
+			"lint/a11y/noStaticElementInteractions": 1
+		},
+		"apps/web/src/routes/admin/settings/models/adminModels.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/admin/settings/models/ollamaDownloads.ts": {
+			"lint/correctness/noUnusedImports": 1
+		},
+		"apps/web/src/routes/admin/settings/models/ollamaStreams.ts": {
+			"lint/style/noNonNullAssertion": 1,
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/admin/settings/models/providerModels.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/admin/settings/webSearch.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/admin/users/AddUserModal.tsx": {
+			"lint/suspicious/useIterableCallbackReturn": 1
+		},
+		"apps/web/src/routes/admin/users/EditGroupModal.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 8
+		},
+		"apps/web/src/routes/admin/users/EditUserModal.tsx": {
+			"lint/style/noNonNullAssertion": 2
+		},
+		"apps/web/src/routes/admin/users/GroupUsers.tsx": {
+			"lint/suspicious/useIterableCallbackReturn": 1
+		},
+		"apps/web/src/routes/admin/users/UserChatsModal.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 2
+		},
+		"apps/web/src/routes/admin/users/UsersPage.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 1
+		},
+		"apps/web/src/routes/admin/users/permissionRows.test.ts": {
+			"lint/style/noNonNullAssertion": 1
+		},
+		"apps/web/src/routes/automations/AutomationDialog.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 6,
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/automations/AutomationPage.tsx": {
+			"lint/a11y/useAriaPropsSupportedByRole": 1
+		},
+		"apps/web/src/routes/automations/automationModel.test.ts": {
+			"lint/suspicious/noExplicitAny": 2
+		},
+		"apps/web/src/routes/benchmarks/AnswersPage.tsx": {
+			"lint/a11y/noLabelWithoutControl": 1,
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/benchmarks/ComparePage.tsx": {
+			"lint/suspicious/noArrayIndexKey": 1
+		},
+		"apps/web/src/routes/benchmarks/ReportPage.tsx": {
+			"lint/security/noDangerouslySetInnerHtml": 1
+		},
+		"apps/web/src/routes/benchmarks/ServePage.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 4,
+			"lint/suspicious/noArrayIndexKey": 1,
+			"lint/suspicious/noExplicitAny": 2
+		},
+		"apps/web/src/routes/benchmarks/TestsPage.tsx": {
+			"lint/a11y/noLabelWithoutControl": 1,
+			"lint/suspicious/noArrayIndexKey": 2
+		},
+		"apps/web/src/routes/benchmarks/TunePage.tsx": {
+			"lint/complexity/useOptionalChain": 1,
+			"lint/correctness/useExhaustiveDependencies": 2,
+			"lint/security/noDangerouslySetInnerHtml": 1,
+			"lint/suspicious/noArrayIndexKey": 3,
+			"lint/suspicious/noExplicitAny": 12
+		},
+		"apps/web/src/routes/calendar/CalendarDialogs.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 3
+		},
+		"apps/web/src/routes/calendar/CalendarPage.tsx": {
+			"lint/suspicious/noArrayIndexKey": 1
+		},
+		"apps/web/src/routes/calendar/calendarModel.test.ts": {
+			"lint/style/noNonNullAssertion": 1,
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/calendar/calendarModel.ts": {
+			"lint/suspicious/noAssignInExpressions": 1
+		},
+		"apps/web/src/routes/channels/ChannelDialogs.tsx": {
+			"lint/a11y/useAriaPropsSupportedByRole": 1,
+			"lint/correctness/useExhaustiveDependencies": 6
+		},
+		"apps/web/src/routes/channels/ChannelMessageView.tsx": {
+			"lint/a11y/useAriaPropsSupportedByRole": 1,
+			"lint/a11y/useMediaCaption": 1,
+			"lint/suspicious/noArrayIndexKey": 3
+		},
+		"apps/web/src/routes/channels/ChannelPage.tsx": {
+			"lint/a11y/noStaticElementInteractions": 1,
+			"lint/a11y/useAriaPropsSupportedByRole": 1,
+			"lint/correctness/useExhaustiveDependencies": 2
+		},
+		"apps/web/src/routes/channels/MessageComposer.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 1,
+			"lint/suspicious/noConfusingVoidType": 1
+		},
+		"apps/web/src/routes/channels/ThreadPanel.tsx": {
+			"lint/a11y/useAriaPropsSupportedByRole": 1
+		},
+		"apps/web/src/routes/channels/channelModel.test.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/channels/channelModel.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/channels/useMessageFeed.ts": {
+			"lint/correctness/useExhaustiveDependencies": 2
+		},
+		"apps/web/src/routes/chat/ChatControls.tsx": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/chat/ChatInput.tsx": {
+			"lint/a11y/noAutofocus": 1,
+			"lint/a11y/useAriaPropsSupportedByRole": 1,
+			"lint/correctness/useExhaustiveDependencies": 1,
+			"lint/suspicious/noExplicitAny": 3
+		},
+		"apps/web/src/routes/chat/ChatMessages.tsx": {
+			"lint/a11y/noStaticElementInteractions": 1,
+			"lint/a11y/useAriaPropsSupportedByRole": 4,
+			"lint/a11y/useKeyWithClickEvents": 1,
+			"lint/suspicious/noArrayIndexKey": 4
+		},
+		"apps/web/src/routes/chat/ChatPage.tsx": {
+			"lint/a11y/noStaticElementInteractions": 1,
+			"lint/correctness/useExhaustiveDependencies": 22,
+			"lint/style/noNonNullAssertion": 1,
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/chat/ChatPlaceholder.tsx": {
+			"lint/suspicious/noArrayIndexKey": 1
+		},
+		"apps/web/src/routes/chat/CitationDialog.tsx": {
+			"lint/suspicious/noArrayIndexKey": 1
+		},
+		"apps/web/src/routes/chat/InputMenus.tsx": {
+			"lint/a11y/noLabelWithoutControl": 2,
+			"lint/suspicious/noExplicitAny": 4
+		},
+		"apps/web/src/routes/chat/MessageActions.tsx": {
+			"lint/a11y/useSemanticElements": 1,
+			"lint/correctness/useExhaustiveDependencies": 5
+		},
+		"apps/web/src/routes/chat/ModelSelector.tsx": {
+			"lint/suspicious/noArrayIndexKey": 1
+		},
+		"apps/web/src/routes/chat/ServerDialogs.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 1,
+			"lint/style/noNonNullAssertion": 1,
+			"lint/suspicious/noArrayIndexKey": 1
+		},
+		"apps/web/src/routes/chat/sidebar/ChatDialogs.tsx": {
+			"lint/a11y/noLabelWithoutControl": 1
+		},
+		"apps/web/src/routes/chat/sidebar/ChatItem.tsx": {
+			"lint/a11y/noAutofocus": 1,
+			"lint/a11y/useAriaPropsSupportedByRole": 1
+		},
+		"apps/web/src/routes/chat/sidebar/ChatSidebar.tsx": {
+			"lint/a11y/useAriaPropsSupportedByRole": 1,
+			"lint/style/noNonNullAssertion": 1
+		},
+		"apps/web/src/routes/chat/useAttachments.ts": {
+			"lint/correctness/useExhaustiveDependencies": 4,
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/chat/useChatSession.test.tsx": {
+			"lint/style/noNonNullAssertion": 1
+		},
+		"apps/web/src/routes/chat/useChatSession.ts": {
+			"lint/suspicious/noExplicitAny": 3
+		},
+		"apps/web/src/routes/chat/useReadAloud.ts": {
+			"lint/style/noNonNullAssertion": 3,
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/notes/NotesPage.tsx": {
+			"lint/a11y/noStaticElementInteractions": 1,
+			"lint/correctness/useExhaustiveDependencies": 7
+		},
+		"apps/web/src/routes/notes/notesModel.ts": {
+			"lint/style/noNonNullAssertion": 1,
+			"lint/suspicious/noControlCharactersInRegex": 2
+		},
+		"apps/web/src/routes/playground/PlaygroundPages.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 2,
+			"lint/suspicious/noArrayIndexKey": 3,
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/public/AuthPage.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 7,
+			"lint/suspicious/noExplicitAny": 2
+		},
+		"apps/web/src/routes/public/SharedChatPage.tsx": {
+			"lint/suspicious/noExplicitAny": 2
+		},
+		"apps/web/src/routes/workspace/WorkspaceLayout.tsx": {
+			"lint/correctness/useExhaustiveDependencies": 3
+		},
+		"apps/web/src/routes/workspace/knowledge/ExternalKnowledgePanel.tsx": {
+			"lint/suspicious/noArrayIndexKey": 1,
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/workspace/knowledge/KnowledgeBasePage.tsx": {
+			"lint/a11y/noLabelWithoutControl": 1,
+			"lint/a11y/useValidAnchor": 1,
+			"lint/correctness/useExhaustiveDependencies": 1,
+			"lint/style/useImportType": 1,
+			"lint/suspicious/noExplicitAny": 2
+		},
+		"apps/web/src/routes/workspace/knowledge/KnowledgeFileList.tsx": {
+			"lint/a11y/useSemanticElements": 4
+		},
+		"apps/web/src/routes/workspace/knowledge/KnowledgePage.tsx": {
+			"lint/a11y/useSemanticElements": 1,
+			"lint/correctness/useExhaustiveDependencies": 1,
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/workspace/knowledge/knowledgeFiles.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/workspace/knowledge/useKnowledgeUploads.ts": {
+			"lint/suspicious/noExplicitAny": 8
+		},
+		"apps/web/src/routes/workspace/models/EditorPickers.tsx": {
+			"lint/a11y/noAutofocus": 2
+		},
+		"apps/web/src/routes/workspace/models/KnowledgePicker.tsx": {
+			"lint/a11y/noAutofocus": 1,
+			"lint/a11y/noLabelWithoutControl": 1
+		},
+		"apps/web/src/routes/workspace/models/ModelEditor.tsx": {
+			"lint/suspicious/noExplicitAny": 8
+		},
+		"apps/web/src/routes/workspace/models/ModelPages.tsx": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/workspace/models/ModelsPage.tsx": {
+			"lint/a11y/noStaticElementInteractions": 1,
+			"lint/a11y/useKeyWithClickEvents": 1,
+			"lint/a11y/useSemanticElements": 1,
+			"lint/correctness/useExhaustiveDependencies": 2,
+			"lint/suspicious/noExplicitAny": 2,
+			"lint/suspicious/noImplicitAnyLet": 1
+		},
+		"apps/web/src/routes/workspace/models/PromptSuggestionsEditor.tsx": {
+			"lint/suspicious/noArrayIndexKey": 1
+		},
+		"apps/web/src/routes/workspace/models/modelEditorLogic.ts": {
+			"lint/suspicious/noExplicitAny": 2
+		},
+		"apps/web/src/routes/workspace/models/modelImport.test.ts": {
+			"lint/style/noNonNullAssertion": 1
+		},
+		"apps/web/src/routes/workspace/models/modelImport.ts": {
+			"lint/suspicious/noExplicitAny": 1
+		},
+		"apps/web/src/routes/workspace/prompts/PromptEditView.tsx": {
+			"lint/a11y/noLabelWithoutControl": 1,
+			"lint/correctness/useExhaustiveDependencies": 1
+		},
+		"apps/web/src/routes/workspace/prompts/PromptsPage.tsx": {
+			"lint/a11y/noStaticElementInteractions": 1,
+			"lint/a11y/useKeyWithClickEvents": 1,
+			"lint/a11y/useSemanticElements": 1
+		},
+		"apps/web/src/routes/workspace/skills/SkillsPage.tsx": {
+			"lint/a11y/noStaticElementInteractions": 1,
+			"lint/a11y/useKeyWithClickEvents": 1,
+			"lint/a11y/useSemanticElements": 1,
+			"lint/suspicious/noImplicitAnyLet": 1
+		},
+		"apps/web/src/routes/workspace/tools/ToolsPage.tsx": {
+			"lint/a11y/useSemanticElements": 1
+		},
+		"apps/web/src/routes/workspace/tools/toolTypes.ts": {
+			"lint/complexity/useOptionalChain": 1
+		},
+		"apps/web/src/styles/global.css": {
+			"lint/suspicious/noDuplicateAtImportRules": 1
+		}
+	}
+}

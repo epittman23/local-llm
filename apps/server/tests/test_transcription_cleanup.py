@@ -13,6 +13,8 @@ from __future__ import annotations
 import asyncio
 import os
 
+import aiofiles
+
 from local_llm.routers import audio as audio_router
 
 
@@ -24,10 +26,10 @@ def test_transcribe_leaves_only_the_original(monkeypatch, tmp_path):
     async def handler(request, chunk_path, metadata, user=None):
         seen.append(chunk_path)
         base = os.path.splitext(chunk_path)[0]
-        with open(base + '.json', 'w') as f:
-            f.write('{"text": "hello"}')
-        with open(base + '.mp3', 'wb') as f:
-            f.write(b'converted copy')
+        async with aiofiles.open(base + '.json', 'w') as f:
+            await f.write('{"text": "hello"}')
+        async with aiofiles.open(base + '.mp3', 'wb') as f:
+            await f.write(b'converted copy')
         return {'text': 'hello'}
 
     monkeypatch.setattr(audio_router, 'BYPASS_PYDUB_PREPROCESSING', True)

@@ -218,11 +218,12 @@ class FeedbackTable:
 
     async def get_feedback_items(
         self,
-        filter: dict = {},
+        filter: dict | None = None,
         skip: int = 0,
         limit: int = 30,
         db: AsyncSession | None = None,
     ) -> FeedbackListResponse:
+        filter = filter or {}
         async with get_async_db_context(db) as db:
             stmt = select(Feedback, User).join(User, Feedback.user_id == User.id)
             count_stmt = select(func.count(Feedback.id)).select_from(Feedback).join(User, Feedback.user_id == User.id)

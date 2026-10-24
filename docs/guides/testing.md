@@ -20,11 +20,13 @@ The root Makefile mirrors CI job for job, with the same commands:
 |---|---|---|
 | `make lint` | Lint and format (pre-commit) | `pre-commit run --all-files` (pinned to CI's pre-commit version) |
 | `make secrets` | Secrets (gitleaks) | gitleaks over the whole git history (CI scans a pull request's own commits, and main's whole history) |
-| `make test-backend` | Backend (pytest) | `uv lock --check`, `uv sync --frozen --group dev`, then pytest with a throwaway pgvector Postgres on `127.0.0.1:55432` (`LLLM_TEST_PG_PORT`), so `test_the_app_imports` runs instead of skipping |
-| `make test-web` | Web (astro check, vitest, build) | `bunx astro check`, `bun run test:unit`, `bun run build` |
+| `make test-types` | Backend types (basedpyright) | basedpyright over `apps/server/local_llm`, against `basedpyright-baseline.json` |
+| `make test-backend` | Backend (pytest) | `uv lock --check`, `uv sync --frozen --group dev`, then pytest with coverage and a throwaway pgvector Postgres on `127.0.0.1:55432` (`LLLM_TEST_PG_PORT`), so `test_the_app_imports` runs instead of skipping; then diff-cover on the changed lines |
+| `make test-web` | Web (astro check, vitest, build) | `bunx astro check`, `bun run test:coverage` and diff-cover on the changed lines, `bun run build` |
 | `make test-e2e` | Web e2e (Playwright) | `bunx playwright test --workers=2` |
 | `make test-desktop` | Desktop (typecheck, vitest, package smoke) | `bun run typecheck`, `bun run test:unit`, `bun run package:dir` (an unpacked package, no `.rpm`) |
-| `make test` | all four test jobs | the four above |
+| `make test-boot` | Boot (real stack) | builds `apps/web`, then `tests/boot_smoke.py` against a throwaway Postgres (`:55433`) and Redis (`:56379`) |
+| `make test` | all six test jobs | the six above |
 | `make check` | `CI passed` | `make lint`, `make secrets`, then `make test` |
 
 `make test-backend` removes its Postgres container on exit (Ctrl-C included),
@@ -32,6 +34,70 @@ so it never touches the `make backend` database. Any pytest run, `make` or
 not, points `DATA_DIR` at a temp directory (`tests/conftest.py`), so it
 never touches `apps/server/data`. Stop `make frontend`
 before `make test-e2e` (see below).
+
+## Baselines for inherited findings
+
+Two checks found too many problems in inherited code to fix before turning
+them on:
+
+- basedpyright, in standard mode, over the backend (`make test-types`, CI's
+  Backend types job): 2,247 findings on 2026-10-23;
+- Biome's linter over `apps/web` (a pre-commit hook): 754 findings.
+
+Each runs against a committed baseline, `apps/server/basedpyright-baseline.json`
+and `apps/web/biome-baseline.json`. A baseline records how many findings of
+each rule each file may have. `.github/scripts/lint_ratchet.py` fails if any
+file has more than its baseline allows, and lists the findings in that file
+and rule, the new ones among them. So new code meets the full rule set, and
+old code can't get worse.
+
+**Baselines only shrink.**
+
+1. Fix some findings.
+2. Run `make baselines`. It writes the lower counts, and refuses if anything
+   grew.
+3. Commit the smaller file.
+
+The PR gate lets a baseline shrink without approval, and trips on one that
+grows, is added or is removed. `tests/fixtures/schema_drift.json` follows
+the same rule.
+
+The baselines are a rollout stage, and the aim is zero. Once a baseline is
+empty, its tool runs without one. Then Biome's hook becomes
+`biome check --error-on-warnings`, and basedpyright just fails on any
+finding.
+
+basedpyright's version is pinned in `ci.yml` and the Makefile
+(`BASEDPYRIGHT_VERSION`), outside Dependabot. A new version can change what
+it reports, so bump it by hand and run `make baselines`.
+
+## Coverage of the changed lines
+
+The backend and web jobs measure coverage: pytest-cov for `local_llm`, and
+Vitest's v8 provider for `apps/web/src`. On a pull request they then run
+[diff-cover](https://github.com/Bachmann1234/diff_cover) against the PR's
+base commit.
+
+- **The rule.** At least **80%** of the lines the PR adds or changes, and
+  that coverage can measure, must run under the unit tests. The setting is
+  `DIFF_COVER_FAIL_UNDER` in `ci.yml` and the Makefile.
+- **Why changed lines.** Nothing gates the overall figure (backend about
+  42%, web about 45% on 2026-10-23). The bar applies only to what a PR
+  touches, so new code arrives with tests and old code gains them as it
+  changes.
+- **Calibration.** Recent PRs that shipped with tests scored 81% (#367),
+  84% (#374), 94% (#371) and 100% (#375). #368, a small change at seven
+  call sites in hooks that only Playwright exercises, scored 56% and would
+  have needed unit tests for those hooks.
+- **Locally.** `make test-backend` and `make test-web` run the same check
+  against `DIFF_BASE`, which defaults to `origin/main`. On a stacked branch
+  that includes the parent PRs' lines too.
+- **Excluded from measurement.** Coverage does not measure:
+  - applied migrations, which run in subprocesses coverage doesn't follow;
+  - shadcn/ui's generated components;
+  - the desktop app, whose Electron glue Vitest can't run.
+- **No ignore comments.** A `# pragma: no cover` or `v8 ignore` comment
+  trips the PR gate. Write the test instead.
 
 ## The PR gate and the tripwire
 
@@ -46,6 +112,8 @@ Besides `CI passed`, every pull request gets a **`PR gate`** check
   - edits to a gate file;
   - new skips or suppressions;
   - deleted or fewer tests;
+  - coverage-ignore comments;
+  - a grown baseline of inherited findings;
   - edited golden files;
   - edits to append-only files.
 
@@ -90,10 +158,11 @@ Run these from `apps/web/`:
 - `bunx astro check` for types (expect 0 errors).
 - `bun run format` (Biome: formats, and applies safe lint fixes) and
   `bun run lint` (Biome, check only). The config is `biome.jsonc`. The repo's
-  pre-commit hook runs Biome's formatter on every commit; until the existing
-  lint findings are fixed it doesn't lint yet (see the root
-  `.pre-commit-config.yaml`). If a commit is rejected because the hook
-  reformatted a file, `git add` it and commit again.
+  pre-commit hooks run Biome's formatter on every commit, and its linter
+  against `biome-baseline.json`: the findings inherited from upstream are
+  allowed, and a new one fails (see "Baselines for inherited findings"
+  below). If a commit is rejected because the hook reformatted a file,
+  `git add` it and commit again.
 
 **Run Playwright with `--workers=2`.** At its default worker count (half the
 cores, about 10 on this 20-core machine) the cold `astro dev` server can't
@@ -108,6 +177,11 @@ stops it afterward, which is not. Stop `make frontend` first.
 
 Because Playwright mocks the backend, a change that touches the
 frontend/backend seam also needs a real run against `make backend`.
+`tests/test_frontend_contract.py` (backend pytest) covers one part of that
+seam automatically: every `fetch()` in `apps/web/src` must match a route
+the backend serves, by method and path. The mocks follow the frontend, so
+without that check a renamed or removed backend route would leave both
+suites green.
 
 ## Desktop (`apps/desktop`)
 
@@ -169,6 +243,49 @@ TEST_DATABASE_URL=postgresql://local_llm:throwaway@127.0.0.1:55432/local_llm
 
 Without it the test skips locally; CI provides one and fails rather than
 skips.
+
+`tests/test_schema_drift.py` also needs `TEST_DATABASE_URL`. It migrates
+a fresh database on that server, then compares every SQLAlchemy model
+against the result with Alembic's autogenerate. Without it, a model change
+with no migration passes every other test and then fails against the real
+database. The comparison is checked against
+`tests/fixtures/schema_drift.json`, which lists the 108 differences
+inherited from upstream when the check was added on 2026-10-23. Any new
+difference fails. The file may only shrink:
+
+1. Fix a model to match its migration, or add a migration.
+2. Record the smaller list with `SCHEMA_DRIFT_RECORD=1`.
+3. Since the file is a golden file, that edit trips the PR gate, so say
+   why in the PR.
+
+`tests/test_frontend_contract.py` reads every `fetch(...)` in
+`apps/web/src` (tests excluded) whose URL is a template on one of the base
+paths in `lib/constants.ts`. It checks each call's method and path against
+the app's route table. A URL segment taken from a helper's parameter, such
+as `testsRequest(token, 'datasets')`, is checked once per literal the
+helper is called with. Calls it cannot resolve are mostly terminal servers
+and direct OpenAI connections. It counts them, and fails if the count grows
+past `UNRESOLVED_LIMIT` (38 on 2026-10-23). It checks paths and methods
+only, not request or response bodies.
+
+## Boot smoke: the real backend, started and used
+
+`tests/boot_smoke.py` (`make test-boot`, CI's Boot job) starts the backend
+the way `make backend` does: uvicorn, Postgres with pgvector, Redis,
+migrations on an empty database and the built frontend. A stub
+OpenAI-compatible server stands in for OpenRouter, so no request leaves
+the machine. The smoke then uses the running backend:
+
+1. Waits for `/ready`.
+2. Signs up the first user (the admin) and signs in.
+3. Gets a chat completion back from the stub.
+4. Calls every GET route that takes no path parameter, failing on any 5xx.
+5. Checks that the API refuses a request without a token.
+6. Stops it with SIGINT and expects a clean exit.
+
+Nothing else in CI starts the app: pytest imports it, and Playwright mocks
+it. `SWEEP_SKIP` in the script lists the routes the sweep leaves out, each
+with its reason. On failure the script prints the end of the backend's log.
 
 `tests/test_serving_fingerprint.py` is the guard on the serving fingerprint:
 it checks `serving/fingerprint.py` against the golden values in

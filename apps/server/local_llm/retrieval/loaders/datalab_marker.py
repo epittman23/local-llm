@@ -7,6 +7,7 @@ import requests
 from fastapi import HTTPException, status
 from langchain_core.documents import Document
 
+from local_llm.env import REQUESTS_TIMEOUT_API, REQUESTS_TIMEOUT_PROCESSING
 from local_llm.utils.json_codec import JSONCodec
 
 log = logging.getLogger(__name__)
@@ -99,6 +100,7 @@ class DatalabMarkerLoader:
                     data=form_data,
                     files=files,
                     headers=headers,
+                    timeout=REQUESTS_TIMEOUT_PROCESSING,
                 )
                 response.raise_for_status()
                 result = response.json()
@@ -129,7 +131,7 @@ class DatalabMarkerLoader:
             for _ in range(300):  # Up to 10 minutes
                 time.sleep(2)
                 try:
-                    poll_response = requests.get(check_url, headers=headers)
+                    poll_response = requests.get(check_url, headers=headers, timeout=REQUESTS_TIMEOUT_API)
                     poll_response.raise_for_status()
                     poll_result = poll_response.json()
                 except (requests.HTTPError, ValueError) as e:

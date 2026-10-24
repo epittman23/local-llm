@@ -13,7 +13,7 @@ from __future__ import annotations
 import pytest
 
 from local_llm.benchmarks.analysis import report
-from local_llm.benchmarks.analysis.report_figures import Figures
+from local_llm.benchmarks.analysis.report_figures import Figures, unicode_bars
 
 
 class Rows:
@@ -233,3 +233,15 @@ def test_sections_are_renumbered(title):
     rows.run([True] * 10)
     rows.run([i < 5 for i in range(10)], system='sha1')
     assert title in build(rows).markdown
+
+
+def test_unicode_bars_draws_one_line_per_label():
+    lines = unicode_bars(['a', 'bb'], [2.0, None], width=4)
+
+    assert lines == ['a   ████  2', 'bb        -']
+
+
+def test_unicode_bars_refuses_labels_and_values_of_different_lengths():
+    # zip(strict=True): a dropped bar would otherwise go unnoticed.
+    with pytest.raises(ValueError):
+        unicode_bars(['a', 'b'], [1.0])

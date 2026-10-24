@@ -40,6 +40,7 @@ from local_llm.models.folders import Folders
 from local_llm.models.messages import MessageForm
 from local_llm.models.users import Users
 from local_llm.utils.auth import create_token
+from local_llm.utils.background import run_in_background
 from local_llm.utils.misc import parse_duration
 from local_llm.utils.task import prompt_template
 from local_llm.utils.terminals import get_terminal_server_url
@@ -241,7 +242,7 @@ async def scheduler_worker_loop(app) -> None:
                 from local_llm.utils.timers import claim_due_timers, execute_due_timer
 
                 for timer_id, claim_id in await claim_due_timers(int(time.time_ns()), limit=10):
-                    asyncio.create_task(execute_due_timer(app, timer_id, claim_id))
+                    run_in_background(execute_due_timer(app, timer_id, claim_id))
             except Exception:
                 log.exception('Scheduler: timer error')
 
@@ -259,7 +260,7 @@ async def scheduler_worker_loop(app) -> None:
                     if batch:
                         log.info('Claimed %s due automation(s)', len(batch))
                     for automation in batch:
-                        asyncio.create_task(execute_automation(app, automation))
+                        run_in_background(execute_automation(app, automation))
                 except Exception:
                     log.exception('Scheduler: automation error')
 
@@ -723,7 +724,7 @@ async def _check_calendar_alerts(app) -> None:
     if not upcoming:
         return
 
-    for event, user_tz in upcoming:
+    for event, _user_tz in upcoming:
         # Skip if already alerted for this start time
         if event.meta and event.meta.get('alerted_at'):
             continue

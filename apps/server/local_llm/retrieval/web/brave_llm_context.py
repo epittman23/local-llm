@@ -3,6 +3,7 @@ import time
 
 import requests
 
+from local_llm.env import REQUESTS_TIMEOUT_API
 from local_llm.retrieval.web.main import SearchResult, get_filtered_results
 
 log = logging.getLogger(__name__)
@@ -41,13 +42,13 @@ def search_brave_llm_context(
         'maximum_number_of_tokens': context_tokens,
     }
 
-    response = requests.get(url, headers=headers, params=params)
+    response = requests.get(url, headers=headers, params=params, timeout=REQUESTS_TIMEOUT_API)
 
     # Handle 429 rate limiting - same rate limits as web search
     if response.status_code == 429:
         log.info('Brave LLM Context API rate limited (429), retrying after 1 second...')
         time.sleep(1)
-        response = requests.get(url, headers=headers, params=params)
+        response = requests.get(url, headers=headers, params=params, timeout=REQUESTS_TIMEOUT_API)
 
     response.raise_for_status()
 

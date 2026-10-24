@@ -32,6 +32,15 @@ env:
   BUN_VERSION: '1.4.2'
   PYTHON_VERSION: '3.12'
   PRE_COMMIT_VERSION: '4.6.2'
+  # diff-cover checks coverage of the lines a pull request changes (backend
+  # and web jobs). The Makefile's DIFF_COVER_VERSION is the same; so is the
+  # bar, DIFF_COVER_FAIL_UNDER (percent of changed, coverable lines).
+  DIFF_COVER_VERSION: '10.6.0'
+  # The backend's type checker (the `types` job); the Makefile's
+  # BASEDPYRIGHT_VERSION is the same. A new version can change what it
+  # reports, so bump it by hand and record the baseline with `make baselines`.
+  BASEDPYRIGHT_VERSION: '1.40.2'
+  DIFF_COVER_FAIL_UNDER: '80'
   # The version .pre-commit-config.yaml's gitleaks hook pins, by digest; the
   # Makefile's GITLEAKS_IMAGE is the same string.
   GITLEAKS_IMAGE: zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
@@ -45,7 +54,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -106,15 +115,28 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0 # diff-cover diffs against the base commit
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       - run: bun install --frozen-lockfile
       - run: bunx astro check
-      - run: bun run test:unit
+      - run: bun run test:coverage
+      # lcov names files relative to apps/web; diff-cover needs them
+      # relative to the repository, like git's diff.
+      - name: Coverage of the changed lines
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          sed 's#^SF:#SF:apps/web/#' coverage/lcov.info > coverage/lcov-repo.info
+          cd ../..
+          uvx "diff-cover@${DIFF_COVER_VERSION}" apps/web/coverage/lcov-repo.info \
+            --compare-branch="$BASE_SHA" --fail-under="$DIFF_COVER_FAIL_UNDER"
       - run: bun run build
 
   e2e:
@@ -203,7 +225,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+          fetch-depth: 0 # diff-cover diffs against the base commit
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
@@ -217,12 +240,109 @@ jobs:
       - name: Install
         run: uv sync --frozen --no-install-project --group dev
       - name: pytest
-        run: uv run --frozen python -m pytest tests -q
+        run: uv run --frozen python -m pytest tests -q --cov --cov-report=xml
+      - name: Coverage of the changed lines
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          uvx "diff-cover@${DIFF_COVER_VERSION}" coverage.xml \
+            --compare-branch="$BASE_SHA" --fail-under="$DIFF_COVER_FAIL_UNDER"
+
+  # basedpyright over the backend, held to apps/server/basedpyright-baseline.json:
+  # the inherited findings are allowed, any new one fails
+  # (.github/scripts/lint_ratchet.py). It needs the backend's dependencies
+  # installed to resolve imports.
+  types:
+    name: Backend types (basedpyright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/server
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: apps/server/uv.lock
+      - name: Install
+        run: uv sync --frozen --no-install-project
+      # basedpyright exits non-zero whenever it reports anything; the
+      # baseline decides. An empty report means it crashed.
+      - name: basedpyright
+        run: uvx "basedpyright@${BASEDPYRIGHT_VERSION}" --outputjson > basedpyright.json || [ -s basedpyright.json ]
+      - name: Against the baseline
+        run: python3 ../../.github/scripts/lint_ratchet.py check basedpyright basedpyright.json basedpyright-baseline.json
+
+  # Starts the real backend, as `make backend` does, and uses it: the pytest
+  # suite only imports the app and Playwright mocks it, so nothing else
+  # would notice a backend that no longer boots. tests/boot_smoke.py has
+  # what it checks. The images are infra/docker-compose.yml's.
+  boot:
+    name: Boot (real stack)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: local_llm
+          POSTGRES_PASSWORD: ci-only-not-a-secret
+          POSTGRES_DB: local_llm
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U local_llm"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7.4.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      LLLM_SECRET_KEY: ci-only-not-a-secret-0123456789abcdef0123456789abcdef
+      DATABASE_URL: postgresql://local_llm:ci-only-not-a-secret@localhost:5432/local_llm
+      REDIS_URL: redis://localhost:6379/0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: apps/server/uv.lock
+      # The backend serves the built frontend at /, so build it first.
+      - name: Build the frontend
+        working-directory: apps/web
+        run: bun install --frozen-lockfile && bun run build
+      - name: Install the backend
+        working-directory: apps/server
+        run: uv sync --frozen --no-install-project
+      - name: Boot smoke
+        working-directory: apps/server
+        run: uv run --frozen python tests/boot_smoke.py
 
   ci-ok:
     name: CI passed
     if: always()
-    needs: [pre-commit, secrets, web, e2e, desktop, backend]
+    needs: [pre-commit, secrets, web, e2e, desktop, backend, types, boot]
     runs-on: ubuntu-latest
     steps:
       - name: Every job succeeded

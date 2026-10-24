@@ -870,7 +870,7 @@ async def get_user_profile_image_by_id(user_id: str, user=Depends(get_verified_u
                     header, base64_data = user.profile_image_url.split(',', 1)
                     image_data = base64.b64decode(base64_data)
                     image_buffer = io.BytesIO(image_data)
-                    media_type = header.split(';')[0].lstrip('data:').lower()
+                    media_type = header.split(';')[0].removeprefix('data:').lower()
 
                     if media_type not in PROFILE_IMAGE_ALLOWED_MIME_TYPES:
                         return FileResponse(f'{STATIC_DIR}/user.png')
