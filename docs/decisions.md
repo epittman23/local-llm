@@ -7,6 +7,31 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-24**: **ruff now selects bug-finding rules, every finding
+  fixed and none exempted.** Added rules:
+  - bugbear B005, B006, B007, B008, B023, B034 and B905;
+  - S113 (`requests` calls without a timeout);
+  - RUF006 (dangling asyncio tasks);
+  - every stable flake8-async rule except ASYNC110.
+
+  FastAPI's `Depends`, `Query` and similar declarative defaults are
+  configured as immutable calls for B008, rather than exempted.
+
+  The fixes include real bugs:
+  - `.lstrip('data:')` stripped characters rather than the prefix, so
+    `data:application/pdf` reached image providers as `pplication/pdf`;
+  - the tune cut's sign test paired ratios from different items after the
+    first gap;
+  - all 30 `requests` calls could hang a worker forever. They now get
+    `(connect, read)` timeouts sized for search APIs, slow generation and
+    document processing;
+  - ten fire-and-forget tasks could be garbage-collected mid-run. They now
+    go through `utils/background.py`.
+
+  ASYNC110 stays off. Its one remaining finding polls Redis for tasks that
+  may run on another instance, and it can go once task cleanup publishes a
+  "chat idle" message. The basedpyright baseline shrank from 2,247 to
+  2,239.
 - **2026-10-23** (closing): **The backend is type-checked, and `apps/web`
   is linted, each against a baseline that only shrinks.**
   - basedpyright runs in standard mode over the backend, in a new
