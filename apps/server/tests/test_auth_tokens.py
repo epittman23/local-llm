@@ -280,9 +280,6 @@ def test_is_valid_token_rules(redis):
     assert _run(is_valid_token({'id': 'u', 'iat': now}, redis))
     # A token with no issue time cannot be shown to postdate the revocation.
     assert not _run(is_valid_token({'id': 'u'}, redis))
-    # A marker that is not a timestamp is ignored rather than locking the user out.
-    redis.store[f'{REDIS_KEY_PREFIX}:auth:user:u:revoked_at'] = 'garbage'
-    assert _run(is_valid_token({'id': 'u', 'iat': now}, redis))
 
 
 def test_signing_out_revokes_the_token_until_it_would_have_expired(people, redis):

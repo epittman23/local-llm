@@ -6,14 +6,17 @@ migrated SQLite database. Only side effects are faked (events, task
 cancellation, live response streams, context usage). Pinned:
 
 - every per-chat route refuses a user who does not own the chat, and leaves
-  the chat as it was; an admin reaches another user's chat only with
-  ENABLE_ADMIN_CHAT_ACCESS on, and never edits it through the owner routes;
+  the chat as it was;
+- an admin reads another user's chat (GET /{id}), share links and chat list
+  only with ENABLE_ADMIN_CHAT_ACCESS on, and cannot update, pin, archive,
+  share, tag or move it even then (the message routes, delete and cloning a
+  share are not pinned for admins here);
 - a share link (/share/{share_id}) serves the snapshot to its owner, to users
   and group members granted read, and to anonymous visitors only under an
   anyone grant; a pending user counts as anonymous;
 - the share's grants are set by its owner only, filtered by the owner's
   sharing permissions, start empty on a new share and are cleared on unshare;
-- cloning a share needs the same grant as reading it.
+- cloning a share needs, for a user, the same grant as reading it.
 
 Run from apps/server:
 
