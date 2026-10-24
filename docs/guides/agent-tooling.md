@@ -7,7 +7,8 @@ The skills and the reviewer agent are instructions to the agent. They run
 inside it, so whatever the agent reads goes to its model provider as
 usual; they add no other network path. codebase-memory-mcp runs on this
 machine; its README says it makes no network requests of its own and
-collects no telemetry (stated upstream, not measured here).
+collects no telemetry (stated upstream). On 2026-10-24 a full index ran
+with networking disabled (`unshare -rn`), so indexing at least needs none.
 
 ## Project skills (`.claude/skills/`)
 
@@ -22,6 +23,7 @@ that applies it.
 | `pr-gate` | before opening or updating a PR, and when `PR gate` fails | predicting the tripwire's findings from the diff, the no-attribution rule, `make pr-gate`, the `## Gate changes` section, asking the owner |
 | `new-migration` | any model or table change, or a recorded discontinuity | finding the head revision, an append-only revision, the `benchmark_schema_note` row, the schema-drift test |
 | `serving-change` | any edit to `benchmarks/serving/` or a profile | every place a launch-flag change touches, so `config_id` stays right |
+| `reindex` | after a pull, checkout or merge, or when graph answers look stale | rebuilding the codebase-memory-mcp index, `full` vs `fast`, checking it against `grep` |
 
 Claude Code offers them automatically when a task matches their
 description, and `/docs-sync` (and so on) runs one by name.
@@ -63,8 +65,8 @@ codebase-memory-mcp --version   # 0.12.1
 ```
 
 **First use:** restart Claude Code in the checkout and approve the project
-server when asked (or under `/mcp`). Then index the repository once, either
-by asking the agent to run `index_repository` or from a shell:
+server when asked (or under `/mcp`). Then index the repository once. The
+`reindex` skill does this and checks the result; from a shell:
 
 ```sh
 codebase-memory-mcp cli index_repository --repo-path "$PWD" --mode fast

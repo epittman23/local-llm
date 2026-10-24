@@ -63,7 +63,8 @@ Agent tooling, described in `docs/guides/agent-tooling.md`:
   (the maintenance-policy checklist), `pr-gate` (the CI tripwire before and
   after a push), `new-migration` (append-only Alembic revisions and
   `benchmark_schema_note` rows), `serving-change` (launch flags and the
-  `config_id` fingerprint).
+  `config_id` fingerprint), `reindex` (refreshing the codebase-memory-mcp
+  index).
 - **`.claude/agents/reviewer.md`** — a pre-PR reviewer subagent (reports, never edits).
 - **`.mcp.json`** — project MCP servers; today only `codebase-memory-mcp`,
   a local code-graph index (binary installed by hand
