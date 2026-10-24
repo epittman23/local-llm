@@ -54,7 +54,8 @@ async def search_searxng(
         'format': 'json',
         'pageno': 1,
         'safesearch': kwargs.get('safesearch', '1'),
-        'language': kwargs.get('language', 'all').strip().rstrip(','),
+        # A stored setting can be null; treat that as the default.
+        'language': (kwargs.get('language') or 'all').strip().rstrip(','),
         'time_range': kwargs.get('time_range', ''),
         'categories': ''.join(kwargs.get('categories', [])),
         'theme': 'simple',
