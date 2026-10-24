@@ -1,4 +1,4 @@
-# Assistant tools: code interpreter, web search, retrieval
+# Assistant tools: code interpreter, web search, retrieval, memory
 
 The services and models behind three of the assistant's tools, added on
 2026-10-24. The services run from `infra/docker-compose.yml` and start and
@@ -72,3 +72,69 @@ while Brave and DuckDuckGo did not answer.
 **Settings** (Admin Settings > Web Search): turn web search on, set the
 engine to `searxng` and the query URL to
 `http://127.0.0.1:8080/search?q=<query>`.
+
+**Speed.** SearXNG answers in a second or two, but a web search in chat
+also fetches each result page and embeds it. On 2026-10-24, five results
+took 107 s end to end on this laptop's CPU (embedding with bge-m3, below).
+Fewer results (`WEB_SEARCH_RESULT_COUNT`), or "Bypass Embedding and
+Retrieval", which passes the fetched pages to the model whole, are the
+levers. Neither has been measured yet.
+
+## Knowledge retrieval
+
+Since 2026-10-24 knowledge bases use:
+
+| Role | Model | Size | Notes |
+|---|---|---|---|
+| Embeddings | `BAAI/bge-m3` | about 2.2 GB | multilingual, 1024 dimensions, up to 8,192 tokens |
+| Reranker | `BAAI/bge-reranker-v2-m3` | about 2.2 GB | a cross-encoder that scores each candidate passage against the query |
+
+They replace `sentence-transformers/all-MiniLM-L6-v2` (384 dimensions,
+English only, about 0.1 GB) with no reranker. Both run on the CPU (torch is
+the CPU build) and load from the Hugging Face cache, since `make backend`
+runs offline; see [dependencies.md](dependencies.md#offline-model-cache) for
+downloading them.
+
+Hybrid search is on, so each query is answered by BM25 keyword search
+and vector search together. The top 5 candidates go to the reranker, and
+the best 3 are kept (`TOP_K` 5, `TOP_K_RERANKER` 3).
+
+The vector column stays `vector(1536)`: the app pads shorter embeddings
+with zeros, which leaves cosine similarity unchanged, so a 1024-dimension
+model needs no migration. **Changing the embedding model later means
+re-embedding every knowledge base**, since vectors from two models are not
+comparable. The database held no knowledge, files or memories when this
+model was chosen.
+
+**Measured 2026-10-24** (this laptop's CPU; three one-paragraph files in
+one knowledge base; queries worded unlike their answers):
+
+| Query | Top hit | Reranker scores |
+|---|---|---|
+| "how do I compare before and after measurements on the same people?" | the paired t-test file | 0.979, 0.006, 0.000 |
+| "smoothing a noisy daily series" | the rolling mean file | 0.820, 0.000, 0.000 |
+| "when was the tower in France built?" | the Eiffel Tower file | 0.952, 0.000, 0.000 |
+
+Each query took about 1.8 s. Loading both models offline took about 4 s
+each.
+
+**Settings** (Admin Settings > Documents): embedding engine "Default
+(SentenceTransformers)" with model `BAAI/bge-m3`; hybrid search on;
+reranking engine "Default (SentenceTransformers)" with model
+`BAAI/bge-reranker-v2-m3`; top K 5, top K reranker 3.
+
+## Memory background review
+
+With memories on, the app can also review a chat every 10th user turn
+and add or update memories from it (`memories.background_review.enable`,
+`memories.review_interval_turns`). It is on since 2026-10-24. Three things
+to know:
+
+- **No page has a switch for it.** It is set through the admin config
+  import (`POST /api/v1/configs/import` with
+  `{"config": {"memories.background_review.enable": true}}`).
+- **It only runs on chats with the memory feature on**, and it asks the
+  chat's own model, so on OpenRouter each review is one more request
+  carrying the last 16 messages.
+- **Not yet seen working end to end.** The setting is stored, but no
+  ten-turn chat has run since.
