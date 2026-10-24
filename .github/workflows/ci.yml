@@ -32,6 +32,11 @@ env:
   BUN_VERSION: '1.4.2'
   PYTHON_VERSION: '3.12'
   PRE_COMMIT_VERSION: '4.6.2'
+  # diff-cover checks coverage of the lines a pull request changes (backend
+  # and web jobs). The Makefile's DIFF_COVER_VERSION is the same; so is the
+  # bar, DIFF_COVER_FAIL_UNDER (percent of changed, coverable lines).
+  DIFF_COVER_VERSION: '10.6.0'
+  DIFF_COVER_FAIL_UNDER: '80'
   # The version .pre-commit-config.yaml's gitleaks hook pins, by digest; the
   # Makefile's GITLEAKS_IMAGE is the same string.
   GITLEAKS_IMAGE: zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
@@ -106,15 +111,28 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0 # diff-cover diffs against the base commit
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
       - run: bun install --frozen-lockfile
       - run: bunx astro check
-      - run: bun run test:unit
+      - run: bun run test:coverage
+      # lcov names files relative to apps/web; diff-cover needs them
+      # relative to the repository, like git's diff.
+      - name: Coverage of the changed lines
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          sed 's#^SF:#SF:apps/web/#' coverage/lcov.info > coverage/lcov-repo.info
+          cd ../..
+          uvx "diff-cover@${DIFF_COVER_VERSION}" apps/web/coverage/lcov-repo.info \
+            --compare-branch="$BASE_SHA" --fail-under="$DIFF_COVER_FAIL_UNDER"
       - run: bun run build
 
   e2e:
@@ -203,6 +221,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0 # diff-cover diffs against the base commit
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -217,7 +236,14 @@ jobs:
       - name: Install
         run: uv sync --frozen --no-install-project --group dev
       - name: pytest
-        run: uv run --frozen python -m pytest tests -q
+        run: uv run --frozen python -m pytest tests -q --cov --cov-report=xml
+      - name: Coverage of the changed lines
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          uvx "diff-cover@${DIFF_COVER_VERSION}" coverage.xml \
+            --compare-branch="$BASE_SHA" --fail-under="$DIFF_COVER_FAIL_UNDER"
 
   # Starts the real backend, as `make backend` does, and uses it: the pytest
   # suite only imports the app and Playwright mocks it, so nothing else

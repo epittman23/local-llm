@@ -66,6 +66,7 @@ timeline
       2026-10-23 (night) : CI tripwire (PR gate) : PRs that change CI gates, weaken tests or edit append-only files fail until the owner approves with a label and a written justification : no agent bypasses it without asking : conventional titles and no attribution enforced
       2026-10-23 (late night) : CI boots the real backend (Postgres, Redis, a stub model) and uses it : sign-up, a chat completion, every GET route swept for server errors, a clean shutdown : models checked against the migrations, 108 inherited differences recorded as a baseline that only shrinks
       2026-10-23 (last) : Every frontend API call checked against the backend's routes, by method and path : the mocked e2e suite can no longer hide a renamed or removed route
+      2026-10-23 (final) : 80% coverage of the lines each PR changes, backend and web (diff-cover) : coverage-ignore comments trip the PR gate
     section Near-Term
       "~1 week" : Resolve the blocking rack hole-type question : confirm riser and PSU questions : re-verify current component pricing
       "~2-4 weeks" : Finish the benchmark upgrade : HumanEval+ and MBPP+ replace HumanEval and MBPP : a LiveCodeBench slice with a per-run release-date window : a llama-bench pre-screen driven by Optuna

@@ -201,6 +201,7 @@ packages = ["local_llm"]
 dev = [
     "pytest",
     "pytest-asyncio>=1.0.0",
+    "pytest-cov>=7.1.0",
     "ruff>=0.17.0",
 ]
 
@@ -220,6 +221,15 @@ explicit = true
 
 [tool.uv.sources]
 torch = { index = "pytorch-cpu" }
+
+# Coverage for CI's diff-coverage check (diff-cover on the lines a pull
+# request changes; docs/guides/testing.md). Applied migrations are
+# generated, and they run in subprocesses (test_imports, test_schema_drift,
+# the boot smoke) that coverage doesn't follow.
+[tool.coverage.run]
+source = ["local_llm"]
+omit = ["local_llm/migrations/versions/*"]
+relative_files = true
 
 [tool.ruff]
 line-length = 120

@@ -20,8 +20,8 @@ The root Makefile mirrors CI job for job, with the same commands:
 |---|---|---|
 | `make lint` | Lint and format (pre-commit) | `pre-commit run --all-files` (pinned to CI's pre-commit version) |
 | `make secrets` | Secrets (gitleaks) | gitleaks over the whole git history (CI scans a pull request's own commits, and main's whole history) |
-| `make test-backend` | Backend (pytest) | `uv lock --check`, `uv sync --frozen --group dev`, then pytest with a throwaway pgvector Postgres on `127.0.0.1:55432` (`LLLM_TEST_PG_PORT`), so `test_the_app_imports` runs instead of skipping |
-| `make test-web` | Web (astro check, vitest, build) | `bunx astro check`, `bun run test:unit`, `bun run build` |
+| `make test-backend` | Backend (pytest) | `uv lock --check`, `uv sync --frozen --group dev`, then pytest with coverage and a throwaway pgvector Postgres on `127.0.0.1:55432` (`LLLM_TEST_PG_PORT`), so `test_the_app_imports` runs instead of skipping; then diff-cover on the changed lines |
+| `make test-web` | Web (astro check, vitest, build) | `bunx astro check`, `bun run test:coverage` and diff-cover on the changed lines, `bun run build` |
 | `make test-e2e` | Web e2e (Playwright) | `bunx playwright test --workers=2` |
 | `make test-desktop` | Desktop (typecheck, vitest, package smoke) | `bun run typecheck`, `bun run test:unit`, `bun run package:dir` (an unpacked package, no `.rpm`) |
 | `make test-boot` | Boot (real stack) | builds `apps/web`, then `tests/boot_smoke.py` against a throwaway Postgres (`:55433`) and Redis (`:56379`) |
@@ -33,6 +33,34 @@ so it never touches the `make backend` database. Any pytest run, `make` or
 not, points `DATA_DIR` at a temp directory (`tests/conftest.py`), so it
 never touches `apps/server/data`. Stop `make frontend`
 before `make test-e2e` (see below).
+
+## Coverage of the changed lines
+
+The backend and web jobs measure coverage: pytest-cov for `local_llm`, and
+Vitest's v8 provider for `apps/web/src`. On a pull request they then run
+[diff-cover](https://github.com/Bachmann1234/diff_cover) against the PR's
+base commit.
+
+- **The rule.** At least **80%** of the lines the PR adds or changes, and
+  that coverage can measure, must run under the unit tests. The setting is
+  `DIFF_COVER_FAIL_UNDER` in `ci.yml` and the Makefile.
+- **Why changed lines.** Nothing gates the overall figure (backend about
+  42%, web about 45% on 2026-10-23). The bar applies only to what a PR
+  touches, so new code arrives with tests and old code gains them as it
+  changes.
+- **Calibration.** Recent PRs that shipped with tests scored 81% (#367),
+  84% (#374), 94% (#371) and 100% (#375). #368, a small change at seven
+  call sites in hooks that only Playwright exercises, scored 56% and would
+  have needed unit tests for those hooks.
+- **Locally.** `make test-backend` and `make test-web` run the same check
+  against `DIFF_BASE`, which defaults to `origin/main`. On a stacked branch
+  that includes the parent PRs' lines too.
+- **Excluded from measurement.** Coverage does not measure:
+  - applied migrations, which run in subprocesses coverage doesn't follow;
+  - shadcn/ui's generated components;
+  - the desktop app, whose Electron glue Vitest can't run.
+- **No ignore comments.** A `# pragma: no cover` or `v8 ignore` comment
+  trips the PR gate. Write the test instead.
 
 ## The PR gate and the tripwire
 
@@ -47,6 +75,7 @@ Besides `CI passed`, every pull request gets a **`PR gate`** check
   - edits to a gate file;
   - new skips or suppressions;
   - deleted or fewer tests;
+  - coverage-ignore comments;
   - edited golden files;
   - edits to append-only files.
 

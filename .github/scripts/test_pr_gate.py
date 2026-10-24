@@ -190,6 +190,9 @@ class SuppressionTests(unittest.TestCase):
             ('apps/web/src/a.test.ts', "it.skipIf(ci)('renders', () => {"),
             ('apps/web/src/a.tsx', '// biome-ignore lint/a11y/useKeyWithClickEvents: x'),
             ('apps/web/src/a.ts', '// @ts-expect-error'),
+            ('apps/web/src/a.ts', '/* v8 ignore next */'),
+            ('apps/web/src/a.ts', '/* istanbul ignore else */'),
+            ('apps/server/local_llm/x.py', 'if x:  # pragma: no branch'),
         ):
             self.assertTrue(g.tripwire(pr([change(path, patch=f'@@ -1 +1 @@\n+{line}\n')]), no_files), line)
 

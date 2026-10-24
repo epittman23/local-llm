@@ -54,6 +54,12 @@ LLLM_BACKEND_HOST ?= 127.0.0.1
 LLLM_UVICORN_FLAGS ?= --reload
 # Keep in sync with PRE_COMMIT_VERSION in .github/workflows/ci.yml.
 PRE_COMMIT_VERSION := 4.6.2
+# Keep in sync with DIFF_COVER_VERSION and DIFF_COVER_FAIL_UNDER in
+# .github/workflows/ci.yml. DIFF_BASE is what the changed lines are measured
+# against: CI uses the pull request's base commit.
+DIFF_COVER_VERSION := 10.6.0
+DIFF_COVER_FAIL_UNDER := 80
+DIFF_BASE ?= origin/main
 # Keep in sync with GITLEAKS_IMAGE in .github/workflows/ci.yml.
 GITLEAKS_IMAGE := zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
 # Host port for the throwaway Postgres `make test-backend` starts; not 5432,
@@ -219,7 +225,9 @@ test-backend:
 	done; \
 	LLLM_SECRET_KEY=test-only-not-a-secret-0123456789abcdef0123456789abcdef \
 	TEST_DATABASE_URL="postgresql://local_llm:test-only-not-a-secret@127.0.0.1:$(LLLM_TEST_PG_PORT)/local_llm" \
-	uv run --frozen python -m pytest tests -q
+	uv run --frozen python -m pytest tests -q --cov --cov-report=xml; \
+	uvx "diff-cover@$(DIFF_COVER_VERSION)" coverage.xml \
+		--compare-branch="$(DIFF_BASE)" --fail-under="$(DIFF_COVER_FAIL_UNDER)"
 
 # CI's "Boot (real stack)": the backend started as `make backend` starts it,
 # against a throwaway Postgres and Redis (infra/docker-compose.yml's images)
@@ -253,12 +261,16 @@ test-boot:
 	REDIS_URL="redis://127.0.0.1:$(LLLM_BOOT_REDIS_PORT)/0" \
 	uv run --frozen python tests/boot_smoke.py
 
-# CI's "Web (astro check, vitest, build)".
+# CI's "Web (astro check, vitest, build)", with the same coverage of the
+# changed lines as CI (against DIFF_BASE).
 test-web:
 	@cd "$(WEB_DIR)" && \
 	bun install --frozen-lockfile && \
 	bunx astro check && \
-	bun run test:unit && \
+	bun run test:coverage && \
+	sed 's#^SF:#SF:apps/web/#' coverage/lcov.info > coverage/lcov-repo.info && \
+	(cd "$(REPO_ROOT)" && uvx "diff-cover@$(DIFF_COVER_VERSION)" apps/web/coverage/lcov-repo.info \
+		--compare-branch="$(DIFF_BASE)" --fail-under="$(DIFF_COVER_FAIL_UNDER)") && \
 	bun run build
 
 # CI's "Web e2e (Playwright, mocked backend)". Two workers, CI's count: at the

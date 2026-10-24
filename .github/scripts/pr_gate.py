@@ -125,7 +125,7 @@ SUPPRESSIONS = {
         (re.compile(r'#\s*ruff\s*:\s*noqa', re.IGNORECASE), '`# ruff: noqa` comments'),
         (re.compile(r'#\s*type\s*:\s*ignore'), '`# type: ignore` comments'),
         (re.compile(r'#\s*pyright\s*:\s*ignore'), '`# pyright: ignore` comments'),
-        (re.compile(r'#\s*pragma\s*:\s*no\s*cover'), '`# pragma: no cover` comments'),
+        (re.compile(r'#\s*pragma\s*:\s*no\s*(cover|branch)'), '`# pragma: no cover/branch` comments'),
     ],
     'js': [
         (
@@ -136,6 +136,7 @@ SUPPRESSIONS = {
         (re.compile(r'biome-ignore'), '`biome-ignore` comments'),
         (re.compile(r'@ts-(ignore|expect-error|nocheck)'), 'TypeScript suppressions'),
         (re.compile(r'eslint-disable'), '`eslint-disable` comments'),
+        (re.compile(r'\b(v8|c8|istanbul)\s+ignore\b'), 'coverage-ignore comments'),
     ],
 }
 LANGUAGE_BY_SUFFIX = {
