@@ -184,6 +184,19 @@ shadcn/ui frontend, `apps/desktop/` is the Electron desktop app, `infra/` holds 
   with CUDA at `~/llama.cpp/build/bin` (`LLAMA_BIN`). Packaging the desktop
   app as an `.rpm` needs `rpm-build` and `libxcrypt-compat`.
 
+## Agent tooling
+
+Project skills in `.claude/skills/` turn the rules below into procedures:
+`docs-sync` (the maintenance policy), `pr-gate` (the CI tripwire),
+`new-migration` (the append-only schema) and `serving-change` (launch flags
+and the `config_id` fingerprint). Use the one that matches the change. The
+`reviewer` subagent (`.claude/agents/`) reviews a branch before
+its PR. `.mcp.json` registers `codebase-memory-mcp`, a local code-graph
+index whose binary is installed separately. Install, first use and caveats
+are in [docs/guides/agent-tooling.md](docs/guides/agent-tooling.md). The
+skills point at this file; when a rule here changes, update the skill that
+applies it in the same change.
+
 ## Backend (`apps/server`)
 
 - Dependencies live only in `apps/server/pyproject.toml` + `uv.lock`; change
@@ -384,7 +397,7 @@ co-author in commits or pull requests; this includes adding
 | [MAP.md](MAP.md) | where everything lives |
 | [docs/decisions.md](docs/decisions.md) | dated log of why things are the way they are |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | history and planned direction |
-| [docs/guides/](docs/guides/) | llama.cpp, telemetry, benchmarks, testing, dependencies, frontend, desktop, model downloads |
+| [docs/guides/](docs/guides/) | llama.cpp, telemetry, benchmarks, testing, dependencies, frontend, desktop, model downloads, agent tooling |
 | [docs/proposals/](docs/proposals/) | not yet built (the dedicated inference server) |
 | [docs/history/](docs/history/) | completed records: the migration plan, reviews, migration-era mappings |
 | [docs/serving-baseline/](docs/serving-baseline/README.md) | test input pinning the serving fingerprint |

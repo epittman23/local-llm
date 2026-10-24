@@ -237,3 +237,6 @@ __marimo__/
 
 # Claude Code agent worktrees (local checkouts, never committed)
 .claude/worktrees/
+# Claude Code's personal settings (permission allowlists); .claude/skills/
+# and .claude/agents/ are tracked
+.claude/settings.local.json

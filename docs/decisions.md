@@ -7,6 +7,34 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-24** (later): **Agent tooling is tracked in the repo:
+  four project skills, a reviewer subagent and one project MCP server.**
+  - `.claude/skills/`: `docs-sync`, `pr-gate`, `new-migration` and
+    `serving-change`. Each one is a procedure for a rule AGENTS.md already
+    states, and points at that rule rather than copying it, so the rules
+    keep one source.
+  - `.claude/agents/reviewer.md`: a pre-PR reviewer, instructed not to
+    edit. Nobody
+    reviews PRs here before they merge, so CI was the only check; the
+    reviewer adds a reading of what CI cannot judge (docs in step,
+    fingerprint safety, gate findings) before a PR is opened.
+  - `.mcp.json` registers codebase-memory-mcp v0.12.1 (MIT), a local
+    Tree-sitter code graph for structural questions ("what calls X?") over
+    an inherited codebase too large to read whole. It was chosen over
+    Graft, which writes its own instruction files and hooks into the repo,
+    where they would compete with AGENTS.md and MAP.md. Its README
+    says it makes no network requests of its own (not measured here), and
+    its index lives outside the repo. Its binary is
+    installed by hand from the v0.12.1 release with a checksum check
+    (`.mcp.json` runs whatever version is on `PATH`),
+    rather than with its `curl | bash` installer, which also rewrites
+    agent configs.
+
+  `.claude/` was untracked local state until now. Its local files
+  (`settings.local.json`, `worktrees/`) stay out of git, and both are
+  now gitignored: `settings.local.json` holds personal permission
+  allowlists, and nothing stopped it being committed by mistake. Details:
+  `docs/guides/agent-tooling.md`.
 - **2026-10-24**: **ruff now selects bug-finding rules, every finding
   fixed and none exempted.** Added rules:
   - bugbear B005, B006, B007, B008, B023, B034 and B905;
