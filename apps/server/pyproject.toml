@@ -277,6 +277,23 @@ select = [
   "B905", # flake8-bugbear: zip() without strict=
   "S113", # flake8-bandit: requests call without a timeout
   "RUF006", # asyncio task created and not stored, so it can be collected mid-run
+  # flake8-async, every stable rule but ASYNC110 (busy wait), listed one by
+  # one: utils/subagents.py polls Redis for a chat's active tasks, which may
+  # run on another instance, and no in-process event can stand in for that.
+  "ASYNC100", # cancel scope with no checkpoint
+  "ASYNC105", # trio sync call not awaited
+  "ASYNC109", # async function with a timeout parameter
+  "ASYNC115", # sleep(0) instead of a checkpoint
+  "ASYNC116", # long sleep instead of sleep_forever
+  "ASYNC210", # blocking HTTP call in an async function
+  "ASYNC212", # blocking httpx call in an async function
+  "ASYNC220", # blocking subprocess creation in an async function
+  "ASYNC221", # blocking subprocess run in an async function
+  "ASYNC222", # blocking wait for a process in an async function
+  "ASYNC230", # blocking open() in an async function
+  "ASYNC240", # blocking os.path or pathlib call in an async function
+  "ASYNC250", # blocking input() in an async function
+  "ASYNC251", # blocking time.sleep() in an async function
 ]
 
 # Plugin configs:

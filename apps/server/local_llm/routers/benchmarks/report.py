@@ -8,6 +8,7 @@ land (DATA_DIR/benchmarks/reports/<run>/) and how they're served back.
 
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 from pathlib import Path
@@ -35,6 +36,13 @@ class ReportForm(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
 
+def _write_report(out_dir: Path, result) -> None:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / 'report.md').write_text(result.markdown)
+    for fig in result.figures:
+        (out_dir / fig.name).write_bytes(fig.data)
+
+
 @router.post('/')
 async def generate_report(form_data: ReportForm, user=Depends(get_admin_user)):
     try:
@@ -50,11 +58,7 @@ async def generate_report(form_data: ReportForm, user=Depends(get_admin_user)):
         return {'error': str(exc)}
 
     run_dir = f'{time.strftime("%Y-%m-%d", time.gmtime())}-{uuid.uuid4().hex[:6]}'
-    out_dir: Path = REPORTS_DIR / run_dir
-    out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / 'report.md').write_text(result.markdown)
-    for fig in result.figures:
-        (out_dir / fig.name).write_bytes(fig.data)
+    await asyncio.to_thread(_write_report, REPORTS_DIR / run_dir, result)
 
     base = f'/api/v1/benchmarks/report/files/{run_dir}'
     return {

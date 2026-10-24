@@ -17,6 +17,7 @@ Run from apps/server:
 
 from __future__ import annotations
 
+import asyncio
 import time
 
 import pytest
@@ -161,3 +162,50 @@ async def test_pgid_works_for_a_command_backed_server(monkeypatch):
         server.pgid()
     finally:
         await server.stop()
+
+
+async def _trap_set(server: Server) -> None:
+    """Until the stub has set its SIGINT trap and said so."""
+    for _ in range(500):
+        if 'ready' in server.tail:
+            return
+        await asyncio.sleep(0.01)
+    raise AssertionError('the stub server never came up')
+
+
+@pytest.mark.asyncio
+async def test_stop_returns_as_soon_as_the_server_exits_on_sigint(monkeypatch):
+    # A stub that exits cleanly on SIGINT, as llama-server does. The trailing
+    # `:` takes the profile name start() appends to the command.
+    monkeypatch.setenv('LLAMA_TUNE_LAUNCH', 'trap "exit 0" INT; echo ready; while :; do sleep 0.1; done; :')
+
+    candidate = Candidate('qwen25c', {}, stage='explore')
+    server = Server(candidate, 8090, load_timeout=5.0, session=_FakeSession())
+    await server.start()
+    await _trap_set(server)
+
+    started = time.monotonic()
+    await server.stop()
+
+    assert not server.cmd.running
+    assert server.cmd.proc.returncode == 0  # it exited on the SIGINT, not on a later SIGTERM
+    assert time.monotonic() - started < 5.0
+
+
+@pytest.mark.asyncio
+async def test_stop_gives_up_on_sigint_after_the_grace_and_terminates(monkeypatch):
+    # A stub that ignores SIGINT: stop() waits out the grace, then SIGTERMs it.
+    monkeypatch.setenv('LLAMA_TUNE_LAUNCH', 'trap "" INT; echo ready; while :; do sleep 0.1; done; :')
+
+    candidate = Candidate('qwen25c', {}, stage='explore')
+    server = Server(candidate, 8090, load_timeout=5.0, session=_FakeSession())
+    server.interrupt_grace = 0.5
+    await server.start()
+    await _trap_set(server)
+
+    started = time.monotonic()
+    await server.stop()
+
+    assert not server.cmd.running
+    assert server.cmd.proc.returncode != 0
+    assert 0.4 < time.monotonic() - started < 10.0

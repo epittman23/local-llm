@@ -1,8 +1,8 @@
-import asyncio
 import logging
 import os
 
 import aiofiles
+import aiofiles.os
 import aiohttp
 from fastapi import (
     APIRouter,
@@ -301,8 +301,8 @@ async def upload_pipeline(
         )
     finally:
         # Ensure the file is deleted after the upload is completed or on failure
-        if os.path.exists(file_path):
-            await asyncio.to_thread(os.remove, file_path)
+        if await aiofiles.os.path.exists(file_path):
+            await aiofiles.os.remove(file_path)
 
 
 class AddPipelineForm(BaseModel):

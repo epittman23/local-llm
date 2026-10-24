@@ -2976,6 +2976,19 @@ mimetypes.add_type('application/wasm', '.wasm')
 app.mount('/static', StaticFiles(directory=STATIC_DIR), name='static')
 
 
+def _cache_file_path(path: str) -> str | None:
+    """The absolute path of a file under CACHE_DIR, or None if path leaves it or names no file."""
+    file_path = os.path.abspath(os.path.join(CACHE_DIR, path))
+    # trailing os.sep is required: without it, a path resolving to a sibling
+    # whose name starts with the cache-dir basename (e.g. cache_backup) passes
+    cache_root = os.path.abspath(CACHE_DIR) + os.sep
+    if not file_path.startswith(cache_root):
+        return None
+    if not os.path.isfile(file_path):
+        return None
+    return file_path
+
+
 @app.get('/cache/{path:path}')
 async def serve_cache_file(
     path: str,
@@ -2987,13 +3000,8 @@ async def serve_cache_file(
     everything else gets a ``Content-Disposition: attachment`` header to prevent
     XSS from user-generated HTML stored in the cache directory.
     """
-    file_path = os.path.abspath(os.path.join(CACHE_DIR, path))
-    # trailing os.sep is required: without it, a path resolving to a sibling
-    # whose name starts with the cache-dir basename (e.g. cache_backup) passes
-    cache_root = os.path.abspath(CACHE_DIR) + os.sep
-    if not file_path.startswith(cache_root):
-        raise HTTPException(status_code=404, detail='File not found')
-    if not os.path.isfile(file_path):
+    file_path = await asyncio.to_thread(_cache_file_path, path)
+    if file_path is None:
         raise HTTPException(status_code=404, detail='File not found')
 
     mime, _ = mimetypes.guess_type(file_path)

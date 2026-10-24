@@ -247,10 +247,10 @@ class _SSRFSafeAdapter(HTTPAdapter):
 class _SSRFSafeConnector(aiohttp.TCPConnector):
     """Rejects filter-listed request targets, and non-global IPs on each new connection."""
 
-    async def connect(self, req, traces, timeout):
+    async def connect(self, req, *args, **kwargs):
         # Per request, not per connection: _resolve_host sees the proxy and pooled reuse skips it.
         _assert_host_allowed(req.url.host)
-        return await super().connect(req, traces, timeout)
+        return await super().connect(req, *args, **kwargs)
 
     async def _resolve_host(self, host, port, traces=None):
         # aiohttp answers IP-literal hosts itself without consulting a resolver.
