@@ -200,7 +200,7 @@ def test_a_run_without_files_still_gets_its_own_directory(tmp_path):
 def test_notes_are_appended_to_stderr(monkeypatch):
     class Executor:
         def __init__(self, *args):
-            pass
+            self.failure = ''
 
         async def __aenter__(self):
             return self

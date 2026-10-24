@@ -747,7 +747,10 @@ async def execute_code(
 
         # Handle image outputs (base64 encoded) - replace with uploaded URLs
         # Get actual user object for image upload (upload_image requires user.id attribute)
-        if __user__ and __user__.get('id'):
+        # A benchmark run (benchmarks/evaluation/harness.py) keeps them inline
+        # rather than store a file per plot in the owner's Files.
+        benchmark = getattr(__request__.state, 'benchmark_harness', False) is True
+        if __user__ and __user__.get('id') and not benchmark:
             from local_llm.models.users import Users
             from local_llm.utils.files import get_image_url_from_base64
 
