@@ -20,12 +20,13 @@ The root Makefile mirrors CI job for job, with the same commands:
 |---|---|---|
 | `make lint` | Lint and format (pre-commit) | `pre-commit run --all-files` (pinned to CI's pre-commit version) |
 | `make secrets` | Secrets (gitleaks) | gitleaks over the whole git history (CI scans a pull request's own commits, and main's whole history) |
+| `make test-types` | Backend types (basedpyright) | basedpyright over `apps/server/local_llm`, against `basedpyright-baseline.json` |
 | `make test-backend` | Backend (pytest) | `uv lock --check`, `uv sync --frozen --group dev`, then pytest with coverage and a throwaway pgvector Postgres on `127.0.0.1:55432` (`LLLM_TEST_PG_PORT`), so `test_the_app_imports` runs instead of skipping; then diff-cover on the changed lines |
 | `make test-web` | Web (astro check, vitest, build) | `bunx astro check`, `bun run test:coverage` and diff-cover on the changed lines, `bun run build` |
 | `make test-e2e` | Web e2e (Playwright) | `bunx playwright test --workers=2` |
 | `make test-desktop` | Desktop (typecheck, vitest, package smoke) | `bun run typecheck`, `bun run test:unit`, `bun run package:dir` (an unpacked package, no `.rpm`) |
 | `make test-boot` | Boot (real stack) | builds `apps/web`, then `tests/boot_smoke.py` against a throwaway Postgres (`:55433`) and Redis (`:56379`) |
-| `make test` | all five test jobs | the five above |
+| `make test` | all six test jobs | the six above |
 | `make check` | `CI passed` | `make lint`, `make secrets`, then `make test` |
 
 `make test-backend` removes its Postgres container on exit (Ctrl-C included),
@@ -33,6 +34,42 @@ so it never touches the `make backend` database. Any pytest run, `make` or
 not, points `DATA_DIR` at a temp directory (`tests/conftest.py`), so it
 never touches `apps/server/data`. Stop `make frontend`
 before `make test-e2e` (see below).
+
+## Baselines for inherited findings
+
+Two checks found too many problems in inherited code to fix before turning
+them on:
+
+- basedpyright, in standard mode, over the backend (`make test-types`, CI's
+  Backend types job): 2,247 findings on 2026-10-23;
+- Biome's linter over `apps/web` (a pre-commit hook): 754 findings.
+
+Each runs against a committed baseline, `apps/server/basedpyright-baseline.json`
+and `apps/web/biome-baseline.json`. A baseline records how many findings of
+each rule each file may have. `.github/scripts/lint_ratchet.py` fails if any
+file has more than its baseline allows, and lists the findings in that file
+and rule, the new ones among them. So new code meets the full rule set, and
+old code can't get worse.
+
+**Baselines only shrink.**
+
+1. Fix some findings.
+2. Run `make baselines`. It writes the lower counts, and refuses if anything
+   grew.
+3. Commit the smaller file.
+
+The PR gate lets a baseline shrink without approval, and trips on one that
+grows, is added or is removed. `tests/fixtures/schema_drift.json` follows
+the same rule.
+
+The baselines are a rollout stage, and the aim is zero. Once a baseline is
+empty, its tool runs without one. Then Biome's hook becomes
+`biome check --error-on-warnings`, and basedpyright just fails on any
+finding.
+
+basedpyright's version is pinned in `ci.yml` and the Makefile
+(`BASEDPYRIGHT_VERSION`), outside Dependabot. A new version can change what
+it reports, so bump it by hand and run `make baselines`.
 
 ## Coverage of the changed lines
 
@@ -76,6 +113,7 @@ Besides `CI passed`, every pull request gets a **`PR gate`** check
   - new skips or suppressions;
   - deleted or fewer tests;
   - coverage-ignore comments;
+  - a grown baseline of inherited findings;
   - edited golden files;
   - edits to append-only files.
 
@@ -120,10 +158,11 @@ Run these from `apps/web/`:
 - `bunx astro check` for types (expect 0 errors).
 - `bun run format` (Biome: formats, and applies safe lint fixes) and
   `bun run lint` (Biome, check only). The config is `biome.jsonc`. The repo's
-  pre-commit hook runs Biome's formatter on every commit; until the existing
-  lint findings are fixed it doesn't lint yet (see the root
-  `.pre-commit-config.yaml`). If a commit is rejected because the hook
-  reformatted a file, `git add` it and commit again.
+  pre-commit hooks run Biome's formatter on every commit, and its linter
+  against `biome-baseline.json`: the findings inherited from upstream are
+  allowed, and a new one fails (see "Baselines for inherited findings"
+  below). If a commit is rejected because the hook reformatted a file,
+  `git add` it and commit again.
 
 **Run Playwright with `--workers=2`.** At its default worker count (half the
 cores, about 10 on this 20-core machine) the cold `astro dev` server can't

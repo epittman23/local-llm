@@ -260,6 +260,34 @@ class AppendOnlyTests(unittest.TestCase):
         self.assertTrue(g.tripwire(pr([edited]), no_files))
 
 
+class ShrinkOnlyTests(unittest.TestCase):
+    def counts(self, **files):
+        return json.dumps({'counts': files})
+
+    def check(self, path, base, head, status='modified'):
+        return g.tripwire(pr([change(path, status)]), files_from({path: base}, {path: head}))
+
+    def test_shrinking_a_counts_baseline_passes(self):
+        base = self.counts(**{'a.py': {'reportX': 3}, 'b.py': {'reportY': 1}})
+        head = self.counts(**{'a.py': {'reportX': 2}})
+        self.assertEqual(self.check('apps/server/basedpyright-baseline.json', base, head), [])
+
+    def test_growing_a_counts_baseline_trips(self):
+        base = self.counts(**{'a.py': {'reportX': 3}})
+        for head in (self.counts(**{'a.py': {'reportX': 4}}), self.counts(**{'a.py': {'reportX': 3, 'reportZ': 1}})):
+            self.assertTrue(self.check('apps/web/biome-baseline.json', base, head))
+
+    def test_the_schema_drift_list_may_only_shrink(self):
+        path = 'apps/server/tests/fixtures/schema_drift.json'
+        self.assertEqual(self.check(path, '["a", "b"]', '["a"]'), [])
+        self.assertTrue(self.check(path, '["a"]', '["a", "c"]'))
+
+    def test_adding_or_removing_a_baseline_trips(self):
+        path = 'apps/web/biome-baseline.json'
+        self.assertTrue(self.check(path, None, self.counts(), status='added'))
+        self.assertTrue(g.tripwire(pr([change(path, 'removed')]), no_files))
+
+
 class ApprovalTests(unittest.TestCase):
     GATE = [change('.github/workflows/ci.yml')]
 

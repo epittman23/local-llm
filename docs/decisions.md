@@ -7,6 +7,25 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-23** (closing): **The backend is type-checked, and `apps/web`
+  is linted, each against a baseline that only shrinks.**
+  - basedpyright runs in standard mode over the backend, in a new
+    `Backend types` job (`make test-types`). It reported 2,247 findings in
+    inherited code, including 32 possibly-unbound variables worth a real
+    look.
+  - Biome's linter now runs on `apps/web`, not just its formatter. It
+    reported 754 findings.
+
+  Fixing either set first would have kept both checks off indefinitely.
+  Instead, each tool's findings are counted per file and rule in a
+  committed baseline (`.github/scripts/lint_ratchet.py`). Any increase
+  fails, so new code meets the full rule set. A fix shrinks the baseline
+  with `make baselines`. The PR gate allows a baseline to shrink and trips
+  on one that grows; `schema_drift.json` now follows the same rule.
+
+  This replaces the 2026-10-09 plan to keep Biome format-only until all of
+  `apps/web`'s findings were fixed. basedpyright's version is pinned
+  outside Dependabot, because a new version can change what it reports.
 - **2026-10-23** (final): **New code must come with tests: 80% coverage of
   the changed lines.** The backend and web jobs now measure coverage
   (pytest-cov; Vitest's v8 provider) and run diff-cover against each pull

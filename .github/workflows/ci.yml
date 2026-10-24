@@ -36,6 +36,10 @@ env:
   # and web jobs). The Makefile's DIFF_COVER_VERSION is the same; so is the
   # bar, DIFF_COVER_FAIL_UNDER (percent of changed, coverable lines).
   DIFF_COVER_VERSION: '10.6.0'
+  # The backend's type checker (the `types` job); the Makefile's
+  # BASEDPYRIGHT_VERSION is the same. A new version can change what it
+  # reports, so bump it by hand and record the baseline with `make baselines`.
+  BASEDPYRIGHT_VERSION: '1.40.2'
   DIFF_COVER_FAIL_UNDER: '80'
   # The version .pre-commit-config.yaml's gitleaks hook pins, by digest; the
   # Makefile's GITLEAKS_IMAGE is the same string.
@@ -245,6 +249,35 @@ jobs:
           uvx "diff-cover@${DIFF_COVER_VERSION}" coverage.xml \
             --compare-branch="$BASE_SHA" --fail-under="$DIFF_COVER_FAIL_UNDER"
 
+  # basedpyright over the backend, held to apps/server/basedpyright-baseline.json:
+  # the inherited findings are allowed, any new one fails
+  # (.github/scripts/lint_ratchet.py). It needs the backend's dependencies
+  # installed to resolve imports.
+  types:
+    name: Backend types (basedpyright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/server
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: apps/server/uv.lock
+      - name: Install
+        run: uv sync --frozen --no-install-project
+      # basedpyright exits non-zero whenever it reports anything; the
+      # baseline decides. An empty report means it crashed.
+      - name: basedpyright
+        run: uvx "basedpyright@${BASEDPYRIGHT_VERSION}" --outputjson > basedpyright.json || [ -s basedpyright.json ]
+      - name: Against the baseline
+        run: python3 ../../.github/scripts/lint_ratchet.py check basedpyright basedpyright.json basedpyright-baseline.json
+
   # Starts the real backend, as `make backend` does, and uses it: the pytest
   # suite only imports the app and Playwright mocks it, so nothing else
   # would notice a backend that no longer boots. tests/boot_smoke.py has
@@ -309,7 +342,7 @@ jobs:
   ci-ok:
     name: CI passed
     if: always()
-    needs: [pre-commit, secrets, web, e2e, desktop, backend, boot]
+    needs: [pre-commit, secrets, web, e2e, desktop, backend, types, boot]
     runs-on: ubuntu-latest
     steps:
       - name: Every job succeeded

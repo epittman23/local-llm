@@ -117,6 +117,14 @@ IMMUTABLE = [
 ]
 DECISIONS = 'docs/decisions.md'
 
+# Baselines of inherited findings, which may only shrink: a PR that fixes
+# findings shrinks one without approval; one that grows it trips.
+SHRINK_ONLY = {
+    'apps/server/basedpyright-baseline.json': 'counts',  # .github/scripts/lint_ratchet.py
+    'apps/web/biome-baseline.json': 'counts',
+    'apps/server/tests/fixtures/schema_drift.json': 'list',  # tests/test_schema_drift.py
+}
+
 SUPPRESSIONS = {
     'python': [
         (re.compile(r'pytest\.mark\.(skip|skipif|xfail)\b'), 'pytest skip/xfail markers'),
@@ -281,6 +289,32 @@ def _structured_findings(change: FileChange, read_file: ReadFile) -> list[str]:
     return findings
 
 
+def _shrink_only_findings(change: FileChange, read_file: ReadFile) -> list[str]:
+    path = change.filename
+    if change.status == 'removed' or change.previous_filename:
+        return [f'`{path}` is a baseline of allowed findings and was {change.status}.']
+    try:
+        base, head = read_file(path, 'base'), read_file(path, 'head')
+        if base is None:
+            return [f'`{path}`: a new baseline of allowed findings (it exempts every finding it lists).']
+        if SHRINK_ONLY[path] == 'list':
+            grown = sorted(set(json.loads(head or '[]')) - set(json.loads(base)))
+        else:
+            was, now = json.loads(base)['counts'], json.loads(head or '{}').get('counts', {})
+            grown = [
+                f'{f}: {rule} {was.get(f, {}).get(rule, 0)} -> {n}'
+                for f, rules in now.items()
+                for rule, n in rules.items()
+                if n > was.get(f, {}).get(rule, 0)
+            ]
+    except (ValueError, KeyError, TypeError) as exc:
+        return [f'`{path}`: could not be read to compare it with the base ({exc}).']
+    if not grown:
+        return []
+    shown = '; '.join(f'`{g}`' for g in grown[:5])
+    return [f'`{path}`: the baseline grew, allowing {len(grown)} more finding(s) ({shown}).']
+
+
 def tripwire(pr: PullRequest, read_file: ReadFile) -> list[str]:
     findings: list[str] = []
     dependabot_only = pr.author == DEPENDABOT and all(a == DEPENDABOT for a in pr.commit_authors)
@@ -294,6 +328,10 @@ def tripwire(pr: PullRequest, read_file: ReadFile) -> list[str]:
     for change in pr.files:
         path, status = change.filename, change.status
         paths = [path] + ([change.previous_filename] if change.previous_filename else [])
+
+        if path in SHRINK_ONLY or change.previous_filename in SHRINK_ONLY:
+            findings.extend(_shrink_only_findings(change, read_file))
+            continue
 
         # Gate files.
         for p in paths:
