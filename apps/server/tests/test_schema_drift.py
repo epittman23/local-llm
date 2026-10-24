@@ -13,8 +13,9 @@ That file is the drift inherited from upstream when this was added
 migrations create but the models don't declare, nullability, three legacy
 tables). It may only shrink: fix a model to match its migration, or add a
 migration, and remove the line. A new difference fails here. To rewrite the
-file after such a fix, run with SCHEMA_DRIFT_RECORD=1; editing it trips the
-PR gate (it is a golden file), so say why in the PR.
+file after such a fix, run with SCHEMA_DRIFT_RECORD=1. The PR gate lets it
+shrink without approval and trips if it grows (SHRINK_ONLY in
+.github/scripts/pr_gate.py).
 
 Needs TEST_DATABASE_URL, like test_imports.py: a throwaway Postgres with
 pgvector. CI provides one and fails rather than skips without it.
