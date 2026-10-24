@@ -7,6 +7,23 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-23**: A backend can be told to **stop everything it started when
+  it exits**: `LLLM_STOP_JOBS_ON_SHUTDOWN=true` makes the lifespan teardown
+  stop a running Tests job, a tune sweep (which stops its own candidate
+  server) and then the served `llama-server`, each bounded by a timeout.
+  The default is unchanged: all three outlive the backend, so a `--reload`
+  restart keeps the model up. `make backend` gains `LLLM_UVICORN_FLAGS`
+  (default `--reload`), because a teardown only runs if uvicorn's shutdown
+  ends. Without `--timeout-graceful-shutdown`, uvicorn 0.54 waits on every
+  open request first, and the Serve page's log stream never finishes one.
+  A second SIGINT is no escape either: it sets uvicorn's `force_exit`, which
+  skips the teardown. The Makefile and the teardown also print stable `==> `
+  stage markers that a supervising program can follow. All of this is for
+  the planned desktop app, which starts and stops the local stack itself.
+  It was checked against a real `make backend`: one SIGINT with a request
+  held open was cancelled at 10 s, the teardown ran, and compose down
+  finished at 14 s. Stopping a real `llama-server` this way is covered only
+  by the test stub, since llama.cpp is not built on this machine yet.
 - **2026-10-19**: The serving fingerprint covers **the model file, the
   profile's extra arguments and offload fitting** (#127), and the launcher
   passes `-fit off` (the benchmark plan's D10, landed with this change so

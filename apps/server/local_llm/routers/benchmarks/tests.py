@@ -316,6 +316,22 @@ async def start_item(form_data: ItemForm, user=Depends(get_admin_user)):
     return _start(job)
 
 
+async def shutdown(timeout: float) -> None:
+    """Cancel a running Tests job and wait for it.
+
+    The cooperative flag first, so a run stops between items, then the task
+    itself. A grade already in its worker thread finishes on its own timeout
+    and kills its subprocess's group on the way out
+    (benchmarks.evaluation.grading).
+    """
+    global _cancel
+    if not active():
+        return
+    _cancel = True
+    _task.cancel()
+    await asyncio.wait({_task}, timeout=timeout)
+
+
 @router.post('/cancel')
 async def cancel_run(user=Depends(get_admin_user)):
     global _cancel

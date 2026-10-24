@@ -105,6 +105,7 @@ from local_llm.env import (
     LLLM_SECRET_KEY,
     LLLM_SESSION_COOKIE_SAME_SITE,
     LLLM_SESSION_COOKIE_SECURE,
+    LLLM_STOP_JOBS_ON_SHUTDOWN,
     LOG_FORMAT,
     MAX_BODY_LOG_SIZE,
     REDIS_KEY_PREFIX,
@@ -458,6 +459,9 @@ async def lifespan(app: FastAPI):
     yield
 
     await publish_event(app, EVENTS.SYSTEM_SHUTDOWN_STARTED, source='system')
+
+    if LLLM_STOP_JOBS_ON_SHUTDOWN:
+        await benchmarks.shutdown()
 
     # Shutdown: clean up shared resources
     from local_llm.utils.session_pool import close_session

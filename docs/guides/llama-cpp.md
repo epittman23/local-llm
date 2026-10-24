@@ -47,6 +47,14 @@ measurements; everything in this repo reaches it on loopback. To expose it to
 the LAN anyway, export `LLAMA_HOST=0.0.0.0` before `make backend`, the
 counterpart of `LLLM_BACKEND_HOST` for the backend. (Until 2026-10-19 it bound
 every interface.)
+
+A served `llama-server` runs in its own session, so it **outlives the
+backend**: a `--reload` restart, or Ctrl-C on `make backend`, leaves it
+holding VRAM, and the Serve page reads "Stopped" afterwards. Stop it with
+`pkill -f llama-server`. A backend started with
+`LLLM_STOP_JOBS_ON_SHUTDOWN=true` (and a graceful-shutdown timeout, through
+`LLLM_UVICORN_FLAGS`) instead stops it on exit, after stopping any tune sweep
+or Tests job.
 GPU telemetry while a server runs is the **Live** page, `/benchmarks/live`.
 
 Serving settings are grouped into profiles rather than scattered across env

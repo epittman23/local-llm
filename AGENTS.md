@@ -146,7 +146,9 @@ shadcn/ui frontend, `infra/` holds the Postgres + pgvector and Redis Compose fil
   included. The backend refuses to start without Redis (`REDIS_URL`), which
   holds session revocation. `make backend LLLM_BACKEND_HOST=0.0.0.0` exposes it to the LAN;
   the chat socket accepts the page's own origin, so a LAN page needs no
-  `CORS_ALLOW_ORIGIN` entry.
+  `CORS_ALLOW_ORIGIN` entry. `LLLM_UVICORN_FLAGS` (default `--reload`)
+  replaces uvicorn's other flags. Each stage prints a `==> ` marker line,
+  which other tools may follow, so keep them stable.
 - `make frontend`: the hot-reloading dev server on `:5174`, proxying the API
   to `:4000`. Only needed while editing the UI.
 - `cd apps/web && bun run build`: rebuild the UI that `make backend` serves.
@@ -181,6 +183,12 @@ shadcn/ui frontend, `infra/` holds the Postgres + pgvector and Redis Compose fil
 - `make backend` pins `DATA_DIR` to `apps/server/data` (uploads, caches,
   benchmark datasets and reports), so the location never moves with the
   code; a hand-started backend defaults to the same place.
+- A served `llama-server`, a tune sweep and a Tests job outlive the backend
+  on purpose, so a `--reload` restart keeps the model up.
+  `LLLM_STOP_JOBS_ON_SHUTDOWN=true` makes the lifespan teardown stop all
+  three (`routers/benchmarks/__init__.py`'s `shutdown()`) for a backend that
+  should leave nothing behind; pair it with a graceful-shutdown timeout, or
+  an open stream can keep the teardown from ever running.
 - The database schema is append-only (see the maintenance policy).
 
 ## Frontend (`apps/web`)
