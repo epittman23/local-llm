@@ -63,7 +63,9 @@ export const STARTUP_OWN: StepDef[] = [
 	},
 	{
 		id: 'services',
-		label: 'Start Postgres and Redis',
+		label: 'Start the services',
+		// A prefix: since 2026-10-24 the line goes on to name Jupyter and
+		// SearXNG, and the recorded fixtures keep the older, shorter one.
 		marker: '==> Starting Postgres and Redis',
 		hint: { afterMs: 30_000, text: 'Docker may be pulling images on a first run.' }
 	},
@@ -112,7 +114,7 @@ export const SHUTDOWN: StepDef[] = [
 		endMarker: '==> Stopped the served model',
 		skipReason: 'none running'
 	},
-	{ id: 'services', label: 'Stop Postgres and Redis', marker: '==> Stopping Postgres and Redis' },
+	{ id: 'services', label: 'Stop the services', marker: '==> Stopping Postgres and Redis' },
 	{ id: 'force', label: 'Force stop', optional: true }
 ];
 

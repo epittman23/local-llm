@@ -81,7 +81,8 @@ If it started the stack, the dialog shows the shutdown:
    the teardown that stops the served model.
 3. **uvicorn finishes open requests** (cancelled after 10 s), then stops
    benchmark jobs and the served model.
-4. **The Makefile's trap brings Postgres and Redis down.**
+4. **The Makefile's trap brings the Compose services down** (Postgres,
+   Redis, Jupyter and SearXNG).
 
 The app waits until the whole group has exited, with a budget of 90 s. Past
 that, it kills the group, runs `docker compose down` itself, and offers to stop

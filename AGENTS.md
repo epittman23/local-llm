@@ -107,7 +107,7 @@ setting, its server URL.
 [MAP.md](MAP.md) is the structural index: what lives where. In short:
 `apps/server/` is the FastAPI backend (its package is
 `apps/server/local_llm/`), `apps/web/` is the Astro + React +
-shadcn/ui frontend, `apps/desktop/` is the Electron desktop app, `infra/` holds the Postgres + pgvector and Redis Compose file, and
+shadcn/ui frontend, `apps/desktop/` is the Electron desktop app, `infra/` holds the Compose file for Postgres + pgvector, Redis, Jupyter and SearXNG, and
 `docs/` holds the decisions log, roadmap, guides, proposals and history.
 
 ## Conventions
@@ -143,7 +143,7 @@ shadcn/ui frontend, `apps/desktop/` is the Electron desktop app, `infra/` holds 
 
 ## Commands
 
-- `make backend`: Postgres and Redis plus the backend (`uvicorn --reload` on
+- `make backend`: Postgres, Redis, Jupyter and SearXNG plus the backend (`uvicorn --reload` on
   `127.0.0.1:4000`), which also serves the last build of `apps/web` at `/`.
   It owns their lifecycle: up before uvicorn, down on exit, Ctrl-C
   included. The backend refuses to start without Redis (`REDIS_URL`), which
@@ -402,7 +402,7 @@ co-author in commits or pull requests; this includes adding
 | [MAP.md](MAP.md) | where everything lives |
 | [docs/decisions.md](docs/decisions.md) | dated log of why things are the way they are |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | history and planned direction |
-| [docs/guides/](docs/guides/) | llama.cpp, telemetry, benchmarks, testing, dependencies, frontend, desktop, model downloads, agent tooling |
+| [docs/guides/](docs/guides/) | llama.cpp, telemetry, benchmarks, testing, dependencies, frontend, desktop, model downloads, agent tooling, assistant tools |
 | [docs/proposals/](docs/proposals/) | not yet built (the dedicated inference server) |
 | [docs/history/](docs/history/) | completed records: the migration plan, reviews, migration-era mappings |
 | [docs/serving-baseline/](docs/serving-baseline/README.md) | test input pinning the serving fingerprint |

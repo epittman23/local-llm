@@ -54,6 +54,67 @@ services:
     volumes:
       - redis-data:/data
 
+  # The code interpreter's engine (Admin Settings > Code Execution: Jupyter).
+  # The backend reaches it on loopback and runs each code block in a fresh
+  # kernel, which it deletes afterwards. It runs code a model wrote, so it is
+  # fenced in: its own network (it cannot reach Postgres or Redis by name),
+  # no Linux capabilities, no privilege escalation, and memory and process
+  # caps. It keeps internet access so `pip install` works; set
+  # `internal: true` on the `jupyter` network below to cut that off.
+  # Terminals are off. Idle kernels are culled after 10 minutes, in case
+  # one is left behind.
+  jupyter:
+    image: quay.io/jupyter/scipy-notebook:2026-10-12
+    container_name: local-llm-jupyter
+    restart: unless-stopped
+    environment:
+      JUPYTER_TOKEN: ${JUPYTER_TOKEN:?set JUPYTER_TOKEN in infra/.env}
+    command:
+      - start-notebook.py
+      - --ServerApp.terminals_enabled=False
+      - --MappingKernelManager.cull_idle_timeout=600
+      - --MappingKernelManager.cull_interval=120
+    ports:
+      - "127.0.0.1:8888:8888"
+    volumes:
+      - jupyter-work:/home/jovyan/work
+    networks: [jupyter]
+    mem_limit: 4g
+    pids_limit: 512
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+  # Private web search (Admin Settings > Web Search: searxng, query URL
+  # http://127.0.0.1:8080/search?q=<query>). It needs no API key, but it is
+  # a metasearch engine: queries still go to the upstream engines it asks
+  # (Google, DuckDuckGo, ...), from this machine's IP, with no account or
+  # cookie attached. searxng/settings.yml turns on the JSON output the
+  # backend reads; the secret comes from infra/.env.
+  searxng:
+    image: searxng/searxng:2026.10.17-1c10abe2d
+    container_name: local-llm-searxng
+    restart: unless-stopped
+    environment:
+      SEARXNG_SECRET: ${SEARXNG_SECRET:?set SEARXNG_SECRET in infra/.env}
+      SEARXNG_SETTINGS_PATH: /config/settings.yml
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./searxng/settings.yml:/config/settings.yml:ro
+    networks: [searxng]
+    mem_limit: 512m
+    pids_limit: 256
+    cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE]
+    security_opt: ["no-new-privileges:true"]
+
+# Postgres and Redis share the default network. Jupyter and SearXNG get one
+# each, so neither can reach anything else by service name.
+networks:
+  jupyter:
+  searxng:
+
 volumes:
   postgres-data:
   redis-data:
+  jupyter-work:

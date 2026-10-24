@@ -1,0 +1,18 @@
+# SearXNG settings for local-llm (infra/docker-compose.yml). Only what
+# differs from SearXNG's defaults, which use_default_settings keeps.
+# The secret is SEARXNG_SECRET from infra/.env, never this file.
+use_default_settings: true
+
+general:
+  instance_name: local-llm
+
+server:
+  # A single user on loopback; the limiter needs a Valkey/Redis of its own.
+  limiter: false
+  image_proxy: false
+
+search:
+  # The backend's searxng engine asks for format=json.
+  formats:
+    - html
+    - json

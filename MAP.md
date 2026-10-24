@@ -33,7 +33,7 @@ local-llm/
 │   ├── web/                   Astro + React + shadcn/ui frontend
 │   └── desktop/               Electron desktop app (Linux), loading the backend's pages
 ├── docs/                      decisions log, roadmap, guides, proposals, history
-└── infra/                     docker-compose for Postgres + pgvector and Redis
+└── infra/                     docker-compose for Postgres + pgvector, Redis, Jupyter and SearXNG
 ```
 
 `scripts/` (the shell orchestrator plus the `llama-console` CLI helpers) and
@@ -104,7 +104,8 @@ Start here for "how do I run/use this."
   venv and offline model cache), `frontend.md` (`apps/web` dev server,
   build, rough edges), `model-downloads.md` (`hf download` commands for the
   GGUF weights), `agent-tooling.md` (the project skills, the reviewer
-  agent and codebase-memory-mcp).
+  agent and codebase-memory-mcp), `assistant-tools.md` (the code interpreter's Jupyter,
+  SearXNG web search, and the retrieval models).
 - **`plans/`** — implementation plans awaiting or under execution:
   `benchmark-upgrade.md` (EvalPlus datasets, LiveCodeBench, the llama-bench
   pre-screen, and error bars in Compare and Report).
@@ -143,7 +144,13 @@ Infrastructure this repo runs but does not write.
   project name, so the pin keeps the data in `local-llm_postgres-data`
   however the directory moves. Role and database are both `local_llm`. (It
   was pinned as `open-web-ui` from 2026-09-14 until the 2026-10-10 rename;
-  see the file's own comment.)
+  see the file's own comment.) Since 2026-10-24 it also runs **Jupyter**
+  (the code interpreter's engine) and **SearXNG** (web search), each on its
+  own network so neither can reach Postgres or Redis; see
+  `docs/guides/assistant-tools.md`.
+- **`searxng/settings.yml`** — SearXNG's settings: only what differs from
+  its defaults (JSON output on, limiter off). Its secret comes from
+  `infra/.env`.
 - **`.env.example`** — the keys `infra/.env` needs, with empty values.
 - **`.env`** — secrets (API keys, DB password, webui secret key); not
   enumerated here, and not tracked. Compose resolves it relative to the
