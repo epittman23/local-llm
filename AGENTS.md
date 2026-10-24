@@ -188,8 +188,9 @@ shadcn/ui frontend, `apps/desktop/` is the Electron desktop app, `infra/` holds 
 
 Project skills in `.claude/skills/` turn the rules below into procedures:
 `docs-sync` (the maintenance policy), `pr-gate` (the CI tripwire),
-`new-migration` (the append-only schema) and `serving-change` (launch flags
-and the `config_id` fingerprint). Use the one that matches the change. The
+`new-migration` (the append-only schema), `serving-change` (launch flags
+and the `config_id` fingerprint) and `reindex` (refreshing the code-graph
+index below). Use the one that matches the change. The
 `reviewer` subagent (`.claude/agents/`) reviews a branch before
 its PR. `.mcp.json` registers `codebase-memory-mcp`, a local code-graph
 index whose binary is installed separately. Install, first use and caveats
