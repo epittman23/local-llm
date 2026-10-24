@@ -1255,85 +1255,17 @@ async def update_rag_config(request: Request, form_data: ConfigForm, user=Depend
     )
 
     if form_data.web is not None:
-        # Web search settings
-        config.ENABLE_WEB_SEARCH = form_data.web.ENABLE_WEB_SEARCH
-        config.ENABLE_WEB_SEARCH_CONFIRMATION = form_data.web.ENABLE_WEB_SEARCH_CONFIRMATION
-        config.WEB_SEARCH_CONFIRMATION_CONTENT = form_data.web.WEB_SEARCH_CONFIRMATION_CONTENT
-        config.WEB_SEARCH_ENGINE = form_data.web.WEB_SEARCH_ENGINE
-        config.WEB_SEARCH_TRUST_ENV = form_data.web.WEB_SEARCH_TRUST_ENV
-        config.WEB_SEARCH_RESULT_COUNT = form_data.web.WEB_SEARCH_RESULT_COUNT
-        config.WEB_SEARCH_CONCURRENT_REQUESTS = form_data.web.WEB_SEARCH_CONCURRENT_REQUESTS
-        config.WEB_FETCH_MAX_CONTENT_LENGTH = form_data.web.WEB_FETCH_MAX_CONTENT_LENGTH
-        config.WEB_LOADER_CONCURRENT_REQUESTS = form_data.web.WEB_LOADER_CONCURRENT_REQUESTS
-        config.WEB_SEARCH_DOMAIN_FILTER_LIST = form_data.web.WEB_SEARCH_DOMAIN_FILTER_LIST
-        config.BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL = form_data.web.BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL
-        config.BYPASS_WEB_SEARCH_WEB_LOADER = form_data.web.BYPASS_WEB_SEARCH_WEB_LOADER
-        config.OLLAMA_CLOUD_WEB_SEARCH_API_KEY = form_data.web.OLLAMA_CLOUD_WEB_SEARCH_API_KEY
-        config.SEARXNG_QUERY_URL = form_data.web.SEARXNG_QUERY_URL
-        config.SEARXNG_LANGUAGE = form_data.web.SEARXNG_LANGUAGE
-        config.OPENSERP_BASE_URL = form_data.web.OPENSERP_BASE_URL
-        config.YACY_QUERY_URL = form_data.web.YACY_QUERY_URL
-        config.YACY_USERNAME = form_data.web.YACY_USERNAME
-        config.YACY_PASSWORD = form_data.web.YACY_PASSWORD
-        config.GOOGLE_PSE_API_KEY = form_data.web.GOOGLE_PSE_API_KEY
-        config.GOOGLE_PSE_ENGINE_ID = form_data.web.GOOGLE_PSE_ENGINE_ID
-        config.BRAVE_SEARCH_API_KEY = form_data.web.BRAVE_SEARCH_API_KEY
-        if form_data.web.BRAVE_SEARCH_CONTEXT_TOKENS is not None:
-            config.BRAVE_SEARCH_CONTEXT_TOKENS = form_data.web.BRAVE_SEARCH_CONTEXT_TOKENS
-        config.KAGI_SEARCH_API_KEY = form_data.web.KAGI_SEARCH_API_KEY
-        config.MOJEEK_SEARCH_API_KEY = form_data.web.MOJEEK_SEARCH_API_KEY
-        config.BOCHA_SEARCH_API_KEY = form_data.web.BOCHA_SEARCH_API_KEY
-        config.SERPSTACK_API_KEY = form_data.web.SERPSTACK_API_KEY
-        config.SERPSTACK_HTTPS = form_data.web.SERPSTACK_HTTPS
-        config.SERPER_API_KEY = form_data.web.SERPER_API_KEY
-        config.SERPHOUSE_API_KEY = form_data.web.SERPHOUSE_API_KEY
-        config.SERPHOUSE_DOMAIN = form_data.web.SERPHOUSE_DOMAIN
-        config.SERPLY_API_KEY = form_data.web.SERPLY_API_KEY
-        config.DDGS_BACKEND = form_data.web.DDGS_BACKEND
-        config.TAVILY_API_KEY = form_data.web.TAVILY_API_KEY
-        config.SEARCHAPI_API_KEY = form_data.web.SEARCHAPI_API_KEY
-        config.SEARCHAPI_ENGINE = form_data.web.SEARCHAPI_ENGINE
-        config.SERPAPI_API_KEY = form_data.web.SERPAPI_API_KEY
-        config.SERPAPI_ENGINE = form_data.web.SERPAPI_ENGINE
-        config.JINA_API_KEY = form_data.web.JINA_API_KEY
-        config.JINA_API_BASE_URL = form_data.web.JINA_API_BASE_URL
-        config.BING_SEARCH_V7_ENDPOINT = form_data.web.BING_SEARCH_V7_ENDPOINT
-        config.BING_SEARCH_V7_SUBSCRIPTION_KEY = form_data.web.BING_SEARCH_V7_SUBSCRIPTION_KEY
-        config.EXA_API_KEY = form_data.web.EXA_API_KEY
-        config.PERPLEXITY_API_KEY = form_data.web.PERPLEXITY_API_KEY
-        config.PERPLEXITY_MODEL = form_data.web.PERPLEXITY_MODEL
-        config.PERPLEXITY_SEARCH_CONTEXT_USAGE = form_data.web.PERPLEXITY_SEARCH_CONTEXT_USAGE
-        config.PERPLEXITY_SEARCH_API_URL = form_data.web.PERPLEXITY_SEARCH_API_URL
-        config.MICROSOFT_WEB_IQ_API_BASE_URL = form_data.web.MICROSOFT_WEB_IQ_API_BASE_URL
-        config.MICROSOFT_WEB_IQ_API_KEY = form_data.web.MICROSOFT_WEB_IQ_API_KEY
-        config.MICROSOFT_WEB_IQ_LANGUAGE = form_data.web.MICROSOFT_WEB_IQ_LANGUAGE
-        config.SOUGOU_API_SID = form_data.web.SOUGOU_API_SID
-        config.SOUGOU_API_SK = form_data.web.SOUGOU_API_SK
-
-        # Web loader settings
-        config.WEB_LOADER_ENGINE = form_data.web.WEB_LOADER_ENGINE
-        config.WEB_LOADER_TIMEOUT = form_data.web.WEB_LOADER_TIMEOUT
-
-        config.ENABLE_WEB_LOADER_SSL_VERIFICATION = form_data.web.ENABLE_WEB_LOADER_SSL_VERIFICATION
-        config.PLAYWRIGHT_WS_URL = form_data.web.PLAYWRIGHT_WS_URL
-        config.PLAYWRIGHT_TIMEOUT = form_data.web.PLAYWRIGHT_TIMEOUT
-        config.FIRECRAWL_API_KEY = form_data.web.FIRECRAWL_API_KEY
-        config.FIRECRAWL_API_BASE_URL = form_data.web.FIRECRAWL_API_BASE_URL
-        config.FIRECRAWL_TIMEOUT = form_data.web.FIRECRAWL_TIMEOUT
-        config.EXTERNAL_WEB_SEARCH_URL = form_data.web.EXTERNAL_WEB_SEARCH_URL
-        config.EXTERNAL_WEB_SEARCH_API_KEY = form_data.web.EXTERNAL_WEB_SEARCH_API_KEY
-        config.EXTERNAL_WEB_LOADER_URL = form_data.web.EXTERNAL_WEB_LOADER_URL
-        config.EXTERNAL_WEB_LOADER_API_KEY = form_data.web.EXTERNAL_WEB_LOADER_API_KEY
-        config.TAVILY_EXTRACT_DEPTH = form_data.web.TAVILY_EXTRACT_DEPTH
-        config.YOUTUBE_LOADER_LANGUAGE = form_data.web.YOUTUBE_LOADER_LANGUAGE
-        config.YOUTUBE_LOADER_PROXY_URL = form_data.web.YOUTUBE_LOADER_PROXY_URL
-        request.app.state.YOUTUBE_LOADER_TRANSLATION = form_data.web.YOUTUBE_LOADER_TRANSLATION
-        config.YANDEX_WEB_SEARCH_URL = form_data.web.YANDEX_WEB_SEARCH_URL
-        config.YANDEX_WEB_SEARCH_API_KEY = form_data.web.YANDEX_WEB_SEARCH_API_KEY
-        config.YANDEX_WEB_SEARCH_CONFIG = form_data.web.YANDEX_WEB_SEARCH_CONFIG
-        config.YOUCOM_API_KEY = form_data.web.YOUCOM_API_KEY
-        config.LINKUP_API_KEY = form_data.web.LINKUP_API_KEY
-        config.LINKUP_SEARCH_PARAMS = form_data.web.LINKUP_SEARCH_PARAMS
+        # Only the fields this request sent. The Admin page sends every one,
+        # but an API caller that sends a few (turning web search on, say)
+        # used to null the rest, SEARXNG_LANGUAGE among them, which broke
+        # SearXNG searches. Each WebConfig field is named after its config key.
+        sent = form_data.web.model_dump(include=form_data.web.model_fields_set)
+        if sent.get('BRAVE_SEARCH_CONTEXT_TOKENS') is None:
+            sent.pop('BRAVE_SEARCH_CONTEXT_TOKENS', None)
+        if 'YOUTUBE_LOADER_TRANSLATION' in sent:
+            request.app.state.YOUTUBE_LOADER_TRANSLATION = sent.pop('YOUTUBE_LOADER_TRANSLATION')
+        for key, value in sent.items():
+            setattr(config, key, value)
 
     await config.save()
 
