@@ -212,6 +212,10 @@ Run these from `apps/web/`:
   workaround as `make frontend`, plus a `globalTeardown` that force-stops it
   afterward: a clean Playwright run was observed leaving the daemon alive
   despite the signal-based path, so this doesn't rely on that alone).
+  The dev server writes only to `apps/web/.astro/dev.log`, which Playwright
+  never prints. When the e2e job fails in CI, it prints that log's last 200
+  lines and uploads the whole file with the `playwright-test-results`
+  artifact, so a dev server that dies mid-run leaves its reason behind.
 - `bunx astro check` for types (expect 0 errors).
 - `bun run format` (Biome: formats, and applies safe lint fixes) and
   `bun run lint` (Biome, check only). The config is `biome.jsonc`. The repo's
