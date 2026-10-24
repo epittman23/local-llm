@@ -33,6 +33,50 @@ not, points `DATA_DIR` at a temp directory (`tests/conftest.py`), so it
 never touches `apps/server/data`. Stop `make frontend`
 before `make test-e2e` (see below).
 
+## The PR gate and the tripwire
+
+Besides `CI passed`, every pull request gets a **`PR gate`** check
+(`.github/workflows/pr-gate.yml`). It checks three things:
+
+- **Title.** The PR title must be a conventional commit, since the squash
+  merge uses it as the commit subject.
+- **Attribution.** No attribution line may appear in the title, the body or
+  any commit (AGENTS.md's commit policy).
+- **Tripwire.** It looks for changes that weaken CI:
+  - edits to a gate file;
+  - new skips or suppressions;
+  - deleted or fewer tests;
+  - edited golden files;
+  - edits to append-only files.
+
+  The full list is in AGENTS.md, "The CI tripwire", and the patterns are in
+  `.github/scripts/pr_gate.py`.
+
+> **No agent may ever bypass the tripwire without first asking the owner for
+> explicit permission and giving explicit reasoning for the bypass.** See
+> AGENTS.md for what counts as a bypass and what to do when it trips.
+
+The owner approves a tripping PR with **both** of these:
+
+- the `gate-change-approved` label, applied after the latest push (a push
+  removes it);
+- a `## Gate changes` section in the PR body that explains each finding.
+
+The workflow runs under `pull_request_target`. That means **main's** copy of
+the workflow and script judges every PR, and a PR that edits either one is
+judged by the version it is changing. Nothing from the PR is checked out or
+run. The script reads the diff through the API.
+
+Two consequences:
+
+- **A change to the gate merges unexercised.** Its unit tests
+  (`.github/scripts/test_pr_gate.py`, run by `make lint`) are its only check
+  before then.
+- **Test a gate change against real PRs before opening it.** Run
+  `make pr-gate PR=<n>` (read-only, using `gh auth token`) on a few:
+  - one that should trip, such as a CI change;
+  - one that should pass, such as docs or a Dependabot bump.
+
 ## Frontend (`apps/web`)
 
 Run these from `apps/web/`:

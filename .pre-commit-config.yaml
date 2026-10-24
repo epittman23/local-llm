@@ -103,3 +103,12 @@ repos:
         files: ^docs/(roadmap-timeline\.mmd|ROADMAP\.md)$
         pass_filenames: false
         entry: python3 .github/scripts/check_roadmap_timeline.py
+      # pr_gate.py runs from main under pull_request_target, so a PR that
+      # changes it never runs its own copy: these tests are its only check
+      # before it merges.
+      - id: pr-gate-tests
+        name: PR gate unit tests
+        language: system
+        files: ^\.github/scripts/
+        pass_filenames: false
+        entry: python3 -m unittest discover -s .github/scripts -q

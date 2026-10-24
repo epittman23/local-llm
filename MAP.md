@@ -15,7 +15,7 @@ instead.
 
 ```
 local-llm/
-├── .github/                   CI workflows, Dependabot config, CI scripts (scripts/)
+├── .github/                   CI workflows (ci.yml; pr-gate.yml, the tripwire), Dependabot, scripts/
 ├── .pre-commit-config.yaml    the only definition of lint and format checks (CI runs it)
 ├── .gitleaksignore            gitleaks findings that are not secrets, with reasons
 ├── AGENTS.md                  agent and contributor guide (CLAUDE.md links to it)

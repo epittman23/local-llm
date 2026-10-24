@@ -48,6 +48,7 @@ timeline
       2026-10-23 (later) : Desktop app (apps/desktop, Electron, Linux rpm) : loads the backend's own pages, so desktop and browser stay identical : starts the stack when nothing runs and stops what it started, with a step-by-step progress dialog : attaches to a terminal-started stack and leaves it running : one setting moves it to a remote server
       2026-10-23 (latest) : llama.cpp build 10597 built on Fedora with CUDA 13.4.3 and GCC 16 : toolkit from NVIDIA's repo, its driver packages excluded so RPM Fusion's driver stays : nothing served or measured on native Linux yet
       2026-10-23 (evening) : CI scans commits for secrets (the gitleaks hook had scanned nothing in CI) : workflows linted by actionlint and zizmor : Dependabot version updates wait out a 7-day cooldown before they auto-merge
+      2026-10-23 (night) : CI tripwire (PR gate) : PRs that change CI gates, weaken tests or edit append-only files fail until the owner approves with a label and a written justification : no agent bypasses it without asking : conventional titles and no attribution enforced
     section Near-Term
       "~1 week" : Resolve the blocking rack hole-type question : confirm riser and PSU questions : re-verify current component pricing
       "~2-4 weeks" : Finish the benchmark upgrade : HumanEval+ and MBPP+ replace HumanEval and MBPP : a LiveCodeBench slice with a per-run release-date window : a llama-bench pre-screen driven by Optuna

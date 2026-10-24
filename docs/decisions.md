@@ -7,6 +7,36 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-23** (night): **A CI tripwire guards the gates themselves.**
+  The owner relies on CI alone, without reviewing pull requests. That makes
+  the gates the weak point: the agent writing a change could make CI pass by
+  editing a workflow, skipping a test or adding a suppression.
+
+  A new `PR gate` check (`.github/workflows/pr-gate.yml`) fails any pull
+  request that does one of these, until the owner approves it:
+  - changes a gate file or the lint/test settings in `pyproject.toml` or a
+    `package.json`;
+  - adds skips or suppressions;
+  - deletes tests or reduces their number;
+  - edits golden files, applied migrations, benchmark prompts or existing
+    decisions entries.
+
+  Approval takes two things: the `gate-change-approved` label, and a
+  `## Gate changes` section in the PR body explaining each finding. A push
+  removes the label.
+
+  The check runs under `pull_request_target` from main's copy, so a PR
+  cannot rewrite its own judge. It never checks out or runs PR code. The
+  same check enforces the conventional PR title (the squash commit's
+  subject) and the no-attribution rule.
+
+  The owner set the rule, stated in AGENTS.md and in the check's own output:
+  **no agent may ever bypass the tripwire without explicitly asking for
+  permission and giving explicit reasoning for the bypass.**
+
+  Dry runs against past PRs behaved as intended. The tripwire caught the
+  migration edits in #79, the golden-recording skips in #86 and the CI
+  changes in #377, and passed the Dependabot and docs-only PRs.
 - **2026-10-23** (evening): **CI scans commits for secrets, and lints the
   workflows and the Dependabot configuration.** Nobody reviews pull requests
   before they merge, so CI is the only check, and a 2026-10-23 review of it
