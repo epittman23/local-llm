@@ -1,0 +1,126 @@
+# Auto-merge for this repository's own pull requests, and branch updates
+# for those that fall behind their base.
+#
+# The main ruleset requires a branch to be up to date before it merges, so
+# an auto-merge PR that falls behind would wait forever. This updates it
+# (a merge commit; never a rebase or a force-push), and CI runs again on
+# the result.
+#
+# Why a token (secret AUTOMERGE_TOKEN, the owner's fine-grained token for
+# this repository; docs/guides/testing.md, "Merging"): GitHub
+# starts no workflow for anything done with GITHUB_TOKEN. An update pushed
+# with it would get no CI, so the required checks would never report.
+# Auto-merge enabled with it would merge as github-actions, so the push to
+# main would start no CI either. Done with the owner's token, both behave
+# like the owner's own actions.
+#
+# Why here and not in auto-merge.yml: this file runs from main on every
+# trigger (workflow_dispatch, push, schedule), so no pull request can
+# rewrite the job that holds the token. A dispatch from auto-merge.yml only
+# names a PR. This job re-reads that PR and refuses forks, drafts, closed
+# PRs and Dependabot. Dependabot's PRs are left to Dependabot, which
+# rebases them itself when main moves (the timelines of #399, #401, #402).
+#
+# A pushed update is a new commit, so pr-gate.yml removes the
+# `gate-change-approved` label from a gated PR it updates, and that PR
+# waits for the owner again (one approval per commit; AGENTS.md).
+#
+# Without the secret, both jobs warn and do nothing. A token GitHub rejects
+# (expired, revoked) fails the run, so stalled updates are visible.
+
+name: Auto-merge and branch updates
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number to turn auto-merge on for (empty to only update branches)
+        required: false
+        default: ''
+  push:
+    branches: [main]
+  schedule:
+    - cron: '*/30 * * * *'
+
+permissions: {}
+
+jobs:
+  enable:
+    name: Enable auto-merge
+    if: github.repository == 'epittman23/local-llm' && github.event_name == 'workflow_dispatch' && inputs.pr != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: Enable auto-merge (squash) if the PR qualifies
+        env:
+          GH_TOKEN: ${{ secrets.AUTOMERGE_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ inputs.pr }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::AUTOMERGE_TOKEN is not set; auto-merge not enabled for #$PR."
+            exit 0
+          fi
+          if ! [[ "$PR" =~ ^[0-9]+$ ]]; then
+            echo "::error::pr must be a pull request number, got '$PR'."
+            exit 1
+          fi
+          # An assignment, so a rejected token fails the step (set -e).
+          info=$(gh api "repos/$REPO/pulls/$PR" \
+            --jq '[.state, .draft, .head.repo.full_name // "", .user.login] | @tsv')
+          IFS=$'\t' read -r state draft head login <<<"$info"
+          if [ "$state" != open ] || [ "$draft" != false ] || [ "$head" != "$REPO" ] \
+              || [ "$login" = 'dependabot[bot]' ]; then
+            echo "::notice::#$PR does not qualify (state=$state draft=$draft head=$head author=$login)."
+            exit 0
+          fi
+          gh pr merge --auto --squash "$PR" --repo "$REPO"
+
+  update:
+    name: Update branches behind their base
+    needs: enable
+    if: ${{ !cancelled() && github.repository == 'epittman23/local-llm' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: {}
+    # A newer run does the same work, so dropping a pending one loses nothing.
+    concurrency:
+      group: update-branches
+      cancel-in-progress: false
+    steps:
+      - name: Update auto-merge PRs that are behind
+        env:
+          GH_TOKEN: ${{ secrets.AUTOMERGE_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::AUTOMERGE_TOKEN is not set; no branches updated."
+            exit 0
+          fi
+          # Open, not draft, from this repository, auto-merge on, not Dependabot.
+          gh api --paginate "repos/$REPO/pulls?state=open&per_page=100" --jq '
+            .[]
+            | select(.draft | not)
+            | select(.auto_merge != null)
+            | select(.head.repo.full_name == .base.repo.full_name)
+            | select(.user.login != "dependabot[bot]")
+            | [.number, .head.sha, .base.ref] | @tsv' > "$RUNNER_TEMP/prs.tsv"
+          while IFS=$'\t' read -r number sha base; do
+            behind=$(gh api "repos/$REPO/compare/$base...$sha" --jq .behind_by)
+            if [ "$behind" -eq 0 ]; then
+              echo "#$number is up to date with $base."
+              continue
+            fi
+            echo "#$number is $behind commit(s) behind $base; updating."
+            if ! out=$(gh api -X PUT "repos/$REPO/pulls/$number/update-branch" \
+                -f expected_head_sha="$sha" 2>&1); then
+              if grep -q 'HTTP 422' <<<"$out"; then
+                # A merge conflict, or a push since the list was read.
+                echo "::warning::#$number was not updated: $out"
+              else
+                echo "::error::#$number: $out"
+                exit 1
+              fi
+            fi
+          done < "$RUNNER_TEMP/prs.tsv"

@@ -1,0 +1,42 @@
+# Asks update-branches.yml to turn on auto-merge for a pull request from a
+# branch of this repository, once it is open and not a draft. GitHub then
+# squash-merges it when the main ruleset's required checks pass. A gated PR
+# still waits, because `PR gate` fails until the owner approves it.
+#
+# This workflow holds no secret. A `pull_request` run uses the workflow file
+# from the PR's own merge ref, so any branch could rewrite this job. It only
+# dispatches update-branches.yml, which always runs main's copy and re-reads
+# the PR before acting on it. It never trusts this request.
+#
+# Forks, drafts and Dependabot are skipped here and refused again there.
+# Dependabot's PRs have their own workflow (dependabot-automerge.yml). It
+# fires on open, reopen and ready-for-review only, so a PR whose auto-merge
+# the owner turned off stays off after later pushes.
+
+name: Auto-merge
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+
+permissions: {}
+
+jobs:
+  request:
+    name: Request auto-merge
+    if: >-
+      github.repository == 'epittman23/local-llm'
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && !github.event.pull_request.draft
+      && github.event.pull_request.user.login != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write # only to dispatch update-branches.yml
+    steps:
+      - name: Dispatch update-branches.yml for this PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: gh workflow run update-branches.yml --repo "$REPO" --ref main -f pr="$PR"
