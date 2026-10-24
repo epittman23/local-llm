@@ -7,6 +7,36 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-24** (evening): **Pull requests from this repository's
+  branches merge themselves once green, and are kept up to date with
+  `main`.** Until now only Dependabot's PRs had auto-merge, and the owner
+  merged everything else by hand. The main ruleset requires a branch to be
+  up to date, so auto-merge alone would leave a PR waiting whenever `main`
+  moved.
+  - `auto-merge.yml` asks for auto-merge when a non-draft PR from a branch
+    of this repo is opened, reopened or marked ready. Drafts, forks and
+    Dependabot are excluded. A draft, or auto-merge turned off by hand,
+    holds a PR back.
+  - `update-branches.yml` turns auto-merge on, and merges the base into
+    auto-merge PRs that are behind: on every push to `main`, every 30
+    minutes, and on demand.
+
+  Both act with the owner's fine-grained token (`AUTOMERGE_TOKEN`), because
+  GitHub starts no workflow for anything done with `GITHUB_TOKEN`. An
+  update pushed with that token would get no CI, and a merge would start
+  no CI on `main`. The token only appears in `update-branches.yml`, which
+  runs main's copy on every trigger. `auto-merge.yml` runs the PR's copy,
+  so it holds no secret and only names the PR.
+
+  A merge queue would do both jobs natively, but GitHub offers it only to
+  organization-owned repositories. Dropping the up-to-date rule would need
+  no token, but two PRs that pass alone and break together would then be
+  caught only after they merged; the owner chose to keep the rule.
+
+  What CI checks is unchanged; the owner's manual merge step is what goes.
+  A gated PR still waits for `gate-change-approved`, and an update removes
+  that label like any other push. Details: `docs/guides/testing.md`,
+  "Merging".
 - **2026-10-24** (later): **Agent tooling is tracked in the repo:
   four project skills, a reviewer subagent and one project MCP server.**
   - `.claude/skills/`: `docs-sync`, `pr-gate`, `new-migration` and

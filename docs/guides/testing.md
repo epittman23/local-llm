@@ -145,6 +145,63 @@ Two consequences:
   - one that should trip, such as a CI change;
   - one that should pass, such as docs or a Dependabot bump.
 
+## Merging: auto-merge and branch updates
+
+Since 2026-10-24, a pull request merges itself once it is green. Nobody
+reviews PRs before they merge, so a PR that should wait must be held back
+on purpose.
+
+- **Which PRs.** Every PR from a branch of this repository that is not a
+  draft, when it is opened, reopened or marked ready for review
+  (`auto-merge.yml`). Forks never qualify. Dependabot's PRs keep their own
+  rule (`dependabot-automerge.yml`: everything but major bumps).
+- **When.** GitHub squash-merges once the main ruleset's required checks
+  (`CI passed`, `PR gate`, CodeQL) pass on a branch that is up to date with
+  `main`. A gated PR waits, because `PR gate` fails until the owner adds
+  `gate-change-approved`. With auto-merge on, that label is the merge
+  button: adding it to a green, up-to-date PR merges it.
+- **Holding a PR back.** Open it as a draft, or turn auto-merge off on the
+  PR page. Later pushes do not turn auto-merge back on; only reopening or
+  marking it ready for review does.
+- **Branch updates.** The ruleset requires a branch to be up to date, so
+  `update-branches.yml` merges `main` into each auto-merge PR that is
+  behind: on every push to `main`, every 30 minutes, and on demand
+  (Actions > Auto-merge and branch updates > Run workflow). It uses a merge
+  commit, never a rebase or a force-push, and CI runs on the result. A PR
+  with a conflict is skipped with a warning and needs a hand merge.
+  Dependabot's PRs are left to Dependabot, which rebases them itself.
+- **An update removes an approval.** An update is a new commit, so
+  `pr-gate.yml` removes `gate-change-approved` from a gated PR it updates,
+  and the owner approves again (one approval per commit). Approve a gated
+  PR when it is up to date.
+- **After a Dependabot merge.** Those merges use `GITHUB_TOKEN`, so they
+  start no workflow, and other PRs are updated on the next half-hourly run.
+
+### The `AUTOMERGE_TOKEN` secret
+
+Both jobs in `update-branches.yml` act with the owner's token, not
+`GITHUB_TOKEN`. GitHub starts no workflow for anything done with
+`GITHUB_TOKEN`, so an update pushed with it would get no CI, and the
+required checks would never report. The token lives only in
+`update-branches.yml`, which runs main's copy on every trigger.
+`auto-merge.yml` runs the PR's own copy, holds no secret, and only names
+the PR. The token job re-reads the PR and refuses forks, drafts, closed
+PRs and Dependabot.
+
+To create it (GitHub > Settings > Developer settings > Fine-grained tokens):
+
+1. Repository access: only `epittman23/local-llm`.
+2. Repository permissions: **Contents**, **Pull requests** and
+   **Workflows**, each read and write. Workflows is probably needed only
+   when an update merges a workflow change from `main` into a PR branch.
+3. An expiry date; note it.
+4. Save it as the Actions secret `AUTOMERGE_TOKEN` (repository Settings >
+   Secrets and variables > Actions).
+
+Without the secret, both jobs warn and do nothing. With a token GitHub
+rejects, for example an expired one, the run fails. Renew it before it
+expires.
+
 ## Frontend (`apps/web`)
 
 Run these from `apps/web/`:

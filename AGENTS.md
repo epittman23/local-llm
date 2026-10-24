@@ -385,7 +385,11 @@ The `PR gate` check enforces the PR title's style (the squash merge uses it
 as the commit subject) and the attribution rule below, in the title, the
 body and every commit message.
 Work on a branch and open a pull request: `main` accepts squash-merged PRs
-only, after the required `CI passed` check. Do not add yourself as a
+only, after the required `CI passed` check. A non-draft PR from a branch of
+this repository merges itself once its required checks pass (auto-merge),
+and is kept up to date with `main` until then; open it as a draft, or turn
+auto-merge off, to hold it. See
+[docs/guides/testing.md](docs/guides/testing.md#merging-auto-merge-and-branch-updates). Do not add yourself as a
 co-author in commits or pull requests; this includes adding
 "🤖 Generated with Claude Code" or
 "Co-Authored-By: Claude <model> <noreply@anthropic.com>".
