@@ -217,6 +217,7 @@ from local_llm.utils.auth import (
     get_http_authorization_cred,
     get_verified_user,
 )
+from local_llm.utils.background import run_in_background
 from local_llm.utils.chat import (
     chat_completed as chat_completed_handler,
 )
@@ -1311,7 +1312,7 @@ async def _start_initial_title_generation(
         except Exception as e:
             log.debug('Error generating initial chat title: %s', e)
 
-    asyncio.create_task(run_initial_title_generation())
+    run_in_background(run_initial_title_generation())
 
 
 async def _create_chat(

@@ -7,6 +7,7 @@ from uuid import uuid4
 from redis.asyncio import Redis
 
 from local_llm.env import REDIS_KEY_PREFIX, REDIS_RESPONSE_STREAM_TTL
+from local_llm.utils.background import run_in_background
 from local_llm.utils.json_codec import JSONCodec, dumps_bytes
 
 log = logging.getLogger(__name__)
@@ -136,7 +137,7 @@ async def create_task(redis, coroutine, id=None, task_id=None):
     task = asyncio.create_task(coroutine)  # Create the task
 
     # Add a done callback for cleanup
-    task.add_done_callback(lambda t: asyncio.create_task(cleanup_task(redis, task_id, id)))
+    task.add_done_callback(lambda t: run_in_background(cleanup_task(redis, task_id, id)))
     tasks[task_id] = task
 
     # If an ID is provided, associate the task with that ID

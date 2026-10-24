@@ -276,6 +276,7 @@ select = [
   "B034", # flake8-bugbear: re.sub/split/subn count or flags passed positionally
   "B905", # flake8-bugbear: zip() without strict=
   "S113", # flake8-bandit: requests call without a timeout
+  "RUF006", # asyncio task created and not stored, so it can be collected mid-run
 ]
 
 # Plugin configs:
