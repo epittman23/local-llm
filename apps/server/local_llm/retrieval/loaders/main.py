@@ -23,6 +23,7 @@ from local_llm.env import (
     AIOHTTP_CLIENT_SESSION_SSL,
     GLOBAL_LOG_LEVEL,
     MINERU_MAX_MARKDOWN_BYTES,
+    REQUESTS_TIMEOUT_PROCESSING,
     REQUESTS_VERIFY,
 )
 from local_llm.retrieval.loaders.datalab_marker import DatalabMarkerLoader
@@ -266,7 +267,9 @@ class TikaLoader:
         content_key = 'tk:content' if self.server_version == '4' else 'X-TIKA:content'
         endpoint = f'{self.url.rstrip("/")}/{endpoint_path}'
 
-        r = requests.put(endpoint, data=data, headers=headers, verify=REQUESTS_VERIFY)
+        r = requests.put(
+            endpoint, data=data, headers=headers, verify=REQUESTS_VERIFY, timeout=REQUESTS_TIMEOUT_PROCESSING
+        )
 
         if r.ok:
             raw_metadata = r.json()
@@ -317,6 +320,7 @@ class DoclingLoader:
                 },
                 headers=headers,
                 verify=AIOHTTP_CLIENT_SESSION_SSL,
+                timeout=REQUESTS_TIMEOUT_PROCESSING,
             )
         if r.ok:
             result = r.json()

@@ -3232,7 +3232,7 @@ async def process_files_batch(
             )
 
             # Update all files with collection name
-            for file_update, file_result in zip(file_updates, file_results):
+            for file_update, file_result in zip(file_updates, file_results, strict=True):
                 await Files.update_file_by_id(id=file_result.file_id, form_data=file_update, db=db)
                 file_result.status = 'completed'
 

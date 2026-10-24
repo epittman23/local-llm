@@ -117,7 +117,7 @@ def normalize_openai_edit_image_data_url(data_url: str) -> str:
         return data_url
 
     header, encoded = data_url.split(',', 1)
-    mime_type = header.split(';')[0].lstrip('data:').lower()
+    mime_type = header.split(';')[0].removeprefix('data:').lower()
     if mime_type not in {'image/jpeg', 'image/jpg', 'image/mpo'}:
         return data_url
 
@@ -153,7 +153,7 @@ def normalize_openai_edit_image_data_url(data_url: str) -> str:
 
 def get_image_file_item(base64_string, param_name='image'):
     header, encoded = base64_string.split(',', 1)
-    mime_type = header.split(';')[0].lstrip('data:') or 'image/png'
+    mime_type = header.split(';')[0].removeprefix('data:') or 'image/png'
     image_data = base64.b64decode(encoded)
     extension = IMAGE_FILE_EXTENSIONS.get(mime_type.lower()) or mimetypes.guess_extension(mime_type) or '.png'
     return (
@@ -504,7 +504,7 @@ async def get_image_data(data: str, headers=None, trusted_base_url: str | None =
         else:
             if ',' in data:
                 header, encoded = data.split(',', 1)
-                mime_type = header.split(';')[0].lstrip('data:')
+                mime_type = header.split(';')[0].removeprefix('data:')
                 img_data = base64.b64decode(encoded)
             else:
                 mime_type = 'image/png'

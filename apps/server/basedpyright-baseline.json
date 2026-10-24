@@ -1,6 +1,6 @@
 {
 	"_comment": "basedpyright findings allowed per file and rule; may only shrink. See .github/scripts/lint_ratchet.py.",
-	"total": 2247,
+	"total": 2239,
 	"counts": {
 		"apps/server/local_llm/benchmarks/analysis/compare.py": {
 			"reportArgumentType": 9,
@@ -52,7 +52,7 @@
 		"apps/server/local_llm/benchmarks/tuning/tune.py": {
 			"reportArgumentType": 9,
 			"reportCallIssue": 2,
-			"reportOptionalMemberAccess": 40,
+			"reportOptionalMemberAccess": 39,
 			"reportReturnType": 2
 		},
 		"apps/server/local_llm/benchmarks/tuning/tune_probe.py": {
@@ -368,7 +368,7 @@
 			"reportReturnType": 1
 		},
 		"apps/server/local_llm/routers/automations.py": {
-			"reportArgumentType": 12,
+			"reportArgumentType": 11,
 			"reportOptionalMemberAccess": 11
 		},
 		"apps/server/local_llm/routers/benchmarks/live.py": {
@@ -386,7 +386,7 @@
 			"reportOptionalMemberAccess": 2
 		},
 		"apps/server/local_llm/routers/calendar.py": {
-			"reportArgumentType": 4,
+			"reportArgumentType": 2,
 			"reportOptionalMemberAccess": 5
 		},
 		"apps/server/local_llm/routers/channels.py": {
@@ -414,7 +414,7 @@
 			"reportOptionalMemberAccess": 12
 		},
 		"apps/server/local_llm/routers/folders.py": {
-			"reportArgumentType": 4,
+			"reportArgumentType": 3,
 			"reportOptionalMemberAccess": 16
 		},
 		"apps/server/local_llm/routers/functions.py": {
@@ -438,7 +438,7 @@
 			"reportReturnType": 1
 		},
 		"apps/server/local_llm/routers/memories.py": {
-			"reportArgumentType": 5,
+			"reportArgumentType": 4,
 			"reportOptionalMemberAccess": 9
 		},
 		"apps/server/local_llm/routers/models.py": {
@@ -556,7 +556,7 @@
 			"reportArgumentType": 3
 		},
 		"apps/server/local_llm/utils/auth.py": {
-			"reportArgumentType": 3
+			"reportArgumentType": 2
 		},
 		"apps/server/local_llm/utils/automations.py": {
 			"reportArgumentType": 7,
@@ -608,7 +608,7 @@
 			"reportOptionalMemberAccess": 1
 		},
 		"apps/server/local_llm/utils/middleware.py": {
-			"reportArgumentType": 36,
+			"reportArgumentType": 35,
 			"reportAttributeAccessIssue": 28,
 			"reportIndexIssue": 8,
 			"reportOperatorIssue": 2,

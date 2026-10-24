@@ -470,7 +470,7 @@ def compare_block(groups: list[Group]) -> dict:
         for b in ordered[i + 1 :]:
             raw.append((a, b, _est().paired(a.summary().scores, b.summary().scores)))
     tested = [t for t in raw if t[2].tested]
-    adjusted = dict(zip((id(t[2]) for t in tested), _est().holm([t[2].p for t in tested])))
+    adjusted = dict(zip((id(t[2]) for t in tested), _est().holm([t[2].p for t in tested]), strict=True))
     m = len(tested)
 
     pairs, different = [], set()

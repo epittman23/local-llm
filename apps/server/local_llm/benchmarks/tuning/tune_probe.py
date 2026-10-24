@@ -92,6 +92,10 @@ class Server:
     not a TCP connect.
     """
 
+    #: How long stop() waits for the server to exit on SIGINT before it
+    #: stops it the hard way.
+    interrupt_grace = 20.0
+
     def __init__(self, candidate: Candidate, port: int, *, load_timeout: float, session: aiohttp.ClientSession):
         self.candidate = candidate
         self.port = port
@@ -187,13 +191,17 @@ class Server:
         is self-healing, not a permanent leak the way an orphaned server
         holding VRAM would be.
         """
-        proc = getattr(self.cmd, 'proc', None) or getattr(self.cmd, 'server_proc', None)
+        proc = self._proc()
         if proc is None:
             return None
         try:
             return os.getpgid(proc.pid)
         except (ProcessLookupError, OSError):
             return None
+
+    def _proc(self) -> asyncio.subprocess.Process | None:
+        """The server's process, whichever of Command and ServeProcess runs it."""
+        return getattr(self.cmd, 'proc', None) or getattr(self.cmd, 'server_proc', None)
 
     async def stop(self) -> None:
         """SIGINT first, so the recorder closes its own run.
@@ -208,11 +216,11 @@ class Server:
         """
         if self.cmd is None:
             return
-        if self.cmd.running:
+        proc = self._proc()
+        if proc is not None and self.cmd.running:
             self.cmd.interrupt()
-            deadline = time.monotonic() + 20.0
-            while self.cmd.running and time.monotonic() < deadline:
-                await asyncio.sleep(0.5)
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(proc.wait(), timeout=self.interrupt_grace)
         # ServeProcess.stop() also stops the telemetry recorder and removes the
         # temp server log, so it runs even after a clean SIGINT exit (it is
         # idempotent on an exited process). A plain Command only needs it

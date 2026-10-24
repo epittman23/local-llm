@@ -201,11 +201,12 @@ class NoteTable:
     async def search_notes(
         self,
         user_id: str,
-        filter: dict = {},
+        filter: dict | None = None,
         skip: int = 0,
         limit: int = 30,
         db: AsyncSession | None = None,
     ) -> NoteListResponse:
+        filter = filter or {}
         async with get_async_db_context(db) as db:
             stmt = select(Note, User).outerjoin(User, User.id == Note.user_id)
             if filter:

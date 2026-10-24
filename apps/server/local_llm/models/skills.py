@@ -218,11 +218,12 @@ class SkillsTable:
     async def search_skills(
         self,
         user_id: str,
-        filter: dict = {},
+        filter: dict | None = None,
         skip: int = 0,
         limit: int = 30,
         db: AsyncSession | None = None,
     ) -> SkillListResponse:
+        filter = filter or {}
         try:
             async with get_async_db_context(db) as db:
                 # Join with User table for user filtering

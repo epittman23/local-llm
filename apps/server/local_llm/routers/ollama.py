@@ -10,6 +10,7 @@ import time
 from urllib.parse import urlparse
 
 import aiofiles
+import aiofiles.os
 import aiohttp
 from aiocache import cached
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
@@ -1561,7 +1562,7 @@ async def download_file_stream(
     chunk_size: int = AIOHTTP_FILE_STREAM_CHUNK_SIZE,
 ):
     """Stream a model file download from *file_url*, then push the blob to Ollama."""
-    current_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+    current_size = await aiofiles.os.path.getsize(file_path) if await aiofiles.os.path.exists(file_path) else 0
     headers = {'Range': f'bytes={current_size}-'} if current_size > 0 else {}
 
     session = await get_session()
@@ -1658,7 +1659,7 @@ async def upload_model(
 
     async def file_process_stream():
         nonlocal ollama_url
-        total_size = os.path.getsize(file_path)
+        total_size = await aiofiles.os.path.getsize(file_path)
         log.info('Total Model Size: %s', total_size)
 
         # Stage 2: hash the file and emit SSE progress

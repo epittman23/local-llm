@@ -14,8 +14,9 @@ no process/DB state of its own:
     declared search space, and the two ways of drawing points from it (a
     broad seeded sample for `explore`, the leader's own neighbourhood for
     `refine`).
-  * `median()`/`log_ratios()`/`sign_test()` -- the paired-ratio statistics the
-    elimination rule in tune.py's `Sweep.eliminate()` is built on.
+  * `median()`/`log_ratios()`/`paired_log_ratio_differences()`/`sign_test()`
+    -- the paired-ratio statistics the elimination rule in tune.py's
+    `Sweep.eliminate()` is built on.
 
 `config_id_of()` is the one function here with I/O: it reads a candidate's
 profile from the database and resolves it through the same
@@ -144,12 +145,12 @@ class Schedule:
 
     @property
     def item_visits(self) -> int:
-        return sum(n * (hi - lo) for n, (lo, hi) in zip(self.survivors, self.slices))
+        return sum(n * (hi - lo) for n, (lo, hi) in zip(self.survivors, self.slices, strict=True))
 
     def rows(self) -> list[list[str]]:
         return [
             [str(i + 1), f'{lo}:{hi}', str(hi - lo), str(n), str(n * (hi - lo))]
-            for i, (n, (lo, hi)) in enumerate(zip(self.survivors, self.slices))
+            for i, (n, (lo, hi)) in enumerate(zip(self.survivors, self.slices, strict=True))
         ]
 
 
@@ -180,7 +181,7 @@ def plan_schedule(tier_size: int, candidates: int, round_items: int, eta: int = 
     if lo > tier_size:
         rows = '\n'.join(
             f'  round {i + 1}: items {a}:{b} ({b - a}), {n} candidates'
-            for i, (n, (a, b)) in enumerate(zip(survivors, slices))
+            for i, (n, (a, b)) in enumerate(zip(survivors, slices, strict=True))
         )
         raise TuneRefused(
             f'llama-tune: this tier cannot carry that search.\n'
@@ -573,16 +574,37 @@ def log_ratios(matrix: dict, candidate: str, baseline: str, items: list[tuple[st
     mid-sweep. The median survives one pathological item, which on DS-1000
     is a real prospect.
     """
+    return [r for key in items if (r := _log_ratio(matrix, key, candidate, baseline)) is not None]
+
+
+def paired_log_ratio_differences(
+    matrix: dict, first: str, second: str, baseline: str, items: list[tuple[str, str]]
+) -> list[float]:
+    """ln(first / baseline) - ln(second / baseline), per item all three served.
+
+    Paired by item. Two log_ratios() lists cannot be zipped into pairs:
+    each drops the items its own candidate did not serve (a visit cut short
+    by a dead server), so after the first such gap the lists pair one
+    item's ratio with another's.
+    """
     out = []
     for key in items:
-        a = matrix.get((*key, candidate))
-        b = matrix.get((*key, baseline))
-        if not a or not b:
-            continue
-        ta, tb = a.get('gen_tps'), b.get('gen_tps')
-        if ta and tb and ta > 0 and tb > 0:
-            out.append(math.log(ta / tb))
+        a = _log_ratio(matrix, key, first, baseline)
+        b = _log_ratio(matrix, key, second, baseline)
+        if a is not None and b is not None:
+            out.append(a - b)
     return out
+
+
+def _log_ratio(matrix: dict, key: tuple[str, str], candidate: str, baseline: str) -> float | None:
+    a = matrix.get((*key, candidate))
+    b = matrix.get((*key, baseline))
+    if not a or not b:
+        return None
+    ta, tb = a.get('gen_tps'), b.get('gen_tps')
+    if ta and tb and ta > 0 and tb > 0:
+        return math.log(ta / tb)
+    return None
 
 
 def sign_test(values: list[float]) -> tuple[float, int]:

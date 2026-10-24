@@ -247,10 +247,10 @@ class _SSRFSafeAdapter(HTTPAdapter):
 class _SSRFSafeConnector(aiohttp.TCPConnector):
     """Rejects filter-listed request targets, and non-global IPs on each new connection."""
 
-    async def connect(self, req, traces, timeout):
+    async def connect(self, req, *args, **kwargs):
         # Per request, not per connection: _resolve_host sees the proxy and pooled reuse skips it.
         _assert_host_allowed(req.url.host)
-        return await super().connect(req, traces, timeout)
+        return await super().connect(req, *args, **kwargs)
 
     async def _resolve_host(self, host, port, traces=None):
         # aiohttp answers IP-literal hosts itself without consulting a resolver.
@@ -998,7 +998,7 @@ class SafeWebBaseLoader(WebBaseLoader):
     async def alazy_load(self) -> AsyncIterator[Document]:
         """Async lazy load text from the url(s) in web_path."""
         results = await self.fetch_all(self.web_paths)
-        for path, html in zip(self.web_paths, results):
+        for path, html in zip(self.web_paths, results, strict=True):
             # parsing a large page costs hundreds of ms, keep it off the event loop
             yield await asyncio.to_thread(self._document_from_html, html, path)
 

@@ -5,13 +5,15 @@ import importlib
 import importlib.abc
 import importlib.machinery
 import logging
-import os
 import re
 import subprocess
 import sys
 import tempfile
 import types
 from typing import Any
+
+import aiofiles
+import aiofiles.os
 
 from local_llm.env import (
     ENABLE_PIP_INSTALL_FRONTMATTER_REQUIREMENTS,
@@ -276,8 +278,8 @@ async def load_tool_module_by_id(tool_id, content=None):
     temp_file = tempfile.NamedTemporaryFile(delete=False)
     temp_file.close()
     try:
-        with open(temp_file.name, 'w', encoding='utf-8') as f:
-            f.write(content)
+        async with aiofiles.open(temp_file.name, 'w', encoding='utf-8') as f:
+            await f.write(content)
         module.__dict__['__file__'] = temp_file.name
 
         # Executing the modified content in the created module's namespace
@@ -296,7 +298,7 @@ async def load_tool_module_by_id(tool_id, content=None):
         del sys.modules[module_name]  # Clean up
         raise e
     finally:
-        os.unlink(temp_file.name)
+        await aiofiles.os.remove(temp_file.name)
 
 
 async def load_function_module_by_id(function_id: str, content: str | None = None):
@@ -328,8 +330,8 @@ async def load_function_module_by_id(function_id: str, content: str | None = Non
     temp_file = tempfile.NamedTemporaryFile(delete=False)
     temp_file.close()
     try:
-        with open(temp_file.name, 'w', encoding='utf-8') as f:
-            f.write(content)
+        async with aiofiles.open(temp_file.name, 'w', encoding='utf-8') as f:
+            await f.write(content)
         module.__dict__['__file__'] = temp_file.name
 
         # Execute the modified content in the created module's namespace
@@ -357,7 +359,7 @@ async def load_function_module_by_id(function_id: str, content: str | None = Non
         await Functions.update_function_by_id(function_id, {'is_active': False})
         raise e
     finally:
-        os.unlink(temp_file.name)
+        await aiofiles.os.remove(temp_file.name)
 
 
 def _state_cache(request, name: str) -> dict:

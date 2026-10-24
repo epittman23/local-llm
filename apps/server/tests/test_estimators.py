@@ -37,7 +37,7 @@ def scores(values, clusters=None, minutes=None, samples=1) -> dict[str, E.Proble
     minutes = minutes or [1.0] * len(values)
     return {
         str(i): E.ProblemScore(str(i), float(v), samples, c, m)
-        for i, (v, c, m) in enumerate(zip(values, clusters, minutes))
+        for i, (v, c, m) in enumerate(zip(values, clusters, minutes, strict=True))
     }
 
 
