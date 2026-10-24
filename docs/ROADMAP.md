@@ -72,6 +72,7 @@ timeline
       2026-10-24 (later) : Agent tooling tracked in the repo : four project skills (docs-sync, pr-gate, new-migration, serving-change) and a pre-PR reviewer subagent : codebase-memory-mcp as a local code-graph MCP server, installed by hand from a checksum-verified release
       2026-10-24 (evening) : Pull requests from the repo's branches auto-merge once green (drafts and forks excluded) : behind PRs updated with main on every push and every 30 minutes : the owner's fine-grained token, so updates and merges start CI
       2026-10-24 (night) : make backend also runs Jupyter (server-side code interpreter, isolated network) and SearXNG (web search without an API key)
+      2026-10-24 (late night) : Knowledge retrieval on bge-m3 with a bge-reranker-v2-m3 reranker and hybrid search : the code interpreter on Jupyter, web search on SearXNG, memory background review on
     section Near-Term
       "~1 week" : Resolve the blocking rack hole-type question : confirm riser and PSU questions : re-verify current component pricing
       "~2-4 weeks" : Finish the benchmark upgrade : HumanEval+ and MBPP+ replace HumanEval and MBPP : a LiveCodeBench slice with a per-run release-date window : a llama-bench pre-screen driven by Optuna

@@ -61,8 +61,16 @@ Face at runtime. The sentence-transformers embedding model
 (`RAG_EMBEDDING_MODEL`, default `sentence-transformers/all-MiniLM-L6-v2`) and
 any reranking model must therefore already be in the local Hugging Face cache.
 If one is missing, the backend still starts, but loading the embedding
-function fails and knowledge uploads are not embedded. Fetch it once by
-running the backend without `HF_HUB_OFFLINE` (for example, start uvicorn by
-hand with the same environment minus that variable), then go back to
-`make backend`. On 2026-10-10 the default model was not cached on this
-machine.
+function fails and knowledge uploads are not embedded. Fetch a model once
+with the backend's own `hf`, outside `make backend`:
+
+```sh
+cd apps/server
+HF_HUB_OFFLINE=0 .venv/bin/hf download BAAI/bge-m3 --exclude "onnx/*" --exclude "imgs/*"
+```
+
+Give each pattern its own `--exclude`: `hf download` reads a second
+pattern after one `--exclude` as a file name to fetch, and then downloads
+only metadata. The models in use since 2026-10-24 (`BAAI/bge-m3` and
+`BAAI/bge-reranker-v2-m3`) are in
+[assistant-tools.md](assistant-tools.md#knowledge-retrieval).
