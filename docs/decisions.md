@@ -7,6 +7,21 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-24** (late night): **Knowledge retrieval moved to bge-m3 with
+  a bge-reranker-v2-m3 reranker and hybrid search, and the assistant's
+  tools were switched on.** `all-MiniLM-L6-v2` (384 dimensions, English
+  only) with no reranker was the inherited default. bge-m3 is
+  multilingual, reads up to 8,192 tokens, and with the cross-encoder and
+  BM25 beside it, it ranked the right passage first in each of three
+  paraphrased test queries, by a margin of 0.8 or more. The switch cost no
+  re-embedding, because the database held no knowledge, files or memories
+  yet. A later change of embedding model will cost one.
+
+  In the same settings change, the code interpreter and code execution
+  moved to the Jupyter engine, web search was turned on with SearXNG, and
+  memory background review was turned on. These are settings in the app's
+  database, not repo files. `docs/guides/assistant-tools.md` records the
+  values and the measurements.
 - **2026-10-24** (night): **`make backend` also runs a Jupyter server and
   SearXNG.** The inherited code interpreter ran Python in the browser
   (Pyodide), so it could not run without a page open, could not use
