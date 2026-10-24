@@ -15,7 +15,7 @@
 #   make pr-gate PR=<n>  the PR gate's title, attribution and tripwire
 #                    checks on pull request <n>, read-only.
 #   make test       backend pytest + web checks + Playwright + desktop checks
-#                    (CI's other jobs).
+#                    + the real-stack boot smoke (CI's other jobs).
 #   make check      lint, secrets, then test: one command that predicts
 #                    `CI passed`.
 #   make help       this text.
@@ -59,8 +59,11 @@ GITLEAKS_IMAGE := zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb
 # Host port for the throwaway Postgres `make test-backend` starts; not 5432,
 # so it never collides with `make backend`'s database.
 LLLM_TEST_PG_PORT ?= 55432
+# Host ports for `make test-boot`'s throwaway Postgres and Redis.
+LLLM_BOOT_PG_PORT ?= 55433
+LLLM_BOOT_REDIS_PORT ?= 56379
 
-.PHONY: help backend frontend astro desktop lint secrets pr-gate test test-backend test-web test-e2e test-desktop check
+.PHONY: help backend frontend astro desktop lint secrets pr-gate test test-backend test-boot test-web test-e2e test-desktop check
 
 help:
 	@echo "make backend   Postgres + Redis + the backend (uvicorn --reload, $(LLLM_BACKEND_HOST):$(LLLM_BACKEND_PORT))"
@@ -69,7 +72,7 @@ help:
 	@echo "make lint      pre-commit over every file, as CI runs it"
 	@echo "make secrets   gitleaks over the whole git history"
 	@echo "make pr-gate PR=<n>  the PR gate's checks on pull request <n> (read-only)"
-	@echo "make test      test-backend + test-web + test-e2e + test-desktop, as CI runs them"
+	@echo "make test      test-backend + test-web + test-e2e + test-desktop + test-boot, as CI runs them"
 	@echo "make check     lint, secrets, then test (predicts CI's 'CI passed')"
 
 # --reload caveat: a code change restarts the uvicorn worker, and with it the
@@ -218,6 +221,38 @@ test-backend:
 	TEST_DATABASE_URL="postgresql://local_llm:test-only-not-a-secret@127.0.0.1:$(LLLM_TEST_PG_PORT)/local_llm" \
 	uv run --frozen python -m pytest tests -q
 
+# CI's "Boot (real stack)": the backend started as `make backend` starts it,
+# against a throwaway Postgres and Redis (infra/docker-compose.yml's images)
+# and a stub in place of OpenRouter, then used; tests/boot_smoke.py has the
+# checks. Builds apps/web first, since the backend serves it. The containers
+# are removed on exit, Ctrl-C included, and nothing touches `make backend`'s
+# database.
+test-boot:
+	@cd "$(WEB_DIR)" && bun install --frozen-lockfile && bun run build
+	@cd "$(SERVER_DIR)"; \
+	export UV_PROJECT_ENVIRONMENT="$(SERVER_DIR)/.venv"; \
+	uv sync --frozen --no-install-project; \
+	for port in $(LLLM_BOOT_PG_PORT) $(LLLM_BOOT_REDIS_PORT); do \
+		if ss -ltn | grep -q "127.0.0.1:$$port "; then \
+			echo "make test-boot: port $$port is in use -- set LLLM_BOOT_PG_PORT / LLLM_BOOT_REDIS_PORT" >&2; \
+			exit 1; \
+		fi; \
+	done; \
+	pg="lllm-boot-pg-$$$$"; redis="lllm-boot-redis-$$$$"; \
+	trap 'docker rm -f "$$pg" "$$redis" >/dev/null 2>&1' EXIT; \
+	docker run --rm -d --name "$$pg" -p "127.0.0.1:$(LLLM_BOOT_PG_PORT):5432" \
+		-e POSTGRES_USER=local_llm -e POSTGRES_PASSWORD=test-only-not-a-secret -e POSTGRES_DB=local_llm \
+		pgvector/pgvector:pg16 >/dev/null; \
+	docker run --rm -d --name "$$redis" -p "127.0.0.1:$(LLLM_BOOT_REDIS_PORT):6379" redis:7.4.2-alpine >/dev/null; \
+	for i in $$(seq 1 60); do \
+		docker exec "$$pg" psql -U local_llm -d local_llm -tAc 'select 1' >/dev/null 2>&1 && break; \
+		sleep 1; \
+	done; \
+	LLLM_SECRET_KEY=test-only-not-a-secret-0123456789abcdef0123456789abcdef \
+	DATABASE_URL="postgresql://local_llm:test-only-not-a-secret@127.0.0.1:$(LLLM_BOOT_PG_PORT)/local_llm" \
+	REDIS_URL="redis://127.0.0.1:$(LLLM_BOOT_REDIS_PORT)/0" \
+	uv run --frozen python tests/boot_smoke.py
+
 # CI's "Web (astro check, vitest, build)".
 test-web:
 	@cd "$(WEB_DIR)" && \
@@ -245,7 +280,7 @@ test-desktop:
 	bun run test:unit && \
 	bun run package:dir
 
-test: test-backend test-web test-e2e test-desktop
+test: test-backend test-web test-e2e test-desktop test-boot
 
 check: lint secrets test
 

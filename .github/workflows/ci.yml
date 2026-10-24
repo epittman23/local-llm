@@ -219,10 +219,71 @@ jobs:
       - name: pytest
         run: uv run --frozen python -m pytest tests -q
 
+  # Starts the real backend, as `make backend` does, and uses it: the pytest
+  # suite only imports the app and Playwright mocks it, so nothing else
+  # would notice a backend that no longer boots. tests/boot_smoke.py has
+  # what it checks. The images are infra/docker-compose.yml's.
+  boot:
+    name: Boot (real stack)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: local_llm
+          POSTGRES_PASSWORD: ci-only-not-a-secret
+          POSTGRES_DB: local_llm
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U local_llm"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7.4.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      LLLM_SECRET_KEY: ci-only-not-a-secret-0123456789abcdef0123456789abcdef
+      DATABASE_URL: postgresql://local_llm:ci-only-not-a-secret@localhost:5432/local_llm
+      REDIS_URL: redis://localhost:6379/0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: apps/server/uv.lock
+      # The backend serves the built frontend at /, so build it first.
+      - name: Build the frontend
+        working-directory: apps/web
+        run: bun install --frozen-lockfile && bun run build
+      - name: Install the backend
+        working-directory: apps/server
+        run: uv sync --frozen --no-install-project
+      - name: Boot smoke
+        working-directory: apps/server
+        run: uv run --frozen python tests/boot_smoke.py
+
   ci-ok:
     name: CI passed
     if: always()
-    needs: [pre-commit, secrets, web, e2e, desktop, backend]
+    needs: [pre-commit, secrets, web, e2e, desktop, backend, boot]
     runs-on: ubuntu-latest
     steps:
       - name: Every job succeeded
