@@ -18,6 +18,8 @@ local-llm/
 ├── .github/                   CI workflows (ci.yml; pr-gate.yml, the tripwire), Dependabot, scripts/ (PR gate, lint ratchet)
 ├── .pre-commit-config.yaml    the only definition of lint and format checks (CI runs it)
 ├── .gitleaksignore            gitleaks findings that are not secrets, with reasons
+├── .claude/                   agent skills and the reviewer subagent (docs/guides/agent-tooling.md)
+├── .mcp.json                  project MCP servers: codebase-memory-mcp
 ├── AGENTS.md                  agent and contributor guide (CLAUDE.md links to it)
 ├── LICENSE, LICENSE_HISTORY   the license texts the derived code is under (see NOTICE)
 ├── NOTICE                     what is derived, the license boundaries, the branding basis
@@ -42,7 +44,7 @@ itself lives in the backend as Python (`apps/server/local_llm/
 benchmarks/serving/`), not in a shell profile table.
 
 Local/generated (not tracked by git — see "Local/generated" section below
-for detail): `.vscode/`, `.claude/`, `logs/`, the backend's runtime data
+for detail): `.vscode/`, `.claude/`'s local state, `logs/`, the backend's runtime data
 directory, and scattered `__pycache__/` directories.
 
 ## `AGENTS.md` and `CLAUDE.md`
@@ -52,6 +54,19 @@ exists, models in use, conventions, commands, backend and frontend
 specifics, the maintenance policy (this file's own upkeep rule lives there)
 and the commit policy. `CLAUDE.md` is a symlink to it, so every agent reads
 the same file. Read it before making structural or config changes.
+
+## `.claude/` and `.mcp.json`
+
+Agent tooling, described in `docs/guides/agent-tooling.md`:
+
+- **`.claude/skills/`** — project skills, one directory each: `docs-sync`
+  (the maintenance-policy checklist), `pr-gate` (the CI tripwire before and
+  after a push), `new-migration` (append-only Alembic revisions and
+  `benchmark_schema_note` rows), `serving-change` (launch flags and the
+  `config_id` fingerprint).
+- **`.claude/agents/reviewer.md`** — a read-only pre-PR reviewer subagent.
+- **`.mcp.json`** — project MCP servers; today only `codebase-memory-mcp`,
+  a local code-graph index (binary installed separately, pinned).
 
 ## `LICENSE`, `LICENSE_HISTORY`, `NOTICE`, `CONTRIBUTOR_LICENSE_AGREEMENT`
 
@@ -86,7 +101,8 @@ Start here for "how do I run/use this."
   `testing.md` (the app's own test suites), `dependencies.md` (the backend
   venv and offline model cache), `frontend.md` (`apps/web` dev server,
   build, rough edges), `model-downloads.md` (`hf download` commands for the
-  GGUF weights).
+  GGUF weights), `agent-tooling.md` (the project skills, the reviewer
+  agent and codebase-memory-mcp).
 - **`plans/`** — implementation plans awaiting or under execution:
   `benchmark-upgrade.md` (EvalPlus datasets, LiveCodeBench, the llama-bench
   pre-screen, and error bars in Compare and Report).
@@ -399,8 +415,10 @@ Present on disk but gitignored — won't show up in `git ls-files`, but worth
 knowing about when navigating the filesystem directly:
 
 - **`.vscode/`** — editor config (currently empty).
-- **`.claude/`** — Claude Code local state (`settings.local.json`,
-  scheduled task locks).
+- **`.claude/`**'s local state — `settings.local.json` (personal permission
+  allowlists; not gitignored, so never commit it), `worktrees/` (agent
+  checkouts) and scheduled task locks. `.claude/skills/` and
+  `.claude/agents/` beside them **are** tracked (see below).
 - **`logs/`** — local logs. On a checkout that has one,
   `llama.db.retired-<date>` is the old SQLite store from before 2026-09-08;
   its Postgres backfill was lost with the old database on 2026-10-09, so that
