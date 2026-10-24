@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import inspect
 import logging
 import time
@@ -13,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from local_llm.env import ENABLE_PLUGINS, VERSION
 from local_llm.models.config import Config
 from local_llm.retrieval.web.utils import validate_url
+from local_llm.utils.background import run_in_background
 from local_llm.utils.webhook import post_webhook
 
 log = logging.getLogger(__name__)
@@ -1059,7 +1059,7 @@ async def dispatch_webhook_event(app: Any, event: Event) -> None:
 
 def schedule_webhook_dispatch(app: Any, event: Event) -> None:
     try:
-        asyncio.create_task(dispatch_webhook_event(app, event))
+        run_in_background(dispatch_webhook_event(app, event))
     except RuntimeError:
         log.exception('Event webhook delivery could not be scheduled for %s', event.event)
 
@@ -1073,7 +1073,7 @@ def schedule_notification_dispatch(app: Any, event: Event) -> None:
     try:
         from local_llm.utils.notifications import dispatch_notification_event
 
-        asyncio.create_task(dispatch_notification_event(app, event))
+        run_in_background(dispatch_notification_event(app, event))
     except RuntimeError:
         log.exception('Notification delivery could not be scheduled for %s', event.event)
 
@@ -1156,7 +1156,7 @@ async def dispatch_event_functions(
 
 def schedule_event_function_dispatch(app: Any, event: Event, request: Any | None = None) -> None:
     try:
-        asyncio.create_task(dispatch_event_functions(app, event, request))
+        run_in_background(dispatch_event_functions(app, event, request))
     except RuntimeError:
         log.exception('Event functions could not be scheduled for %s', event.event)
 

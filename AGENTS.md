@@ -131,9 +131,10 @@ shadcn/ui frontend, `apps/desktop/` is the Electron desktop app, `infra/` holds 
   nobody uses. Files under `benchmarks/data/prompts/` are identified by a
   sha of their exact bytes: never reformat them incidentally.
 - **Two kinds of testing.** Changes to the app are verified by the
-  frontend's Vitest and Playwright suites, the backend's pytest, and using
-  it in the browser; Playwright mocks the backend, so a change across the
-  frontend/backend seam also needs a real run. Local serving configurations
+  frontend's Vitest and Playwright suites, the backend's pytest, a boot
+  smoke that starts the real backend and uses it (`make test-boot`), and
+  using it in the browser; Playwright mocks the backend, so a change across
+  the frontend/backend seam also needs a real run. Local serving configurations
   are verified from the Benchmarks pages. See
   [docs/guides/testing.md](docs/guides/testing.md).
 - **Comments that read `d863707:apps/openwebui/...`** name the SvelteKit
@@ -163,8 +164,8 @@ shadcn/ui frontend, `apps/desktop/` is the Electron desktop app, `infra/` holds 
   (`LLLM_SECRET_KEY`, `LLLM_AUTH`, `LLLM_NAME`, ...; `WEBUI_*` until
   2026-10-10).
 - `make check`: everything CI runs (`make lint`, `make secrets`, then
-  `make test`, which is `test-backend` + `test-web` + `test-e2e` +
-  `test-desktop`), with the same commands, so a green `make check` predicts
+  `make test`, which is `test-backend` + `test-types` + `test-web` +
+  `test-e2e` + `test-desktop` + `test-boot`), with the same commands, so a green `make check` predicts
   a green `CI passed`. Run it before opening a
   PR. The pieces run on their own too; see
   [docs/guides/testing.md](docs/guides/testing.md).
@@ -172,6 +173,9 @@ shadcn/ui frontend, `apps/desktop/` is the Electron desktop app, `infra/` holds 
   `.pre-commit-config.yaml` is the only definition, and CI runs the same file).
   It lints the workflows too (actionlint, zizmor). `make secrets` runs
   gitleaks over the git history; known non-secrets go in `.gitleaksignore`.
+  basedpyright (`make test-types`) and Biome's linter run against baselines
+  of inherited findings that only shrink; after fixing some, record them
+  with `make baselines`.
 - Requirements: native Linux (Fedora 44 since 2026-10-09), Docker Engine with
   the Compose plugin and the user in the `docker` group, `make`, Bun,
   Node ≥ 22.12, and **uv**, which builds the backend venv from

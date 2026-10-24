@@ -3,7 +3,7 @@ from typing import Literal
 
 import requests
 
-from local_llm.env import VERSION
+from local_llm.env import REQUESTS_TIMEOUT_SLOW_API, VERSION
 from local_llm.retrieval.web.main import SearchResult, get_filtered_results
 
 MODELS = Literal[
@@ -68,7 +68,7 @@ def search_perplexity(
         }
 
         # Make the API request
-        response = requests.request('POST', url, json=payload, headers=headers)
+        response = requests.request('POST', url, json=payload, headers=headers, timeout=REQUESTS_TIMEOUT_SLOW_API)
 
         # Parse the JSON response
         json_response = response.json()

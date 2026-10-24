@@ -200,7 +200,7 @@ def _compute_similarities(feedbacks: list[LeaderboardFeedbackData], query: str) 
     tag_norms = np.linalg.norm(tag_embeddings, axis=1)
     query_norm = np.linalg.norm(query_embedding)
     similarities = np.dot(tag_embeddings, query_embedding) / (tag_norms * query_norm + 1e-9)
-    tag_similarity_map = dict(zip(all_tags, similarities.tolist()))
+    tag_similarity_map = dict(zip(all_tags, similarities.tolist(), strict=True))
 
     return {
         feedback.id: max(

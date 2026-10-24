@@ -6,7 +6,7 @@ import requests
 from langchain_core.document_loaders import BaseLoader
 from langchain_core.documents import Document
 
-from local_llm.env import TAVILY_API_BASE_URL
+from local_llm.env import REQUESTS_TIMEOUT_SLOW_API, TAVILY_API_BASE_URL
 
 log = logging.getLogger(__name__)
 
@@ -67,7 +67,7 @@ class TavilyLoader(BaseLoader):
                 urls_param = batch_urls[0] if len(batch_urls) == 1 else batch_urls
                 payload = {'urls': urls_param, 'extract_depth': self.extract_depth}
                 # Make the API call
-                response = requests.post(self.api_url, headers=headers, json=payload)
+                response = requests.post(self.api_url, headers=headers, json=payload, timeout=REQUESTS_TIMEOUT_SLOW_API)
                 response.raise_for_status()
                 response_data = response.json()
                 # Process successful results

@@ -33,6 +33,7 @@ import tempfile
 import urllib.parse
 from dataclasses import dataclass
 from pathlib import Path
+from typing import BinaryIO
 
 from local_llm.benchmarks.serving.build_info import llama_server_build
 from local_llm.benchmarks.serving.fingerprint import FIT, config_id, config_lines
@@ -273,6 +274,19 @@ def telemetry_argv(
 IMPORT_ROOT = Path(__file__).resolve().parents[len(__name__.split('.')) - 1]
 
 
+def _open_server_log() -> tuple[Path, BinaryIO]:
+    """A new temp file for llama-server's output, and a writer on it.
+
+    Unbuffered: the recorder reads this file while the server runs (at first
+    /metrics, and on shutdown), so every line must be on disk as soon as it
+    is teed -- a buffered writer held back the tail of the load log
+    (n_slots, the layer split) until close.
+    """
+    fd, path = tempfile.mkstemp(prefix='lllm-serve-', suffix='.log')
+    os.close(fd)
+    return Path(path), open(path, 'wb', buffering=0)
+
+
 @dataclass
 class ServeProcess:
     """Owns one llama-server invocation and its telemetry recorder.
@@ -331,7 +345,7 @@ class ServeProcess:
             raise LauncherError(f'llama-server not found at {self.llama_bin}')
 
         model_path = resolve_model_path(self.config.model_path)
-        if not Path(model_path).is_file():
+        if not await asyncio.to_thread(os.path.isfile, model_path):
             raise LauncherError(f'model not found: {model_path}')
 
         self.warning = dense_partial_offload_warning(self.config)
@@ -339,14 +353,7 @@ class ServeProcess:
         argv = build_argv(self.config, host=self.host, port=self.port, log_verbosity=self.log_verbosity)
 
         if self.record_telemetry:
-            fd, path = tempfile.mkstemp(prefix='lllm-serve-', suffix='.log')
-            os.close(fd)
-            self.server_log_path = Path(path)
-            # Unbuffered: the recorder reads this file while the server runs
-            # (at first /metrics, and on shutdown), so every line must be on
-            # disk as soon as it is teed -- a buffered writer held back the
-            # tail of the load log (n_slots, the layer split) until close.
-            self._log_file = open(self.server_log_path, 'wb', buffering=0)
+            self.server_log_path, self._log_file = await asyncio.to_thread(_open_server_log)
 
         try:
             self.server_proc = await asyncio.create_subprocess_exec(

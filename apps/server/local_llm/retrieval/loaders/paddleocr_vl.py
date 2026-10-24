@@ -6,7 +6,7 @@ import sys
 import requests
 from langchain_core.documents import Document
 
-from local_llm.env import GLOBAL_LOG_LEVEL
+from local_llm.env import GLOBAL_LOG_LEVEL, REQUESTS_TIMEOUT_PROCESSING
 
 logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
 log = logging.getLogger(__name__)
@@ -60,7 +60,9 @@ class PaddleOCRVLLoader:
         }
 
         try:
-            response = requests.post(f'{self.api_url}/layout-parsing', json=payload, headers=headers)
+            response = requests.post(
+                f'{self.api_url}/layout-parsing', json=payload, headers=headers, timeout=REQUESTS_TIMEOUT_PROCESSING
+            )
             response.raise_for_status()
 
             result = response.json().get('result', {})

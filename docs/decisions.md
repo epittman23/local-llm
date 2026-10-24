@@ -7,6 +7,101 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-24**: **ruff now selects bug-finding rules, every finding
+  fixed and none exempted.** Added rules:
+  - bugbear B005, B006, B007, B008, B023, B034 and B905;
+  - S113 (`requests` calls without a timeout);
+  - RUF006 (dangling asyncio tasks);
+  - every stable flake8-async rule except ASYNC110.
+
+  FastAPI's `Depends`, `Query` and similar declarative defaults are
+  configured as immutable calls for B008, rather than exempted.
+
+  The fixes include real bugs:
+  - `.lstrip('data:')` stripped characters rather than the prefix, so
+    `data:application/pdf` reached image providers as `pplication/pdf`;
+  - the tune cut's sign test paired ratios from different items after the
+    first gap;
+  - all 30 `requests` calls could hang a worker forever. They now get
+    `(connect, read)` timeouts sized for search APIs, slow generation and
+    document processing;
+  - ten fire-and-forget tasks could be garbage-collected mid-run. They now
+    go through `utils/background.py`.
+
+  ASYNC110 stays off. Its one remaining finding polls Redis for tasks that
+  may run on another instance, and it can go once task cleanup publishes a
+  "chat idle" message. The basedpyright baseline shrank from 2,247 to
+  2,239.
+- **2026-10-23** (closing): **The backend is type-checked, and `apps/web`
+  is linted, each against a baseline that only shrinks.**
+  - basedpyright runs in standard mode over the backend, in a new
+    `Backend types` job (`make test-types`). It reported 2,247 findings in
+    inherited code, including 32 possibly-unbound variables worth a real
+    look.
+  - Biome's linter now runs on `apps/web`, not just its formatter. It
+    reported 754 findings.
+
+  Fixing either set first would have kept both checks off indefinitely.
+  Instead, each tool's findings are counted per file and rule in a
+  committed baseline (`.github/scripts/lint_ratchet.py`). Any increase
+  fails, so new code meets the full rule set. A fix shrinks the baseline
+  with `make baselines`. The PR gate allows a baseline to shrink and trips
+  on one that grows; `schema_drift.json` now follows the same rule.
+
+  This replaces the 2026-10-09 plan to keep Biome format-only until all of
+  `apps/web`'s findings were fixed. basedpyright's version is pinned
+  outside Dependabot, because a new version can change what it reports.
+- **2026-10-23** (final): **New code must come with tests: 80% coverage of
+  the changed lines.** The backend and web jobs now measure coverage
+  (pytest-cov; Vitest's v8 provider) and run diff-cover against each pull
+  request's base. At least 80% of the lines a PR changes must be covered by
+  the unit tests.
+
+  Nothing gates the overall figure (backend about 42%, web about 45%). The
+  bar applies to what a PR touches, so old code gains tests as it changes.
+
+  80% was chosen from recent PRs: #367, #374, #371 and #375 scored 81 to
+  100%. #368 scored 56%, because its call sites in hooks run only under
+  Playwright; it would have needed unit tests for those hooks. The desktop
+  app is not measured, since Vitest can't run its Electron glue.
+
+  Coverage-ignore comments (`v8 ignore`, `istanbul ignore`, `pragma: no
+  branch`) now trip the PR gate, as `pragma: no cover` already did.
+- **2026-10-23** (last): **The frontend's API calls are checked against
+  the backend's routes.** Playwright's mocks follow the frontend's API
+  client, so a backend route that is renamed, removed or given another
+  method left every suite green.
+
+  `test_frontend_contract.py` reads all 437 statically resolvable `fetch()`
+  calls in `apps/web/src` and checks each against the app's route table, by
+  method and path. Renaming one route by hand made it fail at the call
+  site. All current calls match. The 38 it cannot resolve (terminal
+  servers, direct OpenAI connections, URLs held in variables) are capped
+  at that count.
+
+  It checks paths and methods only. Request and response shapes are still
+  covered only by a real run.
+- **2026-10-23** (late night): **CI boots the real backend, and checks the
+  models against the migrations.** Before this, nothing in CI started the
+  app: pytest imports it and Playwright mocks it.
+
+  A new `Boot (real stack)` job (`make test-boot`) starts it as
+  `make backend` does, with Postgres, Redis, migrations on an empty
+  database and the built frontend, and a stub in place of OpenRouter. It
+  then signs up the admin, gets a chat completion and sweeps all 149
+  parameter-free GET routes for server errors, and checks that SIGINT shuts
+  it down cleanly.
+
+  A new `test_schema_drift.py` compares every model against a freshly
+  migrated database. It found 108 inherited differences, all cosmetic or
+  legacy: unique flags on primary keys, indexes the migrations create but
+  the models don't declare, nullability, and three legacy tables. Fixing
+  them first would have held up the check, so they are recorded as a
+  baseline that may only shrink, and any new difference fails.
+
+  The first boot found one route, `/ollama/api/version`, that answers 500
+  when no Ollama server runs. The install doesn't use Ollama. The route is
+  left out of the sweep, with that reason, until it is fixed.
 - **2026-10-23** (night): **A CI tripwire guards the gates themselves.**
   The owner relies on CI alone, without reviewing pull requests. That makes
   the gates the weak point: the agent writing a change could make CI pass by

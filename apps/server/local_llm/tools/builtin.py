@@ -1562,7 +1562,7 @@ async def search_chats(
             needles = list(dict.fromkeys([lower_query, *chat_search_terms(lower_query)])) if lower_query else []
 
             for needle in needles:
-                for msg_id, msg in messages.items():
+                for msg in messages.values():
                     content = msg.get('content', '') if isinstance(msg, dict) else ''
                     if isinstance(content, str) and needle in content.lower():
                         idx = content.lower().find(needle)
@@ -3448,7 +3448,7 @@ async def query_knowledge_bases(
                 result_ids = search_results.ids[0]
                 result_distances = search_results.distances[0] if search_results.distances else [0] * len(result_ids)
 
-                for knowledge_base_id, distance in zip(result_ids, result_distances):
+                for knowledge_base_id, distance in zip(result_ids, result_distances, strict=True):
                     if knowledge_base_id in seen_ids:
                         continue
                     seen_ids.add(knowledge_base_id)

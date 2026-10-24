@@ -1,0 +1,705 @@
+{
+	"_comment": "basedpyright findings allowed per file and rule; may only shrink. See .github/scripts/lint_ratchet.py.",
+	"total": 2239,
+	"counts": {
+		"apps/server/local_llm/benchmarks/analysis/compare.py": {
+			"reportArgumentType": 9,
+			"reportReturnType": 1
+		},
+		"apps/server/local_llm/benchmarks/analysis/estimators.py": {
+			"reportArgumentType": 5,
+			"reportAttributeAccessIssue": 3,
+			"reportOptionalOperand": 3
+		},
+		"apps/server/local_llm/benchmarks/analysis/report.py": {
+			"reportArgumentType": 6,
+			"reportAssignmentType": 1,
+			"reportCallIssue": 1,
+			"reportOperatorIssue": 1,
+			"reportOptionalMemberAccess": 7,
+			"reportReturnType": 1
+		},
+		"apps/server/local_llm/benchmarks/analysis/report_figures.py": {
+			"reportArgumentType": 4,
+			"reportPossiblyUnboundVariable": 6,
+			"reportPrivateImportUsage": 4
+		},
+		"apps/server/local_llm/benchmarks/analysis/stats.py": {
+			"reportOptionalMemberAccess": 1
+		},
+		"apps/server/local_llm/benchmarks/evaluation/datasets.py": {
+			"reportOptionalSubscript": 1
+		},
+		"apps/server/local_llm/benchmarks/evaluation/suites.py": {
+			"reportArgumentType": 1
+		},
+		"apps/server/local_llm/benchmarks/serving/env_profile.py": {
+			"reportArgumentType": 1
+		},
+		"apps/server/local_llm/benchmarks/serving/launcher.py": {
+			"reportArgumentType": 3,
+			"reportAttributeAccessIssue": 3
+		},
+		"apps/server/local_llm/benchmarks/serving/telemetry_recorder.py": {
+			"reportArgumentType": 4,
+			"reportCallIssue": 1,
+			"reportOptionalSubscript": 1,
+			"reportReturnType": 1
+		},
+		"apps/server/local_llm/benchmarks/tuning/proc.py": {
+			"reportOptionalMemberAccess": 2
+		},
+		"apps/server/local_llm/benchmarks/tuning/tune.py": {
+			"reportArgumentType": 9,
+			"reportCallIssue": 2,
+			"reportOptionalMemberAccess": 39,
+			"reportReturnType": 2
+		},
+		"apps/server/local_llm/benchmarks/tuning/tune_probe.py": {
+			"reportOptionalMemberAccess": 1
+		},
+		"apps/server/local_llm/config.py": {
+			"reportArgumentType": 11
+		},
+		"apps/server/local_llm/constants.py": {
+			"reportSelfClsParameterName": 18
+		},
+		"apps/server/local_llm/env.py": {
+			"reportArgumentType": 5,
+			"reportPrivateImportUsage": 1
+		},
+		"apps/server/local_llm/events.py": {
+			"reportArgumentType": 1
+		},
+		"apps/server/local_llm/functions.py": {
+			"reportArgumentType": 1,
+			"reportAttributeAccessIssue": 1,
+			"reportCallIssue": 1,
+			"reportGeneralTypeIssues": 1
+		},
+		"apps/server/local_llm/internal/db.py": {
+			"reportAttributeAccessIssue": 2,
+			"reportInvalidTypeVarUse": 2,
+			"reportMissingImports": 1,
+			"reportReturnType": 2
+		},
+		"apps/server/local_llm/main.py": {
+			"reportArgumentType": 14,
+			"reportAttributeAccessIssue": 1,
+			"reportOptionalMemberAccess": 3,
+			"reportOptionalSubscript": 2,
+			"reportPrivateImportUsage": 1,
+			"reportReturnType": 1
+		},
+		"apps/server/local_llm/migrations/env.py": {
+			"reportMissingImports": 1
+		},
+		"apps/server/local_llm/models/access_grants.py": {
+			"reportArgumentType": 2,
+			"reportAttributeAccessIssue": 2,
+			"reportGeneralTypeIssues": 3
+		},
+		"apps/server/local_llm/models/auths.py": {
+			"reportAttributeAccessIssue": 2,
+			"reportGeneralTypeIssues": 2
+		},
+		"apps/server/local_llm/models/automations.py": {
+			"reportArgumentType": 3,
+			"reportAttributeAccessIssue": 16,
+			"reportGeneralTypeIssues": 3,
+			"reportOptionalMemberAccess": 1,
+			"reportReturnType": 2
+		},
+		"apps/server/local_llm/models/benchmarks/configs.py": {
+			"reportArgumentType": 1,
+			"reportAttributeAccessIssue": 2,
+			"reportReturnType": 1
+		},
+		"apps/server/local_llm/models/benchmarks/profiles.py": {
+			"reportArgumentType": 3,
+			"reportAttributeAccessIssue": 1,
+			"reportGeneralTypeIssues": 1
+		},
+		"apps/server/local_llm/models/benchmarks/telemetry.py": {
+			"reportAttributeAccessIssue": 1
+		},
+		"apps/server/local_llm/models/benchmarks/tests.py": {
+			"reportReturnType": 1
+		},
+		"apps/server/local_llm/models/benchmarks/tune.py": {
+			"reportAttributeAccessIssue": 11,
+			"reportGeneralTypeIssues": 1,
+			"reportReturnType": 2
+		},
+		"apps/server/local_llm/models/calendar.py": {
+			"reportArgumentType": 10,
+			"reportAttributeAccessIssue": 10,
+			"reportCallIssue": 2,
+			"reportGeneralTypeIssues": 5
+		},
+		"apps/server/local_llm/models/channels.py": {
+			"reportArgumentType": 8,
+			"reportAttributeAccessIssue": 24,
+			"reportCallIssue": 3,
+			"reportGeneralTypeIssues": 1
+		},
+		"apps/server/local_llm/models/chat_messages.py": {
+			"reportArgumentType": 4,
+			"reportAssignmentType": 1,
+			"reportAttributeAccessIssue": 13,
+			"reportCallIssue": 1,
+			"reportGeneralTypeIssues": 1,
+			"reportReturnType": 3
+		},
+		"apps/server/local_llm/models/chats.py": {
+			"reportArgumentType": 25,
+			"reportAssignmentType": 3,
+			"reportAttributeAccessIssue": 43,
+			"reportGeneralTypeIssues": 9,
+			"reportIndexIssue": 4,
+			"reportOptionalMemberAccess": 31,
+			"reportReturnType": 6
+		},
+		"apps/server/local_llm/models/config.py": {
+			"reportArgumentType": 3,
+			"reportCallIssue": 3
+		},
+		"apps/server/local_llm/models/feedbacks.py": {
+			"reportArgumentType": 1,
+			"reportAttributeAccessIssue": 10
+		},
+		"apps/server/local_llm/models/files.py": {
+			"reportArgumentType": 6,
+			"reportAttributeAccessIssue": 13,
+			"reportGeneralTypeIssues": 10,
+			"reportOptionalMemberAccess": 23
+		},
+		"apps/server/local_llm/models/folders.py": {
+			"reportArgumentType": 5,
+			"reportAssignmentType": 1,
+			"reportAttributeAccessIssue": 9,
+			"reportGeneralTypeIssues": 3,
+			"reportIndexIssue": 2,
+			"reportOperatorIssue": 2,
+			"reportReturnType": 1
+		},
+		"apps/server/local_llm/models/functions.py": {
+			"reportArgumentType": 6,
+			"reportAttributeAccessIssue": 5,
+			"reportGeneralTypeIssues": 2,
+			"reportOptionalMemberAccess": 4,
+			"reportReturnType": 2
+		},
+		"apps/server/local_llm/models/groups.py": {
+			"reportAttributeAccessIssue": 2,
+			"reportReturnType": 1
+		},
+		"apps/server/local_llm/models/knowledge.py": {
+			"reportArgumentType": 20,
+			"reportAssignmentType": 1,
+			"reportCallIssue": 4,
+			"reportGeneralTypeIssues": 1
+		},
+		"apps/server/local_llm/models/memories.py": {
+			"reportAttributeAccessIssue": 12,
+			"reportGeneralTypeIssues": 10,
+			"reportReturnType": 2
+		},
+		"apps/server/local_llm/models/messages.py": {
+			"reportArgumentType": 13,
+			"reportAttributeAccessIssue": 7,
+			"reportGeneralTypeIssues": 10,
+			"reportIncompatibleVariableOverride": 1,
+			"reportOptionalMemberAccess": 11,
+			"reportReturnType": 1
+		},
+		"apps/server/local_llm/models/models.py": {
+			"reportArgumentType": 16,
+			"reportAttributeAccessIssue": 4,
+			"reportCallIssue": 5,
+			"reportGeneralTypeIssues": 1,
+			"reportOptionalMemberAccess": 2,
+			"reportReturnType": 2
+		},
+		"apps/server/local_llm/models/notes.py": {
+			"reportArgumentType": 6,
+			"reportAssignmentType": 1,
+			"reportAttributeAccessIssue": 5,
+			"reportCallIssue": 2,
+			"reportGeneralTypeIssues": 2,
+			"reportIndexIssue": 4,
+			"reportOperatorIssue": 3,
+			"reportReturnType": 1
+		},
+		"apps/server/local_llm/models/oauth_sessions.py": {
+			"reportArgumentType": 41,
+			"reportAttributeAccessIssue": 2
+		},
+		"apps/server/local_llm/models/prompt_history.py": {
+			"reportArgumentType": 4,
+			"reportOptionalMemberAccess": 1,
+			"reportReturnType": 1
+		},
+		"apps/server/local_llm/models/prompts.py": {
+			"reportArgumentType": 22,
+			"reportAttributeAccessIssue": 23,
+			"reportCallIssue": 2,
+			"reportGeneralTypeIssues": 3
+		},
+		"apps/server/local_llm/models/shared_chats.py": {
+			"reportArgumentType": 6,
+			"reportAttributeAccessIssue": 1
+		},
+		"apps/server/local_llm/models/skills.py": {
+			"reportArgumentType": 8,
+			"reportAttributeAccessIssue": 2,
+			"reportCallIssue": 2,
+			"reportGeneralTypeIssues": 1
+		},
+		"apps/server/local_llm/models/tags.py": {
+			"reportAttributeAccessIssue": 1
+		},
+		"apps/server/local_llm/models/tools.py": {
+			"reportArgumentType": 4,
+			"reportCallIssue": 1,
+			"reportOptionalMemberAccess": 4,
+			"reportReturnType": 2
+		},
+		"apps/server/local_llm/models/users.py": {
+			"reportArgumentType": 9,
+			"reportAttributeAccessIssue": 5,
+			"reportCallIssue": 3,
+			"reportReturnType": 4
+		},
+		"apps/server/local_llm/retrieval/external.py": {
+			"reportArgumentType": 2,
+			"reportAttributeAccessIssue": 1,
+			"reportMissingImports": 2
+		},
+		"apps/server/local_llm/retrieval/loaders/datalab_marker.py": {
+			"reportArgumentType": 1,
+			"reportPossiblyUnboundVariable": 1
+		},
+		"apps/server/local_llm/retrieval/loaders/external_document.py": {
+			"reportArgumentType": 3
+		},
+		"apps/server/local_llm/retrieval/loaders/main.py": {
+			"reportArgumentType": 13,
+			"reportAttributeAccessIssue": 1,
+			"reportCallIssue": 1,
+			"reportReturnType": 1
+		},
+		"apps/server/local_llm/retrieval/loaders/mineru.py": {
+			"reportArgumentType": 1
+		},
+		"apps/server/local_llm/retrieval/loaders/mistral.py": {
+			"reportOptionalMemberAccess": 2,
+			"reportReturnType": 1
+		},
+		"apps/server/local_llm/retrieval/loaders/youtube.py": {
+			"reportAssignmentType": 1,
+			"reportAttributeAccessIssue": 1,
+			"reportReturnType": 1
+		},
+		"apps/server/local_llm/retrieval/models/colbert.py": {
+			"reportIncompatibleMethodOverride": 1,
+			"reportMissingImports": 2
+		},
+		"apps/server/local_llm/retrieval/utils.py": {
+			"reportArgumentType": 41,
+			"reportCallIssue": 2,
+			"reportFunctionMemberAccess": 1,
+			"reportIncompatibleMethodOverride": 1,
+			"reportOptionalIterable": 2,
+			"reportOptionalMemberAccess": 17,
+			"reportOptionalSubscript": 3,
+			"reportRedeclaration": 2,
+			"reportReturnType": 4
+		},
+		"apps/server/local_llm/retrieval/vector/async_client.py": {
+			"reportArgumentType": 1
+		},
+		"apps/server/local_llm/retrieval/vector/dbs/pgvector.py": {
+			"reportArgumentType": 17,
+			"reportAttributeAccessIssue": 4,
+			"reportIndexIssue": 19
+		},
+		"apps/server/local_llm/retrieval/vector/utils.py": {
+			"reportGeneralTypeIssues": 4,
+			"reportOptionalSubscript": 2
+		},
+		"apps/server/local_llm/retrieval/web/azure.py": {
+			"reportMissingImports": 1
+		},
+		"apps/server/local_llm/retrieval/web/sougou.py": {
+			"reportMissingImports": 5
+		},
+		"apps/server/local_llm/retrieval/web/utils.py": {
+			"reportArgumentType": 7,
+			"reportAssignmentType": 2,
+			"reportAttributeAccessIssue": 10,
+			"reportIncompatibleMethodOverride": 1,
+			"reportMissingImports": 2
+		},
+		"apps/server/local_llm/retrieval/web/yacy.py": {
+			"reportArgumentType": 2,
+			"reportCallIssue": 1
+		},
+		"apps/server/local_llm/retrieval/web/yandex.py": {
+			"reportArgumentType": 4
+		},
+		"apps/server/local_llm/routers/analytics.py": {
+			"reportOperatorIssue": 1,
+			"reportOptionalMemberAccess": 1,
+			"reportOptionalOperand": 1
+		},
+		"apps/server/local_llm/routers/audio.py": {
+			"reportArgumentType": 4,
+			"reportAssignmentType": 1,
+			"reportCallIssue": 1,
+			"reportMissingImports": 1,
+			"reportOptionalMemberAccess": 6,
+			"reportOptionalSubscript": 1
+		},
+		"apps/server/local_llm/routers/auths.py": {
+			"reportArgumentType": 15,
+			"reportAttributeAccessIssue": 1,
+			"reportOptionalMemberAccess": 3,
+			"reportReturnType": 1
+		},
+		"apps/server/local_llm/routers/automations.py": {
+			"reportArgumentType": 11,
+			"reportOptionalMemberAccess": 11
+		},
+		"apps/server/local_llm/routers/benchmarks/live.py": {
+			"reportArgumentType": 1
+		},
+		"apps/server/local_llm/routers/benchmarks/serve.py": {
+			"reportOptionalMemberAccess": 1
+		},
+		"apps/server/local_llm/routers/benchmarks/tests.py": {
+			"reportArgumentType": 1,
+			"reportOptionalMemberAccess": 1
+		},
+		"apps/server/local_llm/routers/benchmarks/tune.py": {
+			"reportArgumentType": 1,
+			"reportOptionalMemberAccess": 2
+		},
+		"apps/server/local_llm/routers/calendar.py": {
+			"reportArgumentType": 2,
+			"reportOptionalMemberAccess": 5
+		},
+		"apps/server/local_llm/routers/channels.py": {
+			"reportArgumentType": 5,
+			"reportIncompatibleVariableOverride": 1,
+			"reportOptionalIterable": 1,
+			"reportOptionalMemberAccess": 25
+		},
+		"apps/server/local_llm/routers/chats.py": {
+			"reportArgumentType": 8,
+			"reportOperatorIssue": 1,
+			"reportOptionalMemberAccess": 13,
+			"reportOptionalOperand": 2
+		},
+		"apps/server/local_llm/routers/configs.py": {
+			"reportArgumentType": 2
+		},
+		"apps/server/local_llm/routers/evaluations.py": {
+			"reportArgumentType": 4
+		},
+		"apps/server/local_llm/routers/files.py": {
+			"reportArgumentType": 7,
+			"reportAttributeAccessIssue": 2,
+			"reportCallIssue": 1,
+			"reportOptionalMemberAccess": 12
+		},
+		"apps/server/local_llm/routers/folders.py": {
+			"reportArgumentType": 3,
+			"reportOptionalMemberAccess": 16
+		},
+		"apps/server/local_llm/routers/functions.py": {
+			"reportArgumentType": 8
+		},
+		"apps/server/local_llm/routers/groups.py": {
+			"reportArgumentType": 6
+		},
+		"apps/server/local_llm/routers/images.py": {
+			"reportArgumentType": 12,
+			"reportAttributeAccessIssue": 7,
+			"reportCallIssue": 1,
+			"reportOptionalOperand": 1,
+			"reportOptionalSubscript": 1
+		},
+		"apps/server/local_llm/routers/knowledge.py": {
+			"reportArgumentType": 15,
+			"reportCallIssue": 1,
+			"reportIncompatibleVariableOverride": 1,
+			"reportOptionalMemberAccess": 6,
+			"reportReturnType": 1
+		},
+		"apps/server/local_llm/routers/memories.py": {
+			"reportArgumentType": 4,
+			"reportOptionalMemberAccess": 9
+		},
+		"apps/server/local_llm/routers/models.py": {
+			"reportArgumentType": 8,
+			"reportReturnType": 1
+		},
+		"apps/server/local_llm/routers/notes.py": {
+			"reportArgumentType": 7,
+			"reportOptionalMemberAccess": 18
+		},
+		"apps/server/local_llm/routers/ollama.py": {
+			"reportArgumentType": 15,
+			"reportAssignmentType": 7,
+			"reportAttributeAccessIssue": 16,
+			"reportCallIssue": 3,
+			"reportGeneralTypeIssues": 1,
+			"reportIndexIssue": 2,
+			"reportOptionalMemberAccess": 2,
+			"reportOptionalSubscript": 1,
+			"reportPossiblyUnboundVariable": 8,
+			"reportReturnType": 1
+		},
+		"apps/server/local_llm/routers/openai.py": {
+			"reportArgumentType": 14,
+			"reportAttributeAccessIssue": 2,
+			"reportOptionalMemberAccess": 6,
+			"reportReturnType": 3
+		},
+		"apps/server/local_llm/routers/pipelines.py": {
+			"reportArgumentType": 5,
+			"reportCallIssue": 1,
+			"reportPossiblyUnboundVariable": 8
+		},
+		"apps/server/local_llm/routers/prompts.py": {
+			"reportArgumentType": 24
+		},
+		"apps/server/local_llm/routers/retrieval.py": {
+			"reportArgumentType": 22,
+			"reportAttributeAccessIssue": 2,
+			"reportCallIssue": 1,
+			"reportGeneralTypeIssues": 4,
+			"reportOptionalMemberAccess": 7,
+			"reportOptionalSubscript": 3,
+			"reportPossiblyUnboundVariable": 1
+		},
+		"apps/server/local_llm/routers/scim.py": {
+			"reportArgumentType": 4,
+			"reportAttributeAccessIssue": 4,
+			"reportCallIssue": 2,
+			"reportOptionalMemberAccess": 5
+		},
+		"apps/server/local_llm/routers/skills.py": {
+			"reportArgumentType": 5
+		},
+		"apps/server/local_llm/routers/tasks.py": {
+			"reportArgumentType": 15
+		},
+		"apps/server/local_llm/routers/terminals.py": {
+			"reportAttributeAccessIssue": 2
+		},
+		"apps/server/local_llm/routers/tools.py": {
+			"reportArgumentType": 9
+		},
+		"apps/server/local_llm/routers/users.py": {
+			"reportArgumentType": 8
+		},
+		"apps/server/local_llm/routers/utils.py": {
+			"reportArgumentType": 3,
+			"reportPrivateImportUsage": 1
+		},
+		"apps/server/local_llm/socket/main.py": {
+			"reportArgumentType": 2,
+			"reportAttributeAccessIssue": 4,
+			"reportOptionalCall": 7
+		},
+		"apps/server/local_llm/socket/utils.py": {
+			"reportOptionalMemberAccess": 23
+		},
+		"apps/server/local_llm/storage/provider.py": {
+			"reportArgumentType": 3,
+			"reportIncompatibleMethodOverride": 4,
+			"reportOperatorIssue": 1,
+			"reportOptionalMemberAccess": 2
+		},
+		"apps/server/local_llm/tasks.py": {
+			"reportReturnType": 2
+		},
+		"apps/server/local_llm/tools/builtin.py": {
+			"reportArgumentType": 213,
+			"reportAssignmentType": 1,
+			"reportAttributeAccessIssue": 9,
+			"reportGeneralTypeIssues": 7,
+			"reportOptionalIterable": 2,
+			"reportOptionalMemberAccess": 15
+		},
+		"apps/server/local_llm/tools/knowledge_fs.py": {
+			"reportArgumentType": 5,
+			"reportOptionalMemberAccess": 2
+		},
+		"apps/server/local_llm/utils/access_control/files.py": {
+			"reportArgumentType": 6
+		},
+		"apps/server/local_llm/utils/access_control/folders.py": {
+			"reportAssignmentType": 1
+		},
+		"apps/server/local_llm/utils/actions.py": {
+			"reportCallIssue": 1,
+			"reportOptionalCall": 1
+		},
+		"apps/server/local_llm/utils/anthropic.py": {
+			"reportArgumentType": 1,
+			"reportReturnType": 1
+		},
+		"apps/server/local_llm/utils/audit.py": {
+			"reportArgumentType": 3
+		},
+		"apps/server/local_llm/utils/auth.py": {
+			"reportArgumentType": 2
+		},
+		"apps/server/local_llm/utils/automations.py": {
+			"reportArgumentType": 7,
+			"reportAttributeAccessIssue": 13,
+			"reportOptionalMemberAccess": 6
+		},
+		"apps/server/local_llm/utils/calendar.py": {
+			"reportArgumentType": 1
+		},
+		"apps/server/local_llm/utils/chat.py": {
+			"reportArgumentType": 2,
+			"reportAttributeAccessIssue": 10,
+			"reportGeneralTypeIssues": 1,
+			"reportOperatorIssue": 1,
+			"reportOptionalMemberAccess": 6,
+			"reportOptionalSubscript": 2
+		},
+		"apps/server/local_llm/utils/chat_variables.py": {
+			"reportArgumentType": 2
+		},
+		"apps/server/local_llm/utils/code_interpreter.py": {
+			"reportInvalidTypeForm": 1
+		},
+		"apps/server/local_llm/utils/context_compaction.py": {
+			"reportArgumentType": 1,
+			"reportAttributeAccessIssue": 1
+		},
+		"apps/server/local_llm/utils/files.py": {
+			"reportArgumentType": 2,
+			"reportAttributeAccessIssue": 1
+		},
+		"apps/server/local_llm/utils/filter.py": {
+			"reportArgumentType": 3
+		},
+		"apps/server/local_llm/utils/headers.py": {
+			"reportArgumentType": 3
+		},
+		"apps/server/local_llm/utils/logger.py": {
+			"reportArgumentType": 2
+		},
+		"apps/server/local_llm/utils/mcp/client.py": {
+			"reportArgumentType": 14,
+			"reportOptionalMemberAccess": 2,
+			"reportReturnType": 1
+		},
+		"apps/server/local_llm/utils/memory.py": {
+			"reportArgumentType": 3,
+			"reportAttributeAccessIssue": 1,
+			"reportOptionalMemberAccess": 1
+		},
+		"apps/server/local_llm/utils/middleware.py": {
+			"reportArgumentType": 35,
+			"reportAttributeAccessIssue": 28,
+			"reportIndexIssue": 8,
+			"reportOperatorIssue": 2,
+			"reportOptionalCall": 1,
+			"reportOptionalIterable": 3,
+			"reportOptionalMemberAccess": 4,
+			"reportOptionalSubscript": 5,
+			"reportReturnType": 1
+		},
+		"apps/server/local_llm/utils/misc.py": {
+			"reportAttributeAccessIssue": 1,
+			"reportGeneralTypeIssues": 1,
+			"reportReturnType": 2
+		},
+		"apps/server/local_llm/utils/models.py": {
+			"reportArgumentType": 5,
+			"reportAttributeAccessIssue": 4
+		},
+		"apps/server/local_llm/utils/notifications.py": {
+			"reportArgumentType": 1,
+			"reportOptionalMemberAccess": 1
+		},
+		"apps/server/local_llm/utils/oauth.py": {
+			"reportArgumentType": 12,
+			"reportAssignmentType": 2,
+			"reportAttributeAccessIssue": 17,
+			"reportIncompatibleVariableOverride": 1,
+			"reportOptionalMemberAccess": 15,
+			"reportPossiblyUnboundVariable": 7,
+			"reportReturnType": 16
+		},
+		"apps/server/local_llm/utils/payload.py": {
+			"reportArgumentType": 3,
+			"reportAttributeAccessIssue": 4,
+			"reportReturnType": 2
+		},
+		"apps/server/local_llm/utils/pdf_generator.py": {
+			"reportArgumentType": 1
+		},
+		"apps/server/local_llm/utils/plugin.py": {
+			"reportArgumentType": 2,
+			"reportPossiblyUnboundVariable": 1
+		},
+		"apps/server/local_llm/utils/redis.py": {
+			"reportArgumentType": 1,
+			"reportAttributeAccessIssue": 5
+		},
+		"apps/server/local_llm/utils/session_pool.py": {
+			"reportGeneralTypeIssues": 1
+		},
+		"apps/server/local_llm/utils/subagents.py": {
+			"reportAttributeAccessIssue": 4,
+			"reportCallIssue": 1,
+			"reportGeneralTypeIssues": 3,
+			"reportOptionalMemberAccess": 3
+		},
+		"apps/server/local_llm/utils/task.py": {
+			"reportArgumentType": 6,
+			"reportAssignmentType": 1
+		},
+		"apps/server/local_llm/utils/telemetry/instrumentors.py": {
+			"reportArgumentType": 3,
+			"reportAttributeAccessIssue": 3
+		},
+		"apps/server/local_llm/utils/telemetry/logs.py": {
+			"reportArgumentType": 1
+		},
+		"apps/server/local_llm/utils/telemetry/metrics.py": {
+			"reportArgumentType": 3,
+			"reportAssignmentType": 1,
+			"reportRedeclaration": 1
+		},
+		"apps/server/local_llm/utils/telemetry/setup.py": {
+			"reportArgumentType": 1,
+			"reportAttributeAccessIssue": 1
+		},
+		"apps/server/local_llm/utils/timers.py": {
+			"reportArgumentType": 1,
+			"reportAttributeAccessIssue": 15,
+			"reportGeneralTypeIssues": 5,
+			"reportOptionalMemberAccess": 2
+		},
+		"apps/server/local_llm/utils/tool_approval.py": {
+			"reportGeneralTypeIssues": 2,
+			"reportOptionalMemberAccess": 12
+		},
+		"apps/server/local_llm/utils/tools.py": {
+			"reportArgumentType": 3,
+			"reportCallIssue": 1,
+			"reportOptionalMemberAccess": 1,
+			"reportReturnType": 2
+		}
+	}
+}

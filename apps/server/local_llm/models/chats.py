@@ -648,7 +648,7 @@ class ChatTable:
             await session.commit()
 
             # Dual-write messages to chat_message table
-            for form_data, imported_chat in zip(chat_import_forms, chats):
+            for form_data, imported_chat in zip(chat_import_forms, chats, strict=True):
                 history = form_data.chat.get('history') if isinstance(form_data.chat.get('history'), dict) else {}
                 messages = history.get('messages') if isinstance(history.get('messages'), dict) else {}
                 if not messages and isinstance(form_data.chat.get('messages'), list):
@@ -2366,7 +2366,7 @@ class ChatTable:
                 columns.append(stmt.scalar_subquery().label(f'count_{index}'))
 
             row = (await session.execute(select(*columns))).one()
-            return dict(zip(tag_ids, row))
+            return dict(zip(tag_ids, row, strict=True))
 
     async def delete_orphan_tags_for_user(
         self,

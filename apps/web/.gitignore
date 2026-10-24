@@ -5,6 +5,9 @@ dist/
 # Playwright artifacts (traces, screenshots, videos from failed runs)
 test-results/
 playwright-report/
+# Vitest coverage (`bun run test:coverage`); here rather than in the root
+# .gitignore because Biome reads this one
+coverage/
 
 # dependencies
 node_modules/

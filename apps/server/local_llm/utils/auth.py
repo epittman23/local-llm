@@ -30,6 +30,7 @@ from local_llm.models.auths import Auths
 from local_llm.models.config import Config
 from local_llm.models.users import Users
 from local_llm.utils.access_control import has_permission
+from local_llm.utils.background import run_in_background
 from local_llm.utils.misc import parse_duration
 
 log = logging.getLogger(__name__)
@@ -322,8 +323,8 @@ async def get_current_user(
                         current_span.set_attribute('client.auth.type', 'jwt')
 
                 # Refresh the user's last active timestamp
-                # Fire-and-forget via asyncio.create_task to avoid blocking
-                asyncio.create_task(Users.update_last_active_by_id(user.id))
+                # Fire-and-forget, so the request does not wait on the write
+                run_in_background(Users.update_last_active_by_id(user.id))
 
             # Scope-backed, so outer middleware (audit) can reuse the resolved user
             request.state.user = user

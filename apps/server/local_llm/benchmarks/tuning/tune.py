@@ -172,6 +172,7 @@ from local_llm.benchmarks.tuning.tune_schedule import (
     load_grid,
     log_ratios,
     median,
+    paired_log_ratio_differences,
     plan_schedule,
     refine_candidates,
     sample_candidates,
@@ -1199,13 +1200,7 @@ class Sweep:
         if cut and ranked[: max(1, keep_n - 1)]:
             lowest = ranked[max(1, keep_n - 1) - 1]
             highest = cut[0]
-            paired = [
-                a - b
-                for a, b in zip(
-                    log_ratios(matrix, lowest.sha, self.baseline.sha, items),
-                    log_ratios(matrix, highest.sha, self.baseline.sha, items),
-                )
-            ]
+            paired = paired_log_ratio_differences(matrix, lowest.sha, highest.sha, self.baseline.sha, items)
             p, n = sign_test(paired)
             if n and p > 0.20:
                 decision = 'uncertain'
@@ -1653,7 +1648,7 @@ async def plan_sweep(sweep: Sweep) -> dict:
                 'candidates': n,
                 'item_visits': n * (hi - lo),
             }
-            for i, (n, (lo, hi)) in enumerate(zip(s.survivors, s.slices))
+            for i, (n, (lo, hi)) in enumerate(zip(s.survivors, s.slices, strict=True))
         ],
         'winner_items': s.winner_items,
         'estimated_hours': (wall / 3600) if wall else 0.0,

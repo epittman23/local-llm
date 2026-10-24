@@ -316,7 +316,7 @@ def _clean_tool_spec(spec: dict) -> None:
 def _tool_description(tool_callable: Callable, function_name: str) -> str:
     # TODO: Support Pydantic models as parameters
     if tool_callable.__doc__ and tool_callable.__doc__.strip() != '':
-        return re.split(':(param|return)', tool_callable.__doc__, 1)[0]
+        return re.split(':(param|return)', tool_callable.__doc__, maxsplit=1)[0]
     return function_name
 
 
@@ -989,7 +989,7 @@ def clean_properties(schema: dict):
         schema['type'] = 'string'
 
     if 'properties' in schema:
-        for prop_name, prop_schema in schema['properties'].items():
+        for prop_schema in schema['properties'].values():
             clean_properties(prop_schema)
 
     if 'items' in schema:
@@ -1138,7 +1138,7 @@ def convert_openapi_to_tool_payload(openapi_spec):
     """
     tool_payload = []
 
-    for path, methods in openapi_spec.get('paths', {}).items():
+    for methods in openapi_spec.get('paths', {}).values():
         if not isinstance(methods, dict):
             continue
 
@@ -1412,6 +1412,25 @@ async def get_terminal_servers(request: Request):
     return terminal_servers
 
 
+def _terminal_tool_function(fn_name: str, srv_data: dict, hdrs: dict, cks: Any) -> Callable:
+    """A callable that runs terminal tool fn_name on the terminal server srv_data."""
+
+    async def tool_function(**kwargs):
+        params = dict(kwargs)
+        if fn_name == 'display_file':
+            params.pop('page', None)
+        return await execute_tool_server(
+            url=srv_data['url'],
+            headers=hdrs,
+            cookies=cks,
+            name=fn_name,
+            params=params,
+            server_data=srv_data,
+        )
+
+    return tool_function
+
+
 async def get_terminal_tools(
     request: Request,
     terminal_id: str,
@@ -1501,24 +1520,9 @@ async def get_terminal_tools(
                 tool_spec.get('description', '') + f'\n\nThe current working directory is: {terminal_cwd}'
             )
 
-        async def make_tool_function(fn_name, srv_data, hdrs, cks):
-            async def tool_function(**kwargs):
-                params = dict(kwargs)
-                if fn_name == 'display_file':
-                    params.pop('page', None)
-                return await execute_tool_server(
-                    url=srv_data['url'],
-                    headers=hdrs,
-                    cookies=cks,
-                    name=fn_name,
-                    params=params,
-                    server_data=srv_data,
-                )
-
-            return tool_function
-
-        tool_function = await make_tool_function(function_name, server_data, headers, cookies)
-        callable = await get_async_tool_function_and_apply_extra_params(tool_function, {})
+        callable = await get_async_tool_function_and_apply_extra_params(
+            _terminal_tool_function(function_name, server_data, headers, cookies), {}
+        )
 
         tools_dict[function_name] = {
             'tool_id': f'terminal:{terminal_id}',
@@ -1635,7 +1639,7 @@ async def get_tool_servers_data(servers: list[dict[str, Any]]) -> list[dict[str,
 
     # Build final results with index and server metadata
     results = []
-    for (id, idx, server, url, info, _), response in zip(server_entries, responses):
+    for (id, idx, server, url, info, _), response in zip(server_entries, responses, strict=True):
         if isinstance(response, Exception):
             log.error(f'Failed to connect to {url} OpenAPI tool server')
             continue

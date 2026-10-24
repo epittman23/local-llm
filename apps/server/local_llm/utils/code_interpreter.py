@@ -190,8 +190,14 @@ class JupyterCodeExecuter:
 
 
 async def execute_code_jupyter(
-    base_url: str, code: str, token: str = '', password: str = '', timeout: int = 60
+    base_url: str, code: str, token: str = '', password: str = '', idle_timeout: int = 60
 ) -> dict:
-    async with JupyterCodeExecuter(base_url, code, token, password, timeout) as executor:
+    """Run code on a Jupyter server; idle_timeout is the longest wait for any one kernel message.
+
+    Not a deadline for the run: code that keeps producing output runs until
+    it finishes. A silence longer than idle_timeout ends the run with
+    "Execution timed out." in stderr.
+    """
+    async with JupyterCodeExecuter(base_url, code, token, password, idle_timeout) as executor:
         result = await executor.run()
         return result.model_dump()

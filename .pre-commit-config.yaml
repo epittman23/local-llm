@@ -9,12 +9,12 @@
 # `--all-files`, so a skipped hook (`git commit --no-verify`) is still caught
 # before merge. Run it yourself with `pre-commit run --all-files`.
 #
-# Linting is complete except for one stage still rolling out
-# (docs/decisions.md, 2026-10-09): Biome only formats apps/web until its
-# existing lint findings are fixed, then the hook becomes
-# `biome check --write --error-on-warnings`. ruff-check covers the whole
-# backend (since 2026-10-17). That is a temporary gap being closed, not a
-# boundary: all of this code is this repo's own.
+# ruff-check covers the whole backend (since 2026-10-17). Biome lints
+# apps/web against biome-baseline.json (since 2026-10-23): the ~750 findings
+# inherited from upstream are allowed and may only shrink, and any new one
+# fails (.github/scripts/lint_ratchet.py). Once the baseline is empty the
+# hook becomes `biome check --write --error-on-warnings`. That is a temporary
+# gap being closed, not a boundary: all of this code is this repo's own.
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -68,6 +68,18 @@ repos:
           bash -c 'cd apps/web
           && { [ -x node_modules/.bin/biome ] || { echo "biome missing: run bun install in apps/web" >&2; exit 1; }; }
           && exec node_modules/.bin/biome format --write --no-errors-on-unmatched --files-ignore-unknown=true "${@/#apps\/web\//}"' --
+      # Biome's linter over all of apps/web, held to biome-baseline.json.
+      - id: biome-lint-ratchet
+        name: biome lint (apps/web) against its baseline
+        language: system
+        files: ^apps/web/
+        pass_filenames: false
+        entry: >-
+          bash -c 'cd apps/web
+          && { [ -x node_modules/.bin/biome ] || { echo "biome missing: run bun install in apps/web" >&2; exit 1; }; }
+          && report="$(mktemp)" && trap "rm -f \"$report\"" EXIT
+          && { node_modules/.bin/biome lint --reporter=json --max-diagnostics=none . > "$report" || true; }
+          && python3 ../../.github/scripts/lint_ratchet.py check biome "$report" biome-baseline.json --prefix apps/web'
       # The same for apps/desktop, which lints as well as formats: it has no
       # backlog of findings to work through first.
       - id: biome-desktop
