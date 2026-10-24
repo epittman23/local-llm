@@ -1,0 +1,247 @@
+/* The progress and settings dialog. System fonts and colours that follow
+   the desktop's light or dark preference, like the app's own theme. */
+:root {
+	color-scheme: light dark;
+	--bg: #ffffff;
+	--fg: #18181b;
+	--muted: #71717a;
+	--line: #e4e4e7;
+	--panel: #f4f4f5;
+	--accent: #18181b;
+	--accent-fg: #fafafa;
+	--ok: #16a34a;
+	--bad: #dc2626;
+	--warn: #b45309;
+}
+@media (prefers-color-scheme: dark) {
+	:root {
+		--bg: #18181b;
+		--fg: #fafafa;
+		--muted: #a1a1aa;
+		--line: #3f3f46;
+		--panel: #27272a;
+		--accent: #fafafa;
+		--accent-fg: #18181b;
+		--ok: #4ade80;
+		--bad: #f87171;
+		--warn: #fbbf24;
+	}
+}
+* {
+	box-sizing: border-box;
+}
+html,
+body {
+	height: 100%;
+	margin: 0;
+}
+body {
+	background: var(--bg);
+	color: var(--fg);
+	font:
+		14px / 1.45 system-ui,
+		sans-serif;
+}
+main {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	height: 100%;
+	padding: 20px 22px 16px;
+}
+main[hidden] {
+	display: none;
+}
+header {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 12px;
+}
+h1 {
+	margin: 0;
+	font-size: 17px;
+	font-weight: 600;
+}
+.muted {
+	color: var(--muted);
+}
+code {
+	font:
+		12px ui-monospace,
+		monospace;
+}
+ol {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+li {
+	display: grid;
+	grid-template-columns: 20px 1fr auto;
+	column-gap: 8px;
+	padding: 5px 0;
+}
+li .label {
+	font-weight: 500;
+}
+li .time {
+	color: var(--muted);
+	font-variant-numeric: tabular-nums;
+}
+li .sub {
+	grid-column: 2 / 4;
+	overflow: hidden;
+	color: var(--muted);
+	font-size: 12px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+li .hint {
+	grid-column: 2 / 4;
+	color: var(--warn);
+	font-size: 12px;
+}
+li.pending .label,
+li.skipped .label {
+	color: var(--muted);
+}
+.icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	margin-top: 2px;
+	font-size: 12px;
+}
+.pending .icon::before {
+	content: "○";
+	color: var(--muted);
+}
+.done .icon::before {
+	content: "✓";
+	color: var(--ok);
+	font-weight: 700;
+}
+.skipped .icon::before {
+	content: "–";
+	color: var(--muted);
+}
+.failed .icon::before {
+	content: "✕";
+	color: var(--bad);
+	font-weight: 700;
+}
+.running .icon {
+	border: 2px solid var(--line);
+	border-top-color: var(--fg);
+	border-radius: 50%;
+	animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.running .icon {
+		animation: none;
+		border-top-color: var(--warn);
+	}
+}
+.error {
+	margin: 0;
+	padding: 8px 10px;
+	border: 1px solid var(--bad);
+	border-radius: 6px;
+	color: var(--bad);
+}
+details {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+}
+details[open] {
+	flex: 1;
+}
+details[hidden] {
+	display: none;
+}
+summary {
+	color: var(--muted);
+	cursor: pointer;
+}
+pre {
+	flex: 1;
+	min-height: 120px;
+	max-height: 100%;
+	margin: 8px 0 0;
+	padding: 8px;
+	overflow: auto;
+	border-radius: 6px;
+	background: var(--panel);
+	font:
+		11.5px / 1.4 ui-monospace,
+		monospace;
+	white-space: pre-wrap;
+	word-break: break-all;
+}
+footer {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: auto;
+}
+button {
+	padding: 6px 14px;
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	background: transparent;
+	color: var(--fg);
+	font: inherit;
+	cursor: pointer;
+}
+button.primary {
+	border-color: var(--accent);
+	background: var(--accent);
+	color: var(--accent-fg);
+}
+button:focus-visible,
+input:focus-visible,
+summary:focus-visible {
+	outline: 2px solid var(--fg);
+	outline-offset: 2px;
+}
+form {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	height: 100%;
+}
+label {
+	margin-top: 6px;
+	font-weight: 500;
+}
+input {
+	width: 100%;
+	padding: 6px 8px;
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	background: var(--bg);
+	color: var(--fg);
+	font:
+		13px ui-monospace,
+		monospace;
+}
+.row {
+	display: flex;
+	gap: 8px;
+}
+form p {
+	margin: 0;
+	font-size: 12px;
+}
+#settings-message.error-text {
+	color: var(--bad);
+}

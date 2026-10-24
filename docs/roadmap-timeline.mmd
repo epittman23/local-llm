@@ -45,12 +45,13 @@ timeline
       2026-10-19 (night) : The Tests page fetches datasets, calibrates the graders and runs one item : one Tests job at a time, never alongside a tune sweep : datasets fetched, DS-1000 456 of 511 gradeable here, every reference verdict unchanged by the new grader
       2026-10-19 (last) : The fingerprint covers the model file, extra arguments and fitting, and llama-server runs with -fit off : every config_id changed once, noted in the database
       2026-10-23 : A backend can stop its served model and benchmark jobs when it exits (LLLM_STOP_JOBS_ON_SHUTDOWN), off by default : make backend's uvicorn flags configurable, so shutdown can't hang on an open stream : stage markers for a supervising app
+      2026-10-23 (later) : Desktop app (apps/desktop, Electron, Linux rpm) : loads the backend's own pages, so desktop and browser stay identical : starts the stack when nothing runs and stops what it started, with a step-by-step progress dialog : attaches to a terminal-started stack and leaves it running : one setting moves it to a remote server
     section Near-Term
       "~1 week" : Resolve the blocking rack hole-type question : confirm riser and PSU questions : re-verify current component pricing
       "~2-4 weeks" : Finish the benchmark upgrade : HumanEval+ and MBPP+ replace HumanEval and MBPP : a LiveCodeBench slice with a per-run release-date window : a llama-bench pre-screen driven by Optuna
     section Short-Term
       "~1-2 months" : Purchase and provision the R730 and V100 server : run the five acceptance tests : migrate Qwen3.8-27B to fully VRAM-resident serving
     section Medium-Term
-      "~6 months" : Add math and statistics benchmark coverage : stand up Tailscale network exposure : evaluate a second V100 : watch for a Qwen3.8-35B-A3B release
+      "~6 months" : Add math and statistics benchmark coverage : stand up Tailscale network exposure : evaluate a second V100 : watch for a Qwen3.8-35B-A3B release : local coding-agent features in the desktop app
     section Long-Term
       "~2 years" : Network-accessible household inference backend behind Local LLM : early groundwork for smart-home integration

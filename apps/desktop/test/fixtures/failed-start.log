@@ -1,0 +1,2 @@
+make backend: /tmp/scratch/norepo/infra/.env not found -- copy infra/.env.example and fill in OPENROUTER_API_KEY, POSTGRES_PASSWORD, LLLM_SECRET_KEY
+make: *** [Makefile:82: backend] Error 1

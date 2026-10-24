@@ -1,0 +1,9 @@
+# build output (tsc) and packages (electron-builder)
+dist/
+release/
+
+# dependencies
+node_modules/
+
+# captured logs the progress tests replay (the root .gitignore drops *.log)
+!test/fixtures/*.log

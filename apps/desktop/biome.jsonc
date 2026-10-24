@@ -1,0 +1,35 @@
+{
+	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+	// apps/web/biome.jsonc's settings, for apps/desktop. Runs from the repo
+	// root's .pre-commit-config.yaml (and so in CI) like apps/web's.
+	"vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+	"files": {
+		// Captured logs, kept byte for byte.
+		"includes": ["**", "!test/fixtures"]
+	},
+	"formatter": {
+		"indentStyle": "tab",
+		"lineWidth": 120
+	},
+	"javascript": {
+		"formatter": {
+			"quoteStyle": "single",
+			"semicolons": "always",
+			"trailingCommas": "none"
+		}
+	},
+	"linter": {
+		"enabled": true,
+		"rules": { "recommended": true }
+	},
+	"assist": {
+		"actions": { "source": { "organizeImports": "on" } }
+	},
+	"overrides": [
+		{
+			// Files bun rewrites itself, in its own two-space style.
+			"includes": ["package.json", "tsconfig*.json"],
+			"formatter": { "indentStyle": "space", "indentWidth": 2 }
+		}
+	]
+}

@@ -2,7 +2,8 @@
 # `git commit` once installed:
 #
 #   uv tool install pre-commit && pre-commit install
-#   (cd apps/web && bun install)   # the Biome hook runs apps/web's own Biome
+#   (cd apps/web && bun install)       # the Biome hooks run each app's own Biome
+#   (cd apps/desktop && bun install)
 #
 # CI's `pre-commit` job (.github/workflows/ci.yml) runs this same file with
 # `--all-files`, so a skipped hook (`git commit --no-verify`) is still caught
@@ -64,3 +65,13 @@ repos:
           bash -c 'cd apps/web
           && { [ -x node_modules/.bin/biome ] || { echo "biome missing: run bun install in apps/web" >&2; exit 1; }; }
           && exec node_modules/.bin/biome format --write --no-errors-on-unmatched --files-ignore-unknown=true "${@/#apps\/web\//}"' --
+      # The same for apps/desktop, which lints as well as formats: it has no
+      # backlog of findings to work through first.
+      - id: biome-desktop
+        name: biome (apps/desktop)
+        language: system
+        files: ^apps/desktop/
+        entry: >-
+          bash -c 'cd apps/desktop
+          && { [ -x node_modules/.bin/biome ] || { echo "biome missing: run bun install in apps/desktop" >&2; exit 1; }; }
+          && exec node_modules/.bin/biome check --write --error-on-warnings --no-errors-on-unmatched --files-ignore-unknown=true "${@/#apps\/desktop\//}"' --

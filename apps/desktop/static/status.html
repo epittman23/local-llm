@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta
+			http-equiv="Content-Security-Policy"
+			content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'"
+		/>
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Local LLM</title>
+		<link rel="stylesheet" href="status.css" />
+		<script src="status.js" defer></script>
+	</head>
+	<body>
+		<main id="progress-view">
+			<header>
+				<h1 id="title">Starting Local LLM</h1>
+				<span id="elapsed" class="muted"></span>
+			</header>
+			<ol id="steps"></ol>
+			<p id="error" class="error" role="alert" hidden></p>
+			<details id="details">
+				<summary>Show details</summary>
+				<pre id="log"></pre>
+			</details>
+			<footer id="actions"></footer>
+		</main>
+
+		<main id="settings-view" hidden>
+			<header><h1>Settings</h1></header>
+			<form id="settings-form">
+				<label for="server-url">Server URL</label>
+				<input id="server-url" type="text" spellcheck="false" autocomplete="off" required />
+				<p class="muted">
+					At 127.0.0.1 or localhost, the app starts the local stack when nothing is running and stops it on close.
+					At any other address, such as a remote server, it only connects.
+				</p>
+				<label for="repo-path">Repository folder</label>
+				<div class="row">
+					<input id="repo-path" type="text" spellcheck="false" autocomplete="off" />
+					<button type="button" id="browse">Browse…</button>
+				</div>
+				<p class="muted">The local-llm checkout whose <code>make backend</code> runs the local stack.</p>
+				<p id="settings-message" role="status"></p>
+				<footer>
+					<button type="button" id="settings-back">Back</button>
+					<button type="button" id="restart" hidden>Restart now</button>
+					<button type="submit" class="primary">Save</button>
+				</footer>
+			</form>
+		</main>
+	</body>
+</html>

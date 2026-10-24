@@ -103,6 +103,22 @@ Chat is then at `http://localhost:4000/`. While editing the UI, run
 hot reload, proxying API/WebSocket calls to the backend (see
 [docs/guides/frontend.md](docs/guides/frontend.md)).
 
+**The desktop app** (`apps/desktop`, Linux) shows the same pages in a window
+of their own and needs no terminal. Opened from the app launcher, it starts the
+stack above when nothing is running, showing each step, and stops it again
+when it closes. With a stack already started from a terminal, it just
+connects and leaves that stack running. Build and install it once:
+
+```bash
+sudo dnf install rpm-build libxcrypt-compat
+cd apps/desktop && bun install && bun run package
+sudo dnf install ./release/local-llm-desktop-*.rpm
+```
+
+or run it from the checkout with `make desktop`. Its server address is a
+setting, so moving to a remote server is one change in File > Settings
+(see [docs/guides/desktop.md](docs/guides/desktop.md)).
+
 To run everything CI runs before opening a pull request: `make check` (lint,
 backend pytest against a throwaway Postgres, web checks and build, and
 Playwright). It needs Docker, uv and Bun, like the app itself.
@@ -264,6 +280,7 @@ OpenAI-compatible endpoint.
 | The app's own test suites | [docs/guides/testing.md](docs/guides/testing.md) |
 | Backend dependencies and the offline model cache | [docs/guides/dependencies.md](docs/guides/dependencies.md) |
 | Frontend dev server, build, rough edges | [docs/guides/frontend.md](docs/guides/frontend.md) |
+| The desktop app: install, startup and shutdown, settings, security | [docs/guides/desktop.md](docs/guides/desktop.md) |
 | Why things are the way they are | [docs/decisions.md](docs/decisions.md) |
 | History and planned direction | [docs/ROADMAP.md](docs/ROADMAP.md) |
 

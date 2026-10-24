@@ -1,0 +1,36 @@
+# Packaging for `bun run package` (an .rpm in release/) and CI's
+# `bun run package:dir` smoke. Linux only (docs/decisions.md, 2026-10-23).
+appId: dev.local-llm.desktop
+productName: Local LLM
+directories:
+  output: release
+files:
+  - dist/**
+  - static/**
+  - package.json
+extraResources:
+  # The window icon at runtime; the launcher icon is linux.icon below.
+  - from: ../web/public/favicon.png
+    to: icon.png
+linux:
+  target: rpm
+  executableName: local-llm
+  # Names the installed .desktop file after package.json's desktopName, so it
+  # matches StartupWMClass and Electron's Wayland app_id (`local-llm`, the
+  # class Hyprland reports): docks and launchers then match the running
+  # window to its entry instead of showing a second, generic icon.
+  syncDesktopName: true
+  icon: ../web/public/favicon.png
+  category: Development
+  # The rpm needs a maintainer; no email on purpose.
+  maintainer: epittman23
+  synopsis: Local LLM, the private assistant, in its own window
+  desktop:
+    entry:
+      StartupWMClass: local-llm
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  onlyLoadAppFromAsar: true
+  enableEmbeddedAsarIntegrityValidation: true
