@@ -58,8 +58,9 @@ Local models, all evaluation only, one serving profile each:
 Hardware: NVIDIA GeForce RTX 3060 Laptop, 6 GB VRAM, compute capability 8.6,
 on native Fedora 44 since 2026-10-09. Every recorded measurement was taken
 under WSL2 on the same laptop, so all of them are historical until
-re-measured. Neither the CUDA toolkit nor the llama.cpp build exists on the
-Fedora machine yet (2026-10-09).
+re-measured. Since 2026-10-23 the Fedora machine has the CUDA 13.4 toolkit
+and llama.cpp build 10597 (`95b8e33e1`); nothing has been served or
+measured on it yet.
 
 - **Profiles** are versioned rows in Postgres (`benchmark_profile`,
   `benchmark_profile_version`), resolved by
