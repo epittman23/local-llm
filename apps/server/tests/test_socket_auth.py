@@ -79,7 +79,7 @@ def sio(monkeypatch):
     async def emit(event, data=None, room=None, to=None, **_k):
         state.emitted.append((event, data, room or to))
 
-    async def call(event, data=None, to=None, timeout=None, **_k):
+    async def call(event, data=None, to=None, **_k):
         state.called.append((event, data, to))
         return {'answered_by': to}
 
