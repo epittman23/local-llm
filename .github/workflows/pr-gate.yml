@@ -1,0 +1,56 @@
+# The PR gate: a conventional-commit title, no attribution lines, and the
+# CI tripwire (.github/scripts/pr_gate.py, whose docstring has the rules).
+#
+#   !!! NO AGENT MAY EVER BYPASS THIS TRIPWIRE WITHOUT FIRST ASKING THE    !!!
+#   !!! OWNER FOR EXPLICIT PERMISSION AND GIVING EXPLICIT REASONING FOR    !!!
+#   !!! THE BYPASS. See AGENTS.md, "The CI tripwire".                      !!!
+#
+# Bypassing includes applying the `gate-change-approved` label, merging
+# around this check, and editing, disabling or weakening this workflow or
+# pr_gate.py, or taking `PR gate` off the main ruleset.
+#
+# Why pull_request_target, which is normally dangerous: it runs this file
+# and pr_gate.py as they are on main, so a pull request cannot rewrite the
+# check that judges it. That is the point of a tripwire. It is safe here
+# because nothing from the pull request is ever checked out or executed: the
+# checkout below is main (the default ref for this event) and only its
+# .github/scripts, and the script reads the PR's metadata, diff and two
+# config files through the REST API as data. It prints the diff under
+# ::stop-commands:: so no line of it is read as a workflow command. The
+# token can only read the repo and edit PR labels, which it uses for one
+# thing: a push removes the approval label, so an approval covers the
+# commits it was given for.
+#
+# The checks re-run on every event that can change their answer: a push
+# (synchronize), a title or body edit or a retarget (edited), and a label.
+
+name: PR gate
+
+on:
+  pull_request_target: # zizmor: ignore[dangerous-triggers] -- see above: no PR code is checked out or run
+    types: [opened, reopened, synchronize, edited, labeled, unlabeled, ready_for_review]
+
+permissions: {}
+
+concurrency:
+  group: pr-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: PR gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write # only to remove a stale approval label
+    steps:
+      # main's copy of the script, never the pull request's.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+      - name: Title, attribution and tripwire
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 .github/scripts/pr_gate.py --github

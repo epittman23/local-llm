@@ -32,6 +32,9 @@ env:
   BUN_VERSION: '1.4.2'
   PYTHON_VERSION: '3.12'
   PRE_COMMIT_VERSION: '4.6.2'
+  # The version .pre-commit-config.yaml's gitleaks hook pins, by digest; the
+  # Makefile's GITLEAKS_IMAGE is the same string.
+  GITLEAKS_IMAGE: zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
 
 jobs:
   pre-commit:
@@ -62,11 +65,35 @@ jobs:
           key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
       # .pre-commit-config.yaml is the only definition of the lint and
       # format checks. no-commit-to-branch is skipped: it guards local
-      # commits, and on a push to main it would fail by design.
+      # commits, and on a push to main it would fail by design. gitleaks is
+      # skipped because its hook scans only staged changes, which a checkout
+      # has none of; the `secrets` job below scans the commits instead.
       - name: pre-commit run --all-files
         env:
-          SKIP: no-commit-to-branch
-        run: uvx pre-commit@${PRE_COMMIT_VERSION} run --all-files --show-diff-on-failure --color=always
+          SKIP: no-commit-to-branch,gitleaks
+        run: uvx "pre-commit@${PRE_COMMIT_VERSION}" run --all-files --show-diff-on-failure --color=always
+
+  secrets:
+    name: Secrets (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      # A pull request's own commits, so a key committed and then deleted
+      # in a later commit is still caught; on main (push, the daily run) the
+      # whole history. Known non-secrets are listed in .gitleaksignore.
+      - name: gitleaks
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          range=()
+          if [ -n "$BASE_SHA" ]; then range=(--log-opts="$BASE_SHA..$HEAD_SHA"); fi
+          docker run --rm -v "$PWD:/repo:ro" -w /repo "$GITLEAKS_IMAGE" \
+            git --no-banner --redact --verbose "${range[@]}" /repo
 
   web:
     name: Web (astro check, vitest, build)
@@ -195,10 +222,13 @@ jobs:
   ci-ok:
     name: CI passed
     if: always()
-    needs: [pre-commit, web, e2e, desktop, backend]
+    needs: [pre-commit, secrets, web, e2e, desktop, backend]
     runs-on: ubuntu-latest
     steps:
       - name: Every job succeeded
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+          ANY_NOT_SUCCEEDED: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}
         run: |
-          echo '${{ toJSON(needs) }}'
-          [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') || contains(needs.*.result, 'skipped') }}" = false ]
+          echo "$NEEDS"
+          [ "$ANY_NOT_SUCCEEDED" = false ]

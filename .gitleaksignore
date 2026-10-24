@@ -1,0 +1,8 @@
+# Findings gitleaks reports that are not secrets. One fingerprint per line
+# (commit:file:rule:line, as `make secrets` prints it); say why above each.
+#
+# A placeholder LLLM_SECRET_KEY in the 2026-10-19 audit's repro instructions
+# ("x0123456789abcdef..."), committed on the audit branch and again by its
+# squash merge.
+7bb79a925e422c804117e8c693526b824d9792e8:docs/audit/repro/README.md:generic-api-key:10
+ff8c3d905d9fb7302d67c1ac3adedf3b07bced33:docs/audit/repro/README.md:generic-api-key:10

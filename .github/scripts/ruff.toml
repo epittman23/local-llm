@@ -1,0 +1,3 @@
+# The backend's ruff settings (quotes, line length, rule set) for the CI
+# scripts too.
+extend = "../../apps/server/pyproject.toml"

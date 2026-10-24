@@ -11,9 +11,13 @@
 #   make desktop    the desktop app (apps/desktop) from this checkout, which
 #                    starts the stack above itself when nothing is running.
 #   make lint       pre-commit over every file (CI's "Lint and format").
+#   make secrets    gitleaks over the whole git history (CI's "Secrets").
+#   make pr-gate PR=<n>  the PR gate's title, attribution and tripwire
+#                    checks on pull request <n>, read-only.
 #   make test       backend pytest + web checks + Playwright + desktop checks
 #                    (CI's other jobs).
-#   make check      lint, then test: one command that predicts `CI passed`.
+#   make check      lint, secrets, then test: one command that predicts
+#                    `CI passed`.
 #   make help       this text.
 #
 # Replaces scripts/shell/main.sh's lllm-backend/lllm-frontend, deleted along
@@ -50,19 +54,23 @@ LLLM_BACKEND_HOST ?= 127.0.0.1
 LLLM_UVICORN_FLAGS ?= --reload
 # Keep in sync with PRE_COMMIT_VERSION in .github/workflows/ci.yml.
 PRE_COMMIT_VERSION := 4.6.2
+# Keep in sync with GITLEAKS_IMAGE in .github/workflows/ci.yml.
+GITLEAKS_IMAGE := zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
 # Host port for the throwaway Postgres `make test-backend` starts; not 5432,
 # so it never collides with `make backend`'s database.
 LLLM_TEST_PG_PORT ?= 55432
 
-.PHONY: help backend frontend astro desktop lint test test-backend test-web test-e2e test-desktop check
+.PHONY: help backend frontend astro desktop lint secrets pr-gate test test-backend test-web test-e2e test-desktop check
 
 help:
 	@echo "make backend   Postgres + Redis + the backend (uvicorn --reload, $(LLLM_BACKEND_HOST):$(LLLM_BACKEND_PORT))"
 	@echo "make frontend  Astro + React + shadcn/ui dev server (astro dev, :5174; alias: make astro)"
 	@echo "make desktop   the desktop app from this checkout (it starts and stops the stack itself)"
 	@echo "make lint      pre-commit over every file, as CI runs it"
+	@echo "make secrets   gitleaks over the whole git history"
+	@echo "make pr-gate PR=<n>  the PR gate's checks on pull request <n> (read-only)"
 	@echo "make test      test-backend + test-web + test-e2e + test-desktop, as CI runs them"
-	@echo "make check     lint, then test (predicts CI's 'CI passed')"
+	@echo "make check     lint, secrets, then test (predicts CI's 'CI passed')"
 
 # --reload caveat: a code change restarts the uvicorn worker, and with it the
 # in-memory handle Benchmarks > Serve keeps on a running llama-server. The
@@ -159,12 +167,27 @@ desktop:
 # green `make check` predicts a green `CI passed`. If you change a CI job,
 # change its target here too.
 
-# CI's "Lint and format (pre-commit)". no-commit-to-branch is skipped for the
-# same reason as in CI: it guards commits, not the tree.
+# CI's "Lint and format (pre-commit)". no-commit-to-branch and gitleaks are
+# skipped for the same reasons as in CI: the first guards commits, not the
+# tree, and the second only sees staged changes (`make secrets` scans commits).
 lint:
 	@cd "$(WEB_DIR)" && bun install --frozen-lockfile
 	@cd "$(DESKTOP_DIR)" && bun install --frozen-lockfile
-	SKIP=no-commit-to-branch uvx pre-commit@$(PRE_COMMIT_VERSION) run --all-files --show-diff-on-failure
+	SKIP=no-commit-to-branch,gitleaks uvx pre-commit@$(PRE_COMMIT_VERSION) run --all-files --show-diff-on-failure
+
+# CI's "Secrets (gitleaks)". CI scans a pull request's own commits and main's
+# whole history; this scans the whole history, a superset of either, in
+# about 20 s. Known non-secrets are in .gitleaksignore.
+secrets:
+	docker run --rm -v "$(REPO_ROOT):/repo:ro" -w /repo $(GITLEAKS_IMAGE) git --no-banner --redact --verbose /repo
+
+# The PR gate workflow (.github/workflows/pr-gate.yml) on one pull request,
+# read-only: it never removes a label. It reads the PR through the API, so it
+# checks what is pushed, not the working tree. Its unit tests run in
+# `make lint`. See AGENTS.md, "The CI tripwire".
+pr-gate:
+	@[ -n "$(PR)" ] || { echo "make pr-gate: set PR=<number>" >&2; exit 1; }
+	python3 .github/scripts/pr_gate.py --pr $(PR)
 
 # CI's "Backend (pytest)", including the throwaway pgvector Postgres that
 # tests/test_imports.py needs (without it that test skips locally, while CI
@@ -224,5 +247,5 @@ test-desktop:
 
 test: test-backend test-web test-e2e test-desktop
 
-check: lint test
+check: lint secrets test
 

@@ -19,18 +19,63 @@ The root Makefile mirrors CI job for job, with the same commands:
 | Target | CI job | What it runs |
 |---|---|---|
 | `make lint` | Lint and format (pre-commit) | `pre-commit run --all-files` (pinned to CI's pre-commit version) |
+| `make secrets` | Secrets (gitleaks) | gitleaks over the whole git history (CI scans a pull request's own commits, and main's whole history) |
 | `make test-backend` | Backend (pytest) | `uv lock --check`, `uv sync --frozen --group dev`, then pytest with a throwaway pgvector Postgres on `127.0.0.1:55432` (`LLLM_TEST_PG_PORT`), so `test_the_app_imports` runs instead of skipping |
 | `make test-web` | Web (astro check, vitest, build) | `bunx astro check`, `bun run test:unit`, `bun run build` |
 | `make test-e2e` | Web e2e (Playwright) | `bunx playwright test --workers=2` |
 | `make test-desktop` | Desktop (typecheck, vitest, package smoke) | `bun run typecheck`, `bun run test:unit`, `bun run package:dir` (an unpacked package, no `.rpm`) |
 | `make test` | all four test jobs | the four above |
-| `make check` | `CI passed` | `make lint`, then `make test` |
+| `make check` | `CI passed` | `make lint`, `make secrets`, then `make test` |
 
 `make test-backend` removes its Postgres container on exit (Ctrl-C included),
 so it never touches the `make backend` database. Any pytest run, `make` or
 not, points `DATA_DIR` at a temp directory (`tests/conftest.py`), so it
 never touches `apps/server/data`. Stop `make frontend`
 before `make test-e2e` (see below).
+
+## The PR gate and the tripwire
+
+Besides `CI passed`, every pull request gets a **`PR gate`** check
+(`.github/workflows/pr-gate.yml`). It checks three things:
+
+- **Title.** The PR title must be a conventional commit, since the squash
+  merge uses it as the commit subject.
+- **Attribution.** No attribution line may appear in the title, the body or
+  any commit (AGENTS.md's commit policy).
+- **Tripwire.** It looks for changes that weaken CI:
+  - edits to a gate file;
+  - new skips or suppressions;
+  - deleted or fewer tests;
+  - edited golden files;
+  - edits to append-only files.
+
+  The full list is in AGENTS.md, "The CI tripwire", and the patterns are in
+  `.github/scripts/pr_gate.py`.
+
+> **No agent may ever bypass the tripwire without first asking the owner for
+> explicit permission and giving explicit reasoning for the bypass.** See
+> AGENTS.md for what counts as a bypass and what to do when it trips.
+
+The owner approves a tripping PR with **both** of these:
+
+- the `gate-change-approved` label, applied after the latest push (a push
+  removes it);
+- a `## Gate changes` section in the PR body that explains each finding.
+
+The workflow runs under `pull_request_target`. That means **main's** copy of
+the workflow and script judges every PR, and a PR that edits either one is
+judged by the version it is changing. Nothing from the PR is checked out or
+run. The script reads the diff through the API.
+
+Two consequences:
+
+- **A change to the gate merges unexercised.** Its unit tests
+  (`.github/scripts/test_pr_gate.py`, run by `make lint`) are its only check
+  before then.
+- **Test a gate change against real PRs before opening it.** Run
+  `make pr-gate PR=<n>` (read-only, using `gh auth token`) on a few:
+  - one that should trip, such as a CI change;
+  - one that should pass, such as docs or a Dependabot bump.
 
 ## Frontend (`apps/web`)
 
@@ -156,6 +201,18 @@ Generated code is not linted or formatted:
 - `apps/server/uv.lock`: skipped by `check-toml`; CI's `uv lock --check`
   validates it.
 
-The security hooks (gitleaks, private keys, large files, merge markers) still
-scan everything, generated or not. If a generated file is ever edited by
+The security checks (gitleaks, private keys, large files, merge markers) still
+scan everything, generated or not.
+
+The pre-commit file also lints the workflows under `.github/workflows/`
+(actionlint, through its Docker image so shellcheck runs the same
+everywhere, and zizmor for security issues), and checks that the mermaid block in
+`docs/ROADMAP.md` is a byte-identical copy of `docs/roadmap-timeline.mmd`.
+
+The gitleaks hook scans staged changes only, so it guards `git commit` and
+does nothing under `--all-files`: CI and `make lint` skip it. The commits
+themselves are scanned by CI's Secrets job and `make secrets`. A finding that
+is not a secret goes in `.gitleaksignore` by fingerprint, with the reason
+above it. GitHub's push protection blocks recognized provider keys
+separately. If a generated file is ever edited by
 hand, it is no longer generated: take it off its exclusion list.

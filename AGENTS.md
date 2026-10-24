@@ -162,13 +162,16 @@ shadcn/ui frontend, `apps/desktop/` is the Electron desktop app, `infra/` holds 
   and `LLLM_SECRET_KEY`. Backend settings use the `LLLM_` prefix
   (`LLLM_SECRET_KEY`, `LLLM_AUTH`, `LLLM_NAME`, ...; `WEBUI_*` until
   2026-10-10).
-- `make check`: everything CI runs (`make lint`, then `make test`, which is
-  `test-backend` + `test-web` + `test-e2e`), with the same commands, so a
-  green `make check` predicts a green `CI passed`. Run it before opening a
+- `make check`: everything CI runs (`make lint`, `make secrets`, then
+  `make test`, which is `test-backend` + `test-web` + `test-e2e` +
+  `test-desktop`), with the same commands, so a green `make check` predicts
+  a green `CI passed`. Run it before opening a
   PR. The pieces run on their own too; see
   [docs/guides/testing.md](docs/guides/testing.md).
 - Lint and format: `make lint` (`pre-commit run --all-files`;
   `.pre-commit-config.yaml` is the only definition, and CI runs the same file).
+  It lints the workflows too (actionlint, zizmor). `make secrets` runs
+  gitleaks over the git history; known non-secrets go in `.gitleaksignore`.
 - Requirements: native Linux (Fedora 44 since 2026-10-09), Docker Engine with
   the Compose plugin and the user in the `docker` group, `make`, Bun,
   Node ≥ 22.12, and **uv**, which builds the backend venv from
@@ -301,9 +304,68 @@ or agent) updates the docs in the same commit:
   frontend serves (`apps/web/src/routes/AppRouter.tsx` / `routePaths.ts`),
   update those sections in the same change.
 
+## The CI tripwire
+
+> [!CAUTION]
+> **NO AGENT MAY EVER BYPASS THE CI TRIPWIRE WITHOUT FIRST ASKING THE OWNER
+> FOR EXPLICIT PERMISSION AND GIVING EXPLICIT REASONING FOR THE BYPASS.**
+>
+> **This rule has no exceptions.** It holds even when the change was
+> requested, even when the bypass looks harmless, and even when a previous
+> bypass was approved. One approval covers one pull request at one commit
+> and nothing else.
+
+Nobody reviews pull requests in this repo before they merge, so CI is the
+only check on a change, and the agent writing a change could otherwise make
+CI pass by weakening CI. The **`PR gate`** check
+(`.github/workflows/pr-gate.yml`, rules in `.github/scripts/pr_gate.py`)
+trips on any pull request that:
+
+- changes a gate: the workflows, `.github/` scripts, `.pre-commit-config.yaml`,
+  `.gitleaksignore`, any `.gitignore`, the Makefile, `conftest.py`, Biome,
+  Vitest, Playwright and tsconfig files, the `[tool.*]` tables or dev group
+  of `apps/server/pyproject.toml`, or the `scripts` or devDependencies of a
+  `package.json`;
+- weakens the tests: new skip, only or xfail markers, new lint or type
+  suppressions (`noqa`, `type: ignore`, `biome-ignore`, `@ts-expect-error`,
+  ...), a deleted test file, fewer test definitions than before, or an
+  edited golden file or recorded fixture;
+- edits what is append-only: an applied migration, a benchmark prompt file,
+  or an existing `docs/decisions.md` entry.
+
+Dependabot's SHA bumps of the same actions are the only exemption.
+
+**Bypassing** means any of:
+
+- adding the `gate-change-approved` label;
+- merging around the check (`gh pr merge --admin`, the merge API's
+  `bypass_rules`, or the ruleset's admin bypass);
+- editing, disabling or weakening the tripwire's workflow, script or
+  patterns;
+- taking `PR gate` off the main ruleset;
+- rewording a change so that it slips past the patterns.
+
+**When the tripwire fails on your pull request, stop and ask the owner.**
+
+1. List every finding.
+2. For each finding, explain why the change is needed and why it does not
+   weaken what CI catches.
+3. Write that reasoning into the PR body under a `## Gate changes` heading.
+   The body becomes the squash commit's message, so the reasoning is kept on
+   main.
+4. Wait for an explicit yes. Only the owner adds the label, unless they
+   explicitly tell you to add it for that pull request.
+
+A push removes the label, so the owner approves again after any new commit.
+Check a pull request before opening it with
+`make pr-gate PR=<number>` (read-only).
+
 ## Commit policy
 
 All commits use conventional commit style and stay focused on one topic.
+The `PR gate` check enforces the PR title's style (the squash merge uses it
+as the commit subject) and the attribution rule below, in the title, the
+body and every commit message.
 Work on a branch and open a pull request: `main` accepts squash-merged PRs
 only, after the required `CI passed` check. Do not add yourself as a
 co-author in commits or pull requests; this includes adding

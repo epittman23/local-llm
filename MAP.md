@@ -15,6 +15,9 @@ instead.
 
 ```
 local-llm/
+├── .github/                   CI workflows (ci.yml; pr-gate.yml, the tripwire), Dependabot, scripts/
+├── .pre-commit-config.yaml    the only definition of lint and format checks (CI runs it)
+├── .gitleaksignore            gitleaks findings that are not secrets, with reasons
 ├── AGENTS.md                  agent and contributor guide (CLAUDE.md links to it)
 ├── LICENSE, LICENSE_HISTORY   the license texts the derived code is under (see NOTICE)
 ├── NOTICE                     what is derived, the license boundaries, the branding basis
@@ -369,7 +372,7 @@ structural summary.
 
 ## `Makefile`
 
-Root-level process lifecycle and CI-mirroring checks: `make lint`/`make
+Root-level process lifecycle and CI-mirroring checks: `make lint`/`make secrets`/`make
 test`/`make check` (the same commands as `.github/workflows/ci.yml`'s jobs,
 `make test-desktop` among them; see `docs/guides/testing.md`), `make desktop`
 (the desktop app from the checkout), `make backend` (Postgres +
