@@ -312,8 +312,9 @@ difference fails. The file may only shrink:
 
 1. Fix a model to match its migration, or add a migration.
 2. Record the smaller list with `SCHEMA_DRIFT_RECORD=1`.
-3. Since the file is a golden file, that edit trips the PR gate, so say
-   why in the PR.
+3. Commit the smaller file. The PR gate lets it shrink without approval
+   and trips if it grows (`SHRINK_ONLY` in `.github/scripts/pr_gate.py`),
+   as with the baselines above.
 
 `tests/test_frontend_contract.py` reads every `fetch(...)` in
 `apps/web/src` (tests excluded) whose URL is a template on one of the base
