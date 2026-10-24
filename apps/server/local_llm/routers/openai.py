@@ -56,6 +56,7 @@ from local_llm.utils.session_pool import (
     get_session,
     stream_wrapper,
 )
+from local_llm.utils.upstream_trace import note_request
 
 log = logging.getLogger(__name__)
 
@@ -1640,6 +1641,8 @@ async def generate_chat_completion(
     if not is_streaming_request:
         payload.pop('stream_options', None)
     body = JSONCodec.dumps(payload)
+    # A no-op unless the benchmark harness is tracing this call.
+    note_request(request_url, body)
 
     async def report_failure(upstream_error):
         await publish_model_provider_request_failed(

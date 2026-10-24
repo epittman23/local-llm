@@ -2313,7 +2313,9 @@ async def _fetch(tier: str | None, model: str | None, benchmark: str | None):
     which is what lets them stay synchronous (scipy and matplotlib have no
     async API to offer them anyway).
     """
-    rows = await BenchmarkResults.list_results(tier=tier, model=model)
+    # Bare results only, until the report groups by harness_sha
+    # (docs/plans/benchmarks-through-the-app.md, PR 2).
+    rows = await BenchmarkResults.list_results(tier=tier, model=model, bare_only=True)
     records = [r.model_dump() for r in rows]
     if benchmark:
         records = [r for r in records if r.get('benchmark') == benchmark]

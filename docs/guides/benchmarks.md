@@ -151,6 +151,63 @@ running server (`GET /v1/models`) and a mismatch warns rather than
 mislabels, since the profile describes an intended configuration while the
 server is already serving something.
 
+## Through the app (harness mode)
+
+By default an item goes straight to `llama-server`, so a run measures the
+bare model. With `harness_model` set on a Tests run (`POST
+/api/v1/benchmarks/tests/run` or `/item`, the id of a Workspace model entry),
+each item is answered the way a chat answers it instead:
+
+- through that model entry, with its system prompt and params;
+- with the code interpreter on the Jupyter engine, and `execute_code` as the
+  only tool offered (the builtin tools that browse notes, chats and
+  knowledge are cut);
+- through the app's own chat pipeline (`benchmarks/evaluation/harness.py`),
+  with a `temporary:` chat id, so no chat row, title or memory is written.
+
+There is no switch on the Tests page yet (planned in PR 2 of
+[the plan](../plans/benchmarks-through-the-app.md)).
+
+**What it needs.** The model entry has to be on an OpenAI-compatible
+connection that points at the `llama-server` being measured, for example
+`http://127.0.0.1:8090/v1` in Admin Settings > Connections. The code
+interpreter has to be on, on the Jupyter engine. Native function calling
+only.
+
+**What it refuses.** A result is recorded only when the harness can vouch
+for where it came from. The run stops, with `not recorded: ...`, when:
+
+- the entry is served by any other URL, or its base model is missing;
+- it turns streaming off, uses legacy function calling, or sets
+  `max_completion_tokens`;
+- a single upstream request goes anywhere but `127.0.0.1:<port>`, or no
+  upstream request is seen at all;
+- the request changes between items: the system prompt, the tools or the
+  params.
+
+**What is recorded.**
+
+- **`harness_sha`.** A sha of what every item shares, read back from the
+  first request actually sent upstream: the model entry, the system
+  message, the tools offered, the params, and the limits (at most 8 tool
+  rounds, no tool approval). `benchmark_harness` holds what each sha
+  stands for. NULL means a bare request.
+- **What is graded.** Only the text of the message after the last code run,
+  never the code the model ran on the way. The whole structured output is
+  kept in `benchmark_answer.output`.
+- **No llama.cpp timings.** llama.cpp reports them for the last upstream
+  call only, so a speed read from them would mix one-call items with
+  multi-round ones. Instead, `harness_stats` holds the rounds, the code runs,
+  their total time and the output tokens, and `wall_ms` is the whole item.
+- **Errors.** An error with the server still up is the item's
+  `fail_error`. A server that stopped answering raises, as in the bare
+  mode, and records nothing.
+
+**Kept apart.** Compare and Report leave harness rows out for now, until
+they group and label by `harness_sha` (PR 2). A resume continues only a run
+in the same mode. Like the system prompt, the harness is not part of
+`config_id`.
+
 ## System prompts
 
 By default a request carries one message: the item. Selecting a system

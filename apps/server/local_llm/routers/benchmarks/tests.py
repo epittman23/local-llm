@@ -13,11 +13,11 @@ import asyncio
 import json
 
 import aiohttp
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict
 
-from local_llm.benchmarks.evaluation import grading, runner
+from local_llm.benchmarks.evaluation import grading, harness, runner
 from local_llm.benchmarks.evaluation.adapters import ADAPTERS_DIR, load_adapters
 from local_llm.benchmarks.evaluation.datasets import fetch_one, read_items, read_manifest
 from local_llm.benchmarks.evaluation.suites import SUITES_DIR, filter_items
@@ -49,6 +49,10 @@ class ItemForm(BaseModel):
     item_id: str
     profile: str | None = None
     system: str | None = None
+    # A Workspace model entry to answer through the app's chat pipeline
+    # (benchmarks/evaluation/harness.py); None sends the item straight to
+    # llama-server.
+    harness_model: str | None = None
 
     model_config = ConfigDict(extra='forbid')
 
@@ -60,6 +64,7 @@ class TestsRunForm(BaseModel):
     system: str | None = None
     slice: str | None = None
     resume: bool = False
+    harness_model: str | None = None
 
     model_config = ConfigDict(extra='forbid')
 
@@ -73,7 +78,7 @@ async def get_options(user=Depends(get_admin_user)):
     }
 
 
-async def _run_suite(form: TestsRunForm, queue: asyncio.Queue) -> None:
+async def _run_suite(form: TestsRunForm, queue: asyncio.Queue, request: Request | None = None, user=None) -> None:
     global _cancel
     passed = attempted = 0
     try:
@@ -86,6 +91,9 @@ async def _run_suite(form: TestsRunForm, queue: asyncio.Queue) -> None:
                 item_slice=form.slice,
                 system_name=form.system,
                 resume=form.resume,
+                harness_entry=form.harness_model,
+                source_request=request,
+                user=user,
             )
             total = len(todo)
             await queue.put(
@@ -121,6 +129,8 @@ async def _run_suite(form: TestsRunForm, queue: asyncio.Queue) -> None:
         await queue.put({'type': 'error', 'message': str(exc)})
     except runner.ServerGone as exc:
         await queue.put({'type': 'error', 'message': f'server gone: {exc}'})
+    except harness.HarnessRefused as exc:
+        await queue.put({'type': 'error', 'message': f'not recorded: {exc}'})
     except Exception as exc:  # noqa: BLE001 - reported to the client, not swallowed silently
         await queue.put({'type': 'error', 'message': str(exc)})
 
@@ -173,8 +183,8 @@ def _benchmarks(names: list[str] | None) -> list[str]:
 
 
 @router.post('/run')
-async def start_run(form_data: TestsRunForm, user=Depends(get_admin_user)):
-    return _start(lambda queue: _run_suite(form_data, queue))
+async def start_run(request: Request, form_data: TestsRunForm, user=Depends(get_admin_user)):
+    return _start(lambda queue: _run_suite(form_data, queue, request, user))
 
 
 def _dataset_status() -> list[dict]:
@@ -293,7 +303,7 @@ async def start_selfcheck(form_data: SelfcheckForm, user=Depends(get_admin_user)
 
 
 @router.post('/item')
-async def start_item(form_data: ItemForm, user=Depends(get_admin_user)):
+async def start_item(request: Request, form_data: ItemForm, user=Depends(get_admin_user)):
     """Ask and grade one item against what is being served; nothing is recorded."""
     (name,) = _benchmarks([form_data.benchmark])
 
@@ -306,11 +316,16 @@ async def start_item(form_data: ItemForm, user=Depends(get_admin_user)):
                     item=form_data.item_id,
                     profile_name=form_data.profile,
                     system_name=form_data.system,
+                    harness_entry=form_data.harness_model,
+                    source_request=request,
+                    user=user,
                 )
             await queue.put({'type': 'result', **result})
             await queue.put({'type': 'done', 'cancelled': False})
         except runner.ServerGone as exc:
             await queue.put({'type': 'error', 'message': f'server gone: {exc}'})
+        except harness.HarnessRefused as exc:
+            await queue.put({'type': 'error', 'message': f'not recorded: {exc}'})
         except Exception as exc:  # noqa: BLE001 - reported to the client
             await queue.put({'type': 'error', 'message': str(exc)})
 

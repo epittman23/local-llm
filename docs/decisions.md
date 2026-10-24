@@ -7,6 +7,25 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-24** (latest): **Tests can answer items through the app's chat
+  pipeline (harness mode), the first step of the approved plan in
+  `docs/plans/benchmarks-through-the-app.md`.** Until now every benchmark
+  measured the bare model, straight from `llama-server`. Harness mode
+  measures the assistant as deployed: a Workspace model entry, its system
+  prompt, and the Jupyter code interpreter.
+
+  The pipeline was built for a browser, which shaped the design. It returns
+  nothing when code runs, it turns errors into events, it offers a dozen
+  tools, and it never says which connection answered. So the harness:
+
+  - runs the pipeline's four steps by hand, with a capturing event emitter;
+  - offers only `execute_code`;
+  - observes every upstream request, and records nothing unless all of
+    them went to the measured `llama-server`.
+
+  Results group under a new `harness_sha`, beside `system_sha`, read back
+  from the request actually sent. `config_id` is unchanged. Compare and
+  Report leave harness rows out until they can label them.
 - **2026-10-24** (late night): **Knowledge retrieval moved to bge-m3 with
   a bge-reranker-v2-m3 reranker and hybrid search, and the assistant's
   tools were switched on.** `all-MiniLM-L6-v2` (384 dimensions, English

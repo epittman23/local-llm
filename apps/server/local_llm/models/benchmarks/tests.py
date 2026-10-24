@@ -123,6 +123,13 @@ class BenchmarkResult(Base):
     # library and original StackOverflow question). NULL means the problem is
     # treated as independent of every other.
     cluster = Column(Text, nullable=True)
+    # NULL: the item was sent straight to llama-server. A value: it was
+    # answered through the app's chat pipeline, described by the
+    # benchmark_harness row of that sha, and its rounds, output tokens and
+    # code-execution time are in harness_stats (timings stay empty, since
+    # llama.cpp reports them for the last upstream call only).
+    harness_sha = Column(Text, nullable=True)
+    harness_stats = Column(JSON, nullable=True)
 
 
 class BenchmarkResultModel(BaseModel):
@@ -149,6 +156,8 @@ class BenchmarkResultModel(BaseModel):
     system_sha: str | None = None
     adapter_sha: str | None = None
     cluster: str | None = None
+    harness_sha: str | None = None
+    harness_stats: dict | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -159,6 +168,9 @@ class BenchmarkAnswer(Base):
     prompt = Column(Text, nullable=False)
     content = Column(Text, nullable=False)
     reasoning = Column(Text, nullable=False)
+    # A harness answer's structured output (the code that ran, what it
+    # printed); content is the graded text. NULL for a bare answer.
+    output = Column(JSON, nullable=True)
 
 
 class BenchmarkAnswerModel(BaseModel):
@@ -166,8 +178,18 @@ class BenchmarkAnswerModel(BaseModel):
     prompt: str
     content: str
     reasoning: str
+    output: list | None = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class BenchmarkHarness(Base):
+    """What a harness_sha stands for: the model entry, prompt, tools and limits an item was answered under."""
+
+    __tablename__ = 'benchmark_harness'
+    harness_sha = Column(Text, primary_key=True)
+    spec = Column(JSON, nullable=False)
+    recorded_at = Column(BigInteger, nullable=False)
 
 
 class BenchmarkSuiteExclusion(Base):
@@ -332,6 +354,9 @@ class BenchmarkResultTable:
                 # unknown), not a default.
                 adapter_sha=record.get('adapter_sha') or None,
                 cluster=record.get('cluster') or None,
+                # NULL for a bare request, as for system_sha.
+                harness_sha=record.get('harness_sha') or None,
+                harness_stats=record.get('harness_stats') or None,
             )
             stmt = pg_insert(BenchmarkResult).values(**values)
             update_cols = {
@@ -349,6 +374,10 @@ class BenchmarkResultTable:
                 'system_sha': stmt.excluded.system_sha,
                 'adapter_sha': stmt.excluded.adapter_sha,
                 'cluster': stmt.excluded.cluster,
+                # Likewise for the harness: a re-run must not keep the first
+                # attempt's mode.
+                'harness_sha': stmt.excluded.harness_sha,
+                'harness_stats': stmt.excluded.harness_stats,
             }
             stmt = stmt.on_conflict_do_update(
                 index_elements=['suite_run_id', 'benchmark', 'item_id'], set_=update_cols
@@ -362,6 +391,7 @@ class BenchmarkResultTable:
                     prompt=answer.get('prompt', ''),
                     content=answer.get('content', ''),
                     reasoning=answer.get('reasoning', ''),
+                    output=answer.get('output'),
                 )
                 answer_stmt = answer_stmt.on_conflict_do_update(
                     index_elements=['result_id'],
@@ -369,6 +399,7 @@ class BenchmarkResultTable:
                         'prompt': answer_stmt.excluded.prompt,
                         'content': answer_stmt.excluded.content,
                         'reasoning': answer_stmt.excluded.reasoning,
+                        'output': answer_stmt.excluded.output,
                     },
                 )
                 await db.execute(answer_stmt)
@@ -383,10 +414,19 @@ class BenchmarkResultTable:
         model: str | None = None,
         suite_run_id: str | None = None,
         outcome_in: list[str] | None = None,
+        bare_only: bool = False,
         db: AsyncSession | None = None,
     ) -> list[BenchmarkResultModel]:
+        """Results in the order they were recorded.
+
+        bare_only leaves out results answered through the app's chat pipeline
+        (harness_sha set): Compare and Report ask for it until they group and
+        label by harness_sha, so a harness run is never pooled with bare ones.
+        """
         async with get_async_db_context(db) as db:
             query = select(BenchmarkResult)
+            if bare_only:
+                query = query.filter(BenchmarkResult.harness_sha.is_(None))
             if tier:
                 query = query.filter(BenchmarkResult.tier == tier)
             if model:
@@ -407,14 +447,28 @@ class BenchmarkResultTable:
             return {(row.benchmark, row.item_id) for row in result.all()}
 
     async def latest_suite_run(
-        self, *, model: str | None = None, tier: str | None = None, db: AsyncSession | None = None
+        self,
+        *,
+        model: str | None = None,
+        tier: str | None = None,
+        harness: bool = False,
+        db: AsyncSession | None = None,
     ) -> str | None:
+        """The newest suite run of this model and tier, in the same mode (harness or bare).
+
+        The mode is part of the match because a harness run records the same
+        served model and tier as a bare one: without it, a resume of one could
+        continue the other and file the rest of its items under the wrong mode.
+        """
         async with get_async_db_context(db) as db:
             query = select(BenchmarkResult.suite_run_id)
             if model:
                 query = query.filter(BenchmarkResult.model == model)
             if tier:
                 query = query.filter(BenchmarkResult.tier == tier)
+            query = query.filter(
+                BenchmarkResult.harness_sha.is_not(None) if harness else BenchmarkResult.harness_sha.is_(None)
+            )
             query = query.order_by(BenchmarkResult.at.desc(), BenchmarkResult.result_id.desc()).limit(1)
             result = await db.execute(query)
             row = result.scalars().first()
@@ -447,7 +501,7 @@ class BenchmarkResultTable:
             return [dict(row._mapping) for row in result.all()]
 
     async def get_pass_rate_by_group(self, db: AsyncSession | None = None) -> list[dict]:
-        """(model, config_id, tier, benchmark, system_sha, adapter_sha) -> pass rate.
+        """(model, config_id, tier, benchmark, system_sha, harness_sha, adapter_sha) -> pass rate.
 
         Replaces sqlite's v_pass_rate view -- a plain Python-side query
         method per this migration's decision to keep derived views out of
@@ -463,6 +517,7 @@ class BenchmarkResultTable:
                     BenchmarkResult.tier,
                     BenchmarkResult.benchmark,
                     BenchmarkResult.system_sha,
+                    BenchmarkResult.harness_sha,
                     BenchmarkResult.adapter_sha,
                     passed.label('passed'),
                     attempted.label('attempted'),
@@ -474,6 +529,7 @@ class BenchmarkResultTable:
                     BenchmarkResult.tier,
                     BenchmarkResult.benchmark,
                     BenchmarkResult.system_sha,
+                    BenchmarkResult.harness_sha,
                     BenchmarkResult.adapter_sha,
                 )
             )
@@ -509,7 +565,12 @@ class BenchmarkAnswerTable:
                 return None
             result_row, answer_row = row
             record = BenchmarkResultModel.model_validate(result_row).model_dump()
-            record.update(prompt=answer_row.prompt, content=answer_row.content, reasoning=answer_row.reasoning)
+            record.update(
+                prompt=answer_row.prompt,
+                content=answer_row.content,
+                reasoning=answer_row.reasoning,
+                output=answer_row.output,
+            )
             return record
 
 
@@ -562,6 +623,23 @@ class BenchmarkSchemaNoteTable:
             return [BenchmarkSchemaNoteModel.model_validate(row) for row in result.scalars().all()]
 
 
+class BenchmarkHarnessTable:
+    async def record(self, harness_sha: str, spec: dict, db: AsyncSession | None = None) -> None:
+        """Store what a harness_sha stands for; a sha already stored is left as it is."""
+        async with get_async_db_context(db) as db:
+            stmt = pg_insert(BenchmarkHarness).values(harness_sha=harness_sha, spec=spec, recorded_at=int(time.time()))
+            stmt = stmt.on_conflict_do_nothing(index_elements=['harness_sha'])
+            await db.execute(stmt)
+            await db.commit()
+
+    async def get(self, harness_sha: str, db: AsyncSession | None = None) -> dict | None:
+        async with get_async_db_context(db) as db:
+            row = await db.get(BenchmarkHarness, harness_sha)
+            spec = row.spec if row else None
+            return spec if isinstance(spec, dict) else None
+
+
+BenchmarkHarnesses = BenchmarkHarnessTable()
 BenchmarkRequests = BenchmarkRequestTable()
 BenchmarkResults = BenchmarkResultTable()
 BenchmarkAnswers = BenchmarkAnswerTable()

@@ -382,8 +382,13 @@ def block_label(key: tuple) -> str:
 # fetching -- the only functions here that touch the database
 # ---------------------------------------------------------------------------
 async def fetch_results(tier: str | None = None, model: str | None = None) -> list[dict]:
-    """Every result, shaped like the records group_records() understands."""
-    rows = await BenchmarkResults.list_results(tier=tier, model=model)
+    """Every bare result, shaped like the records group_records() understands.
+
+    Results answered through the app's chat pipeline (harness_sha) are left
+    out until Compare groups and labels them as their own rows
+    (docs/plans/benchmarks-through-the-app.md, PR 2).
+    """
+    rows = await BenchmarkResults.list_results(tier=tier, model=model, bare_only=True)
     return [r.model_dump() for r in rows]
 
 

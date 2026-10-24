@@ -2,6 +2,7 @@ import asyncio
 import base64
 import logging
 import os
+import time
 import uuid
 
 import aiohttp
@@ -10,6 +11,7 @@ from pydantic import BaseModel
 
 from local_llm.env import AIOHTTP_CLIENT_ALLOW_REDIRECTS
 from local_llm.utils.json_codec import JSONCodec
+from local_llm.utils.upstream_trace import note_code_run
 
 logger = logging.getLogger(__name__)
 
@@ -307,8 +309,11 @@ async def execute_code_jupyter(
     first, so the code opens them by name; `notes` say which were left out,
     and are added to stderr so the model sees why a file is missing.
     """
+    started = time.monotonic()
     async with JupyterCodeExecuter(base_url, code, token, password, idle_timeout, files) as executor:
         result = await executor.run()
-        if notes:
-            result.stderr = '\n'.join(filter(None, [result.stderr, *notes]))
-        return result.model_dump()
+    # A no-op unless the benchmark harness is tracing this call.
+    note_code_run((time.monotonic() - started) * 1000)
+    if notes:
+        result.stderr = '\n'.join(filter(None, [result.stderr, *notes]))
+    return result.model_dump()
