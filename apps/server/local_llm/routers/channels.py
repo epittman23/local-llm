@@ -1863,7 +1863,7 @@ async def get_webhook_profile_image(webhook_id: str, user=Depends(get_verified_u
                 header, base64_data = webhook.profile_image_url.split(',', 1)
                 image_data = base64.b64decode(base64_data)
                 image_buffer = io.BytesIO(image_data)
-                media_type = header.split(';')[0].lstrip('data:')
+                media_type = header.split(';')[0].removeprefix('data:')
 
                 return StreamingResponse(
                     image_buffer,
