@@ -1,7 +1,7 @@
 # Plan: run benchmarks through the app's chat pipeline
 
-Status: **proposed on 2026-10-24, awaiting the owner's decisions** (section 3).
-No code has been written for it.
+Status: **approved by the owner on 2026-10-24, with every recommendation in
+section 3 accepted as written.** PR 1 (section 4) is under way.
 
 Scope: an optional mode for the Benchmarks Tests page, and later Tune, in
 which each scored item is answered by the assistant as deployed: a
