@@ -416,7 +416,7 @@ knowing about when navigating the filesystem directly:
 
 - **`.vscode/`** — editor config (currently empty).
 - **`.claude/`**'s local state — `settings.local.json` (personal permission
-  allowlists; not gitignored, so never commit it), `worktrees/` (agent
+  allowlists), `worktrees/` (agent
   checkouts) and scheduled task locks. `.claude/skills/` and
   `.claude/agents/` beside them **are** tracked (see below).
 - **`logs/`** — local logs. On a checkout that has one,

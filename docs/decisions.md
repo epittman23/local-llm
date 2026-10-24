@@ -30,9 +30,9 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
     agent configs.
 
   `.claude/` was untracked local state until now. Its local files
-  (`settings.local.json`, `worktrees/`) stay out of git. Only `worktrees/`
-  is gitignored; ignoring `settings.local.json` too would be a PR-gate
-  change, so it was left for the owner. Details:
+  (`settings.local.json`, `worktrees/`) stay out of git, and both are
+  now gitignored: `settings.local.json` holds personal permission
+  allowlists, and nothing stopped it being committed by mistake. Details:
   `docs/guides/agent-tooling.md`.
 - **2026-10-24**: **ruff now selects bug-finding rules, every finding
   fixed and none exempted.** Added rules:

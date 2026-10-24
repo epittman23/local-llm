@@ -96,5 +96,4 @@ directly.
 ## Not tracked
 
 `.claude/settings.local.json` (personal permission allowlists) and
-`.claude/worktrees/` are local state. Only the second is gitignored, so do
-not commit the first.
+`.claude/worktrees/` are local state, and both are gitignored.
