@@ -81,7 +81,7 @@ is marked **(single source)**.
 | GPU | RTX 3060 Laptop, 6,144 MiB; about 6.0 GiB usable (the desktop runs on the Intel GPU) |
 | CPU | i9-12900H, 20 threads |
 | RAM | 62 GiB |
-| llama.cpp | build 10597, commit `95b8e33e1`, **a commit dated 2026-08-23**, built 2026-10-23 with CUDA 13.4 |
+| llama.cpp | build 11875, commit `f0fb5984b` (2026-10-25), CUDA 13.4; the measurements in section 3 used build 10597 (`95b8e33e1`, a commit dated 2026-08-23) |
 | On disk | `qwen38` Qwen3.8-27B-UD-Q3_K_XL (12.24 GiB), `qwen25c` Qwen2.5-Coder-7B Q4_K_M, Qwen3.5-4B Q6_K, Qwen3-4B-Instruct-2507 Q6_K |
 
 **What fits.** A model runs at full speed only if its weights, its KV cache
@@ -445,29 +445,135 @@ own system prompt would replace.
 - **Base:** `unsloth/Magistral-Small-2509-GGUF` → `…UD-IQ3_XXS.gguf` (8.76 GiB);
 - **Uncensored:** `mradermacher/Magistral-Small-2509-ultra-uncensored-heretic-v1-i1-GGUF` (llmfan46, KL 0.0274).
 
+### 5.10 K2 Horizon 7B (not in the report; Intelligence Index 21, measured)
+
+Added on 2026-10-25 at the owner's request.
+
+**What it is.** A dense model, about 9B parameters including its large
+embedding table. The card calls it a "7B-core" model.
+- Repo: [IFM/K2-Horizon-7B](https://huggingface.co/IFM/K2-Horizon-7B), from
+  MBZUAI's Institute of Foundation Models, released September 2026,
+  Apache 2.0.
+- 36 layers of standard grouped-query attention (32 query heads, 8 KV heads,
+  head dim 128), a 250,624-token vocabulary and untied output weights.
+- Text only, 512k context.
+- A separate "Uno" diffusion adapter for faster decoding exists; it is not
+  covered here.
+
+**Scores.**
+- [Artificial Analysis](https://artificialanalysis.ai/models/k2-horizon-7b)
+  shows an Intelligence Index of **21, not marked as estimated**, rank 8 of
+  141. That is above every model in the report except Qwen3.8 27B, at a
+  third of its size. The page shows no per-evaluation scores.
+- Its card, after the final "anti-doom-loop" stage:
+  - SWE-bench Verified 72.4;
+  - LiveCodeBench v6 72.7;
+  - AIME 2025 90.3;
+  - GPQA Diamond 75.6;
+  - BFCL v4 67.0 (tool calling);
+  - Terminal-Bench 2.1 44.6.
+
+  These are the developer's own numbers, and comparison models "may use
+  different harnesses".
+
+**It reasons heavily.**
+- Artificial Analysis needed 160M output tokens to run its index, against a
+  median of 82M.
+- The card recommends `reasoning_effort` `high` on every request, and at
+  least 32,768 output tokens: "Truncated reasoning is a failed response, not
+  a shorter one." Medium and low exist, but the card calls them "not
+  recommended for evaluation".
+- Sampling: temperature 1.0, top_p 0.95.
+
+**llama.cpp support** arrived in
+[#29535](https://github.com/ggml-org/llama.cpp/pull/29535) on 2026-10-06.
+- **Build 10597 cannot load it at all.** Build 11875, installed on
+  2026-10-25, can.
+- That build has a dedicated chat handler for K2's own `<ifm|tool_calls>`
+  markup and its reasoning blocks (`common/chat.cpp`, "K2 Horizon").
+- The tool-call format is a template switch (`tool_call_format`: `xml`, the
+  default; `json`; or `xml_typed`), set through `chat_template_kwargs`.
+- Its structured tool calls are **unmeasured on this machine.**
+
+**Fit.**
+- **The KV cache is large:** about 76.5 KiB per token at q8_0, because every
+  layer holds one. That is 1.20 GiB at 16k and 2.39 GiB at 32k, or about
+  half that at q4_0.
+- **The weights:** the input embedding stays in RAM, an estimated 0.5 GiB.
+  So a Q4_K_M (5.21 GiB) puts an estimated 4.7 GiB on the GPU.
+- **Two ways to run it:**
+  - **Fully on the GPU, 16k context:** IQ4_XS (4.76–4.88 GiB) with
+    `-ctk q4_0 -ctv q4_0`, about 5.5 GiB in total. That is too short for the
+    card's 32k output budget, so hard items would truncate.
+  - **32k context, as the card asks:** Q4_K_M with about 26–30 of the 37
+    layers on the GPU (`-ngl`) and q8_0 KV. Unmeasured, but a 9B dense model
+    with a quarter of its layers in RAM should run several times faster than
+    the partly offloaded Qwen3.8 27B.
+
+**Uncensored variants.**
+- **[candor-lab/K2-Horizon-7B-Candor-Uncensored-GGUF](https://huggingface.co/candor-lab/K2-Horizon-7B-Candor-Uncensored-GGUF)**
+  has the most careful published measurement in this document, measured with
+  thinking on at high effort:
+  - harmful prompts refused fell from 287 to **3** of 288 (StrongREJECT);
+  - harmless prompts refused fell from 2 to 0 of 300;
+  - GSM8K went from 1,222 to **1,209** of 1,319 correct;
+  - KL 0.052.
+
+  It also reports that two of its own top candidate edits failed the maths
+  check, and that it discarded them. **(Single source.)** Its tool,
+  "candor", is not released, and it publishes one file: Q4_K_M, 5.21 GiB.
+- [Avicennasis/K2-Horizon-7B-heretic](https://huggingface.co/Avicennasis/K2-Horizon-7B-heretic)
+  is a Heretic build by an individual. It still refuses 7 of 50 sensitive
+  probes, against 18 of 50 for the base. GGUFs are in
+  `mradermacher/K2-Horizon-7B-heretic-i1-GGUF`, for example i1-IQ4_XS at
+  4.76 GiB.
+- geantendormi's build of the Uno adapter publishes a KL but describes its
+  method mostly in marketing terms. It is not recommended.
+
+**Recommendation:**
+- **Uncensored:** `candor-lab/K2-Horizon-7B-Candor-Uncensored-GGUF` → `K2-Horizon-7B-Candor-Uncensored-Q4_K_M.gguf` (**5.21 GiB**, verified).
+  - Serve with `-c 32768 -ngl ~28 -ctk q8_0 -ctv q8_0 --jinja --temp 1.0 --top-p 0.95`, and `reasoning_effort` `high`.
+  - Tune `-ngl` from the serve log.
+- **Base:** `IFM/K2-Horizon-7B-GGUF` → `K2-Horizon-7B-Q4_K_M.gguf` (**5.21 GiB**, the developer's own quantization), or `bartowski/K2-Horizon-7B-GGUF` → `K2-Horizon-7B-IQ4_XS.gguf` (4.88 GiB) for the fully-GPU, 16k setup.
+
 ---
 
-## 6. The installed llama.cpp is older than it looks
+## 6. llama.cpp: upgraded from build 10597 to 11875
 
 Build 10597 was compiled on 2026-10-23, but its source commit `95b8e33e1`
-is from **2026-08-23**. Upstream was past build 11800 by October.
-
-**Fixes this build lacks:**
+is from **2026-08-23**. It lacked:
 
 - Qwen3-Coder parser handling of nested arguments (#28742);
 - a CUDA graph for the MTP draft (#28549);
 - probabilistic MTP sampling (#27694);
-- the Nemotron 3 pre-tokenizer fix (#30894).
+- the Nemotron 3 pre-tokenizer fix (#30894);
+- any support for K2 Horizon (#29535, section 5.10).
 
-**Against upgrading:** an open issue,
-[#30906](https://github.com/ggml-org/llama.cpp/issues/30906), reports
-repetition-loop output on the CPU backend for the Qwen3.8 family on build
-11756. That matters for a partly offloaded `qwen38`.
+On 2026-10-25, at the owner's request, `~/llama.cpp` was rebuilt at
+**build 11875** (`f0fb5984b`, 2026-10-25), with the same CMake options. The
+old binaries are kept in `~/llama.cpp/build-b10597/bin`. They are linked
+with a RUNPATH, so running them now needs
+`LD_LIBRARY_PATH=~/llama.cpp/build-b10597/bin`, or they load the new
+libraries.
 
-**Recommendation:** keep 10597 until a newer build passes the `smoke` tier on
-`qwen38`. Then rebuild, following `docs/guides/llama-cpp.md`, and record the
-new build there. The `AGENTS.md` line "llama.cpp build 10597" is accurate,
-but should also say the commit date.
+**Checked after the upgrade** (same day, native Fedora 44, the `qwen38`
+argv exactly as the launcher builds it):
+
+| Build | Answer | Tool call | Generation | Prompt | MTP draft accepted |
+|---|---|---|---|---|---|
+| 10597 | correct (median 15.5, σ² 151.67) | structured `execute_code` | 1.15 tok/s | 3.2 tok/s | 419/452 |
+| 11875 | correct | structured `execute_code` | 1.14 tok/s | 7.1 tok/s | 343/364 |
+
+The repetition loop reported in
+[#30906](https://github.com/ggml-org/llama.cpp/issues/30906) did not show on
+this one prompt. That is a probe, not the `smoke` tier: run `smoke` on
+`qwen38` before recording 11875 as the measured build.
+
+**Both builds are slow for the same reason.** 1.1 tok/s is far below the
+historical WSL2 numbers. At the time the laptop was in its low-power
+platform profile, with tuned's `powersave` profile, on AC power. The upgrade
+caused no regression, but no number taken in that state is a measurement of
+the model. Switch to the performance profile before measuring.
 
 ## 7. Recommendations and next steps
 
@@ -480,6 +586,7 @@ experts/layers in RAM.
 | 1 | Qwen3-4B-Instruct-2507 | `unsloth/Qwen3-4B-Instruct-2507-GGUF` → `Qwen3-4B-Instruct-2507-Q6_K.gguf` (**on disk**) | 3.08 | full | base; the only model measured end to end in harness mode |
 | 1 | Gemma 4 E4B (unc.) | `llmfan46/gemma-4-E4B-it-uncensored-heretic-GGUF` → `…-Q6_K.gguf` | 5.79 | full (3.6 on GPU) | llmfan46 Heretic, KL 0.0043, MMLU −0.5 |
 | 1 | Nemotron Nano 9B v2 | `bartowski/nvidia_NVIDIA-Nemotron-Nano-9B-v2-GGUF` → `…-IQ4_NL.gguf` | 4.94 | full, tight | base only: an uncensored build ends the NVIDIA licence |
+| 1–2 | **K2 Horizon 7B (unc.)** | `candor-lab/K2-Horizon-7B-Candor-Uncensored-GGUF` → `…-Q4_K_M.gguf` | 5.21 | mostly on the GPU (`-ngl ~28` at 32k) | candor-lab, KL 0.052, 3/288 refusals, GSM8K −1%; needs build 11875 |
 | 2 | Gemma 4 26B A4B (unc.) | `llmfan46/gemma-4-26B-A4B-it-qat-q4_0-uncensored-heretic-GGUF` → `…-Q4_0.gguf` | 14.93 | experts in RAM, `--n-cpu-moe ~28` | llmfan46 Heretic on the QAT checkpoint, KL 0.0618, MMLU −0.27 |
 | 2 | gpt-oss-20b (unc.) | `mradermacher/gpt-oss-20b-heretic-ara-v3-GGUF` → `…MXFP4_MOE.gguf` | 11.28 | experts in RAM, `--n-cpu-moe ~18` | p-e-w (Heretic's author), KL 0.0554, 3/100 refusals |
 | 3 | Qwen3.8 27B (unc.) | `mradermacher/Qwen3.8-27B-heretic-ara-i1-GGUF` → `…i1-Q3_K_M.gguf` | 12.57 | layers in RAM, like `qwen38` | heretic-org, KL 0.0535, 0/100 refusals, MTP head kept |
@@ -493,8 +600,9 @@ experts/layers in RAM.
 - **Gemma 4 12B at 3 bits:** the 26B is the better use of this machine.
 - **`qwen25c` for the harness:** it cannot make structured tool calls.
 
-**Test order.** Five downloads, 49.5 GiB in total. Each one needs the
-owner's yes first.
+**Test order.** Five downloads, 49.5 GiB in total, plus K2 Horizon's 5.21
+GiB. Each one needs the owner's yes first. gpt-oss-20b was downloaded on
+2026-10-25.
 
 1. **Settle section 4.** Decide which grading rule harness mode uses on
    code-writing benchmarks.
@@ -502,12 +610,15 @@ owner's yes first.
    agentic score, and the most reputable uncensoring.
 3. **Gemma 4 26B A4B uncensored** (14.93 GiB). It has the strongest card
    benchmarks among those that run at moderate speed here.
-4. **Gemma 4 E4B uncensored** (5.79 GiB). The fast tier, to compare with
+4. **K2 Horizon 7B uncensored** (5.21 GiB). It has the highest measured
+   index under 10B, mostly on the GPU. It needs the 32k output budget its
+   card asks for.
+5. **Gemma 4 E4B uncensored** (5.79 GiB). The fast tier, to compare with
    Qwen3-4B-2507.
-5. **Qwen3.8 27B heretic-ara** (12.57 GiB). It replaces or sits beside the
+6. **Qwen3.8 27B heretic-ara** (12.57 GiB). It replaces or sits beside the
    current `qwen38`.
-6. **Nemotron Nano 9B v2** (4.94 GiB). Only if a fully-GPU model stronger
-   than the 4B ones is wanted.
+7. **Nemotron Nano 9B v2** (4.94 GiB). Only if a fully-GPU model stronger
+   than the 4B ones is wanted. K2 Horizon probably makes it unnecessary.
 
 **For each model:**
 - add a serving profile (a `benchmark_profile` row) with its flags, and
@@ -517,8 +628,9 @@ owner's yes first.
 - record the results with their hardware, build and flags, as the
   maintenance policy requires.
 
-**Before any of that:** decide whether to upgrade llama.cpp (section 6).
-Gemma 4 especially benefits from the newer tool-grammar fix.
+**Before any of that:** switch the laptop out of its power-saving profile
+(section 6). Build 11875 is installed, and has the newer tool-grammar fix
+that Gemma 4 especially benefits from.
 
 **Checks for the uncensored builds:**
 - **Refusals in thinking mode.** One quantizer notes that abliteration
