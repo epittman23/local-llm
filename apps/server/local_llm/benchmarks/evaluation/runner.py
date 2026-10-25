@@ -67,6 +67,7 @@ from collections.abc import Awaitable, Callable
 
 import aiohttp
 
+from local_llm.benchmarks.evaluation import harness
 from local_llm.benchmarks.evaluation.adapters import item_cluster, load_adapters, render_prompt
 from local_llm.benchmarks.evaluation.datasets import DatasetError, item_id, read_items, read_manifest
 from local_llm.benchmarks.evaluation.grading import calibration_stale, grade, ungradeable
@@ -80,7 +81,7 @@ from local_llm.benchmarks.evaluation.suites import (
 from local_llm.benchmarks.paths import PROMPTS_DIR
 from local_llm.benchmarks.serving import env_profile
 from local_llm.models.benchmarks.configs import BenchmarkRuns
-from local_llm.models.benchmarks.tests import BenchmarkResults, BenchmarkSuiteExclusions
+from local_llm.models.benchmarks.tests import BenchmarkHarnesses, BenchmarkResults, BenchmarkSuiteExclusions
 
 log = logging.getLogger(__name__)
 
@@ -337,6 +338,9 @@ async def run_item(session: aiohttp.ClientSession, row: dict, ctx: dict) -> dict
     adapter, item = row['adapter'], row['item']
     prompt = render_prompt(adapter, item)
 
+    if ctx.get('harness'):
+        return await _run_harness_item(row, ctx, prompt)
+
     ans = await ask(
         session, prompt, ctx['model'], ctx['profile'], ctx['port'], stream=ctx['stream'], system=ctx.get('system')
     )
@@ -392,6 +396,92 @@ async def run_item(session: aiohttp.ClientSession, row: dict, ctx: dict) -> dict
     return record
 
 
+async def _harness_sha(ctx: dict, spec: dict) -> str:
+    """The sha of this run's harness spec, fixed by its first item; a different spec stops the run.
+
+    Every item of a run is filed under one sha, so the spec must not move
+    between items: the entry's prompt edited mid-run, a tool appearing.
+    Filing the rest under the first item's sha would describe them wrongly.
+    """
+    first = ctx.get('harness_spec')
+    if first is None:
+        ctx['harness_spec'] = spec
+        ctx['harness_sha'] = harness.spec_sha(spec)
+        await BenchmarkHarnesses.record(ctx['harness_sha'], spec)
+    elif spec != first:
+        changed = sorted(k for k in set(first) | set(spec) if first.get(k) != spec.get(k))
+        raise harness.HarnessRefused(f'the request changed between items ({", ".join(changed)}); the run stops')
+    return ctx['harness_sha']
+
+
+async def _resume_harness(ctx: dict, suite_run_id: str) -> None:
+    """Continue a harness run under the spec it was recorded with.
+
+    Seeding the spec means the first new item is compared against it, so a
+    resume after the entry's prompt changed, or through another entry, stops
+    instead of filing two configurations under one suite run.
+    """
+    sha = await BenchmarkResults.harness_sha_of(suite_run_id)
+    spec = await BenchmarkHarnesses.get(sha) if sha else None
+    if not sha or spec is None:
+        raise harness.HarnessRefused(f'suite run {suite_run_id} has no recorded harness to resume under')
+    ctx['harness_spec'] = spec
+    ctx['harness_sha'] = sha
+
+
+async def _run_harness_item(row: dict, ctx: dict, prompt: str) -> dict:
+    """run_item for an item answered through the app's chat pipeline (harness.ask)."""
+    adapter, item = row['adapter'], row['item']
+    ans = await harness.ask(ctx['harness'], prompt)
+    if ans.gone:
+        raise ServerGone(ans.error)
+    sha = await _harness_sha(ctx, ans.spec)
+
+    if ans.error:
+        outcome, reason = 'fail_error', ans.error
+    else:
+        outcome, reason = await asyncio.to_thread(grade, adapter, item, ans.content)
+
+    record = {
+        'suite_run_id': ctx['suite_run_id'],
+        'run_id': ctx['run_id'],
+        'at': int(time.time()),
+        'model': ctx['model'],
+        'config_id': ctx['config_id'],
+        'profile': ctx['profile'].get('name', ''),
+        'benchmark': row['benchmark'],
+        'dataset_revision': ctx['revisions'].get(row['benchmark'], ''),
+        'tier': ctx['tier'],
+        'seed': ctx['seed'],
+        'item_id': row['item_id'],
+        'outcome': outcome,
+        'reason': reason[:400],
+        'wall_ms': round(ans.wall_ms),
+        # Empty on purpose: llama.cpp's timings cover the last upstream call
+        # only, and a speed read from them would mix one-call items with
+        # five-round ones. The rounds and code time are in harness_stats.
+        'timings': {},
+        # Read back from the request actually sent upstream.
+        'params': ans.spec.get('params', {}),
+        # The system prompt is the model entry's, named by the harness spec;
+        # these columns name the benchmark's own prompt files.
+        'system_name': '',
+        'system_sha': '',
+        'adapter_sha': adapter.get('_sha', ''),
+        'cluster': item_cluster(adapter, item),
+        'reasoning_chars': len(ans.reasoning),
+        'harness_sha': sha,
+        'harness_stats': ans.stats,
+    }
+    answer = (
+        None
+        if ans.error
+        else {'prompt': prompt, 'content': ans.content, 'reasoning': ans.reasoning, 'output': ans.output}
+    )
+    record['result_id'] = await BenchmarkResults.add_result(record, answer)
+    return record
+
+
 def _find_item(benchmark: str, wanted: str) -> tuple[dict, dict, str]:
     """(adapter, item, why it is not part of a suite here) for one item id."""
     adapter = load_adapters()[benchmark]
@@ -411,6 +501,9 @@ async def run_one(
     item: str,
     profile_name: str | None = None,
     system_name: str | None = None,
+    harness_entry: str | None = None,
+    source_request=None,
+    user=None,
 ) -> dict:
     """Ask and grade one item, as a suite run would, and record nothing.
 
@@ -422,17 +515,25 @@ async def run_one(
     """
     adapter, row, excluded = await asyncio.to_thread(_find_item, benchmark, item)
     ctx = await context(
-        session, profile_name=profile_name, tier='item', seed=0, benches=[benchmark], system_name=system_name
-    )
-    ans = await ask(
         session,
-        render_prompt(adapter, row),
-        ctx['model'],
-        ctx['profile'],
-        ctx['port'],
-        stream=ctx['stream'],
-        system=ctx.get('system'),
+        profile_name=profile_name,
+        tier='item',
+        seed=0,
+        benches=[benchmark],
+        system_name=system_name,
+        harness_entry=harness_entry,
+        source_request=source_request,
+        user=user,
     )
+    prompt = render_prompt(adapter, row)
+    extra = {}
+    if ctx.get('harness'):
+        ans = await harness.ask(ctx['harness'], prompt)
+        extra = {'harness': ans.spec, 'harness_stats': ans.stats, 'output': ans.output}
+    else:
+        ans = await ask(
+            session, prompt, ctx['model'], ctx['profile'], ctx['port'], stream=ctx['stream'], system=ctx.get('system')
+        )
     if ans.gone:
         raise ServerGone(ans.error)
     if ans.error:
@@ -449,6 +550,7 @@ async def run_one(
         'wall_ms': round(ans.wall_ms),
         'content': ans.content,
         'reasoning_chars': len(ans.reasoning),
+        **extra,
     }
 
 
@@ -515,6 +617,9 @@ async def context(
     benches: list[str],
     system_name: str | None = None,
     suite_run_id: str | None = None,
+    harness_entry: str | None = None,
+    source_request=None,
+    user=None,
 ) -> dict:
     """Everything a run of items is measured under, resolved once.
 
@@ -529,6 +634,17 @@ async def context(
     model = await env_profile.served_model(session, port, prof)
     active = await BenchmarkRuns.get_active_run(port)
     stream = os.environ.get('LLAMA_TEST_STREAM', '1') != '0'
+    hctx = None
+    if harness_entry:
+        # The model entry brings its own system prompt; a second one from
+        # benchmarks/data/prompts/ would be a third thing measured at once.
+        if system_name:
+            raise SuiteLoadError(
+                "a run through the app uses the model entry's system prompt; leave the system prompt unset"
+            )
+        if source_request is None or user is None:
+            raise SuiteLoadError('a run through the app needs the request and user that started it')
+        hctx = await harness.prepare(source_request, user, harness_entry, port)
     system = load_system(system_name)
     body = build_body('', model, prof, stream, system)
 
@@ -552,6 +668,11 @@ async def context(
         'revisions': revisions,
         'system': system,
         'params': params_of(body),
+        # None for a bare run. For a harness run, the spec and its sha are
+        # fixed by the first item (_harness_sha).
+        'harness': hctx,
+        'harness_spec': None,
+        'harness_sha': None,
     }
 
 
@@ -611,6 +732,9 @@ async def prepare_suite(
     system_name: str | None = None,
     resume: bool = False,
     suite_run_id: str | None = None,
+    harness_entry: str | None = None,
+    source_request=None,
+    user=None,
 ) -> tuple[dict, list[dict], list[dict]]:
     """Resolve a suite into (ctx, todo, skipped). No items are run.
 
@@ -631,12 +755,19 @@ async def prepare_suite(
         benches=sorted({r['benchmark'] for r in selected}),
         system_name=system_name,
         suite_run_id=suite_run_id,
+        harness_entry=harness_entry,
+        source_request=source_request,
+        user=user,
     )
 
     if resume:
-        prior = await BenchmarkResults.latest_suite_run(model=ctx['model'], tier=suite['id'])
+        prior = await BenchmarkResults.latest_suite_run(
+            model=ctx['model'], tier=suite['id'], harness=ctx['harness'] is not None
+        )
         if prior:
             ctx['suite_run_id'] = prior
+            if ctx['harness'] is not None:
+                await _resume_harness(ctx, prior)
 
     done = await BenchmarkResults.completed(ctx['suite_run_id'])
     todo = [r for r in selected if (r['benchmark'], r['item_id']) not in done]

@@ -223,7 +223,12 @@ than a second app glued on by a userscript. See `docs/decisions.md` for the migr
 - **`evaluation/`** — `adapters.py`, `suites.py`, `datasets.py` (adapter and
   suite loading, dataset fetch and manifests), `runner.py` (the run/grade/
   record loop, `prepare_suite`/`run_items`, callback-driven so a router can
-  stream live progress), and `grading/` (the HumanEval/MBPP/DS-1000 harnesses).
+  stream live progress), `harness.py` (answering an item through the app's
+  own chat pipeline instead, under a routing guard; see
+  `docs/plans/benchmarks-through-the-app.md`), and `grading/` (the
+  HumanEval/MBPP/DS-1000 harnesses). `utils/upstream_trace.py` is the
+  observer `harness.py` relies on: the upstream requests and code runs one
+  pipeline call makes.
 - **`analysis/`** — `compare.py`, `report.py` + `report_figures.py` (config
   comparison by block and the design-audited statistical report: Wilson
   intervals, Cochran's Q, exact McNemar, power/MDE; reads the DB read-only),
