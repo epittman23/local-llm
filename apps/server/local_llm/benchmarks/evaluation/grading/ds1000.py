@@ -17,7 +17,7 @@ NAME = 'ds1000'
 WANT_DEF = False
 
 
-def build_program(item: dict, code: str) -> str | None:
+def build_program(item: dict, code: str, check: dict | None = None) -> str | None:
     """The full program to execute, or None when the answer has no usable code."""
     if not code.strip():
         return None

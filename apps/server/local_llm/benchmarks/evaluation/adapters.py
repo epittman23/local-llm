@@ -3,7 +3,8 @@
 Ported from local-llm's scripts/llama_tests.py (outer repo). An adapter
 describes one benchmark: id, name, license, homepage, citation, the
 prompt_template that turns a dataset item into a chat turn, and the
-[fetch]/[item]/[filter]/[check] blocks the rest of this package reads.
+[source] or [fetch], [item], [filter] and [check] blocks the rest of this
+package reads.
 
 Every test item in this project comes from a published benchmark that ships
 its own ground truth -- an adapter never states an answer, only how a
@@ -49,8 +50,9 @@ def adapter_sha(adapter: dict) -> str:
     this deliberately differs from system_sha: an adapter carries the prose
     explaining why it is shaped the way it is, and hashing the bytes would file
     every comment edit as a measurement discontinuity. `id`, `name`, `license`,
-    `homepage`, `citation` and `[fetch]` are excluded for the same reason --
-    they say where the benchmark came from, not what was asked of the model.
+    `homepage`, `citation`, `[source]` and `[fetch]` are excluded for the same
+    reason -- they say where the benchmark came from, not what was asked of
+    the model. Which rows were asked is `dataset_revision`'s job.
     """
     payload = {k: adapter[k] for k in FINGERPRINTED if k in adapter}
     canonical = json.dumps(payload, sort_keys=True, separators=(',', ':'))
@@ -80,11 +82,10 @@ def render_prompt(adapter: dict, item: dict) -> str:
     f-strings, LaTeX) and would blow up or be silently mangled by it. Only the
     named placeholders the adapters actually declare are substituted.
     """
-    text = adapter['prompt_template']
-    body = dotted(item, adapter['item']['prompt_field']) or ''
-    fields = {'prompt': body}
-    if adapter['id'] == 'mbpp':
-        fields['tests'] = '\n'.join(item.get('test_list', []))
-    for key, value in fields.items():
-        text = text.replace('{' + key + '}', value)
-    return text
+    spec = adapter['item']
+    body = dotted(item, spec['prompt_field'])
+    body = body if isinstance(body, str) else ''
+    # EvalPlus strips the prompt before fencing it; `strip_prompt` says so.
+    if spec.get('strip_prompt'):
+        body = body.strip()
+    return adapter['prompt_template'].replace('{prompt}', body)

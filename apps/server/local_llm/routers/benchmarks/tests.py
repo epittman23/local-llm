@@ -19,7 +19,13 @@ from pydantic import BaseModel, ConfigDict
 
 from local_llm.benchmarks.evaluation import grading, harness, runner
 from local_llm.benchmarks.evaluation.adapters import ADAPTERS_DIR, load_adapters
-from local_llm.benchmarks.evaluation.datasets import fetch_one, read_items, read_manifest
+from local_llm.benchmarks.evaluation.datasets import (
+    DatasetError,
+    dataset_identity,
+    fetch_one,
+    read_items,
+    short_revision,
+)
 from local_llm.benchmarks.evaluation.suites import SUITES_DIR, filter_items
 from local_llm.constants import ERROR_MESSAGES
 from local_llm.utils.auth import get_admin_user
@@ -187,17 +193,42 @@ async def start_run(request: Request, form_data: TestsRunForm, user=Depends(get_
     return _start(lambda queue: _run_suite(form_data, queue, request, user))
 
 
+def _short_revision(manifest: dict) -> str:
+    return short_revision(manifest.get('revision') or manifest.get('content_sha256', ''))
+
+
 def _dataset_status() -> list[dict]:
     out = []
     for name, adapter in sorted(load_adapters().items()):
-        manifest = read_manifest(name)
+        try:
+            manifest = dataset_identity(name)
+        except DatasetError as exc:
+            # One bad vendored file is that row's problem, not the panel's.
+            out.append(
+                {
+                    'benchmark': name,
+                    'name': adapter.get('name', name),
+                    'fetched': False,
+                    'vendored': True,
+                    'n_items': None,
+                    'revision': None,
+                    'fetched_at': None,
+                    'calibrated_at': None,
+                    'n_checked': None,
+                    'n_ungradeable': None,
+                    'calibration_stale': str(exc),
+                }
+            )
+            continue
         calibration = grading.read_calibration(name)
         row = {
             'benchmark': name,
             'name': adapter.get('name', name),
             'fetched': manifest is not None,
+            # In the repository: there is nothing to fetch, and Fetch only verifies it.
+            'vendored': bool(manifest and manifest.get('vendored')),
             'n_items': manifest.get('n_items') if manifest else None,
-            'revision': (manifest.get('revision') or manifest.get('content_sha256', ''))[:12] if manifest else None,
+            'revision': _short_revision(manifest) if manifest else None,
             'fetched_at': manifest.get('fetched_at') if manifest else None,
             'calibrated_at': calibration.get('checked_at') if calibration else None,
             'n_checked': calibration.get('n_checked') if calibration else None,
@@ -226,15 +257,16 @@ async def start_fetch(form_data: FetchForm, user=Depends(get_admin_user)):
                 if _cancel:
                     break
                 await queue.put({'type': 'progress', 'benchmark': name, 'message': 'fetching'})
-                before = read_manifest(name)
+                before = dataset_identity(name)
                 manifest = await asyncio.to_thread(fetch_one, adapters[name], form_data.force)
                 await queue.put(
                     {
                         'type': 'dataset',
                         'benchmark': name,
                         'n_items': manifest.get('n_items'),
-                        'revision': (manifest.get('revision') or manifest.get('content_sha256', ''))[:12],
+                        'revision': _short_revision(manifest),
                         'fetched': manifest is not before and manifest != before,
+                        'vendored': bool(manifest.get('vendored')),
                     }
                 )
             await queue.put({'type': 'done', 'cancelled': _cancel})

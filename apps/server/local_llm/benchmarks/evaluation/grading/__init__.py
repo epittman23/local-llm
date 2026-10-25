@@ -1,7 +1,7 @@
 """benchmarks/grading - answer extraction, program execution, and calibration.
 
 Ported from local-llm's scripts/llama_tests.py (outer repo). Each benchmark's
-harness (humaneval.py, mbpp.py, ds1000.py) builds a standalone program from the
+harness (evalplus.py for HumanEval+ and MBPP+, ds1000.py) builds a standalone program from the
 benchmark's OWN test material and this package runs it. The rule throughout:
 the dataset decides correctness, this package only arranges for its verdict to
 be reached.
@@ -32,10 +32,10 @@ import tempfile
 import time
 from pathlib import Path
 
-from local_llm.benchmarks.evaluation.datasets import datasets_base_dir, read_manifest
+from local_llm.benchmarks.evaluation.datasets import dataset_identity, datasets_base_dir
 from local_llm.env import SERVER_DIR
 
-from . import ds1000, humaneval, mbpp
+from . import ds1000, evalplus
 
 # ---------------------------------------------------------------------------
 # outcomes
@@ -61,8 +61,7 @@ GRADED = FAILURES | {PASS}  # everything except skipped
 # ---------------------------------------------------------------------------
 REGISTRY = {
     ds1000.NAME: ds1000,
-    humaneval.NAME: humaneval,
-    mbpp.NAME: mbpp,
+    evalplus.NAME: evalplus,
 }
 
 
@@ -140,7 +139,7 @@ def libraries_available(names: list[str]) -> set[str]:
 
 def build_program(adapter: dict, item: dict, code: str) -> str | None:
     """The full program to execute, or None when the answer has no usable code."""
-    return _harness(adapter).build_program(item, code)
+    return _harness(adapter).build_program(item, code, adapter['check'])
 
 
 def grader_env(workdir: str) -> dict[str, str]:
@@ -163,7 +162,9 @@ def grader_env(workdir: str) -> dict[str, str]:
 
 # Bumped whenever a change to how programs are run can change a verdict, so
 # a calibration made under an older harness reads as stale (calibration_stale).
-HARNESS_VERSION = 2
+# 3: a GradeTimeout raised inside the program is fail_timeout (EvalPlus's
+# per-input limits), not fail_error.
+HARNESS_VERSION = 3
 
 # The program that runs a grading program. It is the subprocess's main script;
 # the graded program is executed by it, never run directly, for three reasons:
@@ -285,6 +286,10 @@ def run_program(source: str, timeout: int, isolated: bool) -> tuple[str, str]:
 
     err = (stderr or '').strip()
     tail = err.splitlines()[-1] if err else f'exit {proc.returncode} before its tests finished'
+    # A harness that times inputs itself (evalplus_runtime.py) raises
+    # GradeTimeout, which ends up as the traceback's last line.
+    if re.match(r'^(__graded__\.)?GradeTimeout\b', tail):
+        return FAIL_TIMEOUT, tail
     if 'AssertionError' in err:
         return FAIL_ASSERT, tail
     return FAIL_ERROR, tail
@@ -294,11 +299,14 @@ def grade(adapter: dict, item: dict, answer: str) -> tuple[str, str]:
     """Grade one answer against the benchmark's own tests."""
     module = _harness(adapter)
     code = extract_code(answer or '', want_def=module.WANT_DEF)
-    program = module.build_program(item, code)
+    check = adapter['check']
+    program = module.build_program(item, code, check)
     if program is None:
         return NO_CODE, 'no code in the response'
-    check = adapter['check']
-    return run_program(program, int(check.get('timeout', 30)), bool(check.get('isolated', True)))
+    timeout = (
+        module.subprocess_timeout(check) if hasattr(module, 'subprocess_timeout') else int(check.get('timeout', 30))
+    )
+    return run_program(program, timeout, bool(check.get('isolated', True)))
 
 
 # ---------------------------------------------------------------------------
@@ -363,9 +371,9 @@ def calibration_stale(bench: str, base: Path | None = None) -> str:
     cal = read_calibration(bench, base)
     if cal is None:
         return 'not calibrated yet'
-    manifest = read_manifest(bench, base) or {}
+    manifest = dataset_identity(bench, base) or {}
     if cal.get('content_sha256') != manifest.get('content_sha256'):
-        return 'the dataset was refetched since it was calibrated'
+        return 'the dataset changed since it was calibrated'
     if cal.get('harness_version') != HARNESS_VERSION:
         return 'the grader changed how it runs programs since it was calibrated'
     if cal.get('environment') != env_fingerprint():
@@ -442,7 +450,7 @@ def calibrate(
     finally:
         pool.shutdown(wait=True, cancel_futures=True)
 
-    manifest = read_manifest(bench, base) or {}
+    manifest = dataset_identity(bench, base) or {}
     return {
         'benchmark': bench,
         'checked_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),

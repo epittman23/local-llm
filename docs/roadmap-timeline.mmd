@@ -60,9 +60,10 @@ timeline
       2026-10-24 (late night) : Knowledge retrieval on bge-m3 with a bge-reranker-v2-m3 reranker and hybrid search : the code interpreter on Jupyter, web search on SearXNG, memory background review on
       2026-10-24 (towards midnight) : Tests can answer items through the app's chat pipeline (harness mode) : a routing guard records nothing not served by the measured llama-server : results grouped by a harness_sha read back from what was sent
       2026-10-25 : llama.cpp upgraded from build 10597 (an August commit) to 11875 : loads K2 Horizon, newer tool-call parser and MTP fixes : qwen38 checked on both builds, the old one kept for reproducing recorded runs
+      2026-10-25 (later) : HumanEval+ and MBPP+ replace HumanEval and MBPP, graded as EvalPlus grades them (live expected outputs, its oracles and time limits) : all three datasets vendored and hash-checked on every read : canonical solutions 163/164 and 377/378
     section Near-Term
       "~1 week" : Resolve the blocking rack hole-type question : confirm riser and PSU questions : re-verify current component pricing
-      "~2-4 weeks" : Finish the benchmark upgrade : HumanEval+ and MBPP+ replace HumanEval and MBPP : a LiveCodeBench slice with a per-run release-date window : a llama-bench pre-screen driven by Optuna
+      "~2-4 weeks" : Finish the benchmark upgrade : a LiveCodeBench slice with a per-run release-date window : a llama-bench pre-screen driven by Optuna
     section Short-Term
       "~1-2 months" : Purchase and provision the R730 and V100 server : run the five acceptance tests : migrate Qwen3.8-27B to fully VRAM-resident serving
     section Medium-Term

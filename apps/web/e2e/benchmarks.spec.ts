@@ -210,7 +210,7 @@ test('Tests runs a suite and streams per-item outcomes to completion', async ({ 
 		route.fulfill({
 			status: 200,
 			contentType: 'application/json',
-			body: JSON.stringify({ tiers: ['smoke', 'standard'], benchmarks: ['humaneval'], systems: [] })
+			body: JSON.stringify({ tiers: ['smoke', 'standard'], benchmarks: ['humanevalplus'], systems: [] })
 		})
 	);
 	await page.route('**/api/v1/benchmarks/tests/run', (route) =>
@@ -221,7 +221,7 @@ test('Tests runs a suite and streams per-item outcomes to completion', async ({ 
 			{ type: 'start', suite_run_id: '20260101T000000Z-abc123', total: 2, skipped: 0 },
 			{
 				type: 'item',
-				benchmark: 'humaneval',
+				benchmark: 'humanevalplus',
 				item_id: 'HumanEval/0',
 				outcome: 'pass',
 				i: 1,
@@ -231,7 +231,7 @@ test('Tests runs a suite and streams per-item outcomes to completion', async ({ 
 			},
 			{
 				type: 'item',
-				benchmark: 'humaneval',
+				benchmark: 'humanevalplus',
 				item_id: 'HumanEval/1',
 				outcome: 'fail',
 				reason: 'AssertionError',
@@ -265,7 +265,7 @@ async function mockTestsJob(page: Page, path: string, events: object[], { fetche
 		route.fulfill({
 			status: 200,
 			contentType: 'application/json',
-			body: JSON.stringify({ tiers: ['smoke'], benchmarks: ['humaneval', 'mbpp'], systems: [] })
+			body: JSON.stringify({ tiers: ['smoke'], benchmarks: ['humanevalplus', 'mbppplus'], systems: [] })
 		})
 	);
 	let datasetCalls = 0;
@@ -277,9 +277,10 @@ async function mockTestsJob(page: Page, path: string, events: object[], { fetche
 			contentType: 'application/json',
 			body: JSON.stringify([
 				{
-					benchmark: 'humaneval',
-					name: 'HumanEval',
+					benchmark: 'humanevalplus',
+					name: 'HumanEval+',
 					fetched,
+					vendored: false,
 					n_items: fetched ? 164 : null,
 					revision: fetched ? '463c980b59e8' : null,
 					fetched_at: null,
@@ -305,10 +306,36 @@ async function mockTestsJob(page: Page, path: string, events: object[], { fetche
 	return seen;
 }
 
+test('Fetch on a vendored dataset says it is in the repository', async ({ page }) => {
+	await mockTestsJob(
+		page,
+		'fetch',
+		[
+			{ type: 'progress', benchmark: 'humanevalplus', message: 'fetching' },
+			{
+				type: 'dataset',
+				benchmark: 'humanevalplus',
+				n_items: 164,
+				revision: 'v0.1.10@42526ec0e7d5',
+				fetched: false,
+				vendored: true
+			},
+			{ type: 'done', cancelled: false }
+		],
+		{ fetched: true }
+	);
+	await page.goto('/benchmarks/tests');
+	const panel = page.getByRole('region', { name: 'Datasets' });
+	await panel.getByRole('button', { name: 'Fetch', exact: true }).click();
+	await expect(
+		page.getByText('humanevalplus: in the repository, verified, 164 items, revision v0.1.10@42526ec0e7d5')
+	).toBeVisible();
+});
+
 test('Tests fetches the datasets and shows what was downloaded', async ({ page }) => {
 	const seen = await mockTestsJob(page, 'fetch', [
-		{ type: 'progress', benchmark: 'humaneval', message: 'fetching' },
-		{ type: 'dataset', benchmark: 'humaneval', n_items: 164, revision: '463c980b59e8', fetched: true },
+		{ type: 'progress', benchmark: 'humanevalplus', message: 'fetching' },
+		{ type: 'dataset', benchmark: 'humanevalplus', n_items: 164, revision: '463c980b59e8', fetched: true },
 		{ type: 'done', cancelled: false }
 	]);
 	await page.goto('/benchmarks/tests');
@@ -317,7 +344,7 @@ test('Tests fetches the datasets and shows what was downloaded', async ({ page }
 	// Nothing to check before anything is fetched.
 	await expect(panel.getByRole('button', { name: 'Selfcheck' })).toBeDisabled();
 	await panel.getByRole('button', { name: 'Fetch', exact: true }).click();
-	await expect(page.getByText('humaneval: fetched, 164 items, revision 463c980b59e8')).toBeVisible();
+	await expect(page.getByText('humanevalplus: fetched, 164 items, revision 463c980b59e8')).toBeVisible();
 	expect(seen.body).toEqual({});
 	// The table is read again once the job ends.
 	await expect(panel.getByText('163/164 gradeable')).toBeVisible();
@@ -336,11 +363,19 @@ test('Tests selfcheck streams each reference solution and reports the calibratio
 		page,
 		'selfcheck',
 		[
-			{ type: 'progress', benchmark: 'humaneval', message: 'checking', total: 2 },
-			{ type: 'reference', benchmark: 'humaneval', item_id: 'HumanEval/0', outcome: 'pass', i: 1, total: 2, passed: 1 },
+			{ type: 'progress', benchmark: 'humanevalplus', message: 'checking', total: 2 },
 			{
 				type: 'reference',
-				benchmark: 'humaneval',
+				benchmark: 'humanevalplus',
+				item_id: 'HumanEval/0',
+				outcome: 'pass',
+				i: 1,
+				total: 2,
+				passed: 1
+			},
+			{
+				type: 'reference',
+				benchmark: 'humanevalplus',
 				item_id: 'HumanEval/1',
 				outcome: 'fail_error',
 				reason: 'ImportError',
@@ -348,7 +383,7 @@ test('Tests selfcheck streams each reference solution and reports the calibratio
 				total: 2,
 				passed: 1
 			},
-			{ type: 'calibrated', benchmark: 'humaneval', n_checked: 2, n_ungradeable: 1 },
+			{ type: 'calibrated', benchmark: 'humanevalplus', n_checked: 2, n_ungradeable: 1 },
 			{ type: 'done', cancelled: false }
 		],
 		{ fetched: true }
@@ -357,7 +392,7 @@ test('Tests selfcheck streams each reference solution and reports the calibratio
 	await page.getByRole('button', { name: 'Selfcheck' }).click();
 	await expect(page.getByText('HumanEval/1')).toBeVisible();
 	await expect(page.getByText('ImportError')).toBeVisible();
-	await expect(page.getByText('humaneval: calibrated, 1/2 gradeable here')).toBeVisible();
+	await expect(page.getByText('humanevalplus: calibrated, 1/2 gradeable here')).toBeVisible();
 	expect(seen.body).toEqual({});
 });
 
@@ -365,7 +400,7 @@ test('Tests runs one item and shows its answer without recording it', async ({ p
 	const seen = await mockTestsJob(page, 'item', [
 		{
 			type: 'result',
-			benchmark: 'mbpp',
+			benchmark: 'mbppplus',
 			item_id: '2',
 			model: 'qwen',
 			outcome: 'fail_assert',
@@ -380,16 +415,16 @@ test('Tests runs one item and shows its answer without recording it', async ({ p
 	const form = page.getByRole('region', { name: 'Run one item' });
 	await expect(form.getByRole('button', { name: 'Run item' })).toBeDisabled();
 	await form.getByRole('combobox', { name: 'Item benchmark' }).click();
-	await page.getByRole('option', { name: 'mbpp' }).click();
+	await page.getByRole('option', { name: 'mbppplus' }).click();
 	await form.getByLabel('Item id').fill('2');
 	await form.getByRole('button', { name: 'Run item' }).click();
 	const card = page.getByTestId('item-result');
-	await expect(card).toContainText('mbpp/2');
+	await expect(card).toContainText('mbppplus/2');
 	await expect(card).toContainText('fail_assert');
 	await expect(card).toContainText('A suite here leaves this item out: fail_assert: its own reference fails here');
 	await expect(card).toContainText('def neg(a):');
 	await expect(card).toContainText('2.3s');
-	expect(seen.body).toEqual({ benchmark: 'mbpp', item_id: '2' });
+	expect(seen.body).toEqual({ benchmark: 'mbppplus', item_id: '2' });
 });
 
 const compareOptions = { tiers: ['smoke'], benchmarks: ['ds1000'], systems: [] };
@@ -607,7 +642,7 @@ test('Answers lists results and renders a selected transcript', async ({ page })
 			body: JSON.stringify({
 				rows: [
 					{
-						benchmark: 'humaneval',
+						benchmark: 'humanevalplus',
 						item_id: 'HumanEval/3',
 						outcome: 'fail',
 						reason: 'AssertionError',
@@ -622,7 +657,7 @@ test('Answers lists results and renders a selected transcript', async ({ page })
 			status: 200,
 			contentType: 'application/json',
 			body: JSON.stringify({
-				benchmark: 'humaneval',
+				benchmark: 'humanevalplus',
 				item_id: 'HumanEval/3',
 				model: 'qwen38',
 				config_id: '71bc58dd',
@@ -654,7 +689,7 @@ test('Report generates and renders sanitized markdown plus a figure', async ({ p
 		route.fulfill({
 			status: 200,
 			contentType: 'application/json',
-			body: JSON.stringify({ tiers: ['smoke'], benchmarks: ['humaneval'], systems: [] })
+			body: JSON.stringify({ tiers: ['smoke'], benchmarks: ['humanevalplus'], systems: [] })
 		})
 	);
 	await page.route('**/api/v1/benchmarks/report/', (route) =>

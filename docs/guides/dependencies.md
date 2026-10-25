@@ -46,7 +46,7 @@ default but optional in code (the report falls back to unicode plots).
 
 ## Runtime data (`DATA_DIR`)
 
-Uploads, caches, the Benchmarks section's fetched datasets, answer exports and
+Uploads, caches, the Benchmarks section's grader calibrations (and any fetched dataset; the three today are vendored), answer exports and
 reports live under `DATA_DIR`. `make backend` pins it to `apps/server/data`
 (gitignored) instead of relying on `env.py`'s default, because that default
 is relative to the package and moved once already, when `apps/server/backend/`
