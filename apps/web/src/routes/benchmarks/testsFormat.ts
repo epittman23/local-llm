@@ -28,6 +28,22 @@ export const calibrationText = (d: DatasetStatus): string => {
 	return `${(d.n_checked ?? 0) - (d.n_ungradeable ?? 0)}/${d.n_checked} gradeable`;
 };
 
+// A fetch's running counts: one line per second of download, and one per 25
+// problems decoded.
+const PROGRESS_TICK = /^(\S+): (\S+: \d+ of \d+ MiB|\S+: decoded \d+ of \d+ problems)$/;
+
+/**
+ * Add a job note, except that a fetch's running count replaces the count
+ * before it, so fetching every increment leaves one moving line, not hundreds.
+ */
+export const appendNote = (notes: string[], line: string): string[] => {
+	const tick = PROGRESS_TICK.exec(line);
+	const last = notes.at(-1);
+	const lastTick = last === undefined ? null : PROGRESS_TICK.exec(last);
+	if (tick && lastTick && lastTick[1] === tick[1]) return [...notes.slice(0, -1), line];
+	return [...notes, line];
+};
+
 /** A byte count the way the fetch progress reports it. */
 export const formatBytes = (bytes: number): string =>
 	bytes >= 2 ** 30 ? `${(bytes / 2 ** 30).toFixed(2)} GiB` : `${Math.round(bytes / 2 ** 20)} MiB`;

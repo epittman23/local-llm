@@ -794,11 +794,14 @@ async def prepare_suite(
                 f'the latest {suite["id"]} run ({ctx["suite_run_id"]}) recorded benchmarks this repository '
                 f'no longer has ({", ".join(gone)}); start a new run instead of resuming it'
             )
-        # Its windowed items must have been drawn under the same window, or
-        # the resumed run would hold two pools under one suite run id.
+        # A windowed benchmark this run asks for must have been drawn under
+        # the same window, or the resumed run would hold two pools under one
+        # suite run id. One the earlier run never reached has no pool yet,
+        # so a run started without a window can be resumed with one.
         asked = {r['benchmark']: r['item_window'] for r in selected if r.get('item_window')}
+        in_run = {r['benchmark'] for r in selected}
         for bench, windows in (await BenchmarkResults.windows_of(ctx['suite_run_id'])).items():
-            if windows != {asked.get(bench)}:
+            if bench in in_run and windows != {asked.get(bench)}:
                 raise SuiteLoadError(
                     f'the latest {suite["id"]} run ({ctx["suite_run_id"]}) drew {bench} from '
                     f'{", ".join(sorted(windows))}, and this run asks for {asked.get(bench) or "no window"}; '

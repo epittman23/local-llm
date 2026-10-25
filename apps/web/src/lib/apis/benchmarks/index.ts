@@ -421,8 +421,6 @@ export type DatasetStatus = {
 	fetched: boolean;
 	/** Committed to the repository: nothing to fetch, and Fetch only verifies it. */
 	vendored: boolean;
-	/** A windowed benchmark's increments on disk. */
-	increments?: string[];
 	n_items: number | null;
 	revision: string | null;
 	fetched_at: string | null;

@@ -168,11 +168,21 @@ def decode_private_tests(encoded: str) -> list[dict]:
         value = json.loads(text)
     if not isinstance(value, list) or not all(isinstance(t, dict) for t in value):
         raise DatasetError('private tests are not a list of tests')
-    return [{'input': t['input'], 'output': t['output'], 'testtype': t['testtype']} for t in value]
+    try:
+        return [{'input': t['input'], 'output': t['output'], 'testtype': t['testtype']} for t in value]
+    except KeyError as exc:
+        raise DatasetError(f'a private test has no {exc.args[0]!r} field') from None
 
 
 def decode_row(row: dict, increment: str) -> tuple[dict, list[dict]]:
     """(the items.jsonl row, its private tests) for one line of a release file."""
+    try:
+        return _decode_row(row, increment)
+    except KeyError as exc:
+        raise DatasetError(f'a {increment} row has no {exc.args[0]!r} field') from None
+
+
+def _decode_row(row: dict, increment: str) -> tuple[dict, list[dict]]:
     platform, question = row['platform'], str(row['question_id'])
     if not _PLATFORM.match(platform) or not _QUESTION.match(question):
         raise DatasetError(f'not a LiveCodeBench problem id: {platform}/{question}')
@@ -278,6 +288,7 @@ def fetch(
             _download(_url(adapter, name), raw, inc, progress, should_stop)
             _decode_file(raw, work, inc, progress, should_stop)
             raw.unlink()
+            _check_unique(adapter, base, work, name)
             final = root / _stem(name)
             shutil.rmtree(final, ignore_errors=True)
             os.replace(work, final)
@@ -286,6 +297,19 @@ def fetch(
         _record(adapter, base, inc)
         progress(f'{name}: {inc["items"]} problems from {inc["first"]} to {inc["last"]}')
     return identity(adapter, base) or {}
+
+
+def _check_unique(adapter: dict, base: Path | None, work: Path, name: str) -> None:
+    """Refuse an increment holding a problem another fetched increment has: a result is keyed by its id."""
+    new = {json.loads(line)['id'] for line in (work / 'items.jsonl').read_text().splitlines() if line.strip()}
+    for other in present(adapter, base):
+        if other == name:
+            continue
+        path = bench_dir(adapter, base) / _stem(other) / 'items.jsonl'
+        seen = {json.loads(line)['id'] for line in path.read_text().splitlines() if line.strip()}
+        clash = sorted(new & seen)
+        if clash:
+            raise DatasetError(f'{name} and {other} both hold {", ".join(clash[:5])}')
 
 
 def _record(adapter: dict, base: Path | None, inc: dict) -> None:
@@ -352,6 +376,12 @@ def needed(adapter: dict, window: tuple[dt.date, dt.date | None]) -> list[str]:
 
 
 def in_window(item: dict, field: str, window: tuple[dt.date, dt.date | None]) -> bool:
-    day = dt.date.fromisoformat(str(item[field])[:10])
+    """LiveCodeBench's own filter: start_date <= contest_date <= end_date, each date at midnight.
+
+    So the window's last day holds only problems stamped 00:00 that day:
+    LeetCode's contests carry their start time (18:30, 02:30 ...) and fall
+    outside it, as they do in LiveCodeBench's load_code_generation_dataset().
+    """
+    when = dt.datetime.fromisoformat(str(item[field]))
     lo, hi = window
-    return lo <= day and (hi is None or day <= hi)
+    return dt.datetime.combine(lo, dt.time()) <= when and (hi is None or when <= dt.datetime.combine(hi, dt.time()))

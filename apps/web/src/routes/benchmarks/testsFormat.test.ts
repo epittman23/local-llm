@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { DatasetStatus } from '@/lib/apis/benchmarks';
 import {
+	appendNote,
 	calibrationText,
 	datasetEventText,
 	formatBytes,
@@ -91,5 +92,22 @@ describe('windows and increments', () => {
 		expect(missingIncrements(incs, '2025-01-04', '')).toEqual(['test5.jsonl']);
 		expect(missingIncrements(incs, '2024-01-01', '2024-01-31')).toEqual(['test4.jsonl']);
 		expect(missingIncrements(incs, '', '')).toEqual([]);
+	});
+});
+
+describe('appendNote', () => {
+	it('replaces a running fetch count instead of piling them up', () => {
+		let notes: string[] = [];
+		notes = appendNote(notes, 'livecodebench: test6.jsonl: downloading 128 MiB');
+		notes = appendNote(notes, 'livecodebench: test6.jsonl: 40 of 128 MiB');
+		notes = appendNote(notes, 'livecodebench: test6.jsonl: 80 of 128 MiB');
+		notes = appendNote(notes, 'livecodebench: test6.jsonl: decoded 25 of 175 problems');
+		notes = appendNote(notes, 'livecodebench: test6.jsonl: decoded 50 of 175 problems');
+		notes = appendNote(notes, 'livecodebench: test6.jsonl: 175 problems from 2025-01-04 to 2025-04-06');
+		expect(notes).toEqual([
+			'livecodebench: test6.jsonl: downloading 128 MiB',
+			'livecodebench: test6.jsonl: decoded 50 of 175 problems',
+			'livecodebench: test6.jsonl: 175 problems from 2025-01-04 to 2025-04-06'
+		]);
 	});
 });

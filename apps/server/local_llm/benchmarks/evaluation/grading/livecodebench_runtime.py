@@ -153,10 +153,14 @@ def grade(code: str, func_name: str, tests: list[dict], timeout: float) -> None:
 
 def main(spec_json: str) -> None:
     spec = json.loads(spec_json)
+    os.environ['OMP_NUM_THREADS'] = '1'  # as LiveCodeBench's reliability_guard sets it
     _limit_memory(int(spec['memory_limit_bytes']))
     here = os.path.dirname(os.path.abspath(__file__))
-    with open(os.path.join(here, 'tests.json')) as f:
+    path = os.path.join(here, 'tests.json')
+    with open(path) as f:
         tests = json.load(f)
+    # Gone before the answer runs, so it cannot read the expected outputs.
+    os.unlink(path)
     # The module is taken out of sys.modules first, so the answer cannot
     # reach grade()'s globals by name.
     sys.modules.pop('__graded__', None)

@@ -72,7 +72,9 @@ describe('TestsPage release-date window', () => {
 		);
 		renderPage();
 		const from = await screen.findByLabelText('Window from');
-		expect(screen.getByText(/Without a window, livecodebench is left out/)).toBeInTheDocument();
+		expect(
+			screen.getByText(/Without a window, livecodebench is left out · fetched problems: 2025-01-04 to 2025-04-06/)
+		).toBeInTheDocument();
 
 		fireEvent.change(from, { target: { value: '2025-01-05' } });
 		fireEvent.click(screen.getByRole('button', { name: 'Run' }));

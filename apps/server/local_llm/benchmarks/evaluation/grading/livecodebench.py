@@ -54,11 +54,14 @@ STARTUP_SECONDS = 1.0
 # LiveCodeBench's call_method() swallows it, so output followed by exit(1)
 # is graded on the output. Any other exception is a non-zero exit.
 STDIN_DRIVER = """\
-import runpy, sys
+import os, runpy, sys
+# LiveCodeBench's reliability_guard sets this, before numpy can start its pools.
+os.environ['OMP_NUM_THREADS'] = '1'
 try:
     import resource
     _, _hard = resource.getrlimit(resource.RLIMIT_AS)
-    resource.setrlimit(resource.RLIMIT_AS, ({limit}, _hard))
+    _limit = {limit} if _hard == resource.RLIM_INFINITY else min({limit}, _hard)
+    resource.setrlimit(resource.RLIMIT_AS, (_limit, _hard))
 except (ImportError, ValueError, OSError):
     pass
 sys.set_int_max_str_digits({digits})
@@ -227,10 +230,20 @@ def _run_one(argv: list[str], cwd: str, stdin: str, timeout: float) -> tuple[str
         return 'error', f'could not run the answer: {exc}'
     try:
         out, err = proc.communicate(stdin.encode(), timeout=timeout)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        exited = proc.poll() is not None
         grading.kill_group(proc)
-        proc.communicate()
-        return 'timeout', ''
+        # Bounded, as run_program's is (#142): a child the answer started in
+        # a session of its own outlives kill_group and can hold the pipes.
+        try:
+            proc.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
+        if not exited:
+            return 'timeout', ''
+        # The script itself finished; something it left behind kept the pipe
+        # open. Its output so far is its answer.
+        out, err = exc.stdout or b'', exc.stderr or b''
     finally:
         grading.kill_group(proc)
     if proc.returncode != 0:

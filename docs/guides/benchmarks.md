@@ -410,6 +410,13 @@ Fetch:
   depends on the window alone, never on what happens to be on disk.
   - A window from 2025-01-05 needs test6 only.
 
+**The window's edges are LiveCodeBench's own.** A problem is in the window when
+`window_min <= contest_date <= window_max`, each date taken at midnight. So the
+last day holds only problems stamped 00:00 that day. LeetCode problems carry
+their contest's start time (18:30, 02:30 and so on), so one from the last
+day's evening falls outside, exactly as in LiveCodeBench's own loader. To
+include a whole day, end the window the day after.
+
 **In a tier**, LiveCodeBench is the fourth benchmark (8, 100 or every
 problem), but only when a window is given:
 - Without one, the run leaves it out and says so in the run's notes. Tune's
@@ -420,7 +427,11 @@ problem), but only when a window is given:
 - The window is recorded on every LiveCodeBench result (`item_window`) and
   shown on the running stream. Compare and Report keep each window's results
   in a block of their own.
-- Resuming a run under a different window is refused.
+- Resuming a run that drew LiveCodeBench under a different window is
+  refused. A run started without a window has no LiveCodeBench pool yet, so
+  it can be resumed with one, which adds LiveCodeBench to it.
+- An increment that repeats a problem already fetched is refused, since a
+  result is keyed by its problem id.
 
 
 **Saturation, stated plainly:** HumanEval and MBPP are heavily contaminated for
@@ -515,7 +526,13 @@ Each harness uses the benchmark's own evaluation logic:
     stdout is compared in the grader: stripped lines, each equal exactly or
     as `Decimal` tokens. A `SystemExit` after the output is ignored, as
     LiveCodeBench ignores it. Any other exception is `fail_error`. The
-    verdict never comes from the program's own exit status.
+    verdict never comes from the program's own exit status. A script that
+    printed its answer and exited is graded on that output even if something
+    it started still holds the pipe; one still running at the limit is
+    `fail_timeout`.
+  - Like LiveCodeBench, answers run with `OMP_NUM_THREADS=1`. A functional
+    problem's tests file is deleted before the answer loads, so it cannot
+    read the expected outputs.
   - LiveCodeBench grades stdin problems in one process instead, with stdin
     mocked. That mock fails two common correct idioms (repeated
     `sys.stdin.buffer.readline()`, and a `global` in a helper), so real stdin
@@ -601,8 +618,10 @@ instead, on 2026-10-25, against test6's real tests:
   `sys.stdin.buffer.readline()`, and `open(0)` behind a main guard), plus
   `leetcode/3708` and `leetcode/3731` (31 tests each).
 - Wrong, crashing, looping and unfenced answers came out as `fail_assert`,
-  `fail_error`, `fail_timeout` and `no_code`. Measured on 2026-10-25 on the NVIDIA GeForce RTX 3060 Laptop machine
-under native Fedora 44 (grading runs on the CPU), with harness version 3,
+  `fail_error`, `fail_timeout` and `no_code`.
+
+The reference solutions of the other three were measured on 2026-10-25 on the
+NVIDIA GeForce RTX 3060 Laptop machine under native Fedora 44 (grading runs on the CPU), with harness version 3,
 dataset revisions HumanEval+ `v0.1.10@42526ec0e7d5`, MBPP+ `v0.2.0@b54e76275524`
 and DS-1000 `4416080ac5cb`, and the grading environment Python
 3.12.14, numpy 2.5.3, pandas 3.0.6, scipy 1.18.1, scikit-learn 1.9.1, pyyaml

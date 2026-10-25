@@ -20,6 +20,7 @@ import {
 } from '@/lib/apis/benchmarks';
 import { useAuthStore } from '@/lib/stores/authStore';
 import {
+	appendNote,
 	calibrationText,
 	type DatasetEvent,
 	datasetEventText,
@@ -168,7 +169,7 @@ export function TestsPage() {
 			return;
 		}
 
-		const note = (line: string) => setNotes((prev) => [...prev, line]);
+		const note = (line: string) => setNotes((prev) => appendNote(prev, line));
 		try {
 			for await (const { event, data } of parseBenchmarksEventStream<JobEvent>(res.body)) {
 				if (event === 'done') break;
@@ -438,6 +439,11 @@ export function TestsPage() {
 									{windowMin
 										? `${windowedNames.join(', ')} problems from contests in this window`
 										: `Without a window, ${windowedNames.join(', ')} is left out`}
+									{windowedNames
+										.map((name) => windowed[name].date_range)
+										.filter((range) => range !== null)
+										.map((range) => ` · fetched problems: ${range[0]} to ${range[1]}`)
+										.join('')}
 								</span>
 							</div>
 							{(windowProblem || windowMissing.length > 0) && (

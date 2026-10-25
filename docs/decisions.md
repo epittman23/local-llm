@@ -40,11 +40,16 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
     stdin mocked. That mock fails two common correct idioms: its
     `sys.stdin.buffer.readline` returns the first line on every call, and
     moving the script into a function breaks a helper's `global`.
-    - Everything else follows LiveCodeBench: the import header and
+    - The grading rules follow LiveCodeBench: the import header and
       recursion limit, `SystemExit` ignored after the output, the
-      stripped-line and `Decimal` comparison, 6 s per test, and
-      (6 + 1) x tests + 5 s per problem. Each stdin test also gets 1 s for
-      the interpreter to start.
+      stripped-line and `Decimal` comparison, `OMP_NUM_THREADS=1`, 6 s per
+      test, and (6 + 1) x tests + 5 s per problem. So do the window's edges:
+      its last day is taken at midnight, as LiveCodeBench's loader takes it.
+    - Some isolation differs: each stdin test also gets 1 s for the
+      interpreter to start; `reliability_guard`'s disabling of `os` and
+      `shutil` functions is not ported (the grader's own isolation stands in
+      for it); and a functional problem's tests file is deleted before the
+      answer loads.
   - **A 4 GiB address-space limit** applies, which LiveCodeBench does not
     set.
   - **The prompt** is LiveCodeBench's own, in its OpenAIReasonPreview style:
@@ -55,8 +60,16 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
     against test6's real tests: correct answers in three stdin idioms and
     two functional problems passed, and wrong, crashing, looping and
     unfenced answers failed as each should.
-  - **Resume** refuses a run whose LiveCodeBench results were drawn under a
-    different window.
+  - **Resume.** The plan had `latest_suite_run` match on the window and the
+    system prompt. Instead it is unchanged, and a check after it refuses a
+    run whose LiveCodeBench results were drawn under a different window. A
+    run started without a window can be resumed with one, since it has no
+    LiveCodeBench pool to contradict. The system prompt stays out of the
+    match, as it was before this change.
+  - **`/tests/options`** carries a `windows` map (each windowed benchmark's
+    pinned increments, which are fetched, and the dates they cover) in place
+    of the plan's per-benchmark `windowed` flag, so `benchmarks` keeps its
+    shape.
 - **2026-10-25** (later): **HumanEval+ and MBPP+ replace HumanEval and MBPP,
   graded as EvalPlus grades them, and all three datasets are vendored.**
   This is PR 1 of `docs/plans/benchmark-upgrade.md`.

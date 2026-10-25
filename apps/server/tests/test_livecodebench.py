@@ -17,6 +17,7 @@ import datetime as dt
 import hashlib
 import json
 import pickle
+import time
 import zlib
 
 import pytest
@@ -597,7 +598,7 @@ def test_fetch_takes_the_increments_asked_for_and_none_by_default(router):
     dataset = next(e for e in fetched if e['type'] == 'dataset')
     assert dataset['fetched'] and dataset['n_items'] == 2
     [row] = status
-    assert row['increments'] == ['test.jsonl'] and row['calibration_stale'] == grading.NOT_CALIBRATABLE
+    assert row['fetched'] and row['n_items'] == 2 and row['calibration_stale'] == grading.NOT_CALIBRATABLE
 
 
 def test_selfcheck_says_livecodebench_cannot_be_calibrated(router):
@@ -618,14 +619,8 @@ def test_a_bad_window_is_an_error_event(router):
 # --- resuming and recording -----------------------------------------------------------------------
 
 
-def _resume(monkeypatch, recorded: dict, asked: str | None):
-    import asyncio
-
+def _resume_patches(monkeypatch, row: dict, recorded: dict) -> None:
     from local_llm.benchmarks.evaluation import runner
-
-    row = {'benchmark': 'livecodebench', 'item_id': 'atcoder/x', 'adapter': {}, 'item': {}}
-    if asked:
-        row['item_window'] = asked
 
     def select(*_a):
         return {'id': 'smoke'}, [row], []
@@ -642,15 +637,27 @@ def _resume(monkeypatch, recorded: dict, asked: str | None):
     async def windows_of(suite_run_id):
         return recorded
 
-    async def stop(*_a, **_k):
-        raise RuntimeError('reached')
-
     monkeypatch.setattr(runner, '_select', select)
     monkeypatch.setattr(runner, 'context', context)
-    monkeypatch.setattr(runner, 'load_adapters', lambda: {'livecodebench': ADAPTER})
+    monkeypatch.setattr(runner, 'load_adapters', lambda: {'livecodebench': ADAPTER, 'mbppplus': {}})
     monkeypatch.setattr(runner.BenchmarkResults, 'latest_suite_run', latest)
     monkeypatch.setattr(runner.BenchmarkResults, 'completed', completed)
     monkeypatch.setattr(runner.BenchmarkResults, 'windows_of', windows_of)
+
+
+def _resume(monkeypatch, recorded: dict, asked: str | None):
+    import asyncio
+
+    from local_llm.benchmarks.evaluation import runner
+
+    row = {'benchmark': 'livecodebench', 'item_id': 'atcoder/x', 'adapter': {}, 'item': {}}
+    if asked:
+        row['item_window'] = asked
+
+    async def stop(*_a, **_k):
+        raise RuntimeError('reached')
+
+    _resume_patches(monkeypatch, row, recorded)
     monkeypatch.setattr(runner.BenchmarkSuiteExclusions, 'record_exclusions', stop)
     asyncio.run(runner.prepare_suite(None, suite_name='smoke', resume=True))
 
@@ -712,3 +719,90 @@ def test_a_graded_item_records_its_window(monkeypatch):
     }
     asyncio.run(runner.run_item(None, row, ctx))
     assert seen['item_window'] == '2025-01-05..' and seen['cluster'] == 'atcoder/abc1'
+
+
+# --- review fixes ---------------------------------------------------------------------------------
+
+
+def test_a_child_in_its_own_session_cannot_hold_the_grader(monkeypatch):
+    # It outlives the process group kill and keeps the pipes open; the grade
+    # must still end within the test's limit plus the bounded drain.
+    code = (
+        'import subprocess, sys, time\n'
+        "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'], start_new_session=True)\n"
+        'time.sleep(30)\n'
+    )
+    started = time.monotonic()
+    outcome, _ = _graded(monkeypatch, STDIN_ITEM, fenced(code), timeout_per_test=1)
+    assert outcome == FAIL_TIMEOUT
+    assert time.monotonic() - started < 15
+
+
+def test_output_that_finished_counts_though_a_child_holds_the_pipe(monkeypatch):
+    code = (
+        'import subprocess, sys\n'
+        "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'], start_new_session=True)\n"
+        'print(int(input()) ** 2)\n'
+    )
+    assert _graded(monkeypatch, STDIN_ITEM, fenced(code), timeout_per_test=1) == (PASS, '')
+
+
+def test_a_functional_answer_cannot_read_its_tests():
+    program = harness.build_program(
+        FUNC_ITEM,
+        "import json\ndef pairUp(nums, k):\n    return json.load(open('tests.json'))[0]['output']",
+        ADAPTER['check'],
+    )
+    assert program is not None
+    files = {'tests.json': json.dumps(FUNC_ITEM['public_test_cases']).encode()}
+    outcome, reason = grading.run_program(program, 30, False, files=files)
+    # Unlinked before the answer is loaded.
+    assert outcome == FAIL_ERROR and 'FileNotFoundError' in reason
+
+
+def test_the_window_ends_at_midnight_of_its_last_day_as_livecodebench_s_does():
+    window = livecodebench_data.parse_window('2025-01-01', '2025-01-11')
+    assert livecodebench_data.in_window({'d': '2025-01-11T00:00:00'}, 'd', window)
+    assert not livecodebench_data.in_window({'d': '2025-01-11T18:30:00'}, 'd', window)
+    assert livecodebench_data.in_window({'d': '2025-01-01T00:00:00'}, 'd', window)
+    assert not livecodebench_data.in_window({'d': '2024-12-31T23:59:00'}, 'd', window)
+    assert livecodebench_data.in_window({'d': '2026-01-01T07:30:00'}, 'd', (dt.date(2025, 1, 1), None))
+
+
+def test_an_increment_repeating_a_problem_already_fetched_is_refused(lcb, tmp_path):
+    dup = _increment_file(tmp_path, 'test2.jsonl', [_row('atcoder', 'abc100_a', '2024-05-01', [])])
+    lcb['fetch']['increment'][1] = dup
+    livecodebench_data.fetch(lcb, ['test.jsonl'])
+    with pytest.raises(DatasetError, match='test2.jsonl and test.jsonl both hold atcoder/abc100_a'):
+        livecodebench_data.fetch(lcb, ['test2.jsonl'])
+    assert sorted(livecodebench_data.present(lcb)) == ['test.jsonl']
+
+
+def test_a_row_missing_a_field_is_a_dataset_error():
+    row = _row('atcoder', 'abc1', '2025-01-01', [])
+    del row['metadata']
+    with pytest.raises(DatasetError, match="no 'metadata' field"):
+        livecodebench_data.decode_row(row, 'test6.jsonl')
+    with pytest.raises(DatasetError, match="no 'output' field"):
+        livecodebench_data.decode_private_tests(json.dumps([{'input': '1', 'testtype': 'stdin'}]))
+
+
+def test_a_run_started_without_a_window_can_be_resumed_with_one(monkeypatch):
+    with pytest.raises(RuntimeError, match='reached'):
+        _resume(monkeypatch, {}, '2025-01-05..')
+
+
+def test_resuming_a_windowed_run_for_another_benchmark_is_not_refused(monkeypatch):
+    import asyncio
+
+    from local_llm.benchmarks.evaluation import runner
+
+    row = {'benchmark': 'mbppplus', 'item_id': 'Mbpp/2', 'adapter': {}, 'item': {}}
+
+    async def stop(*_a, **_k):
+        raise RuntimeError('reached')
+
+    _resume_patches(monkeypatch, row, {'livecodebench': {'2025-01-05..'}})
+    monkeypatch.setattr(runner.BenchmarkSuiteExclusions, 'record_exclusions', stop)
+    with pytest.raises(RuntimeError, match='reached'):
+        asyncio.run(runner.prepare_suite(None, suite_name='smoke', resume=True, benchmark='mbppplus'))

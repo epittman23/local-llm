@@ -283,8 +283,6 @@ def _dataset_status() -> list[dict]:
             'n_ungradeable': calibration.get('n_ungradeable') if calibration else None,
             'calibration_stale': grading.calibration_stale(name) if manifest else '',
         }
-        if adapter.get('window'):
-            row['increments'] = sorted((manifest or {}).get('increments') or {})
         out.append(row)
     return out
 
