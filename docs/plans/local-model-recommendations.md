@@ -426,6 +426,21 @@ KL 0.0554 and 3 of 100 refusals. Its weights were re-saved as MXFP4.
 - **Harness requirement:** the harness must send `reasoning_content` back in
   tool turns. The app's pipeline does.
 
+**Measured on 2026-10-25**: the uncensored MXFP4 file, build 11875, the
+serve flags above, on native Fedora 44 in the power-saving profile
+(section 6).
+- 4,513 MiB of VRAM; about 11 tok/s generation, and 22–108 tok/s prompt
+  processing.
+- **Structured tool calls: 3 of 6.**
+  - The data task (a trend fit) got a structured `execute_code` call under
+    all three system prompts.
+  - The compute task asks for the tool *by name*. It got a plain-text answer
+    under all three, and the probe did not keep the answer's text.
+  - Qwen3-4B-2507 called the tool 6 of 6 times on the same probe.
+  - So the model decides for itself whether a task is worth running, and an
+    instruction to use the tool does not override that. Whether the base
+    model does the same is unmeasured.
+
 ### 5.9 Magistral Small 1.2 (Intelligence Index 9, estimated)
 
 **What it is.** Dense, 24B, full attention on every layer. Repo:
@@ -588,7 +603,7 @@ experts/layers in RAM.
 | 1 | Nemotron Nano 9B v2 | `bartowski/nvidia_NVIDIA-Nemotron-Nano-9B-v2-GGUF` → `…-IQ4_NL.gguf` | 4.94 | full, tight | base only: an uncensored build ends the NVIDIA licence |
 | 1–2 | **K2 Horizon 7B (unc.)** | `candor-lab/K2-Horizon-7B-Candor-Uncensored-GGUF` → `…-Q4_K_M.gguf` | 5.21 | mostly on the GPU (`-ngl ~28` at 32k) | candor-lab, KL 0.052, 3/288 refusals, GSM8K −1%; needs build 11875 |
 | 2 | Gemma 4 26B A4B (unc.) | `llmfan46/gemma-4-26B-A4B-it-qat-q4_0-uncensored-heretic-GGUF` → `…-Q4_0.gguf` | 14.93 | experts in RAM, `--n-cpu-moe ~28` | llmfan46 Heretic on the QAT checkpoint, KL 0.0618, MMLU −0.27 |
-| 2 | gpt-oss-20b (unc.) | `mradermacher/gpt-oss-20b-heretic-ara-v3-GGUF` → `…MXFP4_MOE.gguf` | 11.28 | experts in RAM, `--n-cpu-moe ~18` | p-e-w (Heretic's author), KL 0.0554, 3/100 refusals |
+| 2 | gpt-oss-20b (unc.) | `mradermacher/gpt-oss-20b-heretic-ara-v3-GGUF` → `…MXFP4_MOE.gguf` (**on disk**) | 11.28 | experts in RAM, `--n-cpu-moe 18`: 4.5 GiB VRAM, ~11 tok/s | p-e-w (Heretic's author), KL 0.0554, 3/100 refusals; structured calls 3/6 |
 | 3 | Qwen3.8 27B (unc.) | `mradermacher/Qwen3.8-27B-heretic-ara-i1-GGUF` → `…i1-Q3_K_M.gguf` | 12.57 | layers in RAM, like `qwen38` | heretic-org, KL 0.0535, 0/100 refusals, MTP head kept |
 | 3 | Qwen3.8 27B (base) | `unsloth/Qwen3.8-27B-GGUF` → `Qwen3.8-27B-UD-Q3_K_XL.gguf` (**on disk**) | 12.24 | layers in RAM | base; measured, tool calls work |
 
@@ -606,8 +621,9 @@ GiB. Each one needs the owner's yes first. gpt-oss-20b was downloaded on
 
 1. **Settle section 4.** Decide which grading rule harness mode uses on
    code-writing benchmarks.
-2. **gpt-oss-20b uncensored** (11.28 GiB). It has the strongest measured
-   agentic score, and the most reputable uncensoring.
+2. **gpt-oss-20b uncensored** (11.28 GiB, downloaded). It has the strongest
+   measured agentic score, and the most reputable uncensoring. Next step:
+   run `smoke` through the app and see how often it actually runs code.
 3. **Gemma 4 26B A4B uncensored** (14.93 GiB). It has the strongest card
    benchmarks among those that run at moderate speed here.
 4. **K2 Horizon 7B uncensored** (5.21 GiB). It has the highest measured
