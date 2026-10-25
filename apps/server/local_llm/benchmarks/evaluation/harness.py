@@ -145,8 +145,17 @@ async def prepare(source: Request, user, model_entry: str, port: int) -> dict:
     from local_llm.utils.models import get_all_models
 
     request = _request_for(source, user)
-    if not request.app.state.MODELS:
-        await get_all_models(request, user=user)
+
+    def base_of(entry_id: str) -> str | None:
+        entry = request.app.state.MODELS.get(entry_id) or {}
+        return (entry.get('info') or {}).get('base_model_id')
+
+    # The app's model list is a cache, refreshed when a chat lists models.
+    # After a serve swaps the model, it can still name the old one, so a
+    # missing entry or base is checked against a fresh list before refusing.
+    models = request.app.state.MODELS
+    if model_entry not in models or (base_of(model_entry) and base_of(model_entry) not in models):
+        await get_all_models(request, refresh=True, user=user)
     if model_entry not in request.app.state.MODELS:
         raise HarnessRefused(f"no model '{model_entry}' in the app; create it under Workspace > Models")
 

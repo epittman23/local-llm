@@ -106,6 +106,8 @@ def app_with(monkeypatch):
         'enabled': True,
         'defaults': {},
         'jupyter': True,
+        'fresh': {},
+        'refreshes': 0,
     }
 
     async def resolve(request, model_id, model_item, user):
@@ -127,8 +129,16 @@ def app_with(monkeypatch):
     monkeypatch.setattr(openai_router, 'get_openai_connection', connection)
     monkeypatch.setattr(Config, 'get_many', get_many)
     monkeypatch.setattr(Config, 'get', get)
+
+    async def refresh(request, refresh=False, user=None):
+        state['refreshes'] += 1
+        request.app.state.MODELS.update(state['fresh'])
+
+    from local_llm.utils import models as models_util
+
     monkeypatch.setattr(harness, '_request_for', lambda source, user: source)
     monkeypatch.setattr(harness, '_jupyter_alive', jupyter_alive)
+    monkeypatch.setattr(models_util, 'get_all_models', refresh)
 
     def prepare(model='coder'):
         source = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(MODELS=state['models'])))
@@ -169,6 +179,24 @@ def test_an_entry_the_harness_cannot_vouch_for_is_refused(app_with, change, mess
 
     with pytest.raises(harness.HarnessRefused, match=message):
         prepare()
+
+
+def test_a_stale_model_list_is_refreshed_before_an_entry_is_refused(app_with):
+    # The entry names a base the cached list no longer has (a serve swapped
+    # the model since the list was read); a fresh list has it again.
+    state, prepare = app_with
+    state['models']['coder'] = {'id': 'coder', 'info': {'base_model_id': 'qwen25c'}}
+    del state['models']['qwen25c']
+    state['fresh'] = {'qwen25c': {'id': 'qwen25c', 'urlIdx': 1}}
+
+    assert prepare()['base_model'] == 'qwen25c'
+    assert state['refreshes'] == 1
+
+
+def test_a_current_model_list_is_not_refreshed(app_with):
+    state, prepare = app_with
+    prepare()
+    assert state['refreshes'] == 0
 
 
 def test_an_unknown_model_is_refused(app_with):
