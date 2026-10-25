@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { DatasetStatus } from '@/lib/apis/benchmarks';
-import { calibrationText, datasetEventText } from './testsFormat';
+import {
+	calibrationText,
+	datasetEventText,
+	formatBytes,
+	incrementLabel,
+	missingIncrements,
+	windowError
+} from './testsFormat';
 
 const event = { benchmark: 'humanevalplus', n_items: 164, revision: 'v0.1.10@42526ec0e7d5', fetched: false };
 
@@ -46,5 +53,43 @@ describe('calibrationText', () => {
 		expect(calibrationText(status({ fetched: false, calibration_stale: 'does not match its pinned hash' }))).toBe(
 			'does not match its pinned hash'
 		);
+	});
+});
+
+const inc = (name: string, first: string, last: string, fetched = false) => ({
+	name,
+	bytes: 134303240,
+	items: 175,
+	first,
+	last,
+	fetched
+});
+
+describe('windows and increments', () => {
+	it('formats sizes and labels an increment', () => {
+		expect(formatBytes(134303240)).toBe('128 MiB');
+		expect(formatBytes(1252609773)).toBe('1.17 GiB');
+		expect(incrementLabel(inc('test6.jsonl', '2025-01-04', '2025-04-06', true))).toBe(
+			'test6.jsonl: 175 problems, 2025-01-04 to 2025-04-06, 128 MiB (fetched)'
+		);
+	});
+
+	it('refuses a window without a start or one that ends first', () => {
+		expect(windowError('', '')).toBe('');
+		expect(windowError('2025-01-05', '')).toBe('');
+		expect(windowError('', '2025-01-05')).toMatch(/first date/);
+		expect(windowError('2025-02-01', '2025-01-01')).toMatch(/ends before/);
+	});
+
+	it('names every unfetched increment the window touches, overlaps included', () => {
+		const incs = [
+			inc('test4.jsonl', '2023-08-26', '2024-10-05'),
+			inc('test5.jsonl', '2024-09-22', '2025-01-04'),
+			inc('test6.jsonl', '2025-01-04', '2025-04-06', true)
+		];
+		expect(missingIncrements(incs, '2025-01-05', '')).toEqual([]);
+		expect(missingIncrements(incs, '2025-01-04', '')).toEqual(['test5.jsonl']);
+		expect(missingIncrements(incs, '2024-01-01', '2024-01-31')).toEqual(['test4.jsonl']);
+		expect(missingIncrements(incs, '', '')).toEqual([]);
 	});
 });

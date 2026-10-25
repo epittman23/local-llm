@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import tomllib
 
 from local_llm.benchmarks.evaluation.datasets import dotted
@@ -40,7 +41,7 @@ def load_adapters() -> dict[str, dict]:
 # silently made old and new results incomparable with nothing recording the
 # discontinuity, which is the problem config_id and system_sha already solve
 # for serving flags and system prompts. Recorded per result as adapter_sha.
-FINGERPRINTED = ('prompt_template', 'item', 'filter', 'check')
+FINGERPRINTED = ('prompt_template', 'prompt_template_with_starter', 'item', 'filter', 'window', 'check')
 
 
 def adapter_sha(adapter: dict) -> str:
@@ -88,4 +89,12 @@ def render_prompt(adapter: dict, item: dict) -> str:
     # EvalPlus strips the prompt before fencing it; `strip_prompt` says so.
     if spec.get('strip_prompt'):
         body = body.strip()
-    return adapter['prompt_template'].replace('{prompt}', body)
+    fields = {'prompt': body}
+    template = adapter['prompt_template']
+    # LiveCodeBench has a second template for problems that ship starter code.
+    starter = dotted(item, spec['starter_field']) if spec.get('starter_field') else None
+    if isinstance(starter, str) and starter and 'prompt_template_with_starter' in adapter:
+        template = adapter['prompt_template_with_starter']
+        fields['starter_code'] = starter
+    # One pass, so a placeholder inside the problem text is left alone.
+    return re.sub(r'\{(prompt|starter_code)\}', lambda m: fields.get(m.group(1), m.group(0)), template)

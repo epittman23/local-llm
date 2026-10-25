@@ -19,7 +19,14 @@ import {
 	type TestRunForm
 } from '@/lib/apis/benchmarks';
 import { useAuthStore } from '@/lib/stores/authStore';
-import { calibrationText, type DatasetEvent, datasetEventText } from './testsFormat';
+import {
+	calibrationText,
+	type DatasetEvent,
+	datasetEventText,
+	incrementLabel,
+	missingIncrements,
+	windowError
+} from './testsFormat';
 
 type ItemEvent = {
 	type: 'item';
@@ -48,7 +55,7 @@ type ItemResult = {
 
 /** The events every Tests job streams: a suite run, a fetch, a selfcheck, or one item. */
 type JobEvent =
-	| { type: 'start'; suite_run_id: string; total: number; skipped: number }
+	| { type: 'start'; suite_run_id: string; total: number; skipped: number; window?: string | null; notes?: string[] }
 	| ItemEvent
 	| {
 			type: 'reference';
@@ -98,14 +105,26 @@ export function TestsPage() {
 	const tiers: string[] = optionsQuery.data?.tiers ?? [];
 	const benchmarks: string[] = optionsQuery.data?.benchmarks ?? [];
 	const systems: string[] = optionsQuery.data?.systems ?? [];
+	const windowed = optionsQuery.data?.windows ?? {};
+	const windowedNames = Object.keys(windowed);
 
 	const [suite, setSuite] = useState('');
 	const [benchmark, setBenchmark] = useState(ALL_OPTION);
 	const [system, setSystem] = useState(ALL_OPTION);
 	const [slice, setSlice] = useState('');
 	const [resume, setResume] = useState(false);
+	const [windowMin, setWindowMin] = useState('');
+	const [windowMax, setWindowMax] = useState('');
+	const [chosenIncrements, setChosenIncrements] = useState<string[]>([]);
+	const [runWindow, setRunWindow] = useState<string | null>(null);
 
 	const effectiveSuite = suite || tiers[0] || '';
+	// The window applies when the run can include a windowed benchmark.
+	const windowApplies = windowedNames.length > 0 && (benchmark === ALL_OPTION || windowedNames.includes(benchmark));
+	const windowProblem = windowApplies ? windowError(windowMin, windowMax) : '';
+	const windowMissing = windowApplies
+		? windowedNames.flatMap((name) => missingIncrements(windowed[name].increments, windowMin, windowMax))
+		: [];
 
 	const [running, setRunning] = useState(false);
 	const [suiteRunId, setSuiteRunId] = useState<string | null>(null);
@@ -159,6 +178,8 @@ export function TestsPage() {
 					setSuiteRunId(data.suite_run_id);
 					setTotal(data.total);
 					setSkipped(data.skipped);
+					setRunWindow(data.window ?? null);
+					for (const line of data.notes ?? []) note(line);
 				} else if (data.type === 'item') {
 					setLatest(data);
 					setItems((prev) => [...prev, data]);
@@ -188,6 +209,7 @@ export function TestsPage() {
 			console.error(err);
 		}
 		void datasetsQuery.refetch();
+		void optionsQuery.refetch();
 		if (abortControllerRef.current === controller) setRunning(false);
 	};
 
@@ -204,6 +226,7 @@ export function TestsPage() {
 		setSuiteRunId(null);
 		setTotal(0);
 		setSkipped(0);
+		setRunWindow(null);
 		setStreamError(null);
 	};
 
@@ -211,7 +234,11 @@ export function TestsPage() {
 	// Not awaited in onSuccess: see ServePage's startMutation.
 	const jobMutation = useMutation({
 		mutationFn: async (next: { job: Job; force?: boolean }) => {
-			if (next.job === 'fetch') return fetchDatasets(token, next.force ? { force: true } : {});
+			if (next.job === 'fetch')
+				return fetchDatasets(token, {
+					...(next.force ? { force: true } : {}),
+					...(chosenIncrements.length ? { increments: chosenIncrements } : {})
+				});
 			if (next.job === 'selfcheck') return runSelfcheck(token);
 			if (next.job === 'item') {
 				const form = { benchmark: itemBenchmark || benchmarks[0], item_id: itemId.trim() };
@@ -222,6 +249,10 @@ export function TestsPage() {
 			if (system !== ALL_OPTION) form.system = system;
 			if (slice.trim()) form.slice = slice.trim();
 			if (resume) form.resume = true;
+			if (windowApplies && windowMin) {
+				form.window_min = windowMin;
+				if (windowMax) form.window_max = windowMax;
+			}
 			return startTestRun(token, form);
 		},
 		onMutate: (next) => reset(next.job),
@@ -290,6 +321,29 @@ export function TestsPage() {
 						))}
 					</tbody>
 				</table>
+				{windowedNames.map((name) => (
+					<fieldset key={name} className="flex flex-col gap-1 text-xs">
+						<legend className="text-muted-foreground mb-1">
+							{name} is fetched by release increment; Fetch downloads the ones ticked
+						</legend>
+						{windowed[name].increments.map((inc) => (
+							<div key={inc.name} className="flex w-fit items-center gap-2">
+								<Checkbox
+									id={`tests-increment-${name}-${inc.name}`}
+									checked={chosenIncrements.includes(inc.name)}
+									onCheckedChange={(checked) =>
+										setChosenIncrements((prev) =>
+											checked === true ? [...prev, inc.name] : prev.filter((n) => n !== inc.name)
+										)
+									}
+								/>
+								<Label htmlFor={`tests-increment-${name}-${inc.name}`} className="text-xs font-normal">
+									{incrementLabel(inc)}
+								</Label>
+							</div>
+						))}
+					</fieldset>
+				))}
 			</section>
 
 			{optionsQuery.isLoading ? (
@@ -357,6 +411,43 @@ export function TestsPage() {
 						</div>
 					</div>
 
+					{windowApplies && (
+						<div className="flex flex-col gap-1">
+							<div className="flex flex-wrap items-end gap-2">
+								<div className="flex flex-col gap-1">
+									<Label htmlFor="tests-window-min">Window from</Label>
+									<Input
+										id="tests-window-min"
+										type="date"
+										className="w-44"
+										value={windowMin}
+										onChange={(e) => setWindowMin(e.target.value)}
+									/>
+								</div>
+								<div className="flex flex-col gap-1">
+									<Label htmlFor="tests-window-max">Window to</Label>
+									<Input
+										id="tests-window-max"
+										type="date"
+										className="w-44"
+										value={windowMax}
+										onChange={(e) => setWindowMax(e.target.value)}
+									/>
+								</div>
+								<span className="text-muted-foreground pb-2 text-xs">
+									{windowMin
+										? `${windowedNames.join(', ')} problems from contests in this window`
+										: `Without a window, ${windowedNames.join(', ')} is left out`}
+								</span>
+							</div>
+							{(windowProblem || windowMissing.length > 0) && (
+								<div className="text-xs text-amber-600 dark:text-amber-400">
+									{windowProblem || `This window needs ${windowMissing.join(', ')}: fetch it first.`}
+								</div>
+							)}
+						</div>
+					)}
+
 					<label className="flex w-fit items-center gap-2 text-xs">
 						<Checkbox checked={resume} onCheckedChange={(checked) => setResume(checked === true)} />
 						Resume previous run
@@ -365,7 +456,10 @@ export function TestsPage() {
 			)}
 
 			<div className="flex items-center gap-2">
-				<Button onClick={() => jobMutation.mutate({ job: 'run' })} disabled={busy || !effectiveSuite}>
+				<Button
+					onClick={() => jobMutation.mutate({ job: 'run' })}
+					disabled={busy || !effectiveSuite || !!windowProblem}
+				>
 					{jobMutation.isPending && job === 'run' ? 'Starting…' : 'Run'}
 				</Button>
 				<Button
@@ -453,6 +547,7 @@ export function TestsPage() {
 			{suiteRunId && (
 				<div className="text-muted-foreground text-xs">
 					Suite run: <span className="text-foreground">{suiteRunId}</span> · Total: {total} · Skipped: {skipped}
+					{runWindow && <Badge className="ml-2">Release-date window: {runWindow}</Badge>}
 				</div>
 			)}
 

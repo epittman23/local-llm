@@ -1,7 +1,7 @@
 """benchmarks/grading - answer extraction, program execution, and calibration.
 
 Ported from local-llm's scripts/llama_tests.py (outer repo). Each benchmark's
-harness (evalplus.py for HumanEval+ and MBPP+, ds1000.py) builds a standalone program from the
+harness (evalplus.py for HumanEval+ and MBPP+, ds1000.py, livecodebench.py) builds a standalone program from the
 benchmark's OWN test material and this package runs it. The rule throughout:
 the dataset decides correctness, this package only arranges for its verdict to
 be reached.
@@ -35,7 +35,7 @@ from pathlib import Path
 from local_llm.benchmarks.evaluation.datasets import dataset_identity, datasets_base_dir
 from local_llm.env import SERVER_DIR
 
-from . import ds1000, evalplus
+from . import ds1000, evalplus, livecodebench
 
 # ---------------------------------------------------------------------------
 # outcomes
@@ -62,6 +62,7 @@ GRADED = FAILURES | {PASS}  # everything except skipped
 REGISTRY = {
     ds1000.NAME: ds1000,
     evalplus.NAME: evalplus,
+    livecodebench.NAME: livecodebench,
 }
 
 
@@ -218,7 +219,7 @@ main()
 """
 
 
-def _kill_group(proc: subprocess.Popen) -> None:
+def kill_group(proc: subprocess.Popen) -> None:
     """Kill everything the run started: the program and anything it forked."""
     try:
         os.killpg(proc.pid, signal.SIGKILL)
@@ -232,7 +233,7 @@ def _verdict(nonce: str, stdout: str | bytes | None) -> bool:
     return nonce in (stdout or '').splitlines()
 
 
-def run_program(source: str, timeout: int, isolated: bool) -> tuple[str, str]:
+def run_program(source: str, timeout: float, isolated: bool, files: dict[str, bytes] | None = None) -> tuple[str, str]:
     """Execute a grading program. Returns (outcome, reason).
 
     PASS means the program ran to its end: the driver printed this run's
@@ -241,10 +242,13 @@ def run_program(source: str, timeout: int, isolated: bool) -> tuple[str, str]:
     outlives it (#142). A program whose tests finished but left a child
     holding stdout open still passes, on the nonce, when the timeout ends the
     wait. Graded code sees /dev/null on stdin and grader_env()'s environment.
+    `files` are written beside the program first (a harness's test data).
     """
     nonce = secrets.token_hex(16)
     with tempfile.TemporaryDirectory(prefix='llama-grade.') as tmp:
         Path(tmp, 'graded.py').write_text(source)
+        for name, data in (files or {}).items():
+            Path(tmp, Path(name).name).write_bytes(data)
         driver = Path(tmp, 'grade.py')
         driver.write_text(DRIVER)
         argv = [grader_python(), '-I']
@@ -269,7 +273,7 @@ def run_program(source: str, timeout: int, isolated: bool) -> tuple[str, str]:
         try:
             stdout, stderr = proc.communicate(nonce + '\n', timeout=timeout)
         except subprocess.TimeoutExpired as exc:
-            _kill_group(proc)
+            kill_group(proc)
             # What it printed before the deadline: finished tests count even
             # when something they left behind kept the pipe open.
             finished = _verdict(nonce, exc.stdout)
@@ -279,7 +283,7 @@ def run_program(source: str, timeout: int, isolated: bool) -> tuple[str, str]:
                 pass
             return (PASS, '') if finished else (FAIL_TIMEOUT, f'no result within {timeout}s')
         finally:
-            _kill_group(proc)
+            kill_group(proc)
 
     if _verdict(nonce, stdout):
         return PASS, ''
@@ -298,6 +302,9 @@ def run_program(source: str, timeout: int, isolated: bool) -> tuple[str, str]:
 def grade(adapter: dict, item: dict, answer: str) -> tuple[str, str]:
     """Grade one answer against the benchmark's own tests."""
     module = _harness(adapter)
+    # A harness that runs its programs its own way grades the answer itself.
+    if hasattr(module, 'grade'):
+        return module.grade(adapter, item, answer or '')
     code = extract_code(answer or '', want_def=module.WANT_DEF)
     check = adapter['check']
     program = module.build_program(item, code, check)
@@ -366,8 +373,21 @@ def read_calibration(bench: str, base: Path | None = None) -> dict | None:
         return None
 
 
+NOT_CALIBRATABLE = 'not calibratable (no reference solutions)'
+
+
+def calibratable(adapter: dict) -> bool:
+    """Whether the benchmark ships reference solutions selfcheck can grade."""
+    return getattr(_harness(adapter), 'CALIBRATABLE', True)
+
+
 def calibration_stale(bench: str, base: Path | None = None) -> str:
     """Why a stored calibration no longer applies, or "" when it still does."""
+    from local_llm.benchmarks.evaluation.adapters import load_adapters
+
+    adapter = load_adapters().get(bench)
+    if adapter is not None and not calibratable(adapter):
+        return NOT_CALIBRATABLE
     cal = read_calibration(bench, base)
     if cal is None:
         return 'not calibrated yet'

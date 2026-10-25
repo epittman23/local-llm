@@ -310,7 +310,7 @@ export const killLive = async (token: string = '') => {
 // Tests
 // -----------------------------------------------------------------------------
 
-export const getTestOptions = async (token: string = '') => {
+export const getTestOptions = async (token: string = ''): Promise<TestOptions> => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/tests/options`, {
@@ -345,6 +345,27 @@ export type TestRunForm = {
 	system?: string;
 	slice?: string;
 	resume?: boolean;
+	/** The release-date window a windowed benchmark (LiveCodeBench) draws from, YYYY-MM-DD. */
+	window_min?: string;
+	window_max?: string;
+};
+
+/** One release file of a windowed benchmark, as pinned in its adapter. */
+export type WindowIncrement = {
+	name: string;
+	bytes: number;
+	items: number;
+	first: string;
+	last: string;
+	fetched: boolean;
+};
+
+export type TestOptions = {
+	tiers: string[];
+	benchmarks: string[];
+	systems: string[];
+	/** Per windowed benchmark: its increments, and the dates the fetched ones cover. */
+	windows?: Record<string, { increments: WindowIncrement[]; date_range: [string, string] | null }>;
 };
 
 export const startTestRun = async (token: string = '', form: TestRunForm) => {
@@ -400,6 +421,8 @@ export type DatasetStatus = {
 	fetched: boolean;
 	/** Committed to the repository: nothing to fetch, and Fetch only verifies it. */
 	vendored: boolean;
+	/** A windowed benchmark's increments on disk. */
+	increments?: string[];
 	n_items: number | null;
 	revision: string | null;
 	fetched_at: string | null;
@@ -413,8 +436,10 @@ export type DatasetStatus = {
 export const getDatasets = (token: string = ''): Promise<DatasetStatus[]> => testsRequest(token, 'datasets');
 
 /** Download the datasets (all when `benchmarks` is omitted); progress arrives on the Tests stream. */
-export const fetchDatasets = (token: string = '', form: { benchmarks?: string[]; force?: boolean } = {}) =>
-	testsRequest(token, 'fetch', form);
+export const fetchDatasets = (
+	token: string = '',
+	form: { benchmarks?: string[]; force?: boolean; increments?: string[] } = {}
+) => testsRequest(token, 'fetch', form);
 
 /** Grade the datasets' own reference solutions and write the calibrations; streamed like a run. */
 export const runSelfcheck = (token: string = '', form: { benchmarks?: string[] } = {}) =>

@@ -6,8 +6,9 @@ rows come from:
 
     kind = "vendored"   a file committed under benchmarks/data/datasets/,
                         pinned by the SHA-256 of its decompressed bytes
-    [fetch] kinds       downloaded once into DATA_DIR (FETCHERS; none ship
-                        today, LiveCodeBench's will)
+    [fetch] kinds       downloaded once into DATA_DIR: FETCHERS for a small
+                        dataset (none ship today), INCREMENTS_KIND for
+                        LiveCodeBench (livecodebench_data.py)
 
 HumanEval+, MBPP+ and DS-1000 are vendored (2026-10-25). Until then every
 dataset was fetched, from branch heads that resolve to different content over
@@ -93,6 +94,11 @@ def read_items(bench: str, base: Path | None = None) -> list[dict]:
     source = _vendored_source(bench)
     if source is not None:
         return _parse_jsonl(_vendored_bytes(source))
+    increments = _increments_adapter(bench)
+    if increments is not None:
+        from local_llm.benchmarks.evaluation import livecodebench_data
+
+        return livecodebench_data.read_items(increments, base)
     path = items_path(bench, base)
     if not path.exists():
         raise DatasetError(f'{bench} is not downloaded yet: fetch it from the Tests page (Datasets, Fetch)')
@@ -118,6 +124,11 @@ def dataset_identity(bench: str, base: Path | None = None) -> dict | None:
     """
     source = _vendored_source(bench)
     if source is None:
+        increments = _increments_adapter(bench)
+        if increments is not None:
+            from local_llm.benchmarks.evaluation import livecodebench_data
+
+            return livecodebench_data.identity(increments, base)
         return read_manifest(bench, base)
     raw = _vendored_bytes(source)
     adapter = source['_adapter']
@@ -148,6 +159,18 @@ def _vendored_source(bench: str) -> dict | None:
     if not source or source.get('kind') != 'vendored':
         return None
     return {**source, '_adapter': adapter}
+
+
+# The fetch kind whose increments the user picks, decoded by livecodebench_data.
+INCREMENTS_KIND = 'hf_lfs_files'
+
+
+def _increments_adapter(bench: str) -> dict | None:
+    """The adapter when its data comes in increments the user picks (LiveCodeBench), else None."""
+    from local_llm.benchmarks.evaluation.adapters import load_adapters
+
+    adapter = load_adapters().get(bench)
+    return adapter if (adapter or {}).get('fetch', {}).get('kind') == INCREMENTS_KIND else None
 
 
 # Verified bytes, keyed by the file's identity on disk and the pinned hash, so
@@ -213,10 +236,10 @@ def item_id(adapter: dict, item: dict) -> str:
 
 
 # ---------------------------------------------------------------------------
-# fetch kind -> fetcher(spec) returning (rows, revision, source_url, raw bytes).
-# Empty since HumanEval+, MBPP+ and DS-1000 were vendored (2026-10-25); the
-# github_raw and hf_rows kinds they used were removed with them. A benchmark
-# too large to vendor (LiveCodeBench) registers its pinned fetcher here.
+# fetch kind -> fetcher(spec) returning (rows, revision, source_url, raw bytes),
+# for a dataset small enough to hold in memory. Empty since HumanEval+, MBPP+
+# and DS-1000 were vendored (2026-10-25). LiveCodeBench, too large for this,
+# is INCREMENTS_KIND, fetched by livecodebench_data.fetch().
 FETCHERS: dict = {}
 
 
@@ -226,6 +249,8 @@ def fetch_one(adapter: dict, force: bool = False, base: Path | None = None) -> d
         # Nothing to download: the rows are in the repository. Returning the
         # identity reports them, and verifies the file on the way.
         return dataset_identity(bench, base) or {}
+    if (adapter.get('fetch') or {}).get('kind') == INCREMENTS_KIND:
+        raise DatasetError(f'{bench} is fetched by increment: pick the increments to fetch')
     out = (base or datasets_base_dir()) / bench
     manifest = out / 'MANIFEST.json'
 

@@ -17,9 +17,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict
 
-from local_llm.benchmarks.evaluation import grading, harness, runner
+from local_llm.benchmarks.evaluation import grading, harness, livecodebench_data, runner
 from local_llm.benchmarks.evaluation.adapters import ADAPTERS_DIR, load_adapters
 from local_llm.benchmarks.evaluation.datasets import (
+    INCREMENTS_KIND,
     DatasetError,
     dataset_identity,
     fetch_one,
@@ -40,6 +41,9 @@ _cancel = False
 class FetchForm(BaseModel):
     benchmarks: list[str] | None = None  # None: every benchmark
     force: bool = False
+    # LiveCodeBench's release increments to fetch (test.jsonl ... test6.jsonl).
+    # None or empty fetches none of them: together they are 4.5 GB.
+    increments: list[str] | None = None
 
     model_config = ConfigDict(extra='forbid')
 
@@ -71,8 +75,39 @@ class TestsRunForm(BaseModel):
     slice: str | None = None
     resume: bool = False
     harness_model: str | None = None
+    # The release-date window a windowed benchmark (LiveCodeBench) draws its
+    # problems from, as YYYY-MM-DD. Without window_min it is left out of a
+    # tier; window_max None means no upper bound.
+    window_min: str | None = None
+    window_max: str | None = None
 
     model_config = ConfigDict(extra='forbid')
+
+
+def _windows() -> dict[str, dict]:
+    """Each windowed benchmark's increments, which are fetched, and the dates those cover."""
+    out = {}
+    for name, adapter in sorted(load_adapters().items()):
+        if not adapter.get('window'):
+            continue
+        have = livecodebench_data.present(adapter)
+        incs = [
+            {
+                'name': inc['name'],
+                'bytes': inc['bytes'],
+                'items': inc['items'],
+                'first': inc['first'],
+                'last': inc['last'],
+                'fetched': inc['name'] in have,
+            }
+            for inc in livecodebench_data.increments(adapter)
+        ]
+        fetched = [inc for inc in incs if inc['fetched']]
+        out[name] = {
+            'increments': incs,
+            'date_range': [min(i['first'] for i in fetched), max(i['last'] for i in fetched)] if fetched else None,
+        }
+    return out
 
 
 @router.get('/options')
@@ -81,6 +116,7 @@ async def get_options(user=Depends(get_admin_user)):
         'tiers': sorted(p.stem for p in SUITES_DIR.glob('*.toml')),
         'benchmarks': sorted(p.stem for p in ADAPTERS_DIR.glob('*.toml')),
         'systems': runner.system_names(),
+        'windows': await asyncio.to_thread(_windows),
     }
 
 
@@ -88,6 +124,10 @@ async def _run_suite(form: TestsRunForm, queue: asyncio.Queue, request: Request 
     global _cancel
     passed = attempted = 0
     try:
+        try:
+            window = livecodebench_data.parse_window(form.window_min, form.window_max)
+        except ValueError as exc:
+            raise runner.SuiteLoadError(f'bad release-date window: {exc}') from exc
         async with aiohttp.ClientSession() as session:
             ctx, todo, skipped = await runner.prepare_suite(
                 session,
@@ -100,10 +140,18 @@ async def _run_suite(form: TestsRunForm, queue: asyncio.Queue, request: Request 
                 harness_entry=form.harness_model,
                 source_request=request,
                 user=user,
+                window=window,
             )
             total = len(todo)
             await queue.put(
-                {'type': 'start', 'suite_run_id': ctx['suite_run_id'], 'total': total, 'skipped': len(skipped)}
+                {
+                    'type': 'start',
+                    'suite_run_id': ctx['suite_run_id'],
+                    'total': total,
+                    'skipped': len(skipped),
+                    'window': livecodebench_data.window_text(window) if window else None,
+                    'notes': ctx.get('notes') or [],
+                }
             )
 
             async def on_record(record: dict) -> None:
@@ -235,6 +283,8 @@ def _dataset_status() -> list[dict]:
             'n_ungradeable': calibration.get('n_ungradeable') if calibration else None,
             'calibration_stale': grading.calibration_stale(name) if manifest else '',
         }
+        if adapter.get('window'):
+            row['increments'] = sorted((manifest or {}).get('increments') or {})
         out.append(row)
     return out
 
@@ -252,13 +302,31 @@ async def start_fetch(form_data: FetchForm, user=Depends(get_admin_user)):
     adapters = load_adapters()
 
     async def job(queue: asyncio.Queue) -> None:
+        loop = asyncio.get_running_loop()
         try:
             for name in names:
                 if _cancel:
                     break
-                await queue.put({'type': 'progress', 'benchmark': name, 'message': 'fetching'})
-                before = dataset_identity(name)
-                manifest = await asyncio.to_thread(fetch_one, adapters[name], form_data.force)
+                adapter = adapters[name]
+                if (adapter.get('fetch') or {}).get('kind') == INCREMENTS_KIND:
+                    if not form_data.increments:
+                        await queue.put(
+                            {'type': 'progress', 'benchmark': name, 'message': 'no increments chosen, so none fetched'}
+                        )
+                        continue
+                    before = dataset_identity(name)
+                    manifest = await asyncio.to_thread(
+                        livecodebench_data.fetch,
+                        adapter,
+                        form_data.increments,
+                        force=form_data.force,
+                        progress=_progress(loop, queue, name),
+                        should_stop=lambda: _cancel,
+                    )
+                else:
+                    await queue.put({'type': 'progress', 'benchmark': name, 'message': 'fetching'})
+                    before = dataset_identity(name)
+                    manifest = await asyncio.to_thread(fetch_one, adapter, form_data.force)
                 await queue.put(
                     {
                         'type': 'dataset',
@@ -270,10 +338,21 @@ async def start_fetch(form_data: FetchForm, user=Depends(get_admin_user)):
                     }
                 )
             await queue.put({'type': 'done', 'cancelled': _cancel})
+        except livecodebench_data.Cancelled:
+            await queue.put({'type': 'done', 'cancelled': True})
         except Exception as exc:  # noqa: BLE001 - reported to the client
             await queue.put({'type': 'error', 'message': str(exc)})
 
     return _start(job)
+
+
+def _progress(loop: asyncio.AbstractEventLoop, queue: asyncio.Queue, name: str):
+    """A progress callback for a fetch running in a worker thread."""
+
+    def report(message: str) -> None:
+        loop.call_soon_threadsafe(queue.put_nowait, {'type': 'progress', 'benchmark': name, 'message': message})
+
+    return report
 
 
 class _Cancelled(Exception):
@@ -292,6 +371,10 @@ async def start_selfcheck(form_data: SelfcheckForm, user=Depends(get_admin_user)
                 if _cancel:
                     break
                 adapter = adapters[name]
+                if not grading.calibratable(adapter):
+                    message = grading.NOT_CALIBRATABLE
+                    await queue.put({'type': 'progress', 'benchmark': name, 'message': message})
+                    continue
                 items, _ = filter_items(adapter, await asyncio.to_thread(read_items, name))
                 total = len(items)
                 await queue.put({'type': 'progress', 'benchmark': name, 'message': 'checking', 'total': total})
