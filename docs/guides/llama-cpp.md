@@ -36,13 +36,16 @@ CUDA 13.4 accepts GCC up to 16 as its host compiler
 needs no older `gcc`. Check that header again for a newer GCC or CUDA:
 Fedora ships `gcc15` / `gcc15-c++` for `-DCMAKE_CUDA_HOST_COMPILER`.
 
-**llama.cpp.** The current recorded serving measurements used build 10597
-(`95b8e33e1`); the thread-count sweep is older, on 10472. Building 10597
-keeps new runs comparable with the recorded ones:
+**llama.cpp.** The installed build is 11875 (`f0fb5984b`), since
+2026-10-25. The recorded serving measurements used build 10597
+(`95b8e33e1`), and the thread-count sweep is older still, on 10472. Build
+10597 lacks support for newer models (K2 Horizon, for one) and several
+tool-call parser and MTP fixes; see the 2026-10-25 entry in
+[the decisions log](../decisions.md).
 
 ```bash
 git clone https://github.com/ggml-org/llama.cpp ~/llama.cpp && cd ~/llama.cpp
-git checkout 95b8e33e1
+git checkout f0fb5984b
 export PATH=/usr/local/cuda-13.4/bin:$PATH
 cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=86
 cmake --build build -j "$(nproc)"
@@ -51,13 +54,25 @@ cmake --build build -j "$(nproc)"
 `86` is the RTX 3060 Laptop's compute capability (8.6). A configure that
 failed (for example "CUDA Toolkit not found") leaves `build/` behind:
 remove it before configuring again. Check the result with
-`build/bin/llama-server --version` (build 10597, commit `95b8e33e1`) and
+`build/bin/llama-server --version` (build 11875, commit `f0fb5984b`) and
 `build/bin/llama-server --list-devices` (`CUDA0: NVIDIA GeForce RTX 3060
 Laptop GPU`). The runtime libraries resolve from `/usr/local/cuda`, so the
 backend needs no `PATH` change to run it.
 
-On 2026-10-23 this was built on the Fedora machine exactly as above: build
-10597 with CUDA 13.4.3 and GCC 16.2.1, which accepts `-fit off`.
+On 2026-10-23 build 10597 was built on the Fedora machine this way, with
+CUDA 13.4.3 and GCC 16.2.1, which accepts `-fit off`. On 2026-10-25 build
+11875 replaced it, with the same options and compilers. The 10597 binaries
+were moved to `~/llama.cpp/build-b10597/bin` to reproduce the recorded
+runs. Their RUNPATH still points at `build/bin`, so run them with
+`LD_LIBRARY_PATH=~/llama.cpp/build-b10597/bin`, or they load 11875's
+libraries.
+
+Checked after the upgrade with `qwen38`'s exact argv, one tool-call probe
+on each build: both answered correctly and made a structured
+`execute_code` call, at about 1.1 tok/s generation on both. That speed
+reflects the laptop's power-saving profile at the time, not either build,
+so it is not a measurement. Run `smoke` on `qwen38` under 11875 before
+recording new numbers.
 
 It first served on 2026-10-24, from Benchmarks > Serve with each profile's
 stored flags, for the harness test run of
