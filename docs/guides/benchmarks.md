@@ -170,6 +170,14 @@ each item is answered the way a chat answers it instead:
 There is no switch on the Tests page yet (planned in PR 2 of
 [the plan](../plans/benchmarks-through-the-app.md)).
 
+**The model has to make structured tool calls** for the code interpreter to
+run. On 2026-10-24, `qwen25c` (Qwen2.5-Coder-7B) wrote its `execute_code`
+call as JSON text in a code fence instead, so `llama-server` never parsed
+it, no code ran, and a harness run on it measured the bare model plus the
+entry's system prompt. `qwen38` made a structured call; the code ran in
+Jupyter; and a second round answered. That one item took 452 s, partly
+offloaded and thinking. `harness_stats.code_runs` shows which case a run is.
+
 **What it needs.** The model entry has to be on an OpenAI-compatible
 connection that points at the `llama-server` being measured, for example
 `http://127.0.0.1:8090/v1` in Admin Settings > Connections. The code

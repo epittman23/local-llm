@@ -48,9 +48,9 @@ Local models, all evaluation only, one serving profile each:
 
 | Profile | File | Shape | Size | Notes |
 |---|---|---|---|---|
-| `qwen38` | `Qwen3.8-27B-UD-Q3_K_XL.gguf` | dense | 12.24 GiB | partially offloaded (`-ngl 20`), MTP speculative decoding; the only weights on disk as of 2026-10-09 |
+| `qwen38` | `Qwen3.8-27B-UD-Q3_K_XL.gguf` | dense | 12.24 GiB | partially offloaded (`-ngl 20`), MTP speculative decoding; on disk since 2026-10-09 |
 | `qwen36` | `Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf` | MoE, ~3 B active | 20.81 GiB | `-ngl 99 --n-cpu-moe 34`; sparse MoE keeps per-token compute small with most weights in system RAM |
-| `qwen25c` | `Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf` | dense, 7.6 B | 4.36 GiB | the only model fully GPU-resident on the 6 GB card; coding only, not a thinking model; unmeasured |
+| `qwen25c` | `Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf` | dense, 7.6 B | 4.36 GiB | the only model fully GPU-resident on the 6 GB card; coding only, not a thinking model; on disk since 2026-10-24; writes tool calls as fenced JSON text instead of structured calls, so the code interpreter never runs on it; unmeasured |
 | `qwen3c` | `Qwen3-Coder-30B-A3B-Instruct-Q4_1.gguf` | MoE | 17.87 GiB | copies `qwen36`'s shape as an unverified starting point; coding only; unmeasured |
 
 ## Local inference
@@ -59,7 +59,9 @@ Hardware: NVIDIA GeForce RTX 3060 Laptop, 6 GB VRAM, compute capability 8.6,
 on native Fedora 44 since 2026-10-09. Every recorded measurement was taken
 under WSL2 on the same laptop, so all of them are historical until
 re-measured. Since 2026-10-23 the Fedora machine has the CUDA 13.4 toolkit
-and llama.cpp build 10597 (`95b8e33e1`); nothing has been served or
+and llama.cpp build 10597 (`95b8e33e1`). It first served on 2026-10-24
+(`qwen25c` fully on the GPU at 4,987 of 6,144 MiB, `qwen38` at 5,571 MiB,
+each healthy within 12 s), for a harness test run; nothing has been
 measured on it yet.
 
 - **Profiles** are versioned rows in Postgres (`benchmark_profile`,

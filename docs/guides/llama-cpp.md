@@ -57,8 +57,17 @@ Laptop GPU`). The runtime libraries resolve from `/usr/local/cuda`, so the
 backend needs no `PATH` change to run it.
 
 On 2026-10-23 this was built on the Fedora machine exactly as above: build
-10597 with CUDA 13.4.3 and GCC 16.2.1, which accepts `-fit off`. Nothing has
-been served or measured on native Linux yet.
+10597 with CUDA 13.4.3 and GCC 16.2.1, which accepts `-fit off`.
+
+It first served on 2026-10-24, from Benchmarks > Serve with each profile's
+stored flags, for the harness test run of
+[benchmarks-through-the-app](../plans/benchmarks-through-the-app.md):
+
+- `qwen25c` was healthy in 2 s, fully on the GPU at 4,987 of 6,144 MiB;
+- `qwen38` was healthy in 12 s, at 5,571 MiB with `-ngl 20`.
+
+These are load checks, not measurements. No throughput has been measured on
+native Linux yet.
 
 ## Serving
 
