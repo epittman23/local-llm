@@ -58,11 +58,13 @@ Local models, all evaluation only, one serving profile each:
 Hardware: NVIDIA GeForce RTX 3060 Laptop, 6 GB VRAM, compute capability 8.6,
 on native Fedora 44 since 2026-10-09. Every recorded measurement was taken
 under WSL2 on the same laptop, so all of them are historical until
-re-measured. Since 2026-10-23 the Fedora machine has the CUDA 13.4 toolkit
-and llama.cpp build 10597 (`95b8e33e1`). It first served on 2026-10-24
-(`qwen25c` fully on the GPU at 4,987 of 6,144 MiB, `qwen38` at 5,571 MiB,
-each healthy within 12 s), for a harness test run; nothing has been
-measured on it yet.
+re-measured. Since 2026-10-23 the Fedora machine has the CUDA 13.4 toolkit.
+Since 2026-10-25 it has llama.cpp build 11875 (`f0fb5984b`, commit dated
+2026-10-25), replacing build 10597 (`95b8e33e1`, commit dated 2026-08-23),
+which is kept in `~/llama.cpp/build-b10597`. Build 10597 first served on
+2026-10-24 (`qwen25c` fully on the GPU at 4,987 of 6,144 MiB, `qwen38` at
+5,571 MiB, each healthy within 12 s), for a harness test run; nothing has
+been measured on either build yet.
 
 - **Profiles** are versioned rows in Postgres (`benchmark_profile`,
   `benchmark_profile_version`), resolved by
