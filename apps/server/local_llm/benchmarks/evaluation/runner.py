@@ -69,7 +69,7 @@ import aiohttp
 
 from local_llm.benchmarks.evaluation import harness
 from local_llm.benchmarks.evaluation.adapters import item_cluster, load_adapters, render_prompt
-from local_llm.benchmarks.evaluation.datasets import DatasetError, item_id, read_items, read_manifest
+from local_llm.benchmarks.evaluation.datasets import DatasetError, dataset_identity, item_id, read_items
 from local_llm.benchmarks.evaluation.grading import calibration_stale, grade, ungradeable
 from local_llm.benchmarks.evaluation.suites import (
     build_suite,
@@ -650,7 +650,7 @@ async def context(
 
     revisions = {}
     for b in benches:
-        manifest = read_manifest(b) or {}
+        manifest = dataset_identity(b) or {}
         revisions[b] = manifest.get('revision') or manifest.get('content_sha256', '')
 
     return {
@@ -770,6 +770,16 @@ async def prepare_suite(
                 await _resume_harness(ctx, prior)
 
     done = await BenchmarkResults.completed(ctx['suite_run_id'])
+    if resume:
+        # A run recorded under a benchmark that no longer exists (humaneval and
+        # mbpp, replaced on 2026-10-25) would be topped up with its
+        # replacement's items under the same suite run id, mixing the two.
+        gone = sorted({b for b, _ in done} - set(await asyncio.to_thread(load_adapters)))
+        if gone:
+            raise SuiteLoadError(
+                f'the latest {suite["id"]} run ({ctx["suite_run_id"]}) recorded benchmarks this repository '
+                f'no longer has ({", ".join(gone)}); start a new run instead of resuming it'
+            )
     todo = [r for r in selected if (r['benchmark'], r['item_id']) not in done]
 
     # Exclusions are recorded, not merely counted -- but once, against the

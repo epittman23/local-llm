@@ -1,7 +1,6 @@
 import { EventSourceParserStream } from 'eventsource-parser/stream';
-
-import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { errorBody, errorDetail, requestError } from '@/lib/apis/errors';
+import { WEBUI_API_BASE_URL } from '@/lib/constants';
 
 // -----------------------------------------------------------------------------
 // SSE consumption helper
@@ -399,6 +398,8 @@ export type DatasetStatus = {
 	benchmark: string;
 	name: string;
 	fetched: boolean;
+	/** Committed to the repository: nothing to fetch, and Fetch only verifies it. */
+	vendored: boolean;
 	n_items: number | null;
 	revision: string | null;
 	fetched_at: string | null;

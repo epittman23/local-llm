@@ -56,6 +56,7 @@ from local_llm.benchmarks.analysis.stats import (
     short_ot,
     short_spec,
 )
+from local_llm.benchmarks.evaluation.datasets import short_revision
 from local_llm.models.benchmarks.configs import BenchmarkConfigs, BenchmarkRunLoadInfos, BenchmarkRuns
 from local_llm.models.benchmarks.telemetry import BenchmarkGpuSamples, BenchmarkMetricsScrapes
 from local_llm.models.benchmarks.tests import BenchmarkRequests, BenchmarkResults, BenchmarkSuiteExclusions
@@ -318,11 +319,11 @@ class Group:
         return self.summary().ppm.value
 
     def revision(self) -> str:
-        return self.revision_id[:12] if self.revision_id else '-'
+        return short_revision(self.revision_id) if self.revision_id else '-'
 
     def revision_map(self) -> dict[str, str]:
         """benchmark -> dataset revision, for the disagreement note."""
-        return {self.benchmark: self.revision_id[:12]} if self.revision_id else {}
+        return {self.benchmark: short_revision(self.revision_id)} if self.revision_id else {}
 
     def when(self) -> str:
         stamps = [r.get('at') for r in self.records if r.get('at')]
@@ -374,7 +375,7 @@ def block_label(key: tuple) -> str:
     if window:
         parts.append(f'window {window}')
     if revision:
-        parts.append(f'revision {revision[:12]}')
+        parts.append(f'revision {short_revision(revision)}')
     return ' | '.join(parts)
 
 
@@ -525,7 +526,7 @@ def compare_block(groups: list[Group]) -> dict:
         'adapter': adapter or '?',
         'system': ordered[0].system_label(),
         'item_window': window or None,
-        'dataset_revision': revision[:12] if revision else None,
+        'dataset_revision': short_revision(revision) if revision else None,
         'levels': [g.level for g in ordered],
         'letters': _est().letters([g.level for g in ordered], different),
         'holm_m': m,

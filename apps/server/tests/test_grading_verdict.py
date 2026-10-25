@@ -20,8 +20,10 @@ import pytest
 from local_llm.benchmarks.evaluation import grading
 from local_llm.benchmarks.evaluation.grading import FAIL_ASSERT, FAIL_ERROR, FAIL_TIMEOUT, PASS, grade, run_program
 
-HUMANEVAL = {'check': {'harness': 'humaneval', 'timeout': 20, 'isolated': True}}
-MBPP = {'check': {'harness': 'mbpp', 'timeout': 20, 'isolated': True}}
+# HumanEval+ and MBPP+ share one harness; `dataset` picks EvalPlus's oracles.
+EVALPLUS_CHECK = {'harness': 'evalplus', 'min_time_limit': 1.0, 'time_limit_factor': 4.0, 'cap': 20}
+HUMANEVAL = {'check': {**EVALPLUS_CHECK, 'dataset': 'humaneval', 'memory_limit_gib': 4, 'isolated': True}}
+MBPP = {'check': {**EVALPLUS_CHECK, 'dataset': 'mbpp', 'memory_limit_gib': 4, 'isolated': True}}
 DS1000 = {'check': {'harness': 'ds1000', 'timeout': 20, 'isolated': False}}
 
 HUMANEVAL_ITEM = {
@@ -29,13 +31,18 @@ HUMANEVAL_ITEM = {
     'entry_point': 'add',
     'prompt': 'def add(a: int, b: int) -> int:\n    """Sum of a and b."""\n',
     'canonical_solution': '    return a + b\n',
-    'test': 'def check(candidate):\n    assert candidate(1, 2) == 3\n    assert candidate(-1, 1) == 0\n',
+    'atol': 0,
+    'base_input': [[1, 2], [-1, 1]],
+    'plus_input': [[10**6, 1], [0, 0]],
 }
 MBPP_ITEM = {
-    'task_id': 1,
-    'code': 'def add(a, b):\n    return a + b',
-    'test_imports': ['import math'],
-    'test_list': ['assert add(1, 2) == 3', 'assert add(-1, 1) == 0', 'assert math.isclose(add(0.1, 0.2), 0.3)'],
+    'task_id': 'Mbpp/1',
+    'entry_point': 'add',
+    'prompt': '"""\nWrite a function to add two numbers.\nassert add(1, 2) == 3\n"""\n',
+    'canonical_solution': 'import math\ndef add(a, b):\n    return math.fsum([a, b])\n',
+    'atol': 0,
+    'base_input': [[1.0, 2.0], [-1.0, 1.0]],
+    'plus_input': [[0.1, 0.2]],
 }
 # DS-1000's code_context: the solution is exec'd into a test environment by
 # test_execution, and test_string checks its surface form.
@@ -84,14 +91,17 @@ def test_wrong_answers_fail_on_the_datasets_assertions():
 
 # --- exiting before the tests is a failure, not a pass (#126) -------------------------------
 
+# Inside the function: the EvalPlus harness sanitizes an answer to its
+# definitions first, so an exit at the top level never runs at all.
 EARLY_EXITS = {
-    'sys.exit(0)': 'import sys\ndef add(a, b):\n    return a - b\nsys.exit(0)',
+    'sys.exit(0)': 'import sys\ndef add(a, b):\n    sys.exit(0)\n    return a - b',
     'unittest.main()': (
-        'import unittest\ndef add(a, b):\n    return a - b\n'
-        'class T(unittest.TestCase):\n    def test_nothing(self):\n        pass\nunittest.main()'
+        'import unittest\n'
+        'class T(unittest.TestCase):\n    def test_nothing(self):\n        pass\n'
+        'def add(a, b):\n    unittest.main()\n    return a - b'
     ),
-    'os._exit(0)': 'import os\ndef add(a, b):\n    return a - b\nos._exit(0)',
-    'raise SystemExit': 'def add(a, b):\n    return a - b\nraise SystemExit',
+    'os._exit(0)': 'import os\ndef add(a, b):\n    os._exit(0)\n    return a - b',
+    'raise SystemExit': 'def add(a, b):\n    raise SystemExit\n    return a - b',
 }
 
 
@@ -179,7 +189,7 @@ def test_finished_tests_pass_even_when_a_child_holds_stdout_open():
 
 def test_a_calibration_made_by_another_harness_version_is_stale(tmp_path, monkeypatch):
     monkeypatch.setattr(grading, 'env_fingerprint', lambda: {'python': '3.12.0'})
-    monkeypatch.setattr(grading, 'read_manifest', lambda bench, base=None: {'content_sha256': 'abc'})
+    monkeypatch.setattr(grading, 'dataset_identity', lambda bench, base=None: {'content_sha256': 'abc'})
     record = {'content_sha256': 'abc', 'environment': {'python': '3.12.0'}, 'harness_version': grading.HARNESS_VERSION}
     grading.calibration_path('mbpp', tmp_path).parent.mkdir(parents=True)
     grading.calibration_path('mbpp', tmp_path).write_text(json.dumps(record))

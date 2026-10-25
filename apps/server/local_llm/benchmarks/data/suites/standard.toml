@@ -10,11 +10,11 @@ seed = 20260830
 note = "seeded sample; compare between configs, not against published scores"
 
 [[benchmark]]
-id = "humaneval"
+id = "humanevalplus"
 n  = 100
 
 [[benchmark]]
-id = "mbpp"
+id = "mbppplus"
 n  = 100
 
 [[benchmark]]

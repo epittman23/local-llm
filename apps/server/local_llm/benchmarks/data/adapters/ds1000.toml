@@ -35,11 +35,18 @@ prompt_template = """{prompt}
 Reply with only the code that goes in the solution block above. Assign the answer to the variable the problem names for it. Do not restate the setup code.
 """
 
-[fetch]
-kind    = "hf_rows"
-dataset = "xlangai/DS-1000"
-config  = "default"
-split   = "test"
+# Vendored since 2026-10-25: the pinned revision's test.jsonl, unchanged and
+# gzipped. It is the same 1000 rows, field for field, that the datasets-server
+# fetch returned before, so results keep recording the revision that fetch
+# recorded (`revision`, used verbatim): DS-1000 rows from either side of the
+# change stay in one Compare block.
+[source]
+kind     = "vendored"
+release  = "4416080a"
+revision = "4416080ac5cb80bdf7576aefb8f9a0b4d5426a44"
+url     = "https://huggingface.co/datasets/xlangai/DS-1000/blob/4416080ac5cb80bdf7576aefb8f9a0b4d5426a44/test.jsonl"
+path    = "ds1000/DS-1000-4416080a.jsonl.gz"
+sha256  = "26a492838b05f9d030b2f08a5715c6bafecafb601c157da912bf417fd8b0d363"
 
 [item]
 id_field     = "metadata.problem_id"
