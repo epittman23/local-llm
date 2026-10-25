@@ -547,6 +547,7 @@ embedding table. The card calls it a "7B-core" model.
 
 **Recommendation:**
 - **Uncensored:** `candor-lab/K2-Horizon-7B-Candor-Uncensored-GGUF` → `K2-Horizon-7B-Candor-Uncensored-Q4_K_M.gguf` (**5.21 GiB**, verified).
+  - **Downloaded on 2026-10-25** to `~/models/k2-horizon-7b-candor/`. Its SHA-256, `f46e3f6e…6322f`, matches the repo's LFS object. Not served yet.
   - Serve with `-c 32768 -ngl ~28 -ctk q8_0 -ctv q8_0 --jinja --temp 1.0 --top-p 0.95`, and `reasoning_effort` `high`.
   - Tune `-ngl` from the serve log.
 - **Base:** `IFM/K2-Horizon-7B-GGUF` → `K2-Horizon-7B-Q4_K_M.gguf` (**5.21 GiB**, the developer's own quantization), or `bartowski/K2-Horizon-7B-GGUF` → `K2-Horizon-7B-IQ4_XS.gguf` (4.88 GiB) for the fully-GPU, 16k setup.
@@ -616,8 +617,8 @@ experts/layers in RAM.
 - **`qwen25c` for the harness:** it cannot make structured tool calls.
 
 **Test order.** Five downloads, 49.5 GiB in total, plus K2 Horizon's 5.21
-GiB. Each one needs the owner's yes first. gpt-oss-20b was downloaded on
-2026-10-25.
+GiB. Each one needs the owner's yes first. gpt-oss-20b and K2 Horizon 7B
+uncensored were downloaded on 2026-10-25.
 
 1. **Settle section 4.** Decide which grading rule harness mode uses on
    code-writing benchmarks.
@@ -626,7 +627,7 @@ GiB. Each one needs the owner's yes first. gpt-oss-20b was downloaded on
    run `smoke` through the app and see how often it actually runs code.
 3. **Gemma 4 26B A4B uncensored** (14.93 GiB). It has the strongest card
    benchmarks among those that run at moderate speed here.
-4. **K2 Horizon 7B uncensored** (5.21 GiB). It has the highest measured
+4. **K2 Horizon 7B uncensored** (5.21 GiB, downloaded). It has the highest measured
    index under 10B, mostly on the GPU. It needs the 32k output budget its
    card asks for.
 5. **Gemma 4 E4B uncensored** (5.79 GiB). The fast tier, to compare with
