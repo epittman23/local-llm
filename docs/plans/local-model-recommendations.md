@@ -579,6 +579,7 @@ argv exactly as the launcher builds it):
 |---|---|---|---|---|---|
 | 10597 | correct (median 15.5, σ² 151.67) | structured `execute_code` | 1.15 tok/s | 3.2 tok/s | 419/452 |
 | 11875 | correct | structured `execute_code` | 1.14 tok/s | 7.1 tok/s | 343/364 |
+| 11875, performance profile | correct | structured `execute_code` | **3.87 tok/s** | **22.9 tok/s** | 343/364 |
 
 The repetition loop reported in
 [#30906](https://github.com/ggml-org/llama.cpp/issues/30906) did not show on
@@ -589,7 +590,14 @@ this one prompt. That is a probe, not the `smoke` tier: run `smoke` on
 historical WSL2 numbers. At the time the laptop was in its low-power
 platform profile, with tuned's `powersave` profile, on AC power. The upgrade
 caused no regression, but no number taken in that state is a measurement of
-the model. Switch to the performance profile before measuring.
+the model.
+
+**Confirmed the same day.** The owner allowed the switch, and the laptop was
+moved to the `performance` platform profile and tuned's
+`throughput-performance`. The same check, with the same build, argv and prompt,
+then ran 3.4 times faster at generation and 3.2 times faster at prompt
+processing (the last row above), with the same answer and the same draft
+acceptance. That is still a one-prompt check, not a `smoke` run.
 
 ## 7. Recommendations and next steps
 
