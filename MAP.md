@@ -22,7 +22,8 @@ local-llm/
 ├── .mcp.json                  project MCP servers: codebase-memory-mcp
 ├── AGENTS.md                  agent and contributor guide (CLAUDE.md links to it)
 ├── LICENSE, LICENSE_HISTORY   the license texts the derived code is under (see NOTICE)
-├── NOTICE                     what is derived, the license boundaries, the branding basis
+├── NOTICE                     what is derived, the license boundaries, the branding basis, benchmark data
+├── LICENSE_EVALPLUS           Apache-2.0, for the vendored EvalPlus datasets and ported evaluator (see NOTICE)
 ├── CONTRIBUTOR_LICENSE_AGREEMENT  referred to by LICENSE
 ├── CLAUDE.md                  symlink to AGENTS.md
 ├── Makefile                   make backend, make frontend, make check, make help
@@ -79,7 +80,9 @@ earlier BSD and MIT terms) are the legal texts; `CONTRIBUTOR_LICENSE_AGREEMENT` 
 which parts of `apps/server/` and `apps/web/` are derived, the upstream
 multi-license commit boundaries, the required copyright notice, and the clause
 4(i) basis for the changed branding. These are the one place the original
-project's name is required to stay.
+project's name is required to stay. NOTICE's last section, and
+`LICENSE_EVALPLUS` (added 2026-10-25), cover the Benchmarks section's
+vendored datasets and the evaluation code ported from EvalPlus.
 
 ## `README.md`
 
@@ -221,12 +224,15 @@ than a second app glued on by a userscript. See `docs/decisions.md` for the migr
   Profiles themselves are rows in Postgres (`models/benchmarks/profiles.py`),
   versioned and CRUD'd through `routers/benchmarks/profiles.py`.
 - **`evaluation/`** — `adapters.py`, `suites.py`, `datasets.py` (adapter and
-  suite loading, dataset fetch and manifests), `runner.py` (the run/grade/
+  suite loading, reading the vendored datasets against their pinned hashes,
+  dataset fetch and manifests), `runner.py` (the run/grade/
   record loop, `prepare_suite`/`run_items`, callback-driven so a router can
   stream live progress), `harness.py` (answering an item through the app's
   own chat pipeline instead, under a routing guard; see
   `docs/plans/benchmarks-through-the-app.md`), and `grading/` (the
-  HumanEval/MBPP/DS-1000 harnesses). `utils/upstream_trace.py` is the
+  harnesses: `evalplus.py` for HumanEval+ and MBPP+, with
+  `evalplus_runtime.py`, the EvalPlus comparison embedded in each grading
+  program; `ds1000.py`). `utils/upstream_trace.py` is the
   observer `harness.py` relies on: the upstream requests and code runs one
   pipeline call makes.
 - **`analysis/`** — `compare.py`, `report.py` + `report_figures.py` (config
@@ -246,7 +252,9 @@ than a second app glued on by a userscript. See `docs/decisions.md` for the migr
 - **`data/`** + **`paths.py`** — the version-controlled TOML/text config
   (`data/adapters/`, `data/suites/`, `data/tuning/`, `data/prompts/`, moved
   here from this repo's old `tests/adapters/`, `tests/suites/`,
-  `tests/tuning/`, `prompts/system/`), and the one module that locates it.
+  `tests/tuning/`, `prompts/system/`), the vendored datasets
+  (`data/datasets/<id>/`, HumanEval+, MBPP+ and DS-1000, since 2026-10-25),
+  and the one module that locates them.
 
 ### `apps/web/` (Astro + React + shadcn/ui)
 
@@ -441,7 +449,7 @@ knowing about when navigating the filesystem directly:
   its Postgres backfill was lost with the old database on 2026-10-09, so that
   file is the only copy of that history. Absent on the current machine.
 - **`apps/server/data/`** — the backend's `DATA_DIR` (pinned by the
-  Makefile): uploads, caches, the Benchmarks section's fetched datasets,
+  Makefile): uploads, caches, the Benchmarks section's fetched datasets and calibrations,
   answer exports and reports. Created at boot if missing. A checkout from
   before 2026-10-10 has it at `apps/server/backend/data/` until moved.
 - **`apps/server/.venv/`** — the backend's own virtualenv (uv's default

@@ -1,41 +1,39 @@
-"""benchmarks/evaluation/datasets.py - fetched dataset storage, and reading it back.
+"""benchmarks/evaluation/datasets.py - benchmark datasets: vendored, fetched, and reading them back.
 
 Ported from local-llm's scripts/llama_fetch.py and the dataset-reading half of
-scripts/llama_tests.py (outer repo). Two things live here on purpose: the
-fetch/manifest/content-hash logic that downloads a benchmark's rows once, and
-the read_items()/read_manifest()/item_id() helpers every other module in this
-package uses to read them back -- both sides of the same on-disk layout.
+scripts/llama_tests.py (outer repo). An adapter's `[source]` says where its
+rows come from:
 
-Datasets are fetched rather than vendored, same as upstream. They are
-upstream-versioned, they carry three different licenses (MIT, CC-BY-4.0,
-CC-BY-SA-4.0), and checking a copy into this repo would make every result
-trace back to that copy instead of to a citable release.
+    kind = "vendored"   a file committed under benchmarks/data/datasets/,
+                        pinned by the SHA-256 of its decompressed bytes
+    [fetch] kinds       downloaded once into DATA_DIR (FETCHERS; none ship
+                        today, LiveCodeBench's will)
 
-Each benchmark lands as:
+HumanEval+, MBPP+ and DS-1000 are vendored (2026-10-25). Until then every
+dataset was fetched, from branch heads that resolve to different content over
+time, so a fresh DATA_DIR had no data until someone pressed Fetch, and what it
+got was whatever upstream held that day. A vendored file is the same bytes on
+every machine and every checkout, needs no network, and the hash is checked on
+every read (hashed once per file version: a cache keyed by path, mtime and
+size holds the verified bytes): an edited file is refused, never graded. The licenses that once
+argued against vendoring are honoured in NOTICE instead, and each result still
+traces to a citable release through `dataset_revision`
+(`<release>@<sha256[:12]>`, or a `revision` the adapter pins verbatim).
+
+Fetched datasets land as:
 
     <base>/<id>/items.jsonl     the rows, exactly as upstream published them
     <base>/<id>/MANIFEST.json   what was downloaded, and from which revision
 
-The manifest is the point. A pass rate is only reproducible alongside the
-dataset revision it was measured on. Every record this package writes carries
-the revision recorded here.
+Either way, dataset_identity() is what a result records: the revision and
+content hash of the rows it was graded against. A pass rate is only
+reproducible alongside them.
 
-Two revision identifiers are kept:
-
-    revision        the upstream commit / dataset sha, when the host will say
-    content_sha256  the hash of the bytes actually downloaded
-
-The second always exists and is the stronger pin: it identifies the exact
-content, whereas a branch name resolves to different content over time. The
-first is what a human can look up.
-
-Base path: <DATA_DIR>/benchmarks/datasets, where DATA_DIR is the fork's own
-data directory (local_llm.env.DATA_DIR). Overridable with BENCHMARKS_DATA_DIR
-for an alternate deployment, and every function additionally accepts an
-explicit `base` argument so a caller or a test can point at a directory of its
-own without touching the environment -- mirroring how llama_fetch.py and
-llama_tests.py parameterized their own tests/data directory via
-LLAMA_TESTS_DATA.
+Base path for fetched data and calibrations: <DATA_DIR>/benchmarks/datasets,
+where DATA_DIR is the fork's own data directory (local_llm.env.DATA_DIR).
+Overridable with BENCHMARKS_DATA_DIR for an alternate deployment, and every
+function additionally accepts an explicit `base` argument so a caller or a
+test can point at a directory of its own without touching the environment.
 
 Stdlib only (urllib + json + gzip + tomllib elsewhere in this package): no
 `datasets`, no `pyarrow`, no network client beyond what Python ships.
@@ -49,11 +47,9 @@ import json
 import os
 import sys
 import time
-import urllib.error
-import urllib.parse
-import urllib.request
 from pathlib import Path
 
+from local_llm.benchmarks.paths import DATASETS_DIR
 from local_llm.env import DATA_DIR
 
 
@@ -66,12 +62,8 @@ class DatasetError(Exception):
     """
 
 
-UA = {'User-Agent': 'local-llm/benchmarks (https://github.com/epittman23/local-llm)'}
-TIMEOUT = 60
-
-
 def datasets_base_dir() -> Path:
-    """Where fetched datasets live. Overridable so a run can point at a copy."""
+    """Where fetched datasets and calibrations live. Overridable so a run can point at a copy."""
     override = os.environ.get('BENCHMARKS_DATA_DIR')
     return Path(override) if override else DATA_DIR / 'benchmarks' / 'datasets'
 
@@ -98,15 +90,105 @@ def read_manifest(bench: str, base: Path | None = None) -> dict | None:
 
 
 def read_items(bench: str, base: Path | None = None) -> list[dict]:
+    source = _vendored_source(bench)
+    if source is not None:
+        return _parse_jsonl(_vendored_bytes(source))
     path = items_path(bench, base)
     if not path.exists():
         raise DatasetError(f'{bench} is not downloaded yet: fetch it from the Tests page (Datasets, Fetch)')
+    return _parse_jsonl(path.read_bytes())
+
+
+def _parse_jsonl(raw: bytes) -> list[dict]:
     out = []
-    for line in path.read_text().splitlines():
+    for line in raw.decode('utf-8').splitlines():
         line = line.strip()
         if line:
             out.append(json.loads(line))
     return out
+
+
+def dataset_identity(bench: str, base: Path | None = None) -> dict | None:
+    """What a result records about the rows it was graded against, or None when there are none.
+
+    For a vendored dataset it is built from the adapter's `[source]`, after
+    the file's hash has been checked; for a fetched one it is the manifest the
+    fetch wrote. Both carry `revision`, `content_sha256` and `n_items`, which
+    is what the runner, the calibration and the Tests page read.
+    """
+    source = _vendored_source(bench)
+    if source is None:
+        return read_manifest(bench, base)
+    raw = _vendored_bytes(source)
+    adapter = source['_adapter']
+    return {
+        'benchmark': bench,
+        'name': adapter.get('name', bench),
+        'license': adapter.get('license', 'unknown'),
+        'homepage': adapter.get('homepage', ''),
+        'citation': adapter.get('citation', ''),
+        'source_url': source.get('url', ''),
+        'revision': source.get('revision') or f'{source["release"]}@{source["sha256"][:12]}',
+        'content_sha256': source['sha256'],
+        'n_items': sum(1 for line in raw.splitlines() if line.strip()),
+        'vendored': True,
+    }
+
+
+# ---------------------------------------------------------------------------
+# vendored datasets
+# ---------------------------------------------------------------------------
+def _vendored_source(bench: str) -> dict | None:
+    """The adapter's `[source]` when it is vendored, else None."""
+    # Imported here: adapters imports dotted() from this module.
+    from local_llm.benchmarks.evaluation.adapters import load_adapters
+
+    adapter = load_adapters().get(bench)
+    source = (adapter or {}).get('source')
+    if not source or source.get('kind') != 'vendored':
+        return None
+    return {**source, '_adapter': adapter}
+
+
+# Verified bytes, keyed by the file's identity on disk and the pinned hash, so
+# a run that reads a dataset a dozen times hashes and decompresses it once.
+_VERIFIED: dict[tuple, bytes] = {}
+
+
+def vendored_path(source: dict) -> Path:
+    """The vendored file a `[source]` names, refusing anything outside DATASETS_DIR."""
+    path = (DATASETS_DIR / source['path']).resolve()
+    if not path.is_relative_to(DATASETS_DIR.resolve()):
+        raise DatasetError(f'vendored path {source["path"]!r} is outside {DATASETS_DIR}')
+    return path
+
+
+def _vendored_bytes(source: dict) -> bytes:
+    """The decompressed rows of a vendored file, after checking them against the pinned hash."""
+    path = vendored_path(source)
+    try:
+        stat = path.stat()
+    except OSError as exc:
+        raise DatasetError(f'the vendored file {source["path"]} is missing: {exc}') from exc
+    key = (str(path), stat.st_mtime_ns, stat.st_size, source['sha256'])
+    cached = _VERIFIED.get(key)
+    if cached is not None:
+        return cached
+    packed = path.read_bytes()
+    raw = gzip.decompress(packed) if path.suffix == '.gz' else packed
+    actual = hashlib.sha256(raw).hexdigest()
+    if actual != source['sha256']:
+        raise DatasetError(
+            f'the vendored file {source["path"]} does not match its pinned hash '
+            f'(sha256 {actual[:12]}, expected {source["sha256"][:12]}); refusing to grade against it'
+        )
+    _VERIFIED[key] = raw
+    return raw
+
+
+def short_revision(revision: str) -> str:
+    """A dataset revision short enough to show: a bare sha cut to 12, a vendored `<release>@<sha12>` whole."""
+    return revision if '@' in revision else revision[:12]
 
 
 def dotted(obj: dict, path: str):
@@ -131,113 +213,19 @@ def item_id(adapter: dict, item: dict) -> str:
 
 
 # ---------------------------------------------------------------------------
-# fetching: github_raw (a single file out of a repository)
-# ---------------------------------------------------------------------------
-def get(url: str, headers: dict | None = None) -> bytes:
-    req = urllib.request.Request(url, headers={**UA, **(headers or {})})
-    with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
-        return resp.read()
-
-
-def get_json(url: str) -> dict:
-    return json.loads(get(url).decode('utf-8'))
-
-
-def github_revision(repo: str, ref: str, path: str) -> str:
-    """The commit that last touched this file, or "" if GitHub will not say.
-
-    Unauthenticated GitHub allows 60 requests an hour, and this is a nicety
-    rather than a requirement: content_sha256 pins the data either way. So a
-    failure here is a warning, not an error.
-    """
-    url = (
-        f'https://api.github.com/repos/{repo}/commits'
-        f'?path={urllib.parse.quote(path)}&sha={urllib.parse.quote(ref)}&per_page=1'
-    )
-    try:
-        commits = get_json(url)
-        if isinstance(commits, list) and commits:
-            return commits[0].get('sha', '')
-    except (urllib.error.URLError, json.JSONDecodeError, OSError) as exc:
-        print(f'  note: could not resolve the commit sha ({exc}); pinning by content hash only', file=sys.stderr)
-    return ''
-
-
-def fetch_github_raw(spec: dict) -> tuple[list[dict], str, str, bytes]:
-    repo, ref, path = spec['repo'], spec['ref'], spec['path']
-    url = f'https://raw.githubusercontent.com/{repo}/{ref}/{path}'
-    print(f'  GET {url}', file=sys.stderr)
-    raw = get(url)
-
-    body = gzip.decompress(raw) if spec['format'].endswith('.gz') else raw
-    text = body.decode('utf-8')
-
-    if spec['format'].startswith('jsonl'):
-        rows = [json.loads(line) for line in text.splitlines() if line.strip()]
-    else:
-        rows = json.loads(text)
-        if not isinstance(rows, list):
-            raise DatasetError(f'{url} is not a list of records')
-
-    return rows, github_revision(repo, ref, path), url, raw
-
-
-# ---------------------------------------------------------------------------
-# fetching: hf_rows (the HuggingFace datasets-server, plain JSON without auth)
-# ---------------------------------------------------------------------------
-def hf_revision(dataset: str) -> str:
-    try:
-        return get_json(f'https://huggingface.co/api/datasets/{dataset}').get('sha', '')
-    except (urllib.error.URLError, json.JSONDecodeError, OSError):
-        return ''
-
-
-def fetch_hf_rows(spec: dict) -> tuple[list[dict], str, str, bytes]:
-    dataset, config, split = spec['dataset'], spec['config'], spec['split']
-    base = (
-        'https://datasets-server.huggingface.co/rows'
-        f'?dataset={urllib.parse.quote(dataset, safe="")}'
-        f'&config={urllib.parse.quote(config)}&split={urllib.parse.quote(split)}'
-    )
-    print(f'  GET {base} (paginated)', file=sys.stderr)
-
-    rows: list[dict] = []
-    offset, page = 0, 100
-    while True:
-        # The endpoint rate-limits; a short pause between pages is cheaper than
-        # restarting a download that got a 429 halfway through 1000 rows.
-        for attempt in range(5):
-            try:
-                payload = get_json(f'{base}&offset={offset}&length={page}')
-                break
-            except urllib.error.HTTPError as exc:
-                if exc.code not in (429, 502, 503) or attempt == 4:
-                    raise
-                time.sleep(2 * (attempt + 1))
-        else:  # pragma: no cover - loop always breaks
-            raise DatasetError('gave up on the datasets-server')
-
-        batch = payload.get('rows', [])
-        if not batch:
-            break
-        rows.extend(r['row'] for r in batch)
-        print(f'\r  {len(rows)} rows', end='', file=sys.stderr, flush=True)
-        offset += len(batch)
-        if len(batch) < page:
-            break
-        time.sleep(0.2)
-
-    print(file=sys.stderr)
-    body = '\n'.join(json.dumps(r, sort_keys=True) for r in rows).encode('utf-8')
-    return rows, hf_revision(dataset), base, body
-
-
-# ---------------------------------------------------------------------------
-FETCHERS = {'github_raw': fetch_github_raw, 'hf_rows': fetch_hf_rows}
+# fetch kind -> fetcher(spec) returning (rows, revision, source_url, raw bytes).
+# Empty since HumanEval+, MBPP+ and DS-1000 were vendored (2026-10-25); the
+# github_raw and hf_rows kinds they used were removed with them. A benchmark
+# too large to vendor (LiveCodeBench) registers its pinned fetcher here.
+FETCHERS: dict = {}
 
 
 def fetch_one(adapter: dict, force: bool = False, base: Path | None = None) -> dict:
     bench = adapter['id']
+    if (adapter.get('source') or {}).get('kind') == 'vendored':
+        # Nothing to download: the rows are in the repository. Returning the
+        # identity reports them, and verifies the file on the way.
+        return dataset_identity(bench, base) or {}
     out = (base or datasets_base_dir()) / bench
     manifest = out / 'MANIFEST.json'
 
@@ -252,7 +240,9 @@ def fetch_one(adapter: dict, force: bool = False, base: Path | None = None) -> d
         )
         return current
 
-    spec = adapter['fetch']
+    spec = adapter.get('fetch')
+    if not spec:
+        raise DatasetError(f'{bench} has neither a vendored [source] nor a [fetch]')
     fetcher = FETCHERS.get(spec['kind'])
     if fetcher is None:
         raise DatasetError(f"unknown fetch kind '{spec['kind']}'")

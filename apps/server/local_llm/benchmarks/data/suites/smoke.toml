@@ -13,11 +13,11 @@ seed   = 20260830
 note   = "config A/B only; not comparable to published pass@1"
 
 [[benchmark]]
-id = "humaneval"
+id = "humanevalplus"
 n  = 8
 
 [[benchmark]]
-id = "mbpp"
+id = "mbppplus"
 n  = 8
 
 [[benchmark]]

@@ -50,3 +50,69 @@ Open WebUI License, which permits it for deployments with no more than fifty
 end users in any rolling thirty-day period. It is a personal, single-user
 deployment; exceeding that limit would require restoring the branding or
 one of clause 4's other permissions.
+
+Benchmark data and evaluation code
+----------------------------------
+The Benchmarks section vendors three datasets and ports part of one
+evaluator. Each is used under its own license, as follows.
+
+- EvalPlus (https://github.com/evalplus/evalplus), Apache License 2.0; the
+  full text is LICENSE_EVALPLUS in this directory.
+  - The datasets HumanEval+ v0.1.10 and MBPP+ v0.2.0, the release assets of
+    evalplus/humanevalplus_release and evalplus/mbppplus_release,
+    unmodified, in apps/server/local_llm/benchmarks/data/datasets/
+    humanevalplus/ and mbppplus/.
+  - Functions ported from EvalPlus v0.3.1 into
+    apps/server/local_llm/benchmarks/evaluation/grading/evalplus_runtime.py:
+    - the special oracles, from evalplus/eval/_special_oracle.py;
+    - the MBPP+ input deserializer, from evalplus/data/mbpp.py;
+    - the output comparison (is_floats and the loop body of
+      unsafe_execute), from evalplus/eval/__init__.py, rewritten to run
+      without numpy;
+    - the time-limit defaults, from evalplus/config.py;
+    - the expected-output computation, from evalplus/gen/util/__init__.py;
+    - the answer sanitizer (sanitize, extract_target_code_or_empty,
+      code_extract), from evalplus/sanitize.py, rewritten on Python's ast
+      instead of tree-sitter.
+  - The chat instruction in the humanevalplus and mbppplus adapters, from
+    evalplus/codegen.py and evalplus/provider/openai.py.
+
+  EvalPlus's evalplus/eval/ files also carry OpenAI's MIT notice, as they
+  build on HumanEval's evaluation code. It is reproduced here:
+
+    The MIT License
+
+    Copyright (c) OpenAI (https://openai.com)
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in
+    all copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+    THE SOFTWARE.
+
+- The problems underneath them:
+  - HumanEval (Chen et al. 2021, https://github.com/openai/human-eval),
+    under the MIT License above.
+  - MBPP (Austin et al. 2021,
+    https://github.com/google-research/google-research/tree/master/mbpp),
+    under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/).
+    EvalPlus selected 378 of its sanitized problems and corrected some
+    reference solutions; this repository changes nothing further.
+- DS-1000 (Lai et al. 2022, https://github.com/xlang-ai/DS-1000), CC BY-SA
+  4.0 (https://creativecommons.org/licenses/by-sa/4.0/). The file
+  apps/server/local_llm/benchmarks/data/datasets/ds1000/DS-1000-4416080a.jsonl.gz
+  is test.jsonl from https://huggingface.co/datasets/xlangai/DS-1000 at
+  revision 4416080ac5cb80bdf7576aefb8f9a0b4d5426a44, gzipped and otherwise
+  unchanged, and is shared under the same license.

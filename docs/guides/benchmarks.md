@@ -131,9 +131,9 @@ in-filter items); rows recorded before that carry a NULL `adapter_sha`, show as
 | Tests → run one item | Ask and grade one item against what is being served, with the run's system prompt, and show the outcome and the answer. Pick a benchmark and an item id (e.g. `HumanEval/0`). **Not recorded**: a one-item run would land in every comparison that spans tiers. It says when a suite here would leave the item out (the library filter, or a reference solution that fails here) |
 | Tests → run a tier | A whole `smoke`/`standard`/`full` tier. A benchmark filter restricts it, a resume action continues the most recent run of that tier |
 | Tests → system prompt | Send the selected system prompt with every item of that run — see below |
-| Tests → Datasets panel | Each benchmark's dataset: fetched or not, its item count and pinned revision, and its calibration (gradeable items, or why it is stale) |
-| Tests → Fetch / Force refetch | Download and pin every dataset; Fetch keeps one already on disk, Force refetch (after a confirmation) downloads it again. A refetch replaces the files only once it has them all, and keeps the calibration file |
-| Tests → Selfcheck | Grade every fetched dataset's own reference solutions, several at a time, streaming each verdict, and write the calibrations; cancelling writes none |
+| Tests → Datasets panel | Each benchmark's dataset: its item count and pinned revision, and its calibration (gradeable items, or why it is stale) |
+| Tests → Fetch / Force refetch | Download and pin every fetched dataset; Fetch keeps one already on disk, Force refetch (after a confirmation) downloads it again. A refetch replaces the files only once it has them all, and keeps the calibration file. A vendored dataset (all three today) downloads nothing: Fetch only verifies its file and reports "in the repository, verified" |
+| Tests → Selfcheck | Grade every dataset's own reference solutions, several at a time, streaming each verdict, and write the calibrations; cancelling writes none |
 | Compare | Rank models and configurations — see below |
 | Compare → export answers | Write a whole suite run's stored answers back out as flat markdown files, for grepping/diffing/archiving outside the app |
 | Answers → view one | Render one stored answer as markdown directly in the browser |
@@ -328,28 +328,57 @@ otherwise show up raw in a browser rather than being rendered.
 
 | Benchmark | Items | Ground truth | License | Citation |
 | --- | --- | --- | --- | --- |
-| [HumanEval](https://github.com/openai/human-eval) | 164 | `test` field: a `check(candidate)` function, plus `entry_point` | MIT | Chen et al. 2021, [arXiv:2107.03374](https://arxiv.org/abs/2107.03374) |
-| [MBPP (sanitized)](https://github.com/google-research/google-research/tree/master/mbpp) | 427 | `test_imports` + `test_list` (3 asserts) | CC-BY-4.0 | Austin et al. 2021, [arXiv:2108.07732](https://arxiv.org/abs/2108.07732) |
-| [DS-1000](https://github.com/xlang-ai/DS-1000) | 1000 (511 Pandas/Numpy) | `code_context`, which defines `test_execution(solution)` | CC-BY-SA-4.0 | Lai et al. 2022, [arXiv:2211.11501](https://arxiv.org/abs/2211.11501) |
+| [HumanEval+](https://github.com/evalplus/evalplus) (`humanevalplus`), release v0.1.10 | 164 | `base_input` + `plus_input` (a median of 973 inputs per task); the expected outputs come from `canonical_solution` | Apache-2.0 (EvalPlus), over HumanEval (MIT) | Liu et al. 2023, [arXiv:2305.01210](https://arxiv.org/abs/2305.01210); Chen et al. 2021, [arXiv:2107.03374](https://arxiv.org/abs/2107.03374) |
+| [MBPP+](https://github.com/evalplus/evalplus) (`mbppplus`), release v0.2.0 | 378 | the same, a median of 105 plus inputs | Apache-2.0 (EvalPlus), over MBPP (CC-BY-4.0) | Liu et al. 2023; Austin et al. 2021, [arXiv:2108.07732](https://arxiv.org/abs/2108.07732) |
+| [DS-1000](https://github.com/xlang-ai/DS-1000) (`ds1000`), revision `4416080a` | 1000 (511 Pandas/Numpy) | `code_context`, which defines `test_execution(solution)` | CC-BY-SA-4.0 | Lai et al. 2022, [arXiv:2211.11501](https://arxiv.org/abs/2211.11501) |
 
-The Tests page's fetch action downloads them into the backend's own
-`<DATA_DIR>/benchmarks/datasets/` (`BENCHMARKS_DATA_DIR` overrides it) and
-writes a `MANIFEST.json` pinning the upstream revision and a SHA-256 of the
-bytes actually downloaded. **Every result records that revision**: per this project's
-convention a number without its configuration is not reusable, and for a pass
-rate the configuration includes which items were asked. The datasets are fetched
-rather than vendored — they are upstream-versioned, carry three different
-licenses, and a checked-in copy would make every result trace back to that copy
-instead of to a citable release. Fetching is stdlib-only (`urllib` + `json` +
-`gzip`); DS-1000 comes from the HuggingFace `datasets-server` rows API, which
-needs no authentication and no `datasets` package.
+HumanEval+ and MBPP+ replaced HumanEval and MBPP (sanitized) on 2026-10-25.
+They are the same problems with EvalPlus's corrected reference solutions and
+many more inputs, so an answer that passed the original three or so asserts
+but breaks on an edge case now fails. The ids are new (`humanevalplus`,
+`mbppplus`), although the task ids are not (`HumanEval/0`, `Mbpp/2`): a
+resume, which skips items by benchmark and item id, can never mistake an old
+item for a new one. MBPP+ keeps 378 of the 427 sanitized problems; EvalPlus
+removed the ones it found ill-posed.
+
+**The datasets are vendored.** Each file is in the repository under
+`apps/server/local_llm/benchmarks/data/datasets/<id>/`, and its adapter's
+`[source]` names the release, the upstream URL and the SHA-256 of its
+decompressed rows. The loader checks that hash whenever the file changes on
+disk (the verified bytes are cached by path, modification time and size) and
+refuses a file that does not match, so an edited dataset is never graded. The
+Datasets panel shows the refusal on that dataset's row.
+
+- The HumanEval+ and MBPP+ files are upstream's release assets, byte for
+  byte.
+- The DS-1000 file is the pinned revision's `test.jsonl`, gzipped. Its 1000
+  rows are identical, field for field, to what the datasets-server fetch
+  returned before.
+
+**Every result records the dataset's revision**, `<release>@<sha256[:12]>`
+(for example `v0.1.10@42526ec0e7d5`). DS-1000 is the exception: its rows are
+the fetched ones, so it keeps the revision the fetch recorded
+(`4416080ac5cb…`, the adapter's `revision`), and its results from before and
+after vendoring stay comparable. Per this project's convention a number
+without its configuration is not reusable, and for a pass rate the
+configuration includes which items were asked.
+
+Until 2026-10-25 the datasets were fetched from upstream branch heads into
+`<DATA_DIR>/benchmarks/datasets/`, which resolve to different content over
+time. A fresh data directory had nothing to run until someone pressed Fetch.
+Vendoring reverses that decision; the 2026-10-25 entry in
+[docs/decisions.md](../decisions.md) gives the reasons, and
+[NOTICE](../../NOTICE) carries the three licenses. The fetch machinery stays,
+for a benchmark too large to vendor (LiveCodeBench, planned), and calibrations
+still live in that directory (`BENCHMARKS_DATA_DIR` overrides it).
 
 **Saturation, stated plainly:** HumanEval and MBPP are heavily contaminated for
-a 2026 model and will sit near ceiling. That is acceptable here because the
-question is not model capability but whether a *serving configuration* degrades
-output, and a ceiling-hugging benchmark still detects a config that breaks
-things. DS-1000 is explicitly perturbed against memorization and carries most of
-the discriminating power.
+a 2026 model, and their `+` versions share those problems, so they still sit
+near ceiling. The extra inputs make them stricter, not unseen. That is
+acceptable here because the question is not model capability but whether a
+*serving configuration* degrades output, and a ceiling-hugging benchmark still
+detects a config that breaks things. DS-1000 is explicitly perturbed against
+memorization and carries most of the discriminating power.
 
 **Coverage gap:** [AGENTS.md](../../AGENTS.md#why) lists math and statistics among four primary use
 cases; the suite covers coding and data analysis, and measures neither of the
@@ -364,7 +393,7 @@ the math and statistics work this assistant is also for.
 | --- | --- | --- |
 | `smoke` | 8 per benchmark, 24 items | The tuning loop: fast enough to run between two serving configurations |
 | `standard` | 100 per benchmark, 300 items | An overnight run |
-| `full` | Every gradeable item (164 + 427 + 456 = 1047 on 2026-10-19; DS-1000's count depends on the grading environment) | The only tier comparable to a published score |
+| `full` | Every gradeable item (163 + 377 + 456 = 996 on 2026-10-25; DS-1000's count depends on the grading environment) | The only tier comparable to a published score |
 
 Sampling is seeded (`seed = 20260830`, recorded in each result) and sorted by the
 dataset's own id before sampling, so `smoke` is the same 24 items on every run
@@ -379,11 +408,40 @@ rank rows from different tiers against each other.
 
 Each harness uses the benchmark's own evaluation logic:
 
-- **HumanEval** — the last fenced block containing a `def` wins; the item's
-  `test` field and `check(<entry_point>)` are appended and the whole thing is
-  executed. When the model returned only a body, the stub is prepended so that
-  answer is graded rather than discarded.
-- **MBPP** — `test_imports`, then the code, then each assert in `test_list`.
+- **HumanEval+ and MBPP+** (`grading/evalplus.py`, one harness for both) —
+  EvalPlus's own evaluation, ported from v0.3.1 into
+  `grading/evalplus_runtime.py`, which is embedded in every grading program:
+  - The last fenced block containing a `def` wins. For HumanEval+, when the
+    model returned only a body, the stub is prepended so that answer is
+    graded rather than discarded.
+  - The canonical solution (`prompt` + `canonical_solution`) runs first, on
+    deep copies of every input, giving the expected outputs and how long each
+    took. Only then is the answer loaded, as the module `solution`.
+  - The answer is called on every base input, then every plus input, and each
+    output is compared as EvalPlus compares it: exact match, or
+    `allclose(rtol=1e-7, atol)` for floats, with `atol` forced to 1e-6 once
+    a float output appears. EvalPlus's special oracles apply: set equality
+    for eight MBPP+ tasks, presence for three, Mbpp/164, 295, 558 and 581,
+    and HumanEval/32 (`find_zero`), where any root within `atol` passes.
+    That last one is a deliberate difference: in EvalPlus 0.3.1 the oracle
+    skips the progress counter, so every answer fails it.
+  - MBPP+ inputs are deserialized by EvalPlus's rules first: JSON stores
+    tuples as lists, and 62 special-cased task ids need tuples, sets,
+    complex numbers or dicts of tuples back.
+  - The first failure ends the item, and its reason names the input set, the
+    input and what differed (`plus input 0: expected 49, got 0`).
+  - Before any of that, the answer is sanitized as EvalPlus sanitizes it: its
+    imports, then the entry point and the top-level definitions it reaches,
+    and nothing else. A model's own `assert`s and example calls never run,
+    so a wrong self-test cannot fail a correct function. Two of EvalPlus's
+    quirks come along: a function with no `return` is dropped, and so is a
+    decorated one. EvalPlus starts from the longest run of lines in the reply
+    that parses. This harness starts from the block `extract_code()` chose
+    (the last fenced block with a `def`).
+
+  `allclose` is numpy's formula, reimplemented so the program can run with
+  `-S`, and tested against `numpy.allclose` on every float task's real
+  outputs.
 - **DS-1000** — `code_context` is executed and its own `test_execution(solution)`
   is called with the extracted code as a string literal; `test_string(solution)`
   too when the item defines it.
@@ -402,6 +460,24 @@ is replaced with `/dev/null` before any graded code runs, so the program has
 no file, argument or environment variable to read it from. A program that
 exits early fails with `fail_error`, "exited before its tests finished".
 
+**Time limits.** DS-1000 items have a fixed subprocess timeout (60 s, the
+adapter's `[check] timeout`). HumanEval+ and MBPP+ follow EvalPlus, from
+their adapters' `[check]`, so a change to any of these changes `adapter_sha`:
+
+| Limit | Value | EvalPlus's |
+| --- | --- | --- |
+| Per input | `max(min_time_limit, time_limit_factor x the reference's time on that input)` = `max(1.0 s, 4 x ref)` | the same defaults |
+| Per item | `cap` = 120 s, the reference's run included; the answer gets what is left of it, or the sum of its per-input limits if that is less | `min(60, sum) + 1` s per input set, the reference timed separately |
+| Subprocess | `cap` + 5 s, for start-up | none |
+| Memory | `memory_limit_gib` = 4 GiB of address space | 4 GiB |
+
+The cap is wider than EvalPlus's because the reference now runs inside it, on
+a laptop slower than EvalPlus's machines. Reference times are measured in the
+same run, under the same load as the answer, rather than cached from an
+earlier one. A per-input timeout is `fail_timeout`, with a reason naming the
+input, its limit and the reference's time (harness version 3 recognises
+it).
+
 Outcomes are `pass`, `fail_assert`, `fail_error`, `fail_timeout`, `no_code`, and
 `skipped`. `reasoning_content` is never graded — it is chain of thought, not the
 answer. **`skipped` is not a failure** and is excluded from every rate; counting
@@ -419,7 +495,7 @@ server answered, and a 400 can be specific to one item.
 
 > **The Tests page executes model-generated Python.** It runs in a
 > subprocess, in a temporary working directory, under a timeout, and with
-> `-I` (and `-S` for HumanEval/MBPP, which need only the standard library).
+> `-I` (and `-S` for HumanEval+/MBPP+, which need only the standard library).
 > It has no stdin and an environment of `PATH`, `LANG`, `LC_ALL`, `HOME`
 > and `TMPDIR` only (the latter two pointing at the temporary directory),
 > never the backend's own. It runs in its own session, and the whole
@@ -434,22 +510,43 @@ server answered, and a 400 can be specific to one item.
 ## Calibrating the graders — the Tests page's selfcheck action
 
 The selfcheck action grades every benchmark's **own reference solution**
-(`canonical_solution`, `code`, `reference_code`). No model is involved, so a
-correct harness scores 100%; anything less is a bug in the grader. Measured on
-2026-10-19 on the NVIDIA GeForce RTX 3060 Laptop machine under native Fedora 44
-(grading runs on the CPU), with harness version 2, dataset revisions HumanEval
-`463c980b59e8`, MBPP `f82046ba5aab` and DS-1000 `4416080ac5cb`, and the grading
-environment Python 3.12.14, numpy 2.5.3, pandas 3.0.6, scipy 1.18.1,
-scikit-learn 1.9.1, pyyaml 6.0.3:
+(`canonical_solution`, `reference_code`). No model is involved, so a
+correct harness scores 100%; anything less is a bug in the grader, or in the
+dataset. Measured on 2026-10-25 on the NVIDIA GeForce RTX 3060 Laptop machine
+under native Fedora 44 (grading runs on the CPU), with harness version 3,
+dataset revisions HumanEval+ `v0.1.10@42526ec0e7d5`, MBPP+ `v0.2.0@b54e76275524`
+and DS-1000 `4416080ac5cb`, and the grading environment Python
+3.12.14, numpy 2.5.3, pandas 3.0.6, scipy 1.18.1, scikit-learn 1.9.1, pyyaml
+6.0.3:
 
 | Benchmark | Reference solutions passing | Ungradeable here |
 | --- | --- | --- |
-| HumanEval | 164/164 | 0 |
-| MBPP | 427/427 | 0 |
+| HumanEval+ | 163/164 | 1 (HumanEval/32) |
+| MBPP+ | 377/378 | 1 (Mbpp/630) |
 | DS-1000 | 456/511 | 55 |
 
-Every reference solution got the same verdict under the harness before the
-2026-10-19 verdict change and under the one after it, item for item. The
+**HumanEval/32 is EvalPlus's own inconsistency**, twice over: under EvalPlus
+0.3.1 no answer can pass it (see Grading). Its task is `find_zero`,
+graded by evaluating the polynomial at the returned root. The canonical
+solution is a Newton iteration (tolerance 1e-5, at most 1000 steps), and on
+plus input 119, whose constant term is 9,450,000, it ends at a point where
+|p(x)| = 0.0023, above the task's `atol` of 1e-4. Graded as EvalPlus
+grades it, the reference fails, so calibration excludes the item rather than
+score every model against a test its own answer cannot pass.
+
+**Mbpp/630 is EvalPlus's sanitizer.** The reference's helper `adjac` is a
+generator, with `yield` and no `return`, and EvalPlus's sanitizer keeps only
+functions that contain a `return`. EvalPlus never sanitizes its references,
+so it never sees this; graded as an answer, which is what selfcheck does, the
+reference loses its helper and fails with a `NameError`. A model that wrote
+the same helper would fail under EvalPlus too.
+
+The DS-1000 slice is the same 55 items as on 2026-10-19, under harness
+version 2 and the fetched copy of the same rows. The 2026-10-19 figures for
+the benchmarks HumanEval+ and MBPP+ replaced were HumanEval 164/164 and MBPP
+427/427. Every reference solution got the same verdict under the harness
+before the 2026-10-19 verdict change and under the one after it, item for
+item. The
 historical figure, measured on 2026-08-30 under WSL2 with Python 3.14.7, numpy
 2.5.2 and pandas 3.0.5, was 439/511 for DS-1000 (72 ungradeable); the
 environments differ in those three versions, and which difference moved the 17
@@ -536,7 +633,7 @@ land in `benchmark_request` as before, and the Compare page's **by serving**
 view reports them. Nothing was displaced.
 
 Reading one answer back is the Answers page (`/benchmarks/answers`): pick a
-suite run, pick `humaneval/HumanEval/0` (or any other item that run
+suite run, pick `humanevalplus/HumanEval/0` (or any other item that run
 attempted) from its list, and it renders that answer as markdown directly in
 the browser — headings, and the model's own fenced code with syntax
 highlighting, which is most of what there is to read. There is no

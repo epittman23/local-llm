@@ -10,12 +10,12 @@ from local_llm.benchmarks import paths
 
 
 def test_every_data_dir_exists_and_is_not_empty():
-    for d in (paths.ADAPTERS_DIR, paths.SUITES_DIR, paths.GRID_DIR, paths.PROMPTS_DIR):
+    for d in (paths.ADAPTERS_DIR, paths.DATASETS_DIR, paths.SUITES_DIR, paths.GRID_DIR, paths.PROMPTS_DIR):
         assert d.is_dir(), d
         assert any(d.iterdir()), d
 
 
 def test_data_dir_is_inside_the_benchmarks_package():
     assert paths.BENCHMARK_DATA_DIR.parent.name == 'benchmarks'
-    assert (paths.BENCHMARK_DATA_DIR / 'adapters' / 'humaneval.toml').is_file()
+    assert (paths.BENCHMARK_DATA_DIR / 'adapters' / 'humanevalplus.toml').is_file()
     assert (paths.BENCHMARK_DATA_DIR / 'prompts' / 'assistant.txt').is_file()

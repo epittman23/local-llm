@@ -7,6 +7,95 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-25** (later): **HumanEval+ and MBPP+ replace HumanEval and MBPP,
+  graded as EvalPlus grades them, and all three datasets are vendored.**
+  This is PR 1 of `docs/plans/benchmark-upgrade.md`.
+
+  **Why the swap.** Each original problem shipped three or so asserts, so an
+  answer that broke on an edge case could pass. EvalPlus keeps the problems
+  and adds far more inputs: a median of 973 per HumanEval+ task and 105 per
+  MBPP+ task. The expected outputs come from running the canonical solution,
+  so a candidate passes only if it matches on every base and plus input.
+
+  **How it is graded.** The `evalplus` package was not added as a
+  dependency. Its 0.3.1 release pulls in openai, anthropic, transformers and
+  datasets, and it runs candidates in multiprocessing children of the
+  caller. Instead, the comparison, special oracles, MBPP+ input rules and
+  time limits were ported, with attribution, into
+  `grading/evalplus_runtime.py`. That file is embedded in each grading
+  program and runs under the existing driver: a subprocess with `-I -S`, the
+  nonce verdict, and the process group killed on exit.
+
+  Answers are sanitized as EvalPlus sanitizes them, to their imports and
+  the definitions the entry point reaches, so a model's own test code never
+  runs.
+
+  **What is checked.** Every EvalPlus canonical solution was graded as an
+  answer:
+  - HumanEval+ passes 163 of 164. HumanEval/32's own reference fails
+    EvalPlus's `find_zero` tolerance on one input (|p(x)| = 0.0023 against an
+    `atol` of 1e-4).
+  - MBPP+ passes 377 of 378. Mbpp/630's reference uses a generator helper,
+    which EvalPlus's sanitizer drops because it has no `return`.
+
+  Calibration excludes both items.
+
+  **Deliberate differences from the plan:**
+  - The benchmark ids are new (`humanevalplus`, `mbppplus`) because the task
+    ids are not, and resume skips by benchmark and item id.
+  - The pinned SHA-256 is that of each file's decompressed rows. The
+    EvalPlus files are upstream's release assets, so their own hashes still
+    match the releases.
+  - The 120 s item cap includes the reference's run, which happens in the
+    same process rather than being cached. The subprocess gets the cap plus
+    5 s, fixed in advance; the plan's `min(cap, sum of limits) + 5` cannot
+    be, because the limits come from the reference's times in the run. So
+    an answer that swallows its alarms can hold a grader for 125 s, where
+    EvalPlus allows each input set `min(60, sum) + 1`.
+
+  **Deliberate differences from EvalPlus**, each in favour of grading the
+  answer rather than reproducing an accident:
+  - HumanEval/32 (`find_zero`): in EvalPlus 0.3.1 the oracle's `continue`
+    skips the progress counter, so every answer fails, its own reference
+    included. Here a root within `atol` passes. Calibration excludes the
+    item anyway, so `full` has 163 HumanEval+ items where a published
+    pass@1 divides by 164 with one guaranteed failure.
+  - A HumanEval+ answer that is only a function body gets the stub
+    prepended. EvalPlus's chat path grades the reply alone.
+  - The answer is called on deep copies of its inputs, so a mutating answer
+    cannot change what the oracles see. EvalPlus passes them uncopied.
+  - The code sanitized is the block `extract_code()` chose, not the longest
+    parseable run of the whole reply. A reply over 300 lines that does not
+    parse whole, or one that takes over 10 s to sanitize, is graded as
+    written.
+  - EvalPlus's `reliability_guard`, which disables `os` and `shutil`
+    functions, is not ported: the grader's own isolation (a subprocess,
+    `-I -S`, an empty environment, the group killed) stands in for it.
+
+  **Vendoring reverses the fetched-not-vendored choice** that
+  `evaluation/datasets.py` and the benchmarks guide had documented since the
+  benchmarks arrived (2026-08-30).
+  - The fetch read branch heads, which resolve to different content over
+    time, and a fresh `DATA_DIR` had nothing to run until someone pressed
+    Fetch.
+  - A vendored file is the same bytes everywhere and is hash-checked on every
+    read. The licenses that argued against vendoring are honoured in NOTICE
+    and `LICENSE_EVALPLUS`.
+  - DS-1000's file is the pinned revision's `test.jsonl`, whose 1000 rows are
+    identical to the fetched copy. Its results keep recording the revision
+    the fetch recorded (`4416080ac5cb…`, pinned in the adapter as
+    `revision`), so DS-1000 rows from before and after stay in one Compare
+    block. Existing DS-1000 calibrations read as stale (a new content hash,
+    and harness version 3); re-running selfcheck gave the same 55
+    ungradeable items.
+  - Resume refuses a suite run that recorded a benchmark no longer in the
+    repository, `humaneval` or `mbpp`: topping it up would mix the old
+    benchmarks and their replacements under one suite run id.
+  - The `github_raw` and `hf_rows` fetchers were removed. The fetch
+    mechanism stays, for LiveCodeBench (PR 2).
+
+  Harness version 3: a per-input timeout raised inside the program is
+  `fail_timeout`.
 - **2026-10-25**: **llama.cpp upgraded from build 10597 to build 11875
   (`f0fb5984b`).** Build 10597 was compiled on 2026-10-23, but its commit
   dates from 2026-08-23. It could not load K2 Horizon 7B, and it lacked

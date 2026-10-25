@@ -8,7 +8,6 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
 	cancelTestRun,
-	type DatasetStatus,
 	fetchDatasets,
 	getDatasets,
 	getTestOptions,
@@ -20,6 +19,7 @@ import {
 	type TestRunForm
 } from '@/lib/apis/benchmarks';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { calibrationText, type DatasetEvent, datasetEventText } from './testsFormat';
 
 type ItemEvent = {
 	type: 'item';
@@ -61,7 +61,7 @@ type JobEvent =
 			passed: number;
 	  }
 	| { type: 'progress'; benchmark: string; message: string; total?: number }
-	| { type: 'dataset'; benchmark: string; n_items: number; revision: string; fetched: boolean }
+	| ({ type: 'dataset' } & DatasetEvent)
 	| { type: 'calibrated'; benchmark: string; n_checked: number; n_ungradeable: number }
 	| ({ type: 'result' } & ItemResult)
 	| { type: 'done'; passed?: number; attempted?: number; cancelled: boolean }
@@ -70,12 +70,6 @@ type JobEvent =
 type Job = 'run' | 'fetch' | 'selfcheck' | 'item';
 
 const ALL_OPTION = '__all__';
-
-const calibrationText = (d: DatasetStatus) => {
-	if (!d.fetched) return '-';
-	if (d.calibration_stale) return d.calibration_stale;
-	return `${(d.n_checked ?? 0) - (d.n_ungradeable ?? 0)}/${d.n_checked} gradeable`;
-};
 
 const outcomeBadgeVariant = (outcome: string): 'default' | 'destructive' | 'secondary' | 'outline' => {
 	const o = (outcome ?? '').toLowerCase();
@@ -175,9 +169,7 @@ export function TestsPage() {
 				} else if (data.type === 'progress') {
 					note(`${data.benchmark}: ${data.message}${data.total ? ` ${data.total} reference solutions` : ''}`);
 				} else if (data.type === 'dataset') {
-					note(
-						`${data.benchmark}: ${data.fetched ? 'fetched' : 'already downloaded'}, ${data.n_items} items, revision ${data.revision}`
-					);
+					note(datasetEventText(data));
 				} else if (data.type === 'calibrated') {
 					note(
 						`${data.benchmark}: calibrated, ${data.n_checked - data.n_ungradeable}/${data.n_checked} gradeable here`

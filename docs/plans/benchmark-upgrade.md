@@ -6,6 +6,11 @@ pre-screen (D9), and Optuna's studies live in a dedicated `optuna` Postgres
 schema (D13). PR 4 (statistics) is the first to be implemented. Whether the
 security batch B0 must land before the dataset PRs (D0) is still open.
 
+Progress: PR 4 and the audit batches B0-B3 have landed. **PR 1 (HumanEval+
+and MBPP+) was implemented on 2026-10-25**; its differences from section 7.2
+are in that day's decisions entry. PR 2 (LiveCodeBench) and PR 3 (the
+pre-screen) are not started.
+
 Scope: four upgrades to `apps/server/local_llm/benchmarks/` and the
 Benchmarks pages in `apps/web`:
 
