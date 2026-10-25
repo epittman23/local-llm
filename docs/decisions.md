@@ -7,6 +7,22 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-25**: **llama.cpp upgraded from build 10597 to build 11875
+  (`f0fb5984b`).** Build 10597 was compiled on 2026-10-23, but its commit
+  dates from 2026-08-23. It could not load K2 Horizon 7B, and it lacked
+  fixes to the Qwen3-Coder tool-call parser, the MTP draft's CUDA graph
+  and the Nemotron 3 pre-tokenizer. Those models are on the shortlist in
+  `docs/plans/local-model-recommendations.md`.
+
+  The risk was a reported repetition loop on the CPU backend for Qwen3.8
+  (llama.cpp issue #30906). A one-prompt check of `qwen38`, with the
+  launcher's exact argv, did not show it on 11875: the answer was correct,
+  the `execute_code` call was structured, and generation speed matched
+  10597's. The `smoke` tier has not been run yet.
+
+  The old binaries stay in `~/llama.cpp/build-b10597/bin`, so the
+  recorded runs can be reproduced. Every recorded measurement used 10597
+  or older, and each one carries its build.
 - **2026-10-24** (towards midnight): **Tests can answer items through the app's chat
   pipeline (harness mode), the first step of the approved plan in
   `docs/plans/benchmarks-through-the-app.md`.** Until now every benchmark
