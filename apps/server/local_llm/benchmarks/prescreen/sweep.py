@@ -126,14 +126,34 @@ def _nvidia_smi() -> str:
 # ---------------------------------------------------------------------------
 # crash recovery: a sweep whose backend is gone
 # ---------------------------------------------------------------------------
-def _alive(pid: int) -> bool:
+def _started_at(pid: int) -> float | None:
+    """When a process started, in epoch seconds, from /proc; None if it is gone.
+
+    A recorded pid or group id can be reused by a later process, so what
+    the number names now is checked against when the row was written.
+    """
     try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except OSError:
-        return True
-    return True
+        stat = Path(f'/proc/{pid}/stat').read_text()
+        boot = next(int(ln.split()[1]) for ln in Path('/proc/stat').read_text().splitlines() if ln.startswith('btime '))
+    except (OSError, StopIteration, ValueError, IndexError):
+        return None
+    try:
+        # Field 22, counted after the command name, which may hold spaces.
+        ticks = int(stat.rsplit(')', 1)[1].split()[19])
+    except (IndexError, ValueError):
+        return None
+    return boot + ticks / os.sysconf('SC_CLK_TCK')
+
+
+#: Slack for comparing a process's start with a row's timestamp: both are
+#: whole seconds, and /proc's clock ticks round.
+_START_SLACK = 2.0
+
+
+def _still_the_backend(pid: int, since: int) -> bool:
+    """Whether `pid` is still the backend that opened a sweep at `since`, not a later process given its number."""
+    started = _started_at(pid)
+    return started is not None and started <= since + _START_SLACK
 
 
 def _group_is(pgid: int, names: tuple[str, ...]) -> bool:
@@ -151,9 +171,17 @@ def _group_is(pgid: int, names: tuple[str, ...]) -> bool:
     return any(Path(a.decode(errors='replace')).name in names for a in argv)
 
 
-async def kill_orphan(pgid: int | None, *, grace: float = 3.0) -> bool:
-    """SIGTERM, then SIGKILL, to a llama-bench or load-check server an earlier backend left running."""
+async def kill_orphan(pgid: int | None, *, since: int = 0, grace: float = 3.0) -> bool:
+    """SIGTERM, then SIGKILL, to a llama-bench or load-check server an earlier backend left running.
+
+    Only a group whose leader still names one of those binaries and started
+    no earlier than `since`, the sweep's start: an older process with the
+    number is not the one the sweep recorded.
+    """
     if not pgid or pgid <= 1 or not _group_is(pgid, ('llama-bench', 'llama-server')):
+        return False
+    started = _started_at(pgid)
+    if started is None or started < since - _START_SLACK:
         return False
     for sig in (signal.SIGTERM, signal.SIGKILL):
         try:
@@ -170,16 +198,21 @@ async def reclaim_stale(active: str | None = None) -> int:
     The sweep row carries the backend's pid, so a dead backend is
     detectable rather than merely likely, as with Tune's sweeps. A sweep
     still running under another live backend process is refused rather
-    than closed: two pre-screens would share one GPU.
+    than closed: two pre-screens would share one GPU. "Live" means the pid
+    still names a process that started before the sweep did; a later
+    process given the same number (after a reboot or a pid wrap) is not it.
+    Runs at backend startup too (routers/benchmarks/__init__.py's
+    startup()), so a crashed backend's orphan is stopped before Serve,
+    Tune or Tests can start beside it.
     """
     closed = 0
     for row in await BenchmarkPrescreenSweeps.list_sweeps(limit=1000, running_only=True):
         if row.sweep_id == active:
             continue
-        if row.pid and row.pid != os.getpid() and _alive(row.pid):
+        if row.pid and row.pid != os.getpid() and _still_the_backend(row.pid, row.started_at):
             raise PrescreenRefused(f'pre-screen {row.sweep_id} is running in another backend process (pid {row.pid})')
         for point in await BenchmarkPrescreenPoints.sweep_points(row.sweep_id):
-            await kill_orphan(point.pgid)
+            await kill_orphan(point.pgid, since=row.started_at)
             if point.status == 'running':
                 await BenchmarkPrescreenPoints.set_point(
                     point.point_id,
@@ -329,38 +362,46 @@ class Prescreen:
 
         await reclaim_stale()
         url = study.storage_url(self.database_url, self.database_schema)
-        self.storage = await asyncio.to_thread(study.open_storage, url)
-        host = await asyncio.to_thread(bench.host_info, self.nvidia_smi)
-        size = await asyncio.to_thread(os.path.getsize, model)
-        self.sweep_id = BenchmarkPrescreenSweeps.new_id()
-        name = f'prescreen-{self.sweep_id}'
-        await BenchmarkPrescreenSweeps.open_sweep(
-            self.sweep_id,
-            pid=os.getpid(),
-            profile=entry.profile.name,
-            profile_version_id=self.version_id,
-            sampler=self.sampler,
-            seed=o.seed,
-            trial_budget=o.trials if self.sampler == 'tpe' else len(self.plan) + 1,
-            objective=o.objective,
-            study_name=name,
-            grid_path=str(self.grid.path.relative_to(self.grid.path.parents[2])),
-            grid_sha=self.grid.sha,
-            n_prompt=o.n_prompt,
-            n_gen=o.n_gen,
-            reps=o.reps,
-            point_timeout=o.point_timeout,
-            ctx_checks=o.ctx_checks,
-            model_file=Path(model).name,
-            model_bytes=size,
-            **host,
-        )
         try:
+            self.storage = await asyncio.to_thread(study.open_storage, url)
+        except Exception as e:  # the database's own error, passed on as the reason
+            raise PrescreenRefused(f"could not open Optuna's storage: {e}") from e
+        self.sweep_id = BenchmarkPrescreenSweeps.new_id()
+        opened = False
+        try:
+            host = await asyncio.to_thread(bench.host_info, self.nvidia_smi)
+            size = await asyncio.to_thread(os.path.getsize, model)
+            name = f'prescreen-{self.sweep_id}'
+            await BenchmarkPrescreenSweeps.open_sweep(
+                self.sweep_id,
+                pid=os.getpid(),
+                profile=entry.profile.name,
+                profile_version_id=self.version_id,
+                sampler=self.sampler,
+                seed=o.seed,
+                trial_budget=o.trials if self.sampler == 'tpe' else len(self.plan) + 1,
+                objective=o.objective,
+                study_name=name,
+                grid_path=str(self.grid.path.relative_to(self.grid.path.parents[2])),
+                grid_sha=self.grid.sha,
+                n_prompt=o.n_prompt,
+                n_gen=o.n_gen,
+                reps=o.reps,
+                point_timeout=o.point_timeout,
+                ctx_checks=o.ctx_checks,
+                model_file=Path(model).name,
+                model_bytes=size,
+                **host,
+            )
+            opened = True
             self.study = await asyncio.to_thread(self._create_study, name)
         except Exception as e:
-            await BenchmarkPrescreenSweeps.close_sweep(self.sweep_id, status='failed', reason=f'optuna: {e}')
+            # Nothing has touched the GPU yet: close what was opened, and say why.
+            if opened:
+                await BenchmarkPrescreenSweeps.close_sweep(self.sweep_id, status='failed', reason=str(e))
             await asyncio.to_thread(study.close_storage, self.storage)
-            raise
+            self.storage = None
+            raise PrescreenRefused(f'could not start the pre-screen: {e}') from e
         return self.sweep_id
 
     def _create_study(self, name: str):
@@ -643,11 +684,15 @@ class Prescreen:
         if job.server_proc is not None:
             await BenchmarkPrescreenPoints.set_point(point_id, pgid=job.server_proc.pid)
         tail: deque[str] = deque(maxlen=60)
+        # Checked as lines arrive: at -lv 4 the OOM line can be far from the end.
+        oom: list[str] = []
 
         async def drain() -> None:
             with contextlib.suppress(ValueError, OSError):
                 async for line in job.lines():
                     tail.append(line)
+                    if OOM_PATTERN.search(line):
+                        oom.append(line)
 
         drainer = asyncio.create_task(drain())
         try:
@@ -663,9 +708,11 @@ class Prescreen:
                             free = reading['mem_total_mib'] - reading['mem_used_mib']
                         return 'ok', free, None
                     if not job.running:
-                        text = '\n'.join(tail)
+                        # The output pipe ends with the process; read what is left in it first.
+                        with contextlib.suppress(TimeoutError):
+                            await asyncio.wait_for(asyncio.shield(drainer), timeout=5)
                         last = ' / '.join([ln for ln in tail if ln.strip()][-3:])[:400] or 'no output'
-                        return ('oom_at_ctx' if OOM_PATTERN.search(text) else 'load_error'), None, last
+                        return ('oom_at_ctx' if oom else 'load_error'), None, last
                     await asyncio.sleep(1.0)
                 return 'timeout', None, f'no /health within {self.opts.load_timeout}s'
         finally:

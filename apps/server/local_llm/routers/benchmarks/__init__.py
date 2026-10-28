@@ -66,6 +66,14 @@ async def shutdown() -> None:
     await serve.shutdown()
 
 
+async def startup() -> None:
+    """At backend startup: close a pre-screen a dead backend left open, and stop its orphan."""
+    try:
+        await prescreen.startup()
+    except Exception:  # startup must go on; the next pre-screen start retries it
+        log.exception('the pre-screen startup check failed')
+
+
 async def stop_prescreen() -> None:
     """Stop a running pre-screen at every backend shutdown, LLLM_STOP_JOBS_ON_SHUTDOWN or not.
 

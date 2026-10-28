@@ -453,6 +453,10 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             log.warning(f'Failed to initialize terminal servers at startup: {e}')
 
+    # A pre-screen a dead backend left open still holds the GPU through its
+    # orphan; close it before Serve, Tune or Tests can start beside it.
+    await benchmarks.startup()
+
     # Mark application as ready to accept traffic from a startup perspective.
     app.state.startup_complete = True
     await publish_event(app, EVENTS.SYSTEM_STARTUP_COMPLETED, source='system')

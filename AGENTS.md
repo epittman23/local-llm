@@ -231,8 +231,10 @@ applies it in the same change.
 - A served `llama-server`, a tune sweep and a Tests job outlive the backend
   on purpose, so a `--reload` restart keeps the model up. A pre-screen does
   not: its orchestrator runs in the backend, so every shutdown stops it
-  (`stop_prescreen()`). Its optuna-dashboard outlives the backend like the
-  served model.
+  (`stop_prescreen()`), once open responses close (the page's stream ends
+  every 30 s). A sweep a dead backend left open is closed at the next
+  startup. Its optuna-dashboard outlives the backend like the served
+  model.
   `LLLM_STOP_JOBS_ON_SHUTDOWN=true` makes the lifespan teardown stop all
   of them, the dashboard included (`routers/benchmarks/__init__.py`'s
   `shutdown()`), for a backend that should leave nothing behind; pair it with a graceful-shutdown timeout, or

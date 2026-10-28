@@ -25,7 +25,7 @@ import time
 from types import SimpleNamespace
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from prescreen_stubs import Points, Sweeps
 
@@ -384,3 +384,95 @@ def test_the_stream_sends_the_detail_until_the_sweep_ends(client, monkeypatch):
     assert len(events) == 2
     assert '"sweep_id": "s"' in events[0]
     assert 'event: done' in body
+
+
+def test_a_starting_pre_screen_already_holds_the_gpu(client, monkeypatch):
+    """prepare() takes seconds; Serve, Tune and Tests must see the GPU as taken from the first moment."""
+    seen = {}
+
+    async def prepare(self):
+        seen['running'] = prescreen_router.running()
+        try:
+            await serve_router.start_serve(serve_router.ServeStartForm(profile='qwen38'), user=ADMIN)
+        except HTTPException as exc:
+            seen['serve'] = exc.status_code
+        raise PrescreenRefused('stop here')
+
+    monkeypatch.setattr(prescreen_router.Prescreen, 'prepare', prepare)
+    assert _start(client).status_code == 400
+    assert seen == {'running': True, 'serve': 409}
+    assert not prescreen_router.running()
+
+
+def test_start_refuses_while_the_serve_page_is_starting_a_model(client, monkeypatch):
+    async def scenario():
+        async with serve_router._start_lock:
+            return await prescreen_router._gpu_busy()
+
+    assert asyncio.run(scenario()) == 'a model is being started from the Serve page'
+
+
+def test_a_long_stream_ends_and_asks_the_page_to_reconnect(client, monkeypatch):
+    sweeps = Sweeps()
+    monkeypatch.setattr(prescreen_router, 'BenchmarkPrescreenSweeps', sweeps)
+    monkeypatch.setattr(prescreen_router, 'BenchmarkPrescreenPoints', Points())
+    monkeypatch.setattr(prescreen_router, 'running', lambda: True)
+    monkeypatch.setattr(prescreen_router, 'STREAM_SECONDS', 0.0)
+    asyncio.run(sweeps.open_sweep('s', **_FIELDS))
+    with client.stream('GET', '/api/v1/benchmarks/prescreen/stream', params={'sweep_id': 's'}) as response:
+        body = ''.join(response.iter_text())
+    assert 'event: reconnect' in body and 'event: done' not in body
+
+
+_FIELDS = {
+    'profile': 'qwen38',
+    'sampler': 'grid',
+    'seed': 0,
+    'objective': 'tg',
+    'study_name': 'prescreen-s',
+    'grid_path': 'data/prescreen/qwen38.toml',
+    'grid_sha': 'abc',
+    'n_prompt': 512,
+    'n_gen': 128,
+    'reps': 5,
+    'point_timeout': 900,
+    'ctx_checks': 3,
+    'model_file': 'm.gguf',
+}
+
+
+def test_startup_closes_what_a_dead_backend_left_open(monkeypatch, caplog):
+    import logging
+
+    caplog.set_level(logging.WARNING)
+    calls = []
+
+    async def reclaim():
+        calls.append(1)
+        return 2
+
+    monkeypatch.setattr(prescreen_router, 'reclaim_stale', reclaim)
+    asyncio.run(benchmarks.startup())
+    assert calls == [1]
+    assert 'closed 2 pre-screen sweep(s)' in caplog.text
+
+    async def elsewhere():
+        raise PrescreenRefused('pre-screen x is running in another backend process (pid 1)')
+
+    monkeypatch.setattr(prescreen_router, 'reclaim_stale', elsewhere)
+    asyncio.run(benchmarks.startup())  # logged, never raised
+    assert 'running in another backend process' in caplog.text
+
+    async def broken():
+        raise RuntimeError('no database')
+
+    monkeypatch.setattr(prescreen_router, 'reclaim_stale', broken)
+    asyncio.run(benchmarks.startup())
+    assert 'the pre-screen startup check failed' in caplog.text
+
+
+def test_a_dashboard_that_died_says_why(client, tmp_path):
+    (tmp_path / 'dashboard.log').write_text('Traceback ...\nRuntimeError: password authentication failed\n')
+    state = client.get('/api/v1/benchmarks/prescreen/dashboard').json()
+    assert state['running'] is False
+    assert state['last_output'].endswith('RuntimeError: password authentication failed')

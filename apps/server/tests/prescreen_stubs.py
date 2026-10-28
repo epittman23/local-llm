@@ -94,6 +94,9 @@ ctx = int(flag('-c', '0'))
 limit = os.environ.get('STUB_SERVER_MAX_CTX')
 if limit and ctx > int(limit):
     print('cudaMalloc failed: out of memory', flush=True)
+    # llama-server at -lv 4 goes on printing long after the OOM line.
+    for i in range(int(os.environ.get('STUB_SERVER_TRAILING_LINES', '0'))):
+        print(f'llama_model_load: cleanup line {i}', flush=True)
     print('llama_init_from_model: failed to initialize the context', flush=True)
     sys.exit(1)
 print('main: model loaded', flush=True)

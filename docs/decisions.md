@@ -82,11 +82,17 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
   - **A pre-screen stops at every backend shutdown**, not only with
     `LLLM_STOP_JOBS_ON_SHUTDOWN`. Its orchestrator runs in the backend, so
     without it llama-bench would hold the GPU with nothing recording the
-    result. A sweep left open by a backend that died is closed as stale on
-    the next start, and its orphans are stopped by their recorded process
-    group, but only when `/proc` still names llama-bench or llama-server.
-    The dashboard follows llama-server's lifecycle instead, with a pid file
-    so a restarted backend can stop it.
+    result.
+    - **The page's live stream ends every 30 s and reconnects.** uvicorn
+      waits for open responses before the lifespan shutdown runs, so one
+      held open for a whole sweep would hold up the stop with it.
+    - **A sweep left open by a backend that died** is closed as stale when
+      the next backend starts, so Serve, Tune and Tests cannot start beside
+      its orphan. The orphans are stopped by their recorded process group,
+      but only when `/proc` still names llama-bench or llama-server and the
+      process started after the sweep did.
+    - **The dashboard follows llama-server's lifecycle** instead, with a
+      pid file so a restarted backend can stop it.
   - **The JSONL test fixture is still synthetic.** llama.cpp build 11875 is
     on the machine now (the plan said none was), but this change ran no
     inference. The fixture follows llama-bench's field list at `f0fb5984b`.

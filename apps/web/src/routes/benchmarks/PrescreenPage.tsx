@@ -101,7 +101,7 @@ type Detail = State & { sweep: Sweep; points: Point[]; candidates: Candidate[] }
 
 type Sweeps = State & { sweeps: Sweep[] };
 
-type Dashboard = { running: boolean; url: string; port: number };
+type Dashboard = { running: boolean; url: string; port: number; last_output?: string | null };
 
 const fmtNum = (n: unknown, digits = 1): string => (typeof n === 'number' ? n.toFixed(digits) : '—');
 
@@ -194,39 +194,51 @@ export function PrescreenPage() {
 		setStreaming(false);
 	}, []);
 
+	// Each response ends after ~30 s while the sweep runs (so an open tab never
+	// holds up a backend shutdown), so this reads the sweep again and
+	// reconnects for as long as it is running. A stream aborted by show()
+	// switching sweeps stops there, without overwriting the new one.
 	const stream = useCallback(
 		async (sweepId: string) => {
-			let res: Response | null;
-			let controller: AbortController;
-			try {
-				[res, controller] = await streamPrescreen(token, sweepId);
-			} catch (err) {
-				setDetailError(errorMessage(err));
-				return;
-			}
-			if (!res?.ok || !res.body) {
-				setDetailError('Failed to start the live stream');
-				return;
-			}
-			streamControllerRef.current = controller;
-			setStreaming(true);
-			try {
-				for await (const evt of parseBenchmarksEventStream(res.body)) {
-					if (evt.event === 'done') break;
-					if (evt.data) setDetail(evt.data as Detail);
+			for (;;) {
+				let res: Response | null;
+				let controller: AbortController;
+				try {
+					[res, controller] = await streamPrescreen(token, sweepId);
+				} catch (err) {
+					setDetailError(errorMessage(err));
+					return;
 				}
-			} catch (err) {
-				if ((err as { name?: string })?.name !== 'AbortError') setDetailError(errorMessage(err));
-			} finally {
-				setStreaming(false);
-				streamControllerRef.current = null;
+				if (!res?.ok || !res.body) {
+					setDetailError('Failed to start the live stream');
+					return;
+				}
+				streamControllerRef.current = controller;
+				setStreaming(true);
+				try {
+					for await (const evt of parseBenchmarksEventStream(res.body)) {
+						if (evt.event === 'done' || evt.event === 'reconnect') break;
+						if (evt.data) setDetail(evt.data as Detail);
+					}
+				} catch (err) {
+					if ((err as { name?: string })?.name !== 'AbortError') setDetailError(errorMessage(err));
+				} finally {
+					setStreaming(false);
+					if (streamControllerRef.current === controller) streamControllerRef.current = null;
+				}
+				if (controller.signal.aborted) return;
 				await queryClient.invalidateQueries({ queryKey: ['prescreen-sweeps'] });
-			}
-			// The last event can predate the sweep's close; read the final state once.
-			try {
-				setDetail(await getPrescreenSweep(token, sweepId));
-			} catch (err) {
-				setDetailError(errorMessage(err));
+				// The last event can predate the sweep's close; read its state again.
+				let latest: Detail;
+				try {
+					latest = (await getPrescreenSweep(token, sweepId)) as Detail;
+				} catch (err) {
+					setDetailError(errorMessage(err));
+					return;
+				}
+				if (controller.signal.aborted) return;
+				setDetail(latest);
+				if (latest?.sweep?.status !== 'running' || !latest?.running) return;
 			}
 		},
 		[token, queryClient]
@@ -471,6 +483,11 @@ export function PrescreenPage() {
 					</code>
 					.
 				</span>
+				{!dashboard?.running && dashboard?.last_output && (
+					<pre className="text-muted-foreground w-full text-xs whitespace-pre-wrap">
+						Its last output: {dashboard.last_output}
+					</pre>
+				)}
 				{dashboardMutation.isError && <ErrorBox>{errorMessage(dashboardMutation.error)}</ErrorBox>}
 			</div>
 

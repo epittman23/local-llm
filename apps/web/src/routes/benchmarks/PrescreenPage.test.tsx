@@ -231,4 +231,44 @@ describe('PrescreenPage', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Stop dashboard' }));
 		expect(await screen.findByText('port 8091 is already in use')).toBeTruthy();
 	});
+
+	it('reconnects while the sweep still runs, and stops once it ends', async () => {
+		const running = detail('running', { running: true });
+		vi.mocked(api.getPrescreenSweeps).mockResolvedValue({
+			sweeps: [sweep('running')],
+			running: true,
+			active: null,
+			last_error: null
+		});
+		vi.mocked(api.getPrescreenSweep)
+			.mockResolvedValueOnce(running) // on arrival
+			.mockResolvedValueOnce(running) // after the first response ends: still running
+			.mockResolvedValue(detail('done')); // after the second
+		const reconnect = () =>
+			[
+				new Response(`data: ${JSON.stringify(running)}\n\nevent: reconnect\ndata: {}\n\n`, {
+					headers: { 'Content-Type': 'text/event-stream' }
+				}),
+				new AbortController()
+			] as [Response, AbortController];
+		vi.mocked(api.streamPrescreen)
+			.mockImplementationOnce(async () => reconnect())
+			.mockResolvedValue(stream([]));
+		renderPage();
+		await waitFor(() => expect(api.streamPrescreen).toHaveBeenCalledTimes(2));
+		await waitFor(() => expect(api.getPrescreenSweep).toHaveBeenCalledTimes(3));
+		expect(await screen.findByText('done')).toBeTruthy();
+		expect(api.streamPrescreen).toHaveBeenCalledTimes(2);
+	});
+
+	it("shows a stopped dashboard's last output", async () => {
+		vi.mocked(api.getPrescreenDashboard).mockResolvedValue({
+			running: false,
+			url: 'http://127.0.0.1:8091/dashboard',
+			port: 8091,
+			last_output: 'RuntimeError: password authentication failed'
+		});
+		renderPage();
+		expect(await screen.findByText('Its last output: RuntimeError: password authentication failed')).toBeTruthy();
+	});
 });

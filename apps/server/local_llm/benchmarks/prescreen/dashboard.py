@@ -76,6 +76,11 @@ class DashboardProcess:
         self.proc: asyncio.subprocess.Process | None = None
 
     @property
+    def log_path(self) -> Path:
+        """The dashboard's own output, beside its pid file, so a dashboard that dies at once says why."""
+        return self.pidfile.parent / 'dashboard.log'
+
+    @property
     def url(self) -> str:
         return f'http://{HOST}:{self.port}/dashboard'
 
@@ -92,6 +97,15 @@ class DashboardProcess:
     def running(self) -> bool:
         return self.pid() is not None
 
+    def last_output(self, lines: int = 5) -> str | None:
+        """The end of the dashboard's log, for a dashboard that is not running."""
+        try:
+            text = self.log_path.read_text(errors='replace')
+        except OSError:
+            return None
+        kept = [ln for ln in text.splitlines() if ln.strip()][-lines:]
+        return '\n'.join(kept) or None
+
     async def start(self, env: dict[str, str]) -> None:
         """Start the dashboard. Raises RuntimeError, saying why, if it cannot."""
         if self.running():
@@ -100,20 +114,21 @@ class DashboardProcess:
             raise RuntimeError('DATABASE_URL is not set; the dashboard reads the studies from Postgres')
         if await asyncio.to_thread(_port_open, self.port):
             raise RuntimeError(f'port {self.port} is already in use (LLLM_OPTUNA_DASHBOARD_PORT)')
-        self.proc = await asyncio.create_subprocess_exec(
-            sys.executable,
-            '-m',
-            MODULE,
-            '--port',
-            str(self.port),
-            cwd=self.cwd,
-            env=env,
-            stdin=asyncio.subprocess.DEVNULL,
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
-            start_new_session=True,
-        )
         self.pidfile.parent.mkdir(parents=True, exist_ok=True)
+        with self.log_path.open('wb') as log:
+            self.proc = await asyncio.create_subprocess_exec(
+                sys.executable,
+                '-m',
+                MODULE,
+                '--port',
+                str(self.port),
+                cwd=self.cwd,
+                env=env,
+                stdin=asyncio.subprocess.DEVNULL,
+                stdout=log,
+                stderr=asyncio.subprocess.STDOUT,
+                start_new_session=True,
+            )
         self.pidfile.write_text(f'{self.proc.pid}\n')
 
     async def stop(self, grace: float = 5.0) -> bool:

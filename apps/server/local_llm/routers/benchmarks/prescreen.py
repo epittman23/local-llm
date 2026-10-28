@@ -33,7 +33,7 @@ from pydantic import BaseModel, ConfigDict
 from local_llm.benchmarks.prescreen import PrescreenRefused
 from local_llm.benchmarks.prescreen.dashboard import DashboardProcess
 from local_llm.benchmarks.prescreen.grid import grid_names, load_grid
-from local_llm.benchmarks.prescreen.sweep import Prescreen, PrescreenOptions, rank
+from local_llm.benchmarks.prescreen.sweep import Prescreen, PrescreenOptions, rank, reclaim_stale
 from local_llm.benchmarks.serving.launcher import IMPORT_ROOT
 from local_llm.constants import ERROR_MESSAGES
 from local_llm.env import DATA_DIR, DATABASE_SCHEMA, DATABASE_URL, LLLM_OPTUNA_DASHBOARD_PORT
@@ -52,6 +52,16 @@ _last_error: str | None = None
 # Held across the whole of /start: the checks and the spawn are separated by
 # database awaits, so two concurrent requests could otherwise both pass.
 _start_lock = asyncio.Lock()
+# True from the moment /start passes its checks until the sweep's task
+# exists. prepare() awaits the database, nvidia-smi and Optuna's storage for
+# seconds, and Serve, Tune and Tests must see the GPU as taken throughout.
+_starting = False
+
+#: How long one /stream response lasts. uvicorn waits for open responses
+#: before it runs the lifespan shutdown that stops a pre-screen, so a stream
+#: held open for a whole sweep would hold up a Ctrl-C or a --reload with it.
+#: The page reads the sweep again and reconnects while it runs.
+STREAM_SECONDS = 30.0
 
 _dashboard = DashboardProcess(
     DATA_DIR / 'prescreen' / 'dashboard.pid', port=LLLM_OPTUNA_DASHBOARD_PORT, cwd=str(IMPORT_ROOT)
@@ -59,8 +69,8 @@ _dashboard = DashboardProcess(
 
 
 def running() -> bool:
-    """Whether a pre-screen is running; Serve, Tune and Tests refuse to start meanwhile."""
-    return _task is not None and not _task.done()
+    """Whether a pre-screen is running or starting; Serve, Tune and Tests refuse to start meanwhile."""
+    return _starting or (_task is not None and not _task.done())
 
 
 async def _gpu_busy() -> str | None:
@@ -69,6 +79,8 @@ async def _gpu_busy() -> str | None:
 
     if serve._job is not None and serve._job.running:
         return 'a model is being served from the Serve page'
+    if serve._start_lock.locked():
+        return 'a model is being started from the Serve page'
     try:
         from local_llm.routers.benchmarks import tune
     except ImportError:
@@ -112,7 +124,7 @@ async def _run(sweep: Prescreen) -> None:
 
 @router.post('/start')
 async def start_prescreen(form_data: PrescreenStartForm, user=Depends(get_admin_user)):
-    global _sweep, _task, _last_error
+    global _sweep, _task, _last_error, _starting
     async with _start_lock:
         if running():
             raise HTTPException(
@@ -121,15 +133,19 @@ async def start_prescreen(form_data: PrescreenStartForm, user=Depends(get_admin_
         busy = await _gpu_busy()
         if busy:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=ERROR_MESSAGES.DEFAULT(busy))
-        sweep = Prescreen(
-            PrescreenOptions(**form_data.model_dump()), database_url=DATABASE_URL, database_schema=DATABASE_SCHEMA
-        )
+        _starting = True
         try:
-            sweep_id = await sweep.prepare()
-        except PrescreenRefused as exc:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-        _sweep, _last_error = sweep, None
-        _task = asyncio.create_task(_run(sweep))
+            sweep = Prescreen(
+                PrescreenOptions(**form_data.model_dump()), database_url=DATABASE_URL, database_schema=DATABASE_SCHEMA
+            )
+            try:
+                sweep_id = await sweep.prepare()
+            except PrescreenRefused as exc:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+            _sweep, _last_error = sweep, None
+            _task = asyncio.create_task(_run(sweep))
+        finally:
+            _starting = False
         return {'started': True, 'sweep_id': sweep_id}
 
 
@@ -156,6 +172,23 @@ async def stop_sweep() -> None:
 
 def dashboard_running() -> bool:
     return _dashboard.running()
+
+
+async def startup() -> None:
+    """Close what a backend that died left open, before anything else can start on the GPU.
+
+    A sweep row a dead backend left `running` is closed as stale, and its
+    llama-bench or load-check server, if still alive, is stopped. Without
+    this, nothing in a new backend would know about that orphan until the
+    next pre-screen started, and Serve, Tune and Tests would start beside it.
+    """
+    try:
+        closed = await reclaim_stale()
+    except PrescreenRefused as exc:
+        log.warning('pre-screen startup check: %s', exc)
+        return
+    if closed:
+        log.warning('closed %d pre-screen sweep(s) left running by a backend that is gone', closed)
 
 
 async def shutdown() -> None:
@@ -219,12 +252,16 @@ async def stream_prescreen(sweep_id: str, user=Depends(get_admin_user)):
     """The sweep's detail every 2 s until it ends, then a `done` event.
 
     Polled from the database rather than pushed, the same contract as
-    Tune's `/log`: a tab that reconnects sees the whole sweep at once.
+    Tune's `/log`: a tab that reconnects sees the whole sweep at once. Each
+    response ends after STREAM_SECONDS even while the sweep runs, so an
+    open tab never holds up a backend shutdown for long; the page
+    reconnects.
     """
     if await BenchmarkPrescreenSweeps.get_by_id(sweep_id) is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.NOT_FOUND)
 
     async def event_stream():
+        deadline = asyncio.get_running_loop().time() + STREAM_SECONDS
         while True:
             detail = await _detail(sweep_id)
             if detail is not None:
@@ -232,13 +269,23 @@ async def stream_prescreen(sweep_id: str, user=Depends(get_admin_user)):
             if detail is None or detail['sweep']['status'] != 'running' or not running():
                 yield 'event: done\ndata: {}\n\n'
                 return
+            if asyncio.get_running_loop().time() >= deadline:
+                yield 'event: reconnect\ndata: {}\n\n'
+                return
             await asyncio.sleep(2)
 
     return StreamingResponse(event_stream(), media_type='text/event-stream')
 
 
 def _dashboard_state() -> dict:
-    return {'running': _dashboard.running(), 'url': _dashboard.url, 'port': _dashboard.port}
+    running = _dashboard.running()
+    return {
+        'running': running,
+        'url': _dashboard.url,
+        'port': _dashboard.port,
+        # Why a dashboard that was started is not running: its own last words.
+        'last_output': None if running else _dashboard.last_output(),
+    }
 
 
 @router.get('/dashboard')

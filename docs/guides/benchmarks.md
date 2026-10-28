@@ -221,10 +221,19 @@ version, from Serve's profile list.
 **One at a time, and it does not outlive the backend.** The orchestrator
 runs inside the backend, so a backend shutdown stops a running pre-screen,
 whether or not `LLLM_STOP_JOBS_ON_SHUTDOWN` is set, and so does a
-`--reload` restart. A sweep left open by a backend that died (a `kill -9`)
-is closed as `stale` when the next one starts. What it left running is
-stopped by its recorded process group, but only when `/proc` still names
-llama-bench or llama-server.
+`--reload` restart.
+
+- **The shutdown waits for open streams, briefly.** uvicorn waits for open
+  responses before that shutdown runs, so the page's live stream ends every
+  30 s, and the page reconnects. An open Pre-screen tab delays a Ctrl-C or
+  a reload by at most that long.
+- **A sweep left open by a backend that died** (a `kill -9`, or a second
+  Ctrl-C) is closed as `stale` when the next backend starts, before
+  anything else can use the GPU. What it left running is stopped by its
+  recorded process group, but only when `/proc` still names llama-bench or
+  llama-server and that process started after the sweep did. A sweep whose
+  recorded pid now belongs to a process that started later is treated as
+  dead, not as running elsewhere.
 
 **The Optuna dashboard.** Each pre-screen is an Optuna study named
 `prescreen-<sweep id>`, kept in the `optuna` schema of the app's Postgres

@@ -80,7 +80,14 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setenv('LLAMA_TUNE_NVIDIA_SMI', str(e.bin / 'nvidia-smi'))
     monkeypatch.setenv('LLAMA_PORT', str(_free_port()))
     monkeypatch.setenv('STUB_LOG', str(e.log))
-    for name in ('STUB_MODE', 'STUB_OOM_NGL', 'STUB_OOM_MOE', 'STUB_SLOW', 'STUB_SERVER_MAX_CTX'):
+    for name in (
+        'STUB_MODE',
+        'STUB_OOM_NGL',
+        'STUB_OOM_MOE',
+        'STUB_SLOW',
+        'STUB_SERVER_MAX_CTX',
+        'STUB_SERVER_TRAILING_LINES',
+    ):
         monkeypatch.delenv(name, raising=False)
     return e
 
@@ -213,7 +220,7 @@ def test_the_leaders_are_load_checked_at_the_profiles_context(env, monkeypatch):
     checked = [p for p in env.points.rows.values() if p.get('ctx_check')]
     assert len(checked) == 2
     assert all(p['ctx_check'] == 'ok' and p['ctx_check_free_mib'] == 6144 - 4100 for p in checked)
-    assert stub_processes('llama-server') == []
+    assert stub_processes(str(env.bin / 'llama-server')) == []  # the stub's own path, not any mention of it
 
 
 def test_a_load_check_that_runs_out_of_memory_at_context(env, monkeypatch):
@@ -222,6 +229,40 @@ def test_a_load_check_that_runs_out_of_memory_at_context(env, monkeypatch):
     (checked,) = [p for p in env.points.rows.values() if p.get('ctx_check')]
     assert checked['ctx_check'] == 'oom_at_ctx'
     assert 'out of memory' in checked['ctx_check_reason']
+
+
+def test_a_load_check_oom_far_from_the_end_of_the_output_is_still_an_oom(env, monkeypatch):
+    monkeypatch.setenv('STUB_SERVER_MAX_CTX', '8192')
+    monkeypatch.setenv('STUB_SERVER_TRAILING_LINES', '200')  # past the 60-line tail
+    _run(prescreen_sweep.PrescreenOptions(profile='qwen38', ctx_checks=1, load_timeout=30))
+    (checked,) = [p for p in env.points.rows.values() if p.get('ctx_check')]
+    assert checked['ctx_check'] == 'oom_at_ctx'
+
+
+def test_a_failure_after_the_storage_opens_closes_it_and_says_why(env, monkeypatch):
+    closed = []
+    monkeypatch.setattr(prescreen_study, 'close_storage', closed.append)
+
+    async def broken(*args, **kwargs):
+        raise RuntimeError('connection reset')
+
+    monkeypatch.setattr(env.sweeps, 'open_sweep', broken)
+    with pytest.raises(PrescreenRefused, match='could not start the pre-screen: connection reset'):
+        asyncio.run(
+            prescreen_sweep.Prescreen(prescreen_sweep.PrescreenOptions(profile='qwen38'), database_url=DB).prepare()
+        )
+    assert closed == env.storages
+
+
+def test_a_storage_that_will_not_open_is_a_refusal(env, monkeypatch):
+    def unreachable(url):
+        raise OSError('connection refused')
+
+    monkeypatch.setattr(prescreen_study, 'open_storage', unreachable)
+    with pytest.raises(PrescreenRefused, match="could not open Optuna's storage: connection refused"):
+        asyncio.run(
+            prescreen_sweep.Prescreen(prescreen_sweep.PrescreenOptions(profile='qwen38'), database_url=DB).prepare()
+        )
 
 
 def test_a_seeded_tpe_study_repeats_itself(env):
@@ -381,6 +422,34 @@ def test_a_sweep_running_under_another_live_backend_is_refused(env):
         assert env.sweeps.rows['elsewhere']['status'] == 'running'
     finally:
         other.kill()
+
+
+def test_a_reused_pid_does_not_block_every_pre_screen(env):
+    """A live process that started after the sweep is not the backend that opened it."""
+    later = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])
+    try:
+        asyncio.run(env.sweeps.open_sweep('old', pid=later.pid, **OLD_SWEEP))
+        env.sweeps.rows['old']['started_at'] = int(time.time()) - 3600
+        assert asyncio.run(prescreen_sweep.reclaim_stale()) == 1
+        assert env.sweeps.rows['old']['status'] == 'stale'
+        assert later.poll() is None
+    finally:
+        later.kill()
+
+
+def test_an_orphan_older_than_the_sweep_is_left_alone(env):
+    older = subprocess.Popen(
+        [str(env.bin / 'llama-bench')], env={**os.environ, 'STUB_MODE': 'hang'}, start_new_session=True
+    )
+    try:
+        time.sleep(0.5)
+        assert asyncio.run(prescreen_sweep.kill_orphan(older.pid, since=int(time.time()) + 60, grace=0.1)) is False
+        assert older.poll() is None
+        assert asyncio.run(prescreen_sweep.kill_orphan(older.pid, since=int(time.time()) - 60, grace=0.1)) is True
+        assert older.wait(timeout=5) is not None
+    finally:
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(older.pid, signal.SIGKILL)
 
 
 def test_both_objectives_rank_by_pareto_layer():
