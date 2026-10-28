@@ -10,7 +10,8 @@ const tabs = [
 	{ to: routePaths.benchmarksCompare, label: 'Compare' },
 	{ to: routePaths.benchmarksAnswers, label: 'Answers' },
 	{ to: routePaths.benchmarksReport, label: 'Report' },
-	{ to: routePaths.benchmarksTune, label: 'Tune' }
+	{ to: routePaths.benchmarksTune, label: 'Tune' },
+	{ to: routePaths.benchmarksPrescreen, label: 'Pre-screen' }
 ];
 
 const tabClass = ({ isActive }: { isActive: boolean }) =>
@@ -25,7 +26,8 @@ const tabClass = ({ isActive }: { isActive: boolean }) =>
  * Ports d863707:apps/openwebui/src/routes/(app)/benchmarks/+layout.svelte: the same
  * gate (admin + features.enable_benchmarks, see useBenchmarksGate.ts) and
  * the same seven tabs, as a horizontal nav bar over an <Outlet /> instead of
- * a Svelte <slot />.
+ * a Svelte <slot />, plus Pre-screen (2026-10-28), which the Svelte app never
+ * had.
  */
 export function BenchmarksLayout() {
 	const gate = useBenchmarksGate();

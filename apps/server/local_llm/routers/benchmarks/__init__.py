@@ -5,7 +5,7 @@ from collections.abc import Awaitable, Callable
 
 from fastapi import APIRouter
 
-from local_llm.routers.benchmarks import answers, compare, live, profiles, report, serve, tests
+from local_llm.routers.benchmarks import answers, compare, live, prescreen, profiles, report, serve, tests
 
 log = logging.getLogger(__name__)
 
@@ -17,6 +17,7 @@ router.include_router(tests.router, prefix='/tests')
 router.include_router(compare.router, prefix='/compare')
 router.include_router(answers.router, prefix='/answers')
 router.include_router(report.router, prefix='/report')
+router.include_router(prescreen.router, prefix='/prescreen')
 
 try:
     from local_llm.routers.benchmarks import tune
@@ -48,16 +49,31 @@ async def shutdown() -> None:
     """Stop every benchmark job, then the served model, for a backend exiting for good.
 
     main.py's lifespan calls this only when LLLM_STOP_JOBS_ON_SHUTDOWN is set
-    (the desktop app's backend); otherwise all of them deliberately outlive
-    the backend. Jobs first: a sweep stops its own candidate server, and a
-    Tests run would only fail against a model already stopped. The `==>`
-    lines are the markers the desktop app's progress dialog follows.
+    (the desktop app's backend); otherwise all of them but a pre-screen
+    deliberately outlive the backend (stop_prescreen() below). Jobs first: a sweep stops its own candidate server, and a
+    Tests run would only fail against a model already stopped. A pre-screen
+    and its dashboard count as jobs. The `==>` lines are the markers the
+    desktop app's progress dialog follows.
     """
     sweeping = tune is not None and tune.running()
-    if sweeping or tests.active():
+    if sweeping or tests.active() or prescreen.running() or prescreen.dashboard_running():
         log.info('==> Stopping benchmark jobs')
         await _stop_job(tests.shutdown)
         if tune is not None:
             await _stop_job(tune.shutdown)
+        await _stop_job(prescreen.shutdown)
         log.info('==> Stopped benchmark jobs')
     await serve.shutdown()
+
+
+async def stop_prescreen() -> None:
+    """Stop a running pre-screen at every backend shutdown, LLLM_STOP_JOBS_ON_SHUTDOWN or not.
+
+    Unlike a served model, a pre-screen cannot outlive its backend: the
+    orchestrator choosing the next point runs in this process. Left alone,
+    its llama-bench would hold the GPU with nothing to record the result.
+    The dashboard is left running, as llama-server is.
+    """
+    if prescreen.running():
+        log.info('Stopping the running pre-screen')
+        await _stop_job(prescreen.stop_sweep)

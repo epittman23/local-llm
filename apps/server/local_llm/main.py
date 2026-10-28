@@ -463,6 +463,8 @@ async def lifespan(app: FastAPI):
 
     if LLLM_STOP_JOBS_ON_SHUTDOWN:
         await benchmarks.shutdown()
+    else:
+        await benchmarks.stop_prescreen()
 
     # Shutdown: clean up shared resources
     from local_llm.utils.session_pool import close_session

@@ -43,6 +43,7 @@ export const routePaths = {
 	benchmarksAnswers: '/benchmarks/answers',
 	benchmarksReport: '/benchmarks/report',
 	benchmarksTune: '/benchmarks/tune',
+	benchmarksPrescreen: '/benchmarks/prescreen',
 	// Phase 6's four public/static surfaces. Unlike everything above, these
 	// are NOT children of AppShell in AppRouter.tsx -- they're the one place
 	// an unauthenticated visitor is supposed to land, so useAuthGate must not

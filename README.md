@@ -132,9 +132,14 @@ backend pytest against a throwaway Postgres, web checks and build, and
 Playwright). It needs Docker, uv and Bun, like the app itself.
 
 The first account you create becomes the admin. Admin accounts also see a **Benchmarks** entry in the
-sidebar, at `/benchmarks` — serving, testing, comparison, reporting and
-tuning for the local-inference setup below, built into this same frontend
-and backend rather than served from a separate dashboard or port. See
+sidebar, at `/benchmarks` — serving, testing, comparison, reporting,
+tuning and a llama-bench pre-screen for the local-inference setup below,
+built into this same frontend and backend rather than served from a
+separate dashboard or port. The one exception is the pre-screen's optional
+Optuna dashboard: the Pre-screen page starts it as its own process on
+`127.0.0.1:8091` (`LLLM_OPTUNA_DASHBOARD_PORT`), loopback only even when the
+backend listens on the LAN, because it has no authentication; reach it from
+another machine over an SSH tunnel. See
 [docs/guides/llama-cpp.md](docs/guides/llama-cpp.md) and
 [docs/guides/benchmarks.md](docs/guides/benchmarks.md).
 
@@ -196,6 +201,7 @@ Anything marked *admin* also needs `role === 'admin'`.
 | `/benchmarks/answers` | Answers |
 | `/benchmarks/report` | Reports |
 | `/benchmarks/tune` | Tuning |
+| `/benchmarks/prescreen` | Pre-screen: llama-bench over a grid of offload and batch flags, as an Optuna study, and the switch for its dashboard |
 | `/notes` | Notes list. Needs the backend's `features.enable_notes` (and not a denied `notes` permission); otherwise you're sent to `/` |
 | `/notes/new` | Creates a note (optionally from `?title=&content=`) and opens it |
 | `/notes/<id>` | Note editor (TipTap, autosave) |
@@ -242,7 +248,8 @@ which never navigates on its own and renders a 404 page.
 
 Postgres listens on `127.0.0.1:5432` (user/db `local_llm`, password from
 `infra/.env`), loopback only. So do Redis (`:6379`), Jupyter (`:8888`,
-token `JUPYTER_TOKEN`) and SearXNG (`:8080`).
+token `JUPYTER_TOKEN`) and SearXNG (`:8080`), and the pre-screen's Optuna
+dashboard (`:8091`) while the Pre-screen page has it started.
 
 ## Model setup
 

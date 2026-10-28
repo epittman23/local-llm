@@ -197,11 +197,12 @@ def active() -> bool:
 def _start(job) -> dict:
     """Run `job(queue)` as the one Tests job, streamed by /stream.
 
-    One at a time, and never alongside a tune sweep: a fetch would change
-    the datasets under a run, and any of them would compete with a sweep for
-    the server and the CPU it is measuring.
+    One at a time, and never alongside a tune sweep or a pre-screen: a fetch
+    would change the datasets under a run, and any of them would compete
+    with a sweep for the server, the GPU and the CPU it is measuring.
     """
     global _task, _queue, _cancel
+    from local_llm.routers.benchmarks import prescreen as prescreen_router
     from local_llm.routers.benchmarks import tune as tune_router
 
     if active():
@@ -211,6 +212,10 @@ def _start(job) -> dict:
     if tune_router.running():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail=ERROR_MESSAGES.DEFAULT('a tune sweep is running')
+        )
+    if prescreen_router.running():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=ERROR_MESSAGES.DEFAULT('a pre-screen is running')
         )
     _queue = asyncio.Queue()
     _cancel = False

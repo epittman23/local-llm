@@ -73,6 +73,14 @@ been measured on either build yet.
   offload fitting off (`-fit off`, since 2026-10-19), both passed
   unconditionally. The `config_id` fingerprint covers the weights file's
   basename and a profile's `extra` arguments too (#127).
+- **Pre-screening** (since 2026-10-28) runs from Benchmarks > Pre-screen
+  (`/benchmarks/prescreen`, `benchmarks/prescreen/`). It runs `llama-bench`
+  over `data/prescreen/<profile>.toml` as an Optuna study, one process per
+  point, and load-checks the leaders in `llama-server` at the profile's
+  context. Its numbers are raw llama-bench throughput, kept in
+  `benchmark_prescreen_*` and never compared with served runs. Optuna's
+  studies live in the `optuna` Postgres schema, and optuna-dashboard is a
+  loopback process on `127.0.0.1:8091`. Nothing has been pre-screened yet.
 - **Serving** starts from Benchmarks > Serve (`/benchmarks/serve`).
   `serving/launcher.py`'s `ServeProcess` spawns `llama-server` and the GPU
   telemetry recorder, which writes every sample, `/metrics` scrape and
@@ -221,10 +229,13 @@ applies it in the same change.
   benchmark datasets and reports), so the location never moves with the
   code; a hand-started backend defaults to the same place.
 - A served `llama-server`, a tune sweep and a Tests job outlive the backend
-  on purpose, so a `--reload` restart keeps the model up.
+  on purpose, so a `--reload` restart keeps the model up. A pre-screen does
+  not: its orchestrator runs in the backend, so every shutdown stops it
+  (`stop_prescreen()`). Its optuna-dashboard outlives the backend like the
+  served model.
   `LLLM_STOP_JOBS_ON_SHUTDOWN=true` makes the lifespan teardown stop all
-  three (`routers/benchmarks/__init__.py`'s `shutdown()`) for a backend that
-  should leave nothing behind; pair it with a graceful-shutdown timeout, or
+  of them, the dashboard included (`routers/benchmarks/__init__.py`'s
+  `shutdown()`), for a backend that should leave nothing behind; pair it with a graceful-shutdown timeout, or
   an open stream can keep the teardown from ever running.
 - The database schema is append-only (see the maintenance policy).
 

@@ -1083,3 +1083,284 @@ export const streamTuneLog = async (
 
 	return [res, controller];
 };
+
+// -----------------------------------------------------------------------------
+// Pre-screen
+// -----------------------------------------------------------------------------
+
+export type PrescreenStartForm = {
+	profile?: string;
+	grid?: string;
+	sampler?: 'auto' | 'grid' | 'tpe';
+	trials?: number;
+	seed?: number;
+	objective?: 'tg' | 'pp' | 'both';
+	n_prompt?: number;
+	n_gen?: number;
+	reps?: number;
+	point_timeout?: number;
+	ctx_checks?: number;
+	load_timeout?: number;
+};
+
+export const getPrescreenGrids = async (token: string = '') => {
+	let error = null;
+
+	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/prescreen/grids`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		}
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await errorBody(res);
+			return res.json();
+		})
+		.catch((err) => {
+			error = errorDetail(err);
+			console.error(err);
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
+export const startPrescreen = async (token: string = '', form: PrescreenStartForm = {}) => {
+	let error = null;
+
+	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/prescreen/start`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		},
+		body: JSON.stringify(form)
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await errorBody(res);
+			return res.json();
+		})
+		.catch((err) => {
+			error = errorDetail(err);
+			console.error(err);
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
+export const cancelPrescreen = async (token: string = '') => {
+	let error = null;
+
+	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/prescreen/cancel`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		}
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await errorBody(res);
+			return res.json();
+		})
+		.catch((err) => {
+			error = errorDetail(err);
+			console.error(err);
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
+export const getPrescreenSweeps = async (token: string = '', limit: number = 20) => {
+	let error = null;
+
+	const searchParams = new URLSearchParams();
+	if (limit) searchParams.append('limit', limit.toString());
+
+	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/prescreen/sweeps?${searchParams.toString()}`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		}
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await errorBody(res);
+			return res.json();
+		})
+		.catch((err) => {
+			error = errorDetail(err);
+			console.error(err);
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
+export const getPrescreenSweep = async (token: string = '', sweepId: string) => {
+	let error = null;
+
+	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/prescreen/sweeps/${encodeURIComponent(sweepId)}`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		}
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await errorBody(res);
+			return res.json();
+		})
+		.catch((err) => {
+			error = errorDetail(err);
+			console.error(err);
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
+// See the comment above `streamServe` — same [Response, AbortController]
+// convention, consumed via `parseBenchmarksEventStream`. Each event is the
+// sweep's whole detail, as `getPrescreenSweep` returns it.
+export const streamPrescreen = async (
+	token: string = '',
+	sweepId: string
+): Promise<[Response | null, AbortController]> => {
+	const controller = new AbortController();
+	let error = null;
+
+	const searchParams = new URLSearchParams();
+	searchParams.append('sweep_id', sweepId);
+
+	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/prescreen/stream?${searchParams.toString()}`, {
+		signal: controller.signal,
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		}
+	}).catch((err) => {
+		console.error(err);
+		error = requestError(err);
+		return null;
+	});
+
+	if (error) {
+		throw error;
+	}
+
+	return [res, controller];
+};
+
+export const getPrescreenDashboard = async (token: string = '') => {
+	let error = null;
+
+	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/prescreen/dashboard`, {
+		method: 'GET',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		}
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await errorBody(res);
+			return res.json();
+		})
+		.catch((err) => {
+			error = errorDetail(err);
+			console.error(err);
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
+export const startPrescreenDashboard = async (token: string = '') => {
+	let error = null;
+
+	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/prescreen/dashboard/start`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		}
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await errorBody(res);
+			return res.json();
+		})
+		.catch((err) => {
+			error = errorDetail(err);
+			console.error(err);
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};
+
+export const stopPrescreenDashboard = async (token: string = '') => {
+	let error = null;
+
+	const res = await fetch(`${WEBUI_API_BASE_URL}/benchmarks/prescreen/dashboard/stop`, {
+		method: 'POST',
+		headers: {
+			Accept: 'application/json',
+			'Content-Type': 'application/json',
+			authorization: `Bearer ${token}`
+		}
+	})
+		.then(async (res) => {
+			if (!res.ok) throw await errorBody(res);
+			return res.json();
+		})
+		.catch((err) => {
+			error = errorDetail(err);
+			console.error(err);
+			return null;
+		});
+
+	if (error) {
+		throw error;
+	}
+
+	return res;
+};

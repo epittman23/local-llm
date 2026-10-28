@@ -806,6 +806,106 @@ test('Tune shows sweep status streamed as whole-object replacements, and Stop re
 	await expect(page.getByRole('button', { name: 'Stop' })).toBeDisabled();
 });
 
+test('Pre-screen streams a running sweep and labels its candidates as raw llama-bench throughput', async ({ page }) => {
+	const sweep = {
+		sweep_id: '1793-abc',
+		status: 'running',
+		status_reason: null,
+		profile: 'qwen38',
+		sampler: 'grid',
+		objective: 'tg',
+		study_name: 'prescreen-1793-abc',
+		grid_path: 'data/prescreen/qwen38.toml',
+		model_file: 'Qwen3.8-27B-UD-Q3_K_XL.gguf',
+		build_commit: 'f0fb5984b',
+		build_number: 11875,
+		gpu_info: 'GPU',
+		driver_version: '590.48.01',
+		n_prompt: 512,
+		n_gen: 128,
+		reps: 5
+	};
+	const point = (id: number, status: string, ngl: string) => ({
+		point_id: id,
+		phase: 'search',
+		optuna_trial_number: id - 1,
+		remeasure_of: null,
+		overrides: { LLAMA_NGL: ngl },
+		status,
+		reason: null,
+		tg_avg_ts: status === 'ok' ? 6.5 : null,
+		tg_stddev_ts: null,
+		pp_avg_ts: status === 'ok' ? 120 : null,
+		pp_stddev_ts: null,
+		peak_vram_mib: status === 'ok' ? 5300 : null
+	});
+	const candidate = {
+		point_id: 2,
+		rank: 1,
+		is_baseline: false,
+		changes: { ngl: '22' },
+		tg: 6.5,
+		pp: 120,
+		measurements: 1,
+		peak_vram_mib: 5300,
+		ctx_check: null,
+		ctx_check_free_mib: null,
+		ctx_check_reason: null
+	};
+	const active = { sweep_id: '1793-abc', current: { point_id: 3, phase: 'search', overrides: { LLAMA_NGL: '24' } } };
+	const running = {
+		sweep,
+		points: [point(1, 'ok', '20'), point(2, 'ok', '22')],
+		candidates: [candidate],
+		running: true,
+		active,
+		last_error: null
+	};
+	await page.route('**/api/v1/benchmarks/prescreen/grids', (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ grids: [] }) })
+	);
+	await page.route('**/api/v1/benchmarks/prescreen/dashboard', (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: 'application/json',
+			body: JSON.stringify({ running: false, url: 'http://127.0.0.1:8091/dashboard', port: 8091 })
+		})
+	);
+	const next = { ...running, points: [...running.points, point(3, 'oom', '24')] };
+	const done = { ...next, sweep: { ...sweep, status: 'done' }, running: false, active: null };
+	// Running on the first read; finished once the stream has ended.
+	let listed = 0;
+	await page.route('**/api/v1/benchmarks/prescreen/sweeps?**', (route) => {
+		const body = listed++
+			? { sweeps: [done.sweep], running: false, active: null, last_error: null }
+			: { sweeps: [sweep], running: true, active, last_error: null };
+		return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+	});
+	let read = 0;
+	await page.route('**/api/v1/benchmarks/prescreen/sweeps/1793-abc', (route) =>
+		route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(read++ ? done : running) })
+	);
+	await page.route('**/api/v1/benchmarks/prescreen/stream**', (route) => {
+		const body = `data: ${JSON.stringify(running)}\n\ndata: ${JSON.stringify(next)}\n\nevent: done\ndata: {}\n\n`;
+		return route.fulfill({ status: 200, contentType: 'text/event-stream', body });
+	});
+
+	await page.goto('/benchmarks/prescreen');
+
+	await expect(page.getByRole('heading', { name: 'Pre-screen' })).toBeVisible();
+	await expect(page.getByRole('link', { name: 'Pre-screen' })).toBeVisible();
+	await expect(
+		page.getByText('Candidates, raw llama-bench throughput (not a serving measurement): confirm with a full Tests run')
+	).toBeVisible();
+	await expect(page.getByRole('row').filter({ hasText: 'ngl 22' }).first()).toContainText('6.50');
+	// The events replaced each other, and the final read replaced them: three
+	// points, the third an OOM, and the sweep done.
+	await expect(page.getByText('Points (3)')).toBeVisible();
+	await expect(page.getByRole('cell', { name: 'oom' })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Start', exact: true })).toBeEnabled();
+	await expect(page.getByRole('button', { name: 'Cancel' })).toBeDisabled();
+});
+
 test('a non-admin user is bounced out of Benchmarks entirely', async ({ page }) => {
 	// Overrides this file's own beforeEach mock -- last-registered route wins
 	// for a matching request in Playwright.

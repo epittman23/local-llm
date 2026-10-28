@@ -119,6 +119,7 @@ describe('every API helper rejects on a failed request', () => {
 		'index.getToolServersData': "collects each tool server's error in its result",
 		'index.executeToolServer': "returns a tool call's error as the tool's result",
 		// Stream openers: they return the Response, and the caller checks res.ok.
+		'benchmarks.streamPrescreen': 'returns the response',
 		'benchmarks.streamServe': 'returns the response',
 		'benchmarks.streamTestRun': 'returns the response',
 		'benchmarks.streamTuneLog': 'returns the response',

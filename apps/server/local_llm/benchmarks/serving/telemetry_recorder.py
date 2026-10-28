@@ -48,10 +48,8 @@ from __future__ import annotations
 import argparse
 import errno
 import os
-import re
 import signal
 import socket
-import subprocess
 import sys
 import time
 import urllib.error
@@ -63,14 +61,11 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from local_llm.benchmarks.analysis import stats
+from local_llm.benchmarks.serving.gpu import sample_gpu
 
 # Consecutive failed port probes before concluding the server is gone. This is
 # the fallback stop condition; the normal one is a SIGTERM from the router.
 MISS_LIMIT = 3
-
-SMI_FIELDS = (
-    'temperature.gpu,utilization.gpu,memory.used,memory.total,power.draw,clocks.sm,clocks_throttle_reasons.active'
-)
 
 # The /metrics counters worth a row. llama.cpp exposes more, but these are the
 # ones a serving configuration is judged on; anything else would be noise at one
@@ -117,52 +112,6 @@ def port_open(port: int) -> bool:
             return True
     except OSError:
         return False
-
-
-def sample_gpu() -> dict | None:
-    """One nvidia-smi row. None when the query fails, so a transient failure
-    skips a sample rather than writing a row of nulls that would drag every
-    average toward zero."""
-    try:
-        out = subprocess.run(
-            ['nvidia-smi', f'--query-gpu={SMI_FIELDS}', '--format=csv,noheader,nounits'],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    if out.returncode != 0 or not out.stdout.strip():
-        return None
-    fields = [f.strip() for f in out.stdout.strip().split('\n')[0].split(',')]
-    if len(fields) < 7:
-        return None
-
-    def as_int(value: str):
-        try:
-            return int(float(value))
-        except ValueError:
-            return None  # "[N/A]" on a laptop without a sensor
-
-    def as_float(value: str):
-        try:
-            return float(value)
-        except ValueError:
-            return None
-
-    throttle = None
-    if re.fullmatch(r'0x[0-9a-fA-F]+', fields[6]):
-        throttle = int(fields[6], 16)
-    return {
-        'at': now(),
-        'temp_c': as_int(fields[0]),
-        'util_pct': as_int(fields[1]),
-        'mem_used_mib': as_int(fields[2]),
-        'mem_total_mib': as_int(fields[3]),
-        'power_w': as_float(fields[4]),
-        'sm_mhz': as_int(fields[5]),
-        'throttle': throttle,
-    }
 
 
 def scrape_metrics(port: int) -> dict | None:

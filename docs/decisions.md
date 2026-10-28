@@ -7,6 +7,91 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-28**: **A llama-bench pre-screen added: Benchmarks > Pre-screen.**
+  This is PR 3 of `docs/plans/benchmark-upgrade.md`, its last.
+
+  **Why.** Tune serves every candidate and checks its answers, which costs
+  a model load and a run of items per configuration. Many offload and batch
+  settings can be ruled out much more cheaply: either they do not fit in
+  6 GB, or llama-bench alone shows them slower. The pre-screen finds the few
+  worth a Tests run. Its numbers are raw llama-bench throughput at a
+  test-sized context, not serving measurements. They are kept in tables of
+  their own and never shown on Compare or Report.
+
+  **How it works:**
+  - **One llama-bench process per point.** An OOM, a load error, a signal, a
+    timeout and unparseable output are recorded apart.
+  - **Every pre-screen is an Optuna study**, as the owner decided on
+    2026-10-19 over the plan's grid-only recommendation (D9).
+    - The plan argued that a full grid with pruning needs no new
+      dependency, and these grids are small.
+    - The owner preferred one path for any grid size, a Bayesian sampler
+      for larger grids, and optuna-dashboard's plots (history, Pareto front,
+      parameter importance).
+    - Trial 0 is the profile's own configuration. Up to 120 points, every
+      point runs; above that, a seeded multivariate TPE runs a trial budget.
+  - **Monotone pruning.** Once a point runs out of memory, every point that
+    needs at least as much VRAM is recorded as pruned without running.
+  - **An OOM teaches the sampler.** An OOM or pruned point completes with
+    throughput 0 and a violated constraint, so TPE learns where memory runs
+    out.
+  - **The top three are measured again** in fresh processes, and candidates
+    rank on the mean of both measurements.
+  - **The leaders are load-checked.** The top N (3 by default) are loaded
+    in `llama-server` at the profile's own context, to catch an OOM that
+    llama-bench's small test context cannot show.
+  - **Storage:**
+    - `benchmark_prescreen_sweep` and `benchmark_prescreen_point` (migration
+      `c8e1f5a2d907`, with a schema note) are the record. A sweep's row
+      carries its model file, build, GPU, driver, RAM, kernel and grid sha.
+    - Optuna's copy of each study lives in the `optuna` Postgres schema
+      (D13), which Optuna creates and migrates itself.
+  - **The dashboard.** optuna-dashboard runs as its own process, started
+    from the page. It is bound to `127.0.0.1:8091` whatever the backend
+    listens on, because it has no authentication.
+
+  **Deliberate differences from the plan:**
+  - **The schema goes in the URL** (`options=-csearch_path=optuna`), not in
+    `engine_kwargs`. `RDBStorage.upgrade()` hands Alembic the bare URL
+    (optuna 5.0.0), so a search path in `engine_kwargs` is lost exactly when
+    Optuna migrates its tables. Tried on a throwaway database with an older
+    Optuna revision stamped: the upgrade read `public.alembic_version` and
+    found the app's head. A test now forces that upgrade and checks that
+    `public` is untouched.
+  - **GridSampler is not used.** It visits its grid in a seeded shuffle,
+    which defeats pruning. Every grid point is enqueued with its parameters
+    fixed, in pruning order.
+  - **Constraints use `Trial.set_constraint`**, since optuna 5.0.0
+    deprecates `constraints_func`.
+  - **A failure that says nothing about memory** (a crash, a timeout, a load
+    error, unparseable output) is an Optuna FAIL, not infeasible.
+  - **TPE repeats are not re-run.** A proposal TPE repeats is recorded as a
+    `repeat` and told the earlier result.
+  - **Pruning compares only points equal in everything that sizes VRAM**
+    except `-ngl` and `--n-cpu-moe`: batch, ubatch, cache types, flash
+    attention and `-ot`. Threads are ignored, since they allocate nothing
+    on the card. The plan's "at a given batch and ubatch" would have let an
+    f16 cache's OOM prune a q4_0 point.
+  - **`-ot` is converted to llama-bench's separator.** llama-bench separates
+    overrides with `;` and reads `,` as another value to sweep, so
+    `qwen38`'s two pins, passed verbatim as the guide's old preflight
+    command passed them, ran as two tests with one pin each.
+  - **The grids leave out the cache type.** At llama-bench's test-sized
+    context the KV cache is a few MiB whatever its type. The load check is
+    what can see its effect.
+  - **A pre-screen stops at every backend shutdown**, not only with
+    `LLLM_STOP_JOBS_ON_SHUTDOWN`. Its orchestrator runs in the backend, so
+    without it llama-bench would hold the GPU with nothing recording the
+    result. A sweep left open by a backend that died is closed as stale on
+    the next start, and its orphans are stopped by their recorded process
+    group, but only when `/proc` still names llama-bench or llama-server.
+    The dashboard follows llama-server's lifecycle instead, with a pid file
+    so a restarted backend can stop it.
+  - **The JSONL test fixture is still synthetic.** llama.cpp build 11875 is
+    on the machine now (the plan said none was), but this change ran no
+    inference. The fixture follows llama-bench's field list at `f0fb5984b`.
+  - **Not yet run on the GPU.** The PR carries the plan's checklist for the
+    laptop.
 - **2026-10-25** (evening): **LiveCodeBench added, with a per-run
   release-date window.** This is PR 2 of `docs/plans/benchmark-upgrade.md`.
 
