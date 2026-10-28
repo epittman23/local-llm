@@ -114,7 +114,10 @@ Start here for "how do I run/use this."
   pre-screen, and error bars in Compare and Report);
   `benchmarks-through-the-app.md` (scoring the assistant as deployed: items
   sent through the app's chat pipeline with the code interpreter, under a
-  routing guard and a harness grouping key; approved 2026-10-24).
+  routing guard and a harness grouping key; approved 2026-10-24);
+  `local-model-recommendations.md` (the Artificial Analysis shortlist checked
+  against this machine: fit, tool calls, uncensored variants, the exact
+  Hugging Face file for each; analysis for the owner's decision).
 - **`proposals/`** — not yet built: `proposed-inference-server.md`, a
   hardware proposal (Dell R730 + Tesla V100) for a dedicated inference
   server.
