@@ -37,6 +37,10 @@ plan is [FIX_PLAN.md](FIX_PLAN.md).
 | A-12 | pending | Low | desktop | Confirmed | P1 | owned.json records neither the server address nor the checkout, so a crashed stack can be adopted on the wrong port or never stopped |
 | A-13 | pending | Low | desktop | Confirmed | P1 | Any server answering on localhost:5174 is taken for make frontend and loaded as the app |
 | A-14 | pending | Low | desktop | Confirmed | P1 | The make backend child has no error listener, so a login shell that cannot be spawned raises an uncaught exception in the main process |
+| A-15 | pending | Low | desktop | Confirmed | P1, P2 | After a forced stop, the llama-server offer and "Stop llama-server" cover every llama-server the user runs, not the one this stack served |
+| A-16 | pending | Low | desktop | Confirmed | P1 | A clean stop never checks make's exit status, so a failed compose down still shows "Stop the services" as done |
+| A-17 | pending | Low | desktop | Confirmed | P2 | The app grants the server origin the camera too, while the docs say it gets only the microphone |
+| A-18 | pending | Low | desktop | Confirmed | P2 | A hand-edited config.json with an unparseable server URL silently falls back to the local default, and the next close overwrites the edit |
 
 ### A-01: A [::1] or https:// loopback server URL makes the app start a backend it can never reach, and can stop a terminal stack's services
 
@@ -235,7 +239,7 @@ Found by the bug audit of the desktop app at `6c07575`; see docs/audit/2026-10-2
 Issue: pending. Severity: Low. Area: desktop. Status: Confirmed.
 
 - **Location**: [`apps/desktop/src/main.ts:333`](https://github.com/epittman23/local-llm/blob/6c07575fa7cc93e1ad14e16d6aad41cb770141db/apps/desktop/src/main.ts#L333); [`apps/desktop/src/stack.ts:57-60`](https://github.com/epittman23/local-llm/blob/6c07575fa7cc93e1ad14e16d6aad41cb770141db/apps/desktop/src/stack.ts#L57-L60)
-- **Description**: `decideStart` uses `http://localhost:5174` in place of the built UI whenever anything answers there with any HTTP status. Another project's Vite dev server lands on 5174 when 5173 is taken (Vite moves to the next free port), so the app window loads that project, and skips the UI build. It should check that the server is this repo's dev server, for example by a request that only the proxied backend answers.
+- **Description**: `decideStart` uses `http://localhost:5174` in place of the built UI whenever anything answers there with any HTTP status. Another project's Vite dev server lands on 5174 when 5173 is taken (Vite's `strictPort` defaults to false, so it moves to the next free port), so the app window loads that project, and skips the UI build. It should check that the server is this repo's dev server, for example by a request that only the proxied backend answers.
 - **Root cause**: The dev-server check is "anything answered", not "our dev server answered".
 - **Trigger / reproduction**: Run two other Vite projects (the second takes 5174), then launch the app with nothing on :4000: it loads the second project. Confirmed by reading `decideStart` and `probe` (any status counts); not run.
 - **Impact**: The app shows an unrelated site, and the UI build is skipped.
@@ -261,4 +265,68 @@ Issue: pending. Severity: Low. Area: desktop. Status: Confirmed.
 - **Confidence**: Confirmed: traced in the code at the audited commit by the auditing session.
 
 Found by the bug audit of the desktop app at `6c07575`; see docs/audit/2026-10-28-desktop/FINDINGS.md on the audit branch. (finding A-14, package P1)
+
+### A-15: After a forced stop, the llama-server offer and "Stop llama-server" cover every llama-server the user runs, not the one this stack served
+
+Issue: pending. Severity: Low. Area: desktop. Status: Confirmed.
+
+- **Location**: [`apps/desktop/src/stack.ts:223-235`](https://github.com/epittman23/local-llm/blob/6c07575fa7cc93e1ad14e16d6aad41cb770141db/apps/desktop/src/stack.ts#L223-L235); [`apps/desktop/src/stack.ts:286-296`](https://github.com/epittman23/local-llm/blob/6c07575fa7cc93e1ad14e16d6aad41cb770141db/apps/desktop/src/stack.ts#L286-L296); [`apps/desktop/src/main.ts:472-477`](https://github.com/epittman23/local-llm/blob/6c07575fa7cc93e1ad14e16d6aad41cb770141db/apps/desktop/src/main.ts#L472-L477); [`apps/desktop/src/main.ts:483-491`](https://github.com/epittman23/local-llm/blob/6c07575fa7cc93e1ad14e16d6aad41cb770141db/apps/desktop/src/main.ts#L483-L491)
+- **Description**: `llamaServerPids()` is `pgrep -x llama-server`: every process of that name the user owns. After a forced stop, the app offers to stop "a llama-server" if any such process exists, and "Stop llama-server" sends SIGTERM to all of them. A model served from a terminal backend, another checkout, or by hand is offered and killed as if this stack had left it. If none of them belongs to this stack, the offer appears anyway. It should identify the server its own backend started, and offer only that one.
+- **Root cause**: The leftover check has no record of which llama-server the owned stack served; it matches by name.
+- **Trigger / reproduction**: Serve a model from a second checkout (or run `llama-server` by hand), then close the app while it owns a stack that has to be forced: the offer appears, and "Stop llama-server" stops the unrelated server. Read on both sides: `stack.ts:223-235` and `main.ts:483-491`.
+- **Impact**: "Stop llama-server" can kill a model the app never started. With the "Leave it" bug, it is also the only way to dismiss the dialog besides killing the app. The 2026-10-23 decision says the app stops only what it started.
+- **Suggested fix** (approach only): Record the served model's pid (for example from the backend, or the profile's port answered by `/check`) while the stack runs, and offer and stop only that process.
+- **Docs affected under the maintenance policy**: docs/guides/desktop.md "What happens when it closes" ("offers to stop any `llama-server` still running") should say which one.
+- **Related issues and PRs**: A-02 (pending)
+- **Confidence**: Confirmed: traced in the code at the audited commit by the auditing session.
+
+Found by the bug audit of the desktop app at `6c07575`; see docs/audit/2026-10-28-desktop/FINDINGS.md on the audit branch. (finding A-15, package P1, P2)
+
+### A-16: A clean stop never checks make's exit status, so a failed compose down still shows "Stop the services" as done
+
+Issue: pending. Severity: Low. Area: desktop. Status: Confirmed.
+
+- **Location**: [`apps/desktop/src/stack.ts:286-299`](https://github.com/epittman23/local-llm/blob/6c07575fa7cc93e1ad14e16d6aad41cb770141db/apps/desktop/src/stack.ts#L286-L299); [`apps/desktop/src/main.ts:470-480`](https://github.com/epittman23/local-llm/blob/6c07575fa7cc93e1ad14e16d6aad41cb770141db/apps/desktop/src/main.ts#L470-L480); [`apps/desktop/src/progress.ts:117`](https://github.com/epittman23/local-llm/blob/6c07575fa7cc93e1ad14e16d6aad41cb770141db/apps/desktop/src/progress.ts#L117); [`Makefile:130`](https://github.com/epittman23/local-llm/blob/6c07575fa7cc93e1ad14e16d6aad41cb770141db/Makefile#L130)
+- **Description**: On a stop within the budget, `stopGroup` returns `{ forced: false }` once the group is gone, and `shutdown()` marks the progress complete and exits. The `services` step has a start marker and no end marker, so it is shown as done whether or not the trap's `docker compose down` worked. The make process's exit code (which the app holds as `owned.exitCode` when it spawned it) is never looked at. A failed teardown should be shown as failed, with the log.
+- **Root cause**: The stop path treats "the process group is gone" as success.
+- **Trigger / reproduction**: Close the app while it owns the stack, with Docker refusing `compose down` (for example the daemon stopped meanwhile): the dialog ticks "Stop the services" and quits. Read from the code.
+- **Impact**: Containers can be left running after a stop the dialog reported as clean.
+- **Suggested fix** (approach only): Check the make child's exit code (or run `docker compose ps` afterwards) and mark the services step failed, keeping the dialog open with the log, when the teardown did not finish.
+- **Docs affected under the maintenance policy**: None.
+- **Related issues and PRs**: None known.
+- **Confidence**: Confirmed: traced in the code at the audited commit by the auditing session.
+
+Found by the bug audit of the desktop app at `6c07575`; see docs/audit/2026-10-28-desktop/FINDINGS.md on the audit branch. (finding A-16, package P1)
+
+### A-17: The app grants the server origin the camera too, while the docs say it gets only the microphone
+
+Issue: pending. Severity: Low. Area: desktop. Status: Confirmed.
+
+- **Location**: [`apps/desktop/src/policy.ts:30-41`](https://github.com/epittman23/local-llm/blob/6c07575fa7cc93e1ad14e16d6aad41cb770141db/apps/desktop/src/policy.ts#L30-L41); [`apps/desktop/src/main.ts:614-619`](https://github.com/epittman23/local-llm/blob/6c07575fa7cc93e1ad14e16d6aad41cb770141db/apps/desktop/src/main.ts#L614-L619)
+- **Description**: `ALLOWED_PERMISSIONS` includes Electron's `media` permission, which covers both audio and video capture; the request handler never looks at `details.mediaTypes`. policy.ts's comment and docs/guides/desktop.md both say the server origin gets the microphone (voice input). The code and the docs should agree: either grant only audio, or document the camera.
+- **Root cause**: Electron's single `media` permission was taken to mean the microphone.
+- **Trigger / reproduction**: A page on the server origin calls `getUserMedia({ video: true })`: the request handler grants `media` without a prompt. Read against the Electron 45 typings for `PermissionRequest.mediaTypes`.
+- **Impact**: The documented permission set is narrower than the real one.
+- **Suggested fix** (approach only): Check `details.mediaTypes` in the request handler and allow only `audio` unless the camera is wanted (then document it).
+- **Docs affected under the maintenance policy**: docs/guides/desktop.md "Security model" lists the permissions.
+- **Related issues and PRs**: None known.
+- **Confidence**: Confirmed: traced in the code at the audited commit by the auditing session.
+
+Found by the bug audit of the desktop app at `6c07575`; see docs/audit/2026-10-28-desktop/FINDINGS.md on the audit branch. (finding A-17, package P2)
+
+### A-18: A hand-edited config.json with an unparseable server URL silently falls back to the local default, and the next close overwrites the edit
+
+Issue: pending. Severity: Low. Area: desktop. Status: Confirmed.
+
+- **Location**: [`apps/desktop/src/config.ts:66-85`](https://github.com/epittman23/local-llm/blob/6c07575fa7cc93e1ad14e16d6aad41cb770141db/apps/desktop/src/config.ts#L66-L85); [`apps/desktop/src/main.ts:208-214`](https://github.com/epittman23/local-llm/blob/6c07575fa7cc93e1ad14e16d6aad41cb770141db/apps/desktop/src/main.ts#L208-L214)
+- **Description**: `parseConfig` replaces a `serverUrl` that does not parse as an http(s) URL (for example `llm.example.ts.net`, with no scheme) with the default `http://127.0.0.1:4000`, without telling anyone, so the app starts the local stack instead of connecting where the user meant. On the next window close, `saveBounds` writes `{ ...storedConfig(), bounds }`, which saves that default over the hand edit. Unknown fields are dropped the same way. It should report an invalid setting and leave the file as the user wrote it.
+- **Root cause**: Parsing is lenient by design, and the bounds save rewrites the whole file from the parsed result.
+- **Trigger / reproduction**: Write `{"serverUrl": "llm.example.ts.net"}` to config.json and start the app: it starts the local stack. Read on both sides: `normalizeServerUrl` returns null for a URL without a scheme (`config.ts:25-34`), `parseConfig` then keeps the default (`config.ts:76-78`), and `saveBounds` writes the parsed result back (`main.ts:208-214`).
+- **Impact**: A mistyped address quietly becomes "start the local stack", and the user's edit is lost.
+- **Suggested fix** (approach only): Keep the raw file content for fields that fail to parse (write back only what changed), and show "the saved server URL is invalid" in the startup dialog instead of falling back silently.
+- **Docs affected under the maintenance policy**: None.
+- **Related issues and PRs**: None known.
+- **Confidence**: Confirmed: traced in the code at the audited commit by the auditing session.
+
+Found by the bug audit of the desktop app at `6c07575`; see docs/audit/2026-10-28-desktop/FINDINGS.md on the audit branch. (finding A-18, package P2)
 

@@ -35,8 +35,8 @@ The full-repository audit in `docs/audit/` predates the desktop app (added
   1,803 lines); focus: start/attach/adopt/own decisions, the one-SIGINT stop
   and its 90 s budget, crash adoption by pid and start time, the progress
   reducer against the real markers, and tests that cannot fail.
-  - Status: fully read (all 11 files), 2026-10-28; findings A-01 to A-04 and
-    A-08 to A-14.
+  - Status: fully read (all 11 files), 2026-10-28; findings A-01 to A-04,
+    A-08 to A-16.
 - [x] **P2 Surface and packaging**: `src/config.ts`, `src/config.test.ts`,
   `src/policy.ts`, `src/policy.test.ts`, `src/preload.ts`,
   `src/status-preload.ts`, `static/status.html`, `static/status.js`,
@@ -48,7 +48,7 @@ The full-repository audit in `docs/audit/` predates the desktop app (added
   windows may open and request, the dialog's bridge and its sender checks,
   and what the package ships.
   - Status: fully read (all 17 files, and `src/main.ts` in full), 2026-10-28;
-    findings A-01, A-02 and A-05 to A-07. The unpacked package was inspected
+    findings A-01, A-02, A-05 to A-07, A-15, A-17 and A-18. The unpacked package was inspected
     too: the asar contents and the fuses.
 
 ## Still not read line by line
