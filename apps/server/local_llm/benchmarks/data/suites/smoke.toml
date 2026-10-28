@@ -23,3 +23,10 @@ n  = 8
 [[benchmark]]
 id = "ds1000"
 n  = 8
+
+# Only with a release-date window (the Tests page's window dates): without
+# one, a run leaves LiveCodeBench out and says so. A window smaller than n
+# uses every problem in it.
+[[benchmark]]
+id = "livecodebench"
+n  = 8

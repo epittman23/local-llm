@@ -129,11 +129,11 @@ in-filter items); rows recorded before that carry a NULL `adapter_sha`, show as
 | Page / action | What it does |
 | --- | --- |
 | Tests → run one item | Ask and grade one item against what is being served, with the run's system prompt, and show the outcome and the answer. Pick a benchmark and an item id (e.g. `HumanEval/0`). **Not recorded**: a one-item run would land in every comparison that spans tiers. It says when a suite here would leave the item out (the library filter, or a reference solution that fails here) |
-| Tests → run a tier | A whole `smoke`/`standard`/`full` tier. A benchmark filter restricts it, a resume action continues the most recent run of that tier |
+| Tests → run a tier | A whole `smoke`/`standard`/`full` tier. A benchmark filter restricts it, a resume action continues the most recent run of that tier. The window dates include LiveCodeBench, drawn from that window; without them it is left out |
 | Tests → system prompt | Send the selected system prompt with every item of that run — see below |
 | Tests → Datasets panel | Each benchmark's dataset: its item count and pinned revision, and its calibration (gradeable items, or why it is stale) |
-| Tests → Fetch / Force refetch | Download and pin every fetched dataset; Fetch keeps one already on disk, Force refetch (after a confirmation) downloads it again. A refetch replaces the files only once it has them all, and keeps the calibration file. A vendored dataset (all three today) downloads nothing: Fetch only verifies its file and reports "in the repository, verified" |
-| Tests → Selfcheck | Grade every dataset's own reference solutions, several at a time, streaming each verdict, and write the calibrations; cancelling writes none |
+| Tests → Fetch / Force refetch | A vendored dataset (HumanEval+, MBPP+, DS-1000) downloads nothing: Fetch only verifies its file and reports "in the repository, verified". LiveCodeBench downloads the increments ticked under the table, streaming progress; Fetch keeps one already on disk, Force refetch (after a confirmation) downloads it again, and a failed or cancelled download leaves the increments already there whole |
+| Tests → Selfcheck | Grade every dataset's own reference solutions (LiveCodeBench has none, and says "not calibratable"), several at a time, streaming each verdict, and write the calibrations; cancelling writes none |
 | Compare | Rank models and configurations — see below |
 | Compare → export answers | Write a whole suite run's stored answers back out as flat markdown files, for grepping/diffing/archiving outside the app |
 | Answers → view one | Render one stored answer as markdown directly in the browser |
@@ -331,6 +331,7 @@ otherwise show up raw in a browser rather than being rendered.
 | [HumanEval+](https://github.com/evalplus/evalplus) (`humanevalplus`), release v0.1.10 | 164 | `base_input` + `plus_input` (a median of 973 inputs per task); the expected outputs come from `canonical_solution` | Apache-2.0 (EvalPlus), over HumanEval (MIT) | Liu et al. 2023, [arXiv:2305.01210](https://arxiv.org/abs/2305.01210); Chen et al. 2021, [arXiv:2107.03374](https://arxiv.org/abs/2107.03374) |
 | [MBPP+](https://github.com/evalplus/evalplus) (`mbppplus`), release v0.2.0 | 378 | the same, a median of 105 plus inputs | Apache-2.0 (EvalPlus), over MBPP (CC-BY-4.0) | Liu et al. 2023; Austin et al. 2021, [arXiv:2108.07732](https://arxiv.org/abs/2108.07732) |
 | [DS-1000](https://github.com/xlang-ai/DS-1000) (`ds1000`), revision `4416080a` | 1000 (511 Pandas/Numpy) | `code_context`, which defines `test_execution(solution)` | CC-BY-SA-4.0 | Lai et al. 2022, [arXiv:2211.11501](https://arxiv.org/abs/2211.11501) |
+| [LiveCodeBench](https://livecodebench.github.io/) (`livecodebench`), release_v6 at commit `0fe84c39` | 1055, dated 2023-05-07 to 2025-04-06 | public and private tests per problem (stdin, or functional for LeetCode); no reference solutions | unclear (card `cc`, loader MIT), fetched, not redistributed | Jain et al. 2024, [arXiv:2403.07974](https://arxiv.org/abs/2403.07974) |
 
 HumanEval+ and MBPP+ replaced HumanEval and MBPP (sanitized) on 2026-10-25.
 They are the same problems with EvalPlus's corrected reference solutions and
@@ -369,8 +370,69 @@ time. A fresh data directory had nothing to run until someone pressed Fetch.
 Vendoring reverses that decision; the 2026-10-25 entry in
 [docs/decisions.md](../decisions.md) gives the reasons, and
 [NOTICE](../../NOTICE) carries the three licenses. The fetch machinery stays,
-for a benchmark too large to vendor (LiveCodeBench, planned), and calibrations
-still live in that directory (`BENCHMARKS_DATA_DIR` overrides it).
+for LiveCodeBench, which is too large to vendor, and calibrations still live in
+that directory (`BENCHMARKS_DATA_DIR` overrides it).
+
+### LiveCodeBench and the release-date window
+
+LiveCodeBench (added 2026-10-25) is competition problems from LeetCode,
+AtCoder and Codeforces, each dated by its contest. A run draws them from a
+**release-date window** the user gives on the Tests page ("Window from", and
+optionally "Window to"): only problems from contests inside it. A model can
+then be measured on problems published after its training data was
+collected. The newest problem in the newest release is from **2025-04-06**,
+so for a 2026 model no window is guaranteed unseen. Its problems are still far
+less common than HumanEval's, which every training set has.
+
+**Fetching is by increment.** The release is six files, 4.5 GB in all, pinned
+in `livecodebench.toml`. Tick the ones wanted in the Datasets panel, then
+Fetch:
+
+| Increment | Problems | Contest dates | Download |
+| --- | --- | --- | --- |
+| `test.jsonl` | 400 | 2023-05-07 to 2024-03-02 | 1.17 GiB |
+| `test2.jsonl` | 111 | 2024-03-09 to 2024-05-25 | 680 MiB |
+| `test3.jsonl` | 101 | 2024-06-01 to 2024-08-10 | 594 MiB |
+| `test4.jsonl` | 101 | 2023-08-26 to 2024-10-05 | 1.12 GiB |
+| `test5.jsonl` | 167 | 2024-09-22 to 2025-01-04 | 532 MiB |
+| `test6.jsonl` | 175 | 2025-01-04 to 2025-04-06 | 128 MiB |
+
+- **What a fetch does:** each file is streamed to disk and checked against its
+  pinned SHA-256. It is then decoded once, into `items.jsonl` and one gzipped
+  file of private tests per problem, and the raw file is deleted. test6 takes
+  about 40 s and 97 MB.
+- **Decoding:** the private tests are pickled upstream. They are unpickled at
+  fetch time by an unpickler that refuses every global, and never when an
+  answer is graded.
+- **Coverage:** a window needs **every increment whose dates it touches.** The
+  ranges overlap (test4 reaches back to 2023-08-26), so a run refuses a window
+  until those are all fetched, and names the missing ones. The pool then
+  depends on the window alone, never on what happens to be on disk.
+  - A window from 2025-01-05 needs test6 only.
+
+**The window's edges are LiveCodeBench's own.** A problem is in the window when
+`window_min <= contest_date <= window_max`, each date taken at midnight. So the
+last day holds only problems stamped 00:00 that day. LeetCode problems carry
+their contest's start time (18:30, 02:30 and so on), so one from the last
+day's evening falls outside, exactly as in LiveCodeBench's own loader. To
+include a whole day, end the window the day after.
+
+**In a tier**, LiveCodeBench is the fourth benchmark (8, 100 or every
+problem), but only when a window is given:
+- Without one, the run leaves it out and says so in the run's notes. Tune's
+  sweeps and every unwindowed run behave as before.
+- Picking `livecodebench` in the benchmark filter without a window is refused.
+- A window that holds fewer problems than the tier asks for uses all of them,
+  and says so.
+- The window is recorded on every LiveCodeBench result (`item_window`) and
+  shown on the running stream. Compare and Report keep each window's results
+  in a block of their own.
+- Resuming a run that drew LiveCodeBench under a different window is
+  refused. A run started without a window has no LiveCodeBench pool yet, so
+  it can be resumed with one, which adds LiveCodeBench to it.
+- An increment that repeats a problem already fetched is refused, since a
+  result is keyed by its problem id.
+
 
 **Saturation, stated plainly:** HumanEval and MBPP are heavily contaminated for
 a 2026 model, and their `+` versions share those problems, so they still sit
@@ -391,9 +453,9 @@ the math and statistics work this assistant is also for.
 
 | Tier | Composition | Purpose |
 | --- | --- | --- |
-| `smoke` | 8 per benchmark, 24 items | The tuning loop: fast enough to run between two serving configurations |
-| `standard` | 100 per benchmark, 300 items | An overnight run |
-| `full` | Every gradeable item (163 + 377 + 456 = 996 on 2026-10-25; DS-1000's count depends on the grading environment) | The only tier comparable to a published score |
+| `smoke` | 8 per benchmark: 24 items, 32 with a window | The tuning loop: fast enough to run between two serving configurations |
+| `standard` | 100 per benchmark: 300 items, 400 with a window | An overnight run |
+| `full` | Every gradeable item (163 + 377 + 456 = 996 on 2026-10-25; DS-1000's count depends on the grading environment), plus every LiveCodeBench problem in the window | The only tier comparable to a published score |
 
 Sampling is seeded (`seed = 20260830`, recorded in each result) and sorted by the
 dataset's own id before sampling, so `smoke` is the same 24 items on every run
@@ -445,6 +507,36 @@ Each harness uses the benchmark's own evaluation logic:
 - **DS-1000** — `code_context` is executed and its own `test_execution(solution)`
   is called with the extracted code as a string literal; `test_string(solution)`
   too when the item defines it.
+- **LiveCodeBench** (`grading/livecodebench.py`) — LiveCodeBench's own
+  semantics from `lcb_runner/evaluation/testing_util.py` at commit
+  `28fef95e`:
+  - The code is the text between the reply's last two fence lines, as
+    LiveCodeBench extracts it. A reply with no fenced block is `no_code`.
+  - LiveCodeBench's import header goes in first. It brings in `gcd`, `deque`,
+    `List` and the like without an import, and raises the recursion limit to
+    50000.
+  - Public tests run first, then private ones. The first failure ends the
+    problem, and its reason names the test.
+  - **Functional (LeetCode):** one grading program, under the driver below.
+    It calls `Solution().<func_name>` (or a module-level function, when the
+    reply has no `class Solution`) with each test's JSON arguments, and
+    compares the result exactly, a tuple counting as a list.
+  - **Stdin (AtCoder, Codeforces):** the reply runs as `__main__` once per
+    test, in its own subprocess, with the test's input piped to stdin. Its
+    stdout is compared in the grader: stripped lines, each equal exactly or
+    as `Decimal` tokens. A `SystemExit` after the output is ignored, as
+    LiveCodeBench ignores it. Any other exception is `fail_error`. The
+    verdict never comes from the program's own exit status. A script that
+    printed its answer and exited is graded on that output even if something
+    it started still holds the pipe; one still running at the limit is
+    `fail_timeout`.
+  - Like LiveCodeBench, answers run with `OMP_NUM_THREADS=1`. A functional
+    problem's tests file is deleted before the answer loads, so it cannot
+    read the expected outputs.
+  - LiveCodeBench grades stdin problems in one process instead, with stdin
+    mocked. That mock fails two common correct idioms (repeated
+    `sys.stdin.buffer.readline()`, and a `global` in a helper), so real stdin
+    is used here; the decisions entry records it.
 
 **How a verdict is reached.** The program is not run directly: a small
 driver (`DRIVER` in `evaluation/grading/__init__.py`) runs it as the module
@@ -461,7 +553,11 @@ no file, argument or environment variable to read it from. A program that
 exits early fails with `fail_error`, "exited before its tests finished".
 
 **Time limits.** DS-1000 items have a fixed subprocess timeout (60 s, the
-adapter's `[check] timeout`). HumanEval+ and MBPP+ follow EvalPlus, from
+adapter's `[check] timeout`). LiveCodeBench's are its own: 6 s per test
+(`timeout_per_test`, plus 1 s for a stdin test's interpreter to start), and
+(6 + 1) x tests + 5 s for the whole problem. It has no reference to scale
+against, so these are absolute. Its answers get the same 4 GiB address-space
+limit, which LiveCodeBench does not set. HumanEval+ and MBPP+ follow EvalPlus, from
 their adapters' `[check]`, so a change to any of these changes `adapter_sha`:
 
 | Limit | Value | EvalPlus's |
@@ -512,8 +608,20 @@ server answered, and a 400 can be specific to one item.
 The selfcheck action grades every benchmark's **own reference solution**
 (`canonical_solution`, `reference_code`). No model is involved, so a
 correct harness scores 100%; anything less is a bug in the grader, or in the
-dataset. Measured on 2026-10-25 on the NVIDIA GeForce RTX 3060 Laptop machine
-under native Fedora 44 (grading runs on the CPU), with harness version 3,
+dataset.
+
+**LiveCodeBench ships no reference solutions**, so selfcheck reports it as
+"not calibratable" and excludes nothing. Its harness was checked by hand
+instead, on 2026-10-25, against test6's real tests:
+- Hand-written correct answers passed every test of their problem. They were
+  `atcoder/abc387_b` (40 tests) three ways (`input()`, repeated
+  `sys.stdin.buffer.readline()`, and `open(0)` behind a main guard), plus
+  `leetcode/3708` and `leetcode/3731` (31 tests each).
+- Wrong, crashing, looping and unfenced answers came out as `fail_assert`,
+  `fail_error`, `fail_timeout` and `no_code`.
+
+The reference solutions of the other three were measured on 2026-10-25 on the
+NVIDIA GeForce RTX 3060 Laptop machine under native Fedora 44 (grading runs on the CPU), with harness version 3,
 dataset revisions HumanEval+ `v0.1.10@42526ec0e7d5`, MBPP+ `v0.2.0@b54e76275524`
 and DS-1000 `4416080ac5cb`, and the grading environment Python
 3.12.14, numpy 2.5.3, pandas 3.0.6, scipy 1.18.1, scikit-learn 1.9.1, pyyaml

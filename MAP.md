@@ -235,7 +235,10 @@ than a second app glued on by a userscript. See `docs/decisions.md` for the migr
   `docs/plans/benchmarks-through-the-app.md`), and `grading/` (the
   harnesses: `evalplus.py` for HumanEval+ and MBPP+, with
   `evalplus_runtime.py`, the EvalPlus comparison embedded in each grading
-  program; `ds1000.py`). `utils/upstream_trace.py` is the
+  program; `ds1000.py`; `livecodebench.py`, with `livecodebench_runtime.py`
+  for its LeetCode problems), and `livecodebench_data.py` (fetching
+  LiveCodeBench's release increments, decoding them, and its release-date
+  window). `utils/upstream_trace.py` is the
   observer `harness.py` relies on: the upstream requests and code runs one
   pipeline call makes.
 - **`analysis/`** — `compare.py`, `report.py` + `report_figures.py` (config

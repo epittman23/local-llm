@@ -7,6 +7,69 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-10-25** (evening): **LiveCodeBench added, with a per-run
+  release-date window.** This is PR 2 of `docs/plans/benchmark-upgrade.md`.
+
+  **Why.** HumanEval+ and MBPP+ are in every training set. LiveCodeBench
+  dates each problem by its contest, so a run can be limited to problems
+  published after a model's data was collected.
+  - The newest problem in the newest release is from 2025-04-06, so for a
+    2026 model no window is guaranteed unseen.
+  - The owner chose to build it anyway: its problems have surely been seen
+    far less often than the common benchmarks'.
+
+  **How it works:**
+  - **Fetching.** The six release files (4.5 GB) are pinned in
+    `livecodebench.toml` by dataset commit and per-file SHA-256. The user
+    ticks the increments to fetch. Each one is streamed to disk, verified,
+    and decoded once into problems plus gzipped private tests.
+  - **Unpickling.** The private tests are pickled upstream. An unpickler that
+    refuses every global runs at fetch time only.
+  - **The window and its column.** `benchmark_result.item_window` (migration
+    `b7d2c4e6f813`, with a schema note) records the window on every
+    LiveCodeBench result. Compare and Report already keyed blocks by it.
+  - **Coverage.** A window needs every increment whose dates it touches,
+    because the ranges overlap.
+
+  **Deliberate differences from the plan:**
+  - **Without a window, a tier leaves LiveCodeBench out** and says so; it is
+    not an error. Tune's sweeps and CI never send a window. Asking for it by
+    name without one is refused.
+  - **Stdin problems run one subprocess per test**, as the plan says, rather
+    than as LiveCodeBench's commit `28fef95e` does, in one process with
+    stdin mocked. That mock fails two common correct idioms: its
+    `sys.stdin.buffer.readline` returns the first line on every call, and
+    moving the script into a function breaks a helper's `global`.
+    - The grading rules follow LiveCodeBench: the import header and
+      recursion limit, `SystemExit` ignored after the output, the
+      stripped-line and `Decimal` comparison, `OMP_NUM_THREADS=1`, 6 s per
+      test, and (6 + 1) x tests + 5 s per problem. So do the window's edges:
+      its last day is taken at midnight, as LiveCodeBench's loader takes it.
+    - Some isolation differs: each stdin test also gets 1 s for the
+      interpreter to start; `reliability_guard`'s disabling of `os` and
+      `shutil` functions is not ported (the grader's own isolation stands in
+      for it); and a functional problem's tests file is deleted before the
+      answer loads.
+  - **A 4 GiB address-space limit** applies, which LiveCodeBench does not
+    set.
+  - **The prompt** is LiveCodeBench's own, in its OpenAIReasonPreview style:
+    the system message heads the user turn, so the system slot stays free
+    for the system-prompt ablation.
+  - **No calibration.** There are no reference solutions, so selfcheck
+    reports "not calibratable". The harness was instead checked by hand
+    against test6's real tests: correct answers in three stdin idioms and
+    two functional problems passed, and wrong, crashing, looping and
+    unfenced answers failed as each should.
+  - **Resume.** The plan had `latest_suite_run` match on the window and the
+    system prompt. Instead it is unchanged, and a check after it refuses a
+    run whose LiveCodeBench results were drawn under a different window. A
+    run started without a window can be resumed with one, since it has no
+    LiveCodeBench pool to contradict. The system prompt stays out of the
+    match, as it was before this change.
+  - **`/tests/options`** carries a `windows` map (each windowed benchmark's
+    pinned increments, which are fetched, and the dates they cover) in place
+    of the plan's per-benchmark `windowed` flag, so `benchmarks` keeps its
+    shape.
 - **2026-10-25** (later): **HumanEval+ and MBPP+ replace HumanEval and MBPP,
   graded as EvalPlus grades them, and all three datasets are vendored.**
   This is PR 1 of `docs/plans/benchmark-upgrade.md`.

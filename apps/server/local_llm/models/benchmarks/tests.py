@@ -130,6 +130,10 @@ class BenchmarkResult(Base):
     # llama.cpp reports them for the last upstream call only).
     harness_sha = Column(Text, nullable=True)
     harness_stats = Column(JSON, nullable=True)
+    # The release-date window a windowed item (LiveCodeBench) was drawn
+    # under: YYYY-MM-DD..YYYY-MM-DD, or YYYY-MM-DD.. with no upper bound.
+    # NULL for an unwindowed benchmark.
+    item_window = Column(Text, nullable=True)
 
 
 class BenchmarkResultModel(BaseModel):
@@ -158,6 +162,7 @@ class BenchmarkResultModel(BaseModel):
     cluster: str | None = None
     harness_sha: str | None = None
     harness_stats: dict | None = None
+    item_window: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -357,6 +362,7 @@ class BenchmarkResultTable:
                 # NULL for a bare request, as for system_sha.
                 harness_sha=record.get('harness_sha') or None,
                 harness_stats=record.get('harness_stats') or None,
+                item_window=record.get('item_window') or None,
             )
             stmt = pg_insert(BenchmarkResult).values(**values)
             update_cols = {
@@ -378,6 +384,7 @@ class BenchmarkResultTable:
                 # attempt's mode.
                 'harness_sha': stmt.excluded.harness_sha,
                 'harness_stats': stmt.excluded.harness_stats,
+                'item_window': stmt.excluded.item_window,
             }
             stmt = stmt.on_conflict_do_update(
                 index_elements=['suite_run_id', 'benchmark', 'item_id'], set_=update_cols
@@ -445,6 +452,19 @@ class BenchmarkResultTable:
                 select(BenchmarkResult.benchmark, BenchmarkResult.item_id).filter_by(suite_run_id=suite_run_id)
             )
             return {(row.benchmark, row.item_id) for row in result.all()}
+
+    async def windows_of(self, suite_run_id: str, db: AsyncSession | None = None) -> dict[str, set[str]]:
+        """benchmark -> the release-date windows a suite run's windowed items were drawn under."""
+        async with get_async_db_context(db) as db:
+            result = await db.execute(
+                select(BenchmarkResult.benchmark, BenchmarkResult.item_window)
+                .filter(BenchmarkResult.suite_run_id == suite_run_id, BenchmarkResult.item_window.is_not(None))
+                .distinct()
+            )
+            out: dict[str, set[str]] = {}
+            for row in result.all():
+                out.setdefault(row.benchmark, set()).add(row.item_window)
+            return out
 
     async def latest_suite_run(
         self,

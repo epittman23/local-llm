@@ -70,7 +70,7 @@ import aiohttp
 from local_llm.benchmarks.evaluation import harness
 from local_llm.benchmarks.evaluation.adapters import item_cluster, load_adapters, render_prompt
 from local_llm.benchmarks.evaluation.datasets import DatasetError, dataset_identity, item_id, read_items
-from local_llm.benchmarks.evaluation.grading import calibration_stale, grade, ungradeable
+from local_llm.benchmarks.evaluation.grading import NOT_CALIBRATABLE, calibration_stale, grade, ungradeable
 from local_llm.benchmarks.evaluation.suites import (
     build_suite,
     filter_items,
@@ -387,6 +387,7 @@ async def run_item(session: aiohttp.ClientSession, row: dict, ctx: dict) -> dict
         # the statistics never depend on the dataset file being present.
         'cluster': item_cluster(adapter, item),
         'reasoning_chars': len(ans.reasoning),
+        'item_window': row.get('item_window'),
     }
     # The answer is stored as three fields rather than one rendered blob, so
     # "the failures whose reasoning ran past 15k characters" is a query
@@ -470,6 +471,7 @@ async def _run_harness_item(row: dict, ctx: dict, prompt: str) -> dict:
         'adapter_sha': adapter.get('_sha', ''),
         'cluster': item_cluster(adapter, item),
         'reasoning_chars': len(ans.reasoning),
+        'item_window': row.get('item_window'),
         'harness_sha': sha,
         'harness_stats': ans.stats,
     }
@@ -676,7 +678,13 @@ async def context(
     }
 
 
-def _select(suite_name: str, benchmark: str | None, item_slice: str | None) -> tuple[dict, list[dict], list[dict]]:
+def _select(
+    suite_name: str,
+    benchmark: str | None,
+    item_slice: str | None,
+    window: tuple | None = None,
+    notes: list[str] | None = None,
+) -> tuple[dict, list[dict], list[dict]]:
     """prepare_suite's synchronous part: (suite, selected, skipped).
 
     It reads the suite and dataset files and starts the grading interpreter
@@ -686,7 +694,7 @@ def _select(suite_name: str, benchmark: str | None, item_slice: str | None) -> t
     """
     adapters = load_adapters()
     suite = _guard(load_suite, suite_name)
-    selected, skipped = _guard(build_suite, suite, adapters, only=benchmark)
+    selected, skipped = _guard(build_suite, suite, adapters, only=benchmark, window=window, notes=notes)
     if not selected:
         raise SuiteLoadError(f"suite '{suite_name}' selected no items")
 
@@ -712,7 +720,7 @@ def _select(suite_name: str, benchmark: str | None, item_slice: str | None) -> t
 
     for name in sorted({r['benchmark'] for r in selected}):
         why = calibration_stale(name)
-        if why:
+        if why and why != NOT_CALIBRATABLE:
             log.warning(
                 '%s is not calibrated for this environment (%s); items its own '
                 'reference solutions cannot pass here will be scored as failures.',
@@ -735,8 +743,13 @@ async def prepare_suite(
     harness_entry: str | None = None,
     source_request=None,
     user=None,
+    window: tuple | None = None,
 ) -> tuple[dict, list[dict], list[dict]]:
     """Resolve a suite into (ctx, todo, skipped). No items are run.
+
+    `window` is the release-date window a windowed benchmark draws from
+    (livecodebench_data.parse_window()). ctx['notes'] says what the
+    selection left out or shrank because of it.
 
     Mirrors the original CLI's prepare_suite() exactly, so a router endpoint
     resolves the same todo list (interleaving, slice, missing-library
@@ -745,7 +758,8 @@ async def prepare_suite(
     implementation of this setup would eventually disagree with this one
     about what a tier actually contains.
     """
-    suite, selected, skipped = await asyncio.to_thread(_select, suite_name, benchmark, item_slice)
+    notes: list[str] = []
+    suite, selected, skipped = await asyncio.to_thread(_select, suite_name, benchmark, item_slice, window, notes)
 
     ctx = await context(
         session,
@@ -780,6 +794,20 @@ async def prepare_suite(
                 f'the latest {suite["id"]} run ({ctx["suite_run_id"]}) recorded benchmarks this repository '
                 f'no longer has ({", ".join(gone)}); start a new run instead of resuming it'
             )
+        # A windowed benchmark this run asks for must have been drawn under
+        # the same window, or the resumed run would hold two pools under one
+        # suite run id. One the earlier run never reached has no pool yet,
+        # so a run started without a window can be resumed with one.
+        asked = {r['benchmark']: r['item_window'] for r in selected if r.get('item_window')}
+        in_run = {r['benchmark'] for r in selected}
+        for bench, windows in (await BenchmarkResults.windows_of(ctx['suite_run_id'])).items():
+            if bench in in_run and windows != {asked.get(bench)}:
+                raise SuiteLoadError(
+                    f'the latest {suite["id"]} run ({ctx["suite_run_id"]}) drew {bench} from '
+                    f'{", ".join(sorted(windows))}, and this run asks for {asked.get(bench) or "no window"}; '
+                    'give the same window, or start a new run'
+                )
+    ctx['notes'] = notes
     todo = [r for r in selected if (r['benchmark'], r['item_id']) not in done]
 
     # Exclusions are recorded, not merely counted -- but once, against the

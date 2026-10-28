@@ -191,7 +191,7 @@ Anything marked *admin* also needs `role === 'admin'`.
 | `/benchmarks` | Redirects to `/benchmarks/serve`. *Admin*, and the backend's `features.enable_benchmarks` must not be `false`; otherwise you're sent to `/` |
 | `/benchmarks/serve` | Serve + the Profiles panel |
 | `/benchmarks/live` | Live telemetry |
-| `/benchmarks/tests` | Test runs, one-item checks, and the datasets: verify them (all three are in the repository) and calibrate the graders (executes model-generated Python; read [the warning](docs/guides/benchmarks.md#grading) first) |
+| `/benchmarks/tests` | Test runs, one-item checks, and the datasets: verify the three in the repository, fetch LiveCodeBench's release increments, and calibrate the graders (executes model-generated Python; read [the warning](docs/guides/benchmarks.md#grading) first) |
 | `/benchmarks/compare` | Compare runs |
 | `/benchmarks/answers` | Answers |
 | `/benchmarks/report` | Reports |

@@ -1,0 +1,112 @@
+# LiveCodeBench - Jain et al. 2024, "LiveCodeBench: Holistic and
+# Contamination Free Evaluation of Large Language Models for Code"
+# https://arxiv.org/abs/2403.07974
+#
+# Competition problems from LeetCode, AtCoder and Codeforces, each dated by
+# the contest it appeared in. A run draws them from a release-date window the
+# user gives ([window]), so a model can be measured on problems published
+# after its training data was collected. The newest problem in the newest
+# release (release_v6) is from 2025-04-06.
+#
+# Two test formats. LeetCode problems are functional: a `class Solution`
+# stub (starter_code) and a method named in metadata.func_name, called with
+# JSON arguments. AtCoder and Codeforces problems read stdin and write
+# stdout. Each problem ships public tests and up to 40 private ones, and no
+# reference solution, so this benchmark cannot be calibrated.
+#
+# Not vendored: the six release files are 4.5 GB and their license is
+# ambiguous (the dataset card says `cc`, the loader and the GitHub
+# repository MIT; the problems come from the three contest sites). The Tests
+# page fetches the increments the user picks, pinned below, into DATA_DIR.
+
+id       = "livecodebench"
+name     = "LiveCodeBench"
+license  = "unclear: dataset card `cc`, loader and evaluation code MIT; problems from LeetCode, AtCoder and Codeforces"
+homepage = "https://livecodebench.github.io/"
+citation = "Jain et al. 2024, arXiv:2403.07974"
+
+# LiveCodeBench's own code-generation prompt, from
+# lcb_runner/prompts/code_generation.py at commit 28fef95e
+# (get_generic_question_template_answer), in its OpenAIReasonPreview style:
+# SYSTEM_MESSAGE_GENERIC, a blank line, then the question template, all in
+# the user turn. The system slot is left to the system-prompt ablation.
+# Byte for byte, including the two trailing newlines; see test_livecodebench.py.
+prompt_template = "You are an expert Python programmer. You will be given a question (problem specification) and will generate a correct Python program that matches the specification and passes all tests.\n\n### Question:\n{prompt}\n\n### Format: Read the inputs from stdin solve the problem and write the answer to stdout (do not directly test on the sample inputs). Enclose your code within delimiters as follows. Ensure that when the python program runs, it reads the inputs, runs the algorithm and writes output to STDOUT.\n```python\n# YOUR CODE HERE\n```\n\n### Answer: (use the provided format with backticks)\n\n"
+prompt_template_with_starter = "You are an expert Python programmer. You will be given a question (problem specification) and will generate a correct Python program that matches the specification and passes all tests.\n\n### Question:\n{prompt}\n\n### Format: You will use the following starter code to write the solution to the problem and enclose your code within delimiters.\n```python\n{starter_code}\n```\n\n### Answer: (use the provided format with backticks)\n\n"
+
+[fetch]
+kind     = "hf_lfs_files"
+dataset  = "livecodebench/code_generation_lite"
+revision = "0fe84c3912ea0c4d4a78037083943e8f0c4dd505"
+# Each increment adds the problems of one release. Their date ranges were
+# read from the files themselves on 2026-10-25, and they overlap (test4
+# reaches back to 2023-08-26), so a window needs every increment whose range
+# it touches, not just enough of them to span it.
+
+[[fetch.increment]]
+name    = "test.jsonl"   # release_v1's increment
+sha256  = "2bd02b38beb48e8c46b5b9987095d999ff38cd8efc255ea5d58974317c48f63f"
+bytes   = 1252609773
+items   = 400
+first   = "2023-05-07"
+last    = "2024-03-02"
+
+[[fetch.increment]]
+name    = "test2.jsonl"   # release_v2's increment
+sha256  = "095df7c5daf15f882c51a9deb84085cff1e073495a5dbcf95015a564d485f3a3"
+bytes   = 713377060
+items   = 111
+first   = "2024-03-09"
+last    = "2024-05-25"
+
+[[fetch.increment]]
+name    = "test3.jsonl"   # release_v3's increment
+sha256  = "28ed26cc83363ce3f1fe2d5fad9f8393077beb1907b167a31bd3b32f80801b79"
+bytes   = 623360766
+items   = 101
+first   = "2024-06-01"
+last    = "2024-08-10"
+
+[[fetch.increment]]
+name    = "test4.jsonl"   # release_v4's increment
+sha256  = "d711138ddaebfcf5f8ec6a4283ee677298c0f5c5d374a235af92aaf0584510da"
+bytes   = 1204644685
+items   = 101
+first   = "2023-08-26"
+last    = "2024-10-05"
+
+[[fetch.increment]]
+name    = "test5.jsonl"   # release_v5's increment
+sha256  = "7f77571c2a6df0c2a72a3277650309f67e01e0008e18117e624633df53f81214"
+bytes   = 557699297
+items   = 167
+first   = "2024-09-22"
+last    = "2025-01-04"
+
+[[fetch.increment]]
+name    = "test6.jsonl"   # release_v6's increment
+sha256  = "bb4c364f71921c4495a6ad15abe1a927350b720009f4933e2e71f8af0f6fd1f5"
+bytes   = 134303240
+items   = 175
+first   = "2025-01-04"
+last    = "2025-04-06"
+
+[item]
+id_field      = "id"
+prompt_field  = "question_content"
+starter_field = "starter_code"
+# Problems from one contest share setters and themes, so they are not
+# independent observations (D4).
+cluster_fields = ["platform", "contest_id"]
+
+[window]
+field = "contest_date"
+
+[check]
+harness = "livecodebench"
+# LiveCodeBench's limits: 6 s per test, and (6 + 1) x tests + 5 s for the
+# whole problem. Absolute, since there is no reference to scale against.
+timeout_per_test = 6
+memory_limit_gib = 4
+# LiveCodeBench's own environment has numpy, so answers may import it.
+isolated = false
