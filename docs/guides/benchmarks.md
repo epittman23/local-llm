@@ -14,17 +14,19 @@ it](../../README.md#running-it)
 (port `4000`; `make frontend` adds a dev server on `5174`),
 and reached through its own entry in the sidebar (`apps/web/src/components/
 layout/Sidebar.tsx`) — admin-only, like Playground, rather than a tab inside
-the Settings modal like Analytics, since seven interactive pages do not fit
+the Settings modal like Analytics, since eight interactive pages do not fit
 a settings panel. A `benchmarks.enable` config flag (`ENABLE_BENCHMARKS`,
 the **Benchmarks** switch in Admin Settings > General, surfaced to the
 frontend as `enable_benchmarks`) gates whether the entry shows at all.
 
-Those are the whole port table — there is nothing new to add one for:
+Those are the whole port table, apart from the services `make backend` runs
+in containers:
 
 | what | port | started by |
 | --- | --- | --- |
 | Chat + Benchmarks UI and API (uvicorn, serving `apps/web/dist`) | `4000` | `make backend` |
 | UI dev server with hot reload (optional) | `5174` | `make frontend` |
+| optuna-dashboard over the pre-screen's studies (optional), always `127.0.0.1` | `8091` (`LLLM_OPTUNA_DASHBOARD_PORT`) | the Pre-screen page |
 
 `make backend` still owns Postgres's (and Redis's) lifecycle (`infra/docker-compose.yml`),
 starting it before uvicorn and tearing it down via a trap when uvicorn stops,
@@ -47,7 +49,7 @@ retired outright on 2026-09-08, and the whole suite now lives inside the
 app itself, as an admin-only **Benchmarks** section at
 `/benchmarks`, served by the same `make backend` as the rest
 of the app rather than a separate process or port. See the sections
-below for the harnesses themselves. Seven pages,
+below for the harnesses themselves. Eight pages,
 none of them a thin passthrough to a CLI that no longer exists:
 
 - **Serve** (`/benchmarks/serve`) starts and stops `llama-server` from a
@@ -75,6 +77,9 @@ none of them a thin passthrough to a CLI that no longer exists:
   candidate (Phase 2b, 2026-09-17) and fingerprints one in-process with
   `serving/fingerprint.py`'s `config_id()` before serving it, rather than
   shelling out to `lllm-serve`/`lllm-config-id`.
+- **Pre-screen** (`/benchmarks/prescreen`, since 2026-10-28) runs llama-bench
+  over a grid of offload and batch flags to find the configurations worth a
+  Tests run. See [The pre-screen](#the-pre-screen) below.
 
 The adapter/suite TOMLs and system-prompt text files moved with the code,
 into `apps/server/local_llm/benchmarks/data/`; they no
@@ -138,12 +143,121 @@ in-filter items); rows recorded before that carry a NULL `adapter_sha`, show as
 | Compare → export answers | Write a whole suite run's stored answers back out as flat markdown files, for grepping/diffing/archiving outside the app |
 | Answers → view one | Render one stored answer as markdown directly in the browser |
 | Report | The statistical comparison, rendered to the page, without running anything new |
+| Pre-screen → Start / Cancel | Run llama-bench over the chosen profile's pre-screen grid, as an Optuna study; Cancel (after a confirmation) stops the point being measured and keeps the rest |
+| Pre-screen → Start dashboard | Start optuna-dashboard over the pre-screen's studies, on `127.0.0.1:8091` only, and link to it |
 | `psql` (or any Postgres client) against `DATABASE_URL` | Raw access to the app's own database (the `benchmark_*` tables) |
 
 The Tests page runs one job at a time (a tier run, a fetch, a selfcheck or one
 item), and none while a tune sweep runs, nor a sweep while one of them does: a
 fetch would change the datasets under a run, and each competes with a sweep for
-the server and the CPU it measures.
+the server and the CPU it measures. A pre-screen runs alone too: it refuses to
+start while a model is served, a sweep or a Tests job runs, or another process
+records a run, and each of those refuses to start while it runs, since they
+share one GPU.
+
+## The pre-screen
+
+The Pre-screen page (`/benchmarks/prescreen`) is a cheap first pass before
+Tune or a Tests run. It runs `llama-bench` (beside `llama-server` in
+`LLAMA_BIN`) over a grid of the flags llama-bench can measure: `-ngl`,
+`--n-cpu-moe`, `-b`, `-ub`, `-t`, the cache types and flash attention. It
+reports which configurations fit and which are fastest, so the configurations
+that are worth a model load and a run of items are the only ones that get one.
+
+**Not a serving measurement.** llama-bench measures the model at a
+test-sized context (`-p 512 -n 128` by default), with no server, no chat
+template and no speculative decoding. Its numbers are kept in their own
+tables, never shown on Compare or Report, and the page's candidate table
+says so in its title. A candidate is confirmed only by a Tests run of it.
+
+**The grids** are `apps/server/local_llm/benchmarks/data/prescreen/<profile>.toml`,
+one per profile, in Tune's format (`[knob.LLAMA_*] values = [...]`,
+`[[constraint]] expr = "LLAMA_UBATCH <= LLAMA_BATCH"`), restricted to the
+knobs above. They are separate from Tune's grids because Tune serves its
+candidates, so its grids carry knobs llama-bench cannot measure. The shipped
+grids leave the cache type out: at llama-bench's test context the KV cache is
+a few MiB whatever its type, so only the load check can see what a quantized
+cache buys at the profile's context.
+
+**How a pre-screen runs:**
+
+1. **Trial 0 is the profile's own configuration**, so every study measures
+   what it is trying to beat.
+2. **The search.** Under **grid** (the default up to 120 points) every point
+   that satisfies the constraints runs once. Under **TPE** a seeded,
+   multivariate TPE sampler proposes a trial budget's worth. A proposal that
+   breaks a constraint is recorded as `invalid`, and one TPE repeats is
+   recorded as a `repeat` and told the earlier result; neither runs.
+3. **One llama-bench process per point**, in a process group of its own,
+   with the GPU sampled every second for its peak VRAM, power, temperature
+   and throttle reasons. A point ends `ok`, `oom`, `load_error`, `crash` (a
+   signal), `timeout` or `parse_error`. It also ends `parse_error` if
+   llama-bench reports measuring other flags than the ones asked for.
+4. **Monotone pruning.** When a point runs out of memory, every later point
+   that needs at least as much VRAM is recorded as `pruned` and not run, with
+   the OOM point named. Such a point has as many GPU layers or more, as few
+   layers' experts in RAM or fewer, and every other VRAM-sizing flag equal
+   (threads aside). Grid points are walked from the least VRAM up so that
+   pruning applies.
+5. **What Optuna learns.** An OOM, pruned or invalid point completes with
+   throughput 0 and a violated constraint, so TPE learns where memory runs
+   out. A failure that says nothing about memory is a FAIL.
+6. **Re-measurement.** The top three are measured again in fresh processes,
+   since prompt processing has varied by 12-22% between repetitions here,
+   and candidates rank on the mean of both measurements.
+7. **The load check.** The leading candidates (3 by default) are loaded in
+   `llama-server` at the profile's own context, with no telemetry recorded,
+   until `/health` answers. The free VRAM is recorded, or `oom_at_ctx` if
+   the load runs out of memory. A point can fit at llama-bench's small
+   context and still run out at 64K.
+
+The objective is generation speed (`tg`, the default, since generation
+dominates wall-clock time on this hardware), prompt processing (`pp`), or
+both, which ranks by Pareto front. Each candidate row lists what it changes
+from the profile. `ngl` and `threads` can be tried at once as Serve page
+overrides; anything else (batch, ubatch, n-cpu-moe) needs a new profile
+version, from Serve's profile list.
+
+**One at a time, and it does not outlive the backend.** The orchestrator
+runs inside the backend, so a backend shutdown stops a running pre-screen,
+whether or not `LLLM_STOP_JOBS_ON_SHUTDOWN` is set, and so does a
+`--reload` restart.
+
+- **The shutdown waits for open streams, briefly.** uvicorn waits for open
+  responses before that shutdown runs, so the page's live stream ends every
+  30 s, and the page reconnects. An open Pre-screen tab delays a Ctrl-C or
+  a reload by at most that long.
+- **A sweep left open by a backend that died** (a `kill -9`, or a second
+  Ctrl-C) is closed as `stale` when the next backend starts, before
+  anything else can use the GPU. What it left running is stopped by its
+  recorded process group, but only when `/proc` still names llama-bench or
+  llama-server and that process started after the sweep did. A sweep whose
+  recorded pid now belongs to a process that started later is treated as
+  dead, not as running elsewhere.
+
+**The Optuna dashboard.** Each pre-screen is an Optuna study named
+`prescreen-<sweep id>`, kept in the `optuna` schema of the app's Postgres
+(see [dependencies.md](dependencies.md#optuna)). The page's **Start
+dashboard** runs optuna-dashboard (`python -m
+local_llm.benchmarks.prescreen.dashboard`) as its own process on
+`127.0.0.1:8091`. It shows each study's history, Pareto front and parameter
+importance, and its trials match the page's points by trial number.
+
+- **Loopback only.** It always binds `127.0.0.1`, even with
+  `LLLM_BACKEND_HOST=0.0.0.0`, because it has no authentication and can
+  edit and delete studies. From another machine, use an SSH tunnel
+  (`ssh -L 8091:127.0.0.1:8091 <host>`).
+- **Deleting a study there removes only Optuna's copy.** The pre-screen's
+  own tables are the record.
+- **Its lifecycle.** It outlives a `--reload` restart, as a served model
+  does (a pid file lets the next backend stop it), and is stopped only by
+  `LLLM_STOP_JOBS_ON_SHUTDOWN`.
+
+**Not yet run on the GPU** (2026-10-28). Everything above is tested against
+fake llama-bench, llama-server and nvidia-smi binaries, and no grid has been
+pre-screened on this machine yet. The raw llama-bench commands the page
+replaces are kept in [llama-cpp.md](llama-cpp.md#preflight-sweeps) as a
+fallback.
 
 The profile picker on the Serve page names the serving profile whose alias
 and `reasoning_effort` are used; the model name itself is read from the

@@ -53,6 +53,17 @@ either way.
 | `benchmark_answer` | result | prompt, answer, and reasoning as three fields, not one rendered blob |
 | `benchmark_suite_exclusion` | item | what no run can attempt, recorded once against a dataset revision rather than once per run |
 | `benchmark_schema_note` | discontinuity | append-only provenance: what changed, and on what date, when it changed the meaning of rows either side of it |
+| `benchmark_prescreen_sweep` | pre-screen | its profile and grid sha, sampler, seed, objective and Optuna study name, the llama-bench settings (`-p`, `-n`, `-r`, the point timeout), and the context every number needs: the model file and size, the llama.cpp build (from llama-bench's own output), GPU and CPU, driver version, VRAM and RAM totals, kernel, the backend's pid, and how it ended |
+| `benchmark_prescreen_point` | pre-screen point, or re-measurement of one | its overrides and full llama-bench argv, the `config_id` it would have if served, its Optuna trial number, how it ended (`ok`, `oom`, `pruned` with the point that implied it, ...), prompt-processing and generation `avg_ts`/`stddev_ts`/per-repetition samples, the raw JSONL, peak VRAM, power and temperature and the throttle reasons seen, and the load check at the profile's context |
+
+The two pre-screen tables (migration `c8e1f5a2d907`, 2026-10-28) hold raw
+llama-bench throughput, not serving measurements, and join nothing above:
+their `config_id` is a prediction, not a foreign key, since nothing was
+served. Optuna's own copy of each pre-screen study lives in a separate
+**`optuna` schema** of the same database (Optuna's tables: `studies`,
+`trials`, `trial_values` and the rest), created empty by that migration
+and managed by Optuna itself. The `benchmark_prescreen_*` tables are the
+record; see [dependencies.md](dependencies.md#optuna).
 
 This is a schema-preserving 1:1 port of the old SQLite tables (`config` →
 `benchmark_config`, `result` → `benchmark_result`, and so on), added by an

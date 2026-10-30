@@ -320,6 +320,16 @@ difference fails. The file may only shrink:
    and trips if it grows (`SHRINK_ONLY` in `.github/scripts/pr_gate.py`),
    as with the baselines above.
 
+`tests/test_prescreen_optuna_schema.py` needs `TEST_DATABASE_URL` too. It
+migrates a fresh database, runs Optuna studies through the pre-screen's
+storage, forces an Optuna schema upgrade, and checks that `public` (and its
+`alembic_version`) never sees any of it. It also starts the real
+optuna-dashboard process and checks that it listens on loopback only. The
+rest of the pre-screen's tests need no database: they run fake
+`llama-bench`, `llama-server` and `nvidia-smi` scripts
+(`tests/prescreen_stubs.py`) as real subprocesses, so nothing loads a
+model.
+
 `tests/test_frontend_contract.py` reads every `fetch(...)` in
 `apps/web/src` (tests excluded) whose URL is a template on one of the base
 paths in `lib/constants.ts`. It checks each call's method and path against

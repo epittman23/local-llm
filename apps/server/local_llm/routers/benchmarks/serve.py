@@ -130,6 +130,12 @@ async def _start_serve_locked(form_data: ServeStartForm):
             status_code=status.HTTP_409_CONFLICT,
             detail=ERROR_MESSAGES.DEFAULT('a recorded run is already active on another process'),
         )
+    from local_llm.routers.benchmarks import prescreen
+
+    if prescreen.running():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=ERROR_MESSAGES.DEFAULT('a pre-screen is running')
+        )
 
     entry = (
         await BenchmarkProfiles.get_by_name(form_data.profile)

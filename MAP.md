@@ -223,6 +223,8 @@ than a second app glued on by a userscript. See `docs/decisions.md` for the migr
   (`FetchProcess`, the `lllm-fetch` port), `build_info.py`/`model_name.py`
   (small `vram-log.sh` parsers). Also `env_profile.py` (resolves a serving
   profile and what's actually being served, in-process) and
+  `gpu.py` (one `nvidia-smi` reading, shared by the recorder and the
+  pre-screen) and
   `telemetry_recorder.py` (the GPU telemetry recorder: a detached subprocess
   for crash-independence, spawned by `ServeProcess.start()` as
   `python -m local_llm.benchmarks.serving.telemetry_recorder`, inheriting the
@@ -258,8 +260,18 @@ than a second app glued on by a userscript. See `docs/decisions.md` for the migr
   directly for each candidate) and `proc.py` (`Command`, the async subprocess
   wrapper; its only caller is `tune_probe.py`'s `LLAMA_TUNE_LAUNCH`
   fault-injection escape hatch).
+- **`prescreen/`** — the llama-bench pre-screen (2026-10-28, the
+  Benchmarks > Pre-screen page): `grid.py` (pre-screen grids, their
+  constraints and the pruning order), `bench.py` (one llama-bench point: its
+  argv, its run in a process group of its own, its outcome), `study.py`
+  (Optuna's storage in the `optuna` Postgres schema, and the samplers),
+  `sweep.py` (`Prescreen`, the orchestrator: search, re-measure, load
+  check, stale-sweep recovery) and `dashboard.py` (optuna-dashboard as its
+  own loopback process, `python -m local_llm.benchmarks.prescreen.dashboard`).
+  Its tables are `models/benchmarks/prescreen.py`.
 - **`data/`** + **`paths.py`** — the version-controlled TOML/text config
-  (`data/adapters/`, `data/suites/`, `data/tuning/`, `data/prompts/`, moved
+  (`data/adapters/`, `data/suites/`, `data/tuning/`, `data/prescreen/` (the
+  pre-screen grids, 2026-10-28), `data/prompts/`, moved
   here from this repo's old `tests/adapters/`, `tests/suites/`,
   `tests/tuning/`, `prompts/system/`), the vendored datasets
   (`data/datasets/<id>/`, HumanEval+, MBPP+ and DS-1000, since 2026-10-25),
@@ -320,7 +332,7 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   (`public/`: `/auth`, `/error`, `/watch`, `/s/:id`), which are top-level
   siblings because they must render without a session; and
   `NotFound`, the catch-all 404, which never navigates on its own. `benchmarks/`
-  holds all seven Benchmarks pages plus their admin/feature-flag gate.
+  holds all eight Benchmarks pages plus their admin/feature-flag gate.
   `workspace/` is Phase 7's surface: `WorkspaceLayout` (per-section
   permission gate, the five tabs with live counts, the split Create button)
   and `workspaceAccess.ts` (the pure permission rules, unit-tested); the

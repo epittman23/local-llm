@@ -1,0 +1,23 @@
+# Pre-screen grid for the qwen3c MoE profile (Qwen3-Coder-30B-A3B Q4_1, 17.87
+# GiB), whose -ngl 99 --n-cpu-moe 34 copies qwen36's shape as an unverified
+# starting point. This grid copies qwen36.toml's for the same reason; the
+# pre-screen is how that starting point gets checked.
+#
+# No cache-type knob, for the reason in qwen38.toml. Values chosen, not
+# measured (2026-10-28).
+profile = "qwen3c"
+
+[knob.LLAMA_MOE]
+values = [28, 30, 32, 34, 36]
+
+[knob.LLAMA_BATCH]
+values = [512, 1024]
+
+[knob.LLAMA_UBATCH]
+values = [256, 512]
+
+[knob.LLAMA_THREADS]
+values = [6, 8]
+
+[[constraint]]
+expr = "LLAMA_UBATCH <= LLAMA_BATCH"

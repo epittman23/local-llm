@@ -63,9 +63,11 @@ with `LLLM_STOP_JOBS_ON_SHUTDOWN=true`.
   app then attaches to it.
 - **A bounded shutdown:** without the timeout, uvicorn waits forever on an
   open stream, such as the Serve page's log.
-- **The backend stops its own jobs on exit:** a Tests job, a tune sweep, and
-  then the served `llama-server`. By default all three outlive the backend
-  (llama-cpp.md, Serving).
+- **The backend stops its own jobs on exit:** a Tests job, a tune sweep, a
+  pre-screen and its Optuna dashboard, and then the served `llama-server`.
+  By default all of them but a pre-screen outlive the backend (llama-cpp.md,
+  Serving; benchmarks.md, The pre-screen). They are stopped under the same
+  `==> Stopping benchmark jobs` step.
 
 It runs `make` through your login shell (`$SHELL -lc`), so `uv`, `bun`, `node`
 and `docker` are found as in a terminal. An app started from the launcher

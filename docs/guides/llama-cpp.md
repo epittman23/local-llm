@@ -161,9 +161,9 @@ disk on the current machine (as of 2026-10-09), and
 the Benchmarks section's Tests page. It follows the same `qwen36` shape — sparse MoE, `-ngl 99`
 with `--n-cpu-moe 34` since the model is ~4.1x this card's 6 GB VRAM, `q8_0`
 KV cache, 65536 context, 6 threads — copied as a starting point rather than
-independently tuned; the Serve page's `moe`/`ctx` override fields, plus an
-`llama-bench` GPU-layer sweep (see "Preflight sweeps" below), are how that
-would actually get confirmed. It sets no `-ot` and no speculative flags:
+independently tuned; the Pre-screen page's `qwen3c` grid (see "Preflight
+sweeps" below), then a Tests run of what it finds, is how that would
+actually get confirmed. It sets no `-ot` and no speculative flags:
 unlike `qwen38`, nothing here has checked this GGUF for an MTP head.
 
 `qwen38`'s `-ngl 20` is a placeholder pending a GPU-layer sweep;
@@ -230,7 +230,7 @@ What the old shell functions became, now that `scripts/` is gone (Phase 2c,
 | --- | --- |
 | `lllm-serve [profile]` | Serve page, `/benchmarks/serve` — pick a profile, set overrides (`ngl`, `ctx`, `threads`, `parallel`, `ot`, `reasoning`, `spec`), start. Server log streams live in the page. `--metrics` and `-lv 4` are still always passed underneath, for the same reasons as before (server-wide token totals; the load-info block), and are still excluded from the config fingerprint |
 | `lllm-fetch [profile]` | no UI: `serving/weights.py`'s `FetchProcess` exists but no route mounts it, so it is the `hf` CLI by hand, see [model-downloads.md](model-downloads.md) |
-| `lllm-sweep-threads`, `lllm-sweep-ngl` | deleted outright (superseded by Tune's paired search); the raw `llama-bench` invocations are preserved below under "Preflight sweeps" |
+| `lllm-sweep-threads`, `lllm-sweep-ngl` | deleted outright; since 2026-10-28 the Pre-screen page, `/benchmarks/prescreen`, runs llama-bench over a profile's grid (see "Preflight sweeps" below, which keeps the raw invocations as a fallback) |
 | `lllm-check` | the Serve page shows whether a server is running directly, no separate check |
 | `lllm-vram` | Live page, `/benchmarks/live` — polled GPU telemetry, free VRAM called out |
 | `lllm-profiles`, `lllm-profile-json`, `lllm-profile-names` | the Serve page's profile list (full CRUD: list, create, clone, edit as a new version, archive, set default) |
@@ -243,15 +243,29 @@ for serving configuration with the `benchmark_profile`/
 
 ### Preflight sweeps
 
-`lllm-sweep-threads`/`lllm-sweep-ngl` are gone rather than ported: Tune's
-round-elimination search over served, correctness-checked runs supersedes
-them for actually choosing a configuration, and `main.sh` already documented
-these two as feasibility pre-screens, not a source of comparable
-measurements (their numbers never went into Postgres). Their raw
-`llama-bench` invocations still work — `llama-bench` is a llama.cpp binary,
-not something this repo wraps — and are preserved here for anyone tuning a
-profile's `-ngl`/`--n-cpu-moe` before touching the Serve page. Paths below
-are the shell tooling's old defaults (`~/llama.cpp/build/bin`, `~/models/`);
+The **Pre-screen page** (`/benchmarks/prescreen`, since 2026-10-28) is how
+these are run now. It runs `llama-bench`, found beside `llama-server` in
+`LLAMA_BIN`, over a profile's grid in
+`apps/server/local_llm/benchmarks/data/prescreen/` as an Optuna study:
+
+- one llama-bench process per point, with the profile's other flags;
+- out-of-memory points recorded as such, pruning every point that needs
+  more VRAM;
+- the leaders re-measured, and load-checked in `llama-server` at the
+  profile's own context.
+
+Every number is stored with its model file, build, GPU, driver and flags.
+How it works, and what it does not measure, is in
+[benchmarks.md](benchmarks.md#the-pre-screen). Nothing has been
+pre-screened on this machine yet (2026-10-28).
+
+The pre-screen is a feasibility and throughput filter, not a source of
+comparable measurements: it measures the model at a test-sized context,
+with no server. Choosing between the configurations that survive it is
+Tune's paired search, or a Tests run of each.
+
+The raw `llama-bench` invocations still work as a fallback, with the
+shell tooling's old default paths (`~/llama.cpp/build/bin`, `~/models/`);
 substitute your own.
 
 Thread sweep, any profile:
@@ -261,17 +275,23 @@ Thread sweep, any profile:
   [--n-cpu-moe <moe>] -o md
 ```
 
-GPU-layer sweep, dense profiles (`qwen38`, `qwen25c`) — one process per
-value on purpose: `llama-bench` retained GPU allocations across model reloads
-on WSL2 (not rechecked on native Linux), so reusing one process across values would contaminate every
-configuration after the first with the previous one's leftover allocation.
-`-ot` is passed through so headroom matches what the Serve page will
-actually see:
+GPU-layer sweep, dense profiles (`qwen38`, `qwen25c`):
+
+- **One process per value, on purpose.** llama-bench gives up on every
+  remaining value after a failed load. It also retained GPU allocations
+  across model reloads on WSL2 (not rechecked on native Linux).
+- **Pass `-ot` through,** so the headroom matches what the Serve page will
+  see.
+- **Change `-ot`'s separator.** llama-bench separates overrides with `;`,
+  where llama-server uses `,`, and reads a `,` as the start of another value
+  to sweep. `qwen38`'s `output\.weight=CUDA0,blk\.64\..*=CUDA0` is
+  therefore `output\.weight=CUDA0;blk\.64\..*=CUDA0` here. Passed verbatim,
+  as this guide said until 2026-10-28, it runs two tests with one pin each.
 
 ```bash
 for v in 12 16 20 24; do
   ~/llama.cpp/build/bin/llama-bench -m <model path> -ngl "$v" \
-    [-ot '<override-tensors>'] -t <threads> -p 512 -n 128 -o md
+    [-ot '<override-tensors, ; between them>'] -t <threads> -p 512 -n 128 -o md
   sleep 3
 done
 ```
@@ -282,10 +302,6 @@ MoE profiles (`qwen36`, `qwen3c`) sweep `--n-cpu-moe` instead, at `-ngl 99`:
 ~/llama.cpp/build/bin/llama-bench -m <model path> -ngl 99 \
   --n-cpu-moe 30,32,34,36 -o md
 ```
-
-Neither sweep writes to Postgres; their numbers are pre-flight only; they do
-not survive the terminal and are not comparable with anything the Benchmarks
-section records.
 
 ## Hardware and model
 
