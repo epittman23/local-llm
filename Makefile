@@ -216,7 +216,11 @@ pr-gate:
 # CI's "Backend (pytest)", including the throwaway pgvector Postgres that
 # tests/test_imports.py needs (without it that test skips locally, while CI
 # fails). The container is removed on exit, Ctrl-C included. DATA_DIR is the
-# suite's own temp directory (tests/conftest.py), as in CI.
+# suite's own temp directory (tests/conftest.py), as in CI. Readiness is
+# probed over TCP: the image's first-start init runs a temporary server on
+# the Unix socket only, which a socket probe takes for the real one; and
+# running out of probes stops the recipe instead of running the tests anyway.
+# The port check looks for a listener on any address, not only 127.0.0.1.
 # The venv is pinned as in `backend`: `uv sync` removes what the lock doesn't
 # list, so following an inherited UV_PROJECT_ENVIRONMENT would strip another
 # project's environment.
@@ -225,7 +229,7 @@ test-backend:
 	export UV_PROJECT_ENVIRONMENT="$(SERVER_DIR)/.venv"; \
 	uv lock --check; \
 	uv sync --frozen --no-install-project --group dev; \
-	if ss -ltn | grep -q "127.0.0.1:$(LLLM_TEST_PG_PORT) "; then \
+	if [ -n "$$(ss -ltnH "sport = :$(LLLM_TEST_PG_PORT)")" ]; then \
 		echo "make test-backend: port $(LLLM_TEST_PG_PORT) is in use -- set LLLM_TEST_PG_PORT" >&2; \
 		exit 1; \
 	fi; \
@@ -234,10 +238,16 @@ test-backend:
 	docker run --rm -d --name "$$pg" -p "127.0.0.1:$(LLLM_TEST_PG_PORT):5432" \
 		-e POSTGRES_USER=local_llm -e POSTGRES_PASSWORD=test-only-not-a-secret -e POSTGRES_DB=local_llm \
 		pgvector/pgvector:pg16 >/dev/null; \
+	pg_ready=""; \
 	for i in $$(seq 1 60); do \
-		docker exec "$$pg" psql -U local_llm -d local_llm -tAc 'select 1' >/dev/null 2>&1 && break; \
+		if docker exec "$$pg" pg_isready -q -h 127.0.0.1 -p 5432 -U local_llm -d local_llm; then pg_ready=1; break; fi; \
 		sleep 1; \
 	done; \
+	if [ -z "$$pg_ready" ]; then \
+		echo "make $@: Postgres ($$pg) did not accept connections on TCP within 60 s" >&2; \
+		docker logs --tail 20 "$$pg" >&2 || true; \
+		exit 1; \
+	fi; \
 	LLLM_SECRET_KEY=test-only-not-a-secret-0123456789abcdef0123456789abcdef \
 	TEST_DATABASE_URL="postgresql://local_llm:test-only-not-a-secret@127.0.0.1:$(LLLM_TEST_PG_PORT)/local_llm" \
 	uv run --frozen python -m pytest tests -q --cov --cov-report=xml; \
@@ -278,7 +288,7 @@ test-boot:
 	export UV_PROJECT_ENVIRONMENT="$(SERVER_DIR)/.venv"; \
 	uv sync --frozen --no-install-project; \
 	for port in $(LLLM_BOOT_PG_PORT) $(LLLM_BOOT_REDIS_PORT); do \
-		if ss -ltn | grep -q "127.0.0.1:$$port "; then \
+		if [ -n "$$(ss -ltnH "sport = :$$port")" ]; then \
 			echo "make test-boot: port $$port is in use -- set LLLM_BOOT_PG_PORT / LLLM_BOOT_REDIS_PORT" >&2; \
 			exit 1; \
 		fi; \
@@ -289,10 +299,16 @@ test-boot:
 		-e POSTGRES_USER=local_llm -e POSTGRES_PASSWORD=test-only-not-a-secret -e POSTGRES_DB=local_llm \
 		pgvector/pgvector:pg16 >/dev/null; \
 	docker run --rm -d --name "$$redis" -p "127.0.0.1:$(LLLM_BOOT_REDIS_PORT):6379" redis:7.4.2-alpine >/dev/null; \
+	pg_ready=""; \
 	for i in $$(seq 1 60); do \
-		docker exec "$$pg" psql -U local_llm -d local_llm -tAc 'select 1' >/dev/null 2>&1 && break; \
+		if docker exec "$$pg" pg_isready -q -h 127.0.0.1 -p 5432 -U local_llm -d local_llm; then pg_ready=1; break; fi; \
 		sleep 1; \
 	done; \
+	if [ -z "$$pg_ready" ]; then \
+		echo "make $@: Postgres ($$pg) did not accept connections on TCP within 60 s" >&2; \
+		docker logs --tail 20 "$$pg" >&2 || true; \
+		exit 1; \
+	fi; \
 	LLLM_SECRET_KEY=test-only-not-a-secret-0123456789abcdef0123456789abcdef \
 	DATABASE_URL="postgresql://local_llm:test-only-not-a-secret@127.0.0.1:$(LLLM_BOOT_PG_PORT)/local_llm" \
 	REDIS_URL="redis://127.0.0.1:$(LLLM_BOOT_REDIS_PORT)/0" \

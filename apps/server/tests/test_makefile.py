@@ -23,8 +23,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 pytestmark = pytest.mark.skipif(shutil.which('make') is None, reason='needs make')
 
 # Every stub appends one JSON line, {"tool": ..., "argv": [...], "ci": ...},
-# to $STUB_LOG, then exits with $STUB_EXIT_<TOOL> (default 0). A stub can also
-# print $STUB_OUT_<TOOL> first.
+# to $STUB_LOG, then exits with $STUB_EXIT_<TOOL>_<FIRST ARG> if set, else
+# $STUB_EXIT_<TOOL> (default 0). A stub can also print $STUB_OUT_<TOOL> first.
 STUB = """#!/bin/bash
 tool="$(basename "$0")"
 python3 - "$tool" "$@" <<'PY' >> "$STUB_LOG"
@@ -32,9 +32,10 @@ import json, os, sys
 print(json.dumps({'tool': sys.argv[1], 'argv': sys.argv[2:], 'ci': os.environ.get('CI')}))
 PY
 upper="$(printf '%s' "$tool" | tr 'a-z' 'A-Z')"
-out_var="STUB_OUT_$upper"; exit_var="STUB_EXIT_$upper"
+sub="$(printf '%s' "${1:-}" | tr 'a-z' 'A-Z' | tr -c 'A-Z0-9_' '_')"
+out_var="STUB_OUT_$upper"; exit_var="STUB_EXIT_$upper"; sub_var="STUB_EXIT_${upper}_$sub"
 [ -z "${!out_var:-}" ] || printf '%s\\n' "${!out_var}"
-exit "${!exit_var:-0}"
+exit "${!sub_var:-${!exit_var:-0}}"
 """
 
 STUB_TOOLS = ('docker', 'bun', 'bunx', 'uv', 'uvx', 'ss', 'sleep', 'openssl')
@@ -129,3 +130,40 @@ def test_playwright_worker_count_is_pinned_in_its_config():
     """The worker count lives in playwright.config.ts, so CI and `make test-e2e` share it."""
     config = (REPO_ROOT / 'apps' / 'web' / 'playwright.config.ts').read_text()
     assert re.search(r'^\s*workers:\s*2,', config, re.MULTILINE)
+
+
+# --- the throwaway Postgres of make test-backend and make test-boot (#147) ---
+
+LISTENER_ON_ALL_ADDRESSES = 'LISTEN 0 4096 0.0.0.0:{port} 0.0.0.0:*'
+
+
+@pytest.mark.parametrize(('target', 'port'), [('test-backend', '55432'), ('test-boot', '55433')])
+def test_port_check_sees_a_listener_on_any_address(tmp_path, target, port):
+    """A port held on 0.0.0.0 or [::] is in use too, not only one held on 127.0.0.1."""
+    root = _checkout(tmp_path)
+    result, calls = _make(root, tmp_path, target, STUB_OUT_SS=LISTENER_ON_ALL_ADDRESSES.format(port=port))
+    assert result.returncode != 0
+    assert f'port {port} is in use' in result.stderr
+    assert not any(c['tool'] == 'docker' and c['argv'][:1] == ['run'] for c in calls)
+
+
+@pytest.mark.parametrize('target', ['test-backend', 'test-boot'])
+def test_postgres_that_never_gets_ready_stops_the_recipe(tmp_path, target):
+    """Running out of readiness probes is a failure, not a fall-through into the tests."""
+    root = _checkout(tmp_path)
+    result, calls = _make(root, tmp_path, target, STUB_EXIT_DOCKER_EXEC='2')
+    assert result.returncode != 0
+    assert 'did not accept connections' in result.stderr
+    assert not any(c['tool'] == 'uv' and c['argv'][:1] == ['run'] for c in calls)
+
+
+@pytest.mark.parametrize('target', ['test-backend', 'test-boot'])
+def test_readiness_probe_uses_tcp_not_the_socket(tmp_path, target):
+    """The image's init server listens on the Unix socket only, so probe over TCP."""
+    root = _checkout(tmp_path)
+    result, calls = _make(root, tmp_path, target)
+    assert result.returncode == 0, result.stderr
+    probes = [c['argv'] for c in calls if c['tool'] == 'docker' and c['argv'][:1] == ['exec']]
+    assert probes, calls
+    assert 'pg_isready' in probes[0]
+    assert probes[0][probes[0].index('-h') + 1] == '127.0.0.1'
