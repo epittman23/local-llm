@@ -55,19 +55,21 @@ export function parseModelImport(text: string): IncomingModel[] {
 }
 
 /**
- * The update body for an imported model whose id already exists. Like the
- * server's own `/models/import`, the file's meta is merged over the existing
- * meta and the model keeps its sharing and its enabled state: `access_grants`
- * is left out, so `/models/model/update` leaves the grants alone, and
- * `is_active` comes from the existing model. `chat_variables_schema` is derived
- * from the system prompt on read (and so is in an export), so it is not written.
+ * The update body for an imported model whose id already exists. The file's
+ * meta is merged over the existing meta, as the server's own `/models/import`
+ * does. Unlike that endpoint, the file never changes the model's sharing or
+ * enabled state: `access_grants` is left out, so `/models/model/update` leaves
+ * the grants alone, and `is_active` always comes from the existing model. A
+ * file without a base model keeps the existing one. `chat_variables_schema` is
+ * derived from the system prompt on read (and so is in an export), so it is not
+ * written.
  */
 export function importUpdate(existing: Json, incoming: IncomingModel): Json {
 	const { chat_variables_schema: _derived, ...meta } = { ...existing.meta, ...incoming.meta };
 	return {
 		id: incoming.id,
 		name: incoming.name,
-		base_model_id: incoming.base_model_id,
+		base_model_id: incoming.base_model_id ?? existing.base_model_id,
 		meta,
 		params: incoming.params,
 		is_active: existing.is_active

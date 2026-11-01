@@ -184,6 +184,7 @@ test.describe('workspace models list', () => {
 			.toMatchObject({
 				id: 'model-1',
 				name: 'Renamed',
+				base_model_id: 'llama3',
 				is_active: false,
 				meta: { description: 'Preset 1', tags: [{ name: 'imported' }] }
 			});

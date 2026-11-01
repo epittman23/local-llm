@@ -88,6 +88,12 @@ describe('importUpdate', () => {
 		expect(out.is_active).toBe(false);
 		expect(importUpdate({ ...existing, is_active: true }, incoming).is_active).toBe(true);
 	});
+	it("keeps the existing base model when the file has none, and takes the file's when it has one", () => {
+		const bare = parseModelImport(JSON.stringify([{ id: 'm', name: 'New' }]))[0];
+		expect(bare.base_model_id).toBeNull();
+		expect(importUpdate(existing, bare).base_model_id).toBe('llama3');
+		expect(importUpdate(existing, { ...bare, base_model_id: 'gpt-4o' }).base_model_id).toBe('gpt-4o');
+	});
 	it("merges the file's meta over the existing meta, as the server's own import does, and takes the rest from the file", () => {
 		const out = importUpdate(existing, incoming);
 		expect(out.meta).toEqual({ description: 'kept', profile_image_url: '/img.png', tags: [{ name: 't' }] });
