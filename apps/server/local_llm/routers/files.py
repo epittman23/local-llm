@@ -41,7 +41,7 @@ from local_llm.models.knowledge import Knowledges
 from local_llm.models.users import Users
 from local_llm.retrieval.vector.async_client import ASYNC_VECTOR_DB_CLIENT
 from local_llm.routers.audio import transcribe
-from local_llm.routers.retrieval import ProcessFileForm, process_file
+from local_llm.routers.retrieval import ProcessFileForm, process_file, process_file_for
 from local_llm.storage.provider import Storage
 from local_llm.utils.access_control.files import has_access_to_file
 from local_llm.utils.auth import get_admin_user, get_verified_user
@@ -716,6 +716,13 @@ async def update_file_data_content_by_id(
         )
 
     if file.user_id == user.id or user.role == 'admin' or await has_access_to_file(id, 'write', user, db=db):
+        # Empty content used to fall through to re-extracting the original
+        # file, silently undoing the edit (#307).
+        if not form_data.content.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ERROR_MESSAGES.EMPTY_CONTENT,
+            )
         max_size = await Config.get('rag.file.max_size')
         if max_size and len(form_data.content.encode('utf-8')) > int(max_size) * 1024 * 1024:
             raise HTTPException(
@@ -731,13 +738,22 @@ async def update_file_data_content_by_id(
             )
             file = await Files.get_file_by_id(id=id, db=db)
         except Exception as e:
+            # Reported, not swallowed: the page toasted the old content as
+            # saved while nothing, or only part of it, was (#307).
             log.exception(e)
-            log.error(f'Error processing file: {file.id}')
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    'The content could not be processed, so it may be saved but not searchable: '
+                    f'{getattr(e, "detail", None) or e}'
+                ),
+            )
 
         # Propagate content change to all knowledge collections referencing
         # this file.  Without this the old embeddings remain in the knowledge
         # collection and RAG returns both stale and current data (#20558).
         knowledges = await Knowledges.get_knowledges_by_file_id(id, db=db)
+        failed: list[str] = []
         for knowledge in knowledges:
             try:
                 old_vectors = await ASYNC_VECTOR_DB_CLIENT.query(collection_name=knowledge.id, filter={'file_id': id})
@@ -745,16 +761,27 @@ async def update_file_data_content_by_id(
 
                 # Re-add from the now-updated file-{file_id} collection before
                 # removing old vectors, so a failed reindex keeps the KB usable.
-                await process_file(
+                # Write access to the file is checked above; every base that
+                # holds it mirrors its chunks, including bases the editor
+                # cannot otherwise write to (#307).
+                await process_file_for(
                     request,
                     ProcessFileForm(file_id=id, collection_name=knowledge.id),
-                    user=user,
-                    db=db,
+                    user,
+                    db,
+                    check_collection_access=False,
+                    record_failure=False,
                 )
                 if old_vector_ids:
                     await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=knowledge.id, ids=old_vector_ids)
             except Exception as e:
                 log.warning(f'Failed to update knowledge {knowledge.id} after content change for file {id}: {e}')
+                # Name only a base the editor can see; another user's
+                # private base that holds the file stays anonymous.
+                readable = await Knowledges.check_access_by_user_id(knowledge.id, user.id, 'read', db=db)
+                failed.append(
+                    knowledge.name if readable or user.role == 'admin' else 'a knowledge base you cannot open'
+                )
 
         await publish_event(
             request,
@@ -763,7 +790,9 @@ async def update_file_data_content_by_id(
             subject_id=id,
             data={'content_preview': form_data.content[:300]},
         )
-        return {'content': file.data.get('content', '')}
+        # Saved, but some bases still answer from the old text: say which,
+        # rather than report plain success (#307).
+        return {'content': file.data.get('content', ''), 'failed_knowledge': failed}
     else:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

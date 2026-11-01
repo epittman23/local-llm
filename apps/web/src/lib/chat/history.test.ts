@@ -6,6 +6,7 @@ import {
 	applyChatEvent,
 	editContent,
 	emptyHistory,
+	finishReplies,
 	type History,
 	isGenerating,
 	messagesList,
@@ -133,6 +134,24 @@ describe('loading and sending', () => {
 		expect(h.messages.a.childrenIds).toEqual(['b']);
 		expect(h.messages.b.role).toBe('assistant');
 		expect(h.currentId).toBe('b');
+	});
+	it('with nothing generating, finishes every reply left unfinished, not only the current one (#150)', () => {
+		// A multi-model column interrupted mid-stream: the sibling that is not
+		// current was saved unfinished, and stays so through normalisation in
+		// case its task is still running.
+		const h = normalizeHistory({
+			messages: {
+				q: { id: 'q', parentId: null, role: 'user', content: 'q', childrenIds: ['a', 'b'] },
+				a: { id: 'a', parentId: 'q', role: 'assistant', content: 'x', childrenIds: [], done: true },
+				b: { id: 'b', parentId: 'q', role: 'assistant', content: 'y', childrenIds: [], done: false }
+			},
+			currentId: 'a'
+		});
+		expect(h.messages.b.done).toBe(false);
+		const finished = finishReplies(h);
+		expect([finished.messages.a.done, finished.messages.b.done]).toEqual([true, true]);
+		expect(finished.messages.q.done).toBeUndefined();
+		expect(finishReplies(finished)).toBe(finished);
 	});
 	it('marks non-current replies done and builds from a flat list', () => {
 		const h = normalizeHistory(null, [

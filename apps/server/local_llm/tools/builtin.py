@@ -4199,7 +4199,8 @@ async def search_calendar_events(
     up to a year after `start`.
 
     :param query: Search text to match against event title, description, or location (optional)
-    :param start: Only return events starting at or after this datetime, e.g. "2026-04-20 00:00" (optional)
+    :param start: Only return events still running at or after this datetime, e.g. "2026-04-20 00:00" (an event
+        with no end must start at or after it) (optional)
     :param end: Only return events starting before this datetime, e.g. "2026-04-27 00:00" (optional)
     :param count: Maximum number of events to return (default: 10)
     :return: JSON list of matching events with id, title, description, start, end, calendar_id, location, rrule
@@ -4241,9 +4242,8 @@ async def search_calendar_events(
                 end=end_ns,
             )
             # The range query returns every recurring event whatever its
-            # dates (#176). Expand each into the occurrences that start in the
-            # range, as the calendar router does; one already under way when
-            # the range starts is not listed, as on the calendar page (#171).
+            # dates (#176). Expand each into the occurrences that overlap the
+            # range, as the calendar router does (#171).
             # A series whose rule cannot be expanded comes back as its own
             # row and is kept only if that row overlaps the range, like a
             # one-off. Without an end, stop a year out rather than at the
