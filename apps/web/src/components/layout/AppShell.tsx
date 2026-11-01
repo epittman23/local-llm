@@ -11,6 +11,7 @@ import { useUserSettings } from '@/lib/settings/userSettings';
 import { setAppFontFamily, setTextScale } from '@/lib/utils/textScale';
 import { useShortcuts } from '@/lib/useShortcuts';
 import { useUIStore } from '@/lib/stores/uiStore';
+import { useCalendarAlerts } from '@/routes/calendar/useCalendarAlerts';
 import { useChannelUnreadEvents } from '@/routes/channels/useChannels';
 import { SearchChatsDialog } from '@/routes/chat/sidebar/ChatDialogs';
 import { cn } from '@/lib/utils';
@@ -31,6 +32,7 @@ export function AppShell() {
 	const authStatus = useAuthGate();
 	useSettingsUrl();
 	useChannelUnreadEvents();
+	useCalendarAlerts();
 	const sidebarOpen = useUIStore((state) => state.sidebarOpen);
 	const setSidebarOpen = useUIStore((state) => state.setSidebarOpen);
 	const [mobileOpen, setMobileOpen] = useState(false);
