@@ -1076,6 +1076,75 @@ def parse_duration(duration: str) -> dt.timedelta | None:
     return total_duration
 
 
+# The shortest JWT expiry accepted: shorter, a session ends before it is used.
+MIN_JWT_EXPIRY = dt.timedelta(minutes=1)
+
+_DURATION_UNITS = {
+    'ms': dt.timedelta(milliseconds=1),
+    's': dt.timedelta(seconds=1),
+    'm': dt.timedelta(minutes=1),
+    'h': dt.timedelta(hours=1),
+    'd': dt.timedelta(days=1),
+    'w': dt.timedelta(weeks=1),
+}
+
+
+def _duration_pairs(value: str) -> list[tuple[float, str]] | None:
+    """`1d12h` as [(1.0, 'd'), (12.0, 'h')], or None unless the whole of
+    `value` is number-unit pairs. A plain scan rather than a regular
+    expression, so request-supplied text cannot make it slow."""
+    digits = '0123456789'
+    pairs: list[tuple[float, str]] = []
+    i, n = 0, len(value)
+    while i < n:
+        j = i
+        while j < n and value[j] in digits:
+            j += 1
+        if j == i:
+            return None
+        if j < n and value[j] == '.':
+            k = j + 1
+            while k < n and value[k] in digits:
+                k += 1
+            if k == j + 1:
+                return None
+            j = k
+        unit = 'ms' if value.startswith('ms', j) else value[j : j + 1]
+        if unit not in _DURATION_UNITS:
+            return None
+        pairs.append((float(value[i:j]), unit))
+        i = j + len(unit)
+    return pairs or None
+
+
+def jwt_expiry_error(value: str) -> str | None:
+    """Why `value` cannot be the JWT expiry (auth.jwt_expiry), or None if it can.
+
+    '-1' and '0' mean no expiry. Anything else is one or more number-unit
+    pairs (`30m`, `1d12h`, as parse_duration reads them) adding up to at
+    least MIN_JWT_EXPIRY: a negative, zero or sub-minute duration expires
+    every new session at once, locking everyone out, and one too large to
+    add to today's date fails every sign-in (#242).
+    """
+    if value in ('-1', '0'):
+        return None
+    usage = (
+        "use a positive number with a unit (ms, s, m, h, d or w), such as '30m', '1d12h' or '4w', "
+        "or '-1' for no expiration"
+    )
+    pairs = _duration_pairs(value) if isinstance(value, str) else None
+    if pairs is None:
+        return f'Invalid JWT expiration {value!r}: {usage}.'
+    try:
+        delta = sum((number * _DURATION_UNITS[unit] for number, unit in pairs), dt.timedelta())
+        if delta < MIN_JWT_EXPIRY:
+            return f'JWT expiration {value!r} is shorter than a minute: {usage}.'
+        _ = dt.datetime.now(dt.UTC) + delta
+    except (OverflowError, ValueError):
+        return f'JWT expiration {value!r} is too long: {usage}.'
+    return None
+
+
 def parse_ollama_modelfile(model_text):
     parameters_meta = {
         'mirostat': int,

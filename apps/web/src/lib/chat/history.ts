@@ -82,6 +82,19 @@ export function updateMessage(
 	return { ...history, messages: { ...history.messages, [id]: { ...m, ...next } } };
 }
 
+/**
+ * Every assistant reply marked done, for a chat with nothing generating. A
+ * reply saved unfinished on a branch that is not current otherwise stayed
+ * "generating" for good, and prompts queued behind it never sent (#150).
+ * Returns `history` itself when nothing was unfinished.
+ */
+export function finishReplies(history: History): History {
+	let out = history;
+	for (const m of Object.values(history.messages))
+		if (m.role === 'assistant' && !m.done) out = updateMessage(out, m.id, { done: true });
+	return out;
+}
+
 /** Adds `message` under its parent and makes it current. */
 function attach(history: History, message: Message): History {
 	const messages = { ...history.messages, [message.id]: message };
@@ -168,7 +181,9 @@ export function showBranch(history: History, id: string): History {
  * Repairs a history read from the server (Chat.svelte's sanitizeHistory and
  * loadChat): drops junk entries, restores missing ids/children/parents/roles,
  * falls back to the newest leaf when `currentId` is broken, and marks every
- * assistant reply but the current one done.
+ * assistant reply but the current one done, except one stored unfinished: a
+ * multi-model sibling may still be generating. Once the chat has no task
+ * running, finishReplies() finishes those.
  */
 export function normalizeHistory(
 	raw: Partial<History> | null | undefined,

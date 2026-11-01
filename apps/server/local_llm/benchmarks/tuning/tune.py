@@ -457,11 +457,12 @@ class Cooldown:
         self.total_seconds = 0.0
         self.count = 0
 
-    def budget_exhausted(self) -> bool:
+    def budget_exhausted(self, ongoing: float = 0.0) -> bool:
+        """Whether cooling, earlier pauses plus `ongoing` seconds of this one, is over its share."""
         limit = self.sweep.budget.seconds
         if limit is None:
             return False
-        return self.total_seconds > limit * self.o.max_cooldown_share
+        return self.total_seconds + ongoing > limit * self.o.max_cooldown_share
 
     async def run(self, *, trigger: str, rnd: int | None, visit_id: int | None, drift_ratio: float | None) -> str:
         """Cool until the baseline probes clean. Returns the resolution word."""
@@ -523,8 +524,9 @@ class Cooldown:
             # wait was not enough, waiting the same amount again is a guess
             # that has already been wrong once.
             window *= 2
-            self.total_seconds = time.time() - started
-            if self.budget_exhausted():
+            # This pause's time so far, on top of earlier pauses; added to the
+            # total once, below. Assigning it here replaced the total (#137).
+            if self.budget_exhausted(time.time() - started):
                 resolution = 'timeout'
                 break
 
@@ -1188,7 +1190,8 @@ class Sweep:
         thin = [c for c in alive if not c.baseline and scored.get(c.sha, (None, 0))[1] < 3]
         ranked = sorted(
             [c for c in alive if not c.baseline and c not in thin],
-            key=lambda c: scored.get(c.sha, (None, 0))[0] or -math.inf,
+            # Only a missing score sorts last: 0.0 is a tie with the defaults (#135).
+            key=lambda c: s if (s := scored.get(c.sha, (None, 0))[0]) is not None else -math.inf,
             reverse=True,
         )
         for c in alive:
@@ -1207,8 +1210,9 @@ class Sweep:
             lowest = ranked[max(1, keep_n - 1) - 1]
             highest = cut[0]
             paired = paired_log_ratio_differences(matrix, lowest.sha, highest.sha, self.baseline.sha, items)
+            # No non-zero pair (p = 1.0) is no evidence for the cut either (#136).
             p, n = sign_test(paired)
-            if n and p > 0.20:
+            if p > 0.20:
                 decision = 'uncertain'
                 log.warning(
                     '  the cut between %s and %s is not supported (sign test p = %.2f on %s pairs)',
