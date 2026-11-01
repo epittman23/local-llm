@@ -17,10 +17,6 @@ verbatim from the original):
     measures, a paired correctness test needs several hundred items to see a
     5-point difference, so a per-round correctness ranking at 6 or 8 items
     would be ranking noise.
-  * A winner has to have **beaten the defaults**: only a candidate whose
-    median paired log-ratio against the baseline is above 0 can be adopted
-    or refined around (`Sweep.beat_baseline()`). When none is, the verdict
-    is `rejected` and refine has no neighbourhood to descend into.
   * The winner then has to survive **one** pre-registered correctness check
     against the incumbent, at the end, over every item both ran (`Sweep.guard()`).
     The output of that check is "no regression was detectable, and here is
@@ -50,6 +46,12 @@ history, preserved exactly:
     `benchmarks.proc.Command` the rest of this app uses, so it is
     fingerprinted, telemetered and recorded as an ordinary run. This module
     is a caller of scripts/llama-env.sh, never a second copy of it.
+
+A winner has to have beaten the defaults (added 2026-11-01, #134; not in
+the original): only a candidate whose median paired log-ratio against the
+baseline is above 0 can be adopted or refined around
+(`Sweep.beat_baseline()`). When none is, the verdict is `rejected` and
+refine has no neighbourhood to descend into.
 
 Adoption is deliberately manual: `sweep_report()`'s `adoption` field is the
 override diff for a human to review, and nothing in this module writes
@@ -1340,7 +1342,7 @@ class Sweep:
         """
         return sorted(
             [c for c in alive if not c.baseline and (scored.get(c.sha, (None, 0))[0] or 0.0) > 0.0],
-            key=lambda c: scored[c.sha][0],
+            key=lambda c: scored[c.sha][0] or 0.0,
             reverse=True,
         )
 
@@ -1419,8 +1421,9 @@ class Sweep:
         incomplete, 3 indeterminate) via the `verdict` field instead."""
         design, audit, blocks = await self.audit()
         blocked = [r for b in blocks for r in audit.blocked(f'throughput:{b.key}')]
-        winner = await self.best(alive)
         scored = await self.scores(None)
+        ranked = self.beat_baseline(alive, scored)
+        winner = ranked[0] if ranked else None
 
         if self.ended_reason in ('budget', 'visits', 'interrupted', 'cancelled', 'drift'):
             verdict = 'incomplete'
@@ -1443,7 +1446,7 @@ class Sweep:
             # Pre-registered, and it walks down the ranking rather than
             # stopping: rejecting the fastest candidate is a reason to look
             # at the next one, not a reason to abandon the sweep.
-            for cand in self.beat_baseline(alive, scored):
+            for cand in ranked:
                 guard = await self.guard(cand)
                 if not guard['regressed']:
                     winner = cand

@@ -93,6 +93,7 @@ def test_finish_rejects_when_every_candidate_is_slower(monkeypatch):
     got = _finish(monkeypatch, sweep, [BASE, SLOW, SLOWER], regressed=set())
 
     assert got['closed']['verdict'] == 'rejected'
+    assert got['closed']['verdict_reason'] == 'no candidate beat the profile defaults'
     assert got['closed']['winner'] is None
     assert got['guarded'] == []
 
@@ -104,6 +105,7 @@ def test_finish_never_falls_back_to_a_slower_candidate(monkeypatch):
     got = _finish(monkeypatch, sweep, [BASE, FAST, SLOW], regressed={FAST.sha})
 
     assert got['closed']['verdict'] == 'rejected'
+    assert got['closed']['verdict_reason'] == 'every faster candidate showed a correctness regression'
     assert got['closed']['winner'] is None
     assert got['guarded'] == [FAST.sha]
 
@@ -121,6 +123,8 @@ def test_refine_does_not_descend_around_a_slower_leader(monkeypatch):
     sweep = _sweep({BASE.sha: 0.0, SLOW.sha: math.log(0.5)})
     sweep.items = [('b', str(i)) for i in range(100)]
     sweep.budget = types.SimpleNamespace(round_items=10)
+    sweep.grid = sweep.profile_json = None
+    sweep.candidates = {}
 
     async def must_not_run(*args, **kwargs):
         raise AssertionError('refine generated candidates around a slower leader')
