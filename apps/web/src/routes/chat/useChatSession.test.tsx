@@ -17,22 +17,52 @@ vi.mock('@/lib/apis/chats', async (orig) => ({
 		chat: {
 			title: `chat ${id}`,
 			models: [`model-${id}`],
+			history:
+				id === 'M'
+					? // Two models answered; the current reply finished, its sibling was saved mid-stream.
+						{
+							currentId: 'a',
+							messages: {
+								q: { id: 'q', parentId: null, childrenIds: ['b', 'a'], role: 'user', content: 'q' },
+								b: { id: 'b', parentId: 'q', childrenIds: [], role: 'assistant', content: 'y', done: false },
+								a: { id: 'a', parentId: 'q', childrenIds: [], role: 'assistant', content: 'x', done: true }
+							}
+						}
+					: {
+							currentId: `${id}-m`,
+							messages: {
+								[`${id}-m`]: {
+									id: `${id}-m`,
+									parentId: null,
+									childrenIds: [],
+									role: 'user',
+									content: `hello from ${id}`
+								}
+							}
+						}
+		}
+	})),
+	updateChatById: vi.fn(async () => null),
+	// The server's copy after a delete: the sibling still saved mid-stream.
+	deleteChatMessageById: vi.fn(async () => ({
+		chat: {
 			history: {
-				currentId: `${id}-m`,
+				currentId: 'a',
 				messages: {
-					[`${id}-m`]: { id: `${id}-m`, parentId: null, childrenIds: [], role: 'user', content: `hello from ${id}` }
+					q: { id: 'q', parentId: null, childrenIds: ['b', 'a'], role: 'user', content: 'q' },
+					b: { id: 'b', parentId: 'q', childrenIds: [], role: 'assistant', content: 'y', done: false },
+					a: { id: 'a', parentId: 'q', childrenIds: [], role: 'assistant', content: 'x', done: true }
 				}
 			}
 		}
-	})),
-	updateChatById: vi.fn(async () => null)
+	}))
 }));
 
 vi.mock('@/lib/apis', async (orig) => ({
 	...(await orig<object>()),
 	// Resolves only when the test says so, per chat.
 	getTaskIdsByChatId: vi.fn(
-		(_t: string, id: string) => new Promise((resolve) => (pending[id] = () => resolve({ task_ids: [] })))
+		(_t: string, id: string) => new Promise((resolve) => (pending[id] = (v) => resolve(v ?? { task_ids: [] })))
 	)
 }));
 
@@ -100,5 +130,30 @@ describe('useChatSession loadChat', () => {
 		expect(session.chat?.id).toBe('B');
 		expect(session.history.messages['B-m']?.content).toBe('hello from B');
 		expect(session.history.messages['A-m']).toBeUndefined();
+	});
+
+	it('with no task running, finishes a sibling reply saved mid-stream (#150)', async () => {
+		renderAt('M');
+		await waitFor(() => expect(pending.M).toBeDefined());
+		await act(async () => pending.M({ task_ids: [] }));
+		await waitFor(() => expect(session.chat?.id).toBe('M'));
+		expect(session.history.messages.b.done).toBe(true);
+	});
+
+	it("after a delete, finishes the sibling again in the server's copy", async () => {
+		renderAt('M');
+		await waitFor(() => expect(pending.M).toBeDefined());
+		await act(async () => pending.M({ task_ids: [] }));
+		await waitFor(() => expect(session.chat?.id).toBe('M'));
+		await act(() => session.removeMessage(session.history.messages.a));
+		expect(session.history.messages.b.done).toBe(true);
+	});
+
+	it('leaves that sibling streaming while its task still runs', async () => {
+		renderAt('M');
+		await waitFor(() => expect(pending.M).toBeDefined());
+		await act(async () => pending.M({ task_ids: ['t-b'] }));
+		await waitFor(() => expect(session.chat?.id).toBe('M'));
+		expect(session.history.messages.b.done).toBe(false);
 	});
 });
