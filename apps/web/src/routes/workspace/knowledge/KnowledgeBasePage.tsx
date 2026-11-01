@@ -48,7 +48,13 @@ import {
 	KnowledgeBreadcrumbs,
 	KnowledgeFileList
 } from './KnowledgeFileList';
-import { type Breadcrumb, type DirectoryFileEntry, announceContentSaved, gatherDroppedFiles } from './knowledgeFiles';
+import {
+	type Breadcrumb,
+	type DirectoryFileEntry,
+	announceContentSaved,
+	clampPage,
+	gatherDroppedFiles
+} from './knowledgeFiles';
 import {
 	collectDirectoryFiles,
 	collectDroppedEntryFiles,
@@ -216,14 +222,27 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 		() => queryClient.invalidateQueries({ queryKey: ['knowledge-files', id] }),
 		[queryClient, id]
 	);
+	// KnowledgeBase.svelte's init(): back to page 1, then reload. It follows a
+	// delete, reset, upload, sync or saved edit; refresh alone keeps the page.
+	const reload = useCallback(() => {
+		setPage(1);
+		refresh();
+	}, [refresh]);
 	const listed = files.data;
+	// A list that comes back shorter than the page shown (a file moved into a
+	// folder, files deleted elsewhere since the last load) moves back to its
+	// last page. Only settled data counts: a page's stale cache entry, shown
+	// while it refetches, may hold a total that is out of date.
+	useEffect(() => {
+		if (listed && !files.isPlaceholderData && !files.isFetching) setPage((p) => clampPage(p, listed.total, PER_PAGE));
+	}, [listed, files.isPlaceholderData, files.isFetching]);
 	const breadcrumbs = listed?.breadcrumbs ?? [];
 
 	const { uploading, syncing, uploadFiles, uploadWeb, uploadDirectoryEntries, syncDirectory } = useKnowledgeUploads({
 		knowledgeId: id,
 		directoryId,
 		breadcrumbs,
-		refresh
+		refresh: reload
 	});
 
 	// --- name and description save themselves -------------------------------
@@ -333,7 +352,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 		try {
 			if (await removeFileFromKnowledgeById(token, id, fileId)) {
 				toast.success('File removed successfully.');
-				refresh();
+				reload();
 			}
 		} catch (e) {
 			toast.error(`${e}`);
@@ -385,7 +404,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 			if (res) {
 				announceContentSaved(res);
 				setSelectedFileId(null);
-				refresh();
+				reload();
 			}
 		} finally {
 			setSaving(false);
@@ -490,7 +509,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 					try {
 						await resetKnowledgeById(token, id);
 						toast.success('Knowledge base has been reset');
-						refresh();
+						reload();
 					} catch (e) {
 						toast.error(`${e}`);
 					}
