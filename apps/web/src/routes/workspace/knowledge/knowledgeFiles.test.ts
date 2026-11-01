@@ -10,6 +10,9 @@ import {
 	knowledgeMetaPreview,
 	readMovePayload,
 	staleFileIds,
+	takeDroppedItems,
+	gatherDroppedFiles,
+	type DirectoryFileEntry,
 	type DirectoryManifestEntry,
 	type SyncDiff
 } from './knowledgeFiles';
@@ -121,5 +124,64 @@ describe('announceContentSaved', () => {
 		announceContentSaved(null, notify);
 		expect(notify.success).toHaveBeenCalledTimes(2);
 		expect(notify.warning).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('takeDroppedItems', () => {
+	it('reads every dropped item at once, folders and files alike (#231)', () => {
+		const file = (name: string) => new File(['x'], name);
+		const folder = { isDirectory: true, name: 'docs' };
+		const items = [
+			{ webkitGetAsEntry: () => ({ isDirectory: false }), getAsFile: () => file('a.txt') },
+			{ webkitGetAsEntry: () => folder, getAsFile: () => null },
+			{ webkitGetAsEntry: () => ({ isDirectory: false }), getAsFile: () => file('b.txt') },
+			{ getAsFile: () => file('c.txt') }
+		];
+		const { directories, files } = takeDroppedItems(items);
+		expect(directories).toEqual([folder]);
+		expect(files.map((f) => f.name)).toEqual(['a.txt', 'b.txt', 'c.txt']);
+	});
+});
+
+describe('gatherDroppedFiles', () => {
+	/** Items that read as null once the drop handler has awaited, as a browser's DataTransfer does. */
+	function dropped() {
+		let isProtected = false;
+		const folder = { isDirectory: true, name: 'docs' };
+		const items = [
+			{ webkitGetAsEntry: () => (isProtected ? null : folder), getAsFile: () => null },
+			{
+				webkitGetAsEntry: () => (isProtected ? null : { isDirectory: false }),
+				getAsFile: () => (isProtected ? null : new File(['x'], 'after.txt'))
+			}
+		];
+		return { items, protect: () => (isProtected = true) };
+	}
+	const inside: DirectoryFileEntry[] = [{ path: 'docs', filename: 'in.txt', file: new File(['y'], 'in.txt') }];
+
+	it("keeps the files dropped after a folder, and the folder's own (#231)", async () => {
+		const { items, protect } = dropped();
+		const got = await gatherDroppedFiles(
+			items,
+			async () => {
+				protect();
+				return inside;
+			},
+			vi.fn()
+		);
+		expect(got?.loose.map((f) => f.name)).toEqual(['after.txt']);
+		expect(got?.directoryEntries).toEqual(inside);
+	});
+	it('reports a folder it cannot read and gives up', async () => {
+		const onError = vi.fn();
+		const got = await gatherDroppedFiles(
+			dropped().items,
+			async () => {
+				throw new Error('denied');
+			},
+			onError
+		);
+		expect(got).toBeNull();
+		expect(onError).toHaveBeenCalledWith(new Error('denied'));
 	});
 });
