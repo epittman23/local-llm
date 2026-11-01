@@ -1368,3 +1368,65 @@ def test_record_golden(monkeypatch):
             golden[case_id] = _run(streams, metadata, world, form, model, m)
     GOLDEN.parent.mkdir(exist_ok=True)
     GOLDEN.write_text(json.dumps(golden, indent=1, ensure_ascii=False) + '\n', encoding='utf-8')
+
+
+# --- behaviour fixed since the golden file was recorded ---------------------
+# These run through the same fakes as the cases above but are asserted here,
+# not in the golden file, which pins the refactor and changes only by hand.
+
+OPENROUTER_ERROR_CHUNK = sse(
+    {
+        'id': 'gen-abc123',
+        'object': 'chat.completion.chunk',
+        'error': {'code': 502, 'message': 'Provider disconnected unexpectedly'},
+        'choices': [{'index': 0, 'delta': {'content': ''}, 'finish_reason': 'error'}],
+    }
+)
+
+
+def _emitted(observed, kind='chat:completion'):
+    return [c[1]['data'] for c in observed['calls'] if c[0] == 'emit' and c[1].get('type') == kind]
+
+
+def _saved(observed):
+    return [c[2] for c in observed['calls'] if c[0] == 'chats.upsert_message']
+
+
+def test_openrouter_mid_stream_error_chunk_is_saved_and_shown(monkeypatch):
+    """#162: OpenRouter ends a failed reply with a top-level error beside its choices.
+
+    That chunk once took the ordinary delta path, so the cut-off text was
+    saved and shown as a complete answer with no error anywhere.
+    """
+    error = {'code': 502, 'message': 'Provider disconnected unexpectedly'}
+    observed = _run(
+        [[chunk('The answer is'), OPENROUTER_ERROR_CHUNK, DONE]], {'chat_id': SAVED_CHAT}, {}, {}, None, monkeypatch
+    )
+
+    assert {'error': {'content': error}} in _saved(observed)
+    assert {'error': error} in _emitted(observed)
+    # The error chunk itself is not forwarded as one more delta.
+    assert not [d for d in _emitted(observed, 'response:completion') if 'error' in d]
+
+
+def test_finish_reason_error_without_an_error_object_is_still_an_error(monkeypatch):
+    chunk_without_detail = sse({'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'error'}]})
+    observed = _run([[chunk('Half'), chunk_without_detail, DONE]], {'chat_id': SAVED_CHAT}, {}, {}, None, monkeypatch)
+
+    errors = [d['error'] for d in _emitted(observed) if 'error' in d]
+    assert errors and errors[0]['message']
+    assert {'error': {'content': errors[0]}} in _saved(observed)
+
+
+def test_a_null_error_key_beside_choices_is_not_an_error(monkeypatch):
+    observed = _run(
+        [[sse({'error': None, 'choices': [{'index': 0, 'delta': {'content': 'fine'}}]}), DONE]],
+        {'chat_id': SAVED_CHAT},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    assert not [d for d in _emitted(observed) if 'error' in d]
+    assert not [s for s in _saved(observed) if 'error' in s]
