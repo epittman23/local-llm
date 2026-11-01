@@ -177,7 +177,9 @@ export function useChatSession({
 			}
 			const content = record.chat;
 			let h = normalizeHistory(content.history, content.messages, record.current_message_id);
-			const pending = ((await getTaskIdsByChatId(token, id).catch(() => null))?.task_ids ?? []) as string[];
+			// null when the task list could not be read: whether anything is running is unknown.
+			const listed = ((await getTaskIdsByChatId(token, id).catch(() => null))?.task_ids ?? null) as string[] | null;
+			const pending = listed ?? [];
 			// Checked after every await: a slower load of the chat the user just
 			// left must not overwrite the one now open (and later be saved into it).
 			if (chatIdRef.current !== id) return;
@@ -186,7 +188,10 @@ export function useChatSession({
 			if (pending.length && !complete) setTaskIds(pending);
 			else {
 				setTaskIds(null);
-				h = finishReplies(h);
+				// Only with no task running is every unfinished reply really
+				// finished; a multi-model sibling may outlive the current reply.
+				if (listed && !listed.length) h = finishReplies(h);
+				else if (current?.role === 'assistant' && !current.done) h = updateMessage(h, current.id, { done: true });
 			}
 			setChat(record);
 			setTitle(content.title ?? record.title ?? '');
@@ -580,11 +585,16 @@ export function useChatSession({
 					toast.error(`${e}`);
 					return null;
 				})) as { chat?: { history?: History } } | null;
-				if (res?.chat?.history) setHistory(normalizeHistory(res.chat.history));
+				// The server's copy still has replies this load finished; with
+				// nothing generating, finish them again (#150).
+				if (res?.chat?.history) {
+					const h = normalizeHistory(res.chat.history);
+					setHistory(taskIds ? h : finishReplies(h));
+				}
 				void refreshList();
 			} else setHistory((h) => deleteMessage(h, message.id));
 		},
-		[token, refreshList, setHistory]
+		[token, refreshList, setHistory, taskIds]
 	);
 
 	/**
