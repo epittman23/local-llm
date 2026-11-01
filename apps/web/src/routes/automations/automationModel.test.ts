@@ -52,7 +52,24 @@ describe('schedule round-trip', () => {
 			frequency: 'CUSTOM',
 			custom: 'RRULE:FREQ=MINUTELY;INTERVAL=5'
 		});
-		expect(parseRrule('RRULE:FREQ=DAILY;COUNT=10', now).frequency).toBe('DAILY');
+		// The picker cannot show a run count, so it would save the rule without one.
+		expect(parseRrule('RRULE:FREQ=DAILY;COUNT=10', now).frequency).toBe('CUSTOM');
+	});
+	it('a rule the picker would change on save stays custom (#159)', () => {
+		for (const r of [
+			'RRULE:FREQ=MONTHLY;BYDAY=1MO;BYHOUR=9;BYMINUTE=0', // first Monday, not the 1st
+			'RRULE:FREQ=DAILY;BYHOUR=9,17;BYMINUTE=0', // twice a day
+			'RRULE:FREQ=WEEKLY;BYDAY=MO;BYHOUR=9;BYMINUTE=0;UNTIL=20261231T000000Z', // ends
+			'RRULE:FREQ=DAILY;BYMINUTE=0' // at DTSTART's hour, not 9
+		]) {
+			expect(parseRrule(r, now)).toMatchObject({ frequency: 'CUSTOM', custom: r });
+		}
+		// Spelling that means the same rule still opens in the picker.
+		expect(parseRrule('RRULE:FREQ=DAILY;INTERVAL=1;BYHOUR=09;BYMINUTE=00', now)).toMatchObject({
+			frequency: 'DAILY',
+			hour: 9,
+			minute: 0
+		});
 	});
 	it('switching to Custom starts from the schedule that was showing', () => {
 		const s = { ...defaultSchedule(now), hour: 7 };
@@ -69,6 +86,16 @@ describe('schedule round-trip', () => {
 		);
 		expect(formatSchedule('RRULE:FREQ=HOURLY;INTERVAL=2')).toBe('Every 2 hours');
 		expect(formatSchedule('RRULE:FREQ=YEARLY')).toBe('RRULE:FREQ=YEARLY');
+		// A rule the summary cannot describe whole is shown as itself (#159).
+		for (const r of [
+			'RRULE:FREQ=MONTHLY;BYDAY=1MO;BYHOUR=9;BYMINUTE=0',
+			'RRULE:FREQ=DAILY;BYHOUR=9,17;BYMINUTE=0',
+			'RRULE:FREQ=DAILY;INTERVAL=2;BYHOUR=9;BYMINUTE=0',
+			'RRULE:FREQ=WEEKLY;BYDAY=MO;BYHOUR=9;BYMINUTE=0;UNTIL=20261231T000000Z',
+			'RRULE:FREQ=MINUTELY;INTERVAL=5;BYHOUR=9'
+		])
+			expect(formatSchedule(r)).toBe(r);
+		expect(formatSchedule('RRULE:FREQ=MINUTELY;INTERVAL=5')).toBe('Every 5 minutes');
 		expect(formatSchedule('DTSTART:20261001T080500\nRRULE:FREQ=DAILY;COUNT=1')).toMatch(/^Once · /);
 	});
 });
