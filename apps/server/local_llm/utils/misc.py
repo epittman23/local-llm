@@ -647,21 +647,30 @@ def merge_system_messages(messages: list[dict]) -> list[dict]:
     insert their own system message; this function consolidates
     them.
     """
-    system_contents: list[str] = []
+    # Every text part of every system message, as it came: a list-content
+    # message (from an API client) once kept only its first part (#187).
+    parts: list[dict] = []
     other_messages: list[dict] = []
 
     for message in messages:
-        if message.get('role') == 'system':
-            content = get_content_from_message(message)
-            if content:
-                system_contents.append(content)
-        else:
+        if message.get('role') != 'system':
             other_messages.append(message)
+        elif isinstance(message.get('content'), list):
+            parts += [
+                p for p in message['content'] if isinstance(p, dict) and p.get('type') == 'text' and p.get('text')
+            ]
+        elif content := get_content_from_message(message):
+            parts.append({'type': 'text', 'text': content})
 
-    if not system_contents:
+    if not parts:
         return other_messages
 
-    merged = {'role': 'system', 'content': '\n'.join(system_contents)}
+    # Plain text stays one string, which every backend and chat template
+    # takes; a part carrying more than text (cache_control) keeps the list.
+    if all(part.keys() == {'type', 'text'} for part in parts):
+        merged = {'role': 'system', 'content': '\n'.join(part['text'] for part in parts)}
+    else:
+        merged = {'role': 'system', 'content': parts}
     return [merged, *other_messages]
 
 
