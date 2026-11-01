@@ -89,4 +89,19 @@ describe('Account tab after its loads (#259)', () => {
 		expect(auths.updateUserProfile).not.toHaveBeenCalled();
 		expect(users.updateUserVariables).not.toHaveBeenCalled();
 	});
+
+	it('says nothing about a load that fails after the tab is closed', async () => {
+		let reject: (reason: unknown) => void = () => {};
+		vi.mocked(auths.getSessionUser).mockReturnValue(
+			new Promise((_resolve, fail) => {
+				reject = fail;
+			})
+		);
+		const { unmount } = render(<Account />);
+		expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
+		unmount();
+		reject('profile load failed');
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(toastError).not.toHaveBeenCalled();
+	});
 });

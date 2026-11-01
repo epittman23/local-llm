@@ -175,7 +175,7 @@ export default function Account() {
 				<>
 					{loadFailed && (
 						<p role="alert" className="text-destructive mb-3 text-xs">
-							Your account settings didn't load, so saving is off. Reopen this tab to try again.
+							Your account settings didn't load, so saving is off. Close Settings and open it again to retry.
 						</p>
 					)}
 					<SettingsSection title="Profile" first>
