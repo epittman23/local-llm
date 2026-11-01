@@ -2265,13 +2265,18 @@ async def connect_mcp_server(
         headers=headers if headers else None,
     )
 
-    function_name_filter_list = mcp_server_connection.get('config', {}).get('function_name_filter_list', '')
-    if isinstance(function_name_filter_list, str):
-        function_name_filter_list = function_name_filter_list.split(',')
+    # The caller registers the client for cleanup only once this returns, so close it here on failure.
+    try:
+        function_name_filter_list = mcp_server_connection.get('config', {}).get('function_name_filter_list', '')
+        if isinstance(function_name_filter_list, str):
+            function_name_filter_list = function_name_filter_list.split(',')
 
-    tool_specs = await client.list_tool_specs()
-    if function_name_filter_list:
-        tool_specs = [spec for spec in tool_specs if is_string_allowed(spec['name'], function_name_filter_list)]
+        tool_specs = await client.list_tool_specs()
+        if function_name_filter_list:
+            tool_specs = [spec for spec in tool_specs if is_string_allowed(spec['name'], function_name_filter_list)]
+    except Exception:
+        await client.disconnect()
+        raise
 
     return client, tool_specs
 
@@ -2871,15 +2876,17 @@ async def _resolve_payload_tools(
 ):
     """Resolve the chat's tools server-side and hand them to the model (native) or the tools handler (legacy)."""
     mcp_clients = {}
-    tools_dict = await _selected_tools(
-        request, form_data, user, metadata, extra_params, models, task_model_id, event_emitter, mcp_clients
-    )
-    tools_dict = await _add_terminal_tools(request, form_data, user, model, terminal_id, extra_params, tools_dict)
-    # Client side tools
-    _add_direct_server_tools(form_data, metadata.get('tool_servers', None), tools_dict)
-
-    if mcp_clients:
-        metadata['mcp_clients'] = mcp_clients
+    try:
+        tools_dict = await _selected_tools(
+            request, form_data, user, metadata, extra_params, models, task_model_id, event_emitter, mcp_clients
+        )
+        tools_dict = await _add_terminal_tools(request, form_data, user, model, terminal_id, extra_params, tools_dict)
+        # Client side tools
+        _add_direct_server_tools(form_data, metadata.get('tool_servers', None), tools_dict)
+    finally:
+        # Even when a later step raises, so the chat's teardown disconnects every client that connected.
+        if mcp_clients:
+            metadata['mcp_clients'] = mcp_clients
 
     # Inject builtin tools for native function calling based on enabled features and model capability.
     # Only inject when the request originates from the UI (identified by session_id).
