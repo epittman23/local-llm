@@ -135,6 +135,9 @@ Start here for "how do I run/use this."
   non-security finding with its issue number), `FIX_PLAN.md` (batches and
   acceptance criteria for the fixing sessions), `NOTES.md` (non-bug
   observations and invariants checked) and `repro/` (minimal reproductions).
+  `2026-10-28-desktop/` holds the same set of files for the 2026-10-28
+  audit of `apps/desktop` at `6c07575`. Its repros are Vitest files run with
+  the desktop app's own Vitest.
 - **`serving-baseline/`** — test input, not prose: `config-id` fingerprints,
   profile seed data and the verbatim profile rationale, captured from
   `scripts/shell/main.sh` on 2026-09-14 before the shell layer was ported to
@@ -450,6 +453,9 @@ knowing about when navigating the filesystem directly:
   allowlists), `worktrees/` (agent
   checkouts), both gitignored, and scheduled task locks, which are not. `.claude/skills/` and
   `.claude/agents/` beside them **are** tracked (see above).
+- **`.omc/`** — runtime state written by the oh-my-claudecode Claude Code
+  plugin (session state, notepads, project memory), at the root and in any
+  subdirectory a session ran from; gitignored.
 - **`logs/`** — local logs. On a checkout that has one,
   `llama.db.retired-<date>` is the old SQLite store from before 2026-09-08;
   its Postgres backfill was lost with the old database on 2026-10-09, so that

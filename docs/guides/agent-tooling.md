@@ -105,4 +105,6 @@ directly.
 ## Not tracked
 
 `.claude/settings.local.json` (personal permission allowlists) and
-`.claude/worktrees/` are local state, and both are gitignored.
+`.claude/worktrees/` are local state, and both are gitignored. So is
+`.omc/`, the oh-my-claudecode plugin's runtime state, at the root and in
+any subdirectory a session ran from.
