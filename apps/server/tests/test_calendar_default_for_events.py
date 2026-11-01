@@ -51,3 +51,29 @@ def test_the_event_lands_in_the_users_own_default_not_a_shared_one():
 
     assert 'error' not in out, out
     assert out['calendar_id'] == mine.id
+
+
+def test_a_user_who_owns_no_calendar_yet_gets_their_own_default():
+    """Seeing only someone else's shared calendar, the event had nowhere of its own to go."""
+
+    async def scenario():
+        tag = uuid.uuid4().hex[:8]
+        other = await Users.insert_new_user(f'o{tag}', 'Other', f'o{tag}@example.invalid', role='user')
+        me = await Users.insert_new_user(f'm{tag}', 'Me', f'm{tag}@example.invalid', role='user')
+        theirs = (await Calendars.get_or_create_defaults(other.id))[0]
+        await Calendars.update_calendar_by_id(
+            theirs.id,
+            CalendarUpdateForm(access_grants=[{'principal_type': 'user', 'principal_id': me.id, 'permission': 'read'}]),
+        )
+        out = json.loads(
+            await builtin.create_calendar_event(
+                'Dentist', '2026-10-15 14:00', __request__=REQUEST, __user__={'id': me.id, 'role': 'user'}
+            )
+        )
+        calendar = await Calendars.get_calendar_by_id(out.get('calendar_id', ''))
+        return me, out, calendar
+
+    me, out, calendar = asyncio.run(scenario())
+
+    assert 'error' not in out, out
+    assert calendar.user_id == me.id and calendar.is_default
