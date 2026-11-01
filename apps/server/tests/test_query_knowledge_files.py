@@ -63,7 +63,7 @@ def _run(monkeypatch, *, notes=(), internal=(), externals=(), count=5):
     return json.loads(out)
 
 
-def test_a_failing_external_base_leaves_the_rest(monkeypatch):
+def test_a_failing_external_base_leaves_the_rest(monkeypatch, caplog):
     got = _run(
         monkeypatch,
         internal=[0.5],
@@ -71,3 +71,11 @@ def test_a_failing_external_base_leaves_the_rest(monkeypatch):
     )
 
     assert [c['source'] for c in got] == ['internal', 'up']
+    assert any('down' in r.getMessage() for r in caplog.records)
+
+
+def test_when_the_only_source_fails_the_error_is_returned(monkeypatch):
+    """An empty list would read as nothing relevant, when the base could not be reached."""
+    got = _run(monkeypatch, externals=[('down', RuntimeError('connection refused'))])
+
+    assert got == {'error': 'External knowledge unavailable: down: connection refused'}
