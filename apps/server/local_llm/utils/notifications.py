@@ -401,6 +401,16 @@ async def dispatch_notification_event(app: Any, event: Any) -> None:
                     continue
 
                 title, message, data, description = _notification_webhook_content(event)
-                await _send_webhook(app_name, target, message, data, title, description=description)
+                # One dead target must not stop delivery to the rest (#170).
+                try:
+                    await _send_webhook(app_name, target, message, data, title, description=description)
+                except Exception:
+                    log.warning(
+                        'Notification delivery to target %s failed for user %s and event %s',
+                        target.get('id'),
+                        user_id,
+                        event.event,
+                        exc_info=True,
+                    )
         except Exception:
             log.exception('Notification delivery failed for user %s and event %s', user_id, event.event)
