@@ -2616,6 +2616,13 @@ async def query_chat_files(
                     chunk['distance'] = distances[idx]
                 chunks.append(chunk)
 
+        # Each file was searched on its own and comes back in attachment
+        # order, so rank every file's hits together before keeping `count`
+        # (higher scores are better, as everywhere in retrieval); unscored
+        # chunks go last. Full-context sources are whole documents, not hits,
+        # and keep their order (#177).
+        if not full_context:
+            chunks.sort(key=lambda c: (c.get('distance') is not None, c.get('distance') or 0.0), reverse=True)
         return JSONCodec.dumps(chunks[:count], ensure_ascii=False)
     except Exception as e:
         log.exception(f'query_chat_files error: {e}')
