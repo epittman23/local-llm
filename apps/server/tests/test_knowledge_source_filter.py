@@ -29,12 +29,14 @@ def test_local_lists_bases_made_in_the_app_and_external_lists_the_others():
         made = await Knowledges.insert_new_knowledge(user.id, KnowledgeForm(name='Notes', description=''))
         external = await Knowledges.insert_new_knowledge(user.id, KnowledgeForm(name='Wiki', description=''))
         await Knowledges.update_knowledge_meta_by_id(external.id, {'source': 'external'})
+        sourceless = await Knowledges.insert_new_knowledge(user.id, KnowledgeForm(name='Misc', description=''))
+        await Knowledges.update_knowledge_meta_by_id(sourceless.id, {})
         base = {'user_id': user.id, 'group_ids': []}
         local = await Knowledges.search_knowledge_bases(user.id, {**base, 'source': 'local'})
         ext = await Knowledges.search_knowledge_bases(user.id, {**base, 'source': 'external'})
-        return made, external, local, ext
+        return made, external, sourceless, local, ext
 
-    made, external, local, ext = asyncio.run(scenario())
+    made, external, sourceless, local, ext = asyncio.run(scenario())
 
-    assert made.id in _ids(local) and external.id not in _ids(local)
+    assert {made.id, sourceless.id} <= _ids(local) and external.id not in _ids(local)
     assert _ids(ext) == {external.id}
