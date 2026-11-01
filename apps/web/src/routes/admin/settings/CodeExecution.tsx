@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import { SensitiveInput } from '@/components/common/SensitiveInput';
+import { BoundNumber } from '@/components/settings/boundFields';
 import {
 	SettingField,
 	SettingInput,
-	SettingNumber,
 	SettingRow,
 	SettingSelect,
 	SettingSwitch,
@@ -103,17 +103,14 @@ function EngineFields({
 							/>
 						</SettingField>
 					)}
-					<SettingField
+					<BoundNumber
+						config={config}
+						set={set}
+						name={key('JUPYTER_TIMEOUT')}
 						label="Code Execution Timeout"
 						description="Maximum runtime in seconds before execution is stopped."
-					>
-						<SettingNumber
-							value={config[key('JUPYTER_TIMEOUT')]}
-							onChange={(v) => set({ [key('JUPYTER_TIMEOUT')]: v })}
-							placeholder="e.g. 60"
-							autoComplete="off"
-						/>
-					</SettingField>
+						placeholder="e.g. 60"
+					/>
 				</>
 			)}
 		</>
