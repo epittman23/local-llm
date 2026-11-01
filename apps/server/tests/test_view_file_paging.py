@@ -50,6 +50,8 @@ def _read_all(tool) -> tuple[str, list[int]]:
         page = json.loads(
             asyncio.run(tool('f1', offset=offset, max_chars=200, line_numbers=True, __request__=REQUEST, __user__=USER))
         )
+        # Each page starts at the number of the line its first character is on.
+        assert page['content'].split(':', 1)[0] == str(CONTENT[:offset].count('\n') + 1)
         raw += '\n'.join(re.sub(r'^\d+: ', '', line, count=1) for line in page['content'].split('\n'))
         offsets.append(offset)
         if not page.get('truncated'):
