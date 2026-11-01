@@ -95,10 +95,12 @@ function ScheduleField({ value, onChange }: { value: Schedule; onChange: (s: Sch
 			</div>
 			{value.frequency === 'CUSTOM' ? (
 				<div className="px-2 pb-2">
-					<input
+					{/* A textarea: a DTSTART line is followed by a newline, which an input strips. */}
+					<textarea
 						className="w-full rounded-lg border bg-transparent px-2 py-1 font-mono text-xs outline-hidden"
 						aria-label="Custom RRULE"
 						placeholder="RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0"
+						rows={2}
 						value={value.custom}
 						onChange={(e) => set({ custom: e.target.value })}
 					/>

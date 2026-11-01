@@ -64,12 +64,47 @@ describe('schedule round-trip', () => {
 		]) {
 			expect(parseRrule(r, now)).toMatchObject({ frequency: 'CUSTOM', custom: r });
 		}
+		for (const r of [
+			'DTSTART:20250106T090000\nRRULE:FREQ=WEEKLY;BYHOUR=9;BYMINUTE=0', // its weekday is DTSTART's
+			'DTSTART:20271201T090000\nRRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0', // starts in 2027
+			'RRULE:FREQ=DAILY;INTERVAL=2;BYHOUR=9;BYMINUTE=0', // no interval control
+			'RRULE:FREQ=WEEKLY;BYDAY=mo;BYHOUR=9;BYMINUTE=0', // no button for it
+			'RRULE:FREQ=MONTHLY;BYMONTHDAY=-1;BYHOUR=9;BYMINUTE=0', // last day
+			'RRULE:FREQ=DAILY;BYHOUR=24;BYMINUTE=0'
+		]) {
+			expect(parseRrule(r, now).frequency).toBe('CUSTOM');
+		}
 		// Spelling that means the same rule still opens in the picker.
 		expect(parseRrule('RRULE:FREQ=DAILY;INTERVAL=1;BYHOUR=09;BYMINUTE=00', now)).toMatchObject({
 			frequency: 'DAILY',
 			hour: 9,
 			minute: 0
 		});
+	});
+	it("the assistant's documented examples open and read as what they do", () => {
+		// apps/server/local_llm/tools/builtin.py create_automation's docstring.
+		const cases: [string, string, string | RegExp][] = [
+			['DTSTART:20250101T090000\nRRULE:FREQ=DAILY', 'CUSTOM', 'DTSTART:20250101T090000\nRRULE:FREQ=DAILY'],
+			[
+				'DTSTART:20250106T080000\nRRULE:FREQ=WEEKLY;BYDAY=MO',
+				'CUSTOM',
+				'DTSTART:20250106T080000\nRRULE:FREQ=WEEKLY;BYDAY=MO'
+			],
+			['RRULE:FREQ=HOURLY;INTERVAL=1', 'HOURLY', 'Hourly'],
+			['RRULE:FREQ=MINUTELY;INTERVAL=30', 'CUSTOM', 'Every 30 minutes'],
+			['DTSTART:20250415T140000\nRRULE:FREQ=DAILY;COUNT=1', 'ONCE', /^Once · /],
+			[
+				'DTSTART:20250101T090000\nRRULE:FREQ=MONTHLY;BYMONTHDAY=1',
+				'CUSTOM',
+				'DTSTART:20250101T090000\nRRULE:FREQ=MONTHLY;BYMONTHDAY=1'
+			]
+		];
+		for (const [rule, frequency, label] of cases) {
+			expect(parseRrule(rule, now).frequency, rule).toBe(frequency);
+			if (label instanceof RegExp) expect(formatSchedule(rule)).toMatch(label);
+			else expect(formatSchedule(rule), rule).toBe(label);
+		}
+		expect(formatSchedule('RRULE:FREQ=DAILY;BYMINUTE=0')).toBe('RRULE:FREQ=DAILY;BYMINUTE=0');
 	});
 	it('switching to Custom starts from the schedule that was showing', () => {
 		const s = { ...defaultSchedule(now), hour: 7 };
