@@ -6,6 +6,7 @@ These tools are automatically available when native function calling is enabled.
 IMPORTANT: DO NOT IMPORT THIS MODULE DIRECTLY IN OTHER PARTS OF THE CODEBASE.
 """
 
+import asyncio
 import datetime as dt
 import logging
 import time
@@ -4163,8 +4164,20 @@ def _event_to_dict(event, tz) -> dict:
         'location': event.location or '',
         'reminder_minutes': alert_minutes if alert_minutes is not None else 10,
         'color': event.color,
+        'rrule': event.rrule,
         'is_cancelled': event.is_cancelled,
     }
+
+
+# How far ahead a recurring event is listed when a calendar search gives no end.
+_RECURRING_HORIZON_NS = 366 * 24 * 3600 * 1_000_000_000
+
+
+def _overlaps(start_at: int, end_at: int | None, range_start: int, range_end: int) -> bool:
+    """Whether an event overlaps [range_start, range_end), as get_events_by_range decides it for a one-off."""
+    if start_at >= range_end:
+        return False
+    return start_at >= range_start or (end_at is not None and end_at > range_start)
 
 
 async def search_calendar_events(
@@ -4180,10 +4193,16 @@ async def search_calendar_events(
     Helpful for finding upcoming events, reminders, or schedule items.
 
     :param query: Search text to match against event title, description, or location (optional)
+    A repeating event (one with an `rrule`) is listed once per occurrence in
+    the range, every occurrence under the series' `id`: updating or deleting
+    that id changes every occurrence. Without `end`, occurrences are listed
+    up to a year after `start`.
+
+    :param query: Search text to match against event title, description, or location (optional)
     :param start: Only return events starting at or after this datetime, e.g. "2026-04-20 00:00" (optional)
     :param end: Only return events starting before this datetime, e.g. "2026-04-27 00:00" (optional)
     :param count: Maximum number of events to return (default: 10)
-    :return: JSON list of matching events with id, title, description, start, end, calendar_id, location
+    :return: JSON list of matching events with id, title, description, start, end, calendar_id, location, rrule
     """
     if __request__ is None:
         return JSONCodec.dumps({'error': 'Request context not available'})
@@ -4192,7 +4211,8 @@ async def search_calendar_events(
         return JSONCodec.dumps({'error': 'User context not available'})
 
     try:
-        from local_llm.models.calendar import CalendarEvents
+        from local_llm.models.calendar import CalendarEventModel, CalendarEvents
+        from local_llm.utils.calendar import expand_recurring_event
 
         user_id = __user__.get('id')
         tz = _get_user_tz(__user__)
@@ -4215,11 +4235,34 @@ async def search_calendar_events(
             except (ValueError, TypeError) as e:
                 return JSONCodec.dumps({'error': f'Invalid end datetime: {e}'})
 
-            items = await CalendarEvents.get_events_by_range(
+            stored = await CalendarEvents.get_events_by_range(
                 user_id=user_id,
                 start=start_ns,
                 end=end_ns,
             )
+            # The range query returns every recurring event whatever its
+            # dates (#176). Expand each into the occurrences that start in the
+            # range, as the calendar router does; one already under way when
+            # the range starts is not listed, as on the calendar page (#171).
+            # A series whose rule cannot be expanded comes back as its own
+            # row and is kept only if that row overlaps the range, like a
+            # one-off. Without an end, stop a year out rather than at the
+            # expansion's cap of 5,000 occurrences.
+            expand_end = end_ns if end else min(end_ns, start_ns + _RECURRING_HORIZON_NS)
+            items = []
+            for event in stored:
+                if not event.rrule:
+                    items.append(event)
+                    continue
+                instances = await asyncio.to_thread(
+                    expand_recurring_event, event.model_dump(), start_ns, expand_end, tz=tz.key
+                )
+                items.extend(
+                    CalendarEventModel.model_validate(inst)
+                    for inst in instances
+                    if _overlaps(inst['start_at'], inst.get('end_at'), start_ns, end_ns)
+                )
+            items.sort(key=lambda e: e.start_at)
 
             # Apply text filter if query is also provided
             if query:
