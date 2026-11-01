@@ -43,7 +43,12 @@ SERVER_DIR := $(REPO_ROOT)/apps/server
 DATA_DIR ?= $(REPO_ROOT)/apps/server/data
 WEB_DIR := $(REPO_ROOT)/apps/web
 DESKTOP_DIR := $(REPO_ROOT)/apps/desktop
-COMPOSE := docker compose -f $(REPO_ROOT)/infra/docker-compose.yml
+# Quoted, so a checkout path with a space stays one argument. Recipes use it
+# inside double quotes only (never in a single-quoted trap string), so a path
+# with a ' works too. That holds for `make -C <path>` (as the desktop app runs
+# it) and for make run inside the checkout; `make -f <path>/Makefile` from
+# elsewhere splits a spaced path, and a path with a ", $ or ` is unsupported.
+COMPOSE := docker compose -f "$(REPO_ROOT)/infra/docker-compose.yml"
 LLLM_BACKEND_PORT ?= 4000
 # Loopback by default: the backend's admin API can start processes on this
 # machine, so it is not offered to the LAN unless asked for with
@@ -97,6 +102,11 @@ help:
 # included. uvicorn is never exec'd for the same reason: exec would replace
 # this shell -- and its trap -- with uvicorn's process image.
 #
+# The backend runs its migrations when it is imported, so the recipe waits
+# for Postgres's healthcheck (infra/docker-compose.yml) before starting it;
+# on a fresh volume the first start takes several seconds. The other
+# services are not waited on: Redis is retried by the backend itself.
+#
 # The venv is apps/server/pyproject.toml + uv.lock, applied exactly by
 # `uv sync --frozen` on every run: a no-op when nothing changed, and it
 # removes anything the lock no longer lists. uv also fetches a matching
@@ -127,9 +137,11 @@ backend:
 		fi; \
 	done; \
 	set -a; source "$$envfile"; set +a; \
-	trap 'echo "==> Stopping Postgres and Redis, Jupyter and SearXNG"; $(COMPOSE) down' EXIT; \
+	stop_services() { echo "==> Stopping Postgres and Redis, Jupyter and SearXNG"; $(COMPOSE) down; }; \
+	trap stop_services EXIT; \
 	echo "==> Starting Postgres and Redis, Jupyter and SearXNG"; \
 	$(COMPOSE) up -d postgres redis jupyter searxng; \
+	$(COMPOSE) up -d --wait --wait-timeout 120 postgres; \
 	if ! command -v uv >/dev/null 2>&1; then \
 		echo "make backend: uv not found -- install it (https://docs.astral.sh/uv/, e.g. \`curl -LsSf https://astral.sh/uv/install.sh | sh\`)" >&2; \
 		exit 1; \
@@ -157,10 +169,13 @@ backend:
 # real server as an orphan with nothing left in the foreground for Ctrl-C to
 # reach. So this recipe starts it explicitly backgrounded, blocks on
 # `astro dev logs --follow` instead (a real foreground process Ctrl-C can
-# hit), and the trap runs `astro dev stop` on exit either way.
+# hit), and the trap runs `astro dev stop` on exit either way. The steps are
+# separated by `;`, not `&&`: under `-e` a failure on the left of an `&&` list
+# does not stop the shell, so a failed install would start the dev server on
+# stale dependencies with no trap set.
 frontend:
-	@cd "$(WEB_DIR)" && \
-	bun install --frozen-lockfile && \
+	@cd "$(WEB_DIR)"; \
+	bun install --frozen-lockfile; \
 	trap 'bunx astro dev stop' EXIT; \
 	LLLM_BACKEND_URL="http://localhost:$(LLLM_BACKEND_PORT)" bunx astro dev --background; \
 	bunx astro dev logs --follow
@@ -213,7 +228,11 @@ pr-gate:
 # CI's "Backend (pytest)", including the throwaway pgvector Postgres that
 # tests/test_imports.py needs (without it that test skips locally, while CI
 # fails). The container is removed on exit, Ctrl-C included. DATA_DIR is the
-# suite's own temp directory (tests/conftest.py), as in CI.
+# suite's own temp directory (tests/conftest.py), as in CI. Readiness is
+# probed over TCP: the image's first-start init runs a temporary server on
+# the Unix socket only, which a socket probe takes for the real one; and
+# running out of probes stops the recipe instead of running the tests anyway.
+# The port check looks for a listener on any address, not only 127.0.0.1.
 # The venv is pinned as in `backend`: `uv sync` removes what the lock doesn't
 # list, so following an inherited UV_PROJECT_ENVIRONMENT would strip another
 # project's environment.
@@ -222,7 +241,7 @@ test-backend:
 	export UV_PROJECT_ENVIRONMENT="$(SERVER_DIR)/.venv"; \
 	uv lock --check; \
 	uv sync --frozen --no-install-project --group dev; \
-	if ss -ltn | grep -q "127.0.0.1:$(LLLM_TEST_PG_PORT) "; then \
+	if [ -n "$$(ss -ltnH "sport = :$(LLLM_TEST_PG_PORT)")" ]; then \
 		echo "make test-backend: port $(LLLM_TEST_PG_PORT) is in use -- set LLLM_TEST_PG_PORT" >&2; \
 		exit 1; \
 	fi; \
@@ -231,10 +250,16 @@ test-backend:
 	docker run --rm -d --name "$$pg" -p "127.0.0.1:$(LLLM_TEST_PG_PORT):5432" \
 		-e POSTGRES_USER=local_llm -e POSTGRES_PASSWORD=test-only-not-a-secret -e POSTGRES_DB=local_llm \
 		pgvector/pgvector:pg16 >/dev/null; \
+	pg_ready=""; \
 	for i in $$(seq 1 60); do \
-		docker exec "$$pg" psql -U local_llm -d local_llm -tAc 'select 1' >/dev/null 2>&1 && break; \
+		if docker exec "$$pg" pg_isready -q -h 127.0.0.1 -p 5432 -U local_llm -d local_llm; then pg_ready=1; break; fi; \
 		sleep 1; \
 	done; \
+	if [ -z "$$pg_ready" ]; then \
+		echo "make $@: Postgres ($$pg) did not accept connections on TCP within 60 s" >&2; \
+		docker logs --tail 20 "$$pg" >&2 || true; \
+		exit 1; \
+	fi; \
 	LLLM_SECRET_KEY=test-only-not-a-secret-0123456789abcdef0123456789abcdef \
 	TEST_DATABASE_URL="postgresql://local_llm:test-only-not-a-secret@127.0.0.1:$(LLLM_TEST_PG_PORT)/local_llm" \
 	uv run --frozen python -m pytest tests -q --cov --cov-report=xml; \
@@ -275,7 +300,7 @@ test-boot:
 	export UV_PROJECT_ENVIRONMENT="$(SERVER_DIR)/.venv"; \
 	uv sync --frozen --no-install-project; \
 	for port in $(LLLM_BOOT_PG_PORT) $(LLLM_BOOT_REDIS_PORT); do \
-		if ss -ltn | grep -q "127.0.0.1:$$port "; then \
+		if [ -n "$$(ss -ltnH "sport = :$$port")" ]; then \
 			echo "make test-boot: port $$port is in use -- set LLLM_BOOT_PG_PORT / LLLM_BOOT_REDIS_PORT" >&2; \
 			exit 1; \
 		fi; \
@@ -286,10 +311,16 @@ test-boot:
 		-e POSTGRES_USER=local_llm -e POSTGRES_PASSWORD=test-only-not-a-secret -e POSTGRES_DB=local_llm \
 		pgvector/pgvector:pg16 >/dev/null; \
 	docker run --rm -d --name "$$redis" -p "127.0.0.1:$(LLLM_BOOT_REDIS_PORT):6379" redis:7.4.2-alpine >/dev/null; \
+	pg_ready=""; \
 	for i in $$(seq 1 60); do \
-		docker exec "$$pg" psql -U local_llm -d local_llm -tAc 'select 1' >/dev/null 2>&1 && break; \
+		if docker exec "$$pg" pg_isready -q -h 127.0.0.1 -p 5432 -U local_llm -d local_llm; then pg_ready=1; break; fi; \
 		sleep 1; \
 	done; \
+	if [ -z "$$pg_ready" ]; then \
+		echo "make $@: Postgres ($$pg) did not accept connections on TCP within 60 s" >&2; \
+		docker logs --tail 20 "$$pg" >&2 || true; \
+		exit 1; \
+	fi; \
 	LLLM_SECRET_KEY=test-only-not-a-secret-0123456789abcdef0123456789abcdef \
 	DATABASE_URL="postgresql://local_llm:test-only-not-a-secret@127.0.0.1:$(LLLM_BOOT_PG_PORT)/local_llm" \
 	REDIS_URL="redis://127.0.0.1:$(LLLM_BOOT_REDIS_PORT)/0" \
@@ -307,14 +338,16 @@ test-web:
 		--compare-branch="$(DIFF_BASE)" --fail-under="$(DIFF_COVER_FAIL_UNDER)") && \
 	bun run build
 
-# CI's "Web e2e (Playwright, mocked backend)". Two workers, CI's count: at the
-# default (half the cores) a cold dev server misses 5 s timeouts here. Stop
-# `make frontend` first; Playwright reuses and then stops a running dev server.
+# CI's "Web e2e (Playwright, mocked backend)", with CI's command and CI's
+# environment: CI=1 turns on what CI gets from GitHub's CI=true (two retries,
+# a stray test.only fails the run, no reuse of a running dev server), and the
+# worker count is pinned in playwright.config.ts for both. Stop
+# `make frontend` first: with CI=1, Playwright refuses to start beside it.
 test-e2e:
 	@cd "$(WEB_DIR)" && \
 	bun install --frozen-lockfile && \
 	bunx playwright install chromium && \
-	bunx playwright test --workers=2
+	CI=1 bun run test:e2e
 
 # CI's "Desktop (typecheck, vitest, package smoke)". The unpacked package
 # catches an electron-builder bump that breaks packaging, which Dependabot
