@@ -220,16 +220,19 @@ export function eventPayload(
 	let end = endDate ? dateTimeToNs(endDate, f.allDay ? '23:59' : f.endTime) : undefined;
 	if (end !== undefined && end < start)
 		end = start + (editing?.end_at && editing.end_at > editing.start_at ? editing.end_at - editing.start_at : 0);
+	// An update keeps every field the request leaves out, so a field cleared
+	// on an existing event is sent as null; left out, the old value stayed (#158).
+	const blank = editing ? null : undefined;
 	return {
 		form: {
 			calendar_id: f.calendarId,
 			title: f.title.trim(),
-			description: f.description.trim() || undefined,
+			description: f.description.trim() || blank,
 			start_at: start,
-			end_at: end,
+			end_at: end ?? blank,
 			all_day: f.allDay,
-			rrule: REPEAT_RRULES[f.repeat] || undefined,
-			location: f.location.trim() || undefined,
+			rrule: REPEAT_RRULES[f.repeat] || blank,
+			location: f.location.trim() || blank,
 			meta: { alert_minutes: f.alertMinutes }
 		}
 	};

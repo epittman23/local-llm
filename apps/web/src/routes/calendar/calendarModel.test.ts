@@ -124,6 +124,31 @@ describe('event form', () => {
 	});
 });
 
+describe('clearing a field of an existing event (#158)', () => {
+	it('sends null, so the update removes it rather than keeping the old value', () => {
+		const old = ev(at(2026, 8, 1, 9), at(2026, 8, 1, 10), {
+			rrule: 'FREQ=WEEKLY',
+			description: 'Agenda',
+			location: 'Room 4'
+		});
+		const f = { ...eventFields(old, '', null), repeat: '', description: ' ', location: '', endDate: '' };
+		const out = eventPayload(f, old);
+		expect('form' in out && out.form).toMatchObject({
+			rrule: null,
+			description: null,
+			location: null,
+			end_at: null
+		});
+	});
+	it('a new event leaves blank fields out', () => {
+		const f = { ...eventFields(null, 'cal', ns(at(2026, 8, 1, 9))), title: 'x', endDate: '' };
+		const out = eventPayload(f, null);
+		const form = 'form' in out ? out.form : {};
+		for (const key of ['rrule', 'description', 'location', 'end_at'])
+			expect((form as Record<string, unknown>)[key]).toBeUndefined();
+	});
+});
+
 describe('editing one occurrence of a repeating event', () => {
 	// A daily series that began 1 Oct, opened from its 20 Oct occurrence.
 	const seriesStart = ns(at(2026, 9, 1, 9));
