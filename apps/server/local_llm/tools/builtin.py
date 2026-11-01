@@ -4199,7 +4199,8 @@ async def search_calendar_events(
     up to a year after `start`.
 
     :param query: Search text to match against event title, description, or location (optional)
-    :param start: Only return events starting at or after this datetime, e.g. "2026-04-20 00:00" (optional)
+    :param start: Only return events still running at or after this datetime, e.g. "2026-04-20 00:00" (an event
+        with no end must start at or after it) (optional)
     :param end: Only return events starting before this datetime, e.g. "2026-04-27 00:00" (optional)
     :param count: Maximum number of events to return (default: 10)
     :return: JSON list of matching events with id, title, description, start, end, calendar_id, location, rrule

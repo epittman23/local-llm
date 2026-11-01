@@ -56,8 +56,9 @@ def expand_recurring_event(
     original_end_ns = event_dict.get('end_at')
     duration_ns = (original_end_ns - original_start_ns) if original_end_ns else None
     # Look back far enough to find an occurrence still running when the
-    # range starts: it overlaps the range, as a one-off would (#171).
-    scan_start = range_start - max(dt.timedelta(days=1), dt.timedelta(microseconds=(duration_ns or 0) // 1000))
+    # range starts: it overlaps the range, as a one-off would (#171). The
+    # extra day covers a DST change, as the scan runs in wall-clock time.
+    scan_start = range_start - dt.timedelta(days=1, microseconds=max(duration_ns or 0, 0) // 1000)
 
     instances = []
     previous_start = None

@@ -52,3 +52,13 @@ def test_an_occurrence_that_ended_before_the_range_or_has_no_end_is_not():
 
     assert _starts(expand_recurring_event(morning, _ns('2026-10-15 12:00'), _ns('2026-10-15 18:00'), tz=TZ)) == []
     assert _starts(expand_recurring_event(point, _ns('2026-10-15 00:00'), _ns('2026-10-15 12:00'), tz=TZ)) == []
+
+
+def test_a_long_occurrence_is_found_across_a_spring_forward_change():
+    """The lookback runs in wall-clock time; a 23-hour day must not shorten it below the event's length."""
+    long = _event('2026-03-07 23:30', '2026-03-08 23:30', 'FREQ=WEEKLY')  # Saturday, 24 h
+
+    got = expand_recurring_event(long, _ns('2026-03-30 00:00'), _ns('2026-03-31 00:00'), tz=TZ)
+
+    # The 28 March occurrence ends at 00:30 on Monday 30 March (CEST).
+    assert _starts(got) == [_ns('2026-03-28 23:30')]
