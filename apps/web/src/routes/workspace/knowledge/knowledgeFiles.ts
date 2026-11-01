@@ -178,16 +178,16 @@ export function takeDroppedItems<E extends { isDirectory?: boolean }>(
  * `collect` after every item is read; see takeDroppedItems). Null when a
  * folder cannot be read, after `onError` has reported it.
  */
-export async function gatherDroppedFiles(
+export async function gatherDroppedFiles<E extends { isDirectory?: boolean }>(
 	items: Iterable<DroppedItem>,
-	collect: (entry: never) => Promise<DirectoryFileEntry[]>,
+	collect: (entry: E) => Promise<DirectoryFileEntry[]>,
 	onError: (error: unknown) => void
 ): Promise<{ loose: File[]; directoryEntries: DirectoryFileEntry[] } | null> {
-	const { directories, files } = takeDroppedItems(items);
+	const { directories, files } = takeDroppedItems<E>(items);
 	const directoryEntries: DirectoryFileEntry[] = [];
 	for (const entry of directories) {
 		try {
-			directoryEntries.push(...(await collect(entry as never)));
+			directoryEntries.push(...(await collect(entry)));
 		} catch (error) {
 			onError(error);
 			return null;

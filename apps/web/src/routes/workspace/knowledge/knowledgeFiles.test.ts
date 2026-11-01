@@ -12,6 +12,7 @@ import {
 	staleFileIds,
 	takeDroppedItems,
 	gatherDroppedFiles,
+	type DirectoryFileEntry,
 	type DirectoryManifestEntry,
 	type SyncDiff
 } from './knowledgeFiles';
@@ -143,22 +144,38 @@ describe('takeDroppedItems', () => {
 });
 
 describe('gatherDroppedFiles', () => {
-	const folder = { isDirectory: true, name: 'docs' };
-	const items = [
-		{ webkitGetAsEntry: () => folder, getAsFile: () => null },
-		{ webkitGetAsEntry: () => ({ isDirectory: false }), getAsFile: () => new File(['x'], 'after.txt') }
-	];
+	/** Items that read as null once the drop handler has awaited, as a browser's DataTransfer does. */
+	function dropped() {
+		let isProtected = false;
+		const folder = { isDirectory: true, name: 'docs' };
+		const items = [
+			{ webkitGetAsEntry: () => (isProtected ? null : folder), getAsFile: () => null },
+			{
+				webkitGetAsEntry: () => (isProtected ? null : { isDirectory: false }),
+				getAsFile: () => (isProtected ? null : new File(['x'], 'after.txt'))
+			}
+		];
+		return { items, protect: () => (isProtected = true) };
+	}
+	const inside: DirectoryFileEntry[] = [{ path: 'docs', filename: 'in.txt', file: new File(['y'], 'in.txt') }];
 
 	it("keeps the files dropped after a folder, and the folder's own (#231)", async () => {
-		const inside = [{ file: new File(['y'], 'in.txt'), relativePath: 'docs/in.txt' }] as never;
-		const got = await gatherDroppedFiles(items, async () => inside, vi.fn());
+		const { items, protect } = dropped();
+		const got = await gatherDroppedFiles(
+			items,
+			async () => {
+				protect();
+				return inside;
+			},
+			vi.fn()
+		);
 		expect(got?.loose.map((f) => f.name)).toEqual(['after.txt']);
 		expect(got?.directoryEntries).toEqual(inside);
 	});
 	it('reports a folder it cannot read and gives up', async () => {
 		const onError = vi.fn();
 		const got = await gatherDroppedFiles(
-			items,
+			dropped().items,
 			async () => {
 				throw new Error('denied');
 			},
