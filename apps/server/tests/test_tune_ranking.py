@@ -132,3 +132,102 @@ def test_refine_does_not_descend_around_a_slower_leader(monkeypatch):
     monkeypatch.setattr(tune, 'refine_candidates', must_not_run)
 
     assert asyncio.run(sweep.refine(3, [BASE, SLOW], 20)) == (3, [BASE, SLOW], 20)
+
+
+# --- elimination (#135, #136) ----------------------------------------------------
+
+
+def _eliminate(
+    monkeypatch, scores: dict[str, float], alive: list[Candidate], matrix: dict | None = None
+) -> tuple[list[Candidate], str]:
+    sweep = _sweep(scores)
+    sweep.o = tune.SweepOptions()
+
+    async def no_matrix(sweep_id, rnd=None):
+        return matrix or {}
+
+    async def fake_set_candidate(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(tune, 'tune_matrix', no_matrix)
+    monkeypatch.setattr(tune.BenchmarkTuneCandidates, 'set_candidate', staticmethod(fake_set_candidate))
+    return asyncio.run(sweep.eliminate(1, alive))
+
+
+def test_a_candidate_tied_with_the_defaults_outranks_slower_ones(monkeypatch):
+    """A score of exactly 0.0 was read as missing and ranked below everything (#135)."""
+    scores = {BASE.sha: 0.0, TIED.sha: 0.0, SLOW.sha: math.log(0.5), SLOWER.sha: math.log(0.4)}
+
+    survivors, _ = _eliminate(monkeypatch, scores, [BASE, SLOW, SLOWER, TIED])
+
+    assert survivors[:2] == [BASE, TIED]
+    assert SLOWER not in survivors
+
+
+def test_a_cut_with_no_paired_differences_is_recorded_as_uncertain(monkeypatch):
+    """n = 0 pairs is no evidence for the cut, not support for it (#136)."""
+    scores = {BASE.sha: 0.0, FAST.sha: math.log(1.2), SLOW.sha: math.log(0.5), SLOWER.sha: math.log(0.4)}
+
+    _, decision = _eliminate(monkeypatch, scores, [BASE, FAST, SLOW, SLOWER])
+
+    assert decision == 'uncertain'
+
+
+# --- cooldown budget (#137) ------------------------------------------------------
+
+
+def test_cooling_counts_earlier_pauses_against_the_cooldown_share(monkeypatch):
+    """A retry inside a pause overwrote the running total with that pause's own time (#137)."""
+    clock = [0.0]
+    waits: list[float] = []
+
+    class FakeTime:
+        @staticmethod
+        def time():
+            return clock[0]
+
+    async def fake_wait(target, window):
+        waits.append(window)
+        clock[0] += 1000.0
+
+    async def slow_probe():
+        return 5.0
+
+    async def nothing(*args, **kwargs):
+        return None
+
+    async def no_gpu():
+        return None
+
+    sweep = types.SimpleNamespace(
+        sweep_id='sweep', baseline_tps=10.0, budget=types.SimpleNamespace(seconds=10_000), last_pause_at=None
+    )
+    cool = tune.Cooldown(sweep, tune.SweepOptions(cooldown_attempts=5, max_cooldown_share=0.5))
+    cool.total_seconds = 3000.0  # earlier pauses
+    cool.gpu = types.SimpleNamespace(read=no_gpu)
+    cool._wait = fake_wait
+    cool._probe = slow_probe
+    monkeypatch.setattr(tune, 'time', FakeTime)
+    monkeypatch.setattr(tune.BenchmarkTunePauses, 'open_pause', staticmethod(nothing))
+    monkeypatch.setattr(tune.BenchmarkTunePauses, 'close_pause', staticmethod(nothing))
+
+    resolution = asyncio.run(cool.run(trigger='drift', rnd=1, visit_id=None, drift_ratio=0.5))
+
+    # The share is 5,000 s: 3,000 s earlier plus a third 1,000 s attempt exceeds it.
+    assert resolution == 'timeout'
+    assert len(waits) == 3
+    assert cool.total_seconds == 6000.0
+
+
+def test_a_cut_the_items_agree_on_is_still_supported(monkeypatch):
+    """Six items, every one faster on the kept side: p = 0.03, so the cut stands."""
+    scores = {BASE.sha: 0.0, FAST.sha: math.log(1.2), SLOW.sha: math.log(0.5), SLOWER.sha: math.log(0.4)}
+    matrix = {}
+    for i in range(6):
+        for cand, tps in ((BASE, 10.0), (FAST, 12.0), (SLOW, 5.0), (SLOWER, 4.0)):
+            matrix[('b', str(i), cand.sha)] = {'gen_tps': tps}
+
+    survivors, decision = _eliminate(monkeypatch, scores, [BASE, FAST, SLOW, SLOWER], matrix)
+
+    assert decision == 'kept 2 of 4'
+    assert survivors == [BASE, FAST]
