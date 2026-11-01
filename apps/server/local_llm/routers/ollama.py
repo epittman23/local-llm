@@ -1540,8 +1540,10 @@ def upload_path_for(file_name: str | None, upload_dir: str | None = None) -> str
     upload_dir = upload_dir or UPLOAD_DIR
     if not file_name or file_name in ('.', '..') or os.path.basename(file_name) != file_name:
         return None
-    file_path = os.path.join(upload_dir, file_name)
-    if os.path.dirname(os.path.realpath(file_path)) != os.path.realpath(upload_dir):
+    # Return the resolved path that was checked, so every later file
+    # operation uses exactly that path (and CodeQL sees the check guard it).
+    file_path = os.path.realpath(os.path.join(upload_dir, file_name))
+    if not file_path.startswith(os.path.realpath(upload_dir) + os.sep):
         return None
     return file_path
 
@@ -1583,29 +1585,32 @@ async def download_file_stream(
                 progress = round((current_size / progress_total) * 100, 2)
                 yield f'data: {{"progress": {progress}, "completed": {current_size}, "total": {total_size}}}\n\n'
 
-            done = True
-            hashed = await asyncio.to_thread(calculate_sha256, file_path, chunk_size)
+        # Hash and push only once the file is closed: inside the writer its
+        # last buffered bytes are not on disk yet, and Ollama accepts a
+        # truncated blob whose digest matches the truncated bytes (#340). A
+        # body shorter than its Content-Length already raised in the read
+        # above, leaving the partial file to resume from.
+        blob_size = await asyncio.to_thread(os.path.getsize, file_path)
+        hashed = await asyncio.to_thread(calculate_sha256, file_path, chunk_size)
+        blob_url = f'{ollama_url}/api/blobs/sha256:{hashed}'
 
-            blob_url = f'{ollama_url}/api/blobs/sha256:{hashed}'
-            blob_size = await asyncio.to_thread(os.path.getsize, file_path)
+        async def blob_chunks():
+            async with aiofiles.open(file_path, 'rb') as blob_file:
+                while chunk := await blob_file.read(chunk_size):
+                    yield chunk
 
-            async def blob_chunks():
-                async with aiofiles.open(file_path, 'rb') as blob_file:
-                    while chunk := await blob_file.read(chunk_size):
-                        yield chunk
-
-            async with session.post(
-                blob_url,
-                data=blob_chunks(),
-                headers={'Content-Length': str(blob_size)},
-                ssl=AIOHTTP_CLIENT_SESSION_SSL,
-                timeout=aiohttp.ClientTimeout(total=30),
-            ) as blob_resp:
-                if blob_resp.ok:
-                    await asyncio.to_thread(os.remove, file_path)
-                    yield f'data: {JSONCodec.dumps({"done": done, "blob": f"sha256:{hashed}", "name": file_name})}\n\n'
-                else:
-                    raise RuntimeError('Ollama: Could not create blob, Please try again.')
+        async with session.post(
+            blob_url,
+            data=blob_chunks(),
+            headers={'Content-Length': str(blob_size)},
+            ssl=AIOHTTP_CLIENT_SESSION_SSL,
+            timeout=aiohttp.ClientTimeout(total=30),
+        ) as blob_resp:
+            if blob_resp.ok:
+                await asyncio.to_thread(os.remove, file_path)
+                yield f'data: {JSONCodec.dumps({"done": True, "blob": f"sha256:{hashed}", "name": file_name})}\n\n'
+            else:
+                raise RuntimeError('Ollama: Could not create blob, Please try again.')
 
 
 @router.post('/models/download')
