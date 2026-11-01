@@ -338,6 +338,15 @@ and direct OpenAI connections. It counts them, and fails if the count grows
 past `UNRESOLVED_LIMIT` (38 on 2026-10-23). It checks paths and methods
 only, not request or response bodies.
 
+`tests/test_makefile.py` runs the root Makefile's recipes for real, from a
+copy of the Makefile in a temporary directory, with stub `docker`, `bun`,
+`uv` and the like first on `PATH`. It checks what the stubs were asked to
+do: that a failed step stops a recipe, that a trap is set before what it
+cleans up is started, that `make backend` waits for Postgres, and that a
+checkout path with a space or a quote stays one argument. Nothing real
+starts, so it needs neither Docker nor a network. A change to a recipe's
+failure path belongs there.
+
 ## Boot smoke: the real backend, started and used
 
 `tests/boot_smoke.py` (`make test-boot`, CI's Boot job) starts the backend
