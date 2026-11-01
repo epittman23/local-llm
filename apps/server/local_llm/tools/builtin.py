@@ -4341,7 +4341,10 @@ async def create_calendar_event(
         # Resolve calendar_id: use provided, or fall back to default
         if not calendar_id:
             calendars = await Calendars.get_calendars_by_user(user_id)
-            default_cal = next((c for c in calendars if c.is_default), None)
+            # is_default is the owner's flag: a calendar shared with this user
+            # can carry its owner's, and listed first it took the event (#182).
+            own = [c for c in calendars if c.user_id == user_id]
+            default_cal = next((c for c in own if c.is_default), None) or next(iter(own), None)
             if not default_cal and calendars:
                 default_cal = calendars[0]
             if not default_cal:
