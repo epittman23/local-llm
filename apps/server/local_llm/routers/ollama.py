@@ -1540,8 +1540,10 @@ def upload_path_for(file_name: str | None, upload_dir: str | None = None) -> str
     upload_dir = upload_dir or UPLOAD_DIR
     if not file_name or file_name in ('.', '..') or os.path.basename(file_name) != file_name:
         return None
-    file_path = os.path.join(upload_dir, file_name)
-    if os.path.dirname(os.path.realpath(file_path)) != os.path.realpath(upload_dir):
+    # Return the resolved path that was checked, so every later file
+    # operation uses exactly that path (and CodeQL sees the check guard it).
+    file_path = os.path.realpath(os.path.join(upload_dir, file_name))
+    if not file_path.startswith(os.path.realpath(upload_dir) + os.sep):
         return None
     return file_path
 
