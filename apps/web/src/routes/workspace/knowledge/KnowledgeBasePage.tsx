@@ -48,7 +48,7 @@ import {
 	KnowledgeBreadcrumbs,
 	KnowledgeFileList
 } from './KnowledgeFileList';
-import { type Breadcrumb, type DirectoryFileEntry } from './knowledgeFiles';
+import { type Breadcrumb, type DirectoryFileEntry, announceContentSaved } from './knowledgeFiles';
 import {
 	collectDirectoryFiles,
 	collectDroppedEntryFiles,
@@ -396,7 +396,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 				return null;
 			});
 			if (res) {
-				toast.success('File content updated successfully.');
+				announceContentSaved(res);
 				setSelectedFileId(null);
 				refresh();
 			}

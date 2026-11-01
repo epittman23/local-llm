@@ -14,6 +14,7 @@ from local_llm.models.config import Config
 from local_llm.utils.auth import get_admin_user, get_verified_user
 from local_llm.utils.headers import bearer_auth_header, get_custom_headers
 from local_llm.utils.mcp.client import MCPClient
+from local_llm.utils.misc import jwt_expiry_error
 from local_llm.utils.oauth import (
     OAuthClientInformationFull,
     apply_connection_oauth_options,
@@ -96,6 +97,10 @@ class ImportConfigForm(BaseModel):
 
 @router.post('/import', response_model=dict)
 async def import_config(request: Request, form_data: ImportConfigForm, user=Depends(get_admin_user)):
+    # The same check as the admin form: an imported unusable JWT expiry
+    # would lock everyone out (#242).
+    if 'auth.jwt_expiry' in form_data.config and (error := jwt_expiry_error(form_data.config['auth.jwt_expiry'])):
+        raise HTTPException(status_code=400, detail=error)
     await Config.upsert(form_data.config)
     await publish_event(
         request,

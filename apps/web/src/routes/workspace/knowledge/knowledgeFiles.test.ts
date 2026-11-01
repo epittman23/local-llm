@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
 	KB_DIR_MOVE,
 	KB_FILE_MOVE,
+	announceContentSaved,
 	createMissingDirectories,
 	filesToUpload,
 	getDirectoryUploadPath,
@@ -106,5 +107,19 @@ describe('knowledgeMetaPreview', () => {
 				description: 'x'
 			})
 		).toBe('Drive · Docs · service · x');
+	});
+});
+
+describe('announceContentSaved', () => {
+	it('names the knowledge bases a saved edit did not reach (#307)', () => {
+		const notify = { success: vi.fn(), warning: vi.fn() };
+		announceContentSaved({ failed_knowledge: ['Research', 'Ops'] }, notify);
+		expect(notify.warning).toHaveBeenCalledWith(
+			'File content saved, but these knowledge bases still use the old text: Research, Ops.'
+		);
+		announceContentSaved({ failed_knowledge: [] }, notify);
+		announceContentSaved(null, notify);
+		expect(notify.success).toHaveBeenCalledTimes(2);
+		expect(notify.warning).toHaveBeenCalledTimes(1);
 	});
 });

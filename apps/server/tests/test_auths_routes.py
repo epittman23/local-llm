@@ -350,3 +350,34 @@ def test_api_keys_need_the_feature_and_the_permission(client, config):
 def test_token_exchange_is_off_by_default(client, monkeypatch):
     monkeypatch.setattr(auths_router, 'ENABLE_OAUTH_TOKEN_EXCHANGE', False)
     assert client.post('/auths/oauth/any/token/exchange', json={'token': 't'}).status_code == 403
+
+
+# --- JWT expiry setting (#242) ---------------------------------------------------
+
+
+def _save_jwt_expiry(client, admin, value):
+    body = client.get('/auths/admin/config', headers=admin.headers).json()
+    return client.post('/auths/admin/config', json={**body, 'JWT_EXPIRES_IN': value}, headers=admin.headers)
+
+
+@pytest.mark.parametrize(
+    'value', ['-1h', '-0.5d', '0s', '0.0h', '500ms', '30s', '1 hour', '24hr', '1H', '', '3000000d', '999999999w']
+)
+def test_an_unusable_jwt_expiry_is_refused_and_not_saved(client, config, value):
+    """A negative or zero duration expires every new session at once; a typo used to be dropped silently."""
+    admin = _account('admin')
+
+    r = _save_jwt_expiry(client, admin, value)
+
+    assert r.status_code == 400
+    assert config['auth.jwt_expiry'] == '1h'
+
+
+@pytest.mark.parametrize('value', ['30m', '1.5h', '4w', '1d12h', '60s', '-1', '0'])
+def test_a_valid_jwt_expiry_is_saved(client, config, value):
+    admin = _account('admin')
+
+    r = _save_jwt_expiry(client, admin, value)
+
+    assert r.status_code == 200
+    assert config['auth.jwt_expiry'] == value

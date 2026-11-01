@@ -124,6 +124,65 @@ describe('event form', () => {
 	});
 });
 
+describe('editing one occurrence of a repeating event', () => {
+	// A daily series that began 1 Oct, opened from its 20 Oct occurrence.
+	const seriesStart = ns(at(2026, 9, 1, 9));
+	const occurrence = ev(at(2026, 9, 20, 9), at(2026, 9, 20, 9, 30), {
+		id: 's1',
+		rrule: 'FREQ=DAILY',
+		instance_id: `s1_${ns(at(2026, 9, 20, 9))}`
+	});
+
+	it('a rename keeps the series start (#318)', () => {
+		const f = { ...eventFields(occurrence, '', null), title: 'Renamed' };
+		const out = eventPayload(f, occurrence, seriesStart);
+		expect('form' in out && out.form).toMatchObject({
+			title: 'Renamed',
+			start_at: seriesStart,
+			end_at: ns(at(2026, 9, 1, 9, 30)),
+			rrule: 'FREQ=DAILY'
+		});
+	});
+	it('a new time moves every occurrence by the same amount', () => {
+		const f = { ...eventFields(occurrence, '', null), startTime: '10:00', endTime: '11:00' };
+		const out = eventPayload(f, occurrence, seriesStart);
+		expect('form' in out && out.form).toMatchObject({
+			start_at: ns(at(2026, 9, 1, 10)),
+			end_at: ns(at(2026, 9, 1, 11))
+		});
+	});
+	it('a new date moves the series by as many days, at the same local time across a DST change', () => {
+		const tz = process.env.TZ;
+		process.env.TZ = 'America/New_York';
+		try {
+			// Series from 1 Oct 09:00 (EDT), opened at 3 Nov (EST), moved back to 30 Oct.
+			const start = ns(at(2026, 9, 1, 9));
+			const nov3 = ev(at(2026, 10, 3, 9), at(2026, 10, 3, 10), { id: 's2', rrule: 'FREQ=DAILY', instance_id: 'x' });
+			const f = { ...eventFields(nov3, '', null), startDate: '2026-10-30', endDate: '2026-10-30' };
+			const out = eventPayload(f, nov3, start);
+			const got = 'form' in out ? new Date(out.form.start_at / NS) : null;
+			expect([got?.getMonth(), got?.getDate(), got?.getHours()]).toEqual([8, 27, 9]);
+			const allDay = eventPayload({ ...f, allDay: true }, { ...nov3, all_day: true }, start);
+			const [s, e] = 'form' in allDay ? [allDay.form.start_at, allDay.form.end_at ?? 0] : [0, 0];
+			expect([new Date(s / NS).getDate(), new Date(s / NS).getHours()]).toEqual([27, 0]);
+			expect([new Date(e / NS).getDate(), new Date(e / NS).getHours()]).toEqual([27, 23]);
+		} finally {
+			if (tz === undefined) delete process.env.TZ;
+			else process.env.TZ = tz;
+		}
+	});
+	it('a changed repeat rule starts at the occurrence being edited', () => {
+		const f = { ...eventFields(occurrence, '', null), repeat: 'weekly' };
+		const out = eventPayload(f, occurrence, seriesStart);
+		expect('form' in out && out.form).toMatchObject({ start_at: ns(at(2026, 9, 20, 9)), rrule: 'FREQ=WEEKLY' });
+	});
+	it('a stored event (no occurrence) is saved as the form says', () => {
+		const stored = { ...occurrence, instance_id: undefined };
+		const out = eventPayload(eventFields(stored, '', null), stored, seriesStart);
+		expect('form' in out && out.form.start_at).toBe(ns(at(2026, 9, 20, 9)));
+	});
+});
+
 describe('calendars and automations', () => {
 	it('new events go to the default calendar, never the scheduled-tasks one', () => {
 		expect(
