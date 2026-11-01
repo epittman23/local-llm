@@ -21,8 +21,6 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
-pytestmark = pytest.mark.skipif(shutil.which('make') is None, reason='needs make')
-
 # Every stub appends one JSON line, {"tool": ..., "argv": [...], "ci": ...},
 # to $STUB_LOG, then exits with $STUB_EXIT_<TOOL>_<FIRST ARG> if set, else
 # $STUB_EXIT_<TOOL> (default 0). A stub can also print $STUB_OUT_<TOOL> first.
