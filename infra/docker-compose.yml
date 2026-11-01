@@ -38,6 +38,17 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    # What `make backend` waits on (`up --wait`) before starting the backend,
+    # which runs its migrations at import. Over TCP: on a fresh volume the
+    # image's init step first runs a temporary server on the Unix socket only.
+    healthcheck:
+      test: ["CMD", "pg_isready", "-q", "-h", "127.0.0.1", "-U", "local_llm", "-d", "local_llm"]
+      # Failures in the first 60 s don't count (a fresh volume's init), then
+      # 30 more probes: about the 120 s `make backend` waits at most.
+      start_period: 60s
+      interval: 2s
+      timeout: 5s
+      retries: 30
 
   # Required since 2026-10-19: session revocation (sign-out, password changes,
   # admin resets) is stored here, and without it a revoked session stayed
