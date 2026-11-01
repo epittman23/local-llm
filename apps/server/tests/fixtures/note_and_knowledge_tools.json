@@ -655,18 +655,18 @@
     "distance": 0.11
    },
    {
-    "content": "chunk two",
-    "source": "b.txt",
-    "file_id": "",
-    "distance": 0.22
-   },
-   {
     "content": "ext doc",
     "source": "External",
     "file_id": "external-kb_external",
     "type": "external",
     "knowledge_id": "kb_external",
     "distance": 0.5
+   },
+   {
+    "content": "chunk two",
+    "source": "b.txt",
+    "file_id": "",
+    "distance": 0.22
    }
   ],
   "calls": [
@@ -946,18 +946,18 @@
     "distance": 0.11
    },
    {
-    "content": "chunk two",
-    "source": "b.txt",
-    "file_id": "",
-    "distance": 0.22
-   },
-   {
     "content": "ext doc",
     "source": "External",
     "file_id": "external-kb_external",
     "type": "external",
     "knowledge_id": "kb_external",
     "distance": 0.5
+   },
+   {
+    "content": "chunk two",
+    "source": "b.txt",
+    "file_id": "",
+    "distance": 0.22
    }
   ],
   "calls": [
@@ -1043,6 +1043,12 @@
     "source": "a.pdf",
     "file_id": "fa",
     "distance": 0.11
+   },
+   {
+    "content": "chunk two",
+    "source": "b.txt",
+    "file_id": "",
+    "distance": 0.22
    }
   ],
   "calls": [

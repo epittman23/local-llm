@@ -44,7 +44,8 @@ const failureReason = (error: unknown): string => {
  * modified). `uploading` is the list of in-flight single uploads, shown above
  * the server's own list; `syncing` is the status line for directory work.
  *
- * `refresh` reloads the file list; it is called after each successful upload.
+ * `refresh` reloads the file list (from page 1, as the Svelte page's init()
+ * did); it is called after each successful upload and sync.
  */
 export function useKnowledgeUploads({
 	knowledgeId,

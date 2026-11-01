@@ -317,9 +317,16 @@ class FeedbackTable:
             return sorted([row[0] for row in rows if row[0]])
 
     async def get_feedbacks_for_leaderboard(self, db: AsyncSession | None = None) -> list[LeaderboardFeedbackData]:
-        """Fetch only id and data for leaderboard computation (excludes snapshot/meta)."""
+        """Fetch only id and data for leaderboard computation (excludes snapshot/meta).
+
+        Oldest first: Elo is order dependent, so the rows come in the order the
+        feedback was given (id breaks same-second ties). An edit updates the
+        row in place and keeps its created_at, so it keeps its place.
+        """
         async with get_async_db_context(db) as db:
-            result = await db.execute(select(Feedback.id, Feedback.data))
+            result = await db.execute(
+                select(Feedback.id, Feedback.data).order_by(Feedback.created_at.asc(), Feedback.id.asc())
+            )
             return [LeaderboardFeedbackData(id=row.id, data=row.data) for row in result.all()]
 
     async def get_model_evaluation_history(
