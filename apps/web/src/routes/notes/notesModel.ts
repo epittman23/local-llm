@@ -1,4 +1,9 @@
+import type { QueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import type { AccessGrant, Permission } from '@/lib/access/accessGrants';
+import { updateNoteAccessGrants } from '@/lib/apis/notes';
 import { markdownToHtml } from '@/lib/editor/markdown';
+import type { SessionUser } from '@/lib/stores/authStore';
 import { getTimeRange } from '@/lib/utils/api-helpers';
 
 // The rules behind the Notes surface (components/notes/Notes.svelte,
@@ -95,4 +100,43 @@ export function parseGeneratedTitle(reply: string): string | null {
 	} catch {
 		return null;
 	}
+}
+
+/**
+ * The access dialog's options for a note, as NoteEditor.svelte passed them:
+ * read and write grants, with sharing, Public and named users each gated by
+ * the user's own sharing permissions (admins get all three).
+ */
+export function noteAccessProps(user: SessionUser | null) {
+	const isAdmin = user?.role === 'admin';
+	return {
+		accessRoles: ['read', 'write'] as Permission[],
+		share: Boolean(user?.permissions?.sharing?.notes) || isAdmin,
+		sharePublic: Boolean(user?.permissions?.sharing?.public_notes) || isAdmin,
+		shareUsers: (user?.permissions?.access_grants?.allow_users ?? true) || isAdmin
+	};
+}
+
+/**
+ * The note with the grants the server stored. routers/notes.py drops grants
+ * this user may not set, so caching the ones sent could show a note as public
+ * that is stored private. Only `access_grants` is taken from the response; its
+ * title and body may be older than an unsaved edit.
+ */
+export function withServerGrants<T extends { access_grants?: AccessGrant[] }>(
+	note: T,
+	res: { access_grants?: AccessGrant[] } | null | undefined
+): T {
+	return Array.isArray(res?.access_grants) ? { ...note, access_grants: res.access_grants } : note;
+}
+
+/** Sends a note's new grants and caches what the server stored; a failed update leaves the cache as it was. */
+export async function saveNoteAccess(queryClient: QueryClient, token: string, id: string, grants: AccessGrant[]) {
+	const res = await updateNoteAccessGrants(token, id, grants).catch((e) => void toast.error(`${e}`));
+	if (!res) return;
+	queryClient.setQueryData<{ access_grants?: AccessGrant[] }>(
+		['notes', 'item', id],
+		(old) => old && withServerGrants(old, res)
+	);
+	toast.success('Saved');
 }
