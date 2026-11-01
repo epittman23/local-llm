@@ -17,6 +17,10 @@ verbatim from the original):
     measures, a paired correctness test needs several hundred items to see a
     5-point difference, so a per-round correctness ranking at 6 or 8 items
     would be ranking noise.
+  * A winner has to have **beaten the defaults**: only a candidate whose
+    median paired log-ratio against the baseline is above 0 can be adopted
+    or refined around (`Sweep.beat_baseline()`). When none is, the verdict
+    is `rejected` and refine has no neighbourhood to descend into.
   * The winner then has to survive **one** pre-registered correctness check
     against the incumbent, at the end, over every item both ran (`Sweep.guard()`).
     The output of that check is "no regression was detectable, and here is
@@ -1281,7 +1285,7 @@ class Sweep:
         than a stage that did not run.
         """
         best = await self.best(alive)
-        if best is None or best.baseline:
+        if best is None:
             log.info("refine: nothing beat the profile's own defaults, so there is no neighbourhood to descend into")
             return rnd, alive, cursor
         remaining = len(self.items) - cursor
@@ -1326,13 +1330,23 @@ class Sweep:
                 break
         return rnd, alive, cursor
 
-    async def best(self, alive: list[Candidate]) -> Candidate | None:
-        scored = await self.scores(None)
-        ranked = sorted(
-            [c for c in alive if not c.baseline and scored.get(c.sha, (None, 0))[0] is not None],
+    def beat_baseline(self, alive: list[Candidate], scored: dict[str, tuple[float | None, int]]) -> list[Candidate]:
+        """The candidates faster than the profile's own defaults, fastest first.
+
+        A score is the median paired log-ratio against the baseline, so only
+        a score above 0 beat it: 0 ties the defaults and below 0 is slower.
+        Without this filter a sweep whose defaults were already fastest
+        adopted a slower configuration, and refine descended around it.
+        """
+        return sorted(
+            [c for c in alive if not c.baseline and (scored.get(c.sha, (None, 0))[0] or 0.0) > 0.0],
             key=lambda c: scored[c.sha][0],
             reverse=True,
         )
+
+    async def best(self, alive: list[Candidate]) -> Candidate | None:
+        """The fastest candidate that beat the defaults, or None if none did."""
+        ranked = self.beat_baseline(alive, await self.scores(None))
         return ranked[0] if ranked else None
 
     # -- the guard -----------------------------------------------------------
@@ -1429,12 +1443,7 @@ class Sweep:
             # Pre-registered, and it walks down the ranking rather than
             # stopping: rejecting the fastest candidate is a reason to look
             # at the next one, not a reason to abandon the sweep.
-            ranked = sorted(
-                [c for c in alive if not c.baseline and scored.get(c.sha, (None, 0))[0] is not None],
-                key=lambda c: scored[c.sha][0],
-                reverse=True,
-            )
-            for cand in ranked:
+            for cand in self.beat_baseline(alive, scored):
                 guard = await self.guard(cand)
                 if not guard['regressed']:
                     winner = cand
