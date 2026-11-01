@@ -310,14 +310,16 @@ test-web:
 		--compare-branch="$(DIFF_BASE)" --fail-under="$(DIFF_COVER_FAIL_UNDER)") && \
 	bun run build
 
-# CI's "Web e2e (Playwright, mocked backend)". Two workers, CI's count: at the
-# default (half the cores) a cold dev server misses 5 s timeouts here. Stop
-# `make frontend` first; Playwright reuses and then stops a running dev server.
+# CI's "Web e2e (Playwright, mocked backend)", with CI's command and CI's
+# environment: CI=1 turns on what CI gets from GitHub's CI=true (two retries,
+# a stray test.only fails the run, no reuse of a running dev server), and the
+# worker count is pinned in playwright.config.ts for both. Stop
+# `make frontend` first: with CI=1, Playwright refuses to start beside it.
 test-e2e:
 	@cd "$(WEB_DIR)" && \
 	bun install --frozen-lockfile && \
 	bunx playwright install chromium && \
-	bunx playwright test --workers=2
+	CI=1 bun run test:e2e
 
 # CI's "Desktop (typecheck, vitest, package smoke)". The unpacked package
 # catches an electron-builder bump that breaks packaging, which Dependabot

@@ -23,7 +23,7 @@ The root Makefile mirrors CI job for job, with the same commands:
 | `make test-types` | Backend types (basedpyright) | basedpyright over `apps/server/local_llm`, against `basedpyright-baseline.json` |
 | `make test-backend` | Backend (pytest) | `uv lock --check`, `uv sync --frozen --group dev`, then pytest with coverage and a throwaway pgvector Postgres on `127.0.0.1:55432` (`LLLM_TEST_PG_PORT`), so `test_the_app_imports` runs instead of skipping; then diff-cover on the changed lines |
 | `make test-web` | Web (astro check, vitest, build) | `bunx astro check`, `bun run test:coverage` and diff-cover on the changed lines, `bun run build` |
-| `make test-e2e` | Web e2e (Playwright) | `bunx playwright test --workers=2` |
+| `make test-e2e` | Web e2e (Playwright) | `CI=1 bun run test:e2e`: CI's command, with the `CI` variable CI sets (two retries, `test.only` fails the run, no reuse of a running dev server) |
 | `make test-desktop` | Desktop (typecheck, vitest, package smoke) | `bun run typecheck`, `bun run test:unit`, `bun run package:dir` (an unpacked package, no `.rpm`) |
 | `make test-boot` | Boot (real stack) | builds `apps/web`, then `tests/boot_smoke.py` against a throwaway Postgres (`:55433`) and Redis (`:56379`) |
 | `make test` | all six test jobs | the six above |
@@ -225,16 +225,24 @@ Run these from `apps/web/`:
   below). If a commit is rejected because the hook reformatted a file,
   `git add` it and commit again.
 
-**Run Playwright with `--workers=2`.** At its default worker count (half the
+**Playwright runs two workers.** At its default worker count (half the
 cores, about 10 on this 20-core machine) the cold `astro dev` server can't
 answer that many browsers in time, and redirect assertions hit their 5 s
-timeout. That fails on `main` too, so it isn't caused by any one change.
-`bunx playwright test --workers=2` (CI's count) runs clean.
+timeout. `playwright.config.ts` pins `workers: 2`, so `bun run test:e2e`,
+`make test-e2e` and CI all run with two.
+
+**`CI` changes how Playwright behaves.** GitHub sets `CI=true`, and with it
+Playwright retries a failed test twice, fails the run on a stray
+`test.only`, and refuses to reuse a dev server that is already running.
+`make test-e2e` sets `CI=1` so it behaves the same; a bare
+`bun run test:e2e` does none of the three. A test that fails once and
+passes on retry is reported as flaky: the run passes, but fix the test.
 
 The e2e specs mock every `/api/v1/**` response and stub `/ws`, so they need
 **no backend**, and they will fight a `make frontend` you already have
-running: they reuse it if present, which is fine, and `global-teardown.ts`
-stops it afterward, which is not. Stop `make frontend` first.
+running: a bare `bun run test:e2e` reuses it and `global-teardown.ts` stops
+it afterward, and `make test-e2e` (with `CI=1`) refuses to start beside it.
+Stop `make frontend` first.
 
 Because Playwright mocks the backend, a change that touches the
 frontend/backend seam also needs a real run against `make backend`.

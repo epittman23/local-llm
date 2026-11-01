@@ -10,6 +10,7 @@ reads back what the stubs were asked to do. Nothing real is started.
 
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -105,3 +106,26 @@ def test_frontend_sets_its_stop_trap_before_starting_the_dev_server(tmp_path):
     result, calls = _make(root, tmp_path, 'frontend', STUB_EXIT_BUNX='3')
     assert result.returncode != 0
     assert _bunx_astro(calls)[-1] == ['dev', 'stop']
+
+
+# --- make test-e2e (#146) ---------------------------------------------------
+
+
+def test_e2e_runs_ci_command_with_ci_set(tmp_path):
+    """`make test-e2e` runs what CI runs (`bun run test:e2e`), with CI=1 as CI has CI=true."""
+    root = _checkout(tmp_path)
+    result, calls = _make(root, tmp_path, 'test-e2e')
+    assert result.returncode == 0, result.stderr
+    runs = [c for c in calls if c['tool'] == 'bun' and c['argv'][:1] == ['run']]
+    assert [c['argv'] for c in runs] == [['run', 'test:e2e']]
+    assert runs[0]['ci'] == '1'
+    assert not any(c['tool'] == 'bunx' and c['argv'][:2] == ['playwright', 'test'] for c in calls)
+
+    ci_job = (REPO_ROOT / '.github' / 'workflows' / 'ci.yml').read_text()
+    assert '- run: bun run test:e2e' in ci_job
+
+
+def test_playwright_worker_count_is_pinned_in_its_config():
+    """The worker count lives in playwright.config.ts, so CI and `make test-e2e` share it."""
+    config = (REPO_ROOT / 'apps' / 'web' / 'playwright.config.ts').read_text()
+    assert re.search(r'^\s*workers:\s*2,', config, re.MULTILINE)
