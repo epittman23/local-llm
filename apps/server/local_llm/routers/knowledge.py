@@ -1958,6 +1958,38 @@ async def sync_knowledge_diff(
 ############################
 
 
+async def _remove_files_from_knowledge(knowledge_id: str, file_ids: list[str], user, db: AsyncSession) -> None:
+    """Unlink files from a knowledge base and drop their chunks from its collection.
+
+    A file's own row and stored bytes go too, unless retention is on, another
+    knowledge base still links it, or the user neither owns it nor is an admin.
+    """
+    for file_id in file_ids:
+        file = await Files.get_file_by_id(file_id, db=db)
+        if not file:
+            continue
+
+        # Only clean up files that belong to this knowledge base.
+        if not await Knowledges.has_file(knowledge_id, file_id, db=db):
+            continue
+
+        await Knowledges.remove_file_from_knowledge_by_id(knowledge_id, file_id, db=db)
+
+        try:
+            await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=knowledge_id, filter={'file_id': file_id})
+            await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=knowledge_id, filter={'hash': file.hash})
+        except Exception:
+            pass
+
+        linked_knowledges = await Knowledges.get_knowledges_by_file_id(file_id, db=db)
+        if (
+            not ENABLE_KNOWLEDGE_FILE_RETENTION
+            and not linked_knowledges
+            and (file.user_id == user.id or user.role == 'admin')
+        ):
+            await delete_file_resource(file, db)
+
+
 class SyncCleanupForm(BaseModel):
     file_ids: list[str]  # file IDs to delete
     dir_ids: list[str] = []  # directory IDs to rmdir
@@ -1977,30 +2009,7 @@ async def sync_knowledge_cleanup(
     await _verify_knowledge_write_access(id, user, db)
 
     # ── Remove deleted files ──
-    for file_id in form_data.file_ids:
-        file = await Files.get_file_by_id(file_id, db=db)
-        if not file:
-            continue
-
-        # Only clean up files that belong to this knowledge base.
-        if not await Knowledges.has_file(id, file_id, db=db):
-            continue
-
-        await Knowledges.remove_file_from_knowledge_by_id(id, file_id, db=db)
-
-        try:
-            await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=id, filter={'file_id': file_id})
-            await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=id, filter={'hash': file.hash})
-        except Exception:
-            pass
-
-        linked_knowledges = await Knowledges.get_knowledges_by_file_id(file_id, db=db)
-        if (
-            not ENABLE_KNOWLEDGE_FILE_RETENTION
-            and not linked_knowledges
-            and (file.user_id == user.id or user.role == 'admin')
-        ):
-            await delete_file_resource(file, db)
+    await _remove_files_from_knowledge(id, form_data.file_ids, user, db)
 
     # ── Remove orphaned directories (children before parents) ──
     for dir_id in reversed(form_data.dir_ids):
@@ -2008,6 +2017,9 @@ async def sync_knowledge_cleanup(
         directory = await Knowledges.get_directory_by_id(dir_id, db=db)
         if not directory or directory.knowledge_id != id:
             continue
+        await _remove_files_from_knowledge(
+            id, await Knowledges.get_file_ids_in_directory_subtree(dir_id, db=db), user, db
+        )
         await Knowledges.delete_directory(dir_id, move_files_to_parent=False, db=db)
 
     return {'status': True}
@@ -2342,6 +2354,13 @@ async def delete_knowledge_directory(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=ERROR_MESSAGES.NOT_FOUND,
+        )
+
+    if not move_files:
+        # Removing only the links would leave the files' chunks in the
+        # collection, still retrieved but no longer removable (#195).
+        await _remove_files_from_knowledge(
+            id, await Knowledges.get_file_ids_in_directory_subtree(dir_id, db=db), user, db
         )
 
     success = await Knowledges.delete_directory(
