@@ -148,3 +148,27 @@ export function announceContentSaved(
 		notify.warning(`File content saved, but these knowledge bases still use the old text: ${stale.join(', ')}.`);
 	else notify.success('File content updated successfully.');
 }
+
+type DroppedItem = { webkitGetAsEntry?: () => { isDirectory?: boolean } | null; getAsFile: () => File | null };
+
+/**
+ * Every dropped item's directory entry or file, read at once. Once the drop
+ * handler awaits, the DataTransfer is protected and every later item reads
+ * as null, so a folder dropped with other items lost all that came after it
+ * (#231).
+ */
+export function takeDroppedItems<E extends { isDirectory?: boolean }>(
+	items: Iterable<DroppedItem>
+): { directories: E[]; files: File[] } {
+	const directories: E[] = [];
+	const files: File[] = [];
+	for (const item of items) {
+		const entry = item.webkitGetAsEntry?.();
+		if (entry?.isDirectory) directories.push(entry as E);
+		else {
+			const file = item.getAsFile();
+			if (file) files.push(file);
+		}
+	}
+	return { directories, files };
+}

@@ -10,6 +10,7 @@ import {
 	knowledgeMetaPreview,
 	readMovePayload,
 	staleFileIds,
+	takeDroppedItems,
 	type DirectoryManifestEntry,
 	type SyncDiff
 } from './knowledgeFiles';
@@ -121,5 +122,21 @@ describe('announceContentSaved', () => {
 		announceContentSaved(null, notify);
 		expect(notify.success).toHaveBeenCalledTimes(2);
 		expect(notify.warning).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('takeDroppedItems', () => {
+	it('reads every dropped item at once, folders and files alike (#231)', () => {
+		const file = (name: string) => new File(['x'], name);
+		const folder = { isDirectory: true, name: 'docs' };
+		const items = [
+			{ webkitGetAsEntry: () => ({ isDirectory: false }), getAsFile: () => file('a.txt') },
+			{ webkitGetAsEntry: () => folder, getAsFile: () => null },
+			{ webkitGetAsEntry: () => ({ isDirectory: false }), getAsFile: () => file('b.txt') },
+			{ getAsFile: () => file('c.txt') }
+		];
+		const { directories, files } = takeDroppedItems(items);
+		expect(directories).toEqual([folder]);
+		expect(files.map((f) => f.name)).toEqual(['a.txt', 'b.txt', 'c.txt']);
 	});
 });
