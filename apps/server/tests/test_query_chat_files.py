@@ -77,7 +77,23 @@ def test_full_context_keeps_attachment_order(monkeypatch):
     assert [c['file_id'] for c in got] == ['fa', 'fb']
 
 
-def test_chunks_without_a_score_come_after_scored_ones(monkeypatch):
+def test_a_file_attached_in_full_stays_first_beside_ranked_hits(monkeypatch):
+    """Only some files in full: the whole document is kept, ahead of the ranked hits."""
+    whole = {'source': {'id': 'fa', 'name': 'fa.txt', 'context': 'full'}, 'document': ['all of fa'], 'metadata': [{}]}
+
+    got = _run(monkeypatch, [_source('fb', [0.5, 0.9, 0.7, 0.6, 0.8]), whole])
+
+    assert [c['file_id'] for c in got] == ['fa', 'fb', 'fb', 'fb', 'fb']
+    assert [c.get('distance') for c in got[1:]] == [0.9, 0.8, 0.7, 0.6]
+
+
+def test_every_file_in_full_keeps_attachment_order(monkeypatch):
+    got = _run(monkeypatch, [_source('fa', [0.1]), _source('fb', [0.9])], context='full')
+
+    assert [c['file_id'] for c in got] == ['fa', 'fb']
+
+
+def test_unscored_hits_go_after_scored_ones(monkeypatch):
     unscored = {**_source('fa', [0.0]), 'distances': []}
     got = _run(monkeypatch, [unscored, _source('fb', [0.4])], count=2)
 
