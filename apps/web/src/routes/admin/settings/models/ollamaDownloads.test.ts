@@ -14,7 +14,7 @@ vi.mock('./ollamaStreams', async (importActual) => ({
 	lineReader
 }));
 
-import { startPull, useDownloadPool } from './ollamaDownloads';
+import { cancelPull, startPull, useDownloadPool } from './ollamaDownloads';
 
 type Read = () => Promise<ReadableStreamReadResult<string>>;
 
@@ -44,6 +44,7 @@ const pullWith = (reader: ReturnType<typeof fakeReader>) => {
 
 beforeEach(() => {
 	vi.clearAllMocks();
+	deleteModel.mockResolvedValue(true);
 	useDownloadPool.setState({ pool: {} });
 });
 
@@ -103,5 +104,30 @@ describe('startPull', () => {
 		expect(reader.read).toHaveBeenCalledTimes(1);
 		expect(toastError).not.toHaveBeenCalled();
 		expect(useDownloadPool.getState().pool).toEqual({});
+	});
+});
+
+describe('cancelPull', () => {
+	it('stops the pull without deleting a model of the same name (#244)', async () => {
+		const abortController = new AbortController();
+		const reader = fakeReader([]);
+		useDownloadPool.setState({
+			pool: { 'llama3:8b': { abortController, reader: reader as never, done: false } }
+		});
+
+		await cancelPull('llama3:8b');
+
+		expect(abortController.signal.aborted).toBe(true);
+		expect(reader.cancel).toHaveBeenCalledOnce();
+		expect(deleteModel).not.toHaveBeenCalled();
+		expect(useDownloadPool.getState().pool).toEqual({});
+		expect(toastSuccess).toHaveBeenCalledWith('llama3:8b download has been canceled');
+	});
+
+	it('does nothing for a tag that is not downloading', async () => {
+		await cancelPull('llama3:8b');
+
+		expect(deleteModel).not.toHaveBeenCalled();
+		expect(toastSuccess).not.toHaveBeenCalled();
 	});
 });

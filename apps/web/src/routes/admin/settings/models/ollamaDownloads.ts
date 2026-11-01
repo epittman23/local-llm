@@ -1,6 +1,6 @@
 import { toast } from 'sonner';
 import { create } from 'zustand';
-import { deleteModel, pullModel } from '@/lib/apis/ollama';
+import { pullModel } from '@/lib/apis/ollama';
 import {
 	isNotableStatus,
 	lineReader,
@@ -117,15 +117,19 @@ export async function startPull(
 	remove(tag);
 }
 
-/** Stops a pull, and deletes the partial download it leaves. */
-export async function cancelPull(token: string, tag: string): Promise<void> {
+/**
+ * Stops a pull. It deletes nothing: the delete it used to send had no
+ * instance, so the backend could only match a model already listed under this
+ * name (on any instance), in practice never the cancelled download itself
+ * (#244). What happens to partially downloaded layers is up to Ollama.
+ */
+export async function cancelPull(tag: string): Promise<void> {
 	const download = useDownloadPool.getState().pool[tag];
 	if (!download) return;
 	download.abortController?.abort();
 	if (download.reader) {
 		await download.reader.cancel().catch(() => undefined);
 		remove(tag);
-		await deleteModel(token, tag).catch(() => undefined);
 		toast.success(`${tag} download has been canceled`);
 	}
 }
