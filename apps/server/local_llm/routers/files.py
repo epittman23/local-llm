@@ -770,12 +770,18 @@ async def update_file_data_content_by_id(
                     user,
                     db,
                     check_collection_access=False,
+                    record_failure=False,
                 )
                 if old_vector_ids:
                     await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=knowledge.id, ids=old_vector_ids)
             except Exception as e:
                 log.warning(f'Failed to update knowledge {knowledge.id} after content change for file {id}: {e}')
-                failed.append(knowledge.name)
+                # Name only a base the editor can see; another user's
+                # private base that holds the file stays anonymous.
+                readable = await Knowledges.check_access_by_user_id(knowledge.id, user.id, 'read', db=db)
+                failed.append(
+                    knowledge.name if readable or user.role == 'admin' else 'a knowledge base you cannot open'
+                )
 
         await publish_event(
             request,

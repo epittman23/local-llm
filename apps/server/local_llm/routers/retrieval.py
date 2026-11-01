@@ -1799,6 +1799,7 @@ async def process_file_for(
     db: AsyncSession,
     *,
     check_collection_access: bool = True,
+    record_failure: bool = True,
 ):
     """
     Process a file and save its content to the vector database.
@@ -1807,7 +1808,9 @@ async def process_file_for(
     (through a knowledge base, a model, a channel or a shared chat), as the
     routes that call this check (#307). `check_collection_access=False` is
     for a caller that has already authorized the change and is only
-    mirroring the file's chunks into the collections that hold it.
+    mirroring the file's chunks into the collections that hold it; with
+    `record_failure=False` a failure there is only raised, without marking the
+    file itself failed (its own content and collection are fine).
     Note: granular session management is used to prevent connection pool exhaustion.
     The session is committed before external API calls, and updates use a fresh session.
     """
@@ -2033,6 +2036,8 @@ async def process_file_for(
 
         except Exception as e:
             log.exception(e)
+            if not record_failure:
+                raise
             # Fresh session for error status update.
             async with get_async_db() as session:
                 await Files.update_file_data_by_id(

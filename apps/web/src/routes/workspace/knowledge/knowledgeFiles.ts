@@ -3,7 +3,8 @@ import { computeFileHash } from '@/lib/utils/hash';
 
 // The pure parts of KnowledgeBase.svelte's upload / sync machinery, separated
 // from the component so the path arithmetic and the diff bookkeeping -- where a
-// slip silently misfiles or deletes documents -- can be unit-tested.
+// slip silently misfiles or deletes documents -- can be unit-tested. Also the
+// toast for a saved file's content, so its choice of message is tested too.
 
 export type DirectoryFileEntry = { path: string; filename: string; file: File };
 export type DirectoryManifestEntry = DirectoryFileEntry & { checksum: string; size: number };

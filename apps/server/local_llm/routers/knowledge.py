@@ -1447,9 +1447,11 @@ async def add_file_to_knowledge_by_id(
             detail=ERROR_MESSAGES.FILE_NOT_PROCESSED,
         )
 
-    # KB write-access alone is not enough — caller must also be able to read the file.
+    # KB write-access alone is not enough. Adding a file writes its own record
+    # (status, hash, collection), so the caller needs write access to it, as
+    # process_file requires; read access used to pass here and fail there (#307).
     if file.user_id != user.id and user.role != 'admin':
-        if not await has_access_to_file(file.id, 'read', user, db=db):
+        if not await has_access_to_file(file.id, 'write', user, db=db):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=ERROR_MESSAGES.ACCESS_PROHIBITED,

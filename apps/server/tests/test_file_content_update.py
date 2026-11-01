@@ -165,14 +165,18 @@ def _content_saves(monkeypatch):
 def test_a_knowledge_base_that_could_not_be_updated_is_named(monkeypatch, stubs):
     _content_saves(monkeypatch)
 
-    async def mirror(request, form, user, db, *, check_collection_access=True):
+    async def mirror(request, form, user, db, *, check_collection_access=True, record_failure=True):
         raise RuntimeError('vector store full')
 
     async def bases(*_a, **_k):
-        return [SimpleNamespace(id='kb1', name='Research')]
+        return [SimpleNamespace(id='kb1', name='Research'), SimpleNamespace(id='kb2', name='Private notes')]
+
+    async def readable(knowledge_id, user_id, permission='write', **_k):
+        return knowledge_id == 'kb1'
 
     monkeypatch.setattr(files_router, 'process_file_for', mirror)
     monkeypatch.setattr(files_router.Knowledges, 'get_knowledges_by_file_id', bases)
+    monkeypatch.setattr(files_router.Knowledges, 'check_access_by_user_id', readable)
 
     async def scenario():
         owner, _, file = await _users_and_file()
@@ -182,8 +186,9 @@ def test_a_knowledge_base_that_could_not_be_updated_is_named(monkeypatch, stubs)
 
     out = asyncio.run(scenario())
 
-    # Saved, and the base the new text could not reach is named for the page to warn about.
-    assert out == {'content': 'NEW', 'failed_knowledge': ['Research']}
+    # Saved, and the bases the new text could not reach are reported for the
+    # page to warn about: by name only where the editor can open the base.
+    assert out == {'content': 'NEW', 'failed_knowledge': ['Research', 'a knowledge base you cannot open']}
     # The base's old chunks stay until new ones are in.
     assert stubs.deleted == []
 
@@ -193,8 +198,9 @@ def test_every_base_holding_the_file_gets_the_new_text_whoever_can_write_it(monk
     _content_saves(monkeypatch)
     mirrored = []
 
-    async def mirror(request, form, user, db, *, check_collection_access=True):
+    async def mirror(request, form, user, db, *, check_collection_access=True, record_failure=True):
         mirrored.append((form.collection_name, check_collection_access))
+        assert record_failure is False
 
     async def bases(*_a, **_k):
         return [SimpleNamespace(id='mine', name='Mine'), SimpleNamespace(id='theirs', name='Theirs')]
@@ -278,6 +284,91 @@ def test_a_failed_knowledge_reindex_keeps_the_old_chunks(monkeypatch, stubs):
     asyncio.run(scenario())
 
     assert stubs.deleted == []
+
+
+def test_a_failed_mirror_does_not_mark_the_file_failed(monkeypatch, stubs):
+    """The file's own content and collection are fine; only one base missed the new text."""
+
+    async def chunks_without_text(collection_name, filter=None):
+        return SimpleNamespace(ids=[['x']])  # no documents: copying them fails
+
+    monkeypatch.setattr(stubs, 'query', chunks_without_text)
+
+    async def scenario():
+        owner, _, file = await _users_and_file()
+        with pytest.raises(Exception):
+            await retrieval_router.process_file_for(
+                None,
+                retrieval_router.ProcessFileForm(file_id=file.id, collection_name='kb1'),
+                owner,
+                None,
+                check_collection_access=False,
+                record_failure=False,
+            )
+        return await Files.get_file_by_id(file.id)
+
+    row = asyncio.run(scenario())
+
+    assert row.data.get('status') is None
+
+
+def test_a_successful_knowledge_reindex_removes_the_old_chunks(monkeypatch, stubs):
+    async def succeeds(*_a, **_k):
+        return None
+
+    fields = {'id': 'kb1', 'user_id': 'owner', 'name': 'Research', 'description': '', 'created_at': 1, 'updated_at': 1}
+
+    async def kb(*_a, **_k):
+        return SimpleNamespace(**fields, meta=None, model_dump=lambda: fields)
+
+    async def yes(*_a, **_k):
+        return True
+
+    async def no_files(*_a, **_k):
+        return []
+
+    monkeypatch.setattr(knowledge_router, 'process_file', succeeds)
+    monkeypatch.setattr(knowledge_router.Knowledges, 'get_knowledge_by_id', kb)
+    monkeypatch.setattr(knowledge_router.Knowledges, 'has_file', yes)
+    monkeypatch.setattr(knowledge_router.Knowledges, 'get_file_metadatas_by_id', no_files)
+
+    async def scenario():
+        _, _, file = await _users_and_file()
+        user = SimpleNamespace(id='owner', role='user')
+        return await knowledge_router.update_file_from_knowledge_by_id(
+            None, 'kb1', knowledge_router.KnowledgeFileIdForm(file_id=file.id), user=user, db=None
+        )
+
+    assert asyncio.run(scenario()).id == 'kb1'
+
+    assert stubs.deleted == [('kb1', ['old-1', 'old-2'], None)]
+
+
+def test_adding_someone_elses_file_to_a_base_needs_write_access_to_it(monkeypatch, stubs):
+    """Read access passed the route and then failed inside process_file with a confusing 404."""
+
+    async def kb(*_a, **_k):
+        return SimpleNamespace(id='kb1', user_id='reader', name='Mine', meta=None)
+
+    async def read_only(file_id, access_type, user, db=None, **_k):
+        return access_type == 'read'
+
+    monkeypatch.setattr(knowledge_router.Knowledges, 'get_knowledge_by_id', kb)
+    monkeypatch.setattr(knowledge_router, 'has_access_to_file', read_only)
+
+    async def scenario():
+        _, _, file = await _users_and_file()
+        with pytest.raises(HTTPException) as refused:
+            await knowledge_router.add_file_to_knowledge_by_id(
+                None,
+                'kb1',
+                knowledge_router.KnowledgeFileIdForm(file_id=file.id),
+                user=SimpleNamespace(id='reader', role='user'),
+                db=None,
+            )
+        return refused.value.status_code
+
+    assert asyncio.run(scenario()) == 403
 
 
 async def _empty():
