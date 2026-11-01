@@ -3390,13 +3390,19 @@ async def query_knowledge_files(
             chunks.extend(_vector_chunks(query_results))
 
         for knowledge in search.external_knowledges:
-            query_results = await retrieve_external_knowledge(
-                __request__,
-                knowledge,
-                queries=[query],
-                count=count,
-                user=user_model,
-            )
+            # One base that is down or misconfigured must not lose every
+            # other result (#180).
+            try:
+                query_results = await retrieve_external_knowledge(
+                    __request__,
+                    knowledge,
+                    queries=[query],
+                    count=count,
+                    user=user_model,
+                )
+            except Exception as e:
+                log.warning('query_knowledge_files: external knowledge %s failed: %s', knowledge.id, e)
+                continue
             chunks.extend(_external_chunks(query_results, knowledge))
 
         return JSONCodec.dumps(chunks[:count], ensure_ascii=False)
