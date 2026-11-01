@@ -4,16 +4,20 @@ import {
 	addResponses,
 	addUserMessage,
 	applyChatEvent,
+	editContent,
 	emptyHistory,
+	type History,
 	isGenerating,
 	messagesList,
 	normalizeHistory,
 	replyColumns,
+	saveReplyAsCopy,
 	showBranch,
 	siblingsOf,
 	toApiMessages,
 	updateMessage
 } from './history';
+import { getOutputText } from './structuredOutput';
 
 function conversation() {
 	let h = emptyHistory();
@@ -169,5 +173,89 @@ describe('replyColumns', () => {
 			[0, 2, 0],
 			[1, 1, 0]
 		]);
+	});
+});
+
+describe('editing a reply that has structured output (#211)', () => {
+	// A streamed reply keeps what the model said in `output`, which the API
+	// payload, actions and auto-copy prefer over `content`. An edit that
+	// changed only `content` showed the correction while the model kept
+	// receiving the original text.
+	const output = [
+		{ type: 'reasoning', id: 'r1', summary: [], content: [{ type: 'reasoning_text', text: 'six sevens' }] },
+		{
+			type: 'message',
+			id: 'msg_1',
+			role: 'assistant',
+			status: 'completed',
+			content: [{ type: 'output_text', text: 'The answer is 41.' }]
+		}
+	];
+	const history = (): History => ({
+		currentId: 'a',
+		messages: {
+			u: { id: 'u', parentId: null, childrenIds: ['a'], role: 'user', content: 'what is 6*7?' },
+			a: {
+				id: 'a',
+				parentId: 'u',
+				childrenIds: [],
+				role: 'assistant',
+				content: 'The answer is 41.',
+				output: output as never,
+				done: true
+			}
+		}
+	});
+
+	it('an edit reaches the output, and so the next request', () => {
+		const edited = editContent(history(), 'a', 'The answer is 42.');
+		expect(edited.messages.a.content).toBe('The answer is 42.');
+		expect(edited.messages.a.originalContent).toBe('The answer is 41.');
+		expect(getOutputText(edited.messages.a.output)).toBe('The answer is 42.');
+		expect(JSON.stringify(toApiMessages(messagesList(edited, 'a')))).not.toContain('41');
+	});
+
+	it('Save As Copy gives the copy the edited output and leaves the original alone', () => {
+		const h = history();
+		const copied = saveReplyAsCopy(h, 'a', 'The answer is 42.');
+		const copy = copied.messages[copied.currentId as string];
+		expect(getOutputText(copy.output)).toBe('The answer is 42.');
+		expect(JSON.stringify(toApiMessages(messagesList(copied, copy.id)))).not.toContain('41');
+		expect(getOutputText(copied.messages.a.output)).toBe('The answer is 41.');
+	});
+
+	it('tool calls and code runs are kept, in order; only the text is replaced', () => {
+		const h = history();
+		const withTools = [
+			{ type: 'reasoning', id: 'r1', content: [{ type: 'reasoning_text', text: 'compute it' }] },
+			{ type: 'function_call', id: 'fc1', call_id: 'c1', name: 'calc', arguments: '{"x":6}' },
+			{ type: 'function_call_output', id: 'fo1', call_id: 'c1', output: [{ type: 'input_text', text: '41' }] },
+			{ type: 'open_webui:code_interpreter', id: 'ci1', code: 'print(6*7)', output: '42' },
+			{ type: 'message', id: 'msg_1', role: 'assistant', content: [{ type: 'output_text', text: 'The answer is 41.' }] }
+		];
+		h.messages.a = { ...h.messages.a, output: withTools as never };
+		const edited = editContent(h, 'a', 'The answer is 42.').messages.a.output ?? [];
+		expect(edited.map((item) => item.type)).toEqual([
+			'function_call',
+			'function_call_output',
+			'open_webui:code_interpreter',
+			'message'
+		]);
+		expect(edited[3].id).toBe('msg_1');
+		expect(getOutputText(edited)).toBe('The answer is 42.');
+	});
+
+	it('an edit to nothing leaves no empty message for the model', () => {
+		const edited = editContent(history(), 'a', '   ');
+		expect(edited.messages.a.output).toEqual([]);
+		expect(toApiMessages(messagesList(edited, 'a')).filter((m) => m.role === 'assistant')).toEqual([]);
+	});
+
+	it('a reply without output is edited as before', () => {
+		const h = history();
+		h.messages.a = { ...h.messages.a, output: undefined };
+		const edited = editContent(h, 'a', 'The answer is 42.');
+		expect(edited.messages.a.output).toBeUndefined();
+		expect(edited.messages.a.content).toBe('The answer is 42.');
 	});
 });

@@ -88,7 +88,7 @@ test.describe('settings modal host', () => {
 		// selected tab's body first: reading the list the instant the dialog
 		// appears raced the lazy tab chunk on a busy dev server. (Not "any h2":
 		// the dialog's screen-reader title is one too, so that matched two.)
-		const first = await modal(page).getByRole('tab').first().innerText();
+		const first = ((await modal(page).getByRole('tab').first().textContent()) ?? '').trim();
 		await expect(modal(page).getByRole('heading', { level: 2, name: first, exact: true })).toBeVisible();
 		await expect(modal(page).getByRole('tab', { selected: true })).toHaveText(first);
 	});
