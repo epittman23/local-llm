@@ -21,7 +21,7 @@ const alert = (minutes_until: number) => ({
 			event_id: 'e1',
 			title: 'Standup',
 			description: '',
-			start_at: 1_700_000_000_000_000_000,
+			start_at: Date.UTC(2026, 4, 14, 9) * 1_000_000,
 			minutes_until,
 			calendar_id: 'personal',
 			location: ''
