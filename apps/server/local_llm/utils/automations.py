@@ -78,6 +78,8 @@ def _parse_rule(s: str, now: dt.datetime | None = None):
 
     SECONDLY/MINUTELY/HOURLY rules use a fixed epoch DTSTART (2000-01-01 00:00)
     so intervals snap to clock boundaries (e.g. every 5min = :00, :05, :10).
+    A longer rule without a DTSTART starts at `now` (the user's clock) on the
+    minute, so a time or day it does not state comes from there.
     """
     upper = s.upper()
     if 'EXRULE' in upper:
@@ -101,6 +103,12 @@ def _parse_rule(s: str, now: dt.datetime | None = None):
     }.get(rule._freq)
 
     if step is None:
+        if not has_dtstart:
+            # dateutil would start the rule at the server's local now; the
+            # next run is asked for after the user's, so with the user
+            # behind the server today's later runs were skipped. Start at the
+            # user's now, on the minute, so an unset BYSECOND is 0 (#266).
+            return rrulestr(stripped, dtstart=anchor.replace(second=0, microsecond=0), ignoretz=True)
         if not rule._dtstart.tzinfo:
             return parsed
         return rrulestr(stripped, dtstart=start, ignoretz=True)
