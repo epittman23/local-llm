@@ -164,6 +164,7 @@ function CalendarSidebar({
  */
 function Calendar() {
 	const token = useAuthStore((s) => s.token) ?? '';
+	const userId = useAuthStore((s) => s.user?.id);
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
 	useDocumentTitle('Calendar');
@@ -230,7 +231,7 @@ function Calendar() {
 				onOpenChange={(o) => !o && setEventDialog(null)}
 				event={eventDialog?.event ?? null}
 				calendars={list}
-				defaultCalendarId={defaultCalendarId(list)}
+				defaultCalendarId={defaultCalendarId(list, userId)}
 				defaultStartAt={eventDialog?.startAt ?? null}
 				onSaved={refreshEvents}
 			/>

@@ -240,9 +240,20 @@ export function eventPayload(
 	};
 }
 
-/** The calendar a new event goes into: the default one, else the first real one. */
-export const defaultCalendarId = (calendars: { id: string; is_default: boolean }[]) =>
-	(calendars.find((c) => c.is_default) ?? calendars.find((c) => c.id !== SCHEDULED_TASKS_ID))?.id ?? '';
+/**
+ * The calendar a new event goes into: the user's own default, else their
+ * first own calendar, else the first real one. `is_default` is the owner's
+ * flag, so a calendar shared with the user can carry it; listed first, it
+ * took the event (#182).
+ */
+export function defaultCalendarId(
+	calendars: { id: string; is_default: boolean; user_id?: string }[],
+	userId?: string
+): string {
+	const real = calendars.filter((c) => c.id !== SCHEDULED_TASKS_ID);
+	const own = userId ? real.filter((c) => c.user_id === userId) : real;
+	return (own.find((c) => c.is_default) ?? own[0] ?? real[0])?.id ?? '';
+}
 
 /** Where clicking an automation's run goes: its chat if it produced one, else the automation. Null for an ordinary event. */
 export function automationTarget(e: CalendarEventModel): string | null {
