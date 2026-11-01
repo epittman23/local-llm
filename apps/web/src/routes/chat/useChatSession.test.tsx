@@ -69,7 +69,14 @@ vi.mock('@/lib/apis', async (orig) => ({
 		(_t: string, id: string) => new Promise((resolve) => (pending[id] = (v) => resolve(v ?? { task_ids: [] })))
 	),
 	stopTasksByChatId: vi.fn(async () => true),
+	generateTags: vi.fn(async () => ['tagged']),
 	chatAction: vi.fn(() => new Promise((resolve) => (pending.action = resolve)))
+}));
+
+vi.mock('@/lib/apis/evaluations', async (orig) => ({
+	...(await orig<object>()),
+	createNewFeedback: vi.fn(() => new Promise((resolve) => (pending.feedback = resolve))),
+	updateFeedbackById: vi.fn(async () => ({}))
 }));
 
 vi.mock('@/lib/apis/openai', async (orig) => ({
@@ -204,6 +211,7 @@ describe('useChatSession loadChat', () => {
 	});
 
 	it('with the queue off, sending stops the reply being written first (#212)', async () => {
+		vi.mocked(usersApi.getUserSettings).mockClear();
 		vi.mocked(usersApi.getUserSettings).mockResolvedValue({ ui: { enableMessageQueue: false } } as never);
 		try {
 			await openChatA();
@@ -237,5 +245,49 @@ describe('useChatSession loadChat', () => {
 		});
 		expect(chatsApi.updateChatById).not.toHaveBeenCalled();
 		expect(session.history.messages['B-m']?.content).toBe('hello from B');
+	});
+
+	const savedTo = () => vi.mocked(chatsApi.updateChatById).mock.calls.map((c) => c[1]);
+
+	it('a rating is saved to its chat, with the feedback id and the tags', async () => {
+		await openChatA();
+		vi.mocked(chatsApi.updateChatById).mockClear();
+		let run: Promise<void> | undefined;
+		act(() => {
+			run = session.rate(session.history.messages['A-m'], 1);
+		});
+		await waitFor(() => expect(pending.feedback).toBeDefined());
+		await act(async () => {
+			pending.feedback({ id: 'fb1' });
+			await run;
+		});
+		expect(session.history.messages['A-m'].feedbackId).toBe('fb1');
+		expect(session.history.messages['A-m'].annotation).toMatchObject({ rating: 1, tags: ['tagged'] });
+		expect(new Set(savedTo())).toEqual(new Set(['A']));
+	});
+
+	it('a rating that finishes after another chat opened is saved to its own chat (#215)', async () => {
+		const router = await openChatA();
+		vi.mocked(chatsApi.updateChatById).mockClear();
+		delete pending.feedback;
+		let run: Promise<void> | undefined;
+		act(() => {
+			run = session.rate(session.history.messages['A-m'], 1);
+		});
+		await waitFor(() => expect(pending.feedback).toBeDefined());
+		await act(() => router.navigate('/c/B'));
+		await waitFor(() => expect(pending.B).toBeDefined());
+		await act(async () => pending.B(undefined));
+		await waitFor(() => expect(session.chat?.id).toBe('B'));
+		await act(async () => {
+			pending.feedback({ id: 'fb2' });
+			await run;
+		});
+		expect(savedTo()).toEqual(['A']);
+		const body = vi.mocked(chatsApi.updateChatById).mock.calls[0][2] as {
+			history: { messages: Record<string, Record<string, unknown>> };
+		};
+		expect(body.history.messages['A-m']).toMatchObject({ feedbackId: 'fb2', annotation: { rating: 1 } });
+		expect(session.history.messages['B-m'].annotation).toBeUndefined();
 	});
 });

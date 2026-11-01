@@ -464,7 +464,12 @@ export function useChatSession({
 				}
 				// Queue off: interrupt the reply being written, as the setting
 				// says, rather than stream a second reply beside it (#212).
-				void stop().then(() => send(prompt, files, modelId));
+				const chatId = chatIdRef.current;
+				void stop().then(() => {
+					// Another chat opened while stopping: this prompt was for the old one.
+					if (chatIdRef.current === chatId) void send(prompt, files, modelId);
+					else toast.error('The chat changed before the message could be sent.');
+				});
 				return true;
 			}
 			void send(prompt, files, modelId);
@@ -595,8 +600,9 @@ export function useChatSession({
 					return null;
 				})) as { chat?: { history?: History } } | null;
 				// The server's copy still has replies this load finished; with
-				// nothing generating, finish them again (#150).
-				if (res?.chat?.history) {
+				// nothing generating, finish them again (#150). Not if another
+				// chat opened meanwhile: its view would take this one's history.
+				if (res?.chat?.history && chatIdRef.current === id) {
 					const h = normalizeHistory(res.chat.history);
 					setHistory(taskIds ? h : finishReplies(h));
 				}
@@ -662,6 +668,8 @@ export function useChatSession({
 		async (message: Message, rating: number | null, details: FeedbackDetails | null = null) => {
 			const id = chatIdRef.current;
 			if (!id || isTemporaryChatId(id)) return;
+			// This chat's history as it is now: the awaits below may end in another chat.
+			const history = historyRef.current;
 			const annotation = annotate(message, rating, details);
 			const chatRecord = await getChatById(token, id).catch((e) => {
 				toast.error(`${e}`);
@@ -673,7 +681,7 @@ export function useChatSession({
 				return m ? (m.info?.base_model_id ?? null) : undefined;
 			};
 			const item = feedbackItem({
-				history: historyRef.current,
+				history,
 				message,
 				annotation,
 				chatId: id,
@@ -688,13 +696,22 @@ export function useChatSession({
 				toast.error(`${e}`);
 				return null;
 			})) as { id?: string } | null;
-			// The feedback is recorded; the message's annotation is saved only
-			// if this chat is still the one open (#215).
-			if (chatIdRef.current !== id) return;
-			const next = updateMessage(historyRef.current, message.id, {
-				annotation,
-				...(res?.id && !feedbackId ? { feedbackId: res.id } : {})
-			});
+			const patch = { annotation, ...(res?.id && !feedbackId ? { feedbackId: res.id } : {}) };
+			// Another chat opened meanwhile: record the rating in this chat's
+			// stored copy, not in the chat now open (#215).
+			if (chatIdRef.current !== id) {
+				const stored = chatRecord.chat?.history as History | undefined;
+				if (stored?.messages?.[message.id]) {
+					const h = updateMessage(stored, message.id, patch);
+					await updateChatById(token, id, {
+						...chatRecord.chat,
+						history: h,
+						messages: messagesList(h, h.currentId)
+					}).catch((e) => toast.error(`${e}`));
+				}
+				return;
+			}
+			const next = updateMessage(historyRef.current, message.id, patch);
 			setHistory(next);
 			await save(next);
 			if (!details && !(annotation as { tags?: string[] }).tags && message.content) {
