@@ -1054,6 +1054,37 @@ def parse_duration(duration: str) -> dt.timedelta | None:
     return total_duration
 
 
+# The shortest JWT expiry accepted: shorter, a session ends before it is used.
+MIN_JWT_EXPIRY = dt.timedelta(minutes=1)
+
+
+def jwt_expiry_error(value: str) -> str | None:
+    """Why `value` cannot be the JWT expiry (auth.jwt_expiry), or None if it can.
+
+    '-1' and '0' mean no expiry. Anything else is one or more number-unit
+    pairs (`30m`, `1d12h`) adding up to at least MIN_JWT_EXPIRY: a negative,
+    zero or sub-minute duration expires every new session at once, locking
+    everyone out, and one too large to add to today's date fails every
+    sign-in (#242).
+    """
+    if value in ('-1', '0'):
+        return None
+    usage = (
+        "use a positive number with a unit (ms, s, m, h, d or w), such as '30m', '1d12h' or '4w', "
+        "or '-1' for no expiration"
+    )
+    if not isinstance(value, str) or not re.fullmatch(r'(\d+(\.\d+)?(ms|s|m|h|d|w))+', value):
+        return f'Invalid JWT expiration {value!r}: {usage}.'
+    try:
+        delta = parse_duration(value)
+        if delta is None or delta < MIN_JWT_EXPIRY:
+            return f'JWT expiration {value!r} is shorter than a minute: {usage}.'
+        _ = dt.datetime.now(dt.UTC) + delta
+    except (OverflowError, ValueError):
+        return f'JWT expiration {value!r} is too long: {usage}.'
+    return None
+
+
 def parse_ollama_modelfile(model_text):
     parameters_meta = {
         'mirostat': int,

@@ -360,7 +360,9 @@ def _save_jwt_expiry(client, admin, value):
     return client.post('/auths/admin/config', json={**body, 'JWT_EXPIRES_IN': value}, headers=admin.headers)
 
 
-@pytest.mark.parametrize('value', ['-1h', '-0.5d', '0s', '0.0h', '1 hour', '24hr', '1H', ''])
+@pytest.mark.parametrize(
+    'value', ['-1h', '-0.5d', '0s', '0.0h', '500ms', '30s', '1 hour', '24hr', '1H', '', '3000000d', '999999999w']
+)
 def test_an_unusable_jwt_expiry_is_refused_and_not_saved(client, config, value):
     """A negative or zero duration expires every new session at once; a typo used to be dropped silently."""
     admin = _account('admin')
@@ -371,7 +373,7 @@ def test_an_unusable_jwt_expiry_is_refused_and_not_saved(client, config, value):
     assert config['auth.jwt_expiry'] == '1h'
 
 
-@pytest.mark.parametrize('value', ['30m', '1.5h', '4w', '500ms', '-1', '0'])
+@pytest.mark.parametrize('value', ['30m', '1.5h', '4w', '1d12h', '60s', '-1', '0'])
 def test_a_valid_jwt_expiry_is_saved(client, config, value):
     admin = _account('admin')
 
