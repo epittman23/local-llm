@@ -17,6 +17,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -49,10 +50,16 @@ def _checkout(tmp_path: Path, name: str = 'repo') -> Path:
     shutil.copy(REPO_ROOT / 'infra' / 'docker-compose.yml', root / 'infra' / 'docker-compose.yml')
     for sub in ('apps/web', 'apps/desktop', 'apps/server/tests'):
         (root / sub).mkdir(parents=True, exist_ok=True)
+    # What `make backend` reads: infra/.env with every key it checks, and the
+    # backend venv's interpreter, here a stub that prints a database URL.
+    (root / 'infra' / '.env').write_text(
+        'OPENROUTER_API_KEY=stub\nPOSTGRES_PASSWORD=stub\nLLLM_SECRET_KEY=stub\nJUPYTER_TOKEN=stub\nSEARXNG_SECRET=stub\n'
+    )
     bin_dir = tmp_path / 'bin'
     bin_dir.mkdir(exist_ok=True)
-    for tool in STUB_TOOLS:
-        path = bin_dir / tool
+    venv_bin = root / 'apps' / 'server' / '.venv' / 'bin'
+    venv_bin.mkdir(parents=True)
+    for path in [bin_dir / tool for tool in STUB_TOOLS] + [venv_bin / 'python']:
         path.write_text(STUB)
         path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
     return root
@@ -167,3 +174,29 @@ def test_readiness_probe_uses_tcp_not_the_socket(tmp_path, target):
     assert probes, calls
     assert 'pg_isready' in probes[0]
     assert probes[0][probes[0].index('-h') + 1] == '127.0.0.1'
+
+
+# --- make backend waits for Postgres (#148) -----------------------------------
+
+
+def _compose_up_calls(calls: list[dict]) -> list[tuple[int, list[str]]]:
+    return [(i, c['argv']) for i, c in enumerate(calls) if c['tool'] == 'docker' and 'up' in c['argv']]
+
+
+def test_backend_waits_for_postgres_before_starting_the_app(tmp_path):
+    """Migrations run when the app is imported, so Postgres must be accepting connections first."""
+    root = _checkout(tmp_path)
+    result, calls = _make(root, tmp_path, 'backend', STUB_OUT_PYTHON='postgresql://stub')
+    assert result.returncode == 0, result.stderr
+    uvicorn = next(i for i, c in enumerate(calls) if c['tool'] == 'python' and 'uvicorn' in c['argv'])
+    waits = [(i, argv) for i, argv in _compose_up_calls(calls) if '--wait' in argv and 'postgres' in argv]
+    assert waits, _compose_up_calls(calls)
+    assert waits[0][0] < uvicorn
+
+
+def test_postgres_healthcheck_probes_over_tcp():
+    """What `up --wait` waits on: pg_isready over TCP, since the init server is socket-only."""
+    compose = yaml.safe_load((REPO_ROOT / 'infra' / 'docker-compose.yml').read_text())
+    test = compose['services']['postgres']['healthcheck']['test']
+    assert test[:2] == ['CMD', 'pg_isready']
+    assert test[test.index('-h') + 1] == '127.0.0.1'

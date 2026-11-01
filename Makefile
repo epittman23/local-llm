@@ -97,6 +97,11 @@ help:
 # included. uvicorn is never exec'd for the same reason: exec would replace
 # this shell -- and its trap -- with uvicorn's process image.
 #
+# The backend runs its migrations when it is imported, so the recipe waits
+# for Postgres's healthcheck (infra/docker-compose.yml) before starting it;
+# on a fresh volume the first start takes several seconds. The other
+# services are not waited on: Redis is retried by the backend itself.
+#
 # The venv is apps/server/pyproject.toml + uv.lock, applied exactly by
 # `uv sync --frozen` on every run: a no-op when nothing changed, and it
 # removes anything the lock no longer lists. uv also fetches a matching
@@ -130,6 +135,7 @@ backend:
 	trap 'echo "==> Stopping Postgres and Redis, Jupyter and SearXNG"; $(COMPOSE) down' EXIT; \
 	echo "==> Starting Postgres and Redis, Jupyter and SearXNG"; \
 	$(COMPOSE) up -d postgres redis jupyter searxng; \
+	$(COMPOSE) up -d --wait --wait-timeout 120 postgres; \
 	if ! command -v uv >/dev/null 2>&1; then \
 		echo "make backend: uv not found -- install it (https://docs.astral.sh/uv/, e.g. \`curl -LsSf https://astral.sh/uv/install.sh | sh\`)" >&2; \
 		exit 1; \
