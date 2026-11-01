@@ -45,7 +45,9 @@ WEB_DIR := $(REPO_ROOT)/apps/web
 DESKTOP_DIR := $(REPO_ROOT)/apps/desktop
 # Quoted, so a checkout path with a space stays one argument. Recipes use it
 # inside double quotes only (never in a single-quoted trap string), so a path
-# with a ' works too.
+# with a ' works too. That holds for `make -C <path>` (as the desktop app runs
+# it) and for make run inside the checkout; `make -f <path>/Makefile` from
+# elsewhere splits a spaced path, and a path with a ", $ or ` is unsupported.
 COMPOSE := docker compose -f "$(REPO_ROOT)/infra/docker-compose.yml"
 LLLM_BACKEND_PORT ?= 4000
 # Loopback by default: the backend's admin API can start processes on this

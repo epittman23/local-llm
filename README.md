@@ -65,7 +65,7 @@ first run pulls their images, about 5.8 GB together.
 > `make backend`, so migrations don't create an empty schema first:
 >
 > ```bash
-> docker compose -f infra/docker-compose.yml up -d postgres
+> docker compose -f infra/docker-compose.yml up -d --wait postgres
 > docker exec -i local-llm-postgres pg_restore --no-owner --role=local_llm \
 >   -U local_llm -d local_llm < local-llm-<date>.dump
 > ```

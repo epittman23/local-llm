@@ -108,9 +108,11 @@ def test_frontend_sets_its_stop_trap_before_starting_the_dev_server(tmp_path):
     assert astro[0][:2] == ['dev', '--background']
     assert astro[-1] == ['dev', 'stop']
 
-    # The daemon starts but `logs --follow` fails: the trap still stops it.
+    # The daemon fails to start: the trap, set before it, still runs
+    # `astro dev stop`, and the recipe does not go on to follow the logs.
     result, calls = _make(root, tmp_path, 'frontend', STUB_EXIT_BUNX='3')
     assert result.returncode != 0
+    assert ['dev', 'logs', '--follow'] not in _bunx_astro(calls)
     assert _bunx_astro(calls)[-1] == ['dev', 'stop']
 
 

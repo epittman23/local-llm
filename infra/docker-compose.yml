@@ -43,6 +43,9 @@ services:
     # image's init step first runs a temporary server on the Unix socket only.
     healthcheck:
       test: ["CMD", "pg_isready", "-q", "-h", "127.0.0.1", "-U", "local_llm", "-d", "local_llm"]
+      # Failures in the first 60 s don't count (a fresh volume's init), then
+      # 30 more probes: about the 120 s `make backend` waits at most.
+      start_period: 60s
       interval: 2s
       timeout: 5s
       retries: 30
