@@ -1430,3 +1430,39 @@ def test_a_null_error_key_beside_choices_is_not_an_error(monkeypatch):
 
     assert not [d for d in _emitted(observed) if 'error' in d]
     assert not [s for s in _saved(observed) if 'error' in s]
+
+
+def test_text_buffered_before_a_provider_error_is_sent_before_it(monkeypatch):
+    # Deltas are coalesced three at a time, so 'The answer is' is still
+    # buffered when the error chunk arrives.
+    metadata = {'chat_id': SAVED_CHAT, 'params': {'stream_delta_chunk_size': 3}}
+    observed = _run([[chunk('The answer is'), OPENROUTER_ERROR_CHUNK, DONE]], metadata, {}, {}, None, monkeypatch)
+
+    emits = [c[1] for c in observed['calls'] if c[0] == 'emit']
+    text_at = max(
+        i for i, e in enumerate(emits) if e.get('type') == 'response:completion' and 'The answer is' in json.dumps(e)
+    )
+    error_at = next(i for i, e in enumerate(emits) if e.get('type') == 'chat:completion' and 'error' in e['data'])
+    assert text_at < error_at
+
+
+def test_an_error_chunk_that_carries_text_keeps_the_text(monkeypatch):
+    last_words = sse(
+        {
+            'error': {'message': 'cut off'},
+            'choices': [{'index': 0, 'delta': {'content': ' forty-two'}, 'finish_reason': 'error'}],
+        }
+    )
+    observed = _run([[chunk('The answer is'), last_words, DONE]], {'chat_id': SAVED_CHAT}, {}, {}, None, monkeypatch)
+
+    assert {'error': {'message': 'cut off'}} in _emitted(observed)
+    assert 'The answer is forty-two' in json.dumps(observed['assistant_message'])
+
+
+def test_an_error_detail_on_the_choice_is_kept(monkeypatch):
+    on_choice = sse(
+        {'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'error', 'error': {'message': 'upstream 503'}}]}
+    )
+    observed = _run([[chunk('Half'), on_choice, DONE]], {'chat_id': SAVED_CHAT}, {}, {}, None, monkeypatch)
+
+    assert {'error': {'message': 'upstream 503'}} in _emitted(observed)

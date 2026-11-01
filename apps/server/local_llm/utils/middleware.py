@@ -5031,11 +5031,14 @@ class _StreamingReply:
         # A provider error can come beside choices, not only instead of them:
         # OpenRouter ends a failed reply with a top-level `error` and a choice
         # whose finish_reason is "error", with HTTP 200 (#162).
-        error = data.get('error')
+        error = data.get('error') or (choices[0].get('error') if choices else None)
         if not error and choices and choices[0].get('finish_reason') == 'error':
             error = {'message': 'The provider ended the reply with an error.'}
         if error:
             log.error('Provider returned error (streaming): %s', error)
+            # Text still buffered goes out first, so the reply is not marked
+            # failed (and done) before its last words arrive.
+            await stream.deltas.flush()
             await self._save_error(error)
             await self.event_emitter(
                 {
