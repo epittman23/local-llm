@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
 	KB_DIR_MOVE,
 	KB_FILE_MOVE,
-	contentSavedMessage,
+	announceContentSaved,
 	createMissingDirectories,
 	filesToUpload,
 	getDirectoryUploadPath,
@@ -110,16 +110,16 @@ describe('knowledgeMetaPreview', () => {
 	});
 });
 
-describe('contentSavedMessage', () => {
+describe('announceContentSaved', () => {
 	it('names the knowledge bases a saved edit did not reach (#307)', () => {
-		expect(contentSavedMessage({ failed_knowledge: ['Research', 'Ops'] })).toEqual({
-			warning: true,
-			text: 'File content saved, but these knowledge bases still use the old text: Research, Ops.'
-		});
-		expect(contentSavedMessage({ failed_knowledge: [] })).toEqual({
-			warning: false,
-			text: 'File content updated successfully.'
-		});
-		expect(contentSavedMessage(null).warning).toBe(false);
+		const notify = { success: vi.fn(), warning: vi.fn() };
+		announceContentSaved({ failed_knowledge: ['Research', 'Ops'] }, notify);
+		expect(notify.warning).toHaveBeenCalledWith(
+			'File content saved, but these knowledge bases still use the old text: Research, Ops.'
+		);
+		announceContentSaved({ failed_knowledge: [] }, notify);
+		announceContentSaved(null, notify);
+		expect(notify.success).toHaveBeenCalledTimes(2);
+		expect(notify.warning).toHaveBeenCalledTimes(1);
 	});
 });

@@ -1,3 +1,4 @@
+import { toast } from 'sonner';
 import { computeFileHash } from '@/lib/utils/hash';
 
 // The pure parts of KnowledgeBase.svelte's upload / sync machinery, separated
@@ -132,20 +133,17 @@ export function knowledgeMetaPreview(item: {
 }
 
 /**
- * What to say after a file's content is saved. The save succeeds even when a
- * knowledge base holding the file could not take the new text; those bases
+ * Toasts the outcome of saving a file's content. The save succeeds even when
+ * a knowledge base holding the file could not take the new text; those bases
  * still answer from the old one, so name them rather than report plain
  * success (#307).
  */
-export function contentSavedMessage(res: { failed_knowledge?: string[] } | null | undefined): {
-	warning: boolean;
-	text: string;
-} {
+export function announceContentSaved(
+	res: { failed_knowledge?: string[] } | null | undefined,
+	notify: Pick<typeof toast, 'success' | 'warning'> = toast
+): void {
 	const stale = res?.failed_knowledge ?? [];
-	return stale.length
-		? {
-				warning: true,
-				text: `File content saved, but these knowledge bases still use the old text: ${stale.join(', ')}.`
-			}
-		: { warning: false, text: 'File content updated successfully.' };
+	if (stale.length)
+		notify.warning(`File content saved, but these knowledge bases still use the old text: ${stale.join(', ')}.`);
+	else notify.success('File content updated successfully.');
 }
