@@ -243,7 +243,9 @@ test('a calendar reminder from the socket shows as a toast on any page, and open
 		}
 	};
 	const toast = page.locator('[data-sonner-toast]').filter({ hasText: 'Dentist' }).first();
-	// The listener attaches a render after the socket connects, so send until one lands.
+	// The listener attaches a render after the socket connects (SocketProvider
+	// exposes the socket only then), so send until one lands. A real alert in
+	// that window is lost; that race is in SocketProvider, not this hook.
 	await expect(async () => {
 		socket.emit('events', alert);
 		await expect(toast).toBeVisible({ timeout: 500 });

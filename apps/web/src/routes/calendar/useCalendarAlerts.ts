@@ -26,8 +26,9 @@ export const calendarAlertText = (minutes: number) =>
  * branch: an event reminder arrives on the `events` channel, wherever the
  * viewer is, as a toast that opens the calendar, and as a browser
  * notification if they turned those on in Settings and granted the
- * permission. The notification's tag is the event's, so several open tabs
- * show it once. Mounted once, in AppShell.
+ * permission. The notification's tag is the event's, so another open tab's
+ * copy replaces it rather than stacking (how that looks is up to the browser).
+ * Mounted once, in AppShell.
  */
 export function useCalendarAlerts() {
 	const { socket } = useSocket();
