@@ -54,7 +54,7 @@ export type RowHandlers = {
 };
 
 /** A model's description for the hover card: its own text, else the Ollama digest, else its id. */
-const describe = (m: ModelItem) =>
+const modelDescription = (m: ModelItem) =>
 	m.meta?.description
 		? m.meta.description
 		: m.ollama?.digest
@@ -147,7 +147,7 @@ export function ModelRow({
 					/>
 				</div>
 				<div className={cn('flex min-w-0 flex-1 self-center pr-1', !active && 'text-muted-foreground')}>
-					<Tip content={<SafeMarkdown text={describe(model)} className="text-background" />} side="top">
+					<Tip content={<SafeMarkdown text={modelDescription(model)} className="text-background" />} side="top">
 						<div className="flex min-w-0 items-center gap-1.5 text-[0.8125rem] leading-4">
 							<span className="min-w-0 truncate">{model.name ?? model.id}</span>
 							<span className={cn('shrink-0 text-[0.6875rem]', accessClass[access])}>{access}</span>
