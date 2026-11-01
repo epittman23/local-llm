@@ -956,14 +956,20 @@ async def send_notification(request, channel, message, active_user_ids, db=None)
     webui_url = await Config.get('webui.url')
     enable_user_webhooks = await Config.get('ui.enable_user_webhooks')
 
-    users = await get_channel_users_with_access(channel, 'read', db=db)
-
-    # Batch fetch channel members in 1 query (fixes N+1)
-    member_ids = {m.user_id for m in await Channels.get_members_by_channel_id(channel.id, db=db)}
+    members = await Channels.get_members_by_channel_id(channel.id, db=db)
+    if channel.type in ['group', 'dm']:
+        # Membership is the access here: these channels carry no grants, so
+        # the readers are the members (#327). Posting reactivates every
+        # member first; the is_active filter guards direct callers.
+        member_ids = {m.user_id for m in members if m.is_active}
+        users = await Users.get_users_by_user_ids(list(member_ids), db=db)
+    else:
+        member_ids = {m.user_id for m in members}
+        users = await get_channel_users_with_access(channel, 'read', db=db)
     url = f'{webui_url}/channels/{channel.id}'
 
     for u in users:
-        if (u.id not in active_user_ids) and u.id in member_ids:
+        if u.id != message.user_id and u.id not in active_user_ids and u.id in member_ids:
             if enable_user_webhooks and u.settings:
                 await publish_event(
                     request,
