@@ -79,3 +79,31 @@ def test_when_the_only_source_fails_the_error_is_returned(monkeypatch):
     got = _run(monkeypatch, externals=[('down', RuntimeError('connection refused'))])
 
     assert got == {'error': 'External knowledge unavailable: down: connection refused'}
+
+
+def test_an_external_hit_is_not_crowded_out_by_internal_ones(monkeypatch):
+    """#179: internal hits filled every slot, so external bases never contributed."""
+    got = _run(monkeypatch, internal=[0.2] * 5, externals=[('ext', [0.99])], count=5)
+
+    assert len(got) == 5
+    assert 'ext' in [c['source'] for c in got]
+
+
+def test_sources_take_turns_whatever_their_score_scale(monkeypatch):
+    """External pgvector reports a cosine distance (lower is better), internal a
+    similarity (higher is better): hits are merged by each source's own rank."""
+    got = _run(monkeypatch, internal=[0.9, 0.8, 0.7], externals=[('pg', [0.1, 0.2, 0.3])], count=4)
+
+    assert [(c['source'], c['distance']) for c in got] == [
+        ('internal', 0.9),
+        ('pg', 0.1),
+        ('internal', 0.8),
+        ('pg', 0.2),
+    ]
+
+
+def test_attached_notes_do_not_use_up_the_hits(monkeypatch):
+    """#179: with `count` notes attached, no vector hit was ever returned."""
+    got = _run(monkeypatch, notes=['n1', 'n2'], internal=[0.5, 0.4], count=2)
+
+    assert [c['source'] for c in got] == ['n1', 'n2', 'internal', 'internal']
