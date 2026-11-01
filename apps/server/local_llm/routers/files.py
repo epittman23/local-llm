@@ -716,6 +716,13 @@ async def update_file_data_content_by_id(
         )
 
     if file.user_id == user.id or user.role == 'admin' or await has_access_to_file(id, 'write', user, db=db):
+        # Empty content used to fall through to re-extracting the original
+        # file, silently undoing the edit (#307).
+        if not form_data.content.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ERROR_MESSAGES.EMPTY_CONTENT,
+            )
         max_size = await Config.get('rag.file.max_size')
         if max_size and len(form_data.content.encode('utf-8')) > int(max_size) * 1024 * 1024:
             raise HTTPException(
@@ -731,13 +738,19 @@ async def update_file_data_content_by_id(
             )
             file = await Files.get_file_by_id(id=id, db=db)
         except Exception as e:
+            # Reported, not swallowed: the page toasted the old content as
+            # saved while nothing, or only part of it, was (#307).
             log.exception(e)
-            log.error(f'Error processing file: {file.id}')
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f'Could not save the content: {getattr(e, "detail", None) or e}',
+            )
 
         # Propagate content change to all knowledge collections referencing
         # this file.  Without this the old embeddings remain in the knowledge
         # collection and RAG returns both stale and current data (#20558).
         knowledges = await Knowledges.get_knowledges_by_file_id(id, db=db)
+        failed: list[str] = []
         for knowledge in knowledges:
             try:
                 old_vectors = await ASYNC_VECTOR_DB_CLIENT.query(collection_name=knowledge.id, filter={'file_id': id})
@@ -755,6 +768,13 @@ async def update_file_data_content_by_id(
                     await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=knowledge.id, ids=old_vector_ids)
             except Exception as e:
                 log.warning(f'Failed to update knowledge {knowledge.id} after content change for file {id}: {e}')
+                failed.append(f'{knowledge.name}: {getattr(e, "detail", None) or e}')
+        if failed:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail='The content was saved, but these knowledge bases still answer from the old text: '
+                + '; '.join(failed),
+            )
 
         await publish_event(
             request,

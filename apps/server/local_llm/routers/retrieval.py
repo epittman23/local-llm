@@ -119,6 +119,7 @@ from local_llm.retrieval.web.yandex import search_yandex
 from local_llm.retrieval.web.ydc import search_youcom
 from local_llm.storage.provider import Storage
 from local_llm.utils.access_control import has_permission
+from local_llm.utils.access_control.files import has_access_to_file
 from local_llm.utils.auth import get_admin_user, get_verified_user
 from local_llm.utils.misc import (
     calculate_sha256_string,
@@ -1793,10 +1794,16 @@ async def process_file(
     The session is committed before external API calls, and updates use a fresh session.
     """
     config = await get_retrieval_config()
-    if user.role == 'admin':
-        file = await Files.get_file_by_id(form_data.file_id, db=db)
-    else:
-        file = await Files.get_file_by_id_and_user_id(form_data.file_id, user.id, db=db)
+    file = await Files.get_file_by_id(form_data.file_id, db=db)
+    if file and user.role != 'admin' and file.user_id != user.id:
+        # Not only the owner: whoever the file grants access to (through a
+        # knowledge base, a model, a channel or a shared chat), as the routes
+        # that call this check. Copying its chunks into a collection, whose
+        # own write access is checked below, needs read access; changing or
+        # reprocessing the file itself needs write access (#307).
+        needed = 'read' if form_data.collection_name and not form_data.content else 'write'
+        if not await has_access_to_file(file.id, needed, user, db=db):
+            file = None
 
     if file:
         try:

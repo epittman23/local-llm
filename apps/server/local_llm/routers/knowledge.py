@@ -1550,10 +1550,13 @@ async def update_file_from_knowledge_by_id(
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
-    # Remove content from the vector database
-    await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=knowledge.id, filter={'file_id': form_data.file_id})
-
-    # Add content to the vector database
+    # Re-add the file's chunks before removing the old ones, so a failed
+    # re-add (or a caller process_file refuses) leaves the base as it was
+    # instead of without the file's content (#307).
+    old_vectors = await ASYNC_VECTOR_DB_CLIENT.query(
+        collection_name=knowledge.id, filter={'file_id': form_data.file_id}
+    )
+    old_vector_ids = old_vectors.ids[0] if old_vectors and old_vectors.ids else []
     try:
         await process_file(
             request,
@@ -1564,8 +1567,10 @@ async def update_file_from_knowledge_by_id(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e),
+            detail=str(getattr(e, 'detail', None) or e),
         )
+    if old_vector_ids:
+        await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=knowledge.id, ids=old_vector_ids)
 
     if knowledge:
         response = KnowledgeFilesResponse(
