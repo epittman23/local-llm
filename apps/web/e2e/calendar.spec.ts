@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { fakeSocketServer } from './fake-socket';
 import { expect, test } from './test';
 import { mockWorkspaceBackend } from './workspace-helpers';
 
@@ -218,4 +219,38 @@ test('a new calendar is created with its color; deleting one asks first', async 
 	await page.getByRole('button', { name: 'Delete calendar Work' }).click();
 	await page.getByRole('alertdialog').getByRole('button', { name: 'Delete' }).click();
 	await expect.poll(() => seen.deleted).toEqual(['/work/delete']);
+});
+
+test('a calendar reminder from the socket shows as a toast on any page, and opens the calendar', async ({ page }) => {
+	await mockWorkspaceBackend(page, { features: { enable_calendar: true } });
+	await mockCalendar(page);
+	const socket = await fakeSocketServer(page);
+	await page.goto('/workspace/models');
+	await socket.connected;
+	// What utils/automations.py's calendar alert check emits.
+	const alert = {
+		data: {
+			type: 'calendar:alert',
+			data: {
+				event_id: 'e1',
+				title: 'Dentist',
+				description: '',
+				start_at: ns('2026-05-14T09:00:00'),
+				minutes_until: 5,
+				calendar_id: 'personal',
+				location: ''
+			}
+		}
+	};
+	const toast = page.locator('[data-sonner-toast]').filter({ hasText: 'Dentist' }).first();
+	// The listener attaches a render after the socket connects (SocketProvider
+	// exposes the socket only then), so send until one lands. A real alert in
+	// that window is lost; that race is in SocketProvider, not this hook.
+	await expect(async () => {
+		socket.emit('events', alert);
+		await expect(toast).toBeVisible({ timeout: 500 });
+	}).toPass();
+	await expect(toast).toContainText('Starting in 5 minutes');
+	await toast.getByRole('button', { name: 'Open' }).click();
+	await expect(page).toHaveURL(/\/calendar$/);
 });
