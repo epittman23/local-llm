@@ -199,6 +199,12 @@ describe('calendars and automations', () => {
 		).toBe('a');
 		expect(defaultCalendarId([])).toBe('');
 	});
+	it("a shared calendar's default flag is its owner's, not the user's (#182)", () => {
+		const theirs = { id: 'theirs', is_default: true, user_id: 'other' };
+		expect(defaultCalendarId([theirs, { id: 'mine', is_default: true, user_id: 'me' }], 'me')).toBe('mine');
+		expect(defaultCalendarId([theirs, { id: 'mine', is_default: false, user_id: 'me' }], 'me')).toBe('mine');
+		expect(defaultCalendarId([theirs], 'me')).toBe('theirs');
+	});
 	it('an automation run opens its chat, else the automation', () => {
 		expect(automationTarget(ev(at(2026, 8, 1), undefined, { meta: { automation_id: 'a1', chat_id: 'c9' } }))).toBe(
 			'/c/c9'
