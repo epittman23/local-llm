@@ -438,11 +438,13 @@ class PromptsTable:
                     or form_data.access_grants is not None
                 )
 
-                # Update prompt fields
-                prompt.name = form_data.name
-                prompt.content = form_data.content
-                prompt.data = form_data.data or prompt.data
-                prompt.meta = form_data.meta or prompt.meta
+                # The row is what slash commands serve: only a production
+                # save changes it. A draft is kept in the history below (#221).
+                if form_data.is_production:
+                    prompt.name = form_data.name
+                    prompt.content = form_data.content
+                    prompt.data = form_data.data or prompt.data
+                    prompt.meta = form_data.meta or prompt.meta
                 prompt.updated_at = int(time.time())
                 if form_data.access_grants is not None:
                     await AccessGrants.set_access_grants('prompt', prompt.id, form_data.access_grants, db=session)
@@ -506,15 +508,19 @@ class PromptsTable:
                     or (form_data.tags is not None and prompt.tags != form_data.tags)
                 )
 
-                # Update prompt fields
-                prompt.name = form_data.name
-                prompt.command = form_data.command
-                prompt.content = form_data.content
-                prompt.data = form_data.data or prompt.data
-                prompt.meta = form_data.meta or prompt.meta
-
-                if form_data.tags is not None:
-                    prompt.tags = form_data.tags
+                # The row is what slash commands serve: only a production
+                # save changes it. A draft is kept in the history below, and
+                # goes live when that version is made production (#221).
+                # Access grants are permissions, not versioned content, and
+                # apply either way.
+                if form_data.is_production:
+                    prompt.name = form_data.name
+                    prompt.command = form_data.command
+                    prompt.content = form_data.content
+                    prompt.data = form_data.data or prompt.data
+                    prompt.meta = form_data.meta or prompt.meta
+                    if form_data.tags is not None:
+                        prompt.tags = form_data.tags
 
                 if form_data.access_grants is not None:
                     await AccessGrants.set_access_grants('prompt', prompt.id, form_data.access_grants, db=session)
@@ -529,10 +535,10 @@ class PromptsTable:
                     snapshot = {
                         'name': form_data.name,
                         'content': form_data.content,
-                        'command': prompt.command,
+                        'command': form_data.command,
                         'data': form_data.data or {},
                         'meta': form_data.meta or {},
-                        'tags': prompt.tags or [],
+                        'tags': (form_data.tags if form_data.tags is not None else prompt.tags) or [],
                         'access_grants': [grant.model_dump() for grant in current_access_grants],
                     }
 
