@@ -3,9 +3,11 @@
 A prompt row holds what slash commands serve; its history holds every saved
 version, and `version_id` names the live one. The editor's "Set as
 Production" switch sends `is_production`. Prompts.update_prompt_by_id once
-wrote the new name, command and content into the row whatever that flag
-said, and only `version_id` respected it, so a staged draft went live while
-the history still marked the old version Live (#221).
+wrote the new content into the row whatever that flag said, and only
+`version_id` respected it, so a staged draft went live while the history
+still marked the old version Live (#221). Name, command and tags are the
+prompt's identity, not versioned content: they apply at once, as the
+editor's metadata autosave does.
 
 Runs against the suite's own temporary SQLite database (tests/conftest.py
 points DATA_DIR at a temp directory, and DATABASE_URL defaults to a file in
@@ -55,7 +57,8 @@ def test_a_draft_saved_without_production_is_not_served():
 
     assert updated is not None
     assert updated.version_id == p.version_id
-    assert (live.name, live.content, live.tags) == ('Sum', 'V1 content', ['a'])
+    assert live.content == 'V1 content'
+    assert (live.name, live.tags) == ('Sum v2', ['b'])
     # The draft is kept as a version, ready to be made production.
     assert any(h.snapshot.get('content') == 'V2 draft' for h in history)
 
@@ -80,11 +83,11 @@ def test_a_production_save_still_goes_live():
     async def scenario():
         command = f'sum{uuid.uuid4().hex[:8]}'
         p = await _prompt(command)
-        form = PromptForm(command=command, name='Sum v2', content='V2 live', access_grants=[])
+        form = PromptForm(command=command, name='Sum v2', content='V2 live', access_grants=[], tags=['b'])
         updated = await Prompts.update_prompt_by_id(p.id, form, 'u1')
         return p, updated, await Prompts.get_prompt_by_command(command)
 
     p, updated, live = _run(scenario())
 
-    assert live.content == 'V2 live'
+    assert (live.content, live.tags) == ('V2 live', ['b'])
     assert updated.version_id != p.version_id
