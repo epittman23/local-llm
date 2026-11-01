@@ -294,12 +294,9 @@ class KnowledgeTable:
                     if source == 'external':
                         stmt = stmt.filter(Knowledge.meta['source'].as_string() == 'external')
                     elif source == 'local':
-                        stmt = stmt.filter(
-                            or_(
-                                Knowledge.meta.is_(None),
-                                Knowledge.meta['source'].as_string() != 'external',
-                            )
-                        )
+                        # A base made in the app stores meta as JSON null, not
+                        # SQL NULL, so test the source with coalesce (#197).
+                        stmt = stmt.filter(func.coalesce(Knowledge.meta['source'].as_string(), '') != 'external')
 
                     stmt = AccessGrants.has_permission_filter(
                         db=db,
