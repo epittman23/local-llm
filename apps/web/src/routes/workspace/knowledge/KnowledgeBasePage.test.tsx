@@ -1,8 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
+import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { updateKnowledgeById } from '@/lib/apis/knowledge';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { KnowledgeBasePage } from './KnowledgeBasePage';
 import { KB_FILE_MOVE } from './knowledgeFiles';
@@ -102,7 +104,10 @@ beforeEach(() => {
 	} as never);
 	state.files = Array.from({ length: 31 }, (_, i) => ({ id: `f${i + 1}`, meta: { name: `file${i + 1}.txt` } }));
 });
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+	vi.useRealTimers();
+	vi.clearAllMocks();
+});
 
 describe('KnowledgeBasePage pagination after the list changes (#229)', () => {
 	it('goes back to page 1 after deleting the only file on page 2', async () => {
@@ -201,5 +206,73 @@ describe('KnowledgeBasePage pagination after the list changes (#229)', () => {
 		await new Promise((resolve) => setTimeout(resolve, 200));
 		expect(screen.getByText('file30.txt')).toBeInTheDocument();
 		expect(screen.queryByText('file1.txt')).toBeNull();
+	});
+});
+
+describe('KnowledgeBasePage name and description autosave (#228)', () => {
+	/** Opens the knowledge base, then hands the clock to the test. */
+	const openWithFakeTimers = async () => {
+		vi.mocked(updateKnowledgeById).mockResolvedValue({ id: 'kb1' } as never);
+		renderPage();
+		await screen.findByText('file1.txt');
+		vi.useFakeTimers();
+	};
+
+	it('saves an edit made just before leaving with Back instead of dropping it', async () => {
+		await openWithFakeTimers();
+		fireEvent.change(screen.getByLabelText('Knowledge Name'), { target: { value: 'Renamed' } });
+		fireEvent.click(screen.getByText('Back'));
+		expect(updateKnowledgeById).toHaveBeenCalledTimes(1);
+		expect(updateKnowledgeById).toHaveBeenCalledWith(
+			't',
+			'kb1',
+			expect.objectContaining({ name: 'Renamed', description: 'desc' })
+		);
+	});
+
+	it('saves only the last of several quick edits when leaving', async () => {
+		await openWithFakeTimers();
+		fireEvent.change(screen.getByLabelText('Knowledge Name'), { target: { value: 'Renamed' } });
+		fireEvent.change(screen.getByLabelText('Knowledge Description'), { target: { value: 'new desc' } });
+		fireEvent.click(screen.getByText('Back'));
+		expect(updateKnowledgeById).toHaveBeenCalledTimes(1);
+		expect(updateKnowledgeById).toHaveBeenCalledWith(
+			't',
+			'kb1',
+			expect.objectContaining({ name: 'Renamed', description: 'new desc' })
+		);
+	});
+
+	it('does not save again on leaving once the pause has saved the edit', async () => {
+		await openWithFakeTimers();
+		fireEvent.change(screen.getByLabelText('Knowledge Name'), { target: { value: 'Renamed' } });
+		vi.advanceTimersByTime(1000);
+		expect(updateKnowledgeById).toHaveBeenCalledTimes(1);
+		fireEvent.click(screen.getByText('Back'));
+		expect(updateKnowledgeById).toHaveBeenCalledTimes(1);
+	});
+
+	it('saves nothing on leaving when nothing was edited', async () => {
+		await openWithFakeTimers();
+		fireEvent.click(screen.getByText('Back'));
+		expect(updateKnowledgeById).not.toHaveBeenCalled();
+	});
+
+	it('still refuses an emptied name on leaving, saying so', async () => {
+		const error = vi.spyOn(toast, 'error');
+		await openWithFakeTimers();
+		fireEvent.change(screen.getByLabelText('Knowledge Name'), { target: { value: ' ' } });
+		fireEvent.click(screen.getByText('Back'));
+		expect(updateKnowledgeById).not.toHaveBeenCalled();
+		expect(error).toHaveBeenCalledWith('Please fill in all fields.');
+	});
+
+	it('reports a save made on leaving that the server rejects', async () => {
+		const error = vi.spyOn(toast, 'error');
+		await openWithFakeTimers();
+		vi.mocked(updateKnowledgeById).mockRejectedValue('Name taken');
+		fireEvent.change(screen.getByLabelText('Knowledge Name'), { target: { value: 'Renamed' } });
+		fireEvent.click(screen.getByText('Back'));
+		await vi.waitFor(() => expect(error).toHaveBeenCalledWith('Name taken'));
 	});
 });
