@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
-import re
 import time
 import urllib
 import uuid
@@ -73,7 +72,7 @@ from local_llm.utils.auth import (
     verify_password,
 )
 from local_llm.utils.groups import apply_default_group_assignment
-from local_llm.utils.misc import parse_duration, validate_email_format
+from local_llm.utils.misc import jwt_expiry_error, parse_duration, validate_email_format
 from local_llm.utils.rate_limit import RateLimiter
 from local_llm.utils.redis import get_redis_client
 
@@ -949,11 +948,10 @@ async def update_admin_config(request: Request, form_data: AdminConfig, user=Dep
     if form_data.CHANNEL_MODEL_RESPONSE_MODE not in ['thread', 'channel']:
         updates.pop('channels.model_response_mode', None)
 
-    pattern = r'^(-1|0|(-?\d+(\.\d+)?)(ms|s|m|h|d|w))$'
-
-    # Check if the input string matches the pattern
-    if not re.match(pattern, form_data.JWT_EXPIRES_IN):
-        updates.pop('auth.jwt_expiry', None)
+    # Refused before anything is saved: a typo must not be dropped while the
+    # save reports success, nor an unusable value lock everyone out (#242).
+    if error := jwt_expiry_error(form_data.JWT_EXPIRES_IN):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     await Config.upsert(updates)
     return await get_config_values(ADMIN_CONFIG_KEYS)
