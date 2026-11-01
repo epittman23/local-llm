@@ -43,7 +43,10 @@ SERVER_DIR := $(REPO_ROOT)/apps/server
 DATA_DIR ?= $(REPO_ROOT)/apps/server/data
 WEB_DIR := $(REPO_ROOT)/apps/web
 DESKTOP_DIR := $(REPO_ROOT)/apps/desktop
-COMPOSE := docker compose -f $(REPO_ROOT)/infra/docker-compose.yml
+# Quoted, so a checkout path with a space stays one argument. Recipes use it
+# inside double quotes only (never in a single-quoted trap string), so a path
+# with a ' works too.
+COMPOSE := docker compose -f "$(REPO_ROOT)/infra/docker-compose.yml"
 LLLM_BACKEND_PORT ?= 4000
 # Loopback by default: the backend's admin API can start processes on this
 # machine, so it is not offered to the LAN unless asked for with
@@ -132,7 +135,8 @@ backend:
 		fi; \
 	done; \
 	set -a; source "$$envfile"; set +a; \
-	trap 'echo "==> Stopping Postgres and Redis, Jupyter and SearXNG"; $(COMPOSE) down' EXIT; \
+	stop_services() { echo "==> Stopping Postgres and Redis, Jupyter and SearXNG"; $(COMPOSE) down; }; \
+	trap stop_services EXIT; \
 	echo "==> Starting Postgres and Redis, Jupyter and SearXNG"; \
 	$(COMPOSE) up -d postgres redis jupyter searxng; \
 	$(COMPOSE) up -d --wait --wait-timeout 120 postgres; \

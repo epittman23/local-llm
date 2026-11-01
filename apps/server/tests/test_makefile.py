@@ -200,3 +200,20 @@ def test_postgres_healthcheck_probes_over_tcp():
     test = compose['services']['postgres']['healthcheck']['test']
     assert test[:2] == ['CMD', 'pg_isready']
     assert test[test.index('-h') + 1] == '127.0.0.1'
+
+
+# --- a checkout path with a space or a quote (#428) ---------------------------
+
+
+@pytest.mark.parametrize('name', ['local llm', "eli's checkout"])
+def test_backend_keeps_a_spaced_or_quoted_checkout_path_whole(tmp_path, name):
+    """`make -C '<path>' backend`, as the desktop app runs it, starts and stops the services."""
+    root = _checkout(tmp_path, name)
+    result, calls = _make(root, tmp_path, 'backend', STUB_OUT_PYTHON='postgresql://stub')
+    assert result.returncode == 0, result.stderr
+    compose_file = str(root / 'infra' / 'docker-compose.yml')
+    compose = [c['argv'] for c in calls if c['tool'] == 'docker' and c['argv'][:1] == ['compose']]
+    assert [argv[argv.index('-f') + 1] for argv in compose] == [compose_file] * len(compose)
+    assert 'up' in compose[0]
+    assert compose[-1][-1] == 'down'
+    assert '==> Stopping Postgres and Redis, Jupyter and SearXNG' in result.stdout
