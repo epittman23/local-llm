@@ -152,11 +152,12 @@ test.describe('workspace models list', () => {
 		await expect(page.getByRole('button', { name: 'Base model' })).toContainText('Llama 3');
 	});
 
-	test('import updates an existing model, creates a new one, and never takes grants from the file', async ({
+	test('import updates an existing model keeping its grants, enabled state and meta, creates a new one, and never takes grants from the file', async ({
 		page
 	}) => {
 		await mockWorkspaceBackend(page);
-		const { calls } = await mockModelsApi(page, [model(1)]);
+		const grant = { id: 'g1', principal_type: 'group', principal_id: 'team', permission: 'read' };
+		const { calls } = await mockModelsApi(page, [model(1, { is_active: false, access_grants: [grant] })]);
 		await page.goto('/workspace/models');
 		await page.getByRole('button', { name: 'Open create menu' }).click();
 		const chooser = page.waitForEvent('filechooser');
@@ -169,6 +170,8 @@ test.describe('workspace models list', () => {
 					{
 						id: 'model-1',
 						name: 'Renamed',
+						is_active: true,
+						meta: { tags: [{ name: 'imported' }] },
 						access_grants: [{ principal_type: 'user', principal_id: '*', permission: 'write' }]
 					},
 					{ info: { id: 'brand-new', name: 'Brand New' } },
@@ -178,7 +181,13 @@ test.describe('workspace models list', () => {
 		});
 		await expect
 			.poll(() => calls.find((c) => c.path === '/model/update')?.body)
-			.toMatchObject({ id: 'model-1', name: 'Renamed', access_grants: [] });
+			.toMatchObject({
+				id: 'model-1',
+				name: 'Renamed',
+				is_active: false,
+				meta: { description: 'Preset 1', tags: [{ name: 'imported' }] }
+			});
+		expect(calls.find((c) => c.path === '/model/update')?.body).not.toHaveProperty('access_grants');
 		await expect
 			.poll(() => calls.find((c) => c.path === '/create')?.body)
 			.toMatchObject({ id: 'brand-new', name: 'Brand New' });
