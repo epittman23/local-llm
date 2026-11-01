@@ -182,17 +182,29 @@ export function eventFields(
 /**
  * The event to send, or the message to show. An all-day event runs 00:00 to
  * 23:59; an end before the start keeps the event's old length (0 for a new one).
+ *
+ * An occurrence of a repeating event (one with an `instance_id`) carries the
+ * series' id but its own times, and saving it saves the series. With
+ * `seriesStartAt`, the stored series' start, the change the form made to the
+ * occurrence's times moves the series by the same amount, so a rename leaves
+ * the series where it was instead of restarting it at this occurrence (#318).
  */
 export function eventPayload(
 	f: EventFields,
-	editing: CalendarEventModel | null
+	editing: CalendarEventModel | null,
+	seriesStartAt?: number
 ): { error: string } | { form: CalendarEventForm } {
 	if (!f.title.trim()) return { error: 'Title is required' };
 	if (!f.startDate) return { error: 'Date is required' };
-	const start = dateTimeToNs(f.startDate, f.allDay ? '00:00' : f.startTime);
+	let start = dateTimeToNs(f.startDate, f.allDay ? '00:00' : f.startTime);
 	let end = f.endDate ? dateTimeToNs(f.endDate, f.allDay ? '23:59' : f.endTime) : undefined;
 	if (end !== undefined && end < start)
 		end = start + (editing?.end_at && editing.end_at > editing.start_at ? editing.end_at - editing.start_at : 0);
+	if (editing?.instance_id && seriesStartAt !== undefined) {
+		const offset = seriesStartAt - editing.start_at;
+		start += offset;
+		if (end !== undefined) end += offset;
+	}
 	return {
 		form: {
 			calendar_id: f.calendarId,

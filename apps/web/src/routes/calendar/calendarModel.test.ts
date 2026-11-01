@@ -124,6 +124,40 @@ describe('event form', () => {
 	});
 });
 
+describe('editing one occurrence of a repeating event', () => {
+	// A daily series that began 1 Oct, opened from its 20 Oct occurrence.
+	const seriesStart = ns(at(2026, 9, 1, 9));
+	const occurrence = ev(at(2026, 9, 20, 9), at(2026, 9, 20, 9, 30), {
+		id: 's1',
+		rrule: 'FREQ=DAILY',
+		instance_id: `s1_${ns(at(2026, 9, 20, 9))}`
+	});
+
+	it('a rename keeps the series start (#318)', () => {
+		const f = { ...eventFields(occurrence, '', null), title: 'Renamed' };
+		const out = eventPayload(f, occurrence, seriesStart);
+		expect('form' in out && out.form).toMatchObject({
+			title: 'Renamed',
+			start_at: seriesStart,
+			end_at: ns(at(2026, 9, 1, 9, 30)),
+			rrule: 'FREQ=DAILY'
+		});
+	});
+	it('a new time moves every occurrence by the same amount', () => {
+		const f = { ...eventFields(occurrence, '', null), startTime: '10:00', endTime: '11:00' };
+		const out = eventPayload(f, occurrence, seriesStart);
+		expect('form' in out && out.form).toMatchObject({
+			start_at: ns(at(2026, 9, 1, 10)),
+			end_at: ns(at(2026, 9, 1, 11))
+		});
+	});
+	it('a stored event (no occurrence) is saved as the form says', () => {
+		const stored = { ...occurrence, instance_id: undefined };
+		const out = eventPayload(eventFields(stored, '', null), stored, seriesStart);
+		expect('form' in out && out.form.start_at).toBe(ns(at(2026, 9, 20, 9)));
+	});
+});
+
 describe('calendars and automations', () => {
 	it('new events go to the default calendar, never the scheduled-tasks one', () => {
 		expect(
