@@ -1128,7 +1128,11 @@ async def _merge_chat_params(form_data: dict, model_info) -> dict:
         default_model_params,
         model_info.params.model_dump() if model_info and model_info.params else {},
     )
-    request_params = {key: value for key, value in (form_data.get('params') or {}).items() if value is not None}
+    # "" is a cleared field (chat params saved before #200's fix still hold
+    # it, and the tool-approval resume sends them as stored): not a value.
+    request_params = {
+        key: value for key, value in (form_data.get('params') or {}).items() if value is not None and value != ''
+    }
     if model_info_params or request_params:
         form_data['params'] = merge_model_params(model_info_params, request_params)
     return model_info_params
