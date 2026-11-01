@@ -334,7 +334,8 @@ async def _resolve_model_defaults(
         from local_llm.utils.models import get_all_models
 
         try:
-            await get_all_models(_build_request(app, token=token), user=user)
+            request = _build_request(app, token=token)
+            await (get_all_models(request, user=user) if user else get_all_models(request))
         except Exception as e:
             log.warning('Automation: could not load models for %s: %s', model_id, e)
         models = getattr(app.state, 'MODELS', {}) or {}
