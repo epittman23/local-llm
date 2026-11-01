@@ -130,13 +130,37 @@ export function withServerGrants<T extends { access_grants?: AccessGrant[] }>(
 	return Array.isArray(res?.access_grants) ? { ...note, access_grants: res.access_grants } : note;
 }
 
-/** Sends a note's new grants and caches what the server stored; a failed update leaves the cache as it was. */
+// The latest access save per note. A reply to an older save is not cached: the
+// dialog builds each edit on the cached grants and the server replaces them
+// wholesale, so only the newest request says what is stored.
+const accessSaves = new Map<string, number>();
+
+const grantKey = (g: AccessGrant) => `${g.principal_type}:${g.principal_id}:${g.permission}`;
+
+/**
+ * Sends a note's new grants. The cache shows them at once, so a second edit
+ * made before the reply builds on the first; the latest reply then replaces
+ * them with what the server stored, and a failed latest save restores the
+ * grants from before it. Warns, instead of saying Saved, when the server
+ * dropped a grant this user may not set.
+ */
 export async function saveNoteAccess(queryClient: QueryClient, token: string, id: string, grants: AccessGrant[]) {
+	type Cached = { access_grants?: AccessGrant[] };
+	const key = ['notes', 'item', id];
+	const seq = (accessSaves.get(id) ?? 0) + 1;
+	accessSaves.set(id, seq);
+	const previous = queryClient.getQueryData<Cached>(key)?.access_grants;
+	queryClient.setQueryData<Cached>(key, (old) => old && { ...old, access_grants: grants });
+
 	const res = await updateNoteAccessGrants(token, id, grants).catch((e) => void toast.error(`${e}`));
-	if (!res) return;
-	queryClient.setQueryData<{ access_grants?: AccessGrant[] }>(
-		['notes', 'item', id],
-		(old) => old && withServerGrants(old, res)
-	);
-	toast.success('Saved');
+	const latest = accessSaves.get(id) === seq;
+	if (!res) {
+		if (latest) queryClient.setQueryData<Cached>(key, (old) => old && { ...old, access_grants: previous });
+		return;
+	}
+	if (latest) queryClient.setQueryData<Cached>(key, (old) => old && withServerGrants(old, res));
+	const stored = Array.isArray(res.access_grants) ? new Set(res.access_grants.map(grantKey)) : null;
+	if (stored && grants.some((g) => !stored.has(grantKey(g))))
+		toast.warning('Some access settings were not saved: you are not allowed to share this way.');
+	else toast.success('Saved');
 }

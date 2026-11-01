@@ -18,7 +18,7 @@ import {
 } from './notesModel';
 
 vi.mock('@/lib/apis/notes', () => ({ updateNoteAccessGrants: vi.fn() }));
-const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
+const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), warning: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
 
 const ns = (d: Date) => d.getTime() * 1_000_000;
@@ -145,7 +145,10 @@ describe('saving access', () => {
 		await saveNoteAccess(client, 'tok', 'n', publicRead);
 		expect(updateNoteAccessGrants).toHaveBeenLastCalledWith('tok', 'n', publicRead);
 		expect(cached(client)).toEqual({ id: 'n', title: 'T', access_grants: [] });
-		expect(toast.success).toHaveBeenCalledWith('Saved');
+		expect(toast.warning).toHaveBeenCalledWith(
+			'Some access settings were not saved: you are not allowed to share this way.'
+		);
+		expect(toast.success).not.toHaveBeenCalled();
 	});
 	it('keeps the old grants when the update fails', async () => {
 		const client = setup();
@@ -155,10 +158,76 @@ describe('saving access', () => {
 		expect(toast.error).toHaveBeenCalledWith('Not allowed');
 		expect(toast.success).not.toHaveBeenCalled();
 	});
-	it('caches a grant the server kept', async () => {
+	it('caches a grant the server kept and says Saved', async () => {
 		const client = setup();
-		vi.mocked(updateNoteAccessGrants).mockResolvedValueOnce({ id: 'n', access_grants: publicRead });
+		// The stored rows carry ids and resource fields; they match the sent grants by principal and permission.
+		const stored = [{ ...publicRead[0], id: 'g1', resource_type: 'note', resource_id: 'n' }];
+		vi.mocked(updateNoteAccessGrants).mockResolvedValueOnce({ id: 'n', access_grants: stored });
 		await saveNoteAccess(client, 'tok', 'n', publicRead);
-		expect(cached(client)?.access_grants).toEqual(publicRead);
+		expect(cached(client)?.access_grants).toEqual(stored);
+		expect(toast.success).toHaveBeenCalledWith('Saved');
+		expect(toast.warning).not.toHaveBeenCalled();
+	});
+
+	const deferred = () => {
+		let resolve!: (v: unknown) => void;
+		let reject!: (e: unknown) => void;
+		const promise = new Promise((res, rej) => {
+			resolve = res;
+			reject = rej;
+		});
+		return { promise, resolve, reject };
+	};
+	const group = { principal_type: 'group' as const, principal_id: 'g', permission: 'read' as const };
+
+	it('shows the sent grants at once, so the next edit builds on them', async () => {
+		const client = setup();
+		const a = deferred();
+		vi.mocked(updateNoteAccessGrants).mockReturnValueOnce(a.promise);
+		const saving = saveNoteAccess(client, 'tok', 'n', [group]);
+		expect(cached(client)?.access_grants).toEqual([group]);
+		a.resolve({ id: 'n', access_grants: [group] });
+		await saving;
+		expect(cached(client)?.access_grants).toEqual([group]);
+	});
+	it('overlapping saves: only the latest response lands in the cache', async () => {
+		const client = setup();
+		const a = deferred();
+		const b = deferred();
+		vi.mocked(updateNoteAccessGrants).mockReturnValueOnce(a.promise).mockReturnValueOnce(b.promise);
+		const saveA = saveNoteAccess(client, 'tok', 'n', [group]);
+		const saveB = saveNoteAccess(client, 'tok', 'n', [group, ...publicRead]);
+		expect(cached(client)?.access_grants).toEqual([group, ...publicRead]);
+		// B answers first, then the older A: A's reply must not overwrite B's.
+		b.resolve({ id: 'n', access_grants: [group, ...publicRead] });
+		await saveB;
+		a.resolve({ id: 'n', access_grants: [group] });
+		await saveA;
+		expect(cached(client)?.access_grants).toEqual([group, ...publicRead]);
+	});
+	it('a failed save restores the previous grants', async () => {
+		const client = setup();
+		const a = deferred();
+		vi.mocked(updateNoteAccessGrants).mockReturnValueOnce(a.promise);
+		const saving = saveNoteAccess(client, 'tok', 'n', [group]);
+		expect(cached(client)?.access_grants).toEqual([group]);
+		a.reject('Server error');
+		await saving;
+		expect(cached(client)?.access_grants).toEqual([]);
+		expect(toast.error).toHaveBeenCalledWith('Server error');
+	});
+	it('an older save failing does not undo a newer one', async () => {
+		const client = setup();
+		const a = deferred();
+		const b = deferred();
+		vi.mocked(updateNoteAccessGrants).mockReturnValueOnce(a.promise).mockReturnValueOnce(b.promise);
+		const saveA = saveNoteAccess(client, 'tok', 'n', [group]);
+		const saveB = saveNoteAccess(client, 'tok', 'n', [group, ...publicRead]);
+		a.reject('Server error');
+		await saveA;
+		expect(cached(client)?.access_grants).toEqual([group, ...publicRead]);
+		b.resolve({ id: 'n', access_grants: [group, ...publicRead] });
+		await saveB;
+		expect(cached(client)?.access_grants).toEqual([group, ...publicRead]);
 	});
 });
