@@ -2599,11 +2599,13 @@ async def query_chat_files(
         )
 
         chunks = []
+        pinned = set()  # ids of chunks from a file attached in full
         for source in sources or []:
             documents = source.get('document') or []
             metadatas = source.get('metadata') or []
             distances = source.get('distances') or []
             source_info = source.get('source') or {}
+            whole_file = source_info.get('context') == 'full'
 
             for idx, doc in enumerate(documents):
                 metadata = metadatas[idx] if idx < len(metadatas) and isinstance(metadatas[idx], dict) else {}
@@ -2614,8 +2616,20 @@ async def query_chat_files(
                 }
                 if idx < len(distances):
                     chunk['distance'] = distances[idx]
+                if whole_file:
+                    pinned.add(id(chunk))
                 chunks.append(chunk)
 
+        # Each file was searched on its own and comes back in attachment
+        # order, so rank every file's hits together before keeping `count`
+        # (higher scores are better, as everywhere in retrieval) (#177). A
+        # file attached in full is a whole document, not a hit: it goes
+        # first, in attachment order, as it did before. The sort is stable.
+        if not full_context:
+            chunks.sort(
+                key=lambda c: (id(c) in pinned, c.get('distance') is not None, c.get('distance') or 0.0),
+                reverse=True,
+            )
         return JSONCodec.dumps(chunks[:count], ensure_ascii=False)
     except Exception as e:
         log.exception(f'query_chat_files error: {e}')
