@@ -3,6 +3,7 @@ import {
 	KB_DIR_MOVE,
 	KB_FILE_MOVE,
 	announceContentSaved,
+	clampPage,
 	createMissingDirectories,
 	filesToUpload,
 	getDirectoryUploadPath,
@@ -183,5 +184,19 @@ describe('gatherDroppedFiles', () => {
 		);
 		expect(got).toBeNull();
 		expect(onError).toHaveBeenCalledWith(new Error('denied'));
+	});
+});
+
+describe('clampPage', () => {
+	it('keeps a page the list still reaches', () => {
+		expect(clampPage(2, 31, 30)).toBe(2);
+		expect(clampPage(1, 31, 30)).toBe(1);
+	});
+	it('pulls a page past the end back to the last page', () => {
+		expect(clampPage(2, 30, 30)).toBe(1);
+		expect(clampPage(5, 61, 30)).toBe(3);
+	});
+	it('falls back to page 1 for an empty list', () => {
+		expect(clampPage(3, 0, 30)).toBe(1);
 	});
 });
