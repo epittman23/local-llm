@@ -1583,29 +1583,34 @@ async def download_file_stream(
                 progress = round((current_size / progress_total) * 100, 2)
                 yield f'data: {{"progress": {progress}, "completed": {current_size}, "total": {total_size}}}\n\n'
 
-            done = True
-            hashed = await asyncio.to_thread(calculate_sha256, file_path, chunk_size)
+        # Hash and push only once the file is closed: inside the writer its
+        # last buffered bytes are not on disk yet, and Ollama accepts a
+        # truncated blob whose digest matches the truncated bytes (#340).
+        blob_size = await asyncio.to_thread(os.path.getsize, file_path)
+        if total_size and blob_size < total_size:
+            # Keep the partial file: the next attempt resumes from it.
+            raise RuntimeError(f'Download incomplete: {blob_size} of {total_size} bytes. Please try again.')
 
-            blob_url = f'{ollama_url}/api/blobs/sha256:{hashed}'
-            blob_size = await asyncio.to_thread(os.path.getsize, file_path)
+        hashed = await asyncio.to_thread(calculate_sha256, file_path, chunk_size)
+        blob_url = f'{ollama_url}/api/blobs/sha256:{hashed}'
 
-            async def blob_chunks():
-                async with aiofiles.open(file_path, 'rb') as blob_file:
-                    while chunk := await blob_file.read(chunk_size):
-                        yield chunk
+        async def blob_chunks():
+            async with aiofiles.open(file_path, 'rb') as blob_file:
+                while chunk := await blob_file.read(chunk_size):
+                    yield chunk
 
-            async with session.post(
-                blob_url,
-                data=blob_chunks(),
-                headers={'Content-Length': str(blob_size)},
-                ssl=AIOHTTP_CLIENT_SESSION_SSL,
-                timeout=aiohttp.ClientTimeout(total=30),
-            ) as blob_resp:
-                if blob_resp.ok:
-                    await asyncio.to_thread(os.remove, file_path)
-                    yield f'data: {JSONCodec.dumps({"done": done, "blob": f"sha256:{hashed}", "name": file_name})}\n\n'
-                else:
-                    raise RuntimeError('Ollama: Could not create blob, Please try again.')
+        async with session.post(
+            blob_url,
+            data=blob_chunks(),
+            headers={'Content-Length': str(blob_size)},
+            ssl=AIOHTTP_CLIENT_SESSION_SSL,
+            timeout=aiohttp.ClientTimeout(total=30),
+        ) as blob_resp:
+            if blob_resp.ok:
+                await asyncio.to_thread(os.remove, file_path)
+                yield f'data: {JSONCodec.dumps({"done": True, "blob": f"sha256:{hashed}", "name": file_name})}\n\n'
+            else:
+                raise RuntimeError('Ollama: Could not create blob, Please try again.')
 
 
 @router.post('/models/download')
