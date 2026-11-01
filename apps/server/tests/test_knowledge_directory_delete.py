@@ -9,7 +9,7 @@ the single-file remove and the sync cleanup do: vectors by file_id and
 hash, and the File row unless another knowledge base still links it.
 
 Runs against the suite's temporary SQLite database (tests/conftest.py points
-DATA_DIR at a temp directory, and DATABASE_URL defaults to a file in it),
+DATA_DIR at a temp directory, and DATABASE_URL defaults to a file in it, migrated on import),
 with the vector client and file storage replaced by recorders.
 
 Run from apps/server:
@@ -18,35 +18,34 @@ Run from apps/server:
 """
 
 import asyncio
-import importlib
-import pkgutil
 import uuid
 from types import SimpleNamespace
 
-import local_llm.models as models_pkg
-from local_llm.internal.db import Base, async_engine
+import pytest
+from fastapi import HTTPException
+
 from local_llm.models.files import FileForm, Files
 from local_llm.models.knowledge import KnowledgeForm, Knowledges
 from local_llm.models.users import Users
 from local_llm.routers import knowledge as knowledge_router
 
-for module in pkgutil.iter_modules(models_pkg.__path__):
-    importlib.import_module(f'local_llm.models.{module.name}')
-
 
 class VectorRecorder:
-    def __init__(self):
+    def __init__(self, failing: set[str] = frozenset()):
         self.deleted: list[tuple[str, dict]] = []
+        self.failing = failing
 
     async def delete(self, collection_name, ids=None, filter=None):
+        if filter and filter.get('file_id') in self.failing:
+            raise RuntimeError('vector store unavailable')
         self.deleted.append((collection_name, filter))
 
     async def has_collection(self, collection_name):
         return False
 
 
-def _setup(monkeypatch):
-    vectors = VectorRecorder()
+def _setup(monkeypatch, vectors=None):
+    vectors = vectors or VectorRecorder()
     removed_paths: list[str] = []
 
     async def publish(*_a, **_k):
@@ -59,8 +58,6 @@ def _setup(monkeypatch):
 
 
 async def _world():
-    async with async_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
     tag = uuid.uuid4().hex[:8]
     user = await Users.insert_new_user(f'u{tag}', 'Ada', f'u{tag}@example.invalid', role='user')
     kb = await Knowledges.insert_new_knowledge(user.id, KnowledgeForm(name='Notes', description=''))
@@ -136,6 +133,66 @@ def test_sync_cleanup_of_a_directory_still_holding_files_removes_their_chunks(mo
 
     assert linked == {files['outside'].id}
     assert (kb.id, {'file_id': files['in_child'].id}) in vectors.deleted
+
+
+def test_a_collaborator_removes_the_chunks_but_not_the_owners_files(monkeypatch):
+    vectors, removed_paths = _setup(monkeypatch)
+
+    async def scenario():
+        owner, kb, top, files = await _world()
+        collaborator = SimpleNamespace(id='someone-else', role='user')
+        monkeypatch.setattr(knowledge_router, '_verify_knowledge_write_access', _allowed)
+        await knowledge_router.delete_knowledge_directory(
+            None, kb.id, top.id, move_files=False, user=collaborator, db=None
+        )
+        return kb, files, {name: await Files.get_file_by_id(f.id) for name, f in files.items()}
+
+    kb, files, rows = _run(scenario())
+
+    assert (kb.id, {'file_id': files['in_top'].id}) in vectors.deleted
+    assert all(row is not None for row in rows.values())
+    assert removed_paths == []
+
+
+def test_with_retention_on_the_files_are_kept(monkeypatch):
+    vectors, removed_paths = _setup(monkeypatch)
+    monkeypatch.setattr(knowledge_router, 'ENABLE_KNOWLEDGE_FILE_RETENTION', True)
+
+    async def scenario():
+        user, kb, top, files = await _world()
+        await knowledge_router.delete_knowledge_directory(None, kb.id, top.id, move_files=False, user=user, db=None)
+        return files, {name: await Files.get_file_by_id(f.id) for name, f in files.items()}
+
+    files, rows = _run(scenario())
+
+    assert (len(vectors.deleted), removed_paths) == (6, [])
+    assert all(row is not None for row in rows.values())
+
+
+def test_a_file_whose_chunks_cannot_be_deleted_stays_listed(monkeypatch):
+    state = {}
+
+    async def scenario():
+        user, kb, top, files = await _world()
+        state['vectors'], _ = _setup(monkeypatch, VectorRecorder(failing={files['in_top'].id}))
+        with pytest.raises(HTTPException) as refused:
+            await knowledge_router.delete_knowledge_directory(None, kb.id, top.id, move_files=False, user=user, db=None)
+        assert refused.value.status_code == 500
+        assert await Knowledges.get_directory_by_id(top.id) is not None
+        return (
+            files,
+            {f.id for f in await Knowledges.get_files_by_id(kb.id)},
+            await Files.get_file_by_id(files['in_top'].id),
+        )
+
+    files, linked, row = _run(scenario())
+
+    assert linked == {files['in_top'].id, files['outside'].id}
+    assert row is not None
+
+
+async def _allowed(*_a, **_k):
+    return None
 
 
 def _run(coro):

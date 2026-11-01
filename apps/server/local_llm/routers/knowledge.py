@@ -1958,12 +1958,14 @@ async def sync_knowledge_diff(
 ############################
 
 
-async def _remove_files_from_knowledge(knowledge_id: str, file_ids: list[str], user, db: AsyncSession) -> None:
+async def _remove_files_from_knowledge(knowledge_id: str, file_ids: list[str], user, db: AsyncSession) -> list[str]:
     """Unlink files from a knowledge base and drop their chunks from its collection.
 
     A file's own row and stored bytes go too, unless retention is on, another
     knowledge base still links it, or the user neither owns it nor is an admin.
+    Returns the files kept because their chunks could not be deleted.
     """
+    kept: list[str] = []
     for file_id in file_ids:
         file = await Files.get_file_by_id(file_id, db=db)
         if not file:
@@ -1973,13 +1975,17 @@ async def _remove_files_from_knowledge(knowledge_id: str, file_ids: list[str], u
         if not await Knowledges.has_file(knowledge_id, file_id, db=db):
             continue
 
-        await Knowledges.remove_file_from_knowledge_by_id(knowledge_id, file_id, db=db)
-
+        # Chunks first: if they cannot be deleted, the link stays, so the file
+        # is still listed and the removal can be retried (#195).
         try:
             await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=knowledge_id, filter={'file_id': file_id})
             await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=knowledge_id, filter={'hash': file.hash})
-        except Exception:
-            pass
+        except Exception as e:
+            log.warning('Kept file %s in knowledge %s: deleting its chunks failed: %s', file_id, knowledge_id, e)
+            kept.append(file_id)
+            continue
+
+        await Knowledges.remove_file_from_knowledge_by_id(knowledge_id, file_id, db=db)
 
         linked_knowledges = await Knowledges.get_knowledges_by_file_id(file_id, db=db)
         if (
@@ -1988,6 +1994,7 @@ async def _remove_files_from_knowledge(knowledge_id: str, file_ids: list[str], u
             and (file.user_id == user.id or user.role == 'admin')
         ):
             await delete_file_resource(file, db)
+    return kept
 
 
 class SyncCleanupForm(BaseModel):
@@ -2017,10 +2024,10 @@ async def sync_knowledge_cleanup(
         directory = await Knowledges.get_directory_by_id(dir_id, db=db)
         if not directory or directory.knowledge_id != id:
             continue
-        await _remove_files_from_knowledge(
-            id, await Knowledges.get_file_ids_in_directory_subtree(dir_id, db=db), user, db
-        )
-        await Knowledges.delete_directory(dir_id, move_files_to_parent=False, db=db)
+        subtree = await Knowledges.get_file_ids_in_directory_subtree(dir_id, db=db)
+        # A directory still holding a file whose chunks stayed is left for the next sync.
+        if not await _remove_files_from_knowledge(id, subtree, user, db):
+            await Knowledges.delete_directory(dir_id, move_files_to_parent=False, db=db)
 
     return {'status': True}
 
@@ -2359,9 +2366,14 @@ async def delete_knowledge_directory(
     if not move_files:
         # Removing only the links would leave the files' chunks in the
         # collection, still retrieved but no longer removable (#195).
-        await _remove_files_from_knowledge(
-            id, await Knowledges.get_file_ids_in_directory_subtree(dir_id, db=db), user, db
-        )
+        subtree = await Knowledges.get_file_ids_in_directory_subtree(dir_id, db=db)
+        if kept := await _remove_files_from_knowledge(id, subtree, user, db):
+            # Deleting the directory now would drop these files' links and
+            # strand their chunks; keep it so the delete can be retried.
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f'Could not delete the content of {len(kept)} file(s); the directory was kept. Try again.',
+            )
 
     success = await Knowledges.delete_directory(
         directory_id=dir_id,
