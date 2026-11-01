@@ -101,6 +101,12 @@ def _parse_rule(s: str, now: dt.datetime | None = None):
     }.get(rule._freq)
 
     if step is None:
+        if not has_dtstart:
+            # dateutil would start the rule at the server's local now; the
+            # next run is asked for after the user's, so with the user
+            # behind the server today's later runs were skipped. Start at the
+            # user's now, on the minute, so an unset BYSECOND is 0 (#266).
+            return rrulestr(stripped, dtstart=anchor.replace(second=0, microsecond=0), ignoretz=True)
         if not rule._dtstart.tzinfo:
             return parsed
         return rrulestr(stripped, dtstart=start, ignoretz=True)
