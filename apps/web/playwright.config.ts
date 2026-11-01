@@ -4,6 +4,11 @@ export default defineConfig({
 	testDir: './e2e',
 	globalTeardown: './e2e/global-teardown.ts',
 	fullyParallel: true,
+	// Two workers, here and in CI alike: at Playwright's default (half the
+	// cores) a cold `astro dev` server can't answer that many browsers in
+	// time on a many-core machine, and redirect assertions miss their 5 s
+	// timeouts. Pinned in this file so `make test-e2e` and CI run the same.
+	workers: 2,
 	forbidOnly: !!process.env.CI,
 	retries: process.env.CI ? 2 : 0,
 	reporter: 'list',
