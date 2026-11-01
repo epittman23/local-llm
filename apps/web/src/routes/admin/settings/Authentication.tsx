@@ -105,10 +105,10 @@ function UserAccess({ admin, set, groups }: { admin: Rec; set: (p: Rec) => void;
 				set={set}
 				name="JWT_EXPIRES_IN"
 				label="JWT Expiration"
-				description="Valid time units: 's', 'm', 'h', 'd', 'w' or '-1' for no expiration."
+				description="At least a minute, as numbers with units 'ms', 's', 'm', 'h', 'd' or 'w' (such as '1d12h'); or '-1' for no expiration."
 				placeholder={`e.g.) "30m","1h", "10d". `}
 			>
-				{admin.JWT_EXPIRES_IN === '-1' && (
+				{(admin.JWT_EXPIRES_IN === '-1' || admin.JWT_EXPIRES_IN === '0') && (
 					<a
 						className={`${warnClass} underline`}
 						href="https://docs.openwebui.com/reference/env-configuration#jwt_expires_in"
