@@ -2841,7 +2841,10 @@ async def view_file(
             return JSONCodec.dumps(result, ensure_ascii=False)
 
         sliced = content[offset : offset + max_chars]
-        is_truncated = (offset + len(sliced)) < total_chars
+        # Measured before line numbers are added: the "12: " prefixes once
+        # pushed next_offset past text never returned (#178).
+        returned = len(sliced)
+        is_truncated = (offset + returned) < total_chars
 
         if line_numbers:
             start_ln = content[:offset].count('\n') + 1
@@ -2859,10 +2862,10 @@ async def view_file(
         if is_truncated or offset > 0:
             result['truncated'] = is_truncated
             result['total_chars'] = total_chars
-            result['returned_chars'] = len(sliced)
+            result['returned_chars'] = returned
             result['offset'] = offset
             if is_truncated:
-                result['next_offset'] = offset + len(sliced)
+                result['next_offset'] = offset + returned
 
         return JSONCodec.dumps(result, ensure_ascii=False)
     except Exception as e:
@@ -2984,7 +2987,10 @@ async def view_knowledge_file(
             return JSONCodec.dumps(result, ensure_ascii=False)
 
         sliced = content[offset : offset + max_chars]
-        is_truncated = (offset + len(sliced)) < total_chars
+        # Measured before line numbers are added: the "12: " prefixes once
+        # pushed next_offset past text never returned (#178).
+        returned = len(sliced)
+        is_truncated = (offset + returned) < total_chars
 
         if line_numbers:
             start_ln = content[:offset].count('\n') + 1
@@ -3005,10 +3011,10 @@ async def view_knowledge_file(
         if is_truncated or offset > 0:
             result['truncated'] = is_truncated
             result['total_chars'] = total_chars
-            result['returned_chars'] = len(sliced)
+            result['returned_chars'] = returned
             result['offset'] = offset
             if is_truncated:
-                result['next_offset'] = offset + len(sliced)
+                result['next_offset'] = offset + returned
 
         return JSONCodec.dumps(result, ensure_ascii=False)
     except Exception as e:
