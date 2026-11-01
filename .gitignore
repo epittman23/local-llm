@@ -240,3 +240,7 @@ __marimo__/
 # Claude Code's personal settings (permission allowlists); .claude/skills/
 # and .claude/agents/ are tracked
 .claude/settings.local.json
+
+# oh-my-claudecode (Claude Code plugin) runtime state: .omc/ directories at
+# any depth
+*.omc

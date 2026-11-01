@@ -453,6 +453,9 @@ knowing about when navigating the filesystem directly:
   allowlists), `worktrees/` (agent
   checkouts), both gitignored, and scheduled task locks, which are not. `.claude/skills/` and
   `.claude/agents/` beside them **are** tracked (see above).
+- **`.omc/`** — runtime state written by the oh-my-claudecode Claude Code
+  plugin (session state, notepads, project memory), at the root and in any
+  subdirectory a session ran from; gitignored.
 - **`logs/`** — local logs. On a checkout that has one,
   `llama.db.retired-<date>` is the old SQLite store from before 2026-09-08;
   its Postgres backfill was lost with the old database on 2026-10-09, so that
