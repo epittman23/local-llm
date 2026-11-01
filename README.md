@@ -65,7 +65,7 @@ first run pulls their images, about 5.8 GB together.
 > `make backend`, so migrations don't create an empty schema first:
 >
 > ```bash
-> docker compose -f infra/docker-compose.yml up -d postgres
+> docker compose -f infra/docker-compose.yml up -d --wait postgres
 > docker exec -i local-llm-postgres pg_restore --no-owner --role=local_llm \
 >   -U local_llm -d local_llm < local-llm-<date>.dump
 > ```
@@ -83,7 +83,8 @@ make backend
 
 which brings up Postgres, Redis, Jupyter and SearXNG (`infra/docker-compose.yml`) and the
 backend (`uvicorn`, port `4000`) together, and tears them back down when the
-backend stops (Ctrl-C included). Each stage prints a `==> ` line as it
+backend stops (Ctrl-C included). It waits for Postgres's healthcheck before
+starting the backend, which runs its migrations at startup. Each stage prints a `==> ` line as it
 starts. uvicorn runs with `--reload` unless `LLLM_UVICORN_FLAGS` replaces it:
 `make backend LLLM_UVICORN_FLAGS='--timeout-graceful-shutdown 10'` gives a
 backend that doesn't reload and whose shutdown can't hang on an open stream.
