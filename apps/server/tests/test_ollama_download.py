@@ -52,7 +52,7 @@ def _serve_and_download(monkeypatch, tmp_path, blob_status=201):
         await runner.setup()
         site = web.TCPSite(runner, '127.0.0.1', 0)
         await site.start()
-        port = site._server.sockets[0].getsockname()[1]
+        port = runner.addresses[0][1]
         session = aiohttp.ClientSession(trust_env=False)
 
         async def fresh_session():

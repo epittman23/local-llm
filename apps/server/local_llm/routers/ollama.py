@@ -1585,12 +1585,10 @@ async def download_file_stream(
 
         # Hash and push only once the file is closed: inside the writer its
         # last buffered bytes are not on disk yet, and Ollama accepts a
-        # truncated blob whose digest matches the truncated bytes (#340).
+        # truncated blob whose digest matches the truncated bytes (#340). A
+        # body shorter than its Content-Length already raised in the read
+        # above, leaving the partial file to resume from.
         blob_size = await asyncio.to_thread(os.path.getsize, file_path)
-        if total_size and blob_size < total_size:
-            # Keep the partial file: the next attempt resumes from it.
-            raise RuntimeError(f'Download incomplete: {blob_size} of {total_size} bytes. Please try again.')
-
         hashed = await asyncio.to_thread(calculate_sha256, file_path, chunk_size)
         blob_url = f'{ollama_url}/api/blobs/sha256:{hashed}'
 
