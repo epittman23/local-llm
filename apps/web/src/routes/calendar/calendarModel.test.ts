@@ -124,6 +124,54 @@ describe('event form', () => {
 	});
 });
 
+describe('clearing a field of an existing event (#158)', () => {
+	it('sends null, so the update removes it rather than keeping the old value', () => {
+		const old = ev(at(2026, 8, 1, 9), at(2026, 8, 1, 10), {
+			rrule: 'FREQ=WEEKLY',
+			description: 'Agenda',
+			location: 'Room 4'
+		});
+		const f = { ...eventFields(old, '', null), repeat: '', description: ' ', location: '', endDate: '' };
+		const out = eventPayload(f, old);
+		expect('form' in out && out.form).toMatchObject({
+			rrule: null,
+			description: null,
+			location: null,
+			end_at: null
+		});
+	});
+	it('a repeat rule the menu cannot show is kept through an edit', () => {
+		const biweekly = ev(at(2026, 8, 1, 9), at(2026, 8, 1, 10), { rrule: 'FREQ=WEEKLY;INTERVAL=2' });
+		const renamed = eventPayload({ ...eventFields(biweekly, '', null), title: 'Renamed' }, biweekly);
+		expect('form' in renamed && renamed.form.rrule).toBeUndefined();
+		// Also from one of its occurrences, which saves the series at its own start.
+		const occurrence = {
+			...biweekly,
+			start_at: ns(at(2026, 8, 15, 9)),
+			end_at: ns(at(2026, 8, 15, 10)),
+			instance_id: 'x'
+		};
+		const out = eventPayload(
+			{ ...eventFields(occurrence, '', null), title: 'Renamed' },
+			occurrence,
+			ns(at(2026, 8, 1, 9))
+		);
+		expect('form' in out && out.form).toMatchObject({ rrule: undefined, start_at: ns(at(2026, 8, 1, 9)) });
+	});
+	it('clearing Repeat on an occurrence makes it one event at that occurrence', () => {
+		const daily = ev(at(2026, 8, 20, 9), at(2026, 8, 20, 10), { rrule: 'FREQ=DAILY', instance_id: 'x' });
+		const out = eventPayload({ ...eventFields(daily, '', null), repeat: '' }, daily, ns(at(2026, 8, 1, 9)));
+		expect('form' in out && out.form).toMatchObject({ rrule: null, start_at: ns(at(2026, 8, 20, 9)) });
+	});
+	it('a new event leaves blank fields out', () => {
+		const f = { ...eventFields(null, 'cal', ns(at(2026, 8, 1, 9))), title: 'x', endDate: '' };
+		const out = eventPayload(f, null);
+		const form = 'form' in out ? out.form : {};
+		for (const key of ['rrule', 'description', 'location', 'end_at'])
+			expect((form as Record<string, unknown>)[key]).toBeUndefined();
+	});
+});
+
 describe('editing one occurrence of a repeating event', () => {
 	// A daily series that began 1 Oct, opened from its 20 Oct occurrence.
 	const seriesStart = ns(at(2026, 9, 1, 9));
