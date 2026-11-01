@@ -231,7 +231,9 @@ export function eventPayload(
 			start_at: start,
 			end_at: end ?? blank,
 			all_day: f.allDay,
-			rrule: REPEAT_RRULES[f.repeat] || blank,
+			// A rule the Repeat menu cannot show opens as "No Repeat"; leave it out
+			// so the update keeps it, rather than clearing it on any edit.
+			rrule: REPEAT_RRULES[f.repeat] || (editing?.rrule && !repeatFromRrule(editing.rrule) ? undefined : blank),
 			location: f.location.trim() || blank,
 			meta: { alert_minutes: f.alertMinutes }
 		}
