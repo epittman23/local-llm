@@ -7,7 +7,7 @@ start, counted in `total` and pushed the real in-range events past `count`
 (#176).
 
 Runs against the suite's temporary SQLite database (tests/conftest.py points
-DATA_DIR at a temp directory, and DATABASE_URL defaults to a file in it).
+DATA_DIR at a temp directory, and DATABASE_URL defaults to a file in it, migrated on import).
 
 Run from apps/server:
 
@@ -16,21 +16,17 @@ Run from apps/server:
 
 import asyncio
 import datetime as dt
-import importlib
 import json
-import pkgutil
 import uuid
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
-import local_llm.models as models_pkg
-from local_llm.internal.db import Base, async_engine
-from local_llm.models.calendar import CalendarEventForm, CalendarEvents, CalendarForm, Calendars
+from sqlalchemy import update
+
+from local_llm.internal.db import get_async_db_context
+from local_llm.models.calendar import CalendarEvent, CalendarEventForm, CalendarEvents, CalendarForm, Calendars
 from local_llm.models.users import Users
 from local_llm.tools import builtin
-
-for module in pkgutil.iter_modules(models_pkg.__path__):
-    importlib.import_module(f'local_llm.models.{module.name}')
 
 TZ = 'Europe/Berlin'
 REQUEST = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
@@ -40,15 +36,18 @@ def _ns(text: str) -> int:
     return int(dt.datetime.fromisoformat(text).replace(tzinfo=ZoneInfo(TZ)).timestamp()) * 1_000_000_000
 
 
-def _search(events: list[dict], **kwargs) -> dict:
+def _search(events: list[dict], broken_rrule: str | None = None, **kwargs) -> dict:
     async def go():
-        async with async_engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
         tag = uuid.uuid4().hex[:8]
         user = await Users.insert_new_user(f'u{tag}', 'Ada', f'u{tag}@example.invalid', role='user')
         cal = await Calendars.insert_new_calendar(user.id, CalendarForm(name='Mine'))
         for event in events:
-            await CalendarEvents.insert_new_event(user.id, CalendarEventForm(calendar_id=cal.id, **event))
+            stored = await CalendarEvents.insert_new_event(user.id, CalendarEventForm(calendar_id=cal.id, **event))
+            if broken_rrule:
+                # The form refuses a rule that does not parse; older rows may still hold one.
+                async with get_async_db_context() as db:
+                    await db.execute(update(CalendarEvent).filter_by(id=stored.id).values(rrule=broken_rrule))
+                    await db.commit()
         user_dict = {'id': user.id, 'timezone': TZ}
         return json.loads(await builtin.search_calendar_events(__request__=REQUEST, __user__=user_dict, **kwargs))
 
@@ -93,3 +92,28 @@ def test_every_occurrence_in_the_range_is_listed_in_order():
     got = _search([_weekly('Standup')], start='2026-10-01 00:00', end='2026-10-20 00:00')
 
     assert [e['start'] for e in got['events']] == ['2026-10-05 09:00', '2026-10-12 09:00', '2026-10-19 09:00']
+
+
+def test_a_series_whose_rule_cannot_be_expanded_is_judged_by_its_own_row():
+    """The expansion gives back the stored row; it is kept only if that row overlaps the range, like a one-off."""
+    inside = {
+        'title': 'Odd',
+        'start_at': _ns('2026-10-15 09:00'),
+        'end_at': _ns('2026-10-15 10:00'),
+        'rrule': 'FREQ=DAILY',
+    }
+
+    kept = _search([inside], broken_rrule='NOTARULE', start='2026-10-14 00:00', end='2026-10-21 00:00')
+    dropped = _search([_weekly('Odd')], broken_rrule='NOTARULE', start='2026-10-14 00:00', end='2026-10-21 00:00')
+
+    assert [(e['title'], e['start']) for e in kept['events']] == [('Odd', '2026-10-15 09:00')]
+    assert dropped == {'events': [], 'total': 0}
+
+
+def test_without_an_end_a_daily_series_is_listed_for_a_year():
+    daily = {**_weekly('Pills'), 'rrule': 'FREQ=DAILY'}
+
+    got = _search([daily], start='2026-10-14 00:00', count=1)
+
+    assert got['events'][0]['start'] == '2026-10-14 09:00'
+    assert 365 <= got['total'] <= 366
