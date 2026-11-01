@@ -76,8 +76,9 @@ export function SkillEditor({
 				name,
 				description,
 				content,
-				is_active: true,
-				meta: { tags: [] },
+				// Save rewrites every field: keep the skill's own state (#227).
+				is_active: skill?.is_active ?? true,
+				meta: { tags: skill?.meta?.tags ?? [] },
 				access_grants: accessGrants
 			});
 		} finally {
