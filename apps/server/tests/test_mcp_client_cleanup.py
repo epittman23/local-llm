@@ -29,16 +29,18 @@ class _FakeClient:
     async def list_tool_specs(self):
         if self.list_error:
             raise self.list_error
-        return [{'name': 'search', 'description': '', 'parameters': {}}]
+        return [
+            {'name': 'search', 'description': '', 'parameters': {}},
+            {'name': 'fetch', 'description': '', 'parameters': {}},
+        ]
 
     async def disconnect(self):
         self.connected = False
         self.disconnects += 1
 
 
-def test_connect_mcp_server_disconnects_when_listing_tools_fails(monkeypatch):
-    client = _FakeClient(list_error=RuntimeError('tools/list failed'))
-    connection = {'type': 'mcp', 'url': 'http://mcp.test', 'info': {'id': 'docs'}, 'config': {}}
+def _connect(monkeypatch, client, config=None):
+    connection = {'type': 'mcp', 'url': 'http://mcp.test', 'info': {'id': 'docs'}, 'config': config or {}}
 
     async def config_get(key, default=None):
         return [connection]
@@ -53,12 +55,33 @@ def test_connect_mcp_server_disconnects_when_listing_tools_fails(monkeypatch):
     monkeypatch.setattr(middleware, 'has_connection_access', allow)
     monkeypatch.setattr(middleware, 'build_tool_server_headers', headers)
     monkeypatch.setattr(middleware, 'MCPClient', lambda: client)
+    return asyncio.run(middleware.connect_mcp_server(None, 'docs', SimpleNamespace(id='u1'), {}, {}))
 
-    with pytest.raises(RuntimeError, match='tools/list failed'):
-        asyncio.run(middleware.connect_mcp_server(None, 'docs', SimpleNamespace(id='u1'), {}, {}))
+
+@pytest.mark.parametrize(
+    'error',
+    [RuntimeError('tools/list failed'), asyncio.CancelledError()],
+    ids=['listing_fails', 'stopped_while_listing'],
+)
+def test_connect_mcp_server_disconnects_when_listing_tools_fails(monkeypatch, error):
+    """Stopping a chat while tools/list is pending cancels it, which is not an Exception."""
+    client = _FakeClient(list_error=error)
+
+    with pytest.raises(type(error)):
+        _connect(monkeypatch, client)
 
     assert client.disconnects == 1
     assert not client.connected
+
+
+def test_connect_mcp_server_keeps_a_listed_client_open(monkeypatch):
+    client = _FakeClient()
+
+    got, specs = _connect(monkeypatch, client, {'function_name_filter_list': 'search'})
+
+    assert got is client
+    assert [s['name'] for s in specs] == ['search']
+    assert client.connected and client.disconnects == 0
 
 
 async def _no_terminal(request, terminal_id, user, extra_params):

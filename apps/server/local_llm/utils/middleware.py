@@ -2274,7 +2274,9 @@ async def connect_mcp_server(
         tool_specs = await client.list_tool_specs()
         if function_name_filter_list:
             tool_specs = [spec for spec in tool_specs if is_string_allowed(spec['name'], function_name_filter_list)]
-    except Exception:
+    except BaseException:
+        # Cancellation too (a chat stopped while tools/list is pending): disconnect()
+        # runs in this same task and re-raises the task's own cancellation.
         await client.disconnect()
         raise
 
