@@ -48,7 +48,7 @@ import {
 	KnowledgeBreadcrumbs,
 	KnowledgeFileList
 } from './KnowledgeFileList';
-import { type Breadcrumb, type DirectoryFileEntry, announceContentSaved } from './knowledgeFiles';
+import { type Breadcrumb, type DirectoryFileEntry, announceContentSaved, gatherDroppedFiles } from './knowledgeFiles';
 import {
 	collectDirectoryFiles,
 	collectDroppedEntryFiles,
@@ -288,22 +288,9 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 				toast.error('File not found.');
 				return;
 			}
-			const directoryEntries: DirectoryFileEntry[] = [];
-			const loose: File[] = [];
-			for (const item of items as Array<DataTransferItem & { webkitGetAsEntry?: () => any }>) {
-				const entry = item.webkitGetAsEntry?.();
-				if (entry?.isDirectory) {
-					try {
-						directoryEntries.push(...(await collectDroppedEntryFiles(entry)));
-					} catch (error) {
-						handleDirectoryError(error);
-						return;
-					}
-				} else {
-					const file = item.getAsFile();
-					if (file) loose.push(file);
-				}
-			}
+			const dropped = await gatherDroppedFiles(items, collectDroppedEntryFiles, handleDirectoryError);
+			if (!dropped) return;
+			const { loose, directoryEntries } = dropped;
 			await uploadRefs.current.uploadFiles(loose);
 			if (directoryEntries.length > 0) await uploadRefs.current.uploadDirectoryEntries(directoryEntries);
 		};

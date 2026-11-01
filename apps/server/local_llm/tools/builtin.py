@@ -3335,6 +3335,20 @@ def _external_chunks(query_results: dict, knowledge) -> list[dict]:
     return chunks
 
 
+def _take_turns(sources: list[list[dict]]) -> list[dict]:
+    """Every source's hits, best first, taking turns: first hits, then second, ...
+
+    Merged by each source's own rank, not by score: an internal hit's
+    `distance` is a similarity (higher is better), an external pgvector
+    base's is a cosine distance (lower is better), and other providers
+    report whatever their metric gives (#179).
+    """
+    merged = []
+    for rank in range(max((len(hits) for hits in sources), default=0)):
+        merged.extend(hits[rank] for hits in sources if rank < len(hits))
+    return merged
+
+
 async def query_knowledge_files(
     query: str,
     knowledge_ids: list[str] | None = None,
@@ -3350,7 +3364,7 @@ async def query_knowledge_files(
 
     :param query: The search query to find semantically relevant content
     :param knowledge_ids: Optional list of KB ids to limit search to specific knowledge bases
-    :param count: Maximum number of results to return (default: 5)
+    :param count: Maximum number of search hits to return (default: 5); attached notes, up to as many again, come first
     :return: JSON with relevant chunks containing content, source filename, and relevance score
     """
     if __request__ is None:
@@ -3383,7 +3397,10 @@ async def query_knowledge_files(
         else:
             await search.add_all_accessible()
 
-        chunks = list(search.note_results)
+        # Attached notes have their own budget, so they cannot use up the
+        # hits (#179).
+        notes = list(search.note_results)[:count]
+        sources = []
 
         if search.collection_names:
             query_results = await query_collection(
@@ -3393,19 +3410,32 @@ async def query_knowledge_files(
                 embedding_function=lambda queries, prefix: embedding_function(queries, prefix=prefix, user=user_model),
                 k=count,
             )
-            chunks.extend(_vector_chunks(query_results))
+            sources.append(_vector_chunks(query_results))
 
+        failed = []
         for knowledge in search.external_knowledges:
-            query_results = await retrieve_external_knowledge(
-                __request__,
-                knowledge,
-                queries=[query],
-                count=count,
-                user=user_model,
-            )
-            chunks.extend(_external_chunks(query_results, knowledge))
+            # One base that is down or misconfigured must not lose every
+            # other result (#180).
+            try:
+                query_results = await retrieve_external_knowledge(
+                    __request__,
+                    knowledge,
+                    queries=[query],
+                    count=count,
+                    user=user_model,
+                )
+            except Exception as e:
+                log.warning('query_knowledge_files: external knowledge %s failed: %s', knowledge.id, e)
+                failed.append(f'{knowledge.name}: {e}')
+                continue
+            sources.append(_external_chunks(query_results, knowledge))
 
-        return JSONCodec.dumps(chunks[:count], ensure_ascii=False)
+        hits = _take_turns(sources)[:count]
+        # Nothing else answered: an empty list would read as "nothing
+        # relevant" when the base could not be reached at all.
+        if failed and not notes and not hits:
+            return JSONCodec.dumps({'error': 'External knowledge unavailable: ' + '; '.join(failed)})
+        return JSONCodec.dumps(notes + hits, ensure_ascii=False)
     except Exception as e:
         log.exception(f'query_knowledge_files error: {e}')
         return JSONCodec.dumps({'error': str(e)})
