@@ -47,6 +47,11 @@ async function mockCalendar(page: Page, events: Rec[] = []) {
 		const req = route.request();
 		const url = new URL(req.url());
 		const path = url.pathname.replace('/api/v1/calendars', '');
+		const stored = path.match(/^\/events\/([^/]+)$/);
+		if (req.method() === 'GET' && stored) {
+			const found = events.find((e) => e.id === stored[1] && e.series_start_at);
+			return json(route, found && { ...found, start_at: found.series_start_at, instance_id: undefined });
+		}
 		if (req.method() === 'GET' && path.startsWith('/events')) {
 			seen.eventQueries.push(url.search);
 			return json(route, events);
@@ -164,6 +169,39 @@ test('an event opens for editing and saves; an automation run opens its chat ins
 		.toMatchObject({ title: 'Dentist', location: 'Main St', start_at: ns('2026-09-16T09:30:00') });
 	await page.getByRole('button', { name: /Nightly report/ }).click();
 	await expect(page).toHaveURL(/\/c\/c9$/);
+});
+
+test('saving an occurrence of a repeating event keeps the series start; deleting says it removes the series', async ({
+	page
+}) => {
+	await mockWorkspaceBackend(page, { features: { enable_calendar: true } });
+	// A daily standup that began 1 Sep, shown at its 16 Sep occurrence.
+	const occurrence = {
+		...event('s1', 'personal', 'Standup', '2026-09-16T09:00:00', '2026-09-16T09:15:00'),
+		rrule: 'FREQ=DAILY',
+		instance_id: `s1_${ns('2026-09-16T09:00:00')}`,
+		series_start_at: ns('2026-09-01T09:00:00')
+	};
+	const seen = await mockCalendar(page, [occurrence]);
+	await page.goto('/calendar');
+	await page.getByRole('button', { name: /Standup/ }).click();
+	const d = page.getByRole('dialog', { name: 'Edit event' });
+	await expect(d.getByText('changes apply to every occurrence')).toBeVisible();
+	await d.getByLabel('Event title').fill('Daily standup');
+	await d.getByRole('button', { name: 'Save' }).click();
+	await expect
+		.poll(() => seen.updated[0])
+		.toMatchObject({
+			title: 'Daily standup',
+			start_at: ns('2026-09-01T09:00:00'),
+			end_at: ns('2026-09-01T09:15:00'),
+			rrule: 'FREQ=DAILY'
+		});
+
+	await page.getByRole('button', { name: /Standup/ }).click();
+	await d.getByRole('button', { name: 'Delete' }).click();
+	const confirm = page.getByRole('alertdialog');
+	await expect(confirm).toContainText('every occurrence of this event');
 });
 
 test('a new calendar is created with its color; deleting one asks first', async ({ page }) => {
