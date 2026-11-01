@@ -466,12 +466,35 @@ export function replyColumns(history: History, parentId: string): Column[] {
 		});
 }
 
+/**
+ * A reply's `output` after its text was edited. A streamed reply keeps what
+ * the model said in `output`, which the next request, actions and auto-copy
+ * prefer over `content`, so an edit that left it alone was shown but never
+ * reached the model (#211). The original edited `output` in a block editor;
+ * this port edits text, so the edited text replaces it as one message item,
+ * reduced as `content` is for the API (reasoning dropped, tool calls to their
+ * results). A reply without `output` keeps none.
+ */
+function editedOutput(m: Message, content: string): OutputItem[] | undefined {
+	if (!m.output?.length) return m.output;
+	const message = m.output.find((item) => item?.type === 'message');
+	return [
+		{
+			type: 'message',
+			id: message?.id ?? `msg_${uuid().replaceAll('-', '')}`,
+			role: 'assistant',
+			status: 'completed',
+			content: [{ type: 'output_text', text: processDetails(content).trim() }]
+		} as OutputItem
+	];
+}
+
 /** Edits a message in place, keeping the previous text of a reply as `originalContent` (Messages.svelte's editMessage without submit). */
 export function editContent(history: History, id: string, content: string, files?: ChatFile[]): History {
 	const m = history.messages[id];
 	if (!m) return history;
 	if (m.role === 'user') return updateMessage(history, id, { content, ...(files ? { files } : {}) });
-	return updateMessage(history, id, { originalContent: m.content, content });
+	return updateMessage(history, id, { originalContent: m.content, content, output: editedOutput(m, content) });
 }
 
 /** "Save As Copy" for a reply: a new sibling with the edited text, which becomes current. */
@@ -484,6 +507,7 @@ export function saveReplyAsCopy(history: History, id: string, content: string): 
 		childrenIds: [],
 		files: undefined,
 		content,
+		output: editedOutput(m, content),
 		timestamp: Math.floor(Date.now() / 1000)
 	};
 	const messages = { ...history.messages, [copy.id]: copy };
