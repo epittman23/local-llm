@@ -151,6 +151,31 @@ describe('editing one occurrence of a repeating event', () => {
 			end_at: ns(at(2026, 9, 1, 11))
 		});
 	});
+	it('a new date moves the series by as many days, at the same local time across a DST change', () => {
+		const tz = process.env.TZ;
+		process.env.TZ = 'America/New_York';
+		try {
+			// Series from 1 Oct 09:00 (EDT), opened at 3 Nov (EST), moved back to 30 Oct.
+			const start = ns(at(2026, 9, 1, 9));
+			const nov3 = ev(at(2026, 10, 3, 9), at(2026, 10, 3, 10), { id: 's2', rrule: 'FREQ=DAILY', instance_id: 'x' });
+			const f = { ...eventFields(nov3, '', null), startDate: '2026-10-30', endDate: '2026-10-30' };
+			const out = eventPayload(f, nov3, start);
+			const got = 'form' in out ? new Date(out.form.start_at / NS) : null;
+			expect([got?.getMonth(), got?.getDate(), got?.getHours()]).toEqual([8, 27, 9]);
+			const allDay = eventPayload({ ...f, allDay: true }, { ...nov3, all_day: true }, start);
+			const [s, e] = 'form' in allDay ? [allDay.form.start_at, allDay.form.end_at ?? 0] : [0, 0];
+			expect([new Date(s / NS).getDate(), new Date(s / NS).getHours()]).toEqual([27, 0]);
+			expect([new Date(e / NS).getDate(), new Date(e / NS).getHours()]).toEqual([27, 23]);
+		} finally {
+			if (tz === undefined) delete process.env.TZ;
+			else process.env.TZ = tz;
+		}
+	});
+	it('a changed repeat rule starts at the occurrence being edited', () => {
+		const f = { ...eventFields(occurrence, '', null), repeat: 'weekly' };
+		const out = eventPayload(f, occurrence, seriesStart);
+		expect('form' in out && out.form).toMatchObject({ start_at: ns(at(2026, 9, 20, 9)), rrule: 'FREQ=WEEKLY' });
+	});
 	it('a stored event (no occurrence) is saved as the form says', () => {
 		const stored = { ...occurrence, instance_id: undefined };
 		const out = eventPayload(eventFields(stored, '', null), stored, seriesStart);
