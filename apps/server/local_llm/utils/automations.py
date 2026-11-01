@@ -322,8 +322,23 @@ def _build_request(
     return request
 
 
-async def _resolve_model_defaults(app, model_id: str) -> tuple[list[str], dict, list[str], str | None]:
-    models = getattr(app.state, 'MODELS', {})
+async def _resolve_model_defaults(
+    app, model_id: str, user=None, token: str | None = None
+) -> tuple[list[str], dict, list[str], str | None]:
+    models = getattr(app.state, 'MODELS', {}) or {}
+    if model_id not in models:
+        # The model list is loaded on a user's request (or a cache prefetch
+        # that is off by default) and cleared on connection changes, so a run
+        # the scheduler fires first after a restart found it empty and ran
+        # without the model's tools, filters and features (#265).
+        from local_llm.utils.models import get_all_models
+
+        try:
+            request = _build_request(app, token=token)
+            await (get_all_models(request, user=user) if user else get_all_models(request))
+        except Exception as e:
+            log.warning('Automation: could not load models for %s: %s', model_id, e)
+        models = getattr(app.state, 'MODELS', {}) or {}
     model = models.get(model_id, {})
     meta = model.get('info', {}).get('meta', {})
 
@@ -415,6 +430,8 @@ async def _execute_channel_automation(
     if not channel_id or not await Config.get('channels.enable'):
         raise ValueError('Channel not found')
 
+    # First, so the model list is loaded before the model's name is read.
+    tool_ids, features, filter_ids, _ = await _resolve_model_defaults(app, model_id, user=user, token=token)
     model = getattr(app.state, 'MODELS', {}).get(model_id, {})
     request = _build_request(app, token=token)
 
@@ -453,8 +470,6 @@ async def _execute_channel_automation(
             user,
             db,
         )
-
-    tool_ids, features, filter_ids, _ = await _resolve_model_defaults(app, model_id)
 
     form_data = {
         'model': model_id,
@@ -637,7 +652,9 @@ async def execute_automation(app, automation: AutomationModel) -> None:
         )
 
         # Resolve model defaults (frontend does this, backend doesn't)
-        tool_ids, features, filter_ids, terminal_id = await _resolve_model_defaults(app, model_id)
+        tool_ids, features, filter_ids, terminal_id = await _resolve_model_defaults(
+            app, model_id, user=user, token=token
+        )
 
         # Build the same payload the frontend sends to /api/chat/completions
         form_data = {
