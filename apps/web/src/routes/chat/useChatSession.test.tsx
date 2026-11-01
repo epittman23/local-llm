@@ -2,6 +2,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, waitFor } from '@testing-library/react';
 import { createMemoryRouter, RouterProvider, useParams } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as apis from '@/lib/apis';
+import * as chatsApi from '@/lib/apis/chats';
+import * as usersApi from '@/lib/apis/users';
+import { updateMessage } from '@/lib/chat/history';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useChatSession } from './useChatSession';
 
@@ -63,7 +67,21 @@ vi.mock('@/lib/apis', async (orig) => ({
 	// Resolves only when the test says so, per chat.
 	getTaskIdsByChatId: vi.fn(
 		(_t: string, id: string) => new Promise((resolve) => (pending[id] = (v) => resolve(v ?? { task_ids: [] })))
-	)
+	),
+	stopTasksByChatId: vi.fn(async () => true),
+	generateTags: vi.fn(async () => ['tagged']),
+	chatAction: vi.fn(() => new Promise((resolve) => (pending.action = resolve)))
+}));
+
+vi.mock('@/lib/apis/evaluations', async (orig) => ({
+	...(await orig<object>()),
+	createNewFeedback: vi.fn(() => new Promise((resolve) => (pending.feedback = resolve))),
+	updateFeedbackById: vi.fn(async () => ({}))
+}));
+
+vi.mock('@/lib/apis/openai', async (orig) => ({
+	...(await orig<object>()),
+	generateOpenAIChatCompletion: vi.fn(async () => ({}))
 }));
 
 vi.mock('@/lib/apis/users', async (orig) => ({
@@ -155,5 +173,121 @@ describe('useChatSession loadChat', () => {
 		await act(async () => pending.M({ task_ids: ['t-b'] }));
 		await waitFor(() => expect(session.chat?.id).toBe('M'));
 		expect(session.history.messages.b.done).toBe(false);
+	});
+
+	async function openChatA() {
+		const router = renderAt('A');
+		await waitFor(() => expect(pending.A).toBeDefined());
+		await act(async () => pending.A(undefined));
+		await waitFor(() => expect(session.chat?.id).toBe('A'));
+		return router;
+	}
+
+	/** A reply still being written under chat A's message. */
+	const writing = () =>
+		act(() =>
+			session.setHistory((h) => ({
+				currentId: 'r',
+				messages: {
+					...h.messages,
+					'A-m': { ...h.messages['A-m'], childrenIds: ['r'] },
+					r: { id: 'r', parentId: 'A-m', childrenIds: [], role: 'assistant', content: '', done: false }
+				}
+			}))
+		);
+	const asked = (prompt: string) =>
+		Object.values(session.history.messages).some((m) => m.role === 'user' && m.content === prompt);
+
+	it('a queued prompt is sent even when the reply it waited on failed with nothing written (#213)', async () => {
+		await openChatA();
+		writing();
+		act(() => void session.submit('next', [], 'm'));
+		expect(session.queue).toHaveLength(1);
+		act(() =>
+			session.setHistory((h) => updateMessage(h, 'r', { done: true, content: '', error: { content: 'boom' } }))
+		);
+		await waitFor(() => expect(asked('next')).toBe(true));
+		expect(session.queue).toHaveLength(0);
+	});
+
+	it('with the queue off, sending stops the reply being written first (#212)', async () => {
+		vi.mocked(usersApi.getUserSettings).mockClear();
+		vi.mocked(usersApi.getUserSettings).mockResolvedValue({ ui: { enableMessageQueue: false } } as never);
+		try {
+			await openChatA();
+			await waitFor(() => expect(usersApi.getUserSettings).toHaveBeenCalled());
+			await act(async () => {});
+			writing();
+			act(() => void session.submit('next', [], 'm'));
+			await waitFor(() => expect(asked('next')).toBe(true));
+			expect(apis.stopTasksByChatId).toHaveBeenCalledWith('t', 'A');
+			expect(session.history.messages.r.done).toBe(true);
+			expect(session.queue).toHaveLength(0);
+		} finally {
+			vi.mocked(usersApi.getUserSettings).mockResolvedValue({ ui: {} } as never);
+		}
+	});
+
+	it('an action that finishes after another chat opened does not save into that chat (#215)', async () => {
+		const router = await openChatA();
+		vi.mocked(chatsApi.updateChatById).mockClear();
+		let run: Promise<void> | undefined;
+		act(() => {
+			run = session.runAction('act', session.history.messages['A-m']);
+		});
+		await act(() => router.navigate('/c/B'));
+		await waitFor(() => expect(pending.B).toBeDefined());
+		await act(async () => pending.B(undefined));
+		await waitFor(() => expect(session.chat?.id).toBe('B'));
+		await act(async () => {
+			pending.action({ messages: [{ id: 'A-m', content: 'rewritten' }] });
+			await run;
+		});
+		expect(chatsApi.updateChatById).not.toHaveBeenCalled();
+		expect(session.history.messages['B-m']?.content).toBe('hello from B');
+	});
+
+	const savedTo = () => vi.mocked(chatsApi.updateChatById).mock.calls.map((c) => c[1]);
+
+	it('a rating is saved to its chat, with the feedback id and the tags', async () => {
+		await openChatA();
+		vi.mocked(chatsApi.updateChatById).mockClear();
+		let run: Promise<void> | undefined;
+		act(() => {
+			run = session.rate(session.history.messages['A-m'], 1);
+		});
+		await waitFor(() => expect(pending.feedback).toBeDefined());
+		await act(async () => {
+			pending.feedback({ id: 'fb1' });
+			await run;
+		});
+		expect(session.history.messages['A-m'].feedbackId).toBe('fb1');
+		expect(session.history.messages['A-m'].annotation).toMatchObject({ rating: 1, tags: ['tagged'] });
+		expect(new Set(savedTo())).toEqual(new Set(['A']));
+	});
+
+	it('a rating that finishes after another chat opened is saved to its own chat (#215)', async () => {
+		const router = await openChatA();
+		vi.mocked(chatsApi.updateChatById).mockClear();
+		delete pending.feedback;
+		let run: Promise<void> | undefined;
+		act(() => {
+			run = session.rate(session.history.messages['A-m'], 1);
+		});
+		await waitFor(() => expect(pending.feedback).toBeDefined());
+		await act(() => router.navigate('/c/B'));
+		await waitFor(() => expect(pending.B).toBeDefined());
+		await act(async () => pending.B(undefined));
+		await waitFor(() => expect(session.chat?.id).toBe('B'));
+		await act(async () => {
+			pending.feedback({ id: 'fb2' });
+			await run;
+		});
+		expect(savedTo()).toEqual(['A']);
+		const body = vi.mocked(chatsApi.updateChatById).mock.calls[0][2] as {
+			history: { messages: Record<string, Record<string, unknown>> };
+		};
+		expect(body.history.messages['A-m']).toMatchObject({ feedbackId: 'fb2', annotation: { rating: 1 } });
+		expect(session.history.messages['B-m'].annotation).toBeUndefined();
 	});
 });

@@ -394,10 +394,11 @@ export function useChatSession({
 	);
 
 	const send = useCallback(
-		async (prompt: string, files: ChatFile[] = [], modelId?: string) => {
+		/** `queued`: the prompt waited behind a reply, so goes even if that reply failed (#213). */
+		async (prompt: string, files: ChatFile[] = [], modelId?: string, queued = false) => {
 			const h = historyRef.current;
 			const current = h.currentId ? h.messages[h.currentId] : null;
-			if (current?.error && !current.content) {
+			if (!queued && current?.error && !current.content) {
 				toast.error('Oops! There was an error in the previous response.');
 				return;
 			}
@@ -422,6 +423,22 @@ export function useChatSession({
 		[requestReply, setHistory]
 	);
 
+	const stop = useCallback(async () => {
+		const id = chatIdRef.current;
+		if (id) await stopTasksByChatId(token, id).catch((e) => toast.error(`${e}`));
+		else if (taskIds?.length) for (const t of taskIds) await stopTask(token, t).catch((e) => toast.error(`${e}`));
+		// A new chat's POST hasn't answered yet: nothing to cancel by id, so cancel once it does.
+		else stopPendingRef.current = true;
+		setTaskIds(null);
+		setHistory((h) => {
+			const m = h.currentId ? h.messages[h.currentId] : null;
+			if (!m?.parentId) return h;
+			let next = h;
+			for (const c of h.messages[m.parentId]?.childrenIds ?? []) next = updateMessage(next, c, { done: true });
+			return next;
+		});
+	}, [token, taskIds, setHistory]);
+
 	/** The input's submit: validated, then sent now or queued behind the reply being written. */
 	const submit = useCallback(
 		/** `modelId`: a model picked with `@` answers just this message. */
@@ -440,14 +457,25 @@ export function useChatSession({
 				toast.error(`You can only chat with a maximum of ${maxCount} file(s) at a time.`);
 				return false;
 			}
-			if (isGenerating(historyRef.current) && (l.settings?.enableMessageQueue ?? true)) {
-				setQueue((q) => [...q, { id: uuid(), prompt, files, modelId }]);
+			if (isGenerating(historyRef.current)) {
+				if (l.settings?.enableMessageQueue ?? true) {
+					setQueue((q) => [...q, { id: uuid(), prompt, files, modelId }]);
+					return true;
+				}
+				// Queue off: interrupt the reply being written, as the setting
+				// says, rather than stream a second reply beside it (#212).
+				const chatId = chatIdRef.current;
+				void stop().then(() => {
+					// Another chat opened while stopping: this prompt was for the old one.
+					if (chatIdRef.current === chatId) void send(prompt, files, modelId);
+					else toast.error('The chat changed before the message could be sent.');
+				});
 				return true;
 			}
 			void send(prompt, files, modelId);
 			return true;
 		},
-		[config, send]
+		[config, send, stop]
 	);
 
 	// When the reply finishes, the next queued prompt goes.
@@ -456,24 +484,10 @@ export function useChatSession({
 		if (generating || !queue.length) return;
 		const [next, ...rest] = queue;
 		setQueue(rest);
-		void send(next.prompt, next.files, next.modelId);
+		// Already taken off the queue, so it must not be refused for the reply
+		// it waited on failing; the prompt and its files were lost (#213).
+		void send(next.prompt, next.files, next.modelId, true);
 	}, [generating, queue, send]);
-
-	const stop = useCallback(async () => {
-		const id = chatIdRef.current;
-		if (id) await stopTasksByChatId(token, id).catch((e) => toast.error(`${e}`));
-		else if (taskIds?.length) for (const t of taskIds) await stopTask(token, t).catch((e) => toast.error(`${e}`));
-		// A new chat's POST hasn't answered yet: nothing to cancel by id, so cancel once it does.
-		else stopPendingRef.current = true;
-		setTaskIds(null);
-		setHistory((h) => {
-			const m = h.currentId ? h.messages[h.currentId] : null;
-			if (!m?.parentId) return h;
-			let next = h;
-			for (const c of h.messages[m.parentId]?.childrenIds ?? []) next = updateMessage(next, c, { done: true });
-			return next;
-		});
-	}, [token, taskIds, setHistory]);
 
 	const regenerate = useCallback(
 		async (message: Message, suggestionPrompt?: string) => {
@@ -586,8 +600,9 @@ export function useChatSession({
 					return null;
 				})) as { chat?: { history?: History } } | null;
 				// The server's copy still has replies this load finished; with
-				// nothing generating, finish them again (#150).
-				if (res?.chat?.history) {
+				// nothing generating, finish them again (#150). Not if another
+				// chat opened meanwhile: its view would take this one's history.
+				if (res?.chat?.history && chatIdRef.current === id) {
 					const h = normalizeHistory(res.chat.history);
 					setHistory(taskIds ? h : finishReplies(h));
 				}
@@ -626,7 +641,9 @@ export function useChatSession({
 				toast.error(`${e}`);
 				return null;
 			})) as { messages?: Partial<Message>[] } | null;
-			if (!res?.messages?.length) return;
+			// Another chat opened meanwhile: its history must not take these
+			// messages, nor be saved into this one's record (#215).
+			if (!res?.messages?.length || chatIdRef.current !== chatId) return;
 			let h = historyRef.current;
 			for (const m of res.messages) {
 				const cur = m.id ? h.messages[m.id] : undefined;
@@ -651,6 +668,8 @@ export function useChatSession({
 		async (message: Message, rating: number | null, details: FeedbackDetails | null = null) => {
 			const id = chatIdRef.current;
 			if (!id || isTemporaryChatId(id)) return;
+			// This chat's history as it is now: the awaits below may end in another chat.
+			const history = historyRef.current;
 			const annotation = annotate(message, rating, details);
 			const chatRecord = await getChatById(token, id).catch((e) => {
 				toast.error(`${e}`);
@@ -662,7 +681,7 @@ export function useChatSession({
 				return m ? (m.info?.base_model_id ?? null) : undefined;
 			};
 			const item = feedbackItem({
-				history: historyRef.current,
+				history,
 				message,
 				annotation,
 				chatId: id,
@@ -677,10 +696,22 @@ export function useChatSession({
 				toast.error(`${e}`);
 				return null;
 			})) as { id?: string } | null;
-			const next = updateMessage(historyRef.current, message.id, {
-				annotation,
-				...(res?.id && !feedbackId ? { feedbackId: res.id } : {})
-			});
+			const patch = { annotation, ...(res?.id && !feedbackId ? { feedbackId: res.id } : {}) };
+			// Another chat opened meanwhile: record the rating in this chat's
+			// stored copy, not in the chat now open (#215).
+			if (chatIdRef.current !== id) {
+				const stored = chatRecord.chat?.history as History | undefined;
+				if (stored?.messages?.[message.id]) {
+					const h = updateMessage(stored, message.id, patch);
+					await updateChatById(token, id, {
+						...chatRecord.chat,
+						history: h,
+						messages: messagesList(h, h.currentId)
+					}).catch((e) => toast.error(`${e}`));
+				}
+				return;
+			}
+			const next = updateMessage(historyRef.current, message.id, patch);
 			setHistory(next);
 			await save(next);
 			if (!details && !(annotation as { tags?: string[] }).tags && message.content) {
@@ -689,11 +720,13 @@ export function useChatSession({
 				)) as string[] | null;
 				const fid = (next.messages[message.id].feedbackId as string | undefined) ?? res?.id;
 				if (tags?.length && fid) {
-					const tagged = updateMessage(historyRef.current, message.id, (m) => ({
-						annotation: { ...(m.annotation ?? {}), tags }
-					}));
-					setHistory(tagged);
-					void save(tagged);
+					if (chatIdRef.current === id) {
+						const tagged = updateMessage(historyRef.current, message.id, (m) => ({
+							annotation: { ...(m.annotation ?? {}), tags }
+						}));
+						setHistory(tagged);
+						void save(tagged);
+					}
 					void updateFeedbackById(token, fid, { ...item, data: { ...item.data, tags } }).catch(() => {});
 				}
 			}
