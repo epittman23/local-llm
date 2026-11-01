@@ -4241,9 +4241,8 @@ async def search_calendar_events(
                 end=end_ns,
             )
             # The range query returns every recurring event whatever its
-            # dates (#176). Expand each into the occurrences that start in the
-            # range, as the calendar router does; one already under way when
-            # the range starts is not listed, as on the calendar page (#171).
+            # dates (#176). Expand each into the occurrences that overlap the
+            # range, as the calendar router does (#171).
             # A series whose rule cannot be expanded comes back as its own
             # row and is kept only if that row overlaps the range, like a
             # one-off. Without an end, stop a year out rather than at the

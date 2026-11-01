@@ -41,7 +41,6 @@ def expand_recurring_event(
 
     range_start = to_local_datetime(range_start_ns)
     range_end = to_local_datetime(range_end_ns)
-    scan_start = range_start - dt.timedelta(days=1)
 
     original_start_ns = event_dict['start_at']
     original_start = to_local_datetime(original_start_ns)
@@ -56,6 +55,9 @@ def expand_recurring_event(
 
     original_end_ns = event_dict.get('end_at')
     duration_ns = (original_end_ns - original_start_ns) if original_end_ns else None
+    # Look back far enough to find an occurrence still running when the
+    # range starts: it overlaps the range, as a one-off would (#171).
+    scan_start = range_start - max(dt.timedelta(days=1), dt.timedelta(microseconds=(duration_ns or 0) // 1000))
 
     instances = []
     previous_start = None
@@ -66,7 +68,7 @@ def expand_recurring_event(
 
         instance_start_ns = int(occurrence_start.replace(tzinfo=user_timezone).timestamp() * 1_000_000_000)
 
-        if instance_start_ns >= range_start_ns:
+        if instance_start_ns >= range_start_ns or (duration_ns and instance_start_ns + duration_ns > range_start_ns):
             instance = {
                 **event_dict,
                 'start_at': instance_start_ns,
