@@ -332,8 +332,16 @@ class CalendarTable:
 
             cal_ids = [c.id for c in calendars]
             grants_map = await AccessGrants.get_grants_by_resources('calendar', cal_ids, db=db)
+            visible = [
+                await self._to_calendar_model(c, access_grants=grants_map.get(c.id, []), db=db) for c in calendars
+            ]
 
-            return [await self._to_calendar_model(c, access_grants=grants_map.get(c.id, []), db=db) for c in calendars]
+            # Calendars shared with the user are not theirs to add events to:
+            # one who owns none yet gets their own default too, or a new event
+            # had only someone else's calendar to go into (#182).
+            if not any(c.user_id == user_id for c in calendars):
+                return await self.get_or_create_defaults(user_id, db=db) + visible
+            return visible
 
     async def get_calendar_by_id(self, id: str, db: AsyncSession | None = None) -> CalendarModel | None:
         async with get_async_db_context(db) as db:

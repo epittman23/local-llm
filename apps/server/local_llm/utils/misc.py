@@ -258,6 +258,15 @@ def get_content_from_message(message: dict) -> str | None:
     return output_text or (content if isinstance(content, str) else None)
 
 
+def get_text_from_message(message: dict) -> str | None:
+    """Every text part of a message, joined; get_content_from_message returns only the first."""
+    content = message.get('content')
+    if isinstance(content, list):
+        texts = [item.get('text') for item in content if isinstance(item, dict) and item.get('type') == 'text']
+        return '\n'.join(t for t in texts if t) or None
+    return get_content_from_message(message)
+
+
 def get_output_text(output: list | None) -> str:
     if not isinstance(output, list):
         return ''
@@ -647,32 +656,45 @@ def merge_system_messages(messages: list[dict]) -> list[dict]:
     insert their own system message; this function consolidates
     them.
     """
-    system_contents: list[str] = []
+    # Every text part of every system message, as it came: a list-content
+    # message (from an API client) once kept only its first part (#187).
+    parts: list[dict] = []
     other_messages: list[dict] = []
 
     for message in messages:
-        if message.get('role') == 'system':
-            content = get_content_from_message(message)
-            if content:
-                system_contents.append(content)
-        else:
+        if message.get('role') != 'system':
             other_messages.append(message)
+        elif isinstance(message.get('content'), list):
+            parts += [
+                dict(p) for p in message['content'] if isinstance(p, dict) and p.get('type') == 'text' and p.get('text')
+            ]
+        elif content := get_content_from_message(message):
+            parts.append({'type': 'text', 'text': content})
 
-    if not system_contents:
+    if not parts:
         return other_messages
 
-    merged = {'role': 'system', 'content': '\n'.join(system_contents)}
+    # Plain text stays one string, which every backend and chat template
+    # takes; a part carrying more than text (cache_control) keeps the list.
+    if all(part.keys() == {'type', 'text'} for part in parts):
+        merged = {'role': 'system', 'content': '\n'.join(part['text'] for part in parts)}
+    else:
+        merged = {'role': 'system', 'content': parts}
     return [merged, *other_messages]
 
 
 def update_message_content(message: dict, content: str, append: bool = True) -> dict:
     if isinstance(message['content'], list):
-        for item in message['content']:
-            if item['type'] == 'text':
-                if append:
-                    item['text'] = f'{item["text"]}\n{content}'
-                else:
-                    item['text'] = f'{content}\n{item["text"]}'
+        # One part only: after the last text part, or before the first. Every
+        # text part once got its own copy, which reached the model once per
+        # part when a list system message kept all its parts (#187).
+        texts = [item for item in message['content'] if item.get('type') == 'text']
+        if not texts:
+            message['content'].append({'type': 'text', 'text': content})
+        elif append:
+            texts[-1]['text'] = f'{texts[-1]["text"]}\n{content}'
+        else:
+            texts[0]['text'] = f'{content}\n{texts[0]["text"]}'
     else:
         if append:
             message['content'] = f'{message["content"]}\n{content}'

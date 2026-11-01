@@ -108,6 +108,7 @@ from local_llm.utils.misc import (
     get_reasoning_details,
     get_response_error_detail,
     get_system_message,
+    get_text_from_message,
     is_string_allowed,
     merge_system_messages,
     replace_system_message_content,
@@ -2927,7 +2928,9 @@ async def _record_system_prompt(form_data: dict, metadata: dict, user, model_sys
 
     A snapshot taken after file-source injection would already have the RAG template baked in."""
     system_message = get_system_message(form_data['messages'])
-    system_content = get_content_from_message(system_message) if system_message else ''
+    # All of it: the tool loop restores this, and a list-content system
+    # message once came back as its first part only (#187).
+    system_content = get_text_from_message(system_message) if system_message else ''
     resolved_model_system_prompt = await resolve_system_prompt(
         model_system_prompt,
         metadata,
@@ -5980,7 +5983,7 @@ class _ToolCallRounds:
         if self.original_system_content is None:
             original_system_message = get_system_message(reply.form_data['messages'])
             self.original_system_content = (
-                get_content_from_message(original_system_message) if original_system_message else None
+                get_text_from_message(original_system_message) if original_system_message else None
             )
 
     async def _pause(self) -> None:
