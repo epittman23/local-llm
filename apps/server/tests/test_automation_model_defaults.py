@@ -50,3 +50,15 @@ def test_a_loaded_model_list_is_not_reloaded(monkeypatch):
     monkeypatch.setattr(models_util, 'get_all_models', must_not_run)
 
     assert asyncio.run(automations._resolve_model_defaults(app, 'm1'))[0] == ['web_tool']
+
+
+def test_a_failed_load_leaves_the_run_without_defaults_rather_than_failing_it(monkeypatch, caplog):
+    app = SimpleNamespace(state=SimpleNamespace(MODELS={}))
+
+    async def unreachable(*_a, **_k):
+        raise RuntimeError('provider down')
+
+    monkeypatch.setattr(models_util, 'get_all_models', unreachable)
+
+    assert asyncio.run(automations._resolve_model_defaults(app, 'm1')) == ([], {}, [], None)
+    assert any('m1' in r.getMessage() for r in caplog.records)

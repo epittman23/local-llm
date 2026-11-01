@@ -429,6 +429,8 @@ async def _execute_channel_automation(
     if not channel_id or not await Config.get('channels.enable'):
         raise ValueError('Channel not found')
 
+    # First, so the model list is loaded before the model's name is read.
+    tool_ids, features, filter_ids, _ = await _resolve_model_defaults(app, model_id, user=user, token=token)
     model = getattr(app.state, 'MODELS', {}).get(model_id, {})
     request = _build_request(app, token=token)
 
@@ -467,8 +469,6 @@ async def _execute_channel_automation(
             user,
             db,
         )
-
-    tool_ids, features, filter_ids, _ = await _resolve_model_defaults(app, model_id, user=user, token=token)
 
     form_data = {
         'model': model_id,
