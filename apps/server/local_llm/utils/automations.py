@@ -78,6 +78,8 @@ def _parse_rule(s: str, now: dt.datetime | None = None):
 
     SECONDLY/MINUTELY/HOURLY rules use a fixed epoch DTSTART (2000-01-01 00:00)
     so intervals snap to clock boundaries (e.g. every 5min = :00, :05, :10).
+    A longer rule without a DTSTART starts at `now` (the user's clock) on the
+    minute, so a time or day it does not state comes from there.
     """
     upper = s.upper()
     if 'EXRULE' in upper:

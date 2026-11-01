@@ -42,3 +42,17 @@ def test_a_rule_with_its_own_dtstart_is_unchanged():
     rule = _parse_rule('DTSTART:20200101T120000\nRRULE:FREQ=DAILY', USER_NOW)
 
     assert rule.after(USER_NOW) == dt.datetime(2020, 1, 6, 12, 0, 0)
+
+
+def test_a_rule_without_a_time_takes_the_users_minute_and_keeps_it():
+    """Such a rule once ran every few hours, re-anchored at the server's clock on each recomputation."""
+    assert _parse_rule('RRULE:FREQ=DAILY;BYHOUR=10', USER_NOW).after(USER_NOW) == dt.datetime(2020, 1, 6, 10, 3, 0)
+
+    # The scheduler recomputes the next run from the run just claimed, a few seconds late.
+    when = USER_NOW
+    runs = []
+    for _ in range(3):
+        when = _parse_rule('RRULE:FREQ=DAILY', when).after(when)
+        runs.append(when)
+        when += dt.timedelta(seconds=11)
+    assert runs == [dt.datetime(2020, 1, d, 8, 3, 0) for d in (7, 8, 9)]
