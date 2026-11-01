@@ -57,7 +57,20 @@ function ruleParts(rrule: string): Record<string, string> {
 	return parts;
 }
 
+/**
+ * The parts with spelling that does not change the rule evened out
+ * (`INTERVAL=1` dropped, `09` read as `9`), for comparing two rules.
+ */
+function canonical(parts: Record<string, string>): string {
+	return Object.entries(parts)
+		.filter(([k, v]) => !(k === 'INTERVAL' && Number(v) === 1))
+		.map(([k, v]) => `${k}=${/^\d+$/.test(v) ? String(Number(v)) : v}`)
+		.sort()
+		.join(';');
+}
+
 const ONCE = /COUNT=1(?!\d)/;
+const DTSTART_LINE = /^\s*DTSTART/im;
 const DTSTART = /DTSTART:(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})/;
 
 /** Builds the RRULE for a schedule. `frequency` may be given to build a visual schedule while CUSTOM is selected. */
@@ -74,7 +87,12 @@ export function buildRrule(s: Schedule, frequency: Frequency = s.frequency): str
 	return `RRULE:${parts.join(';')}`;
 }
 
-/** Reads an RRULE back into the picker; a rule it cannot show (MINUTELY, YEARLY, ...) becomes CUSTOM with the text kept. */
+/**
+ * Reads an RRULE back into the picker. A rule it cannot show exactly becomes
+ * CUSTOM with the text kept: MINUTELY or YEARLY, and also any rule saving
+ * from the picker would change (a run count or end date, several hours, an
+ * nth weekday of the month), since the picker rebuilds the rule on save (#159).
+ */
 export function parseRrule(rrule: string, now = new Date()): Schedule {
 	const s = defaultSchedule(now);
 	if (ONCE.test(rrule)) {
@@ -87,8 +105,12 @@ export function parseRrule(rrule: string, now = new Date()): Schedule {
 	}
 	const p = ruleParts(rrule);
 	const freq = p.FREQ || 'DAILY';
-	if (!['HOURLY', 'DAILY', 'WEEKLY', 'MONTHLY'].includes(freq)) return { ...s, frequency: 'CUSTOM', custom: rrule };
-	return {
+	const custom: Schedule = { ...s, frequency: 'CUSTOM', custom: rrule };
+	if (!['HOURLY', 'DAILY', 'WEEKLY', 'MONTHLY'].includes(freq)) return custom;
+	// The picker writes a DTSTART only for a one-time run, so saving would
+	// drop this rule's start (its first date, weekday or hour) (#159).
+	if (DTSTART_LINE.test(rrule)) return custom;
+	const shown: Schedule = {
 		...s,
 		frequency: freq as Frequency,
 		interval: Number.parseInt(p.INTERVAL || '1'),
@@ -97,6 +119,20 @@ export function parseRrule(rrule: string, now = new Date()): Schedule {
 		days: p.BYDAY ? p.BYDAY.split(',') : [],
 		monthDay: Number.parseInt(p.BYMONTHDAY || '1')
 	};
+	// No interval control, and a value the inputs cannot hold, mean the
+	// picker cannot show it either, even when it would rebuild the text.
+	const representable =
+		shown.interval === 1 &&
+		shown.days.every((d) => WEEKDAYS.includes(d)) &&
+		shown.hour >= 0 &&
+		shown.hour <= 23 &&
+		shown.minute >= 0 &&
+		shown.minute <= 59 &&
+		shown.monthDay >= 1 &&
+		shown.monthDay <= 31;
+	// Without a DTSTART an hourly rule starts on the hour, as BYMINUTE=0 says.
+	const stated = freq === 'HOURLY' && p.BYMINUTE === undefined ? { ...p, BYMINUTE: '0' } : p;
+	return representable && canonical(ruleParts(buildRrule(shown))) === canonical(stated) ? shown : custom;
 }
 
 /**
@@ -111,6 +147,34 @@ export function withFrequency(s: Schedule, next: Frequency): Schedule {
 const ordinal = (n: number) =>
 	n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th';
 
+/**
+ * The keys each frequency's summary describes. A rule with any other key, or
+ * several values where the summary shows one, is shown as itself rather than
+ * as a summary that leaves part of it out (#159).
+ */
+const REQUIRED: Record<string, string[]> = {
+	DAILY: ['BYHOUR', 'BYMINUTE'],
+	WEEKLY: ['BYHOUR', 'BYMINUTE'],
+	MONTHLY: ['BYMONTHDAY', 'BYHOUR', 'BYMINUTE']
+};
+const SUMMARISED: Record<string, string[]> = {
+	MINUTELY: ['FREQ', 'INTERVAL'],
+	HOURLY: ['FREQ', 'INTERVAL', 'BYMINUTE'],
+	DAILY: ['FREQ', 'BYHOUR', 'BYMINUTE'],
+	WEEKLY: ['FREQ', 'BYDAY', 'BYHOUR', 'BYMINUTE'],
+	MONTHLY: ['FREQ', 'BYMONTHDAY', 'BYHOUR', 'BYMINUTE']
+};
+// A missing hour or day would read as midnight or the 1st; it comes from the
+// rule's DTSTART, which the summary does not show.
+const summarisable = (p: Record<string, string>) =>
+	(REQUIRED[p.FREQ] ?? []).every((k) => p[k] !== undefined) &&
+	Object.entries(p).every(
+		([k, v]) =>
+			(k === 'INTERVAL' && Number(v) === 1) ||
+			(SUMMARISED[p.FREQ]?.includes(k) &&
+				(k === 'BYDAY' ? v.split(',').every((d) => WEEKDAYS.includes(d)) : k === 'FREQ' || /^\d+$/.test(v)))
+	);
+
 /** "Daily at 9:00 AM", "MO,WE at 6:30 PM", "Once · Sep 30 9:00 AM", or the rule itself if it is none of those. */
 export function formatSchedule(rrule: string): string {
 	if (ONCE.test(rrule)) {
@@ -120,6 +184,7 @@ export function formatSchedule(rrule: string): string {
 		return `Once · ${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} ${d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
 	}
 	const p = ruleParts(rrule);
+	if (DTSTART_LINE.test(rrule) || !summarisable(p)) return rrule;
 	const hour = Number.parseInt(p.BYHOUR || '0');
 	const iv = Number.parseInt(p.INTERVAL || '1');
 	const time = `${hour % 12 || 12}:${(p.BYMINUTE || '0').padStart(2, '0')} ${hour >= 12 ? 'PM' : 'AM'}`;
