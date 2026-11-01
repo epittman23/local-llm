@@ -137,12 +137,14 @@ def test_refine_does_not_descend_around_a_slower_leader(monkeypatch):
 # --- elimination (#135, #136) ----------------------------------------------------
 
 
-def _eliminate(monkeypatch, scores: dict[str, float], alive: list[Candidate]) -> tuple[list[Candidate], str]:
+def _eliminate(
+    monkeypatch, scores: dict[str, float], alive: list[Candidate], matrix: dict | None = None
+) -> tuple[list[Candidate], str]:
     sweep = _sweep(scores)
     sweep.o = tune.SweepOptions()
 
     async def no_matrix(sweep_id, rnd=None):
-        return {}
+        return matrix or {}
 
     async def fake_set_candidate(*args, **kwargs):
         return None
@@ -215,3 +217,17 @@ def test_cooling_counts_earlier_pauses_against_the_cooldown_share(monkeypatch):
     assert resolution == 'timeout'
     assert len(waits) == 3
     assert cool.total_seconds == 6000.0
+
+
+def test_a_cut_the_items_agree_on_is_still_supported(monkeypatch):
+    """Six items, every one faster on the kept side: p = 0.03, so the cut stands."""
+    scores = {BASE.sha: 0.0, FAST.sha: math.log(1.2), SLOW.sha: math.log(0.5), SLOWER.sha: math.log(0.4)}
+    matrix = {}
+    for i in range(6):
+        for cand, tps in ((BASE, 10.0), (FAST, 12.0), (SLOW, 5.0), (SLOWER, 4.0)):
+            matrix[('b', str(i), cand.sha)] = {'gen_tps': tps}
+
+    survivors, decision = _eliminate(monkeypatch, scores, [BASE, FAST, SLOW, SLOWER], matrix)
+
+    assert decision == 'kept 2 of 4'
+    assert survivors == [BASE, FAST]
