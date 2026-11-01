@@ -2841,7 +2841,10 @@ async def view_file(
             return JSONCodec.dumps(result, ensure_ascii=False)
 
         sliced = content[offset : offset + max_chars]
-        is_truncated = (offset + len(sliced)) < total_chars
+        # Measured before line numbers are added: the "12: " prefixes once
+        # pushed next_offset past text never returned (#178).
+        returned = len(sliced)
+        is_truncated = (offset + returned) < total_chars
 
         if line_numbers:
             start_ln = content[:offset].count('\n') + 1
@@ -2859,10 +2862,10 @@ async def view_file(
         if is_truncated or offset > 0:
             result['truncated'] = is_truncated
             result['total_chars'] = total_chars
-            result['returned_chars'] = len(sliced)
+            result['returned_chars'] = returned
             result['offset'] = offset
             if is_truncated:
-                result['next_offset'] = offset + len(sliced)
+                result['next_offset'] = offset + returned
 
         return JSONCodec.dumps(result, ensure_ascii=False)
     except Exception as e:
@@ -2984,7 +2987,10 @@ async def view_knowledge_file(
             return JSONCodec.dumps(result, ensure_ascii=False)
 
         sliced = content[offset : offset + max_chars]
-        is_truncated = (offset + len(sliced)) < total_chars
+        # Measured before line numbers are added: the "12: " prefixes once
+        # pushed next_offset past text never returned (#178).
+        returned = len(sliced)
+        is_truncated = (offset + returned) < total_chars
 
         if line_numbers:
             start_ln = content[:offset].count('\n') + 1
@@ -3005,10 +3011,10 @@ async def view_knowledge_file(
         if is_truncated or offset > 0:
             result['truncated'] = is_truncated
             result['total_chars'] = total_chars
-            result['returned_chars'] = len(sliced)
+            result['returned_chars'] = returned
             result['offset'] = offset
             if is_truncated:
-                result['next_offset'] = offset + len(sliced)
+                result['next_offset'] = offset + returned
 
         return JSONCodec.dumps(result, ensure_ascii=False)
     except Exception as e:
@@ -4211,7 +4217,8 @@ async def search_calendar_events(
     up to a year after `start`.
 
     :param query: Search text to match against event title, description, or location (optional)
-    :param start: Only return events starting at or after this datetime, e.g. "2026-04-20 00:00" (optional)
+    :param start: Only return events still running at or after this datetime, e.g. "2026-04-20 00:00" (an event
+        with no end must start at or after it) (optional)
     :param end: Only return events starting before this datetime, e.g. "2026-04-27 00:00" (optional)
     :param count: Maximum number of events to return (default: 10)
     :return: JSON list of matching events with id, title, description, start, end, calendar_id, location, rrule
@@ -4253,9 +4260,8 @@ async def search_calendar_events(
                 end=end_ns,
             )
             # The range query returns every recurring event whatever its
-            # dates (#176). Expand each into the occurrences that start in the
-            # range, as the calendar router does; one already under way when
-            # the range starts is not listed, as on the calendar page (#171).
+            # dates (#176). Expand each into the occurrences that overlap the
+            # range, as the calendar router does (#171).
             # A series whose rule cannot be expanded comes back as its own
             # row and is kept only if that row overlaps the range, like a
             # one-off. Without an end, stop a year out rather than at the
@@ -4353,7 +4359,10 @@ async def create_calendar_event(
         # Resolve calendar_id: use provided, or fall back to default
         if not calendar_id:
             calendars = await Calendars.get_calendars_by_user(user_id)
-            default_cal = next((c for c in calendars if c.is_default), None)
+            # is_default is the owner's flag: a calendar shared with this user
+            # can carry its owner's, and listed first it took the event (#182).
+            own = [c for c in calendars if c.user_id == user_id]
+            default_cal = next((c for c in own if c.is_default), None) or next(iter(own), None)
             if not default_cal and calendars:
                 default_cal = calendars[0]
             if not default_cal:
