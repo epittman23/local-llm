@@ -7,7 +7,10 @@ update it writes, for the knowledge tool every access check made and which
 collections were searched. Notes, knowledge bases, files, access grants,
 groups, the vector search and external knowledge are fakes that record
 their calls. Each case was recorded from the untouched functions into
-fixtures/note_and_knowledge_tools.json and must not change.
+fixtures/note_and_knowledge_tools.json and must not change, except as
+recorded again for #179 (knowledge hits merged by source rank, attached
+notes on their own budget): kb:specific_ids, kb:model_knowledge and
+kb:results_trimmed_to_count.
 
 The golden file is only ever written by hand, never by this test. To record
 it again (only for an intended behaviour change, reviewed as such), run

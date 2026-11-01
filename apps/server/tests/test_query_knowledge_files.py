@@ -107,3 +107,9 @@ def test_attached_notes_do_not_use_up_the_hits(monkeypatch):
     got = _run(monkeypatch, notes=['n1', 'n2'], internal=[0.5, 0.4], count=2)
 
     assert [c['source'] for c in got] == ['n1', 'n2', 'internal', 'internal']
+
+
+def test_attached_notes_have_a_budget_of_count(monkeypatch):
+    got = _run(monkeypatch, notes=['n1', 'n2', 'n3'], internal=[0.5], count=2)
+
+    assert [c['source'] for c in got] == ['n1', 'n2', 'internal']
