@@ -329,7 +329,8 @@ def convert_messages_openai_to_ollama(messages: list[dict]) -> list[dict]:
             for item in content:
                 # Check if it's a text type
                 if item.get('type') == 'text':
-                    content_text += item.get('text', '')
+                    # Parts are separate blocks of text; keep them apart.
+                    content_text += ('\n' if content_text else '') + item.get('text', '')
 
                 # Check if it's an image URL type
                 elif item.get('type') == 'image_url':
