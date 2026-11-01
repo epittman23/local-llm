@@ -220,24 +220,40 @@ export function eventPayload(
 	let end = endDate ? dateTimeToNs(endDate, f.allDay ? '23:59' : f.endTime) : undefined;
 	if (end !== undefined && end < start)
 		end = start + (editing?.end_at && editing.end_at > editing.start_at ? editing.end_at - editing.start_at : 0);
+	// An update keeps every field the request leaves out, so a field cleared
+	// on an existing event is sent as null; left out, the old value stayed (#158).
+	const blank = editing ? null : undefined;
 	return {
 		form: {
 			calendar_id: f.calendarId,
 			title: f.title.trim(),
-			description: f.description.trim() || undefined,
+			description: f.description.trim() || blank,
 			start_at: start,
-			end_at: end,
+			end_at: end ?? blank,
 			all_day: f.allDay,
-			rrule: REPEAT_RRULES[f.repeat] || undefined,
-			location: f.location.trim() || undefined,
+			// A rule the Repeat menu cannot show opens as "No Repeat"; leave it out
+			// so the update keeps it, rather than clearing it on any edit.
+			rrule: REPEAT_RRULES[f.repeat] || (editing?.rrule && !repeatFromRrule(editing.rrule) ? undefined : blank),
+			location: f.location.trim() || blank,
 			meta: { alert_minutes: f.alertMinutes }
 		}
 	};
 }
 
-/** The calendar a new event goes into: the default one, else the first real one. */
-export const defaultCalendarId = (calendars: { id: string; is_default: boolean }[]) =>
-	(calendars.find((c) => c.is_default) ?? calendars.find((c) => c.id !== SCHEDULED_TASKS_ID))?.id ?? '';
+/**
+ * The calendar a new event goes into: the user's own default, else their
+ * first own calendar, else the first real one. `is_default` is the owner's
+ * flag, so a calendar shared with the user can carry it; listed first, it
+ * took the event (#182).
+ */
+export function defaultCalendarId(
+	calendars: { id: string; is_default: boolean; user_id?: string }[],
+	userId?: string
+): string {
+	const real = calendars.filter((c) => c.id !== SCHEDULED_TASKS_ID);
+	const own = userId ? real.filter((c) => c.user_id === userId) : real;
+	return (own.find((c) => c.is_default) ?? own[0] ?? real[0])?.id ?? '';
+}
 
 /** Where clicking an automation's run goes: its chat if it produced one, else the automation. Null for an ordinary event. */
 export function automationTarget(e: CalendarEventModel): string | null {
