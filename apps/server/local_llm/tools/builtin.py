@@ -6,6 +6,7 @@ These tools are automatically available when native function calling is enabled.
 IMPORTANT: DO NOT IMPORT THIS MODULE DIRECTLY IN OTHER PARTS OF THE CODEBASE.
 """
 
+import asyncio
 import datetime as dt
 import logging
 import time
@@ -4163,8 +4164,16 @@ def _event_to_dict(event, tz) -> dict:
         'location': event.location or '',
         'reminder_minutes': alert_minutes if alert_minutes is not None else 10,
         'color': event.color,
+        'rrule': event.rrule,
         'is_cancelled': event.is_cancelled,
     }
+
+
+def _overlaps(start_at: int, end_at: int | None, range_start: int, range_end: int) -> bool:
+    """Whether an event overlaps [range_start, range_end), as get_events_by_range decides it."""
+    if start_at >= range_end:
+        return False
+    return start_at >= range_start or (end_at is not None and end_at > range_start)
 
 
 async def search_calendar_events(
@@ -4192,7 +4201,8 @@ async def search_calendar_events(
         return JSONCodec.dumps({'error': 'User context not available'})
 
     try:
-        from local_llm.models.calendar import CalendarEvents
+        from local_llm.models.calendar import CalendarEventModel, CalendarEvents
+        from local_llm.utils.calendar import expand_recurring_event
 
         user_id = __user__.get('id')
         tz = _get_user_tz(__user__)
@@ -4215,11 +4225,28 @@ async def search_calendar_events(
             except (ValueError, TypeError) as e:
                 return JSONCodec.dumps({'error': f'Invalid end datetime: {e}'})
 
-            items = await CalendarEvents.get_events_by_range(
+            stored = await CalendarEvents.get_events_by_range(
                 user_id=user_id,
                 start=start_ns,
                 end=end_ns,
             )
+            # The range query returns every recurring event whatever its
+            # dates; expand each into its occurrences in the range, as the
+            # calendar router does, and keep only those that overlap it.
+            items = []
+            for event in stored:
+                if not event.rrule:
+                    items.append(event)
+                    continue
+                instances = await asyncio.to_thread(
+                    expand_recurring_event, event.model_dump(), start_ns, end_ns, tz=__user__.get('timezone')
+                )
+                items.extend(
+                    CalendarEventModel.model_validate(inst)
+                    for inst in instances
+                    if _overlaps(inst['start_at'], inst.get('end_at'), start_ns, end_ns)
+                )
+            items.sort(key=lambda e: e.start_at)
 
             # Apply text filter if query is also provided
             if query:
