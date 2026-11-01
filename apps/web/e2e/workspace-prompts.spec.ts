@@ -114,7 +114,11 @@ async function mockPromptsApi(page: Page, initial: Prompt[]) {
 			if (rest === '/update/version') return json(prompt);
 			if (rest === '/access/update') return json(prompt);
 			if (rest === '/update') {
-				Object.assign(prompt, body, { version_id: 'v-new' });
+				// As the backend does (#221): a save not marked production keeps
+				// the live content and version; name, command and tags apply.
+				const { content, is_production, ...identity } = body as Record<string, unknown>;
+				if (is_production === false) Object.assign(prompt, identity);
+				else Object.assign(prompt, identity, { content, version_id: 'v-new' });
 				return json(prompt);
 			}
 		}
