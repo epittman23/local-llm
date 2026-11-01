@@ -171,6 +171,15 @@ export type CompletionContext = {
 };
 
 /** The POST /api/chat/completions body (sendMessageSocket). */
+/**
+ * The parameters that are set. A number box cleared in chat controls stores
+ * "" (Default), and the other places that edit params drop it before saving;
+ * sent as is it became the value upstream, and it hid the user's own
+ * setting for that parameter (#200).
+ */
+const setParams = (params: Record<string, unknown> | null | undefined) =>
+	Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== '' && v !== null && v !== undefined));
+
 export function completionBody(c: CompletionContext) {
 	const response = c.history.messages[c.responseId];
 	const user = response ? c.history.messages[response.parentId ?? ''] : undefined;
@@ -190,8 +199,8 @@ export function completionBody(c: CompletionContext) {
 		model: c.model.id,
 		...(messages.length ? { messages } : {}),
 		params: {
-			...(c.settings?.params ?? {}),
-			...c.params,
+			...setParams(c.settings?.params),
+			...setParams(c.params),
 			stop: stopTokens(c.params?.stop ?? c.settings?.params?.stop)
 		},
 		files: files.length ? files : undefined,

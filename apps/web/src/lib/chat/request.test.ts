@@ -76,6 +76,19 @@ describe('completionBody', () => {
 		variables: {}
 	};
 
+	it('a number cleared in chat controls means Default, not an empty value sent upstream (#200)', () => {
+		const body = completionBody({
+			...setup(),
+			...base,
+			chatId: 'c1',
+			temporary: false,
+			params: { temperature: '', max_tokens: 512, seed: null },
+			settings: { params: { temperature: 0.3, top_p: '' } }
+		});
+		expect(body.params).toMatchObject({ temperature: 0.3, max_tokens: 512 });
+		expect(body.params).not.toHaveProperty('top_p');
+		expect(body.params).not.toHaveProperty('seed');
+	});
 	it('asks the server to create a new chat, with title and tags', () => {
 		const body = completionBody({ ...setup(), ...base, chatId: null, temporary: false });
 		expect(body).toMatchObject({
