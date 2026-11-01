@@ -24,6 +24,7 @@ import {
 	emptyHistory,
 	errorText,
 	failMessage,
+	finishReplies,
 	isGenerating,
 	messagesList,
 	normalizeHistory,
@@ -185,7 +186,7 @@ export function useChatSession({
 			if (pending.length && !complete) setTaskIds(pending);
 			else {
 				setTaskIds(null);
-				if (current?.role === 'assistant' && !current.done) h = updateMessage(h, current.id, { done: true });
+				h = finishReplies(h);
 			}
 			setChat(record);
 			setTitle(content.title ?? record.title ?? '');
