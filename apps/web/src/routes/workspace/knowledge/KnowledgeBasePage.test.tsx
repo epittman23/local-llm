@@ -59,9 +59,9 @@ vi.mock('@/lib/apis/files', () => ({
 		state.files = [f, ...state.files];
 		return f;
 	}),
-	getFileById: vi.fn(),
+	getFileById: vi.fn(async (_t: string, fileId: string) => ({ id: fileId, data: { content: 'text' } })),
 	renameFileById: vi.fn(),
-	updateFileDataContentById: vi.fn()
+	updateFileDataContentById: vi.fn(async (_t: string, fileId: string) => ({ id: fileId }))
 }));
 
 const renderPage = () =>
@@ -87,6 +87,14 @@ const openPageTwo = async () => {
 	return view;
 };
 
+const sixtyOneFiles = () =>
+	Array.from({ length: 61 }, (_, i) => ({ id: `f${i + 1}`, meta: { name: `file${i + 1}.txt` } }));
+
+const upload = (container: HTMLElement, name: string) => {
+	const input = container.ownerDocument.getElementById('files-input') as HTMLInputElement;
+	fireEvent.change(input, { target: { files: [new File(['hello'], name, { type: 'text/plain' })] } });
+};
+
 beforeEach(() => {
 	useAuthStore.setState({
 		token: 't',
@@ -110,7 +118,7 @@ describe('KnowledgeBasePage pagination after the list changes (#229)', () => {
 	});
 
 	it('goes back to page 1 after any delete, as the original did, even with page 2 still filled', async () => {
-		state.files = Array.from({ length: 61 }, (_, i) => ({ id: `f${i + 1}`, meta: { name: `file${i + 1}.txt` } }));
+		state.files = sixtyOneFiles();
 		await openPageTwo();
 		fireEvent.pointerDown(screen.getByLabelText('file31.txt menu'), {
 			button: 0,
@@ -128,8 +136,7 @@ describe('KnowledgeBasePage pagination after the list changes (#229)', () => {
 		fireEvent.click(await screen.findByText('Reset'));
 		fireEvent.click(await screen.findByRole('button', { name: 'Confirm' }));
 		await waitFor(() => expect(screen.queryByText('file31.txt')).toBeNull());
-		const input = container.ownerDocument.getElementById('files-input') as HTMLInputElement;
-		fireEvent.change(input, { target: { files: [new File(['hello'], 'notes.txt', { type: 'text/plain' })] } });
+		upload(container, 'notes.txt');
 		// The in-flight row also reads "notes.txt", until the upload settles and
 		// the reloaded list (header "1 files") replaces it.
 		await screen.findByText('1 files');
@@ -150,5 +157,49 @@ describe('KnowledgeBasePage pagination after the list changes (#229)', () => {
 		});
 		expect(await screen.findByText('file1.txt')).toBeInTheDocument();
 		expect(screen.queryByText('file31.txt')).toBeNull();
+	});
+
+	it('goes back to page 1 after an upload, as the original did, even with page 2 still filled', async () => {
+		state.files = sixtyOneFiles();
+		const { container } = await openPageTwo();
+		upload(container, 'notes.txt');
+		expect(await screen.findByText('62 files')).toBeInTheDocument();
+		await waitFor(() => {
+			expect(screen.getByText('file1.txt')).toBeInTheDocument();
+			expect(screen.queryByText('file31.txt')).toBeNull();
+		});
+	});
+
+	it('goes back to page 1 after saving a file edit, as the original did', async () => {
+		state.files = sixtyOneFiles();
+		await openPageTwo();
+		fireEvent.click(screen.getByRole('button', { name: 'Open file31.txt' }));
+		const save = await screen.findByRole('button', { name: 'Save' });
+		await waitFor(() => expect(save).toBeEnabled());
+		fireEvent.click(save);
+		expect(await screen.findByText('file1.txt')).toBeInTheDocument();
+		expect(screen.queryByText('file32.txt')).toBeNull();
+	});
+
+	it('reaches page 2 again after a delete there and an upload refill it', async () => {
+		// The delete reloads while page 2 is still the page shown, which caches
+		// page 2 as empty with 30 files; that stale entry must not bounce the
+		// next visit to page 2 back to page 1.
+		const { container } = await openPageTwo();
+		fireEvent.pointerDown(screen.getByLabelText('file31.txt menu'), {
+			button: 0,
+			ctrlKey: false,
+			pointerType: 'mouse'
+		});
+		fireEvent.click(await screen.findByText('Delete'));
+		expect(await screen.findByText('file1.txt')).toBeInTheDocument();
+		await waitFor(() => expect(screen.queryByRole('navigation')).toBeNull());
+		upload(container, 'notes.txt');
+		await screen.findByText('31 files');
+		fireEvent.click(await screen.findByText('2'));
+		expect(await screen.findByText('file30.txt')).toBeInTheDocument();
+		await new Promise((resolve) => setTimeout(resolve, 200));
+		expect(screen.getByText('file30.txt')).toBeInTheDocument();
+		expect(screen.queryByText('file1.txt')).toBeNull();
 	});
 });
