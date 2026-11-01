@@ -64,6 +64,7 @@ export default function Account() {
 	const config = useConfigStore((s) => s.config);
 	const features = (config?.features ?? {}) as Record<string, unknown>;
 	const [profile, setProfile] = useState<Profile | null>(null);
+	const [loadFailed, setLoadFailed] = useState(false);
 	const [customGender, setCustomGender] = useState(false);
 	const [rows, setRows] = useState<VariableRow[]>([]);
 	const [saving, setSaving] = useState(false);
@@ -78,10 +79,18 @@ export default function Account() {
 
 	useEffect(() => {
 		let live = true;
+		let failed = false;
+		const loadError = (e: unknown) => {
+			failed = true;
+			if (live) toast.error(`${e}`);
+			return null;
+		};
 		void (async () => {
-			const u = ((await getSessionUser(token).catch(() => null)) ?? user ?? {}) as Profile;
-			const vars = await getUserVariables(token).catch(() => null);
+			const u = ((await getSessionUser(token).catch(loadError)) ?? user ?? {}) as Profile;
+			const vars = await getUserVariables(token).catch(loadError);
 			if (!live) return;
+			// Saving sends the whole profile and every variable, so a part that didn't load would be overwritten.
+			setLoadFailed(failed);
 			setProfile({
 				name: u.name ?? '',
 				profile_image_url: u.profile_image_url ?? '',
@@ -161,9 +170,14 @@ export default function Account() {
 	const set = (patch: Partial<Profile>) => profile && setProfile({ ...profile, ...patch });
 
 	return (
-		<SettingsForm title="Account" onSubmit={save} saving={saving} loading={!profile}>
+		<SettingsForm title="Account" onSubmit={save} saving={saving} loading={!profile} disabled={loadFailed}>
 			{profile && (
 				<>
+					{loadFailed && (
+						<p role="alert" className="text-destructive mb-3 text-xs">
+							Your account settings didn't load, so saving is off. Reopen this tab to try again.
+						</p>
+					)}
 					<SettingsSection title="Profile" first>
 						<div className="flex items-center gap-3">
 							<img
