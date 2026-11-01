@@ -10,6 +10,7 @@ import {
 	createCalendar,
 	createCalendarEvent,
 	deleteCalendarEvent,
+	getCalendarEventById,
 	updateCalendarEvent
 } from '@/lib/apis/calendar';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -67,6 +68,8 @@ export function EventDialog({
 	const [confirmDelete, setConfirmDelete] = useState(false);
 	const set = (patch: Partial<EventFields>) => setF((prev) => ({ ...prev, ...patch }));
 	const editing = event && !event.meta?.automation_id ? event : null;
+	// An occurrence of a repeating event: saving or deleting it acts on the series.
+	const occurrence = Boolean(editing?.instance_id);
 
 	useEffect(() => {
 		if (open) setF(eventFields(event, defaultCalendarId, defaultStartAt));
@@ -75,10 +78,16 @@ export function EventDialog({
 	}, [open]);
 
 	const save = async () => {
-		const out = eventPayload(f, editing);
-		if ('error' in out) return void toast.error(out.error);
+		const checked = eventPayload(f, editing);
+		if ('error' in checked) return void toast.error(checked.error);
 		setLoading(true);
 		try {
+			let out = checked;
+			if (editing && occurrence) {
+				const series = await getCalendarEventById(token, editing.id);
+				const shifted = eventPayload(f, editing, series.start_at);
+				if ('form' in shifted) out = shifted;
+			}
 			const res = editing
 				? await updateCalendarEvent(token, editing.id, out.form)
 				: await createCalendarEvent(token, out.form);
@@ -114,11 +123,13 @@ export function EventDialog({
 			<ConfirmDialog
 				open={confirmDelete}
 				onOpenChange={setConfirmDelete}
-				title="Delete Event"
+				title={editing?.rrule ? 'Delete Repeating Event' : 'Delete Event'}
 				confirmLabel="Delete"
 				onConfirm={remove}
 			>
-				This action cannot be undone. Do you wish to continue?
+				{editing?.rrule
+					? 'This deletes every occurrence of this event, not just this one. This action cannot be undone.'
+					: 'This action cannot be undone. Do you wish to continue?'}
 			</ConfirmDialog>
 			<Dialog open={open} onOpenChange={onOpenChange}>
 				<DialogContent className="sm:max-w-lg">
@@ -254,6 +265,11 @@ export function EventDialog({
 								</select>
 							</div>
 						</div>
+						{occurrence && (
+							<p className="text-muted-foreground text-xs">
+								This is one occurrence of a repeating event: changes apply to every occurrence.
+							</p>
+						)}
 						<div>
 							<label className={label} htmlFor="event-description">
 								Description
