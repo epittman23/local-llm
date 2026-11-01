@@ -35,3 +35,10 @@ def test_only_the_real_opponents_count():
     assert round(stats['m']['rating']) == 1016
     assert round(stats['b']['rating']) == 984
     assert (stats['m']['won'], stats['m']['lost'], stats['b']['won'], stats['b']['lost']) == (1, 0, 0, 1)
+
+
+def test_a_loss_counts_against_the_real_opponent_only():
+    stats = _calculate_elo([_feedback(-1, ['m', 'b'])])
+    assert round(stats['m']['rating']) == 984
+    assert round(stats['b']['rating']) == 1016
+    assert (stats['m']['won'], stats['m']['lost'], stats['b']['won'], stats['b']['lost']) == (0, 1, 1, 0)
