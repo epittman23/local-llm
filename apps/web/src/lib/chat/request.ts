@@ -170,7 +170,6 @@ export type CompletionContext = {
 	messages?: Message[] | null;
 };
 
-/** The POST /api/chat/completions body (sendMessageSocket). */
 /**
  * The parameters that are set. A number box cleared in chat controls stores
  * "" (Default), and the other places that edit params drop it before saving;
@@ -180,10 +179,13 @@ export type CompletionContext = {
 const setParams = (params: Record<string, unknown> | null | undefined) =>
 	Object.fromEntries(Object.entries(params ?? {}).filter(([, v]) => v !== '' && v !== null && v !== undefined));
 
+/** The POST /api/chat/completions body (sendMessageSocket). */
 export function completionBody(c: CompletionContext) {
 	const response = c.history.messages[c.responseId];
 	const user = response ? c.history.messages[response.parentId ?? ''] : undefined;
 	const system = c.params?.system ?? c.settings?.system;
+	const mine = setParams(c.settings?.params);
+	const chat = setParams(c.params);
 	let messages: Record<string, unknown>[] = system ? [{ role: 'system', content: String(system) }] : [];
 	// Saved chats are read from the database; a temporary one has to carry its conversation.
 	if (c.temporary) messages = [...messages, ...toApiMessages(c.messages ?? messagesList(c.history, c.responseId))];
@@ -198,11 +200,7 @@ export function completionBody(c: CompletionContext) {
 		stream,
 		model: c.model.id,
 		...(messages.length ? { messages } : {}),
-		params: {
-			...setParams(c.settings?.params),
-			...setParams(c.params),
-			stop: stopTokens(c.params?.stop ?? c.settings?.params?.stop)
-		},
+		params: { ...mine, ...chat, stop: stopTokens(chat.stop ?? mine.stop) },
 		files: files.length ? files : undefined,
 		filter_ids: c.filterIds?.length ? c.filterIds : undefined,
 		tool_ids: c.toolIds?.length ? c.toolIds : undefined,

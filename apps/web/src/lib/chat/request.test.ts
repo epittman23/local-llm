@@ -89,6 +89,18 @@ describe('completionBody', () => {
 		expect(body.params).not.toHaveProperty('top_p');
 		expect(body.params).not.toHaveProperty('seed');
 	});
+	it('zero and false are values; a cleared stop sequence or a Default (null) falls back to the setting', () => {
+		const body = completionBody({
+			...setup(),
+			...base,
+			chatId: 'c1',
+			temporary: false,
+			params: { temperature: 0, stream_response: false, seed: null, stop: '' },
+			settings: { params: { temperature: 0.7, seed: 42, stop: ['END'] } }
+		});
+		expect(body.params).toMatchObject({ temperature: 0, stream_response: false, seed: 42 });
+		expect(body.params.stop).toEqual(['END']);
+	});
 	it('asks the server to create a new chat, with title and tags', () => {
 		const body = completionBody({ ...setup(), ...base, chatId: null, temporary: false });
 		expect(body).toMatchObject({
