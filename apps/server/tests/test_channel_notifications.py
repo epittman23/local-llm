@@ -51,6 +51,7 @@ def _run(monkeypatch, scenario):
 async def _users():
     tag = uuid.uuid4().hex[:8]
     sender = await Users.insert_new_user(f's{tag}', 'Sam', f's{tag}@example.invalid', role='admin')
+    await Users.update_user_settings_by_id(sender.id, {'notifications': {'webhook_url': 'http://hook.test'}})
     others = []
     for name in ('Bob', 'Cat'):
         user = await Users.insert_new_user(f'{name}{tag}', name, f'{name}{tag}@example.invalid', role='user')
@@ -93,6 +94,8 @@ def test_a_group_notifies_its_offline_members_but_not_the_online_ones(monkeypatc
 
 
 def test_a_member_who_left_a_group_is_not_notified(monkeypatch):
+    """A safeguard for direct callers: posting reactivates every member first."""
+
     async def scenario(published):
         sender, (bob, cat) = await _users()
         form = CreateChannelForm(
@@ -121,4 +124,24 @@ def test_a_standard_channel_still_notifies_its_offline_members(monkeypatch):
 
     bob, notified = _run(monkeypatch, scenario)
 
+    assert notified == [bob.id]
+
+
+def test_an_offline_sender_is_not_notified_of_their_own_message(monkeypatch):
+    """A message posted through the API, with no socket in the room, used to notify its own sender."""
+
+    async def scenario(published):
+        sender, (bob, _) = await _users()
+        form = CreateChannelForm(
+            type='',
+            name=f'general-{uuid.uuid4().hex[:6]}',
+            access_grants=[{'principal_type': 'user', 'principal_id': '*', 'permission': 'read'}],
+        )
+        std = await Channels.insert_new_channel(form, sender.id)
+        await Channels.join_channel(std.id, bob.id)
+        return sender, bob, await _post(std, sender, published)
+
+    sender, bob, notified = _run(monkeypatch, scenario)
+
+    assert sender.id not in notified
     assert notified == [bob.id]

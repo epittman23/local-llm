@@ -959,7 +959,8 @@ async def send_notification(request, channel, message, active_user_ids, db=None)
     members = await Channels.get_members_by_channel_id(channel.id, db=db)
     if channel.type in ['group', 'dm']:
         # Membership is the access here: these channels carry no grants, so
-        # the readers are the members who have not left (#327).
+        # the readers are the members (#327). Posting reactivates every
+        # member first; the is_active filter guards direct callers.
         member_ids = {m.user_id for m in members if m.is_active}
         users = await Users.get_users_by_user_ids(list(member_ids), db=db)
     else:
