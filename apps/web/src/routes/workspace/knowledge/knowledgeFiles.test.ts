@@ -11,6 +11,7 @@ import {
 	readMovePayload,
 	staleFileIds,
 	takeDroppedItems,
+	gatherDroppedFiles,
 	type DirectoryManifestEntry,
 	type SyncDiff
 } from './knowledgeFiles';
@@ -138,5 +139,32 @@ describe('takeDroppedItems', () => {
 		const { directories, files } = takeDroppedItems(items);
 		expect(directories).toEqual([folder]);
 		expect(files.map((f) => f.name)).toEqual(['a.txt', 'b.txt', 'c.txt']);
+	});
+});
+
+describe('gatherDroppedFiles', () => {
+	const folder = { isDirectory: true, name: 'docs' };
+	const items = [
+		{ webkitGetAsEntry: () => folder, getAsFile: () => null },
+		{ webkitGetAsEntry: () => ({ isDirectory: false }), getAsFile: () => new File(['x'], 'after.txt') }
+	];
+
+	it("keeps the files dropped after a folder, and the folder's own (#231)", async () => {
+		const inside = [{ file: new File(['y'], 'in.txt'), relativePath: 'docs/in.txt' }] as never;
+		const got = await gatherDroppedFiles(items, async () => inside, vi.fn());
+		expect(got?.loose.map((f) => f.name)).toEqual(['after.txt']);
+		expect(got?.directoryEntries).toEqual(inside);
+	});
+	it('reports a folder it cannot read and gives up', async () => {
+		const onError = vi.fn();
+		const got = await gatherDroppedFiles(
+			items,
+			async () => {
+				throw new Error('denied');
+			},
+			onError
+		);
+		expect(got).toBeNull();
+		expect(onError).toHaveBeenCalledWith(new Error('denied'));
 	});
 });

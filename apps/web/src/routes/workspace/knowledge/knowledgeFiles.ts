@@ -172,3 +172,26 @@ export function takeDroppedItems<E extends { isDirectory?: boolean }>(
 	}
 	return { directories, files };
 }
+
+/**
+ * The dropped files: loose ones, and those inside dropped folders (walked by
+ * `collect` after every item is read; see takeDroppedItems). Null when a
+ * folder cannot be read, after `onError` has reported it.
+ */
+export async function gatherDroppedFiles(
+	items: Iterable<DroppedItem>,
+	collect: (entry: never) => Promise<DirectoryFileEntry[]>,
+	onError: (error: unknown) => void
+): Promise<{ loose: File[]; directoryEntries: DirectoryFileEntry[] } | null> {
+	const { directories, files } = takeDroppedItems(items);
+	const directoryEntries: DirectoryFileEntry[] = [];
+	for (const entry of directories) {
+		try {
+			directoryEntries.push(...(await collect(entry as never)));
+		} catch (error) {
+			onError(error);
+			return null;
+		}
+	}
+	return { loose: files, directoryEntries };
+}
