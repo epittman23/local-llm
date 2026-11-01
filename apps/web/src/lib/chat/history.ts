@@ -1,6 +1,6 @@
 import { processDetails } from '@/lib/markdown/content';
-import { type OutputItem, applyResponseStreamEvent, getOutputText } from './structuredOutput';
 import { uuid } from '@/lib/utils/uuid';
+import { applyResponseStreamEvent, getOutputText, type OutputItem } from './structuredOutput';
 
 // A chat is a tree of messages (edits and regenerations are siblings), and
 // `currentId` is the leaf being shown. Everything here is pure: each function
@@ -421,7 +421,7 @@ export const isGenerating = (history: History) => {
 export function toApiMessages(list: Message[]): Record<string, unknown>[] {
 	return list
 		.map((m) => {
-			if (m.output && m.role === 'assistant') return { role: m.role, model: m.model, output: m.output };
+			if (m.output?.length && m.role === 'assistant') return { role: m.role, model: m.model, output: m.output };
 			const images = (m.files ?? []).filter((f) => f.type === 'image' || (f.content_type ?? '').startsWith('image/'));
 			const content = processDetails(m.content);
 			if (m.role === 'user' && images.length)
@@ -468,25 +468,42 @@ export function replyColumns(history: History, parentId: string): Column[] {
 
 /**
  * A reply's `output` after its text was edited. A streamed reply keeps what
- * the model said in `output`, which the next request, actions and auto-copy
- * prefer over `content`, so an edit that left it alone was shown but never
- * reached the model (#211). The original edited `output` in a block editor;
- * this port edits text, so the edited text replaces it as one message item,
- * reduced as `content` is for the API (reasoning dropped, tool calls to their
- * results). A reply without `output` keeps none.
+ * the model said in `output`, which the next request (and the server's
+ * replay of a saved chat), actions and auto-copy prefer over `content`, so an
+ * edit that left it alone was shown but never reached the model (#211).
+ *
+ * The edit is to the reply's text, which is all `content` holds for such a
+ * reply, so only the text items change: the message items become one item
+ * holding the edited text, where the last of them was, and reasoning is
+ * dropped (it argued for the text being replaced). Tool calls, their outputs
+ * and code-interpreter runs stay as they were and where they were, so the
+ * model still knows what ran. An edit to nothing leaves no message item. A
+ * reply without `output` keeps none.
  */
 function editedOutput(m: Message, content: string): OutputItem[] | undefined {
 	if (!m.output?.length) return m.output;
-	const message = m.output.find((item) => item?.type === 'message');
-	return [
-		{
-			type: 'message',
-			id: message?.id ?? `msg_${uuid().replaceAll('-', '')}`,
-			role: 'assistant',
-			status: 'completed',
-			content: [{ type: 'output_text', text: processDetails(content).trim() }]
-		} as OutputItem
-	];
+	const text = processDetails(content).trim();
+	let lastMessage = -1;
+	m.output.forEach((item, i) => {
+		if (item?.type === 'message') lastMessage = i;
+	});
+	const edited: OutputItem[] = text
+		? [
+				{
+					type: 'message',
+					id: (lastMessage >= 0 ? m.output[lastMessage].id : undefined) ?? `msg_${uuid().replaceAll('-', '')}`,
+					role: 'assistant',
+					status: 'completed',
+					content: [{ type: 'output_text', text }]
+				} as OutputItem
+			]
+		: [];
+	const kept: OutputItem[] = [];
+	m.output.forEach((item, i) => {
+		if (i === lastMessage) kept.push(...edited);
+		if (item?.type !== 'message' && item?.type !== 'reasoning') kept.push(item);
+	});
+	return lastMessage === -1 ? [...kept, ...edited] : kept;
 }
 
 /** Edits a message in place, keeping the previous text of a reply as `originalContent` (Messages.svelte's editMessage without submit). */

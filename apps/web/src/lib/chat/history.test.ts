@@ -6,6 +6,7 @@ import {
 	applyChatEvent,
 	editContent,
 	emptyHistory,
+	type History,
 	isGenerating,
 	messagesList,
 	normalizeHistory,
@@ -14,8 +15,7 @@ import {
 	showBranch,
 	siblingsOf,
 	toApiMessages,
-	updateMessage,
-	type History
+	updateMessage
 } from './history';
 import { getOutputText } from './structuredOutput';
 
@@ -224,13 +224,31 @@ describe('editing a reply that has structured output (#211)', () => {
 		expect(getOutputText(copied.messages.a.output)).toBe('The answer is 41.');
 	});
 
-	it('the edited output is plain text: details blocks are reduced as for content', () => {
-		const edited = editContent(
-			history(),
-			'a',
-			'<details type="reasoning" done="true"><summary>Thought</summary>six sevens</details>\nThe answer is 42.'
-		);
-		expect(getOutputText(edited.messages.a.output)).toBe('The answer is 42.');
+	it('tool calls and code runs are kept, in order; only the text is replaced', () => {
+		const h = history();
+		const withTools = [
+			{ type: 'reasoning', id: 'r1', content: [{ type: 'reasoning_text', text: 'compute it' }] },
+			{ type: 'function_call', id: 'fc1', call_id: 'c1', name: 'calc', arguments: '{"x":6}' },
+			{ type: 'function_call_output', id: 'fo1', call_id: 'c1', output: [{ type: 'input_text', text: '41' }] },
+			{ type: 'open_webui:code_interpreter', id: 'ci1', code: 'print(6*7)', output: '42' },
+			{ type: 'message', id: 'msg_1', role: 'assistant', content: [{ type: 'output_text', text: 'The answer is 41.' }] }
+		];
+		h.messages.a = { ...h.messages.a, output: withTools as never };
+		const edited = editContent(h, 'a', 'The answer is 42.').messages.a.output ?? [];
+		expect(edited.map((item) => item.type)).toEqual([
+			'function_call',
+			'function_call_output',
+			'open_webui:code_interpreter',
+			'message'
+		]);
+		expect(edited[3].id).toBe('msg_1');
+		expect(getOutputText(edited)).toBe('The answer is 42.');
+	});
+
+	it('an edit to nothing leaves no empty message for the model', () => {
+		const edited = editContent(history(), 'a', '   ');
+		expect(edited.messages.a.output).toEqual([]);
+		expect(toApiMessages(messagesList(edited, 'a')).filter((m) => m.role === 'assistant')).toEqual([]);
 	});
 
 	it('a reply without output is edited as before', () => {
