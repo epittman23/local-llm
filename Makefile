@@ -157,10 +157,13 @@ backend:
 # real server as an orphan with nothing left in the foreground for Ctrl-C to
 # reach. So this recipe starts it explicitly backgrounded, blocks on
 # `astro dev logs --follow` instead (a real foreground process Ctrl-C can
-# hit), and the trap runs `astro dev stop` on exit either way.
+# hit), and the trap runs `astro dev stop` on exit either way. The steps are
+# separated by `;`, not `&&`: under `-e` a failure on the left of an `&&` list
+# does not stop the shell, so a failed install would start the dev server on
+# stale dependencies with no trap set.
 frontend:
-	@cd "$(WEB_DIR)" && \
-	bun install --frozen-lockfile && \
+	@cd "$(WEB_DIR)"; \
+	bun install --frozen-lockfile; \
 	trap 'bunx astro dev stop' EXIT; \
 	LLLM_BACKEND_URL="http://localhost:$(LLLM_BACKEND_PORT)" bunx astro dev --background; \
 	bunx astro dev logs --follow
