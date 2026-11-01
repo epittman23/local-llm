@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
 	KB_DIR_MOVE,
 	KB_FILE_MOVE,
+	contentSavedMessage,
 	createMissingDirectories,
 	filesToUpload,
 	getDirectoryUploadPath,
@@ -106,5 +107,19 @@ describe('knowledgeMetaPreview', () => {
 				description: 'x'
 			})
 		).toBe('Drive · Docs · service · x');
+	});
+});
+
+describe('contentSavedMessage', () => {
+	it('names the knowledge bases a saved edit did not reach (#307)', () => {
+		expect(contentSavedMessage({ failed_knowledge: ['Research', 'Ops'] })).toEqual({
+			warning: true,
+			text: 'File content saved, but these knowledge bases still use the old text: Research, Ops.'
+		});
+		expect(contentSavedMessage({ failed_knowledge: [] })).toEqual({
+			warning: false,
+			text: 'File content updated successfully.'
+		});
+		expect(contentSavedMessage(null).warning).toBe(false);
 	});
 });

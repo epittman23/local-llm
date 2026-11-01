@@ -1788,22 +1788,39 @@ async def process_file(
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
+    """Process a file and save its content to the vector database (see process_file_for)."""
+    return await process_file_for(request, form_data, user, db)
+
+
+async def process_file_for(
+    request: Request,
+    form_data: ProcessFileForm,
+    user,
+    db: AsyncSession,
+    *,
+    check_collection_access: bool = True,
+):
     """
     Process a file and save its content to the vector database.
+
+    The caller must own the file, be an admin, or have write access to it
+    (through a knowledge base, a model, a channel or a shared chat), as the
+    routes that call this check (#307). `check_collection_access=False` is
+    for a caller that has already authorized the change and is only
+    mirroring the file's chunks into the collections that hold it.
     Note: granular session management is used to prevent connection pool exhaustion.
     The session is committed before external API calls, and updates use a fresh session.
     """
     config = await get_retrieval_config()
     file = await Files.get_file_by_id(form_data.file_id, db=db)
     if file and user.role != 'admin' and file.user_id != user.id:
-        # Not only the owner: whoever the file grants access to (through a
-        # knowledge base, a model, a channel or a shared chat), as the routes
-        # that call this check. Copying its chunks into a collection, whose
-        # own write access is checked below, needs read access; changing or
-        # reprocessing the file itself needs write access (#307).
-        needed = 'read' if form_data.collection_name and not form_data.content else 'write'
-        if not await has_access_to_file(file.id, needed, user, db=db):
+        # Every path below writes the file's own row (content, status, hash),
+        # so read access is not enough, whatever the target collection.
+        if not await has_access_to_file(file.id, 'write', user, db=db):
             file = None
+    # Before the try: a refused collection must not mark the file failed.
+    if file and form_data.collection_name and check_collection_access:
+        await _validate_collection_access([form_data.collection_name], user, access_type='write')
 
     if file:
         try:
@@ -1812,8 +1829,6 @@ async def process_file(
 
             if collection_name is None:
                 collection_name = file_collection_name
-            else:
-                await _validate_collection_access([collection_name], user, access_type='write')
             collection_names = [collection_name]
 
             if form_data.content:

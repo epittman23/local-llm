@@ -4,7 +4,9 @@ POST /files/{id}/data/content/update passes anyone the file grants write
 access, but process_file looked non-admins up by owner only, so for a
 knowledge base's write grantee it 404'd and nothing was saved. The route
 swallowed that, and any other processing or knowledge-base failure, and
-returned 200 with the old content, which the page toasted as success.
+returned 200 with the old content, which the page toasted as success. Now a
+processing failure is an error, and a knowledge base the new text could not
+reach is named in the response for the page to warn about.
 Saving empty content restored the originally extracted text instead.
 And /knowledge/{id}/file/update deleted the file's chunks from the base
 before re-adding them, so a failed re-add left the base without them.
@@ -95,7 +97,7 @@ def test_a_write_grantee_saves_new_content(monkeypatch, stubs):
 
     out, stored = asyncio.run(scenario())
 
-    assert out == {'content': 'NEW CONTENT'}
+    assert out == {'content': 'NEW CONTENT', 'failed_knowledge': []}
     assert stored == 'NEW CONTENT'
 
 
@@ -153,32 +155,102 @@ def test_empty_content_is_refused_before_anything_changes(monkeypatch, stubs):
     assert (code, stored, called) == (400, 'OLD CONTENT', [])
 
 
-def test_a_knowledge_base_that_could_not_be_updated_is_named(monkeypatch, stubs):
+def _content_saves(monkeypatch):
     async def process(request, form, **_k):
-        if form.collection_name:
-            raise RuntimeError('vector store full')
         await Files.update_file_data_by_id(form.file_id, {'content': form.content})
+
+    monkeypatch.setattr(files_router, 'process_file', process)
+
+
+def test_a_knowledge_base_that_could_not_be_updated_is_named(monkeypatch, stubs):
+    _content_saves(monkeypatch)
+
+    async def mirror(request, form, user, db, *, check_collection_access=True):
+        raise RuntimeError('vector store full')
 
     async def bases(*_a, **_k):
         return [SimpleNamespace(id='kb1', name='Research')]
 
-    monkeypatch.setattr(files_router, 'process_file', process)
+    monkeypatch.setattr(files_router, 'process_file_for', mirror)
     monkeypatch.setattr(files_router.Knowledges, 'get_knowledges_by_file_id', bases)
 
     async def scenario():
         owner, _, file = await _users_and_file()
-        with pytest.raises(HTTPException) as refused:
-            await files_router.update_file_data_content_by_id(
-                None, file.id, files_router.ContentForm(content='NEW'), user=owner, db=None
-            )
-        return refused.value
+        return await files_router.update_file_data_content_by_id(
+            None, file.id, files_router.ContentForm(content='NEW'), user=owner, db=None
+        )
 
-    err = asyncio.run(scenario())
+    out = asyncio.run(scenario())
 
-    assert err.status_code == 500
-    assert 'Research' in err.detail and 'vector store full' in err.detail
+    # Saved, and the base the new text could not reach is named for the page to warn about.
+    assert out == {'content': 'NEW', 'failed_knowledge': ['Research']}
     # The base's old chunks stay until new ones are in.
     assert stubs.deleted == []
+
+
+def test_every_base_holding_the_file_gets_the_new_text_whoever_can_write_it(monkeypatch, stubs):
+    """The editor's write access to the file is checked once; bases mirror its chunks."""
+    _content_saves(monkeypatch)
+    mirrored = []
+
+    async def mirror(request, form, user, db, *, check_collection_access=True):
+        mirrored.append((form.collection_name, check_collection_access))
+
+    async def bases(*_a, **_k):
+        return [SimpleNamespace(id='mine', name='Mine'), SimpleNamespace(id='theirs', name='Theirs')]
+
+    monkeypatch.setattr(files_router, 'process_file_for', mirror)
+    monkeypatch.setattr(files_router.Knowledges, 'get_knowledges_by_file_id', bases)
+
+    async def scenario():
+        owner, _, file = await _users_and_file()
+        return await files_router.update_file_data_content_by_id(
+            None, file.id, files_router.ContentForm(content='NEW'), user=owner, db=None
+        )
+
+    out = asyncio.run(scenario())
+
+    assert out['failed_knowledge'] == []
+    assert mirrored == [('mine', False), ('theirs', False)]
+    assert ('mine', ['old-1', 'old-2'], None) in stubs.deleted
+
+
+def test_a_reader_cannot_copy_a_file_into_a_collection_through_process_file(monkeypatch, stubs):
+    """Every process_file path writes the file's row, so reading it is not enough."""
+    _grant(monkeypatch, 'read')
+
+    async def scenario():
+        _, reader, file = await _users_and_file()
+        with pytest.raises(HTTPException) as refused:
+            await retrieval_router.process_file(
+                None, retrieval_router.ProcessFileForm(file_id=file.id, collection_name='kb1'), user=reader, db=None
+            )
+        return refused.value.status_code, await Files.get_file_by_id(file.id)
+
+    code, row = asyncio.run(scenario())
+
+    assert code == 404
+    assert (row.data.get('status'), row.data['content']) == (None, 'OLD CONTENT')
+
+
+def test_a_refused_collection_does_not_mark_the_file_failed(monkeypatch, stubs):
+    async def refuse(collections, user, access_type='read'):
+        raise HTTPException(status_code=403, detail='no')
+
+    monkeypatch.setattr(retrieval_router, '_validate_collection_access', refuse)
+
+    async def scenario():
+        owner, _, file = await _users_and_file()
+        with pytest.raises(HTTPException) as refused:
+            await retrieval_router.process_file(
+                None, retrieval_router.ProcessFileForm(file_id=file.id, collection_name='kb1'), user=owner, db=None
+            )
+        return refused.value.status_code, await Files.get_file_by_id(file.id)
+
+    code, row = asyncio.run(scenario())
+
+    assert code == 403
+    assert row.data.get('status') is None and row.hash is None and row.data['content'] == 'OLD CONTENT'
 
 
 def test_a_failed_knowledge_reindex_keeps_the_old_chunks(monkeypatch, stubs):

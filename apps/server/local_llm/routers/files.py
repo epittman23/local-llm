@@ -41,7 +41,7 @@ from local_llm.models.knowledge import Knowledges
 from local_llm.models.users import Users
 from local_llm.retrieval.vector.async_client import ASYNC_VECTOR_DB_CLIENT
 from local_llm.routers.audio import transcribe
-from local_llm.routers.retrieval import ProcessFileForm, process_file
+from local_llm.routers.retrieval import ProcessFileForm, process_file, process_file_for
 from local_llm.storage.provider import Storage
 from local_llm.utils.access_control.files import has_access_to_file
 from local_llm.utils.auth import get_admin_user, get_verified_user
@@ -743,7 +743,10 @@ async def update_file_data_content_by_id(
             log.exception(e)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f'Could not save the content: {getattr(e, "detail", None) or e}',
+                detail=(
+                    'The content could not be processed, so it may be saved but not searchable: '
+                    f'{getattr(e, "detail", None) or e}'
+                ),
             )
 
         # Propagate content change to all knowledge collections referencing
@@ -758,23 +761,21 @@ async def update_file_data_content_by_id(
 
                 # Re-add from the now-updated file-{file_id} collection before
                 # removing old vectors, so a failed reindex keeps the KB usable.
-                await process_file(
+                # Write access to the file is checked above; every base that
+                # holds it mirrors its chunks, including bases the editor
+                # cannot otherwise write to (#307).
+                await process_file_for(
                     request,
                     ProcessFileForm(file_id=id, collection_name=knowledge.id),
-                    user=user,
-                    db=db,
+                    user,
+                    db,
+                    check_collection_access=False,
                 )
                 if old_vector_ids:
                     await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=knowledge.id, ids=old_vector_ids)
             except Exception as e:
                 log.warning(f'Failed to update knowledge {knowledge.id} after content change for file {id}: {e}')
-                failed.append(f'{knowledge.name}: {getattr(e, "detail", None) or e}')
-        if failed:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail='The content was saved, but these knowledge bases still answer from the old text: '
-                + '; '.join(failed),
-            )
+                failed.append(knowledge.name)
 
         await publish_event(
             request,
@@ -783,7 +784,9 @@ async def update_file_data_content_by_id(
             subject_id=id,
             data={'content_preview': form_data.content[:300]},
         )
-        return {'content': file.data.get('content', '')}
+        # Saved, but some bases still answer from the old text: say which,
+        # rather than report plain success (#307).
+        return {'content': file.data.get('content', ''), 'failed_knowledge': failed}
     else:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
