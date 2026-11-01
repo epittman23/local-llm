@@ -1,8 +1,10 @@
+import { toast } from 'sonner';
 import { computeFileHash } from '@/lib/utils/hash';
 
 // The pure parts of KnowledgeBase.svelte's upload / sync machinery, separated
 // from the component so the path arithmetic and the diff bookkeeping -- where a
-// slip silently misfiles or deletes documents -- can be unit-tested.
+// slip silently misfiles or deletes documents -- can be unit-tested. Also the
+// toast for a saved file's content, so its choice of message is tested too.
 
 export type DirectoryFileEntry = { path: string; filename: string; file: File };
 export type DirectoryManifestEntry = DirectoryFileEntry & { checksum: string; size: number };
@@ -129,4 +131,20 @@ export function knowledgeMetaPreview(item: {
 		.map(([key, value]) => (['string', 'number', 'boolean'].includes(typeof value) ? `${key}: ${value}` : key))
 		.join(' · ');
 	return [fileCount, metadata, item.description].filter(Boolean).join(' · ');
+}
+
+/**
+ * Toasts the outcome of saving a file's content. The save succeeds even when
+ * a knowledge base holding the file could not take the new text; those bases
+ * still answer from the old one, so name them rather than report plain
+ * success (#307).
+ */
+export function announceContentSaved(
+	res: { failed_knowledge?: string[] } | null | undefined,
+	notify: Pick<typeof toast, 'success' | 'warning'> = toast
+): void {
+	const stale = res?.failed_knowledge ?? [];
+	if (stale.length)
+		notify.warning(`File content saved, but these knowledge bases still use the old text: ${stale.join(', ')}.`);
+	else notify.success('File content updated successfully.');
 }
