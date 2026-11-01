@@ -42,7 +42,20 @@ vi.mock('@/lib/apis/chats', async (orig) => ({
 						}
 		}
 	})),
-	updateChatById: vi.fn(async () => null)
+	updateChatById: vi.fn(async () => null),
+	// The server's copy after a delete: the sibling still saved mid-stream.
+	deleteChatMessageById: vi.fn(async () => ({
+		chat: {
+			history: {
+				currentId: 'a',
+				messages: {
+					q: { id: 'q', parentId: null, childrenIds: ['b', 'a'], role: 'user', content: 'q' },
+					b: { id: 'b', parentId: 'q', childrenIds: [], role: 'assistant', content: 'y', done: false },
+					a: { id: 'a', parentId: 'q', childrenIds: [], role: 'assistant', content: 'x', done: true }
+				}
+			}
+		}
+	}))
 }));
 
 vi.mock('@/lib/apis', async (orig) => ({
@@ -124,6 +137,15 @@ describe('useChatSession loadChat', () => {
 		await waitFor(() => expect(pending.M).toBeDefined());
 		await act(async () => pending.M({ task_ids: [] }));
 		await waitFor(() => expect(session.chat?.id).toBe('M'));
+		expect(session.history.messages.b.done).toBe(true);
+	});
+
+	it("after a delete, finishes the sibling again in the server's copy", async () => {
+		renderAt('M');
+		await waitFor(() => expect(pending.M).toBeDefined());
+		await act(async () => pending.M({ task_ids: [] }));
+		await waitFor(() => expect(session.chat?.id).toBe('M'));
+		await act(() => session.removeMessage(session.history.messages.a));
 		expect(session.history.messages.b.done).toBe(true);
 	});
 
