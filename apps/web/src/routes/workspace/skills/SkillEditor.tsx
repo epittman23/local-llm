@@ -76,9 +76,10 @@ export function SkillEditor({
 				name,
 				description,
 				content,
-				// Save rewrites every field: keep the skill's own state (#227).
-				is_active: skill?.is_active ?? true,
-				meta: { tags: skill?.meta?.tags ?? [] },
+				// Save rewrites every field: an edit keeps the skill's own state
+				// (#227); a new skill, clones included, starts active and untagged.
+				is_active: edit ? (skill?.is_active ?? true) : true,
+				meta: { tags: edit ? (skill?.meta?.tags ?? []) : [] },
 				access_grants: accessGrants
 			});
 		} finally {
