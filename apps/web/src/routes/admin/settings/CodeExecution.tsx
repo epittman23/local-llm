@@ -108,7 +108,7 @@ function EngineFields({
 						set={set}
 						name={key('JUPYTER_TIMEOUT')}
 						label="Code Execution Timeout"
-						description="Maximum runtime in seconds before execution is stopped."
+						description="Longest wait in seconds for any output before a run is stopped. Empty uses 60."
 						placeholder="e.g. 60"
 					/>
 				</>
