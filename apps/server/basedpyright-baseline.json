@@ -1,6 +1,6 @@
 {
 	"_comment": "basedpyright findings allowed per file and rule; may only shrink. See .github/scripts/lint_ratchet.py.",
-	"total": 2239,
+	"total": 2235,
 	"counts": {
 		"apps/server/local_llm/benchmarks/analysis/compare.py": {
 			"reportArgumentType": 9,
@@ -50,8 +50,7 @@
 			"reportOptionalMemberAccess": 2
 		},
 		"apps/server/local_llm/benchmarks/tuning/tune.py": {
-			"reportArgumentType": 9,
-			"reportCallIssue": 2,
+			"reportArgumentType": 7,
 			"reportOptionalMemberAccess": 39,
 			"reportReturnType": 2
 		},

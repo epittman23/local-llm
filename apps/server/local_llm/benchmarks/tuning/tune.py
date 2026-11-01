@@ -47,6 +47,12 @@ history, preserved exactly:
     fingerprinted, telemetered and recorded as an ordinary run. This module
     is a caller of scripts/llama-env.sh, never a second copy of it.
 
+A winner has to have beaten the defaults (added 2026-11-01, #134; not in
+the original): only a candidate whose median paired log-ratio against the
+baseline is above 0 can be adopted or refined around
+(`Sweep.beat_baseline()`). When none is, the verdict is `rejected` and
+refine has no neighbourhood to descend into.
+
 Adoption is deliberately manual: `sweep_report()`'s `adoption` field is the
 override diff for a human to review, and nothing in this module writes
 llama-env.sh. That file is the source of truth for serving configuration in
@@ -1281,7 +1287,7 @@ class Sweep:
         than a stage that did not run.
         """
         best = await self.best(alive)
-        if best is None or best.baseline:
+        if best is None:
             log.info("refine: nothing beat the profile's own defaults, so there is no neighbourhood to descend into")
             return rnd, alive, cursor
         remaining = len(self.items) - cursor
@@ -1326,13 +1332,23 @@ class Sweep:
                 break
         return rnd, alive, cursor
 
-    async def best(self, alive: list[Candidate]) -> Candidate | None:
-        scored = await self.scores(None)
-        ranked = sorted(
-            [c for c in alive if not c.baseline and scored.get(c.sha, (None, 0))[0] is not None],
-            key=lambda c: scored[c.sha][0],
+    def beat_baseline(self, alive: list[Candidate], scored: dict[str, tuple[float | None, int]]) -> list[Candidate]:
+        """The candidates faster than the profile's own defaults, fastest first.
+
+        A score is the median paired log-ratio against the baseline, so only
+        a score above 0 beat it: 0 ties the defaults and below 0 is slower.
+        Without this filter a sweep whose defaults were already fastest
+        adopted a slower configuration, and refine descended around it.
+        """
+        return sorted(
+            [c for c in alive if not c.baseline and (scored.get(c.sha, (None, 0))[0] or 0.0) > 0.0],
+            key=lambda c: scored[c.sha][0] or 0.0,
             reverse=True,
         )
+
+    async def best(self, alive: list[Candidate]) -> Candidate | None:
+        """The fastest candidate that beat the defaults, or None if none did."""
+        ranked = self.beat_baseline(alive, await self.scores(None))
         return ranked[0] if ranked else None
 
     # -- the guard -----------------------------------------------------------
@@ -1405,8 +1421,9 @@ class Sweep:
         incomplete, 3 indeterminate) via the `verdict` field instead."""
         design, audit, blocks = await self.audit()
         blocked = [r for b in blocks for r in audit.blocked(f'throughput:{b.key}')]
-        winner = await self.best(alive)
         scored = await self.scores(None)
+        ranked = self.beat_baseline(alive, scored)
+        winner = ranked[0] if ranked else None
 
         if self.ended_reason in ('budget', 'visits', 'interrupted', 'cancelled', 'drift'):
             verdict = 'incomplete'
@@ -1429,11 +1446,6 @@ class Sweep:
             # Pre-registered, and it walks down the ranking rather than
             # stopping: rejecting the fastest candidate is a reason to look
             # at the next one, not a reason to abandon the sweep.
-            ranked = sorted(
-                [c for c in alive if not c.baseline and scored.get(c.sha, (None, 0))[0] is not None],
-                key=lambda c: scored[c.sha][0],
-                reverse=True,
-            )
             for cand in ranked:
                 guard = await self.guard(cand)
                 if not guard['regressed']:
