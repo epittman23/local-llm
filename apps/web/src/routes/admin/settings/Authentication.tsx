@@ -105,7 +105,7 @@ function UserAccess({ admin, set, groups }: { admin: Rec; set: (p: Rec) => void;
 				set={set}
 				name="JWT_EXPIRES_IN"
 				label="JWT Expiration"
-				description="Valid time units: 's', 'm', 'h', 'd', 'w' or '-1' for no expiration."
+				description="A positive number with one unit: 'ms', 's', 'm', 'h', 'd' or 'w'; or '-1' for no expiration."
 				placeholder={`e.g.) "30m","1h", "10d". `}
 			>
 				{admin.JWT_EXPIRES_IN === '-1' && (

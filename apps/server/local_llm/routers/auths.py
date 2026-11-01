@@ -949,11 +949,21 @@ async def update_admin_config(request: Request, form_data: AdminConfig, user=Dep
     if form_data.CHANNEL_MODEL_RESPONSE_MODE not in ['thread', 'channel']:
         updates.pop('channels.model_response_mode', None)
 
-    pattern = r'^(-1|0|(-?\d+(\.\d+)?)(ms|s|m|h|d|w))$'
-
-    # Check if the input string matches the pattern
-    if not re.match(pattern, form_data.JWT_EXPIRES_IN):
-        updates.pop('auth.jwt_expiry', None)
+    # '-1' and '0' mean no expiry. Anything else must be one positive
+    # duration: a negative or zero one expires every new session at once,
+    # locking everyone out, and a typo must not be dropped while the save
+    # reports success (#242).
+    jwt_expiry = form_data.JWT_EXPIRES_IN
+    if jwt_expiry not in ('-1', '0') and (
+        not re.fullmatch(r'\d+(\.\d+)?(ms|s|m|h|d|w)', jwt_expiry) or parse_duration(jwt_expiry) <= dt.timedelta(0)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f'Invalid JWT expiration {jwt_expiry!r}: use a positive number with a unit '
+                "(ms, s, m, h, d or w), such as '30m' or '4w', or '-1' for no expiration."
+            ),
+        )
 
     await Config.upsert(updates)
     return await get_config_values(ADMIN_CONFIG_KEYS)
