@@ -55,6 +55,7 @@ export function ThreadPanel({
 						channel={channel}
 						messages={feed.messages}
 						top={feed.top}
+						failed={feed.failed}
 						thread
 						replyToId={replyTo?.id}
 						onLoadMore={feed.loadMore}
