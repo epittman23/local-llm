@@ -512,27 +512,27 @@ class EmbeddingModelUpdateForm(BaseModel):
     RAG_EMBEDDING_CONCURRENT_REQUESTS: int | None = 0
 
 
-async def unload_embedding_model(request: Request):
-    config = await get_retrieval_config()
-    if config.RAG_EMBEDDING_ENGINE == '':
-        # unloads current internal embedding model and clears VRAM cache
-        request.app.state.ef = None
-        request.app.state.EMBEDDING_FUNCTION = None
-        import gc
+def free_replaced_embedding_model() -> None:
+    """Frees the memory, and the VRAM cache, of an internal embedding model nothing refers to any more."""
+    import gc
 
-        gc.collect()
-        if DEVICE_TYPE == 'cuda':
-            import torch
+    gc.collect()
+    if DEVICE_TYPE == 'cuda':
+        import torch
 
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
 
 @router.post('/embedding/update')
 async def update_embedding_config(request: Request, form_data: EmbeddingModelUpdateForm, user=Depends(get_admin_user)):
     config = await get_retrieval_config()
     log.info('Updating embedding model: %s to %s', config.RAG_EMBEDDING_MODEL, form_data.RAG_EMBEDDING_MODEL)
-    await unload_embedding_model(request)
+    # The new model is loaded before the old one is let go, and nothing is saved
+    # unless it loads, so a failure leaves the working configuration in place.
+    # It is loaded even when unchanged: the Documents page's download button
+    # sends the same request as a plain save, to re-fetch the model.
+    embedding_in_use = config.RAG_EMBEDDING_ENGINE != '' or request.app.state.ef is not None
     try:
         config.RAG_EMBEDDING_ENGINE = form_data.RAG_EMBEDDING_ENGINE
         config.RAG_EMBEDDING_MODEL = form_data.RAG_EMBEDDING_MODEL.strip()
@@ -553,15 +553,29 @@ async def update_embedding_config(request: Request, form_data: EmbeddingModelUpd
             config.RAG_AZURE_OPENAI_API_KEY = form_data.azure_openai_config.key or ''
             config.RAG_AZURE_OPENAI_API_VERSION = form_data.azure_openai_config.version or ''
 
-        request.app.state.ef = get_ef(
+        ef = get_ef(
             config.RAG_EMBEDDING_ENGINE,
             config.RAG_EMBEDDING_MODEL,
         )
+        # get_ef returns None for an external engine too; only a named internal model must load.
+        if config.RAG_EMBEDDING_ENGINE == '' and config.RAG_EMBEDDING_MODEL and ef is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"Could not load the embedding model '{config.RAG_EMBEDDING_MODEL}'. Check the name, and that "
+                    'it is in the Hugging Face cache when the server runs offline (HF_HUB_OFFLINE). '
+                    + (
+                        'The previous embedding model is still in use.'
+                        if embedding_in_use
+                        else 'No embedding model is loaded; uploads and queries will fail until one is.'
+                    )
+                ),
+            )
 
-        request.app.state.EMBEDDING_FUNCTION = get_embedding_function(
+        embedding_function = get_embedding_function(
             config.RAG_EMBEDDING_ENGINE,
             config.RAG_EMBEDDING_MODEL,
-            request.app.state.ef,
+            ef,
             (
                 config.RAG_OPENAI_API_BASE_URL
                 if config.RAG_EMBEDDING_ENGINE == 'openai'
@@ -589,6 +603,11 @@ async def update_embedding_config(request: Request, form_data: EmbeddingModelUpd
         )
 
         await config.save()
+        replaced_internal_model = request.app.state.ef is not None
+        request.app.state.ef = ef
+        request.app.state.EMBEDDING_FUNCTION = embedding_function
+        if replaced_internal_model:
+            free_replaced_embedding_model()
         return {
             'status': True,
             'RAG_EMBEDDING_ENGINE': config.RAG_EMBEDDING_ENGINE,
@@ -610,6 +629,8 @@ async def update_embedding_config(request: Request, form_data: EmbeddingModelUpd
                 'version': config.RAG_AZURE_OPENAI_API_VERSION,
             },
         }
+    except HTTPException:
+        raise
     except Exception as e:
         log.exception(f'Problem updating embedding model: {e}')
         raise HTTPException(

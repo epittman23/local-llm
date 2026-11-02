@@ -1,4 +1,5 @@
 import type { AutomationForm, AutomationResponse } from '@/lib/apis/automations';
+import { routePaths } from '@/routes/routePaths';
 
 // The rules behind the Automations surface: the schedule picker's RRULE
 // round-trip (components/automations/ScheduleDropdown.svelte), the one-line
@@ -255,7 +256,7 @@ export function destinationLabel(
 
 /** Where a run links to: its channel, or its chat. */
 export const runTarget = (chatId: string) =>
-	chatId.startsWith('channel:') ? `/channels/${chatId.slice('channel:'.length)}` : `/c/${chatId}`;
+	chatId.startsWith('channel:') ? `${routePaths.channels}/${chatId.slice('channel:'.length)}` : `/c/${chatId}`;
 
 // --- the form ------------------------------------------------------------
 
