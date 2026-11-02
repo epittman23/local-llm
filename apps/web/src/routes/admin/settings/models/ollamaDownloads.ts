@@ -1,6 +1,6 @@
 import { toast } from 'sonner';
 import { create } from 'zustand';
-import { deleteModel, pullModel } from '@/lib/apis/ollama';
+import { pullModel } from '@/lib/apis/ollama';
 import {
 	isNotableStatus,
 	lineReader,
@@ -78,11 +78,23 @@ export async function startPull(
 	}));
 
 	let aborted = false;
+	let failed = false;
 	for (;;) {
+		let chunk: ReadableStreamReadResult<string>;
 		try {
-			const { value, done } = await reader.read();
-			if (done) break;
-			for (const data of parseStreamLines(value)) {
+			chunk = await reader.read();
+		} catch (err) {
+			// An errored stream rejects every later read too, so reading on would spin forever.
+			if ((err as Error)?.name === 'AbortError') aborted = true;
+			else {
+				toast.error(`${(err as Error)?.message ?? err}`);
+				failed = true;
+			}
+			break;
+		}
+		if (chunk.done) break;
+		try {
+			for (const data of parseStreamLines(chunk.value)) {
 				const failure = streamError(data);
 				if (failure) throw failure;
 				if (!data.status) continue;
@@ -90,12 +102,8 @@ export async function startPull(
 				else update(tag, { done: data.status === 'success' });
 			}
 		} catch (err) {
-			if ((err as Error)?.name === 'AbortError') {
-				aborted = true;
-				break;
-			}
 			toast.error(typeof err === 'string' ? err : `${(err as Error)?.message ?? err}`);
-			// The stream is dead after an error the server sent; a parse error leaves it readable.
+			// The stream is dead after an error the server sent; a line that is not JSON leaves it readable.
 			if (typeof err === 'string') break;
 		}
 	}
@@ -103,21 +111,25 @@ export async function startPull(
 	if (useDownloadPool.getState().pool[tag]?.done) {
 		toast.success(`Model '${tag}' has been successfully downloaded.`);
 		await onDone?.();
-	} else if (!aborted && useDownloadPool.getState().pool[tag]) {
+	} else if (!aborted && !failed && useDownloadPool.getState().pool[tag]) {
 		toast.error('Download canceled');
 	}
 	remove(tag);
 }
 
-/** Stops a pull, and deletes the partial download it leaves. */
-export async function cancelPull(token: string, tag: string): Promise<void> {
+/**
+ * Stops a pull. It deletes nothing: the delete it used to send had no
+ * instance, so the backend could only match a model already listed under this
+ * name (on any instance), in practice never the cancelled download itself
+ * (#244). What happens to partially downloaded layers is up to Ollama.
+ */
+export async function cancelPull(tag: string): Promise<void> {
 	const download = useDownloadPool.getState().pool[tag];
 	if (!download) return;
 	download.abortController?.abort();
 	if (download.reader) {
 		await download.reader.cancel().catch(() => undefined);
 		remove(tag);
-		await deleteModel(token, tag).catch(() => undefined);
 		toast.success(`${tag} download has been canceled`);
 	}
 }

@@ -386,11 +386,7 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 								<Progress percent={d.pullProgress ?? 0} digest={d.digest} />
 							</div>
 							<Tip content="Cancel">
-								<button
-									type="button"
-									aria-label={`Cancel ${name} download`}
-									onClick={() => void cancelPull(token, name)}
-								>
+								<button type="button" aria-label={`Cancel ${name} download`} onClick={() => void cancelPull(name)}>
 									<X className="size-4" />
 								</button>
 							</Tip>
