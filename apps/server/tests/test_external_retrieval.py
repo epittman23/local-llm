@@ -13,6 +13,8 @@ Run from apps/server:
 import asyncio
 from types import SimpleNamespace
 
+import pytest
+
 from local_llm.retrieval import external
 
 REQUEST = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(EMBEDDING_FUNCTION=object())))
@@ -81,3 +83,81 @@ def test_one_query_keeps_the_provider_order(monkeypatch):
 
     assert result['documents'] == [['a', 'b']]
     assert result['distances'] == [[0.1, 0.7]]
+
+
+# The pgvector provider (#350): the query embedding went to psycopg as a
+# Python list, which psycopg sends as double precision[] (oid 1022), and
+# `vector <=> double precision[]` has no operator. The provider also reported
+# the raw cosine distance, where a lower number is better, while the chat
+# shows the value as relevance and the other providers report a similarity.
+
+
+def _retrieve_pgvector(monkeypatch, rows: list[dict]):
+    import pgvector.psycopg
+    import psycopg
+
+    executed = []
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def execute(self, query, params):
+            executed.append(params)
+
+        def fetchall(self):
+            return rows
+
+    class Connection(Cursor):
+        def cursor(self):
+            return Cursor()
+
+    async def embed(query, prefix=None):
+        return [0.25, 0.5, 1.0]
+
+    monkeypatch.setattr(psycopg, 'connect', lambda *a, **k: Connection())
+    monkeypatch.setattr(pgvector.psycopg, 'register_vector', lambda conn: None)
+    knowledge = SimpleNamespace(id='kb', name='KB', meta={'external': {'source': {'name': 'docs'}}})
+    hits = asyncio.run(
+        external._retrieve_pgvector({'endpoint': 'postgresql://example.invalid/db'}, {}, knowledge, 'q', 3, embed)
+    )
+    return hits, executed
+
+
+def test_pgvector_sends_the_embedding_as_a_vector(monkeypatch):
+    import psycopg
+    from pgvector import Vector
+    from pgvector.psycopg.vector import register_vector_info
+    from psycopg.adapt import AdaptersMap, PyFormat, Transformer
+    from psycopg.types import TypeInfo
+
+    _, executed = _retrieve_pgvector(monkeypatch, [])
+
+    (embedding, collection, count) = executed[0]
+    assert isinstance(embedding, Vector)
+    assert embedding.to_list() == [0.25, 0.5, 1.0]
+    assert (collection, count) == ('docs', 3)
+
+    # What register_vector sets up on a real connection, with a made-up oid
+    # for the vector type: the value is dumped as that type, not float8[].
+    adapters = AdaptersMap(psycopg.adapters)
+    register_vector_info(adapters, TypeInfo('vector', 99999, 99998))
+    assert Transformer(adapters).get_dumper(embedding, PyFormat.AUTO).oid == 99999
+
+
+def test_pgvector_reports_similarity_best_first(monkeypatch):
+    hits, _ = _retrieve_pgvector(
+        monkeypatch,
+        [
+            {'id': 'a', 'content': 'closest', 'metadata': {}, 'distance': 0.1},
+            {'id': 'b', 'content': 'further', 'metadata': {}, 'distance': 0.4},
+            {'id': 'c', 'content': 'no vector', 'metadata': {}, 'distance': None},
+        ],
+    )
+
+    assert [hit['content'] for hit in hits] == ['closest', 'further', 'no vector']
+    assert [hit['distance'] for hit in hits][:2] == pytest.approx([0.9, 0.6])
+    assert hits[2]['distance'] is None

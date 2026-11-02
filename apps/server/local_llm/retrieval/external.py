@@ -208,6 +208,7 @@ async def _retrieve_milvus(connection, auth_config, knowledge, query, count, emb
 async def _retrieve_pgvector(connection, auth_config, knowledge, query, count, embedding_function) -> list[dict]:
     try:
         import psycopg
+        from pgvector import Vector
         from pgvector.psycopg import register_vector
         from psycopg.rows import dict_row
     except ImportError as exc:
@@ -275,7 +276,9 @@ async def _retrieve_pgvector(connection, auth_config, knowledge, query, count, e
                         table_name=table_identifier,
                         collection=collection_identifier,
                     ),
-                    (vector, collection_name, count),
+                    # As a Vector: register_vector adapts it as the vector type,
+                    # where a list would go as double precision[] (#350).
+                    (Vector(vector), collection_name, count),
                 )
                 return cur.fetchall()
 
@@ -286,7 +289,16 @@ async def _retrieve_pgvector(connection, auth_config, knowledge, query, count, e
         'document_id_field': 'id',
         'score_field': 'distance',
     }
-    return [_normalize_result(row, mapping, knowledge, distance=row.get('distance')) for row in rows]
+    # Reported as cosine similarity (1 - distance), higher is better like the
+    # other providers' scores and the relevance the chat shows (#350). The SQL
+    # still orders by the raw distance so an index on the column can serve it.
+    normalized = []
+    for row in rows:
+        result = dict(row)
+        if result.get('distance') is not None:
+            result['distance'] = 1 - result['distance']
+        normalized.append(_normalize_result(result, mapping, knowledge, distance=result.get('distance')))
+    return normalized
 
 
 async def retrieve_external_knowledge(
