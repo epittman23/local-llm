@@ -24,6 +24,7 @@ import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { copyToClipboard, cn } from '@/lib/utils';
 import { formatSecondsTimestamp } from '@/lib/utils/dates';
+import { useDebouncedCallback } from '@/lib/utils/useDebouncedCallback';
 import { routePaths } from '@/routes/routePaths';
 import { type EditablePrompt, type PromptDraft, isValidCommand } from './promptTypes';
 
@@ -72,8 +73,6 @@ export function PromptEditView({
 
 	// The last metadata that the server accepted, for revert-on-failure.
 	const saved = useRef({ name: prompt.name, command, tags });
-	const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-	useEffect(() => () => void (saveTimer.current && clearTimeout(saveTimer.current)), []);
 
 	// The parent bumps `prompt.version_id` after a save; follow it.
 	useEffect(() => setVersionId(prompt.version_id ?? null), [prompt.version_id]);
@@ -134,10 +133,9 @@ export function PromptEditView({
 	};
 
 	// --- auto-saving metadata -------------------------------------------
-	const scheduleMetadataSave = (next: { name: string; command: string; tags: { name: string }[] }) => {
-		if (disabled) return;
-		if (saveTimer.current) clearTimeout(saveTimer.current);
-		saveTimer.current = setTimeout(async () => {
+	// Leaving the page saves a pending change at once instead of dropping it.
+	const debouncedMetadataSave = useDebouncedCallback(
+		async (next: { name: string; command: string; tags: { name: string }[] }) => {
 			if (!isValidCommand(next.command)) {
 				toast.error('Only alphanumeric characters and hyphens are allowed in the command string.');
 				setCommand(saved.current.command);
@@ -159,7 +157,11 @@ export function PromptEditView({
 				setCommand(saved.current.command);
 				setTags(saved.current.tags);
 			}
-		}, METADATA_SAVE_DELAY_MS);
+		},
+		METADATA_SAVE_DELAY_MS
+	);
+	const scheduleMetadataSave = (next: { name: string; command: string; tags: { name: string }[] }) => {
+		if (!disabled) debouncedMetadataSave(next);
 	};
 
 	// --- new version -----------------------------------------------------
