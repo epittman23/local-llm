@@ -140,6 +140,30 @@ test.describe('workspace models list', () => {
 		await expect(page.getByText('All models are now hidden')).toBeVisible();
 	});
 
+	test('bulk actions leave read-only models alone and keep the rest of each model', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockModelsApi(page, [
+			model(1, { is_active: false }),
+			model(2, { write_access: false, is_active: false, params: {} })
+		]);
+		await page.goto('/workspace/models');
+		await expect(page.getByText('Read Only')).toBeVisible();
+
+		await page.getByRole('button', { name: 'Actions' }).click();
+		await page.getByRole('menuitem', { name: 'Hide All' }).click();
+		await expect(page.getByText('Skipped 1 read-only model')).toBeVisible();
+		const updates = calls.filter((c) => c.path === '/model/update');
+		expect(updates.map((c) => c.body.id)).toEqual(['model-1']);
+		expect(updates[0].body).toMatchObject({ is_active: false, params: { system: 'You are model 1' } });
+		expect(updates[0].body.meta.hidden).toBe(true);
+		expect(updates[0].body).not.toHaveProperty('access_grants');
+
+		await page.getByRole('button', { name: 'Actions' }).click();
+		await page.getByRole('menuitem', { name: 'Enable All' }).click();
+		await expect.poll(() => calls.filter((c) => c.path === '/model/toggle').length).toBe(1);
+		expect(calls.find((c) => c.path === '/model/toggle')?.search).toBe('?id=model-1');
+	});
+
 	test('clone opens the create form pre-filled, with the base model kept', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockModelsApi(page, [model(1)]);

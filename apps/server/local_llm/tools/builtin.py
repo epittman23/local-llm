@@ -983,6 +983,7 @@ async def update_memory(
     Path is optional. Use it as a stable memory address to group related memories.
     Prefer an existing path from list_memory_paths when one fits.
     Leave path empty when no useful grouping is clear.
+    On replace, leave path out to keep the memory's current path; an empty path clears it.
 
     Operation shapes:
     - {"action": "add", "content": "...", "type": "user"|"context", "path": "..."}
