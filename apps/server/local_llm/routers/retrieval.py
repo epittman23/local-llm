@@ -530,6 +530,9 @@ async def update_embedding_config(request: Request, form_data: EmbeddingModelUpd
     log.info('Updating embedding model: %s to %s', config.RAG_EMBEDDING_MODEL, form_data.RAG_EMBEDDING_MODEL)
     # The new model is loaded before the old one is let go, and nothing is saved
     # unless it loads, so a failure leaves the working configuration in place.
+    # It is loaded even when unchanged: the Documents page's download button
+    # sends the same request as a plain save, to re-fetch the model.
+    embedding_in_use = config.RAG_EMBEDDING_ENGINE != '' or request.app.state.ef is not None
     try:
         config.RAG_EMBEDDING_ENGINE = form_data.RAG_EMBEDDING_ENGINE
         config.RAG_EMBEDDING_MODEL = form_data.RAG_EMBEDDING_MODEL.strip()
@@ -561,7 +564,11 @@ async def update_embedding_config(request: Request, form_data: EmbeddingModelUpd
                 detail=(
                     f"Could not load the embedding model '{config.RAG_EMBEDDING_MODEL}'. Check the name, and that "
                     'it is in the Hugging Face cache when the server runs offline (HF_HUB_OFFLINE). '
-                    'The previous embedding model is still in use.'
+                    + (
+                        'The previous embedding model is still in use.'
+                        if embedding_in_use
+                        else 'No embedding model is loaded; uploads and queries will fail until one is.'
+                    )
                 ),
             )
 

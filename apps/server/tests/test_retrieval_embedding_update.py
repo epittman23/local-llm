@@ -4,9 +4,10 @@
 working model first, then save the new name and report success, after which
 every upload and query failed with "No embedding model is loaded" (#346).
 These pin that a model that fails to load is refused with a message naming
-it, that nothing is saved and the loaded model stays in use, that a model
-that loads replaces the old one, and that an external engine (for which
-`get_ef` returns None by design) still saves.
+it and saying truthfully whether an embedding model is still in use, that
+nothing is saved and the state is untouched, that a model that loads
+replaces the old one, and that an external engine (for which `get_ef`
+returns None by design) still saves.
 """
 
 import asyncio
@@ -27,10 +28,16 @@ async def OLD_EMBEDDING_FUNCTION(query, prefix=None, user=None):
 
 
 @pytest.fixture
-def stored(monkeypatch):
-    """A local model is configured and loaded; returns what the route writes."""
-    values = {field: '' for field in retrieval.RETRIEVAL_CONFIG_KEYS}
-    values['RAG_EMBEDDING_MODEL'] = 'old/model'
+def values():
+    """The stored settings: a local model; a test may change them before the update."""
+    stored_values = {field: '' for field in retrieval.RETRIEVAL_CONFIG_KEYS}
+    stored_values['RAG_EMBEDDING_MODEL'] = 'old/model'
+    return stored_values
+
+
+@pytest.fixture
+def stored(monkeypatch, values):
+    """Serves `values` as the stored settings; returns what the route writes."""
     written: dict = {}
 
     async def get_config():
@@ -93,6 +100,55 @@ def test_a_model_that_loads_replaces_the_old_one(stored, monkeypatch):
     assert stored['rag.embedding_model'] == 'new/model'
     assert request.app.state.ef.path == 'new/model'
     assert request.app.state.EMBEDDING_FUNCTION is not OLD_EMBEDDING_FUNCTION
+
+
+def test_with_no_model_loaded_the_refusal_says_none_is(stored, monkeypatch):
+    # An offline backend that booted with the stored model missing: nothing loaded.
+    _loader(monkeypatch, fails=True)
+    request = _request()
+    request.app.state.ef = None
+
+    with pytest.raises(HTTPException) as raised:
+        _update(request, RAG_EMBEDDING_ENGINE='', RAG_EMBEDDING_MODEL='old/model')
+
+    assert raised.value.status_code == 400
+    assert 'No embedding model is loaded; uploads and queries will fail until one is.' in raised.value.detail
+    assert 'still in use' not in raised.value.detail
+    assert stored == {}
+    assert request.app.state.ef is None
+    assert request.app.state.EMBEDDING_FUNCTION is OLD_EMBEDDING_FUNCTION
+
+
+def test_with_an_external_engine_in_use_the_refusal_says_it_is_kept(stored, values, monkeypatch):
+    values['RAG_EMBEDDING_ENGINE'] = 'openai'
+    _loader(monkeypatch, fails=True)
+    request = _request()
+    request.app.state.ef = None
+
+    with pytest.raises(HTTPException) as raised:
+        _update(request, RAG_EMBEDDING_ENGINE='', RAG_EMBEDDING_MODEL='missing/model')
+
+    assert 'previous embedding model is still in use' in raised.value.detail
+    assert stored == {}
+    assert request.app.state.EMBEDDING_FUNCTION is OLD_EMBEDDING_FUNCTION
+
+
+def test_a_failure_building_the_embedding_function_changes_nothing(stored, monkeypatch):
+    _loader(monkeypatch, fails=False)
+
+    def broken(*args, **kwargs):
+        raise RuntimeError('cannot build the embedding function')
+
+    monkeypatch.setattr(retrieval, 'get_embedding_function', broken)
+    request = _request()
+
+    with pytest.raises(HTTPException) as raised:
+        _update(request, RAG_EMBEDDING_ENGINE='', RAG_EMBEDDING_MODEL='new/model')
+
+    assert raised.value.status_code == 500
+    assert stored == {}
+    assert request.app.state.ef is OLD_EF
+    assert request.app.state.EMBEDDING_FUNCTION is OLD_EMBEDDING_FUNCTION
 
 
 @pytest.mark.parametrize('fails', [True, False])
