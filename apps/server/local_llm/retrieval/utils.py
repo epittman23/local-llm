@@ -1797,7 +1797,11 @@ class RerankCompressor(BaseDocumentCompressor):
         scores = None
         if reranking:
             scores = await asyncio.to_thread(self.reranking_function, query, documents)
-        else:
+            if scores is None:
+                # Score by embedding similarity instead, as when no reranker is configured, so a
+                # failed rerank still gets top-k and the relevance threshold.
+                log.warning('Reranking failed; ranking %d documents by embedding similarity instead', len(documents))
+        if scores is None:
             from sentence_transformers import util as st_util
 
             query_embedding = await self.embedding_function(query, RAG_EMBEDDING_QUERY_PREFIX)
