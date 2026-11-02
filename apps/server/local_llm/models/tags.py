@@ -119,16 +119,22 @@ class TagTable:
             return False
 
     async def ensure_tags_exist(self, names: list[str], user_id: str, db: AsyncSession | None = None) -> None:
-        """Create tag rows for any *names* that don't already exist for *user_id*."""
+        """Create tag rows for any *names* that don't already exist for *user_id*.
+
+        Names that normalise to the same id ('Python', 'python') are one tag;
+        the first spelling is kept as its name.
+        """
         if not names:
             return
-        ids = [n.replace(' ', '_').lower() for n in names]
+        names_by_id: dict[str, str] = {}
+        for name in names:
+            names_by_id.setdefault(name.replace(' ', '_').lower(), name)
         async with get_async_db_context(db) as db:
-            result = await db.execute(select(Tag.id).filter(Tag.id.in_(ids), Tag.user_id == user_id))
+            result = await db.execute(select(Tag.id).filter(Tag.id.in_(names_by_id), Tag.user_id == user_id))
             existing = {row[0] for row in result.all()}
             new_tags = [
                 Tag(id=tag_id, name=name, user_id=user_id)
-                for tag_id, name in zip(ids, names, strict=True)
+                for tag_id, name in names_by_id.items()
                 if tag_id not in existing
             ]
             if new_tags:
