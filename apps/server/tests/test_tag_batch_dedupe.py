@@ -101,3 +101,12 @@ def test_unarchive_with_repeated_tag_ids_in_meta_succeeds(monkeypatch):
     assert response.status_code == 200, response.text
     assert response.json()['archived'] is False
     assert _tags(user.id) == {'python': 'python'}
+
+
+def test_ensure_tags_exist_leaves_an_existing_tag_and_its_spelling_alone():
+    user = _user()
+    _run(Tags.ensure_tags_exist(['Python'], user.id))
+
+    _run(Tags.ensure_tags_exist(['PYTHON', 'Rust'], user.id))
+
+    assert _tags(user.id) == {'python': 'Python', 'rust': 'Rust'}
