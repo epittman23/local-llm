@@ -1686,21 +1686,36 @@ async def get_sources_from_items(
     ctx.folder_items = await _expand_folders(items, user)
 
     query_results = []
+    failed = []
     for item in items:
-        query_result, collection_names = await _item_source(item, ctx)
-        if query_result is None and collection_names:
-            searched = await _search_collections(item, collection_names, ctx, embedding_function, full_context)
-            if searched is None:
-                continue
-            query_result, collection_names = searched
-            ctx.extracted_collections.extend(collection_names)
+        # One attachment or knowledge base that fails (an external base
+        # disabled or unreachable) must not lose every other's context (#351).
+        try:
+            query_result, collection_names = await _item_source(item, ctx)
+            if query_result is None and collection_names:
+                searched = await _search_collections(item, collection_names, ctx, embedding_function, full_context)
+                if searched is None:
+                    continue
+                query_result, collection_names = searched
+                ctx.extracted_collections.extend(collection_names)
+        except Exception as e:
+            label = item.get('name') or item.get('id') or item.get('url') or item.get('type')
+            log.warning('get_sources_from_items: %s %s failed: %s', item.get('type'), label, e)
+            failed.append(f'{label}: {e}')
+            continue
 
         if query_result:
             if 'data' in item:
                 del item['data']
             query_results.append({**query_result, 'file': item})
 
-    return _sources_from_results(query_results)
+    sources = _sources_from_results(query_results)
+    # Nothing else answered: an empty list would read as "nothing relevant"
+    # when a source could not be reached at all. (Search and embedding errors
+    # inside _search_collections are still logged there and not counted here.)
+    if failed and not sources:
+        raise RuntimeError('Sources unavailable: ' + '; '.join(failed))
+    return sources
 
 
 def get_model_path(model: str, update_model: bool = False):

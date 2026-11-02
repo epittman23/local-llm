@@ -215,6 +215,7 @@ function ChannelView({ id }: { id: string }) {
 								channel={channel}
 								messages={feed.messages}
 								top={feed.top}
+								failed={feed.failed}
 								replyToId={replyTo?.id}
 								onLoadMore={feed.loadMore}
 								actions={actions}
