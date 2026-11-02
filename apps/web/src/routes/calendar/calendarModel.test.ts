@@ -260,4 +260,9 @@ describe('calendars and automations', () => {
 		expect(automationTarget(ev(at(2026, 8, 1), undefined, { meta: { automation_id: 'a1' } }))).toBe('/automations/a1');
 		expect(automationTarget(ev(at(2026, 8, 1)))).toBeNull();
 	});
+	it("a channel automation's run opens its channel, not /c/channel:<id> (#320)", () => {
+		expect(
+			automationTarget(ev(at(2026, 8, 1), undefined, { meta: { automation_id: 'a1', chat_id: 'channel:ch1' } }))
+		).toBe('/channels/ch1');
+	});
 });
