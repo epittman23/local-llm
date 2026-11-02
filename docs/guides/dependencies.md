@@ -61,7 +61,9 @@ Face at runtime. The sentence-transformers embedding model
 (`RAG_EMBEDDING_MODEL`, default `sentence-transformers/all-MiniLM-L6-v2`) and
 any reranking model must therefore already be in the local Hugging Face cache.
 If one is missing, the backend still starts, but loading the embedding
-function fails and knowledge uploads are not embedded. Fetch a model once
+function fails and knowledge uploads are not embedded. Choosing a missing
+embedding model in Admin Settings > Documents is refused with an error
+instead, and the model already loaded stays in use. Fetch a model once
 with the backend's own `hf`, outside `make backend`:
 
 ```sh
