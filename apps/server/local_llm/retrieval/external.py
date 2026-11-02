@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import re
 import time
@@ -376,9 +377,11 @@ async def retrieve_external_knowledge_for_connection(
     # The queries take turns, each one's best hit first, so the first query
     # cannot fill the budget alone (#349). Merged by rank, not score: whether
     # a higher score is better depends on the collection's metric, which is
-    # unknown here. A chunk several queries return is kept once, at its best
-    # rank; the key includes the content because document_id_field may map a
-    # parent document shared by several chunks.
+    # unknown here. A chunk returned more than once, by several queries or
+    # twice by one, is kept once, at its best rank; the key includes the
+    # content because document_id_field may map a parent document shared by
+    # several chunks. It is built as text because either field may be mapped
+    # to a JSON object or array, which is not hashable.
     chunks = []
     seen = set()
     for rank in range(max((len(hits) for hits in hits_by_query), default=0)):
@@ -386,7 +389,7 @@ async def retrieve_external_knowledge_for_connection(
             if rank >= len(hits):
                 continue
             chunk = hits[rank]
-            key = (chunk['metadata'].get('document_id'), chunk['content'])
+            key = json.dumps([chunk['metadata'].get('document_id'), chunk['content']], sort_keys=True, default=str)
             if key not in seen:
                 seen.add(key)
                 chunks.append(chunk)

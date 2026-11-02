@@ -21,7 +21,7 @@ REQUEST = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(EMBEDDING_FU
 KNOWLEDGE = SimpleNamespace(id='kb', name='KB', meta={})
 
 
-def _chunk(content: str, score: float, document_id: str | None = None) -> dict:
+def _chunk(content: object, score: float, document_id: object = None) -> dict:
     return {'content': content, 'metadata': {'document_id': document_id}, 'distance': score}
 
 
@@ -75,6 +75,35 @@ def test_chunks_sharing_a_document_id_are_not_merged(monkeypatch):
     )
 
     assert result['documents'] == [['part one', 'part two']]
+
+
+def test_queries_with_fewer_hits_drop_out_of_the_turns(monkeypatch):
+    result = _retrieve(
+        monkeypatch,
+        {
+            'q1': [_chunk('q1-hit0', 0.5)],
+            'q2': [_chunk('q2-hit0', 0.9), _chunk('q2-hit1', 0.8), _chunk('q2-hit2', 0.7)],
+        },
+        count=3,
+    )
+
+    assert result['documents'] == [['q1-hit0', 'q2-hit0', 'q2-hit1']]
+
+
+def test_content_and_ids_mapped_to_json_values_still_merge(monkeypatch):
+    """An admin may map content or document_id to a jsonb/array column or an
+    object node; such a value is not hashable and must not lose the results."""
+    record = {'title': 'T', 'body': ['a', 'b']}
+    result = _retrieve(
+        monkeypatch,
+        {
+            'q1': [_chunk(record, 0.9, document_id={'k': 1}), _chunk(['x', 'y'], 0.5)],
+            'q2': [_chunk(dict(reversed(record.items())), 0.8, document_id={'k': 1})],
+        },
+        count=5,
+    )
+
+    assert result['documents'] == [[record, ['x', 'y']]]
 
 
 def test_one_query_keeps_the_provider_order(monkeypatch):
