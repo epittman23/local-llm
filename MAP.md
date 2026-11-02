@@ -344,7 +344,7 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   folder tree, uploads, incremental folder sync and a file-text sheet --
   `knowledgeFiles.ts` holds its path/diff logic and the content-save toast,
   `useKnowledgeUploads.ts` the upload flows), and `workspace/models/` (list
-  with bulk actions and pinning; `ModelEditor` with its data flow in
+  with pinning and bulk actions, those in `modelBulk.ts`; `ModelEditor` with its data flow in
   `modelEditorLogic.ts`, the
   pickers in `EditorPickers`/`KnowledgePicker`, and import
   sanitizers in `modelImport.ts`). `admin/` is Phase 8's surface:
