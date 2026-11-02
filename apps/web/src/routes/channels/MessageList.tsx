@@ -40,7 +40,7 @@ export function MessageList({
 		<div>
 			{!top && failed ? (
 				<div className="text-muted-foreground flex items-center justify-center gap-2 py-1 text-xs">
-					Couldn't load older messages.
+					<span>Couldn't load {list.length > 0 ? 'older ' : ''}messages.</span>
 					<button type="button" className="hover:text-foreground underline" onClick={onLoadMore}>
 						Retry
 					</button>
