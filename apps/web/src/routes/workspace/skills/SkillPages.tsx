@@ -6,16 +6,7 @@ import { createNewSkill, getSkillById, updateSkillById } from '@/lib/apis/skills
 import { useAuthStore } from '@/lib/stores/authStore';
 import { routePaths } from '@/routes/routePaths';
 import { SkillEditor } from './SkillEditor';
-import { type SkillDraft, sanitizeStashedSkill } from './skillTypes';
-
-const toDraft = (s: SkillDraft & { access_grants?: SkillDraft['access_grants'] }): SkillDraft => ({
-	id: s.id,
-	name: s.name,
-	description: s.description,
-	content: s.content,
-	is_active: s.is_active,
-	access_grants: s.access_grants === undefined ? [] : s.access_grants
-});
+import { type SkillDraft, sanitizeStashedSkill, toSkillDraft } from './skillTypes';
 
 /**
  * Ports (app)/workspace/skills/create/+page.svelte. A skill left in
@@ -78,7 +69,7 @@ export function SkillEditPage() {
 					return;
 				}
 				setDisabled(!res.write_access);
-				setSkill(toDraft(res));
+				setSkill(toSkillDraft(res));
 			});
 		return () => {
 			cancelled = true;
@@ -93,7 +84,7 @@ export function SkillEditPage() {
 		});
 		if (updated) {
 			toast.success('Skill updated successfully');
-			setSkill(toDraft(updated));
+			setSkill(toSkillDraft(updated));
 		}
 	};
 

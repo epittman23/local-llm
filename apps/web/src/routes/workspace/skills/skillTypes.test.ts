@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { formatSkillName, parseFrontmatter } from '@/lib/utils/skills';
-import { parseSkillImport, sanitizeStashedSkill } from './skillTypes';
+import { parseSkillImport, sanitizeStashedSkill, toSkillDraft } from './skillTypes';
 
 describe('parseFrontmatter / formatSkillName', () => {
 	it('reads key: value lines, unquotes, and keeps colons inside values', () => {
@@ -65,5 +65,34 @@ describe('sanitizeStashedSkill', () => {
 	it('rejects non-objects', () => {
 		expect(sanitizeStashedSkill('x')).toBeNull();
 		expect(sanitizeStashedSkill([1])).toBeNull();
+	});
+});
+
+describe('toSkillDraft', () => {
+	it('keeps is_active and the tags a save writes back (#227), and defaults missing grants', () => {
+		expect(
+			toSkillDraft({
+				id: 's',
+				name: 'S',
+				description: 'd',
+				content: 'c',
+				is_active: false,
+				meta: { tags: ['a', 'b'] }
+			})
+		).toEqual({
+			id: 's',
+			name: 'S',
+			description: 'd',
+			content: 'c',
+			is_active: false,
+			meta: { tags: ['a', 'b'] },
+			access_grants: []
+		});
+	});
+
+	it('reads null or missing tags (SkillMeta.tags is nullable) as none', () => {
+		const base = { id: 's', name: 'S', description: '', content: '', is_active: true, access_grants: [] };
+		expect(toSkillDraft({ ...base, meta: { tags: null } }).meta).toEqual({ tags: [] });
+		expect(toSkillDraft(base).meta).toEqual({ tags: [] });
 	});
 });
