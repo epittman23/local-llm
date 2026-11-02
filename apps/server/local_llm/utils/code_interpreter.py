@@ -294,12 +294,15 @@ def _read_bytes(path: str) -> bytes:
         return f.read()
 
 
+DEFAULT_IDLE_TIMEOUT = 60
+
+
 async def execute_code_jupyter(
     base_url: str,
     code: str,
     token: str = '',
     password: str = '',
-    idle_timeout: int = 60,
+    idle_timeout: int | None = DEFAULT_IDLE_TIMEOUT,
     files: list[tuple[str, str]] | None = None,
     notes: list[str] | None = None,
 ) -> dict:
@@ -313,6 +316,10 @@ async def execute_code_jupyter(
     first, so the code opens them by name; `notes` say which were left out,
     and are added to stderr so the model sees why a file is missing.
     """
+    # A timeout cleared in Admin > Code Execution is saved as null, and 0 or
+    # less is no usable limit: either would wait for output forever (#247).
+    if idle_timeout is None or idle_timeout <= 0:
+        idle_timeout = DEFAULT_IDLE_TIMEOUT
     started = time.monotonic()
     async with JupyterCodeExecuter(base_url, code, token, password, idle_timeout, files) as executor:
         result = await executor.run()

@@ -72,6 +72,27 @@ describe('feedback', () => {
 			meta: { chat_id: 'c1', message_id: m.id, message_index: 2, base_models: { a: 'llama3', b: null } }
 		});
 	});
+	it("leaves the model's own regenerations and model-less replies out of its opponents", () => {
+		const u = addUserMessage(emptyHistory(), null, { content: 'q' });
+		const item = (models: { id: string }[]) => {
+			const r = addResponses(u.history, u.id, models);
+			const m = r.history.messages[r.targets[0].message_id];
+			return feedbackItem({
+				history: r.history,
+				message: m,
+				annotation: annotate(m, 1),
+				chatId: 'c1',
+				chat: { id: 'c1' },
+				baseModelOf: () => null
+			});
+		};
+		const regenerated = item([{ id: 'a' }, { id: 'a' }, { id: '' }]);
+		expect(regenerated.data).not.toHaveProperty('sibling_model_ids');
+		expect(regenerated.meta.base_models).toEqual({ a: null });
+		const mixed = item([{ id: 'a' }, { id: 'a' }, { id: 'b' }, { id: '' }]);
+		expect(mixed.data).toMatchObject({ model_id: 'a', sibling_model_ids: ['b'] });
+		expect(mixed.meta.base_models).toEqual({ a: null, b: null });
+	});
 	it('merges details into the annotation', () => {
 		const { h, replies } = setup();
 		const m = { ...h.messages[replies[0]], annotation: { rating: -1 } };
