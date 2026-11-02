@@ -47,8 +47,12 @@ export function useMessageFeed(
 	const { socket } = useSocket();
 	const [messages, setMessages] = useState<ChannelMessage[] | null>(null);
 	const [top, setTop] = useState(false);
+	/** The last page failed to load: not the start of the history, so `loadMore` stays available to retry it. */
+	const [failed, setFailed] = useState(false);
 	const [typing, setTyping] = useState<ChannelUser[]>([]);
 	const loadingMore = useRef(false);
+	/** Bumped when the list resets or unmounts, so a page still loading for the old one is dropped (no toast, no state). */
+	const generation = useRef(0);
 	const typingTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 	const optsRef = useRef(opts);
 	optsRef.current = opts;
@@ -67,6 +71,7 @@ export function useMessageFeed(
 		let cancelled = false;
 		setMessages(null);
 		setTop(false);
+		setFailed(false);
 		early.current = [];
 		const scope = { channelId, parentId };
 		const landed = (page: ChannelMessage[]) => {
@@ -84,10 +89,12 @@ export function useMessageFeed(
 				if (cancelled) return;
 				toast.error(`${e}`);
 				landed([]);
-				setTop(true);
+				setFailed(true);
 			});
 		return () => {
 			cancelled = true;
+			generation.current += 1;
+			loadingMore.current = false;
 		};
 		// fetchPage changes with the channel and thread.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -95,11 +102,22 @@ export function useMessageFeed(
 
 	const loadMore = useCallback(async () => {
 		if (loadingMore.current || top || !messages) return;
+		const gen = generation.current;
 		loadingMore.current = true;
-		const page = (await fetchPage(messages.length).catch(() => null)) ?? [];
-		setMessages((ms) => [...(ms ?? []), ...page.filter((p) => !(ms ?? []).some((m) => m.id === p.id))]);
-		if (page.length < PAGE) setTop(true);
-		loadingMore.current = false;
+		// The loader, not the Retry row, while the retry is in flight.
+		setFailed(false);
+		try {
+			const page = (await fetchPage(messages.length)) ?? [];
+			if (gen !== generation.current) return;
+			setMessages((ms) => [...(ms ?? []), ...page.filter((p) => !(ms ?? []).some((m) => m.id === p.id))]);
+			if (page.length < PAGE) setTop(true);
+		} catch (e) {
+			if (gen !== generation.current) return;
+			toast.error(`${e}`);
+			setFailed(true);
+		} finally {
+			if (gen === generation.current) loadingMore.current = false;
+		}
 	}, [fetchPage, messages, top]);
 
 	useEffect(() => {
@@ -247,5 +265,5 @@ export function useMessageFeed(
 			pinned_at: pinned ? nowNs() : null
 		}));
 
-	return { messages, top, typing, loadMore, submit, emitTyping, actions, setPinned };
+	return { messages, top, failed, typing, loadMore, submit, emitTyping, actions, setPinned };
 }

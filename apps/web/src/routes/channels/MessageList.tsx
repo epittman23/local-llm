@@ -9,13 +9,15 @@ import { ChannelMessageView, type MessageActions } from './ChannelMessageView';
 
 /**
  * Ports channel/Messages.svelte: the messages oldest-first, a loader at the
- * top that pages back while there is more, and, once the start is reached in
- * the channel itself, the "beginning of the channel" header.
+ * top that pages back while there is more (a Retry button in its place after a
+ * page failed to load), and, once the start is reached in the channel itself,
+ * the "beginning of the channel" header.
  */
 export function MessageList({
 	channel,
 	messages,
 	top,
+	failed = false,
 	thread = false,
 	replyToId,
 	onLoadMore,
@@ -24,6 +26,7 @@ export function MessageList({
 	channel: Channel;
 	messages: ChannelMessage[];
 	top: boolean;
+	failed?: boolean;
 	thread?: boolean;
 	replyToId?: string | null;
 	onLoadMore: () => void;
@@ -35,7 +38,14 @@ export function MessageList({
 
 	return (
 		<div>
-			{!top ? (
+			{!top && failed ? (
+				<div className="text-muted-foreground flex items-center justify-center gap-2 py-1 text-xs">
+					<span>Couldn't load {list.length > 0 ? 'older ' : ''}messages.</span>
+					<button type="button" className="hover:text-foreground underline" onClick={onLoadMore}>
+						Retry
+					</button>
+				</div>
+			) : !top ? (
 				<InfiniteLoader onVisible={onLoadMore}>
 					<div className="text-muted-foreground flex items-center justify-center gap-2 py-1 text-xs">
 						<Spinner className="size-4" /> Loading...
