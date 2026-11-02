@@ -38,6 +38,7 @@ import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { blobToFile } from '@/lib/utils/files';
 import { copyToClipboard } from '@/lib/utils';
+import { useDebouncedCallback } from '@/lib/utils/useDebouncedCallback';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { routePaths } from '@/routes/routePaths';
 import { ExternalKnowledgePanel } from './ExternalKnowledgePanel';
@@ -246,27 +247,31 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 	});
 
 	// --- name and description save themselves -------------------------------
-	const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-	useEffect(() => () => void (saveTimer.current && clearTimeout(saveTimer.current)), []);
-	const scheduleSave = (next: Knowledge) => {
-		if (saveTimer.current) clearTimeout(saveTimer.current);
-		saveTimer.current = setTimeout(async () => {
-			if (next.name.trim() === '' || next.description.trim() === '') {
-				toast.error('Please fill in all fields.');
-				return;
-			}
-			const res = await updateKnowledgeById(token, id, {
-				...next,
-				name: next.name,
-				description: next.description,
-				access_grants: next.access_grants ?? []
-			} as never).catch((e) => {
-				toast.error(`${e}`);
-				return null;
-			});
-			if (res) toast.success('Knowledge updated successfully');
-		}, 1000);
-	};
+	// Leaving the page saves a pending change at once instead of dropping it.
+	const scheduleSave = useDebouncedCallback(async (next: Knowledge) => {
+		if (next.name.trim() === '' || next.description.trim() === '') {
+			toast.error('Please fill in all fields.');
+			return;
+		}
+		const res = await updateKnowledgeById(token, id, {
+			...next,
+			name: next.name,
+			description: next.description,
+			access_grants: next.access_grants ?? []
+		} as never).catch((e) => {
+			toast.error(`${e}`);
+			return null;
+		});
+		if (!res) return;
+		// A page opened again from the cache must start from what was saved, and
+		// so must the list of knowledge bases.
+		queryClient.setQueryData<Knowledge | null>(
+			['knowledge-base', id],
+			(old) => old && { ...old, name: next.name, description: next.description }
+		);
+		queryClient.invalidateQueries({ queryKey: ['knowledge'] });
+		toast.success('Knowledge updated successfully');
+	}, 1000);
 	const edit = (patch: Partial<Knowledge>) => {
 		const next = { ...knowledge, ...patch };
 		setKnowledge(next);
