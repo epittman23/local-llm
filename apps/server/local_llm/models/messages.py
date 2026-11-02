@@ -403,6 +403,9 @@ class MessageTable:
     ) -> MessageModel | None:
         async with get_async_db_context(db) as db:
             message = await db.get(Message, id)
+            if message is None:
+                # Deleted meanwhile, e.g. a model reply whose thread was deleted while it streamed.
+                return None
             message.content = form_data.content
             message.data = {
                 **(message.data if message.data else {}),
@@ -578,18 +581,6 @@ class MessageTable:
             await db.commit()
             return True
 
-    async def delete_reactions_by_id(self, id: str, db: AsyncSession | None = None) -> bool:
-        async with get_async_db_context(db) as db:
-            await db.execute(delete(MessageReaction).filter_by(message_id=id))
-            await db.commit()
-            return True
-
-    async def delete_replies_by_id(self, id: str, db: AsyncSession | None = None) -> bool:
-        async with get_async_db_context(db) as db:
-            await db.execute(delete(Message).filter_by(parent_id=id))
-            await db.commit()
-            return True
-
     async def delete_message_by_id(self, id: str, db: AsyncSession | None = None) -> bool:
         """Delete a message with its thread replies, at any depth, and every reaction to them.
 
@@ -597,10 +588,15 @@ class MessageTable:
         pinned and searchable, including by the model's search_messages tool (#277).
         """
         async with get_async_db_context(db) as db:
+            root = await db.get(Message, id)
+            if root is None:
+                return True
             ids = {id}
             frontier = [id]
             while frontier:
-                result = await db.execute(select(Message.id).filter(Message.parent_id.in_(frontier)))
+                result = await db.execute(
+                    select(Message.id).filter(Message.channel_id == root.channel_id, Message.parent_id.in_(frontier))
+                )
                 frontier = [reply_id for reply_id in result.scalars().all() if reply_id not in ids]
                 ids.update(frontier)
 

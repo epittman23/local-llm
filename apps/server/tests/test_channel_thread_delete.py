@@ -116,3 +116,20 @@ def test_deleting_a_reply_leaves_its_parent_and_siblings():
     assert seen['parent'].reply_count == 1
     assert seen['sibling'] is not None
     assert seen['nested'] is None
+
+
+def test_a_message_gone_already_is_neither_deleted_nor_updated():
+    """A model reply still streaming into a thread whose parent was deleted finds its row gone."""
+
+    async def scenario():
+        _tag, _user, _channel, parent, reply, _nested, _bystander = await _channel_with_thread()
+        await Messages.delete_message_by_id(parent.id)
+        return (
+            await Messages.delete_message_by_id(parent.id),
+            await Messages.update_message_by_id(reply.id, MessageForm(content='late token')),
+        )
+
+    deleted_again, updated = _run(scenario)
+
+    assert deleted_again is True
+    assert updated is None
