@@ -167,7 +167,8 @@ async def list_task_ids_by_item_id(redis, id):
     """
     if redis:
         return await redis_list_item_tasks(redis, id)
-    return item_tasks.get(id, [])
+    # A copy: each finished task's cleanup removes its id from the live list.
+    return list(item_tasks.get(id, []))
 
 
 async def save_response_stream(
@@ -270,17 +271,28 @@ async def stop_task(redis, task_id: str):
 async def stop_item_tasks(redis: Redis, item_id: str):
     """
     Stop all tasks associated with a specific item ID.
+
+    `stopped` lists the tasks stopped here. Under Redis a stop is a request
+    published to whichever worker runs the task, so it lists every id asked.
     """
     task_ids = await list_task_ids_by_item_id(redis, item_id)
     if not task_ids:
-        return {'status': True, 'message': f'No tasks found for item {item_id}.'}
+        return {'status': True, 'message': f'No tasks found for item {item_id}.', 'stopped': []}
 
+    # stop_task fails for a task that has already ended, and raises if the task
+    # ended in, or raised while being cancelled with, an error: keep going either way.
+    stopped = []
     for task_id in task_ids:
-        result = await stop_task(redis, task_id)
-        if not result['status']:
-            return result  # Return the first failure
-
-    return {'status': True, 'message': f'All tasks for item {item_id} stopped.'}
+        try:
+            if (await stop_task(redis, task_id))['status']:
+                stopped.append(task_id)
+        except Exception as e:
+            log.warning('stop_item_tasks: task %s of item %s raised while stopping: %r', task_id, item_id, e)
+    if len(stopped) == len(task_ids):
+        message = f'All tasks for item {item_id} stopped.'
+    else:
+        message = f'Stopped {len(stopped)} of {len(task_ids)} tasks for item {item_id}; the rest had already ended.'
+    return {'status': True, 'message': message, 'stopped': stopped}
 
 
 async def has_active_tasks(redis, chat_id: str) -> bool:
