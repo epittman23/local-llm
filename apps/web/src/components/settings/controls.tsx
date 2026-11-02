@@ -19,13 +19,14 @@ export const settingTextareaClass =
  * A settings tab: heading, scrolling body, and (unless `footer` is false) a
  * Save button pinned below it. Submitting the form saves; `saving` disables the
  * button and shows a spinner (the Svelte tabs each do this differently -- some
- * do not guard double submits at all).
+ * do not guard double submits at all); `disabled` turns saving off without one.
  */
 export function SettingsForm({
 	title,
 	onSubmit,
 	saving = false,
 	loading = false,
+	disabled = false,
 	footer = true,
 	children
 }: {
@@ -33,6 +34,7 @@ export function SettingsForm({
 	onSubmit?: () => void | Promise<void>;
 	saving?: boolean;
 	loading?: boolean;
+	disabled?: boolean;
 	footer?: boolean;
 	children: ReactNode;
 }) {
@@ -45,7 +47,7 @@ export function SettingsForm({
 				// its own <form> bubbles its submit up to this one. That is the dialog's
 				// business, not a request to save the tab.
 				if (e.target !== e.currentTarget) return;
-				if (!saving) onSubmit?.();
+				if (!saving && !disabled) onSubmit?.();
 			}}
 		>
 			<h2 className="mb-4 text-sm font-medium">{title}</h2>
@@ -60,7 +62,7 @@ export function SettingsForm({
 			</div>
 			{footer && !loading && (
 				<div className="flex justify-end pt-3 text-sm font-normal">
-					<Button type="submit" disabled={saving}>
+					<Button type="submit" disabled={saving || disabled}>
 						Save
 						{saving && <Spinner className="size-3.5" />}
 					</Button>
