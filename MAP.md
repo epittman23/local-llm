@@ -332,7 +332,7 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   folder tree, uploads, incremental folder sync and a file-text sheet --
   `knowledgeFiles.ts` holds its path/diff logic and the content-save toast,
   `useKnowledgeUploads.ts` the upload flows), and `workspace/models/` (list
-  with bulk actions and pinning; `ModelEditor` with its data flow in
+  with pinning and bulk actions, those in `modelBulk.ts`; `ModelEditor` with its data flow in
   `modelEditorLogic.ts`, the
   pickers in `EditorPickers`/`KnowledgePicker`, and import
   sanitizers in `modelImport.ts`). `admin/` is Phase 8's surface:
@@ -371,7 +371,7 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
 - **`src/lib/auth/`**, **`stores/`** (Zustand: auth, config, UI),
   **`socket/`**, **`i18n/`** (i18next setup and the one shipped locale, `en-US`),
   **`query/`**, **`utils/`** (only the functions from the SvelteKit app's
-  `utils/index.ts` that ported pages actually use),
+  `utils/index.ts` that ported pages actually use, plus small React hooks: `useDebouncedValue`, `useDebouncedCallback`, `useShiftKey`),
   **`access/`** (`accessGrants.ts`: the pure grant-rewriting rules behind
   `AccessControl`), and **`settings/`** (`userSettings.ts`: the user's saved
   UI settings through TanStack Query, for model pinning; `useConfigDraft`

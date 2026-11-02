@@ -21,6 +21,30 @@ export type SkillListItem = {
 	user?: { name?: string; email?: string } | null;
 };
 
+/**
+ * A skill as the API returns it, reduced to what the editor edits and saves
+ * back. `is_active` and `meta` are carried through because Save writes the
+ * whole form (`routers/skills.py`'s update): dropping them here re-enabled a
+ * disabled skill and cleared its tags on every save (#227). `SkillMeta.tags`
+ * is nullable on the server, so a null reads as no tags.
+ */
+export function toSkillDraft(
+	s: Omit<SkillDraft, 'meta' | 'access_grants'> & {
+		meta?: { tags?: string[] | null } | null;
+		access_grants?: AccessGrant[];
+	}
+): SkillDraft {
+	return {
+		id: s.id,
+		name: s.name,
+		description: s.description,
+		content: s.content,
+		is_active: s.is_active,
+		meta: { tags: s.meta?.tags ?? [] },
+		access_grants: s.access_grants ?? []
+	};
+}
+
 const asString = (value: unknown, max: number) => (typeof value === 'string' ? value.slice(0, max) : '');
 const ID_MAX = 200;
 const NAME_MAX = 200;
