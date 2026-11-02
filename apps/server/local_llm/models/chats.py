@@ -838,7 +838,7 @@ class ChatTable:
             meta = row[0] or {}
             old_tags = meta.get('tags', [])
             new_tags = [t for t in tags if t.replace(' ', '_').lower() != 'none']
-            new_tag_ids = [t.replace(' ', '_').lower() for t in new_tags]
+            new_tag_ids = list(dict.fromkeys(t.replace(' ', '_').lower() for t in new_tags))
 
             # Single meta update
             await session.execute(update(Chat).filter_by(id=id).values(meta={**meta, 'tags': new_tag_ids}))

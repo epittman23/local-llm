@@ -35,14 +35,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
-import {
-	deleteModelById,
-	getModelById,
-	getModelItems,
-	getModelTags,
-	toggleModelById,
-	updateModelById
-} from '@/lib/apis/models';
+import { deleteModelById, getModelById, getModelItems, getModelTags, toggleModelById } from '@/lib/apis/models';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useWebUIName } from '@/lib/stores/configStore';
@@ -52,6 +45,7 @@ import { dayjs } from '@/lib/utils/dates';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { useShiftKey } from '@/lib/utils/useShiftKey';
 import { routePaths } from '@/routes/routePaths';
+import { type BulkAction, runBulkAction, setVisibility } from './modelBulk';
 import { DEFAULT_PROFILE_IMAGE } from './modelEditorLogic';
 import { parseModelImport, saveImportedModel } from './modelImport';
 
@@ -82,6 +76,9 @@ type ModelRow = {
  *   the ['models-all'] query here, invalidated the same way.
  * - Importing a file never takes access grants from it, and "Share" sends only
  *   the model's own definition (see modelImport.ts).
+ * - The bulk actions skip models the user can't write, and say how many they
+ *   skipped; Show / Hide All send each model's own fields, not the list row
+ *   (see modelBulk.ts).
  */
 export function ModelsPage() {
 	const token = useAuthStore((s) => s.token) ?? '';
@@ -181,15 +178,7 @@ export function ModelsPage() {
 	};
 
 	const setHidden = async (m: ModelRow, hidden: boolean) => {
-		const updated = { ...m, meta: { ...m.meta, hidden } };
-		try {
-			if (await updateModelById(token, m.id, updated)) {
-				toast.success(`Model ${m.id} is now ${hidden ? 'hidden' : 'visible'}`);
-				setPage(1);
-			}
-		} catch (e) {
-			toast.error(`${e}`);
-		}
+		if (await setVisibility(token, m, hidden)) setPage(1);
 		await refetch();
 	};
 
@@ -235,40 +224,15 @@ export function ModelsPage() {
 		}
 		return all;
 	};
-	const bulk = async (pick: (m: ModelRow) => boolean, apply: (m: ModelRow) => Promise<unknown>, after?: string) => {
-		try {
-			const targets = (await fetchAll()).filter(pick);
-			if (targets.length === 0) return;
-			await Promise.all(targets.map(apply));
-			if (after) toast.success(after);
-		} catch (e) {
-			toast.error(`${e}`);
-		}
+	const bulk = async (action: BulkAction) => {
+		await runBulkAction(token, fetchAll, action);
 		setActiveOverride({});
 		await refetch();
 	};
-	const enableAll = () =>
-		bulk(
-			(m) => !(m.is_active ?? true),
-			(m) => toggleModelById(token, m.id)
-		);
-	const disableAll = () =>
-		bulk(
-			(m) => m.is_active ?? true,
-			(m) => toggleModelById(token, m.id)
-		);
-	const showAll = () =>
-		bulk(
-			(m) => m.meta?.hidden === true,
-			(m) => updateModelById(token, m.id, { ...m, meta: { ...m.meta, hidden: false } }),
-			'All models are now visible'
-		);
-	const hideAll = () =>
-		bulk(
-			(m) => !(m.meta?.hidden ?? false),
-			(m) => updateModelById(token, m.id, { ...m, meta: { ...m.meta, hidden: true } }),
-			'All models are now hidden'
-		);
+	const enableAll = () => bulk('enable');
+	const disableAll = () => bulk('disable');
+	const showAll = () => bulk('show');
+	const hideAll = () => bulk('hide');
 
 	// --- import ---------------------------------------------------------------
 	const importFile = (file: File) => {
