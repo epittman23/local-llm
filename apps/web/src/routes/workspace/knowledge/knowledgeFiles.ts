@@ -10,6 +10,14 @@ export type DirectoryFileEntry = { path: string; filename: string; file: File };
 export type DirectoryManifestEntry = DirectoryFileEntry & { checksum: string; size: number };
 export type Breadcrumb = { id: string; name: string };
 
+/**
+ * `page` pulled back to the last page a list of `total` items fills at
+ * `perPage` a page (page 1 when the list is empty), so a list that shrank
+ * under it never leaves an empty page with no pagination shown to leave by.
+ */
+export const clampPage = (page: number, total: number, perPage: number): number =>
+	Math.min(page, Math.max(1, Math.ceil(total / perPage)));
+
 /** Hidden files and folders (any path segment starting with ".") are never uploaded. */
 export const hasHiddenFolder = (path: string): boolean => path.split('/').some((part) => part.startsWith('.'));
 
