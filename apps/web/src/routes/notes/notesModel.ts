@@ -1,4 +1,9 @@
+import type { QueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import type { AccessGrant, Permission } from '@/lib/access/accessGrants';
+import { updateNoteAccessGrants } from '@/lib/apis/notes';
 import { markdownToHtml } from '@/lib/editor/markdown';
+import type { SessionUser } from '@/lib/stores/authStore';
 import { getTimeRange } from '@/lib/utils/api-helpers';
 
 // The rules behind the Notes surface (components/notes/Notes.svelte,
@@ -95,4 +100,67 @@ export function parseGeneratedTitle(reply: string): string | null {
 	} catch {
 		return null;
 	}
+}
+
+/**
+ * The access dialog's options for a note, as NoteEditor.svelte passed them:
+ * read and write grants, with sharing, Public and named users each gated by
+ * the user's own sharing permissions (admins get all three).
+ */
+export function noteAccessProps(user: SessionUser | null) {
+	const isAdmin = user?.role === 'admin';
+	return {
+		accessRoles: ['read', 'write'] as Permission[],
+		share: Boolean(user?.permissions?.sharing?.notes) || isAdmin,
+		sharePublic: Boolean(user?.permissions?.sharing?.public_notes) || isAdmin,
+		shareUsers: (user?.permissions?.access_grants?.allow_users ?? true) || isAdmin
+	};
+}
+
+/**
+ * The note with the grants the server stored. routers/notes.py drops grants
+ * this user may not set, so caching the ones sent could show a note as public
+ * that is stored private. Only `access_grants` is taken from the response; its
+ * title and body may be older than an unsaved edit.
+ */
+export function withServerGrants<T extends { access_grants?: AccessGrant[] }>(
+	note: T,
+	res: { access_grants?: AccessGrant[] } | null | undefined
+): T {
+	return Array.isArray(res?.access_grants) ? { ...note, access_grants: res.access_grants } : note;
+}
+
+// The latest access save per note. A reply to an older save is not cached: the
+// dialog builds each edit on the cached grants and the server replaces them
+// wholesale, so only the newest request says what is stored.
+const accessSaves = new Map<string, number>();
+
+const grantKey = (g: AccessGrant) => `${g.principal_type}:${g.principal_id}:${g.permission}`;
+
+/**
+ * Sends a note's new grants. The cache shows them at once, so a second edit
+ * made before the reply builds on the first; the latest reply then replaces
+ * them with what the server stored, and a failed latest save restores the
+ * grants from before it. Warns, instead of saying Saved, when the server
+ * dropped a grant this user may not set.
+ */
+export async function saveNoteAccess(queryClient: QueryClient, token: string, id: string, grants: AccessGrant[]) {
+	type Cached = { access_grants?: AccessGrant[] };
+	const key = ['notes', 'item', id];
+	const seq = (accessSaves.get(id) ?? 0) + 1;
+	accessSaves.set(id, seq);
+	const previous = queryClient.getQueryData<Cached>(key)?.access_grants;
+	queryClient.setQueryData<Cached>(key, (old) => old && { ...old, access_grants: grants });
+
+	const res = await updateNoteAccessGrants(token, id, grants).catch((e) => void toast.error(`${e}`));
+	const latest = accessSaves.get(id) === seq;
+	if (!res) {
+		if (latest) queryClient.setQueryData<Cached>(key, (old) => old && { ...old, access_grants: previous });
+		return;
+	}
+	if (latest) queryClient.setQueryData<Cached>(key, (old) => old && withServerGrants(old, res));
+	const stored = Array.isArray(res.access_grants) ? new Set(res.access_grants.map(grantKey)) : null;
+	if (stored && grants.some((g) => !stored.has(grantKey(g))))
+		toast.warning('Some access settings were not saved: you are not allowed to share this way.');
+	else toast.success('Saved');
 }
