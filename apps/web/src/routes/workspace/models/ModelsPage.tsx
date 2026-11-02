@@ -36,7 +36,6 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import {
-	createNewModel,
 	deleteModelById,
 	getModelById,
 	getModelItems,
@@ -54,7 +53,7 @@ import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { useShiftKey } from '@/lib/utils/useShiftKey';
 import { routePaths } from '@/routes/routePaths';
 import { DEFAULT_PROFILE_IMAGE } from './modelEditorLogic';
-import { parseModelImport } from './modelImport';
+import { parseModelImport, saveImportedModel } from './modelImport';
 
 const PER_PAGE = 30;
 
@@ -284,8 +283,7 @@ export function ModelsPage() {
 			}
 			for (const model of incoming) {
 				// Update a model that already exists, create it otherwise.
-				const exists = await getModelById(token, model.id).catch(() => null);
-				await (exists ? updateModelById(token, model.id, model) : createNewModel(token, model)).catch((error) => {
+				await saveImportedModel(token, model).catch((error) => {
 					toast.error(`${error}`);
 					return null;
 				});

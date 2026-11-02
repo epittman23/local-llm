@@ -23,6 +23,24 @@ export function normalizeSuggestion(raw: unknown): PromptSuggestion {
 	return { content: str(s.content), title };
 }
 
+/**
+ * Repairs a stored suggestion's title for editing, as the original's render
+ * did: a bare-string title becomes `[title, '']`, anything else that is not a
+ * pair is blank. Nothing is cut and every other field is kept, so editing one
+ * suggestion never rewrites the others (#226); the limits above are for imports.
+ */
+export function shapeSuggestion(raw: unknown): PromptSuggestion {
+	const s = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+	const text = (v: unknown) => (typeof v === 'string' ? v : '');
+	const title: [string, string] =
+		typeof s.title === 'string'
+			? [s.title, '']
+			: Array.isArray(s.title)
+				? [text(s.title[0]), text(s.title[1])]
+				: ['', ''];
+	return { ...s, content: text(s.content), title };
+}
+
 /** Parses an imported suggestions file (a JSON array); throws on anything that is not one. */
 export function parseSuggestionsImport(text: string): PromptSuggestion[] {
 	const parsed: unknown = JSON.parse(text);
@@ -38,7 +56,7 @@ export function PromptSuggestionsEditor({
 	value: PromptSuggestion[];
 	onChange: (next: PromptSuggestion[]) => void;
 }) {
-	const suggestions = value.map(normalizeSuggestion);
+	const suggestions = value.map(shapeSuggestion);
 	const update = (i: number, patch: Partial<PromptSuggestion>) =>
 		onChange(suggestions.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
 	const field = 'w-full bg-transparent text-[0.8125rem] leading-5 outline-hidden placeholder:text-muted-foreground/50';
