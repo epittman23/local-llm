@@ -12,12 +12,12 @@ import { KB_FILE_MOVE } from './knowledgeFiles';
 // The server side of one knowledge base: 30 files a page, newest first, and
 // one directory listed on every page. The mocks below edit it the way the
 // real endpoints would.
-const state = vi.hoisted(() => ({ files: [] as { id: string; meta: { name: string } }[] }));
+const state = vi.hoisted(() => ({ name: 'KB', files: [] as { id: string; meta: { name: string } }[] }));
 
 vi.mock('@/lib/apis/knowledge', () => ({
 	getKnowledgeById: vi.fn(async () => ({
 		id: 'kb1',
-		name: 'KB',
+		name: state.name,
 		description: 'desc',
 		write_access: true,
 		access_grants: []
@@ -66,12 +66,13 @@ vi.mock('@/lib/apis/files', () => ({
 	updateFileDataContentById: vi.fn(async (_t: string, fileId: string) => ({ id: fileId }))
 }));
 
-const renderPage = () =>
+const renderPage = (client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) =>
 	render(
-		<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+		<QueryClientProvider client={client}>
 			<TooltipProvider>
 				<MemoryRouter initialEntries={['/workspace/knowledge/kb1']}>
 					<Routes>
+						<Route path="/workspace/knowledge" element={null} />
 						<Route path="/workspace/knowledge/:id" element={<KnowledgeBasePage />} />
 					</Routes>
 				</MemoryRouter>
@@ -102,6 +103,7 @@ beforeEach(() => {
 		token: 't',
 		user: { id: 'u', email: 'e', name: 'n', role: 'user', profile_image_url: '' }
 	} as never);
+	state.name = 'KB';
 	state.files = Array.from({ length: 31 }, (_, i) => ({ id: `f${i + 1}`, meta: { name: `file${i + 1}.txt` } }));
 });
 afterEach(() => {
@@ -265,6 +267,25 @@ describe('KnowledgeBasePage name and description autosave (#228)', () => {
 		fireEvent.click(screen.getByText('Back'));
 		expect(updateKnowledgeById).not.toHaveBeenCalled();
 		expect(error).toHaveBeenCalledWith('Please fill in all fields.');
+	});
+
+	it('shows the saved name when the knowledge base is opened again from the cache', async () => {
+		vi.mocked(updateKnowledgeById).mockImplementation(async (_t, _id, form) => {
+			state.name = (form as { name: string }).name;
+			return { id: 'kb1' } as never;
+		});
+		const success = vi.spyOn(toast, 'success');
+		const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+		const view = renderPage(client);
+		await screen.findByText('file1.txt');
+		fireEvent.change(screen.getByLabelText('Knowledge Name'), { target: { value: 'Renamed' } });
+		view.unmount();
+		await waitFor(() => expect(success).toHaveBeenCalledWith('Knowledge updated successfully'));
+		renderPage(client);
+		await screen.findByText('file1.txt');
+		// The background refetch has settled too, so a stale name would stay put.
+		await waitFor(() => expect(client.isFetching()).toBe(0));
+		expect(screen.getByLabelText('Knowledge Name')).toHaveValue('Renamed');
 	});
 
 	it('reports a save made on leaving that the server rejects', async () => {

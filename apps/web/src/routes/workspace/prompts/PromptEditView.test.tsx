@@ -26,12 +26,12 @@ const prompt = {
 	access_grants: []
 };
 
-const renderView = () =>
+const renderView = (disabled = false) =>
 	render(
 		<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
 			<TooltipProvider>
 				<MemoryRouter>
-					<PromptEditView prompt={prompt} disabled={false} onSubmit={vi.fn()} />
+					<PromptEditView prompt={prompt} disabled={disabled} onSubmit={vi.fn()} />
 				</MemoryRouter>
 			</TooltipProvider>
 		</QueryClientProvider>
@@ -82,6 +82,13 @@ describe('PromptEditView metadata autosave (#228)', () => {
 		expect(updatePromptMetadata).toHaveBeenCalledTimes(1);
 		view.unmount();
 		expect(updatePromptMetadata).toHaveBeenCalledTimes(1);
+	});
+
+	it('saves nothing on leaving a prompt the user may not edit', () => {
+		const view = renderView(true);
+		fireEvent.change(screen.getByLabelText('Prompt Name'), { target: { value: 'Summary v2' } });
+		view.unmount();
+		expect(updatePromptMetadata).not.toHaveBeenCalled();
 	});
 
 	it('saves nothing on leaving when nothing was edited', () => {

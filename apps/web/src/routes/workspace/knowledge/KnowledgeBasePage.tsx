@@ -262,7 +262,15 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 			toast.error(`${e}`);
 			return null;
 		});
-		if (res) toast.success('Knowledge updated successfully');
+		if (!res) return;
+		// A page opened again from the cache must start from what was saved, and
+		// so must the list of knowledge bases.
+		queryClient.setQueryData<Knowledge | null>(
+			['knowledge-base', id],
+			(old) => old && { ...old, name: next.name, description: next.description }
+		);
+		queryClient.invalidateQueries({ queryKey: ['knowledge'] });
+		toast.success('Knowledge updated successfully');
 	}, 1000);
 	const edit = (patch: Partial<Knowledge>) => {
 		const next = { ...knowledge, ...patch };
