@@ -82,7 +82,8 @@ def _calculate_elo(feedbacks: list[LeaderboardFeedbackData], similarities: dict 
 
     Each feedback represents a comparison where a user rated one model
     against its opponents (sibling_model_ids). Rating=1 means the model won,
-    rating=-1 means it lost.
+    rating=-1 means it lost. The model's own id and empty ids among the
+    siblings are not opponents.
 
     The Elo system adjusts ratings based on:
     - Current rating difference (upsets cause bigger swings)
@@ -109,6 +110,10 @@ def _calculate_elo(feedbacks: list[LeaderboardFeedbackData], similarities: dict 
         weight = similarities.get(feedback.id, 1.0) if similarities else 1.0
 
         for opponent_id in data.get('sibling_model_ids') or []:
+            # A regeneration by the same model, or a reply with no model id,
+            # is in sibling_model_ids but is not an opponent (#278).
+            if not opponent_id or opponent_id == winner_id:
+                continue
             winner = get_or_create_stats(winner_id)
             opponent = get_or_create_stats(opponent_id)
             expected = 1 / (1 + 10 ** ((opponent['rating'] - winner['rating']) / 400))

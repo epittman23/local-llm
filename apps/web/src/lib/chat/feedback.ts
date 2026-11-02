@@ -56,8 +56,8 @@ export const annotate = (m: Message, rating: number | null, details: FeedbackDet
 });
 
 /**
- * The feedback item for the evaluations API. `sibling_model_ids` (other
- * replies to the same prompt) is what makes a rating count in the arena
+ * The feedback item for the evaluations API. `sibling_model_ids` (the other
+ * models that replied to the same prompt) is what makes a rating count in the arena
  * leaderboard; `base_models` maps each model to the model it wraps.
  */
 export function feedbackItem(opts: {
@@ -71,11 +71,14 @@ export function feedbackItem(opts: {
 	const { history, message } = opts;
 	const siblings = (message.parentId ? history.messages[message.parentId]?.childrenIds : []) ?? [];
 	const modelOf = (m: Message | undefined) => m?.selectedModelId ?? m?.model ?? '';
-	const siblingModels =
-		siblings.length > 1
-			? siblings.filter((id) => id !== message.id).map((id) => modelOf(history.messages[id]))
-			: undefined;
 	const modelId = modelOf(message);
+	// A regeneration by the same model, or a reply with no model, is not an
+	// opponent: the leaderboard would play the model against itself (#278).
+	const opponents = siblings
+		.filter((id) => id !== message.id)
+		.map((id) => modelOf(history.messages[id]))
+		.filter((id) => id && id !== modelId);
+	const siblingModels = opponents.length > 0 ? opponents : undefined;
 	const base: Record<string, string | null> = {};
 	for (const id of [modelId, ...(siblingModels ?? [])]) {
 		const b = opts.baseModelOf(id);
