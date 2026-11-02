@@ -18,13 +18,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import type { AccessGrant } from '@/lib/access/accessGrants';
 import { generateOpenAIChatCompletion } from '@/lib/apis/openai';
-import {
-	deleteNoteById,
-	getNoteById,
-	toggleNotePinnedStatusById,
-	updateNoteAccessGrants,
-	updateNoteById
-} from '@/lib/apis/notes';
+import { deleteNoteById, getNoteById, toggleNotePinnedStatusById, updateNoteById } from '@/lib/apis/notes';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore, useDocumentTitle } from '@/lib/stores/configStore';
@@ -34,8 +28,10 @@ import { initialModel } from '@/routes/playground/playgroundModel';
 import {
 	type NoteContent,
 	editorContent,
+	noteAccessProps,
 	parseGeneratedTitle,
 	safeFileName,
+	saveNoteAccess,
 	titlePrompt,
 	wordCount
 } from './notesModel';
@@ -115,6 +111,7 @@ function useNoteSaver(id: string) {
 function NoteEditor() {
 	const { id = '' } = useParams();
 	const token = useAuthStore((s) => s.token) ?? '';
+	const user = useAuthStore((s) => s.user);
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
 	const defaults = useConfigStore((s) => s.config?.default_models as string | undefined);
@@ -198,10 +195,6 @@ function NoteEditor() {
 		if (res) queryClient.setQueryData(['notes', 'item', id], { ...n, is_pinned: !n.is_pinned });
 		queryClient.invalidateQueries({ queryKey: ['pinned-notes'] });
 	};
-	const saveAccess = async (grants: AccessGrant[]) => {
-		queryClient.setQueryData(['notes', 'item', id], { ...n, access_grants: grants });
-		await updateNoteAccessGrants(token, n.id, grants).catch((e) => void toast.error(`${e}`));
-	};
 	const remove = async () => {
 		const res = await deleteNoteById(token, n.id).catch((e) => void toast.error(`${e}`));
 		if (res) {
@@ -226,7 +219,8 @@ function NoteEditor() {
 					open={showAccess}
 					onOpenChange={setShowAccess}
 					accessGrants={n.access_grants ?? []}
-					onChange={saveAccess}
+					onChange={(grants) => saveNoteAccess(queryClient, token, n.id, grants)}
+					{...noteAccessProps(user)}
 				/>
 			)}
 
