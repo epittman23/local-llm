@@ -321,12 +321,12 @@ async def retrieve_external_knowledge_for_connection(
         raise RuntimeError('External knowledge connection is disabled')
 
     started_at = time.monotonic()
-    chunks = []
+    hits_by_query = []
     provider = (connection.get('provider') or '').lower()
 
     for query in queries:
         if provider == 'qdrant':
-            chunks.extend(
+            hits_by_query.append(
                 await _retrieve_qdrant(
                     connection,
                     auth_config,
@@ -337,7 +337,7 @@ async def retrieve_external_knowledge_for_connection(
                 )
             )
         elif provider == 'milvus':
-            chunks.extend(
+            hits_by_query.append(
                 await _retrieve_milvus(
                     connection,
                     auth_config,
@@ -348,7 +348,7 @@ async def retrieve_external_knowledge_for_connection(
                 )
             )
         elif provider == 'pgvector':
-            chunks.extend(
+            hits_by_query.append(
                 await _retrieve_pgvector(
                     connection,
                     auth_config,
@@ -361,6 +361,23 @@ async def retrieve_external_knowledge_for_connection(
         else:
             raise RuntimeError(f'Unsupported external knowledge provider: {connection.get("provider")}')
 
+    # The queries take turns, each one's best hit first, so the first query
+    # cannot fill the budget alone (#349). Merged by rank, not score: whether
+    # a higher score is better depends on the collection's metric, which is
+    # unknown here. A chunk several queries return is kept once, at its best
+    # rank; the key includes the content because document_id_field may map a
+    # parent document shared by several chunks.
+    chunks = []
+    seen = set()
+    for rank in range(max((len(hits) for hits in hits_by_query), default=0)):
+        for hits in hits_by_query:
+            if rank >= len(hits):
+                continue
+            chunk = hits[rank]
+            key = (chunk['metadata'].get('document_id'), chunk['content'])
+            if key not in seen:
+                seen.add(key)
+                chunks.append(chunk)
     chunks = chunks[:count]
     log.info(
         'external_knowledge_retrieval knowledge_id=%s connection_id=%s provider=%s user_id=%s latency_ms=%s '
