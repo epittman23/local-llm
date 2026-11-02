@@ -167,7 +167,8 @@ async def list_task_ids_by_item_id(redis, id):
     """
     if redis:
         return await redis_list_item_tasks(redis, id)
-    return item_tasks.get(id, [])
+    # A copy: each finished task's cleanup removes its id from the live list.
+    return list(item_tasks.get(id, []))
 
 
 async def save_response_stream(
@@ -273,14 +274,15 @@ async def stop_item_tasks(redis: Redis, item_id: str):
     """
     task_ids = await list_task_ids_by_item_id(redis, item_id)
     if not task_ids:
-        return {'status': True, 'message': f'No tasks found for item {item_id}.'}
+        return {'status': True, 'message': f'No tasks found for item {item_id}.', 'stopped': []}
 
-    for task_id in task_ids:
-        result = await stop_task(redis, task_id)
-        if not result['status']:
-            return result  # Return the first failure
-
-    return {'status': True, 'message': f'All tasks for item {item_id} stopped.'}
+    # stop_task fails only for a task that has already ended, so keep going.
+    stopped = [task_id for task_id in task_ids if (await stop_task(redis, task_id))['status']]
+    if len(stopped) == len(task_ids):
+        message = f'All tasks for item {item_id} stopped.'
+    else:
+        message = f'Stopped {len(stopped)} of {len(task_ids)} tasks for item {item_id}; the rest had already ended.'
+    return {'status': True, 'message': message, 'stopped': stopped}
 
 
 async def has_active_tasks(redis, chat_id: str) -> bool:
