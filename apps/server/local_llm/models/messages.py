@@ -591,11 +591,21 @@ class MessageTable:
             return True
 
     async def delete_message_by_id(self, id: str, db: AsyncSession | None = None) -> bool:
-        async with get_async_db_context(db) as db:
-            await db.execute(delete(Message).filter_by(id=id))
+        """Delete a message with its thread replies, at any depth, and every reaction to them.
 
-            # Delete all reactions to this message
-            await db.execute(delete(MessageReaction).filter_by(message_id=id))
+        A reply left behind would vanish from the channel and thread views but stay
+        pinned and searchable, including by the model's search_messages tool (#277).
+        """
+        async with get_async_db_context(db) as db:
+            ids = {id}
+            frontier = [id]
+            while frontier:
+                result = await db.execute(select(Message.id).filter(Message.parent_id.in_(frontier)))
+                frontier = [reply_id for reply_id in result.scalars().all() if reply_id not in ids]
+                ids.update(frontier)
+
+            await db.execute(delete(MessageReaction).filter(MessageReaction.message_id.in_(list(ids))))
+            await db.execute(delete(Message).filter(Message.id.in_(list(ids))))
 
             await db.commit()
             return True
