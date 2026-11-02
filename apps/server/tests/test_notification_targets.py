@@ -84,8 +84,15 @@ async def _raising(url: str) -> bool:
     return True
 
 
-@pytest.mark.parametrize('post_webhook', [_refused, _raising], ids=['refused', 'raises'])
+async def _hanging(url: str) -> bool:
+    if url == BROKEN:
+        await asyncio.sleep(3600)
+    return True
+
+
+@pytest.mark.parametrize('post_webhook', [_refused, _raising, _hanging], ids=['refused', 'raises', 'hangs'])
 def test_failing_target_does_not_stop_later_targets(monkeypatch, caplog, post_webhook):
+    monkeypatch.setattr(notifications, 'TARGET_TIMEOUT_SECONDS', 0.05)
     with caplog.at_level(logging.WARNING, logger=notifications.log.name):
         attempted = _dispatch(monkeypatch, post_webhook)
 

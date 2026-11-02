@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 import time
@@ -21,6 +22,9 @@ CHANNEL_MESSAGE_EVENT = 'channel.message'
 CALENDAR_ALERT_EVENT = 'calendar.alert'
 
 DEFAULT_TARGET_ID = 'webhook'
+# Webhook posts have no timeout of their own (AIOHTTP_CLIENT_TIMEOUT is unset by
+# default), so one target that never answers would hold up every target after it.
+TARGET_TIMEOUT_SECONDS = 30
 DESCRIPTION_DEFAULT = object()
 log = logging.getLogger(__name__)
 
@@ -401,16 +405,19 @@ async def dispatch_notification_event(app: Any, event: Any) -> None:
                     continue
 
                 title, message, data, description = _notification_webhook_content(event)
-                # One dead target must not stop delivery to the rest (#170).
+                # One dead or hanging target must not stop delivery to the rest (#170).
                 try:
-                    await _send_webhook(app_name, target, message, data, title, description=description)
-                except Exception:
+                    await asyncio.wait_for(
+                        _send_webhook(app_name, target, message, data, title, description=description),
+                        TARGET_TIMEOUT_SECONDS,
+                    )
+                except Exception as e:
                     log.warning(
-                        'Notification delivery to target %s failed for user %s and event %s',
+                        'Notification delivery to target %s failed for user %s and event %s: %r',
                         target.get('id'),
                         user_id,
                         event.event,
-                        exc_info=True,
+                        e,
                     )
         except Exception:
             log.exception('Notification delivery failed for user %s and event %s', user_id, event.event)
