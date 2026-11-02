@@ -267,7 +267,11 @@ def validate_memory_operations(form_data) -> list[dict]:
             op['content'] = clean_memory_content(op.get('content'))
             if op.get('type') is not None:
                 op['type'] = Memories.normalize_memory_type(op.get('type'))
-            op['path'] = clean_memory_path(op.get('path'))
+            # As in /memories/{id}/update: no path (or null) keeps the stored one; an empty path clears it.
+            if op.get('path') is None:
+                del op['path']
+            else:
+                op['path'] = clean_memory_path(op['path'])
         elif action == 'move':
             if not op.get('id'):
                 raise HTTPException(status_code=400, detail='Memory id is required for move')
