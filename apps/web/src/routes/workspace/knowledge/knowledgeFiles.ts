@@ -10,6 +10,14 @@ export type DirectoryFileEntry = { path: string; filename: string; file: File };
 export type DirectoryManifestEntry = DirectoryFileEntry & { checksum: string; size: number };
 export type Breadcrumb = { id: string; name: string };
 
+/**
+ * `page` pulled back to the last page a list of `total` items fills at
+ * `perPage` a page (page 1 when the list is empty), so a list that shrank
+ * under it never leaves an empty page with no pagination shown to leave by.
+ */
+export const clampPage = (page: number, total: number, perPage: number): number =>
+	Math.min(page, Math.max(1, Math.ceil(total / perPage)));
+
 /** Hidden files and folders (any path segment starting with ".") are never uploaded. */
 export const hasHiddenFolder = (path: string): boolean => path.split('/').some((part) => part.startsWith('.'));
 
@@ -147,4 +155,51 @@ export function announceContentSaved(
 	if (stale.length)
 		notify.warning(`File content saved, but these knowledge bases still use the old text: ${stale.join(', ')}.`);
 	else notify.success('File content updated successfully.');
+}
+
+type DroppedItem = { webkitGetAsEntry?: () => { isDirectory?: boolean } | null; getAsFile: () => File | null };
+
+/**
+ * Every dropped item's directory entry or file, read at once. Once the drop
+ * handler awaits, the DataTransfer is protected and every later item reads
+ * as null, so a folder dropped with other items lost all that came after it
+ * (#231).
+ */
+export function takeDroppedItems<E extends { isDirectory?: boolean }>(
+	items: Iterable<DroppedItem>
+): { directories: E[]; files: File[] } {
+	const directories: E[] = [];
+	const files: File[] = [];
+	for (const item of items) {
+		const entry = item.webkitGetAsEntry?.();
+		if (entry?.isDirectory) directories.push(entry as E);
+		else {
+			const file = item.getAsFile();
+			if (file) files.push(file);
+		}
+	}
+	return { directories, files };
+}
+
+/**
+ * The dropped files: loose ones, and those inside dropped folders (walked by
+ * `collect` after every item is read; see takeDroppedItems). Null when a
+ * folder cannot be read, after `onError` has reported it.
+ */
+export async function gatherDroppedFiles<E extends { isDirectory?: boolean }>(
+	items: Iterable<DroppedItem>,
+	collect: (entry: E) => Promise<DirectoryFileEntry[]>,
+	onError: (error: unknown) => void
+): Promise<{ loose: File[]; directoryEntries: DirectoryFileEntry[] } | null> {
+	const { directories, files } = takeDroppedItems<E>(items);
+	const directoryEntries: DirectoryFileEntry[] = [];
+	for (const entry of directories) {
+		try {
+			directoryEntries.push(...(await collect(entry)));
+		} catch (error) {
+			onError(error);
+			return null;
+		}
+	}
+	return { loose: files, directoryEntries };
 }
