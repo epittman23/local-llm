@@ -1,4 +1,5 @@
 import type { CalendarEventForm, CalendarEventModel } from '@/lib/apis/calendar';
+import { runTarget } from '@/routes/automations/automationModel';
 
 // The date arithmetic behind the Calendar page (routes/(app)/calendar and
 // components/calendar/*.svelte). The backend stores times in *nanoseconds*
@@ -255,8 +256,11 @@ export function defaultCalendarId(
 	return (own.find((c) => c.is_default) ?? own[0] ?? real[0])?.id ?? '';
 }
 
-/** Where clicking an automation's run goes: its chat if it produced one, else the automation. Null for an ordinary event. */
+/**
+ * Where clicking an automation's run goes: the chat or channel it posted to, else the
+ * automation. Null for an ordinary event.
+ */
 export function automationTarget(e: CalendarEventModel): string | null {
 	if (!e.meta?.automation_id) return null;
-	return e.meta.chat_id ? `/c/${e.meta.chat_id}` : `/automations/${e.meta.automation_id}`;
+	return e.meta.chat_id ? runTarget(e.meta.chat_id) : `/automations/${e.meta.automation_id}`;
 }
