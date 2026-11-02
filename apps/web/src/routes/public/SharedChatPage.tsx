@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router';
+import { toast } from 'sonner';
 import { Markdown } from '@/components/chat/markdown/Markdown';
 import { cloneSharedChatById, getChatByShareId } from '@/lib/apis/chats';
 import { Button } from '@/components/ui/button';
@@ -69,7 +70,8 @@ export function SharedChatPage() {
 				window.location.assign(`/c/${res.id}`);
 			}
 		} catch (err) {
-			console.error(err);
+			// A refusal (say, a share holding an unfinished response) must show.
+			toast.error(`${err}`);
 		}
 	};
 

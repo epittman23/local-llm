@@ -7,10 +7,15 @@ router and auth against the test run's migrated database; only side effects
 (events, the Redis task registry) are faked. Pinned:
 
 - fork, clone and share refuse with a 409 while the chat has an active task
-  or an assistant message that is not done, and create or change nothing;
+  ("Wait for ...") or, with no task, an assistant message that is not done,
+  say one paused or orphaned ("Finish or stop ..."), and create or change
+  nothing; another user still gets the 401 the routes give non-owners;
+- clone and share check the chat JSON they copy as well as the chat_message
+  rows, since the two can disagree;
 - re-sharing mid-stream keeps the earlier snapshot as it was;
 - cloning a share refuses a snapshot that holds an unfinished reply, but not
-  a finished snapshot of a chat whose owner has a new reply streaming.
+  a finished snapshot of a chat whose owner has a new reply streaming; an
+  admin cloning a live chat by id is checked like clone.
 
 Run from apps/server:
 
@@ -28,9 +33,12 @@ from types import SimpleNamespace
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import update
 
 from local_llm.config import DEFAULT_USER_PERMISSIONS
-from local_llm.models.chats import ChatForm, Chats
+from local_llm.internal.db import get_async_db_context
+from local_llm.models.chat_messages import ChatMessages
+from local_llm.models.chats import Chat, ChatForm, Chats
 from local_llm.models.config import Config
 from local_llm.models.shared_chats import SharedChats
 from local_llm.models.users import Users
@@ -42,12 +50,31 @@ def _run(coro):
     return asyncio.run(coro)
 
 
-@pytest.fixture(scope='module')
-def owner() -> SimpleNamespace:
-    uid = f'unfinished-{uuid.uuid4().hex[:10]}'
-    _run(Users.insert_new_user(uid, 'owner', f'{uid}@example.com', role='user'))
+def _user(role: str) -> SimpleNamespace:
+    uid = f'unfinished-{role}-{uuid.uuid4().hex[:10]}'
+    _run(Users.insert_new_user(uid, role, f'{uid}@example.com', role=role))
     token = create_token({'id': uid}, dt.timedelta(minutes=30))
     return SimpleNamespace(id=uid, headers={'Authorization': f'Bearer {token}'})
+
+
+@pytest.fixture(scope='module')
+def owner() -> SimpleNamespace:
+    return _user('user')
+
+
+@pytest.fixture(scope='module')
+def other() -> SimpleNamespace:
+    return _user('user')
+
+
+@pytest.fixture(scope='module')
+def admin() -> SimpleNamespace:
+    return _user('admin')
+
+
+WAIT = 'Wait for the current response to finish before {}.'
+STOP = 'Finish or stop the current response before {}.'
+STALE_SHARE = 'This share holds an unfinished response; its owner needs to share the chat again.'
 
 
 def _history(done: bool) -> dict:
@@ -72,6 +99,21 @@ def _chat(owner, *, done: bool) -> str:
     form = ChatForm(chat={'title': 'chat', 'history': _history(done), 'models': ['m'], 'tags': []})
     _run(Chats.insert_new_chat(chat_id, owner.id, form))
     return chat_id
+
+
+def _set_json_done(chat_id: str, done: bool) -> None:
+    """Change the reply's done flag in the chat JSON only, leaving its chat_message row."""
+
+    async def go():
+        chat = await Chats.get_chat_by_id(chat_id)
+        assert chat
+        data = copy.deepcopy(chat.chat)
+        data['history']['messages']['m2']['done'] = done
+        async with get_async_db_context() as session:
+            await session.execute(update(Chat).where(Chat.id == chat_id).values(chat=data))
+            await session.commit()
+
+    _run(go())
 
 
 def _share_id(chat_id: str) -> str | None:
@@ -129,7 +171,7 @@ def test_an_unfinished_reply_is_never_copied(client, owner, name, route, verb):
     path, body = route(chat_id)
     r = client.post(path, json=body, headers=owner.headers)
     assert r.status_code == 409, r.text
-    assert r.json()['detail'] == f'Wait for the current response to finish before {verb}.'
+    assert r.json()['detail'] == STOP.format(verb)
     assert _chat_count(owner) == before
     assert _share_id(chat_id) is None
 
@@ -142,9 +184,34 @@ def test_a_running_task_blocks_the_copy(client, owner, active, name, route, verb
     path, body = route(chat_id)
     r = client.post(path, json=body, headers=owner.headers)
     assert r.status_code == 409, r.text
-    assert r.json()['detail'] == f'Wait for the current response to finish before {verb}.'
+    assert r.json()['detail'] == WAIT.format(verb)
     assert _chat_count(owner) == before
     assert _share_id(chat_id) is None
+
+
+@pytest.mark.parametrize(('name', 'route', 'verb'), COPIES[1:], ids=[c[0] for c in COPIES[1:]])
+@pytest.mark.parametrize(('json_done', 'rows_done'), [(False, True), (True, False)], ids=['json', 'rows'])
+def test_clone_and_share_refuse_when_json_or_rows_hold_an_unfinished_reply(
+    client, owner, name, route, verb, json_done, rows_done
+):
+    chat_id = _chat(owner, done=rows_done)
+    _set_json_done(chat_id, json_done)
+    assert _run(ChatMessages.has_unfinished_assistant_by_chat_id(chat_id)) is not rows_done
+    before = _chat_count(owner)
+    path, body = route(chat_id)
+    r = client.post(path, json=body, headers=owner.headers)
+    assert r.status_code == 409, r.text
+    assert r.json()['detail'] == STOP.format(verb)
+    assert _chat_count(owner) == before
+    assert _share_id(chat_id) is None
+
+
+@pytest.mark.parametrize(('name', 'route', 'verb'), COPIES, ids=[c[0] for c in COPIES])
+def test_another_user_gets_401_not_409_on_a_streaming_chat(client, owner, other, active, name, route, verb):
+    chat_id = _chat(owner, done=False)
+    active.add(chat_id)
+    path, body = route(chat_id)
+    assert client.post(path, json=body, headers=other.headers).status_code == 401
 
 
 @pytest.mark.parametrize(('name', 'route', 'verb'), COPIES, ids=[c[0] for c in COPIES])
@@ -172,7 +239,7 @@ def test_cloning_a_share_refuses_a_snapshot_with_an_unfinished_reply(client, own
     before = _chat_count(owner)
     r = client.post(f'/chats/{shared.id}/clone/shared', headers=owner.headers)
     assert r.status_code == 409, r.text
-    assert r.json()['detail'] == 'This share was taken while a response was still streaming; share the chat again.'
+    assert r.json()['detail'] == STALE_SHARE
     assert _chat_count(owner) == before
 
 
@@ -183,3 +250,24 @@ def test_cloning_a_finished_share_ignores_a_new_reply_streaming_in_its_chat(clie
     r = client.post(f'/chats/{share_id}/clone/shared', headers=owner.headers)
     assert r.status_code == 200, r.text
     assert r.json()['chat']['history']['messages']['m2']['content'] == 'answer'
+
+
+@pytest.mark.parametrize(('streaming', 'detail'), [(True, WAIT), (False, STOP)], ids=['task', 'unfinished'])
+def test_an_admin_cloning_a_live_chat_by_id_is_checked_like_clone(
+    client, owner, admin, active, monkeypatch, streaming, detail
+):
+    monkeypatch.setattr(chats_router, 'ENABLE_ADMIN_CHAT_ACCESS', True)
+    chat_id = _chat(owner, done=streaming)
+    if streaming:
+        active.add(chat_id)
+    before = _chat_count(admin)
+    r = client.post(f'/chats/{chat_id}/clone/shared', headers=admin.headers)
+    assert r.status_code == 409, r.text
+    assert r.json()['detail'] == detail.format('cloning')
+    assert _chat_count(admin) == before
+
+
+def test_an_admin_clones_a_finished_live_chat_by_id(client, owner, admin, monkeypatch):
+    monkeypatch.setattr(chats_router, 'ENABLE_ADMIN_CHAT_ACCESS', True)
+    chat_id = _chat(owner, done=True)
+    assert client.post(f'/chats/{chat_id}/clone/shared', headers=admin.headers).status_code == 200
