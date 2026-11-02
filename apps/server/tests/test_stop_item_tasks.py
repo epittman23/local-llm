@@ -99,3 +99,24 @@ def test_a_chat_without_tasks_says_so():
     assert result['status'] is True
     assert result['stopped'] == []
     assert result['message'].startswith('No tasks found')
+
+
+def test_a_task_that_raises_while_stopping_does_not_leave_the_rest_running():
+    async def fails_on_cancel():
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            raise RuntimeError('cleanup failed') from None
+
+    async def scenario():
+        _, broken = await tasks.create_task(None, fails_on_cancel(), id='chat-1', task_id='broken')
+        rest = await _start(2, 'chat-1')
+
+        result = await tasks.stop_item_tasks(None, 'chat-1')
+
+        assert broken.done()
+        assert [t.cancelled() for t in rest] == [True, True]
+        assert result['stopped'] == ['t1', 't2']
+        await _settle()
+
+    asyncio.run(scenario())
