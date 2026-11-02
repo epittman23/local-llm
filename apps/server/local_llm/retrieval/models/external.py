@@ -59,6 +59,9 @@ class ExternalReranker(BaseReranker):
 
             if 'results' in data:
                 sorted_results = sorted(data['results'], key=lambda x: x['index'])
+                if [result['index'] for result in sorted_results] != list(range(len(docs))):
+                    log.error('External reranking response does not score each of the %d documents once', len(docs))
+                    return None
                 return [result['relevance_score'] for result in sorted_results]
             else:
                 log.error('No results found in external reranking response')

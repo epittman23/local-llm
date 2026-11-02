@@ -1804,33 +1804,37 @@ class RerankCompressor(BaseDocumentCompressor):
         if scores is None:
             from sentence_transformers import util as st_util
 
-            query_embedding = await self.embedding_function(query, RAG_EMBEDDING_QUERY_PREFIX)
-            doc_texts = [doc.page_content for doc in documents]
-            document_embedding = await self.embedding_function(doc_texts, RAG_EMBEDDING_CONTENT_PREFIX)
-            scores = st_util.cos_sim(query_embedding, document_embedding)[0]
-
-        if scores is not None:
-            docs_with_scores = list(
-                zip(
-                    documents,
-                    scores.tolist() if not isinstance(scores, list) else scores,
-                    strict=True,
+            try:
+                query_embedding = await self.embedding_function(query, RAG_EMBEDDING_QUERY_PREFIX)
+                doc_texts = [doc.page_content for doc in documents]
+                document_embedding = await self.embedding_function(doc_texts, RAG_EMBEDDING_CONTENT_PREFIX)
+                scores = st_util.cos_sim(query_embedding, document_embedding)[0]
+            except Exception:
+                if not reranking:
+                    raise
+                log.warning(
+                    'Embedding similarity failed after a failed rerank; keeping the first %d documents', self.top_n
                 )
+                return documents[: self.top_n]
+
+        docs_with_scores = list(
+            zip(
+                documents,
+                scores.tolist() if not isinstance(scores, list) else scores,
+                strict=True,
             )
-            if self.r_score:
-                docs_with_scores = [(d, s) for d, s in docs_with_scores if s >= self.r_score]
+        )
+        if self.r_score:
+            docs_with_scores = [(d, s) for d, s in docs_with_scores if s >= self.r_score]
 
-            result = sorted(docs_with_scores, key=operator.itemgetter(1), reverse=True)
-            final_results = []
-            for doc, doc_score in result[: self.top_n]:
-                metadata = doc.metadata
-                metadata['score'] = doc_score
-                doc = Document(
-                    page_content=doc.page_content,
-                    metadata=metadata,
-                )
-                final_results.append(doc)
-            return final_results
-        else:
-            log.warning('No valid scores found, check your reranking function. Returning original documents.')
-            return documents
+        result = sorted(docs_with_scores, key=operator.itemgetter(1), reverse=True)
+        final_results = []
+        for doc, doc_score in result[: self.top_n]:
+            metadata = doc.metadata
+            metadata['score'] = doc_score
+            doc = Document(
+                page_content=doc.page_content,
+                metadata=metadata,
+            )
+            final_results.append(doc)
+        return final_results
