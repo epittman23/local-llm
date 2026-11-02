@@ -3340,9 +3340,9 @@ def _take_turns(sources: list[list[dict]]) -> list[dict]:
     """Every source's hits, best first, taking turns: first hits, then second, ...
 
     Merged by each source's own rank, not by score: an internal hit's
-    `distance` is a similarity (higher is better), an external pgvector
-    base's is a cosine distance (lower is better), and other providers
-    report whatever their metric gives (#179).
+    `distance` is a similarity (higher is better), as is an external
+    pgvector base's (#350), but Qdrant and Milvus bases report whatever
+    their collection's metric gives (#179).
     """
     merged = []
     for rank in range(max((len(hits) for hits in sources), default=0)):

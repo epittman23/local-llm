@@ -1,6 +1,6 @@
 {
 	"_comment": "basedpyright findings allowed per file and rule; may only shrink. See .github/scripts/lint_ratchet.py.",
-	"total": 2235,
+	"total": 2233,
 	"counts": {
 		"apps/server/local_llm/benchmarks/analysis/compare.py": {
 			"reportArgumentType": 9,
@@ -271,8 +271,7 @@
 			"reportReturnType": 4
 		},
 		"apps/server/local_llm/retrieval/external.py": {
-			"reportArgumentType": 2,
-			"reportAttributeAccessIssue": 1,
+			"reportArgumentType": 1,
 			"reportMissingImports": 2
 		},
 		"apps/server/local_llm/retrieval/loaders/datalab_marker.py": {

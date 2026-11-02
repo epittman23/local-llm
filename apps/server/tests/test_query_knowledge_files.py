@@ -90,8 +90,9 @@ def test_an_external_hit_is_not_crowded_out_by_internal_ones(monkeypatch):
 
 
 def test_sources_take_turns_whatever_their_score_scale(monkeypatch):
-    """External pgvector reports a cosine distance (lower is better), internal a
-    similarity (higher is better): hits are merged by each source's own rank."""
+    """An external base may report a distance (lower is better: Qdrant's Euclid,
+    Milvus's L2), internal a similarity (higher is better): hits are merged by
+    each source's own rank."""
     got = _run(monkeypatch, internal=[0.9, 0.8, 0.7], externals=[('pg', [0.1, 0.2, 0.3])], count=4)
 
     assert [(c['source'], c['distance']) for c in got] == [

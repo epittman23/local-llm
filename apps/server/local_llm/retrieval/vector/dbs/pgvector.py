@@ -536,12 +536,12 @@ class PgvectorClient(VectorDBBase):
                 documents[qid].append(row.text)
                 metadatas[qid].append(row.vmetadata)
 
-            self.session.rollback()  # read-only transaction
             return SearchResult(ids=ids, distances=distances, documents=documents, metadatas=metadatas)
         except Exception as e:
-            self.session.rollback()
             log.exception(f'Error during search: {e}')
             return None
+        finally:
+            self.session.rollback()  # read-only transaction
 
     def hybrid_search(
         self,
@@ -645,16 +645,16 @@ class PgvectorClient(VectorDBBase):
             documents = [[result.text for result in results]]
             metadatas = [[result.vmetadata for result in results]]
 
-            self.session.rollback()  # read-only transaction
             return GetResult(
                 ids=ids,
                 documents=documents,
                 metadatas=metadatas,
             )
         except Exception as e:
-            self.session.rollback()
             log.exception(f'Error during query: {e}')
             return None
+        finally:
+            self.session.rollback()  # read-only transaction
 
     def get(self, collection_name: str, limit: int | None = None) -> GetResult | None:
         try:
@@ -684,12 +684,12 @@ class PgvectorClient(VectorDBBase):
                 documents = [[result.text for result in results]]
                 metadatas = [[result.vmetadata for result in results]]
 
-            self.session.rollback()  # read-only transaction
             return GetResult(ids=ids, documents=documents, metadatas=metadatas)
         except Exception as e:
-            self.session.rollback()
             log.exception(f'Error during get: {e}')
             return None
+        finally:
+            self.session.rollback()  # read-only transaction
 
     def delete(
         self,
