@@ -2,7 +2,7 @@ import logging
 
 import requests
 
-from local_llm.env import ENABLE_FORWARD_USER_INFO_HEADERS, REQUESTS_VERIFY
+from local_llm.env import ENABLE_FORWARD_USER_INFO_HEADERS, REQUESTS_TIMEOUT_API, REQUESTS_VERIFY
 from local_llm.retrieval.models.base_reranker import BaseReranker
 from local_llm.utils.headers import include_user_info_headers
 
@@ -49,7 +49,8 @@ class ExternalReranker(BaseReranker):
                 f'{self.url}',
                 headers=headers,
                 json=payload,
-                timeout=self.timeout,
+                # An unset RAG_EXTERNAL_RERANKER_TIMEOUT must not mean "wait forever".
+                timeout=self.timeout if self.timeout is not None else REQUESTS_TIMEOUT_API,
                 verify=REQUESTS_VERIFY,
             )
 
@@ -58,6 +59,9 @@ class ExternalReranker(BaseReranker):
 
             if 'results' in data:
                 sorted_results = sorted(data['results'], key=lambda x: x['index'])
+                if [result['index'] for result in sorted_results] != list(range(len(docs))):
+                    log.error('External reranking response does not score each of the %d documents once', len(docs))
+                    return None
                 return [result['relevance_score'] for result in sorted_results]
             else:
                 log.error('No results found in external reranking response')
