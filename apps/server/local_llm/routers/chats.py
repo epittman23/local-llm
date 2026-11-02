@@ -132,6 +132,32 @@ async def can_read_shared_chat(user, shared, db: AsyncSession) -> bool:
     )
 
 
+def has_unfinished_reply(messages: dict) -> bool:
+    """Whether a message map holds an assistant reply that is still streaming."""
+    return any(
+        message.get('role') == 'assistant' and message.get('done') is False
+        for message in messages.values()
+        if isinstance(message, dict)
+    )
+
+
+async def refuse_while_streaming(request: Request, chat, verb: str) -> dict:
+    """409 while a reply in the chat streams, so no copy of it (fork, clone,
+    share) keeps the unfinished placeholder as if it were the answer.
+
+    Returns the chat's message map, which the check had to load anyway.
+    """
+    detail = f'Wait for the current response to finish before {verb}.'
+    if await has_active_tasks(request.app.state.redis, chat.id):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
+
+    history = (chat.chat or {}).get('history') or {}
+    messages_map = await Chats.get_messages_map_by_chat_id(chat.id) or history.get('messages') or {}
+    if has_unfinished_reply(messages_map):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
+    return messages_map
+
+
 async def add_active_state_to_chat_list(
     request: Request, chat_list: list[ChatTitleIdResponse]
 ) -> list[ChatTitleIdResponse]:
@@ -1391,23 +1417,8 @@ async def fork_chat_by_id(
     if not chat:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=ERROR_MESSAGES.DEFAULT())
 
-    if await has_active_tasks(request.app.state.redis, id):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail='Wait for the current response to finish before forking.',
-        )
-
+    messages_map = await refuse_while_streaming(request, chat, 'forking')
     history = (chat.chat or {}).get('history') or {}
-    messages_map = await Chats.get_messages_map_by_chat_id(id) or history.get('messages') or {}
-    if any(
-        message.get('role') == 'assistant' and message.get('done') is False
-        for message in messages_map.values()
-        if isinstance(message, dict)
-    ):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail='Wait for the current response to finish before forking.',
-        )
 
     source_message_id = (
         (form_data.message_id if form_data else None) or chat.current_message_id or history.get('currentId')
@@ -1480,6 +1491,7 @@ async def clone_chat_by_id(
 
     chat = await Chats.get_chat_by_id_and_user_id(id, user.id, db=db)
     if chat:
+        await refuse_while_streaming(request, chat, 'cloning')
         updated_chat = {
             **chat.chat,
             'originalChatId': chat.id,
@@ -1564,6 +1576,14 @@ async def clone_shared_chat_by_id(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
             )
+
+    # A snapshot is frozen, so only what it holds matters: a reply its chat
+    # streams now is not in it, but one streaming when it was taken is.
+    if has_unfinished_reply(((chat.chat or {}).get('history') or {}).get('messages') or {}):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='This share was taken while a response was still streaming; share the chat again.',
+        )
 
     updated_chat = {
         **chat.chat,
@@ -1652,6 +1672,8 @@ async def share_chat_by_id(
     chat = await Chats.get_chat_by_id_and_user_id(id, user.id, db=db)
     if not chat:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail=ERROR_MESSAGES.ACCESS_PROHIBITED)
+
+    await refuse_while_streaming(request, chat, 'sharing')
 
     # If a share already exists, re-snapshot it
     if chat.share_id:
