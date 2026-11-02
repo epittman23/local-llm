@@ -35,14 +35,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
-import {
-	deleteModelById,
-	getModelById,
-	getModelItems,
-	getModelTags,
-	toggleModelById,
-	updateModelById
-} from '@/lib/apis/models';
+import { deleteModelById, getModelById, getModelItems, getModelTags, toggleModelById } from '@/lib/apis/models';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useWebUIName } from '@/lib/stores/configStore';
@@ -52,7 +45,7 @@ import { dayjs } from '@/lib/utils/dates';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { useShiftKey } from '@/lib/utils/useShiftKey';
 import { routePaths } from '@/routes/routePaths';
-import { type BulkAction, runBulkAction } from './modelBulk';
+import { type BulkAction, runBulkAction, setVisibility } from './modelBulk';
 import { DEFAULT_PROFILE_IMAGE } from './modelEditorLogic';
 import { parseModelImport, saveImportedModel } from './modelImport';
 
@@ -185,15 +178,7 @@ export function ModelsPage() {
 	};
 
 	const setHidden = async (m: ModelRow, hidden: boolean) => {
-		const updated = { ...m, meta: { ...m.meta, hidden } };
-		try {
-			if (await updateModelById(token, m.id, updated)) {
-				toast.success(`Model ${m.id} is now ${hidden ? 'hidden' : 'visible'}`);
-				setPage(1);
-			}
-		} catch (e) {
-			toast.error(`${e}`);
-		}
+		if (await setVisibility(token, m, hidden)) setPage(1);
 		await refetch();
 	};
 

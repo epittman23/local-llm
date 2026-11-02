@@ -58,12 +58,30 @@ export function visibilityUpdate(m: BulkRow, hidden: boolean): Json {
 }
 
 /**
+ * Saves one writable model's visibility (the row's Hide / Show Model) with the
+ * body visibilityUpdate builds, and toasts the outcome. Returns whether it was
+ * saved.
+ */
+export async function setVisibility(token: string, m: BulkRow, hidden: boolean) {
+	try {
+		if (!(await updateModelById(token, m.id, visibilityUpdate(m, hidden)))) return false;
+		toast.success(`Model ${m.id} is now ${hidden ? 'hidden' : 'visible'}`);
+		return true;
+	} catch (e) {
+		toast.error(`${e}`);
+		return false;
+	}
+}
+
+/**
  * Applies one bulk action to every row that needs it and that the user can
  * write. Returns how many were changed and how many read-only rows that needed
- * it were skipped.
+ * it were skipped. A row the paged list returned twice (its pages are not
+ * ordered by a unique key) is acted on once, or a toggle would undo itself.
  */
 export async function applyBulkAction(token: string, rows: BulkRow[], action: BulkAction) {
-	const targets = rows.filter(needsChange[action]);
+	const unique = [...new Map(rows.map((m) => [m.id, m])).values()];
+	const targets = unique.filter(needsChange[action]);
 	const writable = targets.filter((m) => m.write_access === true);
 	await Promise.all(
 		writable.map((m) =>

@@ -1,7 +1,7 @@
 import { toast } from 'sonner';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { toggleModelById, updateModelById } from '@/lib/apis/models';
-import { applyBulkAction, type BulkRow, runBulkAction, visibilityUpdate } from './modelBulk';
+import { applyBulkAction, type BulkRow, runBulkAction, setVisibility, visibilityUpdate } from './modelBulk';
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), info: vi.fn(), error: vi.fn() } }));
 
@@ -42,6 +42,32 @@ describe('visibilityUpdate', () => {
 			JSON.stringify(visibilityUpdate({ id: 'b', name: 'B', write_access: true, meta: null }, false))
 		);
 		expect(body).toEqual({ id: 'b', name: 'B', meta: { hidden: false }, is_active: true });
+	});
+});
+
+describe('setVisibility', () => {
+	it("saves one model's visibility with its own fields, never its grants or derived meta", async () => {
+		await setVisibility('t', row('a', { is_active: false }), true);
+		expect(vi.mocked(updateModelById).mock.calls).toEqual([
+			['t', 'a', visibilityUpdate(row('a', { is_active: false }), true)]
+		]);
+		const body = vi.mocked(updateModelById).mock.calls[0][2];
+		expect(body).not.toHaveProperty('access_grants');
+		expect(body).toMatchObject({ is_active: false, params: { system: 'prompt of a' }, meta: { hidden: true } });
+		expect((body as BulkRow).meta).not.toHaveProperty('chat_variables_schema');
+	});
+	it('toasts the outcome and says whether the model was saved', async () => {
+		expect(await setVisibility('t', row('a'), true)).toBe(true);
+		expect(toast.success).toHaveBeenLastCalledWith('Model a is now hidden');
+		expect(await setVisibility('t', row('a'), false)).toBe(true);
+		expect(toast.success).toHaveBeenLastCalledWith('Model a is now visible');
+
+		vi.mocked(updateModelById).mockResolvedValueOnce(null);
+		expect(await setVisibility('t', row('a'), true)).toBe(false);
+		vi.mocked(updateModelById).mockRejectedValueOnce('denied');
+		expect(await setVisibility('t', row('a'), true)).toBe(false);
+		expect(toast.success).toHaveBeenCalledTimes(2);
+		expect(toast.error).toHaveBeenCalledWith('denied');
 	});
 });
 
@@ -88,6 +114,15 @@ describe('applyBulkAction', () => {
 		vi.mocked(updateModelById).mockClear();
 		expect(await applyBulkAction('t', rows.slice(3), 'hide')).toEqual({ changed: 0, skipped: 2 });
 		expect(updateModelById).not.toHaveBeenCalled();
+	});
+
+	it('acts once on a row the paged list returned twice, so a toggle does not cancel itself out', async () => {
+		const off = row('off', { is_active: false });
+		expect(await applyBulkAction('t', [off, row('on'), { ...off }], 'enable')).toEqual({ changed: 1, skipped: 0 });
+		expect(vi.mocked(toggleModelById).mock.calls).toEqual([['t', 'off']]);
+
+		const ro = row('ro', { write_access: false });
+		expect(await applyBulkAction('t', [ro, ro], 'hide')).toEqual({ changed: 0, skipped: 1 });
 	});
 
 	it('passes an API error back to the page', async () => {
