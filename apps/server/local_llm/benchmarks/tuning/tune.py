@@ -114,13 +114,14 @@ SIGINT, rather than left uncalled. Two paths lead there now:
     resumable state.
 
 A cancellation can also land where neither catch sees an open row (#138):
-during a visit's server teardown, after its try body finished, or while
-cooling. So the teardown runs shielded to its end (`_uncancellable()`; it
-is bounded by SIGTERM, a grace period and SIGKILL), `Cooldown.run()`
+during a server's teardown, after a visit's try body finished, or while
+cooling. So a server's teardown and the visit's closing write run to their
+end (`_uncancellable()`, which re-raises the cancellation afterwards), a
+visit that measured to the end still closes as 'done', `Cooldown.run()`
 closes its pause as 'abandoned' before re-raising, and `finish()` on an
-interrupted sweep closes any visit still 'running' as aborted and any pause
-still open as abandoned (`Sweep.close_open_rows()`), the same words
-`reclaim_stale_sweeps()` uses for a dead tuner.
+interrupted sweep closes anything still open as `reclaim_stale_sweeps()`
+closes a dead tuner's rows (`Sweep.close_open_rows()`). A resume re-probes
+the card only when the latest pause was abandoned.
 
 Crash recovery (`reclaim_stale_runs()`/`reclaim_stale_sweeps()`) is ported
 from scripts/llama_db.py's `sweep_stale_runs()`/`sweep_stale_sweeps()`,
@@ -237,25 +238,42 @@ def _alive(pid: int) -> bool:
 async def _uncancellable(aw) -> None:
     """Await `aw` to the end even if this task is cancelled meanwhile.
 
-    For teardown (#138): `/stop` cancels the sweep's task, and a cancellation
-    that lands inside `Server.stop()` would interrupt `ServeProcess.stop`,
-    leaving the telemetry recorder and the temp server log behind. The
-    teardown is already bounded (SIGTERM, a grace period, then SIGKILL), so
-    shielding it cannot hang the sweep. A cancellation received meanwhile is
-    re-raised once the teardown is done, so the caller still sees it.
+    For teardown and the row writes after it (#138): `/stop` cancels the
+    sweep's task, and a cancellation that lands inside `Server.stop()` would
+    interrupt `ServeProcess.stop`, leaving the telemetry recorder and the
+    temp server log behind. A server's teardown is bounded by grace periods
+    that end in SIGKILL, so waiting for it cannot hang the sweep unless a
+    process outlives SIGKILL.
+
+    A cancellation received meanwhile, however many and however late (even
+    in the tick `aw` finishes), is re-raised once `aw` is done, so the caller
+    still sees it. If `aw` itself failed after a cancellation, the failure
+    is logged and the cancellation wins, so the sweep still reaches finish().
     """
     task = asyncio.ensure_future(aw)
     cancelled = False
     while not task.done():
         try:
-            await asyncio.shield(task)
+            await asyncio.wait({task})
         except asyncio.CancelledError:
-            if task.done():
-                break
             cancelled = True
     if cancelled:
+        if not task.cancelled() and task.exception() is not None:
+            log.warning('teardown failed after the sweep was cancelled: %r', task.exception())
         raise asyncio.CancelledError
     task.result()
+
+
+def latest_pause_abandoned(pauses: list[dict]) -> bool:
+    """Whether resuming must re-probe the card first.
+
+    Only the latest pause says anything about the card now. An abandoned
+    pause that a later one already resolved says nothing, and re-probing on
+    every abandoned pause in the sweep's history would re-run a full
+    cooldown on every later resume (#138). `pauses` is in start order, as
+    BenchmarkTunePauses.sweep_pauses() returns it.
+    """
+    return bool(pauses) and pauses[-1]['resolution'] == 'abandoned'
 
 
 async def reclaim_stale_runs(limit: int = 10_000) -> int:
@@ -645,7 +663,7 @@ class Cooldown:
             log.warning('  probe could not serve the baseline: %s', exc.reason)
             return None
         finally:
-            await server.stop()
+            await _uncancellable(server.stop())
 
 
 # ---------------------------------------------------------------------------
@@ -910,6 +928,7 @@ class Sweep:
         server = Server(cand, self.port, load_timeout=self.o.load_timeout, session=self.session)
         drift: str | None = None
         records: list[dict] = []
+        measured = False
         t0 = time.time()
         _current_visits[self.sweep_id] = {
             'candidate_sha': cand.sha,
@@ -961,6 +980,7 @@ class Sweep:
                 should_stop=lambda: watch.collapsed or self.spent() is not None,
             )
             drift = 'cliff' if watch.collapsed else None
+            measured = True
         except Infeasible as exc:
             await BenchmarkTuneVisits.close_visit(
                 visit_id,
@@ -996,28 +1016,35 @@ class Sweep:
             )
             raise
         finally:
-            # A cancellation that lands here (or in close_visit below) leaves
-            # the visit 'running'; finish() closes it as aborted, since an
-            # interrupted sweep always reaches finish() (#138).
             try:
                 await _uncancellable(server.stop())
+            except asyncio.CancelledError:
+                # Stopped during the teardown of a visit that measured to
+                # the end (#138): its items are graded and committed, so it
+                # still closes as what it was, then the cancellation goes on.
+                if measured:
+                    await _uncancellable(self.close_done(visit_id, records, drift))
+                raise
             finally:
                 self.serve_seconds += time.time() - t0
                 _current_visits.pop(self.sweep_id, None)
 
-        counts = not drift
-        await BenchmarkTuneVisits.close_visit(
-            visit_id,
-            status='done',
-            items_done=len(records),
-            counts_toward_round=counts,
-            reason='drift' if drift else '',
-        )
+        await _uncancellable(self.close_done(visit_id, records, drift))
         if drift:
             log.warning(
                 "  throughput collapsed mid-visit; this visit's %s items are excluded from the round", len(records)
             )
         return {'status': 'done', 'items': len(records), 'drift': drift, 'visit_id': visit_id}
+
+    async def close_done(self, visit_id: int, records: list[dict], drift: str | None) -> None:
+        """Close a visit that measured its slice: counted unless it drifted."""
+        await BenchmarkTuneVisits.close_visit(
+            visit_id,
+            status='done',
+            items_done=len(records),
+            counts_toward_round=not drift,
+            reason='drift' if drift else '',
+        )
 
     def spent(self) -> str | None:
         if self.cancel_requested:
@@ -1468,19 +1495,17 @@ class Sweep:
     async def close_open_rows(self) -> None:
         """Close the visit and pause rows a task cancellation left open (#138).
 
-        A cancellation can land where nothing closes a row: during a visit's
-        teardown, after its try body finished, or between a pause's open and
-        its close. finish() then closes the sweep, and reclaim_stale_sweeps()
-        skips closed sweeps, so without this those rows would read 'running'
-        forever. They close with the words reclaim_stale_sweeps() uses for a
-        dead tuner: an aborted visit is re-visited on resume, and an
-        abandoned pause is re-probed.
+        visit() and Cooldown.run() close their own rows when cancelled, so
+        this is the backstop for what they cannot cover, such as a second
+        cancellation landing in their own error handling. finish() closes the
+        sweep, and reclaim_stale_sweeps() skips closed sweeps, so a row left
+        open here would read 'running' forever. Rows close as
+        reclaim_stale_sweeps() closes a dead tuner's: a visit as 'aborted', a
+        pause as 'abandoned'.
         """
         for visit in await BenchmarkTuneVisits.sweep_visits(self.sweep_id):
             if visit.status == 'running':
-                await BenchmarkTuneVisits.close_visit(
-                    visit.visit_id, status='aborted', reason='interrupted', counts_toward_round=False
-                )
+                await BenchmarkTuneVisits.close_visit(visit.visit_id, status='aborted', reason='interrupted')
         for pause in await BenchmarkTunePauses.sweep_pauses(self.sweep_id):
             if pause['resolution'] is None:
                 await BenchmarkTunePauses.close_pause(pause['pause_id'], resolution='abandoned')
@@ -1833,9 +1858,8 @@ async def resume_sweep(sweep_id: str | None, defaults: SweepOptions, session: ai
     # pause and no evidence about the card: the sweep was waiting on it
     # precisely because it could not be trusted, and nothing was watching in
     # between.
-    stale = [p for p in await BenchmarkTunePauses.sweep_pauses(sweep_id) if p['resolution'] == 'abandoned']
-    if stale:
-        log.warning('%s pause(s) were abandoned by a crash; re-probing before measuring anything', len(stale))
+    if latest_pause_abandoned(await BenchmarkTunePauses.sweep_pauses(sweep_id)):
+        log.warning('the last pause was abandoned (a crash or a stop); re-probing before measuring anything')
         await sweep.cool.run(trigger='drift', rnd=(len(done) or 1), visit_id=None, drift_ratio=None)
 
     alive = [c for c in sweep.candidates.values() if c.status in ('pending', 'active', 'marginal', 'winner')]
