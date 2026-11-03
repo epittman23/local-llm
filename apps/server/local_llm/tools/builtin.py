@@ -1167,23 +1167,17 @@ async def search_notes(
                 'user_id': user_id,
                 'group_ids': user_group_ids,
                 'permission': 'read',
+                # The range is part of the query (notes keep nanoseconds): filtering
+                # newest matches afterwards found nothing in a past range (#181).
+                'updated_after': start_timestamp * 1_000_000_000 if start_timestamp else None,
+                'updated_before': end_timestamp * 1_000_000_000 if end_timestamp else None,
             },
             skip=0,
-            limit=count * 3,  # Fetch more for filtering
+            limit=count,
         )
-
-        # Convert timestamps to nanoseconds for comparison
-        start_ts = start_timestamp * 1_000_000_000 if start_timestamp else None
-        end_ts = end_timestamp * 1_000_000_000 if end_timestamp else None
 
         notes = []
         for note in result.items:
-            # Apply date filters (updated_at is in nanoseconds)
-            if start_ts and note.updated_at < start_ts:
-                continue
-            if end_ts and note.updated_at > end_ts:
-                continue
-
             # Extract a snippet from the markdown content
             content_snippet = ''
             if note.data and note.data.get('content', {}).get('md'):
@@ -1545,19 +1539,18 @@ async def search_chats(
             search_text=query,
             include_archived=False,
             skip=0,
-            limit=count * 3,  # Fetch more for filtering
+            # One more, for the current chat, which is left out below.
+            limit=count + 1,
+            # The range is part of the query: filtering newest matches
+            # afterwards found nothing in a past range (#181).
+            updated_after=start_timestamp or None,
+            updated_before=end_timestamp or None,
         )
 
         results = []
         for chat in chats:
             # Skip the current chat to avoid showing it in search results
             if __chat_id__ and chat.id == __chat_id__:
-                continue
-
-            # Apply date filters (updated_at is in seconds)
-            if start_timestamp and chat.updated_at < start_timestamp:
-                continue
-            if end_timestamp and chat.updated_at > end_timestamp:
                 continue
 
             # Find a matching message snippet

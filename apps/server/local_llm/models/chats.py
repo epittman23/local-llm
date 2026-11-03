@@ -1968,9 +1968,14 @@ class ChatTable:
         skip: int = 0,
         limit: int = 60,
         db: AsyncSession | None = None,
+        updated_after: int | None = None,
+        updated_before: int | None = None,
     ) -> list[ChatModel]:
         """
         Filters chats based on a search query using Python, allowing pagination using skip and limit.
+
+        updated_after and updated_before (Unix seconds, inclusive) limit the
+        chats searched, in the query itself (#181).
         """
         search_text = sanitize_text_for_db(search_text).lower().strip()
 
@@ -2036,6 +2041,11 @@ class ChatTable:
 
             if folder_ids:
                 stmt = stmt.filter(Chat.folder_id.in_(folder_ids))
+
+            if updated_after is not None:
+                stmt = stmt.filter(Chat.updated_at >= updated_after)
+            if updated_before is not None:
+                stmt = stmt.filter(Chat.updated_at <= updated_before)
 
             # Check if the database dialect is either 'sqlite' or 'postgresql'
             bind = await session.connection()

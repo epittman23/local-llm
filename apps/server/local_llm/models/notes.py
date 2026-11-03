@@ -229,6 +229,13 @@ class NoteTable:
                             )
                         )
 
+                # A date range, in nanoseconds like updated_at, is part of the
+                # query, so a range in the past is not cut off by newer matches (#181).
+                if filter.get('updated_after') is not None:
+                    stmt = stmt.filter(Note.updated_at >= filter['updated_after'])
+                if filter.get('updated_before') is not None:
+                    stmt = stmt.filter(Note.updated_at <= filter['updated_before'])
+
                 view_option = filter.get('view_option')
                 if view_option == 'created':
                     stmt = stmt.filter(Note.user_id == user_id)
