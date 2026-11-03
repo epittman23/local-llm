@@ -42,6 +42,7 @@ import {
 	embeddingModelFor,
 	ragFormError,
 	ragSaveOutcome,
+	reindexProblem,
 	rerankingModelFor,
 	toEmbeddingForm,
 	toRagForm
@@ -174,10 +175,13 @@ export default function Documents() {
 
 	const reindexAll = async () => {
 		try {
-			await reindexKnowledgeFiles(token);
+			const report = await reindexKnowledgeFiles(token);
 			await reindexKnowledgeMetadata(token);
 			await reindexMemoryVectors(token);
-			toast.success('Success');
+			// Files that failed to embed again are said, not hidden behind "Success" (#308).
+			const problem = reindexProblem(report);
+			if (problem) toast.error(problem, { duration: 15000 });
+			else toast.success('Success');
 		} catch (error) {
 			toast.error(`${error}`);
 		}

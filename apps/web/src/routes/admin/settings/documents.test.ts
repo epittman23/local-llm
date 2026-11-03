@@ -10,6 +10,7 @@ import {
 	parseList,
 	ragFormError,
 	ragSaveOutcome,
+	reindexProblem,
 	rerankingModelFor,
 	toEmbeddingForm,
 	toRagForm
@@ -275,5 +276,20 @@ describe('ragSaveOutcome', () => {
 	it('copes with a response that has no warnings or flag (an older server)', () => {
 		expect(ragSaveOutcome({ ENABLE_RAG_HYBRID_SEARCH: true }, { status: true })).toEqual({ warnings: [], changes: {} });
 		expect(ragSaveOutcome({ ENABLE_RAG_HYBRID_SEARCH: true }, null)).toEqual({ warnings: [], changes: {} });
+	});
+});
+
+describe('reindexProblem', () => {
+	it('says how many files failed and names the first few (#308)', () => {
+		const failed = ['a.pdf', 'b.pdf', 'c.pdf', 'd.pdf'].map((filename, i) => ({ file_id: `f${i}`, filename }));
+		expect(reindexProblem({ status: false, total: 10, reindexed: 6, failed })).toBe(
+			'4 of 10 files could not be embedded again and are missing from knowledge search until they are (a.pdf, b.pdf, c.pdf, and 1 more); the backend log has the errors.'
+		);
+	});
+
+	it('is null when everything was embedded, or for an older server that answered true', () => {
+		expect(reindexProblem({ status: true, total: 3, reindexed: 3, failed: [] })).toBeNull();
+		expect(reindexProblem(true)).toBeNull();
+		expect(reindexProblem(null)).toBeNull();
 	});
 });
