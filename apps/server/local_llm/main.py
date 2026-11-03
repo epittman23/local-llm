@@ -276,7 +276,7 @@ from local_llm.utils.tools import set_terminal_servers, set_tool_servers
 
 if SAFE_MODE:
     print('SAFE MODE ENABLED')
-    # Functions.deactivate_all_functions() is awaited in lifespan below
+    # Functions are deactivated in lifespan, before its first published event
 
 logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
 log = logging.getLogger(__name__)
@@ -341,6 +341,16 @@ async def require_redis(client, attempts: int = 20, delay: float = 0.5):
     raise RuntimeError(f'Redis at REDIS_URL is not reachable: {last_error}')
 
 
+async def _enter_safe_mode() -> None:
+    """Deactivate every function, or refuse to start: SAFE_MODE with them still active would run them."""
+    if await Functions.deactivate_all_functions() is not True:
+        raise RuntimeError(
+            'SAFE_MODE is set but the functions could not be deactivated, so startup stops rather than run them. '
+            'Check the database, or start without SAFE_MODE.'
+        )
+    log.warning('SAFE_MODE: every function is deactivated')
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Store reference to main event loop for sync->async calls (e.g., embedding generation)
@@ -360,6 +370,12 @@ async def lifespan(app: FastAPI):
     app.state.instance_id = INSTANCE_ID
     start_logger()
 
+    if SAFE_MODE:
+        # First, before any other startup step: publishing an event dispatches
+        # event functions, which SAFE_MODE exists to keep from running (#361).
+        # The migrations ran at import, so the table is there.
+        await _enter_safe_mode()
+
     # The vector store's client is created lazily (retrieval/vector/factory.py);
     # connect it now so a misconfigured store fails startup, not the first upload.
     await asyncio.to_thread(VECTOR_DB_CLIENT.resolve)
@@ -378,9 +394,6 @@ async def lifespan(app: FastAPI):
         if await create_admin_user(LLLM_ADMIN_EMAIL, LLLM_ADMIN_PASSWORD, LLLM_ADMIN_NAME):
             # Disable signup since we now have an admin
             await Config.upsert({'ui.enable_signup': False})
-
-    if SAFE_MODE:
-        await Functions.deactivate_all_functions()
 
     # This should be blocking (sync) so functions are not deactivated on first /get_models calls
     # when the first user lands on the / route.
@@ -1919,6 +1932,14 @@ async def chat_completion(
 
     # Fan out: one task per model
     if metadata.get('session_id') and metadata.get('chat_id'):
+        if missing_base_model and model_id:
+            # The fallback chosen above, for the copy that asked for the broken
+            # preset; the fan-out reads its models from message_ids, which still
+            # name the preset (#360). The chat record above keeps the preset.
+            message_ids = [
+                {**entry, 'model_id': model['id']} if entry.get('model_id') == model_id else entry
+                for entry in message_ids
+            ]
         return await _fan_out_chat(request, form_data, user, metadata, model, message_ids, tasks)
 
     # Legacy/direct: single model, synchronous
