@@ -4784,6 +4784,11 @@ class _StreamingReply:
             self._trim_empty_trailing_message(self.prior_output)
             self.output = []
             self.content_parts = []
+            # Continuing a reply: its usage so far counts too, since the save
+            # at the end replaces the stored usage with self.usage (#196).
+            stored_usage = normalize_usage(message.get('usage') or {}) if message else {}
+            if stored_usage:
+                self.usage = stored_usage
         elif existing_output:
             self.output = existing_output
         elif initial_content:

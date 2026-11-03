@@ -23,7 +23,7 @@ from sqlalchemy import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from local_llm.internal.db import Base, get_async_db_context
-from local_llm.utils.response import merge_usage, normalize_usage
+from local_llm.utils.response import normalize_usage
 
 ####################
 # Helpers
@@ -240,10 +240,12 @@ class ChatMessageTable:
         if 'context_summary' in data or 'contextSummary' in data:
             message.context_summary = data.get('context_summary') or data.get('contextSummary')
 
+        # The saved message carries the reply's whole usage (a continue starts
+        # from what was stored), so it replaces the row's: merging added it
+        # again on every later save of the chat (#196).
         usage = get_usage(data)
         if usage:
-            existing_usage = normalize_usage(message.usage)
-            message.usage = existing_usage if usage == existing_usage else merge_usage(existing_usage, usage)
+            message.usage = usage
         message.updated_at = now
 
     @staticmethod
