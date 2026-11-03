@@ -6,8 +6,10 @@ import hashlib
 import logging
 import re
 import sys
+import time
 import urllib
 import uuid
+import weakref
 from dataclasses import dataclass, field
 from functools import partialmethod
 from types import SimpleNamespace
@@ -811,6 +813,101 @@ async def recover_static_oauth_client_metadata(connection: dict, oauth_client_in
     return recovered
 
 
+class RefreshRejected(Exception):
+    """The refresh grant is gone: the token endpoint answered invalid_grant, or there is no refresh token (#284).
+
+    Only this deletes the session, and only once its access token has
+    expired. Anything else that stops a refresh may pass or is the client's
+    configuration rather than the user's grant (a network or DNS error, an
+    IdP 5xx or 429, a discovery document that did not load, invalid_client
+    or invalid_scope after a settings change, an HTML 401 from a proxy), so
+    the session is kept for the next attempt.
+    """
+
+
+# How long one refresh may take. It runs under its session's lock, so a hung IdP
+# would otherwise hold every request for that session for aiohttp's default 300 s.
+OAUTH_REFRESH_TIMEOUT = aiohttp.ClientTimeout(total=30)
+
+# One lock per session being refreshed, kept while anything references it. Keyed by
+# the event loop too: an asyncio.Lock used under one loop cannot be awaited under another.
+# The lock is per process; see _token_refreshed_if_needed for several workers.
+_REFRESH_LOCKS: weakref.WeakValueDictionary[tuple[asyncio.AbstractEventLoop, str], asyncio.Lock] = (
+    weakref.WeakValueDictionary()
+)
+
+
+def _is_invalid_grant(status: int, body: str) -> bool:
+    """Whether a token endpoint's error reply says the refresh grant itself is gone (RFC 6749 section 5.2)."""
+    if status not in (400, 401):
+        return False
+    try:
+        error = JSONCodec.loads(body).get('error')
+    except Exception:
+        return False
+    return error == 'invalid_grant'
+
+
+def _needs_refresh(session, force_refresh: bool) -> bool:
+    return (
+        force_refresh
+        or session.expires_at is None
+        or dt.datetime.now() + dt.timedelta(minutes=5) >= dt.datetime.fromtimestamp(session.expires_at)
+    )
+
+
+async def _token_refreshed_if_needed(manager, session, force_refresh: bool) -> dict | None:
+    """The session's token, refreshed first when it is close to expiry (#284).
+
+    Refreshes of one session run one at a time in this process: two
+    requests near expiry would otherwise both send the same refresh token,
+    and with rotation the second is refused. A request that waited finds the
+    token the one before it obtained and uses that. Across several worker
+    processes the race can still happen, so a refusal deletes the session
+    only if it still holds the token that was refused.
+
+    A refusal or a transient failure returns the current token while it has
+    not expired, and keeps the session. A refusal after expiry deletes it.
+    The refresh and the store of its result are shielded from cancellation:
+    a rotated refresh token that was not stored would be lost.
+    """
+    if not _needs_refresh(session, force_refresh):
+        return session.token
+    key = (asyncio.get_running_loop(), session.id)
+    lock = _REFRESH_LOCKS.get(key)
+    if lock is None:
+        lock = _REFRESH_LOCKS[key] = asyncio.Lock()
+    async with lock:
+        current = await OAuthSessions.get_session_by_id(session.id)
+        if current is None:
+            return None
+        if current.token != session.token:
+            # Refreshed by the request this one waited for.
+            return current.token
+        log.debug('Token refresh needed for user %s, provider %s', current.user_id, current.provider)
+        unexpired = current.expires_at is not None and time.time() < current.expires_at
+        try:
+            refreshed = await asyncio.shield(manager._refresh_token(current))
+        except RefreshRejected as e:
+            if unexpired:
+                log.warning(f'Token refresh refused for session {current.id}; using its token until it expires: {e}')
+                return current.token
+            latest = await OAuthSessions.get_session_by_id(current.id)
+            if latest is not None and latest.token == current.token:
+                log.warning(f'Token refresh refused for session {current.id} ({current.provider}), deleting it: {e}')
+                await OAuthSessions.delete_session_by_id(current.id)
+                return None
+            # Another worker refreshed it meanwhile; its token is the live one.
+            return latest.token if latest is not None else None
+        if refreshed:
+            return refreshed
+        if unexpired:
+            log.warning(f'Token refresh failed for session {current.id}; keeping it and its unexpired token')
+            return current.token
+        log.warning(f'Token refresh failed for session {current.id}; keeping it for the next attempt')
+        return None
+
+
 class OAuthClientManager:
     def __init__(self, app):
         self.oauth = OAuth()
@@ -1044,23 +1141,7 @@ class OAuthClientManager:
                 log.warning(f'No OAuth session found for user {user_id}, client_id {client_id}')
                 return None
 
-            if (
-                force_refresh
-                or session.expires_at is None
-                or dt.datetime.now() + dt.timedelta(minutes=5) >= dt.datetime.fromtimestamp(session.expires_at)
-            ):
-                log.debug('Token refresh needed for user %s, client_id %s', user_id, session.provider)
-                refreshed_token = await self._refresh_token(session)
-                if refreshed_token:
-                    return refreshed_token
-                else:
-                    log.warning(
-                        f'Token refresh failed for user {user_id}, client_id {session.provider}, deleting session '
-                        f'{session.id}'
-                    )
-                    await OAuthSessions.delete_session_by_id(session.id)
-                    return None
-            return session.token
+            return await _token_refreshed_if_needed(self, session, force_refresh)
 
         except Exception as e:
             log.error(f'Error getting OAuth token for user {user_id}: {e}')
@@ -1068,13 +1149,16 @@ class OAuthClientManager:
 
     async def _refresh_token(self, session) -> dict:
         """
-        Refresh an OAuth token if needed, with concurrency protection.
+        Refresh an OAuth token and store it; _token_refreshed_if_needed serialises the calls.
 
         Args:
             session: The OAuth session object
 
         Returns:
-            dict: Refreshed token data, or None if refresh failed
+            dict: Refreshed token data, or None if the refresh failed and may succeed later
+
+        Raises:
+            RefreshRejected: the provider refused the refresh for good
         """
         try:
             # Perform the actual refresh
@@ -1089,6 +1173,8 @@ class OAuthClientManager:
                 log.error(f'Failed to refresh token for session {session.id}')
                 return None
 
+        except RefreshRejected:
+            raise
         except Exception as e:
             log.error(f'Error refreshing token for session {session.id}: {e}')
             return None
@@ -1108,8 +1194,7 @@ class OAuthClientManager:
         token_data = session.token
 
         if not token_data.get('refresh_token'):
-            log.warning(f'No refresh token available for session {session.id}')
-            return None
+            raise RefreshRejected(f'no refresh token available for session {session.id}')
 
         try:
             client = await self.get_client(client_id)
@@ -1118,7 +1203,7 @@ class OAuthClientManager:
                 return None
 
             token_endpoint = None
-            async with aiohttp.ClientSession(trust_env=True) as session_http:
+            async with aiohttp.ClientSession(trust_env=True, timeout=OAUTH_REFRESH_TIMEOUT) as session_http:
                 async with session_http.get(await self.get_server_metadata_url(client_id)) as r:
                     if r.status == 200:
                         openid_data = await r.json()
@@ -1151,7 +1236,7 @@ class OAuthClientManager:
                 refresh_data['scope'] = client.client_kwargs['scope']
 
             # Make refresh request
-            async with aiohttp.ClientSession(trust_env=True) as session_http:
+            async with aiohttp.ClientSession(trust_env=True, timeout=OAUTH_REFRESH_TIMEOUT) as session_http:
                 async with session_http.post(
                     token_endpoint,
                     data=refresh_data,
@@ -1172,8 +1257,12 @@ class OAuthClientManager:
                     else:
                         error_text = await r.text()
                         log.error(f'Token refresh failed for client_id {client_id}: {r.status} - {error_text}')
+                        if _is_invalid_grant(r.status, error_text):
+                            raise RefreshRejected(f'{r.status} - {error_text}')
                         return None
 
+        except RefreshRejected:
+            raise
         except Exception as e:
             log.error(f'Exception during token refresh for client_id {client_id}: {e}')
             return None
@@ -1744,24 +1833,7 @@ class OAuthManager:
                 )
                 return None
 
-            if (
-                force_refresh
-                or session.expires_at is None
-                or dt.datetime.now() + dt.timedelta(minutes=5) >= dt.datetime.fromtimestamp(session.expires_at)
-            ):
-                log.debug('Token refresh needed for user %s, provider %s', user_id, session.provider)
-                refreshed_token = await self._refresh_token(session)
-                if refreshed_token:
-                    return refreshed_token
-                else:
-                    log.warning(
-                        f'Token refresh failed for user {user_id}, provider {session.provider}, deleting session '
-                        f'{session.id}'
-                    )
-                    await OAuthSessions.delete_session_by_id(session.id)
-
-                    return None
-            return session.token
+            return await _token_refreshed_if_needed(self, session, force_refresh)
 
         except Exception as e:
             log.error(f'Error getting OAuth token for user {user_id}: {e}')
@@ -1769,13 +1841,16 @@ class OAuthManager:
 
     async def _refresh_token(self, session) -> dict:
         """
-        Refresh an OAuth token if needed, with concurrency protection.
+        Refresh an OAuth token and store it; _token_refreshed_if_needed serialises the calls.
 
         Args:
             session: The OAuth session object
 
         Returns:
-            dict: Refreshed token data, or None if refresh failed
+            dict: Refreshed token data, or None if the refresh failed and may succeed later
+
+        Raises:
+            RefreshRejected: the provider refused the refresh for good
         """
         try:
             # Perform the actual refresh
@@ -1790,6 +1865,8 @@ class OAuthManager:
                 log.error(f'Failed to refresh token for session {session.id}')
                 return None
 
+        except RefreshRejected:
+            raise
         except Exception as e:
             log.error(f'Error refreshing token for session {session.id}: {e}')
             return None
@@ -1809,8 +1886,7 @@ class OAuthManager:
         auth_config = await get_oauth_runtime_config()
 
         if not token_data.get('refresh_token'):
-            log.warning(f'No refresh token available for session {session.id}')
-            return None
+            raise RefreshRejected(f'no refresh token available for session {session.id}')
 
         try:
             client = self.get_client(provider)
@@ -1820,7 +1896,7 @@ class OAuthManager:
 
             server_metadata_url = self.get_server_metadata_url(provider)
             token_endpoint = None
-            async with aiohttp.ClientSession(trust_env=True) as session_http:
+            async with aiohttp.ClientSession(trust_env=True, timeout=OAUTH_REFRESH_TIMEOUT) as session_http:
                 async with session_http.get(server_metadata_url) as r:
                     if r.status == 200:
                         openid_data = await r.json()
@@ -1850,7 +1926,7 @@ class OAuthManager:
                 refresh_data['scope'] = client.client_kwargs['scope']
 
             # Make refresh request
-            async with aiohttp.ClientSession(trust_env=True) as session_http:
+            async with aiohttp.ClientSession(trust_env=True, timeout=OAUTH_REFRESH_TIMEOUT) as session_http:
                 async with session_http.post(
                     token_endpoint,
                     data=refresh_data,
@@ -1871,8 +1947,12 @@ class OAuthManager:
                     else:
                         error_text = await r.text()
                         log.error(f'Token refresh failed for provider {provider}: {r.status} - {error_text}')
+                        if _is_invalid_grant(r.status, error_text):
+                            raise RefreshRejected(f'{r.status} - {error_text}')
                         return None
 
+        except RefreshRejected:
+            raise
         except Exception as e:
             log.error(f'Exception during token refresh for provider {provider}: {e}')
             return None

@@ -1,0 +1,350 @@
+"""A failed OAuth refresh deletes the session only when the provider refused it (#284).
+
+Both OAuthClientManager (MCP) and OAuthManager (SSO) deleted the session
+on any refresh failure: a DNS error, an IdP 5xx, a metadata fetch that
+failed. Each then had to be authorised again. Refresh also had no lock,
+so two requests near expiry both refreshed with the same refresh token;
+with rotation and reuse detection the second failed and deleted the
+session the first had just updated.
+
+Now only a definitive refusal (the token endpoint answering 400 or 401,
+or no refresh token to send) deletes the session. A transient failure
+keeps it, and returns the current token while it has not expired.
+Refreshes of one session run one at a time, and a request that waited
+uses the token the one before it obtained.
+
+Run from apps/server:
+
+    python -m pytest tests/test_oauth_refresh_keeps_session.py
+"""
+
+import asyncio
+import json
+import time
+import weakref
+from types import SimpleNamespace
+
+import pytest
+
+from local_llm.utils import oauth
+
+
+class _Sessions:
+    """OAuthSessions in memory."""
+
+    def __init__(self, session):
+        self.rows = {session.id: session}
+        self.deleted: list[str] = []
+
+    async def get_session_by_provider_and_user_id(self, provider, user_id, db=None):
+        return next((s for s in self.rows.values() if s.provider == provider and s.user_id == user_id), None)
+
+    async def get_session_by_id_and_user_id(self, session_id, user_id, db=None):
+        s = self.rows.get(session_id)
+        return s if s and s.user_id == user_id else None
+
+    async def get_session_by_id(self, session_id, db=None):
+        return self.rows.get(session_id)
+
+    async def update_session_by_id(self, session_id, token, db=None):
+        s = self.rows[session_id]
+        self.rows[session_id] = SimpleNamespace(**{**vars(s), 'token': token, 'expires_at': token.get('expires_at')})
+        return self.rows[session_id]
+
+    async def delete_session_by_id(self, session_id, db=None):
+        self.deleted.append(session_id)
+        return self.rows.pop(session_id, None) is not None
+
+
+def _session(provider, *, expires_in):
+    token = {'access_token': 'old', 'refresh_token': 'r1', 'expires_at': int(time.time()) + expires_in}
+    return SimpleNamespace(id='s1', provider=provider, user_id='u1', token=token, expires_at=token['expires_at'])
+
+
+MANAGERS = {
+    # (manager class, provider, how get_oauth_token names the session)
+    'mcp': (oauth.OAuthClientManager, 'mcp:server', 'mcp:server'),
+    'sso': (oauth.OAuthManager, 'oidc', 's1'),
+}
+
+
+@pytest.fixture(params=list(MANAGERS))
+def manager(request, monkeypatch):
+    cls, provider, key = MANAGERS[request.param]
+    m = object.__new__(cls)
+    monkeypatch.setattr(oauth, '_REFRESH_LOCKS', weakref.WeakValueDictionary())
+
+    def setup(*, expires_in=60):
+        sessions = _Sessions(_session(provider, expires_in=expires_in))
+        monkeypatch.setattr(oauth, 'OAuthSessions', sessions)
+        return sessions
+
+    def get(force_refresh=False):
+        return m.get_oauth_token('u1', key, force_refresh=force_refresh)
+
+    return SimpleNamespace(m=m, setup=setup, get=get, provider=provider)
+
+
+def _refresh_with(manager, monkeypatch, outcome):
+    calls: list[str] = []
+
+    async def perform(session):
+        calls.append(session.token['refresh_token'])
+        await asyncio.sleep(0.01)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    monkeypatch.setattr(manager.m, '_perform_token_refresh', perform)
+    return calls
+
+
+def test_a_transient_failure_keeps_the_session_and_its_unexpired_token(manager, monkeypatch):
+    sessions = manager.setup(expires_in=60)
+    _refresh_with(manager, monkeypatch, None)
+
+    token = asyncio.run(manager.get())
+
+    assert token['access_token'] == 'old'
+    assert sessions.deleted == []
+
+
+def test_a_transient_failure_after_expiry_returns_no_token_but_keeps_the_session(manager, monkeypatch):
+    sessions = manager.setup(expires_in=-60)
+    _refresh_with(manager, monkeypatch, None)
+
+    assert asyncio.run(manager.get()) is None
+    assert sessions.deleted == []
+
+
+def test_a_refused_refresh_deletes_the_session(manager, monkeypatch):
+    sessions = manager.setup(expires_in=-60)
+    _refresh_with(manager, monkeypatch, oauth.RefreshRejected('400: invalid_grant'))
+
+    assert asyncio.run(manager.get()) is None
+    assert sessions.deleted == ['s1']
+
+
+def test_a_refused_refresh_keeps_a_token_that_has_not_expired(manager, monkeypatch):
+    sessions = manager.setup(expires_in=60)
+    _refresh_with(manager, monkeypatch, oauth.RefreshRejected('no refresh token'))
+
+    token = asyncio.run(manager.get())
+
+    assert token['access_token'] == 'old'
+    assert sessions.deleted == []
+
+
+def test_a_refusal_does_not_delete_a_session_another_worker_refreshed_meanwhile(manager, monkeypatch):
+    # With several workers the lock does not span them: another process may
+    # rotate the token while this one's refresh, using the old one, is refused.
+    sessions = manager.setup(expires_in=-60)
+    rotated = {'access_token': 'other', 'refresh_token': 'r2', 'expires_at': int(time.time()) + 3600}
+
+    async def perform(session):
+        await sessions.update_session_by_id(session.id, rotated)
+        raise oauth.RefreshRejected('400 - invalid_grant')
+
+    monkeypatch.setattr(manager.m, '_perform_token_refresh', perform)
+
+    token = asyncio.run(manager.get())
+
+    assert sessions.deleted == []
+    assert token['access_token'] == 'other'
+
+
+def test_a_refresh_still_stores_its_token_when_the_request_is_cancelled(manager, monkeypatch):
+    # The IdP may already have rotated the refresh token; dropping the reply
+    # would leave the session holding one that no longer works.
+    sessions = manager.setup(expires_in=-60)
+    new = {'access_token': 'new', 'refresh_token': 'r2', 'expires_at': int(time.time()) + 3600}
+
+    async def perform(session):
+        await asyncio.sleep(0.05)
+        return new
+
+    monkeypatch.setattr(manager.m, '_perform_token_refresh', perform)
+
+    async def cancel_midway():
+        request = asyncio.ensure_future(manager.get())
+        await asyncio.sleep(0.01)
+        request.cancel()
+        await asyncio.sleep(0.1)
+
+    asyncio.run(cancel_midway())
+
+    assert sessions.rows['s1'].token['refresh_token'] == 'r2'
+
+
+def test_concurrent_requests_refresh_once_and_share_the_new_token(manager, monkeypatch):
+    manager.setup(expires_in=-60)
+    new = {'access_token': 'new', 'refresh_token': 'r2', 'expires_at': int(time.time()) + 3600}
+    calls = _refresh_with(manager, monkeypatch, new)
+
+    async def both():
+        return await asyncio.gather(manager.get(), manager.get())
+
+    first, second = asyncio.run(both())
+
+    assert calls == ['r1']
+    assert first['access_token'] == second['access_token'] == 'new'
+
+
+def test_a_lock_left_from_another_event_loop_is_not_reused(manager, monkeypatch):
+    # As happens when a held lock outlives the loop that used it: the next
+    # loop must get a lock of its own, not one bound to the old loop.
+    manager.setup(expires_in=-60)
+    new = {'access_token': 'new', 'refresh_token': 'r2', 'expires_at': int(time.time()) + 3600}
+    _refresh_with(manager, monkeypatch, new)
+
+    async def contended():
+        return await asyncio.gather(manager.get(), manager.get())
+
+    async def hold_a_lock():
+        lock = asyncio.Lock()
+        oauth._REFRESH_LOCKS[(asyncio.get_running_loop(), 's1')] = lock
+        await lock.acquire()
+        # Make the lock bind to this loop, as a contended acquire does.
+        waiter = asyncio.ensure_future(lock.acquire())
+        await asyncio.sleep(0)
+        waiter.cancel()
+        return lock
+
+    # Kept alive here, as a stray reference would keep it, and still held.
+    kept = asyncio.run(hold_a_lock())
+    first, second = asyncio.run(contended())
+
+    assert kept.locked()
+    assert first['access_token'] == second['access_token'] == 'new'
+
+
+# --- what counts as a refusal -------------------------------------------------
+
+
+class _Reply:
+    def __init__(self, status, body=None):
+        self.status = status
+        self.body = body or {}
+
+    async def json(self):
+        return self.body
+
+    async def text(self):
+        return self.body if isinstance(self.body, str) else json.dumps(self.body)
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+def _endpoint(monkeypatch, *, post):
+    """The IdP: discovery answers with a token endpoint, and the token endpoint answers with `post`."""
+    opened: list[dict] = []
+
+    class _Http:
+        def __init__(self, **kwargs):
+            opened.append(kwargs)
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            return False
+
+        def get(self, url, **kwargs):
+            return _Reply(200, {'token_endpoint': 'https://idp.test/token'})
+
+        def post(self, url, **kwargs):
+            if isinstance(post, Exception):
+                raise post
+            return _Reply(*post)
+
+    monkeypatch.setattr(oauth.aiohttp, 'ClientSession', _Http)
+    return opened
+
+
+@pytest.fixture
+def performer(manager, monkeypatch):
+    client = SimpleNamespace(client_id='c', client_secret='', client_kwargs={})
+
+    async def runtime_config():
+        return SimpleNamespace(OAUTH_REFRESH_TOKEN_INCLUDE_SCOPE=False)
+
+    monkeypatch.setattr(oauth, 'get_oauth_runtime_config', runtime_config)
+    monkeypatch.setattr(oauth, 'should_send_oauth_resource', lambda info: False)
+    if isinstance(manager.m, oauth.OAuthClientManager):
+
+        async def get_client(_id):
+            return client
+
+        async def metadata_url(_id):
+            return 'https://idp.test/.well-known/openid-configuration'
+
+        async def client_info(_id):
+            return SimpleNamespace(resource=None)
+
+        monkeypatch.setattr(manager.m, 'get_client', get_client)
+        monkeypatch.setattr(manager.m, 'get_server_metadata_url', metadata_url)
+        monkeypatch.setattr(manager.m, 'get_client_info', client_info)
+    else:
+        monkeypatch.setattr(manager.m, 'get_client', lambda _p: client)
+        monkeypatch.setattr(manager.m, 'get_server_metadata_url', lambda _p: 'https://idp.test/.well-known')
+    return lambda: asyncio.run(manager.m._perform_token_refresh(_session(manager.provider, expires_in=-60)))
+
+
+@pytest.mark.parametrize('status', [400, 401])
+def test_the_token_endpoint_answering_invalid_grant_is_a_refusal(performer, monkeypatch, status):
+    _endpoint(monkeypatch, post=(status, {'error': 'invalid_grant'}))
+
+    with pytest.raises(oauth.RefreshRejected):
+        performer()
+
+
+def test_no_refresh_token_is_a_refusal(performer, manager, monkeypatch):
+    _endpoint(monkeypatch, post=(200, {}))
+    session = _session(manager.provider, expires_in=-60)
+    del session.token['refresh_token']
+
+    with pytest.raises(oauth.RefreshRejected):
+        asyncio.run(manager.m._perform_token_refresh(session))
+
+
+@pytest.mark.parametrize(
+    'post',
+    [
+        # The client's configuration, not the user's grant: fixing the
+        # settings should not need every user to sign in again.
+        (401, {'error': 'invalid_client'}),
+        (400, {'error': 'invalid_scope'}),
+        (400, {'error': 'invalid_request'}),
+    ],
+)
+def test_a_client_configuration_error_is_not_a_refusal(performer, monkeypatch, post):
+    _endpoint(monkeypatch, post=post)
+
+    assert performer() is None
+
+
+def test_a_reply_that_is_not_json_is_not_a_refusal(performer, monkeypatch):
+    # An HTML 401 from a proxy in front of the IdP.
+    _endpoint(monkeypatch, post=(401, '<html>Unauthorized</html>'))
+
+    assert performer() is None
+
+
+def test_each_refresh_request_has_a_time_limit(performer, monkeypatch):
+    opened = _endpoint(monkeypatch, post=(503, {}))
+
+    performer()
+
+    assert opened
+    assert all(kw.get('timeout') is oauth.OAUTH_REFRESH_TIMEOUT for kw in opened)
+
+
+@pytest.mark.parametrize('post', [(503, {}), (429, {}), OSError('name resolution failed')])
+def test_a_server_error_or_a_network_error_is_not_a_refusal(performer, monkeypatch, post):
+    _endpoint(monkeypatch, post=post)
+
+    assert performer() is None
