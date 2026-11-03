@@ -814,19 +814,38 @@ async def recover_static_oauth_client_metadata(connection: dict, oauth_client_in
 
 
 class RefreshRejected(Exception):
-    """The provider refused a token refresh for good, or there is nothing to refresh with (#284).
+    """The refresh grant is gone: the token endpoint answered invalid_grant, or there is no refresh token (#284).
 
-    Only this deletes the session. Anything else that stops a refresh (a
-    network or DNS error, an IdP 5xx or 429, a discovery document that did
-    not load) may pass, so the session is kept for the next attempt.
+    Only this deletes the session, and only once its access token has
+    expired. Anything else that stops a refresh may pass or is the client's
+    configuration rather than the user's grant (a network or DNS error, an
+    IdP 5xx or 429, a discovery document that did not load, invalid_client
+    or invalid_scope after a settings change, an HTML 401 from a proxy), so
+    the session is kept for the next attempt.
     """
 
 
-# One lock per session being refreshed, held only while some request uses it. Keyed by
+# How long one refresh may take. It runs under its session's lock, so a hung IdP
+# would otherwise hold every request for that session for aiohttp's default 300 s.
+OAUTH_REFRESH_TIMEOUT = aiohttp.ClientTimeout(total=30)
+
+# One lock per session being refreshed, kept while anything references it. Keyed by
 # the event loop too: an asyncio.Lock used under one loop cannot be awaited under another.
+# The lock is per process; see _token_refreshed_if_needed for several workers.
 _REFRESH_LOCKS: weakref.WeakValueDictionary[tuple[asyncio.AbstractEventLoop, str], asyncio.Lock] = (
     weakref.WeakValueDictionary()
 )
+
+
+def _is_invalid_grant(status: int, body: str) -> bool:
+    """Whether a token endpoint's error reply says the refresh grant itself is gone (RFC 6749 section 5.2)."""
+    if status not in (400, 401):
+        return False
+    try:
+        error = JSONCodec.loads(body).get('error')
+    except Exception:
+        return False
+    return error == 'invalid_grant'
 
 
 def _needs_refresh(session, force_refresh: bool) -> bool:
@@ -840,11 +859,17 @@ def _needs_refresh(session, force_refresh: bool) -> bool:
 async def _token_refreshed_if_needed(manager, session, force_refresh: bool) -> dict | None:
     """The session's token, refreshed first when it is close to expiry (#284).
 
-    Refreshes of one session run one at a time: two requests near expiry
-    would otherwise both send the same refresh token, and with rotation the
-    second is refused. A request that waited finds the token the one before
-    it obtained and uses that. A refusal deletes the session; a transient
-    failure keeps it and returns the current token while it has not expired.
+    Refreshes of one session run one at a time in this process: two
+    requests near expiry would otherwise both send the same refresh token,
+    and with rotation the second is refused. A request that waited finds the
+    token the one before it obtained and uses that. Across several worker
+    processes the race can still happen, so a refusal deletes the session
+    only if it still holds the token that was refused.
+
+    A refusal or a transient failure returns the current token while it has
+    not expired, and keeps the session. A refusal after expiry deletes it.
+    The refresh and the store of its result are shielded from cancellation:
+    a rotated refresh token that was not stored would be lost.
     """
     if not _needs_refresh(session, force_refresh):
         return session.token
@@ -860,15 +885,23 @@ async def _token_refreshed_if_needed(manager, session, force_refresh: bool) -> d
             # Refreshed by the request this one waited for.
             return current.token
         log.debug('Token refresh needed for user %s, provider %s', current.user_id, current.provider)
+        unexpired = current.expires_at is not None and time.time() < current.expires_at
         try:
-            refreshed = await manager._refresh_token(current)
+            refreshed = await asyncio.shield(manager._refresh_token(current))
         except RefreshRejected as e:
-            log.warning(f'Token refresh refused for session {current.id} ({current.provider}), deleting it: {e}')
-            await OAuthSessions.delete_session_by_id(current.id)
-            return None
+            if unexpired:
+                log.warning(f'Token refresh refused for session {current.id}; using its token until it expires: {e}')
+                return current.token
+            latest = await OAuthSessions.get_session_by_id(current.id)
+            if latest is not None and latest.token == current.token:
+                log.warning(f'Token refresh refused for session {current.id} ({current.provider}), deleting it: {e}')
+                await OAuthSessions.delete_session_by_id(current.id)
+                return None
+            # Another worker refreshed it meanwhile; its token is the live one.
+            return latest.token if latest is not None else None
         if refreshed:
             return refreshed
-        if current.expires_at is not None and time.time() < current.expires_at:
+        if unexpired:
             log.warning(f'Token refresh failed for session {current.id}; keeping it and its unexpired token')
             return current.token
         log.warning(f'Token refresh failed for session {current.id}; keeping it for the next attempt')
@@ -1170,7 +1203,7 @@ class OAuthClientManager:
                 return None
 
             token_endpoint = None
-            async with aiohttp.ClientSession(trust_env=True) as session_http:
+            async with aiohttp.ClientSession(trust_env=True, timeout=OAUTH_REFRESH_TIMEOUT) as session_http:
                 async with session_http.get(await self.get_server_metadata_url(client_id)) as r:
                     if r.status == 200:
                         openid_data = await r.json()
@@ -1203,7 +1236,7 @@ class OAuthClientManager:
                 refresh_data['scope'] = client.client_kwargs['scope']
 
             # Make refresh request
-            async with aiohttp.ClientSession(trust_env=True) as session_http:
+            async with aiohttp.ClientSession(trust_env=True, timeout=OAUTH_REFRESH_TIMEOUT) as session_http:
                 async with session_http.post(
                     token_endpoint,
                     data=refresh_data,
@@ -1224,8 +1257,7 @@ class OAuthClientManager:
                     else:
                         error_text = await r.text()
                         log.error(f'Token refresh failed for client_id {client_id}: {r.status} - {error_text}')
-                        if r.status in (400, 401):
-                            # invalid_grant, invalid_client and the like: the grant is gone.
+                        if _is_invalid_grant(r.status, error_text):
                             raise RefreshRejected(f'{r.status} - {error_text}')
                         return None
 
@@ -1864,7 +1896,7 @@ class OAuthManager:
 
             server_metadata_url = self.get_server_metadata_url(provider)
             token_endpoint = None
-            async with aiohttp.ClientSession(trust_env=True) as session_http:
+            async with aiohttp.ClientSession(trust_env=True, timeout=OAUTH_REFRESH_TIMEOUT) as session_http:
                 async with session_http.get(server_metadata_url) as r:
                     if r.status == 200:
                         openid_data = await r.json()
@@ -1894,7 +1926,7 @@ class OAuthManager:
                 refresh_data['scope'] = client.client_kwargs['scope']
 
             # Make refresh request
-            async with aiohttp.ClientSession(trust_env=True) as session_http:
+            async with aiohttp.ClientSession(trust_env=True, timeout=OAUTH_REFRESH_TIMEOUT) as session_http:
                 async with session_http.post(
                     token_endpoint,
                     data=refresh_data,
@@ -1915,8 +1947,7 @@ class OAuthManager:
                     else:
                         error_text = await r.text()
                         log.error(f'Token refresh failed for provider {provider}: {r.status} - {error_text}')
-                        if r.status in (400, 401):
-                            # invalid_grant, invalid_client and the like: the grant is gone.
+                        if _is_invalid_grant(r.status, error_text):
                             raise RefreshRejected(f'{r.status} - {error_text}')
                         return None
 

@@ -19,7 +19,9 @@ Run from apps/server:
 """
 
 import asyncio
+import json
 import time
+import weakref
 from types import SimpleNamespace
 
 import pytest
@@ -70,6 +72,7 @@ MANAGERS = {
 def manager(request, monkeypatch):
     cls, provider, key = MANAGERS[request.param]
     m = object.__new__(cls)
+    monkeypatch.setattr(oauth, '_REFRESH_LOCKS', weakref.WeakValueDictionary())
 
     def setup(*, expires_in=60):
         sessions = _Sessions(_session(provider, expires_in=expires_in))
@@ -120,6 +123,57 @@ def test_a_refused_refresh_deletes_the_session(manager, monkeypatch):
 
     assert asyncio.run(manager.get()) is None
     assert sessions.deleted == ['s1']
+
+
+def test_a_refused_refresh_keeps_a_token_that_has_not_expired(manager, monkeypatch):
+    sessions = manager.setup(expires_in=60)
+    _refresh_with(manager, monkeypatch, oauth.RefreshRejected('no refresh token'))
+
+    token = asyncio.run(manager.get())
+
+    assert token['access_token'] == 'old'
+    assert sessions.deleted == []
+
+
+def test_a_refusal_does_not_delete_a_session_another_worker_refreshed_meanwhile(manager, monkeypatch):
+    # With several workers the lock does not span them: another process may
+    # rotate the token while this one's refresh, using the old one, is refused.
+    sessions = manager.setup(expires_in=-60)
+    rotated = {'access_token': 'other', 'refresh_token': 'r2', 'expires_at': int(time.time()) + 3600}
+
+    async def perform(session):
+        await sessions.update_session_by_id(session.id, rotated)
+        raise oauth.RefreshRejected('400 - invalid_grant')
+
+    monkeypatch.setattr(manager.m, '_perform_token_refresh', perform)
+
+    token = asyncio.run(manager.get())
+
+    assert sessions.deleted == []
+    assert token['access_token'] == 'other'
+
+
+def test_a_refresh_still_stores_its_token_when_the_request_is_cancelled(manager, monkeypatch):
+    # The IdP may already have rotated the refresh token; dropping the reply
+    # would leave the session holding one that no longer works.
+    sessions = manager.setup(expires_in=-60)
+    new = {'access_token': 'new', 'refresh_token': 'r2', 'expires_at': int(time.time()) + 3600}
+
+    async def perform(session):
+        await asyncio.sleep(0.05)
+        return new
+
+    monkeypatch.setattr(manager.m, '_perform_token_refresh', perform)
+
+    async def cancel_midway():
+        request = asyncio.ensure_future(manager.get())
+        await asyncio.sleep(0.01)
+        request.cancel()
+        await asyncio.sleep(0.1)
+
+    asyncio.run(cancel_midway())
+
+    assert sessions.rows['s1'].token['refresh_token'] == 'r2'
 
 
 def test_concurrent_requests_refresh_once_and_share_the_new_token(manager, monkeypatch):
@@ -176,7 +230,7 @@ class _Reply:
         return self.body
 
     async def text(self):
-        return str(self.body)
+        return self.body if isinstance(self.body, str) else json.dumps(self.body)
 
     async def __aenter__(self):
         return self
@@ -187,10 +241,11 @@ class _Reply:
 
 def _endpoint(monkeypatch, *, post):
     """The IdP: discovery answers with a token endpoint, and the token endpoint answers with `post`."""
+    opened: list[dict] = []
 
     class _Http:
         def __init__(self, **kwargs):
-            pass
+            opened.append(kwargs)
 
         async def __aenter__(self):
             return self
@@ -207,6 +262,7 @@ def _endpoint(monkeypatch, *, post):
             return _Reply(*post)
 
     monkeypatch.setattr(oauth.aiohttp, 'ClientSession', _Http)
+    return opened
 
 
 @pytest.fixture
@@ -239,11 +295,52 @@ def performer(manager, monkeypatch):
 
 
 @pytest.mark.parametrize('status', [400, 401])
-def test_the_token_endpoint_refusing_the_grant_is_a_refusal(performer, monkeypatch, status):
+def test_the_token_endpoint_answering_invalid_grant_is_a_refusal(performer, monkeypatch, status):
     _endpoint(monkeypatch, post=(status, {'error': 'invalid_grant'}))
 
     with pytest.raises(oauth.RefreshRejected):
         performer()
+
+
+def test_no_refresh_token_is_a_refusal(performer, manager, monkeypatch):
+    _endpoint(monkeypatch, post=(200, {}))
+    session = _session(manager.provider, expires_in=-60)
+    del session.token['refresh_token']
+
+    with pytest.raises(oauth.RefreshRejected):
+        asyncio.run(manager.m._perform_token_refresh(session))
+
+
+@pytest.mark.parametrize(
+    'post',
+    [
+        # The client's configuration, not the user's grant: fixing the
+        # settings should not need every user to sign in again.
+        (401, {'error': 'invalid_client'}),
+        (400, {'error': 'invalid_scope'}),
+        (400, {'error': 'invalid_request'}),
+    ],
+)
+def test_a_client_configuration_error_is_not_a_refusal(performer, monkeypatch, post):
+    _endpoint(monkeypatch, post=post)
+
+    assert performer() is None
+
+
+def test_a_reply_that_is_not_json_is_not_a_refusal(performer, monkeypatch):
+    # An HTML 401 from a proxy in front of the IdP.
+    _endpoint(monkeypatch, post=(401, '<html>Unauthorized</html>'))
+
+    assert performer() is None
+
+
+def test_each_refresh_request_has_a_time_limit(performer, monkeypatch):
+    opened = _endpoint(monkeypatch, post=(503, {}))
+
+    performer()
+
+    assert opened
+    assert all(kw.get('timeout') is oauth.OAUTH_REFRESH_TIMEOUT for kw in opened)
 
 
 @pytest.mark.parametrize('post', [(503, {}), (429, {}), OSError('name resolution failed')])
