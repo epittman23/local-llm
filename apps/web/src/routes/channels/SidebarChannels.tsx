@@ -106,7 +106,11 @@ function ChannelItem({
 
 	const hideDm = async () => {
 		queryClient.setQueryData<Channel[]>(CHANNELS_KEY, (list) => list?.filter((c) => c.id !== channel.id));
-		await updateChannelMemberActiveStatusById(token, channel.id, false).catch((e) => toast.error(`${e}`));
+		await updateChannelMemberActiveStatusById(token, channel.id, false).catch((e) => {
+			// Refused: the conversation is still listed for this user, so fetch it back (#252).
+			toast.error(`${e}`);
+			void queryClient.invalidateQueries({ queryKey: CHANNELS_KEY });
+		});
 	};
 
 	const update = async (payload: Record<string, unknown>) => {

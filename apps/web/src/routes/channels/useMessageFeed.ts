@@ -226,17 +226,39 @@ export function useMessageFeed(
 		return res;
 	};
 
+	// Each action shows its change at once and puts back what it changed if the
+	// server refuses it (#252). Only that field, and only while it still holds
+	// the change: another update that arrived meanwhile is kept.
 	const actions = (onPinChange?: (id: string, pinned: boolean) => void): MessageActions => ({
 		onDelete: (m) => {
-			setMessages((ms) => ms?.filter((x) => x.id !== m.id) ?? ms);
-			// Deleting the root from inside its thread ends the thread, echo or not (docs/history/code-review.md L7).
-			if (parentId && m.id === parentId) optsRef.current.onRootDeleted?.();
-			optsRef.current.onMessageDeleted?.(m.id);
-			deleteMessage(token, channelId, m.id).catch((e) => toast.error(`${e}`));
+			let index = -1;
+			setMessages((ms) => {
+				index = ms?.findIndex((x) => x.id === m.id) ?? -1;
+				return ms?.filter((x) => x.id !== m.id) ?? ms;
+			});
+			deleteMessage(token, channelId, m.id).then(
+				() => {
+					// Deleting the root from inside its thread ends the thread, echo or not
+					// (docs/history/code-review.md L7), once the server has deleted it.
+					if (parentId && m.id === parentId) optsRef.current.onRootDeleted?.();
+					optsRef.current.onMessageDeleted?.(m.id);
+				},
+				(e) => {
+					toast.error(`${e}`);
+					setMessages((ms) => {
+						if (!ms || ms.some((x) => x.id === m.id)) return ms;
+						const at = index < 0 ? ms.length : Math.min(index, ms.length);
+						return [...ms.slice(0, at), m, ...ms.slice(at)];
+					});
+				}
+			);
 		},
 		onEdit: (m, content) => {
 			patch(m.id, (x) => ({ ...x, content }));
-			updateMessage(token, channelId, m.id, { content } as never).catch((e) => toast.error(`${e}`));
+			updateMessage(token, channelId, m.id, { content } as never).catch((e) => {
+				toast.error(`${e}`);
+				patch(m.id, (x) => (x.content === content ? { ...x, content: m.content } : x));
+			});
 		},
 		onPin: (m) => {
 			const pinned = !m.is_pinned;
@@ -247,13 +269,24 @@ export function useMessageFeed(
 				pinned_at: pinned ? nowNs() : null
 			}));
 			onPinChange?.(m.id, pinned);
-			pinMessage(token, channelId, m.id, pinned).catch((e) => toast.error(`${e}`));
+			pinMessage(token, channelId, m.id, pinned).catch((e) => {
+				toast.error(`${e}`);
+				patch(m.id, (x) =>
+					Boolean(x.is_pinned) === pinned
+						? { ...x, is_pinned: m.is_pinned, pinned_by: m.pinned_by, pinned_at: m.pinned_at }
+						: x
+				);
+				onPinChange?.(m.id, !pinned);
+			});
 		},
 		onReaction: (m, name) => {
 			if (!me) return;
 			const { message, added } = toggleReaction(m, name, { id: me.id, name: me.name });
 			patch(m.id, () => message);
-			(added ? addReaction : removeReaction)(token, channelId, m.id, name).catch((e) => toast.error(`${e}`));
+			(added ? addReaction : removeReaction)(token, channelId, m.id, name).catch((e) => {
+				toast.error(`${e}`);
+				patch(m.id, (x) => (x.reactions === message.reactions ? { ...x, reactions: m.reactions } : x));
+			});
 		}
 	});
 

@@ -69,13 +69,18 @@ export function PinnedMessagesDialog({
 	const token = useAuthStore((s) => s.token) ?? '';
 	const [messages, setMessages] = useState<ChannelMessage[] | null>(null);
 	const [done, setDone] = useState(false);
+	// The first page failed: not "No pinned messages", which it would look like (#252).
+	const [failed, setFailed] = useState(false);
 	const page = useRef(1);
 	const loading = useRef(false);
 
 	const load = async (reset = false) => {
 		if (loading.current || (done && !reset)) return;
 		loading.current = true;
-		if (reset) page.current = 1;
+		if (reset) {
+			page.current = 1;
+			setFailed(false);
+		}
 		const res = (await getChannelPinnedMessages(token, channel.id, page.current).catch((e) => {
 			toast.error(`${e}`);
 			return null;
@@ -84,7 +89,7 @@ export function PinnedMessagesDialog({
 			setMessages((ms) => [...(reset ? [] : (ms ?? [])), ...res]);
 			setDone(res.length === 0);
 			page.current += 1;
-		} else if (reset) setMessages([]);
+		} else if (reset) setFailed(true);
 		loading.current = false;
 	};
 
@@ -97,9 +102,22 @@ export function PinnedMessagesDialog({
 	}, [open, channel.id]);
 
 	const unpin = async (m: ChannelMessage) => {
-		setMessages((ms) => ms?.filter((x) => x.id !== m.id) ?? ms);
+		let index = -1;
+		setMessages((ms) => {
+			index = ms?.findIndex((x) => x.id === m.id) ?? -1;
+			return ms?.filter((x) => x.id !== m.id) ?? ms;
+		});
 		onPinChange(m.id, false);
-		await pinMessage(token, channel.id, m.id, false).catch((e) => toast.error(`${e}`));
+		await pinMessage(token, channel.id, m.id, false).catch((e) => {
+			// Refused: it is still pinned, so it goes back in its place (#252).
+			toast.error(`${e}`);
+			setMessages((ms) => {
+				if (!ms || ms.some((x) => x.id === m.id)) return ms;
+				const at = index < 0 ? ms.length : Math.min(index, ms.length);
+				return [...ms.slice(0, at), m, ...ms.slice(at)];
+			});
+			onPinChange(m.id, true);
+		});
 	};
 
 	return (
@@ -109,7 +127,14 @@ export function PinnedMessagesDialog({
 					<DialogTitle>Pinned Messages</DialogTitle>
 				</DialogHeader>
 				<div className="-mx-2 max-h-[28rem] overflow-y-auto pt-6">
-					{messages === null ? (
+					{failed && messages === null ? (
+						<div className="text-muted-foreground flex flex-col items-center gap-2 py-6 text-sm">
+							<p>Pinned messages could not be loaded.</p>
+							<Button variant="outline" size="sm" onClick={() => void load(true)}>
+								Retry
+							</Button>
+						</div>
+					) : messages === null ? (
 						<div className="flex justify-center py-6">
 							<Spinner className="size-5" />
 						</div>
