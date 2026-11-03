@@ -340,14 +340,8 @@ async def run_automation_by_id(
     await check_automations_permission(request, user)
     automation = await Automations.get_by_id(id, db=db)
     check_automation_access(automation, user)
+    # execute_automation announces the run (AUTOMATION_RUN_STARTED) itself.
     run_in_background(execute_automation(request.app, automation))
-    await publish_event(
-        request,
-        EVENTS.AUTOMATION_RUN_STARTED,
-        actor=user,
-        subject_id=automation.id,
-        data={'name': automation.name},
-    )
     return await enrich_automation(automation, db, tz=user.timezone)
 
 

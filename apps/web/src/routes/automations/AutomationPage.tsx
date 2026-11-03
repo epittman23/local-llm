@@ -22,6 +22,7 @@ import { FeatureGate } from '@/routes/common/FeatureGate';
 import { AutomationDialog } from './AutomationDialog';
 import { AutomationsHeader } from './AutomationsPage';
 import { destinationLabel, formatSchedule, runTarget } from './automationModel';
+import { useAutomationResults } from './useAutomationResults';
 import { useDestinations } from './useDestinations';
 
 const RUNS_PAGE = 50;
@@ -71,6 +72,7 @@ function Automation() {
 		getNextPageParam: (last, pages) => (last.length < RUNS_PAGE ? undefined : pages.length),
 		enabled: automation.isSuccess
 	});
+	useAutomationResults(id);
 	useDocumentTitle(automation.data?.name || 'Automation');
 	useEffect(() => {
 		if (automation.isError) toast.error(`${automation.error}`);
@@ -98,7 +100,9 @@ function Automation() {
 		setRunning(false);
 		if (res) {
 			toast.success('Automation triggered');
-			// The run is recorded asynchronously; look again shortly (as the original does).
+			// A run that fails before its reply starts is recorded at once; look
+			// again shortly. One with a reply is recorded when the reply ends,
+			// and useAutomationResults refetches on its automation:result.
 			setTimeout(() => queryClient.invalidateQueries({ queryKey: ['automations', 'runs', id] }), 2000);
 		}
 	};
