@@ -277,7 +277,8 @@ export type ChatEffect =
 	| { kind: 'title'; title: string }
 	| { kind: 'tags' }
 	| { kind: 'inactive' }
-	| { kind: 'cancelled' }
+	/** `current`: the cancelled reply is the current one or a sibling of it, not one a later send replaced. */
+	| { kind: 'cancelled'; current: boolean }
 	| { kind: 'notification'; level: string; content: string }
 	| { kind: 'dialog'; type: 'confirmation' | 'input' | 'execute' | 'ask_user'; data: any };
 
@@ -350,8 +351,12 @@ export function applyChatEvent(history: History, event: ChatEvent): { history: H
 			patch = { output, content };
 			break;
 		}
-		case 'chat:tasks:cancel':
-			effects.push({ kind: 'cancelled' });
+		case 'chat:tasks:cancel': {
+			const current = history.currentId ? history.messages[history.currentId] : undefined;
+			effects.push({
+				kind: 'cancelled',
+				current: id === history.currentId || (Boolean(message.parentId) && current?.parentId === message.parentId)
+			});
 			if (id === history.currentId && message.parentId) {
 				let h = history;
 				for (const c of history.messages[message.parentId]?.childrenIds ?? []) h = updateMessage(h, c, { done: true });
@@ -359,6 +364,7 @@ export function applyChatEvent(history: History, event: ChatEvent): { history: H
 			}
 			patch = { done: true };
 			break;
+		}
 		case 'chat:message:delta':
 		case 'message':
 			patch = { content: message.content + (data?.content ?? '') };
