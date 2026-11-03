@@ -710,10 +710,15 @@ async def execute_automation(app, automation: AutomationModel) -> None:
         await _announce_run(app, user, automation, chat.id)
         request = _build_request(app, token=token)
         response = await app.state.CHAT_COMPLETION_HANDLER(request, form_data, user=user)
-        await _wait_for_reply(response)
-        await finish_automation_run(
-            app, user, {'automation_id': automation.id, 'chat_id': chat.id, 'message_id': assistant_msg_id}
-        )
+        run = {'automation_id': automation.id, 'chat_id': chat.id, 'message_id': assistant_msg_id}
+        try:
+            reason = await _wait_for_reply(response)
+        except asyncio.CancelledError:
+            # The backend is stopping (a --reload restart or a shutdown):
+            # the run still gets its row and its FAILED event.
+            await asyncio.shield(finish_automation_run(app, user, run, error=REPLY_INTERRUPTED))
+            raise
+        await finish_automation_run(app, user, run, error=reason)
 
     except Exception as e:
         log.exception(f'Automation {automation.id} failed')
@@ -812,52 +817,91 @@ async def _check_calendar_alerts(app) -> None:
             log.debug('Failed to send notification for calendar alert %s', event.id, exc_info=True)
 
 
-async def _wait_for_reply(response) -> None:
+# How long a run waits for its reply before recording it as unfinished. Long
+# enough for a thinking model on slow local hardware; the reply itself is not
+# stopped, only no longer waited for.
+REPLY_WAIT_SECONDS = 30 * 60
+REPLY_STOPPED = 'The reply was stopped'
+REPLY_INTERRUPTED = 'The backend stopped before the reply finished'
+
+
+async def _wait_for_reply(response, wait_seconds: float = REPLY_WAIT_SECONDS) -> str | None:
     """Wait for the background tasks a chat completion dispatched to end.
 
-    The reply's own task reports its errors (on the message and to the chat),
-    so a task that failed or was cancelled is only waited for here.
+    Returns why the run failed when the wait itself says so: a task was
+    cancelled (someone pressed Stop) or the reply outlasted the wait.
+    Otherwise None, and the stored message tells the outcome: the reply's
+    own task saves its errors there. A task no longer registered has ended.
     """
     from local_llm.tasks import tasks as running
 
     task_ids = response.get('task_ids') if isinstance(response, dict) else None
     pending = [running[t] for t in task_ids or [] if t in running]
-    if pending:
-        await asyncio.wait(pending)
+    if not pending:
+        return None
+    done, still_running = await asyncio.wait(pending, timeout=wait_seconds)
+    if still_running:
+        return f'The reply did not finish within {round(wait_seconds)} s'
+    if any(task.cancelled() for task in done):
+        return REPLY_STOPPED
+    return None
 
 
 def _error_text(stored) -> str:
     """Readable text for an error saved on a message: {'content': str | provider dict} or a bare value."""
     content = stored.get('content') if isinstance(stored, dict) else stored
     if isinstance(content, dict):
-        content = content.get('message') or content.get('detail') or content.get('error')
+        content = content.get('message') or content.get('detail') or content.get('error') or content
     return str(content)[:4000] if content else 'The reply failed'
+
+
+async def _reply_error(chat_id: str, message_id: str) -> str | None:
+    """Why a stored reply failed, or None if it finished without an error."""
+    message = await Chats.get_message_by_id_and_message_id(chat_id, message_id)
+    if message is None:
+        return 'The reply was not found'
+    if message.get('error'):
+        return _error_text(message['error'])
+    if not message.get('done'):
+        return 'The reply did not finish'
+    return None
 
 
 async def finish_automation_run(app, user, metadata: dict, error: str | None = None) -> None:
     """Record how an automation's reply ended, once it has (#264).
 
-    The stored message says: the reply's task saves its error there, whether
-    the request failed or a provider error arrived inside the stream (which
-    does not raise), and a reply stopped part way stays not done. Never
-    raises: recording the outcome must not fail the run.
+    Unless the caller already knows the error, the stored message says: the
+    reply's task saves its error there, whether the request failed or a
+    provider error arrived inside the stream (which does not raise); a reply
+    that is missing or not done did not finish. The run is recorded before
+    automation:result is emitted, so the page that refetches on it sees the
+    row. An automation deleted meanwhile gets no row. Never raises:
+    recording the outcome must not fail the run.
     """
     automation_id = metadata.get('automation_id')
     if not automation_id:
         return
+    chat_id = metadata.get('chat_id')
     try:
-        chat_id = metadata.get('chat_id')
         if error is None and chat_id and metadata.get('message_id'):
-            message = await Chats.get_message_by_id_and_message_id(chat_id, metadata['message_id'])
-            stored = (message or {}).get('error')
-            if stored:
-                error = _error_text(stored)
-            elif message is not None and not message.get('done'):
-                error = 'The reply did not finish'
+            error = await _reply_error(chat_id, metadata['message_id'])
+    except Exception:
+        log.exception('could not read the reply of automation %s', automation_id)
+        error = 'The reply could not be read'
+    try:
         automation = await Automations.get_by_id(automation_id)
-        name = automation.name if automation else ''
-        status = 'error' if error else 'success'
-
+        if automation is None:
+            return
+        name = automation.name
+    except Exception:
+        log.exception('could not look up automation %s', automation_id)
+        name = ''
+    status = 'error' if error else 'success'
+    try:
+        await _record_run(automation_id, status, chat_id=chat_id, error=error)
+    except Exception:
+        log.exception('could not record the run of automation %s', automation_id)
+    try:
         from local_llm.socket.main import sio
 
         await sio.emit(
@@ -865,7 +909,6 @@ async def finish_automation_run(app, user, metadata: dict, error: str | None = N
             {'automation_id': automation_id, 'name': name, 'chat_id': chat_id, 'status': status},
             room=f'user:{user.id}',
         )
-        await _record_run(automation_id, status, chat_id=chat_id, error=error)
         await publish_event(
             app,
             EVENTS.AUTOMATION_RUN_FAILED if error else EVENTS.AUTOMATION_RUN_COMPLETED,
@@ -874,7 +917,7 @@ async def finish_automation_run(app, user, metadata: dict, error: str | None = N
             data={'name': name, 'chat_id': chat_id, **({'error': error} if error else {})},
         )
     except Exception:
-        log.exception('could not record the outcome of automation %s', automation_id)
+        log.exception('could not announce the outcome of automation %s', automation_id)
 
 
 async def _record_run(
