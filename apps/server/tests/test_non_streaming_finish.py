@@ -119,3 +119,12 @@ def test_a_reply_with_text_is_unchanged(monkeypatch):
     done_saves, _ = _finished(saved, emitted)
     assert len(done_saves) == 1
     assert 'error' not in done_saves[0]
+
+
+def test_provider_reasoning_details_are_kept_on_a_reply_without_text(monkeypatch):
+    details = [{'type': 'reasoning.encrypted', 'data': 'opaque'}]
+    saved, emitted = _run(monkeypatch, {'content': '', 'reasoning_details': details}, finish_reason='length')
+
+    done_saves, _ = _finished(saved, emitted)
+    (reasoning,) = [item for item in done_saves[0]['output'] if item['type'] == 'reasoning']
+    assert reasoning['reasoning_details'] == details

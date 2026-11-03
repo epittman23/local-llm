@@ -4231,7 +4231,10 @@ async def non_streaming_chat_response_handler(response, ctx):
 
             choices = response_data.get('choices', [])
             response_output = response_data.get('output')
-            choice_message = choices[0].get('message', {}) if choices else {}
+            first_choice = choices[0] if choices else {}
+            if not isinstance(first_choice, dict):
+                first_choice = {}
+            choice_message = first_choice.get('message') or {}
             content = choice_message.get('content') if choices else ''
 
             if choices and (content or response_output):
@@ -4299,7 +4302,7 @@ async def non_streaming_chat_response_handler(response, ctx):
                 await _finish_reply_without_text(
                     ctx,
                     choice_message,
-                    finish_reason=choices[0].get('finish_reason'),
+                    finish_reason=first_choice.get('finish_reason'),
                     usage=normalize_usage(response_data.get('usage', {}) or {}),
                     save_to_chat=save_to_chat,
                 )
