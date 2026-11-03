@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -146,6 +147,7 @@ function DefaultInterfaceSettings({
 export default function General() {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const saved = useAdminConfigSaved();
+	const queryClient = useQueryClient();
 	const { draft, setDraft, isLoading } = useConfigDraft<Draft>(['general'], async () => ({
 		admin: await getAdminConfig(token),
 		banners: await getBanners(token).catch(() => [] as Banner[])
@@ -161,6 +163,8 @@ export default function General() {
 		try {
 			const res = await updateAdminConfig(token, draft.admin);
 			await setBanners(token, draft.banners);
+			// The new chat's banners (ChatBanners) show the saved list, not a cached one.
+			void queryClient.invalidateQueries({ queryKey: ['banners'] });
 			if (res) await saved();
 			else toast.error('Failed to update settings');
 		} catch (error) {
