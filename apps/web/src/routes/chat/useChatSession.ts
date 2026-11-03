@@ -125,8 +125,14 @@ export function useChatSession({
 	const chatIdRef = useRef<string | null>(routeChatId);
 	/** The chat this hook created and then moved the URL to: its route change must not reload it. */
 	const adoptedRef = useRef<string | null>(null);
-	/** Stop pressed while a request was still in flight (no task ids yet): cancel its tasks as soon as they are known. */
-	const stopPendingRef = useRef(false);
+	/**
+	 * Completion POSTs still unanswered, each with its own stop flag. Stop
+	 * pressed before the backend created a request's tasks cancels them as
+	 * soon as that request learns their ids, in a saved chat as in a new one
+	 * (#151). One flag per request, so a later send cannot clear a stop meant
+	 * for an earlier one (#516).
+	 */
+	const inFlightRef = useRef(new Set<{ stopped: boolean }>());
 	const latest = useRef({
 		params,
 		chatFiles,
@@ -314,6 +320,29 @@ export function useChatSession({
 		};
 	}, [socket, setHistory, handleEffects]);
 
+	/**
+	 * Runs a completion POST as an in-flight request, and says on its answer
+	 * whether Stop was pressed meanwhile (`stopped`).
+	 */
+	const inFlight = useCallback(async <T>(post: () => Promise<T>): Promise<(T & { stopped?: boolean }) | null> => {
+		const req = { stopped: false };
+		inFlightRef.current.add(req);
+		try {
+			const res = await post();
+			return res ? { ...res, stopped: req.stopped } : null;
+		} finally {
+			inFlightRef.current.delete(req);
+		}
+	}, []);
+
+	/** Cancels the tasks of a request stopped before it knew them; the running tasks shown stay as they are. */
+	const stopTasks = useCallback(
+		(ids: string[]) => {
+			for (const t of ids) void stopTask(token, t).catch((e) => toast.error(`${e}`));
+		},
+		[token]
+	);
+
 	/** Asks for a reply (or one per selected model) to the user message `parentId`. */
 	const requestReply = useCallback(
 		async (
@@ -332,7 +361,6 @@ export function useChatSession({
 				toast.error('Model not selected');
 				return;
 			}
-			stopPendingRef.current = false;
 			if (!opts.modelId) setHistory((h) => updateMessage(h, parentId, { models: ids }));
 			const { history: h, targets } = addResponses(historyRef.current, parentId, chosen, opts.modelIdx);
 			setHistory(h);
@@ -363,11 +391,13 @@ export function useChatSession({
 					regenerationPrompt: opts.regenerationPrompt,
 					messages: opts.messages
 				});
-				const res = await generateOpenAIChatCompletion(token, body, `${WEBUI_BASE_URL}/api`).catch((error) => {
-					toast.error(errorText(error) || 'Uh-oh! There was an issue with the response.');
-					setHistory((cur) => updateMessage(cur, primary.message_id, (m) => failMessage(m, error)));
-					return null;
-				});
+				const res = await inFlight(() =>
+					generateOpenAIChatCompletion(token, body, `${WEBUI_BASE_URL}/api`).catch((error) => {
+						toast.error(errorText(error) || 'Uh-oh! There was an issue with the response.');
+						setHistory((cur) => updateMessage(cur, primary.message_id, (m) => failMessage(m, error)));
+						return null;
+					})
+				);
 				if (!res) return;
 				if (res.error) {
 					toast.error(errorText(res.error));
@@ -375,11 +405,8 @@ export function useChatSession({
 					return;
 				}
 				const ids: string[] = res.task_ids ?? (res.task_id ? [res.task_id] : []);
-				if (stopPendingRef.current) {
-					stopPendingRef.current = false;
-					for (const t of ids) void stopTask(token, t).catch((e) => toast.error(`${e}`));
-					setTaskIds(null);
-				} else setTaskIds(ids.length ? ids : null);
+				if (res.stopped) stopTasks(ids);
+				else setTaskIds(ids.length ? ids : null);
 				if (res.chat_id && !chatIdRef.current && !l.temporary) {
 					chatIdRef.current = adoptedRef.current = res.chat_id;
 					navigate(`/c/${res.chat_id}`, { replace: true });
@@ -390,7 +417,7 @@ export function useChatSession({
 				clearInterval(usage);
 			}
 		},
-		[socket, token, user, config, navigate, refreshList, setHistory, userLocation]
+		[socket, token, user, config, navigate, refreshList, setHistory, userLocation, inFlight, stopTasks]
 	);
 
 	const send = useCallback(
@@ -425,10 +452,11 @@ export function useChatSession({
 
 	const stop = useCallback(async () => {
 		const id = chatIdRef.current;
+		// A request whose POST hasn't answered has no task to cancel yet, in a
+		// saved chat as in a new one: it cancels its tasks once it learns them.
+		for (const req of inFlightRef.current) req.stopped = true;
 		if (id) await stopTasksByChatId(token, id).catch((e) => toast.error(`${e}`));
 		else if (taskIds?.length) for (const t of taskIds) await stopTask(token, t).catch((e) => toast.error(`${e}`));
-		// A new chat's POST hasn't answered yet: nothing to cancel by id, so cancel once it does.
-		else stopPendingRef.current = true;
 		setTaskIds(null);
 		setHistory((h) => {
 			const m = h.currentId ? h.messages[h.currentId] : null;
@@ -554,19 +582,23 @@ export function useChatSession({
 				variables: promptVariables(user, await userLocation()),
 				continueResponse: true
 			});
-			const res = await generateOpenAIChatCompletion(token, body, `${WEBUI_BASE_URL}/api`).catch((error) => {
-				toast.error(errorText(error));
-				setHistory((cur) => updateMessage(cur, message.id, (m) => failMessage(m, error)));
-				return null;
-			});
+			const res = await inFlight(() =>
+				generateOpenAIChatCompletion(token, body, `${WEBUI_BASE_URL}/api`).catch((error) => {
+					toast.error(errorText(error));
+					setHistory((cur) => updateMessage(cur, message.id, (m) => failMessage(m, error)));
+					return null;
+				})
+			);
 			if (res?.error) {
 				toast.error(errorText(res.error));
 				setHistory((cur) => updateMessage(cur, message.id, (m) => failMessage(m, res.error)));
 				return;
 			}
-			if (res?.task_id || res?.task_ids) setTaskIds(res.task_ids ?? [res.task_id]);
+			const ids: string[] = res?.task_ids ?? (res?.task_id ? [res.task_id] : []);
+			if (res?.stopped) stopTasks(ids);
+			else if (ids.length) setTaskIds(ids);
 		},
-		[socket, token, user, config, setHistory, userLocation]
+		[socket, token, user, config, setHistory, userLocation, inFlight, stopTasks]
 	);
 
 	/** Edits a prompt and sends it again as a new branch (`resend`), or edits a message in place. */
