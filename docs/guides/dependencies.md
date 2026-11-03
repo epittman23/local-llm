@@ -74,6 +74,13 @@ deletes any vectors, and refuses with the reason if not. It still deletes
 each collection before embedding it again, so a file that fails during the
 run (a provider limit, an embedder that stops) loses its vectors; such files
 are named in the result instead of a plain "Success".
+The local Whisper model for speech to text (Admin Settings > Audio, engine
+"Whisper (Local)", default `base`) is fetched by faster-whisper into
+`WHISPER_MODEL_DIR` (default `apps/server/data/cache/whisper/models`), so it
+must be fetched once too, by a run with `HF_HUB_OFFLINE=0`. An Audio save
+loads it only when the local engine is chosen or its model changes, and a
+model that cannot load refuses the save with an error naming it; nothing is
+saved. Otherwise it loads on the first transcription.
 Fetch a model once with the backend's own `hf`, outside `make backend`:
 
 ```sh

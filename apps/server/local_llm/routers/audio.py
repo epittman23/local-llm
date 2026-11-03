@@ -284,6 +284,30 @@ async def get_audio_config(request: Request, user=Depends(get_admin_user)):
 
 @router.post('/config/update')
 async def update_audio_config(request: Request, form_data: AudioConfigUpdateForm, user=Depends(get_admin_user)):
+    # The local Whisper model is loaded only when the local engine is chosen or its
+    # model changes, and before anything is saved (#342): under HF_HUB_OFFLINE a model
+    # missing from the cache refuses the save instead of failing after it, and a save
+    # that changes neither (a new voice) no longer loads the model at all. A model not
+    # loaded yet is otherwise left to load on first use, as transcription does.
+    previous = await get_config_values({'ENGINE': STT_CONFIG_KEYS['ENGINE'], 'MODEL': STT_CONFIG_KEYS['WHISPER_MODEL']})
+    local = form_data.stt.ENGINE == ''
+    whisper_changed = local and (previous.get('ENGINE') != '' or previous.get('MODEL') != form_data.stt.WHISPER_MODEL)
+    whisper_model = None
+    if whisper_changed:
+        try:
+            whisper_model = await asyncio.to_thread(
+                set_faster_whisper_model, form_data.stt.WHISPER_MODEL, WHISPER_MODEL_AUTO_UPDATE
+            )
+        except Exception as e:
+            log.warning('Whisper model %s could not be loaded: %s', form_data.stt.WHISPER_MODEL, e)
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f'The Whisper model "{form_data.stt.WHISPER_MODEL}" could not be loaded, so the audio settings '
+                    f'were not saved. With HF_HUB_OFFLINE set it must already be downloaded. ({e})'
+                ),
+            )
+
     await Config.upsert(
         {
             **config_updates(form_data.tts.model_dump(), TTS_CONFIG_KEYS),
@@ -291,12 +315,10 @@ async def update_audio_config(request: Request, form_data: AudioConfigUpdateForm
         }
     )
 
-    if form_data.stt.ENGINE == '':
-        request.app.state.faster_whisper_model = await asyncio.to_thread(
-            set_faster_whisper_model, form_data.stt.WHISPER_MODEL, WHISPER_MODEL_AUTO_UPDATE
-        )
-    else:
+    if not local:
         request.app.state.faster_whisper_model = None
+    elif whisper_changed:
+        request.app.state.faster_whisper_model = whisper_model
 
     config = await get_audio_config(request, user)
     await publish_event(
