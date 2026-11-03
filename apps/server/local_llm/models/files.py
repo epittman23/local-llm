@@ -6,7 +6,7 @@ import logging
 import time
 
 from pydantic import BaseModel, ConfigDict, model_validator
-from sqlalchemy import JSON, BigInteger, Column, String, Text, delete, func, select
+from sqlalchemy import JSON, BigInteger, Column, String, Text, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # local imports
@@ -116,6 +116,11 @@ class FileUpdateForm(BaseModel):
     hash: str | None = None
     data: dict | None = None
     meta: dict | None = None
+
+
+# A file whose processing has not ended: the knowledge base page lists these
+# as uploading. Shared by the queries below.
+_STILL_PROCESSING = File.data['status'].as_string().in_(['pending', 'processing'])
 
 
 class FilesTable:
@@ -414,19 +419,18 @@ class FilesTable:
         """
         async with get_async_db_context(db) as db:
             try:
-                result = await db.execute(
-                    select(File).filter(File.data['status'].as_string().in_(['pending', 'processing']))
-                )
-                files = result.scalars().all()
-                for file in files:
-                    file.data = {
-                        **(file.data or {}),
+                result = await db.execute(select(File.id, File.data).filter(_STILL_PROCESSING))
+                rows = result.all()
+                now = int(time.time())
+                for file_id, data in rows:
+                    failed = {
+                        **(data or {}),
                         'status': 'failed',
                         'error': 'Processing was interrupted by a backend restart; upload it again.',
                     }
-                    file.updated_at = int(time.time())
+                    await db.execute(update(File).where(File.id == file_id).values(data=failed, updated_at=now))
                 await db.commit()
-                return len(files)
+                return len(rows)
             except Exception as e:
                 log.warning(f'Error marking interrupted uploads failed: {e}')
                 return 0
@@ -458,7 +462,7 @@ class FilesTable:
                     select(File)
                     .filter(
                         File.meta['data']['knowledge_id'].as_string() == knowledge_id,
-                        File.data['status'].as_string().in_(['pending', 'processing']),
+                        _STILL_PROCESSING,
                         File.id.notin_(linked_ids),
                     )
                     .order_by(File.created_at.desc())

@@ -88,3 +88,35 @@ def test_startup_marks_them_before_anything_is_published(monkeypatch):
         asyncio.run(run())
 
     assert order == ['fail interrupted uploads', 'publish system.startup.started']
+
+
+def test_a_database_error_is_logged_and_startup_goes_on(monkeypatch):
+    from contextlib import asynccontextmanager
+
+    from local_llm.models import files as files_model
+
+    class _Broken:
+        async def execute(self, stmt):
+            raise RuntimeError('database went away')
+
+    @asynccontextmanager
+    async def broken(db=None):
+        yield _Broken()
+
+    monkeypatch.setattr(files_model, 'get_async_db_context', broken)
+
+    assert asyncio.run(Files.fail_interrupted_processing()) == 0
+
+
+def test_startup_says_how_many_uploads_it_marked(monkeypatch, caplog):
+    order, run = _startup(monkeypatch, safe_mode=False, deactivated=True)
+
+    async def two_interrupted():
+        return 2
+
+    monkeypatch.setattr(main.Files, 'fail_interrupted_processing', two_interrupted)
+
+    with caplog.at_level('WARNING'), pytest.raises(_FirstPublish):
+        asyncio.run(run())
+
+    assert 'Marked 2 upload(s) interrupted by the last restart as failed' in caplog.text
