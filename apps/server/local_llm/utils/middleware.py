@@ -3463,11 +3463,17 @@ async def drain_approved_tool_calls(request, form_data, user, model, metadata) -
                 ):
                     message['output'] = strip_reasoning_details(output)
 
-            form_data['messages'] = process_messages_with_output(
+            # Keep what process_chat_payload built into the system message
+            # (the chat prompt, retrieved context, memories, skills) and send
+            # the user's images again, as _replay_history_from_db does; the
+            # stored history alone has neither (#164).
+            system_message = get_system_message(form_data.get('messages', []))
+            _inline_message_images(db_messages)
+            replayed = process_messages_with_output(
                 db_messages,
                 reasoning_format=get_reasoning_format(model),
             )
-            form_data['messages'] = sanitize_tool_pairs(form_data['messages'])
+            form_data['messages'] = sanitize_tool_pairs([system_message, *replayed] if system_message else replayed)
 
         if not paused and ENABLE_PLUGINS:
             filter_functions = await get_filter_functions(request, model, metadata.get('filter_ids', []))
