@@ -201,7 +201,8 @@ Project skills in `.claude/skills/` turn the rules below into procedures:
 and the `config_id` fingerprint) and `reindex` (refreshing the code-graph
 index below). Use the one that matches the change. The
 `reviewer` subagent (`.claude/agents/`) reviews a branch before
-its PR. `.mcp.json` registers `codebase-memory-mcp`, a local code-graph
+its PR. `.claude/settings.json` turns off Claude Code's attribution
+defaults, which the commit policy below forbids. `.mcp.json` registers `codebase-memory-mcp`, a local code-graph
 index whose binary is installed separately. Install, first use and caveats
 are in [docs/guides/agent-tooling.md](docs/guides/agent-tooling.md). The
 skills point at this file; when a rule here changes, update the skill that
