@@ -5524,6 +5524,17 @@ class _StreamingReply:
 
             try:
                 await self.consume(response, self.form_data)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                # The upstream body failed mid-stream (a reset connection, a
+                # payload error, an idle timeout). Keep what already streamed,
+                # finished, and clear the stream snapshot; the caller then
+                # records the error on the message and tells the chat (#163).
+                # Only the stream: later rounds save through _finish().
+                log.exception('the reply stream failed; saving what arrived')
+                await self._save_partial_state(response, cancelled=False)
+                raise
             finally:
                 if response.background:
                     await response.background()
@@ -5537,14 +5548,6 @@ class _StreamingReply:
             log.warning('Task was cancelled!')
             await self._save_cancelled_state(response)
             raise  # re-raise CancelledError for proper propagation
-        except Exception:
-            # The upstream body failed mid-stream (a reset connection, a
-            # payload error, an idle timeout). Keep what already streamed,
-            # finished, and clear the stream snapshot; the caller then records
-            # the error on the message and tells the chat (#163).
-            log.exception('the reply stream failed; saving what arrived')
-            await self._save_partial_state(response, cancelled=False)
-            raise
 
         if response.background is not None:
             await response.background()
