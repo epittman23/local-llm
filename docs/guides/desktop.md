@@ -80,7 +80,8 @@ If it started the stack, the dialog shows the shutdown:
    Never a second one: uvicorn takes a second SIGINT as "force exit" and skips
    the teardown that stops the served model.
 3. **uvicorn finishes open requests** (cancelled after 10 s), then stops
-   benchmark jobs and the served model.
+   benchmark jobs and the served model, and stops any chat reply still being
+   written, saving what arrived (up to 10 s more).
 4. **The Makefile's trap brings the Compose services down** (Postgres,
    Redis, Jupyter and SearXNG).
 

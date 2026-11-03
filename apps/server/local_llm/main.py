@@ -195,6 +195,7 @@ from local_llm.tasks import (
     list_task_ids_by_item_id,
     list_tasks,
     redis_task_command_listener,
+    stop_all_tasks,
     stop_item_tasks,
     stop_task,
 )  # Import from tasks.py
@@ -459,10 +460,21 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    await _shutdown(app)
+
+
+async def _shutdown(app) -> None:
+    """The lifespan's teardown, in order."""
     await publish_event(app, EVENTS.SYSTEM_SHUTDOWN_STARTED, source='system')
 
     if LLLM_STOP_JOBS_ON_SHUTDOWN:
         await benchmarks.shutdown()
+
+    # Running chat replies first, while the HTTP pool and the database are
+    # still open: cancelled, each saves what arrived as stopped. Closing the
+    # pool under them broke their streams instead (#362). Sub-agent runs are
+    # in the same registry; served models, tune sweeps and Tests jobs are not.
+    await stop_all_tasks(wait_seconds=10)
 
     # Shutdown: clean up shared resources
     from local_llm.utils.session_pool import close_session

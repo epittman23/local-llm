@@ -152,6 +152,22 @@ async def create_task(redis, coroutine, id=None, task_id=None):
     return task_id, task
 
 
+async def stop_all_tasks(wait_seconds: float = 10) -> int:
+    """Cancel every task in this process's registry and wait, up to `wait_seconds`, for them to end.
+
+    For shutdown (#362): a reply cancelled this way saves what arrived as
+    stopped, which it can only do while the HTTP pool and the database are
+    still open. Returns how many tasks were cancelled; any still running at
+    the limit are left to the event loop's own teardown.
+    """
+    running = [task for task in tasks.values() if not task.done()]
+    for task in running:
+        task.cancel()
+    if running:
+        await asyncio.wait(running, timeout=wait_seconds)
+    return len(running)
+
+
 async def list_tasks(redis):
     """
     List all currently active task IDs.
