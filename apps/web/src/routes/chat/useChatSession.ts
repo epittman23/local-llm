@@ -25,6 +25,7 @@ import {
 	errorText,
 	failMessage,
 	finishReplies,
+	hasPendingAssistantLeaf,
 	isGenerating,
 	messagesList,
 	normalizeHistory,
@@ -274,10 +275,17 @@ export function useChatSession({
 					case 'reload':
 						if (chatIdRef.current) void loadChat(chatIdRef.current);
 						break;
-					case 'inactive':
+					case 'inactive': {
 						setTaskIds(null);
-						markRead(chatIdRef.current);
+						const id = chatIdRef.current;
+						// No task left, yet the reply still reads as being written: its
+						// done event was missed (a dropped socket, a backend reload).
+						// The stored chat has its real end (#214).
+						if (id && !isTemporaryChatId(id) && hasPendingAssistantLeaf(historyRef.current, e.messageId))
+							void loadChat(id);
+						markRead(id);
 						break;
+					}
 					case 'cancelled':
 						// A reply a later send replaced was cancelled (a stop that
 						// landed before its task existed): the tasks shown are
@@ -327,6 +335,23 @@ export function useChatSession({
 			socket.off('events', handler);
 		};
 	}, [socket, setHistory, handleEffects]);
+
+	// Events sent while the socket was down are lost. On reconnect, a reply
+	// still being written whose chat has no task left missed its end, so the
+	// stored chat is loaded again (#214), as Chat.svelte's handleSocketConnect did.
+	useEffect(() => {
+		if (!socket) return;
+		const onConnect = async () => {
+			const id = chatIdRef.current;
+			if (!id || isTemporaryChatId(id) || !hasPendingAssistantLeaf(historyRef.current)) return;
+			const res = await getTaskIdsByChatId(token, id).catch(() => null);
+			if (res && !(res.task_ids ?? []).length && chatIdRef.current === id) void loadChat(id);
+		};
+		socket.on('connect', onConnect);
+		return () => {
+			socket.off('connect', onConnect);
+		};
+	}, [socket, token, loadChat]);
 
 	/**
 	 * Registers a completion request, so Stop marks it from now on, while its

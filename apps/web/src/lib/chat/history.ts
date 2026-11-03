@@ -276,7 +276,8 @@ export type ChatEffect =
 	| { kind: 'reload' }
 	| { kind: 'title'; title: string }
 	| { kind: 'tags' }
-	| { kind: 'inactive' }
+	/** The chat has no running task; `messageId` is the reply the event was about. */
+	| { kind: 'inactive'; messageId?: string }
 	/** `current`: the cancelled reply is the current one or a sibling of it, not one a later send replaced. */
 	| { kind: 'cancelled'; current: boolean }
 	| { kind: 'notification'; level: string; content: string }
@@ -291,6 +292,16 @@ const visibleText = (m: Message) =>
  * chat:completion / response:completion handlers) to the history. Events for
  * messages this history does not hold are ignored.
  */
+/**
+ * Whether a reply (`messageId`, or any) is still marked as being written with
+ * nothing after it: an assistant leaf that is not done. With no task left for
+ * the chat, such a reply missed its done event (#214).
+ */
+export function hasPendingAssistantLeaf(history: History, messageId?: string | null): boolean {
+	const messages = messageId ? [history.messages[messageId]] : Object.values(history.messages);
+	return messages.some((m) => m?.role === 'assistant' && !m.done && (m.childrenIds?.length ?? 0) === 0);
+}
+
 export function applyChatEvent(history: History, event: ChatEvent): { history: History; effects: ChatEffect[] } {
 	const type = event.data?.type ?? '';
 	const data = event.data?.data;
@@ -306,7 +317,7 @@ export function applyChatEvent(history: History, event: ChatEvent): { history: H
 			patch = { statusHistory: [...(message.statusHistory ?? []), data] };
 			break;
 		case 'chat:active':
-			if (!data?.active) effects.push({ kind: 'inactive' });
+			if (!data?.active) effects.push({ kind: 'inactive', messageId: id });
 			break;
 		case 'chat:completion': {
 			const { done, choices, content, output, sources, selected_model_id, error, usage } = data ?? {};
