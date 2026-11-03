@@ -21,8 +21,9 @@ export const DEV_SERVER_BACKEND_PORT = 4000;
 // lifespan teardown that stops the served model would never run.
 export const GRACEFUL_SHUTDOWN_SECONDS = 10;
 
-// 10 s of graceful timeout, up to 15 s for ServeProcess.stop() (three 5 s
-// graces), 20 s each for a tune sweep and a Tests job, compose down, margin.
+// 10 s of graceful timeout, up to 10 s for running chat replies to save, up
+// to 15 s for ServeProcess.stop() (three 5 s graces), 20 s each for a tune
+// sweep and a Tests job, compose down, margin.
 export const STOP_BUDGET_MS = 90_000;
 
 export type Mode = 'remote' | 'attach' | 'adopt' | 'own';
