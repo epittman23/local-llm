@@ -81,6 +81,9 @@ type Queued = { id: string; prompt: string; files: ChatFile[]; modelId?: string 
  * - A prompt sent while a reply is still being written is queued (the
  *   user's "message queue" setting, on by default) and sent when it ends.
  */
+/** One completion request: Stop sets `stopped`, `posted` once its POST is out; `settled` resolves once it is done with its tasks. */
+type ChatRequest = { stopped: boolean; posted: boolean; settled: Promise<void>; settle: () => void };
+
 export function useChatSession({
 	routeChatId,
 	folderId,
@@ -125,8 +128,14 @@ export function useChatSession({
 	const chatIdRef = useRef<string | null>(routeChatId);
 	/** The chat this hook created and then moved the URL to: its route change must not reload it. */
 	const adoptedRef = useRef<string | null>(null);
-	/** Stop pressed while a request was still in flight (no task ids yet): cancel its tasks as soon as they are known. */
-	const stopPendingRef = useRef(false);
+	/**
+	 * Completion requests of the open chat not yet answered, each with its own
+	 * stop flag. Stop pressed before the backend created a request's tasks
+	 * cancels them as soon as that request learns of them, in a saved chat as
+	 * in a new one (#151). One flag per request, so a later send cannot clear
+	 * a stop meant for an earlier one (#516).
+	 */
+	const inFlightRef = useRef(new Set<ChatRequest>());
 	const latest = useRef({
 		params,
 		chatFiles,
@@ -225,6 +234,8 @@ export function useChatSession({
 		if (routeChatId && routeChatId === adoptedRef.current) return;
 		adoptedRef.current = null;
 		chatIdRef.current = routeChatId;
+		// A stop in the chat opened now must not cancel the one left (#151).
+		inFlightRef.current = new Set();
 		setQueue([]);
 		setDialog(null);
 		setTaskIds(null);
@@ -268,7 +279,10 @@ export function useChatSession({
 						markRead(chatIdRef.current);
 						break;
 					case 'cancelled':
-						setTaskIds(null);
+						// A reply a later send replaced was cancelled (a stop that
+						// landed before its task existed): the tasks shown are
+						// that later send's, still running (#516).
+						if (e.current) setTaskIds(null);
 						break;
 					case 'notification':
 						(
@@ -314,6 +328,54 @@ export function useChatSession({
 		};
 	}, [socket, setHistory, handleEffects]);
 
+	/**
+	 * Registers a completion request, so Stop marks it from now on, while its
+	 * body is still being built as well as while its POST is out. Then waits
+	 * for any request of this chat that was stopped before it learned its
+	 * tasks: that one cancels them by chat id, which would also take this
+	 * request's reply if it were already running (#516).
+	 */
+	const beginRequest = useCallback(async (): Promise<ChatRequest | null> => {
+		let settle = () => {};
+		const settled = new Promise<void>((resolve) => (settle = resolve));
+		const req: ChatRequest = { stopped: false, posted: false, settled, settle };
+		const requests = inFlightRef.current;
+		// Only one that posted can have tasks to cancel; one stopped while its
+		// body was built never posts, so it is not waited for.
+		const earlier = [...requests].filter((r) => r.stopped && r.posted);
+		requests.add(req);
+		await Promise.all(earlier.map((r) => r.settled));
+		// Another chat opened while this one waited: the history and chat id
+		// to send with are gone, so nothing is sent. (A chat left and opened
+		// again within that wait starts a new set, so the order is not kept
+		// across that round trip; the window is one unanswered POST.)
+		if (inFlightRef.current !== requests) {
+			requests.delete(req);
+			settle();
+			toast.error('The chat changed before the message could be sent.');
+			return null;
+		}
+		return req;
+	}, []);
+
+	const endRequest = useCallback((req: ChatRequest) => {
+		inFlightRef.current.delete(req);
+		req.settle();
+	}, []);
+
+	/**
+	 * Cancels the tasks of a request stopped before it learned them. By chat
+	 * id where there is one: the chat's owner may stop those, while stopping
+	 * a task by its own id is for admins only.
+	 */
+	const cancelStopped = useCallback(
+		async (chatId: string | null | undefined, ids: string[]) => {
+			if (chatId) await stopTasksByChatId(token, chatId).catch((e) => toast.error(`${e}`));
+			else for (const t of ids) await stopTask(token, t).catch((e) => toast.error(`${e}`));
+		},
+		[token]
+	);
+
 	/** Asks for a reply (or one per selected model) to the user message `parentId`. */
 	const requestReply = useCallback(
 		async (
@@ -332,14 +394,16 @@ export function useChatSession({
 				toast.error('Model not selected');
 				return;
 			}
-			stopPendingRef.current = false;
 			if (!opts.modelId) setHistory((h) => updateMessage(h, parentId, { models: ids }));
 			const { history: h, targets } = addResponses(historyRef.current, parentId, chosen, opts.modelIdx);
 			setHistory(h);
 
+			const primary = targets[0];
+			const req = await beginRequest();
+			if (!req) return;
+			// Read after the wait: a new chat's earlier request may have created the chat meanwhile.
 			let chatId = chatIdRef.current;
 			if (!chatId && l.temporary) chatId = chatIdRef.current = temporaryChatId(socket?.id);
-			const primary = targets[0];
 			const usage = setInterval(
 				() => socket?.emit('usage', { action: 'chat', model: primary.model_id, chat_id: chatId ?? '' }),
 				1000
@@ -363,6 +427,9 @@ export function useChatSession({
 					regenerationPrompt: opts.regenerationPrompt,
 					messages: opts.messages
 				});
+				// Stopped while the body was built (it awaits the user's location): never sent.
+				if (req.stopped) return;
+				req.posted = true;
 				const res = await generateOpenAIChatCompletion(token, body, `${WEBUI_BASE_URL}/api`).catch((error) => {
 					toast.error(errorText(error) || 'Uh-oh! There was an issue with the response.');
 					setHistory((cur) => updateMessage(cur, primary.message_id, (m) => failMessage(m, error)));
@@ -375,11 +442,8 @@ export function useChatSession({
 					return;
 				}
 				const ids: string[] = res.task_ids ?? (res.task_id ? [res.task_id] : []);
-				if (stopPendingRef.current) {
-					stopPendingRef.current = false;
-					for (const t of ids) void stopTask(token, t).catch((e) => toast.error(`${e}`));
-					setTaskIds(null);
-				} else setTaskIds(ids.length ? ids : null);
+				if (req.stopped) await cancelStopped(res.chat_id ?? chatId, ids);
+				else setTaskIds(ids.length ? ids : null);
 				if (res.chat_id && !chatIdRef.current && !l.temporary) {
 					chatIdRef.current = adoptedRef.current = res.chat_id;
 					navigate(`/c/${res.chat_id}`, { replace: true });
@@ -388,9 +452,22 @@ export function useChatSession({
 				}
 			} finally {
 				clearInterval(usage);
+				endRequest(req);
 			}
 		},
-		[socket, token, user, config, navigate, refreshList, setHistory, userLocation]
+		[
+			socket,
+			token,
+			user,
+			config,
+			navigate,
+			refreshList,
+			setHistory,
+			userLocation,
+			beginRequest,
+			endRequest,
+			cancelStopped
+		]
 	);
 
 	const send = useCallback(
@@ -425,10 +502,11 @@ export function useChatSession({
 
 	const stop = useCallback(async () => {
 		const id = chatIdRef.current;
+		// A request whose POST hasn't answered has no task to cancel yet, in a
+		// saved chat as in a new one: it cancels its tasks once it learns them.
+		for (const req of inFlightRef.current) req.stopped = true;
 		if (id) await stopTasksByChatId(token, id).catch((e) => toast.error(`${e}`));
 		else if (taskIds?.length) for (const t of taskIds) await stopTask(token, t).catch((e) => toast.error(`${e}`));
-		// A new chat's POST hasn't answered yet: nothing to cancel by id, so cancel once it does.
-		else stopPendingRef.current = true;
 		setTaskIds(null);
 		setHistory((h) => {
 			const m = h.currentId ? h.messages[h.currentId] : null;
@@ -537,36 +615,46 @@ export function useChatSession({
 				return;
 			}
 			setHistory((h) => updateMessage(h, message.id, { done: false }));
+			const req = await beginRequest();
+			if (!req) return;
 			const chatId = chatIdRef.current;
-			const body = completionBody({
-				history: historyRef.current,
-				responseId: message.id,
-				model,
-				chatId,
-				temporary: isTemporaryChatId(chatId),
-				sessionId: socket?.id,
-				folderId: l.folderId,
-				params: l.params,
-				settings: l.settings,
-				chatFiles: l.chatFiles,
-				features: requestFeatures(l.toggles, user, config, l.settings),
-				toolIds: l.toolIds,
-				variables: promptVariables(user, await userLocation()),
-				continueResponse: true
-			});
-			const res = await generateOpenAIChatCompletion(token, body, `${WEBUI_BASE_URL}/api`).catch((error) => {
-				toast.error(errorText(error));
-				setHistory((cur) => updateMessage(cur, message.id, (m) => failMessage(m, error)));
-				return null;
-			});
-			if (res?.error) {
-				toast.error(errorText(res.error));
-				setHistory((cur) => updateMessage(cur, message.id, (m) => failMessage(m, res.error)));
-				return;
+			try {
+				const body = completionBody({
+					history: historyRef.current,
+					responseId: message.id,
+					model,
+					chatId,
+					temporary: isTemporaryChatId(chatId),
+					sessionId: socket?.id,
+					folderId: l.folderId,
+					params: l.params,
+					settings: l.settings,
+					chatFiles: l.chatFiles,
+					features: requestFeatures(l.toggles, user, config, l.settings),
+					toolIds: l.toolIds,
+					variables: promptVariables(user, await userLocation()),
+					continueResponse: true
+				});
+				if (req.stopped) return;
+				req.posted = true;
+				const res = await generateOpenAIChatCompletion(token, body, `${WEBUI_BASE_URL}/api`).catch((error) => {
+					toast.error(errorText(error));
+					setHistory((cur) => updateMessage(cur, message.id, (m) => failMessage(m, error)));
+					return null;
+				});
+				if (res?.error) {
+					toast.error(errorText(res.error));
+					setHistory((cur) => updateMessage(cur, message.id, (m) => failMessage(m, res.error)));
+					return;
+				}
+				const ids: string[] = res?.task_ids ?? (res?.task_id ? [res.task_id] : []);
+				if (req.stopped) await cancelStopped(chatId, ids);
+				else if (ids.length) setTaskIds(ids);
+			} finally {
+				endRequest(req);
 			}
-			if (res?.task_id || res?.task_ids) setTaskIds(res.task_ids ?? [res.task_id]);
 		},
-		[socket, token, user, config, setHistory, userLocation]
+		[socket, token, user, config, setHistory, userLocation, beginRequest, endRequest, cancelStopped]
 	);
 
 	/** Edits a prompt and sends it again as a new branch (`resend`), or edits a message in place. */
