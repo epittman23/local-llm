@@ -728,11 +728,29 @@ async def execute_automation(app, automation: AutomationModel) -> None:
 ####################
 
 
+def already_alerted(meta: dict | None, start_at: int) -> bool:
+    """Whether the occurrence starting at `start_at` (ns) was already alerted (#183)."""
+    from local_llm.models.calendar import MAX_ALERT_LEAD_NS
+
+    if not meta:
+        return False
+    alerted_for = meta.get('alerted_for')
+    if isinstance(alerted_for, int):
+        return alerted_for == start_at
+    # Rows alerted before alerted_for existed carry only alerted_at, the time
+    # of the alert. It belongs to this occurrence only if it came within the
+    # longest lead before it; an earlier one was for another start.
+    alerted_at = meta.get('alerted_at')
+    return isinstance(alerted_at, int) and start_at - MAX_ALERT_LEAD_NS <= alerted_at <= start_at + MAX_ALERT_LEAD_NS
+
+
 async def _check_calendar_alerts(app) -> None:
     """Check for upcoming calendar events and send alert notifications.
 
-    De-duplication is DB-backed via meta.alerted_at — survives restarts
-    and works across multiple instances.
+    De-duplication is DB-backed via meta.alerted_for, the start of the
+    occurrence last alerted, so it survives restarts and works across
+    instances. A moved event, and each occurrence of a recurring one, has a
+    start it was not alerted for, so it alerts again (#183).
     """
     from local_llm.models.calendar import CalendarEvents, CalendarEventUpdateForm
     from local_llm.socket.main import sio
@@ -750,8 +768,7 @@ async def _check_calendar_alerts(app) -> None:
         return
 
     for event, _user_tz in upcoming:
-        # Skip if already alerted for this start time
-        if event.meta and event.meta.get('alerted_at'):
+        if already_alerted(event.meta, event.start_at):
             continue
 
         # Compute minutes until event starts
@@ -782,7 +799,7 @@ async def _check_calendar_alerts(app) -> None:
         try:
             await CalendarEvents.update_event_by_id(
                 event.id,
-                CalendarEventUpdateForm(meta={'alerted_at': now_ns}),
+                CalendarEventUpdateForm(meta={'alerted_at': now_ns, 'alerted_for': event.start_at}),
             )
         except Exception:
             log.debug('Failed to mark event %s as alerted', event.id, exc_info=True)
