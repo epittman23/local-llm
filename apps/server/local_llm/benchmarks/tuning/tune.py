@@ -113,6 +113,16 @@ SIGINT, rather than left uncalled. Two paths lead there now:
     already-fast DB writes `finish()` needs to leave the sweep in a
     resumable state.
 
+A cancellation can also land where neither catch sees an open row (#138):
+during a server's teardown, after a visit's try body finished, or while
+cooling. So a server's teardown and the visit's closing write run to their
+end (`_uncancellable()`, which re-raises the cancellation afterwards), a
+visit that measured to the end still closes as 'done', `Cooldown.run()`
+closes its pause as 'abandoned' before re-raising, and `finish()` on an
+interrupted sweep closes anything still open as `reclaim_stale_sweeps()`
+closes a dead tuner's rows (`Sweep.close_open_rows()`). A resume re-probes
+the card only when the latest pause was abandoned.
+
 Crash recovery (`reclaim_stale_runs()`/`reclaim_stale_sweeps()`) is ported
 from scripts/llama_db.py's `sweep_stale_runs()`/`sweep_stale_sweeps()`,
 which the original ran as a side effect of every `db.connect(sweep=True)`.
@@ -223,6 +233,52 @@ def _alive(pid: int) -> bool:
     except OSError:  # pragma: no cover
         return True
     return True
+
+
+async def _uncancellable(aw) -> None:
+    """Await `aw` to the end even if this task is cancelled meanwhile.
+
+    For teardown and the row writes after it (#138): `/stop` cancels the
+    sweep's task, and a cancellation that lands inside `Server.stop()` would
+    interrupt `ServeProcess.stop`, leaving the telemetry recorder and the
+    temp server log behind. A server's teardown is bounded by grace periods
+    that end in SIGKILL, so waiting for it cannot hang the sweep unless a
+    process outlives SIGKILL.
+
+    A cancellation received meanwhile, however many and however late (even
+    in the tick `aw` finishes), is re-raised once `aw` is done, so the caller
+    still sees it. If `aw` itself failed after a cancellation, the failure
+    is logged and the cancellation wins, so the sweep still reaches finish().
+    """
+    task = asyncio.ensure_future(aw)
+    cancelled = False
+    while not task.done():
+        try:
+            await asyncio.wait({task})
+        except asyncio.CancelledError:
+            cancelled = True
+    if cancelled:
+        if not task.cancelled() and task.exception() is not None:
+            log.warning('teardown failed after the sweep was cancelled: %r', task.exception())
+        raise asyncio.CancelledError
+    task.result()
+
+
+# The reason close_open_rows() gives a visit nothing else closed. Its server
+# may have outlived the teardown, so guard_port() treats it as an orphan.
+LEFT_OPEN = 'left open by a stop'
+
+
+def latest_pause_abandoned(pauses: list[dict]) -> bool:
+    """Whether resuming must re-probe the card first.
+
+    Only the latest pause says anything about the card now. An abandoned
+    pause that a later one already resolved says nothing, and re-probing on
+    every abandoned pause in the sweep's history would re-run a full
+    cooldown on every later resume (#138). `pauses` is in start order, as
+    BenchmarkTunePauses.sweep_pauses() returns it.
+    """
+    return bool(pauses) and pauses[-1]['resolution'] == 'abandoned'
 
 
 async def reclaim_stale_runs(limit: int = 10_000) -> int:
@@ -490,45 +546,53 @@ class Cooldown:
         window = self.o.cooldown_max
         resolution = 'timeout'
         probe_tps = None
-        for attempt in range(1, self.o.cooldown_attempts + 1):
-            log.warning(
-                'cooling (%s, attempt %s/%s): waiting for the card to settle below %.0fC with the '
-                'thermal and power bits clear',
-                trigger,
-                attempt,
-                self.o.cooldown_attempts,
-                target,
-            )
-            await self._wait(target, window)
-            probe_tps = await self._probe()
-            if probe_tps is not None and self.sweep.baseline_tps:
-                ratio = probe_tps / self.sweep.baseline_tps
-                log.info(
-                    '  probe %.2f t/s against a round-1 baseline of %.2f (%.2fx)',
-                    probe_tps,
-                    self.sweep.baseline_tps,
-                    ratio,
+        try:
+            for attempt in range(1, self.o.cooldown_attempts + 1):
+                log.warning(
+                    'cooling (%s, attempt %s/%s): waiting for the card to settle below %.0fC with the '
+                    'thermal and power bits clear',
+                    trigger,
+                    attempt,
+                    self.o.cooldown_attempts,
+                    target,
                 )
-                # One-sided: this probe exists to prove the card will hold up
-                # under load, and round-1's own baseline is not a ceiling --
-                # it ran after other candidates had already been warming the
-                # card, so a fully-cooled probe legitimately beats it. Only a
-                # probe that is still slow is a sign the cap has not lifted.
-                if ratio >= 1 - self.o.drift_tolerance:
+                await self._wait(target, window)
+                probe_tps = await self._probe()
+                if probe_tps is not None and self.sweep.baseline_tps:
+                    ratio = probe_tps / self.sweep.baseline_tps
+                    log.info(
+                        '  probe %.2f t/s against a round-1 baseline of %.2f (%.2fx)',
+                        probe_tps,
+                        self.sweep.baseline_tps,
+                        ratio,
+                    )
+                    # One-sided: this probe exists to prove the card will hold up
+                    # under load, and round-1's own baseline is not a ceiling --
+                    # it ran after other candidates had already been warming the
+                    # card, so a fully-cooled probe legitimately beats it. Only a
+                    # probe that is still slow is a sign the cap has not lifted.
+                    if ratio >= 1 - self.o.drift_tolerance:
+                        resolution = 'recovered'
+                        break
+                elif probe_tps is not None:
                     resolution = 'recovered'
                     break
-            elif probe_tps is not None:
-                resolution = 'recovered'
-                break
-            # Doubling rather than retrying the same window: if the first
-            # wait was not enough, waiting the same amount again is a guess
-            # that has already been wrong once.
-            window *= 2
-            # This pause's time so far, on top of earlier pauses; added to the
-            # total once, below. Assigning it here replaced the total (#137).
-            if self.budget_exhausted(time.time() - started):
-                resolution = 'timeout'
-                break
+                # Doubling rather than retrying the same window: if the first
+                # wait was not enough, waiting the same amount again is a guess
+                # that has already been wrong once.
+                window *= 2
+                # This pause's time so far, on top of earlier pauses; added to the
+                # total once, below. Assigning it here replaced the total (#137).
+                if self.budget_exhausted(time.time() - started):
+                    resolution = 'timeout'
+                    break
+        except asyncio.CancelledError:
+            # Stopped mid-pause (#138): nobody watched the card to the end,
+            # so the pause closes as 'abandoned', the word reclaim_stale_sweeps()
+            # uses, and a resume re-probes rather than assume it recovered.
+            self.total_seconds += time.time() - started
+            await BenchmarkTunePauses.close_pause(pause_id, resolution='abandoned')
+            raise
 
         self.total_seconds += time.time() - started
         after = await self.gpu.read()
@@ -604,7 +668,7 @@ class Cooldown:
             log.warning('  probe could not serve the baseline: %s', exc.reason)
             return None
         finally:
-            await server.stop()
+            await _uncancellable(server.stop())
 
 
 # ---------------------------------------------------------------------------
@@ -822,7 +886,11 @@ class Sweep:
         if not await port_busy(self.port, self.session):
             return
         visits = await BenchmarkTuneVisits.sweep_visits(self.sweep_id)
-        orphans = [v for v in visits if v.status == 'running' or (v.status == 'aborted' and v.reason == 'tuner gone')]
+        orphans = [
+            v
+            for v in visits
+            if v.status == 'running' or (v.status == 'aborted' and v.reason in ('tuner gone', LEFT_OPEN))
+        ]
         killed_one = False
         for orphan in orphans:
             if orphan.server_pgid:
@@ -869,6 +937,7 @@ class Sweep:
         server = Server(cand, self.port, load_timeout=self.o.load_timeout, session=self.session)
         drift: str | None = None
         records: list[dict] = []
+        measured = False
         t0 = time.time()
         _current_visits[self.sweep_id] = {
             'candidate_sha': cand.sha,
@@ -920,6 +989,7 @@ class Sweep:
                 should_stop=lambda: watch.collapsed or self.spent() is not None,
             )
             drift = 'cliff' if watch.collapsed else None
+            measured = True
         except Infeasible as exc:
             await BenchmarkTuneVisits.close_visit(
                 visit_id,
@@ -955,23 +1025,41 @@ class Sweep:
             )
             raise
         finally:
-            await server.stop()
-            self.serve_seconds += time.time() - t0
-            _current_visits.pop(self.sweep_id, None)
+            try:
+                await _uncancellable(server.stop())
+            except asyncio.CancelledError:
+                # Stopped during the teardown of a visit that measured to
+                # the end (#138): its items are graded and committed, so it
+                # still closes as what it was, then the cancellation goes on.
+                if measured:
+                    try:
+                        await _uncancellable(self.close_done(visit_id, records, drift))
+                    except Exception:
+                        # The stop must still reach finish(): execute() and
+                        # resume_sweep() catch only CancelledError, and
+                        # close_open_rows() closes this visit instead.
+                        log.exception('could not close visit %s while stopping', visit_id)
+                raise
+            finally:
+                self.serve_seconds += time.time() - t0
+                _current_visits.pop(self.sweep_id, None)
 
-        counts = not drift
-        await BenchmarkTuneVisits.close_visit(
-            visit_id,
-            status='done',
-            items_done=len(records),
-            counts_toward_round=counts,
-            reason='drift' if drift else '',
-        )
+        await _uncancellable(self.close_done(visit_id, records, drift))
         if drift:
             log.warning(
                 "  throughput collapsed mid-visit; this visit's %s items are excluded from the round", len(records)
             )
         return {'status': 'done', 'items': len(records), 'drift': drift, 'visit_id': visit_id}
+
+    async def close_done(self, visit_id: int, records: list[dict], drift: str | None) -> None:
+        """Close a visit that measured its slice: counted unless it drifted."""
+        await BenchmarkTuneVisits.close_visit(
+            visit_id,
+            status='done',
+            items_done=len(records),
+            counts_toward_round=not drift,
+            reason='drift' if drift else '',
+        )
 
     def spent(self) -> str | None:
         if self.cancel_requested:
@@ -1419,10 +1507,32 @@ class Sweep:
         }
 
     # -- the verdict -----------------------------------------------------------
+    async def close_open_rows(self) -> None:
+        """Close the visit and pause rows a task cancellation left open (#138).
+
+        visit() and Cooldown.run() close their own rows when cancelled, so
+        this is the backstop for what they cannot cover, such as a second
+        cancellation landing in their own error handling. finish() closes the
+        sweep, and reclaim_stale_sweeps() skips closed sweeps, so a row left
+        open here would read 'running' forever. Rows close as
+        reclaim_stale_sweeps() closes a dead tuner's: a visit as 'aborted', a
+        pause as 'abandoned'. The visit's reason, LEFT_OPEN, tells
+        guard_port() that its server may have outlived the teardown, as a
+        dead tuner's 'tuner gone' does.
+        """
+        for visit in await BenchmarkTuneVisits.sweep_visits(self.sweep_id):
+            if visit.status == 'running':
+                await BenchmarkTuneVisits.close_visit(visit.visit_id, status='aborted', reason=LEFT_OPEN)
+        for pause in await BenchmarkTunePauses.sweep_pauses(self.sweep_id):
+            if pause['resolution'] is None:
+                await BenchmarkTunePauses.close_pause(pause['pause_id'], resolution='abandoned')
+
     async def finish(self, alive: list[Candidate]) -> dict:
         """Decide, record and return a structured report. Three verdicts,
         matching the original's three exit codes (0 adopted/rejected, 1
         incomplete, 3 indeterminate) via the `verdict` field instead."""
+        if self.ended_reason == 'interrupted':
+            await self.close_open_rows()
         design, audit, blocks = await self.audit()
         blocked = [r for b in blocks for r in audit.blocked(f'throughput:{b.key}')]
         scored = await self.scores(None)
@@ -1765,9 +1875,8 @@ async def resume_sweep(sweep_id: str | None, defaults: SweepOptions, session: ai
     # pause and no evidence about the card: the sweep was waiting on it
     # precisely because it could not be trusted, and nothing was watching in
     # between.
-    stale = [p for p in await BenchmarkTunePauses.sweep_pauses(sweep_id) if p['resolution'] == 'abandoned']
-    if stale:
-        log.warning('%s pause(s) were abandoned by a crash; re-probing before measuring anything', len(stale))
+    if latest_pause_abandoned(await BenchmarkTunePauses.sweep_pauses(sweep_id)):
+        log.warning('the last pause was abandoned (a crash or a stop); re-probing before measuring anything')
         await sweep.cool.run(trigger='drift', rnd=(len(done) or 1), visit_id=None, drift_ratio=None)
 
     alive = [c for c in sweep.candidates.values() if c.status in ('pending', 'active', 'marginal', 'winner')]
