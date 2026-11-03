@@ -4115,31 +4115,63 @@ def _reasoning_output(choice_message: dict) -> list[dict]:
     return [reasoning_item]
 
 
-async def _finish_reply_without_text(ctx: dict, choice_message: dict, save_to_chat: bool) -> None:
+async def _publish_chat_failed(request, user, metadata: dict, message: str) -> None:
+    """Tell chat-event subscribers (webhooks) that a saved chat's reply failed."""
+    chat_id = metadata.get('chat_id')
+    if getattr(request.state, 'internal', False) is True or not chat_id or not is_saved_chat_id(chat_id):
+        return
+    webui_url = await Config.get('webui.url')
+    await publish_event(
+        request,
+        EVENTS.CHAT_FAILED,
+        actor=user,
+        subject_id=chat_id,
+        subject_type='chat',
+        data={
+            'user_id': user.id,
+            'chat_id': chat_id,
+            'message_id': metadata.get('message_id'),
+            'model_id': metadata.get('model_id'),
+            'url': f'{webui_url}/c/{chat_id}' if webui_url else f'/c/{chat_id}',
+            'message': message,
+        },
+        message='Chat failed',
+    )
+
+
+async def _finish_reply_without_text(
+    ctx: dict, choice_message: dict, *, finish_reason: str | None, usage: dict, save_to_chat: bool
+) -> None:
     """Finish a non-streaming reply that has no text, so it does not stay "generating" (#165).
 
     A native tool-call reply has `content: null`: running its tools is the
     streaming path's job, so say so. A thinking model can spend its whole
-    budget reasoning and answer ''. Either way the reasoning is kept.
+    budget reasoning and stop for length with ''. The reasoning and usage
+    are kept. It is reported as a failed reply (CHAT_FAILED); the title,
+    tag, follow-up and outlet handlers, which work on an answer, are skipped.
     """
     metadata = ctx['metadata']
     event_emitter = ctx['event_emitter']
     if choice_message.get('tool_calls'):
         error = (
-            'The model asked to call tools, which needs streaming. Turn streaming on for this chat or model, '
-            'then regenerate.'
+            'The model asked to call tools, which needs a streamed reply. Turn on Stream Chat Response '
+            "(in your Settings, or in the model's Advanced Params), then regenerate."
         )
+    elif finish_reason == 'length':
+        error = 'The model returned no answer: it reached its token limit, likely while reasoning.'
     else:
-        error = 'The model returned no answer (it may have used its whole token budget on reasoning).'
+        error = 'The model returned no text.'
     output = _reasoning_output(choice_message)
+    extra = {'usage': usage} if usage else {}
     if save_to_chat:
         await Chats.upsert_message_to_chat_by_id_and_message_id(
             metadata['chat_id'],
             metadata['message_id'],
-            {'done': True, 'role': 'assistant', 'output': output, 'error': {'content': error}},
+            {'done': True, 'role': 'assistant', 'output': output, 'error': {'content': error}, **extra},
         )
-    await event_emitter({'type': 'chat:completion', 'data': {'done': True, 'output': output}})
+    await event_emitter({'type': 'chat:completion', 'data': {'done': True, 'output': output, **extra}})
     await event_emitter({'type': 'chat:message:error', 'data': {'error': {'content': error}}})
+    await _publish_chat_failed(ctx['request'], ctx['user'], metadata, error)
 
 
 async def non_streaming_chat_response_handler(response, ctx):
@@ -4160,7 +4192,8 @@ async def non_streaming_chat_response_handler(response, ctx):
 
     if event_emitter:
         try:
-            if 'error' in response_data:
+            provider_error = 'error' in response_data
+            if provider_error:
                 error = response_data.get('error')
 
                 if isinstance(error, dict):
@@ -4262,32 +4295,19 @@ async def non_streaming_chat_response_handler(response, ctx):
                     await outlet_filter_handler(ctx)
                     await background_tasks_handler(ctx)
 
-            elif choices and 'error' not in response_data:
-                await _finish_reply_without_text(ctx, choice_message, save_to_chat)
+            elif choices and not provider_error:
+                await _finish_reply_without_text(
+                    ctx,
+                    choice_message,
+                    finish_reason=choices[0].get('finish_reason'),
+                    usage=normalize_usage(response_data.get('usage', {}) or {}),
+                    save_to_chat=save_to_chat,
+                )
 
             response = build_response_object(response, merge_events_into_response(response_data, events))
         except Exception as e:
             log.debug('Error occurred while processing request: %s', e)
-            chat_id = metadata.get('chat_id')
-            if getattr(request.state, 'internal', False) is not True and chat_id and is_saved_chat_id(chat_id):
-                webui_url = await Config.get('webui.url')
-                await publish_event(
-                    request,
-                    EVENTS.CHAT_FAILED,
-                    actor=user,
-                    subject_id=chat_id,
-                    subject_type='chat',
-                    data={
-                        'user_id': user.id,
-                        'chat_id': chat_id,
-                        'message_id': metadata.get('message_id'),
-                        'model_id': metadata.get('model_id'),
-                        'url': f'{webui_url}/c/{chat_id}' if webui_url else f'/c/{chat_id}',
-                        'message': str(e),
-                    },
-                    message='Chat failed',
-                )
-            pass
+            await _publish_chat_failed(request, user, metadata, str(e))
 
         return response
 
