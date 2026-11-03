@@ -83,3 +83,14 @@ def test_working_chunk_settings_are_saved(stored):
     assert (response['CHUNK_SIZE'], response['CHUNK_OVERLAP']) == (500, 50)
     assert stored[retrieval.RETRIEVAL_CONFIG_KEYS['CHUNK_SIZE']] == 500
     assert stored[retrieval.RETRIEVAL_CONFIG_KEYS['CHUNK_OVERLAP']] == 50
+
+
+def test_the_settings_save_route_is_still_update_rag_config_and_admin_only():
+    # The check is a module-level helper next to the route; the unit tests
+    # above call update_rag_config directly, so they would not notice the
+    # route itself landing on the wrong function.
+    from local_llm.utils.auth import get_admin_user
+
+    (route,) = [r for r in retrieval.router.routes if getattr(r, 'path', None) == '/config/update']
+    assert route.endpoint is retrieval.update_rag_config
+    assert any(d.call is get_admin_user for d in route.dependant.dependencies)

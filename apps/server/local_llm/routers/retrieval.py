@@ -123,6 +123,7 @@ from local_llm.utils.access_control.files import has_access_to_file
 from local_llm.utils.auth import get_admin_user, get_verified_user
 from local_llm.utils.misc import (
     calculate_sha256_string,
+    chunk_settings_error,
     sanitize_text_for_db,
 )
 
@@ -965,22 +966,6 @@ class ConfigForm(BaseModel):
 
 
 @router.post('/config/update')
-def _chunk_settings_error(chunk_size, chunk_overlap) -> str | None:
-    """Why the text splitters could not use these chunk settings, or None (#235).
-
-    They raise on a size below 1, a negative overlap, or an overlap larger
-    than the size, on every upload and reindex. An overlap equal to the size
-    is refused too: each chunk would repeat the whole of the one before.
-    """
-    if not isinstance(chunk_size, int) or chunk_size < 1:
-        return 'Chunk Size must be at least 1.'
-    if not isinstance(chunk_overlap, int) or chunk_overlap < 0:
-        return 'Chunk Overlap cannot be negative.'
-    if chunk_overlap >= chunk_size:
-        return f'Chunk Overlap must be smaller than Chunk Size ({chunk_overlap} is not smaller than {chunk_size}).'
-    return None
-
-
 async def update_rag_config(request: Request, form_data: ConfigForm, user=Depends(get_admin_user)):
     # RAG settings
     config = await get_retrieval_config()
@@ -988,7 +973,7 @@ async def update_rag_config(request: Request, form_data: ConfigForm, user=Depend
     # only when the save sets a chunk value (a Web Search save sets none):
     # the one it leaves alone is checked at its stored value.
     if form_data.CHUNK_SIZE is not None or form_data.CHUNK_OVERLAP is not None:
-        chunk_error = _chunk_settings_error(
+        chunk_error = chunk_settings_error(
             form_data.CHUNK_SIZE if form_data.CHUNK_SIZE is not None else config.CHUNK_SIZE,
             form_data.CHUNK_OVERLAP if form_data.CHUNK_OVERLAP is not None else config.CHUNK_OVERLAP,
         )

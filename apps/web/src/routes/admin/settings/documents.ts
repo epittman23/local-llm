@@ -49,7 +49,6 @@ const isJsonObjectText = (text: string) => {
 };
 const objectOrEmpty = (text: unknown) => (typeof text === 'string' && text.trim() !== '' ? JSON.parse(text) : {});
 
-/** What the chosen extraction engine cannot run without, or a malformed JSON box; null when the form is fine. */
 /**
  * Why the text splitters could not use these chunk settings, or null (#235);
  * the same rule as the server's `_chunk_settings_error`. A cleared box (null)
@@ -64,6 +63,10 @@ export function chunkSettingsError(size: unknown, overlap: unknown): string | nu
 	return null;
 }
 
+/**
+ * What the chosen extraction engine cannot run without, a malformed JSON box,
+ * or a chunk setting the splitters cannot use; null when the form is fine.
+ */
 export function ragFormError(c: Rec): string | null {
 	const engine = c.CONTENT_EXTRACTION_ENGINE;
 	if (engine === 'external') {
