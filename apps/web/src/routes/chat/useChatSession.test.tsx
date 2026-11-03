@@ -353,6 +353,30 @@ describe('useChatSession loadChat', () => {
 		}
 	});
 
+	it('a send still waiting when another chat opens is not sent (#516)', async () => {
+		probeModels = [{ id: 'm' }];
+		try {
+			const router = await openChatA();
+			const first = await holdNextPost();
+			act(() => void session.submit('first', [], 'm'));
+			await waitFor(() => expect(first.send).toHaveBeenCalledTimes(1));
+			await act(async () => session.stop());
+			act(() => void session.submit('second', [], 'm'));
+			await waitFor(() => expect(asked('second')).toBe(true));
+
+			await act(async () => router.navigate('/c/B'));
+			await waitFor(() => expect(pending.B).toBeDefined());
+			await act(async () => pending.B(undefined));
+			await act(async () => first.answer.resolve({ task_ids: ['t1'] }));
+			await act(async () => {});
+
+			// The waiting send would have been built from chat B's history.
+			expect(first.send).toHaveBeenCalledTimes(1);
+		} finally {
+			probeModels = [];
+		}
+	});
+
 	it('a stop in the chat opened next does not cancel the chat left behind (#151)', async () => {
 		probeModels = [{ id: 'm' }];
 		try {
@@ -371,6 +395,26 @@ describe('useChatSession loadChat', () => {
 
 			expect(apis.stopTasksByChatId).not.toHaveBeenCalled();
 			expect(apis.stopTask).not.toHaveBeenCalled();
+		} finally {
+			probeModels = [];
+		}
+	});
+
+	it.each([
+		['the POST fails', () => Promise.reject(new Error('offline'))],
+		['the server answers with an error', async () => ({ error: { detail: 'model gone' } })]
+	])('continuing a reply that fails because %s marks it failed', async (_case, post) => {
+		probeModels = [{ id: 'm' }];
+		try {
+			await openChatA();
+			writing();
+			act(() => session.setHistory((h) => updateMessage(h, 'r', { done: true, content: 'half', model: 'm' })));
+			const send = vi.mocked((await import('@/lib/apis/openai')).generateOpenAIChatCompletion);
+			send.mockImplementationOnce(post as never);
+			await act(async () => session.continueReply(session.history.messages.r));
+
+			expect(session.history.messages.r.error).toBeTruthy();
+			expect(session.taskIds).toBeNull();
 		} finally {
 			probeModels = [];
 		}

@@ -81,8 +81,8 @@ type Queued = { id: string; prompt: string; files: ChatFile[]; modelId?: string 
  * - A prompt sent while a reply is still being written is queued (the
  *   user's "message queue" setting, on by default) and sent when it ends.
  */
-/** One completion request: Stop sets `stopped`; `settled` resolves once it is done with its tasks. */
-type ChatRequest = { stopped: boolean; settled: Promise<void>; settle: () => void };
+/** One completion request: Stop sets `stopped`, `posted` once its POST is out; `settled` resolves once it is done with its tasks. */
+type ChatRequest = { stopped: boolean; posted: boolean; settled: Promise<void>; settle: () => void };
 
 export function useChatSession({
 	routeChatId,
@@ -335,13 +335,26 @@ export function useChatSession({
 	 * tasks: that one cancels them by chat id, which would also take this
 	 * request's reply if it were already running (#516).
 	 */
-	const beginRequest = useCallback(async (): Promise<ChatRequest> => {
+	const beginRequest = useCallback(async (): Promise<ChatRequest | null> => {
 		let settle = () => {};
 		const settled = new Promise<void>((resolve) => (settle = resolve));
-		const req: ChatRequest = { stopped: false, settled, settle };
-		const earlier = [...inFlightRef.current].filter((r) => r.stopped);
-		inFlightRef.current.add(req);
+		const req: ChatRequest = { stopped: false, posted: false, settled, settle };
+		const requests = inFlightRef.current;
+		// Only one that posted can have tasks to cancel; one stopped while its
+		// body was built never posts, so it is not waited for.
+		const earlier = [...requests].filter((r) => r.stopped && r.posted);
+		requests.add(req);
 		await Promise.all(earlier.map((r) => r.settled));
+		// Another chat opened while this one waited: the history and chat id
+		// to send with are gone, so nothing is sent. (A chat left and opened
+		// again within that wait starts a new set, so the order is not kept
+		// across that round trip; the window is one unanswered POST.)
+		if (inFlightRef.current !== requests) {
+			requests.delete(req);
+			settle();
+			toast.error('The chat changed before the message could be sent.');
+			return null;
+		}
 		return req;
 	}, []);
 
@@ -385,10 +398,12 @@ export function useChatSession({
 			const { history: h, targets } = addResponses(historyRef.current, parentId, chosen, opts.modelIdx);
 			setHistory(h);
 
-			let chatId = chatIdRef.current;
-			if (!chatId && l.temporary) chatId = chatIdRef.current = temporaryChatId(socket?.id);
 			const primary = targets[0];
 			const req = await beginRequest();
+			if (!req) return;
+			// Read after the wait: a new chat's earlier request may have created the chat meanwhile.
+			let chatId = chatIdRef.current;
+			if (!chatId && l.temporary) chatId = chatIdRef.current = temporaryChatId(socket?.id);
 			const usage = setInterval(
 				() => socket?.emit('usage', { action: 'chat', model: primary.model_id, chat_id: chatId ?? '' }),
 				1000
@@ -414,6 +429,7 @@ export function useChatSession({
 				});
 				// Stopped while the body was built (it awaits the user's location): never sent.
 				if (req.stopped) return;
+				req.posted = true;
 				const res = await generateOpenAIChatCompletion(token, body, `${WEBUI_BASE_URL}/api`).catch((error) => {
 					toast.error(errorText(error) || 'Uh-oh! There was an issue with the response.');
 					setHistory((cur) => updateMessage(cur, primary.message_id, (m) => failMessage(m, error)));
@@ -599,8 +615,9 @@ export function useChatSession({
 				return;
 			}
 			setHistory((h) => updateMessage(h, message.id, { done: false }));
-			const chatId = chatIdRef.current;
 			const req = await beginRequest();
+			if (!req) return;
+			const chatId = chatIdRef.current;
 			try {
 				const body = completionBody({
 					history: historyRef.current,
@@ -619,6 +636,7 @@ export function useChatSession({
 					continueResponse: true
 				});
 				if (req.stopped) return;
+				req.posted = true;
 				const res = await generateOpenAIChatCompletion(token, body, `${WEBUI_BASE_URL}/api`).catch((error) => {
 					toast.error(errorText(error));
 					setHistory((cur) => updateMessage(cur, message.id, (m) => failMessage(m, error)));
