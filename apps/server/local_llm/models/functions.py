@@ -427,6 +427,8 @@ class FunctionsTable:
                 await db.commit()
                 return True
             except Exception:
+                # SAFE_MODE refuses to start on this; the log says why (#361).
+                log.exception('Error deactivating all functions')
                 return None
 
     async def delete_function_by_id(self, id: str, db: AsyncSession | None = None) -> bool:
