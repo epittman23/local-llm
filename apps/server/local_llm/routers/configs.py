@@ -14,7 +14,7 @@ from local_llm.models.config import Config
 from local_llm.utils.auth import get_admin_user, get_verified_user
 from local_llm.utils.headers import bearer_auth_header, get_custom_headers
 from local_llm.utils.mcp.client import MCPClient
-from local_llm.utils.misc import jwt_expiry_error
+from local_llm.utils.misc import chunk_settings_error, jwt_expiry_error
 from local_llm.utils.oauth import (
     OAuthClientInformationFull,
     apply_connection_oauth_options,
@@ -101,6 +101,16 @@ async def import_config(request: Request, form_data: ImportConfigForm, user=Depe
     # would lock everyone out (#242).
     if 'auth.jwt_expiry' in form_data.config and (error := jwt_expiry_error(form_data.config['auth.jwt_expiry'])):
         raise HTTPException(status_code=400, detail=error)
+    # And the Documents form's: imported chunk settings the text splitters
+    # cannot use would break every upload (#235). The one not imported is
+    # checked at its stored value.
+    if 'rag.chunk_size' in form_data.config or 'rag.chunk_overlap' in form_data.config:
+        error = chunk_settings_error(
+            form_data.config.get('rag.chunk_size', await Config.get('rag.chunk_size')),
+            form_data.config.get('rag.chunk_overlap', await Config.get('rag.chunk_overlap')),
+        )
+        if error:
+            raise HTTPException(status_code=400, detail=error)
     await Config.upsert(form_data.config)
     await publish_event(
         request,

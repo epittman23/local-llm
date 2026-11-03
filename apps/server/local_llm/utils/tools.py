@@ -1750,6 +1750,17 @@ async def _tool_server_response_data(response):
         return f'data:{content_type};base64,{b64}'
 
 
+def _body_field_names(operation: dict, components: dict) -> set[str]:
+    """The property names of an operation's JSON request body, its $refs resolved; empty if it has none."""
+    schema = operation.get('requestBody')
+    for key in ('content', 'application/json', 'schema'):
+        schema = schema.get(key) if isinstance(schema, dict) else None
+    if not isinstance(schema, dict):
+        return set()
+    properties = resolve_schema(schema, components or {}).get('properties')
+    return set(properties) if isinstance(properties, dict) else set()
+
+
 async def execute_tool_server(
     url: str,
     headers: dict[str, str],
@@ -1773,8 +1784,11 @@ async def execute_tool_server(
         body_params = {}
         if operation.get('requestBody', {}).get('content'):
             # The tool's arguments flatten the body's fields together with the operation's
-            # parameters; those go in the path, query, header or cookie, not in the body too.
-            parameter_names = {param['name'] for param in parameters}
+            # parameters. A parameter goes in the path, query, header or cookie and not in
+            # the body too, unless the body schema has a field of that name: then it goes
+            # in both (#189), as for PUT /users/{id} whose body also requires id.
+            body_fields = _body_field_names(operation, openapi.get('components', {}))
+            parameter_names = {param['name'] for param in parameters} - body_fields
             body_params = {key: value for key, value in params.items() if key not in parameter_names}
 
         # Methods that may carry a body always send one, empty when the operation takes none.
