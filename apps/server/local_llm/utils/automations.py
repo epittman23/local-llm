@@ -685,27 +685,15 @@ async def execute_automation(app, automation: AutomationModel) -> None:
 
         # Call the full chat completion pipeline (same as POST /api/chat/completions).
         # The handler reference is stored on app.state to avoid circular imports.
+        # It returns once the reply is dispatched to a background task; that
+        # task records the run's outcome when the reply ends
+        # (finish_automation_run, from main._process_chat), so a model or
+        # provider failure reaches the run history (#264).
         request = _build_request(app, token=token)
         await app.state.CHAT_COMPLETION_HANDLER(request, form_data, user=user)
-
-        # Notify user
-        from local_llm.socket.main import sio
-
-        await sio.emit(
-            'automation:result',
-            {
-                'automation_id': automation.id,
-                'name': automation.name,
-                'chat_id': chat.id,
-                'status': 'success',
-            },
-            room=f'user:{automation.user_id}',
-        )
-
-        await _record_run(automation.id, 'success', chat_id=chat.id)
         await publish_event(
             app,
-            EVENTS.AUTOMATION_RUN_COMPLETED,
+            EVENTS.AUTOMATION_RUN_STARTED,
             actor=user,
             subject_id=automation.id,
             data={'name': automation.name, 'chat_id': chat.id},
@@ -806,6 +794,47 @@ async def _check_calendar_alerts(app) -> None:
             )
         except Exception:
             log.debug('Failed to send notification for calendar alert %s', event.id, exc_info=True)
+
+
+async def finish_automation_run(app, user, metadata: dict, error: str | None = None) -> None:
+    """Record how an automation's reply ended, once it has (#264).
+
+    Called from main._process_chat for a reply that carries an automation id.
+    A reply that finished can still have failed: a provider error inside the
+    stream is saved on the message without raising, so the stored message is
+    checked too. Never raises: recording the outcome must not fail the reply.
+    """
+    automation_id = metadata.get('automation_id')
+    if not automation_id:
+        return
+    try:
+        chat_id = metadata.get('chat_id')
+        if error is None and chat_id and metadata.get('message_id'):
+            message = await Chats.get_message_by_id_and_message_id(chat_id, metadata['message_id'])
+            stored = (message or {}).get('error')
+            if stored:
+                error = str(stored.get('content') if isinstance(stored, dict) else stored)[:4000] or 'The reply failed'
+        automation = await Automations.get_by_id(automation_id)
+        name = automation.name if automation else ''
+        status = 'error' if error else 'success'
+
+        from local_llm.socket.main import sio
+
+        await sio.emit(
+            'automation:result',
+            {'automation_id': automation_id, 'name': name, 'chat_id': chat_id, 'status': status},
+            room=f'user:{user.id}',
+        )
+        await _record_run(automation_id, status, chat_id=chat_id, error=error)
+        await publish_event(
+            app,
+            EVENTS.AUTOMATION_RUN_FAILED if error else EVENTS.AUTOMATION_RUN_COMPLETED,
+            actor=user,
+            subject_id=automation_id,
+            data={'name': name, 'chat_id': chat_id, **({'error': error} if error else {})},
+        )
+    except Exception:
+        log.exception('could not record the outcome of automation %s', automation_id)
 
 
 async def _record_run(

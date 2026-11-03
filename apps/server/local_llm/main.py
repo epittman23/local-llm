@@ -1555,6 +1555,15 @@ async def _prepare_chat_record(
             await _persist_follow_up(request, user, metadata, message_ids, chat_variables)
 
 
+async def _finish_automation_run(request: Request, user, metadata: dict, error: str | None = None) -> None:
+    """Record an automation run's outcome when its reply ends (#264); a no-op for other chats."""
+    if not metadata.get('automation_id'):
+        return
+    from local_llm.utils.automations import finish_automation_run
+
+    await finish_automation_run(request.app, user, metadata, error)
+
+
 async def _report_chat_error(metadata: dict, error_detail: str) -> None:
     """Record a failed reply on its message and tell the open chat, so the frontend stops waiting."""
     try:
@@ -1691,11 +1700,14 @@ async def _process_chat(request: Request, form_data: dict, user, metadata: dict,
 
         ctx = await build_chat_response_context(request, form_data, user, model, metadata, tasks, events)
 
-        return await process_chat_response(response, ctx)
+        result = await process_chat_response(response, ctx)
+        await _finish_automation_run(request, user, metadata)
+        return result
     except asyncio.CancelledError:
         log.info('Chat processing was cancelled')
         try:
             await asyncio.shield(_emit_tasks_cancel(metadata))
+            await asyncio.shield(_finish_automation_run(request, user, metadata, 'The run was stopped'))
         except Exception:
             pass
         raise  # re-raise to ensure proper task cancellation handling
@@ -1712,6 +1724,7 @@ async def _process_chat(request: Request, form_data: dict, user, metadata: dict,
                 detail=error_detail,
             )
         await _report_chat_error(metadata, error_detail)
+        await _finish_automation_run(request, user, metadata, error_detail)
     finally:
         await _disconnect_mcp_clients(metadata)
         await _end_chat_task(request, user, metadata)
