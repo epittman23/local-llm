@@ -326,7 +326,7 @@ export function ChannelMessageView({
 									// A model reply is empty while it is under way, and "Thinking" until
 									// done; one that finished with no text says so instead of spinning (#329).
 									message.meta.done ? (
-										<p className="text-muted-foreground my-0.5 text-sm italic">No response</p>
+										files.length === 0 && <p className="text-muted-foreground my-0.5 text-sm italic">No response</p>
 									) : (
 										<div className="bg-muted my-1 h-4 w-24 animate-pulse rounded" aria-label="Thinking" />
 									)

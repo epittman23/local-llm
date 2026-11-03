@@ -118,16 +118,47 @@ def test_a_completion_that_fails_before_its_task_finishes_the_reply_as_an_error(
     assert h.emitted[0][2]['data']['data']['content'] == 'Error: Model not found'
 
 
-def test_an_unexpected_failure_is_reported_in_the_reply_too(monkeypatch):
+def test_an_unexpected_failure_is_reported_without_its_details(monkeypatch, caplog):
     async def completion(request, form_data, user=None):
-        raise RuntimeError('connection refused')
+        raise RuntimeError('connection to 10.0.0.5:5432 refused')
 
     h = _harness(monkeypatch, completion)
     _, (reply,) = _ask(h)
 
+    # Every member of the channel sees the reply; the details are in the log only.
     assert reply is not None
-    assert reply.content == 'Error: connection refused'
+    assert reply.content == 'Error: An error occurred'
     assert (reply.meta or {}).get('done') is True
+    assert '10.0.0.5' in caplog.text
+
+
+def test_when_one_of_several_models_fails_the_others_replies_are_left_alone(monkeypatch):
+    async def completion(request, form_data, user=None):
+        return {'status': True}
+
+    h = _harness(monkeypatch, completion)
+    second = {'id': 'other', 'name': 'Other'}
+
+    async def two_models(request, user=None):
+        return [MODEL, second]
+
+    real_placeholder = channels_router.new_message_handler
+
+    async def second_fails(request, channel_id, form_data, user, db):
+        if form_data.meta and form_data.meta.get('model_id') == 'other':
+            raise HTTPException(status_code=403, detail='No access to Other')
+        return await real_placeholder(request, channel_id, form_data, user, db)
+
+    monkeypatch.setattr(channels_router, 'get_all_models', two_models)
+    monkeypatch.setattr(channels_router, 'new_message_handler', second_fails)
+    monkeypatch.setattr(channels_router, 'extract_mentions', lambda content: [{'id': 'other', 'id_type': 'M'}])
+
+    _, (first_reply,) = _ask(h)
+
+    assert first_reply is not None
+    assert first_reply.content == ''
+    assert 'done' not in (first_reply.meta or {})
+    assert h.emitted == []
 
 
 def test_a_completion_that_starts_leaves_the_reply_to_the_pipeline(monkeypatch):
@@ -141,6 +172,36 @@ def test_a_completion_that_starts_leaves_the_reply_to_the_pipeline(monkeypatch):
     assert reply.content == ''
     assert 'done' not in (reply.meta or {})
     assert h.emitted == []
+
+
+def test_an_error_reply_is_not_given_to_the_next_model_as_history():
+    async def go():
+        async with async_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        tag = uuid.uuid4().hex[:8]
+        user = await Users.insert_new_user(f'u{tag}', 'Una', f'u{tag}@example.invalid', role='admin')
+        assert user is not None
+        form = CreateChannelForm(type='', name=f'history-{tag}', access_grants=[])
+        channel = await Channels.insert_new_channel(form, user.id)
+        assert channel is not None
+
+        async def post(content, parent_id=None, meta=None):
+            message = await Messages.insert_new_message(
+                MessageForm(content=content, parent_id=parent_id, meta=meta), channel.id, user.id
+            )
+            assert message is not None
+            return await Messages.get_message_by_id(message.id)
+
+        root = await post('What is 17 times 23?')
+        assert root is not None
+        await post('Error: Model not found', parent_id=root.id, meta={'model_id': 'calc', 'done': True})
+        await post('Error: is a word I use', parent_id=root.id)
+        trigger = await post('try again', parent_id=root.id)
+        return await channels_router._model_context_messages(channel.id, trigger, 'thread')
+
+    history = asyncio.run(go())
+
+    assert [m.content for m in history] == ['What is 17 times 23?', 'Error: is a word I use']
 
 
 def test_a_failure_while_reporting_the_error_is_only_logged(monkeypatch, caplog):

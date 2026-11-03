@@ -42,4 +42,15 @@ describe('a model reply', () => {
 		expect(screen.queryByLabelText('Thinking')).toBeNull();
 		expect(screen.getByText('No response')).toBeTruthy();
 	});
+
+	it('shows only its files when it is done with files and no text', () => {
+		const message = {
+			...reply('', { model_id: 'calc', model_name: 'Calc', done: true }),
+			data: { files: [{ type: 'file', id: 'f1', name: 'answer.csv' }] }
+		} as ChannelMessage;
+		show(message);
+		expect(screen.queryByLabelText('Thinking')).toBeNull();
+		expect(screen.queryByText('No response')).toBeNull();
+		expect(screen.getByText('answer.csv')).toBeTruthy();
+	});
 });

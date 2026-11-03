@@ -1055,7 +1055,14 @@ async def _model_context_messages(
     )
     if replied_to and replied_to.channel_id == channel_id and replied_to.id not in {m.id for m in [*lead, *earlier]}:
         lead.append(replied_to)
-    return [m for m in [*lead, *earlier] if (m.content or '').strip() or not (m.meta or {}).get('model_id')]
+    return [m for m in [*lead, *earlier] if not _unanswered_model_reply(m)]
+
+
+def _unanswered_model_reply(message) -> bool:
+    """A model reply with no answer in it: still empty, or finished as an error (#329)."""
+    meta = message.meta or {}
+    content = (message.content or '').strip()
+    return bool(meta.get('model_id')) and (not content or (bool(meta.get('done')) and content.startswith('Error: ')))
 
 
 async def _fail_model_reply(channel_id: str, message_id: str, error: Exception) -> None:
@@ -1066,10 +1073,15 @@ async def _fail_model_reply(channel_id: str, message_id: str, error: Exception) 
     channel, which shows an empty model reply as "Thinking" for good. This goes
     through the channel emitter's own error path, which saves the reply and sends
     the update to the channel's room.
+
+    The reply is shown to every member of the channel, so only an HTTP error's
+    detail (what a chat shows its own user) is given; anything else is logged and
+    shown as a generic error. In a narrow race (Redis failing after the task has
+    started) the error text is shown until the task's first update replaces it.
     """
     from local_llm.socket import main as socket_main
 
-    detail = error.detail if isinstance(error, HTTPException) else str(error)
+    detail = str(error.detail) if isinstance(error, HTTPException) else 'An error occurred'
     try:
         emitter = await socket_main.get_event_emitter({'chat_id': f'channel:{channel_id}', 'message_id': message_id})
         if emitter:
