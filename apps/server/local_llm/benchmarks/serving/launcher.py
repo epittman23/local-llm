@@ -219,6 +219,7 @@ def telemetry_argv(
     interval: float = 5.0,
     wait: int = 600,
     profile_version_id: int | None = None,
+    server_pid: int | None = None,
 ) -> list[str]:
     """The `local_llm.benchmarks.serving.telemetry_recorder` argv for this run.
 
@@ -261,6 +262,10 @@ def telemetry_argv(
     ]
     if profile_version_id is not None:
         argv += ['--profile-version-id', str(profile_version_id)]
+    if server_pid is not None:
+        # Not part of the fingerprint: it says which process to record, not
+        # how the server computes (see the recorder's server_ready()).
+        argv += ['--server-pid', str(server_pid)]
     for line in lines:
         argv += ['--config-line', line]
     return argv
@@ -395,6 +400,7 @@ class ServeProcess:
             llama_build=build,
             server_log=str(self.server_log_path),
             profile_version_id=self.profile_version_id,
+            server_pid=self.server_proc.pid if self.server_proc is not None else None,
         )
         self.telemetry_proc = await asyncio.create_subprocess_exec(
             sys.executable,

@@ -119,6 +119,95 @@ def port_open(port: int) -> bool:
         return False
 
 
+def pid_alive(pid: int) -> bool:
+    """Whether `pid` is a live process: not gone, and not a zombie.
+
+    The recorder is not the server's parent, so an exited server can linger
+    as a zombie until the backend reaps it, and `kill(pid, 0)` alone would
+    still call it alive.
+    """
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    try:
+        with open(f'/proc/{pid}/stat') as f:
+            state = f.read().rsplit(')', 1)[1].split()[0]
+    except (OSError, IndexError):
+        return True
+    return state not in ('Z', 'X')
+
+
+def listening_inodes(port: int) -> set[str] | None:
+    """The socket inodes listening on `port`, from /proc/net/tcp and tcp6.
+
+    None when neither table can be read (no /proc), so a caller can tell
+    "nobody listens" from "cannot tell".
+    """
+    found: set[str] = set()
+    readable = False
+    for table in ('/proc/net/tcp', '/proc/net/tcp6'):
+        try:
+            with open(table) as f:
+                rows = f.readlines()[1:]
+        except OSError:
+            continue
+        readable = True
+        for row in rows:
+            fields = row.split()
+            if len(fields) < 10:
+                continue
+            local, state, inode = fields[1], fields[3], fields[9]
+            # 0A is TCP_LISTEN; the port is the hex after the last colon.
+            if state == '0A' and int(local.rsplit(':', 1)[1], 16) == port:
+                found.add(inode)
+    return found if readable else None
+
+
+def owns_listener(pid: int, port: int) -> bool | None:
+    """Whether process `pid` holds the socket listening on `port`.
+
+    None when that cannot be told: no /proc, or the process's descriptors
+    are not readable (another user's process).
+    """
+    inodes = listening_inodes(port)
+    if inodes is None:
+        return None
+    try:
+        fds = os.listdir(f'/proc/{pid}/fd')
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return None
+    for fd in fds:
+        try:
+            target = os.readlink(f'/proc/{pid}/fd/{fd}')
+        except OSError:
+            continue
+        if target.startswith('socket:[') and target[len('socket:[') : -1] in inodes:
+            return True
+    return False
+
+
+def server_ready(port: int, server_pid: int | None) -> bool:
+    """Whether the server this run is for answers on `port` (#156).
+
+    Something answering is not enough: an orphaned or hand-started server
+    can hold the port, the new one then fails to bind, and a run opened
+    against the old one files its telemetry under the new configuration.
+    With the server's pid, the port must be held by that process. Without
+    it (a hand-started recorder) or where ownership cannot be told, this is
+    the bare port check it always was.
+    """
+    if not port_open(port):
+        return False
+    if server_pid is None:
+        return True
+    return owns_listener(server_pid, port) is not False
+
+
 def sample_gpu() -> dict | None:
     """One nvidia-smi row. None when the query fails, so a transient failure
     skips a sample rather than writing a row of nulls that would drag every
@@ -407,9 +496,14 @@ def record(args: argparse.Namespace) -> int:
     # Wait for the server to bind its port before opening the run, so a run that
     # never came up leaves no row at all rather than an empty one.
     waited = 0
-    while not port_open(args.port):
+    while not server_ready(args.port, args.server_pid):
         if _stop:
             note('stopped before the server came up')
+            return 0
+        if args.server_pid is not None and not pid_alive(args.server_pid):
+            # Most often it could not bind because something else holds the
+            # port; recording that something would mislabel it (#156).
+            note(f'the server (pid {args.server_pid}) exited before it served port {args.port}; nothing recorded')
             return 0
         if waited >= args.wait:
             note(f'no server on port {args.port} after {args.wait}s; giving up')
@@ -518,6 +612,12 @@ def main() -> int:
         default=None,
         help='benchmark_profile_version.version_id this server was '
         'resolved from; NULL on the run when omitted (hand-started).',
+    )
+    ap.add_argument(
+        '--server-pid',
+        type=int,
+        default=None,
+        help='the llama-server process this run is for; the run opens only once that process holds the port',
     )
     ap.add_argument('--server-log', default=os.environ.get('LLAMA_SERVER_LOG', ''))
     ap.add_argument('--interval', type=float, default=float(os.environ.get('LLAMA_VRAM_INTERVAL', '5')))
