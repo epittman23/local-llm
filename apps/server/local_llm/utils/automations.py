@@ -685,18 +685,22 @@ async def execute_automation(app, automation: AutomationModel) -> None:
 
         # Call the full chat completion pipeline (same as POST /api/chat/completions).
         # The handler reference is stored on app.state to avoid circular imports.
-        # It returns once the reply is dispatched to a background task; that
-        # task records the run's outcome when the reply ends
-        # (finish_automation_run, from main._process_chat), so a model or
-        # provider failure reaches the run history (#264).
+        # It returns once the reply is dispatched to background tasks, so the
+        # run's outcome is recorded only once they end: a model or provider
+        # failure then reaches the run history (#264). This runs in the
+        # background itself, so waiting holds up no other automation.
         request = _build_request(app, token=token)
-        await app.state.CHAT_COMPLETION_HANDLER(request, form_data, user=user)
+        response = await app.state.CHAT_COMPLETION_HANDLER(request, form_data, user=user)
         await publish_event(
             app,
             EVENTS.AUTOMATION_RUN_STARTED,
             actor=user,
             subject_id=automation.id,
             data={'name': automation.name, 'chat_id': chat.id},
+        )
+        await _wait_for_reply(response)
+        await finish_automation_run(
+            app, user, {'automation_id': automation.id, 'chat_id': chat.id, 'message_id': assistant_msg_id}
         )
 
     except Exception as e:
@@ -796,13 +800,27 @@ async def _check_calendar_alerts(app) -> None:
             log.debug('Failed to send notification for calendar alert %s', event.id, exc_info=True)
 
 
+async def _wait_for_reply(response) -> None:
+    """Wait for the background tasks a chat completion dispatched to end.
+
+    The reply's own task reports its errors (on the message and to the chat),
+    so a task that failed or was cancelled is only waited for here.
+    """
+    from local_llm.tasks import tasks as running
+
+    task_ids = response.get('task_ids') if isinstance(response, dict) else None
+    pending = [running[t] for t in task_ids or [] if t in running]
+    if pending:
+        await asyncio.wait(pending)
+
+
 async def finish_automation_run(app, user, metadata: dict, error: str | None = None) -> None:
     """Record how an automation's reply ended, once it has (#264).
 
-    Called from main._process_chat for a reply that carries an automation id.
-    A reply that finished can still have failed: a provider error inside the
-    stream is saved on the message without raising, so the stored message is
-    checked too. Never raises: recording the outcome must not fail the reply.
+    The stored message says: the reply's task saves its error there, whether
+    the request failed or a provider error arrived inside the stream (which
+    does not raise), and a reply stopped part way stays not done. Never
+    raises: recording the outcome must not fail the run.
     """
     automation_id = metadata.get('automation_id')
     if not automation_id:
@@ -814,6 +832,8 @@ async def finish_automation_run(app, user, metadata: dict, error: str | None = N
             stored = (message or {}).get('error')
             if stored:
                 error = str(stored.get('content') if isinstance(stored, dict) else stored)[:4000] or 'The reply failed'
+            elif message is not None and not message.get('done'):
+                error = 'The reply did not finish'
         automation = await Automations.get_by_id(automation_id)
         name = automation.name if automation else ''
         status = 'error' if error else 'success'
@@ -840,8 +860,8 @@ async def finish_automation_run(app, user, metadata: dict, error: str | None = N
 async def _record_run(
     automation_id: str,
     status: str,
-    chat_id: str = None,
-    error: str = None,
+    chat_id: str | None = None,
+    error: str | None = None,
 ):
     """Insert a run record into automation_run."""
     async with get_async_db() as db:

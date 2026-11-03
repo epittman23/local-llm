@@ -3,9 +3,10 @@
 execute_automation awaited the chat handler, which only dispatches the reply
 to a background task, and then recorded the run as a success and published
 AUTOMATION_RUN_COMPLETED. A model or provider failure afterwards never
-reached the run history or the webhooks. The reply's task now records the
-outcome when the reply ends (main._process_chat calls
-finish_automation_run), and the dispatch publishes AUTOMATION_RUN_STARTED.
+reached the run history or the webhooks. The run now waits for the
+dispatched tasks (it runs in the background itself), then records the
+outcome from the stored message; the dispatch publishes
+AUTOMATION_RUN_STARTED.
 
 Run from apps/server:
 
@@ -17,7 +18,6 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
-from local_llm import main
 from local_llm.events import EVENTS
 from local_llm.utils import automations
 
@@ -82,46 +82,27 @@ def test_a_provider_error_saved_inside_the_stream_is_a_failure(monkeypatch):
     assert [p[0] for p in published] == [EVENTS.AUTOMATION_RUN_FAILED]
 
 
-def _process(monkeypatch, *, fails: bool):
-    finished: list[tuple] = []
+def test_a_reply_that_never_finished_is_a_failure(monkeypatch):
+    runs, _, _ = _finish(monkeypatch, stored_message={'done': False, 'content': 'half'})
 
-    async def finish(request, user, metadata, error=None):
-        finished.append((metadata.get('automation_id'), error))
-
-    async def process_chat_payload(request, form_data, user, metadata, model):
-        return form_data, metadata, []
-
-    async def no(*args, **kwargs):
-        return False
-
-    async def nothing(*args, **kwargs):
-        return None
-
-    async def completion(request, form_data, user):
-        return object()
-
-    async def process_chat_response(response, ctx):
-        if fails:
-            raise RuntimeError('upstream 500')
-        return {'status': True}
-
-    monkeypatch.setattr(main, '_finish_automation_run', finish)
-    monkeypatch.setattr(main, 'process_chat_payload', process_chat_payload)
-    monkeypatch.setattr(main, 'drain_approved_tool_calls', no)
-    monkeypatch.setattr(main, 'chat_completion_handler', completion)
-    monkeypatch.setattr(main, 'build_chat_response_context', nothing)
-    monkeypatch.setattr(main, 'process_chat_response', process_chat_response)
-    monkeypatch.setattr(main, '_report_chat_error', nothing)
-    for name in ('_disconnect_mcp_clients', '_end_chat_task', '_run_pending_internal_messages'):
-        monkeypatch.setattr(main, name, nothing)
-
-    asyncio.run(main._process_chat(SimpleNamespace(app=None), {}, USER, dict(METADATA), {}))
-    return finished
+    assert runs == [('auto-1', 'error', 'c1', 'The reply did not finish')]
 
 
-def test_the_reply_task_reports_a_finished_run_once(monkeypatch):
-    assert _process(monkeypatch, fails=False) == [('auto-1', None)]
+def test_the_run_waits_for_the_tasks_the_chat_dispatched(monkeypatch):
+    from local_llm import tasks as task_registry
 
+    order: list[str] = []
 
-def test_the_reply_task_reports_a_failed_run_once_with_its_error(monkeypatch):
-    assert _process(monkeypatch, fails=True) == [('auto-1', 'upstream 500')]
+    async def scenario():
+        async def reply():
+            await asyncio.sleep(0.05)
+            order.append('reply ended')
+
+        task = asyncio.create_task(reply())
+        monkeypatch.setitem(task_registry.tasks, 't1', task)
+        await automations._wait_for_reply({'status': True, 'task_ids': ['t1', 'gone']})
+        order.append('outcome recorded')
+
+    asyncio.run(scenario())
+
+    assert order == ['reply ended', 'outcome recorded']
