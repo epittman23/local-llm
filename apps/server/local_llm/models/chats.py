@@ -1236,21 +1236,32 @@ class ChatTable:
                 user_id = str(chat_item.user_id)
 
             if saved_message is not None:
-                await self._mirror_message_row(id, message_id, user_id, saved_message)
+                await self._mirror_message_row(
+                    id, message_id, user_id, saved_message, {'statusHistory': saved_message.get('statusHistory', [])}
+                )
             return updated_chat
         except Exception:
             return None
 
-    async def _mirror_message_row(self, chat_id: str, message_id: str, user_id: str, message: Any) -> None:
-        """Write a message changed in the chat JSON to its chat_message row too.
+    async def _mirror_message_row(
+        self, chat_id: str, message_id: str, user_id: str, message: Any, fields: dict
+    ) -> None:
+        """Write what changed in the chat JSON to the message's chat_message row too.
 
         Reads prefer the row (get_message_metadata, the messages map forks and
         compaction build from), so a writer that changed only the JSON was
-        invisible to them (#290). As in upsert_message_to_chat_by_id_and_message_id,
-        a failure here is logged and does not undo the JSON write.
+        invisible to them (#290). An existing row gets only `fields`: writing
+        the whole JSON message would also carry over its other fields (its
+        usage, or a `done` a later save already changed). A missing row is
+        created from the whole message. As in
+        upsert_message_to_chat_by_id_and_message_id, a failure here is logged
+        and does not undo the JSON write.
         """
         try:
-            await ChatMessages.upsert_message(message_id=message_id, chat_id=chat_id, user_id=user_id, data=message)
+            existing = await ChatMessages.get_message_by_id(f'{chat_id}-{message_id}')
+            await ChatMessages.upsert_message(
+                message_id=message_id, chat_id=chat_id, user_id=user_id, data=fields if existing else message
+            )
         except Exception as e:
             log.warning(f'Failed to write to chat_message table: {e}')
 
@@ -1291,7 +1302,10 @@ class ChatTable:
 
         # After the session closes, so the row write does not wait on this chat's lock.
         if saved_message is not None:
-            await self._mirror_message_row(id, message_id, user_id, self._clean_null_bytes(saved_message))
+            cleaned = self._clean_null_bytes(saved_message)
+            await self._mirror_message_row(
+                id, message_id, user_id, cleaned, {'files': self._clean_null_bytes(message_files)}
+            )
         return message_files
 
     async def insert_shared_chat_by_chat_id(self, chat_id: str, db: AsyncSession | None = None) -> ChatModel | None:
