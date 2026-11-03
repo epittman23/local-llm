@@ -275,7 +275,7 @@ from local_llm.utils.tools import set_terminal_servers, set_tool_servers
 
 if SAFE_MODE:
     print('SAFE MODE ENABLED')
-    # Functions.deactivate_all_functions() is awaited in lifespan below
+    # Functions are deactivated in lifespan, before its first published event
 
 logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
 log = logging.getLogger(__name__)
@@ -340,6 +340,16 @@ async def require_redis(client, attempts: int = 20, delay: float = 0.5):
     raise RuntimeError(f'Redis at REDIS_URL is not reachable: {last_error}')
 
 
+async def _enter_safe_mode() -> None:
+    """Deactivate every function, or refuse to start: SAFE_MODE with them still active would run them."""
+    if await Functions.deactivate_all_functions() is not True:
+        raise RuntimeError(
+            'SAFE_MODE is set but the functions could not be deactivated, so startup stops rather than run them. '
+            'Check the database, or start without SAFE_MODE.'
+        )
+    log.warning('SAFE_MODE: every function is deactivated')
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Store reference to main event loop for sync->async calls (e.g., embedding generation)
@@ -370,6 +380,10 @@ async def lifespan(app: FastAPI):
     await seed_registered_defaults()
     await initialize_runtime_config(app)
     await migrate_legacy_webhook_config()
+    if SAFE_MODE:
+        # Before the first published event: publishing dispatches event
+        # functions, which SAFE_MODE exists to keep from running (#361).
+        await _enter_safe_mode()
     await publish_event(app, EVENTS.SYSTEM_STARTUP_STARTED, source='system')
 
     # Create admin account from env vars if specified and no users exist
@@ -377,9 +391,6 @@ async def lifespan(app: FastAPI):
         if await create_admin_user(LLLM_ADMIN_EMAIL, LLLM_ADMIN_PASSWORD, LLLM_ADMIN_NAME):
             # Disable signup since we now have an admin
             await Config.upsert({'ui.enable_signup': False})
-
-    if SAFE_MODE:
-        await Functions.deactivate_all_functions()
 
     # This should be blocking (sync) so functions are not deactivated on first /get_models calls
     # when the first user lands on the / route.
