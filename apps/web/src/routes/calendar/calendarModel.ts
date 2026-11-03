@@ -162,13 +162,17 @@ export function eventFields(
 	now = new Date()
 ): EventFields {
 	if (event) {
+		// The grids read an end as exclusive, so an all-day event that ends at
+		// midnight (as one made in chat can) ends on the day before it; the
+		// form, which saves an all-day end as 23:59 of its date, shows that day.
+		const lastAllDayMoment = event.all_day && event.end_at && event.end_at > event.start_at ? event.end_at - NS : null;
 		return {
 			title: event.title,
 			description: event.description || '',
 			calendarId: event.calendar_id,
 			startDate: nsToDate(event.start_at),
 			startTime: nsToTime(event.start_at),
-			endDate: event.end_at ? nsToDate(event.end_at) : '',
+			endDate: lastAllDayMoment ? nsToDate(lastAllDayMoment) : event.end_at ? nsToDate(event.end_at) : '',
 			endTime: event.end_at ? nsToTime(event.end_at) : '',
 			allDay: event.all_day,
 			location: event.location || '',

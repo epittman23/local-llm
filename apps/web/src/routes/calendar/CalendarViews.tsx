@@ -211,6 +211,8 @@ export function CalendarViews({
 								return (
 									<div
 										key={day.toISOString()}
+										role="group"
+										aria-label={day.toDateString()}
 										className="flex min-w-0 flex-col gap-0.5 border-l border-border/50 p-0.5"
 									>
 										{shown.map(bandChip)}

@@ -73,6 +73,12 @@ describe('day and week grids', () => {
 		const band = screen.getByRole('region', { name: 'All-day and continuing events' });
 		// Vacation is on all seven days (18 to 24 Oct); Monday 19 Oct has four trips too.
 		expect(within(band).getAllByRole('button', { name: 'Vacation' })).toHaveLength(7);
+		const monday = within(band).getByRole('group', { name: new Date(2026, 9, 19).toDateString() });
+		expect(
+			within(monday)
+				.getAllByRole('button')
+				.map((b) => b.textContent)
+		).toEqual(['Vacation', 'Trip 1', 'Trip 2', '+2 more']);
 		fireEvent.click(within(band).getByRole('button', { name: '+2 more' }));
 		expect(onOpenDay).toHaveBeenCalledWith(new Date(2026, 9, 19));
 	});

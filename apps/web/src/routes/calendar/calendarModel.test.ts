@@ -79,6 +79,16 @@ describe('placing events', () => {
 		expect(eventsInHour([e], at(2026, 8, 1), 9)).toEqual([e]);
 		expect(eventsInHour([e], at(2026, 8, 1), 10)).toEqual([]);
 	});
+	it('an event that ends at or before its start is on its start day only', () => {
+		for (const end of [at(2026, 8, 1, 22), at(2026, 8, 1, 21)]) {
+			const e = ev(at(2026, 8, 1, 22), end);
+			expect(Object.keys(eventsByDay([e]))).toEqual([String(at(2026, 8, 1).getTime())]);
+		}
+	});
+	it('an occurrence carried over from the day before is in the band', () => {
+		const e = ev(at(2026, 8, 1, 23), at(2026, 8, 2, 1), { rrule: 'FREQ=DAILY', instance_id: 'x_1' });
+		expect(bandEvents(eventsByDay([e]), at(2026, 8, 2))).toEqual([e]);
+	});
 	it('an event that ends at midnight is not on the next day', () => {
 		const e = ev(at(2026, 8, 1, 22), at(2026, 8, 2));
 		expect(Object.keys(eventsByDay([e]))).toEqual([String(at(2026, 8, 1).getTime())]);
@@ -104,6 +114,16 @@ describe('placing events', () => {
 });
 
 describe('event form', () => {
+	it('an all-day event ending at midnight shows the day before as its end', () => {
+		const chat = ev(at(2026, 9, 20), at(2026, 9, 21), { all_day: true });
+		expect(eventFields(chat, '', null).endDate).toBe('2026-10-20');
+		// Saved unchanged, it stays on the one day.
+		expect(eventPayload(eventFields(chat, '', null), chat)).toMatchObject({
+			form: { start_at: ns(at(2026, 9, 20)), end_at: ns(at(2026, 9, 20, 23, 59)) }
+		});
+		const form = ev(at(2026, 9, 20), at(2026, 9, 21, 23, 59), { all_day: true });
+		expect(eventFields(form, '', null).endDate).toBe('2026-10-21');
+	});
 	it('a new event is one hour from the clicked time', () => {
 		const f = eventFields(null, 'cal', ns(at(2026, 8, 1, 9)));
 		expect(f).toMatchObject({
