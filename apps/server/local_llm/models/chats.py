@@ -1233,7 +1233,7 @@ class ChatTable:
                 flag_modified(chat_item, 'chat')
                 await session.commit()
                 updated_chat = ChatModel.model_validate(chat_item)
-                user_id = chat_item.user_id
+                user_id = str(chat_item.user_id)
 
             if saved_message is not None:
                 await self._mirror_message_row(id, message_id, user_id, saved_message)
@@ -1241,7 +1241,7 @@ class ChatTable:
         except Exception:
             return None
 
-    async def _mirror_message_row(self, chat_id: str, message_id: str, user_id: str, message: dict) -> None:
+    async def _mirror_message_row(self, chat_id: str, message_id: str, user_id: str, message: Any) -> None:
         """Write a message changed in the chat JSON to its chat_message row too.
 
         Reads prefer the row (get_message_metadata, the messages map forks and
@@ -1287,7 +1287,7 @@ class ChatTable:
             flag_modified(chat_item, 'chat')
             chat_item.updated_at = int(time.time())
             await session.commit()
-            user_id = chat_item.user_id
+            user_id = str(chat_item.user_id)
 
         # After the session closes, so the row write does not wait on this chat's lock.
         if saved_message is not None:
