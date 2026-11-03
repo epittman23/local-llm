@@ -133,6 +133,37 @@ def test_a_cancel_during_teardown_still_stops_the_server(monkeypatch):
     assert rows == [DONE]
 
 
+def test_a_visit_that_is_not_stopped_closes_as_done(monkeypatch):
+    events: list[str] = []
+
+    async def scenario():
+        release = asyncio.Event()
+        release.set()
+
+        async def context(*args, **kwargs):
+            return {'config_id': None, 'run_id': 1}
+
+        async def run_items(*args, **kwargs):
+            return None
+
+        async def rows_for(lo, hi, cand):
+            return [{'benchmark': 'b', 'item_id': 'i'}]
+
+        monkeypatch.setattr(tune, 'Server', _fake_server(events, asyncio.Event(), release))
+        monkeypatch.setattr(tune.runner, 'context', context)
+        monkeypatch.setattr(tune.runner, 'run_items', run_items)
+        sweep = _sweep()
+        sweep.rows_for = rows_for
+        rows = _record_visit_rows(monkeypatch)
+        return await sweep.visit(CAND, 1, 0, 1), rows
+
+    summary, rows = asyncio.run(scenario())
+
+    assert summary == {'status': 'done', 'items': 0, 'drift': None, 'visit_id': 7}
+    assert events == ['start', 'stop started', 'stop finished']
+    assert rows == [DONE]
+
+
 def test_a_cancel_in_the_tick_the_teardown_ends_is_not_lost(monkeypatch):
     events, sweep, rows = _visit_in_teardown(monkeypatch, same_tick=True)
 
@@ -299,7 +330,7 @@ def _finish_with_open_rows(monkeypatch, ended_reason: str) -> tuple[list, list]:
 def test_an_interrupted_sweep_closes_the_rows_it_left_open(monkeypatch):
     visits, pauses = _finish_with_open_rows(monkeypatch, 'interrupted')
 
-    assert visits == [(2, {'status': 'aborted', 'reason': 'interrupted'})]
+    assert visits == [(2, {'status': 'aborted', 'reason': tune.LEFT_OPEN})]
     assert pauses == [(6, 'abandoned')]
 
 

@@ -264,6 +264,11 @@ async def _uncancellable(aw) -> None:
     task.result()
 
 
+# The reason close_open_rows() gives a visit nothing else closed. Its server
+# may have outlived the teardown, so guard_port() treats it as an orphan.
+LEFT_OPEN = 'left open by a stop'
+
+
 def latest_pause_abandoned(pauses: list[dict]) -> bool:
     """Whether resuming must re-probe the card first.
 
@@ -881,7 +886,11 @@ class Sweep:
         if not await port_busy(self.port, self.session):
             return
         visits = await BenchmarkTuneVisits.sweep_visits(self.sweep_id)
-        orphans = [v for v in visits if v.status == 'running' or (v.status == 'aborted' and v.reason == 'tuner gone')]
+        orphans = [
+            v
+            for v in visits
+            if v.status == 'running' or (v.status == 'aborted' and v.reason in ('tuner gone', LEFT_OPEN))
+        ]
         killed_one = False
         for orphan in orphans:
             if orphan.server_pgid:
@@ -1023,7 +1032,13 @@ class Sweep:
                 # the end (#138): its items are graded and committed, so it
                 # still closes as what it was, then the cancellation goes on.
                 if measured:
-                    await _uncancellable(self.close_done(visit_id, records, drift))
+                    try:
+                        await _uncancellable(self.close_done(visit_id, records, drift))
+                    except Exception:
+                        # The stop must still reach finish(): execute() and
+                        # resume_sweep() catch only CancelledError, and
+                        # close_open_rows() closes this visit instead.
+                        log.exception('could not close visit %s while stopping', visit_id)
                 raise
             finally:
                 self.serve_seconds += time.time() - t0
@@ -1501,11 +1516,13 @@ class Sweep:
         sweep, and reclaim_stale_sweeps() skips closed sweeps, so a row left
         open here would read 'running' forever. Rows close as
         reclaim_stale_sweeps() closes a dead tuner's: a visit as 'aborted', a
-        pause as 'abandoned'.
+        pause as 'abandoned'. The visit's reason, LEFT_OPEN, tells
+        guard_port() that its server may have outlived the teardown, as a
+        dead tuner's 'tuner gone' does.
         """
         for visit in await BenchmarkTuneVisits.sweep_visits(self.sweep_id):
             if visit.status == 'running':
-                await BenchmarkTuneVisits.close_visit(visit.visit_id, status='aborted', reason='interrupted')
+                await BenchmarkTuneVisits.close_visit(visit.visit_id, status='aborted', reason=LEFT_OPEN)
         for pause in await BenchmarkTunePauses.sweep_pauses(self.sweep_id):
             if pause['resolution'] is None:
                 await BenchmarkTunePauses.close_pause(pause['pause_id'], resolution='abandoned')
