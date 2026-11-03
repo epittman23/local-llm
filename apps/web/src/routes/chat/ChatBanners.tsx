@@ -1,11 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
-import { ExternalLink, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useState } from 'react';
 import { SafeMarkdown } from '@/components/common/SafeMarkdown';
 import { getBanners } from '@/lib/apis/configs';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
-import { bannerLink, bannerList, readDismissedBannerIds, rememberDismissedBanner, visibleBanners } from './banners';
+import {
+	bannerList,
+	closedBannerIds,
+	readDismissedBannerIds,
+	rememberDismissedBanner,
+	visibleBanners
+} from './banners';
 
 const TYPE_CLASSES: Record<string, string> = {
 	info: 'bg-blue-500/20 text-blue-700 dark:text-blue-200',
@@ -18,7 +24,8 @@ const TYPE_CLASSES: Record<string, string> = {
  * Ports d863707:apps/openwebui/src/lib/components/common/Banner.svelte and its
  * use in chat/Navbar.svelte (#243): the banners an admin sets in Settings >
  * General, above a new chat. Closing a dismissible one is remembered in this
- * browser; any other closes until the page is reloaded, as in the original.
+ * browser; any other stays closed until the page is reloaded, as in the
+ * original.
  */
 export function ChatBanners() {
 	const token = useAuthStore((s) => s.token) ?? '';
@@ -29,20 +36,28 @@ export function ChatBanners() {
 		staleTime: 60_000
 	});
 	const [dismissed, setDismissed] = useState(readDismissedBannerIds);
-	const [closed, setClosed] = useState<string[]>([]);
+	const [closed, setClosed] = useState(() => [...closedBannerIds]);
 	const all = banners.data ?? [];
 	const shown = visibleBanners(all, dismissed, closed);
 	if (shown.length === 0) return null;
 
+	const close = (id: string, dismissible: boolean | undefined) => {
+		if (dismissible) {
+			setDismissed(rememberDismissedBanner(id, all));
+		} else {
+			closedBannerIds.add(id);
+			setClosed([...closedBannerIds]);
+		}
+	};
+
 	return (
-		<section aria-label="Announcements" className="mx-auto flex w-full max-w-3xl flex-col gap-1 px-4 pt-2">
+		<ul aria-label="Announcements" className="mx-auto flex w-full max-w-3xl flex-col gap-1 px-4 pt-2">
 			{shown.map((banner) => {
 				const type = (banner.type || 'info').toLowerCase();
-				const link = bannerLink(banner.url);
+				const contentId = `banner-${banner.id}`;
 				return (
-					<div
+					<li
 						key={banner.id}
-						role="status"
 						className="flex items-start gap-2 rounded-lg border px-2 py-1 text-xs"
 						data-testid="chat-banner"
 					>
@@ -51,33 +66,21 @@ export function ChatBanners() {
 						>
 							{banner.type || 'info'}
 						</span>
-						<SafeMarkdown text={banner.content} className="max-h-60 min-w-0 flex-1 overflow-y-auto" />
-						{link && (
-							<a
-								href={link}
-								target="_blank"
-								rel="noopener noreferrer"
-								className="inline-flex shrink-0 items-center gap-1 underline"
-							>
-								Details
-								<ExternalLink className="size-3" aria-hidden />
-							</a>
-						)}
+						<div id={contentId} className="min-w-0 flex-1">
+							<SafeMarkdown text={banner.content} className="max-h-60 overflow-y-auto" />
+						</div>
 						<button
 							type="button"
-							aria-label="Close Banner"
+							aria-label={`Close ${type} banner`}
+							aria-describedby={contentId}
 							className="text-muted-foreground hover:text-foreground shrink-0"
-							onClick={() =>
-								banner.dismissible
-									? setDismissed(rememberDismissedBanner(banner.id, all))
-									: setClosed((ids) => [...ids, banner.id])
-							}
+							onClick={() => close(banner.id, banner.dismissible)}
 						>
 							<X className="size-3.5" />
 						</button>
-					</div>
+					</li>
 				);
 			})}
-		</section>
+		</ul>
 	);
 }

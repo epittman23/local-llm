@@ -14,7 +14,7 @@ const BANNERS = [
 	}
 ];
 
-test('banners show above a new chat; a dismissible one stays dismissed, another closes until reload (#243)', async ({
+test('banners show above a new chat; a dismissible one stays dismissed, another stays closed until reload (#243)', async ({
 	page
 }) => {
 	await mockChat(page);
@@ -24,13 +24,9 @@ test('banners show above a new chat; a dismissible one stays dismissed, another 
 	await expect(banners).toHaveCount(2);
 	await expect(banners.nth(0)).toContainText('Maintenance tonight');
 	await expect(banners.nth(0).locator('strong')).toHaveText('tonight');
-	await expect(banners.nth(1).getByRole('link', { name: 'Details' })).toHaveAttribute(
-		'href',
-		'https://example.com/notes'
-	);
 
-	await banners.nth(0).getByRole('button', { name: 'Close Banner' }).click();
-	await banners.nth(0).getByRole('button', { name: 'Close Banner' }).click();
+	await page.getByRole('button', { name: 'Close warning banner' }).click();
+	await page.getByRole('button', { name: 'Close info banner' }).click();
 	await expect(banners).toHaveCount(0);
 
 	await page.reload();

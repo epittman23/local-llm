@@ -17,13 +17,15 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
   the original's chat navbar did, and not inside an existing chat.
   - **Closing:** a dismissible banner stays dismissed in this browser
     (`localStorage` `dismissedBannerIds`, the original's key, pruned to
-    banners that still exist). Any other banner closes until the page is
-    reloaded, as in the original.
-  - **Safety:** content goes through `SafeMarkdown`. A "Details" link
-    goes to the banner's URL, and only when it is http(s); the original's links
-    ignored the URL.
-  - **Not ported:** the license-trial and seat banners, which have no
-    licence system here.
+    banners that still exist). Any other banner stays closed until the page
+    is reloaded, across new chats, as in the original.
+  - **Safety:** content goes through `SafeMarkdown`.
+  - **Refresh:** saving General refreshes the list, so an admin sees the
+    saved banners at once.
+  - **Not ported:**
+    - the "Learn More" link: the backend's `BannerModel` has no URL and
+      the editor has no field for one;
+    - the license-trial and seat banners: there is no license system here.
 - **2026-10-25** (evening): **LiveCodeBench added, with a per-run
   release-date window.** This is PR 2 of `docs/plans/benchmark-upgrade.md`.
 

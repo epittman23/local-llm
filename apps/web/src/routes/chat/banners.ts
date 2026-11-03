@@ -43,13 +43,8 @@ export function rememberDismissedBanner(
 export const visibleBanners = (banners: Banner[], dismissed: string[], closed: string[]) =>
 	banners.filter((b) => !dismissed.includes(b.id) && !closed.includes(b.id));
 
-/** A banner's "Learn More" link, only when it is an http(s) URL. */
-export function bannerLink(url: string | undefined): string | null {
-	if (!url) return null;
-	try {
-		const parsed = new URL(url);
-		return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.href : null;
-	} catch {
-		return null;
-	}
-}
+/**
+ * Banners closed on this page that are not dismissible: they stay closed
+ * until the page is reloaded, across new chats, as in the original.
+ */
+export const closedBannerIds = new Set<string>();

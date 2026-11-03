@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import type { Banner } from '@/lib/types';
 import {
 	DISMISSED_BANNERS_KEY,
-	bannerLink,
 	bannerList,
 	readDismissedBannerIds,
 	rememberDismissedBanner,
@@ -65,14 +64,5 @@ describe('visibleBanners', () => {
 	it('hides the dismissed and the closed', () => {
 		const all = [banner('a'), banner('b'), banner('c')];
 		expect(visibleBanners(all, ['a'], ['c']).map((b) => b.id)).toEqual(['b']);
-	});
-});
-
-describe('bannerLink', () => {
-	it('links only to http(s)', () => {
-		expect(bannerLink('https://example.com/notes')).toBe('https://example.com/notes');
-		expect(bannerLink('javascript:alert(1)')).toBeNull();
-		expect(bannerLink('not a url')).toBeNull();
-		expect(bannerLink(undefined)).toBeNull();
 	});
 });
