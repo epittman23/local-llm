@@ -447,6 +447,17 @@ async def query_doc_with_native_hybrid_search(
             return None
 
         documents = _search_result_to_documents(result)
+        if not documents and hybrid_bm25_weight >= 1:
+            # Keywords only, and no chunk had them all: vector search answers,
+            # rather than chat getting no context at all (#347).
+            vector_result = await ASYNC_VECTOR_DB_CLIENT.hybrid_search(
+                collection_name=collection_name,
+                query=query,
+                vectors=[await embedding_function(query, RAG_EMBEDDING_QUERY_PREFIX)],
+                limit=k,
+                hybrid_bm25_weight=0.0,
+            )
+            documents = _search_result_to_documents(vector_result) if vector_result else []
         if not documents:
             return {'distances': [[]], 'documents': [[]], 'metadatas': [[]]}
 

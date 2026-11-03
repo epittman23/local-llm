@@ -6,7 +6,7 @@ import logging
 import time
 
 from pydantic import BaseModel, ConfigDict, model_validator
-from sqlalchemy import JSON, BigInteger, Column, String, Text, delete, func, select
+from sqlalchemy import JSON, BigInteger, Column, String, Text, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # local imports
@@ -116,6 +116,11 @@ class FileUpdateForm(BaseModel):
     hash: str | None = None
     data: dict | None = None
     meta: dict | None = None
+
+
+# A file whose processing has not ended: the knowledge base page lists these
+# as uploading. Shared by the queries below.
+_STILL_PROCESSING = File.data['status'].as_string().in_(['pending', 'processing'])
 
 
 class FilesTable:
@@ -405,6 +410,33 @@ class FilesTable:
             except Exception:
                 return None
 
+    async def fail_interrupted_processing(self, db: AsyncSession | None = None) -> int:
+        """Mark every file still pending or processing as failed, for startup (#309).
+
+        Processing runs as an in-memory background task, so in a
+        single-process backend none is running at startup; a file left in
+        either status was cut off by a restart and would show as uploading
+        forever. With several workers, one starting late would fail another's
+        live upload; this app runs one. Returns how many were marked.
+        """
+        async with get_async_db_context(db) as db:
+            try:
+                result = await db.execute(select(File.id, File.data).filter(_STILL_PROCESSING))
+                rows = result.all()
+                now = int(time.time())
+                for file_id, data in rows:
+                    failed = {
+                        **(data or {}),
+                        'status': 'failed',
+                        'error': 'Processing was interrupted by a backend restart; upload it again.',
+                    }
+                    await db.execute(update(File).where(File.id == file_id).values(data=failed, updated_at=now))
+                await db.commit()
+                return len(rows)
+            except Exception as e:
+                log.warning(f'Error marking interrupted uploads failed: {e}')
+                return 0
+
     async def get_pending_files_for_knowledge(
         self, knowledge_id: str, db: AsyncSession | None = None
     ) -> list[FileModelResponse]:
@@ -432,7 +464,7 @@ class FilesTable:
                     select(File)
                     .filter(
                         File.meta['data']['knowledge_id'].as_string() == knowledge_id,
-                        File.data['status'].as_string().in_(['pending', 'processing']),
+                        _STILL_PROCESSING,
                         File.id.notin_(linked_ids),
                     )
                     .order_by(File.created_at.desc())
