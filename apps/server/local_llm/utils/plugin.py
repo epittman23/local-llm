@@ -301,7 +301,14 @@ async def load_tool_module_by_id(tool_id, content=None):
         await aiofiles.os.remove(temp_file.name)
 
 
-async def load_function_module_by_id(function_id: str, content: str | None = None):
+async def load_function_module_by_id(function_id: str, content: str | None = None, deactivate_on_error: bool = True):
+    """Load a function's module and its object (Pipe, Filter, Action or Event).
+
+    A runtime load of stored code that fails switches the stored function off. The
+    create, update and sync routes check new code instead, and pass
+    ``deactivate_on_error=False``: a rejected edit must leave the stored function as it
+    was, not off behind an error that says nothing changed (#302).
+    """
     if not ENABLE_PLUGINS:
         raise RuntimeError('Plugins are disabled by ENABLE_PLUGINS=false')
 
@@ -356,7 +363,8 @@ async def load_function_module_by_id(function_id: str, content: str | None = Non
         # Cleanup by removing the module in case of error
         del sys.modules[module_name]
 
-        await Functions.update_function_by_id(function_id, {'is_active': False})
+        if deactivate_on_error:
+            await Functions.update_function_by_id(function_id, {'is_active': False})
         raise e
     finally:
         await aiofiles.os.remove(temp_file.name)
