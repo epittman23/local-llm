@@ -417,6 +417,21 @@ async def _set_terminal_cwd(app, server_id: str, user, cwd: str, chat_id: str) -
         log.warning(f'Failed to set terminal CWD: {e}')
 
 
+async def _announce_run(app, user, automation: AutomationModel, chat_id: str) -> None:
+    """Publish AUTOMATION_RUN_STARTED, once per run and before its reply is dispatched (#264).
+
+    Both a scheduled and a manual run, into a chat or a channel, come through
+    here, so the router publishes nothing itself.
+    """
+    await publish_event(
+        app,
+        EVENTS.AUTOMATION_RUN_STARTED,
+        actor=user,
+        subject_id=automation.id,
+        data={'name': automation.name, 'chat_id': chat_id},
+    )
+
+
 async def _execute_channel_automation(
     app,
     automation: AutomationModel,
@@ -497,6 +512,7 @@ async def _execute_channel_automation(
     if filter_ids:
         form_data['filter_ids'] = filter_ids
 
+    await _announce_run(app, user, automation, f'channel:{channel.id}')
     await app.state.CHAT_COMPLETION_HANDLER(request, form_data, user=user)
 
     from local_llm.socket.main import sio
@@ -691,13 +707,7 @@ async def execute_automation(app, automation: AutomationModel) -> None:
         # background itself, so waiting holds up no other automation.
         # Started before the dispatch, so a reply that fails at once still
         # reads started, then failed. A manual run is announced here too.
-        await publish_event(
-            app,
-            EVENTS.AUTOMATION_RUN_STARTED,
-            actor=user,
-            subject_id=automation.id,
-            data={'name': automation.name, 'chat_id': chat.id},
-        )
+        await _announce_run(app, user, automation, chat.id)
         request = _build_request(app, token=token)
         response = await app.state.CHAT_COMPLETION_HANDLER(request, form_data, user=user)
         await _wait_for_reply(response)

@@ -119,3 +119,61 @@ def test_an_empty_error_is_still_a_failure_with_a_reason(monkeypatch):
     runs, _, _ = _finish(monkeypatch, stored_message={'done': True, 'error': {'content': None}})
 
     assert runs == [('auto-1', 'error', 'c1', 'The reply failed')]
+
+
+def test_a_channel_run_is_announced_before_its_reply_is_dispatched(monkeypatch):
+    # The router no longer publishes AUTOMATION_RUN_STARTED for a manual run,
+    # so the channel path, which returns before the chat path's announcement,
+    # announces its own run.
+    order: list[str] = []
+    published: list[tuple] = []
+
+    async def config_get(key, default=None):
+        return True if key == 'channels.enable' else default
+
+    async def model_defaults(app, model_id, user=None, token=None):
+        return None, None, None, None
+
+    async def new_message_handler(request, channel_id, form, user, db):
+        return SimpleNamespace(id='m1', parent_id=None), SimpleNamespace(id='ch1')
+
+    class _Db:
+        async def __aenter__(self):
+            return None
+
+        async def __aexit__(self, *exc):
+            return False
+
+    async def publish(app, event, **kwargs):
+        order.append('published')
+        published.append((event, kwargs['data']))
+
+    async def handler(request, form_data, user=None):
+        order.append('dispatched')
+
+    async def record_run(*args, **kwargs):
+        pass
+
+    async def emit(*args, **kwargs):
+        pass
+
+    from local_llm.routers import channels
+    from local_llm.socket import main as socket_main
+
+    monkeypatch.setattr(automations.Config, 'get', config_get)
+    monkeypatch.setattr(automations, '_resolve_model_defaults', model_defaults)
+    monkeypatch.setattr(automations, '_build_request', lambda app, token=None: None)
+    monkeypatch.setattr(automations, 'get_async_db', _Db)
+    monkeypatch.setattr(channels, 'new_message_handler', new_message_handler)
+    monkeypatch.setattr(automations, 'publish_event', publish)
+    monkeypatch.setattr(automations, '_record_run', record_run)
+    monkeypatch.setattr(socket_main.sio, 'emit', emit)
+
+    app = SimpleNamespace(state=SimpleNamespace(MODELS={}, CHAT_COMPLETION_HANDLER=handler))
+    automation = SimpleNamespace(id='auto-1', name='Daily digest', user_id='u1', data={'target': {'channel_id': 'ch1'}})
+    user = SimpleNamespace(id='u1', name='Eli')
+
+    asyncio.run(automations._execute_channel_automation(app, automation, user, 'hi', 'm', 'tok'))
+
+    assert order[:2] == ['published', 'dispatched']
+    assert published[0] == (EVENTS.AUTOMATION_RUN_STARTED, {'name': 'Daily digest', 'chat_id': 'channel:ch1'})
