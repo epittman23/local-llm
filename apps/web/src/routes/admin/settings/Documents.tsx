@@ -41,6 +41,7 @@ import {
 	embeddingError,
 	embeddingModelFor,
 	ragFormError,
+	ragSaveOutcome,
 	rerankingModelFor,
 	toEmbeddingForm,
 	toRagForm
@@ -159,7 +160,10 @@ export default function Documents() {
 		try {
 			// Bypassing retrieval means there is no embedding model to keep in step.
 			if (!rag.BYPASS_EMBEDDING_AND_RETRIEVAL && !(await applyEmbedding())) return;
-			await updateRAGConfig(token, buildRagPayload(rag));
+			const res = await updateRAGConfig(token, buildRagPayload(rag));
+			const { warnings, changes } = ragSaveOutcome(rag, res);
+			if (Object.keys(changes).length) setRag(changes);
+			for (const warning of warnings) toast.warning(warning, { duration: 15000 });
 			await saved();
 		} catch (error) {
 			toast.error(`${error}`);
