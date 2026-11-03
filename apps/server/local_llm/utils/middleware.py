@@ -3469,7 +3469,8 @@ async def drain_approved_tool_calls(request, form_data, user, model, metadata) -
             # images again, resolved as the normal path resolves them: the
             # stored history alone has neither (#164). What the normal path
             # adds to the user message itself (retrieved context by default,
-            # file tags) is still rebuilt from the stored history only.
+            # file tags, stripped skill mentions) is still missing: the user
+            # message is rebuilt from the stored history alone.
             system_message = get_system_message(form_data.get('messages', []))
             _inline_message_images(db_messages)
             replayed = process_messages_with_output(
