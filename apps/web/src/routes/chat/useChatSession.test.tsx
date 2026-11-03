@@ -327,8 +327,9 @@ describe('useChatSession chat documents (#160)', () => {
 		await act(async () => void (await session.submit('next', [], 'm')));
 
 		await waitFor(() => expect(send).toHaveBeenCalled());
-		const body = send.mock.calls.at(-1)![1] as { files?: unknown };
-		expect(body.files).toBeUndefined();
+		const body = send.mock.calls.at(-1)?.[1] as { files?: unknown } | undefined;
+		expect(body).toBeDefined();
+		expect(body?.files).toBeUndefined();
 		expect(session.chatFiles).toEqual([]);
 	});
 });
