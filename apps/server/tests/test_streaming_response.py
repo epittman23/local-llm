@@ -1122,6 +1122,8 @@ def _stream_response(lines, log, name, background=False, aclose=None):
         for line in lines:
             if line == 'CANCEL':
                 raise asyncio.CancelledError()
+            if line == 'RESET':
+                raise ConnectionResetError('upstream closed the connection')
             yield line
 
     content = _LineIterator(lines, log, aclose) if aclose else body()
@@ -1466,3 +1468,52 @@ def test_an_error_detail_on_the_choice_is_kept(monkeypatch):
     observed = _run([[chunk('Half'), on_choice, DONE]], {'chat_id': SAVED_CHAT}, {}, {}, None, monkeypatch)
 
     assert {'error': {'message': 'upstream 503'}} in _emitted(observed)
+
+
+def test_an_upstream_failure_mid_stream_keeps_the_partial_reply(monkeypatch):
+    """#163: the body iterator raising (a reset connection) once lost everything streamed.
+
+    Only a cancellation was handled around it, so nothing saved the text
+    the user had watched arrive, and the stream snapshot was never cleared.
+    The partial reply is now saved, finished, and the error still propagates
+    to the caller, which records it on the message and tells the chat.
+    """
+    log = []
+    _install(monkeypatch, {}, log, [])
+    ctx = _ctx({}, {'chat_id': SAVED_CHAT}, {}, None, log)
+    response = _stream_response([chunk('The answer is'), 'RESET'], log, 'first')
+
+    with pytest.raises(ConnectionResetError):
+        asyncio.run(middleware.streaming_chat_response_handler(response, ctx))
+
+    saved = [c[2] for c in log if c[0] == 'chats.upsert_message']
+    assert any(s.get('done') is True and 'The answer is' in json.dumps(s.get('output')) for s in saved)
+    assert any(c[0] == 'clear_response_stream' for c in log)
+    # The caller reports the error; this path does not announce a cancel.
+    assert not [c for c in log if c[0] == 'emit' and c[1].get('type') == 'chat:tasks:cancel']
+
+
+def test_a_failure_after_the_reply_finished_does_not_save_it_again(monkeypatch):
+    """#163 handles the stream only: a later failure must not overwrite the finished save.
+
+    _finish() has already saved the reply and run the outlet filters (which
+    may have edited it); saving the pre-filter output again would undo that.
+    """
+    log = []
+    _install(monkeypatch, {}, log, [])
+
+    async def failing_background(ctx):
+        raise RuntimeError('title model is gone')
+
+    monkeypatch.setattr(middleware, 'background_tasks_handler', failing_background)
+    ctx = _ctx({}, {'chat_id': SAVED_CHAT}, {}, None, log)
+    response = _stream_response([chunk('All done.'), DONE], log, 'first')
+
+    try:
+        asyncio.run(middleware.streaming_chat_response_handler(response, ctx))
+    except RuntimeError:
+        pass
+
+    done_saves = [c for c in log if c[0] == 'chats.upsert_message' and c[2].get('done') is True]
+    assert len(done_saves) == 1
+    assert len([c for c in log if c[0] == 'clear_response_stream']) == 1
