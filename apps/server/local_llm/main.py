@@ -1905,6 +1905,14 @@ async def chat_completion(
 
     # Fan out: one task per model
     if metadata.get('session_id') and metadata.get('chat_id'):
+        if missing_base_model and model_id:
+            # The fallback chosen above, for the copy that asked for the broken
+            # preset; the fan-out reads its models from message_ids, which still
+            # name the preset (#360). The chat record above keeps the preset.
+            message_ids = [
+                {**entry, 'model_id': model['id']} if entry.get('model_id') == model_id else entry
+                for entry in message_ids
+            ]
         return await _fan_out_chat(request, form_data, user, metadata, model, message_ids, tasks)
 
     # Legacy/direct: single model, synchronous
