@@ -18,7 +18,7 @@ local-llm/
 ├── .github/                   CI workflows (ci.yml; pr-gate.yml, the tripwire; auto-merge.yml + update-branches.yml), Dependabot, scripts/ (PR gate, lint ratchet)
 ├── .pre-commit-config.yaml    the only definition of lint and format checks (CI runs it)
 ├── .gitleaksignore            gitleaks findings that are not secrets, with reasons
-├── .claude/                   agent skills and the reviewer subagent (docs/guides/agent-tooling.md)
+├── .claude/                   agent skills, the reviewer subagent and project settings (docs/guides/agent-tooling.md)
 ├── .mcp.json                  project MCP servers: codebase-memory-mcp
 ├── AGENTS.md                  agent and contributor guide (CLAUDE.md links to it)
 ├── LICENSE, LICENSE_HISTORY   the license texts the derived code is under (see NOTICE)
@@ -67,6 +67,9 @@ Agent tooling, described in `docs/guides/agent-tooling.md`:
   `config_id` fingerprint), `reindex` (refreshing the codebase-memory-mcp
   index).
 - **`.claude/agents/reviewer.md`** — a pre-PR reviewer subagent (reports, never edits).
+- **`.claude/settings.json`** — tracked project settings: only Claude Code's
+  attribution setting, which keeps co-author trailers, "Generated with"
+  lines and session links out of commits and pull requests.
 - **`.mcp.json`** — project MCP servers; today only `codebase-memory-mcp`,
   a local code-graph index (binary installed by hand
   from the v0.12.1 release; `.mcp.json` runs whatever is on `PATH`).
@@ -452,8 +455,8 @@ knowing about when navigating the filesystem directly:
 - **`.vscode/`** — editor config (currently empty).
 - **`.claude/`**'s local state — `settings.local.json` (personal permission
   allowlists), `worktrees/` (agent
-  checkouts), both gitignored, and scheduled task locks, which are not. `.claude/skills/` and
-  `.claude/agents/` beside them **are** tracked (see above).
+  checkouts), both gitignored, and scheduled task locks, which are not. `.claude/skills/`,
+  `.claude/agents/` and `.claude/settings.json` beside them **are** tracked (see above).
 - **`.omc/`** — runtime state written by the oh-my-claudecode Claude Code
   plugin (session state, notepads, project memory), at the root and in any
   subdirectory a session ran from; gitignored.

@@ -41,6 +41,37 @@ reviewer agent on this branch"). Nobody reviews PRs here before they merge,
 so it is the only second reader a change gets besides CI. It does not
 replace CI.
 
+## Project settings (`.claude/settings.json`)
+
+The tracked project settings hold one thing, Claude Code's attribution
+setting, added 2026-11-03:
+
+```json
+{"attribution": {"commit": "", "pr": "", "sessionUrl": false}}
+```
+
+The empty `commit` and `pr` strings stop Claude Code from adding its
+co-author trailer to commits and its "Generated with" line to pull request
+bodies, and `sessionUrl: false` keeps a session link out of both. The
+commit policy in `AGENTS.md` forbids all three, and the `PR gate` check
+rejects a pull request whose title, body or commits carry one. The setting
+removes the text Claude Code would otherwise add to commit messages and
+pull request bodies, in every checkout and in cloud sessions, where no
+personal settings file exists. It is not a check: the gate still is.
+
+It does not touch the commit's **author**. A cloud session's global git
+identity can be `Claude <noreply@anthropic.com>`, and a squash merge adds a
+`Co-authored-by:` trailer for every branch commit author other than the
+merge's own, so such a commit would put that identity on `main`. The
+`PR gate` reads commit messages, not authors, so it would not notice. Set
+the owner's identity in the checkout (`git config user.name` and
+`git config user.email`; the squash commits on `main` use the owner's
+GitHub noreply address) before the first commit, and check
+`git log origin/main.. --format='%an <%ae>'` before pushing.
+
+Personal permission allowlists stay in the untracked `settings.local.json`
+(see "Not tracked" below).
+
 ## codebase-memory-mcp (`.mcp.json`)
 
 A local MCP server ([DeusData/codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp),
