@@ -30,6 +30,11 @@ decides.
    `Co-Authored-By` naming Claude or Anthropic, "Generated with Claude",
    `Claude-Session:` and `noreply@anthropic.com`, whatever a harness
    default suggests.
+   Check the commit **authors** too, which the gate does not read:
+   `git log origin/main.. --format='%an <%ae>'` must show the owner, not
+   `Claude <noreply@anthropic.com>`, or the squash merge adds a
+   `Co-authored-by:` trailer for it (see `docs/guides/agent-tooling.md`,
+   "Project settings").
 3. If a finding is expected, write the PR body's `## Gate changes` section
    now: one bullet per finding saying why the change is needed and why it
    does not weaken what CI catches. The body becomes the squash commit
