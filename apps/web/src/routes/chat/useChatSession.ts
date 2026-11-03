@@ -25,6 +25,7 @@ import {
 	errorText,
 	failMessage,
 	finishReplies,
+	hasPendingAssistantLeaf,
 	isGenerating,
 	messagesList,
 	normalizeHistory,
@@ -274,10 +275,23 @@ export function useChatSession({
 					case 'reload':
 						if (chatIdRef.current) void loadChat(chatIdRef.current);
 						break;
-					case 'inactive':
+					case 'inactive': {
 						setTaskIds(null);
-						markRead(chatIdRef.current);
+						const id = chatIdRef.current;
+						// No task left, yet a reply of this turn still reads as being
+						// written: its done event was missed (a dropped socket, a backend
+						// reload). The stored chat has its real end (#214). Not while a
+						// request of ours is unanswered: its reply is not stored yet.
+						if (
+							id &&
+							!isTemporaryChatId(id) &&
+							!inFlightRef.current.size &&
+							hasPendingAssistantLeaf(historyRef.current, e.messageId)
+						)
+							void loadChat(id);
+						markRead(id);
 						break;
+					}
 					case 'cancelled':
 						// A reply a later send replaced was cancelled (a stop that
 						// landed before its task existed): the tasks shown are
@@ -327,6 +341,28 @@ export function useChatSession({
 			socket.off('events', handler);
 		};
 	}, [socket, setHistory, handleEffects]);
+
+	// Events sent while the socket was down are lost. On reconnect, a reply
+	// still being written whose chat has no task left missed its end, so the
+	// stored chat is loaded again (#214), as Chat.svelte's handleSocketConnect did.
+	useEffect(() => {
+		if (!socket) return;
+		const idle = () => !inFlightRef.current.size;
+		const onConnect = async () => {
+			const id = chatIdRef.current;
+			if (!id || isTemporaryChatId(id) || !idle() || !hasPendingAssistantLeaf(historyRef.current)) return;
+			const res = await getTaskIdsByChatId(token, id).catch(() => null);
+			// Checked again after the wait: a send made meanwhile has no task yet.
+			if (res && !(res.task_ids ?? []).length && chatIdRef.current === id && idle()) void loadChat(id);
+		};
+		socket.on('connect', onConnect);
+		// Already connected when this listener attached (the provider exposes
+		// the socket only after its first connect): check once now.
+		if (socket.connected) void onConnect();
+		return () => {
+			socket.off('connect', onConnect);
+		};
+	}, [socket, token, loadChat]);
 
 	/**
 	 * Registers a completion request, so Stop marks it from now on, while its
