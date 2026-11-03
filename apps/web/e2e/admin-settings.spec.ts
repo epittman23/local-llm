@@ -2046,6 +2046,26 @@ test.describe('settings: Documents', () => {
 		await expect(page.getByText('Success', { exact: true })).toHaveCount(0);
 	});
 
+	test('Danger Zone: a reindex where files failed says so instead of Success (#308)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockDocuments(page);
+		await page.route('**/api/v1/knowledge/reindex', (route) =>
+			json(route, {
+				status: false,
+				total: 3,
+				reindexed: 2,
+				failed: [{ file_id: 'f1', filename: 'report.pdf', error: 'embedding failed' }]
+			})
+		);
+		await page.goto('/?settings=admin:documents');
+		await region(page, 'Danger Zone').getByRole('button', { name: 'Reindex' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await expect(
+			page.getByText('1 of 3 files could not be embedded again (report.pdf); the backend log has the errors.')
+		).toBeVisible();
+		await expect(page.getByText('Success', { exact: true })).toHaveCount(0);
+	});
+
 	test('Danger Zone: reindex runs knowledge files, knowledge metadata, then memories, in that order', async ({
 		page
 	}) => {

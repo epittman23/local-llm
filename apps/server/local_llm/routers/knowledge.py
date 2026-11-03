@@ -353,7 +353,28 @@ async def create_new_knowledge(
 ############################
 
 
-@router.post('/reindex', response_model=bool)
+async def _embedding_error(request: Request, user) -> str | None:
+    """Why the embedding model cannot embed right now, or None; None too when retrieval is bypassed."""
+    if await Config.get('rag.bypass_embedding_and_retrieval', False):
+        return None
+    embed = getattr(request.app.state, 'EMBEDDING_FUNCTION', None)
+    if embed is None:
+        return 'no embedding model is loaded'
+    try:
+        embedding = await embed('reindex check', prefix=RAG_EMBEDDING_CONTENT_PREFIX, user=user)
+    except Exception as e:
+        return str(e) or type(e).__name__
+    return None if embedding else 'the embedding model returned nothing'
+
+
+class ReindexReport(BaseModel):
+    status: bool
+    total: int
+    reindexed: int
+    failed: list[dict]
+
+
+@router.post('/reindex', response_model=ReindexReport)
 async def reindex_knowledge_files(
     request: Request,
     user=Depends(get_verified_user),
@@ -363,6 +384,17 @@ async def reindex_knowledge_files(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=ERROR_MESSAGES.UNAUTHORIZED,
+        )
+
+    # Every collection is deleted before its files are embedded again, so an
+    # embedding model that cannot run would leave no vectors at all (#308).
+    embedding_error = await _embedding_error(request, user)
+    if embedding_error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f'The embedding model cannot embed right now, so nothing was deleted or reindexed: {embedding_error}'
+            ),
         )
 
     knowledge_bases = await Knowledges.get_knowledge_bases(db=db)
@@ -419,7 +451,7 @@ async def reindex_knowledge_files(
                     )
                 except Exception as e:
                     log.error(f'Error processing file {file.filename} (ID: {file.id}): {str(e)}')
-                    failed_files.append({'file_id': file.id, 'error': str(e)})
+                    failed_files.append({'file_id': file.id, 'filename': file.filename, 'error': str(e)})
                     continue
 
         except Exception as e:
@@ -440,7 +472,13 @@ async def reindex_knowledge_files(
         subject_id='all',
         data={'count': len(knowledge_bases)},
     )
-    return True
+    # What happened, for the admin page to show: it said "Success" whatever happened (#308).
+    return ReindexReport(
+        status=not failed_files,
+        total=total_files,
+        reindexed=total_files - len(failed_files),
+        failed=failed_files,
+    )
 
 
 ############################

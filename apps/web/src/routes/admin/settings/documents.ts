@@ -134,6 +134,22 @@ export function ragSaveOutcome(sent: Rec, res: Rec | null | undefined): { warnin
 	return { warnings, changes };
 }
 
+/**
+ * What the admin should be told after Reindex, or null when every file was
+ * embedded again (#308). The reply is POST /knowledge/reindex's report; an
+ * older server answered `true`, which is taken as success.
+ */
+export function reindexProblem(res: Rec | boolean | null | undefined): string | null {
+	if (!res || typeof res !== 'object' || res.status !== false) return null;
+	const failed: Rec[] = Array.isArray(res.failed) ? res.failed : [];
+	const names = failed
+		.slice(0, 3)
+		.map((f) => f.filename || f.file_id)
+		.join(', ');
+	const more = failed.length > 3 ? `, and ${failed.length - 3} more` : '';
+	return `${failed.length} of ${res.total} files could not be embedded again (${names}${more}); the backend log has the errors.`;
+}
+
 export type Credentials = { url: string; key: string };
 export type EmbeddingForm = {
 	engine: string;
