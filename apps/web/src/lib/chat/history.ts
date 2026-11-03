@@ -276,7 +276,8 @@ export type ChatEffect =
 	| { kind: 'reload' }
 	| { kind: 'title'; title: string }
 	| { kind: 'tags' }
-	| { kind: 'inactive' }
+	/** The chat has no running task; `messageId` is the reply the event was about. */
+	| { kind: 'inactive'; messageId?: string }
 	/** `current`: the cancelled reply is the current one or a sibling of it, not one a later send replaced. */
 	| { kind: 'cancelled'; current: boolean }
 	| { kind: 'notification'; level: string; content: string }
@@ -285,6 +286,39 @@ export type ChatEffect =
 /** Strips `<details>` blocks (reasoning, tool calls) from a finished reply: what is copied or spoken. */
 const visibleText = (m: Message) =>
 	getOutputText(m.output) || m.content.replace(/<details[^>]*>[\s\S]*?<\/details>/gi, '').trim();
+
+/**
+ * Whether a reply waits on the user on purpose: a tool call pending approval
+ * or an ask_user question, with no result yet. Such a reply is not done, and
+ * its task has ended, by design (the server's own check in
+ * drain_approved_tool_calls).
+ */
+function pausedForUser(m: Message): boolean {
+	const items = Array.isArray(m.output) ? (m.output as Record<string, unknown>[]) : [];
+	const answered = new Set(items.filter((i) => i.type === 'function_call_output').map((i) => i.call_id));
+	return items.some(
+		(i) =>
+			i.type === 'function_call' &&
+			['pending', 'queued', 'requires_approval'].includes(String(i.status)) &&
+			!answered.has(i.call_id)
+	);
+}
+
+/**
+ * Whether a reply is still marked as being written with nothing after it: an
+ * assistant leaf that is not done and is not paused for the user. With no
+ * task left for the chat, such a reply missed its done event (#214).
+ * `messageId` limits the check to that reply and its sibling columns; without
+ * it, every reply counts.
+ */
+export function hasPendingAssistantLeaf(history: History, messageId?: string | null): boolean {
+	const anchor = messageId ? history.messages[messageId] : undefined;
+	const ids = anchor ? siblingsOf(history, anchor) : messageId ? [] : Object.keys(history.messages);
+	return ids.some((id) => {
+		const m = history.messages[id];
+		return m?.role === 'assistant' && !m.done && (m.childrenIds?.length ?? 0) === 0 && !pausedForUser(m);
+	});
+}
 
 /**
  * Applies one `events` socket event (Chat.svelte's chatEventHandler and its
@@ -306,7 +340,7 @@ export function applyChatEvent(history: History, event: ChatEvent): { history: H
 			patch = { statusHistory: [...(message.statusHistory ?? []), data] };
 			break;
 		case 'chat:active':
-			if (!data?.active) effects.push({ kind: 'inactive' });
+			if (!data?.active) effects.push({ kind: 'inactive', messageId: id });
 			break;
 		case 'chat:completion': {
 			const { done, choices, content, output, sources, selected_model_id, error, usage } = data ?? {};
