@@ -5,8 +5,8 @@ to a background task, and then recorded the run as a success and published
 AUTOMATION_RUN_COMPLETED. A model or provider failure afterwards never
 reached the run history or the webhooks. The run now waits for the
 dispatched tasks (it runs in the background itself), then records the
-outcome from the stored message; the dispatch publishes
-AUTOMATION_RUN_STARTED.
+outcome from the stored message. It publishes AUTOMATION_RUN_STARTED once,
+before the dispatch, for a scheduled and a manual run alike.
 
 Run from apps/server:
 
@@ -106,3 +106,16 @@ def test_the_run_waits_for_the_tasks_the_chat_dispatched(monkeypatch):
     asyncio.run(scenario())
 
     assert order == ['reply ended', 'outcome recorded']
+
+
+def test_a_provider_error_object_is_recorded_as_its_message(monkeypatch):
+    stored = {'done': True, 'error': {'content': {'message': 'Invalid API key', 'code': 401}}}
+    runs, _, _ = _finish(monkeypatch, stored_message=stored)
+
+    assert runs == [('auto-1', 'error', 'c1', 'Invalid API key')]
+
+
+def test_an_empty_error_is_still_a_failure_with_a_reason(monkeypatch):
+    runs, _, _ = _finish(monkeypatch, stored_message={'done': True, 'error': {'content': None}})
+
+    assert runs == [('auto-1', 'error', 'c1', 'The reply failed')]

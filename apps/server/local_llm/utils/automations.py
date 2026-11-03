@@ -689,8 +689,8 @@ async def execute_automation(app, automation: AutomationModel) -> None:
         # run's outcome is recorded only once they end: a model or provider
         # failure then reaches the run history (#264). This runs in the
         # background itself, so waiting holds up no other automation.
-        request = _build_request(app, token=token)
-        response = await app.state.CHAT_COMPLETION_HANDLER(request, form_data, user=user)
+        # Started before the dispatch, so a reply that fails at once still
+        # reads started, then failed. A manual run is announced here too.
         await publish_event(
             app,
             EVENTS.AUTOMATION_RUN_STARTED,
@@ -698,6 +698,8 @@ async def execute_automation(app, automation: AutomationModel) -> None:
             subject_id=automation.id,
             data={'name': automation.name, 'chat_id': chat.id},
         )
+        request = _build_request(app, token=token)
+        response = await app.state.CHAT_COMPLETION_HANDLER(request, form_data, user=user)
         await _wait_for_reply(response)
         await finish_automation_run(
             app, user, {'automation_id': automation.id, 'chat_id': chat.id, 'message_id': assistant_msg_id}
@@ -814,6 +816,14 @@ async def _wait_for_reply(response) -> None:
         await asyncio.wait(pending)
 
 
+def _error_text(stored) -> str:
+    """Readable text for an error saved on a message: {'content': str | provider dict} or a bare value."""
+    content = stored.get('content') if isinstance(stored, dict) else stored
+    if isinstance(content, dict):
+        content = content.get('message') or content.get('detail') or content.get('error')
+    return str(content)[:4000] if content else 'The reply failed'
+
+
 async def finish_automation_run(app, user, metadata: dict, error: str | None = None) -> None:
     """Record how an automation's reply ended, once it has (#264).
 
@@ -831,7 +841,7 @@ async def finish_automation_run(app, user, metadata: dict, error: str | None = N
             message = await Chats.get_message_by_id_and_message_id(chat_id, metadata['message_id'])
             stored = (message or {}).get('error')
             if stored:
-                error = str(stored.get('content') if isinstance(stored, dict) else stored)[:4000] or 'The reply failed'
+                error = _error_text(stored)
             elif message is not None and not message.get('done'):
                 error = 'The reply did not finish'
         automation = await Automations.get_by_id(automation_id)
