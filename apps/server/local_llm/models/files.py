@@ -413,9 +413,11 @@ class FilesTable:
     async def fail_interrupted_processing(self, db: AsyncSession | None = None) -> int:
         """Mark every file still pending or processing as failed, for startup (#309).
 
-        Processing runs as an in-memory background task, so at startup none
-        is running; a file left in either status was cut off by a restart
-        and would show as uploading forever. Returns how many were marked.
+        Processing runs as an in-memory background task, so in a
+        single-process backend none is running at startup; a file left in
+        either status was cut off by a restart and would show as uploading
+        forever. With several workers, one starting late would fail another's
+        live upload; this app runs one. Returns how many were marked.
         """
         async with get_async_db_context(db) as db:
             try:

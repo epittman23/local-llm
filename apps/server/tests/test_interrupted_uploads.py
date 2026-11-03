@@ -1,12 +1,12 @@
 """Uploads whose processing a restart interrupted are marked failed at startup (#309).
 
-Upload processing runs as an in-memory background task. When the backend
-restarted mid-processing (every save under `make backend`'s --reload), the
-file stayed `pending` or `processing` for good: the knowledge base page
-kept a spinner row and polled forever, and the row could not be removed
-because the file was never linked. Startup now marks such files failed,
-with an error saying to upload them again. These run against the test
-run's migrated database.
+Upload processing runs as an in-memory background task. When a restart cut
+it off (a crash or kill, a forced shutdown, the desktop app's 10 s graceful
+timeout), the file stayed `pending` or `processing` for good: the knowledge
+base page kept a spinner row and polled forever, and the row could not be
+removed because the file was never linked. Startup now marks such files
+failed, with an error saying to upload them again. These run against the
+test run's migrated database.
 
 Run from apps/server (any LLLM_SECRET_KEY of 32 characters or more):
 
