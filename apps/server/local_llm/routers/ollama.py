@@ -1556,16 +1556,28 @@ def partial_download_path(url: str, file_name: str | None, upload_dir: str | Non
     separate partial files, so a resume continues its own download, not the other
     one's (#341). None when ``file_name`` is not a plain file name.
     """
-    if upload_path_for(file_name, upload_dir) is None:
+    if file_name is None or upload_path_for(file_name, upload_dir) is None:
         return None
     digest = hashlib.sha256(url.encode()).hexdigest()[:16]
-    return upload_path_for(f'{file_name}.{digest}.part', upload_dir)
+    # Kept well under a file system's 255-byte name limit with the suffix added.
+    return upload_path_for(f'{file_name[:200]}.{digest}.part', upload_dir)
 
 
-# A model file can take far longer than any fixed limit, so the download and the
-# push to Ollama are limited by how long the connection may sit idle instead (#341).
+# A model file can take far longer than any fixed limit, so the download is limited
+# by how long the connection may sit idle instead (#341).
 DOWNLOAD_TIMEOUT = aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=120)
-BLOB_PUSH_TIMEOUT = aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=600)
+# aiohttp starts a read timeout only once the request body is sent and has no write
+# timeout, so the push gets a total limit too, scaled to the blob: at least 10
+# minutes, and as long as the blob takes at 5 MiB/s.
+BLOB_PUSH_MIN_SECONDS = 600
+BLOB_PUSH_BYTES_PER_SECOND = 5 * 1024 * 1024
+
+
+def blob_push_timeout(blob_size: int) -> aiohttp.ClientTimeout:
+    """The push's timeout: a total scaled to the blob's size, and the same idle limits."""
+    return aiohttp.ClientTimeout(
+        total=max(BLOB_PUSH_MIN_SECONDS, blob_size / BLOB_PUSH_BYTES_PER_SECOND), sock_connect=30, sock_read=600
+    )
 
 
 def _content_range(header: str | None) -> tuple[int | None, int | None]:
@@ -1617,8 +1629,12 @@ async def download_file_stream(
             write_mode = None  # The partial file is already the whole file.
         elif response.status == 206 and current_size > 0:
             if first_byte != current_size:
+                # Kept, the partial file would get the same answer on every retry.
+                await asyncio.to_thread(os.remove, file_path)
                 raise RuntimeError(
-                    f'Download failed: asked to resume at byte {current_size}, the server answered from {first_byte}.'
+                    f'Download failed: asked to resume at byte {current_size}, the server answered '
+                    f'{"from byte " + str(first_byte) if first_byte is not None else "without a usable range"}. '
+                    'The partial download was removed; try again.'
                 )
             write_mode = 'ab'
         elif response.status == 200:
@@ -1656,7 +1672,7 @@ async def download_file_stream(
             data=blob_chunks(),
             headers={'Content-Length': str(blob_size)},
             ssl=AIOHTTP_CLIENT_SESSION_SSL,
-            timeout=BLOB_PUSH_TIMEOUT,
+            timeout=blob_push_timeout(blob_size),
         ) as blob_resp:
             if blob_resp.ok:
                 await asyncio.to_thread(os.remove, file_path)
