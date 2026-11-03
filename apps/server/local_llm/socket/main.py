@@ -823,6 +823,20 @@ async def _make_channel_emitter(request_info):
     return __channel_emitter__
 
 
+def merge_message_files(existing, incoming) -> list:
+    """A message's files after a `files` event: those it had, then the new ones not already there.
+
+    The middleware sends the whole list it just saved (streamed images),
+    while a tool sends only its own new files; extending one with the other
+    duplicated every image (#290).
+    """
+    merged = list(existing) if isinstance(existing, list) else []
+    for item in incoming or []:
+        if item not in merged:
+            merged.append(item)
+    return merged
+
+
 async def get_event_emitter(request_info, update_db=True):
     # Channel mode: route pipeline output to channel message updates
     if (request_info.get('chat_id') or '').startswith('channel:'):
@@ -910,10 +924,8 @@ async def get_event_emitter(request_info, update_db=True):
                 )
 
             elif event_type == 'files':
-                files = event_data.get('data', {}).get('files', [])
                 existing_files = await Chats.get_message_metadata(chat_id, message_id, 'files')
-                if isinstance(existing_files, list):
-                    files.extend(existing_files)
+                files = merge_message_files(existing_files, event_data.get('data', {}).get('files', []))
 
                 await Chats.upsert_message_to_chat_by_id_and_message_id(
                     chat_id,
