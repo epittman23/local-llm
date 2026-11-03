@@ -278,10 +278,16 @@ export function useChatSession({
 					case 'inactive': {
 						setTaskIds(null);
 						const id = chatIdRef.current;
-						// No task left, yet the reply still reads as being written: its
-						// done event was missed (a dropped socket, a backend reload).
-						// The stored chat has its real end (#214).
-						if (id && !isTemporaryChatId(id) && hasPendingAssistantLeaf(historyRef.current, e.messageId))
+						// No task left, yet a reply of this turn still reads as being
+						// written: its done event was missed (a dropped socket, a backend
+						// reload). The stored chat has its real end (#214). Not while a
+						// request of ours is unanswered: its reply is not stored yet.
+						if (
+							id &&
+							!isTemporaryChatId(id) &&
+							!inFlightRef.current.size &&
+							hasPendingAssistantLeaf(historyRef.current, e.messageId)
+						)
 							void loadChat(id);
 						markRead(id);
 						break;
@@ -341,13 +347,18 @@ export function useChatSession({
 	// stored chat is loaded again (#214), as Chat.svelte's handleSocketConnect did.
 	useEffect(() => {
 		if (!socket) return;
+		const idle = () => !inFlightRef.current.size;
 		const onConnect = async () => {
 			const id = chatIdRef.current;
-			if (!id || isTemporaryChatId(id) || !hasPendingAssistantLeaf(historyRef.current)) return;
+			if (!id || isTemporaryChatId(id) || !idle() || !hasPendingAssistantLeaf(historyRef.current)) return;
 			const res = await getTaskIdsByChatId(token, id).catch(() => null);
-			if (res && !(res.task_ids ?? []).length && chatIdRef.current === id) void loadChat(id);
+			// Checked again after the wait: a send made meanwhile has no task yet.
+			if (res && !(res.task_ids ?? []).length && chatIdRef.current === id && idle()) void loadChat(id);
 		};
 		socket.on('connect', onConnect);
+		// Already connected when this listener attached (the provider exposes
+		// the socket only after its first connect): check once now.
+		if (socket.connected) void onConnect();
 		return () => {
 			socket.off('connect', onConnect);
 		};

@@ -7,7 +7,7 @@ import {
 	editContent,
 	emptyHistory,
 	finishReplies,
-	type History,
+	hasPendingAssistantLeaf,
 	isGenerating,
 	messagesList,
 	normalizeHistory,
@@ -16,6 +16,7 @@ import {
 	showBranch,
 	siblingsOf,
 	toApiMessages,
+	type History,
 	updateMessage
 } from './history';
 import { getOutputText } from './structuredOutput';
@@ -286,5 +287,51 @@ describe('editing a reply that has structured output (#211)', () => {
 		const edited = editContent(h, 'a', 'The answer is 42.');
 		expect(edited.messages.a.output).toBeUndefined();
 		expect(edited.messages.a.content).toBe('The answer is 42.');
+	});
+});
+
+describe('hasPendingAssistantLeaf (#214)', () => {
+	const reply = (id: string, extra: Record<string, unknown> = {}) => ({
+		id,
+		parentId: 'q',
+		childrenIds: [] as string[],
+		role: 'assistant',
+		content: '',
+		done: false,
+		...extra
+	});
+	const history = (replies: Record<string, unknown>[]) =>
+		({
+			currentId: 'b',
+			messages: {
+				q: { id: 'q', parentId: null, childrenIds: replies.map((r) => r.id), role: 'user', content: 'q' },
+				...Object.fromEntries(replies.map((r) => [r.id, r]))
+			}
+		}) as any;
+
+	it('counts a reply that is not done and has nothing after it', () => {
+		expect(hasPendingAssistantLeaf(history([reply('a')]))).toBe(true);
+		expect(hasPendingAssistantLeaf(history([reply('a', { done: true })]))).toBe(false);
+	});
+	it('does not count a reply the conversation went on from', () => {
+		expect(hasPendingAssistantLeaf(history([reply('a', { childrenIds: ['next'] })]))).toBe(false);
+	});
+	it('does not count a reply paused for a tool approval or a question', () => {
+		const paused = reply('a', {
+			output: [{ type: 'function_call', call_id: 'c1', name: 'lookup', status: 'pending' }]
+		});
+		expect(hasPendingAssistantLeaf(history([paused]))).toBe(false);
+		const answered = reply('a', {
+			output: [
+				{ type: 'function_call', call_id: 'c1', name: 'lookup', status: 'pending' },
+				{ type: 'function_call_output', call_id: 'c1', output: [] }
+			]
+		});
+		expect(hasPendingAssistantLeaf(history([answered]))).toBe(true);
+	});
+	it("checks the named reply's sibling columns too", () => {
+		const h = history([reply('a', { done: true }), reply('b')]);
+		expect(hasPendingAssistantLeaf(h, 'a')).toBe(true);
+		expect(hasPendingAssistantLeaf(history([reply('a', { done: true })]), 'a')).toBe(false);
 	});
 });

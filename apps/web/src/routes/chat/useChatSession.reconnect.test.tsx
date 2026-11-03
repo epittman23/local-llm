@@ -128,4 +128,26 @@ describe('useChatSession: a missed done event (#214)', () => {
 		expect(chatsApi.getChatById).not.toHaveBeenCalled();
 		expect(session.history.messages.a1.done).toBe(false);
 	});
+
+	it('leaves a reply paused for a tool approval alone when the chat goes inactive', async () => {
+		await openWritingChat();
+		const paused = {
+			...writing,
+			messages: {
+				...writing.messages,
+				a1: {
+					...writing.messages.a1,
+					output: [{ type: 'function_call', call_id: 'c1', name: 'lookup', status: 'pending' }]
+				}
+			}
+		};
+		act(() => session.setHistory(paused as never));
+
+		await act(async () =>
+			listener('events')({ chat_id: 'C', message_id: 'a1', data: { type: 'chat:active', data: { active: false } } })
+		);
+
+		expect(chatsApi.getChatById).not.toHaveBeenCalled();
+		expect(session.history.messages.a1.done).toBe(false);
+	});
 });

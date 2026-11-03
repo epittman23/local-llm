@@ -288,20 +288,43 @@ const visibleText = (m: Message) =>
 	getOutputText(m.output) || m.content.replace(/<details[^>]*>[\s\S]*?<\/details>/gi, '').trim();
 
 /**
+ * Whether a reply waits on the user on purpose: a tool call pending approval
+ * or an ask_user question, with no result yet. Such a reply is not done, and
+ * its task has ended, by design (the server's own check in
+ * drain_approved_tool_calls).
+ */
+function pausedForUser(m: Message): boolean {
+	const items = Array.isArray(m.output) ? (m.output as Record<string, unknown>[]) : [];
+	const answered = new Set(items.filter((i) => i.type === 'function_call_output').map((i) => i.call_id));
+	return items.some(
+		(i) =>
+			i.type === 'function_call' &&
+			['pending', 'queued', 'requires_approval'].includes(String(i.status)) &&
+			!answered.has(i.call_id)
+	);
+}
+
+/**
+ * Whether a reply is still marked as being written with nothing after it: an
+ * assistant leaf that is not done and is not paused for the user. With no
+ * task left for the chat, such a reply missed its done event (#214).
+ * `messageId` limits the check to that reply and its sibling columns; without
+ * it, every reply counts.
+ */
+export function hasPendingAssistantLeaf(history: History, messageId?: string | null): boolean {
+	const anchor = messageId ? history.messages[messageId] : undefined;
+	const ids = anchor ? siblingsOf(history, anchor) : messageId ? [] : Object.keys(history.messages);
+	return ids.some((id) => {
+		const m = history.messages[id];
+		return m?.role === 'assistant' && !m.done && (m.childrenIds?.length ?? 0) === 0 && !pausedForUser(m);
+	});
+}
+
+/**
  * Applies one `events` socket event (Chat.svelte's chatEventHandler and its
  * chat:completion / response:completion handlers) to the history. Events for
  * messages this history does not hold are ignored.
  */
-/**
- * Whether a reply (`messageId`, or any) is still marked as being written with
- * nothing after it: an assistant leaf that is not done. With no task left for
- * the chat, such a reply missed its done event (#214).
- */
-export function hasPendingAssistantLeaf(history: History, messageId?: string | null): boolean {
-	const messages = messageId ? [history.messages[messageId]] : Object.values(history.messages);
-	return messages.some((m) => m?.role === 'assistant' && !m.done && (m.childrenIds?.length ?? 0) === 0);
-}
-
 export function applyChatEvent(history: History, event: ChatEvent): { history: History; effects: ChatEffect[] } {
 	const type = event.data?.type ?? '';
 	const data = event.data?.data;
