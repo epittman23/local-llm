@@ -3463,10 +3463,13 @@ async def drain_approved_tool_calls(request, form_data, user, model, metadata) -
                 ):
                     message['output'] = strip_reasoning_details(output)
 
-            # Keep what process_chat_payload built into the system message
-            # (the chat prompt, retrieved context, memories, skills) and send
-            # the user's images again, as _replay_history_from_db does; the
-            # stored history alone has neither (#164).
+            # Keep the system message process_chat_payload built (the chat
+            # prompt, memories, skills, attached knowledge, and retrieved
+            # context when RAG_SYSTEM_CONTEXT is on) and send the user's
+            # images again, resolved as the normal path resolves them: the
+            # stored history alone has neither (#164). What the normal path
+            # adds to the user message itself (retrieved context by default,
+            # file tags) is still rebuilt from the stored history only.
             system_message = get_system_message(form_data.get('messages', []))
             _inline_message_images(db_messages)
             replayed = process_messages_with_output(
@@ -3474,6 +3477,9 @@ async def drain_approved_tool_calls(request, form_data, user, model, metadata) -
                 reasoning_format=get_reasoning_format(model),
             )
             form_data['messages'] = sanitize_tool_pairs([system_message, *replayed] if system_message else replayed)
+            # A saved chat stores an image by its file id; resolve it to a
+            # data URL (with the access check) as process_chat_payload does.
+            await convert_url_images_to_base64(form_data, user=user)
 
         if not paused and ENABLE_PLUGINS:
             filter_functions = await get_filter_functions(request, model, metadata.get('filter_ids', []))

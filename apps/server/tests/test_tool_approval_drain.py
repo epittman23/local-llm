@@ -21,7 +21,9 @@ from types import SimpleNamespace
 
 from local_llm.utils import middleware
 
-IMAGE = {'type': 'image', 'url': 'data:image/png;base64,AAAA'}
+# A saved chat stores an uploaded image by its file id (useAttachments.ts).
+IMAGE = {'type': 'file', 'url': 'f-123', 'content_type': 'image/png'}
+IMAGE_DATA = 'data:image/png;base64,QUJD'
 
 
 def _drain(monkeypatch, form_messages):
@@ -44,8 +46,12 @@ def _drain(monkeypatch, form_messages):
     async def get_message(chat_id, message_id):
         return copy.deepcopy(stored)
 
-    async def nothing(*args, **kwargs):
-        return None
+    async def upsert(chat_id, message_id, data, **kwargs):
+        # The drain re-reads the message after saving the tool results.
+        stored.update(copy.deepcopy(data))
+
+    async def image_data(url, user=None):
+        return IMAGE_DATA if url == IMAGE['url'] else None
 
     async def no_emitter(metadata):
         return None, None
@@ -58,7 +64,8 @@ def _drain(monkeypatch, form_messages):
 
     monkeypatch.setattr(middleware, 'is_saved_chat_id', lambda chat_id: True)
     monkeypatch.setattr(middleware.Chats, 'get_message_by_id_and_message_id', get_message)
-    monkeypatch.setattr(middleware.Chats, 'upsert_message_to_chat_by_id_and_message_id', nothing)
+    monkeypatch.setattr(middleware.Chats, 'upsert_message_to_chat_by_id_and_message_id', upsert)
+    monkeypatch.setattr(middleware, 'get_image_base64_from_url', image_data)
     monkeypatch.setattr(middleware, 'get_event_emitter_and_caller', no_emitter)
     monkeypatch.setattr(middleware, 'execute_tool_call_for_output', execute)
     monkeypatch.setattr(middleware, 'load_messages_from_db', load_messages)
@@ -79,6 +86,11 @@ def test_the_built_system_message_survives_the_resume(monkeypatch):
     assert paused is False
     assert messages[0] == system
     assert [m['role'] for m in messages].count('system') == 1
+    # The tool's result follows the call that asked for it.
+    assert [m['role'] for m in messages] == ['system', 'user', 'assistant', 'tool']
+    assert messages[2]['tool_calls'][0]['id'] == 'c1'
+    assert messages[3]['tool_call_id'] == 'c1'
+    assert '42' in str(messages[3]['content'])
 
 
 def test_the_users_images_are_sent_again_after_the_resume(monkeypatch):
@@ -86,4 +98,5 @@ def test_the_users_images_are_sent_again_after_the_resume(monkeypatch):
 
     user = next(m for m in messages if m['role'] == 'user')
     assert isinstance(user['content'], list)
-    assert {'type': 'image_url', 'image_url': {'url': IMAGE['url']}} in user['content']
+    # Resolved from the file id, as the normal path does; a bare id is no URL.
+    assert {'type': 'image_url', 'image_url': {'url': IMAGE_DATA}} in user['content']
