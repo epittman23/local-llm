@@ -4198,7 +4198,8 @@ async def non_streaming_chat_response_handler(response, ctx):
 
             choices = response_data.get('choices', [])
             response_output = response_data.get('output')
-            content = choices[0].get('message', {}).get('content') if choices else ''
+            choice_message = choices[0].get('message', {}) if choices else {}
+            content = choice_message.get('content') if choices else ''
 
             if choices and (content or response_output):
                 if content or response_output:
@@ -4214,7 +4215,7 @@ async def non_streaming_chat_response_handler(response, ctx):
                     # Use output from backend if provided (OR-compliant backends),
                     # otherwise generate from response content
                     if not response_output:
-                        response_output = _reasoning_output(choices[0].get('message', {}))
+                        response_output = _reasoning_output(choice_message)
                         response_output.append(
                             {
                                 'type': 'message',
@@ -4262,7 +4263,7 @@ async def non_streaming_chat_response_handler(response, ctx):
                     await background_tasks_handler(ctx)
 
             elif choices and 'error' not in response_data:
-                await _finish_reply_without_text(ctx, choices[0].get('message', {}), save_to_chat)
+                await _finish_reply_without_text(ctx, choice_message, save_to_chat)
 
             response = build_response_object(response, merge_events_into_response(response_data, events))
         except Exception as e:
