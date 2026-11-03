@@ -148,7 +148,8 @@ async def _discard_orphan_upload(file_id: str, knowledge_id: str, delay: float =
         await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=knowledge_id, filter={'file_id': file_id})
         if await ASYNC_VECTOR_DB_CLIENT.has_collection(collection_name=f'file-{file_id}'):
             await ASYNC_VECTOR_DB_CLIENT.delete_collection(collection_name=f'file-{file_id}')
-        await asyncio.to_thread(Storage.delete_file, file.path)
+        if file.path:
+            await asyncio.to_thread(Storage.delete_file, file.path)
         await Files.delete_file_by_id(file_id)
         log.info('Discarded knowledge upload %s, whose base step failed', file_id)
     except Exception:

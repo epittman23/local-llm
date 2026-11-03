@@ -82,6 +82,20 @@ def _run_kept(monkeypatch, **world):
     return done
 
 
+def test_a_discard_that_fails_is_logged_and_does_not_raise(monkeypatch, caplog):
+    _orphan_world(monkeypatch)
+
+    async def vectors_down(collection_name, filter=None):
+        raise RuntimeError('vector store unreachable')
+
+    monkeypatch.setattr(files_router.ASYNC_VECTOR_DB_CLIENT, 'delete', vectors_down)
+
+    with caplog.at_level('ERROR'):
+        asyncio.run(files_router._discard_orphan_upload('f1', 'kb1', delay=0))
+
+    assert 'Could not discard knowledge upload f1' in caplog.text
+
+
 def test_a_failed_base_step_marks_the_file_failed_and_schedules_its_discard(monkeypatch):
     scheduled: list[str] = []
     marked: list[dict] = []
