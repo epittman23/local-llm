@@ -121,7 +121,7 @@ describe('streaming events', () => {
 	});
 	it('a cancel for a reply a later send replaced is not the current one (#516)', () => {
 		const { h } = conversation();
-		const old = h.currentId!;
+		const old = h.currentId ?? '';
 		const next = addUserMessage(h, old, { content: 'again' });
 		const later = addResponses(next.history, next.id, [{ id: 'a' }]).history;
 		const r = applyChatEvent(later, ev(old, 'chat:tasks:cancel', {}));
