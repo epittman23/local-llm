@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime as dt
+import hashlib
 import logging
 import os
 import random
@@ -1548,6 +1549,34 @@ def upload_path_for(file_name: str | None, upload_dir: str | None = None) -> str
     return file_path
 
 
+def partial_download_path(url: str, file_name: str | None, upload_dir: str | None = None) -> str | None:
+    """Where a URL download is written until it is pushed: named by the whole URL.
+
+    Two URLs ending in the same file name (``m.gguf`` from two repositories) get
+    separate partial files, so a resume continues its own download, not the other
+    one's (#341). None when ``file_name`` is not a plain file name.
+    """
+    if upload_path_for(file_name, upload_dir) is None:
+        return None
+    digest = hashlib.sha256(url.encode()).hexdigest()[:16]
+    return upload_path_for(f'{file_name}.{digest}.part', upload_dir)
+
+
+# A model file can take far longer than any fixed limit, so the download and the
+# push to Ollama are limited by how long the connection may sit idle instead (#341).
+DOWNLOAD_TIMEOUT = aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=120)
+BLOB_PUSH_TIMEOUT = aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=600)
+
+
+def _content_range(header: str | None) -> tuple[int | None, int | None]:
+    """(first byte, complete size) from a Content-Range header; None where it says ``*`` or is unreadable."""
+    match = re.fullmatch(r'bytes (?:(\d+)-\d+|\*)/(\d+|\*)', (header or '').strip())
+    if not match:
+        return None, None
+    first, size = match.groups()
+    return (int(first) if first else None), (int(size) if size != '*' else None)
+
+
 def parse_huggingface_url(hf_url: str) -> str | None:
     """Extract the filename from a HuggingFace download URL."""
     try:
@@ -1572,18 +1601,41 @@ async def download_file_stream(
         file_url,
         headers=headers,
         ssl=AIOHTTP_CLIENT_SESSION_SSL,
-        timeout=aiohttp.ClientTimeout(total=600),
+        timeout=DOWNLOAD_TIMEOUT,
     ) as response:
-        total_size = int(response.headers.get('content-length', 0)) + current_size
+        # What the server answered decides what the body is (#341): only a 200 is
+        # the file from its start, and only a 206 from where the partial file ends
+        # continues it. Any other answer is an error page, never a model.
+        first_byte, complete_size = _content_range(response.headers.get('Content-Range'))
+        if response.status == 416 and current_size > 0:
+            if complete_size != current_size:
+                await asyncio.to_thread(os.remove, file_path)
+                raise RuntimeError(
+                    'Download failed: the server could not resume the partial download (HTTP 416). '
+                    'It was removed; try again.'
+                )
+            write_mode = None  # The partial file is already the whole file.
+        elif response.status == 206 and current_size > 0:
+            if first_byte != current_size:
+                raise RuntimeError(
+                    f'Download failed: asked to resume at byte {current_size}, the server answered from {first_byte}.'
+                )
+            write_mode = 'ab'
+        elif response.status == 200:
+            write_mode, current_size = 'wb', 0
+        else:
+            raise RuntimeError(f'Download failed: HTTP {response.status} {response.reason or ""}'.strip())
 
-        async with aiofiles.open(file_path, 'ab') as f:
-            async for data in response.content.iter_chunked(chunk_size):
-                current_size += len(data)
-                await f.write(data)
+        if write_mode:
+            total_size = int(response.headers.get('content-length', 0)) + current_size
+            async with aiofiles.open(file_path, write_mode) as f:
+                async for data in response.content.iter_chunked(chunk_size):
+                    current_size += len(data)
+                    await f.write(data)
 
-                progress_total = total_size or current_size
-                progress = round((current_size / progress_total) * 100, 2)
-                yield f'data: {{"progress": {progress}, "completed": {current_size}, "total": {total_size}}}\n\n'
+                    progress_total = total_size or current_size
+                    progress = round((current_size / progress_total) * 100, 2)
+                    yield f'data: {{"progress": {progress}, "completed": {current_size}, "total": {total_size}}}\n\n'
 
         # Hash and push only once the file is closed: inside the writer its
         # last buffered bytes are not on disk yet, and Ollama accepts a
@@ -1604,7 +1656,7 @@ async def download_file_stream(
             data=blob_chunks(),
             headers={'Content-Length': str(blob_size)},
             ssl=AIOHTTP_CLIENT_SESSION_SSL,
-            timeout=aiohttp.ClientTimeout(total=30),
+            timeout=BLOB_PUSH_TIMEOUT,
         ) as blob_resp:
             if blob_resp.ok:
                 await asyncio.to_thread(os.remove, file_path)
@@ -1632,8 +1684,8 @@ async def download_model(
     url = (await Config.get('ollama.base_urls', []))[url_idx if url_idx is not None else 0]
     file_name = parse_huggingface_url(form_data.url)
 
-    file_path = upload_path_for(file_name)
-    if file_path is None:
+    file_path = partial_download_path(form_data.url, file_name)
+    if file_path is None or file_name is None:
         return None
     return StreamingResponse(
         download_file_stream(url, form_data.url, file_path, file_name),
