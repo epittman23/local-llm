@@ -45,6 +45,7 @@ from local_llm.routers.retrieval import ProcessFileForm, process_file, process_f
 from local_llm.storage.provider import Storage
 from local_llm.utils.access_control.files import has_access_to_file
 from local_llm.utils.auth import get_admin_user, get_verified_user
+from local_llm.utils.background import run_in_background
 from local_llm.utils.json_codec import JSONCodec
 from local_llm.utils.misc import strict_match_mime_type
 
@@ -120,6 +121,39 @@ def _media_supported_for_extraction(
     if supported is None:
         return content_extraction_engine == 'external'
     return bool(content_extraction_engine and _matches_configured_mime_type(supported, content_type))
+
+
+# How long a knowledge upload that failed its base step is kept before it is
+# discarded (#310): the client polls the file's status every second, and must
+# read "failed" before the row is gone, or it takes the upload for a success.
+ORPHAN_DISCARD_DELAY_SECONDS = 10
+
+
+async def _discard_orphan_upload(file_id: str, knowledge_id: str, delay: float = ORPHAN_DISCARD_DELAY_SECONDS):
+    """Delete a knowledge upload whose base step failed, once its failure has been read (#310).
+
+    Left behind, it was never linked to the base, so folder sync uploaded it
+    again on every run and leaked another copy. Skipped if it was linked or
+    processed again meanwhile.
+    """
+    await asyncio.sleep(delay)
+    try:
+        file = await Files.get_file_by_id(file_id)
+        if not file or (file.data or {}).get('status') != 'failed':
+            return
+        if await Knowledges.get_knowledges_by_file_id(file_id):
+            return
+        # By file id only: deleting by hash would take the vectors of the
+        # base's own file with the same content, the usual cause of the failure.
+        await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=knowledge_id, filter={'file_id': file_id})
+        if await ASYNC_VECTOR_DB_CLIENT.has_collection(collection_name=f'file-{file_id}'):
+            await ASYNC_VECTOR_DB_CLIENT.delete_collection(collection_name=f'file-{file_id}')
+        if file.path:
+            await asyncio.to_thread(Storage.delete_file, file.path)
+        await Files.delete_file_by_id(file_id)
+        log.info('Discarded knowledge upload %s, whose base step failed', file_id)
+    except Exception:
+        log.exception(f'Could not discard knowledge upload {file_id}')
 
 
 async def process_uploaded_file(
@@ -242,6 +276,8 @@ async def process_uploaded_file(
                         log.info('Linked file %s to knowledge %s', file_item.id, knowledge_id)
                 except Exception as e:
                     log.warning(f'Failed to link file {file_item.id} to knowledge {knowledge_id}: {e}')
+                    # Marked failed below; discarded once the client has read that.
+                    run_in_background(_discard_orphan_upload(file_item.id, knowledge_id))
                     raise
 
         except Exception as e:
