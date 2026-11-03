@@ -369,6 +369,12 @@ async def lifespan(app: FastAPI):
     app.state.instance_id = INSTANCE_ID
     start_logger()
 
+    if SAFE_MODE:
+        # First, before any other startup step: publishing an event dispatches
+        # event functions, which SAFE_MODE exists to keep from running (#361).
+        # The migrations ran at import, so the table is there.
+        await _enter_safe_mode()
+
     # The vector store's client is created lazily (retrieval/vector/factory.py);
     # connect it now so a misconfigured store fails startup, not the first upload.
     await asyncio.to_thread(VECTOR_DB_CLIENT.resolve)
@@ -380,10 +386,6 @@ async def lifespan(app: FastAPI):
     await seed_registered_defaults()
     await initialize_runtime_config(app)
     await migrate_legacy_webhook_config()
-    if SAFE_MODE:
-        # Before the first published event: publishing dispatches event
-        # functions, which SAFE_MODE exists to keep from running (#361).
-        await _enter_safe_mode()
     await publish_event(app, EVENTS.SYSTEM_STARTUP_STARTED, source='system')
 
     # Create admin account from env vars if specified and no users exist

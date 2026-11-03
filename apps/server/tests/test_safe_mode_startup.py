@@ -7,7 +7,7 @@ deactivation was ignored. Functions are now deactivated first, and a
 deactivation that fails stops startup rather than run them.
 
 These drive main.lifespan as far as its first published event, with the
-setup before it stubbed.
+setup before it stubbed, and record any direct dispatch of event functions.
 
 Run from apps/server (any LLLM_SECRET_KEY of 32 characters or more):
 
@@ -50,8 +50,16 @@ def _startup(monkeypatch, *, safe_mode: bool, deactivated):
     for name in ('import_legacy_config_json', 'seed_registered_defaults', 'initialize_runtime_config'):
         monkeypatch.setattr(main, name, nothing)
     monkeypatch.setattr(main, 'migrate_legacy_webhook_config', nothing)
+
+    async def dispatch_event_functions(*args, **kwargs):
+        order.append('dispatch')
+
+    from local_llm import events
+
     monkeypatch.setattr(main.Functions, 'deactivate_all_functions', deactivate_all_functions)
     monkeypatch.setattr(main, 'publish_event', publish_event)
+    # Any startup step that dispatches event functions directly shows up too.
+    monkeypatch.setattr(events, 'dispatch_event_functions', dispatch_event_functions)
 
     async def run():
         async with main.lifespan(SimpleNamespace(state=SimpleNamespace())):
@@ -76,6 +84,23 @@ def test_safe_mode_refuses_to_start_when_deactivation_fails(monkeypatch):
         asyncio.run(run())
 
     assert order == ['deactivate']
+
+
+def test_safe_mode_deactivates_before_any_other_startup_step(monkeypatch):
+    # Not only before the publish: before the vector store and config steps,
+    # so a step added there later cannot run functions first.
+    order, run = _startup(monkeypatch, safe_mode=True, deactivated=True)
+
+    def resolve():
+        order.append('vector store')
+
+    monkeypatch.setattr(main, 'VECTOR_DB_CLIENT', SimpleNamespace(resolve=resolve))
+
+    with pytest.raises(_FirstPublish):
+        asyncio.run(run())
+
+    assert order[0] == 'deactivate'
+    assert 'dispatch' not in order
 
 
 def test_without_safe_mode_nothing_is_deactivated(monkeypatch):
