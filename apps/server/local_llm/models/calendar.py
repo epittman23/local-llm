@@ -762,37 +762,56 @@ class CalendarEventTable:
         upper = now_ns + max_lookahead_ns
 
         async with get_async_db_context(db) as db:
+            # A recurring series is fetched whenever it began before the window
+            # closes: its row's start_at is only its first occurrence (#183).
             result = await db.execute(
                 select(CalendarEvent, UserRow.timezone)
                 .outerjoin(UserRow, UserRow.id == CalendarEvent.user_id)
                 .filter(
                     CalendarEvent.is_cancelled == false(),
-                    CalendarEvent.start_at >= now_ns - grace_ns,
                     CalendarEvent.start_at <= upper,
+                    or_(CalendarEvent.start_at >= now_ns - grace_ns, CalendarEvent.rrule.isnot(None)),
                 )
             )
             rows = result.all()
 
         events = []
         for event, tz in rows:
-            model = CalendarEventModel.model_validate(event)
-            # meta is user-writable and this poll is shared by every user.
-            alert_minutes = (model.meta or {}).get('alert_minutes')
-            if not isinstance(alert_minutes, (int, float)):
-                alert_minutes = None
-
-            if alert_minutes is not None:
-                if alert_minutes < 0:
-                    # alert_minutes < 0 means "no alert"
-                    continue
-                event_lookahead_ns = alert_minutes * 60 * 1_000_000_000
-            else:
-                event_lookahead_ns = default_lookahead_ns
-
-            if model.start_at <= now_ns + event_lookahead_ns:
-                events.append((model, tz))
+            for model in self._occurrences_in(CalendarEventModel.model_validate(event), now_ns - grace_ns, upper, tz):
+                events.extend(self._if_alert_due(model, tz, now_ns, default_lookahead_ns))
 
         return events
+
+    @staticmethod
+    def _occurrences_in(
+        model: CalendarEventModel, start_ns: int, end_ns: int, tz: str | None
+    ) -> list[CalendarEventModel]:
+        """The event, or each occurrence of a recurring one, that starts in [start_ns, end_ns]."""
+        if not model.rrule:
+            return [model]
+        from local_llm.utils.calendar import expand_recurring_event
+
+        occurrences = []
+        for instance in expand_recurring_event(model.model_dump(), start_ns, end_ns, tz):
+            if start_ns <= instance['start_at'] <= end_ns:
+                occurrences.append(
+                    model.model_copy(update={'start_at': instance['start_at'], 'end_at': instance.get('end_at')})
+                )
+        return occurrences
+
+    @staticmethod
+    def _if_alert_due(
+        model: CalendarEventModel, tz: str | None, now_ns: int, default_lookahead_ns: int
+    ) -> list[tuple[CalendarEventModel, str | None]]:
+        """[(model, tz)] when this occurrence is inside its own alert lookahead, else []."""
+        # meta is user-writable and this poll is shared by every user.
+        alert_minutes = (model.meta or {}).get('alert_minutes')
+        if not isinstance(alert_minutes, (int, float)):
+            alert_minutes = None
+        if alert_minutes is not None and alert_minutes < 0:
+            return []  # alert_minutes < 0 means "no alert"
+        event_lookahead_ns = alert_minutes * 60 * 1_000_000_000 if alert_minutes is not None else default_lookahead_ns
+        return [(model, tz)] if model.start_at <= now_ns + event_lookahead_ns else []
 
     async def delete_event_by_id(self, id: str, db: AsyncSession | None = None) -> bool:
         try:
