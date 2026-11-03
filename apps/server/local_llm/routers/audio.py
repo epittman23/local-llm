@@ -894,6 +894,25 @@ async def _transcribe_azure(request, file_path, filename, file_dir, id):
         )
 
 
+# The speech-to-text engines the server runs; the others ("Web API") run in the browser.
+SERVER_STT_ENGINES = ('', 'openai', 'deepgram', 'azure', 'mistral')
+
+
+def _server_stt_refusal(engine: str | None) -> HTTPException:
+    """The 400 for an engine the server cannot transcribe with (#343)."""
+    if engine == 'web':
+        reason = (
+            'Speech to text is set to "Web API", which transcribes in the browser, so the server cannot '
+            'transcribe audio files.'
+        )
+    else:
+        reason = f'Speech to text is set to "{engine}", which the server cannot run.'
+    return HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=f'{reason} Choose a server engine in Admin Settings > Audio to transcribe audio files.',
+    )
+
+
 async def transcription_handler(request, file_path, metadata, user=None):
     filename = os.path.basename(file_path)
     file_dir = os.path.dirname(file_path)
@@ -917,6 +936,7 @@ async def transcription_handler(request, file_path, metadata, user=None):
 
     elif await Config.get('audio.stt.engine') == 'mistral':
         return await _transcribe_mistral(request, file_path, filename, metadata, file_dir, id)
+    raise _server_stt_refusal(await Config.get('audio.stt.engine'))
 
 
 async def _transcribe_mistral(request, file_path, filename, metadata, file_dir, id):
@@ -1069,6 +1089,9 @@ async def transcribe(request: Request, file_path: str, metadata: dict | None = N
     write all land there and are removed with it. They used to be written
     beside the upload, where deleting the file left them behind.
     """
+    engine = await Config.get('audio.stt.engine')
+    if engine not in SERVER_STT_ENGINES:
+        raise _server_stt_refusal(engine)
     with tempfile.TemporaryDirectory(prefix='lllm-transcribe-') as workdir:
         work_path = os.path.join(workdir, os.path.basename(file_path))
         await asyncio.to_thread(shutil.copyfile, file_path, work_path)
