@@ -65,8 +65,10 @@ function fails and knowledge uploads are not embedded. In Admin Settings >
 Documents, a missing embedding model is refused with an error that says
 whether an earlier model is still in use; nothing is saved. Every Documents
 save loads the embedding model, so while it is missing the page's other
-settings cannot be saved either, unless retrieval is bypassed. Fetch a model
-once with the backend's own `hf`, outside `make backend`:
+settings cannot be saved either, unless retrieval is bypassed. A reranking
+model that cannot load is not refused: the save goes through with hybrid
+search turned off, and the page says why in a warning and shows the toggle
+off. Fetch a model once with the backend's own `hf`, outside `make backend`:
 
 ```sh
 cd apps/server
