@@ -69,6 +69,7 @@ vi.mock('@/lib/apis', async (orig) => ({
 		(_t: string, id: string) => new Promise((resolve) => (pending[id] = (v) => resolve(v ?? { task_ids: [] })))
 	),
 	stopTasksByChatId: vi.fn(async () => true),
+	stopTask: vi.fn(async () => true),
 	generateTags: vi.fn(async () => ['tagged']),
 	chatAction: vi.fn(() => new Promise((resolve) => (pending.action = resolve)))
 }));
@@ -91,13 +92,15 @@ vi.mock('@/lib/apis/users', async (orig) => ({
 
 type Session = ReturnType<typeof useChatSession>;
 let session: Session;
+/** The models the probe offers; most tests send nothing, so none. */
+let probeModels: { id: string }[] = [];
 
 function Probe({ id }: { id: string }) {
 	session = useChatSession({
 		routeChatId: id,
 		folderId: null,
-		models: [],
-		selectedModels: [],
+		models: probeModels as never,
+		selectedModels: probeModels.map((m) => m.id),
 		temporary: false,
 		toggles: { webSearch: false, imageGeneration: false, codeInterpreter: false },
 		toolIds: []
@@ -289,5 +292,152 @@ describe('useChatSession loadChat', () => {
 		};
 		expect(body.history.messages['A-m']).toMatchObject({ feedbackId: 'fb2', annotation: { rating: 1 } });
 		expect(session.history.messages['B-m'].annotation).toBeUndefined();
+	});
+
+	/** The next completion POST, held until the test answers it. */
+	async function holdNextPost() {
+		const send = vi.mocked((await import('@/lib/apis/openai')).generateOpenAIChatCompletion);
+		send.mockClear();
+		const answer: { resolve: (v: unknown) => void } = { resolve: () => undefined };
+		send.mockImplementationOnce(() => new Promise((r) => (answer.resolve = r)) as never);
+		return { send, answer };
+	}
+
+	it('in a saved chat, a stop pressed before the task exists stops it once it does (#151)', async () => {
+		probeModels = [{ id: 'm' }];
+		try {
+			await openChatA();
+			const { send, answer } = await holdNextPost();
+			act(() => void session.submit('next', [], 'm'));
+			await waitFor(() => expect(send).toHaveBeenCalled());
+
+			await act(async () => session.stop());
+			vi.mocked(apis.stopTasksByChatId).mockClear();
+			await act(async () => answer.resolve({ task_ids: ['t1'] }));
+
+			// By chat id, which the chat's owner may use; stopping one task by id is admin-only.
+			expect(apis.stopTasksByChatId).toHaveBeenCalledWith('t', 'A');
+			expect(session.taskIds).toBeNull();
+		} finally {
+			probeModels = [];
+		}
+	});
+
+	it('a send after a stop waits for the stopped request to cancel its tasks first (#516)', async () => {
+		probeModels = [{ id: 'm' }];
+		try {
+			await openChatA();
+			const first = await holdNextPost();
+			act(() => void session.submit('first', [], 'm'));
+			await waitFor(() => expect(first.send).toHaveBeenCalledTimes(1));
+			await act(async () => session.stop());
+			vi.mocked(apis.stopTasksByChatId).mockClear();
+
+			first.send.mockImplementationOnce(async () => ({ task_ids: ['t2'] }) as never);
+			act(() => void session.submit('second', [], 'm'));
+			await waitFor(() => expect(asked('second')).toBe(true));
+			await act(async () => {});
+			// Cancelling the first request's tasks by chat id would also take the
+			// second reply, so the second POST waits for it.
+			expect(first.send).toHaveBeenCalledTimes(1);
+
+			await act(async () => first.answer.resolve({ task_ids: ['t1'] }));
+			await waitFor(() => expect(first.send).toHaveBeenCalledTimes(2));
+			expect(apis.stopTasksByChatId).toHaveBeenCalledWith('t', 'A');
+			expect(vi.mocked(apis.stopTasksByChatId).mock.invocationCallOrder[0]).toBeLessThan(
+				first.send.mock.invocationCallOrder[1]
+			);
+			await waitFor(() => expect(session.taskIds).toEqual(['t2']));
+		} finally {
+			probeModels = [];
+		}
+	});
+
+	it('a send still waiting when another chat opens is not sent (#516)', async () => {
+		probeModels = [{ id: 'm' }];
+		try {
+			const router = await openChatA();
+			const first = await holdNextPost();
+			act(() => void session.submit('first', [], 'm'));
+			await waitFor(() => expect(first.send).toHaveBeenCalledTimes(1));
+			await act(async () => session.stop());
+			act(() => void session.submit('second', [], 'm'));
+			await waitFor(() => expect(asked('second')).toBe(true));
+
+			await act(async () => router.navigate('/c/B'));
+			await waitFor(() => expect(pending.B).toBeDefined());
+			await act(async () => pending.B(undefined));
+			await act(async () => first.answer.resolve({ task_ids: ['t1'] }));
+			await act(async () => {});
+
+			// The waiting send would have been built from chat B's history.
+			expect(first.send).toHaveBeenCalledTimes(1);
+		} finally {
+			probeModels = [];
+		}
+	});
+
+	it('a stop in the chat opened next does not cancel the chat left behind (#151)', async () => {
+		probeModels = [{ id: 'm' }];
+		try {
+			const router = await openChatA();
+			const { send, answer } = await holdNextPost();
+			act(() => void session.submit('next', [], 'm'));
+			await waitFor(() => expect(send).toHaveBeenCalled());
+
+			await act(async () => router.navigate('/c/B'));
+			await waitFor(() => expect(pending.B).toBeDefined());
+			await act(async () => pending.B(undefined));
+			await act(async () => session.stop());
+			vi.mocked(apis.stopTasksByChatId).mockClear();
+			vi.mocked(apis.stopTask).mockClear();
+			await act(async () => answer.resolve({ task_ids: ['tA'] }));
+
+			expect(apis.stopTasksByChatId).not.toHaveBeenCalled();
+			expect(apis.stopTask).not.toHaveBeenCalled();
+		} finally {
+			probeModels = [];
+		}
+	});
+
+	it.each([
+		['the POST fails', () => Promise.reject(new Error('offline'))],
+		['the server answers with an error', async () => ({ error: { detail: 'model gone' } })]
+	])('continuing a reply that fails because %s marks it failed', async (_case, post) => {
+		probeModels = [{ id: 'm' }];
+		try {
+			await openChatA();
+			writing();
+			act(() => session.setHistory((h) => updateMessage(h, 'r', { done: true, content: 'half', model: 'm' })));
+			const send = vi.mocked((await import('@/lib/apis/openai')).generateOpenAIChatCompletion);
+			send.mockImplementationOnce(post as never);
+			await act(async () => session.continueReply(session.history.messages.r));
+
+			expect(session.history.messages.r.error).toBeTruthy();
+			expect(session.taskIds).toBeNull();
+		} finally {
+			probeModels = [];
+		}
+	});
+
+	it('continuing a reply is stopped the same way (#151)', async () => {
+		probeModels = [{ id: 'm' }];
+		try {
+			await openChatA();
+			writing();
+			act(() => session.setHistory((h) => updateMessage(h, 'r', { done: true, content: 'half', model: 'm' })));
+			const { send, answer } = await holdNextPost();
+			act(() => void session.continueReply(session.history.messages.r));
+			await waitFor(() => expect(send).toHaveBeenCalled());
+
+			await act(async () => session.stop());
+			vi.mocked(apis.stopTasksByChatId).mockClear();
+			await act(async () => answer.resolve({ task_id: 't3' }));
+
+			expect(apis.stopTasksByChatId).toHaveBeenCalledWith('t', 'A');
+			expect(session.taskIds).toBeNull();
+		} finally {
+			probeModels = [];
+		}
 	});
 });

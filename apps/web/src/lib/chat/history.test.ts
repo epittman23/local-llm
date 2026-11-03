@@ -117,6 +117,16 @@ describe('streaming events', () => {
 		const two = addResponses(h, userId, [{ id: 'b' }]).history;
 		const r = applyChatEvent(two, ev(two.currentId!, 'chat:tasks:cancel', {}));
 		expect(two.messages[userId].childrenIds.every((c) => r.history.messages[c].done)).toBe(true);
+		expect(r.effects).toContainEqual({ kind: 'cancelled', current: true });
+	});
+	it('a cancel for a reply a later send replaced is not the current one (#516)', () => {
+		const { h } = conversation();
+		const old = h.currentId ?? '';
+		const next = addUserMessage(h, old, { content: 'again' });
+		const later = addResponses(next.history, next.id, [{ id: 'a' }]).history;
+		const r = applyChatEvent(later, ev(old, 'chat:tasks:cancel', {}));
+		expect(r.effects).toContainEqual({ kind: 'cancelled', current: false });
+		expect(r.history.messages[old].done).toBe(true);
 	});
 });
 
