@@ -5537,6 +5537,17 @@ class _StreamingReply:
 
             try:
                 await self.consume(response, self.form_data)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                # The upstream body failed mid-stream (a reset connection, a
+                # payload error, an idle timeout). Keep what already streamed,
+                # finished, and clear the stream snapshot; the caller then
+                # records the error on the message and tells the chat (#163).
+                # Only the stream: later rounds save through _finish().
+                log.exception('the reply stream failed; saving what arrived')
+                await self._save_partial_state(response, cancelled=False)
+                raise
             finally:
                 if response.background:
                     await response.background()
@@ -5622,6 +5633,14 @@ class _StreamingReply:
         await background_tasks_handler(self.ctx)
 
     async def _save_cancelled_state(self, response) -> None:
+        await self._save_partial_state(response, cancelled=True)
+
+    async def _save_partial_state(self, response, *, cancelled: bool) -> None:
+        """Save what streamed so far as finished, and clear the stream snapshot.
+
+        `cancelled` also tells the chat the tasks were cancelled; after a
+        failure the caller reports the error, and that report announces it.
+        """
         # Close the response body iterator to trigger cleanup
         # in stream_wrapper's finally block and release the
         # upstream connection.  Without this, the async
@@ -5633,7 +5652,8 @@ class _StreamingReply:
                 pass
 
         async def save_cancelled_state():
-            await self.event_emitter({'type': 'chat:tasks:cancel'})
+            if cancelled:
+                await self.event_emitter({'type': 'chat:tasks:cancel'})
             if self.save_to_chat:
                 await Chats.upsert_message_to_chat_by_id_and_message_id(
                     self.metadata['chat_id'],
