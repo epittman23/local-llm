@@ -54,7 +54,35 @@ def test_transcribe_refuses_an_engine_the_server_cannot_run(monkeypatch, tmp_pat
     assert raised.value.status_code == 400
     assert 'Admin Settings > Audio' in raised.value.detail
     if engine == 'web':
-        assert 'in the browser' in raised.value.detail
+        assert '"Web API", a browser engine' in raised.value.detail
+
+
+@pytest.mark.parametrize('engine', audio_router.SERVER_STT_ENGINES)
+def test_every_server_engine_is_one_the_handler_runs(monkeypatch, tmp_path, engine):
+    """The list `transcribe` checks matches the handler's branches, so no server engine is refused."""
+    _engine(monkeypatch, engine)
+    ran = []
+
+    def stub(name):
+        async def run(*_a, **_k):
+            ran.append(name)
+            return {'text': name}
+
+        return run
+
+    for name in (
+        '_transcribe_whisper',
+        '_transcribe_openai',
+        '_transcribe_deepgram',
+        '_transcribe_azure',
+        '_transcribe_mistral',
+    ):
+        monkeypatch.setattr(audio_router, name, stub(name))
+
+    result = asyncio.run(audio_router.transcription_handler(SimpleNamespace(), str(tmp_path / 'c.mp3'), {}))
+
+    assert len(ran) == 1
+    assert result == {'text': ran[0]}
 
 
 def test_a_chunk_for_an_engine_the_server_cannot_run_is_refused_too(monkeypatch, tmp_path):

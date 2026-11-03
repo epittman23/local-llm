@@ -901,15 +901,12 @@ SERVER_STT_ENGINES = ('', 'openai', 'deepgram', 'azure', 'mistral')
 def _server_stt_refusal(engine: str | None) -> HTTPException:
     """The 400 for an engine the server cannot transcribe with (#343)."""
     if engine == 'web':
-        reason = (
-            'Speech to text is set to "Web API", which transcribes in the browser, so the server cannot '
-            'transcribe audio files.'
-        )
+        reason = 'Speech to text is set to "Web API", a browser engine, so the server cannot transcribe audio files.'
     else:
         reason = f'Speech to text is set to "{engine}", which the server cannot run.'
     return HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,
-        detail=f'{reason} Choose a server engine in Admin Settings > Audio to transcribe audio files.',
+        detail=f'{reason} An admin can choose a server engine in Admin Settings > Audio to transcribe them.',
     )
 
 
