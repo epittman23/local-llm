@@ -156,9 +156,10 @@ async def _start_serve_locked(form_data: ServeStartForm):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
     job = ServeProcess(config=resolved, profile_version_id=entry.version.version_id)
-    # Something already answering on the port is not ours: an orphan left by
-    # an earlier backend (the documented --reload case) or a hand-started
-    # server. The new llama-server could not bind, and its telemetry would be
+    # Something already answering on the port is not ours: a hand-started
+    # server, or an orphan left by an earlier backend whose recorder is gone
+    # (while that recorder still runs, the active-run check above refuses
+    # first). The new llama-server could not bind, and its telemetry would be
     # filed under this configuration while measuring the other one (#156).
     if await _port_answers(job.port):
         raise HTTPException(

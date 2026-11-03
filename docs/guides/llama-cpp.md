@@ -104,10 +104,13 @@ every interface.)
 A served `llama-server` runs in its own session, so it **outlives the
 backend**: a `--reload` restart, or Ctrl-C on `make backend`, leaves it
 holding VRAM, and the Serve page reads "Stopped" afterwards. Stop it with
-`pkill -f llama-server`. Until it is stopped, Serve refuses to start
-another server on the same port (409, "something is already serving on
-port ..."), since the new one could not bind and its telemetry would
-describe the old one. A backend started with
+`pkill -f llama-server`. Until it is stopped, Serve refuses (409) to
+start another server on the same port, since the new one could not bind
+and its telemetry would describe the old one. The message names whichever
+check refused first: "a recorded run is already active on another
+process" while the orphan's own recorder still runs (it outlives the
+backend too), or "something is already serving on port ..." when nothing
+is recording it. A backend started with
 `LLLM_STOP_JOBS_ON_SHUTDOWN=true` (and a graceful-shutdown timeout, through
 `LLLM_UVICORN_FLAGS`) instead stops it on exit, after stopping any tune sweep
 or Tests job.
