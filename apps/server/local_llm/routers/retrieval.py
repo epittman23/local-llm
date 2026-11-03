@@ -123,6 +123,7 @@ from local_llm.utils.access_control.files import has_access_to_file
 from local_llm.utils.auth import get_admin_user, get_verified_user
 from local_llm.utils.misc import (
     calculate_sha256_string,
+    chunk_settings_error,
     sanitize_text_for_db,
 )
 
@@ -970,6 +971,16 @@ async def update_rag_config(request: Request, form_data: ConfigForm, user=Depend
     warnings: list[str] = []
     # RAG settings
     config = await get_retrieval_config()
+    # Checked before anything changes, so a refused save changes nothing, and
+    # only when the save sets a chunk value (a Web Search save sets none):
+    # the one it leaves alone is checked at its stored value.
+    if form_data.CHUNK_SIZE is not None or form_data.CHUNK_OVERLAP is not None:
+        chunk_error = chunk_settings_error(
+            form_data.CHUNK_SIZE if form_data.CHUNK_SIZE is not None else config.CHUNK_SIZE,
+            form_data.CHUNK_OVERLAP if form_data.CHUNK_OVERLAP is not None else config.CHUNK_OVERLAP,
+        )
+        if chunk_error:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=chunk_error)
     config.RAG_TEMPLATE = form_data.RAG_TEMPLATE if form_data.RAG_TEMPLATE is not None else config.RAG_TEMPLATE
     config.TOP_K = form_data.TOP_K if form_data.TOP_K is not None else config.TOP_K
     config.BYPASS_EMBEDDING_AND_RETRIEVAL = (
