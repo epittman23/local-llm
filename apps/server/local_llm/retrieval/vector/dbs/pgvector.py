@@ -568,10 +568,14 @@ class PgvectorClient(VectorDBBase):
 
             fts_results = []
             if bm25_weight > 0 and query and query.strip():
+                # Any of the query's words, not every one (#347): plainto_tsquery
+                # ANDs them, so a question matched almost no chunk. Its output
+                # is a parsed, quoted tsquery, so swapping its ANDs for ORs is
+                # safe; ts_rank_cd still ranks chunks with more words higher.
                 fts_rows = self.session.execute(
                     text("""
                         WITH fts_query AS (
-                            SELECT plainto_tsquery('simple', :query) AS query
+                            SELECT replace(plainto_tsquery('simple', :query)::text, ' & ', ' | ')::tsquery AS query
                         )
                         SELECT
                             document_chunk.id AS id,
@@ -595,6 +599,12 @@ class PgvectorClient(VectorDBBase):
                 )
                 fts_results = [dict(row) for row in fts_rows.mappings().all()]
                 self.session.rollback()
+
+            if not fts_results and vector_result is None and vectors:
+                # Keywords only, and none matched: vector search answers, rather
+                # than chat getting no context at all (#347).
+                vector_result = self.search(collection_name=collection_name, vectors=vectors, limit=limit)
+                hybrid_bm25_weight = 0.0
 
             return merge_hybrid_search_results(
                 vector_result=vector_result,
