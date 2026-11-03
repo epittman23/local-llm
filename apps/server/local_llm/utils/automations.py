@@ -718,7 +718,11 @@ async def execute_automation(app, automation: AutomationModel) -> None:
             # the run still gets its row and its FAILED event.
             await asyncio.shield(finish_automation_run(app, user, run, error=REPLY_INTERRUPTED))
             raise
-        await finish_automation_run(app, user, run, error=reason)
+        if reason == REPLY_INTERRUPTED:
+            # Shutdown is under way: recorded under shield, as above.
+            await asyncio.shield(finish_automation_run(app, user, run, error=reason))
+        else:
+            await finish_automation_run(app, user, run, error=reason)
 
     except Exception as e:
         log.exception(f'Automation {automation.id} failed')
@@ -860,7 +864,10 @@ async def _wait_for_reply(response, wait_seconds: float = REPLY_WAIT_SECONDS) ->
     if still_running:
         return f'The reply did not finish within {round(wait_seconds)} s'
     if any(task.cancelled() for task in done):
-        return REPLY_STOPPED
+        # Shutdown cancels running replies too (#362); that is not a Stop.
+        from local_llm import tasks as registry
+
+        return REPLY_INTERRUPTED if registry.stopping else REPLY_STOPPED
     return None
 
 

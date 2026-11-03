@@ -15,6 +15,9 @@ log = logging.getLogger(__name__)
 # A dictionary to keep track of active tasks
 tasks: dict[str, asyncio.Task] = {}
 item_tasks = {}
+# Set once shutdown has begun stopping tasks (#362): a task cancelled then was
+# not stopped by anyone, and no new reply should be started.
+stopping = False
 response_streams: dict[str, dict] = {}
 
 
@@ -157,15 +160,27 @@ async def stop_all_tasks(wait_seconds: float = 10) -> int:
 
     For shutdown (#362): a reply cancelled this way saves what arrived as
     stopped, which it can only do while the HTTP pool and the database are
-    still open. Returns how many tasks were cancelled; any still running at
-    the limit are left to the event loop's own teardown.
+    still open. Sets `stopping`, so callers can tell a shutdown from a Stop
+    and start nothing new. Returns how many tasks were cancelled; any still
+    running at the limit are left to the event loop's own teardown.
     """
-    running = [task for task in tasks.values() if not task.done()]
-    for task in running:
-        task.cancel()
-    if running:
-        await asyncio.wait(running, timeout=wait_seconds)
-    return len(running)
+    global stopping
+    stopping = True
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + wait_seconds
+    cancelled: set[asyncio.Task] = set()
+    # Again until nothing runs: a task ending can start another (a sub-agent's
+    # result starts a reply in its parent chat), which must stop too.
+    while running := [task for task in tasks.values() if not task.done()]:
+        for task in running:
+            if task not in cancelled:
+                task.cancel()
+                cancelled.add(task)
+        remaining = deadline - loop.time()
+        if remaining <= 0:
+            break
+        await asyncio.wait(running, timeout=remaining, return_when=asyncio.FIRST_COMPLETED)
+    return len(cancelled)
 
 
 async def list_tasks(redis):

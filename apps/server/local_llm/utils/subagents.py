@@ -76,6 +76,12 @@ async def process_pending_internal_messages(
     user_id: str,
     run: dict,
 ) -> None:
+    from local_llm import tasks as registry
+
+    if registry.stopping:
+        # The backend is shutting down (#362): a reply started now would break
+        # on the closed pool. The results stay pending for the next start.
+        return
     lock = _parent_locks.setdefault(parent_chat_id, asyncio.Lock())
     while await has_active_tasks(source_request.app.state.redis, parent_chat_id):
         await asyncio.sleep(0.25)
