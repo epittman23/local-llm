@@ -1087,7 +1087,9 @@ class ChatTable:
             )
             metadata_row = result.first()
 
-        if metadata_row is not None:
+        # A row whose column is still NULL falls back to the chat JSON, which
+        # may hold what an older writer put only there (#290).
+        if metadata_row is not None and metadata_row[0] is not None:
             return metadata_row[0]
 
         chat = await self.get_chat_by_id(chat_id)
@@ -1217,10 +1219,12 @@ class ChatTable:
                 self._repair_chat_current_id(chat)
                 history = chat.get('history', {})
 
+                saved_message = None
                 if message_id in history.get('messages', {}):
                     status_history = history['messages'][message_id].get('statusHistory', [])
                     status_history.append(status)
                     history['messages'][message_id]['statusHistory'] = status_history
+                    saved_message = history['messages'][message_id]
 
                 chat['history'] = history
                 chat_item.chat = chat
@@ -1228,10 +1232,38 @@ class ChatTable:
                 chat_item.current_message_id = self.get_current_message_id(chat)
                 flag_modified(chat_item, 'chat')
                 await session.commit()
+                updated_chat = ChatModel.model_validate(chat_item)
+                user_id = str(chat_item.user_id)
 
-                return ChatModel.model_validate(chat_item)
+            if saved_message is not None:
+                await self._mirror_message_row(
+                    id, message_id, user_id, saved_message, {'statusHistory': saved_message.get('statusHistory', [])}
+                )
+            return updated_chat
         except Exception:
             return None
+
+    async def _mirror_message_row(
+        self, chat_id: str, message_id: str, user_id: str, message: Any, fields: dict
+    ) -> None:
+        """Write what changed in the chat JSON to the message's chat_message row too.
+
+        Reads prefer the row (get_message_metadata, the messages map forks and
+        compaction build from), so a writer that changed only the JSON was
+        invisible to them (#290). An existing row gets only `fields`: writing
+        the whole JSON message would also carry over its other fields (its
+        usage, or a `done` a later save already changed). A missing row is
+        created from the whole message. As in
+        upsert_message_to_chat_by_id_and_message_id, a failure here is logged
+        and does not undo the JSON write.
+        """
+        try:
+            existing = await ChatMessages.get_message_by_id(f'{chat_id}-{message_id}')
+            await ChatMessages.upsert_message(
+                message_id=message_id, chat_id=chat_id, user_id=user_id, data=fields if existing else message
+            )
+        except Exception as e:
+            log.warning(f'Failed to write to chat_message table: {e}')
 
     async def add_message_files_by_id_and_message_id(
         self, id: str, message_id: str, files: list[dict]
@@ -1250,11 +1282,13 @@ class ChatTable:
             history = chat.get('history', {})
 
             message_files = []
+            saved_message = None
 
             if message_id in history.get('messages', {}):
                 message_files = history['messages'][message_id].get('files', [])
                 message_files = message_files + files
                 history['messages'][message_id]['files'] = message_files
+                saved_message = history['messages'][message_id]
 
             # Written here rather than through update_chat_by_id: with session sharing off that opens a second
             # connection, which then blocks on the lock this one holds.
@@ -1264,7 +1298,15 @@ class ChatTable:
             flag_modified(chat_item, 'chat')
             chat_item.updated_at = int(time.time())
             await session.commit()
-            return message_files
+            user_id = str(chat_item.user_id)
+
+        # After the session closes, so the row write does not wait on this chat's lock.
+        if saved_message is not None:
+            cleaned = self._clean_null_bytes(saved_message)
+            await self._mirror_message_row(
+                id, message_id, user_id, cleaned, {'files': self._clean_null_bytes(message_files)}
+            )
+        return message_files
 
     async def insert_shared_chat_by_chat_id(self, chat_id: str, db: AsyncSession | None = None) -> ChatModel | None:
         """Create a shared snapshot for a chat. Returns the original chat with share_id set."""
