@@ -1497,6 +1497,8 @@ class ChatTable:
         skip: int = 0,
         limit: int = 50,
         db: AsyncSession | None = None,
+        updated_after: int | None = None,
+        updated_before: int | None = None,
     ) -> list[ChatTitleIdResponse]:
         async with get_async_db_context(db) as session:
             stmt = select(Chat.id, Chat.title, Chat.updated_at, Chat.created_at, Chat.last_read_at).filter_by(
@@ -1505,6 +1507,11 @@ class ChatTable:
             stmt = stmt.where(Chat.meta['internal'].as_boolean().is_not(True))
             if not include_archived:
                 stmt = stmt.filter_by(archived=False)
+            # Unix seconds, inclusive: an empty search lists chats through here (#181).
+            if updated_after is not None:
+                stmt = stmt.filter(Chat.updated_at >= updated_after)
+            if updated_before is not None:
+                stmt = stmt.filter(Chat.updated_at <= updated_before)
 
             if filter:
                 query_key = filter.get('query')
@@ -1981,7 +1988,14 @@ class ChatTable:
 
         if not search_text:
             return await self.get_chat_list_by_user_id(
-                user_id, include_archived, filter={}, skip=skip, limit=limit, db=db
+                user_id,
+                include_archived,
+                filter={},
+                skip=skip,
+                limit=limit,
+                db=db,
+                updated_after=updated_after,
+                updated_before=updated_before,
             )
 
         search_text_words = search_text.split()

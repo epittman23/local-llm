@@ -141,3 +141,52 @@ def test_the_current_chat_is_still_left_out_and_does_not_cost_a_result():
 
     assert len(found) == 5
     assert newest.id not in [c['id'] for c in found]
+
+
+def test_an_empty_query_still_keeps_to_the_range():
+    # An empty query lists chats instead of searching them; the range must
+    # apply there too ("what did I chat about last year").
+    uid = _user()
+    _chats(uid)
+
+    found = json.loads(
+        _run(
+            builtin.search_chats('', count=20, end_timestamp=NOW - YEAR // 2, __request__=REQUEST, __user__={'id': uid})
+        )
+    )
+
+    assert sorted(c['title'] for c in found) == sorted(f'kubernetes {i}' for i in range(15, 20))
+
+
+def test_note_bounds_are_inclusive_at_both_ends():
+    uid = _user()
+    _notes(uid)
+    newest_old = LAST_YEAR - 15 * 60  # 'kubernetes 15', the newest of last year's
+
+    found = json.loads(
+        _run(
+            builtin.search_notes(
+                'kubernetes',
+                count=20,
+                start_timestamp=newest_old,
+                end_timestamp=newest_old,
+                __request__=REQUEST,
+                __user__={'id': uid},
+            )
+        )
+    )
+
+    assert [n['title'] for n in found] == ['kubernetes 15']
+
+
+def test_asking_for_no_results_gets_none():
+    uid = _user()
+    _chats(uid)
+    _notes(uid)
+
+    assert (
+        json.loads(_run(builtin.search_chats('kubernetes', count=0, __request__=REQUEST, __user__={'id': uid}))) == []
+    )
+    assert (
+        json.loads(_run(builtin.search_notes('kubernetes', count=0, __request__=REQUEST, __user__={'id': uid}))) == []
+    )

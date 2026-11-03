@@ -1156,6 +1156,9 @@ async def search_notes(
     if not __user__:
         return JSONCodec.dumps({'error': 'User context not available'})
 
+    if count < 1:
+        return JSONCodec.dumps([])
+
     try:
         user_id = __user__.get('id')
         user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id)]
@@ -1530,6 +1533,9 @@ async def search_chats(
 
     if not __user__:
         return JSONCodec.dumps({'error': 'User context not available'})
+
+    if count < 1:
+        return JSONCodec.dumps([])
 
     try:
         user_id = __user__.get('id')
