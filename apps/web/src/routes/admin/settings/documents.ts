@@ -50,6 +50,20 @@ const isJsonObjectText = (text: string) => {
 const objectOrEmpty = (text: unknown) => (typeof text === 'string' && text.trim() !== '' ? JSON.parse(text) : {});
 
 /** What the chosen extraction engine cannot run without, or a malformed JSON box; null when the form is fine. */
+/**
+ * Why the text splitters could not use these chunk settings, or null (#235);
+ * the same rule as the server's `_chunk_settings_error`. A cleared box (null)
+ * leaves the stored value, which the server checks.
+ */
+export function chunkSettingsError(size: unknown, overlap: unknown): string | null {
+	const isNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+	if (isNumber(size) && (size < 1 || !Number.isInteger(size))) return 'Chunk Size must be at least 1.';
+	if (isNumber(overlap) && (overlap < 0 || !Number.isInteger(overlap))) return 'Chunk Overlap cannot be negative.';
+	if (isNumber(size) && isNumber(overlap) && overlap >= size)
+		return `Chunk Overlap must be smaller than Chunk Size (${overlap} is not smaller than ${size}).`;
+	return null;
+}
+
 export function ragFormError(c: Rec): string | null {
 	const engine = c.CONTENT_EXTRACTION_ENGINE;
 	if (engine === 'external') {
@@ -71,6 +85,8 @@ export function ragFormError(c: Rec): string | null {
 	if (engine === 'paddleocr_vl' && blank(c.PADDLEOCR_VL_BASE_URL)) return 'PaddleOCR-vl API URL required.';
 	if (engine === 'mineru' && c.MINERU_API_MODE === 'cloud' && blank(c.MINERU_API_KEY))
 		return 'MinerU API Key required for Cloud API mode.';
+	const chunk = chunkSettingsError(c.CHUNK_SIZE, c.CHUNK_OVERLAP);
+	if (chunk) return chunk;
 	if (c.DOCLING_PARAMS && !parsesAsJson(c.DOCLING_PARAMS)) return 'Invalid JSON format in Docling Parameters';
 	if (c.MINERU_PARAMS && !parsesAsJson(c.MINERU_PARAMS)) return 'Invalid JSON format in MinerU Parameters';
 	return null;

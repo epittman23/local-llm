@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	buildEmbeddingPayload,
 	buildRagPayload,
+	chunkSettingsError,
 	contextPlaceholders,
 	embeddingError,
 	embeddingModelFor,
@@ -222,5 +223,32 @@ describe('contextPlaceholders', () => {
 		expect(contextPlaceholders('Use [context] to answer')).toBe(1);
 		expect(contextPlaceholders('[context] and {{CONTEXT}}')).toBe(2);
 		expect(contextPlaceholders(null)).toBe(0);
+	});
+});
+
+describe('chunkSettingsError', () => {
+	it('refuses what the text splitters cannot use (#235)', () => {
+		expect(chunkSettingsError(0, 0)).toBe('Chunk Size must be at least 1.');
+		expect(chunkSettingsError(1.5, 0)).toBe('Chunk Size must be at least 1.');
+		expect(chunkSettingsError(100, -1)).toBe('Chunk Overlap cannot be negative.');
+		expect(chunkSettingsError(100, 200)).toBe(
+			'Chunk Overlap must be smaller than Chunk Size (200 is not smaller than 100).'
+		);
+		expect(chunkSettingsError(100, 100)).toBe(
+			'Chunk Overlap must be smaller than Chunk Size (100 is not smaller than 100).'
+		);
+	});
+
+	it('accepts working settings, and leaves a cleared box to the server', () => {
+		expect(chunkSettingsError(1000, 100)).toBeNull();
+		expect(chunkSettingsError(1, 0)).toBeNull();
+		expect(chunkSettingsError(null, 100)).toBeNull();
+		expect(chunkSettingsError(1000, null)).toBeNull();
+	});
+
+	it('is part of the form check, so the embedding model is not applied first', () => {
+		expect(ragFormError({ CHUNK_SIZE: 100, CHUNK_OVERLAP: 200 })).toBe(
+			'Chunk Overlap must be smaller than Chunk Size (200 is not smaller than 100).'
+		);
 	});
 });

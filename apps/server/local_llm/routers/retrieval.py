@@ -965,9 +965,35 @@ class ConfigForm(BaseModel):
 
 
 @router.post('/config/update')
+def _chunk_settings_error(chunk_size, chunk_overlap) -> str | None:
+    """Why the text splitters could not use these chunk settings, or None (#235).
+
+    They raise on a size below 1, a negative overlap, or an overlap larger
+    than the size, on every upload and reindex. An overlap equal to the size
+    is refused too: each chunk would repeat the whole of the one before.
+    """
+    if not isinstance(chunk_size, int) or chunk_size < 1:
+        return 'Chunk Size must be at least 1.'
+    if not isinstance(chunk_overlap, int) or chunk_overlap < 0:
+        return 'Chunk Overlap cannot be negative.'
+    if chunk_overlap >= chunk_size:
+        return f'Chunk Overlap must be smaller than Chunk Size ({chunk_overlap} is not smaller than {chunk_size}).'
+    return None
+
+
 async def update_rag_config(request: Request, form_data: ConfigForm, user=Depends(get_admin_user)):
     # RAG settings
     config = await get_retrieval_config()
+    # Checked before anything changes, so a refused save changes nothing, and
+    # only when the save sets a chunk value (a Web Search save sets none):
+    # the one it leaves alone is checked at its stored value.
+    if form_data.CHUNK_SIZE is not None or form_data.CHUNK_OVERLAP is not None:
+        chunk_error = _chunk_settings_error(
+            form_data.CHUNK_SIZE if form_data.CHUNK_SIZE is not None else config.CHUNK_SIZE,
+            form_data.CHUNK_OVERLAP if form_data.CHUNK_OVERLAP is not None else config.CHUNK_OVERLAP,
+        )
+        if chunk_error:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=chunk_error)
     config.RAG_TEMPLATE = form_data.RAG_TEMPLATE if form_data.RAG_TEMPLATE is not None else config.RAG_TEMPLATE
     config.TOP_K = form_data.TOP_K if form_data.TOP_K is not None else config.TOP_K
     config.BYPASS_EMBEDDING_AND_RETRIEVAL = (

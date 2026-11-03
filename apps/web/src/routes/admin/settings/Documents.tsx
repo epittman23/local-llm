@@ -261,7 +261,7 @@ export default function Documents() {
 										label="Chunk Size"
 										description="Maximum size for each text chunk."
 										placeholder="Enter Chunk Size"
-										min={0}
+										min={1}
 									/>
 									<BoundNumber
 										{...bound}
