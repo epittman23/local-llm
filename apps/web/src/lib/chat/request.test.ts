@@ -76,6 +76,46 @@ describe('completionBody', () => {
 		variables: {}
 	};
 
+	it('sends only the documents still attached to a message on the path being answered (#160)', () => {
+		const doc = { type: 'file', id: 'd1', content_type: 'application/pdf' };
+		const other = { type: 'file', id: 'd2', content_type: 'text/plain' };
+		// Branch A: a user message carrying d1, answered.
+		const a = addUserMessage(emptyHistory(), null, { content: 'read this', files: [doc] });
+		const ar = addResponses(a.history, a.id, [{ id: 'a' }]);
+		// Branch B: a sibling of that message with no files, being answered now.
+		const b = addUserMessage(ar.history, null, { content: 'no files here' });
+		const br = addResponses(b.history, b.id, [{ id: 'a' }]);
+		const body = (responseId: string, history = br.history) =>
+			completionBody({
+				...base,
+				history,
+				responseId,
+				chatId: 'c1',
+				temporary: false,
+				chatFiles: [doc, other]
+			});
+
+		// d1 lives only on branch A, and d2 on no message at all (its message was deleted).
+		expect(body(br.targets[0].message_id).files).toBeUndefined();
+		expect(body(ar.targets[0].message_id).files).toEqual([doc]);
+	});
+
+	it('keeps the chat documents a regeneration with a suggestion still sees (#160)', () => {
+		const doc = { type: 'file', id: 'd1', content_type: 'application/pdf' };
+		const u = addUserMessage(emptyHistory(), null, { content: 'read this', files: [doc] });
+		const r = addResponses(u.history, u.id, [{ id: 'a' }]);
+		const body = completionBody({
+			...base,
+			history: r.history,
+			responseId: r.targets[0].message_id,
+			chatId: 'c1',
+			temporary: false,
+			chatFiles: [doc],
+			messages: [u.history.messages[u.id]]
+		});
+		expect(body.files).toEqual([doc]);
+	});
+
 	it('a number cleared in chat controls means Default, not an empty value sent upstream (#200)', () => {
 		const body = completionBody({
 			...setup(),

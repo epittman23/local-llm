@@ -13,6 +13,7 @@ import { useChatSession } from './useChatSession';
 // left must not overwrite the one now open.
 
 const pending: Record<string, (v: unknown) => void> = {};
+const DOC = { type: 'file', id: 'd1', content_type: 'application/pdf' };
 
 vi.mock('@/lib/apis/chats', async (orig) => ({
 	...(await orig<object>()),
@@ -21,29 +22,41 @@ vi.mock('@/lib/apis/chats', async (orig) => ({
 		chat: {
 			title: `chat ${id}`,
 			models: [`model-${id}`],
+			...(id === 'F' ? { files: [DOC] } : {}),
 			history:
-				id === 'M'
-					? // Two models answered; the current reply finished, its sibling was saved mid-stream.
+				id === 'F'
+					? // The document was attached on branch q1; the open branch, q2, has none.
 						{
-							currentId: 'a',
+							currentId: 'a2',
 							messages: {
-								q: { id: 'q', parentId: null, childrenIds: ['b', 'a'], role: 'user', content: 'q' },
-								b: { id: 'b', parentId: 'q', childrenIds: [], role: 'assistant', content: 'y', done: false },
-								a: { id: 'a', parentId: 'q', childrenIds: [], role: 'assistant', content: 'x', done: true }
+								q1: { id: 'q1', parentId: null, childrenIds: ['a1'], role: 'user', content: 'read', files: [DOC] },
+								a1: { id: 'a1', parentId: 'q1', childrenIds: [], role: 'assistant', content: 'ok', done: true },
+								q2: { id: 'q2', parentId: null, childrenIds: ['a2'], role: 'user', content: 'other' },
+								a2: { id: 'a2', parentId: 'q2', childrenIds: [], role: 'assistant', content: 'x', done: true }
 							}
 						}
-					: {
-							currentId: `${id}-m`,
-							messages: {
-								[`${id}-m`]: {
-									id: `${id}-m`,
-									parentId: null,
-									childrenIds: [],
-									role: 'user',
-									content: `hello from ${id}`
+					: id === 'M'
+						? // Two models answered; the current reply finished, its sibling was saved mid-stream.
+							{
+								currentId: 'a',
+								messages: {
+									q: { id: 'q', parentId: null, childrenIds: ['b', 'a'], role: 'user', content: 'q' },
+									b: { id: 'b', parentId: 'q', childrenIds: [], role: 'assistant', content: 'y', done: false },
+									a: { id: 'a', parentId: 'q', childrenIds: [], role: 'assistant', content: 'x', done: true }
 								}
 							}
-						}
+						: {
+								currentId: `${id}-m`,
+								messages: {
+									[`${id}-m`]: {
+										id: `${id}-m`,
+										parentId: null,
+										childrenIds: [],
+										role: 'user',
+										content: `hello from ${id}`
+									}
+								}
+							}
 		}
 	})),
 	updateChatById: vi.fn(async () => null),
@@ -91,13 +104,15 @@ vi.mock('@/lib/apis/users', async (orig) => ({
 
 type Session = ReturnType<typeof useChatSession>;
 let session: Session;
+/** The models the probe offers; most tests send nothing, so none. */
+let probeModels: { id: string }[] = [];
 
 function Probe({ id }: { id: string }) {
 	session = useChatSession({
 		routeChatId: id,
 		folderId: null,
-		models: [],
-		selectedModels: [],
+		models: probeModels as never,
+		selectedModels: probeModels.map((m) => m.id),
 		temporary: false,
 		toggles: { webSearch: false, imageGeneration: false, codeInterpreter: false },
 		toolIds: []
@@ -289,5 +304,31 @@ describe('useChatSession loadChat', () => {
 		};
 		expect(body.history.messages['A-m']).toMatchObject({ feedbackId: 'fb2', annotation: { rating: 1 } });
 		expect(session.history.messages['B-m'].annotation).toBeUndefined();
+	});
+});
+
+describe('useChatSession chat documents (#160)', () => {
+	beforeEach(() => {
+		useAuthStore.setState({ token: 't' } as never);
+		probeModels = [{ id: 'm' }];
+	});
+	afterEach(() => {
+		probeModels = [];
+	});
+
+	it('a document from another branch is neither sent nor kept', async () => {
+		const send = vi.mocked((await import('@/lib/apis/openai')).generateOpenAIChatCompletion);
+		send.mockClear();
+		renderAt('F');
+		await waitFor(() => expect(pending.F).toBeDefined());
+		await act(async () => pending.F({ task_ids: [] }));
+		await waitFor(() => expect(session.chatFiles).toEqual([DOC]));
+
+		await act(async () => void (await session.submit('next', [], 'm')));
+
+		await waitFor(() => expect(send).toHaveBeenCalled());
+		const body = send.mock.calls.at(-1)![1] as { files?: unknown };
+		expect(body.files).toBeUndefined();
+		expect(session.chatFiles).toEqual([]);
 	});
 });

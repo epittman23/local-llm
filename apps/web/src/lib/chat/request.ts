@@ -138,6 +138,18 @@ export function initialModels(opts: {
 	return selected;
 }
 
+/**
+ * The chat's documents still attached to a message on `path`, the
+ * conversation being answered. `chatFiles` only ever grows as files are
+ * attached, so without this a document from a deleted message or another
+ * branch kept being sent as context (#160). Chat.svelte filtered it the same
+ * way before every send (d863707:apps/openwebui/src/lib/components/chat/Chat.svelte).
+ */
+export function pathChatFiles(chatFiles: ChatFile[], path: Message[]): ChatFile[] {
+	const onPath = path.flatMap((m) => m.files ?? []);
+	return chatFiles.filter((f) => onPath.some((g) => g.id === f.id));
+}
+
 /** Files the server should read for this turn: the chat's documents plus the new message's non-image files, deduplicated. */
 export function turnFiles(chatFiles: ChatFile[], userMessage: Message | undefined): ChatFile[] {
 	const docTypes = ['doc', 'text', 'note', 'chat', 'collection', 'folder'];
@@ -189,7 +201,7 @@ export function completionBody(c: CompletionContext) {
 	let messages: Record<string, unknown>[] = system ? [{ role: 'system', content: String(system) }] : [];
 	// Saved chats are read from the database; a temporary one has to carry its conversation.
 	if (c.temporary) messages = [...messages, ...toApiMessages(c.messages ?? messagesList(c.history, c.responseId))];
-	const files = turnFiles(c.chatFiles, user);
+	const files = turnFiles(pathChatFiles(c.chatFiles, c.messages ?? messagesList(c.history, c.responseId)), user);
 	const newChat = !c.chatId;
 	const stream =
 		(c.model as { info?: { params?: { stream_response?: boolean } } }).info?.params?.stream_response ??

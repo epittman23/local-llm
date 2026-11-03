@@ -35,6 +35,7 @@ import {
 	type FeatureToggles,
 	completionBody,
 	isTemporaryChatId,
+	pathChatFiles,
 	promptVariables,
 	requestFeatures,
 	temporaryChatId
@@ -314,6 +315,21 @@ export function useChatSession({
 		};
 	}, [socket, setHistory, handleEffects]);
 
+	/**
+	 * The chat's documents still attached to a message on `path`, written back
+	 * so the chat saves only those (#160). `chatFiles` only grows as files are
+	 * attached; Chat.svelte pruned it the same way before every send.
+	 */
+	const keepPathFiles = useCallback((path: Message[]) => {
+		const all = latest.current.chatFiles;
+		const kept = pathChatFiles(all, path);
+		if (kept.length !== all.length) {
+			latest.current.chatFiles = kept;
+			setChatFiles(kept);
+		}
+		return kept;
+	}, []);
+
 	/** Asks for a reply (or one per selected model) to the user message `parentId`. */
 	const requestReply = useCallback(
 		async (
@@ -340,6 +356,7 @@ export function useChatSession({
 			let chatId = chatIdRef.current;
 			if (!chatId && l.temporary) chatId = chatIdRef.current = temporaryChatId(socket?.id);
 			const primary = targets[0];
+			const files = keepPathFiles(opts.messages ?? messagesList(historyRef.current, primary.message_id));
 			const usage = setInterval(
 				() => socket?.emit('usage', { action: 'chat', model: primary.model_id, chat_id: chatId ?? '' }),
 				1000
@@ -356,7 +373,7 @@ export function useChatSession({
 					folderId: l.folderId,
 					params: l.params,
 					settings: l.settings,
-					chatFiles: l.chatFiles,
+					chatFiles: files,
 					features: requestFeatures(l.toggles, user, config, l.settings),
 					toolIds: l.toolIds,
 					variables: promptVariables(user, await userLocation()),
@@ -390,7 +407,7 @@ export function useChatSession({
 				clearInterval(usage);
 			}
 		},
-		[socket, token, user, config, navigate, refreshList, setHistory, userLocation]
+		[socket, token, user, config, navigate, refreshList, setHistory, userLocation, keepPathFiles]
 	);
 
 	const send = useCallback(
@@ -538,6 +555,7 @@ export function useChatSession({
 			}
 			setHistory((h) => updateMessage(h, message.id, { done: false }));
 			const chatId = chatIdRef.current;
+			const files = keepPathFiles(messagesList(historyRef.current, message.id));
 			const body = completionBody({
 				history: historyRef.current,
 				responseId: message.id,
@@ -548,7 +566,7 @@ export function useChatSession({
 				folderId: l.folderId,
 				params: l.params,
 				settings: l.settings,
-				chatFiles: l.chatFiles,
+				chatFiles: files,
 				features: requestFeatures(l.toggles, user, config, l.settings),
 				toolIds: l.toolIds,
 				variables: promptVariables(user, await userLocation()),
@@ -566,7 +584,7 @@ export function useChatSession({
 			}
 			if (res?.task_id || res?.task_ids) setTaskIds(res.task_ids ?? [res.task_id]);
 		},
-		[socket, token, user, config, setHistory, userLocation]
+		[socket, token, user, config, setHistory, userLocation, keepPathFiles]
 	);
 
 	/** Edits a prompt and sends it again as a new branch (`resend`), or edits a message in place. */
