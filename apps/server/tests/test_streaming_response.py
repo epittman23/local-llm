@@ -1517,3 +1517,40 @@ def test_a_failure_after_the_reply_finished_does_not_save_it_again(monkeypatch):
     done_saves = [c for c in log if c[0] == 'chats.upsert_message' and c[2].get('done') is True]
     assert len(done_saves) == 1
     assert len([c for c in log if c[0] == 'clear_response_stream']) == 1
+
+
+def test_a_continued_reply_adds_its_usage_to_what_was_stored(monkeypatch):
+    """#196: a continue started from no usage, so the saved total lost the first part."""
+    stored_usage = {'prompt_tokens': 100, 'completion_tokens': 50, 'total_tokens': 150}
+    observed = _run(
+        [
+            [
+                chunk(' tail'),
+                sse({'choices': [], 'usage': {'prompt_tokens': 30, 'completion_tokens': 20, 'total_tokens': 50}}),
+                DONE,
+            ]
+        ],
+        {'chat_id': SAVED_CHAT, 'assistant_message_id': 'a1'},
+        {
+            'stored_message': {
+                'content': 'head',
+                'usage': stored_usage,
+                'output': [
+                    {
+                        'type': 'message',
+                        'id': 'msg_s',
+                        'status': 'completed',
+                        'content': [{'type': 'output_text', 'text': 'head'}],
+                    }
+                ],
+            }
+        },
+        {},
+        None,
+        monkeypatch,
+    )
+
+    final = [s for s in _saved(observed) if s.get('done') is True][-1]
+    assert final['usage']['total_tokens'] == 200
+    # The canonical counts are summed (prompt_tokens is an alias that keeps the latest value).
+    assert (final['usage']['input_tokens'], final['usage']['output_tokens']) == (130, 70)

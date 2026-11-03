@@ -4288,6 +4288,12 @@ async def non_streaming_chat_response_handler(response, ctx):
 
                     # Save message in the database
                     usage = normalize_usage(response_data.get('usage', {}) or {})
+                    if save_to_chat and metadata.get('assistant_message_id'):
+                        # Continuing a reply: the saved usage replaces the stored one, so add it in (#196).
+                        stored = await Chats.get_message_by_id_and_message_id(
+                            metadata['chat_id'], metadata['message_id']
+                        )
+                        usage = merge_usage((stored or {}).get('usage'), usage)
 
                     if save_to_chat:
                         await Chats.upsert_message_to_chat_by_id_and_message_id(
@@ -4840,6 +4846,11 @@ class _StreamingReply:
             self._trim_empty_trailing_message(self.prior_output)
             self.output = []
             self.content_parts = []
+            # Continuing a reply: its usage so far counts too, since the save
+            # at the end replaces the stored usage with self.usage (#196).
+            stored_usage = normalize_usage(message.get('usage') or {}) if message else {}
+            if stored_usage:
+                self.usage = stored_usage
         elif existing_output:
             self.output = existing_output
         elif initial_content:
