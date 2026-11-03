@@ -2108,15 +2108,19 @@ class ChatTable:
 
             elif dialect_name == 'postgresql':
                 # A JSON-escaped NUL (\u0000) cannot be turned into text, and the
-                # content match below does that (->>, #>>), so a row holding one
-                # would fail the whole search. Writes strip NULs, but rows from
-                # before that may hold them. CHAT_JSON_NUL matches only a real
-                # escape, not a backslash the user typed before "u0000", which
-                # JSON stores doubled. The LIKE patterns that stood here matched
-                # "x00" in a title and any written \u0000, hiding chats about
-                # hex and escapes from every search (#289). A title needs no
-                # filter: Postgres text cannot hold a NUL at all.
-                stmt = stmt.filter(text(f"Chat.chat::text !~ '{CHAT_JSON_NUL}'"))
+                # content match reads Chat.chat's messages with ->>, so a chat
+                # holding one would fail the whole search. Writes strip NULs, but
+                # rows from before that may hold them. CHAT_JSON_NUL matches only
+                # a real escape, not a backslash the user typed before "u0000",
+                # which JSON stores doubled; the regex runs only on rows that
+                # contain the characters at all, so most rows cost a LIKE scan as
+                # before. The LIKE patterns that stood here matched "x00" in a
+                # title and any written \u0000, hiding chats about hex and escapes
+                # from every search (#289). A title needs no filter: Postgres text
+                # cannot hold a NUL at all.
+                stmt = stmt.filter(
+                    text(f"(Chat.chat::text NOT LIKE '%\\\\u0000%' OR Chat.chat::text !~ '{CHAT_JSON_NUL}')")
+                )
 
                 if 'none' in tag_ids:
                     stmt = stmt.filter(

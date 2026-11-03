@@ -16,9 +16,9 @@ now a regex that matches only a real escape. Checked by hand on Postgres 16
 (pgvector image) with the cases below; these tests run the search with a
 fake session and read the SQL it sends, and check the pattern in Python.
 
-Run from apps/server:
+Run from apps/server (any LLLM_SECRET_KEY of 32 characters or more):
 
-    python -m pytest tests/test_chat_search_postgres_filters.py
+    LLLM_SECRET_KEY=... python -m pytest tests/test_chat_search_postgres_filters.py
 """
 
 import asyncio
@@ -74,9 +74,11 @@ def _search(monkeypatch, text: str) -> tuple[str, list]:
 def test_the_search_sends_no_filter_on_x00_and_only_the_precise_nul_guard(monkeypatch):
     sql, _ = _search(monkeypatch, '0x00ff')
 
-    assert 'NOT LIKE' not in sql
+    assert 'title::text NOT LIKE' not in sql
     assert 'x00' not in sql
-    assert f"Chat.chat::text !~ '{chats_model.CHAT_JSON_NUL}'" in sql
+    # The regex only where the characters appear at all (LIKE escapes the
+    # backslash, so this is the literal text backslash-u0000).
+    assert f"(Chat.chat::text NOT LIKE '%%\\\\u0000%%' OR Chat.chat::text !~ '{chats_model.CHAT_JSON_NUL}')" in sql
 
 
 @pytest.mark.parametrize(
