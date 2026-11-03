@@ -171,7 +171,20 @@ class MemoriesTable:
         user_id: str,
         operations: list[dict],
         db: AsyncSession | None = None,
+        commit: bool = True,
     ) -> list[dict]:
+        """Apply the operations in one transaction and return each one's result.
+
+        With ``commit=False`` the transaction is rolled back instead: the results
+        say what the operations would do, and nothing is written. The memory
+        routes plan a batch this way, embed the texts it would store, and only
+        then apply it, so a failed embedding leaves the database unchanged.
+        A plan always uses a session of its own: rolling back a shared session
+        would discard its caller's other pending work, so passing ``db`` with
+        ``commit=False`` is refused.
+        """
+        if not commit and db is not None:
+            raise TypeError('apply_memory_operations(commit=False) uses its own session; do not pass db')
         now = int(time.time())
         results: list[dict] = []
 
@@ -261,7 +274,10 @@ class MemoriesTable:
                 else:
                     raise ValueError(f'Unsupported memory operation: {action}')
 
-            await db.commit()
+            if commit:
+                await db.commit()
+            else:
+                await db.rollback()
 
         return results
 
