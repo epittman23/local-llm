@@ -405,6 +405,32 @@ class FilesTable:
             except Exception:
                 return None
 
+    async def fail_interrupted_processing(self, db: AsyncSession | None = None) -> int:
+        """Mark every file still pending or processing as failed, for startup (#309).
+
+        Processing runs as an in-memory background task, so at startup none
+        is running; a file left in either status was cut off by a restart
+        and would show as uploading forever. Returns how many were marked.
+        """
+        async with get_async_db_context(db) as db:
+            try:
+                result = await db.execute(
+                    select(File).filter(File.data['status'].as_string().in_(['pending', 'processing']))
+                )
+                files = result.scalars().all()
+                for file in files:
+                    file.data = {
+                        **(file.data or {}),
+                        'status': 'failed',
+                        'error': 'Processing was interrupted by a backend restart; upload it again.',
+                    }
+                    file.updated_at = int(time.time())
+                await db.commit()
+                return len(files)
+            except Exception as e:
+                log.warning(f'Error marking interrupted uploads failed: {e}')
+                return 0
+
     async def get_pending_files_for_knowledge(
         self, knowledge_id: str, db: AsyncSession | None = None
     ) -> list[FileModelResponse]:

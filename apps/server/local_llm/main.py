@@ -132,6 +132,7 @@ from local_llm.models.access_grants import AccessGrants
 from local_llm.models.channels import Channels
 from local_llm.models.chats import ChatForm, Chats
 from local_llm.models.config import Config
+from local_llm.models.files import Files
 from local_llm.models.functions import Functions
 from local_llm.models.messages import Messages
 from local_llm.models.models import Models, normalize_model_tags
@@ -386,6 +387,9 @@ async def lifespan(app: FastAPI):
     await seed_registered_defaults()
     await initialize_runtime_config(app)
     await migrate_legacy_webhook_config()
+    # Uploads a restart cut off mid-processing would show as uploading forever (#309).
+    if interrupted := await Files.fail_interrupted_processing():
+        log.warning('Marked %s upload(s) interrupted by the last restart as failed', interrupted)
     await publish_event(app, EVENTS.SYSTEM_STARTUP_STARTED, source='system')
 
     # Create admin account from env vars if specified and no users exist
