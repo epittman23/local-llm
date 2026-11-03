@@ -1221,7 +1221,12 @@ async def update_rag_config(request: Request, form_data: ConfigForm, user=Depend
             # response says so, since the form still shows it on (#232).
             log.error(f'Error loading reranking model: {e}')
             config.ENABLE_RAG_HYBRID_SEARCH = False
-            warnings.append(f'Hybrid search was turned off: the reranking model could not be loaded. {e}')
+            # get_rf wraps every cause in a generic message, so name the model
+            # and point at the log, which has the cause.
+            warnings.append(
+                f'Hybrid search was turned off: the reranking model {config.RAG_RERANKING_MODEL!r} could not be loaded'
+                ' (the backend log says why).'
+            )
     except Exception as e:
         log.exception(f'Problem updating reranking model: {e}')
         raise HTTPException(

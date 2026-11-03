@@ -67,8 +67,9 @@ whether an earlier model is still in use; nothing is saved. Every Documents
 save loads the embedding model, so while it is missing the page's other
 settings cannot be saved either, unless retrieval is bypassed. A reranking
 model that cannot load is not refused: the save goes through with hybrid
-search turned off, and the page says why in a warning and shows the toggle
-off. Fetch a model once with the backend's own `hf`, outside `make backend`:
+search turned off, a warning names the model, and the toggle shows off. A
+Web Search save reloads the reranker too, so it can give the same warning.
+Fetch a model once with the backend's own `hf`, outside `make backend`:
 
 ```sh
 cd apps/server

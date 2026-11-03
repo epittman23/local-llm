@@ -13,6 +13,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from local_llm.constants import ERROR_MESSAGES
 from local_llm.routers import retrieval
 
 
@@ -42,7 +43,8 @@ def _save(form: retrieval.ConfigForm) -> dict:
 
 def test_a_reranker_that_cannot_load_turns_hybrid_search_off_and_says_so(stored, monkeypatch):
     def cannot_load(*args, **kwargs):
-        raise Exception('CrossEncoder error: not in the Hugging Face cache')
+        # As get_rf raises it: the cause is logged, the message is generic.
+        raise Exception(ERROR_MESSAGES.DEFAULT(OSError('not in the Hugging Face cache'), 'CrossEncoder error'))
 
     monkeypatch.setattr(retrieval, 'get_rf', cannot_load)
 
@@ -52,7 +54,7 @@ def test_a_reranker_that_cannot_load_turns_hybrid_search_off_and_says_so(stored,
     assert stored[retrieval.RETRIEVAL_CONFIG_KEYS['ENABLE_RAG_HYBRID_SEARCH']] is False
     assert len(response['warnings']) == 1
     assert 'Hybrid search was turned off' in response['warnings'][0]
-    assert 'not in the Hugging Face cache' in response['warnings'][0]
+    assert "'BAAI/bge-reranker-v2-m3'" in response['warnings'][0]
 
 
 def test_a_reranker_that_loads_keeps_hybrid_search_on_without_a_warning(stored, monkeypatch):

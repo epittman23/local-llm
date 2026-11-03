@@ -1660,6 +1660,10 @@ test.describe('settings: Images', () => {
 	});
 });
 
+// What update_rag_config warns when a save turned hybrid search off (#232).
+const RERANKER_WARNING =
+	"Hybrid search was turned off: the reranking model 'BAAI/bge-reranker-v2-m3' could not be loaded (the backend log says why).";
+
 test.describe('settings: Documents', () => {
 	const ragCfg = (over: Rec = {}) => ({
 		CONTENT_EXTRACTION_ENGINE: '',
@@ -1716,7 +1720,10 @@ test.describe('settings: Documents', () => {
 		...over
 	});
 
-	async function mockDocuments(page: Page, opts: { rag?: Rec; embedding?: Rec; failEmbeddingUpdate?: boolean } = {}) {
+	async function mockDocuments(
+		page: Page,
+		opts: { rag?: Rec; embedding?: Rec; failEmbeddingUpdate?: boolean; saved?: (body: Rec) => Rec } = {}
+	) {
 		const calls: Call[] = [];
 		const record = (route: any) => {
 			const req = route.request();
@@ -1737,7 +1744,7 @@ test.describe('settings: Documents', () => {
 				return json(route, opts.embedding ?? embeddingCfg());
 			if (path === '/retrieval/embedding/update')
 				return opts.failEmbeddingUpdate ? json(route, { detail: 'Model not found' }, 400) : json(route, body);
-			if (path === '/retrieval/config/update') return json(route, body);
+			if (path === '/retrieval/config/update') return json(route, opts.saved ? opts.saved(body) : body);
 			return json(route, true);
 		});
 		await page.route('**/api/v1/files/all', (route) => (record(route), json(route, true)));
@@ -1957,6 +1964,23 @@ test.describe('settings: Documents', () => {
 		});
 	});
 
+	test('a reranker that cannot load: the save says hybrid search went off, and the switch shows it (#232)', async ({
+		page
+	}) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockDocuments(page, {
+			rag: ragCfg({ ENABLE_RAG_HYBRID_SEARCH: true }),
+			saved: (body) => ({ ...body, ENABLE_RAG_HYBRID_SEARCH: false, warnings: [RERANKER_WARNING] })
+		});
+		await page.goto('/?settings=admin:documents');
+		const r = region(page, 'Retrieval');
+		await expect(r.getByRole('switch', { name: 'Hybrid Search', exact: true })).toBeChecked();
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText(RERANKER_WARNING)).toBeVisible();
+		await expect(r.getByRole('switch', { name: 'Hybrid Search', exact: true })).not.toBeChecked();
+		expect(sent(calls, '/retrieval/config/update')[0]).toMatchObject({ ENABLE_RAG_HYBRID_SEARCH: true });
+	});
+
 	test('full context mode hides the segmented-retrieval settings; a template with several placeholders is flagged', async ({
 		page
 	}) => {
@@ -2048,7 +2072,7 @@ test.describe('settings: Web Search', () => {
 		...over
 	});
 
-	async function mockWeb(page: Page, web: Rec = webCfg()) {
+	async function mockWeb(page: Page, web: Rec = webCfg(), saved: (body: Rec) => Rec = (body) => body) {
 		const calls: Call[] = [];
 		await page.route('**/api/v1/retrieval/config**', (route) => {
 			const req = route.request();
@@ -2062,7 +2086,7 @@ test.describe('settings: Web Search', () => {
 			calls.push({ method: req.method(), path, body });
 			// The document settings share this endpoint; this tab must leave them alone.
 			if (req.method() === 'GET') return json(route, { CONTENT_EXTRACTION_ENGINE: 'tika', web });
-			return json(route, body);
+			return json(route, saved(body));
 		});
 		return { calls };
 	}
@@ -2091,6 +2115,21 @@ test.describe('settings: Web Search', () => {
 			LINKUP_SEARCH_PARAMS: {},
 			WEB_LOADER_CONCURRENT_REQUESTS: 10
 		});
+	});
+
+	test('a save that turned hybrid search off shows the warning, though this tab has no such switch (#232)', async ({
+		page
+	}) => {
+		await mockWorkspaceBackend(page);
+		await mockWeb(page, webCfg(), (body) => ({
+			...body,
+			ENABLE_RAG_HYBRID_SEARCH: false,
+			warnings: [RERANKER_WARNING]
+		}));
+		await page.goto('/?settings=admin:web');
+		await expect(modal(page).getByLabel('Domain Filter List')).toHaveValue('example.com, !bad.com');
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText(RERANKER_WARNING)).toBeVisible();
 	});
 
 	test('the engine choice decides which connection boxes show; required ones block the save', async ({ page }) => {
