@@ -4,14 +4,14 @@ import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { Tip } from '@/components/common/Tip';
-import { createNewChannel, updateChannelById, updateChannelMemberActiveStatusById } from '@/lib/apis/channels';
+import { createNewChannel, updateChannelById } from '@/lib/apis/channels';
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { useSocket } from '@/lib/socket/SocketProvider';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
 import { ChannelFormDialog } from './ChannelDialogs';
 import { type Channel, channelTitle, formatUnread, isPublicChannel } from './channelModel';
-import { CHANNELS_KEY, useChannelList, useChannelsEnabled, useMarkChannelRead } from './useChannels';
+import { CHANNELS_KEY, hideConversation, useChannelList, useChannelsEnabled, useMarkChannelRead } from './useChannels';
 
 /**
  * Ports the Channels section of layout/Sidebar.svelte with
@@ -104,14 +104,7 @@ function ChannelItem({
 	const unread = channel.unread_count ?? 0;
 	const canEdit = me?.role === 'admin' || channel.user_id === me?.id;
 
-	const hideDm = async () => {
-		queryClient.setQueryData<Channel[]>(CHANNELS_KEY, (list) => list?.filter((c) => c.id !== channel.id));
-		await updateChannelMemberActiveStatusById(token, channel.id, false).catch((e) => {
-			// Refused: the conversation is still listed for this user, so fetch it back (#252).
-			toast.error(`${e}`);
-			void queryClient.invalidateQueries({ queryKey: CHANNELS_KEY });
-		});
-	};
+	const hideDm = () => hideConversation(queryClient, token, channel.id);
 
 	const update = async (payload: Record<string, unknown>) => {
 		const { name, is_private, access_grants, group_ids, user_ids } = payload;

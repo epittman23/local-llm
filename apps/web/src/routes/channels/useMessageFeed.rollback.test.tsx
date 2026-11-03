@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { MessageActions } from './ChannelMessageView';
 import { useMessageFeed } from './useMessageFeed';
 
 // #252: an optimistic edit, pin, reaction or delete that the server refuses is
@@ -38,7 +39,8 @@ const msg = (id: string, over: Record<string, unknown> = {}) => ({
 	reactions: [],
 	...over
 });
-const MESSAGES = [msg('m1'), msg('m2'), msg('m3')];
+// Newest first, as the feed holds them.
+const MESSAGES = [msg('m1', { created_at: 3 }), msg('m2', { created_at: 2 }), msg('m3', { created_at: 1 })];
 
 beforeEach(() => {
 	vi.resetAllMocks();
@@ -53,12 +55,14 @@ const feed = async (opts = {}) => {
 	await waitFor(() => expect(hook.result.current.messages).toHaveLength(3));
 	return hook;
 };
+/** Every action of the feed: the type leaves them optional for views that offer fewer. */
+const all = (actions: MessageActions) => actions as Required<MessageActions>;
 const byId = (messages: unknown, id: string) => (messages as { id: string }[]).find((m) => m.id === id) as never;
 
 describe('a refused change is rolled back (#252)', () => {
 	it('an edit goes back to the saved text', async () => {
 		const { result } = await feed();
-		await act(async () => result.current.actions().onEdit(byId(result.current.messages, 'm2'), 'new text'));
+		await act(async () => all(result.current.actions()).onEdit(byId(result.current.messages, 'm2'), 'new text'));
 		await waitFor(() => expect(toast.error).toHaveBeenCalledWith('403 Forbidden'));
 		expect(byId(result.current.messages, 'm2')).toMatchObject({ content: 'text m2' });
 	});
@@ -66,7 +70,7 @@ describe('a refused change is rolled back (#252)', () => {
 	it('a pin is undone, and whoever was told of it is told again', async () => {
 		const onPinChange = vi.fn();
 		const { result } = await feed();
-		await act(async () => result.current.actions(onPinChange).onPin(byId(result.current.messages, 'm2')));
+		await act(async () => all(result.current.actions(onPinChange)).onPin(byId(result.current.messages, 'm2')));
 		await waitFor(() => expect(toast.error).toHaveBeenCalled());
 		expect(byId(result.current.messages, 'm2')).toMatchObject({ is_pinned: false, pinned_by: null, pinned_at: null });
 		expect(onPinChange.mock.calls).toEqual([
@@ -77,7 +81,7 @@ describe('a refused change is rolled back (#252)', () => {
 
 	it('a reaction is taken back off', async () => {
 		const { result } = await feed();
-		await act(async () => result.current.actions().onReaction(byId(result.current.messages, 'm2'), 'thumbsup'));
+		await act(async () => all(result.current.actions()).onReaction(byId(result.current.messages, 'm2'), 'thumbsup'));
 		await waitFor(() => expect(toast.error).toHaveBeenCalled());
 		expect(byId(result.current.messages, 'm2')).toMatchObject({ reactions: [] });
 	});
@@ -85,7 +89,7 @@ describe('a refused change is rolled back (#252)', () => {
 	it('a deleted message comes back in its place, and nothing is told it was deleted', async () => {
 		const onMessageDeleted = vi.fn();
 		const { result } = await feed({ onMessageDeleted });
-		await act(async () => result.current.actions().onDelete(byId(result.current.messages, 'm2')));
+		await act(async () => all(result.current.actions()).onDelete(byId(result.current.messages, 'm2')));
 		await waitFor(() => expect(toast.error).toHaveBeenCalled());
 		expect((result.current.messages ?? []).map((m) => m.id)).toEqual(['m1', 'm2', 'm3']);
 		expect(onMessageDeleted).not.toHaveBeenCalled();
@@ -95,7 +99,7 @@ describe('a refused change is rolled back (#252)', () => {
 		const onRootDeleted = vi.fn();
 		const { result } = renderHook(() => useMessageFeed('c1', 'root', { onRootDeleted }));
 		await waitFor(() => expect(result.current.messages).toHaveLength(2));
-		await act(async () => result.current.actions().onDelete(byId(result.current.messages, 'root')));
+		await act(async () => all(result.current.actions()).onDelete(byId(result.current.messages, 'root')));
 		await waitFor(() => expect(toast.error).toHaveBeenCalled());
 		expect(onRootDeleted).not.toHaveBeenCalled();
 	});
@@ -105,11 +109,34 @@ describe('a refused change is rolled back (#252)', () => {
 		api.deleteMessage.mockResolvedValue(true);
 		const onMessageDeleted = vi.fn();
 		const { result } = await feed({ onMessageDeleted });
-		await act(async () => result.current.actions().onEdit(byId(result.current.messages, 'm1'), 'kept'));
-		await act(async () => result.current.actions().onDelete(byId(result.current.messages, 'm3')));
+		await act(async () => all(result.current.actions()).onEdit(byId(result.current.messages, 'm1'), 'kept'));
+		await act(async () => all(result.current.actions()).onDelete(byId(result.current.messages, 'm3')));
 		await waitFor(() => expect(onMessageDeleted).toHaveBeenCalledWith('m3'));
 		expect(byId(result.current.messages, 'm1')).toMatchObject({ content: 'kept' });
 		expect((result.current.messages ?? []).map((m) => m.id)).toEqual(['m1', 'm2']);
 		expect(toast.error).not.toHaveBeenCalled();
+	});
+});
+
+describe('a failed delete is put back by its time (#252)', () => {
+	it('lands in its place even when a newer message arrived meanwhile', async () => {
+		let reject: (e: unknown) => void = () => {};
+		api.getChannelMessages.mockResolvedValue([
+			msg('m3', { created_at: 3 }),
+			msg('m2', { created_at: 2 }),
+			msg('m1', { created_at: 1 })
+		]);
+		api.deleteMessage.mockReturnValue(new Promise((_, r) => (reject = r)));
+		api.sendMessage.mockResolvedValue(msg('m4', { created_at: 4 }));
+		const { result } = renderHook(() => useMessageFeed('c1', null));
+		await waitFor(() => expect(result.current.messages).toHaveLength(3));
+
+		act(() => all(result.current.actions()).onDelete(byId(result.current.messages, 'm2')));
+		await act(async () => {
+			await result.current.submit({ content: 'm4' } as never, null);
+		});
+		await act(async () => reject('403 Forbidden'));
+
+		expect((result.current.messages ?? []).map((m) => m.id)).toEqual(['m4', 'm3', 'm2', 'm1']);
 	});
 });

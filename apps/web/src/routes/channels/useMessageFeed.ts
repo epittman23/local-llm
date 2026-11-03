@@ -24,6 +24,7 @@ import {
 } from './channelModel';
 import type { ComposerSubmit } from './MessageComposer';
 import type { MessageActions } from './ChannelMessageView';
+import { putBack } from './usePinnedMessages';
 import { uuid } from '@/lib/utils/uuid';
 
 const PAGE = 50;
@@ -231,11 +232,7 @@ export function useMessageFeed(
 	// the change: another update that arrived meanwhile is kept.
 	const actions = (onPinChange?: (id: string, pinned: boolean) => void): MessageActions => ({
 		onDelete: (m) => {
-			let index = -1;
-			setMessages((ms) => {
-				index = ms?.findIndex((x) => x.id === m.id) ?? -1;
-				return ms?.filter((x) => x.id !== m.id) ?? ms;
-			});
+			setMessages((ms) => ms?.filter((x) => x.id !== m.id) ?? ms);
 			deleteMessage(token, channelId, m.id).then(
 				() => {
 					// Deleting the root from inside its thread ends the thread, echo or not
@@ -245,11 +242,9 @@ export function useMessageFeed(
 				},
 				(e) => {
 					toast.error(`${e}`);
-					setMessages((ms) => {
-						if (!ms || ms.some((x) => x.id === m.id)) return ms;
-						const at = index < 0 ? ms.length : Math.min(index, ms.length);
-						return [...ms.slice(0, at), m, ...ms.slice(at)];
-					});
+					// Back by its time, newest first: a message that arrived meanwhile
+					// moved every index along.
+					setMessages((ms) => putBack(ms, m, ms ? ms.findIndex((x) => x.created_at < m.created_at) : -1));
 				}
 			);
 		},

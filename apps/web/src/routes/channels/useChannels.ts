@@ -1,10 +1,10 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { create } from 'zustand';
 import { canUseFeature } from '@/lib/access/features';
-import { getChannels } from '@/lib/apis/channels';
+import { getChannels, updateChannelMemberActiveStatusById } from '@/lib/apis/channels';
 import { useSocket } from '@/lib/socket/SocketProvider';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
@@ -25,6 +25,18 @@ import {
 // viewer is looking at.
 
 export const CHANNELS_KEY = ['channels'] as const;
+
+/**
+ * Hide a conversation from the viewer's sidebar: gone from the list at once,
+ * and fetched back if the server refuses, since it is then still listed (#252).
+ */
+export async function hideConversation(queryClient: QueryClient, token: string, channelId: string) {
+	queryClient.setQueryData<Channel[]>(CHANNELS_KEY, (list) => list?.filter((c) => c.id !== channelId));
+	await updateChannelMemberActiveStatusById(token, channelId, false).catch((e) => {
+		toast.error(`${e}`);
+		void queryClient.invalidateQueries({ queryKey: CHANNELS_KEY });
+	});
+}
 
 export const useOpenChannelStore = create<{
 	openChannelId: string | null;
