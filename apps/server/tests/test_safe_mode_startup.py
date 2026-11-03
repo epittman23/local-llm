@@ -51,6 +51,11 @@ def _startup(monkeypatch, *, safe_mode: bool, deactivated):
         monkeypatch.setattr(main, name, nothing)
     monkeypatch.setattr(main, 'migrate_legacy_webhook_config', nothing)
 
+    async def no_interrupted_uploads():
+        return 0
+
+    monkeypatch.setattr(main.Files, 'fail_interrupted_processing', no_interrupted_uploads)
+
     async def dispatch_event_functions(*args, **kwargs):
         order.append('dispatch')
 
