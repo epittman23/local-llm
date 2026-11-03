@@ -74,21 +74,34 @@ export const headerText = (view: CalendarViewMode, d: Date) =>
 /** A local-midnight key for a day, for grouping events. */
 export const dayKey = (d: Date) => String(midnight(d).getTime());
 
-/** Events grouped by every local day they touch (an event spanning three days is under all three). */
+/**
+ * Events grouped by every local day they touch (an event spanning three days is under all three).
+ * The end is exclusive, so an event that ends at midnight is not on the day that midnight starts.
+ */
 export function eventsByDay(events: CalendarEventModel[]): Record<string, CalendarEventModel[]> {
 	const map: Record<string, CalendarEventModel[]> = {};
 	for (const e of events) {
 		const start = midnight(new Date(e.start_at / NS));
-		const last = Math.max(start.getTime(), midnight(new Date((e.end_at || e.start_at) / NS)).getTime());
+		const lastMs = e.end_at && e.end_at > e.start_at ? e.end_at / NS - 1 : e.start_at / NS;
+		const last = Math.max(start.getTime(), midnight(new Date(lastMs)).getTime());
 		for (let d = start; d.getTime() <= last; d = addDays(d, 1)) (map[dayKey(d)] ??= []).push(e);
 	}
 	return map;
 }
 
-/** Events that *start* in a given local hour of a day (the week and day grids). */
+/** Timed events that *start* in a given local hour of a day (the week and day grids); all-day events are in the band. */
 export function eventsInHour(events: CalendarEventModel[], day: Date, hour: number): CalendarEventModel[] {
 	const from = new Date(day.getFullYear(), day.getMonth(), day.getDate(), hour).getTime();
-	return events.filter((e) => e.start_at / NS >= from && e.start_at / NS < from + 3_600_000);
+	return events.filter((e) => !e.all_day && e.start_at / NS >= from && e.start_at / NS < from + 3_600_000);
+}
+
+/**
+ * The events in a day's band above the hours of the week and day grids: all-day events, and timed
+ * events that began on an earlier day and continue into this one, which have no start hour here (#319).
+ */
+export function bandEvents(byDay: Record<string, CalendarEventModel[]>, day: Date): CalendarEventModel[] {
+	const dayStart = midnight(day).getTime();
+	return (byDay[dayKey(day)] ?? []).filter((e) => e.all_day || e.start_at / NS < dayStart);
 }
 
 export const formatHour = (h: number) => (h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`);
@@ -149,13 +162,17 @@ export function eventFields(
 	now = new Date()
 ): EventFields {
 	if (event) {
+		// The grids read an end as exclusive, so an all-day event that ends at
+		// midnight (as one made in chat can) ends on the day before it; the
+		// form, which saves an all-day end as 23:59 of its date, shows that day.
+		const lastAllDayMoment = event.all_day && event.end_at && event.end_at > event.start_at ? event.end_at - NS : null;
 		return {
 			title: event.title,
 			description: event.description || '',
 			calendarId: event.calendar_id,
 			startDate: nsToDate(event.start_at),
 			startTime: nsToTime(event.start_at),
-			endDate: event.end_at ? nsToDate(event.end_at) : '',
+			endDate: lastAllDayMoment ? nsToDate(lastAllDayMoment) : event.end_at ? nsToDate(event.end_at) : '',
 			endTime: event.end_at ? nsToTime(event.end_at) : '',
 			allDay: event.all_day,
 			location: event.location || '',

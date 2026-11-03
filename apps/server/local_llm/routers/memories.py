@@ -126,45 +126,58 @@ def _memory_metadata(memory: MemoryModel) -> dict:
     }
 
 
+def _vector_text(memory: MemoryModel) -> str:
+    return memory_vector_text(memory.content, memory.path)
+
+
+def _vector_item(memory: MemoryModel, vector) -> dict:
+    return {
+        'id': memory.id,
+        'text': _vector_text(memory),
+        'vector': vector,
+        'metadata': _memory_metadata(memory),
+    }
+
+
+async def _embed(request: Request, user, text: str):
+    return await request.app.state.EMBEDDING_FUNCTION(text, prefix=RAG_EMBEDDING_CONTENT_PREFIX, user=user)
+
+
+async def _embed_texts(request: Request, user, texts: list[str]) -> dict[str, list]:
+    """Each distinct text's vector. Raises if any embedding fails."""
+    unique = list(dict.fromkeys(texts))
+    vectors = await asyncio.gather(*[_embed(request, user, text) for text in unique])
+    return dict(zip(unique, vectors, strict=True))
+
+
 async def reindex_memory_vectors_for_user(
     request: Request,
     user_id: str,
     memories: list[MemoryModel] | None = None,
     user=None,
 ) -> int:
+    """Rebuild the user's memory collection from their rows.
+
+    Every memory is embedded before the old collection is deleted, so a failed
+    embedding (a missing model, say) raises with the old vectors still in place
+    rather than leaving the user with none (#303).
+    """
     collection_name = f'user-memory-{user_id}'
+    memories = memories if memories is not None else await Memories.get_memories_by_user_id(user_id)
+    memories = memories or []
+    vectors = await _embed_texts(request, user, [_vector_text(memory) for memory in memories])
+
     try:
         await ASYNC_VECTOR_DB_CLIENT.delete_collection(collection_name)
     except Exception as e:
         log.debug(e)
 
-    memories = memories if memories is not None else await Memories.get_memories_by_user_id(user_id)
-    memories = memories or []
     if not memories:
         return 0
 
-    vectors = await asyncio.gather(
-        *[
-            request.app.state.EMBEDDING_FUNCTION(
-                memory_vector_text(memory.content, memory.path),
-                prefix=RAG_EMBEDDING_CONTENT_PREFIX,
-                user=user,
-            )
-            for memory in memories
-        ]
-    )
-
     await ASYNC_VECTOR_DB_CLIENT.upsert(
         collection_name=collection_name,
-        items=[
-            {
-                'id': memory.id,
-                'text': memory_vector_text(memory.content, memory.path),
-                'vector': vectors[idx],
-                'metadata': _memory_metadata(memory),
-            }
-            for idx, memory in enumerate(memories)
-        ],
+        items=[_vector_item(memory, vectors[_vector_text(memory)]) for memory in memories],
     )
     return len(memories)
 
@@ -197,6 +210,9 @@ async def add_memory(
 
     content = clean_memory_content(form_data.content)
     path = clean_memory_path(form_data.path)
+    # Embedded first, so a failed embedding stores nothing; a row without a
+    # vector is never recalled, and a retry would store it twice (#303).
+    vector = await _embed(request, user, memory_vector_text(content, path))
     memory = await Memories.insert_new_memory(
         user.id,
         content,
@@ -205,22 +221,11 @@ async def add_memory(
         meta={'created_by': 'manual'},
     )
 
-    vector = await request.app.state.EMBEDDING_FUNCTION(
-        memory_vector_text(memory.content, memory.path), prefix=RAG_EMBEDDING_CONTENT_PREFIX, user=user
-    )
-
-    await upsert_memory_vectors_or_reindex(
-        request,
-        user,
-        [
-            {
-                'id': memory.id,
-                'text': memory_vector_text(memory.content, memory.path),
-                'vector': vector,
-                'metadata': _memory_metadata(memory),
-            }
-        ],
-    )
+    try:
+        await upsert_memory_vectors_or_reindex(request, user, [_vector_item(memory, vector)])
+    except Exception:
+        await Memories.delete_memory_by_id_and_user_id(memory.id, user.id)
+        raise
 
     await publish_event(
         request,
@@ -230,6 +235,22 @@ async def add_memory(
         data={'content_preview': memory.content[:300], 'type': memory.type, 'path': memory.path},
     )
     return memory
+
+
+async def _apply_memory_operations(user_id: str, operations: list[dict], commit: bool = True) -> list[dict]:
+    try:
+        return await Memories.apply_memory_operations(user_id, operations, commit=commit)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+def _embedded_memories(results: list[dict]) -> list[MemoryModel]:
+    """The memories a batch creates or changes, whose vectors it writes."""
+    return [
+        result['memory']
+        for result in results
+        if result.get('status') in {'created', 'updated'} and isinstance(result.get('memory'), MemoryModel)
+    ]
 
 
 @router.post('/update', response_model=list[dict])
@@ -252,42 +273,34 @@ async def update_memories(
                 'model': metadata.get('model'),
             }
 
+    # The batch is planned without writing, the texts it would store are
+    # embedded, and only then is it applied, so a failed embedding leaves the
+    # database as it was (#303).
+    planned = await _apply_memory_operations(user.id, operations, commit=False)
+    vectors = await _embed_texts(request, user, [_vector_text(memory) for memory in _embedded_memories(planned)])
+    results = await _apply_memory_operations(user.id, operations)
+
+    delete_ids = [result['id'] for result in results if result.get('status') == 'deleted' and result.get('id')]
+    response = [
+        {**result, 'memory': result['memory'].model_dump()} if isinstance(result.get('memory'), MemoryModel) else result
+        for result in results
+    ]
+
+    # Deleted memories leave the vector store even when an embedding or the
+    # upsert fails, or chat context would keep recalling them.
     try:
-        results = await Memories.apply_memory_operations(user.id, operations)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-
-    upsert_items = []
-    delete_ids = []
-    response = []
-
-    for result in results:
-        memory = result.get('memory')
-        if isinstance(memory, MemoryModel):
-            result = {**result, 'memory': memory.model_dump()}
-            if result.get('status') in {'created', 'updated'}:
-                vector = await request.app.state.EMBEDDING_FUNCTION(
-                    memory_vector_text(memory.content, memory.path),
-                    prefix=RAG_EMBEDDING_CONTENT_PREFIX,
-                    user=user,
-                )
-                upsert_items.append(
-                    {
-                        'id': memory.id,
-                        'text': memory_vector_text(memory.content, memory.path),
-                        'vector': vector,
-                        'metadata': _memory_metadata(memory),
-                    }
-                )
-        if result.get('status') == 'deleted' and result.get('id'):
-            delete_ids.append(result['id'])
-        response.append(result)
-
-    if upsert_items:
-        await upsert_memory_vectors_or_reindex(request, user, upsert_items)
-
-    if delete_ids:
-        await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=f'user-memory-{user.id}', ids=delete_ids)
+        upsert_items = []
+        for memory in _embedded_memories(results):
+            text = _vector_text(memory)
+            if text not in vectors:
+                # The row changed between the plan and the write.
+                vectors[text] = await _embed(request, user, text)
+            upsert_items.append(_vector_item(memory, vectors[text]))
+        if upsert_items:
+            await upsert_memory_vectors_or_reindex(request, user, upsert_items)
+    finally:
+        if delete_ids:
+            await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=f'user-memory-{user.id}', ids=delete_ids)
 
     for result in response:
         status_value = result.get('status')
@@ -460,14 +473,21 @@ async def reindex_memories_from_vector_db(
     users_result = await Users.get_users()
     users = users_result.get('users', []) if users_result else []
     total_memories = 0
+    failed_users = 0
 
+    # One user's failure does not stop the others; a failed user keeps the
+    # vectors they had, since a reindex embeds before it deletes.
     for memory_user in users:
-        total_memories += await reindex_memory_vectors_for_user(
-            request,
-            memory_user.id,
-            memories=memories_by_user_id.get(memory_user.id, []),
-            user=memory_user,
-        )
+        try:
+            total_memories += await reindex_memory_vectors_for_user(
+                request,
+                memory_user.id,
+                memories=memories_by_user_id.get(memory_user.id, []),
+                user=memory_user,
+            )
+        except Exception:
+            failed_users += 1
+            log.exception('Reindexing memory vectors failed for user %s', memory_user.id)
 
     await publish_event(
         request,
@@ -475,8 +495,16 @@ async def reindex_memories_from_vector_db(
         actor=user,
         subject_id='all',
         subject_type='user',
-        data={'count': total_memories, 'user_count': len(users), 'reindex': True},
+        data={'count': total_memories, 'user_count': len(users), 'failed_user_count': failed_users, 'reindex': True},
     )
+    if failed_users:
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                f'Memory vectors could not be rebuilt for {failed_users} of {len(users)} users; '
+                'they keep their previous vectors. See the server log.'
+            ),
+        )
     return {'status': True, 'total_users': len(users), 'total_memories': total_memories}
 
 
@@ -562,6 +590,24 @@ async def update_memory_by_id(
     path = clean_memory_path(form_data.path)
     if content is None and form_data.type is None and form_data.path is None:
         raise HTTPException(status_code=400, detail='No memory update provided')
+
+    existing = await Memories.get_memory_by_id(memory_id)
+    if existing is None or existing.user_id != user.id:
+        raise HTTPException(status_code=404, detail=ERROR_MESSAGES.NOT_FOUND)
+
+    # Embedded before the row is written, so a failed embedding keeps the old
+    # content, matching the vector, rather than storing new content that the
+    # vector store never sees (#303).
+    reembed = form_data.content is not None or form_data.path is not None
+    text = None
+    vector = None
+    if reembed:
+        text = memory_vector_text(
+            content if content is not None else existing.content,
+            path if form_data.path is not None else existing.path,
+        )
+        vector = await _embed(request, user, text)
+
     memory = await Memories.update_memory_by_id_and_user_id(
         memory_id,
         user.id,
@@ -574,23 +620,11 @@ async def update_memory_by_id(
     if memory is None:
         raise HTTPException(status_code=404, detail=ERROR_MESSAGES.NOT_FOUND)
 
-    if form_data.content is not None or form_data.path is not None:
-        vector = await request.app.state.EMBEDDING_FUNCTION(
-            memory_vector_text(memory.content, memory.path), prefix=RAG_EMBEDDING_CONTENT_PREFIX, user=user
-        )
-
-        await upsert_memory_vectors_or_reindex(
-            request,
-            user,
-            [
-                {
-                    'id': memory.id,
-                    'text': memory_vector_text(memory.content, memory.path),
-                    'vector': vector,
-                    'metadata': _memory_metadata(memory),
-                }
-            ],
-        )
+    if reembed:
+        if _vector_text(memory) != text:
+            # The row changed between the read and the write.
+            vector = await _embed(request, user, _vector_text(memory))
+        await upsert_memory_vectors_or_reindex(request, user, [_vector_item(memory, vector)])
 
     await publish_event(
         request,
