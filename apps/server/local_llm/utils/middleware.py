@@ -4092,6 +4092,56 @@ async def outlet_filter_handler(ctx):
         log.debug('Error running outlet filters: %s', e)
 
 
+def _reasoning_output(choice_message: dict) -> list[dict]:
+    """The reasoning item of a non-streaming reply, as a one-item output list (empty without reasoning)."""
+    reasoning_content = choice_message.get('reasoning_content') or choice_message.get('reasoning')
+    reasoning_details = get_reasoning_details(choice_message)
+    if not (reasoning_content or reasoning_details):
+        return []
+    reasoning_item = {
+        'type': 'reasoning',
+        'id': output_id('r'),
+        'status': 'completed',
+        'start_tag': '<think>',
+        'end_tag': '</think>',
+        'attributes': {'type': 'reasoning_content'},
+        'content': [{'type': 'output_text', 'text': reasoning_content}] if reasoning_content else [],
+        'summary': None,
+    }
+    if reasoning_details:
+        reasoning_item['reasoning_details'] = (
+            reasoning_details if isinstance(reasoning_details, list) else [reasoning_details]
+        )
+    return [reasoning_item]
+
+
+async def _finish_reply_without_text(ctx: dict, choice_message: dict, save_to_chat: bool) -> None:
+    """Finish a non-streaming reply that has no text, so it does not stay "generating" (#165).
+
+    A native tool-call reply has `content: null`: running its tools is the
+    streaming path's job, so say so. A thinking model can spend its whole
+    budget reasoning and answer ''. Either way the reasoning is kept.
+    """
+    metadata = ctx['metadata']
+    event_emitter = ctx['event_emitter']
+    if choice_message.get('tool_calls'):
+        error = (
+            'The model asked to call tools, which needs streaming. Turn streaming on for this chat or model, '
+            'then regenerate.'
+        )
+    else:
+        error = 'The model returned no answer (it may have used its whole token budget on reasoning).'
+    output = _reasoning_output(choice_message)
+    if save_to_chat:
+        await Chats.upsert_message_to_chat_by_id_and_message_id(
+            metadata['chat_id'],
+            metadata['message_id'],
+            {'done': True, 'role': 'assistant', 'output': output, 'error': {'content': error}},
+        )
+    await event_emitter({'type': 'chat:completion', 'data': {'done': True, 'output': output}})
+    await event_emitter({'type': 'chat:message:error', 'data': {'error': {'content': error}}})
+
+
 async def non_streaming_chat_response_handler(response, ctx):
     request = ctx['request']
 
@@ -4164,28 +4214,7 @@ async def non_streaming_chat_response_handler(response, ctx):
                     # Use output from backend if provided (OR-compliant backends),
                     # otherwise generate from response content
                     if not response_output:
-                        choice_message = choices[0].get('message', {})
-                        reasoning_content = choice_message.get('reasoning_content') or choice_message.get('reasoning')
-                        reasoning_details = get_reasoning_details(choice_message)
-                        response_output = []
-                        if reasoning_content or reasoning_details:
-                            reasoning_item = {
-                                'type': 'reasoning',
-                                'id': output_id('r'),
-                                'status': 'completed',
-                                'start_tag': '<think>',
-                                'end_tag': '</think>',
-                                'attributes': {'type': 'reasoning_content'},
-                                'content': (
-                                    [{'type': 'output_text', 'text': reasoning_content}] if reasoning_content else []
-                                ),
-                                'summary': None,
-                            }
-                            if reasoning_details:
-                                reasoning_item['reasoning_details'] = (
-                                    reasoning_details if isinstance(reasoning_details, list) else [reasoning_details]
-                                )
-                            response_output.append(reasoning_item)
+                        response_output = _reasoning_output(choices[0].get('message', {}))
                         response_output.append(
                             {
                                 'type': 'message',
@@ -4231,6 +4260,9 @@ async def non_streaming_chat_response_handler(response, ctx):
                     }
                     await outlet_filter_handler(ctx)
                     await background_tasks_handler(ctx)
+
+            elif choices and 'error' not in response_data:
+                await _finish_reply_without_text(ctx, choices[0].get('message', {}), save_to_chat)
 
             response = build_response_object(response, merge_events_into_response(response_data, events))
         except Exception as e:
