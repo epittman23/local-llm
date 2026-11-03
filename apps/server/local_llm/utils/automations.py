@@ -728,12 +728,10 @@ async def execute_automation(app, automation: AutomationModel) -> None:
 ####################
 
 
-# The longest an alert may come before its occurrence (get_upcoming_events).
-MAX_ALERT_LEAD_NS = 60 * 60 * 1_000_000_000
-
-
 def already_alerted(meta: dict | None, start_at: int) -> bool:
     """Whether the occurrence starting at `start_at` (ns) was already alerted (#183)."""
+    from local_llm.models.calendar import MAX_ALERT_LEAD_NS
+
     if not meta:
         return False
     alerted_for = meta.get('alerted_for')

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 from uuid import uuid4
@@ -28,6 +29,12 @@ from local_llm.models.groups import Groups
 from local_llm.models.users import User, UserModel, UserResponse
 
 log = logging.getLogger(__name__)
+
+# The longest an alert may come before its occurrence. Each series keeps a
+# single meta.alerted_for, which is right while at most one occurrence of a
+# series is due at once: a lead this short against rules a day or more apart.
+MAX_ALERT_LEAD_NS = 60 * 60 * 1_000_000_000
+DAY_NS = 24 * 60 * 60 * 1_000_000_000
 MIN_CALENDAR_RRULE_INTERVAL_SECONDS = 24 * 60 * 60
 
 
@@ -758,7 +765,7 @@ class CalendarEventTable:
 
         # Use the maximum possible lookahead (60 min) to cast a wide net;
         # per-event filtering happens in Python after fetching.
-        max_lookahead_ns = max(default_lookahead_ns, 60 * 60 * 1_000_000_000)
+        max_lookahead_ns = max(default_lookahead_ns, MAX_ALERT_LEAD_NS)
         upper = now_ns + max_lookahead_ns
 
         async with get_async_db_context(db) as db:
@@ -770,29 +777,49 @@ class CalendarEventTable:
                 .filter(
                     CalendarEvent.is_cancelled == false(),
                     CalendarEvent.start_at <= upper,
-                    or_(CalendarEvent.start_at >= now_ns - grace_ns, CalendarEvent.rrule.isnot(None)),
+                    or_(
+                        CalendarEvent.start_at >= now_ns - grace_ns,
+                        CalendarEvent.rrule.isnot(None) & (CalendarEvent.rrule != ''),
+                    ),
                 )
             )
             rows = result.all()
 
-        events = []
-        for event, tz in rows:
-            for model in self._occurrences_in(CalendarEventModel.model_validate(event), now_ns - grace_ns, upper, tz):
-                events.extend(self._if_alert_due(model, tz, now_ns, default_lookahead_ns))
+        models = [(CalendarEventModel.model_validate(event), tz) for event, tz in rows]
 
-        return events
+        def due() -> list[tuple[CalendarEventModel, str | None]]:
+            events = []
+            for model, tz in models:
+                for occurrence in self._occurrences_in(model, now_ns - grace_ns, upper, tz):
+                    events.extend(self._if_alert_due(occurrence, tz, now_ns, default_lookahead_ns))
+            return events
+
+        # Off the event loop: expanding a series walks its rule from its first
+        # start, as routers/calendar.py does for the same reason (#367).
+        return await asyncio.to_thread(due)
 
     @staticmethod
     def _occurrences_in(
         model: CalendarEventModel, start_ns: int, end_ns: int, tz: str | None
     ) -> list[CalendarEventModel]:
-        """The event, or each occurrence of a recurring one, that starts in [start_ns, end_ns]."""
+        """The event, or each occurrence of a recurring one, that starts in [start_ns, end_ns].
+
+        A recurring all-day series is left out: its start is local midnight, so
+        every occurrence would remind the evening before (a one-off all-day
+        event keeps its single reminder). A rule the expander cannot use
+        (EXRULE) is left out too, rather than warned about on every poll.
+        """
         if not model.rrule:
-            return [model]
+            return [model] if start_ns <= model.start_at <= end_ns else []
+        if model.all_day or 'EXRULE' in model.rrule.upper():
+            return []
         from local_llm.utils.calendar import expand_recurring_event
 
         occurrences = []
-        for instance in expand_recurring_event(model.model_dump(), start_ns, end_ns, tz):
+        # The expander compares local clock times, so on the night clocks go
+        # back the repeated hour can fall outside a one-hour range; expand a
+        # day further and filter exactly below.
+        for instance in expand_recurring_event(model.model_dump(), start_ns, end_ns + DAY_NS, tz):
             if start_ns <= instance['start_at'] <= end_ns:
                 occurrences.append(
                     model.model_copy(update={'start_at': instance['start_at'], 'end_at': instance.get('end_at')})
