@@ -569,7 +569,9 @@ class BenchmarkTunePauseTable:
         """Replaces sqlite's v_tune_pause view (adds `seconds` + `interrupted_candidate`)."""
         async with get_async_db_context(db) as db:
             result = await db.execute(
-                select(BenchmarkTunePause).filter_by(sweep_id=sweep_id).order_by(BenchmarkTunePause.started_at)
+                select(BenchmarkTunePause)
+                .filter_by(sweep_id=sweep_id)
+                .order_by(BenchmarkTunePause.started_at, BenchmarkTunePause.pause_id)
             )
             out = []
             for row in result.scalars().all():
