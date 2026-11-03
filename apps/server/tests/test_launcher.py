@@ -446,6 +446,18 @@ def test_telemetry_argv_carries_the_profile_version_id(profiles):
     assert argv[argv.index('--profile-version-id') + 1] == '7'
 
 
+def test_telemetry_argv_carries_the_server_pid_only_when_given(profiles):
+    """The recorder needs the pid to tell its server from another on the port (#156)."""
+    config = _resolved(next(c for c in _cases() if c['case'] == 'base-qwen25c'), profiles)
+    kw = dict(resolved_model_path='/m/x.gguf', port=8090, llama_build='b', server_log='/tmp/x.log')
+    without = telemetry_argv(config, **kw)
+    assert '--server-pid' not in without
+    argv = telemetry_argv(config, **kw, server_pid=4321)
+    assert argv[argv.index('--server-pid') + 1] == '4321'
+    # The pid says which process to record; the fingerprint lines are unchanged.
+    assert [a for a in argv if a not in ('--server-pid', '4321')] == without
+
+
 @pytest.mark.asyncio
 async def test_serve_process_log_is_on_disk_before_stop(tmp_path, monkeypatch, profiles):
     stub, model = _write_stub_server(tmp_path)
