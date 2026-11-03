@@ -184,3 +184,13 @@ def test_new_files_with_new_content_are_still_added(monkeypatch):
     diff = _diff(monkeypatch, [('LICENSE', 'abc'), ('README', 'def')], linked=[('LICENSE', 'abc')])
 
     assert diff.added == [{'filename': 'README', 'path': ''}]
+
+
+def test_a_copy_of_content_this_sync_replaces_is_still_uploaded(monkeypatch):
+    # a.txt changed from X to Y, so its stored X goes as stale in this sync;
+    # the new b.txt holding X is then the only copy, and must go up.
+    diff = _diff(monkeypatch, [('a.txt', 'Y'), ('b.txt', 'X')], linked=[('a.txt', 'X')])
+
+    assert [m['filename'] for m in diff.modified] == ['a.txt']
+    assert diff.added == [{'filename': 'b.txt', 'path': ''}]
+    assert diff.unmodified_count == 0

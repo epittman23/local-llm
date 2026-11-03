@@ -1939,12 +1939,16 @@ async def sync_knowledge_diff(
     # A new path whose bytes match a file the base keeps is a copy the base
     # de-duplicates by content: uploading it only failed, every sync, and left
     # an orphan behind (#310). Counted as unmodified instead; a match with a
-    # file this sync deletes is still uploaded, so the content stays.
+    # file this sync deletes or replaces is still uploaded, so the content stays.
+    # Only paths this sync leaves as they are: a modified path's stored copy
+    # goes as stale here, so it is not kept.
+    checksum_by_key = {(entry.path, entry.filename): entry.checksum for entry in form_data.manifest}
     kept_checksums = {
-        info['checksum'] for key, info in indexed_files.items() if key in manifest_keys and info['checksum']
+        info['checksum']
+        for key, info in indexed_files.items()
+        if info['checksum'] and checksum_by_key.get(key) == info['checksum']
     }
     if kept_checksums:
-        checksum_by_key = {(entry.path, entry.filename): entry.checksum for entry in form_data.manifest}
         copies = [a for a in added if checksum_by_key.get((a['path'], a['filename'])) in kept_checksums]
         added = [a for a in added if a not in copies]
         unmodified_count += len(copies)
