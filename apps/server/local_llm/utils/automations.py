@@ -514,6 +514,8 @@ async def _execute_channel_automation(
 
     await _announce_run(app, user, automation, f'channel:{channel.id}')
     await app.state.CHAT_COMPLETION_HANDLER(request, form_data, user=user)
+    # Recorded before automation:result, on which the automation page refetches its runs.
+    await _record_run(automation.id, 'success', chat_id=f'channel:{channel.id}')
 
     from local_llm.socket.main import sio
 
@@ -528,8 +530,6 @@ async def _execute_channel_automation(
         },
         room=f'user:{automation.user_id}',
     )
-
-    await _record_run(automation.id, 'success', chat_id=f'channel:{channel.id}')
     await publish_event(
         app,
         EVENTS.AUTOMATION_RUN_COMPLETED,

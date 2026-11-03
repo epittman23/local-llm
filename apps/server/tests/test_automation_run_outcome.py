@@ -152,10 +152,11 @@ def test_a_channel_run_is_announced_before_its_reply_is_dispatched(monkeypatch):
         order.append('dispatched')
 
     async def record_run(*args, **kwargs):
-        pass
+        order.append('recorded')
 
-    async def emit(*args, **kwargs):
-        pass
+    async def emit(name, *args, **kwargs):
+        if name == 'automation:result':
+            order.append('result emitted')
 
     from local_llm.routers import channels
     from local_llm.socket import main as socket_main
@@ -175,7 +176,8 @@ def test_a_channel_run_is_announced_before_its_reply_is_dispatched(monkeypatch):
 
     asyncio.run(automations._execute_channel_automation(app, automation, user, 'hi', 'm', 'tok'))
 
-    assert order[:2] == ['published', 'dispatched']
+    # The page refetches the runs on automation:result, so the row comes first.
+    assert order[:4] == ['published', 'dispatched', 'recorded', 'result emitted']
     assert published[0] == (EVENTS.AUTOMATION_RUN_STARTED, {'name': 'Daily digest', 'chat_id': 'channel:ch1'})
 
 
