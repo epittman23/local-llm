@@ -29,9 +29,7 @@ import {
 	deleteChannelById,
 	deleteChannelWebhook,
 	getChannelMembersById,
-	getChannelPinnedMessages,
 	getChannelWebhooks,
-	pinMessage,
 	removeMembersById,
 	updateChannelWebhook
 } from '@/lib/apis/channels';
@@ -44,12 +42,12 @@ import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import {
 	type Channel,
 	type ChannelFormValue,
-	type ChannelMessage,
 	channelPayload,
 	isPublicChannel,
 	normalizeChannelName
 } from './channelModel';
 import { ChannelMessageView } from './ChannelMessageView';
+import { usePinnedMessages } from './usePinnedMessages';
 
 type DialogProps = { open: boolean; onOpenChange: (open: boolean) => void };
 const MEMBERS_PER_PAGE = 30;
@@ -66,41 +64,7 @@ export function PinnedMessagesDialog({
 	channel,
 	onPinChange
 }: DialogProps & { channel: Channel; onPinChange: (id: string, pinned: boolean) => void }) {
-	const token = useAuthStore((s) => s.token) ?? '';
-	const [messages, setMessages] = useState<ChannelMessage[] | null>(null);
-	const [done, setDone] = useState(false);
-	const page = useRef(1);
-	const loading = useRef(false);
-
-	const load = async (reset = false) => {
-		if (loading.current || (done && !reset)) return;
-		loading.current = true;
-		if (reset) page.current = 1;
-		const res = (await getChannelPinnedMessages(token, channel.id, page.current).catch((e) => {
-			toast.error(`${e}`);
-			return null;
-		})) as ChannelMessage[] | null;
-		if (res) {
-			setMessages((ms) => [...(reset ? [] : (ms ?? [])), ...res]);
-			setDone(res.length === 0);
-			page.current += 1;
-		} else if (reset) setMessages([]);
-		loading.current = false;
-	};
-
-	useEffect(() => {
-		if (!open) return;
-		setMessages(null);
-		setDone(false);
-		void load(true);
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [open, channel.id]);
-
-	const unpin = async (m: ChannelMessage) => {
-		setMessages((ms) => ms?.filter((x) => x.id !== m.id) ?? ms);
-		onPinChange(m.id, false);
-		await pinMessage(token, channel.id, m.id, false).catch((e) => toast.error(`${e}`));
-	};
+	const { messages, done, failed, load, unpin } = usePinnedMessages(channel.id, open, onPinChange);
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange}>
@@ -109,7 +73,14 @@ export function PinnedMessagesDialog({
 					<DialogTitle>Pinned Messages</DialogTitle>
 				</DialogHeader>
 				<div className="-mx-2 max-h-[28rem] overflow-y-auto pt-6">
-					{messages === null ? (
+					{failed && messages === null ? (
+						<div className="text-muted-foreground flex flex-col items-center gap-2 py-6 text-sm">
+							<p>Pinned messages could not be loaded.</p>
+							<Button variant="outline" size="sm" onClick={() => void load(true)}>
+								Retry
+							</Button>
+						</div>
+					) : messages === null ? (
 						<div className="flex justify-center py-6">
 							<Spinner className="size-5" />
 						</div>
