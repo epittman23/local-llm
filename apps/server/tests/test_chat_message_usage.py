@@ -98,20 +98,6 @@ def test_saving_a_chat_after_a_continue_does_not_add_the_usage_again(monkeypatch
     assert totals == [50, 50]
 
 
-def test_a_pause_for_tool_approval_saves_the_usage_so_far(monkeypatch):
-    saved = []
-
-    async def upsert(chat_id, message_id, data, **kwargs):
-        saved.append(data)
-
-    monkeypatch.setattr(middleware.Chats, 'upsert_message_to_chat_by_id_and_message_id', upsert)
-    output = [{'type': 'function_call', 'id': 'fc', 'call_id': 'c1', 'name': 'lookup', 'arguments': '{}'}]
-
-    _run(middleware.pause_for_tool_approval('c', 'r', output, {}, {}, usage=REPLY))
-
-    assert saved[0]['usage'] == REPLY
-
-
 def test_a_non_streaming_continue_adds_its_usage_to_the_stored_usage(monkeypatch):
     saved = []
 

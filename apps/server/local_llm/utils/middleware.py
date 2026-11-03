@@ -3515,9 +3515,7 @@ async def drain_approved_tool_calls(request, form_data, user, model, metadata) -
     return False
 
 
-async def pause_for_tool_approval(
-    chat_id: str, message_id: str, output: list[dict], form_data: dict, metadata: dict, usage: dict | None = None
-):
+async def pause_for_tool_approval(chat_id: str, message_id: str, output: list[dict], form_data: dict, metadata: dict):
     result_call_ids = {
         item.get('call_id') for item in output if item.get('type') == 'function_call_output' and item.get('call_id')
     }
@@ -3544,8 +3542,6 @@ async def pause_for_tool_approval(
         {
             'done': False,
             'output': output,
-            # The rounds before the pause, so the resume starts from them (#196).
-            **({'usage': usage} if usage else {}),
             'meta': {
                 **(metadata.get('tool_approval') or {}),
                 'session_id': metadata.get('session_id'),
@@ -6052,7 +6048,6 @@ class _ToolCallRounds:
                 reply.full_output(),
                 reply.form_data,
                 reply.metadata,
-                usage=reply.usage,
             )
         await reply.event_emitter({'type': 'chat:completion', 'data': {'output': reply.full_output()}})
 
