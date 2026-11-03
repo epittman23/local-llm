@@ -28,6 +28,7 @@ import { ChatMenu } from './ChatMenu';
 import { AttachMenu, IntegrationsMenu, type Toggles } from './InputMenus';
 import { useAttachments } from './useAttachments';
 import { ChatMessages, type MessageHandlers } from './ChatMessages';
+import { ChatBanners } from './ChatBanners';
 import { ChatPlaceholder } from './ChatPlaceholder';
 import { CitationDialog } from './CitationDialog';
 import { useMessageActions } from './MessageActions';
@@ -433,11 +434,14 @@ export function ChatPage() {
 						<Spinner className="size-5" />
 					</div>
 				) : empty ? (
-					<ChatPlaceholder
-						model={firstModel}
-						temporary={temporary && !id}
-						onSelect={(prompt) => applyPrompt(prompt, prefs.insertSuggestion)}
-					/>
+					<>
+						{!id && <ChatBanners />}
+						<ChatPlaceholder
+							model={firstModel}
+							temporary={temporary && !id}
+							onSelect={(prompt) => applyPrompt(prompt, prefs.insertSuggestion)}
+						/>
+					</>
 				) : (
 					<div
 						ref={scroller}
