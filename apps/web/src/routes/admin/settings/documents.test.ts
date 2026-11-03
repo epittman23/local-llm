@@ -8,6 +8,7 @@ import {
 	mineruUrlForMode,
 	parseList,
 	ragFormError,
+	ragSaveOutcome,
 	rerankingModelFor,
 	toEmbeddingForm,
 	toRagForm
@@ -222,5 +223,29 @@ describe('contextPlaceholders', () => {
 		expect(contextPlaceholders('Use [context] to answer')).toBe(1);
 		expect(contextPlaceholders('[context] and {{CONTEXT}}')).toBe(2);
 		expect(contextPlaceholders(null)).toBe(0);
+	});
+});
+
+describe('ragSaveOutcome', () => {
+	it('passes on the warnings and takes over hybrid search when the server turned it off', () => {
+		const res = {
+			status: true,
+			warnings: ['Hybrid search was turned off: the reranking model could not be loaded. CrossEncoder error'],
+			ENABLE_RAG_HYBRID_SEARCH: false
+		};
+		expect(ragSaveOutcome({ ENABLE_RAG_HYBRID_SEARCH: true }, res)).toEqual({
+			warnings: ['Hybrid search was turned off: the reranking model could not be loaded. CrossEncoder error'],
+			changes: { ENABLE_RAG_HYBRID_SEARCH: false }
+		});
+	});
+
+	it('changes nothing when the server stored what was sent', () => {
+		const res = { status: true, warnings: [], ENABLE_RAG_HYBRID_SEARCH: true };
+		expect(ragSaveOutcome({ ENABLE_RAG_HYBRID_SEARCH: true }, res)).toEqual({ warnings: [], changes: {} });
+	});
+
+	it('copes with a response that has no warnings or flag (an older server)', () => {
+		expect(ragSaveOutcome({ ENABLE_RAG_HYBRID_SEARCH: true }, { status: true })).toEqual({ warnings: [], changes: {} });
+		expect(ragSaveOutcome({ ENABLE_RAG_HYBRID_SEARCH: true }, null)).toEqual({ warnings: [], changes: {} });
 	});
 });

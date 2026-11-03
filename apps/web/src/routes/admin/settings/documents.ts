@@ -101,6 +101,20 @@ export function buildRagPayload(c: Rec): Rec {
 	};
 }
 
+/**
+ * What a save changed on its own (#232): the warnings the server sent, and
+ * the flags it stored differently from what the form sent, for the form to
+ * take over. A reranker that cannot load turns hybrid search off.
+ */
+export function ragSaveOutcome(sent: Rec, res: Rec | null | undefined): { warnings: string[]; changes: Rec } {
+	const warnings = Array.isArray(res?.warnings) ? res.warnings.filter((w: unknown) => typeof w === 'string') : [];
+	const changes: Rec = {};
+	const stored = res?.ENABLE_RAG_HYBRID_SEARCH;
+	if (typeof stored === 'boolean' && stored !== sent.ENABLE_RAG_HYBRID_SEARCH)
+		changes.ENABLE_RAG_HYBRID_SEARCH = stored;
+	return { warnings, changes };
+}
+
 export type Credentials = { url: string; key: string };
 export type EmbeddingForm = {
 	engine: string;
