@@ -69,6 +69,11 @@ settings cannot be saved either, unless retrieval is bypassed. A reranking
 model that cannot load is not refused: the save goes through with hybrid
 search turned off, a warning names the model, and the toggle shows off. A
 Web Search save reloads the reranker too, so it can give the same warning.
+Reindex in the Danger Zone checks the embedding model embeds before it
+deletes any vectors, and refuses with the reason if not. It still deletes
+each collection before embedding it again, so a file that fails during the
+run (a provider limit, an embedder that stops) loses its vectors; such files
+are named in the result instead of a plain "Success".
 Fetch a model once with the backend's own `hf`, outside `make backend`:
 
 ```sh
