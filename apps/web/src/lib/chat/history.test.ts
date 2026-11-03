@@ -307,7 +307,7 @@ describe('hasPendingAssistantLeaf (#214)', () => {
 				q: { id: 'q', parentId: null, childrenIds: replies.map((r) => r.id), role: 'user', content: 'q' },
 				...Object.fromEntries(replies.map((r) => [r.id, r]))
 			}
-		}) as any;
+		}) as unknown as Parameters<typeof hasPendingAssistantLeaf>[0];
 
 	it('counts a reply that is not done and has nothing after it', () => {
 		expect(hasPendingAssistantLeaf(history([reply('a')]))).toBe(true);
