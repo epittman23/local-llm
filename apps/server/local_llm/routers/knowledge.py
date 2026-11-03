@@ -361,7 +361,10 @@ async def _embedding_error(request: Request, user) -> str | None:
     if embed is None:
         return 'no embedding model is loaded'
     try:
-        embedding = await embed('reindex check', prefix=RAG_EMBEDDING_CONTENT_PREFIX, user=user)
+        # Bounded: a hosted embedder with no client timeout could hold the request forever.
+        embedding = await asyncio.wait_for(
+            embed('reindex check', prefix=RAG_EMBEDDING_CONTENT_PREFIX, user=user), timeout=30
+        )
     except Exception as e:
         return str(e) or type(e).__name__
     return None if embedding else 'the embedding model returned nothing'
@@ -404,6 +407,7 @@ async def reindex_knowledge_files(
     ]
     total_files = sum(len(files) for _, files in knowledge_base_files)
     processed_files = 0
+    reindexed_files = 0
     failed_files = []
     start_time = time.monotonic()
 
@@ -416,7 +420,14 @@ async def reindex_knowledge_files(
                     await ASYNC_VECTOR_DB_CLIENT.delete_collection(collection_name=knowledge_base.id)
             except Exception as e:
                 log.error(f'Error deleting collection {knowledge_base.id}: {str(e)}')
-                continue  # Skip, don't raise
+                # Skipped, not reindexed: its files count as failed, or the
+                # report would read as a success (#308).
+                failed_files.extend(
+                    {'file_id': f.id, 'filename': f.filename, 'error': f'knowledge base not reindexed: {e}'}
+                    for f in files
+                )
+                processed_files += len(files)
+                continue
 
             for file in files:
                 processed_files += 1
@@ -449,6 +460,7 @@ async def reindex_knowledge_files(
                         user=user,
                         db=db,
                     )
+                    reindexed_files += 1
                 except Exception as e:
                     log.error(f'Error processing file {file.filename} (ID: {file.id}): {str(e)}')
                     failed_files.append({'file_id': file.id, 'filename': file.filename, 'error': str(e)})
@@ -476,7 +488,7 @@ async def reindex_knowledge_files(
     return ReindexReport(
         status=not failed_files,
         total=total_files,
-        reindexed=total_files - len(failed_files),
+        reindexed=reindexed_files,
         failed=failed_files,
     )
 

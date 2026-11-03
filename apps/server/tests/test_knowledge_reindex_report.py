@@ -24,7 +24,7 @@ from fastapi import HTTPException
 from local_llm.routers import knowledge
 
 
-def _setup(monkeypatch, *, embeds=True, failing=()):
+def _setup(monkeypatch, *, embeds=True, failing=(), bypass=False, delete_fails=False):
     deleted: list[str] = []
     processed: list[str] = []
     files = [SimpleNamespace(id=f'f{i}', filename=f'doc{i}.pdf') for i in range(3)]
@@ -34,6 +34,8 @@ def _setup(monkeypatch, *, embeds=True, failing=()):
             return True
 
         async def delete_collection(self, collection_name):
+            if delete_fails and collection_name == 'kb1':
+                raise RuntimeError('lock timeout')
             deleted.append(collection_name)
 
     async def bases(db=None):
@@ -53,7 +55,7 @@ def _setup(monkeypatch, *, embeds=True, failing=()):
         return [0.1, 0.2]
 
     async def config_get(key, default=None):
-        return default
+        return bypass if key == 'rag.bypass_embedding_and_retrieval' else default
 
     async def nothing(*args, **kwargs):
         return None
@@ -99,3 +101,51 @@ def test_a_clean_reindex_reports_every_file(monkeypatch):
 
     assert report == {'status': True, 'total': 3, 'reindexed': 3, 'failed': []}
     assert 'kb1' in deleted
+
+
+def test_files_of_a_knowledge_base_that_could_not_be_cleared_are_reported_failed(monkeypatch):
+    request, admin, _, processed = _setup(monkeypatch, delete_fails=True)
+
+    report = asyncio.run(knowledge.reindex_knowledge_files(request, user=admin, db=None)).model_dump()
+
+    assert processed == []
+    assert (report['status'], report['reindexed']) == (False, 0)
+    assert [f['file_id'] for f in report['failed']] == ['f0', 'f1', 'f2']
+    assert 'lock timeout' in report['failed'][0]['error']
+
+
+def test_with_retrieval_bypassed_the_embedding_check_is_skipped(monkeypatch):
+    request, admin, _, processed = _setup(monkeypatch, embeds=False, bypass=True)
+
+    report = asyncio.run(knowledge.reindex_knowledge_files(request, user=admin, db=None)).model_dump()
+
+    assert report['status'] is True
+    assert processed == ['f0', 'f1', 'f2']
+
+
+def test_no_embedding_model_loaded_stops_the_reindex(monkeypatch):
+    request, admin, deleted, _ = _setup(monkeypatch)
+    del request.app.state.EMBEDDING_FUNCTION
+
+    with pytest.raises(HTTPException) as refused:
+        asyncio.run(knowledge.reindex_knowledge_files(request, user=admin, db=None))
+
+    assert 'no embedding model is loaded' in refused.value.detail
+    assert deleted == []
+
+
+def test_an_embedder_that_never_answers_is_given_up_on(monkeypatch):
+    request, admin, deleted, _ = _setup(monkeypatch)
+
+    async def hangs(text, prefix=None, user=None):
+        await asyncio.sleep(60)
+
+    request.app.state.EMBEDDING_FUNCTION = hangs
+    real_wait_for = asyncio.wait_for
+    monkeypatch.setattr(knowledge.asyncio, 'wait_for', lambda aw, timeout: real_wait_for(aw, timeout=0.05))
+
+    with pytest.raises(HTTPException) as refused:
+        asyncio.run(knowledge.reindex_knowledge_files(request, user=admin, db=None))
+
+    assert 'TimeoutError' in refused.value.detail
+    assert deleted == []

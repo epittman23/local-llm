@@ -2061,7 +2061,9 @@ test.describe('settings: Documents', () => {
 		await region(page, 'Danger Zone').getByRole('button', { name: 'Reindex' }).click();
 		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
 		await expect(
-			page.getByText('1 of 3 files could not be embedded again (report.pdf); the backend log has the errors.')
+			page.getByText(
+				'1 of 3 files could not be embedded again and are missing from knowledge search until they are (report.pdf); the backend log has the errors.'
+			)
 		).toBeVisible();
 		await expect(page.getByText('Success', { exact: true })).toHaveCount(0);
 	});

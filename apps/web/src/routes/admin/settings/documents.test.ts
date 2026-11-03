@@ -283,7 +283,7 @@ describe('reindexProblem', () => {
 	it('says how many files failed and names the first few (#308)', () => {
 		const failed = ['a.pdf', 'b.pdf', 'c.pdf', 'd.pdf'].map((filename, i) => ({ file_id: `f${i}`, filename }));
 		expect(reindexProblem({ status: false, total: 10, reindexed: 6, failed })).toBe(
-			'4 of 10 files could not be embedded again (a.pdf, b.pdf, c.pdf, and 1 more); the backend log has the errors.'
+			'4 of 10 files could not be embedded again and are missing from knowledge search until they are (a.pdf, b.pdf, c.pdf, and 1 more); the backend log has the errors.'
 		);
 	});
 

@@ -147,7 +147,7 @@ export function reindexProblem(res: Rec | boolean | null | undefined): string | 
 		.map((f) => f.filename || f.file_id)
 		.join(', ');
 	const more = failed.length > 3 ? `, and ${failed.length - 3} more` : '';
-	return `${failed.length} of ${res.total} files could not be embedded again (${names}${more}); the backend log has the errors.`;
+	return `${failed.length} of ${res.total} files could not be embedded again and are missing from knowledge search until they are (${names}${more}); the backend log has the errors.`;
 }
 
 export type Credentials = { url: string; key: string };
