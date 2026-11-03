@@ -54,7 +54,7 @@ def harness(monkeypatch):
     return SimpleNamespace(request=request, loads=loads, state=state)
 
 
-def _form(voice='alloy', engine='', whisper='base'):
+def _form(voice='alloy', engine='', whisper='base', load=False):
     config = asyncio.run(audio_router.get_audio_config(None, ADMIN))
     tts = {**{field: '' for field in audio_router.TTSConfigForm.model_fields}, **config['tts'], 'VOICE': voice}
     stt = {
@@ -66,7 +66,7 @@ def _form(voice='alloy', engine='', whisper='base'):
         'ENGINE': engine,
         'WHISPER_MODEL': whisper,
     }
-    return audio_router.AudioConfigUpdateForm.model_validate({'tts': tts, 'stt': stt})
+    return audio_router.AudioConfigUpdateForm.model_validate({'tts': tts, 'stt': stt, 'LOAD_WHISPER_MODEL': load})
 
 
 def _save(harness, form):
@@ -94,7 +94,21 @@ def test_a_tts_only_change_does_not_load_the_model(harness):
     assert _stored('audio.tts.voice') == 'nova'
 
 
-def test_a_new_model_that_cannot_load_refuses_the_save_and_stores_nothing(harness):
+def test_the_update_model_button_loads_an_unchanged_model(harness):
+    _save(harness, _form(load=True))
+
+    assert harness.loads == ['base']
+    assert harness.request.app.state.faster_whisper_model == 'loaded:base'
+
+
+def test_the_update_model_button_does_nothing_for_another_engine(harness):
+    _save(harness, _form(engine='openai', load=True))
+
+    assert harness.loads == []
+
+
+def test_a_new_model_that_cannot_load_refuses_the_save_and_stores_nothing(harness, monkeypatch):
+    monkeypatch.setenv('HF_HUB_OFFLINE', '1')
     harness.state.fail.add('large-v3')
 
     with pytest.raises(HTTPException) as raised:
@@ -103,8 +117,21 @@ def test_a_new_model_that_cannot_load_refuses_the_save_and_stores_nothing(harnes
     assert raised.value.status_code == 400
     assert 'large-v3' in raised.value.detail
     assert 'not saved' in raised.value.detail
+    assert 'is not in the cache' in raised.value.detail
+    assert 'runs offline' in raised.value.detail
     assert _stored('audio.stt.whisper_model') == 'base'
     assert _stored('audio.tts.voice') == 'start'
+
+
+def test_online_the_error_does_not_blame_offline_mode(harness, monkeypatch):
+    monkeypatch.delenv('HF_HUB_OFFLINE', raising=False)
+    harness.state.fail.add('bse')
+
+    with pytest.raises(HTTPException) as raised:
+        _save(harness, _form(whisper='bse'))
+
+    assert 'bse' in raised.value.detail
+    assert 'offline' not in raised.value.detail
 
 
 def test_a_new_model_that_loads_is_saved_and_used(harness):

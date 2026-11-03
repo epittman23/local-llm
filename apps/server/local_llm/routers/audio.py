@@ -233,6 +233,11 @@ def set_faster_whisper_model(model: str, auto_update: bool = False):
     return whisper_model
 
 
+def _hf_offline() -> bool:
+    """Whether Hugging Face downloads are turned off, as under `make backend`."""
+    return os.environ.get('HF_HUB_OFFLINE', '').strip().lower() in ('1', 'true', 'yes', 'on')
+
+
 class TTSConfigForm(BaseModel):
     OPENAI_API_BASE_URL: str
     OPENAI_API_KEY: str
@@ -272,6 +277,9 @@ class STTConfigForm(BaseModel):
 class AudioConfigUpdateForm(BaseModel):
     tts: TTSConfigForm
     stt: STTConfigForm
+    # Sent by the page's "Update model" button: load (or download) the local Whisper
+    # model even when its name has not changed.
+    LOAD_WHISPER_MODEL: bool = False
 
 
 @router.get('/config')
@@ -288,10 +296,15 @@ async def update_audio_config(request: Request, form_data: AudioConfigUpdateForm
     # model changes, and before anything is saved (#342): under HF_HUB_OFFLINE a model
     # missing from the cache refuses the save instead of failing after it, and a save
     # that changes neither (a new voice) no longer loads the model at all. A model not
-    # loaded yet is otherwise left to load on first use, as transcription does.
+    # loaded yet is otherwise left to load on first use, as transcription does, unless
+    # the "Update model" button asks for it to be loaded now.
     previous = await get_config_values({'ENGINE': STT_CONFIG_KEYS['ENGINE'], 'MODEL': STT_CONFIG_KEYS['WHISPER_MODEL']})
     local = form_data.stt.ENGINE == ''
-    whisper_changed = local and (previous.get('ENGINE') != '' or previous.get('MODEL') != form_data.stt.WHISPER_MODEL)
+    whisper_changed = local and (
+        form_data.LOAD_WHISPER_MODEL
+        or previous.get('ENGINE') != ''
+        or previous.get('MODEL') != form_data.stt.WHISPER_MODEL
+    )
     whisper_model = None
     if whisper_changed:
         try:
@@ -304,7 +317,12 @@ async def update_audio_config(request: Request, form_data: AudioConfigUpdateForm
                 status_code=400,
                 detail=(
                     f'The Whisper model "{form_data.stt.WHISPER_MODEL}" could not be loaded, so the audio settings '
-                    f'were not saved. With HF_HUB_OFFLINE set it must already be downloaded. ({e})'
+                    f'were not saved: {e}'
+                    + (
+                        ' The backend runs offline (HF_HUB_OFFLINE), so the model must already be downloaded.'
+                        if _hf_offline()
+                        else ''
+                    )
                 ),
             )
 
