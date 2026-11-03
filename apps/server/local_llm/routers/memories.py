@@ -280,27 +280,22 @@ async def update_memories(
     vectors = await _embed_texts(request, user, [_vector_text(memory) for memory in _embedded_memories(planned)])
     results = await _apply_memory_operations(user.id, operations)
 
-    upsert_items = []
-    delete_ids = []
-    response = []
+    delete_ids = [result['id'] for result in results if result.get('status') == 'deleted' and result.get('id')]
+    response = [
+        {**result, 'memory': result['memory'].model_dump()} if isinstance(result.get('memory'), MemoryModel) else result
+        for result in results
+    ]
 
-    for result in results:
-        memory = result.get('memory')
-        if isinstance(memory, MemoryModel):
-            result = {**result, 'memory': memory.model_dump()}
-            if result.get('status') in {'created', 'updated'}:
-                text = _vector_text(memory)
-                if text not in vectors:
-                    # The row changed between the plan and the write.
-                    vectors[text] = await _embed(request, user, text)
-                upsert_items.append(_vector_item(memory, vectors[text]))
-        if result.get('status') == 'deleted' and result.get('id'):
-            delete_ids.append(result['id'])
-        response.append(result)
-
-    # Deleted memories leave the vector store even when the upsert fails,
-    # or chat context would keep recalling them.
+    # Deleted memories leave the vector store even when an embedding or the
+    # upsert fails, or chat context would keep recalling them.
     try:
+        upsert_items = []
+        for memory in _embedded_memories(results):
+            text = _vector_text(memory)
+            if text not in vectors:
+                # The row changed between the plan and the write.
+                vectors[text] = await _embed(request, user, text)
+            upsert_items.append(_vector_item(memory, vectors[text]))
         if upsert_items:
             await upsert_memory_vectors_or_reindex(request, user, upsert_items)
     finally:

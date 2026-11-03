@@ -179,7 +179,12 @@ class MemoriesTable:
         say what the operations would do, and nothing is written. The memory
         routes plan a batch this way, embed the texts it would store, and only
         then apply it, so a failed embedding leaves the database unchanged.
+        A plan always uses a session of its own: rolling back a shared session
+        would discard its caller's other pending work, so passing ``db`` with
+        ``commit=False`` is refused.
         """
+        if not commit and db is not None:
+            raise TypeError('apply_memory_operations(commit=False) uses its own session; do not pass db')
         now = int(time.time())
         results: list[dict] = []
 

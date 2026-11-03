@@ -13,7 +13,9 @@ left behind:
   failed embedding keeps the vectors that were there, and `/reindex`
   carries on past a user that fails, then reports the failures;
 - chat context labels a vector hit from the memory's database row, not
-  from the text stored with the vector.
+  from the text stored with the vector;
+- a vector-dimension mismatch (the embedding model changed) still reindexes
+  the user's collection, from rows that include the new memory.
 
 Requests go through the real router functions and `Memories` against the
 test run's migrated SQLite database; the permission check, the embedding
@@ -32,6 +34,7 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from local_llm.models.memories import Memories
 from local_llm.routers import memories as memories_router
@@ -50,9 +53,13 @@ class FakeVectorStore:
     def __init__(self):
         self.calls: list[tuple] = []
         self.fail_upsert = False
+        # Errors the next upserts raise, in order, before fail_upsert applies.
+        self.upsert_errors: list[Exception] = []
 
     async def upsert(self, collection_name, items):
-        self.calls.append(('upsert', collection_name, [item['text'] for item in items]))
+        self.calls.append(('upsert', collection_name, sorted(item['text'] for item in items)))
+        if self.upsert_errors:
+            raise self.upsert_errors.pop(0)
         if self.fail_upsert:
             raise VectorStoreDown('vector store down')
 
@@ -159,6 +166,37 @@ def test_add_stores_and_embeds_the_memory(harness):
     assert _stored(harness.user.id) == [('Deadline is Friday', 'work/project')]
     assert harness.state.embedded == ['work/project\nDeadline is Friday']
     assert harness.store.calls == [('upsert', f'user-memory-{harness.user.id}', ['work/project\nDeadline is Friday'])]
+
+
+DIMENSION_MISMATCH = 'Embedding dimension mismatch: expected 384, got 768'
+
+
+def test_add_reindexes_on_a_dimension_mismatch_with_the_new_memory(harness):
+    _insert(harness.user.id, 'Older fact')
+    harness.store.upsert_errors = [RuntimeError(DIMENSION_MISMATCH)]
+
+    asyncio.run(
+        memories_router.add_memory(harness.request, memories_router.AddMemoryForm(content='New fact'), harness.user)
+    )
+
+    collection = f'user-memory-{harness.user.id}'
+    assert _stored(harness.user.id) == [('New fact', None), ('Older fact', None)]
+    assert harness.store.calls == [
+        ('upsert', collection, ['New fact']),
+        ('delete_collection', collection),
+        ('upsert', collection, ['New fact', 'Older fact']),
+    ]
+
+
+def test_add_removes_its_row_when_the_reindex_after_a_mismatch_fails(harness):
+    harness.store.upsert_errors = [RuntimeError(DIMENSION_MISMATCH), VectorStoreDown('vector store down')]
+
+    with pytest.raises(VectorStoreDown):
+        asyncio.run(
+            memories_router.add_memory(harness.request, memories_router.AddMemoryForm(content='New fact'), harness.user)
+        )
+
+    assert _stored(harness.user.id) == []
 
 
 # /{id}/update
@@ -298,6 +336,30 @@ def test_batch_embeds_a_text_that_changed_after_it_was_planned(harness, monkeypa
     assert harness.store.calls == [('upsert', f'user-memory-{harness.user.id}', ['work\nDeadline moved'])]
 
 
+def test_batch_applies_its_vector_deletes_when_a_late_embedding_fails(harness, monkeypatch):
+    kept = _insert(harness.user.id, 'Deadline is Friday')
+    removed = _insert(harness.user.id, 'Old fact')
+    real_apply = Memories.apply_memory_operations
+
+    async def apply_after_another_edit(user_id, operations, **kwargs):
+        if kwargs.get('commit', True):
+            await Memories.update_memory_by_id_and_user_id(kept.id, user_id, 'Deadline moved')
+            harness.state.fail_on = 'moved'
+        return await real_apply(user_id, operations, **kwargs)
+
+    monkeypatch.setattr(memories_router.Memories, 'apply_memory_operations', apply_after_another_edit)
+
+    with pytest.raises(EmbeddingDown):
+        _batch(harness, {'action': 'move', 'id': kept.id, 'path': 'work'}, {'action': 'remove', 'id': removed.id})
+
+    assert harness.store.calls == [('delete', f'user-memory-{harness.user.id}', [removed.id])]
+
+
+def test_batch_plan_refuses_a_shared_session():
+    with pytest.raises(TypeError):
+        asyncio.run(Memories.apply_memory_operations('anyone', [], db=AsyncSession(), commit=False))
+
+
 def test_batch_plan_writes_nothing():
     user_id = _new_user().id
     stored = _insert(user_id, 'Deadline is Friday')
@@ -336,6 +398,12 @@ def test_reset_keeps_the_vectors_when_embedding_fails(harness):
         asyncio.run(memories_router.reset_memory_from_vector_db(harness.request, harness.user))
 
     assert harness.store.calls == []
+
+
+def test_reset_of_a_user_without_memories_drops_the_collection(harness):
+    asyncio.run(memories_router.reset_memory_from_vector_db(harness.request, harness.user))
+
+    assert harness.store.calls == [('delete_collection', f'user-memory-{harness.user.id}')]
 
 
 def test_reindex_carries_on_past_a_failing_user_and_reports_it(harness, monkeypatch):
@@ -387,5 +455,9 @@ def test_context_labels_a_vector_hit_from_its_database_row():
     )
 
     sections = memory_utils._memory_sections([row], 'anything', stale_hit)
+
+    # A hit with no row is still shown from the vector's text, as the
+    # recorded add_memory_context cases expect; dropping it is left to the
+    # owner, since it changes that golden file (#303).
 
     assert sections['context'] == ['work: Deadline is Monday', 'unknown memory']
