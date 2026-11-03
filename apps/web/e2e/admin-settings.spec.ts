@@ -1964,6 +1964,25 @@ test.describe('settings: Documents', () => {
 		});
 	});
 
+	test('chunk settings the splitters cannot use are refused before anything is sent (#235)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockDocuments(page);
+		await page.goto('/?settings=admin:documents');
+		const m = modal(page);
+		await expect(m.getByLabel('Chunk Size')).toHaveValue('1000');
+		await m.getByLabel('Chunk Overlap').fill('2000');
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect(
+			page.getByText('Chunk Overlap must be smaller than Chunk Size (2000 is not smaller than 1000).')
+		).toBeVisible();
+		expect(sent(calls, '/retrieval/embedding/update')).toHaveLength(0);
+		expect(sent(calls, '/retrieval/config/update')).toHaveLength(0);
+		await m.getByLabel('Chunk Overlap').fill('200');
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect.poll(() => sent(calls, '/retrieval/config/update').length).toBe(1);
+		expect(sent(calls, '/retrieval/config/update')[0]).toMatchObject({ CHUNK_SIZE: 1000, CHUNK_OVERLAP: 200 });
+	});
+
 	test('a reranker that cannot load: the save says hybrid search went off, and the switch shows it (#232)', async ({
 		page
 	}) => {

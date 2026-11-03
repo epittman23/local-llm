@@ -1415,3 +1415,21 @@ def stream_chunks_handler(stream: aiohttp.StreamReader):
             yield bytes(buffer)
 
     return yield_safe_stream_chunks()
+
+
+def chunk_settings_error(chunk_size, chunk_overlap) -> str | None:
+    """Why the text splitters could not use these chunk settings, or None (#235).
+
+    Every TextSplitter raises on a size below 1, a negative overlap, or an
+    overlap larger than the size, on every upload and reindex. An overlap
+    equal to the size is refused too: TokenTextSplitter raises on it when it
+    splits ("tokens_per_chunk must be greater than chunk_overlap"), so keep
+    the check at >=.
+    """
+    if not isinstance(chunk_size, int) or chunk_size < 1:
+        return 'Chunk Size must be at least 1.'
+    if not isinstance(chunk_overlap, int) or chunk_overlap < 0:
+        return 'Chunk Overlap cannot be negative.'
+    if chunk_overlap >= chunk_size:
+        return f'Chunk Overlap must be smaller than Chunk Size ({chunk_overlap} is not smaller than {chunk_size}).'
+    return None
