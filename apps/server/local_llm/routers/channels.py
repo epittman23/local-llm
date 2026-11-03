@@ -1058,6 +1058,28 @@ async def _model_context_messages(
     return [m for m in [*lead, *earlier] if (m.content or '').strip() or not (m.meta or {}).get('model_id')]
 
 
+async def _fail_model_reply(channel_id: str, message_id: str, error: Exception) -> None:
+    """Finishes a model's empty channel reply as ``Error: ...``, marked done (#329).
+
+    The reply is inserted before the chat pipeline runs; a failure the pipeline
+    raises before its own task starts (``Model not found``, say) never reaches the
+    channel, which shows an empty model reply as "Thinking" for good. This goes
+    through the channel emitter's own error path, which saves the reply and sends
+    the update to the channel's room.
+    """
+    from local_llm.socket import main as socket_main
+
+    detail = error.detail if isinstance(error, HTTPException) else str(error)
+    try:
+        emitter = await socket_main.get_event_emitter({'chat_id': f'channel:{channel_id}', 'message_id': message_id})
+        if emitter:
+            await emitter(
+                {'type': 'chat:message:error', 'data': {'error': {'content': detail or type(error).__name__}}}
+            )
+    except Exception as e:
+        log.exception('Could not report the failed channel reply %s: %s', message_id, e)
+
+
 async def model_response_handler(request, channel, message, user, db=None):
     MODELS = {model['id']: model for model in await get_filtered_models(await get_all_models(request, user=user), user)}
 
@@ -1088,6 +1110,7 @@ async def model_response_handler(request, channel, message, user, db=None):
         model = MODELS.get(model_id, None)
 
         if model:
+            response_message = None
             try:
                 mode = await Config.get('channels.model_response_mode', 'thread')
                 thread_messages = await _model_context_messages(
@@ -1216,6 +1239,8 @@ async def model_response_handler(request, channel, message, user, db=None):
 
             except Exception as e:
                 log.exception(e)
+                if response_message is not None:
+                    await _fail_model_reply(channel.id, response_message.id, e)
 
     return True
 
