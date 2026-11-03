@@ -74,6 +74,7 @@ def _function(function_id):
 
 
 def test_an_edit_that_fails_to_load_keeps_the_function_on_and_unchanged(stored):
+    before = _function(stored)
     form = FunctionForm(id=stored, name='My filter', content=BROKEN, meta=FunctionMeta())
 
     async def update():
@@ -83,10 +84,26 @@ def test_an_edit_that_fails_to_load_keeps_the_function_on_and_unchanged(stored):
         asyncio.run(update())
 
     assert raised.value.status_code == 400
-    function = _function(stored)
-    assert function.is_active is True
-    assert function.is_global is True
-    assert function.content.strip() == WORKING.strip()
+    # No write at all: the row is as it was.
+    assert _function(stored) == before
+    assert before.is_active is True
+
+
+def test_an_update_that_is_not_saved_leaves_the_cached_module_alone(stored, monkeypatch):
+    request = _request()
+    live = object()
+    request.app.state.FUNCTIONS[stored] = live
+
+    async def not_saved(*_a, **_k):
+        return None
+
+    monkeypatch.setattr(functions_router.Functions, 'update_function_by_id', not_saved)
+    form = FunctionForm(id=stored, name='My filter', content=WORKING + '\n# edited\n', meta=FunctionMeta())
+
+    with pytest.raises(HTTPException):
+        asyncio.run(functions_router.update_function_by_id(request, stored, form, ADMIN, db=None))
+
+    assert request.app.state.FUNCTIONS[stored] is live
 
 
 def test_a_sync_with_code_that_fails_to_load_keeps_the_function_on(stored):
@@ -115,6 +132,6 @@ def test_a_runtime_load_of_broken_stored_code_still_switches_it_off(stored):
     asyncio.run(Functions.update_function_by_id(stored, {'content': BROKEN}))
 
     with pytest.raises(SyntaxError):
-        asyncio.run(plugin.load_function_module_by_id(stored, BROKEN))
+        asyncio.run(plugin.get_function_module_from_cache(_request(), stored))
 
     assert _function(stored).is_active is False
