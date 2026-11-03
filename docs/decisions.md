@@ -7,6 +7,23 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-03**: **Admin banners are shown again (#243).** The banners
+  set in Admin Settings > General were saved but displayed nowhere. The
+  2026-09-27 Phase 8 entry left the stores the Svelte tabs refreshed
+  (banners among them) to Phase 10's chat, and Phase 10 did not port the
+  display or record it as a gap.
+
+  **What.** `routes/chat/ChatBanners.tsx` shows them above a new chat, as
+  the original's chat navbar did, and not inside an existing chat.
+  - **Closing:** a dismissible banner stays dismissed in this browser
+    (`localStorage` `dismissedBannerIds`, the original's key, pruned to
+    banners that still exist). Any other banner closes until the page is
+    reloaded, as in the original.
+  - **Safety:** content goes through `SafeMarkdown`. A "Details" link
+    goes to the banner's URL, and only when it is http(s); the original's links
+    ignored the URL.
+  - **Not ported:** the license-trial and seat banners, which have no
+    licence system here.
 - **2026-10-25** (evening): **LiveCodeBench added, with a per-run
   release-date window.** This is PR 2 of `docs/plans/benchmark-upgrade.md`.
 
