@@ -136,6 +136,34 @@ def test_concurrent_requests_refresh_once_and_share_the_new_token(manager, monke
     assert first['access_token'] == second['access_token'] == 'new'
 
 
+def test_a_lock_left_from_another_event_loop_is_not_reused(manager, monkeypatch):
+    # As happens when a held lock outlives the loop that used it: the next
+    # loop must get a lock of its own, not one bound to the old loop.
+    manager.setup(expires_in=-60)
+    new = {'access_token': 'new', 'refresh_token': 'r2', 'expires_at': int(time.time()) + 3600}
+    _refresh_with(manager, monkeypatch, new)
+
+    async def contended():
+        return await asyncio.gather(manager.get(), manager.get())
+
+    async def hold_a_lock():
+        lock = asyncio.Lock()
+        oauth._REFRESH_LOCKS[(asyncio.get_running_loop(), 's1')] = lock
+        await lock.acquire()
+        # Make the lock bind to this loop, as a contended acquire does.
+        waiter = asyncio.ensure_future(lock.acquire())
+        await asyncio.sleep(0)
+        waiter.cancel()
+        return lock
+
+    # Kept alive here, as a stray reference would keep it, and still held.
+    kept = asyncio.run(hold_a_lock())
+    first, second = asyncio.run(contended())
+
+    assert kept.locked()
+    assert first['access_token'] == second['access_token'] == 'new'
+
+
 # --- what counts as a refusal -------------------------------------------------
 
 

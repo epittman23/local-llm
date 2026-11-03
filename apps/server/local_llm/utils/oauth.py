@@ -822,8 +822,11 @@ class RefreshRejected(Exception):
     """
 
 
-# One lock per session being refreshed, held only while some request uses it.
-_REFRESH_LOCKS: weakref.WeakValueDictionary[str, asyncio.Lock] = weakref.WeakValueDictionary()
+# One lock per session being refreshed, held only while some request uses it. Keyed by
+# the event loop too: an asyncio.Lock used under one loop cannot be awaited under another.
+_REFRESH_LOCKS: weakref.WeakValueDictionary[tuple[asyncio.AbstractEventLoop, str], asyncio.Lock] = (
+    weakref.WeakValueDictionary()
+)
 
 
 def _needs_refresh(session, force_refresh: bool) -> bool:
@@ -845,9 +848,10 @@ async def _token_refreshed_if_needed(manager, session, force_refresh: bool) -> d
     """
     if not _needs_refresh(session, force_refresh):
         return session.token
-    lock = _REFRESH_LOCKS.get(session.id)
+    key = (asyncio.get_running_loop(), session.id)
+    lock = _REFRESH_LOCKS.get(key)
     if lock is None:
-        lock = _REFRESH_LOCKS[session.id] = asyncio.Lock()
+        lock = _REFRESH_LOCKS[key] = asyncio.Lock()
     async with lock:
         current = await OAuthSessions.get_session_by_id(session.id)
         if current is None:
