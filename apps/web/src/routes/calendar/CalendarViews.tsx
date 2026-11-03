@@ -209,17 +209,20 @@ export function CalendarViews({
 							{days.map((day, i) => {
 								const shown = view === 'week' ? bands[i].slice(0, 3) : bands[i];
 								return (
-									<div
+									<ul
 										key={day.toISOString()}
-										role="group"
 										aria-label={day.toDateString()}
 										className="flex min-w-0 flex-col gap-0.5 border-l border-border/50 p-0.5"
 									>
-										{shown.map(bandChip)}
+										{shown.map((e) => (
+											<li key={e.instance_id || e.id}>{bandChip(e)}</li>
+										))}
 										{view === 'week' && bands[i].length > 3 && (
-											<More count={bands[i].length - 3} onClick={() => onOpenDay(day)} />
+											<li>
+												<More count={bands[i].length - 3} onClick={() => onOpenDay(day)} />
+											</li>
 										)}
-									</div>
+									</ul>
 								);
 							})}
 						</section>
