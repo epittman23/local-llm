@@ -15,7 +15,7 @@ import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from PIL import Image, ImageOps
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from local_llm.config import (
     CACHE_DIR,
@@ -264,6 +264,13 @@ class ImagesConfig(BaseModel):
     IMAGES_EDIT_COMFYUI_WORKFLOW: str
     IMAGES_EDIT_COMFYUI_WORKFLOW_NODES: list[dict]
 
+    @field_validator('IMAGE_STEPS', mode='before')
+    @classmethod
+    def _cleared_steps_is_unset(cls, value):
+        # A cleared Steps box arrives as '' (or null): no step count, so the
+        # engine's own default applies, as for a null in generation (#237).
+        return None if value == '' else value
+
 
 @router.get('/config', response_model=ImagesConfig)
 async def get_config(request: Request, user=Depends(get_admin_user)):
@@ -289,7 +296,7 @@ async def update_config(request: Request, form_data: ImagesConfig, user=Depends(
             detail=ERROR_MESSAGES.INCORRECT_FORMAT('  (e.g., 512x512).'),
         )
 
-    if form_data.IMAGE_STEPS < 0:
+    if form_data.IMAGE_STEPS is not None and form_data.IMAGE_STEPS < 0:
         raise HTTPException(
             status_code=400,
             detail=ERROR_MESSAGES.INCORRECT_FORMAT('  (e.g., 50).'),
