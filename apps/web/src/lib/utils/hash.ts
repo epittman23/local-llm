@@ -43,9 +43,21 @@ function rotr(n: number, x: number): number {
 	return (x >>> n) | (x << (32 - n));
 }
 
-function sha256Fallback(data: Uint8Array): string {
+/**
+ * Writes a message's length in bits where SHA-256's padding ends: the last 8
+ * bytes before `end`, as a 64-bit big-endian number. Bits past 2^32 (from
+ * 512 MiB on) go in the high word, which was left 0 before (#258). A byte
+ * length is below 2^53 / 8, so the division is exact.
+ */
+export function writeBitLength(view: DataView, end: number, byteLength: number): void {
+	const bitLen = byteLength * 8;
+	view.setUint32(end - 8, Math.floor(bitLen / 2 ** 32), false);
+	view.setUint32(end - 4, bitLen % 2 ** 32, false);
+}
+
+/** Exported for its tests; computeFileHash is the way in. */
+export function sha256Fallback(data: Uint8Array): string {
 	// Pre-processing: padding
-	const bitLen = data.length * 8;
 	const padLen = (((data.length + 8) >>> 6) + 1) << 6;
 	const padded = new Uint8Array(padLen);
 	padded.set(data);
@@ -53,7 +65,7 @@ function sha256Fallback(data: Uint8Array): string {
 
 	// Append original length in bits as 64-bit big-endian
 	const view = new DataView(padded.buffer);
-	view.setUint32(padLen - 4, bitLen, false);
+	writeBitLength(view, padLen, data.length);
 
 	// Initial hash values
 	let h0 = 0x6a09e667;
