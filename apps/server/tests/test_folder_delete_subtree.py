@@ -138,3 +138,31 @@ def test_a_failed_chat_move_is_an_error_and_deletes_no_folder(tree, monkeypatch)
     assert r.status_code == 400
     # The chats stayed in folders that still exist.
     assert _run(_folders_left(tree.ids, tree.user.id)) == tree.ids
+
+
+def _without_chat_delete(monkeypatch):
+    async def has_permission(user_id, key, *_a, **_k):
+        return key != 'chat.delete'
+
+    monkeypatch.setattr(folders_router, 'has_permission', has_permission)
+
+
+def test_without_chat_delete_a_folder_can_still_be_deleted_keeping_its_chats(tree, monkeypatch):
+    """Keeping the chats only moves them, so it needs no chat delete permission (#316)."""
+    _without_chat_delete(monkeypatch)
+
+    r = _client(tree.user, monkeypatch).delete(f'/folders/{tree.ids[0]}', params={'delete_contents': False})
+
+    assert r.status_code == 200 and r.json() is True
+    assert _run(_folders_left(tree.ids, tree.user.id)) == []
+    assert [_run(Chats.get_chat_by_id(cid)).folder_id for cid in tree.chats] == [None, None, None]
+
+
+def test_without_chat_delete_deleting_a_folder_with_its_chats_is_refused(tree, monkeypatch):
+    _without_chat_delete(monkeypatch)
+
+    r = _client(tree.user, monkeypatch).delete(f'/folders/{tree.ids[0]}', params={'delete_contents': True})
+
+    assert r.status_code == 403
+    assert _run(_folders_left(tree.ids, tree.user.id)) == tree.ids
+    assert all(_run(Chats.get_chat_by_id(cid)) for cid in tree.chats)
