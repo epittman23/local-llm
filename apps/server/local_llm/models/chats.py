@@ -2017,11 +2017,18 @@ class ChatTable:
         ]
 
         # Extract folder names
-        folders = await Folders.search_folders_by_names(
-            user_id,
-            [word.replace('folder:', '') for word in search_text_words if word.startswith('folder:')],
-        )
+        # A bare `folder:` (one still being typed) names nothing yet and is ignored.
+        folder_names = [
+            word.replace('folder:', '')
+            for word in search_text_words
+            if word.startswith('folder:') and word != 'folder:'
+        ]
+        folders = await Folders.search_folders_by_names(user_id, folder_names)
         folder_ids = [folder.id for folder in folders]
+        # A folder filter that names no folder of this user's matches no chat: it
+        # used to be dropped, and a misspelled folder returned every chat (#291).
+        if folder_names and not folder_ids:
+            return []
 
         is_pinned = None
         if 'pinned:true' in search_text_words:
