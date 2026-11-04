@@ -27,6 +27,7 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore, useDocumentTitle } from '@/lib/stores/configStore';
 import { useUIStore } from '@/lib/stores/uiStore';
 import { cn } from '@/lib/utils';
+import { useDebouncedCallback } from '@/lib/utils/useDebouncedCallback';
 import { ArtifactPanel } from './ArtifactPanel';
 import { ChatControls } from './ChatControls';
 import { ChatInput, type ChatInputHandle } from './ChatInput';
@@ -317,27 +318,20 @@ export function ChatPage() {
 	// The controls panel edits the chat's own params; a saved chat keeps them (debounced).
 	const controlsOpen = useUIStore((s) => s.controlsOpen);
 	const setControlsOpen = useUIStore((s) => s.setControlsOpen);
-	const paramsDirty = useRef(false);
-	// Params edited in one chat are never saved into the next: the pending
-	// debounce below is flushed to the chat being left, then cleared.
-	const paramsFor = useRef<{ id: string | null; params: Record<string, any> }>({ id, params: session.params });
+	// Saved to the chat they were edited in, after a pause. A pending save is
+	// made at once when another chat opens, so it never lands in the next one,
+	// and when the page unmounts, so leaving the page does not drop it (#525).
+	// A new chat's params go with its first message instead.
+	const saveParams = useDebouncedCallback(
+		({ chatId, params }: { chatId: string; params: Record<string, any> }) =>
+			updateChatById(token, chatId, { params }).catch((e) => toast.error(`${e}`)),
+		500
+	);
 	useEffect(() => {
-		const prev = paramsFor.current;
-		if (prev.id !== id) {
-			if (paramsDirty.current && prev.id)
-				void updateChatById(token, prev.id, { params: prev.params }).catch((e) => toast.error(`${e}`));
-			paramsDirty.current = false;
-		}
-		paramsFor.current = { id, params: session.params };
-	}, [id, session.params, token]);
-	useEffect(() => {
-		if (!paramsDirty.current || !id) return;
-		const t = setTimeout(() => {
-			paramsDirty.current = false;
-			void updateChatById(token, id, { params: session.params }).catch((e) => toast.error(`${e}`));
-		}, 500);
-		return () => clearTimeout(t);
-	}, [session.params, id, token]);
+		// Only a saved chat has a save to make when it is left.
+		if (!id) return;
+		return saveParams.flush;
+	}, [id, saveParams]);
 	const [preview, setPreview] = useState<string | null>(null);
 	useEffect(() => setPreview(null), [id]);
 
@@ -546,8 +540,8 @@ export function ChatPage() {
 					<ChatControls
 						params={session.params}
 						onParams={(p) => {
-							paramsDirty.current = true;
 							session.setParams(p);
+							if (id) saveParams({ chatId: id, params: p });
 						}}
 						files={session.chatFiles}
 						onRemoveFile={(i) => session.setChatFiles(session.chatFiles.filter((_, j) => j !== i))}
