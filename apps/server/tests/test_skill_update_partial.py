@@ -116,6 +116,7 @@ def test_an_update_that_leaves_fields_out_keeps_them(client, owner, group):
     assert (skill.name, skill.content) == (f'Renamed {skill_id}', 'new')
     assert skill.is_active is False
     assert skill.meta.tags == ['imported']
+    assert skill.description == 'd'
     assert _grants(skill_id) == [('group', group.id, 'read')]
 
 
