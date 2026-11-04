@@ -79,7 +79,9 @@ const CONFIG_FILE = join(USER_DATA, 'config.json');
 const OWNED_FILE = join(USER_DATA, 'owned.json');
 const LOG_FILE = join(USER_DATA, 'logs', 'backend.log');
 
-type Phase = 'idle' | 'starting' | 'running' | 'failed' | 'stopping';
+// 'stopped': a forced stop left a llama-server and the dialog offers to stop it;
+// nothing of the stack is left to stop, so any way of quitting just exits (#421).
+type Phase = 'idle' | 'starting' | 'running' | 'failed' | 'stopping' | 'stopped';
 
 let phase: Phase = 'idle';
 let config: DesktopConfig;
@@ -214,6 +216,9 @@ function saveBounds(bounds: Bounds): void {
 }
 
 function openApp(url: string): Promise<void> {
+	// Every startup path awaits before it gets here; a stop begun meanwhile (a
+	// Cancel during the last probe) owns the dialog, and no window opens (#423).
+	if (phase !== 'starting') return Promise.resolve();
 	appOrigin = new URL(url).origin;
 	dispatch({ type: 'begin', step: 'open', at: Date.now() });
 	const win = new BrowserWindow({
@@ -239,6 +244,13 @@ function openApp(url: string): Promise<void> {
 	});
 	return new Promise((resolve) => {
 		win.once('ready-to-show', () => {
+			// A stop that began while the page loaded owns the dialog and the
+			// phase; this window is already destroyed, and must not reopen (#423).
+			if (phase !== 'starting') {
+				if (!win.isDestroyed()) win.destroy();
+				resolve();
+				return;
+			}
 			// Shown before the dialog closes, or no window would be left
 			// open for a moment and the app would quit.
 			win.show();
@@ -426,6 +438,10 @@ function forgetOwned(): void {
  * owned (attached, remote, or a failed start) it just quits.
  */
 async function shutdown(): Promise<void> {
+	if (phase === 'stopped') {
+		app.exit(0);
+		return;
+	}
 	if (phase === 'stopping') return;
 	phase = 'stopping';
 	startAbort?.abort();
@@ -473,6 +489,7 @@ async function shutdown(): Promise<void> {
 		// Its own session keeps it out of the group; offer, don't kill unasked.
 		dispatch({ type: 'offer-stop-llama' });
 		dispatch({ type: 'complete', at: Date.now() });
+		phase = 'stopped';
 		return;
 	}
 	dispatch({ type: 'complete', at: Date.now() });
@@ -563,6 +580,8 @@ function registerIpc(): void {
 				case 'quit':
 					return shutdown();
 				case 'retry':
+					// Offered only after a failed start; never during or after a stop.
+					if (phase !== 'failed') return;
 					statusView = 'progress';
 					return startup();
 				case 'open-log':
