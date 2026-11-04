@@ -1,5 +1,5 @@
 import { Copy, Plus, RefreshCw, Trash2 } from 'lucide-react';
-import { type ChangeEvent, useEffect, useRef, useState } from 'react';
+import { type ChangeEvent, type FormEvent, useEffect, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
@@ -69,6 +69,10 @@ export default function Account() {
 	const [rows, setRows] = useState<VariableRow[]>([]);
 	const [saving, setSaving] = useState(false);
 	const [passwords, setPasswords] = useState({ current: '', next: '', confirm: '' });
+	// The password fields belong to a form of their own (#260), so Enter in one
+	// changes the password instead of saving the tab. Forms cannot nest, so it
+	// comes after the tab's form, and the fields name it with `form=`.
+	const passwordForm = useId();
 	const [apiKey, setApiKey] = useState('');
 	const [confirmDeleteKey, setConfirmDeleteKey] = useState(false);
 	const fileRef = useRef<HTMLInputElement>(null);
@@ -137,6 +141,11 @@ export default function Account() {
 		setSaving(false);
 	};
 
+	const submitPassword = (e: FormEvent) => {
+		e.preventDefault();
+		if (passwords.current && passwords.next) void changePassword();
+	};
+
 	const changePassword = async () => {
 		if (passwords.next !== passwords.confirm) {
 			toast.error("The passwords you entered don't quite match. Please double-check and try again.");
@@ -170,7 +179,14 @@ export default function Account() {
 	const set = (patch: Partial<Profile>) => profile && setProfile({ ...profile, ...patch });
 
 	return (
-		<SettingsForm title="Account" onSubmit={save} saving={saving} loading={!profile} disabled={loadFailed}>
+		<SettingsForm
+			title="Account"
+			onSubmit={save}
+			saving={saving}
+			loading={!profile}
+			disabled={loadFailed}
+			after={canPassword && <form id={passwordForm} aria-label="Change Password" hidden onSubmit={submitPassword} />}
+		>
 			{profile && (
 				<>
 					{loadFailed && (
@@ -305,9 +321,10 @@ export default function Account() {
 
 					{canPassword && (
 						<SettingsSection title="Change Password">
-							{/* Its own inputs, submitted by its own button: the tab's Save must not change the password. */}
+							{/* Its own form, submitted by its own button or Enter: the tab's Save must not change the password, nor Enter here save the tab. */}
 							<SettingInput
 								type="password"
+								form={passwordForm}
 								aria-label="Current Password"
 								placeholder="Current Password"
 								autoComplete="current-password"
@@ -316,6 +333,7 @@ export default function Account() {
 							/>
 							<SettingInput
 								type="password"
+								form={passwordForm}
 								aria-label="New Password"
 								placeholder="New Password"
 								autoComplete="new-password"
@@ -324,6 +342,7 @@ export default function Account() {
 							/>
 							<SettingInput
 								type="password"
+								form={passwordForm}
 								aria-label="Confirm Password"
 								placeholder="Confirm Password"
 								autoComplete="new-password"
@@ -331,12 +350,12 @@ export default function Account() {
 								onChange={(e) => setPasswords({ ...passwords, confirm: e.target.value })}
 							/>
 							<Button
-								type="button"
+								type="submit"
+								form={passwordForm}
 								size="sm"
 								variant="outline"
 								className="self-start"
 								disabled={!passwords.current || !passwords.next}
-								onClick={() => void changePassword()}
 							>
 								Update password
 							</Button>
