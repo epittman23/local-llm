@@ -168,20 +168,30 @@ describe('temporary chats and web search confirmation', () => {
 });
 
 describe('{{USER_LANGUAGE}} (#326)', () => {
+	const prefer = (languages: string[], language: string) => {
+		vi.spyOn(navigator, 'languages', 'get').mockReturnValue(languages);
+		vi.spyOn(navigator, 'language', 'get').mockReturnValue(language);
+	};
 	afterEach(() => {
-		vi.unstubAllGlobals();
+		vi.restoreAllMocks();
 		localStorage.clear();
 	});
 
-	it("is the browser's language, not the interface's only locale", () => {
-		vi.stubGlobal('navigator', { ...navigator, language: 'de-DE' });
+	it("is the user's first preferred language, not the interface's only locale", () => {
+		prefer(['de-DE', 'en-US'], 'en-US');
 		localStorage.setItem('locale', 'en-US');
 
 		expect(promptVariables(null)['{{USER_LANGUAGE}}']).toBe('de-DE');
 	});
 
+	it("is the browser's language when it lists no preferences", () => {
+		prefer([], 'fr-FR');
+
+		expect(promptVariables(null)['{{USER_LANGUAGE}}']).toBe('fr-FR');
+	});
+
 	it('falls back to en-US when the browser names none', () => {
-		vi.stubGlobal('navigator', { ...navigator, language: '' });
+		prefer([], '');
 
 		expect(promptVariables(null)['{{USER_LANGUAGE}}']).toBe('en-US');
 	});
