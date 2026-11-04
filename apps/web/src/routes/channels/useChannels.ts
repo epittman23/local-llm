@@ -7,6 +7,7 @@ import { canUseFeature } from '@/lib/access/features';
 import { getChannels, updateChannelMemberActiveStatusById } from '@/lib/apis/channels';
 import { useSocket } from '@/lib/socket/SocketProvider';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { isLastActiveTab, startLastActiveTab } from '@/lib/utils/lastActiveTab';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import {
@@ -96,7 +97,8 @@ function playNotificationSound() {
  * refetches the list when a channel appears), and announces a message from
  * someone else that the viewer is not looking at: a toast that opens the
  * channel, and a browser notification if they turned those on in Settings
- * and granted the permission. Mounted once, in AppShell.
+ * and granted the permission (from the tab looked at last only, when several
+ * are open). Mounted once, in AppShell.
  */
 export function useChannelUnreadEvents() {
 	const { socket } = useSocket();
@@ -107,6 +109,8 @@ export function useChannelUnreadEvents() {
 	const { settings } = useUserSettings();
 	const notify = Boolean((settings as Record<string, unknown> | null)?.notificationEnabled);
 	const sound = ((settings as Record<string, unknown> | null)?.notificationSound ?? true) !== false;
+
+	useEffect(() => startLastActiveTab(), []);
 
 	useEffect(() => {
 		if (!socket || !enabled) return;
@@ -134,6 +138,9 @@ export function useChannelUnreadEvents() {
 				description: body.slice(0, 200),
 				action: { label: 'Open', onClick: () => navigate(`/channels/${event.channel_id}`) }
 			});
+			// The toast is this tab's own; the sound and the desktop notification
+			// come from the tab looked at last only, once for all open tabs (#254).
+			if (!isLastActiveTab()) return;
 			if (sound) playNotificationSound();
 			if (notify && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
 				new Notification(title, { body });
