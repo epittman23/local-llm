@@ -35,7 +35,8 @@ def test_an_unknown_folder_finds_no_chats():
         async def ids(text):
             return sorted(chat.id for chat in await Chats.get_chats_by_user_id_and_search_text(user.id, text))
 
-        return {text: await ids(text) for text in ('folder:nosuch', 'folder:nosuch plan', 'folder:work', 'plan')}
+        texts = ('folder:nosuch', 'folder:nosuch plan', 'folder:work', 'folder:work folder:nosuch', 'folder:', 'plan')
+        return {text: await ids(text) for text in texts}
 
     found = asyncio.run(run())
 
@@ -43,5 +44,9 @@ def test_an_unknown_folder_finds_no_chats():
         'folder:nosuch': [],
         'folder:nosuch plan': [],
         'folder:work': [f'in-{tag}'],
+        # Any folder named, as before.
+        'folder:work folder:nosuch': [f'in-{tag}'],
+        # A bare `folder:` names no folder yet, so it does not narrow the search.
+        'folder:': sorted([f'in-{tag}', f'out-{tag}']),
         'plan': sorted([f'in-{tag}', f'out-{tag}']),
     }
