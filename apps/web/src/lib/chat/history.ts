@@ -1,6 +1,6 @@
 import { processDetails } from '@/lib/markdown/content';
 import { uuid } from '@/lib/utils/uuid';
-import { applyResponseStreamEvent, getOutputText, type OutputItem } from './structuredOutput';
+import { applyResponseStreamEvent, getOutputText, type OutputItem, replaceOutputMessageText } from './structuredOutput';
 
 // A chat is a tree of messages (edits and regenerations are siblings), and
 // `currentId` is the leaf being shown. Everything here is pure: each function
@@ -59,6 +59,39 @@ export const emptyHistory = (): History => ({ messages: {}, currentId: null });
 const now = () => Math.floor(Date.now() / 1000);
 
 /** The path from the root to `id`, oldest first. */
+/**
+ * The patch for a message an action function or an outlet filter rewrote:
+ * the new fields, with the old text kept as `originalContent`. A new text
+ * goes into the message's `output` too, unless the rewrite brings an output
+ * of its own (not the one the message had):
+ * the next request is built from `output`, so the model (and the next
+ * action) would otherwise get the old text (#502).
+ */
+export function rewrittenMessage(existing: Message, rewrite: Partial<Message>): Partial<Message> {
+	const content = rewrite.content;
+	if (content === undefined || content === existing.content) return rewrite;
+	const patch: Partial<Message> = { originalContent: existing.content, ...rewrite };
+	// An outlet event sends the output back as it was when only the text changed.
+	const ownOutput = rewrite.output !== undefined && JSON.stringify(rewrite.output) !== JSON.stringify(existing.output);
+	if (!ownOutput && existing.output?.length) patch.output = withOutputText(existing, content);
+	return patch;
+}
+
+function withOutputText(existing: Message, content: string): OutputItem[] {
+	const output = existing.output ?? [];
+	const replaced = replaceOutputMessageText(output, existing.content, content);
+	if (replaced !== output || !getOutputText(output)) return replaced;
+	// The old text is not found as written (it spans several message items):
+	// the output's text becomes the new one, in place of its first message.
+	let placed = false;
+	return output.flatMap((item) => {
+		if (item?.type !== 'message') return [item];
+		if (placed) return [];
+		placed = true;
+		return [{ ...item, content: [{ type: 'output_text', text: content }] }];
+	});
+}
+
 export function messagesList(history: History, id: string | null | undefined): Message[] {
 	const list: Message[] = [];
 	const seen = new Set<string>();
@@ -428,8 +461,7 @@ export function applyChatEvent(history: History, event: ChatEvent): { history: H
 			let h = history;
 			for (const msg of data?.messages ?? []) {
 				const existing = h.messages[msg?.id];
-				if (existing && existing.content !== msg.content)
-					h = updateMessage(h, msg.id, { originalContent: existing.content, ...msg });
+				if (existing && existing.content !== msg.content) h = updateMessage(h, msg.id, rewrittenMessage(existing, msg));
 			}
 			return { history: h, effects };
 		}

@@ -267,6 +267,36 @@ def get_text_from_message(message: dict) -> str | None:
     return get_content_from_message(message)
 
 
+def with_output_text(output: list, old_text: str, new_text: str) -> list:
+    """The output with its message text replaced by `new_text`, its other items kept (#502).
+
+    For a message whose content was rewritten (an outlet filter, an action):
+    the next request is built from `output`, so it must carry the new text.
+    The text part holding `old_text` takes the new one; when the old text is
+    not found as written (it spans several message items), the first message
+    item takes the new text and the other message items go.
+    """
+    for index, item in enumerate(output):
+        parts = item.get('content') if isinstance(item, dict) and item.get('type') == 'message' else None
+        if not isinstance(parts, list):
+            continue
+        for part_index, part in enumerate(parts):
+            text = part.get('text') if isinstance(part, dict) else None
+            if old_text and isinstance(text, str) and old_text in text:
+                new_parts = [*parts]
+                new_parts[part_index] = {**part, 'text': text.replace(old_text, new_text, 1)}
+                return [*output[:index], {**item, 'content': new_parts}, *output[index + 1 :]]
+    rewritten, placed = [], False
+    for item in output:
+        if isinstance(item, dict) and item.get('type') == 'message':
+            if placed:
+                continue
+            placed = True
+            item = {**item, 'content': [{'type': 'output_text', 'text': new_text}]}
+        rewritten.append(item)
+    return rewritten
+
+
 def get_output_text(output: list | None) -> str:
     if not isinstance(output, list):
         return ''
