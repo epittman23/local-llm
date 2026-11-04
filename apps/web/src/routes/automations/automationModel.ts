@@ -211,6 +211,24 @@ export function formatSchedule(rrule: string): string {
 export const oncePassed = (s: Schedule, now = new Date()) =>
 	s.frequency === 'ONCE' && new Date(`${s.onceDate}T${s.onceTime}`) <= now;
 
+/**
+ * A one-time run without a whole date and time (#322). A cleared box sent
+ * `DTSTART:20261201T00`, which the server took as midnight, and an invalid
+ * date passed `oncePassed`, since it compares as neither past nor future.
+ */
+export const onceIncomplete = (s: Schedule) =>
+	s.frequency === 'ONCE' && !(/^\d{4}-\d{2}-\d{2}$/.test(s.onceDate) && /^\d{2}:\d{2}$/.test(s.onceTime));
+
+/**
+ * The hour and minute a time box holds, or null while it is cleared or
+ * incomplete (#322): `''` used to read as hour 0 with no minute, which built
+ * `BYMINUTE=undefined` and a save the server refused.
+ */
+export function timeFromInput(value: string): { hour: number; minute: number } | null {
+	const m = /^(\d{2}):(\d{2})/.exec(value);
+	return m ? { hour: Number(m[1]), minute: Number(m[2]) } : null;
+}
+
 // --- destinations --------------------------------------------------------
 
 export type Folder = { id: string; name: string; parent_id?: string | null; shared?: boolean };
@@ -321,6 +339,7 @@ export function withoutMissingDestinations(
 export function automationPayload(f: AutomationFields, now = new Date()): { error: string } | { form: AutomationForm } {
 	if (!f.name.trim() || !f.prompt.trim() || !f.modelId.trim()) return { error: 'Name, prompt, and model are required' };
 	if (f.targetType === 'channel' && !f.channelId) return { error: 'Channel is required' };
+	if (onceIncomplete(f.schedule)) return { error: 'Pick a date and time for the one-time run' };
 	if (oncePassed(f.schedule, now)) return { error: 'Scheduled time must be in the future' };
 	const channel = f.targetType === 'channel';
 	return {
