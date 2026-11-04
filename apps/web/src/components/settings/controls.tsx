@@ -28,6 +28,7 @@ export function SettingsForm({
 	loading = false,
 	disabled = false,
 	footer = true,
+	after,
 	children
 }: {
 	title: string;
@@ -36,9 +37,11 @@ export function SettingsForm({
 	loading?: boolean;
 	disabled?: boolean;
 	footer?: boolean;
+	/** Rendered after the form, outside it: another form whose fields sit in this one and name it with `form=`. */
+	after?: ReactNode;
 	children: ReactNode;
 }) {
-	return (
+	const form = (
 		<form
 			className="flex h-full flex-col justify-between text-sm"
 			onSubmit={(e) => {
@@ -69,6 +72,13 @@ export function SettingsForm({
 				</div>
 			)}
 		</form>
+	);
+	if (!after) return form;
+	return (
+		<>
+			{form}
+			{after}
+		</>
 	);
 }
 
