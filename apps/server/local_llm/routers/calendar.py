@@ -27,6 +27,7 @@ from local_llm.models.groups import Groups
 from local_llm.models.users import UserModel
 from local_llm.utils.access_control import filter_allowed_access_grants, has_permission
 from local_llm.utils.auth import get_verified_user
+from local_llm.utils.automations import runs_between_ns
 from local_llm.utils.calendar import expand_recurring_event
 
 log = logging.getLogger(__name__)
@@ -232,14 +233,23 @@ async def get_events(
                     'user': None,
                 }
 
-                # Only expand into the future — past runs are handled below
+                # Only the future: past runs are handled below. The runs are the
+                # scheduler's own, so a COUNT does not start over at the next run (#356).
                 now_ns = int(time.time_ns())
-                rrule_start = max(start_ns, now_ns)
-                instances = await asyncio.to_thread(
-                    expand_recurring_event, virtual, rrule_start, end_ns, tz=user.timezone
-                )
-                for inst in instances:
-                    expanded.append(CalendarEventUserResponse(**inst))
+                try:
+                    run_starts = await asyncio.to_thread(
+                        runs_between_ns, rrule_str, auto.next_run_at, max(start_ns, now_ns), end_ns, user.timezone
+                    )
+                except Exception as e:
+                    # One unreadable rule leaves the other automations' runs shown.
+                    log.warning(f'Failed to list the runs of automation {auto.id}: {e}')
+                    continue
+                for run_ns in run_starts:
+                    expanded.append(
+                        CalendarEventUserResponse(
+                            **{**virtual, 'start_at': run_ns, 'instance_id': f'auto_{auto.id}_{run_ns}'}
+                        )
+                    )
 
             # Past runs: single range query joined with automation
             runs_with_auto = await AutomationRuns.get_runs_by_user_range(user.id, start_ns, end_ns)
