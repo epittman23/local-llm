@@ -27,6 +27,7 @@ import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ChatMenu } from './ChatMenu';
 import { AttachMenu, IntegrationsMenu, type Toggles } from './InputMenus';
 import { useAttachments } from './useAttachments';
+import { useOnChatSwitch } from './useOnChatSwitch';
 import { ChatMessages, type MessageHandlers } from './ChatMessages';
 import { ChatBanners } from './ChatBanners';
 import { ChatPlaceholder } from './ChatPlaceholder';
@@ -124,6 +125,14 @@ export function ChatPage() {
 		toolIds
 	});
 	const attachments = useAttachments({ temporary: temporary && !id, selectedModels, models, chatId: session.chatId });
+	const input = useRef<ChatInputHandle>(null);
+	// Files attached and text typed in one chat are not carried into the next
+	// (#217). Declared before the effects below that fill them for the chat now
+	// opened (`?load-url=`, `?q=`), so it runs first.
+	useOnChatSwitch(id, session.adoptedChatId, () => {
+		attachments.clear();
+		input.current?.setText('');
+	});
 
 	// One model selected: take its default tools and feature switches (Chat.svelte's setDefaults).
 	const defaultsFor = useRef<string | null>(null);
@@ -164,7 +173,6 @@ export function ChatPage() {
 		// Once.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [id]);
-	const input = useRef<ChatInputHandle>(null);
 	const scroller = useRef<HTMLDivElement>(null);
 	const atBottom = useRef(true);
 
