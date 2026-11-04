@@ -77,10 +77,12 @@ def _resolve_tz(tz: str = None) -> ZoneInfo | None:
 def _parse_rule(s: str, now: dt.datetime | None = None):
     """Parse RRULE with clock-aligned DTSTART for sub-daily frequencies.
 
-    SECONDLY/MINUTELY/HOURLY rules use a fixed epoch DTSTART (2000-01-01 00:00)
-    so intervals snap to clock boundaries (e.g. every 5min = :00, :05, :10).
-    A longer rule without a DTSTART starts at `now` (the user's clock) on the
-    minute, so a time or day it does not state comes from there.
+    A SECONDLY/MINUTELY/HOURLY rule without a DTSTART starts from a fixed epoch
+    (2000-01-01 00:00), so intervals snap to clock boundaries (every 5 min =
+    :00, :05, :10). One with a DTSTART far in the past is moved forward by
+    whole steps from it, keeping its phase and what is left of its COUNT
+    (#267). A longer rule without a DTSTART starts at `now` (the user's clock)
+    on the minute, so a time or day it does not state comes from there.
     """
     upper = s.upper()
     if 'EXRULE' in upper:
@@ -128,24 +130,31 @@ def _parse_rule(s: str, now: dt.datetime | None = None):
         count = getattr(rule, '_count', None)
         if not count:
             return rrulestr(stripped, dtstart=moved, ignoretz=True)
-        if re.search(r'\bBY', stripped, re.IGNORECASE):
+        left = count - steps
+        if left > 0:
+            recounted = _with_count(stripped, left)
+        else:
+            recounted = _with_count(stripped, 1)
+        if re.search(r'\bBY', stripped, re.IGNORECASE) or recounted is None:
             # A filtered or expanded step is not one run each, so the runs left
-            # cannot be counted: keep DTSTART, and walk at most COUNT runs.
+            # cannot be counted (nor a COUNT that cannot be rewritten): keep
+            # DTSTART. Exact, but the next run is found by walking every run
+            # before it, at most COUNT, which can take seconds.
             return rrulestr(stripped, dtstart=start, ignoretz=True)
         # One run per step, `steps` of them before `moved`: what is left of
-        # COUNT runs from there, and a COUNT that ran out stays run out.
-        left = count - steps
-        if left <= 0:
-            return rrulestr(_with_count(stripped, 1), dtstart=start, ignoretz=True)
-        return rrulestr(_with_count(stripped, left), dtstart=moved, ignoretz=True)
+        # COUNT runs from there. A COUNT that ran out stays run out: its one
+        # remaining run is at the original start, long past.
+        return rrulestr(recounted, dtstart=moved if left > 0 else start, ignoretz=True)
 
     epoch = dt.datetime(2000, 1, 1)
     dtstart = epoch + ((anchor - epoch) // step) * step
     return rrulestr(stripped, dtstart=dtstart, ignoretz=True)
 
 
-def _with_count(rule: str, count: int) -> str:
-    return re.sub(r'COUNT=\d+', f'COUNT={count}', rule, flags=re.IGNORECASE)
+def _with_count(rule: str, count: int) -> str | None:
+    """The rule with COUNT set to `count`, or None when it has not exactly one COUNT to set."""
+    replaced, n = re.subn(r'COUNT=[+-]?\d+', f'COUNT={count}', rule, flags=re.IGNORECASE)
+    return replaced if n == 1 else None
 
 
 def validate_rrule(s: str, tz: str = None) -> None:
@@ -191,11 +200,8 @@ def next_n_runs_ns(s: str, n: int = 5, tz: str = None) -> list[int]:
     result = []
     now = dt.datetime.now(zi).replace(tzinfo=None) if zi else dt.datetime.now()
     rule = _parse_rule(s, now)
-    when = now
-    for _ in range(n):
-        when = rule.after(when)
-        if not when:
-            break
+    # One walk for all n, rather than n walks from DTSTART (#267).
+    for when in rule.xafter(now, count=n):
         if zi:
             dt_tz = when.replace(tzinfo=zi)
             result.append(int(dt_tz.timestamp() * 1_000_000_000))
