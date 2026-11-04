@@ -257,15 +257,25 @@ class MessageTable:
             result = await db.execute(select(Message).filter_by(parent_id=id).order_by(Message.created_at.desc()))
             all_messages = result.scalars().all()
 
+            # A webhook author (only one from this message's own channel), else the
+            # real author, as get_message_by_id does; the real authors in one query.
+            # Only webhooks used to be filled in, so a person's reply had no author (#185).
+            infos = [await self._resolve_user_info(message, db) for message in all_messages]
+            author_ids = [MessageModel.model_validate(message).user_id for message in all_messages]
+            missing = list({uid for uid, info in zip(author_ids, infos, strict=True) if not info and uid})
+            authors = (
+                {u.id: u.model_dump() for u in await Users.get_users_by_user_ids(missing, db=db)} if missing else {}
+            )
+
             messages = []
-            for message in all_messages:
+            for message, info, author_id in zip(all_messages, infos, author_ids, strict=True):
                 reply_to_message = (
                     await self.get_message_by_id(message.reply_to_id, include_thread_replies=False, db=db)
                     if message.reply_to_id
                     else None
                 )
 
-                user_info = await self._resolve_user_info(message, db)
+                user_info = info or authors.get(author_id)
 
                 messages.append(
                     MessageReplyToResponse.model_validate(
