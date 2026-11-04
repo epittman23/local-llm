@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { addResponses, addUserMessage, emptyHistory } from './history';
 import {
 	completionBody,
@@ -7,6 +7,7 @@ import {
 	isTemporaryChatId,
 	needsWebSearchConfirm,
 	newChatTemporary,
+	promptVariables,
 	requestFeatures,
 	stopTokens,
 	turnFiles,
@@ -163,5 +164,25 @@ describe('temporary chats and web search confirmation', () => {
 		expect(webSearchConfirmText({ features: { web_search_confirmation_content: '  ' } })).toBe(
 			'Your query will be sent to the configured web search provider.'
 		);
+	});
+});
+
+describe('{{USER_LANGUAGE}} (#326)', () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		localStorage.clear();
+	});
+
+	it("is the browser's language, not the interface's only locale", () => {
+		vi.stubGlobal('navigator', { ...navigator, language: 'de-DE' });
+		localStorage.setItem('locale', 'en-US');
+
+		expect(promptVariables(null)['{{USER_LANGUAGE}}']).toBe('de-DE');
+	});
+
+	it('falls back to en-US when the browser names none', () => {
+		vi.stubGlobal('navigator', { ...navigator, language: '' });
+
+		expect(promptVariables(null)['{{USER_LANGUAGE}}']).toBe('en-US');
 	});
 });
