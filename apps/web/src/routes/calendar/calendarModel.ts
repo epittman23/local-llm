@@ -137,6 +137,32 @@ export const nsToDate = (ns: number) => {
 export const nsToTime = (ns: number) => new Date(ns / NS).toTimeString().slice(0, 5);
 export const dateTimeToNs = (date: string, time: string) => new Date(`${date}T${time || '00:00'}`).getTime() * NS;
 
+/** The reminder choices the event form offers, as minutes before (-1: none). */
+export const REMINDERS: [number, string][] = [
+	[-1, 'None'],
+	[0, 'At time of event'],
+	[5, '5 minutes before'],
+	[10, '10 minutes before'],
+	[15, '15 minutes before'],
+	[30, '30 minutes before'],
+	[60, '1 hour before']
+];
+
+/**
+ * The reminder choices, with the event's own value added when it is not one
+ * of them (#324). A reminder set elsewhere (the assistant's calendar tool, say,
+ * at 120 minutes) showed as "None", and picking None then changed nothing.
+ */
+export function reminderOptions(current: number): [number, string][] {
+	if (REMINDERS.some(([minutes]) => minutes === current)) return REMINDERS;
+	const label =
+		current % 60 === 0
+			? `${current / 60} hour${current === 60 ? '' : 's'} before`
+			: `${current} minute${current === 1 ? '' : 's'} before`;
+	const own: [number, string] = [current, label];
+	return [...REMINDERS, own].sort((a, b) => a[0] - b[0]);
+}
+
 export type EventFields = {
 	title: string;
 	description: string;

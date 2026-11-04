@@ -11,6 +11,7 @@ import {
 	formatHour,
 	headerText,
 	monthGrid,
+	reminderOptions,
 	repeatFromRrule,
 	stepDate,
 	visibleRange,
@@ -307,5 +308,17 @@ describe('calendars and automations', () => {
 		expect(
 			automationTarget(ev(at(2026, 8, 1), undefined, { meta: { automation_id: 'a1', chat_id: 'channel:ch1' } }))
 		).toBe('/channels/ch1');
+	});
+});
+
+describe('reminder options (#324)', () => {
+	it('are the standard ones when the event uses one of them', () => {
+		expect(reminderOptions(10).map(([m]) => m)).toEqual([-1, 0, 5, 10, 15, 30, 60]);
+	});
+	it("add the event's own value, in order, when it is not one of them", () => {
+		expect(reminderOptions(120)).toContainEqual([120, '2 hours before']);
+		expect(reminderOptions(45).map(([m]) => m)).toEqual([-1, 0, 5, 10, 15, 30, 45, 60]);
+		expect(reminderOptions(45)).toContainEqual([45, '45 minutes before']);
+		expect(reminderOptions(1)).toContainEqual([1, '1 minute before']);
 	});
 });

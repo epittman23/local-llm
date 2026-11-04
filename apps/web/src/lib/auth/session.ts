@@ -8,10 +8,11 @@
 
 import { toast } from 'sonner';
 import { getBackendConfig } from '@/lib/apis';
-import { getSessionUser, userSignOut } from '@/lib/apis/auths';
+import { getSessionUser, updateUserTimezone, userSignOut } from '@/lib/apis/auths';
 import { WEBUI_API_BASE_URL, WEBUI_BASE_URL } from '@/lib/constants';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
+import { getUserTimezone } from '@/lib/utils/auth-helpers';
 import { isServerUnreachable } from '@/lib/apis/errors';
 
 const TOKEN_EXPIRY_BUFFER = 60; // seconds
@@ -191,6 +192,11 @@ export const initAuth = async () => {
 		const userConfig = await getBackendConfig().catch(() => null);
 		if (userConfig) useConfigStore.getState().setConfig(userConfig);
 		useAuthStore.getState().setSession(token, sessionUser);
+		// On every load, as the original did, not only at sign-in (#324): a
+		// restored session kept the zone of the last sign-in, which recurring
+		// events and automation schedules are expanded in.
+		const timezone = getUserTimezone();
+		if (timezone) void updateUserTimezone(token, timezone);
 	} catch (error) {
 		console.error('Failed to restore session:', error);
 		useAuthStore.getState().clearSession();

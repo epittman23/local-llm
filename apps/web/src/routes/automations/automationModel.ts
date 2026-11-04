@@ -258,6 +258,10 @@ export function destinationLabel(
 export const runTarget = (chatId: string) =>
 	chatId.startsWith('channel:') ? `${routePaths.channels}/${chatId.slice('channel:'.length)}` : `/c/${chatId}`;
 
+/** When an automation runs next, or null when it will not: a paused one does not run, whatever its rule says (#324). */
+export const nextRunAt = (a: Pick<AutomationResponse, 'is_active' | 'next_runs' | 'next_run_at'>): number | null =>
+	a.is_active ? (a.next_runs?.[0] ?? a.next_run_at ?? null) : null;
+
 // --- the form ------------------------------------------------------------
 
 export type AutomationFields = {
