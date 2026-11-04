@@ -121,8 +121,7 @@ class ERROR_MESSAGES(StrEnum):
     def MODEL_NOT_FOUND(name=''):
         return f"Model '{name}' was not found"
 
-    def OPENAI_NOT_FOUND(name=''):
-        return 'OpenAI API was not found'
+    OPENAI_NOT_FOUND = 'OpenAI API was not found'
 
     OLLAMA_NOT_FOUND = 'WebUI could not connect to Ollama'
     CREATE_API_KEY_ERROR = (
