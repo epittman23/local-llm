@@ -263,7 +263,8 @@ export default function Connections() {
 	// "Settings saved" only when both saves were taken: it used to follow two
 	// failures, after each had shown its own error (#239).
 	const submitAll = async () => {
-		const results = await Promise.all([openai ? saveOpenAI(openai) : true, ollama ? saveOllama(ollama) : true]);
+		// Nothing loaded (the tab failed to load) is nothing saved, not a success.
+		const results = await Promise.all([openai ? saveOpenAI(openai) : false, ollama ? saveOllama(ollama) : false]);
 		if (results.every(Boolean)) await saved();
 	};
 

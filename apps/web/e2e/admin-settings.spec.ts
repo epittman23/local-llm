@@ -565,6 +565,18 @@ test.describe('settings: Connections', () => {
 		expect(await page.getByText('Settings saved successfully!').count()).toBe(0);
 	});
 
+	test('Save does not say the save is done when only one upstream took it (#239)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockUpstreams(page);
+		await page.route('**/ollama/config/update', (route) => json(route, { detail: 'ollama refused' }, 500));
+		await page.goto('/?settings=admin:connections');
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('OpenAI API settings updated')).toBeVisible();
+		await expect(page.getByText('ollama refused')).toBeVisible();
+		await page.waitForTimeout(300);
+		expect(await page.getByText('Settings saved successfully!').count()).toBe(0);
+	});
+
 	test('Save says the save is done when both upstreams took it', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockUpstreams(page);
