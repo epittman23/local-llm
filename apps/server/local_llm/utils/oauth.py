@@ -2,7 +2,6 @@ import asyncio
 import base64
 import datetime as dt
 import fnmatch
-import hashlib
 import logging
 import re
 import sys
@@ -20,7 +19,7 @@ import jwt
 from authlib.integrations.starlette_client import OAuth
 from authlib.oauth2.rfc6749.errors import OAuth2Error
 from authlib.oidc.core import UserInfo
-from cryptography.fernet import Fernet, InvalidToken
+from cryptography.fernet import InvalidToken
 from fastapi import (
     HTTPException,
     status,
@@ -97,6 +96,7 @@ from local_llm.utils.auth import (
 from local_llm.utils.groups import apply_default_group_assignment
 from local_llm.utils.json_codec import JSONCodec
 from local_llm.utils.misc import parse_duration
+from local_llm.utils.secret_keys import fernet_from_secret
 from local_llm.utils.validate import validate_profile_image_url
 
 # Some IdPs put private params in ID token JOSE headers (CAS: client_id, CyberArk: app_id).
@@ -286,19 +286,7 @@ def _normalize_token_expiry(token: dict) -> dict:
     return token
 
 
-FERNET = None
-
-if len(OAUTH_CLIENT_INFO_ENCRYPTION_KEY) != 44:
-    key_bytes = hashlib.sha256(OAUTH_CLIENT_INFO_ENCRYPTION_KEY.encode()).digest()
-    OAUTH_CLIENT_INFO_ENCRYPTION_KEY = base64.urlsafe_b64encode(key_bytes)
-else:
-    OAUTH_CLIENT_INFO_ENCRYPTION_KEY = OAUTH_CLIENT_INFO_ENCRYPTION_KEY.encode()
-
-try:
-    FERNET = Fernet(OAUTH_CLIENT_INFO_ENCRYPTION_KEY)
-except Exception as e:
-    log.error(f'Error initializing Fernet with provided key: {e}')
-    raise
+FERNET = fernet_from_secret(OAUTH_CLIENT_INFO_ENCRYPTION_KEY)
 
 
 def encrypt_data(data) -> str:

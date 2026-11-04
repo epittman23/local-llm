@@ -200,7 +200,16 @@ export default function AdminModels() {
 		const plan = upsertPlan(model, overrides, recordIds);
 		try {
 			if (plan.action === 'update') await updateModelById(token, plan.id, plan.body);
-			else await createNewModel(token, plan.body);
+			else {
+				await createNewModel(token, plan.body);
+				// A record now exists, so the next change updates it instead of
+				// creating it again, which the server refuses (#249): upsertPlan
+				// keys on recordIds, togglePlan on the row having base_model_id.
+				// Recorded locally, not by re-reading everything, which would drop
+				// an unsaved reorder and run once per model in a bulk action.
+				setRecordIds((ids) => new Set(ids).add(plan.body.id));
+				patchModel(plan.body.id, { base_model_id: plan.body.base_model_id ?? null });
+			}
 			if (notify) toast.success('Model updated successfully');
 			return true;
 		} catch (error) {
