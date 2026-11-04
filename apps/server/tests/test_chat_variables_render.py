@@ -59,7 +59,7 @@ def test_an_unusable_set_renders_none_and_says_so(caplog):
 
 
 def test_validating_a_set_still_refuses_any_invalid_value():
-    """Saving variables is still all or nothing."""
+    """`validate_chat_variables` keeps its all-or-nothing answer (no save path calls it yet)."""
     with pytest.raises(ChatVariablesError, match='Invalid value'):
         validate_chat_variables(PROMPT, {'name': 'Ada', 'level': 'c', 'goal': 'proofs'})
 
@@ -68,3 +68,11 @@ def test_validating_a_set_still_refuses_any_invalid_value():
         'level': 'a',
         'goal': 'proofs',
     }
+
+
+def test_a_variable_with_no_value_renders_its_default_or_nothing():
+    prompt = (
+        'Tone: {{chat.variables.tone | select:options=["dry","warm"]:default="dry"}}; Note: {{chat.variables.note}}'
+    )
+
+    assert render_chat_variables(prompt, {}) == 'Tone: dry; Note: '

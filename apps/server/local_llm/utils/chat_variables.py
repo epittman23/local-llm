@@ -265,8 +265,9 @@ def _renderable_chat_variables(system_prompt: str, variables: Any, required: boo
 
     An invalid value, such as a select option the model no longer offers,
     blanks only its own variable, not every one in the prompt (#172). What
-    makes the whole set unusable (an unreadable definition, a set too large
-    to store) still renders none, now with a warning.
+    makes the whole set unusable (an unreadable definition, a set over the
+    size limit) still renders none, now with a warning. Nothing validates a
+    chat's variables when they are saved, so a stale value reaches here.
     """
     try:
         field_map = collect_chat_variable_fields(system_prompt)
