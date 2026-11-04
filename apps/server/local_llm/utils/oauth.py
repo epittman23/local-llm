@@ -2120,7 +2120,7 @@ class OAuthManager:
         # not the IdP's, so the claim does not remove it (#275). Without this,
         # sign-up added a user to it and this sync, in the same callback,
         # took them out again; as it would at every later login.
-        default_group_id = await Config.get('ui.default_group_id')
+        default_group_id = await Config.get('ui.default_group_id') if groups_claim_present else None
 
         # Remove groups that user is no longer a part of
         for group_model in user_current_groups:
