@@ -57,6 +57,27 @@ async def get_openai_connection(url_idx: int) -> tuple[str, str]:
     return base_urls[url_idx], api_keys[url_idx]
 
 
+async def _reply_json(response: aiohttp.ClientResponse, fallback: str | None = None):
+    """The Pipelines server's JSON reply, read while the `async with` still holds it.
+
+    A failure is raised as an HTTPException with the server's status and its
+    own `detail`, else `fallback`, else the status's reason. Read after the
+    block had released the response, the body was gone, so every failure
+    came out as "Pipeline not found", or a bare reason phrase (#304).
+    """
+    if response.ok:
+        return await response.json()
+    detail = None
+    try:
+        body = await response.json(content_type=None)
+        if isinstance(body, dict):
+            detail = body.get('detail')
+    except Exception:
+        pass
+    log.warning(f'Pipelines server answered {response.status} for {response.url}: {detail}')
+    raise HTTPException(status_code=response.status, detail=detail or fallback or response.reason)
+
+
 async def process_pipeline_inlet_filter(request, payload, user, models):
     user = {'id': user.id, 'email': user.email, 'name': user.name, 'role': user.role}
     model_id = payload['model']
@@ -96,25 +117,7 @@ async def process_pipeline_inlet_filter(request, payload, user, models):
                     json=request_data,
                     ssl=AIOHTTP_CLIENT_SESSION_SSL,
                 ) as response:
-                    response.raise_for_status()
-                    payload = await response.json()
-            except aiohttp.ClientResponseError as e:
-                try:
-                    res = await response.json() if 'application/json' in response.content_type else {}
-                    if 'detail' in res:
-                        raise HTTPException(
-                            status_code=response.status,
-                            detail=res['detail'],
-                        )
-                except HTTPException:
-                    raise
-                except Exception:
-                    pass
-
-                raise HTTPException(
-                    status_code=response.status,
-                    detail=e.message,
-                )
+                    payload = await _reply_json(response)
             except HTTPException:
                 raise
             except Exception as e:
@@ -162,25 +165,7 @@ async def process_pipeline_outlet_filter(request, payload, user, models):
                     json=request_data,
                     ssl=AIOHTTP_CLIENT_SESSION_SSL,
                 ) as response:
-                    response.raise_for_status()
-                    payload = await response.json()
-            except aiohttp.ClientResponseError as e:
-                try:
-                    res = await response.json() if 'application/json' in response.content_type else {}
-                    if 'detail' in res:
-                        raise HTTPException(
-                            status_code=response.status,
-                            detail=res['detail'],
-                        )
-                except HTTPException:
-                    raise
-                except Exception:
-                    pass
-
-                raise HTTPException(
-                    status_code=response.status,
-                    detail=e.message,
-                )
+                    payload = await _reply_json(response)
             except HTTPException:
                 raise
             except Exception as e:
@@ -269,8 +254,7 @@ async def upload_pipeline(
                 data=form_data,
                 ssl=AIOHTTP_CLIENT_SESSION_SSL,
             ) as response:
-                response.raise_for_status()
-                data = await response.json()
+                data = await _reply_json(response, 'Pipeline not found')
 
         await publish_event(
             request,
@@ -280,24 +264,14 @@ async def upload_pipeline(
             data={'url_idx': urlIdx, 'filename': filename},
         )
         return {**data}
+    except HTTPException:
+        raise
     except Exception as e:
         # Handle connection error here
         log.exception(f'Connection error: {e}')
-
-        detail = None
-        status_code = status.HTTP_404_NOT_FOUND
-        if response is not None:
-            status_code = response.status
-            try:
-                res = await response.json()
-                if 'detail' in res:
-                    detail = res['detail']
-            except Exception:
-                pass
-
         raise HTTPException(
-            status_code=status_code,
-            detail=detail if detail else 'Pipeline not found',
+            status_code=(response.status if response is not None else status.HTTP_404_NOT_FOUND),
+            detail='Pipeline not found',
         )
     finally:
         # Ensure the file is deleted after the upload is completed or on failure
@@ -325,8 +299,7 @@ async def add_pipeline(request: Request, form_data: AddPipelineForm, user=Depend
                 json={'url': form_data.url},
                 ssl=AIOHTTP_CLIENT_SESSION_SSL,
             ) as response:
-                response.raise_for_status()
-                data = await response.json()
+                data = await _reply_json(response, 'Pipeline not found')
 
         await publish_event(
             request,
@@ -336,22 +309,14 @@ async def add_pipeline(request: Request, form_data: AddPipelineForm, user=Depend
             data={'url_idx': urlIdx, 'url': form_data.url},
         )
         return {**data}
+    except HTTPException:
+        raise
     except Exception as e:
         # Handle connection error here
         log.exception(f'Connection error: {e}')
-
-        detail = None
-        if response is not None:
-            try:
-                res = await response.json()
-                if 'detail' in res:
-                    detail = res['detail']
-            except Exception:
-                pass
-
         raise HTTPException(
             status_code=(response.status if response is not None else status.HTTP_404_NOT_FOUND),
-            detail=detail if detail else 'Pipeline not found',
+            detail='Pipeline not found',
         )
 
 
@@ -375,8 +340,7 @@ async def delete_pipeline(request: Request, form_data: DeletePipelineForm, user=
                 json={'id': form_data.id},
                 ssl=AIOHTTP_CLIENT_SESSION_SSL,
             ) as response:
-                response.raise_for_status()
-                data = await response.json()
+                data = await _reply_json(response, 'Pipeline not found')
 
         await publish_event(
             request,
@@ -386,22 +350,14 @@ async def delete_pipeline(request: Request, form_data: DeletePipelineForm, user=
             data={'url_idx': urlIdx},
         )
         return {**data}
+    except HTTPException:
+        raise
     except Exception as e:
         # Handle connection error here
         log.exception(f'Connection error: {e}')
-
-        detail = None
-        if response is not None:
-            try:
-                res = await response.json()
-                if 'detail' in res:
-                    detail = res['detail']
-            except Exception:
-                pass
-
         raise HTTPException(
             status_code=(response.status if response is not None else status.HTTP_404_NOT_FOUND),
-            detail=detail if detail else 'Pipeline not found',
+            detail='Pipeline not found',
         )
 
 
@@ -417,26 +373,17 @@ async def get_pipelines(request: Request, urlIdx: int | None = None, user=Depend
                 headers={'Authorization': f'Bearer {key}'},
                 ssl=AIOHTTP_CLIENT_SESSION_SSL,
             ) as response:
-                response.raise_for_status()
-                data = await response.json()
+                data = await _reply_json(response, 'Pipeline not found')
 
         return {**data}
+    except HTTPException:
+        raise
     except Exception as e:
         # Handle connection error here
         log.exception(f'Connection error: {e}')
-
-        detail = None
-        if response is not None:
-            try:
-                res = await response.json()
-                if 'detail' in res:
-                    detail = res['detail']
-            except Exception:
-                pass
-
         raise HTTPException(
             status_code=(response.status if response is not None else status.HTTP_404_NOT_FOUND),
-            detail=detail if detail else 'Pipeline not found',
+            detail='Pipeline not found',
         )
 
 
@@ -457,33 +404,17 @@ async def get_pipeline_valves(
                 headers={'Authorization': f'Bearer {key}'},
                 ssl=AIOHTTP_CLIENT_SESSION_SSL,
             ) as response:
-                response.raise_for_status()
-                data = await response.json()
+                data = await _reply_json(response, 'Pipeline not found')
 
-        await publish_event(
-            request,
-            EVENTS.PIPELINE_VALVES_UPDATED,
-            actor=user,
-            subject_id=pipeline_id,
-            data={'url_idx': urlIdx},
-        )
         return {**data}
+    except HTTPException:
+        raise
     except Exception as e:
         # Handle connection error here
         log.exception(f'Connection error: {e}')
-
-        detail = None
-        if response is not None:
-            try:
-                res = await response.json()
-                if 'detail' in res:
-                    detail = res['detail']
-            except Exception:
-                pass
-
         raise HTTPException(
             status_code=(response.status if response is not None else status.HTTP_404_NOT_FOUND),
-            detail=detail if detail else 'Pipeline not found',
+            detail='Pipeline not found',
         )
 
 
@@ -504,26 +435,17 @@ async def get_pipeline_valves_spec(
                 headers={'Authorization': f'Bearer {key}'},
                 ssl=AIOHTTP_CLIENT_SESSION_SSL,
             ) as response:
-                response.raise_for_status()
-                data = await response.json()
+                data = await _reply_json(response, 'Pipeline not found')
 
         return {**data}
+    except HTTPException:
+        raise
     except Exception as e:
         # Handle connection error here
         log.exception(f'Connection error: {e}')
-
-        detail = None
-        if response is not None:
-            try:
-                res = await response.json()
-                if 'detail' in res:
-                    detail = res['detail']
-            except Exception:
-                pass
-
         raise HTTPException(
             status_code=(response.status if response is not None else status.HTTP_404_NOT_FOUND),
-            detail=detail if detail else 'Pipeline not found',
+            detail='Pipeline not found',
         )
 
 
@@ -546,25 +468,23 @@ async def update_pipeline_valves(
                 json={**form_data},
                 ssl=AIOHTTP_CLIENT_SESSION_SSL,
             ) as response:
-                response.raise_for_status()
-                data = await response.json()
+                data = await _reply_json(response, 'Pipeline not found')
 
+        # Announced here, on an update, not when the valves are read (#304).
+        await publish_event(
+            request,
+            EVENTS.PIPELINE_VALVES_UPDATED,
+            actor=user,
+            subject_id=pipeline_id,
+            data={'url_idx': urlIdx},
+        )
         return {**data}
+    except HTTPException:
+        raise
     except Exception as e:
         # Handle connection error here
         log.exception(f'Connection error: {e}')
-
-        detail = None
-
-        if response is not None:
-            try:
-                res = await response.json()
-                if 'detail' in res:
-                    detail = res['detail']
-            except Exception:
-                pass
-
         raise HTTPException(
             status_code=(response.status if response is not None else status.HTTP_404_NOT_FOUND),
-            detail=detail if detail else 'Pipeline not found',
+            detail='Pipeline not found',
         )
