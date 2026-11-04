@@ -30,15 +30,17 @@ def zone(request):
     old = os.environ.get('TZ')
     os.environ['TZ'] = request.param
     time.tzset()
-    # tzset falls back to UTC for a zone it cannot find; then this test would
-    # prove nothing. None of the other zones is ever at offset 0.
-    assert (time.localtime().tm_gmtoff != 0) == (request.param != 'UTC')
-    yield request.param
-    if old is None:
-        os.environ.pop('TZ', None)
-    else:
-        os.environ['TZ'] = old
-    time.tzset()
+    try:
+        # tzset falls back to UTC for a zone it cannot find; then this test would
+        # prove nothing. None of the other zones is ever at offset 0.
+        assert (time.localtime().tm_gmtoff != 0) == (request.param != 'UTC')
+        yield request.param
+    finally:
+        if old is None:
+            os.environ.pop('TZ', None)
+        else:
+            os.environ['TZ'] = old
+        time.tzset()
 
 
 def _session(expires_at):
