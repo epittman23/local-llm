@@ -178,11 +178,11 @@ def validate_rrule(s: str, tz: str = None) -> None:
 
 
 def _sub_daily(s: str) -> bool:
-    """Whether the rule repeats more often than daily (SECONDLY, MINUTELY or HOURLY)."""
-    try:
-        parsed = rrulestr(s, ignoretz=True)
-    except Exception:
-        return False
+    """Whether the rule repeats more often than daily (SECONDLY, MINUTELY or HOURLY).
+
+    A rule that does not parse raises here as `_parse_rule` would.
+    """
+    parsed = rrulestr(s, ignoretz=True)
     rules = parsed._rrule if isinstance(parsed, rruleset) else [parsed]
     return bool(rules) and rules[0]._freq in (SECONDLY, MINUTELY, HOURLY)
 
