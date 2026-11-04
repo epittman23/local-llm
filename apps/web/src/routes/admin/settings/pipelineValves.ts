@@ -3,12 +3,17 @@ export type ValveSpec = {
 };
 export type ValveValues = Record<string, unknown>;
 
-/** Array valves are edited as comma-separated text; join them for the form. */
+/**
+ * Array valves are edited as comma-separated text; join them for the form. An
+ * unset (null) one stays null, which the form shows as "None": as '' it showed
+ * as an empty, required Custom field, and the tab could not be saved until it
+ * was filled in or switched back (#251).
+ */
 export function valvesToForm(valves: ValveValues, spec: ValveSpec): ValveValues {
 	const form = { ...valves };
 	for (const [key, prop] of Object.entries(spec.properties ?? {})) {
 		if (prop?.type === 'array')
-			form[key] = Array.isArray(valves[key]) ? (valves[key] as unknown[]).join(',') : (valves[key] ?? '');
+			form[key] = Array.isArray(valves[key]) ? (valves[key] as unknown[]).join(',') : (valves[key] ?? null);
 	}
 	return form;
 }
