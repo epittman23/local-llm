@@ -52,6 +52,10 @@ class ProfileError(ValueError):
     """A profile or override combination the serving layer refuses to run."""
 
 
+class ProfileConflict(ProfileError):
+    """Another request changed the profile first: a name taken, or a version number used (#153)."""
+
+
 @dataclass(frozen=True)
 class ServingProfile:
     """One serving configuration's definition, independent of any overrides."""

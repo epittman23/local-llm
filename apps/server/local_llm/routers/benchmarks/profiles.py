@@ -20,7 +20,7 @@ import re
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from local_llm.benchmarks.serving.profiles import ProfileError
+from local_llm.benchmarks.serving.profiles import ProfileConflict, ProfileError
 from local_llm.constants import ERROR_MESSAGES
 from local_llm.models.benchmarks.profiles import BenchmarkProfileEntry, BenchmarkProfiles
 from local_llm.utils.auth import get_admin_user
@@ -189,6 +189,8 @@ async def create_profile(form_data: CreateProfileForm, user=Depends(get_admin_us
             created_by=user.id,
             note=form_data.note,
         )
+    except ProfileConflict as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
     except ProfileError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
@@ -210,6 +212,8 @@ async def clone_profile(name: str, form_data: CloneProfileForm, user=Depends(get
             created_by=user.id,
             note=form_data.note or f"cloned from '{name}' (version {source.version.version})",
         )
+    except ProfileConflict as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
     except ProfileError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
@@ -224,6 +228,8 @@ async def add_version(name: str, form_data: AddVersionForm, user=Depends(get_adm
             created_by=user.id,
             note=form_data.note,
         )
+    except ProfileConflict as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
     except ProfileError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
