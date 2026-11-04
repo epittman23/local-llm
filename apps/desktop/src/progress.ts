@@ -90,7 +90,8 @@ export const STARTUP_STOP_EARLIER: StepDef[] = [
 		id: 'earlier',
 		label: 'Stop the backend an earlier launch started',
 		hint: { afterMs: 15_000, text: 'It stops as on close: open requests, benchmark runs and the served model first.' }
-	}
+	},
+	{ id: 'force', label: 'Force stop', optional: true }
 ];
 
 export const STARTUP_ATTACH: StepDef[] = [

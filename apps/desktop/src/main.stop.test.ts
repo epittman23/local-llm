@@ -50,6 +50,8 @@ const h = vi.hoisted(() => {
 		/** What the next /ready probe answers; a promise holds it in flight. */
 		ready: (): Promise<number | null> => Promise.resolve(200),
 		stopResult: { forced: false, llama: [] as number[] },
+		/** Holds every stop in flight until it resolves. */
+		stopHold: Promise.resolve() as Promise<void>,
 		llama: [] as number[],
 		/** Containers compose still lists as running after a clean stop; null when it can't be asked. */
 		servicesLeft: 0 as number | null
@@ -135,6 +137,7 @@ const h = vi.hoisted(() => {
 		state.spawned = 0;
 		state.ready = () => Promise.resolve(200);
 		state.stopResult = { forced: false, llama: [] };
+		state.stopHold = Promise.resolve();
 		state.llama = [];
 		state.servicesLeft = 0;
 	}
@@ -159,6 +162,7 @@ vi.mock('./stack', async (original) => ({
 	},
 	stopGroup: async (pgid: number) => {
 		h.state.stops.push(pgid);
+		await h.state.stopHold;
 		return h.state.stopResult;
 	},
 	llamaServerPids: async () => h.state.llama,
@@ -417,4 +421,41 @@ test('a launch for a remote server stops the stack an earlier launch left runnin
 	expect(h.state.stops).toEqual([4242]);
 	expect(h.state.spawned).toBe(0);
 	expect(existsSync(join(h.state.userData, 'owned.json'))).toBe(false);
+});
+
+test('a cancel while the earlier stack stops waits for that stop, and never signals it again (#431)', async () => {
+	let release: () => void = () => {};
+	h.state.stopHold = new Promise<void>((resolve) => (release = resolve));
+	recordEarlierStack({ origin: 'http://127.0.0.1:4100', repo: HERE.repoPath }, HERE);
+	await launch();
+	expect(h.state.stops).toEqual([4242]);
+
+	void statusCall('status:action', 'cancel');
+	await tick(20);
+	expect(statusWindows()[0]?.userClose()).toBe(false); // the dialog stays while it stops
+	expect(h.state.exits).toEqual([]);
+
+	release();
+	await tick(20);
+	expect(h.state.exits).toEqual([0]);
+	expect(h.state.stops).toEqual([4242]);
+	expect(h.state.spawned).toBe(0);
+});
+
+test('an earlier stack that had to be forced and left a llama-server stops the launch, saying so (#431)', async () => {
+	h.state.stopResult = { forced: true, llama: [777] };
+	recordEarlierStack({ origin: 'http://127.0.0.1:4100', repo: HERE.repoPath }, HERE);
+	await launch();
+
+	const shown = (await statusCall('status:ready')) as Shown;
+	expect(shown.progress.error).toContain('a llama-server is still running (pid 777)');
+	expect(h.state.spawned).toBe(0);
+});
+
+test('an earlier stack forced to stop cleanly lets the launch go on (#431)', async () => {
+	h.state.stopResult = { forced: true, llama: [] };
+	recordEarlierStack({ origin: 'http://127.0.0.1:4100', repo: HERE.repoPath }, HERE);
+	await launch();
+
+	expect(h.state.spawned).toBe(1);
 });

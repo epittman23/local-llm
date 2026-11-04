@@ -66,6 +66,7 @@ import {
 	readProcStat,
 	runInShell,
 	runningServices,
+	type StopResult,
 	spawnInGroup,
 	stopGroup
 } from './stack';
@@ -99,6 +100,8 @@ let owned: { pgid: number; child?: ChildProcess; exitCode?: number | null } | nu
 let buildChild: ChildProcess | null = null;
 let tail: LogTail | null = null;
 let startAbort: AbortController | null = null;
+/** The stop of a stack an earlier launch started, while it runs (#431). */
+let earlierStop: Promise<StopResult> | null = null;
 
 class Cancelled extends Error {}
 
@@ -339,9 +342,12 @@ async function startup(): Promise<void> {
 			config.repoPath,
 			isLocalOrigin(origin)
 		);
-		if (earlier === 'stop' && record) await stopEarlier(record);
-		// Cancelled while it stopped: shutdown() has already quit.
-		if (abort.signal.aborted) return;
+		if (earlier === 'stop' && record) {
+			const left = await stopEarlier(record);
+			// Cancelled while it stopped: shutdown() saw the stop through and quit.
+			if (abort.signal.aborted) return;
+			if (left) return fail(left);
+		}
 
 		if (!isLocalOrigin(origin)) {
 			setProgress(createProgress('startup', 'Connecting to Local LLM', startupRemote(origin), now()));
@@ -443,9 +449,10 @@ async function startup(): Promise<void> {
 /**
  * Stops the stack an earlier launch started for another server address or
  * checkout (#431), the way closing the app would, before this launch goes on.
- * If it has to be forced, compose is brought down in its own checkout.
+ * If it has to be forced, compose is brought down in its own checkout. Gives
+ * what is left running after a forced stop, or null.
  */
-async function stopEarlier(record: OwnedRecord): Promise<void> {
+async function stopEarlier(record: OwnedRecord): Promise<string | null> {
 	setProgress(createProgress('startup', 'Starting Local LLM', STARTUP_STOP_EARLIER, Date.now()));
 	openStatus('progress');
 	dispatch({
@@ -460,17 +467,42 @@ async function stopEarlier(record: OwnedRecord): Promise<void> {
 	followLog(true);
 	const repo = record.repo ?? config.repoPath;
 	const env = childEnv(process.env);
-	await stopGroup(record.pgid, {
+	// Kept, so a quit meanwhile waits for it (forced if need be) instead of leaving it half-stopped.
+	earlierStop = stopGroup(record.pgid, {
 		kill: process.kill,
 		sleep,
 		now: Date.now,
 		composeDown: () => runInShell(composeDownCommand(repo), env, 60_000),
 		leftoverLlama: llamaServerPids,
-		onTimeout: () => dispatch({ type: 'timeout', step: 'earlier', at: Date.now() })
+		onTimeout: () => {
+			dispatch({ type: 'timeout', step: 'earlier', at: Date.now() });
+			dispatch({
+				type: 'begin',
+				step: 'force',
+				at: Date.now(),
+				detail: 'killing the process group, then docker compose down'
+			});
+		}
 	});
+	const result = await earlierStop;
+	earlierStop = null;
 	tail?.stop();
 	tail = null;
-	dispatch({ type: 'finish', step: 'earlier', at: Date.now() });
+	if (!result.forced) {
+		dispatch({ type: 'finish', step: 'earlier', at: Date.now() });
+		return null;
+	}
+	dispatch({ type: 'finish', step: 'force', at: Date.now() });
+	const left = await runningServices(repo, env);
+	const problems = [
+		left === null ? 'docker compose ps failed, so its services may still be running' : '',
+		left ? `${left} of its ${left === 1 ? 'containers is' : 'containers are'} still there` : '',
+		result.llama.length > 0 ? `a llama-server is still running (pid ${result.llama.join(', ')})` : ''
+	].filter(Boolean);
+	return problems.length > 0
+		? `The backend an earlier launch started had to be forced to stop, and ${problems.join('; ')}. ` +
+				`\`docker compose -f ${join(repo, 'infra', 'docker-compose.yml')} down\` stops the services. Retry once they are stopped.`
+		: null;
 }
 
 function forgetOwned(): void {
@@ -500,6 +532,8 @@ async function shutdown(): Promise<void> {
 		}
 	}
 	if (!owned) {
+		// Its one SIGINT is sent: see that stop through, so it can still be forced.
+		if (earlierStop) await earlierStop;
 		tail?.stop();
 		app.exit(0);
 		return;
@@ -743,7 +777,7 @@ if (!app.requestSingleInstanceLock()) {
 	// Every way of quitting (the menu, Ctrl+Q, the session ending, Ctrl-C on
 	// `make desktop`) goes through shutdown(), so an owned stack is stopped.
 	app.on('before-quit', (event) => {
-		if (owned && phase !== 'stopping') {
+		if ((owned || earlierStop) && phase !== 'stopping') {
 			event.preventDefault();
 			void shutdown();
 		}
