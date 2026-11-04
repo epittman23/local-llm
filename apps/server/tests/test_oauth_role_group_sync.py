@@ -108,7 +108,11 @@ def test_an_empty_groups_claim_removes_memberships(monkeypatch):
     async def update(**_k):
         return None
 
+    async def config_get(key, default=None):
+        return default
+
     monkeypatch.setattr(oauth, 'get_oauth_runtime_config', runtime)
+    monkeypatch.setattr(oauth.Config, 'get', config_get)
     monkeypatch.setattr(oauth.Groups, 'get_groups_by_member_id', current)
     monkeypatch.setattr(oauth.Groups, 'get_all_groups', all_groups)
     monkeypatch.setattr(oauth.Groups, 'remove_users_from_group', remove)
