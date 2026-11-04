@@ -63,6 +63,21 @@ test('chat: builds a conversation, runs it with the system prompt and parameters
 	await expect(page.getByLabel('assistant message 2')).toHaveCount(0);
 });
 
+test('chat: parameters set in Controls go under params, as the chat page sends them (#208)', async ({ page }) => {
+	await mockWorkspaceBackend(page);
+	const seen = await mockPlayground(page);
+	await page.goto('/playground');
+	await page.getByRole('button', { name: 'Controls' }).click();
+	await page.getByRole('button', { name: 'Temperature: Default' }).click();
+	await page.getByLabel('Temperature', { exact: true }).fill('1.2');
+	await page.getByRole('dialog').getByRole('button', { name: 'Close' }).click();
+	await page.getByLabel('New message').fill('Hi there');
+	await page.getByRole('button', { name: 'Run' }).click();
+	await expect(page.getByLabel('assistant message 2')).toHaveValue('Hello!');
+	expect(seen.bodies[0]).toMatchObject({ model: 'coder', stream: true, params: { temperature: 1.2 } });
+	expect(seen.bodies[0]).not.toHaveProperty('temperature');
+});
+
 test('chat: Add alternates roles; a failed request shows its error', async ({ page }) => {
 	await mockWorkspaceBackend(page);
 	await mockPlayground(page);
