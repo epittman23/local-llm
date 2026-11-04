@@ -52,16 +52,24 @@ const entries = ['new.md', 'edit.md', 'broken.md', 'same.md'].map((filename) => 
 }));
 
 const sync = async () => {
+	const refresh = vi.fn();
 	const { result } = renderHook(() =>
-		useKnowledgeUploads({ knowledgeId: 'kb1', directoryId: null, breadcrumbs: [], refresh: vi.fn() })
+		useKnowledgeUploads({ knowledgeId: 'kb1', directoryId: null, breadcrumbs: [], refresh })
 	);
 	await act(() => result.current.syncDirectory(entries));
+	return refresh;
 };
 
 beforeEach(() => {
 	calls.length = 0;
 	vi.clearAllMocks();
 	kb.syncKnowledgeDiff.mockResolvedValue(diff);
+	kb.syncKnowledgeCleanup.mockImplementation(
+		async (_t: string, _kb: string, fileIds: string[], dirIds: string[] = []) => {
+			calls.push(`cleanup ${fileIds.join(',')} | ${dirIds.join(',')}`);
+			return {};
+		}
+	);
 	files.uploadFile.mockImplementation(async (_t: string, file: File) => {
 		calls.push(`upload ${file.name}`);
 		return { id: `new-${file.name}` };
@@ -81,11 +89,12 @@ describe('useKnowledgeUploads syncDirectory', () => {
 		expect(calls).toEqual([
 			// Deleted files and folders first, as before.
 			'cleanup gone | dir-gone',
-			'upload new.md',
 			'upload edit.md',
 			'upload broken.md',
 			// Only the replaced copy: broken.md keeps its old version.
-			'cleanup old-edit | '
+			'cleanup old-edit | ',
+			// Added files last.
+			'upload new.md'
 		]);
 		expect(toast.error).toHaveBeenCalledWith('Upload failed for 1 of 3 files.');
 		expect(toast.success).not.toHaveBeenCalled();
@@ -94,7 +103,7 @@ describe('useKnowledgeUploads syncDirectory', () => {
 	it('removes every replaced copy when all uploads succeed, and reports the sync', async () => {
 		await sync();
 
-		expect(calls.at(-1)).toBe('cleanup old-edit,old-broken | ');
+		expect(calls.slice(-2)).toEqual(['cleanup old-edit,old-broken | ', 'upload new.md']);
 		expect(toast.success).toHaveBeenCalledWith('Sync complete: 1 added, 2 modified, 1 deleted, 1 unmodified');
 	});
 
@@ -104,5 +113,39 @@ describe('useKnowledgeUploads syncDirectory', () => {
 		await sync();
 
 		expect(calls.filter((c) => c.startsWith('cleanup'))).toEqual(['cleanup gone | dir-gone']);
+	});
+
+	it('still lists the uploads, and says so, when the old copies cannot be removed', async () => {
+		kb.syncKnowledgeCleanup.mockImplementation(async (_t: string, _kb: string, fileIds: string[]) => {
+			if (fileIds.includes('old-edit')) throw 'Server error';
+			return {};
+		});
+
+		const refresh = await sync();
+
+		expect(toast.error).toHaveBeenCalledWith('The old copies of modified files could not be removed: Server error');
+		expect(toast.success).not.toHaveBeenCalled();
+		expect(refresh).toHaveBeenCalled();
+	});
+
+	it('uploads a file refused as duplicate content again once its old copy is gone', async () => {
+		files.uploadFile.mockImplementation(async (_t: string, file: File) => {
+			calls.push(`upload ${file.name}`);
+			// The first try of edit.md meets its own old copy, as a re-saved file with the same text does.
+			if (file.name === 'edit.md' && calls.filter((c) => c === 'upload edit.md').length === 1)
+				return { id: 'x', error: 'Duplicate content detected. Please provide unique content to proceed.' };
+			return { id: `new-${file.name}` };
+		});
+
+		await sync();
+
+		expect(calls.slice(1)).toEqual([
+			'upload edit.md',
+			'upload broken.md',
+			'cleanup old-edit,old-broken | ',
+			'upload edit.md',
+			'upload new.md'
+		]);
+		expect(toast.success).toHaveBeenCalled();
 	});
 });
