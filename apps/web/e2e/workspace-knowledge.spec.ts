@@ -173,9 +173,7 @@ test.describe('workspace knowledge list', () => {
 		// only the request's answer brings, and poll the log.
 		await expect(page.getByText('Base 1', { exact: true })).toHaveCount(0);
 		await expect(page.getByText('Base 2', { exact: true })).toBeVisible();
-		await expect
-			.poll(() => calls.some((c) => c.path === '/search' && c.search.includes('query=Base+2')))
-			.toBe(true);
+		await expect.poll(() => calls.some((c) => c.path === '/search' && c.search.includes('query=Base+2'))).toBe(true);
 	});
 
 	test('create dialog posts the form and opens the new base', async ({ page }) => {
