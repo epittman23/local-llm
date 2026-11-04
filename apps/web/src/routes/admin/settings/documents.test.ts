@@ -88,7 +88,7 @@ describe('ragFormError', () => {
 	it('rejects headers that are not a JSON object, and bad JSON in the other boxes', () => {
 		const external = { CONTENT_EXTRACTION_ENGINE: 'external', EXTERNAL_DOCUMENT_LOADER_URL: 'http://x' };
 		expect(ragFormError({ ...external, EXTERNAL_DOCUMENT_LOADER_HEADERS: '["a"]' })).toBe(
-			'Headers must be a valid JSON object'
+			'External Document Loader Headers must be a valid JSON object'
 		);
 		expect(ragFormError({ ...external, EXTERNAL_DOCUMENT_LOADER_HEADERS: '{"a":"b"}' })).toBeNull();
 		expect(ragFormError({ CONTENT_EXTRACTION_ENGINE: 'datalab_marker', DATALAB_MARKER_ADDITIONAL_CONFIG: '{x' })).toBe(

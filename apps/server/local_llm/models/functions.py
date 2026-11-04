@@ -319,7 +319,8 @@ class FunctionsTable:
 
     async def update_function_valves_by_id(
         self, id: str, valves: dict, db: AsyncSession | None = None
-    ) -> FunctionValves | None:
+    ) -> FunctionModel | None:
+        """The function with its valves saved, or None when they were not (#288)."""
         async with get_async_db_context(db) as db:
             try:
                 function = await db.get(Function, id)
@@ -327,7 +328,8 @@ class FunctionsTable:
                 function.updated_at = int(time.time())
                 await db.commit()
                 return FunctionModel.model_validate(function)
-            except Exception:
+            except Exception as e:
+                log.exception(f'Error updating function valves by id {id}: {e}')
                 return None
 
     async def update_function_metadata_by_id(
@@ -388,8 +390,9 @@ class FunctionsTable:
 
             user_settings['functions']['valves'][id] = encrypt_valves(valves)
 
-            # Update the user settings in the database
-            await Users.update_user_by_id(user_id, {'settings': user_settings}, db=db)
+            # Update the user settings in the database; None when that saved nothing (#288).
+            if not await Users.update_user_by_id(user_id, {'settings': user_settings}, db=db):
+                return None
 
             return valves
         except Exception as e:
