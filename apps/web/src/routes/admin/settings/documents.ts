@@ -72,7 +72,7 @@ export function ragFormError(c: Rec): string | null {
 	if (engine === 'external' && blank(c.EXTERNAL_DOCUMENT_LOADER_URL)) return 'External Document Loader URL required.';
 	// Saved whichever engine is selected, and the server takes only an object (#234).
 	if (c.EXTERNAL_DOCUMENT_LOADER_HEADERS && !isJsonObjectText(c.EXTERNAL_DOCUMENT_LOADER_HEADERS))
-		return 'Headers must be a valid JSON object';
+		return 'External Document Loader Headers must be a valid JSON object';
 	if (engine === 'tika' && blank(c.TIKA_SERVER_URL)) return 'Tika Server URL required.';
 	if (engine === 'docling' && blank(c.DOCLING_SERVER_URL)) return 'Docling Server URL required.';
 	if (
