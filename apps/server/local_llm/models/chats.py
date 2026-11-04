@@ -610,6 +610,8 @@ class ChatTable:
 
     def _chat_import_form_to_chat_model(self, user_id: str, form_data: ChatImportForm) -> ChatModel:
         id = str(uuid.uuid4())
+        now = int(time.time())
+        updated_at = form_data.updated_at if form_data.updated_at else now
         chat = ChatModel(
             **{
                 'id': id,
@@ -621,8 +623,11 @@ class ChatTable:
                 'pinned': form_data.pinned,
                 'folder_id': form_data.folder_id,
                 'current_message_id': form_data.current_message_id or self.get_current_message_id(form_data.chat),
-                'created_at': (form_data.created_at if form_data.created_at else int(time.time())),
-                'updated_at': (form_data.updated_at if form_data.updated_at else int(time.time())),
+                'created_at': (form_data.created_at if form_data.created_at else now),
+                'updated_at': updated_at,
+                # Read as of its own last update, as a new chat starts read: an
+                # import used to leave every chat unread (#295).
+                'last_read_at': updated_at,
             }
         )
         return chat
