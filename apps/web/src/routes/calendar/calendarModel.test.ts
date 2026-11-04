@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	NS,
 	automationTarget,
+	bandEvents,
 	defaultCalendarId,
 	eventFields,
 	eventPayload,
@@ -78,9 +79,51 @@ describe('placing events', () => {
 		expect(eventsInHour([e], at(2026, 8, 1), 9)).toEqual([e]);
 		expect(eventsInHour([e], at(2026, 8, 1), 10)).toEqual([]);
 	});
+	it('an event that ends at or before its start is on its start day only', () => {
+		for (const end of [at(2026, 8, 1, 22), at(2026, 8, 1, 21)]) {
+			const e = ev(at(2026, 8, 1, 22), end);
+			expect(Object.keys(eventsByDay([e]))).toEqual([String(at(2026, 8, 1).getTime())]);
+		}
+	});
+	it('an occurrence carried over from the day before is in the band', () => {
+		const e = ev(at(2026, 8, 1, 23), at(2026, 8, 2, 1), { rrule: 'FREQ=DAILY', instance_id: 'x_1' });
+		expect(bandEvents(eventsByDay([e]), at(2026, 8, 2))).toEqual([e]);
+	});
+	it('an event that ends at midnight is not on the next day', () => {
+		const e = ev(at(2026, 8, 1, 22), at(2026, 8, 2));
+		expect(Object.keys(eventsByDay([e]))).toEqual([String(at(2026, 8, 1).getTime())]);
+	});
+	// Day and week grids (#319): an hour row holds timed events that start
+	// in it; the band above the hours holds all-day events, and timed events
+	// carried over from an earlier day, on every day they touch.
+	it('an all-day event is in the band on every day, never in an hour', () => {
+		const e = ev(at(2026, 9, 19), at(2026, 9, 21, 23, 59), { all_day: true });
+		const byDay = eventsByDay([e]);
+		for (const d of [19, 20, 21]) expect(bandEvents(byDay, at(2026, 9, d))).toEqual([e]);
+		expect(bandEvents(byDay, at(2026, 9, 22))).toEqual([]);
+		expect(eventsInHour([e], at(2026, 9, 19), 0)).toEqual([]);
+	});
+	it('a timed event is in its start hour, then in the band on later days', () => {
+		const e = ev(at(2026, 9, 19, 22), at(2026, 9, 21, 10));
+		const byDay = eventsByDay([e]);
+		expect(eventsInHour([e], at(2026, 9, 19), 22)).toEqual([e]);
+		expect(bandEvents(byDay, at(2026, 9, 19))).toEqual([]);
+		expect(bandEvents(byDay, at(2026, 9, 20))).toEqual([e]);
+		expect(bandEvents(byDay, at(2026, 9, 21))).toEqual([e]);
+	});
 });
 
 describe('event form', () => {
+	it('an all-day event ending at midnight shows the day before as its end', () => {
+		const chat = ev(at(2026, 9, 20), at(2026, 9, 21), { all_day: true });
+		expect(eventFields(chat, '', null).endDate).toBe('2026-10-20');
+		// Saved unchanged, it stays on the one day.
+		expect(eventPayload(eventFields(chat, '', null), chat)).toMatchObject({
+			form: { start_at: ns(at(2026, 9, 20)), end_at: ns(at(2026, 9, 20, 23, 59)) }
+		});
+		const form = ev(at(2026, 9, 20), at(2026, 9, 21, 23, 59), { all_day: true });
+		expect(eventFields(form, '', null).endDate).toBe('2026-10-21');
+	});
 	it('a new event is one hour from the clicked time', () => {
 		const f = eventFields(null, 'cal', ns(at(2026, 8, 1, 9)));
 		expect(f).toMatchObject({
