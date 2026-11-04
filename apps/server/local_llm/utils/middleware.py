@@ -5565,8 +5565,13 @@ class _StreamingReply:
         the function_call items that have no output yet. None from a response that ended in an error:
         its calls may be cut off, and the reply is failed already (#501)."""
         if stream.errored:
-            if stream.response_tool_calls or any(item.get('type') == 'function_call' for item in self.output):
-                log.warning('Not running the tool calls of a response that ended in an error')
+            answered = {item.get('call_id') for item in self.output if item.get('type') == 'function_call_output'}
+            for item in self.output:
+                # Not run: marked failed, or the reply's finish would show them as completed.
+                if item.get('type') == 'function_call' and item.get('call_id') not in answered:
+                    if item.get('status') in (None, 'in_progress'):
+                        log.warning('Not running tool call %s: its response ended in an error', item.get('name'))
+                        item['status'] = 'failed'
             return
         if stream.response_tool_calls:
             for tc in stream.response_tool_calls:
