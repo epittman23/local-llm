@@ -109,6 +109,25 @@ class OAuthClientMetadata(MCPOAuthClientMetadata):
     pass
 
 
+def _token_endpoint_auth_method(offered: list[str] | None, *, has_secret: bool) -> str:
+    """The token endpoint auth method to register or use with an authorization server (#273).
+
+    `client_secret_post` whenever the server lists it, or lists nothing.
+    Otherwise the first the server lists of the others this client supports
+    (`client_secret_basic`, `none`), a secret method first when there is, or
+    registration will issue, a secret. When it lists none of them,
+    `client_secret_post` is kept: the server's own choice (`private_key_jwt`,
+    say) is one this client cannot use, and taking it failed validation.
+    """
+    if not offered or 'client_secret_post' in offered:
+        return 'client_secret_post'
+    preference = ('client_secret_basic', 'none') if has_secret else ('none', 'client_secret_basic')
+    for method in preference:
+        if method in offered:
+            return method
+    return 'client_secret_post'
+
+
 OAuthResourceParameterMode = Literal['auto', 'include', 'omit']
 
 
@@ -539,15 +558,10 @@ async def get_oauth_client_info_with_dynamic_client_registration(
                             ):
                                 oauth_client_metadata.scope = ' '.join(oauth_server_metadata.scopes_supported)
 
-                            if (
-                                oauth_server_metadata.token_endpoint_auth_methods_supported
-                                and oauth_client_metadata.token_endpoint_auth_method
-                                not in oauth_server_metadata.token_endpoint_auth_methods_supported
-                            ):
-                                # Pick the first supported method from the server
-                                oauth_client_metadata.token_endpoint_auth_method = (
-                                    oauth_server_metadata.token_endpoint_auth_methods_supported[0]
-                                )
+                            # Registration issues a secret for a secret method, so prefer one.
+                            oauth_client_metadata.token_endpoint_auth_method = _token_endpoint_auth_method(
+                                oauth_server_metadata.token_endpoint_auth_methods_supported, has_secret=True
+                            )
 
                             break
                         except Exception as e:
@@ -677,13 +691,10 @@ async def get_oauth_client_info_with_static_credentials(
         )
 
         # Determine token_endpoint_auth_method
-        token_endpoint_auth_method = 'client_secret_post'
-        if (
-            oauth_server_metadata
-            and oauth_server_metadata.token_endpoint_auth_methods_supported
-            and token_endpoint_auth_method not in oauth_server_metadata.token_endpoint_auth_methods_supported
-        ):
-            token_endpoint_auth_method = oauth_server_metadata.token_endpoint_auth_methods_supported[0]
+        token_endpoint_auth_method = _token_endpoint_auth_method(
+            oauth_server_metadata.token_endpoint_auth_methods_supported if oauth_server_metadata else None,
+            has_secret=bool(oauth_client_secret),
+        )
 
         oauth_client_info = OAuthClientInformationFull(
             client_id=oauth_client_id,
