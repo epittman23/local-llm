@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
 	childEnv,
+	composeRunningCommand,
+	countRunning,
 	DEV_SERVER_URL,
 	decideStart,
 	isAdoptable,
@@ -211,5 +213,21 @@ describe('LogTail', () => {
 		await new Promise((r) => setTimeout(r, 350));
 		tail.stop();
 		expect(lines).toEqual(['==> Starting €', 'half']);
+	});
+});
+
+describe('services left after a stop (#435)', () => {
+	it('asks compose for the running containers of this checkout', () => {
+		expect(composeRunningCommand('/home/me/local llm')).toBe(
+			"docker compose -f '/home/me/local llm/infra/docker-compose.yml' ps -a -q"
+		);
+	});
+
+	it('counts the containers listed, and knows when compose could not be asked', () => {
+		expect(countRunning('3f2a9c1d4e5b\n0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\n')).toBe(2);
+		expect(countRunning('')).toBe(0);
+		expect(countRunning(null)).toBeNull();
+		// A login profile's greeting is not a container.
+		expect(countRunning('Welcome back\n3f2a9c1d4e5b\n')).toBe(1);
 	});
 });

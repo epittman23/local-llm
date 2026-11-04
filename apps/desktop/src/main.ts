@@ -63,6 +63,7 @@ import {
 	probe,
 	readProcStat,
 	runInShell,
+	runningServices,
 	spawnInGroup,
 	stopGroup
 } from './stack';
@@ -480,11 +481,35 @@ async function shutdown(): Promise<void> {
 		onTimeout: () => {
 			const running = progress.steps.find((s) => s.state === 'running');
 			if (running) dispatch({ type: 'timeout', step: running.id, at: Date.now() });
-			dispatch({ type: 'begin', step: 'force', at: Date.now(), detail: 'killing the process group' });
+			dispatch({
+				type: 'begin',
+				step: 'force',
+				at: Date.now(),
+				detail: 'killing the process group, then docker compose down'
+			});
 		}
 	});
 	tail?.stop();
 	forgetOwned();
+	// compose down ran (make's trap, or the forced path itself), but nothing says
+	// whether it worked, so compose is asked what is left (#435).
+	const left = await runningServices(repo, env);
+	if (left !== 0) {
+		const llama = result.forced && result.llama.length > 0 ? ' A llama-server is still running too.' : '';
+		dispatch({
+			type: 'fail',
+			step: result.forced ? 'force' : 'services',
+			message:
+				(left === null
+					? 'Could not check that the services stopped: docker compose ps failed. '
+					: `The services did not stop: ${left} ${left === 1 ? 'container is' : 'containers are'} still there. `) +
+				'`docker compose -f infra/docker-compose.yml down` stops them; the log shows why.' +
+				llama,
+			at: Date.now()
+		});
+		phase = 'stopped';
+		return;
+	}
 	if (result.forced && result.llama.length > 0) {
 		// Its own session keeps it out of the group; offer, don't kill unasked.
 		dispatch({ type: 'offer-stop-llama' });
