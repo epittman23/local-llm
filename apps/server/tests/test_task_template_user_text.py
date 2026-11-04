@@ -43,6 +43,42 @@ def test_a_query_prompt_keeps_a_prompt_placeholder_inside_a_message():
     assert prompt.count('{{prompt}}') == 2  # once from the prompt, once from the history
 
 
+def test_a_prompt_mentioning_messages_does_not_repeat_the_conversation():
+    messages = [
+        {'role': 'assistant', 'content': 'Hello there.'},
+        {'role': 'user', 'content': 'What does {{MESSAGES}} hold?'},
+    ]
+
+    prompt = _run(task.query_generation_template('Q: {{prompt}}\nHistory: {{MESSAGES}}', messages, USER))
+
+    assert 'Q: What does {{MESSAGES}} hold?' in prompt
+    assert prompt.count('Hello there.') == 1
+
+
+def test_a_message_without_text_leaves_no_prompt_placeholder():
+    messages = [{'role': 'user', 'content': [{'type': 'image_url', 'image_url': {'url': 'data:,'}}]}]
+
+    prompt = _run(task.title_generation_template('P=[{{prompt}}] S=[{{prompt:start:5}}]', messages, USER))
+
+    assert prompt == 'P=[] S=[]'
+
+
+def test_a_filled_in_value_is_not_read_for_placeholders():
+    user = SimpleNamespace(model_dump=lambda: {'name': 'Ada', 'bio': 'I write {{MESSAGES}} and {{prompt}}.'})
+
+    prompt = _run(task.title_generation_template('Bio: {{USER_BIO}}\n{{MESSAGES}}', MESSAGES, user))
+
+    assert prompt.startswith('Bio: I write {{MESSAGES}} and {{prompt}}.\n')
+    assert prompt.count(QUESTION) == 1
+
+
+def test_an_autocomplete_type_goes_in_as_written():
+    for kind in ('{{PROMPT}}{{USER_EMAIL}}', '\x000\x00', '\x005\x00'):
+        prompt = _run(task.autocomplete_generation_template('<t>{{TYPE}}</t>{{PROMPT}}', 'abc', None, kind, USER))
+
+        assert prompt == f'<t>{kind}</t>abc'
+
+
 def test_every_task_template_fills_its_own_variables():
     template = 'For {{USER_NAME}}: {{prompt}}'
     prompts = [

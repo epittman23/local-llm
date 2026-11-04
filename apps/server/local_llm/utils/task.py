@@ -274,28 +274,36 @@ async def fill_task_template(
     prompt: str | None = None,
     messages: list[dict] | None = None,
     fill_messages: bool = True,
+    literals: dict[str, str] | None = None,
 ) -> str:
-    """A task prompt: the template's own variables, then the user's prompt and messages.
+    """A task prompt: the user's text, and the template's own variables, each filled in once.
 
-    The variables ({{USER_NAME}}, {{CURRENT_DATE}}, ...) are filled in the
-    template alone, and the prompt and messages go in last, as they are. They
-    used to be put in first and the whole text expanded after, so a message
-    that mentions {{USER_EMAIL}} or {{MESSAGES}} (a Jinja question, say) had
-    them filled in: the user's email, or the whole conversation again (#305).
+    The variables ({{USER_NAME}}, {{CURRENT_DATE}}, ...) and the user's
+    prompt and messages used to be filled in turn over the whole text, so a
+    message that mentions {{USER_EMAIL}} or {{MESSAGES}} (a Jinja question,
+    say) had them filled in: the user's email, or the whole conversation
+    again (#305). Now the placeholders for the user's text (and `literals`,
+    such as {{TYPE}}) become tokens first, while the template holds no user
+    text; the template's own variables are filled next; and the tokens are
+    swapped back last, in one pass. So neither the user's text nor a value
+    filled in (a bio, say) is read for placeholders, and the tokens carry a
+    nonce no text can guess.
     """
-    template = await prompt_template(template, user)
+    nonce = uuid.uuid4().hex
     pieces: list[str] = []
 
     def keep(text: str) -> str:
         pieces.append(text)
-        return f'\x00{len(pieces) - 1}\x00'
+        return f'\x00{nonce}:{len(pieces) - 1}\x00'
 
-    if prompt is not None:
-        template = replace_prompt_variable(template, prompt, wrap=keep)
+    for placeholder, value in (literals or {}).items():
+        template = template.replace(placeholder, keep(value))
+    # A message with no text (an image only) has no prompt: its placeholders become empty.
+    template = replace_prompt_variable(template, prompt or '', wrap=keep)
     if fill_messages:
         template = replace_messages_variable(template, messages, wrap=keep)
-    # One pass, so a piece's own text is never read again.
-    return re.sub(r'\x00(\d+)\x00', lambda m: pieces[int(m.group(1))], template)
+    template = await prompt_template(template, user)
+    return re.sub(f'\x00{nonce}:(\\d+)\x00', lambda m: pieces[int(m.group(1))], template)
 
 
 # {{prompt:middletruncate:8000}}
@@ -369,8 +377,7 @@ async def autocomplete_generation_template(
     type: str | None = None,
     user: Any | None = None,
 ) -> str:
-    template = template.replace('{{TYPE}}', type if type else '')
-    return await fill_task_template(template, user, prompt, messages)
+    return await fill_task_template(template, user, prompt, messages, literals={'{{TYPE}}': type or ''})
 
 
 async def query_generation_template(template: str, messages: list[dict], user: Any | None = None) -> str:
