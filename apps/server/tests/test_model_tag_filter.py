@@ -15,12 +15,16 @@ Run from apps/server:
     python -m pytest tests/test_model_tag_filter.py
 """
 
+import asyncio
+import importlib
 import json
 import os
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 
+from sqlalchemy.dialects import postgresql
 from test_schema_drift import fresh_database
 
 __all__ = ['fresh_database']
@@ -93,3 +97,44 @@ def test_the_tag_filter_matches_tags_only_on_postgres(fresh_database, tmp_path):
     env = {**os.environ, 'DATABASE_URL': fresh_database, 'DATA_DIR': str(tmp_path), 'HF_HUB_OFFLINE': '1'}
 
     assert _search(env) == EXPECTED
+
+
+# The same search in this process, on the test run's SQLite database, so the
+# coverage of the filter is measured; the scripts above prove both dialects.
+importlib.import_module('local_llm.config')  # runs the migrations
+models_module = importlib.import_module('local_llm.models.models')
+
+
+def test_the_tag_filter_in_process_on_sqlite():
+    from local_llm.models.models import ModelForm, Models
+    from local_llm.models.users import Users
+
+    tag = uuid.uuid4().hex[:8]
+
+    async def run():
+        await Users.insert_new_user(f'tagger-{tag}', 'Tagger', f'tagger-{tag}@example.invalid', role='admin')
+        metas = {
+            'tagged': {'tags': [{'name': f'vision-{tag}'}]},
+            'capability-only': {'capabilities': {f'vision-{tag}': True}},
+            'unicode': {'tags': [{'name': f'Ünï-{tag}'}]},
+        }
+        for name, meta in metas.items():
+            await Models.insert_new_model(
+                ModelForm(id=f'{name}-{tag}', base_model_id='base', name=name, meta=meta, params={}), f'tagger-{tag}'
+            )
+        found = {}
+        for query in (f'VISION-{tag}', f'Ünï-{tag}'):
+            result = await Models.search_models(f'tagger-{tag}', {'tag': query}, limit=100)
+            found[query] = sorted(model.id for model in result.items)
+        return found
+
+    assert asyncio.run(run()) == {f'VISION-{tag}': [f'tagged-{tag}'], f'Ünï-{tag}': [f'unicode-{tag}']}
+
+
+def test_the_postgres_filter_compares_the_lowercased_tag_by_name():
+    clause = models_module._has_tag('postgresql', 'Vision')
+    sql = str(clause.compile(dialect=postgresql.dialect(), compile_kwargs={'literal_binds': True}))
+
+    assert 'jsonb_array_elements' in sql
+    assert "tag ->> 'name'" in sql
+    assert "= 'vision'" in sql
