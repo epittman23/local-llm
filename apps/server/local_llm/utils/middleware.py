@@ -3220,24 +3220,14 @@ async def build_chat_response_context(request, form_data, user, model, metadata,
 async def execute_tool_call_for_output(request, form_data, user, metadata, event_caller, event_emitter, tool_call):
     tools = metadata.get('tools', {})
     name = tool_call.get('function', {}).get('name', '')
-    tool_args = tool_call.get('function', {}).get('arguments', '{}')
-    params = {}
-    if tool_args and tool_args.strip():
-        try:
-            params = JSONCodec.loads(tool_args)
-        except Exception:
-            try:
-                params = ast.literal_eval(tool_args)
-            except Exception as e:
-                log.debug(e)
-                return {
-                    'tool_call_id': tool_call.get('id', ''),
-                    'content': (
-                        'Error: Tool call arguments could not be parsed. '
-                        'The model generated malformed or incomplete JSON.'
-                    ),
-                }
-    tool_call.setdefault('function', {})['arguments'] = JSONCodec.dumps(params)
+    params = _parse_tool_params(tool_call)
+    if params is None:
+        return {
+            'tool_call_id': tool_call.get('id', ''),
+            'content': (
+                'Error: Tool call arguments could not be parsed. The model generated malformed or incomplete JSON.'
+            ),
+        }
 
     tool = tools.get(name)
     if not tool:
@@ -4734,8 +4724,14 @@ def _url_citation_source(title: str, url: str) -> dict:
 def _parse_tool_params(tool_call: dict) -> dict | None:
     """The call's arguments as a dict (JSON, or a Python literal), written back onto it as JSON.
 
-    None when they can't be read."""
+    None when they can't be read, which includes valid JSON that is not an
+    object, such as `[]` or `"x"` (a tool takes named parameters), and a Python
+    literal holding what JSON cannot carry, such as a set (#166)."""
     tool_args = tool_call.get('function', {}).get('arguments', '{}')
+    if isinstance(tool_args, dict):
+        tool_args = JSONCodec.dumps(tool_args)
+    elif not isinstance(tool_args, str | None):
+        return None
     params = {}
     if tool_args and tool_args.strip():
         try:
@@ -4746,7 +4742,14 @@ def _parse_tool_params(tool_call: dict) -> dict | None:
             except Exception as e:
                 log.debug(e)
                 return None
-    tool_call.setdefault('function', {})['arguments'] = JSONCodec.dumps(params)
+    if not isinstance(params, dict):
+        return None
+    try:
+        arguments = JSONCodec.dumps(params)
+    except (TypeError, ValueError) as e:
+        log.debug(e)
+        return None
+    tool_call.setdefault('function', {})['arguments'] = arguments
     return params
 
 
