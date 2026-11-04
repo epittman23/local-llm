@@ -164,3 +164,17 @@ export async function saveNoteAccess(queryClient: QueryClient, token: string, id
 		toast.warning('Some access settings were not saved: you are not allowed to share this way.');
 	else toast.success('Saved');
 }
+
+/**
+ * Creates the note a `?title=`/`?content=` link describes and opens it. If the
+ * create fails, says so and opens the list instead: the page shows a spinner
+ * until this navigates, which used to never end on a failure (#210).
+ */
+export async function openLinkedNote(create: () => Promise<string | undefined>, open: (path: string) => void) {
+	const id = await create().catch((err) => {
+		toast.error(`${err}`);
+		return null;
+	});
+	if (id === undefined) toast.error('The note could not be created');
+	open(id ? `/notes/${id}` : '/notes');
+}
