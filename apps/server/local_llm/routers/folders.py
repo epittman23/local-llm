@@ -703,47 +703,39 @@ async def delete_folder_by_id(
                 detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
             )
 
-    folders = []
-    folders.append(folder)
-    while folders:
-        folder = folders.pop()
-        if folder:
-            try:
-                folder_ids = await Folders.delete_folder_by_id_and_user_id(folder.id, folder_owner_id, db=db)
+    # The chats first, then the folders, so a failure part way never leaves a
+    # chat pointing at a folder that is gone, where the sidebar hides it (#281).
+    try:
+        for folder_id in folder_ids:
+            if delete_contents:
+                done = await Chats.delete_chats_by_user_id_and_folder_id(folder_owner_id, folder_id, db=db)
+            else:
+                done = await Chats.move_chats_by_user_id_and_folder_id(folder_owner_id, folder_id, None, db=db)
+            # These report a failure by returning False, not by raising.
+            if not done:
+                raise RuntimeError(f'Could not move or delete the chats of folder {folder_id}')
 
-                for folder_id in folder_ids:
-                    if delete_contents:
-                        await Chats.delete_chats_by_user_id_and_folder_id(folder_owner_id, folder_id, db=db)
-                    else:
-                        await Chats.move_chats_by_user_id_and_folder_id(folder_owner_id, folder_id, None, db=db)
+            # Clean up access grants for this folder
+            await AccessGrants.revoke_all_access('folder', folder_id, db=db)
 
-                    # Clean up access grants for this folder
-                    await AccessGrants.revoke_all_access('folder', folder_id, db=db)
-
-                await Automations.clear_folder_ids(folder_owner_id, folder_ids, db=db)
-
-                await publish_event(
-                    request,
-                    EVENTS.FOLDER_DELETED,
-                    actor=user,
-                    subject_id=id,
-                    data={'folder_ids': folder_ids, 'delete_contents': delete_contents},
-                )
-                return True
-            except Exception as e:
-                log.exception(e)
-                log.error(f'Error deleting folder: {id}')
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=ERROR_MESSAGES.DEFAULT('Error deleting folder'),
-                )
-            finally:
-                # Get all subfolders
-                subfolders = await Folders.get_folders_by_parent_id_and_user_id(folder.id, folder_owner_id, db=db)
-                folders.extend(subfolders)
-
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ERROR_MESSAGES.NOT_FOUND,
+        await Automations.clear_folder_ids(folder_owner_id, folder_ids, db=db)
+        # Exactly the folders whose chats were handled above.
+        folder_ids = await Folders.delete_folder_by_id_and_user_id(
+            folder.id, folder_owner_id, db=db, folder_ids=folder_ids
         )
+    except Exception as e:
+        log.exception(e)
+        log.error(f'Error deleting folder: {id}')
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.DEFAULT('Error deleting folder'),
+        )
+
+    await publish_event(
+        request,
+        EVENTS.FOLDER_DELETED,
+        actor=user,
+        subject_id=id,
+        data={'folder_ids': folder_ids, 'delete_contents': delete_contents},
+    )
+    return True

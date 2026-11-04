@@ -68,10 +68,12 @@ export const updateConfig = async (token: string = '', config: object) => {
 	return res;
 };
 
-export const verifyConfigUrl = async (token: string = '') => {
+/** Checks the stored server URL of the generation engine, or (`'edit'`) of the edit engine (#236). */
+export const verifyConfigUrl = async (token: string = '', target: 'generation' | 'edit' = 'generation') => {
 	let error = null;
 
-	const res = await fetch(`${IMAGES_API_BASE_URL}/config/url/verify`, {
+	const query = target === 'edit' ? '?target=edit' : '';
+	const res = await fetch(`${IMAGES_API_BASE_URL}/config/url/verify${query}`, {
 		method: 'GET',
 		headers: {
 			Accept: 'application/json',
