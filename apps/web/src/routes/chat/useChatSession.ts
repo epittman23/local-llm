@@ -118,6 +118,10 @@ export function useChatSession({
 	const [loading, setLoading] = useState(Boolean(routeChatId));
 	const [taskIds, setTaskIds] = useState<string[] | null>(null);
 	const [queue, setQueue] = useState<Queued[]>([]);
+	const queueRef = useRef(queue);
+	queueRef.current = queue;
+	/** The queues of chats left with prompts still waiting, sent when that chat is open again (#218). */
+	const leftQueues = useRef(new Map<string, Queued[]>());
 	const [dialog, setDialogState] = useState<ServerDialog | null>(null);
 	const dialogRef = useRef<ServerDialog | null>(null);
 	const setDialog = useCallback((d: ServerDialog | null) => {
@@ -234,10 +238,15 @@ export function useChatSession({
 	useEffect(() => {
 		if (routeChatId && routeChatId === adoptedRef.current) return;
 		adoptedRef.current = null;
+		// The chat left keeps its queue; the one opened gets its own back (#218).
+		const left = chatIdRef.current;
+		if (left && queueRef.current.length) leftQueues.current.set(left, queueRef.current);
+		const kept = routeChatId ? leftQueues.current.get(routeChatId) : undefined;
+		if (routeChatId) leftQueues.current.delete(routeChatId);
 		chatIdRef.current = routeChatId;
 		// A stop in the chat opened now must not cancel the one left (#151).
 		inFlightRef.current = new Set();
-		setQueue([]);
+		setQueue(kept ?? []);
 		setDialog(null);
 		setTaskIds(null);
 		if (routeChatId) void loadChat(routeChatId);
@@ -595,13 +604,15 @@ export function useChatSession({
 	// When the reply finishes, the next queued prompt goes.
 	const generating = isGenerating(history);
 	useEffect(() => {
-		if (generating || !queue.length) return;
+		// Not before the chat has loaded: a queue given back on returning to a
+		// chat would otherwise go into the history still shown (#218).
+		if (generating || loading || !queue.length) return;
 		const [next, ...rest] = queue;
 		setQueue(rest);
 		// Already taken off the queue, so it must not be refused for the reply
 		// it waited on failing; the prompt and its files were lost (#213).
 		void send(next.prompt, next.files, next.modelId, true);
-	}, [generating, queue, send]);
+	}, [generating, loading, queue, send]);
 
 	const regenerate = useCallback(
 		async (message: Message, suggestionPrompt?: string) => {

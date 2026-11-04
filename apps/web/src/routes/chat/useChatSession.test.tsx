@@ -213,6 +213,29 @@ describe('useChatSession loadChat', () => {
 		expect(session.queue).toHaveLength(0);
 	});
 
+	it('a queued prompt waits while another chat is open, then goes in its own chat (#218)', async () => {
+		const router = await openChatA();
+		writing();
+		act(() => void session.submit('next', [], 'm'));
+		expect(session.queue).toHaveLength(1);
+
+		await act(() => router.navigate('/c/B'));
+		await waitFor(() => expect(pending.B).toBeDefined());
+		await act(async () => pending.B(undefined));
+		await waitFor(() => expect(session.chat?.id).toBe('B'));
+		// Not shown, and not sent, in the chat opened meanwhile.
+		expect(session.queue).toHaveLength(0);
+		expect(asked('next')).toBe(false);
+
+		delete pending.A;
+		await act(() => router.navigate('/c/A'));
+		await waitFor(() => expect(pending.A).toBeDefined());
+		await act(async () => pending.A(undefined));
+		await waitFor(() => expect(session.chat?.id).toBe('A'));
+		await waitFor(() => expect(asked('next')).toBe(true));
+		expect(session.queue).toHaveLength(0);
+	});
+
 	it('with the queue off, sending stops the reply being written first (#212)', async () => {
 		vi.mocked(usersApi.getUserSettings).mockClear();
 		vi.mocked(usersApi.getUserSettings).mockResolvedValue({ ui: { enableMessageQueue: false } } as never);
