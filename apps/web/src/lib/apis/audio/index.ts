@@ -28,7 +28,10 @@ export const getAudioConfig = async (token: string) => {
 	return res;
 };
 
-export const updateAudioConfig = async (token: string, payload: { tts: object; stt: object }) => {
+export const updateAudioConfig = async (
+	token: string,
+	payload: { tts: object; stt: object; LOAD_WHISPER_MODEL?: boolean }
+) => {
 	let error = null;
 
 	const res = await fetch(`${AUDIO_API_BASE_URL}/config/update`, {

@@ -74,6 +74,22 @@ deletes any vectors, and refuses with the reason if not. It still deletes
 each collection before embedding it again, so a file that fails during the
 run (a provider limit, an embedder that stops) loses its vectors; such files
 are named in the result instead of a plain "Success".
+The local Whisper model for speech to text (Admin Settings > Audio, engine
+"Whisper (Local)", default `base`) is a faster-whisper model in
+`WHISPER_MODEL_DIR` (default `apps/server/data/cache/whisper/models`), not
+in the Hugging Face cache, so fetch it there once, from `apps/server`:
+
+```sh
+HF_HUB_OFFLINE=0 .venv/bin/hf download Systran/faster-whisper-base --cache-dir data/cache/whisper/models
+```
+
+Each size name maps to a repository in faster-whisper's `_MODELS` list
+(`faster_whisper/utils.py`); `small` is `Systran/faster-whisper-small`. An
+Audio save loads the model only when the
+local engine is chosen, its model changes, or the model field's "Update
+model" button is used; a model that cannot load refuses the save with an
+error naming it, and nothing is saved. Otherwise it loads on the first
+transcription.
 Fetch a model once with the backend's own `hf`, outside `make backend`:
 
 ```sh
