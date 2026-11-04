@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { isLastActiveTab } from '@/lib/utils/lastActiveTab';
-import { useChannelUnreadEvents } from './useChannels';
+import { CHANNELS_KEY, useChannelUnreadEvents } from './useChannels';
 
 // #254: only the tab looked at last plays the sound and shows the desktop
 // notification for a channel message; every tab still shows its own toast.
@@ -72,5 +72,26 @@ describe('useChannelUnreadEvents (#254)', () => {
 		expect(toast).toHaveBeenCalledWith('Ben (#general)', expect.anything());
 		expect(audio).not.toHaveBeenCalled();
 		expect(notification).not.toHaveBeenCalled();
+	});
+
+	it('neither announces nor counts a thread reply (#255)', () => {
+		vi.mocked(isLastActiveTab).mockReturnValue(true);
+		const client = new QueryClient();
+		client.setQueryData(CHANNELS_KEY, [{ id: 'c1', name: 'general', type: 'group', unread_count: 0 }]);
+		renderHook(() => useChannelUnreadEvents(), {
+			wrapper: ({ children }: { children: ReactNode }) => (
+				<QueryClientProvider client={client}>
+					<MemoryRouter>{children}</MemoryRouter>
+				</QueryClientProvider>
+			)
+		});
+		handlers.get('events:channel')?.({
+			...message,
+			data: { type: 'message', data: { ...message.data.data, parent_id: 'm1' } }
+		});
+		expect(toast).not.toHaveBeenCalled();
+		expect(audio).not.toHaveBeenCalled();
+		expect(notification).not.toHaveBeenCalled();
+		expect(client.getQueryData<{ unread_count: number }[]>(CHANNELS_KEY)?.[0].unread_count).toBe(0);
 	});
 });

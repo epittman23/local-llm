@@ -14,6 +14,7 @@ import {
 	type Channel,
 	type ChannelEvent,
 	applyUnreadEvent,
+	isThreadReply,
 	markRead,
 	mentionsToText,
 	sortChannels
@@ -130,7 +131,8 @@ export function useChannelUnreadEvents() {
 			if (next) queryClient.setQueryData(CHANNELS_KEY, next);
 			else queryClient.invalidateQueries({ queryKey: CHANNELS_KEY });
 
-			if (type !== 'message') return;
+			// Not announced either: the thread shows its replies, and the badge does not count them (#255).
+			if (type !== 'message' || isThreadReply(event)) return;
 			const data = event.data?.data ?? {};
 			const title = `${data.user?.name ?? 'Someone'}${event.channel?.type !== 'dm' && event.channel?.name ? ` (#${event.channel.name})` : ''}`;
 			const body = mentionsToText(String(data.content ?? ''));
