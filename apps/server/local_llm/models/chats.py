@@ -625,12 +625,14 @@ class ChatTable:
     @staticmethod
     def _normalise_imported_tags(form_data: ChatImportForm) -> list[str]:
         """Store an imported chat's tags as tag ids, as a tag write does, and
-        return their names, so their rows can be created (#531). A file's
-        `meta.tags` that is not a list of names is left as it is."""
+        return their names, so their rows can be created (#531). Only names
+        are kept: a `meta.tags` that is not a list is stored as no tags, and
+        an item that is not a name is dropped, since everything that reads
+        the tags expects a list of ids."""
         meta = form_data.meta or {}
-        tags = meta.get('tags')
-        if not isinstance(tags, list):
+        if 'tags' not in meta:
             return []
+        tags = meta['tags'] if isinstance(meta['tags'], list) else []
         names = [t for t in tags if isinstance(t, str) and t.strip() and t.replace(' ', '_').lower() != 'none']
         form_data.meta = {**meta, 'tags': list(dict.fromkeys(t.replace(' ', '_').lower() for t in names))}
         return names
