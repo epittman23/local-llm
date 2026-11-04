@@ -1937,7 +1937,7 @@ test.describe('settings: Documents', () => {
 		await expect(modal(page).getByLabel('Max Upload Count')).toHaveValue('7');
 	});
 
-	test('hybrid search reveals reranking; an external engine clears the model; BM25 weight is Default until made Custom', async ({
+	test('hybrid search reveals reranking; an external engine clears the model; the BM25 weight shows its default and saves a change (#233)', async ({
 		page
 	}) => {
 		await mockWorkspaceBackend(page);
@@ -1952,8 +1952,7 @@ test.describe('settings: Documents', () => {
 		await expect(r.getByLabel('API Base URL')).toBeVisible();
 		await r.getByLabel('Reranking Engine').selectOption('');
 		await expect(r.getByLabel('Reranking Model')).toHaveValue('BAAI/bge-reranker-v2-m3');
-		await expect(r.getByLabel('BM25 Weight slider')).toHaveCount(0);
-		await r.getByRole('button', { name: 'Default' }).click();
+		await expect(r.getByLabel('BM25 Weight slider')).toHaveValue('0.5');
 		await expect(r.getByLabel('BM25 Weight', { exact: true })).toHaveValue('0.5');
 		await r.getByLabel('BM25 Weight', { exact: true }).fill('0.3');
 		await modal(page).getByRole('button', { name: 'Save' }).click();
@@ -1962,6 +1961,11 @@ test.describe('settings: Documents', () => {
 			ENABLE_RAG_HYBRID_SEARCH: true,
 			HYBRID_BM25_WEIGHT: 0.3
 		});
+		// Reset sends the number, which the server saves; "Default" sent null, which it kept as before.
+		await r.getByRole('button', { name: 'Reset to 0.5' }).click();
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect.poll(() => sent(calls, '/retrieval/config/update').length).toBe(2);
+		expect(sent(calls, '/retrieval/config/update')[1]).toMatchObject({ HYBRID_BM25_WEIGHT: 0.5 });
 	});
 
 	test('chunk settings the splitters cannot use are refused before anything is sent (#235)', async ({ page }) => {
@@ -2500,6 +2504,37 @@ test.describe('settings: Models', () => {
 		});
 	});
 
+	test('hiding a model with no record creates it once, and showing it again updates it (#249)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockModels(page);
+		// Registered after mockModels, so it answers first: a record created here
+		// is listed from then on, as the server would list it.
+		const created: Rec[] = [];
+		await page.route('**/api/v1/models/**', (route) => {
+			const path = new URL(route.request().url()).pathname.replace('/api/v1', '');
+			if (path === '/models/create') created.push(route.request().postDataJSON());
+			if (path === '/models/base') return json(route, [...records(), ...created]);
+			return route.fallback();
+		});
+		await page.goto('/?settings=admin:models');
+		await moreMenu(page, 'mistral', 'Mistral');
+		await page.getByRole('menuitem', { name: 'Hide Model' }).click();
+		await expect(page.getByText('Model mistral is now hidden')).toBeVisible();
+		await moreMenu(page, 'mistral', 'Mistral');
+		await page.getByRole('menuitem', { name: 'Show Model' }).click();
+		await expect(page.getByText('Model mistral is now visible')).toBeVisible();
+		expect(posts(calls, '/models/create').map((b) => b.id)).toEqual(['mistral']);
+		expect(posts(calls, '/models/model/update')).toEqual([
+			expect.objectContaining({ id: 'mistral', meta: expect.objectContaining({ hidden: false }) })
+		]);
+		// The enable switch now toggles the record instead of creating it again.
+		await row(page, 'mistral').getByRole('switch').click();
+		await expect
+			.poll(() => calls.filter((c) => c.path.startsWith('/models/model/toggle')).map((c) => c.path))
+			.toEqual(['/models/model/toggle?id=mistral']);
+		expect(posts(calls, '/models/create')).toHaveLength(1);
+	});
+
 	test('Move Down reorders and enables Save, which sends the new order and nothing else changed', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockModels(page);
@@ -2761,6 +2796,22 @@ test.describe('settings: Models > Manage', () => {
 		await dialog(page).getByRole('button', { name: 'Update All Models' }).click();
 		await expect(page.getByText('All models are up to date')).toBeVisible();
 		expect(calls.filter((c) => c.path.startsWith('/api/pull')).map((c) => c.body.name)).toEqual(['llama3:8b', 'phi3']);
+	});
+
+	test('Ollama: Update All Models says which pulls failed instead of all up to date (#246)', async ({ page }) => {
+		await mockManage(page);
+		// Registered after mockManage, so it answers the pulls instead.
+		await page.route('**/ollama/api/pull**', (route) =>
+			route.fulfill({
+				status: 500,
+				contentType: 'application/json',
+				body: JSON.stringify({ detail: 'Ollama: unreachable' })
+			})
+		);
+		await open(page);
+		await dialog(page).getByRole('button', { name: 'Update All Models' }).click();
+		await expect(page.getByText('Could not update 2 models: llama3:8b, phi3 (Ollama: unreachable)')).toBeVisible();
+		await expect(page.getByText('All models are up to date')).toHaveCount(0);
 	});
 
 	test('Ollama: the experimental GGUF upload stays hidden until asked for', async ({ page }) => {
