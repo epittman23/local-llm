@@ -1,5 +1,5 @@
 // The chat page's model pick, and whether it has been made (#373): until it
-// has, the input stays disabled, as a message sent then was refused with
+// has, a send waits (useHeldSend), as one made then was refused with
 // "Model not selected".
 import { renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';

@@ -25,7 +25,8 @@ import { InputVariablesDialog } from './InputVariablesDialog';
 import { modelImage } from './ModelSelector';
 import type { ChatModel } from './useModels';
 
-export type ChatInputHandle = { focus: () => void; setText: (text: string) => void };
+/** `submit` sends what the box holds now, as Enter would. */
+export type ChatInputHandle = { focus: () => void; setText: (text: string) => void; submit: () => void };
 
 type Prompt = { command: string; content: string; title?: string; name?: string };
 type Suggestion =
@@ -129,7 +130,11 @@ export const ChatInput = forwardRef<
 	const area = useRef<HTMLTextAreaElement>(null);
 	const { settings } = useUserSettings();
 	const ctrlEnter = Boolean((settings as Record<string, unknown> | null)?.ctrlEnterToSend);
-	useImperativeHandle(ref, () => ({ focus: () => area.current?.focus(), setText: (t) => setText(t) }));
+	useImperativeHandle(ref, () => ({
+		focus: () => area.current?.focus(),
+		setText: (t) => setText(t),
+		submit: () => submit()
+	}));
 
 	const command = commandAt(text, cursor);
 	const active = command && `${command.trigger}${command.start}` !== dismissed ? command : null;

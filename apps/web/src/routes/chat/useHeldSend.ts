@@ -6,21 +6,27 @@ type Send = (text: string, files: ChatFile[]) => boolean;
 /**
  * The message box's send, held until the page can send (#373). Sent the moment
  * the box appeared, before the page had chosen its models, a message was
- * refused with "Model not selected". Now it stays in the box and goes as soon
- * as `ready`, and `sent` then clears the box.
+ * refused with "Model not selected". Now a send made then leaves the text in
+ * the box, and once `ready` the box is submitted again by `resubmit`, with
+ * whatever it holds then. Only that a send is waiting is kept, for the chat
+ * `route` it was made in: moving to another chat drops it.
  */
-export function useHeldSend(ready: boolean, send: Send, sent: () => void): Send {
-	const [held, setHeld] = useState<{ text: string; files: ChatFile[] } | null>(null);
-	const latest = useRef({ send, sent });
-	latest.current = { send, sent };
+export function useHeldSend(ready: boolean, route: string, send: Send, resubmit: () => void): Send {
+	const [held, setHeld] = useState<{ route: string; go: boolean } | null>(null);
+	const latest = useRef(resubmit);
+	latest.current = resubmit;
 	useEffect(() => {
-		if (!ready || !held) return;
+		if (!held) return;
+		if (held.route !== route) return setHeld(null);
+		if (!ready) return;
+		// One render more first: the models' default tools and toggles are set as the pick lands.
+		if (!held.go) return setHeld({ route, go: true });
 		setHeld(null);
-		if (latest.current.send(held.text, held.files)) latest.current.sent();
-	}, [ready, held]);
+		latest.current();
+	}, [ready, route, held]);
 	return (text, files) => {
 		if (ready) return send(text, files);
-		setHeld({ text, files });
+		setHeld({ route, go: false });
 		return false;
 	};
 }

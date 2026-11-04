@@ -248,8 +248,9 @@ export function ChatPage() {
 	// A send before the page has chosen its models waits for them, in the box (#373).
 	const heldSend = useHeldSend(
 		modelsChosen,
+		id ?? `new:${folderId ?? ''}`,
 		(text, files) => requestSend(text, files, true),
-		() => input.current?.setText('')
+		() => input.current?.submit()
 	);
 
 	// `?temporary-chat=true` (also the New Temporary Chat shortcut) switches a new chat to temporary.
