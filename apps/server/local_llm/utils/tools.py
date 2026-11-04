@@ -35,6 +35,11 @@ from local_llm.env import (
     ENABLE_PLUGINS,
     FORWARD_SESSION_INFO_HEADER_CHAT_ID,
     FORWARD_SESSION_INFO_HEADER_MESSAGE_ID,
+    FORWARD_USER_INFO_HEADER_JWT,
+    FORWARD_USER_INFO_HEADER_USER_EMAIL,
+    FORWARD_USER_INFO_HEADER_USER_ID,
+    FORWARD_USER_INFO_HEADER_USER_NAME,
+    FORWARD_USER_INFO_HEADER_USER_ROLE,
     REDIS_KEY_PREFIX,
 )
 from local_llm.models.access_grants import AccessGrants
@@ -1180,7 +1185,7 @@ def convert_openapi_to_tool_payload(openapi_spec):
 
                 for param in merged_params.values():
                     param_name = param.get('name')
-                    if not param_name:
+                    if not param_name or _is_reserved_header(param):
                         continue
                     param_schema = param.get('schema', {})
                     description = param_schema.get('description', '')
@@ -1707,8 +1712,38 @@ def _operation_parameters(methods: dict, operation: dict) -> list[dict]:
     return list(merged_params.values())
 
 
-# OpenAPI: a header parameter named one of these "SHALL be ignored".
-_IGNORED_HEADER_PARAMETERS = frozenset({'accept', 'content-type', 'authorization'})
+# Header parameters never taken from the model's arguments, nor offered to it
+# (#190), lowercased. OpenAPI says Accept, Content-Type and Authorization "SHALL
+# be ignored"; the rest frame the request or are headers this app sends itself
+# (identity, session, terminal context), which a call may simply not carry, so
+# "the connection's own value wins" alone would not keep them out.
+_RESERVED_HEADER_PARAMETERS = frozenset(
+    name.lower()
+    for name in (
+        'Accept',
+        'Content-Type',
+        'Authorization',
+        'Host',
+        'Content-Length',
+        'Transfer-Encoding',
+        'Connection',
+        'Cookie',
+        'X-User-Id',
+        'X-Session-Id',
+        TERMINAL_CONTEXT_HEADER,
+        FORWARD_USER_INFO_HEADER_USER_NAME,
+        FORWARD_USER_INFO_HEADER_USER_ID,
+        FORWARD_USER_INFO_HEADER_USER_EMAIL,
+        FORWARD_USER_INFO_HEADER_USER_ROLE,
+        FORWARD_USER_INFO_HEADER_JWT,
+        FORWARD_SESSION_INFO_HEADER_CHAT_ID,
+        FORWARD_SESSION_INFO_HEADER_MESSAGE_ID,
+    )
+)
+
+
+def _is_reserved_header(param: dict) -> bool:
+    return param.get('in') == 'header' and str(param.get('name', '')).lower() in _RESERVED_HEADER_PARAMETERS
 
 
 class _RoutedParams(NamedTuple):
@@ -1719,9 +1754,15 @@ class _RoutedParams(NamedTuple):
 
 
 def _parameter_text(value: Any) -> str:
-    """A header or cookie value as text: OpenAPI's default "simple" style, so an array joins with commas."""
+    """A header or cookie value as text, in OpenAPI's default "simple" style.
+
+    An array joins its values with commas, skipping nulls; an object joins its
+    keys and values the same way (`{'a': 1, 'b': 2}` is `a,1,b,2`).
+    """
+    if isinstance(value, dict):
+        value = [part for key, item in value.items() if item is not None for part in (key, item)]
     if isinstance(value, list | tuple):
-        return ','.join(_parameter_text(item) for item in value)
+        return ','.join(_parameter_text(item) for item in value if item is not None)
     if isinstance(value, bool):
         return 'true' if value else 'false'
     return str(value)
@@ -1745,7 +1786,7 @@ def _route_params(parameters: list[dict], params: dict) -> _RoutedParams:
             continue
         if param_in == 'query':
             routed.query[param_name] = value
-        elif param_in == 'header' and param_name.lower() not in _IGNORED_HEADER_PARAMETERS:
+        elif param_in == 'header' and not _is_reserved_header(param):
             routed.header[param_name] = _parameter_text(value)
         elif param_in == 'cookie':
             routed.cookie[param_name] = _parameter_text(value)

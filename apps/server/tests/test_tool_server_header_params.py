@@ -9,9 +9,12 @@ cookie parameters as cookies.
 
 The connection's own headers and cookies (its auth, mostly) are not
 replaced by a value the model gives: where both name the same header or
-cookie, the connection's wins. And the three header names OpenAPI says a
-parameter definition must ignore (Accept, Content-Type, Authorization) are
-never sent from the model's arguments.
+cookie, the connection's wins. Some headers are never taken from the
+model's arguments, nor offered to it in the tool's parameters: the three
+OpenAPI says a parameter definition must ignore (Accept, Content-Type,
+Authorization), those that frame the request (Host, Content-Length, ...), and
+those this app sends itself (the user and session headers), which a call may
+not carry, so "the connection's wins" alone would not keep them out.
 
 Run from apps/server:
 
@@ -129,8 +132,30 @@ def test_the_connections_own_header_and_cookie_win(monkeypatch):
     assert request['cookies'] == {'session': 'configured'}
 
 
-@pytest.mark.parametrize('name', ['Authorization', 'accept', 'Content-Type'])
-def test_a_header_openapi_ignores_is_not_sent(monkeypatch, name):
+RESERVED = [
+    'Authorization',
+    'accept',
+    'Content-Type',
+    'Host',
+    'content-length',
+    'Transfer-Encoding',
+    'Connection',
+    'Cookie',
+    'X-User-Id',
+    'x-session-id',
+    'X-Terminal-Context-Id',
+    'x-lllm-user-id',
+    'X-LLLM-User-Name',
+    'X-LLLM-User-Email',
+    'X-LLLM-User-Role',
+    'X-LLLM-User-Jwt',
+    'X-LLLM-Chat-Id',
+    'X-LLLM-Message-Id',
+]
+
+
+@pytest.mark.parametrize('name', RESERVED)
+def test_a_reserved_header_is_not_sent(monkeypatch, name):
     request = _call(monkeypatch, [{'name': name, 'in': 'header'}], {name: 'from-model'})
 
     assert request['headers'] == {}
@@ -141,3 +166,33 @@ def test_the_connections_headers_are_not_changed_in_place(monkeypatch):
     _call(monkeypatch, [VERSION], {'X-Api-Version': '2'}, headers=headers)
 
     assert headers == {'Authorization': 'Bearer k'}
+
+
+def test_object_and_null_values_are_written_in_the_simple_style(monkeypatch):
+    parameters = [{'name': 'X-Filter', 'in': 'header'}, {'name': 'X-Tags', 'in': 'header'}]
+    request = _call(monkeypatch, parameters, {'X-Filter': {'a': 1, 'b': None, 'c': 'x'}, 'X-Tags': ['a', None, 'b']})
+
+    assert request['headers'] == {'X-Filter': 'a,1,c,x', 'X-Tags': 'a,b'}
+
+
+def test_the_tool_offers_header_parameters_but_not_reserved_ones():
+    parameters = [
+        VERSION,
+        {'name': 'Authorization', 'in': 'header', 'required': True, 'schema': {'type': 'string'}},
+        {'name': 'x-lllm-user-id', 'in': 'header', 'schema': {'type': 'string'}},
+        SESSION,
+        QUERY,
+    ]
+    (tool,) = tools.convert_openapi_to_tool_payload(_server(parameters)['openapi'])
+
+    assert set(tool['parameters']['properties']) == {'X-Api-Version', 'session', 'q'}
+    assert tool['parameters']['required'] == ['X-Api-Version']
+
+
+def test_a_query_parameter_named_like_a_reserved_header_is_still_offered_and_sent(monkeypatch):
+    parameters = [{'name': 'host', 'in': 'query', 'schema': {'type': 'string'}}]
+    (tool,) = tools.convert_openapi_to_tool_payload(_server(parameters)['openapi'])
+    request = _call(monkeypatch, parameters, {'host': 'a.example'})
+
+    assert set(tool['parameters']['properties']) == {'host'}
+    assert request['url'] == 'https://items.test/items?host=a.example'
