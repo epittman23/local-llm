@@ -226,6 +226,22 @@ describe('Account tab: the API key (#526)', () => {
 		expect(screen.queryByText(/could not be loaded/)).toBeNull();
 	});
 
+	it('cannot be clicked again while it is loading the key', async () => {
+		let answer: (key: string) => void = () => undefined;
+		vi.mocked(auths.getAPIKey)
+			.mockRejectedValueOnce('Internal Server Error')
+			.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)));
+		render(<Account />);
+		const retry = await screen.findByRole('button', { name: 'Try again' });
+		fireEvent.click(retry);
+
+		await waitFor(() => expect(retry).toBeDisabled());
+		fireEvent.click(retry);
+		expect(auths.getAPIKey).toHaveBeenCalledTimes(2);
+		answer('sk-1');
+		expect(await screen.findByDisplayValue('sk-1')).toBeInTheDocument();
+	});
+
 	it('offers to create a key when there is none', async () => {
 		vi.mocked(auths.getAPIKey).mockResolvedValueOnce(null);
 		render(<Account />);

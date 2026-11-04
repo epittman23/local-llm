@@ -12,6 +12,7 @@ import {
 	updateUserPassword,
 	updateUserProfile
 } from '@/lib/apis/auths';
+import { errorMessage } from '@/lib/apis/errors';
 import { getUserVariables, updateUserVariables } from '@/lib/apis/users';
 import { signOut } from '@/lib/auth/session';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -81,6 +82,7 @@ export default function Account() {
 	// Why the key did not load. Only a 404 means there is none; on any other
 	// failure the tab must not offer to create one, which would replace it (#526).
 	const [apiKeyError, setApiKeyError] = useState<string | null>(null);
+	const [retryingKey, setRetryingKey] = useState(false);
 	const [confirmDeleteKey, setConfirmDeleteKey] = useState(false);
 	const fileRef = useRef<HTMLInputElement>(null);
 	const perms = user?.permissions as { features?: { api_keys?: boolean } } | undefined;
@@ -96,7 +98,7 @@ export default function Account() {
 				setApiKey(key ?? '');
 				setApiKeyError(null);
 			} catch (e) {
-				if (live()) setApiKeyError(`${e}`);
+				if (live()) setApiKeyError(errorMessage(e));
 			}
 		},
 		[token]
@@ -396,7 +398,16 @@ export default function Account() {
 							{apiKeyError ? (
 								<div className="flex flex-wrap items-center gap-2 text-xs">
 									<span className="text-destructive">{`The API key could not be loaded: ${apiKeyError}`}</span>
-									<Button type="button" size="sm" variant="outline" onClick={() => void loadAPIKey()}>
+									<Button
+										type="button"
+										size="sm"
+										variant="outline"
+										disabled={retryingKey}
+										onClick={() => {
+											setRetryingKey(true);
+											void loadAPIKey().finally(() => setRetryingKey(false));
+										}}
+									>
 										Try again
 									</Button>
 								</div>
