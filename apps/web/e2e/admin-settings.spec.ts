@@ -2523,6 +2523,12 @@ test.describe('settings: Models', () => {
 		expect(posts(calls, '/models/model/update')).toEqual([
 			expect.objectContaining({ id: 'mistral', meta: expect.objectContaining({ hidden: false }) })
 		]);
+		// The enable switch now toggles the record instead of creating it again.
+		await row(page, 'mistral').getByRole('switch').click();
+		await expect
+			.poll(() => calls.filter((c) => c.path.startsWith('/models/model/toggle')).map((c) => c.path))
+			.toEqual(['/models/model/toggle?id=mistral']);
+		expect(posts(calls, '/models/create')).toHaveLength(1);
 	});
 
 	test('Move Down reorders and enables Save, which sends the new order and nothing else changed', async ({ page }) => {
