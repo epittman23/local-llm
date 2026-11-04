@@ -207,10 +207,16 @@ def _compute_similarities(feedbacks: list[LeaderboardFeedbackData], query: str) 
     similarities = np.dot(tag_embeddings, query_embedding) / (tag_norms * query_norm + 1e-9)
     tag_similarity_map = dict(zip(all_tags, similarities.tolist(), strict=True))
 
+    # Cosine similarity runs from -1 to 1; below 0 a tag points away from the
+    # query, which is no relevance, not negative relevance. A negative weight
+    # reversed the result, so the winner lost points (#204).
     return {
         feedback.id: max(
-            (tag_similarity_map.get(tag, 0) for tag in _tags(feedback.data)),
-            default=0,
+            0.0,
+            max(
+                (tag_similarity_map.get(tag, 0) for tag in _tags(feedback.data)),
+                default=0,
+            ),
         )
         for feedback in feedbacks
     }

@@ -492,8 +492,11 @@ async def get_filtered_models(models, user, db=None):
         for model in models:
             if model.get('arena'):
                 continue
+            # A workspace row's info is that row, carrying its id. Default model
+            # metadata gives an unconfigured model info too, but no id, so it
+            # stays unconfigured: visible to admins only (#272).
             info = model.get('info')
-            if info:
+            if isinstance(info, dict) and info.get('id') == model['id']:
                 model_infos[model['id']] = info
 
         user_group_ids = {group.id for group in await Groups.get_groups_by_member_id(user.id, db=db)}
