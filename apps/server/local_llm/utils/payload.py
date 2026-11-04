@@ -1,4 +1,5 @@
 import logging
+import re
 from collections.abc import Callable
 
 from local_llm.utils.chat_variables import render_chat_variables, render_user_variables
@@ -63,6 +64,26 @@ async def apply_system_prompt_to_body(
         form_data['messages'] = add_or_update_system_message(system, form_data.get('messages', []))
 
     return form_data
+
+
+# An escape sequence as typed in a model's settings: `\n`, `\t`, `\\`, `\x41`, `\u00e9`, ...
+_ESCAPE_SEQUENCE = re.compile(r'\\(?:[\\\'"abfnrtv]|[0-7]{1,3}|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})')
+
+
+def stop_sequences(value) -> list:
+    """A model's stop sequences, with escapes typed as text turned into the characters they name.
+
+    Only the escape sequences are decoded, so other text, non-ASCII included,
+    is kept as it is; a single string is one stop sequence, not one per
+    character (#271).
+    """
+    stops = [value] if isinstance(value, str) else list(value)
+    return [
+        _ESCAPE_SEQUENCE.sub(lambda m: m.group(0).encode('ascii').decode('unicode_escape'), stop)
+        if isinstance(stop, str)
+        else stop
+        for stop in stops
+    ]
 
 
 # inplace function: form_data is modified
@@ -188,7 +209,7 @@ def apply_model_params_to_body_openai(params: dict, form_data: dict) -> dict:
         'presence_penalty': float,
         'reasoning_effort': str,
         'seed': lambda x: x,
-        'stop': lambda x: [bytes(s, 'utf-8').decode('unicode_escape') for s in x],
+        'stop': stop_sequences,
         'logit_bias': lambda x: x,
         'response_format': dict,
     }
@@ -242,7 +263,7 @@ def apply_model_params_to_body_ollama(params: dict, form_data: dict) -> dict:
         'repeat_penalty': float,
         'presence_penalty': float,
         'frequency_penalty': float,
-        'stop': lambda x: [bytes(s, 'utf-8').decode('unicode_escape') for s in x],
+        'stop': stop_sequences,
         'num_gpu': int,
         'use_mmap': bool,
         'use_mlock': bool,
