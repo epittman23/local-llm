@@ -2634,11 +2634,18 @@ class ChatTable:
         if not file_ids:
             return None
 
-        chat_message_file_ids = {
-            item.id for item in await self.get_chat_files_by_chat_id_and_message_id(chat_id, message_id, db=db)
-        }
-        # Remove duplicates and existing file_ids
-        file_ids = list({file_id for file_id in file_ids if file_id and file_id not in chat_message_file_ids})
+        # Each file once, and none already linked to this chat (by any message): a
+        # chat links a file once, and one already linked broke the whole batch, so
+        # the new files in it were never linked (#293).
+        file_ids = list(dict.fromkeys(file_id for file_id in file_ids if file_id))
+        if not file_ids:
+            return None
+        async with get_async_db_context(db) as session:
+            result = await session.execute(
+                select(ChatFile.file_id).filter(ChatFile.chat_id == chat_id, ChatFile.file_id.in_(file_ids))
+            )
+            linked = set(result.scalars().all())
+        file_ids = [file_id for file_id in file_ids if file_id not in linked]
         if not file_ids:
             return None
 
