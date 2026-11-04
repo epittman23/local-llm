@@ -79,6 +79,17 @@ async def delete_file_resource(file: FileModel, db: AsyncSession) -> bool:
     return result
 
 
+async def _linked_elsewhere(file_id: str, knowledge_id: str, db: AsyncSession) -> bool:
+    """Whether a knowledge base other than knowledge_id still links the file.
+
+    Removing a file from one knowledge base, or resetting it, deletes the file
+    itself only when no other base links it: deleting it would drop the other
+    base's link while its collection kept the chunks (#313).
+    """
+    linked = await Knowledges.get_knowledge_ids_by_file_id(file_id, db=db)
+    return any(other != knowledge_id for other in linked)
+
+
 ############################
 # Knowledge Base Embedding
 ############################
@@ -1126,6 +1137,11 @@ class KnowledgeFilesResponse(KnowledgeResponse):
     write_access: bool | None = False
 
 
+class KnowledgeFilesBatchResponse(KnowledgeFilesResponse):
+    # Files of a batch add that failed to process; None when every file was added.
+    warnings: dict | None = None
+
+
 @router.get('/{id}', response_model=KnowledgeFilesResponse | None)
 async def get_knowledge_by_id(id: str, user=Depends(get_verified_user), db: AsyncSession = Depends(get_async_session)):
     knowledge = await Knowledges.get_knowledge_by_id(id=id, db=db)
@@ -1452,6 +1468,20 @@ class KnowledgeFileIdForm(BaseModel):
     directory_id: str | None = None
 
 
+async def _drop_unlinked_chunks(knowledge_id: str, file_id: str, db: AsyncSession) -> None:
+    """Delete a file's chunks from a knowledge base it could not be linked to.
+
+    Only when the file is not in the base after all: another request may have
+    linked it meanwhile, and its chunks carry the same file id.
+    """
+    if await Knowledges.has_file(knowledge_id=knowledge_id, file_id=file_id, db=db):
+        return
+    try:
+        await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=knowledge_id, filter={'file_id': file_id})
+    except Exception as e:
+        log.warning('Could not delete the chunks of unlinked file %s from knowledge %s: %s', file_id, knowledge_id, e)
+
+
 @router.post('/{id}/file/add', response_model=KnowledgeFilesResponse | None)
 async def add_file_to_knowledge_by_id(
     request: Request,
@@ -1511,6 +1541,14 @@ async def add_file_to_knowledge_by_id(
     # used to fail the link silently after the file was embedded.
     await _require_directory_in(id, form_data.directory_id, db)
 
+    # A file already in this base would be embedded into its collection a
+    # second time, and its second link fail unreported (#314).
+    if await Knowledges.has_file(knowledge_id=id, file_id=form_data.file_id, db=db):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.FILE_ALREADY_IN_KNOWLEDGE,
+        )
+
     # Add content to the vector database
     try:
         await process_file(
@@ -1521,13 +1559,19 @@ async def add_file_to_knowledge_by_id(
         )
 
         # Add file to knowledge base
-        await Knowledges.add_file_to_knowledge_by_id(
+        linked = await Knowledges.add_file_to_knowledge_by_id(
             knowledge_id=id,
             file_id=form_data.file_id,
             user_id=user.id,
             directory_id=form_data.directory_id,
             db=db,
         )
+        if linked is None:
+            # The insert failed (it reports that as None): the chunks just
+            # embedded would stay in the collection with no file listed to
+            # remove them by, and a retry would embed them again.
+            await _drop_unlinked_chunks(id, form_data.file_id, db)
+            raise Exception(ERROR_MESSAGES.FILE_NOT_ADDED_TO_KNOWLEDGE)
     except Exception as e:
         log.debug(e)
         raise HTTPException(
@@ -1697,6 +1741,15 @@ async def remove_file_from_knowledge_by_id(
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
+    # Anyone with write permission or higher can delete files, unless another
+    # knowledge base still uses the file. Decided before anything changes, so a
+    # failed lookup leaves the file in this base, where removing it can be retried.
+    delete_it = (
+        delete_file
+        and (file.user_id == user.id or user.role == 'admin')
+        and not await _linked_elsewhere(file.id, knowledge.id, db)
+    )
+
     await Knowledges.remove_file_from_knowledge_by_id(knowledge_id=id, file_id=form_data.file_id, db=db)
 
     # Remove content from the vector database
@@ -1713,8 +1766,7 @@ async def remove_file_from_knowledge_by_id(
         log.debug(e)
         pass
 
-    # Anyone with write permission or higher can delete files
-    if delete_file and (file.user_id == user.id or user.role == 'admin'):
+    if delete_it:
         await delete_file_resource(file, db)
 
     if knowledge:
@@ -1874,7 +1926,7 @@ async def reset_knowledge_by_id(
         pass
 
     for file in files:
-        if file.user_id == user.id or user.role == 'admin':
+        if (file.user_id == user.id or user.role == 'admin') and not await _linked_elsewhere(file.id, id, db):
             await delete_file_resource(file, db)
 
     knowledge = await Knowledges.reset_knowledge_by_id(id=id, include_directories=include_directories, db=db)
@@ -2049,6 +2101,14 @@ async def _remove_files_from_knowledge(knowledge_id: str, file_ids: list[str], u
         if not await Knowledges.has_file(knowledge_id, file_id, db=db):
             continue
 
+        # Decided before anything changes, so a failed lookup leaves the file
+        # listed here, where the removal can be retried.
+        delete_it = (
+            not ENABLE_KNOWLEDGE_FILE_RETENTION
+            and (file.user_id == user.id or user.role == 'admin')
+            and not await _linked_elsewhere(file_id, knowledge_id, db)
+        )
+
         # Chunks first: if they cannot be deleted, the link stays, so the file
         # is still listed and the removal can be retried (#195).
         try:
@@ -2061,12 +2121,7 @@ async def _remove_files_from_knowledge(knowledge_id: str, file_ids: list[str], u
 
         await Knowledges.remove_file_from_knowledge_by_id(knowledge_id, file_id, db=db)
 
-        linked_knowledges = await Knowledges.get_knowledges_by_file_id(file_id, db=db)
-        if (
-            not ENABLE_KNOWLEDGE_FILE_RETENTION
-            and not linked_knowledges
-            and (file.user_id == user.id or user.role == 'admin')
-        ):
+        if delete_it:
             await delete_file_resource(file, db)
     return kept
 
@@ -2111,7 +2166,7 @@ async def sync_knowledge_cleanup(
 ############################
 
 
-@router.post('/{id}/files/batch/add', response_model=KnowledgeFilesResponse | None)
+@router.post('/{id}/files/batch/add', response_model=KnowledgeFilesBatchResponse | None)
 async def add_files_to_knowledge_batch(
     request: Request,
     id: str,
@@ -2178,7 +2233,7 @@ async def add_files_to_knowledge_batch(
             new_entries.append(form)
 
     if not new_entries:
-        return KnowledgeFilesResponse(
+        return KnowledgeFilesBatchResponse(
             **knowledge.model_dump(),
             files=await Knowledges.get_file_metadatas_by_id(knowledge.id, db=db),
         )
@@ -2202,19 +2257,22 @@ async def add_files_to_knowledge_batch(
     # Only add files that were successfully processed
     successful_file_ids = [r.file_id for r in result.results if r.status == 'completed']
     dir_map = {form.file_id: form.directory_id for form in new_entries}
+    error_details = [f'{err.file_id}: {err.error}' for err in result.errors]
     for file_id in successful_file_ids:
-        await Knowledges.add_file_to_knowledge_by_id(
+        linked = await Knowledges.add_file_to_knowledge_by_id(
             knowledge_id=id,
             file_id=file_id,
             user_id=user.id,
             directory_id=dir_map.get(file_id),
             db=db,
         )
+        if linked is None:
+            await _drop_unlinked_chunks(id, file_id, db)
+            error_details.append(f'{file_id}: {ERROR_MESSAGES.FILE_NOT_ADDED_TO_KNOWLEDGE}')
 
     # If there were any errors, include them in the response
-    if result.errors:
-        error_details = [f'{err.file_id}: {err.error}' for err in result.errors]
-        return KnowledgeFilesResponse(
+    if error_details:
+        return KnowledgeFilesBatchResponse(
             **knowledge.model_dump(),
             files=await Knowledges.get_file_metadatas_by_id(knowledge.id, db=db),
             warnings={
@@ -2223,7 +2281,7 @@ async def add_files_to_knowledge_batch(
             },
         )
 
-    return KnowledgeFilesResponse(
+    return KnowledgeFilesBatchResponse(
         **knowledge.model_dump(),
         files=await Knowledges.get_file_metadatas_by_id(knowledge.id, db=db),
     )
