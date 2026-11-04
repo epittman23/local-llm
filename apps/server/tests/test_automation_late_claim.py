@@ -68,3 +68,42 @@ def test_next_run_ns_takes_an_unstated_time_from_its_anchor():
     # A rule that states its time keeps it, anchor or not.
     stated = 'RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=30'
     assert next_run_ns(stated, anchor_ns=anchor) == next_run_ns(stated)
+
+
+def _ns(local: dt.datetime, tz: str) -> int:
+    from zoneinfo import ZoneInfo
+
+    return int(local.replace(tzinfo=ZoneInfo(tz)).timestamp() * 1_000_000_000)
+
+
+def test_the_anchor_is_read_in_the_users_zone_and_kept_after_days_down():
+    tz = 'Pacific/Auckland'
+    from zoneinfo import ZoneInfo
+
+    today = dt.datetime.now(ZoneInfo(tz)).replace(tzinfo=None, second=0, microsecond=0)
+    due = _ns((today - dt.timedelta(days=3)).replace(hour=9, minute=17), tz)
+
+    when = dt.datetime.fromtimestamp(next_run_ns('RRULE:FREQ=DAILY', tz=tz, anchor_ns=due) / 1e9, ZoneInfo(tz))
+
+    assert (when.hour, when.minute) == (9, 17)
+
+
+def test_a_rule_that_states_only_its_hour_keeps_its_minute():
+    now = time.time_ns()
+    anchor = now - now % MINUTE_NS - 7 * MINUTE_NS
+    minute = dt.datetime.fromtimestamp(anchor / 1e9).minute
+
+    when = dt.datetime.fromtimestamp(next_run_ns('RRULE:FREQ=DAILY;BYHOUR=9', anchor_ns=anchor) / 1e9)
+
+    assert (when.hour, when.minute) == (9, minute)
+
+
+def test_a_sub_daily_rule_ignores_a_far_anchor_and_stays_on_its_grid():
+    year_ago = time.time_ns() - 365 * 24 * 60 * MINUTE_NS
+
+    started = time.perf_counter()
+    anchored = next_run_ns('RRULE:FREQ=MINUTELY;INTERVAL=5', anchor_ns=year_ago)
+    elapsed = time.perf_counter() - started
+
+    assert anchored == next_run_ns('RRULE:FREQ=MINUTELY;INTERVAL=5')
+    assert elapsed < 0.5

@@ -58,7 +58,7 @@ CALENDAR_ALERT_LOOKAHEAD_MINUTES = int(os.getenv('CALENDAR_ALERT_LOOKAHEAD_MINUT
 ####################
 
 
-def _resolve_tz(tz: str = None) -> ZoneInfo | None:
+def _resolve_tz(tz: str | None = None) -> ZoneInfo | None:
     """Safely resolve a timezone string to ZoneInfo.
 
     Returns None (→ server-local fallback) when *tz* is empty, None,
@@ -177,6 +177,16 @@ def validate_rrule(s: str, tz: str = None) -> None:
         raise ValueError(ERROR_MESSAGES.AUTOMATION_NO_FUTURE_RUNS)
 
 
+def _sub_daily(s: str) -> bool:
+    """Whether the rule repeats more often than daily (SECONDLY, MINUTELY or HOURLY)."""
+    try:
+        parsed = rrulestr(s, ignoretz=True)
+    except Exception:
+        return False
+    rules = parsed._rrule if isinstance(parsed, rruleset) else [parsed]
+    return bool(rules) and rules[0]._freq in (SECONDLY, MINUTELY, HOURLY)
+
+
 def next_run_ns(s: str, tz: str | None = None, anchor_ns: int | None = None) -> int | None:
     """Next occurrence as epoch nanoseconds, respecting user timezone.
 
@@ -188,11 +198,12 @@ def next_run_ns(s: str, tz: str | None = None, anchor_ns: int | None = None) -> 
     zi = _resolve_tz(tz)
     now = dt.datetime.now(zi) if zi else dt.datetime.now()
     now_naive = now.replace(tzinfo=None)
-    anchor = (
-        dt.datetime.fromtimestamp(anchor_ns / 1_000_000_000, tz=zi).replace(tzinfo=None)
-        if anchor_ns is not None
-        else now_naive
-    )
+    anchor = now_naive
+    # Only a daily or longer rule takes anything from its anchor; a shorter one
+    # is aligned to its own grid, and anchoring it far back only made the walk
+    # to now longer.
+    if anchor_ns is not None and not _sub_daily(s):
+        anchor = dt.datetime.fromtimestamp(anchor_ns / 1_000_000_000, tz=zi).replace(tzinfo=None)
     when = _parse_rule(s, anchor).after(now_naive)
     if when is None:
         return None
