@@ -95,7 +95,9 @@ base commit.
 - **Excluded from measurement.** Coverage does not measure:
   - applied migrations, which run in subprocesses coverage doesn't follow;
   - shadcn/ui's generated components;
-  - the desktop app, whose Electron glue Vitest can't run.
+  - the desktop app, whose diff coverage CI does not check (most of
+    `main.ts` runs only inside Electron; its stop paths are tested against a
+    fake Electron).
 - **No ignore comments.** A `# pragma: no cover` or `v8 ignore` comment
   trips the PR gate. Write the test instead.
 
@@ -261,7 +263,10 @@ Run these from `apps/desktop/`:
   sequence (`stack.ts`, with the process calls faked), and the progress
   dialog (`progress.ts`). The dialog's tests replay logs captured from real
   `make backend` runs (`test/fixtures/`, whose README says which one is not
-  captured).
+  captured). `main.stop.test.ts` loads `main.ts` against a fake Electron and
+  covers its stop: a Cancel during startup, a quit while the window loads,
+  Retry during a stop, the "Leave it" offer, and services left after a
+  stop.
 - `bun run typecheck`, and `bun run lint` / `bun run format` (Biome; the
   pre-commit hook lints this app too, not only formats it).
 - `bun run package:dir`: the unpacked package CI builds.
