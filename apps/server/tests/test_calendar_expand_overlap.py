@@ -87,6 +87,15 @@ def test_an_all_day_occurrence_ends_at_the_next_midnight_across_a_dst_change():
     assert [(i['start_at'], i['end_at']) for i in spring] == [(_ns('2026-03-29 00:00'), _ns('2026-03-30 00:00'))]
 
 
+def test_an_all_day_occurrence_saved_as_the_web_form_saves_it_stays_on_its_day():
+    """The form saves an all-day event as 00:00 to 23:59; across spring-forward its end landed at 00:59 the next day."""
+    day = _all_day('2026-03-20 00:00', '2026-03-20 23:59', 'FREQ=DAILY')
+
+    got = expand_recurring_event(day, _ns('2026-03-29 00:00'), _ns('2026-03-30 00:00'), tz=TZ)
+
+    assert [(i['start_at'], i['end_at']) for i in got] == [(_ns('2026-03-29 00:00'), _ns('2026-03-29 23:59'))]
+
+
 def test_a_timed_occurrence_keeps_its_exact_length_across_a_dst_change():
     meeting = _event('2026-10-20 09:00', '2026-10-20 10:00', 'FREQ=DAILY')
 
