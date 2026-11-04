@@ -2,9 +2,10 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from local_llm.config import (
+    AUTOCOMPLETE_GENERATION_INPUT_MAX_LENGTH,
     DEFAULT_AUTOCOMPLETE_GENERATION_PROMPT_TEMPLATE,
     DEFAULT_EMOJI_GENERATION_PROMPT_TEMPLATE,
     DEFAULT_FOLLOW_UP_GENERATION_PROMPT_TEMPLATE,
@@ -128,6 +129,13 @@ class TaskConfigForm(BaseModel):
     TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE: str
     ENABLE_VOICE_MODE_PROMPT: bool
     VOICE_MODE_PROMPT_TEMPLATE: str | None
+
+    @field_validator('AUTOCOMPLETE_GENERATION_INPUT_MAX_LENGTH', mode='before')
+    @classmethod
+    def _cleared_is_default(cls, value):
+        # The Interface tab sends a cleared number as null; it means the
+        # default, not a failed save (#248).
+        return AUTOCOMPLETE_GENERATION_INPUT_MAX_LENGTH if value is None else value
 
 
 @router.post('/config/update')

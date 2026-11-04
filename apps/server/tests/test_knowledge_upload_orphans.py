@@ -103,7 +103,7 @@ def test_a_failed_base_step_marks_the_file_failed_and_schedules_its_discard(monk
     async def config_get(key, default=None):
         return default
 
-    async def process_file(request, form, user=None, db=None):
+    async def process_file_for(request, form, user=None, db=None, **_options):
         if form.collection_name:
             raise RuntimeError('Duplicate content detected')
 
@@ -118,7 +118,7 @@ def test_a_failed_base_step_marks_the_file_failed_and_schedules_its_discard(monk
         coroutine.close()
 
     monkeypatch.setattr(files_router.Config, 'get', config_get)
-    monkeypatch.setattr(files_router, 'process_file', process_file)
+    monkeypatch.setattr(files_router, 'process_file_for', process_file_for)
     monkeypatch.setattr(files_router.Knowledges, 'get_knowledge_by_id', knowledge)
     monkeypatch.setattr(files_router.Files, 'update_file_data_by_id', update_data)
     monkeypatch.setattr(files_router, 'run_in_background', run_in_background)

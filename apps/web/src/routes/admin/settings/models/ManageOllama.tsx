@@ -18,6 +18,8 @@ import {
 	parseStreamLines,
 	progressPercent,
 	streamError,
+	updateModels,
+	updateSummary,
 	uploadedModelfile
 } from './ollamaStreams';
 
@@ -149,38 +151,23 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 	const updateAll = async () => {
 		updateCancelled.current = false;
 		toast.info('Checking for model updates...');
-		for (const model of models ?? []) {
-			if (updateCancelled.current) break;
-			setUpdateModelId(model.id);
-			let pulled: [Response | null, AbortController | null] = [null, null];
-			try {
-				pulled = (await pullModel(token, model.id, urlIdx)) as [Response | null, AbortController | null];
-			} catch (error) {
-				if ((error as Error)?.name !== 'AbortError') toast.error(`${error}`);
-			}
-			const [res, controller] = pulled;
-			controllers.current[model.id] = controller;
-			if (res) {
-				const reader = lineReader(res);
-				try {
-					for (;;) {
-						const { value, done } = await reader.read();
-						if (done) break;
-						for (const data of parseStreamLines(value)) {
-							const failure = streamError(data);
-							if (failure) throw failure;
-							if (data.status && data.digest) setUpdateProgress(progressPercent(data));
-						}
-					}
-				} catch (err) {
-					if ((err as Error)?.name !== 'AbortError') console.error(err);
+		const outcome = await updateModels(
+			(models ?? []).map((model) => model.id),
+			{
+				pull: (id) => pullModel(token, id, urlIdx) as Promise<[Response | null, AbortController | null]>,
+				isCancelled: () => updateCancelled.current,
+				onModel: setUpdateModelId,
+				onController: (id, controller) => {
+					controllers.current[id] = controller;
+				},
+				onProgress: setUpdateProgress,
+				onDone: (id) => {
+					delete controllers.current[id];
 				}
 			}
-			delete controllers.current[model.id];
-		}
-		toast[updateCancelled.current ? 'info' : 'success'](
-			updateCancelled.current ? 'Model update cancelled' : 'All models are up to date'
 		);
+		const [kind, message] = updateSummary(outcome);
+		toast[kind](message);
 		setUpdateModelId(null);
 		setUpdateProgress(null);
 	};
