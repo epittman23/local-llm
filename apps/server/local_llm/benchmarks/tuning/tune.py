@@ -55,9 +55,13 @@ refine has no neighbourhood to descend into.
 
 Defaults that cannot run end the sweep (added 2026-11-04, #139): with no
 baseline items to pair with, every candidate would read as thin and be kept
-for good, so the round stops at the baseline's failure and the verdict is
+for good. So once the baseline's visit fails before it has produced any data,
+the round stops visiting (the rotation can put it last in a round, so others
+may already have run), closes with no survivors, and the verdict is
 `indeterminate`, naming why the defaults could not run
-(`Sweep.verdict_for()`).
+(`Sweep.verdict_for()`). A resumed sweep in that state visits nobody. A
+baseline that fails only after an earlier round measured it is visited
+again next round, as before.
 
 Adoption is deliberately manual: `sweep_report()`'s `adoption` field is the
 override diff for a human to review, and nothing in this module writes
@@ -1148,6 +1152,9 @@ class Sweep:
         await BenchmarkTuneRounds.open_round(
             self.sweep_id, rnd, stage=stage, item_from=lo, item_to=hi, survivors=len(alive)
         )
+        if self.baseline_unusable():
+            # A resume of a sweep whose defaults already failed: visit nobody.
+            return await self.end_for_baseline(rnd)
         # A visit only counts as "handled" here if it either landed data
         # that counts toward the round or is permanently infeasible. A
         # drift- or crash-discarded visit (status 'done' with
@@ -1186,7 +1193,7 @@ class Sweep:
             self.visits += 1
             next_attempt[cand.sha] = attempt + 1
             if outcome['status'] == 'infeasible':
-                if cand.baseline:
+                if cand.baseline and self.baseline_unusable():
                     # Nothing can be paired with defaults that do not run (#139).
                     break
                 continue
@@ -1217,20 +1224,8 @@ class Sweep:
                     cut_short = True
                     break
 
-        if self.baseline is not None and self.baseline.status == 'infeasible':
-            # Every candidate is scored on items paired with the baseline; with
-            # none, all of them would read as thin and be kept round after
-            # round, so the sweep ends here and the verdict says why (#139).
-            self.ended_reason = 'baseline'
-            await BenchmarkTuneRounds.close_round(
-                self.sweep_id,
-                rnd,
-                baseline_gen_tps=None,
-                drift_ratio=None,
-                decision=f'stopped: the baseline could not run ({self.baseline.reason})'[:400],
-                survivors=0,
-            )
-            return []
+        if self.baseline_unusable():
+            return await self.end_for_baseline(rnd)
 
         if cut_short:
             # Leave the round open (no close_round) and nobody eliminated: a
@@ -1266,6 +1261,34 @@ class Sweep:
             survivors=len(survivors),
         )
         return survivors
+
+    def baseline_unusable(self) -> bool:
+        """The defaults failed to run and never produced data to pair with (#139).
+
+        A baseline that measured in an earlier round and then fails (another
+        process holding VRAM, a slow disk) is not this: it is visited again in
+        the next round, as before, since its earlier rounds still pair.
+        """
+        return self.baseline is not None and self.baseline.status == 'infeasible' and self.baseline_tps is None
+
+    async def end_for_baseline(self, rnd: int) -> list[Candidate]:
+        """Closes the round with no survivors and ends the sweep for an unusable baseline.
+
+        Every candidate is scored on items paired with the baseline; with none,
+        all of them would read as thin and be kept round after round, so the
+        sweep ends and the verdict says why.
+        """
+        self.ended_reason = 'baseline'
+        why = self.baseline.reason if self.baseline else ''
+        await BenchmarkTuneRounds.close_round(
+            self.sweep_id,
+            rnd,
+            baseline_gen_tps=None,
+            drift_ratio=None,
+            decision=f'stopped: the baseline could not run ({why})'[:400],
+            survivors=0,
+        )
+        return []
 
     def fall_back(self, rnd: int) -> bool:
         """What an unrecoverable card means, per budget mode. False ends the sweep.
@@ -1377,7 +1400,8 @@ class Sweep:
                     # No survivors: nothing left for a further round to visit
                     # (run_round()'s rotation indexes by len(alive), which is
                     # zero here), and finish() already turns an empty `alive`
-                    # into a clean 'rejected' verdict on its own.
+                    # into a clean 'rejected' verdict on its own, or an
+                    # 'indeterminate' one when the baseline could not run.
                     break
 
             cursor = self.schedule.slices[-1][1] if self.schedule.slices else 0
@@ -1894,6 +1918,7 @@ async def resume_sweep(sweep_id: str | None, defaults: SweepOptions, session: ai
         cand = Candidate(row.profile, c.overrides or {}, stage=c.stage, baseline=bool(c.is_baseline))
         cand.config_id = c.config_id
         cand.status = c.status
+        cand.reason = c.status_reason or ''
         sweep.candidates[cand.sha] = cand
         if cand.baseline:
             sweep.baseline = cand

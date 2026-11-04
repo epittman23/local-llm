@@ -56,18 +56,61 @@ def _sweep(monkeypatch, infeasible: set[str]):
     return sweep, [base, *others], visited, closed
 
 
-def test_a_baseline_that_cannot_run_ends_the_round_without_survivors(monkeypatch):
+def test_a_baseline_that_cannot_run_ends_the_sweep_after_its_round(monkeypatch):
     sweep, alive, visited, closed = _sweep(monkeypatch, infeasible={'baseline'})
 
-    # Round 0 starts with the baseline, so nothing else is visited after it fails.
-    survivors = asyncio.run(sweep.run_round(0, 'explore', alive, 0, 10))
+    # Round 1's rotation puts the baseline last, so the others ran first.
+    survivors = asyncio.run(sweep.run_round(1, 'explore', alive, 0, 10))
 
     assert survivors == []
-    assert visited == ['baseline']
+    assert visited[-1] == 'baseline'
     assert sweep.ended_reason == 'baseline'
     assert sweep.stopped()
     assert closed and closed[0]['survivors'] == 0
     assert 'out of memory' in closed[0]['decision']
+
+
+def test_a_round_stops_visiting_once_the_baseline_fails(monkeypatch):
+    sweep, alive, visited, _closed = _sweep(monkeypatch, infeasible={'baseline'})
+
+    # A round whose rotation reaches the baseline first visits nobody after it.
+    asyncio.run(sweep.run_round(3, 'explore', alive, 0, 10))
+
+    assert visited == ['baseline']
+
+
+def test_a_resumed_sweep_whose_baseline_already_failed_visits_nobody(monkeypatch):
+    sweep, alive, visited, closed = _sweep(monkeypatch, infeasible=set())
+    # What resume_sweep() loads: the baseline infeasible, with its reason, and so not alive.
+    sweep.baseline.status, sweep.baseline.reason = 'infeasible', 'out of memory loading the model'
+    others = [c for c in alive if not c.baseline]
+
+    survivors = asyncio.run(sweep.run_round(2, 'explore', others, 10, 20))
+
+    assert survivors == []
+    assert visited == []
+    assert sweep.ended_reason == 'baseline'
+    assert 'out of memory' in closed[0]['decision']
+
+
+def test_a_baseline_that_fails_after_measuring_is_visited_again_not_the_end(monkeypatch):
+    sweep, alive, _visited, closed = _sweep(monkeypatch, infeasible={'baseline'})
+    sweep.baseline_tps = 41.0  # round 1 measured the defaults
+
+    async def absolute_baseline(rnd):
+        return None
+
+    async def eliminate(rnd, alive_now):
+        return [sweep.baseline, *alive_now], 'kept all'
+
+    monkeypatch.setattr(sweep, 'absolute_baseline', absolute_baseline)
+    monkeypatch.setattr(sweep, 'eliminate', eliminate)
+
+    survivors = asyncio.run(sweep.run_round(3, 'explore', alive, 20, 30))
+
+    assert sweep.ended_reason == 'complete'
+    assert sweep.baseline in survivors
+    assert closed[0]['decision'] == 'kept all'
 
 
 def test_the_verdict_names_why_the_defaults_could_not_run(monkeypatch):
