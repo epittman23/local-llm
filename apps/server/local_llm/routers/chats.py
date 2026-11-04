@@ -6,10 +6,14 @@ from uuid import uuid4
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from local_llm.config import ENABLE_ADMIN_EXPORT
+from local_llm.config import (
+    CONTEXT_COMPACTION_RETENTION_PERCENTAGE,
+    CONTEXT_COMPACTION_TOKEN_THRESHOLD,
+    ENABLE_ADMIN_EXPORT,
+)
 from local_llm.constants import ERROR_MESSAGES
 from local_llm.env import ENABLE_ADMIN_CHAT_ACCESS
 from local_llm.events import EVENTS, publish_event
@@ -209,6 +213,17 @@ class ChatConfigForm(BaseModel):
     CONTEXT_COMPACTION_RETENTION_PERCENTAGE: int = 40
     CONTEXT_COMPACTION_PROMPT_TEMPLATE: str
     ENABLE_TOOL_PERMISSIONS: bool = False
+
+    @field_validator('CONTEXT_COMPACTION_TOKEN_THRESHOLD', 'CONTEXT_COMPACTION_RETENTION_PERCENTAGE', mode='before')
+    @classmethod
+    def _cleared_is_default(cls, value, info):
+        # The Interface tab sends a cleared number as null; it means the
+        # default, not a failed save (#248).
+        if value is not None:
+            return value
+        if info.field_name == 'CONTEXT_COMPACTION_TOKEN_THRESHOLD':
+            return CONTEXT_COMPACTION_TOKEN_THRESHOLD
+        return CONTEXT_COMPACTION_RETENTION_PERCENTAGE
 
 
 class CompactChatForm(BaseModel):
