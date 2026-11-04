@@ -168,3 +168,24 @@ describe('toFormState', () => {
 		expect(s.editNodes).toEqual(DEFAULT_EDIT_WORKFLOW_NODES);
 	});
 });
+
+describe('prepareImagesConfig: a cleared Steps box (#237)', () => {
+	const base = {
+		ENABLE_IMAGE_GENERATION: false,
+		IMAGE_GENERATION_ENGINE: 'automatic1111',
+		AUTOMATIC1111_PARAMS: '',
+		IMAGES_OPENAI_API_PARAMS: '',
+		COMFYUI_WORKFLOW: '',
+		IMAGES_EDIT_COMFYUI_WORKFLOW: ''
+	};
+
+	it('is sent as null, not as an empty string the server refuses', () => {
+		const r = prepareImagesConfig({ ...base, IMAGE_STEPS: '' }, [], DEFAULT_EDIT_WORKFLOW_NODES);
+		expect(r.ok && r.payload.IMAGE_STEPS).toBeNull();
+	});
+
+	it('a number is sent as it is', () => {
+		const r = prepareImagesConfig({ ...base, IMAGE_STEPS: 30 }, [], DEFAULT_EDIT_WORKFLOW_NODES);
+		expect(r.ok && r.payload.IMAGE_STEPS).toBe(30);
+	});
+});
