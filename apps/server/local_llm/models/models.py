@@ -6,14 +6,13 @@ from copy import deepcopy
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from sqlalchemy import BigInteger, Boolean, Column, String, Text, cast, delete, func, or_, select, update
+from sqlalchemy import BigInteger, Boolean, Column, String, Text, cast, delete, func, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from local_llm.internal.db import Base, JSONField, get_async_db_context
 from local_llm.models.access_grants import AccessGrantModel, AccessGrants
 from local_llm.models.groups import Groups
 from local_llm.models.users import User, UserModel, UserResponse, Users
-from local_llm.utils.misc import json_text_variants
 from local_llm.utils.validate import validate_profile_image_url
 
 log = logging.getLogger(__name__)
@@ -183,6 +182,39 @@ class ModelForm(BaseModel):
     params: ModelParams
     access_grants: list[dict] | None = None
     is_active: bool = True
+
+
+# A model whose `meta.tags` holds a tag of this name, ignoring case (#280). It
+# used to be a LIKE over the whole serialized meta, which also matched a
+# capability key such as "vision", a knowledge file's name or any quoted text,
+# and read `%` and `_` in a tag as wildcards. A tag is `{"name": ...}`, or a
+# bare string in rows saved before tags were normalized; a meta whose `tags`
+# is not a list has none.
+_HAS_TAG_SQL = {
+    'postgresql': """EXISTS (
+        SELECT 1 FROM jsonb_array_elements(
+            CASE WHEN jsonb_typeof(CAST(model.meta AS jsonb) -> 'tags') = 'array'
+                THEN CAST(model.meta AS jsonb) -> 'tags' ELSE '[]'::jsonb END
+        ) AS tag
+        WHERE lower(CASE jsonb_typeof(tag) WHEN 'object' THEN tag ->> 'name' ELSE tag #>> '{}' END) = :model_tag
+    )""",
+    'sqlite': """EXISTS (
+        SELECT 1 FROM json_each(
+            CASE WHEN json_type(model.meta, '$.tags') = 'array' THEN json_extract(model.meta, '$.tags') ELSE '[]' END
+        ) AS tag
+        WHERE {name} = :model_tag
+    )""",
+}
+
+
+def _has_tag(dialect: str, tag: str):
+    if dialect == 'sqlite':
+        name = "CASE tag.type WHEN 'object' THEN json_extract(tag.value, '$.name') ELSE tag.value END"
+        if tag.isascii():
+            # SQLite's lower() folds ASCII only, so a non-ASCII tag is matched exact-case, as before.
+            name, tag = f'lower({name})', tag.lower()
+        return text(_HAS_TAG_SQL['sqlite'].format(name=name)).bindparams(model_tag=tag)
+    return text(_HAS_TAG_SQL['postgresql']).bindparams(model_tag=tag.lower())
 
 
 class ModelsTable:
@@ -387,14 +419,7 @@ class ModelsTable:
 
                 tag = filter.get('tag')
                 if tag:
-                    if db.bind.dialect.name == 'sqlite' and not tag.isascii():
-                        # SQLite's LOWER() is ASCII-only, so match non-ASCII tags exact-case.
-                        meta_text = cast(Model.meta, String)
-                        variants = json_text_variants(tag)
-                    else:
-                        meta_text = func.lower(cast(Model.meta, String))
-                        variants = json_text_variants(tag.lower())
-                    stmt = stmt.filter(or_(*(meta_text.like(f'%"{variant}"%') for variant in variants)))
+                    stmt = stmt.filter(_has_tag(db.bind.dialect.name, tag))
 
                 order_by = filter.get('order_by')
                 direction = filter.get('direction')
