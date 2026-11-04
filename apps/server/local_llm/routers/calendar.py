@@ -236,9 +236,14 @@ async def get_events(
                 # Only the future: past runs are handled below. The runs are the
                 # scheduler's own, so a COUNT does not start over at the next run (#356).
                 now_ns = int(time.time_ns())
-                run_starts = await asyncio.to_thread(
-                    runs_between_ns, rrule_str, auto.next_run_at, max(start_ns, now_ns), end_ns, user.timezone
-                )
+                try:
+                    run_starts = await asyncio.to_thread(
+                        runs_between_ns, rrule_str, auto.next_run_at, max(start_ns, now_ns), end_ns, user.timezone
+                    )
+                except Exception as e:
+                    # One unreadable rule leaves the other automations' runs shown.
+                    log.warning(f'Failed to list the runs of automation {auto.id}: {e}')
+                    continue
                 for run_ns in run_starts:
                     expanded.append(
                         CalendarEventUserResponse(

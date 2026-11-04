@@ -222,6 +222,8 @@ def runs_between_ns(
     the rule at the next run, so a COUNT started over there and it showed
     runs that never come (#356).
     """
+    if start_ns >= end_ns:
+        return []
     zi = _resolve_tz(tz)
 
     def local(ns: int) -> dt.datetime:
@@ -234,7 +236,9 @@ def runs_between_ns(
         when_ns = int((when.replace(tzinfo=zi) if zi else when).timestamp() * 1_000_000_000)
         if when_ns >= end_ns or len(runs) >= limit:
             break
-        if when_ns >= start_ns:
+        # A wall-clock time the clocks skip lands on a later one, which the rule
+        # then gives again: the scheduler runs that instant once.
+        if when_ns >= start_ns and (not runs or when_ns > runs[-1]):
             runs.append(when_ns)
     return runs
 
