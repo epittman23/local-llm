@@ -2897,8 +2897,9 @@ async def query_doc_handler(
                     if request.app.state.RERANKING_FUNCTION
                     else None
                 ),
-                k_reranker=form_data.k_reranker or config.TOP_K_RERANKER,
-                r=(form_data.r if form_data.r else config.RELEVANCE_THRESHOLD),
+                # An explicit 0 is an override too (#354).
+                k_reranker=form_data.k_reranker if form_data.k_reranker is not None else config.TOP_K_RERANKER,
+                r=form_data.r if form_data.r is not None else config.RELEVANCE_THRESHOLD,
                 hybrid_bm25_weight=(
                     form_data.hybrid_bm25_weight
                     if form_data.hybrid_bm25_weight is not None
@@ -2962,8 +2963,9 @@ async def query_collection_handler(
                     if request.app.state.RERANKING_FUNCTION
                     else None
                 ),
-                k_reranker=form_data.k_reranker or config.TOP_K_RERANKER,
-                r=(form_data.r if form_data.r else config.RELEVANCE_THRESHOLD),
+                # An explicit 0 is an override too (#354).
+                k_reranker=form_data.k_reranker if form_data.k_reranker is not None else config.TOP_K_RERANKER,
+                r=form_data.r if form_data.r is not None else config.RELEVANCE_THRESHOLD,
                 hybrid_bm25_weight=(
                     form_data.hybrid_bm25_weight
                     if form_data.hybrid_bm25_weight is not None
@@ -2984,6 +2986,8 @@ async def query_collection_handler(
                     query, prefix=prefix, user=user
                 ),
                 k=form_data.k if form_data.k else config.TOP_K,
+                # hybrid=false asked for vector search only (#354).
+                allow_hybrid=False,
             )
 
     except HTTPException:
