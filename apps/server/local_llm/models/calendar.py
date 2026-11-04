@@ -30,12 +30,13 @@ from local_llm.models.users import User, UserModel, UserResponse
 
 log = logging.getLogger(__name__)
 
-# The longest an alert may come before its occurrence. Each series keeps a
-# single meta.alerted_for, which is right while at most one occurrence of a
-# series is due at once: a lead this short against rules a day or more apart.
-# The longest a reminder can come before its event: the calendar tool offers
-# reminders of any length (#184), and a longer one comes a day before.
-MAX_ALERT_LEAD_MINUTES = 24 * 60
+# The longest a reminder can come before its occurrence; the calendar tool
+# offers reminders of any length (#184), and a longer one comes this long
+# before. Each series keeps a single meta.alerted_for, which is right only
+# while at most one occurrence of a series is due at once. Rules are a day or
+# more apart, but the day clocks go forward has 23 hours, and an occurrence is
+# still due for a grace window after its start: 22 hours keeps clear of both.
+MAX_ALERT_LEAD_MINUTES = 22 * 60
 MAX_ALERT_LEAD_NS = MAX_ALERT_LEAD_MINUTES * 60 * 1_000_000_000
 DAY_NS = 24 * 60 * 60 * 1_000_000_000
 MIN_CALENDAR_RRULE_INTERVAL_SECONDS = 24 * 60 * 60
@@ -766,7 +767,7 @@ class CalendarEventTable:
         """
         from local_llm.models.users import User as UserRow
 
-        # Use the longest lead (a day) to cast a wide net; per-event
+        # Use the longest lead (22 hours) to cast a wide net; per-event
         # filtering happens in Python after fetching.
         max_lookahead_ns = max(default_lookahead_ns, MAX_ALERT_LEAD_NS)
         upper = now_ns + max_lookahead_ns

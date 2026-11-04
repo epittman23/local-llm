@@ -17,8 +17,10 @@ Run from apps/server:
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import time
 import uuid
+from zoneinfo import ZoneInfo
 
 from local_llm.models.calendar import CalendarEventForm, CalendarEvents, CalendarEventUpdateForm, Calendars
 from local_llm.models.users import Users
@@ -164,11 +166,67 @@ def test_a_reminder_does_not_fire_before_its_lead(monkeypatch):
     assert _alerted(monkeypatch, event) == 0
 
 
-def test_a_reminder_longer_than_a_day_fires_a_day_before(monkeypatch):
+def test_a_reminder_longer_than_22_hours_fires_22_hours_before(monkeypatch):
     uid, cal = _user_calendar()
-    soon = _event_with_lead(uid, cal, time.time_ns() + 23 * HOUR, 3 * 24 * 60)
-    later = _event_with_lead(uid, cal, time.time_ns() + 25 * HOUR, 3 * 24 * 60)
+    soon = _event_with_lead(uid, cal, time.time_ns() + 21 * HOUR, 3 * 24 * 60)
+    later = _event_with_lead(uid, cal, time.time_ns() + 23 * HOUR, 3 * 24 * 60)
 
     sent = [a['event_id'] for a in _poll(monkeypatch)]
     assert sent.count(soon.id) == 1
     assert sent.count(later.id) == 0
+
+
+def _daily(tz: str, first: int, minutes: int):
+    uid = f'alerts-{uuid.uuid4().hex[:10]}'
+    _run(Users.insert_new_user(uid, 'user', f'{uid}@example.com', role='user'))
+    _run(Users.update_user_by_id(uid, {'timezone': tz}))
+    cal = _run(Calendars.get_or_create_defaults(uid))[0].id
+    form = CalendarEventForm(
+        calendar_id=cal, title='Daily', start_at=first, rrule='FREQ=DAILY', meta={'alert_minutes': minutes}
+    )
+    return _run(CalendarEvents.insert_new_event(uid, form))
+
+
+def _alerts_at(monkeypatch, event, times: list[int]) -> list[int]:
+    """The occurrence starts alerted for `event` by a poll at each of `times`."""
+    starts: list[int] = []
+    clock = [0]
+
+    async def emit(name, payload, room=None):
+        if payload['data']['data']['event_id'] == event.id:
+            starts.append(payload['data']['data']['start_at'])
+
+    async def nothing(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(socket_main.sio, 'emit', emit)
+    monkeypatch.setattr(automations, 'publish_event', nothing)
+    monkeypatch.setattr(time, 'time_ns', lambda: clock[0])
+    for t in times:
+        clock[0] = t
+        _run(automations._check_calendar_alerts(None))
+    return starts
+
+
+def test_a_daily_series_with_a_day_long_reminder_alerts_each_occurrence_once(monkeypatch):
+    """#184: with a lead of a day, two occurrences of a daily series were due at once, and alerted in turn."""
+    start = int(dt.datetime(2030, 6, 10, 9, tzinfo=dt.UTC).timestamp()) * 1_000_000_000
+    event = _daily('UTC', start - 3 * DAY, 3 * 24 * 60)
+    polls = [start - DAY + 2 * 1_000_000_000] + [start + (1 + 11 * k) * 1_000_000_000 for k in range(6)]
+
+    starts = _alerts_at(monkeypatch, event, polls)
+
+    assert len(starts) == len(set(starts))
+
+
+def test_a_daily_series_over_the_spring_forward_night_alerts_once(monkeypatch):
+    """Occurrences 23 hours apart: a lead over 22 hours had both due, and alerted every poll for an hour."""
+    ny = ZoneInfo('America/New_York')
+    first = int(dt.datetime(2027, 3, 10, 9, tzinfo=ny).timestamp()) * 1_000_000_000
+    saturday = int(dt.datetime(2027, 3, 13, 9, tzinfo=ny).timestamp()) * 1_000_000_000
+    event = _daily('America/New_York', first, 1440)
+    polls = [saturday - 70 * MIN + k * 10 * 1_000_000_000 for k in range(420)]
+
+    starts = _alerts_at(monkeypatch, event, polls)
+
+    assert len(starts) == len(set(starts))
