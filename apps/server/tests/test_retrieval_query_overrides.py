@@ -14,6 +14,7 @@ import asyncio
 from types import SimpleNamespace
 
 import pytest
+from pydantic import ValidationError
 
 from local_llm.retrieval import utils as retrieval_utils
 from local_llm.routers import retrieval as retrieval_router
@@ -72,20 +73,32 @@ def test_hybrid_false_asks_the_collection_search_for_vector_search_only(searches
     assert kwargs['allow_hybrid'] is False
 
 
-def test_a_collection_query_passes_an_explicit_0_for_r_and_k_reranker(searches):
-    _collection(r=0, k_reranker=0)
+def test_a_collection_query_passes_an_explicit_r_of_0(searches):
+    _collection(r=0, k_reranker=2)
 
     [(name, kwargs)] = searches
     assert name == 'query_collection_with_hybrid_search'
-    assert (kwargs['r'], kwargs['k_reranker']) == (0, 0)
+    assert (kwargs['r'], kwargs['k_reranker']) == (0, 2)
 
 
-def test_a_doc_query_passes_an_explicit_0_for_r_and_k_reranker(searches):
-    _doc(r=0, k_reranker=0)
+def test_a_doc_query_passes_an_explicit_r_of_0(searches):
+    _doc(r=0, k_reranker=2)
 
     [(name, kwargs)] = searches
     assert name == 'query_doc_with_hybrid_search'
-    assert (kwargs['r'], kwargs['k_reranker']) == (0, 0)
+    assert (kwargs['r'], kwargs['k_reranker']) == (0, 2)
+
+
+@pytest.mark.parametrize('form', [retrieval_router.QueryCollectionsForm, retrieval_router.QueryDocForm])
+@pytest.mark.parametrize('field', ['k', 'k_reranker'])
+@pytest.mark.parametrize('value', [0, -1])
+def test_a_k_or_k_reranker_below_1_is_refused(form, field, value):
+    """The reranker keeps its top k_reranker, so 0 returned nothing and -1 dropped the last hit."""
+    names = (
+        {'collection_names': ['kb1']} if form is retrieval_router.QueryCollectionsForm else {'collection_name': 'kb1'}
+    )
+    with pytest.raises(ValidationError):
+        form(query='q', **names, **{field: value})
 
 
 def test_unset_values_still_come_from_the_configuration(searches):
