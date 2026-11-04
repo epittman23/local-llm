@@ -731,7 +731,10 @@ class KnowledgeTable:
                     return KnowledgeFileModel.model_validate(result)
                 else:
                     return None
-            except Exception:
+            except Exception as e:
+                # Rolled back, so a caller's session stays usable after the failure (#314).
+                await db.rollback()
+                log.warning('Could not link file %s to knowledge %s: %s', file_id, knowledge_id, e)
                 return None
 
     async def has_file(self, knowledge_id: str, file_id: str, db: AsyncSession | None = None) -> bool:

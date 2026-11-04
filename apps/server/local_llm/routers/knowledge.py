@@ -1457,6 +1457,20 @@ class KnowledgeFileIdForm(BaseModel):
     directory_id: str | None = None
 
 
+async def _drop_unlinked_chunks(knowledge_id: str, file_id: str, db: AsyncSession) -> None:
+    """Delete a file's chunks from a knowledge base it could not be linked to.
+
+    Only when the file is not in the base after all: another request may have
+    linked it meanwhile, and its chunks carry the same file id.
+    """
+    if await Knowledges.has_file(knowledge_id=knowledge_id, file_id=file_id, db=db):
+        return
+    try:
+        await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=knowledge_id, filter={'file_id': file_id})
+    except Exception as e:
+        log.warning('Could not delete the chunks of unlinked file %s from knowledge %s: %s', file_id, knowledge_id, e)
+
+
 @router.post('/{id}/file/add', response_model=KnowledgeFilesResponse | None)
 async def add_file_to_knowledge_by_id(
     request: Request,
@@ -1542,8 +1556,11 @@ async def add_file_to_knowledge_by_id(
             db=db,
         )
         if linked is None:
-            # The insert failed (it reports that as None), so the file is not in the base.
-            raise Exception('The file could not be added to the knowledge base.')
+            # The insert failed (it reports that as None): the chunks just
+            # embedded would stay in the collection with no file listed to
+            # remove them by, and a retry would embed them again.
+            await _drop_unlinked_chunks(id, form_data.file_id, db)
+            raise Exception(ERROR_MESSAGES.FILE_NOT_ADDED_TO_KNOWLEDGE)
     except Exception as e:
         log.debug(e)
         raise HTTPException(
@@ -2218,18 +2235,21 @@ async def add_files_to_knowledge_batch(
     # Only add files that were successfully processed
     successful_file_ids = [r.file_id for r in result.results if r.status == 'completed']
     dir_map = {form.file_id: form.directory_id for form in new_entries}
+    error_details = [f'{err.file_id}: {err.error}' for err in result.errors]
     for file_id in successful_file_ids:
-        await Knowledges.add_file_to_knowledge_by_id(
+        linked = await Knowledges.add_file_to_knowledge_by_id(
             knowledge_id=id,
             file_id=file_id,
             user_id=user.id,
             directory_id=dir_map.get(file_id),
             db=db,
         )
+        if linked is None:
+            await _drop_unlinked_chunks(id, file_id, db)
+            error_details.append(f'{file_id}: {ERROR_MESSAGES.FILE_NOT_ADDED_TO_KNOWLEDGE}')
 
     # If there were any errors, include them in the response
-    if result.errors:
-        error_details = [f'{err.file_id}: {err.error}' for err in result.errors]
+    if error_details:
         return KnowledgeFilesBatchResponse(
             **knowledge.model_dump(),
             files=await Knowledges.get_file_metadatas_by_id(knowledge.id, db=db),
