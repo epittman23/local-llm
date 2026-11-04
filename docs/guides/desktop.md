@@ -86,7 +86,12 @@ If it started the stack, the dialog shows the shutdown:
    Redis, Jupyter and SearXNG).
 
 The app waits until the whole group has exited, with a budget of 90 s. Past
-that, it kills the group, runs `docker compose down` itself, and offers to stop
+that, it kills the group, marks the steps it never reached as "not reached"
+and runs `docker compose down` itself. Either way it then asks Compose
+(`docker compose ps -a`, up to 15 s more) whether any of the services' containers
+are left. If some are, or Compose cannot be asked, the step fails and the
+dialog stays open with the log and Quit, since `docker compose down` did not
+work or could not be confirmed. Otherwise, past the budget, it offers to stop
 any `llama-server` still running. That server runs in its own session,
 outside the group, so it is offered rather than killed unasked: "Stop
 llama-server" stops it and quits, while "Leave it", closing the dialog or
@@ -163,8 +168,8 @@ and an unpacked package. The unit tests cover:
 - `src/progress.ts`, replayed against logs from real runs in
   `test/fixtures/`;
 - `src/main.ts`'s stop: a Cancel during startup, a quit while the window
-  loads, Retry during a stop, and the "Leave it" offer, run against a fake
-  Electron in `src/main.stop.test.ts`.
+  loads, Retry during a stop, the "Leave it" offer, and services left after
+  a stop, run against a fake Electron in `src/main.stop.test.ts`.
 
 Launching, closing and attaching the real stack are checked by hand: see
 [testing.md](testing.md#desktop-appsdesktop).

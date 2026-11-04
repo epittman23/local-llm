@@ -203,13 +203,20 @@ export function reduce(progress: Progress, event: ProgressEvent): Progress {
 			return update(progress, event.step, (s) =>
 				s.state === 'pending' ? { ...s, state: 'skipped', detail: event.reason } : s
 			);
-		case 'timeout':
-			return update(progress, event.step, (s) => ({
-				...s,
-				state: 'failed',
-				endedAt: event.at,
-				detail: 'did not finish in time'
-			}));
+		case 'timeout': {
+			// The stop is forced from here: the steps after this one never ran,
+			// which is not the same as having nothing to do (#427).
+			const index = progress.steps.findIndex((s) => s.id === event.step);
+			return {
+				...progress,
+				steps: progress.steps.map((s, i) => {
+					if (i === index) return { ...s, state: 'failed', endedAt: event.at, detail: 'did not finish in time' };
+					if (i > index && s.state === 'pending' && !s.optional)
+						return { ...s, state: 'skipped', detail: 'not reached' };
+					return s;
+				})
+			};
+		}
 		case 'fail': {
 			const target =
 				progress.steps.find((s) => s.id === event.step) ??
