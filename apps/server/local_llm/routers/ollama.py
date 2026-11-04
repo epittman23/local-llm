@@ -1702,7 +1702,8 @@ async def download_model(
 
     file_path = partial_download_path(form_data.url, file_name)
     if file_path is None or file_name is None:
-        return None
+        # Answered `null` with a 200 before, which the tab could not read (#250).
+        raise HTTPException(status_code=400, detail='The URL does not name a model file.')
 
     async def events():
         # A failure once the stream has started used to cut it off with no

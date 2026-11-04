@@ -11,7 +11,6 @@ import { createModel, deleteModel, downloadModel, getOllamaModels, pullModel, up
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cancelPull, startPull, useDownloadPool } from './ollamaDownloads';
 import {
-	DEFAULT_MODELFILE,
 	finishUpload,
 	isNotableStatus,
 	lineReader,
@@ -116,7 +115,6 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 	const [uploadMode, setUploadMode] = useState<'file' | 'url'>('file');
 	const [uploadFile, setUploadFile] = useState<File | null>(null);
 	const [uploadUrl, setUploadUrl] = useState('');
-	const [modelfile, setModelfile] = useState(DEFAULT_MODELFILE);
 	const [uploading, setUploading] = useState(false);
 	const [uploadMessage, setUploadMessage] = useState('');
 	const [uploadProgress, setUploadProgress] = useState<number | null>(null);
@@ -236,7 +234,7 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 			}
 
 			if (res?.ok) {
-				await finishUpload(res, modelfile, {
+				await finishUpload(res, {
 					onProgress: (percent) => {
 						setUploadMessage('');
 						setUploadProgress(percent);
@@ -482,18 +480,6 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 						)}
 					</div>
 
-					{readyToUpload && (
-						<div>
-							<div className="my-2.5 text-sm font-normal">Modelfile Content</div>
-							<textarea
-								className={textareaClass}
-								rows={6}
-								aria-label="Modelfile content"
-								value={modelfile}
-								onChange={(e) => setModelfile(e.target.value)}
-							/>
-						</div>
-					)}
 					<div className="text-muted-foreground mt-1 text-xs">
 						To access the GGUF models available for downloading,{' '}
 						<a

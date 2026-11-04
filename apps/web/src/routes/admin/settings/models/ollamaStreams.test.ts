@@ -106,7 +106,6 @@ describe('finishUpload (#250)', () => {
 		const s = steps();
 		await finishUpload(
 			stream({ progress: 50 }, { done: true, blob: 'sha256:abc', name: 'm.gguf', model_created: 'm' }),
-			'PARAMETER x 1',
 			s
 		);
 
@@ -116,19 +115,15 @@ describe('finishUpload (#250)', () => {
 
 	it('creates the model from the stored blob after a URL download', async () => {
 		const s = steps();
-		await finishUpload(stream({ done: true, blob: 'sha256:abc', name: 'm.Q4.gguf' }), 'PARAMETER x 1', s);
+		await finishUpload(stream({ done: true, blob: 'sha256:abc', name: 'm.Q4.gguf' }), s);
 
-		expect(s.create).toHaveBeenCalledWith({
-			model: 'm.Q4',
-			files: { 'm.Q4.gguf': 'sha256:abc' },
-			modelfile: 'FROM @sha256:abc\nPARAMETER x 1'
-		});
+		expect(s.create).toHaveBeenCalledWith({ model: 'm.Q4', files: { 'm.Q4.gguf': 'sha256:abc' } });
 		expect(s.calls.at(-1)).toBe('follow');
 	});
 
 	it('shows an error the stream carries, and creates nothing', async () => {
 		const s = steps();
-		await finishUpload(stream({ progress: 10 }, { error: 'Ollama: Could not create blob' }), '', s);
+		await finishUpload(stream({ progress: 10 }, { error: 'Ollama: Could not create blob' }), s);
 
 		expect(s.calls).toEqual(['progress 10', 'error Ollama: Could not create blob']);
 		expect(s.create).not.toHaveBeenCalled();
@@ -136,7 +131,7 @@ describe('finishUpload (#250)', () => {
 
 	it('says so when the stream ends before the blob is stored', async () => {
 		const s = steps();
-		await finishUpload(stream({ progress: 10 }), '', s);
+		await finishUpload(stream({ progress: 10 }), s);
 
 		expect(s.calls.at(-1)).toBe('error The upload ended before the model was stored.');
 	});
@@ -144,17 +139,32 @@ describe('finishUpload (#250)', () => {
 	it('shows the reason a create was refused', async () => {
 		const s = steps();
 		s.create.mockResolvedValueOnce(new Response('{"detail":"model exists"}', { status: 400 }));
-		await finishUpload(stream({ done: true, blob: 'sha256:abc', name: 'm.gguf' }), '', s);
+		await finishUpload(stream({ done: true, blob: 'sha256:abc', name: 'm.gguf' }), s);
 
 		expect(s.calls.at(-1)).toBe('error model exists');
 		expect(s.followCreate).not.toHaveBeenCalled();
+	});
+
+	it('says the create failed when its refusal is not JSON (a proxy error page)', async () => {
+		const s = steps();
+		s.create.mockResolvedValueOnce(new Response('Bad Gateway', { status: 502 }));
+		await finishUpload(stream({ done: true, blob: 'sha256:abc', name: 'm.gguf' }), s);
+
+		expect(s.calls.at(-1)).toBe('error Failed to create the model');
+	});
+
+	it('skips a line that is not an event object', async () => {
+		const s = steps();
+		await finishUpload(new Response('null\n', { status: 200 }), s);
+
+		expect(s.calls).toEqual(['error The upload ended before the model was stored.']);
 	});
 
 	it('skips a line it cannot read and carries on', async () => {
 		const s = steps();
 		const body = `data: not json\n\ndata: ${JSON.stringify({ done: true, blob: 'b', name: 'n', model_created: 'n' })}\n\n`;
 		const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
-		await finishUpload(new Response(body, { status: 200 }), '', s);
+		await finishUpload(new Response(body, { status: 200 }), s);
 		error.mockRestore();
 
 		expect(s.calls.at(-1)).toBe('success Model n created');
