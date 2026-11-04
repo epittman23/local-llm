@@ -110,15 +110,21 @@ export default function Audio() {
 
 	const browserVoices = useBrowserVoices(draft?.tts.ENGINE === '');
 
-	/** Saves `next`; false (after saying why) when the parameters are not valid JSON or the server refuses. */
-	const persist = async (next: Draft) => {
+	/**
+	 * Saves `next`; false (after saying why) when the parameters are not valid JSON or the server refuses.
+	 * `loadWhisperModel` has the server load the local Whisper model even when its name is unchanged.
+	 */
+	const persist = async (next: Draft, loadWhisperModel = false) => {
 		const params = parseOpenAiParams(next.paramsText);
 		if (!params.ok) {
 			toast.error('Invalid JSON format for Parameters');
 			return false;
 		}
 		try {
-			const res = await updateAudioConfig(token, buildAudioPayload(next.tts, next.stt, params.value, next.mimeText));
+			const res = await updateAudioConfig(token, {
+				...buildAudioPayload(next.tts, next.stt, params.value, next.mimeText),
+				...(loadWhisperModel && { LOAD_WHISPER_MODEL: true })
+			});
 			if (!res) return false;
 			setDraft((d) => d && { ...d, paramsText: params.text });
 			await saved();
@@ -143,7 +149,7 @@ export default function Audio() {
 		if (!draft) return;
 		setWhisperLoading(true);
 		try {
-			await persist(draft);
+			await persist(draft, true);
 		} finally {
 			setWhisperLoading(false);
 		}

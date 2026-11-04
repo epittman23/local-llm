@@ -393,13 +393,14 @@ async def update_function_by_id(
         function_module, function_type, frontmatter = await load_function_module_by_id(id, content=form_data.content)
         form_data.meta.manifest = frontmatter
 
-        FUNCTIONS = get_functions_cache(request)
-        FUNCTIONS[id] = function_module
-
         updated = {**form_data.model_dump(exclude={'id'}), 'type': function_type}
         log.debug(updated)
 
         function = await Functions.update_function_by_id(id, updated, db=db)
+        # Cached only once saved: a cached module whose code was not saved would run
+        # while the API says the update was rejected.
+        if function:
+            get_functions_cache(request)[id] = function_module
 
         if function_type == 'filter' and getattr(function_module, 'toggle', None):
             await Functions.update_function_metadata_by_id(id, {'toggle': True}, db=db)
