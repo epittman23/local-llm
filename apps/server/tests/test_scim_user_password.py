@@ -20,6 +20,7 @@ import uuid
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from local_llm.internal.db import get_async_db, get_async_session
 from local_llm.models.auths import Auth, Auths
@@ -77,3 +78,25 @@ def test_scim_creates_the_users_credentials(monkeypatch):
     assert r.status_code == 201, r.text
     credentials = _run(_credentials(r.json()['id']))
     assert credentials is not None and credentials.email == f'scim-{tag}@example.invalid'
+
+
+def test_a_row_made_meanwhile_by_another_request_gets_the_password(monkeypatch):
+    """Two resets at once for a user with no credentials: the second sets the first's row."""
+    tag = uuid.uuid4().hex[:8]
+    user = _run(Users.insert_new_user(f'scim-race-{tag}', 'Race', f'scim-race-{tag}@example.invalid', role='user'))
+    real_get = AsyncSession.get
+    raced = []
+
+    async def get_after_a_competing_reset(self, model, ident, *args, **kwargs):
+        found = await real_get(self, model, ident, *args, **kwargs)
+        if model is Auth and found is None and not raced:
+            # Another reset creates the row between this read and this commit.
+            raced.append(True)
+            await Auths.update_user_password_by_id(user.id, 'first-hash')
+        return found
+
+    monkeypatch.setattr(AsyncSession, 'get', get_after_a_competing_reset)
+
+    assert _run(Auths.update_user_password_by_id(user.id, 'second-hash')) is True
+    monkeypatch.undo()
+    assert _run(_credentials(user.id)).password == 'second-hash'

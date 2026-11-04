@@ -224,8 +224,16 @@ class AuthsTable:
                 if user is None:
                     return False
                 session.add(Auth(id=user_id, email=user.email, password=new_password, active=True))
-            else:
-                auth_row.password = new_password
+                try:
+                    await session.commit()
+                    return True
+                except IntegrityError:
+                    # Another request made the row meanwhile: set the password on it.
+                    await session.rollback()
+                    auth_row = await session.get(Auth, user_id)
+                    if auth_row is None:
+                        raise
+            auth_row.password = new_password
             await session.commit()
             return True
 
