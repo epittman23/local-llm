@@ -23,6 +23,7 @@ import {
 	folderOptions,
 	folderPath,
 	localDate,
+	timeFromInput,
 	withFrequency,
 	withoutMissingDestinations
 } from './automationModel';
@@ -134,8 +135,8 @@ function ScheduleField({ value, onChange }: { value: Schedule; onChange: (s: Sch
 								className={small}
 								value={`${pad(value.hour)}:${pad(value.minute)}`}
 								onChange={(e) => {
-									const [hour, minute] = e.target.value.split(':').map(Number);
-									if (!Number.isNaN(hour)) set({ hour, minute });
+									const time = timeFromInput(e.target.value);
+									if (time) set(time);
 								}}
 							/>
 						</label>
