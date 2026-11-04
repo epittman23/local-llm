@@ -101,6 +101,19 @@ async def get_custom_headers(custom_headers: dict, user=None, metadata: dict = N
     return parse_custom_headers(custom_headers, user, metadata, request=request, user_groups=user_groups)
 
 
+def _header_value(value: str) -> str:
+    """A substituted value as a header can carry it (#175).
+
+    Printable ASCII is left as it is, so existing setups see the same headers.
+    Anything else (a non-ASCII name, a control character) is percent-encoded as
+    UTF-8, as the user-name header in include_user_info_headers is; httpx, the
+    MCP client, refuses a header value it cannot encode as ASCII.
+    """
+    if value.isascii() and value.isprintable():
+        return value
+    return quote(value, safe=' ')
+
+
 def parse_custom_headers(
     custom_headers: dict, user=None, metadata: dict = None, request=None, user_groups: list | None = None
 ) -> dict:
@@ -147,7 +160,8 @@ def parse_custom_headers(
         if not isinstance(value, str):
             value = str(value)
         for token, val in template_vars.items():
-            value = value.replace(token, val)
+            if token in value:
+                value = value.replace(token, _header_value(val))
         parsed_headers[key] = value
 
     return parsed_headers
