@@ -189,10 +189,9 @@ class ModelForm(BaseModel):
 # capability key such as "vision", a knowledge file's name or any quoted value,
 # and read `%` and `_` in a tag as wildcards. A tag is `{"name": ...}`, or a
 # bare string in rows saved before tags were normalized; a meta whose `tags`
-# is not a list has none. `meta` is JSON stored as text, and some text the
-# app's encoder writes (an escaped NUL, a lone surrogate, NaN) is not valid
-# jsonb, so a row Postgres cannot read is skipped rather than failing the
-# query (`pg_input_is_valid`, Postgres 16, as infra/docker-compose.yml runs).
+# is not a list has none. `meta` is JSON stored as text, and not all of it is
+# valid jsonb (an escaped NUL, for example), so such a row is skipped on
+# Postgres (`pg_input_is_valid`, Postgres 16, as infra/docker-compose.yml runs).
 _HAS_TAG_SQL = {
     'postgresql': """EXISTS (
         SELECT 1 FROM jsonb_array_elements(

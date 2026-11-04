@@ -5,8 +5,7 @@ serialized meta. So `vision` matched every model with the `vision`
 capability, and any value equal to the tag (a description, a knowledge file's
 name) matched too, and `%` and `_` in a tag were wildcards. The filter now
 looks only at the names in `meta.tags`, case-insensitively as before. A meta
-Postgres cannot read as jsonb is skipped there, not an error for the whole
-listing.
+that is not valid jsonb is skipped on Postgres.
 
 The same script runs on the test run's SQLite database and, with
 TEST_DATABASE_URL (CI provides one), on a fresh Postgres, since the match is
