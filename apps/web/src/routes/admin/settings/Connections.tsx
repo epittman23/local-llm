@@ -277,26 +277,26 @@ export default function Connections() {
 					<AddConnectionModal
 						open={showAddOpenAI}
 						onOpenChange={setShowAddOpenAI}
-						onSubmit={(c) =>
-							saveOpenAI({
+						onSubmit={async (c) => {
+							await saveOpenAI({
 								...openai,
 								urls: [...openai.urls, c.url],
 								keys: [...openai.keys, c.key],
 								configs: { ...openai.configs, [openai.urls.length]: c.config }
-							})
-						}
+							});
+						}}
 					/>
 					<AddConnectionModal
 						open={showAddOllama}
 						onOpenChange={setShowAddOllama}
 						ollama
-						onSubmit={(c) =>
-							saveOllama({
+						onSubmit={async (c) => {
+							await saveOllama({
 								...ollama,
 								urls: [...ollama.urls, c.url],
 								configs: { ...ollama.configs, [ollama.urls.length]: { ...c.config, key: c.key } }
-							})
-						}
+							});
+						}}
 					/>
 
 					<SettingsSection first>
