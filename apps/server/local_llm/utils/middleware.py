@@ -794,7 +794,7 @@ def _done(data: dict, current_output: list) -> tuple[list, dict | None]:
 
 
 def _completed(data: dict, current_output: list) -> tuple[list, dict | None]:
-    response_data = data.get('response', {})
+    response_data = data.get('response') or {}
     # Some providers send an empty output on response.completed despite having streamed items
     new_output = response_data.get('output') or current_output
 
@@ -811,7 +811,8 @@ def _completed(data: dict, current_output: list) -> tuple[list, dict | None]:
 
 
 def _failed(data: dict, current_output: list) -> tuple[list, dict | None]:
-    return current_output, {'error': data.get('response', {}).get('error', {})}
+    # `response` may be null on a failure; the caller supplies a message then (#167).
+    return current_output, {'error': (data.get('response') or {}).get('error', {})}
 
 
 _RESPONSES_EVENT_HANDLERS = {
@@ -1434,20 +1435,14 @@ async def chat_web_search_handler(request: Request, form_data: dict, extra_param
                 detail = 'Query generation failed'
             raise Exception(detail)
 
-        response = res['choices'][0]['message']['content']
-
-        try:
-            bracket_start = response.rfind('{')
-            bracket_end = response.rfind('}') + 1
-
-            if bracket_start == -1 or bracket_end == -1:
-                raise Exception('No JSON object found in the response')
-
-            response = response[bracket_start:bracket_end]
-            queries = JSONCodec.loads(response)
-            queries = queries.get('queries', [])
-        except Exception:
-            queries = [response]
+        response = res['choices'][0]['message']['content'] or ''
+        found = _last_json_object(response)
+        if found is not None:
+            queries = found.get('queries', [])
+        else:
+            # A reply with no braces is taken as the query itself; one whose
+            # JSON did not parse (cut short, say) gives way to the user's message.
+            queries = [user_message or ''] if '{' in response else [response]
 
         if ENABLE_QUERIES_CACHE:
             request.state.cached_queries = queries
@@ -1812,20 +1807,8 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
                         detail = 'Image prompt generation failed'
                     raise Exception(detail)
 
-                response = res['choices'][0]['message']['content']
-
-                try:
-                    bracket_start = response.rfind('{')
-                    bracket_end = response.rfind('}') + 1
-
-                    if bracket_start == -1 or bracket_end == -1:
-                        raise Exception('No JSON object found in the response')
-
-                    response = response[bracket_start:bracket_end]
-                    response = JSONCodec.loads(response)
-                    prompt = response.get('prompt', [])
-                except Exception:
-                    prompt = user_message
+                found = _last_json_object(res['choices'][0]['message']['content'] or '')
+                prompt = found.get('prompt', []) if found is not None else user_message
 
             except Exception as e:
                 log.exception(e)
@@ -1922,19 +1905,13 @@ async def chat_completion_files_handler(
                     },
                     user,
                 )
-                queries_response = queries_response['choices'][0]['message']['content']
-
-                try:
-                    bracket_start = queries_response.rfind('{')
-                    bracket_end = queries_response.rfind('}') + 1
-
-                    if bracket_start == -1 or bracket_end == -1:
-                        raise Exception('No JSON object found in the response')
-
-                    queries_response = queries_response[bracket_start:bracket_end]
-                    queries_response = JSONCodec.loads(queries_response)
-                except Exception:
-                    queries_response = {'queries': [queries_response]}
+                queries_response = queries_response['choices'][0]['message']['content'] or ''
+                found = _last_json_object(queries_response)
+                if found is None:
+                    # As in web search: a reply with no braces is the query; one whose JSON
+                    # did not parse gives no queries, so the user's message is used below.
+                    found = {'queries': [] if '{' in queries_response else [queries_response]}
+                queries_response = found
 
                 queries = queries_response.get('queries', [])
             except Exception:
@@ -3220,24 +3197,14 @@ async def build_chat_response_context(request, form_data, user, model, metadata,
 async def execute_tool_call_for_output(request, form_data, user, metadata, event_caller, event_emitter, tool_call):
     tools = metadata.get('tools', {})
     name = tool_call.get('function', {}).get('name', '')
-    tool_args = tool_call.get('function', {}).get('arguments', '{}')
-    params = {}
-    if tool_args and tool_args.strip():
-        try:
-            params = JSONCodec.loads(tool_args)
-        except Exception:
-            try:
-                params = ast.literal_eval(tool_args)
-            except Exception as e:
-                log.debug(e)
-                return {
-                    'tool_call_id': tool_call.get('id', ''),
-                    'content': (
-                        'Error: Tool call arguments could not be parsed. '
-                        'The model generated malformed or incomplete JSON.'
-                    ),
-                }
-    tool_call.setdefault('function', {})['arguments'] = JSONCodec.dumps(params)
+    params = _parse_tool_params(tool_call)
+    if params is None:
+        return {
+            'tool_call_id': tool_call.get('id', ''),
+            'content': (
+                'Error: Tool call arguments could not be parsed. The model generated malformed or incomplete JSON.'
+            ),
+        }
 
     tool = tools.get(name)
     if not tool:
@@ -3768,6 +3735,39 @@ def _messages_for_tasks(message_list: list[dict]) -> list[dict]:
             }
         )
     return messages
+
+
+_JSON_OBJECT_START = re.compile(r'\{\s*["}]')
+
+
+def _last_json_object(text: str) -> dict | None:
+    """The last JSON object in a task model's reply, or None when it has none.
+
+    Objects are read with the JSON decoder from left to right, each one whole,
+    so a brace inside one of their strings (a search query about `{set}`
+    syntax) is neither the start nor the end of an object, as it was when the
+    reply was sliced from its last `{` (#168). The last one is the answer when
+    the model echoes the template's example first. Only a `{` that can open an
+    object (`{"` or `{}`) is tried, so a reply full of code braces is not
+    decoded at every one.
+    """
+    decoder = json.JSONDecoder()
+    found = None
+    pos = 0
+    while match := _JSON_OBJECT_START.search(text, pos):
+        try:
+            value, end = decoder.raw_decode(text, match.start())
+        except ValueError:
+            pos = match.start() + 1
+            continue
+        except RecursionError:
+            # Nested past the interpreter's limit: no task reply looks like
+            # this, and retrying at each inner brace would take quadratic time.
+            break
+        if isinstance(value, dict):
+            found = value
+        pos = end
+    return found
 
 
 def _task_reply_json(res: dict, text_from_message) -> str:
@@ -4734,8 +4734,14 @@ def _url_citation_source(title: str, url: str) -> dict:
 def _parse_tool_params(tool_call: dict) -> dict | None:
     """The call's arguments as a dict (JSON, or a Python literal), written back onto it as JSON.
 
-    None when they can't be read."""
+    None when they can't be read, which includes valid JSON that is not an
+    object, such as `[]` or `"x"` (a tool takes named parameters), and a Python
+    literal holding what JSON cannot carry, such as a set (#166)."""
     tool_args = tool_call.get('function', {}).get('arguments', '{}')
+    if isinstance(tool_args, dict):
+        tool_args = JSONCodec.dumps(tool_args)
+    elif not isinstance(tool_args, str | None):
+        return None
     params = {}
     if tool_args and tool_args.strip():
         try:
@@ -4746,7 +4752,14 @@ def _parse_tool_params(tool_call: dict) -> dict | None:
             except Exception as e:
                 log.debug(e)
                 return None
-    tool_call.setdefault('function', {})['arguments'] = JSONCodec.dumps(params)
+    if not isinstance(params, dict):
+        return None
+    try:
+        arguments = JSONCodec.dumps(params)
+    except (TypeError, ValueError) as e:
+        log.debug(e)
+        return None
+    tool_call.setdefault('function', {})['arguments'] = arguments
     return params
 
 
@@ -5077,11 +5090,17 @@ class _StreamingReply:
                 self.usage = stream.add_usage(response_metadata['usage'])
                 response_metadata['usage'] = self.usage
 
-            if response_metadata.get('error'):
+            if 'error' in response_metadata:
+                # `response.failed`: save the error as the Chat Completions path
+                # does, so the reply still reads as failed after a reload, and
+                # give one with no error object a message of its own (#167).
+                error = response_metadata['error'] or {'message': 'The provider ended the reply with an error.'}
+                log.error('Provider returned error (Responses API stream): %s', error)
+                await self._save_error(error)
                 await self.event_emitter(
                     {
                         'type': 'chat:completion',
-                        'data': {'error': response_metadata['error']},
+                        'data': {'error': error},
                     }
                 )
 
