@@ -66,3 +66,53 @@ def test_paging_with_line_numbers_returns_the_whole_file_once(tool):
 
     assert raw == CONTENT
     assert offsets == list(range(0, len(CONTENT), 200))
+
+
+# --- #513: a page's edges ------------------------------------------------------
+
+
+def _page(tool, **kwargs):
+    return json.loads(asyncio.run(tool('f1', __request__=REQUEST, __user__=USER, **kwargs)))
+
+
+@pytest.mark.parametrize('tool', [builtin.view_file, builtin.view_knowledge_file])
+def test_a_page_ending_on_a_newline_does_not_number_the_next_line_too(tool):
+    first_line = CONTENT.split('\n')[0]
+    page = _page(tool, offset=0, max_chars=len(first_line) + 1, line_numbers=True)
+    next_page = _page(tool, offset=page['next_offset'], max_chars=20, line_numbers=True)
+
+    assert page['content'] == f'1: {first_line}\n'
+    assert next_page['content'].startswith('2: ')
+
+
+@pytest.mark.parametrize('tool', [builtin.view_file, builtin.view_knowledge_file])
+def test_a_page_starting_mid_line_says_its_first_line_is_continued(tool):
+    mid = _page(tool, offset=3, max_chars=20, line_numbers=True)
+    start = _page(tool, offset=0, max_chars=20, line_numbers=True)
+    next_line = _page(tool, offset=CONTENT.index('\n') + 1, max_chars=20, line_numbers=True)
+
+    assert mid['first_line_continued'] is True
+    assert mid['content'].startswith('1: ')
+    assert 'first_line_continued' not in start
+    assert 'first_line_continued' not in next_line
+
+
+@pytest.mark.parametrize('tool', [builtin.view_file, builtin.view_knowledge_file])
+@pytest.mark.parametrize(('start_line', 'end_line'), [(200, None), (70, 80), (10, 5)])
+def test_a_line_range_that_selects_nothing_says_so_instead_of_a_reversed_range(tool, start_line, end_line):
+    page = _page(tool, start_line=start_line, end_line=end_line)
+
+    assert page['content'] == ''
+    assert 'showing_lines' not in page
+    assert page['total_lines'] == 60
+    assert page['note']
+    assert not page.get('truncated')
+
+
+@pytest.mark.parametrize('tool', [builtin.view_file, builtin.view_knowledge_file])
+def test_a_line_range_still_reads_as_before(tool):
+    page = _page(tool, start_line=59, end_line=70)
+
+    assert page['showing_lines'] == '59-60'
+    assert page['content'].split('\n')[0].startswith('59: ')
+    assert 'note' not in page
