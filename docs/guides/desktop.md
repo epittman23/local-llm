@@ -56,6 +56,10 @@ running:
 
 `:5174` and `:4000` are different origins, so each keeps its own login.
 
+The sources it compares with `dist/` are `apps/web`'s `src/` and `public/`
+(every file and folder in them, so a renamed or deleted file counts),
+`package.json`, `bun.lock`, `astro.config.mjs` and `tsconfig.json`.
+
 The backend it starts runs `make backend LLLM_UVICORN_FLAGS='--timeout-graceful-shutdown 10'`
 with `LLLM_STOP_JOBS_ON_SHUTDOWN=true`.
 - **No `--reload`:** backend code edits don't take effect while the app owns

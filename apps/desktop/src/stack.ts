@@ -64,14 +64,18 @@ export function decideStart(input: StartInput): StartPlan {
 	return { mode: 'own', loadUrl, buildUi: input.uiStale && !useDevServer };
 }
 
-/** apps/web inputs whose change means `dist/` is out of date. */
-export const UI_SOURCES = ['src', 'public', 'package.json', 'bun.lock', 'astro.config.mjs'];
+/** apps/web inputs whose change means `dist/` is out of date; tsconfig.json holds the path aliases (#429). */
+export const UI_SOURCES = ['src', 'public', 'package.json', 'bun.lock', 'astro.config.mjs', 'tsconfig.json'];
 
 export function uiBuildIsStale(builtAt: number | null, newestSource: number): boolean {
 	return builtAt === null || newestSource > builtAt;
 }
 
-/** The newest modification time among these files and everything under these directories. */
+/**
+ * The newest modification time among these files and everything under these
+ * directories, the directories included: a rename or a deletion changes only
+ * the directory it happened in, as the files left keep their times (#429).
+ */
 export async function newestMtime(paths: string[]): Promise<number> {
 	let newest = 0;
 	for (const path of paths) {
@@ -84,7 +88,7 @@ export async function newestMtime(paths: string[]): Promise<number> {
 		newest = Math.max(newest, info.mtimeMs);
 		if (!info.isDirectory()) continue;
 		for (const entry of await readdir(path, { recursive: true, withFileTypes: true })) {
-			if (!entry.isFile()) continue;
+			if (!entry.isFile() && !entry.isDirectory()) continue;
 			try {
 				newest = Math.max(newest, (await stat(join(entry.parentPath, entry.name))).mtimeMs);
 			} catch {

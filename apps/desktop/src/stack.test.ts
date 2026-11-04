@@ -1,4 +1,4 @@
-import { appendFileSync, mkdtempSync, utimesSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -17,6 +17,7 @@ import {
 	type StartInput,
 	shellQuote,
 	stopGroup,
+	UI_SOURCES,
 	uiBuildIsStale
 } from './stack';
 
@@ -91,6 +92,24 @@ describe('the UI build', () => {
 		utimesSync(join(dir, 'b.ts'), 5000, 5000);
 		utimesSync(dir, 2000, 2000);
 		expect(await newestMtime([dir, join(dir, 'missing')])).toBe(5_000_000);
+	});
+
+	it('sees a file deleted or renamed in a subdirectory, by the directory it left (#429)', async () => {
+		const dir = mkdtempSync(join(tmpdir(), 'lllm-mtime-'));
+		const pages = join(dir, 'pages');
+		mkdirSync(pages);
+		writeFileSync(join(pages, 'old.astro'), '');
+		writeFileSync(join(pages, 'kept.astro'), '');
+		for (const path of [join(pages, 'old.astro'), join(pages, 'kept.astro'), pages, dir]) utimesSync(path, 1000, 1000);
+		expect(await newestMtime([dir])).toBe(1_000_000);
+
+		rmSync(join(pages, 'old.astro'));
+		utimesSync(pages, 7000, 7000); // what the deletion does to it, at a known time
+		expect(await newestMtime([dir])).toBe(7_000_000);
+	});
+
+	it('counts the TypeScript config, which holds the path aliases, as a source (#429)', () => {
+		expect(UI_SOURCES).toContain('tsconfig.json');
 	});
 });
 
