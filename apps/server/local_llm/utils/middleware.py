@@ -3609,7 +3609,13 @@ def build_response_object(response, response_data):
     return response
 
 
-def update_assistant_message_from_stream(assistant_message, raw):
+def update_assistant_message_from_stream(assistant_message, raw, stream_usage: dict):
+    """Add one streamed line to the assistant message the outlet filters read.
+
+    `stream_usage` holds the usage reported so far on this stream. A provider
+    can report its running usage on several chunks, so each report replaces
+    the keys it carries rather than adding to them (#155).
+    """
     line = raw.decode('utf-8', 'replace') if isinstance(raw, bytes) else raw
     if not isinstance(line, str):
         return
@@ -3639,13 +3645,15 @@ def update_assistant_message_from_stream(assistant_message, raw):
             if output:
                 assistant_message['output'] = output
             if meta and meta.get('usage'):
-                assistant_message['usage'] = merge_usage(assistant_message.get('usage'), meta['usage'])
+                stream_usage.update(meta['usage'])
+                assistant_message['usage'] = normalize_usage(stream_usage)
             continue
 
         raw_usage = data.get('usage', {}) or {}
         raw_usage.update(data.get('timings', {}))
         if raw_usage:
-            assistant_message['usage'] = merge_usage(assistant_message.get('usage'), raw_usage)
+            stream_usage.update(raw_usage)
+            assistant_message['usage'] = normalize_usage(stream_usage)
 
         for choice in data.get('choices', []):
             delta = choice.get('delta', {}) or {}
@@ -5066,7 +5074,7 @@ class _StreamingReply:
 
             # Normalize and capture usage for DB persistence
             if response_metadata.get('usage'):
-                self.usage = merge_usage(self.usage, response_metadata['usage'])
+                self.usage = stream.add_usage(response_metadata['usage'])
                 response_metadata['usage'] = self.usage
 
             if response_metadata.get('error'):
@@ -5110,7 +5118,7 @@ class _StreamingReply:
         raw_usage = data.get('usage', {}) or {}
         raw_usage.update(data.get('timings', {}))  # llama.cpp
         if raw_usage:
-            self.usage = merge_usage(self.usage, raw_usage)
+            self.usage = stream.add_usage(raw_usage)
             await self.event_emitter(
                 {
                     'type': 'chat:completion',
@@ -6069,6 +6077,21 @@ class _StreamPass:
             ),
         )
         self.filter_extra_params = {'__body__': form_data, **reply.extra_params} if reply.filter_functions else None
+        # The reply's usage before this request, and this request's own so far.
+        self.usage_before = reply.usage
+        self.usage = {}
+
+    def add_usage(self, chunk_usage: dict) -> dict:
+        """The reply's usage after a chunk of this stream that reports usage.
+
+        A provider can report its running usage on several chunks of one
+        stream (llama.cpp's per-token timings do), so each report replaces the
+        keys it carries rather than adding to them (#155). Each request of a
+        reply, such as a tool-call round, is billed on its own, so the stream's
+        usage is added to the reply's from before it.
+        """
+        self.usage = {**self.usage, **chunk_usage}
+        return merge_usage(self.usage_before, self.usage)
 
 
 class _ToolCallRounds:
@@ -6381,6 +6404,7 @@ async def _passthrough_stream(response, ctx: dict, events: list, filter_function
         return f'data: {item}\n\n'
 
     assistant_message = {}
+    stream_usage = {}
     filter_context = FilterContext()
     has_api_outlet_filters = ENABLE_API_OUTLET_FILTERS and bool(filter_functions)
     if ENABLE_API_OUTLET_FILTERS and not has_api_outlet_filters:
@@ -6412,7 +6436,7 @@ async def _passthrough_stream(response, ctx: dict, events: list, filter_function
 
         if data:
             if has_api_outlet_filters:
-                update_assistant_message_from_stream(assistant_message, data)
+                update_assistant_message_from_stream(assistant_message, data, stream_usage)
             yield data
 
     if has_api_outlet_filters and assistant_message:
