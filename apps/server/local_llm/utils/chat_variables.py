@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from typing import Any
 
@@ -16,6 +17,9 @@ CHAT_VARIABLE_ANY_RE = re.compile(r'{{\s*chat\.variables\.([^\s|{}]+)\s*(?:\|([^
 USER_VARIABLE_ANY_RE = re.compile(r'{{\s*user\.variables\.([^\s|{}]+)\s*(?:\|([^{}]*))?}}')
 MAX_VARIABLE_VALUE_LENGTH = 20_000
 MAX_VARIABLES_JSON_LENGTH = 100_000
+
+
+log = logging.getLogger(__name__)
 
 
 class ChatVariablesError(ValueError):
@@ -225,35 +229,60 @@ def validate_chat_variables(
     except TypeError:
         raise ChatVariablesError('Chat variables must be JSON serializable.')
 
+    return {key: _validated_value(key, field, variables, required) for key, field in field_map.items()}
+
+
+def _validated_value(key: str, field: dict[str, Any], variables: dict[str, Any], required: bool) -> Any:
+    """One chat variable's value, its default, or '' when it has none; ChatVariablesError when it is invalid."""
+    has_value = key in variables and variables[key] not in (None, '')
+    value = variables.get(key)
+    label = field.get('label') or key
+
+    if not has_value:
+        if field.get('default') not in (None, ''):
+            value = field.get('default')
+            has_value = True
+        elif required and field.get('required'):
+            raise ChatVariablesError(f'Missing required chat variable: {label}')
+        else:
+            value = ''
+
+    if field.get('type') == 'select':
+        options = field.get('options') or []
+        if has_value and value not in options:
+            raise ChatVariablesError(f'Invalid value for chat variable: {label}')
+
+    if isinstance(value, str):
+        value = value.replace('\r\n', '\n')
+        if len(value) > MAX_VARIABLE_VALUE_LENGTH:
+            raise ChatVariablesError(f'Chat variable is too long: {label}')
+
+    return value
+
+
+def _renderable_chat_variables(system_prompt: str, variables: Any, required: bool) -> dict[str, Any]:
+    """The values to render: each valid variable, with an invalid one left out (and logged).
+
+    An invalid value, such as a select option the model no longer offers,
+    blanks only its own variable, not every one in the prompt (#172). What
+    makes the whole set unusable (an unreadable definition, a set too large
+    to store) still renders none, now with a warning.
+    """
+    try:
+        field_map = collect_chat_variable_fields(system_prompt)
+        variables = normalize_chat_variables(variables)
+        if len(JSONCodec.dumps(variables)) > MAX_VARIABLES_JSON_LENGTH:
+            raise ChatVariablesError('Chat variables are too large.')
+    except (ChatVariablesError, TypeError) as e:
+        log.warning('Chat variables not rendered: %s', e)
+        return {}
+
     validated: dict[str, Any] = {}
     for key, field in field_map.items():
-        has_value = key in variables and variables[key] not in (None, '')
-        value = variables.get(key)
-
-        if not has_value:
-            if field.get('default') not in (None, ''):
-                value = field.get('default')
-                has_value = True
-            elif required and field.get('required'):
-                label = field.get('label') or key
-                raise ChatVariablesError(f'Missing required chat variable: {label}')
-            else:
-                value = ''
-
-        if field.get('type') == 'select':
-            options = field.get('options') or []
-            if has_value and value not in options:
-                label = field.get('label') or key
-                raise ChatVariablesError(f'Invalid value for chat variable: {label}')
-
-        if isinstance(value, str):
-            value = value.replace('\r\n', '\n')
-            if len(value) > MAX_VARIABLE_VALUE_LENGTH:
-                label = field.get('label') or key
-                raise ChatVariablesError(f'Chat variable is too long: {label}')
-
-        validated[key] = value
-
+        try:
+            validated[key] = _validated_value(key, field, variables, required)
+        except ChatVariablesError as e:
+            log.warning('Chat variable %s not rendered: %s', key, e)
     return validated
 
 
@@ -266,10 +295,7 @@ def render_chat_variables(
     if not system_prompt:
         return system_prompt
 
-    try:
-        validated = validate_chat_variables(system_prompt, variables, required=required)
-    except ChatVariablesError:
-        validated = {}
+    validated = _renderable_chat_variables(system_prompt, variables, required)
 
     def replace(match: re.Match) -> str:
         key = match.group(1).strip()
