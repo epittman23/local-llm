@@ -112,6 +112,40 @@ test.describe('personal settings', () => {
 		expect(JSON.stringify(variables[0])).toContain('"region":"eu"');
 	});
 
+	test('Enter in a password field changes the password, not the profile (#260)', async ({ page }) => {
+		await mockWorkspaceBackend(page, {
+			role: 'user',
+			features: { enable_login_form: true, enable_password_change_form: true }
+		});
+		await mockUserSettings(page);
+		const profiles: unknown[] = [];
+		const passwords: unknown[] = [];
+		await page.route('**/api/v1/auths/update/profile', (route) => {
+			profiles.push(route.request().postDataJSON());
+			return json(route, { id: 'u1', ...route.request().postDataJSON() });
+		});
+		await page.route('**/api/v1/auths/update/password', (route) => {
+			passwords.push(route.request().postDataJSON());
+			return json(route, { detail: 'Incorrect password' }, 400);
+		});
+		await page.goto('/?settings=account');
+		const m = modal(page);
+		await expect(m.getByLabel('Name')).toHaveValue('Test User');
+
+		await m.getByLabel('Current Password').fill('old-pass');
+		await m.getByLabel('New Password').fill('new-pass');
+		await m.getByLabel('Confirm Password').fill('new-pass');
+		await m.getByLabel('Confirm Password').press('Enter');
+		await expect(page.getByText('Incorrect password')).toBeVisible();
+		expect(passwords).toEqual([{ password: 'old-pass', new_password: 'new-pass' }]);
+		expect(profiles).toHaveLength(0);
+
+		// And Enter in a profile field still saves the tab, not the password.
+		await m.getByLabel('Name').press('Enter');
+		await expect.poll(() => profiles.length).toBe(1);
+		expect(passwords).toHaveLength(1);
+	});
+
 	test('Archived Chats lists, and unarchives, an archived chat', async ({ page }) => {
 		await mockWorkspaceBackend(page, { role: 'user' });
 		await mockUserSettings(page);
