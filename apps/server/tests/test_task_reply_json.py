@@ -1,10 +1,10 @@
-"""A task model's JSON is read from its first object, so braces inside strings survive (#168).
+"""A task model's JSON is read whole with the decoder, so braces inside strings survive (#168).
 
 The web search, image prompt and retrieval handlers took the JSON from the
 reply's last `{`, so a generated query such as "python {set} comprehension
 syntax" cut the object short, failed to parse, and the fallback then searched
-for the cut fragment. They now read the first JSON object in the reply with
-the JSON decoder.
+for the cut fragment. They now read the reply's objects whole with the JSON
+decoder and take the last one, as before.
 
 Run from apps/server:
 
@@ -12,6 +12,7 @@ Run from apps/server:
 """
 
 import asyncio
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -29,15 +30,38 @@ from local_llm.utils import middleware
         ('```json\n{"queries": ["a } b"]}\n```', {'queries': ['a } b']}),
         # A stray brace before the object is skipped.
         ('Use {curly} braces: {"queries": ["x"]}', {'queries': ['x']}),
+        # The template's example echoed first: the answer is the last object.
+        ('Format: {"queries": []}. Answer: {"queries": ["x {y}"]}', {'queries': ['x {y}']}),
+        ('{}', {}),
     ],
 )
-def test_the_first_json_object_is_read_whole(text, expected):
-    assert middleware._first_json_object(text) == expected
+def test_the_last_json_object_is_read_whole(text, expected):
+    assert middleware._last_json_object(text) == expected
 
 
-@pytest.mark.parametrize('text', ['', 'no json here', '{not json', '["a"]', '{"a": 1'])
+@pytest.mark.parametrize(
+    'text',
+    ['', 'no json here', '{not json', '["a"]', '{"a": 1', '{"queries": ["a", "b"'],
+)
 def test_no_json_object_is_none(text):
-    assert middleware._first_json_object(text) is None
+    assert middleware._last_json_object(text) is None
+
+
+def test_nesting_past_the_recursion_limit_ends_the_search_quickly():
+    started = time.perf_counter()
+
+    assert middleware._last_json_object('{"a": 1} ' + '{"a":' * 20000) == {'a': 1}
+    assert time.perf_counter() - started < 5
+
+
+def test_a_reply_full_of_code_braces_is_read_quickly():
+    code = 'for (i = 0; i < n; i++) { if (a[i]) { b(); } }\n' * 20000  # ~1 MB, 80,000 braces
+    started = time.perf_counter()
+
+    assert middleware._last_json_object(code + '{"queries": ["loops"]}') == {'queries': ['loops']}
+    # Decoding at every brace took about 45 s for this; skipping the ones that
+    # cannot open an object takes milliseconds.
+    assert time.perf_counter() - started < 5
 
 
 def test_web_search_sends_a_query_containing_braces_whole(monkeypatch):
@@ -70,11 +94,21 @@ def test_web_search_sends_a_query_containing_braces_whole(monkeypatch):
     assert searched == [['python {set} comprehension syntax']]
 
 
-def test_web_search_falls_back_to_the_whole_reply_without_json(monkeypatch):
+@pytest.mark.parametrize(
+    ('reply', 'expected'),
+    [
+        # No braces at all: the reply is the query.
+        ('set comprehension syntax', ['set comprehension syntax']),
+        # JSON that does not parse (cut short, say): the user's message, not the fragment.
+        ('{"queries": ["set compre', ['q']),
+        ('set comprehension {syntax', ['q']),
+    ],
+)
+def test_web_search_fallbacks(monkeypatch, reply, expected):
     searched = []
 
     async def generate_queries(request, form, user):
-        return {'choices': [{'message': {'content': 'set comprehension {syntax'}}]}
+        return {'choices': [{'message': {'content': reply}}]}
 
     async def process_web_search(request, form, user=None):
         searched.append(form.queries)
@@ -97,8 +131,7 @@ def test_web_search_falls_back_to_the_whole_reply_without_json(monkeypatch):
         )
     )
 
-    # Not a fragment cut at the brace.
-    assert searched == [['set comprehension {syntax']]
+    assert searched == [expected]
 
 
 class _Stop(Exception):

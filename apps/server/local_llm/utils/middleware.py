@@ -1435,9 +1435,13 @@ async def chat_web_search_handler(request: Request, form_data: dict, extra_param
             raise Exception(detail)
 
         response = res['choices'][0]['message']['content'] or ''
-        found = _first_json_object(response)
-        # A reply without a JSON object is taken as the query itself.
-        queries = found.get('queries', []) if found is not None else [response]
+        found = _last_json_object(response)
+        if found is not None:
+            queries = found.get('queries', [])
+        else:
+            # A reply with no braces is taken as the query itself; one whose
+            # JSON did not parse (cut short, say) gives way to the user's message.
+            queries = [user_message or ''] if '{' in response else [response]
 
         if ENABLE_QUERIES_CACHE:
             request.state.cached_queries = queries
@@ -1802,7 +1806,7 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
                         detail = 'Image prompt generation failed'
                     raise Exception(detail)
 
-                found = _first_json_object(res['choices'][0]['message']['content'] or '')
+                found = _last_json_object(res['choices'][0]['message']['content'] or '')
                 prompt = found.get('prompt', []) if found is not None else user_message
 
             except Exception as e:
@@ -1901,9 +1905,12 @@ async def chat_completion_files_handler(
                     user,
                 )
                 queries_response = queries_response['choices'][0]['message']['content'] or ''
-                found = _first_json_object(queries_response)
-                # A reply without a JSON object is taken as the query itself.
-                queries_response = found if found is not None else {'queries': [queries_response]}
+                found = _last_json_object(queries_response)
+                if found is None:
+                    # As in web search: a reply with no braces is the query; one whose JSON
+                    # did not parse gives no queries, so the user's message is used below.
+                    found = {'queries': [] if '{' in queries_response else [queries_response]}
+                queries_response = found
 
                 queries = queries_response.get('queries', [])
             except Exception:
@@ -3731,25 +3738,37 @@ def _messages_for_tasks(message_list: list[dict]) -> list[dict]:
     return messages
 
 
-def _first_json_object(text: str) -> dict | None:
-    """The first JSON object in a task model's reply, or None when it has none.
+_JSON_OBJECT_START = re.compile(r'\{\s*["}]')
 
-    Read with the JSON decoder from each `{` in turn, so a brace inside one of
-    its strings (a search query about `{set}` syntax) does not cut it short,
-    as slicing from the last `{` did (#168).
+
+def _last_json_object(text: str) -> dict | None:
+    """The last JSON object in a task model's reply, or None when it has none.
+
+    Objects are read with the JSON decoder from left to right, each one whole,
+    so a brace inside one of their strings (a search query about `{set}`
+    syntax) is neither the start nor the end of an object, as it was when the
+    reply was sliced from its last `{` (#168). The last one is the answer when
+    the model echoes the template's example first. Only a `{` that can open an
+    object (`{"` or `{}`) is tried, so a reply full of code braces is not
+    decoded at every one.
     """
     decoder = json.JSONDecoder()
-    start = text.find('{')
-    while start != -1:
+    found = None
+    pos = 0
+    while match := _JSON_OBJECT_START.search(text, pos):
         try:
-            value, _ = decoder.raw_decode(text, start)
+            value, end = decoder.raw_decode(text, match.start())
         except ValueError:
-            pass
-        else:
-            if isinstance(value, dict):
-                return value
-        start = text.find('{', start + 1)
-    return None
+            pos = match.start() + 1
+            continue
+        except RecursionError:
+            # Nested past the interpreter's limit: no task reply looks like
+            # this, and retrying at each inner brace would take quadratic time.
+            break
+        if isinstance(value, dict):
+            found = value
+        pos = end
+    return found
 
 
 def _task_reply_json(res: dict, text_from_message) -> str:
