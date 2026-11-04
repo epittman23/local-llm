@@ -328,6 +328,67 @@ describe('useChatSession loadChat', () => {
 		expect(session.history.messages['B-m']?.content).toBe('hello from B');
 	});
 
+	/** Opens chat A, starts a reply there whose POST answers only when told, then opens chat B. */
+	async function startInAThenOpenB(start: () => void, setup?: () => void) {
+		const send = vi.mocked((await import('@/lib/apis/openai')).generateOpenAIChatCompletion);
+		send.mockClear();
+		let answer: (value: unknown) => void = () => {};
+		send.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)) as never);
+		const router = await openChatA();
+		if (setup) act(setup);
+		act(start);
+		await waitFor(() => expect(send).toHaveBeenCalled());
+		await act(() => router.navigate('/c/B'));
+		await waitFor(() => expect(pending.B).toBeDefined());
+		await act(async () => pending.B(undefined));
+		await waitFor(() => expect(session.chat?.id).toBe('B'));
+		return (value: unknown) => act(async () => answer(value));
+	}
+
+	it('a reply started before another chat opened does not put its tasks in that chat (#515)', async () => {
+		probeModels = [{ id: 'm' }];
+		try {
+			const answer = await startInAThenOpenB(() => void session.submit('in A', [], 'm'));
+			await answer({ task_ids: ['tA'] });
+
+			expect(session.taskIds).toBeNull();
+			expect(session.generating).toBe(false);
+		} finally {
+			probeModels = [];
+		}
+	});
+
+	it('a continue started before another chat opened does not put its tasks there (#515)', async () => {
+		probeModels = [{ id: 'm' }];
+		try {
+			const answer = await startInAThenOpenB(
+				() => void session.continueReply(session.history.messages.r),
+				() =>
+					session.setHistory((h) => ({
+						currentId: 'r',
+						messages: {
+							...h.messages,
+							'A-m': { ...h.messages['A-m'], childrenIds: ['r'] },
+							r: {
+								id: 'r',
+								parentId: 'A-m',
+								childrenIds: [],
+								role: 'assistant',
+								content: 'half',
+								done: true,
+								model: 'm'
+							}
+						}
+					}))
+			);
+			await answer({ task_ids: ['tA'] });
+
+			expect(session.taskIds).toBeNull();
+		} finally {
+			probeModels = [];
+		}
+	});
+
 	const savedTo = () => vi.mocked(chatsApi.updateChatById).mock.calls.map((c) => c[1]);
 
 	it('a rating is saved to its chat, with the feedback id and the tags', async () => {

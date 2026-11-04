@@ -410,6 +410,13 @@ export function useChatSession({
 		return req;
 	}, []);
 
+	/**
+	 * Whether the chat a request was made in is still the one open: opening
+	 * another starts a new set of requests. A reply whose POST answers after
+	 * that must not put its tasks, or its failure, into the chat open now (#515).
+	 */
+	const stillOpen = useCallback((req: ChatRequest) => inFlightRef.current.has(req), []);
+
 	const endRequest = useCallback((req: ChatRequest) => {
 		inFlightRef.current.delete(req);
 		req.settle();
@@ -492,19 +499,19 @@ export function useChatSession({
 				req.posted = true;
 				const res = await generateOpenAIChatCompletion(token, body, `${WEBUI_BASE_URL}/api`).catch((error) => {
 					toast.error(errorText(error) || 'Uh-oh! There was an issue with the response.');
-					failAll(error);
+					if (stillOpen(req)) failAll(error);
 					return null;
 				});
 				if (!res) return;
 				if (res.error) {
 					toast.error(errorText(res.error));
-					failAll(res.error);
+					if (stillOpen(req)) failAll(res.error);
 					return;
 				}
 				const ids: string[] = res.task_ids ?? (res.task_id ? [res.task_id] : []);
 				if (req.stopped) await cancelStopped(res.chat_id ?? chatId, ids);
-				else setTaskIds(ids.length ? ids : null);
-				if (res.chat_id && !chatIdRef.current && !l.temporary) {
+				else if (stillOpen(req)) setTaskIds(ids.length ? ids : null);
+				if (res.chat_id && !chatIdRef.current && !l.temporary && stillOpen(req)) {
 					chatIdRef.current = adoptedRef.current = res.chat_id;
 					navigate(`/c/${res.chat_id}`, { replace: true });
 					void refreshList();
@@ -526,6 +533,7 @@ export function useChatSession({
 			userLocation,
 			beginRequest,
 			endRequest,
+			stillOpen,
 			cancelStopped
 		]
 	);
@@ -701,22 +709,22 @@ export function useChatSession({
 				req.posted = true;
 				const res = await generateOpenAIChatCompletion(token, body, `${WEBUI_BASE_URL}/api`).catch((error) => {
 					toast.error(errorText(error));
-					setHistory((cur) => updateMessage(cur, message.id, (m) => failMessage(m, error)));
+					if (stillOpen(req)) setHistory((cur) => updateMessage(cur, message.id, (m) => failMessage(m, error)));
 					return null;
 				});
 				if (res?.error) {
 					toast.error(errorText(res.error));
-					setHistory((cur) => updateMessage(cur, message.id, (m) => failMessage(m, res.error)));
+					if (stillOpen(req)) setHistory((cur) => updateMessage(cur, message.id, (m) => failMessage(m, res.error)));
 					return;
 				}
 				const ids: string[] = res?.task_ids ?? (res?.task_id ? [res.task_id] : []);
 				if (req.stopped) await cancelStopped(chatId, ids);
-				else if (ids.length) setTaskIds(ids);
+				else if (ids.length && stillOpen(req)) setTaskIds(ids);
 			} finally {
 				endRequest(req);
 			}
 		},
-		[socket, token, user, config, setHistory, userLocation, beginRequest, endRequest, cancelStopped]
+		[socket, token, user, config, setHistory, userLocation, beginRequest, endRequest, stillOpen, cancelStopped]
 	);
 
 	/** Edits a prompt and sends it again as a new branch (`resend`), or edits a message in place. */
