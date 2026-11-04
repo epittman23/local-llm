@@ -69,11 +69,10 @@ export function chunkSettingsError(size: unknown, overlap: unknown): string | nu
  */
 export function ragFormError(c: Rec): string | null {
 	const engine = c.CONTENT_EXTRACTION_ENGINE;
-	if (engine === 'external') {
-		if (blank(c.EXTERNAL_DOCUMENT_LOADER_URL)) return 'External Document Loader URL required.';
-		if (c.EXTERNAL_DOCUMENT_LOADER_HEADERS && !isJsonObjectText(c.EXTERNAL_DOCUMENT_LOADER_HEADERS))
-			return 'Headers must be a valid JSON object';
-	}
+	if (engine === 'external' && blank(c.EXTERNAL_DOCUMENT_LOADER_URL)) return 'External Document Loader URL required.';
+	// Saved whichever engine is selected, and the server takes only an object (#234).
+	if (c.EXTERNAL_DOCUMENT_LOADER_HEADERS && !isJsonObjectText(c.EXTERNAL_DOCUMENT_LOADER_HEADERS))
+		return 'Headers must be a valid JSON object';
 	if (engine === 'tika' && blank(c.TIKA_SERVER_URL)) return 'Tika Server URL required.';
 	if (engine === 'docling' && blank(c.DOCLING_SERVER_URL)) return 'Docling Server URL required.';
 	if (
@@ -90,8 +89,15 @@ export function ragFormError(c: Rec): string | null {
 		return 'MinerU API Key required for Cloud API mode.';
 	const chunk = chunkSettingsError(c.CHUNK_SIZE, c.CHUNK_OVERLAP);
 	if (chunk) return chunk;
-	if (c.DOCLING_PARAMS && !parsesAsJson(c.DOCLING_PARAMS)) return 'Invalid JSON format in Docling Parameters';
-	if (c.MINERU_PARAMS && !parsesAsJson(c.MINERU_PARAMS)) return 'Invalid JSON format in MinerU Parameters';
+	// The server takes only an object here, so other JSON (`[]`) is refused too (#234).
+	for (const [key, name] of [
+		['DOCLING_PARAMS', 'Docling Parameters'],
+		['MINERU_PARAMS', 'MinerU Parameters']
+	] as const) {
+		if (!c[key]) continue;
+		if (!parsesAsJson(c[key])) return `Invalid JSON format in ${name}`;
+		if (!isJsonObjectText(c[key])) return `${name} must be a JSON object`;
+	}
 	return null;
 }
 
