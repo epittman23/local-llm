@@ -88,6 +88,14 @@ export function useAttachments({
 				toast.error('You cannot upload an empty file.');
 				return;
 			}
+			// HEIC/HEIF: most browsers cannot decode it, so it cannot be shown or
+			// scaled, and uploaded raw it fails at the provider. The Svelte app
+			// converted it to JPEG with a dependency this port does not carry, so it
+			// is refused (#220). The name counts only when the browser gave no type.
+			if (/^image\/hei[cf]$/i.test(file.type) || (!file.type && /\.hei[cf]$/i.test(file.name))) {
+				toast.error('HEIC images are not supported. Convert the image to JPEG or PNG first.');
+				return;
+			}
 			const itemId = uuid();
 			const image = file.type.startsWith('image/');
 			if (!image && temporary) {
