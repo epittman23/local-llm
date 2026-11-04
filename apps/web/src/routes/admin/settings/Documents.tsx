@@ -160,9 +160,11 @@ export default function Documents() {
 		}
 		setSaving(true);
 		try {
+			// Built first: what cannot be sent stops the save before the embedding changes (#234).
+			const payload = buildRagPayload(rag);
 			// Bypassing retrieval means there is no embedding model to keep in step.
 			if (!rag.BYPASS_EMBEDDING_AND_RETRIEVAL && !(await applyEmbedding())) return;
-			const res = await updateRAGConfig(token, buildRagPayload(rag));
+			const res = await updateRAGConfig(token, payload);
 			const { warnings, changes } = ragSaveOutcome(rag, res);
 			if (Object.keys(changes).length) setRag(changes);
 			for (const warning of warnings) toast.warning(warning, { duration: 15000 });
@@ -630,7 +632,7 @@ export default function Documents() {
 								{...bound}
 								name="FILE_MAX_SIZE"
 								label="Max Upload Size"
-								description="Maximum file size in MB. Leave empty for unlimited."
+								description="Maximum file size in MB. Leave empty or set 0 for unlimited."
 								placeholder="Leave empty for unlimited"
 								min={0}
 							/>
