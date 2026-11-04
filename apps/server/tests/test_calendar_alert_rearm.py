@@ -136,3 +136,39 @@ def test_the_repeated_hour_on_the_night_clocks_go_back_is_found():
     now = occurrence - 10 * MIN
     found = CalendarEvents._occurrences_in(model, now, now + HOUR, 'America/New_York')
     assert occurrence in [o.start_at for o in found]
+
+
+def _event_with_lead(uid: str, calendar_id: str, start_at: int, minutes: int):
+    form = CalendarEventForm(calendar_id=calendar_id, title='Talk', start_at=start_at, meta={'alert_minutes': minutes})
+    return _run(CalendarEvents.insert_new_event(uid, form))
+
+
+def _alerted(monkeypatch, event) -> int:
+    return [a['event_id'] for a in _poll(monkeypatch)].count(event.id)
+
+
+def test_a_reminder_longer_than_an_hour_fires_that_long_before(monkeypatch):
+    """#184: the poll fetched only events within the next hour, so a 2-hour reminder came an hour before."""
+    uid, cal = _user_calendar()
+    event = _event_with_lead(uid, cal, time.time_ns() + 90 * MIN, 120)
+
+    assert _alerted(monkeypatch, event) == 1
+    # Within its own lead, not the old one-hour window: not alerted again.
+    assert _alerted(monkeypatch, event) == 0
+
+
+def test_a_reminder_does_not_fire_before_its_lead(monkeypatch):
+    uid, cal = _user_calendar()
+    event = _event_with_lead(uid, cal, time.time_ns() + 90 * MIN, 60)
+
+    assert _alerted(monkeypatch, event) == 0
+
+
+def test_a_reminder_longer_than_a_day_fires_a_day_before(monkeypatch):
+    uid, cal = _user_calendar()
+    soon = _event_with_lead(uid, cal, time.time_ns() + 23 * HOUR, 3 * 24 * 60)
+    later = _event_with_lead(uid, cal, time.time_ns() + 25 * HOUR, 3 * 24 * 60)
+
+    sent = [a['event_id'] for a in _poll(monkeypatch)]
+    assert sent.count(soon.id) == 1
+    assert sent.count(later.id) == 0

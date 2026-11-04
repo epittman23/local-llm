@@ -4360,7 +4360,7 @@ async def create_calendar_event(
     :param calendar_id: Target calendar ID (optional, uses default calendar if omitted)
     :param all_day: Whether this is an all-day event (default: false)
     :param location: Event location (optional)
-    :param reminder_minutes: Minutes before the event to send a notification (optional, default: 10). Use 0 for "at time of event", -1 for no notification.
+    :param reminder_minutes: Minutes before the event to send a notification (optional, default: 10). Use 0 for "at time of event", -1 for no notification; at most 1440 (a day before).
     :return: JSON with the created event details including id
     """  # noqa: E501 - the model reads this docstring as the tool description
     if __request__ is None:
@@ -4513,7 +4513,7 @@ async def update_calendar_event(
     :param all_day: Whether this is an all-day event (optional)
     :param location: New event location (optional)
     :param is_cancelled: Set to true to cancel the event (optional)
-    :param reminder_minutes: Minutes before the event to send a reminder notification (optional). Use 0 for "at time of event", -1 for no reminder. Accepts any positive integer for custom timing (e.g. 120 for 2 hours before).
+    :param reminder_minutes: Minutes before the event to send a reminder notification (optional). Use 0 for "at time of event", -1 for no reminder. Accepts any positive integer for custom timing (e.g. 120 for 2 hours before); a reminder comes at most a day (1440 minutes) before.
     :return: JSON with the updated event details
     """  # noqa: E501 - the model reads this docstring as the tool description
     if __request__ is None:
