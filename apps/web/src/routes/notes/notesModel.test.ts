@@ -235,7 +235,7 @@ describe('saving access', () => {
 
 describe('openLinkedNote (#210)', () => {
 	beforeEach(() => vi.clearAllMocks());
-	const run = async (create: () => Promise<string | undefined>) => {
+	const run = async (create: () => Promise<string | null | undefined>) => {
 		const open = vi.fn();
 		await openLinkedNote(create, open);
 		return open.mock.calls;
@@ -247,10 +247,13 @@ describe('openLinkedNote (#210)', () => {
 	});
 	it('says why when the create fails, and opens the list', async () => {
 		expect(await run(() => Promise.reject('Notes are not allowed'))).toEqual([['/notes']]);
-		expect(toast.error).toHaveBeenCalledWith('Notes are not allowed');
+		expect(toast.error.mock.calls).toEqual([['Notes are not allowed']]);
 	});
 	it('says so when the create returns no note, and opens the list', async () => {
-		expect(await run(async () => undefined)).toEqual([['/notes']]);
-		expect(toast.error).toHaveBeenCalledWith('The note could not be created');
+		for (const id of [undefined, null, '']) {
+			vi.clearAllMocks();
+			expect(await run(async () => id)).toEqual([['/notes']]);
+			expect(toast.error.mock.calls).toEqual([['The note could not be created']]);
+		}
 	});
 });

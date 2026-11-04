@@ -27,8 +27,8 @@ import {
 	contentFromMarkdown,
 	groupNotes,
 	importableNote,
-	openLinkedNote,
 	nextSort,
+	openLinkedNote,
 	safeFileName
 } from './notesModel';
 
