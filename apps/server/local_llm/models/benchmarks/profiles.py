@@ -1,5 +1,6 @@
 import logging
 import time
+from typing import cast
 
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import (
@@ -18,9 +19,12 @@ from sqlalchemy import (
     text,
     update,
 )
+from sqlalchemy.engine import CursorResult
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from local_llm.benchmarks.serving.profiles import (
+    ProfileConflict,
     ProfileError,
     ServingProfile,
     validate_definition,
@@ -28,6 +32,13 @@ from local_llm.benchmarks.serving.profiles import (
 from local_llm.internal.db import Base, get_async_db_context
 
 log = logging.getLogger(__name__)
+
+
+def _unique_violation(error: IntegrityError) -> bool:
+    """Whether a unique constraint failed (a lost race), not a CHECK, NOT NULL or foreign key."""
+    orig = error.orig
+    sqlstate = getattr(orig, 'sqlstate', None) or getattr(orig, 'pgcode', None)
+    return sqlstate == '23505' or 'UNIQUE constraint failed' in str(orig)
 
 
 ####################
@@ -280,19 +291,27 @@ class BenchmarkProfileTable:
         now = int(time.time())
         async with get_async_db_context(db) as db:
             profile = BenchmarkProfile(name=name, display_name=display_name, is_default=False, created_at=now)
-            db.add(profile)
-            await db.flush()
-            db.add(
-                BenchmarkProfileVersion(
-                    profile_id=profile.profile_id,
-                    version=1,
-                    created_at=now,
-                    created_by=created_by,
-                    note=note,
-                    **definition,
+            try:
+                db.add(profile)
+                await db.flush()
+                db.add(
+                    BenchmarkProfileVersion(
+                        profile_id=profile.profile_id,
+                        version=1,
+                        created_at=now,
+                        created_by=created_by,
+                        note=note,
+                        **definition,
+                    )
                 )
-            )
-            await db.commit()
+                await db.commit()
+            except IntegrityError as e:
+                # Another create of the same name got in after the router's
+                # check: a conflict to report, not a 500 (#153).
+                await db.rollback()
+                if not _unique_violation(e):
+                    raise
+                raise ProfileConflict(f"a profile named '{name}' already exists") from e
             return (await self._entries(db, [profile]))[0]
 
     async def add_version(
@@ -308,7 +327,8 @@ class BenchmarkProfileTable:
 
         Two concurrent edits both computing the same next version number are
         stopped by uq_benchmark_profile_version rather than by a lock: one
-        commits, the other fails loudly instead of silently overwriting.
+        commits, the other raises ProfileConflict (a 409) instead of silently
+        overwriting (#153).
         """
         definition = validate_definition(definition)
         async with get_async_db_context(db) as db:
@@ -327,7 +347,13 @@ class BenchmarkProfileTable:
                 **definition,
             )
             db.add(row)
-            await db.commit()
+            try:
+                await db.commit()
+            except IntegrityError as e:
+                await db.rollback()
+                if not _unique_violation(e):
+                    raise
+                raise ProfileConflict('another edit of this profile was saved first; reload it and try again') from e
             await db.refresh(row)
             return BenchmarkProfileVersionModel.model_validate(row)
 
@@ -338,32 +364,70 @@ class BenchmarkProfileTable:
             )
             await db.commit()
 
+    async def _refusal(self, db: AsyncSession, profile_id: int, message: str) -> ProfileError:
+        """Why a guarded write matched nothing: the profile is gone, or the guard held."""
+        await db.rollback()
+        result = await db.execute(select(BenchmarkProfile).filter_by(profile_id=profile_id))
+        if result.scalars().first() is None:
+            return ProfileError(f'no benchmark profile with id {profile_id}')
+        return ProfileError(message)
+
     async def set_default(self, profile_id: int, db: AsyncSession | None = None) -> None:
+        """Make a profile the default, unless it is archived.
+
+        Clear, then set, in one transaction, as two statements: the partial
+        unique index is checked row by row, so clearing first never has two
+        defaults. The set is guarded on `archived_at IS NULL` in the UPDATE
+        itself, not by an earlier read, so an archive that commits in between
+        makes it match nothing; the rollback then keeps the old default (#152).
+        A set-default that commits in between makes the index refuse this one,
+        a conflict (409) rather than a 500.
+        """
         async with get_async_db_context(db) as db:
-            result = await db.execute(select(BenchmarkProfile).filter_by(profile_id=profile_id))
-            profile = result.scalars().first()
-            if profile is None:
-                raise ProfileError(f'no benchmark profile with id {profile_id}')
-            if profile.archived_at is not None:
-                raise ProfileError('an archived profile cannot be the default')
-            # Clear, then set, in one transaction: the partial unique index is
-            # checked per statement, so this order never has two defaults.
-            await db.execute(
-                update(BenchmarkProfile).filter(BenchmarkProfile.is_default.is_(True)).values(is_default=False)
-            )
-            await db.execute(update(BenchmarkProfile).filter_by(profile_id=profile_id).values(is_default=True))
+            try:
+                await db.execute(
+                    update(BenchmarkProfile).filter(BenchmarkProfile.is_default.is_(True)).values(is_default=False)
+                )
+                # An UPDATE returns a CursorResult, which carries rowcount.
+                result = cast(
+                    CursorResult,
+                    await db.execute(
+                        update(BenchmarkProfile)
+                        .filter(BenchmarkProfile.profile_id == profile_id, BenchmarkProfile.archived_at.is_(None))
+                        .values(is_default=True)
+                    ),
+                )
+            except IntegrityError as e:
+                await db.rollback()
+                if not _unique_violation(e):
+                    raise
+                raise ProfileConflict(
+                    'another profile was made the default at the same time; reload and try again'
+                ) from e
+            if not result.rowcount:
+                raise await self._refusal(db, profile_id, 'an archived profile cannot be the default')
             await db.commit()
 
     async def archive(self, profile_id: int, db: AsyncSession | None = None) -> None:
-        """Hide a profile from pickers. Never a delete: runs reference its versions."""
+        """Hide a profile from pickers. Never a delete: runs reference its versions.
+
+        Guarded on `is_default` in the UPDATE itself, so a set-default that
+        commits in between makes it match nothing rather than leaving the
+        default archived (#152).
+        """
         async with get_async_db_context(db) as db:
-            result = await db.execute(select(BenchmarkProfile).filter_by(profile_id=profile_id))
-            profile = result.scalars().first()
-            if profile is None:
-                raise ProfileError(f'no benchmark profile with id {profile_id}')
-            if profile.is_default:
-                raise ProfileError('the default profile cannot be archived; set another default first')
-            profile.archived_at = int(time.time())
+            result = cast(
+                CursorResult,
+                await db.execute(
+                    update(BenchmarkProfile)
+                    .filter(BenchmarkProfile.profile_id == profile_id, BenchmarkProfile.is_default.is_(False))
+                    .values(archived_at=int(time.time()))
+                ),
+            )
+            if not result.rowcount:
+                raise await self._refusal(
+                    db, profile_id, 'the default profile cannot be archived; set another default first'
+                )
             await db.commit()
 
     async def unarchive(self, profile_id: int, db: AsyncSession | None = None) -> None:
