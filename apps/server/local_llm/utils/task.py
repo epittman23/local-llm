@@ -3,6 +3,7 @@ import logging
 import math
 import re
 import uuid
+from collections.abc import Callable
 from typing import Any
 
 from local_llm.config import DEFAULT_RAG_TEMPLATE
@@ -105,7 +106,10 @@ async def prompt_template(template: str, user: Any | None = None) -> str:
     return template
 
 
-def replace_prompt_variable(template: str, prompt: str) -> str:
+def replace_prompt_variable(template: str, prompt: str, wrap: Callable[[str], str] | None = None) -> str:
+    """Fills the prompt placeholders; `wrap`, if given, receives each filled-in piece
+    and returns what goes in the template in its place (see fill_task_template)."""
+
     def replacement_function(match):
         full_match = match.group(0).lower()  # Normalize to lowercase for consistent handling
         start_length = match.group(1)
@@ -129,7 +133,7 @@ def replace_prompt_variable(template: str, prompt: str) -> str:
 
     # Updated regex pattern to make it case-insensitive with the `(?i)` flag
     pattern = r'(?i){{prompt}}|{{prompt:start:(\d+)}}|{{prompt:end:(\d+)}}|{{prompt:middletruncate:(\d+)}}'
-    template = re.sub(pattern, replacement_function, template)
+    template = re.sub(pattern, lambda m: (wrap or _same)(replacement_function(m)), template)
     return template
 
 
@@ -195,7 +199,10 @@ def apply_content_filter(messages: list[dict], filter_str: str) -> list[dict]:
 
 
 def replace_messages_variable(
-    template: str, messages: list[dict] | None = None, variable_name: str = 'MESSAGES'
+    template: str,
+    messages: list[dict] | None = None,
+    variable_name: str = 'MESSAGES',
+    wrap: Callable[[str], str] | None = None,
 ) -> str:
     def replacement_function(match):
         # Groups: (1) filter for bare MESSAGES
@@ -250,11 +257,45 @@ def replace_messages_variable(
         rf'|\{{\{{{variable_pattern}:END:(\d+)(?:\|(\w+:\d+))?\}}\}}'
         rf'|\{{\{{{variable_pattern}:MIDDLETRUNCATE:(\d+)(?:\|(\w+:\d+))?\}}\}}'
         r')',
-        replacement_function,
+        lambda m: (wrap or _same)(replacement_function(m)),
         template,
     )
 
     return template
+
+
+def _same(text: str) -> str:
+    return text
+
+
+async def fill_task_template(
+    template: str,
+    user: Any | None,
+    prompt: str | None = None,
+    messages: list[dict] | None = None,
+    fill_messages: bool = True,
+) -> str:
+    """A task prompt: the template's own variables, then the user's prompt and messages.
+
+    The variables ({{USER_NAME}}, {{CURRENT_DATE}}, ...) are filled in the
+    template alone, and the prompt and messages go in last, as they are. They
+    used to be put in first and the whole text expanded after, so a message
+    that mentions {{USER_EMAIL}} or {{MESSAGES}} (a Jinja question, say) had
+    them filled in: the user's email, or the whole conversation again (#305).
+    """
+    template = await prompt_template(template, user)
+    pieces: list[str] = []
+
+    def keep(text: str) -> str:
+        pieces.append(text)
+        return f'\x00{len(pieces) - 1}\x00'
+
+    if prompt is not None:
+        template = replace_prompt_variable(template, prompt, wrap=keep)
+    if fill_messages:
+        template = replace_messages_variable(template, messages, wrap=keep)
+    # One pass, so a piece's own text is never read again.
+    return re.sub(r'\x00(\d+)\x00', lambda m: pieces[int(m.group(1))], template)
 
 
 # {{prompt:middletruncate:8000}}
@@ -302,47 +343,23 @@ async def rag_template(template: str, context: str, query: str):
 
 
 async def title_generation_template(template: str, messages: list[dict], user: Any | None = None) -> str:
-    prompt = get_last_user_message(messages)
-    template = replace_prompt_variable(template, prompt)
-    template = replace_messages_variable(template, messages)
-
-    template = await prompt_template(template, user)
-
-    return template
+    return await fill_task_template(template, user, get_last_user_message(messages), messages)
 
 
 async def follow_up_generation_template(template: str, messages: list[dict], user: Any | None = None) -> str:
-    prompt = get_last_user_message(messages)
-    template = replace_prompt_variable(template, prompt)
-    template = replace_messages_variable(template, messages)
-
-    template = await prompt_template(template, user)
-    return template
+    return await fill_task_template(template, user, get_last_user_message(messages), messages)
 
 
 async def tags_generation_template(template: str, messages: list[dict], user: Any | None = None) -> str:
-    prompt = get_last_user_message(messages)
-    template = replace_prompt_variable(template, prompt)
-    template = replace_messages_variable(template, messages)
-
-    template = await prompt_template(template, user)
-    return template
+    return await fill_task_template(template, user, get_last_user_message(messages), messages)
 
 
 async def image_prompt_generation_template(template: str, messages: list[dict], user: Any | None = None) -> str:
-    prompt = get_last_user_message(messages)
-    template = replace_prompt_variable(template, prompt)
-    template = replace_messages_variable(template, messages)
-
-    template = await prompt_template(template, user)
-    return template
+    return await fill_task_template(template, user, get_last_user_message(messages), messages)
 
 
 async def emoji_generation_template(template: str, prompt: str, user: Any | None = None) -> str:
-    template = replace_prompt_variable(template, prompt)
-    template = await prompt_template(template, user)
-
-    return template
+    return await fill_task_template(template, user, prompt, fill_messages=False)
 
 
 async def autocomplete_generation_template(
@@ -353,20 +370,11 @@ async def autocomplete_generation_template(
     user: Any | None = None,
 ) -> str:
     template = template.replace('{{TYPE}}', type if type else '')
-    template = replace_prompt_variable(template, prompt)
-    template = replace_messages_variable(template, messages)
-
-    template = await prompt_template(template, user)
-    return template
+    return await fill_task_template(template, user, prompt, messages)
 
 
 async def query_generation_template(template: str, messages: list[dict], user: Any | None = None) -> str:
-    prompt = get_last_user_message(messages)
-    template = replace_prompt_variable(template, prompt)
-    template = replace_messages_variable(template, messages)
-
-    template = await prompt_template(template, user)
-    return template
+    return await fill_task_template(template, user, get_last_user_message(messages), messages)
 
 
 def moa_response_generation_template(template: str, prompt: str, responses: list[str]) -> str:
