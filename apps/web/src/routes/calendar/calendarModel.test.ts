@@ -107,8 +107,8 @@ describe('placing events', () => {
 		const tz = process.env.TZ;
 		process.env.TZ = 'America/New_York';
 		try {
-			const rows = (events: unknown[], day: Date) =>
-				Array.from({ length: 24 }, (_, h) => eventsInHour(events as any, day, h).length);
+			const rows = (events: Parameters<typeof eventsInHour>[0], day: Date) =>
+				Array.from({ length: 24 }, (_, h) => eventsInHour(events, day, h).length);
 			// 8 Mar 2026, spring forward: 2 AM is skipped, so a 03:30 event is in the 3 AM row only.
 			const spring = ev(new Date(Date.UTC(2026, 2, 8, 7, 30)));
 			const springRows = rows([spring], at(2026, 2, 8));
