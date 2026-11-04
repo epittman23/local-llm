@@ -135,3 +135,22 @@ def test_a_runtime_load_of_broken_stored_code_still_switches_it_off(stored):
         asyncio.run(plugin.get_function_module_from_cache(_request(), stored))
 
     assert _function(stored).is_active is False
+
+
+def test_a_saved_update_caches_the_new_module(stored):
+    request = _request()
+    form = FunctionForm(id=stored, name='My filter', content=WORKING + '\n# edited\n', meta=FunctionMeta())
+
+    saved = asyncio.run(functions_router.update_function_by_id(request, stored, form, ADMIN, db=None))
+
+    assert saved is not None
+    assert hasattr(request.app.state.FUNCTIONS[stored], 'inlet')
+
+
+def test_a_cache_only_runtime_load_of_broken_stored_code_switches_it_off(stored):
+    asyncio.run(Functions.update_function_by_id(stored, {'content': BROKEN}))
+
+    with pytest.raises(SyntaxError):
+        asyncio.run(plugin.get_function_module_from_cache(_request(), stored, load_from_db=False))
+
+    assert _function(stored).is_active is False
