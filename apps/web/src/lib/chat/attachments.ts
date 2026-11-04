@@ -1,5 +1,6 @@
+import { toast } from 'sonner';
 import type { SessionUser } from '@/lib/stores/authStore';
-import type { ChatFile } from './history';
+import { type ChatFile, type History, messagesList } from './history';
 
 // What the chat input may attach and how (MessageInput.svelte, InputMenu,
 // IntegrationsMenu, Commands/*), as pure rules.
@@ -19,6 +20,11 @@ export type Capability =
 /** Every selected model has the capability (a capability that is not set counts as present, as in the Svelte app). */
 export function allCapable(selected: string[], models: ModelLike[], cap: Capability): boolean {
 	return selected.every((id) => models.find((m) => m.id === id)?.info?.meta?.capabilities?.[cap] ?? true);
+}
+
+/** At least one selected model has the capability (unset counts as present). */
+export function anyCapable(selected: string[], models: ModelLike[], cap: Capability): boolean {
+	return selected.some((id) => models.find((m) => m.id === id)?.info?.meta?.capabilities?.[cap] ?? true);
 }
 
 const perm = (user: SessionUser | null, group: 'chat' | 'features', key: string, fallback: boolean) =>
@@ -68,6 +74,38 @@ export function modelDefaults(
 
 export const isImageFile = (f: Pick<ChatFile, 'type' | 'content_type'>) =>
 	f.type === 'image' || (f.content_type ?? '').startsWith('image/');
+
+/**
+ * The selected models that cannot read images, by name, when the message going
+ * out (its files, or the conversation it continues) has an image and no image
+ * is being generated: Chat.svelte warned about each at send, without stopping
+ * it (#219).
+ */
+export function modelsWithoutVision(
+	selected: string[],
+	models: (ModelLike & { name?: string })[],
+	files: Pick<ChatFile, 'type' | 'content_type'>[],
+	imageGeneration: boolean
+): string[] {
+	if (imageGeneration || !files.some(isImageFile)) return [];
+	return selected.flatMap((id) => {
+		const model = models.find((m) => m.id === id);
+		return model?.info?.meta?.capabilities?.vision === false ? [model.name ?? model.id] : [];
+	});
+}
+
+/** Shows Chat.svelte's send-time error for each model `modelsWithoutVision` names, the conversation so far included. */
+export function warnModelsWithoutVision(
+	selected: string[],
+	models: (ModelLike & { name?: string })[],
+	files: Pick<ChatFile, 'type' | 'content_type'>[],
+	history: History,
+	imageGeneration: boolean
+) {
+	const earlier = messagesList(history, history.currentId).flatMap((m) => m.files ?? []);
+	for (const name of modelsWithoutVision(selected, models, [...files, ...earlier], imageGeneration))
+		toast.error(`Model ${name} is not vision capable`);
+}
 
 /**
  * The size an uploaded image is scaled down to, or null to keep it: the

@@ -13,7 +13,13 @@ import type { ChatFile, History } from '@/lib/chat/history';
 import { cssUrl } from '@/lib/chat/prefs';
 import { type Citation, citationIndex, citationsOf } from '@/lib/chat/sources';
 import { initialModels, needsWebSearchConfirm, newChatTemporary, webSearchConfirmText } from '@/lib/chat/request';
-import { canUploadFiles, canUploadWeb, featureButtons, modelDefaults } from '@/lib/chat/attachments';
+import {
+	canUploadFiles,
+	canUploadWeb,
+	featureButtons,
+	modelDefaults,
+	warnModelsWithoutVision
+} from '@/lib/chat/attachments';
 import { canUseFeature } from '@/lib/access/features';
 import { getTools } from '@/lib/apis/tools';
 import { useUserSettings } from '@/lib/settings/userSettings';
@@ -201,6 +207,13 @@ export function ChatPage() {
 	/** Sends a prompt now (true if it went, or was queued). */
 	const send = (text: string, files: ChatFile[] = []) => {
 		scrollOnce.current = true;
+		warnModelsWithoutVision(
+			atModel ? [atModel.id] : selectedModels,
+			models,
+			files,
+			session.history,
+			toggles.imageGeneration
+		);
 		const ok = session.submit(text, files, atModel?.id);
 		if (ok) attachments.clear();
 		return ok;

@@ -398,8 +398,9 @@ async def _get_accessible_files(
                 }
             )
 
-    # Also handle directly attached files (not in any KB)
-    if model_knowledge:
+    # Also handle directly attached files (not in any KB); not when one KB's
+    # files were asked for, or `ls` lists them inside every base (#276).
+    if model_knowledge and not knowledge_id:
         attached_file_ids = set()
         for item in model_knowledge:
             if item.get('type') == 'file':

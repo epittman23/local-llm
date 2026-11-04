@@ -69,7 +69,8 @@ export type ServerDialog = {
 	data: any;
 	reply: (value: unknown) => void;
 };
-type Queued = { id: string; prompt: string; files: ChatFile[]; modelId?: string };
+/** `models`: the chat's models when it was queued, used even if another chat's are selected when it goes (#218). */
+type Queued = { id: string; prompt: string; files: ChatFile[]; modelId?: string; models?: string[] };
 
 /**
  * One open chat (Chat.svelte's state and its load/send/stream/stop cycle):
@@ -118,6 +119,10 @@ export function useChatSession({
 	const [loading, setLoading] = useState(Boolean(routeChatId));
 	const [taskIds, setTaskIds] = useState<string[] | null>(null);
 	const [queue, setQueue] = useState<Queued[]>([]);
+	const queueRef = useRef(queue);
+	queueRef.current = queue;
+	/** The queues of chats left with prompts still waiting, sent when that chat is open again (#218). */
+	const leftQueues = useRef(new Map<string, Queued[]>());
 	const [dialog, setDialogState] = useState<ServerDialog | null>(null);
 	const dialogRef = useRef<ServerDialog | null>(null);
 	const setDialog = useCallback((d: ServerDialog | null) => {
@@ -181,6 +186,11 @@ export function useChatSession({
 			const record = (await getChatById(token, id).catch(() => null)) as ChatRecord | null;
 			if (chatIdRef.current !== id) return;
 			if (!record?.chat) {
+				// A queue given back to this chat cannot go anywhere now: drop it, saying
+				// so, before `loading` ends and would let it into the chat still shown (#218).
+				leftQueues.current.delete(id);
+				if (queueRef.current.length) toast.error('The chat could not be opened; its queued prompts were dropped.');
+				setQueue([]);
 				setLoading(false);
 				navigate('/', { replace: true });
 				return;
@@ -234,10 +244,16 @@ export function useChatSession({
 	useEffect(() => {
 		if (routeChatId && routeChatId === adoptedRef.current) return;
 		adoptedRef.current = null;
+		// The chat left keeps its queue; the one opened gets its own back (#218).
+		const left = chatIdRef.current;
+		// Not a temporary chat's: it is never opened again.
+		if (left && !isTemporaryChatId(left) && queueRef.current.length) leftQueues.current.set(left, queueRef.current);
+		const kept = routeChatId ? leftQueues.current.get(routeChatId) : undefined;
+		if (routeChatId) leftQueues.current.delete(routeChatId);
 		chatIdRef.current = routeChatId;
 		// A stop in the chat opened now must not cancel the one left (#151).
 		inFlightRef.current = new Set();
-		setQueue([]);
+		setQueue(kept ?? []);
 		setDialog(null);
 		setTaskIds(null);
 		if (routeChatId) void loadChat(routeChatId);
@@ -418,13 +434,15 @@ export function useChatSession({
 			parentId: string,
 			opts: {
 				modelId?: string;
+				/** The models to answer, when not the ones selected now (a queued prompt, #218). */
+				models?: string[];
 				modelIdx?: number;
 				regenerationPrompt?: string | null;
 				messages?: Message[] | null;
 			} = {}
 		) => {
 			const l = latest.current;
-			const ids = opts.modelId ? [opts.modelId] : l.selectedModels;
+			const ids = opts.modelId ? [opts.modelId] : (opts.models ?? l.selectedModels);
 			const chosen = ids.map((id) => l.models.find((m) => m.id === id)).filter((m): m is ChatModel => Boolean(m));
 			if (!chosen.length) {
 				toast.error('Model not selected');
@@ -514,7 +532,7 @@ export function useChatSession({
 
 	const send = useCallback(
 		/** `queued`: the prompt waited behind a reply, so goes even if that reply failed (#213). */
-		async (prompt: string, files: ChatFile[] = [], modelId?: string, queued = false) => {
+		async (prompt: string, files: ChatFile[] = [], modelId?: string, queued = false, models?: string[]) => {
 			const h = historyRef.current;
 			const current = h.currentId ? h.messages[h.currentId] : null;
 			if (!queued && current?.error && !current.content) {
@@ -534,10 +552,10 @@ export function useChatSession({
 			const { history: next, id } = addUserMessage(h, h.currentId, {
 				content: prompt,
 				files,
-				models: modelId ? [modelId] : latest.current.selectedModels
+				models: modelId ? [modelId] : (models ?? latest.current.selectedModels)
 			});
 			setHistory(next);
-			await requestReply(id, modelId ? { modelId } : {});
+			await requestReply(id, modelId ? { modelId } : { models });
 		},
 		[requestReply, setHistory]
 	);
@@ -579,7 +597,7 @@ export function useChatSession({
 			}
 			if (isGenerating(historyRef.current)) {
 				if (l.settings?.enableMessageQueue ?? true) {
-					setQueue((q) => [...q, { id: uuid(), prompt, files, modelId }]);
+					setQueue((q) => [...q, { id: uuid(), prompt, files, modelId, models: l.selectedModels }]);
 					return true;
 				}
 				// Queue off: interrupt the reply being written, as the setting
@@ -601,13 +619,15 @@ export function useChatSession({
 	// When the reply finishes, the next queued prompt goes.
 	const generating = isGenerating(history);
 	useEffect(() => {
-		if (generating || !queue.length) return;
+		// Not before the chat has loaded: a queue given back on returning to a
+		// chat would otherwise go into the history still shown (#218).
+		if (generating || loading || !queue.length) return;
 		const [next, ...rest] = queue;
 		setQueue(rest);
 		// Already taken off the queue, so it must not be refused for the reply
 		// it waited on failing; the prompt and its files were lost (#213).
-		void send(next.prompt, next.files, next.modelId, true);
-	}, [generating, queue, send]);
+		void send(next.prompt, next.files, next.modelId, true, next.models);
+	}, [generating, loading, queue, send]);
 
 	const regenerate = useCallback(
 		async (message: Message, suggestionPrompt?: string) => {
