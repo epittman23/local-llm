@@ -117,3 +117,67 @@ describe('TunePage errors show what the server said', () => {
 		expect(await screen.findByText('no sweep is running')).toBeTruthy();
 	});
 });
+
+// The live-status stream belongs to the page (#144): the page owns its
+// controller from before the request is sent, so leaving the page or switching
+// sweeps while /tune/log has not answered yet aborts it, and a stream that a
+// newer one replaced neither shows its status nor clears the newer one's state.
+describe('TunePage live-status stream lifecycle', () => {
+	beforeEach(() => {
+		useAuthStore.setState({ token: 'test-token' });
+		vi.mocked(api.getServeProfiles).mockResolvedValue({ profiles: [] });
+		vi.mocked(api.getTestOptions).mockResolvedValue({ tiers: ['smoke'], benchmarks: [], systems: [] });
+		vi.mocked(api.getTuneGrids).mockResolvedValue({ grids: [] });
+		vi.mocked(api.getRecentSweeps).mockResolvedValue({ sweeps: [] });
+	});
+
+	afterEach(() => {
+		cleanup();
+		vi.clearAllMocks();
+		useAuthStore.setState({ token: null });
+	});
+
+	/** streamTuneLog held until `answer`, recording the controller each call was given. */
+	function held() {
+		const calls: {
+			sweepId: string | null;
+			controller?: AbortController;
+			answer: (r: [Response, AbortController]) => void;
+		}[] = [];
+		vi.mocked(api.streamTuneLog).mockImplementation(
+			(_token, sweepId = null, controller) =>
+				new Promise((resolve) => calls.push({ sweepId, controller, answer: resolve }))
+		);
+		return calls;
+	}
+
+	it('leaving the page before the stream answers aborts it', async () => {
+		const calls = held();
+		const { unmount } = renderPage();
+		await vi.waitFor(() => expect(calls).toHaveLength(1));
+
+		unmount();
+
+		expect(calls[0]?.controller?.signal.aborted).toBe(true);
+	});
+
+	it('switching sweeps before the first stream answers aborts it, and its late answer is ignored', async () => {
+		const calls = held();
+		renderPage();
+		await vi.waitFor(() => expect(calls).toHaveLength(1));
+
+		fireEvent.change(screen.getByPlaceholderText('Latest'), { target: { value: 'sweep-new' } });
+		fireEvent.click(screen.getByRole('button', { name: 'View' }));
+		await vi.waitFor(() => expect(calls).toHaveLength(2));
+		expect(calls[0]?.controller?.signal.aborted).toBe(true);
+
+		calls[1]?.answer(stream([{ sweep_id: 'sweep-new', verdict: 'adopted' }]));
+		expect(await screen.findByText('sweep-new')).toBeTruthy();
+		// The first request answers late, for the sweep that is no longer viewed.
+		calls[0]?.answer(stream([{ sweep_id: 'sweep-old', verdict: 'rejected' }]));
+		await new Promise((r) => setTimeout(r, 50));
+
+		expect(screen.queryByText('sweep-old')).toBeNull();
+		expect(screen.getByText('sweep-new')).toBeTruthy();
+	});
+});

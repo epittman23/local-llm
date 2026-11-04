@@ -140,14 +140,21 @@ export function TunePage() {
 		stopStreaming();
 		setStatusError(null);
 
+		// Stored before the fetch, so leaving the page or switching sweeps
+		// while it is pending aborts it (#144), as ServePage does.
+		const controller = new AbortController();
+		streamControllerRef.current = controller;
+		// A newer stream (or unmount) replaced this one: leave its state alone.
+		const replaced = () => controller.signal.aborted;
+
 		let res: Response | null;
-		let controller: AbortController | null;
 		try {
-			[res, controller] = await streamTuneLog(token, sweepId);
+			[res] = await streamTuneLog(token, sweepId, controller);
 		} catch (err: any) {
-			setStatusError(errorMessage(err, 'Failed to start live status stream'));
+			if (!replaced()) setStatusError(errorMessage(err, 'Failed to start live status stream'));
 			return;
 		}
+		if (replaced()) return;
 
 		if (!res || !res.body) {
 			setStatusError('Failed to start live status stream');
@@ -160,22 +167,24 @@ export function TunePage() {
 			return;
 		}
 
-		streamControllerRef.current = controller;
 		setStreaming(true);
 
 		try {
 			for await (const evt of parseBenchmarksEventStream(res.body)) {
+				if (replaced()) break;
 				if (evt.event === 'done') break;
 				if (evt.data) setStatus(evt.data);
 			}
 		} catch (err: any) {
-			if (err?.name !== 'AbortError') {
+			if (err?.name !== 'AbortError' && !replaced()) {
 				console.error('Tune log stream error:', err);
 				setStatusError(errorMessage(err, 'Live status stream ended unexpectedly'));
 			}
 		} finally {
-			setStreaming(false);
-			streamControllerRef.current = null;
+			if (streamControllerRef.current === controller) {
+				setStreaming(false);
+				streamControllerRef.current = null;
+			}
 		}
 	};
 
