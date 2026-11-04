@@ -7,13 +7,14 @@ import { uploadFile } from '@/lib/apis/files';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { type ComposerHandle, MessageComposer } from '../channels/MessageComposer';
+import { useKnowledgeUploads } from '../workspace/knowledge/useKnowledgeUploads';
 import { KnowledgePicker } from '../workspace/models/KnowledgePicker';
 import { useAttachments } from './useAttachments';
 
 // #238: an admin's Max Upload Size of 0 means no limit to the server
 // (`if max_size and ...`), but the chat and channel composers read it as
 // "nothing may be larger than 0 MB" and refused every file; so did the
-// model editor's knowledge picker.
+// model editor's knowledge picker and the knowledge base page.
 
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn(), warning: vi.fn(), success: vi.fn() }) }));
 vi.mock('@/lib/apis/files', () => ({ uploadFile: vi.fn(() => new Promise(() => {})) }));
@@ -125,6 +126,32 @@ describe("model editor's knowledge picker and the upload size limit", () => {
 		limit(1);
 		const onChange = attach();
 		expect(onChange).not.toHaveBeenCalled();
+		expect(toast.error).toHaveBeenCalledWith('File size should not exceed 1 MB.');
+	});
+});
+
+describe('knowledge base uploads and the upload size limit', () => {
+	const upload = async () => {
+		const { result } = renderHook(() =>
+			useKnowledgeUploads({ knowledgeId: 'kb1', directoryId: null, breadcrumbs: [], refresh: () => {} })
+		);
+		act(() => {
+			void result.current.uploadFiles([twoMegabytes()]);
+		});
+		return result.current.uploading;
+	};
+
+	it('a limit of 0 is no limit', async () => {
+		limit(0);
+		expect(await upload()).toEqual([expect.objectContaining({ name: 'big.txt' })]);
+		expect(uploadFile).toHaveBeenCalledTimes(1);
+		expect(toast.error).not.toHaveBeenCalled();
+	});
+
+	it('a limit of 1 MB still refuses a 2 MB file', async () => {
+		limit(1);
+		expect(await upload()).toEqual([]);
+		expect(uploadFile).not.toHaveBeenCalled();
 		expect(toast.error).toHaveBeenCalledWith('File size should not exceed 1 MB.');
 	});
 });
