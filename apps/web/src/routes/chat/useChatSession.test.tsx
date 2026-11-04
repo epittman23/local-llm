@@ -381,6 +381,30 @@ describe('useChatSession loadChat', () => {
 		return { send, answer };
 	}
 
+	it.each([
+		['the request is refused', (send: ReturnType<typeof vi.fn>) => send.mockRejectedValueOnce(new Error('offline'))],
+		['the response is an error', (send: ReturnType<typeof vi.fn>) => send.mockResolvedValueOnce({ error: 'no key' })]
+	])('a multi-model send whose %s fails every column and stops generating (#216)', async (_case, fail) => {
+		probeModels = [{ id: 'm1' }, { id: 'm2' }];
+		try {
+			await openChatA();
+			const send = vi.mocked((await import('@/lib/apis/openai')).generateOpenAIChatCompletion);
+			send.mockClear();
+			fail(send as never);
+			act(() => void session.submit('both'));
+			await waitFor(() => expect(send).toHaveBeenCalled());
+
+			await waitFor(() => {
+				const replies = Object.values(session.history.messages).filter((m) => m.role === 'assistant');
+				expect(replies).toHaveLength(2);
+				for (const reply of replies) expect(reply).toMatchObject({ done: true, error: expect.anything() });
+			});
+			expect(session.generating).toBe(false);
+		} finally {
+			probeModels = [];
+		}
+	});
+
 	it('in a saved chat, a stop pressed before the task exists stops it once it does (#151)', async () => {
 		probeModels = [{ id: 'm' }];
 		try {

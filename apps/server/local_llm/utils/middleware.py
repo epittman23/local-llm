@@ -794,7 +794,7 @@ def _done(data: dict, current_output: list) -> tuple[list, dict | None]:
 
 
 def _completed(data: dict, current_output: list) -> tuple[list, dict | None]:
-    response_data = data.get('response', {})
+    response_data = data.get('response') or {}
     # Some providers send an empty output on response.completed despite having streamed items
     new_output = response_data.get('output') or current_output
 
@@ -811,7 +811,8 @@ def _completed(data: dict, current_output: list) -> tuple[list, dict | None]:
 
 
 def _failed(data: dict, current_output: list) -> tuple[list, dict | None]:
-    return current_output, {'error': data.get('response', {}).get('error', {})}
+    # `response` may be null on a failure; the caller supplies a message then (#167).
+    return current_output, {'error': (data.get('response') or {}).get('error', {})}
 
 
 _RESPONSES_EVENT_HANDLERS = {
@@ -5089,11 +5090,17 @@ class _StreamingReply:
                 self.usage = stream.add_usage(response_metadata['usage'])
                 response_metadata['usage'] = self.usage
 
-            if response_metadata.get('error'):
+            if 'error' in response_metadata:
+                # `response.failed`: save the error as the Chat Completions path
+                # does, so the reply still reads as failed after a reload, and
+                # give one with no error object a message of its own (#167).
+                error = response_metadata['error'] or {'message': 'The provider ended the reply with an error.'}
+                log.error('Provider returned error (Responses API stream): %s', error)
+                await self._save_error(error)
                 await self.event_emitter(
                     {
                         'type': 'chat:completion',
-                        'data': {'error': response_metadata['error']},
+                        'data': {'error': error},
                     }
                 )
 

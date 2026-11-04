@@ -453,6 +453,12 @@ export function useChatSession({
 			setHistory(h);
 
 			const primary = targets[0];
+			// A request that fails fails every column it was for, not only the first,
+			// or the others stay `done: false` and the input stays generating (#216).
+			const failAll = (error: unknown) =>
+				setHistory((cur) =>
+					targets.reduce((next, t) => updateMessage(next, t.message_id, (m) => failMessage(m, error)), cur)
+				);
 			const req = await beginRequest();
 			if (!req) return;
 			// Read after the wait: a new chat's earlier request may have created the chat meanwhile.
@@ -486,13 +492,13 @@ export function useChatSession({
 				req.posted = true;
 				const res = await generateOpenAIChatCompletion(token, body, `${WEBUI_BASE_URL}/api`).catch((error) => {
 					toast.error(errorText(error) || 'Uh-oh! There was an issue with the response.');
-					setHistory((cur) => updateMessage(cur, primary.message_id, (m) => failMessage(m, error)));
+					failAll(error);
 					return null;
 				});
 				if (!res) return;
 				if (res.error) {
 					toast.error(errorText(res.error));
-					setHistory((cur) => updateMessage(cur, primary.message_id, (m) => failMessage(m, res.error)));
+					failAll(res.error);
 					return;
 				}
 				const ids: string[] = res.task_ids ?? (res.task_id ? [res.task_id] : []);

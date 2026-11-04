@@ -1730,3 +1730,36 @@ def test_tool_arguments_that_are_not_an_object_get_a_parse_error(monkeypatch):
     assert 'error' not in final
     assert 'Sorry, retrying.' in json.dumps(final)
     assert 'Tool call arguments could not be parsed' in json.dumps(observed['calls'])
+
+
+def test_a_failed_responses_api_reply_is_saved_as_failed(monkeypatch):
+    """#167: `response.failed` was shown live but never saved, so after a reload the reply looked complete."""
+    error = {'code': 'server_error', 'message': 'The model crashed'}
+    observed = _run(
+        [[sse({'type': 'response.failed', 'response': {'error': error}}), DONE]],
+        {'chat_id': SAVED_CHAT},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    assert {'error': {'content': error}} in _saved(observed)
+    assert {'error': error} in _emitted(observed)
+
+
+@pytest.mark.parametrize('response', [{}, {'error': None}, None])
+def test_a_failed_responses_api_reply_without_an_error_object_is_still_an_error(monkeypatch, response):
+    """#167: with no error object the failure was neither shown nor saved; with no response at all it raised."""
+    observed = _run(
+        [[sse({'type': 'response.failed', 'response': response}), DONE]],
+        {'chat_id': SAVED_CHAT},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    errors = [d['error'] for d in _emitted(observed) if 'error' in d]
+    assert errors and errors[0]['message']
+    assert {'error': {'content': errors[0]}} in _saved(observed)
