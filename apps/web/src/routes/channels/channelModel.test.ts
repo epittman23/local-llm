@@ -378,6 +378,15 @@ describe('the channel list', () => {
 		expect(applyUnreadEvent(list, { channel_id: 'c1', data: { type: 'channel:created' } }, null, 'me')).toBeNull();
 		expect(markRead([ch('c1', '', { unread_count: 3 })], 'c1')[0].unread_count).toBe(0);
 	});
+	it("does not count a thread reply, which the server's unread count leaves out (#255)", () => {
+		const list = [ch('c1', '')];
+		const reply = {
+			channel_id: 'c1',
+			user: { id: 'u2', name: 'x' },
+			data: { type: 'message', data: { parent_id: 'm1' } }
+		};
+		expect(applyUnreadEvent(list, reply, null, 'me')).toBe(list);
+	});
 });
 
 describe('channelPayload', () => {
