@@ -144,6 +144,15 @@ class ComfyUICreateImageForm(BaseModel):
     seed: int | None = None
 
 
+# Node types filled straight from one payload field: (field, input key when the node names none).
+_PAYLOAD_INPUTS = {
+    'width': ('width', 'width'),
+    'height': ('height', 'height'),
+    'n': ('n', 'batch_size'),
+    'steps': ('steps', 'steps'),
+}
+
+
 def _apply_workflow_nodes(workflow, nodes, model, payload):
     """Mutate *workflow* dict in-place based on typed node definitions."""
     for node in nodes:
@@ -165,18 +174,13 @@ def _apply_workflow_nodes(workflow, nodes, model, payload):
                 else:
                     for node_id in node.node_ids:
                         workflow[node_id]['inputs'][node.key] = payload.image
-            elif node.type == 'width':
-                for node_id in node.node_ids:
-                    workflow[node_id]['inputs'][node.key if node.key else 'width'] = payload.width
-            elif node.type == 'height':
-                for node_id in node.node_ids:
-                    workflow[node_id]['inputs'][node.key if node.key else 'height'] = payload.height
-            elif node.type == 'n':
-                for node_id in node.node_ids:
-                    workflow[node_id]['inputs'][node.key if node.key else 'batch_size'] = payload.n
-            elif node.type == 'steps':
-                for node_id in node.node_ids:
-                    workflow[node_id]['inputs'][node.key if node.key else 'steps'] = payload.steps
+            elif node.type in _PAYLOAD_INPUTS:
+                field, default_key = _PAYLOAD_INPUTS[node.type]
+                value = getattr(payload, field)
+                # A value not set (no step count, #237) leaves the workflow's own.
+                if value is not None:
+                    for node_id in node.node_ids:
+                        workflow[node_id]['inputs'][node.key if node.key else default_key] = value
             elif node.type == 'seed':
                 seed = payload.seed if payload.seed else random.randint(0, 1125899906842624)
                 for node_id in node.node_ids:

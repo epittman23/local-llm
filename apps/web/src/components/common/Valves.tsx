@@ -9,13 +9,25 @@ export type ValveProperty = {
 	description?: string | null;
 	type?: string;
 	default?: unknown;
-	enum?: string[];
+	enum?: Array<string | number | boolean | null>;
 	input?: { type?: string; options?: Array<{ value: string; label?: string } | string> };
 };
 export type ValvesSpec = { properties?: Record<string, ValveProperty>; required?: string[] } | null;
 export type ValveValues = Record<string, unknown>;
 
 const fieldClass = 'border-border bg-background w-full rounded-lg border px-3 py-2 text-sm outline-hidden';
+
+/** The enum entry a `<select>`'s text stands for, with its own type: `'2'` is `2` in `[1, 2, 3]`. */
+export const enumOption = (options: ReadonlyArray<unknown>, text: string): unknown =>
+	options.find((option) => option !== null && String(option) === text) ?? text;
+
+/**
+ * The entries a valve's `<select>` offers. A `null` entry (an Optional
+ * Literal) is left out: choosing it is the valve's "Default" state, which
+ * this form shows as the None/Custom switch.
+ */
+export const enumChoices = (options: ReadonlyArray<unknown> = []) =>
+	options.filter((option): option is string | number | boolean => option !== null && option !== undefined);
 
 const optionValue = (o: { value: string; label?: string } | string) => (typeof o === 'string' ? o : o.value);
 const optionLabel = (o: { value: string; label?: string } | string) =>
@@ -91,7 +103,8 @@ export function Valves({
 				const def = Array.isArray(p.default) ? p.default : [];
 				set(name, p.input?.type === 'multiselect' ? [...def] : def.join(', '));
 			} else {
-				set(name, p.default ?? '');
+				// An enum starts at its first entry, not at '' (no option, so not savable).
+				set(name, p.default ?? enumChoices(p.enum)[0] ?? '');
 			}
 		} else {
 			set(name, null);
@@ -110,10 +123,16 @@ export function Valves({
 				if (value !== null) {
 					if (p.enum) {
 						field = (
-							<select className={fieldClass} value={String(value)} onChange={(e) => set(name, e.target.value)}>
-								{p.enum.map((option) => (
-									<option key={option} value={option}>
-										{option}
+							<select
+								className={fieldClass}
+								value={String(value)}
+								// The option itself, not the select's text: a Literal[1, 2, 3]
+								// valve refused "2" (#201).
+								onChange={(e) => set(name, enumOption(p.enum ?? [], e.target.value))}
+							>
+								{enumChoices(p.enum).map((option) => (
+									<option key={String(option)} value={String(option)}>
+										{String(option)}
 									</option>
 								))}
 							</select>
