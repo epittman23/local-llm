@@ -707,6 +707,10 @@ async def delete_folder_by_id(
     # The chats first, then the folders, so a failure part way never leaves a
     # chat pointing at a folder that is gone, where the sidebar hides it (#281).
     try:
+        # Other users' chats, which only the folder held, are kept (#315). First,
+        # before anything is deleted or any grant revoked, so a failure here
+        # changes nothing.
+        await Chats.move_other_users_chats_out_of_folders(folder_ids, folder_owner_id, db=db)
         for folder_id in folder_ids:
             if delete_contents:
                 done = await Chats.delete_chats_by_user_id_and_folder_id(folder_owner_id, folder_id, db=db)
@@ -718,9 +722,6 @@ async def delete_folder_by_id(
 
             # Clean up access grants for this folder
             await AccessGrants.revoke_all_access('folder', folder_id, db=db)
-
-        # Other users' chats, which only the folder held, are kept (#315).
-        await Chats.move_other_users_chats_out_of_folders(folder_ids, folder_owner_id, db=db)
 
         await Automations.clear_folder_ids(folder_owner_id, folder_ids, db=db)
         # Exactly the folders whose chats were handled above.

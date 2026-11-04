@@ -200,3 +200,5 @@ def test_a_failed_move_of_other_users_chats_is_an_error_and_deletes_no_folder(tr
 
     assert r.status_code == 400
     assert _run(_folders_left(tree.ids, tree.user.id)) == tree.ids
+    # Nothing was changed before it: the owner's chats are still in their folders.
+    assert [_run(Chats.get_chat_by_id(cid)).folder_id for cid in tree.chats] == tree.ids
