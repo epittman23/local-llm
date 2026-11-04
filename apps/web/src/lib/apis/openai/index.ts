@@ -360,12 +360,17 @@ export const verifyOpenAIConnection = async (
 	return res;
 };
 
+/**
+ * Starts a chat completion. Pass `controller` to be able to abort it before
+ * the response's headers arrive: the one returned only reaches the caller
+ * after they have (#207).
+ */
 export const chatCompletion = async (
 	token: string = '',
 	body: object,
-	url: string = `${WEBUI_BASE_URL}/api`
+	url: string = `${WEBUI_BASE_URL}/api`,
+	controller: AbortController = new AbortController()
 ): Promise<[Response | null, AbortController]> => {
-	const controller = new AbortController();
 	let error = null;
 
 	const res = await fetch(`${url}/chat/completions`, {
