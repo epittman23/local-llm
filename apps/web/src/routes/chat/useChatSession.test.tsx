@@ -94,13 +94,15 @@ type Session = ReturnType<typeof useChatSession>;
 let session: Session;
 /** The models the probe offers; most tests send nothing, so none. */
 let probeModels: { id: string }[] = [];
+/** The models selected, when not all of `probeModels`. */
+let probeSelected: string[] | null = null;
 
 function Probe({ id }: { id: string }) {
 	session = useChatSession({
 		routeChatId: id,
 		folderId: null,
 		models: probeModels as never,
-		selectedModels: probeModels.map((m) => m.id),
+		selectedModels: probeSelected ?? probeModels.map((m) => m.id),
 		temporary: false,
 		toggles: { webSearch: false, imageGeneration: false, codeInterpreter: false },
 		toolIds: []
@@ -234,6 +236,59 @@ describe('useChatSession loadChat', () => {
 		await waitFor(() => expect(session.chat?.id).toBe('A'));
 		await waitFor(() => expect(asked('next')).toBe(true));
 		expect(session.queue).toHaveLength(0);
+	});
+
+	it("a queued prompt goes to its own chat's models, not those of the chat opened meanwhile (#218)", async () => {
+		probeModels = [{ id: 'mA' }, { id: 'mB' }];
+		probeSelected = ['mA'];
+		try {
+			const router = await openChatA();
+			writing();
+			act(() => void session.submit('next'));
+			expect(session.queue).toHaveLength(1);
+
+			// Chat B uses another model; ChatPage selects it when B opens.
+			probeSelected = ['mB'];
+			await act(() => router.navigate('/c/B'));
+			await waitFor(() => expect(pending.B).toBeDefined());
+			await act(async () => pending.B(undefined));
+			await waitFor(() => expect(session.chat?.id).toBe('B'));
+
+			const send = vi.mocked((await import('@/lib/apis/openai')).generateOpenAIChatCompletion);
+			send.mockClear();
+			delete pending.A;
+			await act(() => router.navigate('/c/A'));
+			await waitFor(() => expect(pending.A).toBeDefined());
+			await act(async () => pending.A(undefined));
+			await waitFor(() => expect(send).toHaveBeenCalled());
+
+			const asked = Object.values(session.history.messages).find((m) => m.content === 'next');
+			expect(asked?.models).toEqual(['mA']);
+			expect(send.mock.calls[0][1]).toMatchObject({ model: 'mA' });
+		} finally {
+			probeModels = [];
+			probeSelected = null;
+		}
+	});
+
+	it('a queued prompt is dropped, with a message, when its chat cannot be opened again (#218)', async () => {
+		const router = await openChatA();
+		writing();
+		act(() => void session.submit('next', [], 'm'));
+		await act(() => router.navigate('/c/B'));
+		await waitFor(() => expect(pending.B).toBeDefined());
+		await act(async () => pending.B(undefined));
+		await waitFor(() => expect(session.chat?.id).toBe('B'));
+
+		const send = vi.mocked((await import('@/lib/apis/openai')).generateOpenAIChatCompletion);
+		send.mockClear();
+		vi.mocked(chatsApi.getChatById).mockRejectedValueOnce(new Error('gone'));
+		await act(() => router.navigate('/c/A'));
+		await act(async () => {});
+
+		expect(session.queue).toHaveLength(0);
+		expect(send).not.toHaveBeenCalled();
+		expect(asked('next')).toBe(false);
 	});
 
 	it('with the queue off, sending stops the reply being written first (#212)', async () => {
