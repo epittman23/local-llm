@@ -147,6 +147,14 @@ def test_a_reranker_that_raises_and_a_failed_embedding_keep_top_k_in_original_or
     assert [d.page_content for d in result] == ['d0', 'd1']
 
 
+def test_a_reranker_that_scores_too_few_documents_falls_back_too(caplog):
+    with caplog.at_level(logging.WARNING, logger=retrieval.log.name):
+        result = _compress(lambda query, documents: [0.9, 0.1])
+
+    assert [d.page_content for d in result] == ['d2', 'd3']
+    assert any('2 scores for 5 documents' in r.getMessage() for r in caplog.records)
+
+
 def test_without_a_reranker_an_embedding_failure_still_raises():
     with pytest.raises(RuntimeError, match='embedding service down'):
         _compress(None, embedding_function=_broken_embed)
