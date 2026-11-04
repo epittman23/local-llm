@@ -40,7 +40,8 @@ class VectorRecorder:
         self.dropped.append(collection_name)
 
     async def has_collection(self, collection_name):
-        return False
+        # A file's own collection, which deleting the file drops.
+        return collection_name.startswith('file-')
 
 
 @pytest.fixture
@@ -103,6 +104,7 @@ def test_removing_a_shared_file_keeps_it_for_the_other_base(recorders):
 
     assert row is not None
     assert removed_paths == []
+    assert f'file-{files["shared"].id}' not in vectors.dropped
     # Gone from this base, its chunks included; still in the other one.
     assert linked == {files['own'].id}
     assert (kb.id, {'file_id': files['shared'].id}) in vectors.deleted
@@ -140,7 +142,7 @@ def test_resetting_a_base_keeps_the_files_another_base_uses(recorders):
 
     kb, files, tag, rows, linked, other_linked = asyncio.run(scenario())
 
-    assert vectors.dropped == [kb.id]
+    assert vectors.dropped == [kb.id, f'file-{files["own"].id}']
     assert linked == []
     assert rows['own'] is None and rows['shared'] is not None
     assert removed_paths == [f'/store/{tag}/own']
@@ -174,10 +176,34 @@ def test_a_failed_link_lookup_keeps_the_file(recorders, monkeypatch):
         monkeypatch.setattr(Knowledges, 'get_knowledge_ids_by_file_id', broken)
         with pytest.raises(RuntimeError):
             await _remove(user, kb, files['own'].id)
-        return await Files.get_file_by_id(files['own'].id)
+        return await Files.get_file_by_id(files['own'].id), await Knowledges.has_file(kb.id, files['own'].id)
 
-    assert asyncio.run(scenario()) is not None
+    row, still_linked = asyncio.run(scenario())
+
+    # Nothing changed: the file is still in the base, so removing it can be retried.
+    assert row is not None and still_linked
     assert removed_paths == []
+
+
+def test_a_failed_link_lookup_in_sync_cleanup_keeps_the_file_in_the_base(recorders, monkeypatch):
+    vectors, removed_paths = recorders
+
+    async def scenario():
+        user, kb, _other, files, _tag = await _world()
+
+        async def broken(*_a, **_k):
+            raise RuntimeError('database unavailable')
+
+        monkeypatch.setattr(Knowledges, 'get_knowledge_ids_by_file_id', broken)
+        form = knowledge_router.SyncCleanupForm(file_ids=[files['own'].id])
+        with pytest.raises(RuntimeError):
+            await knowledge_router.sync_knowledge_cleanup(kb.id, form, user=user, db=None)
+        return await Files.get_file_by_id(files['own'].id), await Knowledges.has_file(kb.id, files['own'].id)
+
+    row, still_linked = asyncio.run(scenario())
+
+    assert row is not None and still_linked
+    assert removed_paths == [] and vectors.deleted == []
 
 
 def test_the_link_lookup_lists_every_base_linking_the_file():

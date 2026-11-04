@@ -1708,6 +1708,15 @@ async def remove_file_from_knowledge_by_id(
             detail=ERROR_MESSAGES.NOT_FOUND,
         )
 
+    # Anyone with write permission or higher can delete files, unless another
+    # knowledge base still uses the file. Decided before anything changes, so a
+    # failed lookup leaves the file in this base, where removing it can be retried.
+    delete_it = (
+        delete_file
+        and (file.user_id == user.id or user.role == 'admin')
+        and not await _linked_elsewhere(file.id, knowledge.id, db)
+    )
+
     await Knowledges.remove_file_from_knowledge_by_id(knowledge_id=id, file_id=form_data.file_id, db=db)
 
     # Remove content from the vector database
@@ -1724,13 +1733,7 @@ async def remove_file_from_knowledge_by_id(
         log.debug(e)
         pass
 
-    # Anyone with write permission or higher can delete files, unless another
-    # knowledge base still uses the file.
-    if (
-        delete_file
-        and (file.user_id == user.id or user.role == 'admin')
-        and not await _linked_elsewhere(file.id, knowledge.id, db)
-    ):
+    if delete_it:
         await delete_file_resource(file, db)
 
     if knowledge:
@@ -2065,6 +2068,14 @@ async def _remove_files_from_knowledge(knowledge_id: str, file_ids: list[str], u
         if not await Knowledges.has_file(knowledge_id, file_id, db=db):
             continue
 
+        # Decided before anything changes, so a failed lookup leaves the file
+        # listed here, where the removal can be retried.
+        delete_it = (
+            not ENABLE_KNOWLEDGE_FILE_RETENTION
+            and (file.user_id == user.id or user.role == 'admin')
+            and not await _linked_elsewhere(file_id, knowledge_id, db)
+        )
+
         # Chunks first: if they cannot be deleted, the link stays, so the file
         # is still listed and the removal can be retried (#195).
         try:
@@ -2077,11 +2088,7 @@ async def _remove_files_from_knowledge(knowledge_id: str, file_ids: list[str], u
 
         await Knowledges.remove_file_from_knowledge_by_id(knowledge_id, file_id, db=db)
 
-        if (
-            not ENABLE_KNOWLEDGE_FILE_RETENTION
-            and (file.user_id == user.id or user.role == 'admin')
-            and not await _linked_elsewhere(file_id, knowledge_id, db)
-        ):
+        if delete_it:
             await delete_file_resource(file, db)
     return kept
 
