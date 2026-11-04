@@ -247,7 +247,7 @@ function openApp(url: string): Promise<void> {
 			// A stop that began while the page loaded owns the dialog and the
 			// phase; this window is already destroyed, and must not reopen (#423).
 			if (phase !== 'starting') {
-				win.destroy();
+				if (!win.isDestroyed()) win.destroy();
 				resolve();
 				return;
 			}
@@ -580,6 +580,8 @@ function registerIpc(): void {
 				case 'quit':
 					return shutdown();
 				case 'retry':
+					// Offered only after a failed start; never during or after a stop.
+					if (phase !== 'failed') return;
 					statusView = 'progress';
 					return startup();
 				case 'open-log':

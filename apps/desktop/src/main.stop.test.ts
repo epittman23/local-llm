@@ -5,7 +5,7 @@
 //
 // The fake is built inside vi.hoisted because vi.mock factories may only use
 // hoisted values; it follows docs/audit/2026-10-28-desktop/repro/P1/main-harness.ts.
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -46,6 +46,7 @@ const h = vi.hoisted(() => {
 		handlers: new Map<string, (...args: unknown[]) => unknown>(),
 		appEvents: new Emitter(),
 		stops: [] as number[],
+		spawned: 0,
 		/** What the next /ready probe answers; a promise holds it in flight. */
 		ready: (): Promise<number | null> => Promise.resolve(200),
 		stopResult: { forced: false, llama: [] as number[] },
@@ -75,6 +76,12 @@ const h = vi.hoisted(() => {
 			if (this.destroyed) return;
 			this.destroyed = true;
 			this.emit('closed');
+			// A destroyed BrowserWindow fires no more events.
+			this.off = () => this;
+			this.emit = () => {};
+		}
+		isDestroyed() {
+			return this.destroyed;
 		}
 		loadFile(f: string) {
 			this.loaded = f;
@@ -123,6 +130,7 @@ const h = vi.hoisted(() => {
 		state.handlers = new Map();
 		state.appEvents = new Emitter();
 		state.stops = [];
+		state.spawned = 0;
 		state.ready = () => Promise.resolve(200);
 		state.stopResult = { forced: false, llama: [] };
 		state.llama = [];
@@ -142,7 +150,10 @@ vi.mock('./stack', async (original) => ({
 	readProcStat: () => ({ comm: 'make', startTicks: '1' }),
 	// Nothing answers before the stack starts, so the app starts its own.
 	probe: async (url: string) => (url.endsWith('/ready') ? h.state.ready() : null),
-	spawnInGroup: () => Object.assign(new h.Emitter(), { pid: 990201 }),
+	spawnInGroup: () => {
+		h.state.spawned++;
+		return Object.assign(new h.Emitter(), { pid: 990201 });
+	},
 	stopGroup: async (pgid: number) => {
 		h.state.stops.push(pgid);
 		return h.state.stopResult;
@@ -169,15 +180,34 @@ async function launch() {
 	await tick(50);
 }
 
+const SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const;
+let listenersBefore: Map<string, Set<(...args: unknown[]) => void>>;
+
 beforeEach(() => {
 	vi.resetModules();
 	h.reset();
+	// A server URL exported for the real app would send startup down the remote path.
+	vi.stubEnv('LLLM_SERVER_URL', '');
 	h.state.userData = mkdtempSync(join(tmpdir(), 'lllm-desktop-'));
 	h.state.statusHtml = join(__dirname, '..', 'static', 'status.html');
 	vi.spyOn(process, 'kill').mockImplementation((() => true) as never);
+	listenersBefore = new Map(SIGNALS.map((s) => [s, new Set(process.listeners(s) as never)]));
 });
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+	vi.restoreAllMocks();
+	vi.unstubAllEnvs();
+	rmSync(h.state.userData, { recursive: true, force: true });
+	// main.ts adds signal handlers each time it is imported.
+	for (const signal of SIGNALS) {
+		for (const f of process.listeners(signal)) {
+			if (!listenersBefore.get(signal)?.has(f as never)) process.off(signal, f);
+		}
+	}
+});
+
+/** The SIGINT handler the freshly imported main.ts added. */
+const sigint = () => (process.listeners('SIGINT').at(-1) as (() => void) | undefined)?.();
 
 test('a Cancel while the last readiness probe is in flight opens no app window and stops once (#423)', async () => {
 	let answer: (status: number) => void = () => {};
@@ -199,21 +229,39 @@ test('a Cancel while the last readiness probe is in flight opens no app window a
 	expect(h.state.stops).toEqual([990201]);
 });
 
-test('an app window that paints after a stop began does not end the stopping phase (#423)', async () => {
+test('a quit while the app window loads keeps the stop dialog and stops once (#423)', async () => {
 	await launch();
 	const win = appWindows()[0];
 	expect(win).toBeDefined();
 
-	// The window is still loading when the user quits.
+	// The window is still loading when the user quits; the stop destroys it,
+	// so it never paints, and the dialog stays.
 	h.state.appEvents.emit('before-quit', { preventDefault: () => {} });
 	await tick(20);
 	win?.emit('ready-to-show');
 	await tick(20);
 
+	expect(appWindows()).toHaveLength(0);
 	expect(statusWindows()).toHaveLength(1);
-	win?.userClose();
+	h.state.appEvents.emit('window-all-closed');
 	await tick(800);
 	expect(h.state.stops).toEqual([990201]);
+});
+
+test('Retry during a stop does not start the stack again', async () => {
+	let answer: (status: number) => void = () => {};
+	h.state.ready = () => new Promise<number>((resolve) => (answer = resolve));
+	await launch();
+	expect(h.state.spawned).toBe(1);
+
+	void statusCall('status:action', 'cancel');
+	await tick(20);
+	await statusCall('status:action', 'retry');
+	answer(200);
+	await tick(50);
+
+	expect(h.state.spawned).toBe(1);
+	expect(appWindows()).toHaveLength(0);
 });
 
 test('after a forced stop that left a llama-server, "Leave it" quits and leaves it running (#421)', async () => {
@@ -233,7 +281,7 @@ test('after a forced stop that left a llama-server, "Leave it" quits and leaves 
 	expect(vi.mocked(process.kill).mock.calls.filter(([pid]) => pid === 777)).toEqual([]);
 });
 
-test('after a forced stop that left a llama-server, closing the dialog or a signal quits too (#421)', async () => {
+test('after a forced stop that left a llama-server, closing the dialog quits too (#421)', async () => {
 	h.state.stopResult = { forced: true, llama: [777] };
 	h.state.llama = [777];
 	await launch();
@@ -244,6 +292,22 @@ test('after a forced stop that left a llama-server, closing the dialog or a sign
 
 	expect(statusWindows()[0]?.userClose()).toBe(true);
 	h.state.appEvents.emit('window-all-closed');
+	await tick(10);
+	expect(h.state.exits).toEqual([0]);
+	expect(h.state.stops).toEqual([990201]);
+});
+
+test('after a forced stop that left a llama-server, a signal quits too (#421)', async () => {
+	h.state.stopResult = { forced: true, llama: [777] };
+	h.state.llama = [777];
+	await launch();
+	appWindows()[0]?.emit('ready-to-show');
+	await tick(10);
+	appWindows()[0]?.userClose();
+	await tick(50);
+	expect(h.state.exits).toEqual([]);
+
+	sigint(); // Ctrl-C on `make desktop`, or the session ending
 	await tick(10);
 	expect(h.state.exits).toEqual([0]);
 	expect(h.state.stops).toEqual([990201]);

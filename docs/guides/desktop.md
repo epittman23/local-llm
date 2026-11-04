@@ -161,7 +161,10 @@ and an unpacked package. The unit tests cover:
 - `src/config.ts`, `src/policy.ts` and `src/stack.ts`'s decisions and stop
   sequence;
 - `src/progress.ts`, replayed against logs from real runs in
-  `test/fixtures/`.
+  `test/fixtures/`;
+- `src/main.ts`'s stop: a Cancel during startup, a quit while the window
+  loads, Retry during a stop, and the "Leave it" offer, run against a fake
+  Electron in `src/main.stop.test.ts`.
 
-Launching, closing and attaching are checked by hand: see
+Launching, closing and attaching the real stack are checked by hand: see
 [testing.md](testing.md#desktop-appsdesktop).
