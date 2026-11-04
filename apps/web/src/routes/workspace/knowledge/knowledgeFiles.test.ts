@@ -5,12 +5,13 @@ import {
 	announceContentSaved,
 	clampPage,
 	createMissingDirectories,
+	deletedFileIds,
 	filesToUpload,
 	getDirectoryUploadPath,
 	hasHiddenFolder,
 	knowledgeMetaPreview,
 	readMovePayload,
-	staleFileIds,
+	replacedFileIds,
 	takeDroppedItems,
 	gatherDroppedFiles,
 	type DirectoryFileEntry,
@@ -55,8 +56,14 @@ describe('sync diff', () => {
 		const manifest = [entry('a', 'new.md'), entry('a', 'edit.md'), entry('a', 'same.md'), entry('b', 'new.md')];
 		expect(filesToUpload(manifest, diff).map((e) => `${e.path}/${e.filename}`)).toEqual(['a/new.md', 'a/edit.md']);
 	});
-	it('removes deleted files and the stale copies of modified ones first', () => {
-		expect(staleFileIds(diff)).toEqual(['gone1', 'old1']);
+	it('removes deleted files before uploading, and not the old copies of modified ones', () => {
+		expect(deletedFileIds(diff)).toEqual(['gone1']);
+	});
+	it('removes the old copy of a modified file only once its new version uploaded (#317)', () => {
+		expect(replacedFileIds(diff, [entry('a', 'new.md'), entry('a', 'edit.md')])).toEqual(['old1']);
+		expect(replacedFileIds(diff, [entry('a', 'new.md')])).toEqual([]);
+		// Same name in another folder is another file.
+		expect(replacedFileIds(diff, [entry('b', 'edit.md')])).toEqual([]);
 	});
 });
 

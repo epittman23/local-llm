@@ -56,11 +56,21 @@ export const filesToUpload = (manifest: DirectoryManifestEntry[], diff: SyncDiff
 			diff.modified.some((m) => m.filename === entry.filename && m.path === entry.path)
 	);
 
-/** Ids to remove before uploading: deleted files plus the stale copies of modified ones. */
-export const staleFileIds = (diff: SyncDiff): string[] => [
-	...diff.deleted.map((d) => d.file_id),
-	...diff.modified.map((m) => m.stale_file_id)
-];
+/** Ids to remove before uploading: the files gone from the folder. */
+export const deletedFileIds = (diff: SyncDiff): string[] => diff.deleted.map((d) => d.file_id);
+
+/**
+ * Ids to remove after uploading: the old copy of each modified file whose new
+ * version uploaded. Removing them first left a file missing from the base
+ * whenever its new version failed to upload (#317).
+ */
+export const replacedFileIds = (
+	diff: SyncDiff,
+	uploaded: Pick<DirectoryManifestEntry, 'filename' | 'path'>[]
+): string[] =>
+	diff.modified
+		.filter((m) => uploaded.some((entry) => entry.filename === m.filename && entry.path === m.path))
+		.map((m) => m.stale_file_id);
 
 /**
  * Creates each directory in `diff.mkdir` (the server lists parents before
