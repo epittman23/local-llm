@@ -73,6 +73,37 @@ test('a redirect that would leave the app is ignored: signing in lands home inst
 	expect(errors.filter((e) => e.includes('External navigation'))).toEqual([]);
 });
 
+for (const [what, redirect] of [
+	['a tab', '%2F%09%2Fevil.example%2Fpwned'],
+	['a dot segment', '%2F.%2F%2Fevil.example%2Fpwned']
+])
+	test(`a redirect that ${what} turns into another host is ignored too: signing in lands home (#206)`, async ({
+		page
+	}) => {
+		await mockConfig(page, baseConfig);
+		await page.route('**/api/v1/auths/signin', (route) =>
+			route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(sessionUser) })
+		);
+		await page.route('**/api/v1/auths/', (route) =>
+			route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(sessionUser) })
+		);
+		await page.route('**/api/v1/auths/update/timezone', (route) =>
+			route.fulfill({ status: 200, contentType: 'application/json', body: '{}' })
+		);
+		const errors: string[] = [];
+		page.on('pageerror', (e) => errors.push(String(e)));
+
+		// `/%09/evil.example` decodes to "/\t/evil.example", which URL parsing
+		// reads as `//evil.example`; `/.//evil.example` resolves to that path.
+		await page.goto(`/auth?redirect=${redirect}`);
+		await page.getByLabel('Email').fill('user@example.com');
+		await page.getByLabel('Password').fill('hunter2');
+		await page.getByRole('button', { name: 'Sign in' }).click();
+
+		await expect(page).toHaveURL(/localhost:5174\/$/);
+		expect(errors.filter((e) => e.includes('External navigation'))).toEqual([]);
+	});
+
 test('a failed sign-in shows the backend error inline and stays on /auth', async ({ page }) => {
 	await mockConfig(page, baseConfig);
 	await page.route('**/api/v1/auths/signin', (route) =>
