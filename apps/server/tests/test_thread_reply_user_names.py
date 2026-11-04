@@ -4,7 +4,8 @@
 message, so the `view_channel_thread` tool gave `user_name: null` for every
 reply a person posted, and the model could not tell who said what. A reply's
 author is now its real user (batch-loaded), as `get_message_by_id` already did
-for a single message; a genuine webhook reply still shows the webhook.
+for a single message; a genuine webhook reply still shows the webhook, and one
+naming another channel's webhook shows its real author.
 
 Runs against the test run's migrated SQLite database.
 
@@ -36,6 +37,8 @@ def _thread():
         ben = await Users.insert_new_user(f'ben-{tag}', 'Ben', f'ben-{tag}@example.invalid', role='user')
         channel = await Channels.insert_new_channel(CreateChannelForm(name=f'general-{tag}', user_ids=[ben.id]), ann.id)
         hook = await Channels.insert_webhook(channel.id, ann.id, ChannelWebhookForm(name='Deploy bot'))
+        other = await Channels.insert_new_channel(CreateChannelForm(name=f'other-{tag}'), ann.id)
+        foreign = await Channels.insert_webhook(other.id, ann.id, ChannelWebhookForm(name='Other bot'))
         parent = await Messages.insert_new_message(MessageForm(content='Plan?'), channel.id, ann.id)
         await Messages.insert_new_message(MessageForm(content='Yes', parent_id=parent.id), channel.id, ben.id)
         await Messages.insert_new_message(MessageForm(content='Me too', parent_id=parent.id), channel.id, ann.id)
@@ -43,6 +46,12 @@ def _thread():
             MessageForm(content='Deployed', parent_id=parent.id, meta={'webhook': {'id': hook.id}}),
             channel.id,
             ann.id,
+        )
+        # A webhook from another channel is not believed: the reply shows its real author.
+        await Messages.insert_new_message(
+            MessageForm(content='Spoofed', parent_id=parent.id, meta={'webhook': {'id': foreign.id}}),
+            channel.id,
+            ben.id,
         )
         return SimpleNamespace(ann=ann, ben=ben, channel=channel, parent=parent)
 
@@ -57,6 +66,7 @@ def test_thread_replies_carry_their_authors():
     assert sorted((r.content, r.user.name if r.user else None) for r in replies) == [
         ('Deployed', 'Deploy bot'),
         ('Me too', 'Ann'),
+        ('Spoofed', 'Ben'),
         ('Yes', 'Ben'),
     ]
 
@@ -73,4 +83,5 @@ def test_view_channel_thread_names_who_said_what():
         ('Yes', 'Ben'),
         ('Me too', 'Ann'),
         ('Deployed', 'Deploy bot'),
+        ('Spoofed', 'Ben'),
     ]
