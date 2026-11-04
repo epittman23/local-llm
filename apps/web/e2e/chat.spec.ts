@@ -304,7 +304,7 @@ test('a request refused because the session expired signs out and says so', asyn
 	await expect(page).toHaveURL(/\/auth\?redirect=/);
 });
 
-test('a message typed the moment the box appears waits for the model list, then is sent (#373)', async ({ page }) => {
+test('a message sent the moment the box appears waits for the model list, then goes (#373)', async ({ page }) => {
 	const chat = await mockChat(page);
 	let release = () => {};
 	const held = new Promise<void>((resolve) => (release = resolve));
@@ -315,13 +315,16 @@ test('a message typed the moment the box appears waits for the model list, then 
 	await page.goto('/?models=llama');
 	await chat.socket.connected;
 	const box = page.getByRole('textbox', { name: 'Message' });
-	await expect(box).toBeVisible();
-	await expect(box).toBeDisabled();
+	await expect(box).toBeFocused();
+
+	await page.keyboard.type('Hello there');
+	await page.keyboard.press('Enter');
+	await expect(box).toHaveValue('Hello there');
+	expect(chat.seen.completions).toHaveLength(0);
 
 	release();
-	await box.fill('Hello there');
-	await box.press('Enter');
 	await expect.poll(() => chat.seen.completions.length).toBe(1);
 	expect(chat.seen.completions[0]).toMatchObject({ model: 'llama', user_message: { content: 'Hello there' } });
+	await expect(box).toHaveValue('');
 	await expect(page.getByText('Model not selected')).toHaveCount(0);
 });

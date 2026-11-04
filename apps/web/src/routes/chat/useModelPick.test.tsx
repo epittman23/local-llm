@@ -8,14 +8,21 @@ import { useConfigStore } from '@/lib/stores/configStore';
 import { useModelPick } from './useModelPick';
 
 const route = vi.hoisted(() => ({ params: {} as Record<string, string>, search: '' }));
-const lists = vi.hoisted(() => ({ models: [] as { id: string }[], loaded: false, settings: null as unknown }));
+const lists = vi.hoisted(() => ({
+	models: [] as { id: string }[],
+	loaded: false,
+	failed: false,
+	settings: null as unknown
+}));
 
 vi.mock('react-router', async (orig) => ({
 	...(await orig<typeof import('react-router')>()),
 	useParams: () => route.params,
 	useSearchParams: () => [new URLSearchParams(route.search), () => {}]
 }));
-vi.mock('./useModels', () => ({ useModels: () => ({ models: lists.models, loaded: lists.loaded }) }));
+vi.mock('./useModels', () => ({
+	useModels: () => ({ models: lists.models, loaded: lists.loaded, failed: lists.failed })
+}));
 vi.mock('@/lib/settings/userSettings', () => ({ useUserSettings: () => ({ settings: lists.settings }) }));
 
 const fetched = { isFetched: true, data: null };
@@ -25,6 +32,7 @@ beforeEach(() => {
 	route.search = '';
 	lists.models = [{ id: 'llama' }, { id: 'qwen' }];
 	lists.loaded = false;
+	lists.failed = false;
 	lists.settings = null;
 	useAuthStore.setState({ user: { id: 'u', role: 'user', permissions: { chat: {} } } } as never);
 	useConfigStore.setState({ config: { default_models: 'qwen' } } as never);
@@ -111,5 +119,12 @@ describe('useModelPick (#373)', () => {
 		route.params = { id: 'new1' };
 		rerender();
 		expect(result.current).toBe(true);
+	});
+	it('is ready, with nothing picked, when the model list failed to load', () => {
+		lists.failed = true;
+		const set = vi.fn();
+		const { result } = renderHook(() => useModelPick(null, fetched, set));
+		expect(result.current).toBe(true);
+		expect(set).not.toHaveBeenCalled();
 	});
 });

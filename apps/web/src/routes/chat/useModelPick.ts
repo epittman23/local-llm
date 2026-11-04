@@ -12,11 +12,11 @@ type FolderQuery = { isFetched: boolean; data?: { data?: { model_ids?: string[] 
 /**
  * Picks the models for the chat on screen: a saved chat brings its own; a new
  * one takes them from the URL, its folder, the user's settings or the
- * defaults. Gives whether a pick has been made since the page loaded. Until
- * then the input stays disabled: a message sent the moment the box appeared
- * was refused with "Model not selected", as no model was chosen yet (#373).
- * It stays true after: a chat started here moves to its own route mid-reply,
- * and another chat's loading already holds the input while it loads.
+ * defaults. Gives whether a pick has been made since the page loaded, or the
+ * model list failed to load. Until then a send is held (useHeldSend): sent the
+ * moment the box appeared, it was refused with "Model not selected", as no
+ * model was chosen yet (#373). It stays true after: a chat started here moves
+ * to its own route mid-reply, and another chat's loading holds the input.
  */
 export function useModelPick(chat: SavedChat, folder: FolderQuery, setSelectedModels: (ids: string[]) => void) {
 	const { id = null, folderId = null } = useParams();
@@ -24,7 +24,7 @@ export function useModelPick(chat: SavedChat, folder: FolderQuery, setSelectedMo
 	const user = useAuthStore((s) => s.user);
 	const config = useConfigStore((s) => s.config);
 	const { settings } = useUserSettings();
-	const { models, loaded } = useModels();
+	const { models, loaded, failed } = useModels();
 	const chatPerms = (user?.permissions as { chat?: Record<string, boolean> } | undefined)?.chat ?? {};
 	const multiple = user?.role === 'admin' || (chatPerms.multiple_models ?? true);
 
@@ -37,7 +37,11 @@ export function useModelPick(chat: SavedChat, folder: FolderQuery, setSelectedMo
 	const pickedFor = useRef<string | null>(null);
 	const [chosen, setChosen] = useState(false);
 	useEffect(() => {
-		if (!loaded) return;
+		if (!loaded) {
+			// No list to pick from: let a send through, to say so ("Model not selected").
+			if (failed) setChosen(true);
+			return;
+		}
 		const { search, settings, config, models, multiple, setSelectedModels } = inputs.current;
 		if (id) {
 			// While switching chats `chat` is still the previous chat's record
@@ -66,6 +70,6 @@ export function useModelPick(chat: SavedChat, folder: FolderQuery, setSelectedMo
 			);
 		}
 		setChosen(true);
-	}, [loaded, id, folderId, folder.isFetched, chat]);
+	}, [loaded, failed, id, folderId, folder.isFetched, chat]);
 	return chosen;
 }

@@ -39,6 +39,7 @@ import { ChatBanners } from './ChatBanners';
 import { ChatPlaceholder } from './ChatPlaceholder';
 import { CitationDialog } from './CitationDialog';
 import { useMessageActions } from './MessageActions';
+import { useHeldSend } from './useHeldSend';
 import { useModelPick } from './useModelPick';
 import { ModelSelector } from './ModelSelector';
 import { ServerDialogs } from './ServerDialogs';
@@ -244,6 +245,12 @@ export function ChatPage() {
 
 	// A saved chat brings its own models; a new one picks them (URL, folder, user, defaults).
 	const modelsChosen = useModelPick(session.chat, folder, setSelectedModels);
+	// A send before the page has chosen its models waits for them, in the box (#373).
+	const heldSend = useHeldSend(
+		modelsChosen,
+		(text, files) => requestSend(text, files, true),
+		() => input.current?.setText('')
+	);
 
 	// `?temporary-chat=true` (also the New Temporary Chat shortcut) switches a new chat to temporary.
 	useEffect(() => {
@@ -483,10 +490,10 @@ export function ChatPage() {
 							/>
 						</>
 					}
-					onSubmit={(text, files) => requestSend(text, files, true)}
+					onSubmit={heldSend}
 					wide={prefs.widescreen}
 					// Until the chat on screen has loaded, a message would be built on the previous one (docs/history/code-review.md L11).
-					disabled={session.loading || !modelsChosen}
+					disabled={session.loading}
 					onPasteText={prefs.largeTextAsFile ? (file) => attachments.addFiles([file], { context: 'full' }) : undefined}
 				/>
 				<ConfirmDialog
