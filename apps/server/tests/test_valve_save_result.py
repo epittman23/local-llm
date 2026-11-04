@@ -17,6 +17,7 @@ Run from apps/server:
 from __future__ import annotations
 
 import asyncio
+import logging
 from types import SimpleNamespace
 
 import pytest
@@ -146,10 +147,14 @@ def test_a_user_valve_save_returns_the_valves_when_stored(monkeypatch, table, sc
         (functions_model, lambda: functions_model.Functions.update_function_valves_by_id('f1', {'level': 3})),
     ],
 )
-def test_a_valve_save_that_raises_is_none(monkeypatch, module, save):
+def test_a_valve_save_that_raises_is_none_and_says_why(monkeypatch, caplog, module, save):
     def fail(valves):
         raise ValueError('cannot encrypt')
 
     monkeypatch.setattr(module, 'encrypt_valves', fail)
 
-    assert asyncio.run(save()) is None
+    with caplog.at_level(logging.ERROR, logger=module.__name__):
+        assert asyncio.run(save()) is None
+
+    # It used to return None without a word.
+    assert 'cannot encrypt' in caplog.text
