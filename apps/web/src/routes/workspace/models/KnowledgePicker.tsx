@@ -133,7 +133,8 @@ export function KnowledgePicker({
 			toast.error('You cannot upload an empty file.');
 			return;
 		}
-		if (maxSizeMb !== null && file.size > maxSizeMb * 1024 * 1024) {
+		// 0 or unset is no limit, as on the server (#238).
+		if (maxSizeMb && file.size > maxSizeMb * 1024 * 1024) {
 			toast.error(`File size should not exceed ${maxSizeMb} MB.`);
 			return;
 		}
