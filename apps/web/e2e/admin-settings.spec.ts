@@ -1937,7 +1937,7 @@ test.describe('settings: Documents', () => {
 		await expect(modal(page).getByLabel('Max Upload Count')).toHaveValue('7');
 	});
 
-	test('hybrid search reveals reranking; an external engine clears the model; BM25 weight is Default until made Custom', async ({
+	test('hybrid search reveals reranking; an external engine clears the model; the BM25 weight shows its default and saves a change (#233)', async ({
 		page
 	}) => {
 		await mockWorkspaceBackend(page);
@@ -1952,8 +1952,7 @@ test.describe('settings: Documents', () => {
 		await expect(r.getByLabel('API Base URL')).toBeVisible();
 		await r.getByLabel('Reranking Engine').selectOption('');
 		await expect(r.getByLabel('Reranking Model')).toHaveValue('BAAI/bge-reranker-v2-m3');
-		await expect(r.getByLabel('BM25 Weight slider')).toHaveCount(0);
-		await r.getByRole('button', { name: 'Default' }).click();
+		await expect(r.getByLabel('BM25 Weight slider')).toHaveValue('0.5');
 		await expect(r.getByLabel('BM25 Weight', { exact: true })).toHaveValue('0.5');
 		await r.getByLabel('BM25 Weight', { exact: true }).fill('0.3');
 		await modal(page).getByRole('button', { name: 'Save' }).click();
