@@ -55,9 +55,9 @@ def world():
             assert feedback is not None
             ids.append(feedback.id)
         # Equal timestamps for all four, so only the tiebreaker orders them; and
-        # ids that sort against the insertion order, so an unordered query
+        # ids whose insertion order is neither sort order, so an unordered query
         # (which SQLite returns in insertion order) cannot pass by chance.
-        fixed = [f'fb-{tag}-{letter}' for letter in 'dcba']
+        fixed = [f'fb-{tag}-{letter}' for letter in 'bdac']
         async with get_async_db_context() as db:
             for old_id, new_id in zip(ids, fixed, strict=True):
                 await db.execute(
