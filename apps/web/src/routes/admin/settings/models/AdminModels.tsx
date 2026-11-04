@@ -200,7 +200,12 @@ export default function AdminModels() {
 		const plan = upsertPlan(model, overrides, recordIds);
 		try {
 			if (plan.action === 'update') await updateModelById(token, plan.id, plan.body);
-			else await createNewModel(token, plan.body);
+			else {
+				await createNewModel(token, plan.body);
+				// A record now exists, so the next change updates it instead of
+				// creating it again, which the server refuses (#249).
+				await init();
+			}
 			if (notify) toast.success('Model updated successfully');
 			return true;
 		} catch (error) {

@@ -2500,6 +2500,31 @@ test.describe('settings: Models', () => {
 		});
 	});
 
+	test('hiding a model with no record creates it once, and showing it again updates it (#249)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockModels(page);
+		// Registered after mockModels, so it answers first: a record created here
+		// is listed from then on, as the server would list it.
+		const created: Rec[] = [];
+		await page.route('**/api/v1/models/**', (route) => {
+			const path = new URL(route.request().url()).pathname.replace('/api/v1', '');
+			if (path === '/models/create') created.push(route.request().postDataJSON());
+			if (path === '/models/base') return json(route, [...records(), ...created]);
+			return route.fallback();
+		});
+		await page.goto('/?settings=admin:models');
+		await moreMenu(page, 'mistral', 'Mistral');
+		await page.getByRole('menuitem', { name: 'Hide Model' }).click();
+		await expect(page.getByText('Model mistral is now hidden')).toBeVisible();
+		await moreMenu(page, 'mistral', 'Mistral');
+		await page.getByRole('menuitem', { name: 'Show Model' }).click();
+		await expect(page.getByText('Model mistral is now visible')).toBeVisible();
+		expect(posts(calls, '/models/create').map((b) => b.id)).toEqual(['mistral']);
+		expect(posts(calls, '/models/model/update')).toEqual([
+			expect.objectContaining({ id: 'mistral', meta: expect.objectContaining({ hidden: false }) })
+		]);
+	});
+
 	test('Move Down reorders and enables Save, which sends the new order and nothing else changed', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockModels(page);
