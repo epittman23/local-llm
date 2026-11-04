@@ -70,6 +70,12 @@ describe('TunePage errors show what the server said', () => {
 		expect(await screen.findByText('a sweep is already running')).toBeTruthy();
 	});
 
+	it('a status stream that cannot reach the server', async () => {
+		vi.mocked(api.streamTuneLog).mockRejectedValue(new ServerUnreachableError());
+		renderPage();
+		expect(await screen.findByText('Could not reach the server')).toBeTruthy();
+	});
+
 	it('a refused resume', async () => {
 		vi.mocked(api.resumeTune).mockRejectedValue('no sweep to resume');
 		renderPage();
@@ -77,11 +83,17 @@ describe('TunePage errors show what the server said', () => {
 		expect(await screen.findByText('no sweep to resume')).toBeTruthy();
 	});
 
-	it('a status stream that cannot start, and a refresh that fails', async () => {
-		vi.mocked(api.streamTuneLog).mockRejectedValue('Sweep not found');
+	it('a status stream the server refuses, and a refresh that cannot reach it', async () => {
+		vi.mocked(api.streamTuneLog).mockResolvedValue([
+			new Response(JSON.stringify({ detail: 'Your session has expired' }), {
+				status: 401,
+				headers: { 'Content-Type': 'application/json' }
+			}),
+			new AbortController()
+		]);
 		vi.mocked(api.getTuneStatus).mockRejectedValue(new ServerUnreachableError());
 		renderPage();
-		expect(await screen.findByText('Sweep not found')).toBeTruthy();
+		expect(await screen.findByText('Your session has expired')).toBeTruthy();
 
 		fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
 		expect(await screen.findByText('Could not reach the server')).toBeTruthy();

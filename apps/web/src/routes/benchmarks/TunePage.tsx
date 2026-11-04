@@ -33,7 +33,7 @@ import {
 	streamTuneLog
 } from '@/lib/apis/benchmarks';
 // The helpers throw the server's detail as a string; errorMessage reads any shape (#143).
-import { errorMessage } from '@/lib/apis/errors';
+import { errorBody, errorMessage } from '@/lib/apis/errors';
 import { useAuthStore } from '@/lib/stores/authStore';
 
 const DEFAULT_OPTION = '__default__';
@@ -151,6 +151,12 @@ export function TunePage() {
 
 		if (!res || !res.body) {
 			setStatusError('Failed to start live status stream');
+			return;
+		}
+		// The stream opener returns any response; a refusal (401, 500) has a
+		// JSON body that yields no events, and the page would go quiet (#143).
+		if (!res.ok) {
+			setStatusError(errorMessage(await errorBody(res), 'Failed to start live status stream'));
 			return;
 		}
 
