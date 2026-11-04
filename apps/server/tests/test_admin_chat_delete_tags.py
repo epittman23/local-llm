@@ -59,3 +59,23 @@ def test_an_admin_deleting_a_users_chat_cleans_the_owners_tags_not_their_own(mon
     admin_tags = {t.id for t in _run(Tags.get_tags_by_user_id(admin.id))}
     assert 'work' not in owner_tags  # the owner's only chat with it is gone
     assert 'work' in admin_tags  # the admin still uses it
+
+
+def test_deleting_an_archived_chat_keeps_a_tag_another_chat_still_uses(monkeypatch):
+    """An archived chat is not counted, so it must not be subtracted either."""
+
+    async def nothing(*_a, **_k):
+        return None
+
+    monkeypatch.setattr(chats_router, 'stop_item_tasks', nothing)
+    monkeypatch.setattr(chats_router, 'publish_event', nothing)
+
+    owner = _user('user')
+    archived = _tagged_chat(owner.id, ['Work'])
+    _tagged_chat(owner.id, ['Work'])  # a live chat that keeps the tag
+    _run(Chats.toggle_chat_archive_by_id(archived))
+
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(redis=None)))
+    assert _run(chats_router.delete_chat_by_id(request, archived, user=owner, db=None)) is True
+
+    assert 'work' in {t.id for t in _run(Tags.get_tags_by_user_id(owner.id))}

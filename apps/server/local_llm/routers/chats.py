@@ -1356,8 +1356,13 @@ async def delete_chat_by_id(
     # deleting the chat to prevent orphaned requests.
     await stop_item_tasks(request.app.state.redis, id)
     # The chat owner's tags: an admin deleting another user's chat used to
-    # clean up the admin's own tag rows instead (#338).
-    await Chats.delete_orphan_tags_for_user(chat.meta.get('tags', []), chat.user_id, threshold=1, db=db)
+    # clean up the admin's own tag rows instead (#338). Only chats that are not
+    # archived or internal are counted, so such a chat does not count itself:
+    # a threshold of 1 would drop a tag that one other chat still uses.
+    counted = not chat.archived and not (chat.meta or {}).get('internal')
+    await Chats.delete_orphan_tags_for_user(
+        chat.meta.get('tags', []), chat.user_id, threshold=1 if counted else 0, db=db
+    )
 
     # Cascade to internal child chats spawned from this one.
     for child_id in await Chats.get_internal_chat_ids_by_parent_id(id, chat.user_id):
