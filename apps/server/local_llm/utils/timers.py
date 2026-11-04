@@ -8,11 +8,11 @@ import datetime as dt
 import logging
 import re
 import time
-from typing import Literal
+from typing import Literal, cast
 from uuid import uuid4
 
 from fastapi import Request
-from sqlalchemy import select
+from sqlalchemy import select, update
 from starlette.datastructures import Headers
 
 from local_llm.internal.db import get_async_db
@@ -227,7 +227,83 @@ async def cancel_timers_for_chat(
         await db.commit()
 
 
+# Longer than a run takes to write its messages and become completed: a timer
+# still running after this was left by a restart, or by an error that could
+# not be recorded (#270).
+STALE_RUNNING_NS = 10 * 60 * 1_000_000_000
+
+
+async def recover_stale_timers(now_ns: int) -> list[str]:
+    """Put timers left running back to pending, due again at their own time.
+
+    A timer is completed in the same commit that writes its messages, so one
+    still running has posted nothing yet. Only internal timer chats are
+    looked at: an imported or other chat can carry any meta.
+    """
+    async with get_async_db() as db:
+        stmt = (
+            select(Chat)
+            .where(Chat.meta['type'].as_string() == 'timer')
+            .where(Chat.meta['internal'].as_boolean().is_(True))
+            .where(Chat.meta['status'].as_string() == 'running')
+        )
+        if db.get_bind().dialect.name == 'postgresql':
+            stmt = stmt.with_for_update(skip_locked=True)
+        result = await db.execute(stmt)
+        recovered: list[str] = []
+        for row in result.scalars().all():
+            meta = cast(dict, row.meta or {})
+            started = meta.get('timer_started_at')
+            if isinstance(started, int) and now_ns - started < STALE_RUNNING_NS:
+                continue
+            due = meta.get('timer_at')
+            await db.execute(
+                update(Chat)
+                .where(Chat.id == row.id)
+                .values(
+                    meta={**meta, 'status': 'pending', 'timer_claim_id': None, 'timer_started_at': None},
+                    timer_at=due if isinstance(due, int) else now_ns,
+                    updated_at=int(time.time()),
+                )
+            )
+            recovered.append(str(row.id))
+        await db.commit()
+    if recovered:
+        log.warning('Timers left running put back to pending: %s', ', '.join(recovered))
+    return recovered
+
+
 async def execute_due_timer(app, timer_id: str, claim_id: str | None = None) -> None:
+    """Run a claimed timer; an error marks it failed, rather than leaving it running (#270)."""
+    try:
+        await _execute_due_timer(app, timer_id, claim_id)
+    except Exception as exc:
+        log.exception('Timer %s failed', timer_id)
+        try:
+            await _record_timer_error(timer_id, claim_id, str(exc)[:500])
+        except Exception:
+            log.exception('Timer %s: its error could not be recorded', timer_id)
+
+
+async def _record_timer_error(timer_id: str, claim_id: str | None, error: str) -> None:
+    """Mark the timer failed, unless it has been claimed again since (a run that outlived recovery)."""
+    async with get_async_db() as db:
+        row = await db.get(Chat, timer_id)
+        if not row:
+            return
+        meta = cast(dict, row.meta or {})
+        if claim_id is not None and meta.get('timer_claim_id') not in (claim_id, None):
+            log.warning("Timer %s: claimed again since, so this run's error is not recorded", timer_id)
+            return
+        await db.execute(
+            update(Chat)
+            .where(Chat.id == timer_id)
+            .values(meta={**meta, 'status': 'error', 'timer_error': error}, updated_at=int(time.time()))
+        )
+        await db.commit()
+
+
+async def _execute_due_timer(app, timer_id: str, claim_id: str | None) -> None:
     lock = _timer_locks.setdefault(timer_id, asyncio.Lock())
     async with lock:
         from local_llm.socket.main import sio

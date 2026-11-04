@@ -109,6 +109,42 @@ class OAuthClientMetadata(MCPOAuthClientMetadata):
     pass
 
 
+def _token_endpoint_auth_method(offered: list[str] | None, *, has_secret: bool) -> str:
+    """The token endpoint auth method to register or use with an authorization server (#273).
+
+    `client_secret_post` whenever the server lists it, or lists nothing.
+    Otherwise the first method the server lists that this client supports
+    (`client_secret_basic` or `none`), in the server's own order, except that
+    a client with no secret takes `none` when it is listed. When the server
+    lists neither, `client_secret_post` is kept: the server's first choice
+    (`private_key_jwt`, say) is one this client cannot use, and taking it
+    failed validation.
+    """
+    if not offered or 'client_secret_post' in offered:
+        return 'client_secret_post'
+    usable = [method for method in offered if method in ('client_secret_basic', 'none')]
+    if not has_secret and 'none' in usable:
+        return 'none'
+    return usable[0] if usable else 'client_secret_post'
+
+
+def _refresh_client_auth(
+    client_id: str, client_secret: str | None, method: str | None
+) -> tuple[dict, aiohttp.BasicAuth | None]:
+    """The client credentials for a refresh request, sent as its registered method asks (#273).
+
+    `client_secret_basic` sends them in an Authorization header, as authlib
+    does for the code exchange, and not in the body; `none` sends the
+    client id only; `client_secret_post` (the default) sends both in the body.
+    Returns the body fields and the Basic auth, if any.
+    """
+    if method == 'client_secret_basic' and client_secret:
+        return {}, aiohttp.BasicAuth(client_id, client_secret, encoding='latin1')
+    if method == 'none' or not client_secret:
+        return {'client_id': client_id}, None
+    return {'client_id': client_id, 'client_secret': client_secret}, None
+
+
 OAuthResourceParameterMode = Literal['auto', 'include', 'omit']
 
 
@@ -527,15 +563,10 @@ async def get_oauth_client_info_with_dynamic_client_registration(
                             ):
                                 oauth_client_metadata.scope = ' '.join(oauth_server_metadata.scopes_supported)
 
-                            if (
-                                oauth_server_metadata.token_endpoint_auth_methods_supported
-                                and oauth_client_metadata.token_endpoint_auth_method
-                                not in oauth_server_metadata.token_endpoint_auth_methods_supported
-                            ):
-                                # Pick the first supported method from the server
-                                oauth_client_metadata.token_endpoint_auth_method = (
-                                    oauth_server_metadata.token_endpoint_auth_methods_supported[0]
-                                )
+                            # Registration issues a secret for a secret method, so prefer one.
+                            oauth_client_metadata.token_endpoint_auth_method = _token_endpoint_auth_method(
+                                oauth_server_metadata.token_endpoint_auth_methods_supported, has_secret=True
+                            )
 
                             break
                         except Exception as e:
@@ -665,13 +696,10 @@ async def get_oauth_client_info_with_static_credentials(
         )
 
         # Determine token_endpoint_auth_method
-        token_endpoint_auth_method = 'client_secret_post'
-        if (
-            oauth_server_metadata
-            and oauth_server_metadata.token_endpoint_auth_methods_supported
-            and token_endpoint_auth_method not in oauth_server_metadata.token_endpoint_auth_methods_supported
-        ):
-            token_endpoint_auth_method = oauth_server_metadata.token_endpoint_auth_methods_supported[0]
+        token_endpoint_auth_method = _token_endpoint_auth_method(
+            oauth_server_metadata.token_endpoint_auth_methods_supported if oauth_server_metadata else None,
+            has_secret=bool(oauth_client_secret),
+        )
 
         oauth_client_info = OAuthClientInformationFull(
             client_id=oauth_client_id,
@@ -836,12 +864,14 @@ def _is_invalid_grant(status: int, body: str) -> bool:
     return error == 'invalid_grant'
 
 
+# Refresh a token this long before it expires.
+REFRESH_MARGIN_SECONDS = 5 * 60
+
+
 def _needs_refresh(session, force_refresh: bool) -> bool:
-    return (
-        force_refresh
-        or session.expires_at is None
-        or dt.datetime.now() + dt.timedelta(minutes=5) >= dt.datetime.fromtimestamp(session.expires_at)
-    )
+    # Epoch seconds, not datetimes: a naive local conversion of the non-expiring
+    # sentinel (9999-12-31 UTC) is in the year 10000 east of UTC and raised (#285).
+    return force_refresh or session.expires_at is None or time.time() + REFRESH_MARGIN_SECONDS >= session.expires_at
 
 
 async def _token_refreshed_if_needed(manager, session, force_refresh: bool) -> dict | None:
@@ -1203,17 +1233,19 @@ class OAuthClientManager:
                 return None
 
             # Prepare refresh request
+            client_info = await self.get_client_info(client_id)
+            credentials, basic_auth = _refresh_client_auth(
+                client.client_id,
+                getattr(client, 'client_secret', None),
+                getattr(client_info, 'token_endpoint_auth_method', None),
+            )
             refresh_data = {
                 'grant_type': 'refresh_token',
                 'refresh_token': token_data['refresh_token'],
-                'client_id': client.client_id,
+                **credentials,
             }
-            client_info = await self.get_client_info(client_id)
             if should_send_oauth_resource(client_info):
                 refresh_data['resource'] = client_info.resource
-
-            if hasattr(client, 'client_secret') and client.client_secret:
-                refresh_data['client_secret'] = client.client_secret
 
             # Add scope if available in client kwargs (some providers require it on refresh)
             if (
@@ -1229,6 +1261,7 @@ class OAuthClientManager:
                     token_endpoint,
                     data=refresh_data,
                     headers={'Content-Type': 'application/x-www-form-urlencoded'},
+                    auth=basic_auth,
                     ssl=AIOHTTP_CLIENT_SESSION_SSL,
                 ) as r:
                     if r.status == 200:
@@ -2104,12 +2137,19 @@ class OAuthManager:
         log.debug("User's current groups: %s", [g.name for g in user_current_groups])
         log.debug('All groups available in Local LLM: %s', [g.name for g in all_available_groups])
 
+        # The default group is the app's own (sign-up adds every new user to it),
+        # not the IdP's, so the claim does not remove it (#275). Without this,
+        # sign-up added a user to it and this sync, in the same callback,
+        # took them out again; as it would at every later login.
+        default_group_id = await Config.get('ui.default_group_id') if groups_claim_present else None
+
         # Remove groups that user is no longer a part of
         for group_model in user_current_groups:
             if (
                 groups_claim_present
                 and group_model.name not in user_oauth_groups
                 and not is_in_blocked_groups(group_model.name, blocked_groups)
+                and not (default_group_id and group_model.id == default_group_id)
             ):
                 # Remove group from user
                 log.debug('Removing user from group %s as it is no longer in their oauth groups', group_model.name)
