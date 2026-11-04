@@ -727,6 +727,58 @@ def merge_and_sort_query_results(query_results: list[dict], k: int) -> dict:
     }
 
 
+CHUNK_INDEX_KEY = 'chunk_index'
+
+
+def number_chunks(metadatas: list[dict]) -> None:
+    """Gives each chunk its place in its file, CHUNK_INDEX_KEY, counted in list order (#355).
+
+    Chunks are numbered within their file (`file_id`, else `source`), since one
+    save can hold several. The splitters' `start_index` is no order: it starts
+    again at 0 for every markdown section and every PDF page.
+    """
+    counts: dict[str, int] = {}
+    for metadata in metadatas:
+        group = str(metadata.get('file_id') or metadata.get('source') or '')
+        metadata[CHUNK_INDEX_KEY] = counts.get(group, 0)
+        counts[group] = metadata[CHUNK_INDEX_KEY] + 1
+
+
+def in_document_order(result: dict) -> dict:
+    """A collection's chunks, each file's in the order they were saved in (#355).
+
+    Vector stores return a collection in no set order: pgvector has no ORDER
+    BY, and its ids are random, so after deletes and a VACUUM a file's chunks
+    could come back shuffled and a full-context read garbled the document.
+    Files keep the order they first appear in; a file's chunks are sorted by
+    CHUNK_INDEX_KEY. Chunks saved before it existed have none and keep their
+    stored order, after any that have one.
+    """
+    if not (result.get('documents') and result.get('metadatas') and result.get('ids')):
+        return result
+    documents, metadatas, ids = result['documents'][0], result['metadatas'][0], result['ids'][0]
+    first_seen: dict[str, int] = {}
+
+    def key(position: int):
+        metadata = metadatas[position] or {}
+        file_key = str(metadata.get('file_id') or metadata.get('source') or '')
+        group = first_seen.setdefault(file_key, len(first_seen))
+        index = metadata.get(CHUNK_INDEX_KEY)
+        if isinstance(index, int) and not isinstance(index, bool):
+            return (group, 0, index, position)
+        return (group, 1, 0, position)
+
+    # Keys in input order, so a file's group is where it first appears.
+    keys = [key(position) for position in range(len(documents))]
+    order = sorted(range(len(documents)), key=keys.__getitem__)
+    return {
+        **result,
+        'documents': [[documents[i] for i in order]],
+        'metadatas': [[metadatas[i] for i in order]],
+        'ids': [[ids[i] for i in order]],
+    }
+
+
 def get_all_items_from_collections(collection_names: list[str]) -> dict:
     results = []
 
@@ -735,7 +787,7 @@ def get_all_items_from_collections(collection_names: list[str]) -> dict:
             try:
                 result = get_doc(collection_name=collection_name)
                 if result is not None:
-                    results.append(result.model_dump())
+                    results.append(in_document_order(result.model_dump()))
             except Exception as e:
                 log.exception(f'Error when querying the collection: {e}')
         else:
@@ -750,7 +802,13 @@ async def query_collection(
     queries: list[str],
     embedding_function,
     k: int,
+    allow_hybrid: bool = True,
 ) -> dict:
+    """Vector search over the collections, or hybrid search when it is enabled.
+
+    allow_hybrid=False keeps it to vector search whatever the setting: a caller
+    that asked for no hybrid search used to get it anyway (#354).
+    """
     config = await Config.get_many(
         'rag.enable_hybrid_search',
         'rag.top_k_reranker',
@@ -759,7 +817,7 @@ async def query_collection(
         'rag.enable_hybrid_search_enriched_texts',
     )
     # When request is provided, try hybrid search + reranking if enabled
-    if request and config.get('rag.enable_hybrid_search'):
+    if request and allow_hybrid and config.get('rag.enable_hybrid_search'):
         try:
             reranking_function = (
                 (lambda query, documents: request.app.state.RERANKING_FUNCTION(query, documents))

@@ -617,15 +617,44 @@ app.state.BASE_MODELS = []
 ########################################
 
 
-async def initialize_runtime_config(app: FastAPI):
-    # Migrate legacy access_control → access_grants on boot.
+async def migrate_legacy_access_control() -> list[dict]:
+    """Migrate legacy access_control to access_grants in tool servers and arena models; returns the connections.
+
+    A connection's `config` or an arena model's `meta` stored as null is read
+    as empty and stored back as `{}`. `c.get('config', {})` gave None for one,
+    and `'access_control' in None` stopped the backend starting (#363); later
+    readers of the stored value would meet the same None.
+    """
     from local_llm.utils.access_control import migrate_access_control
 
     connections = await Config.get('tool_server.connections', []) or []
-    if any('access_control' in c.get('config', {}) for c in connections):
+    repaired = False
+    for connection in connections:
+        if connection.get('config') is None:
+            connection['config'] = {}
+            repaired = True
+    if repaired or any('access_control' in c['config'] for c in connections):
         for connection in connections:
-            migrate_access_control(connection.get('config', {}))
+            migrate_access_control(connection['config'])
         await Config.upsert({'tool_server.connections': connections})
+
+    arena_models = await Config.get('evaluation.arena.models', []) or []
+    repaired = False
+    for model in arena_models:
+        if model.get('meta') is None:
+            model['meta'] = {}
+            repaired = True
+    if repaired or any('access_control' in m['meta'] for m in arena_models):
+        for model in arena_models:
+            migrate_access_control(model['meta'])
+        await Config.upsert({'evaluation.arena.models': arena_models})
+
+    return connections
+
+
+async def initialize_runtime_config(app: FastAPI):
+    # Migrate legacy access_control → access_grants on boot.
+    connections = await migrate_legacy_access_control()
 
     for tool_server_connection in connections:
         if tool_server_connection.get('type', 'openapi') == 'mcp':
@@ -655,12 +684,6 @@ async def initialize_runtime_config(app: FastAPI):
                         server_id,
                         f'{type(e).__name__}: {e}' if str(e) else type(e).__name__,
                     )
-
-    arena_models = await Config.get('evaluation.arena.models', []) or []
-    if any('access_control' in m.get('meta', {}) for m in arena_models):
-        for model in arena_models:
-            migrate_access_control(model.get('meta', {}))
-        await Config.upsert({'evaluation.arena.models': arena_models})
 
     app.state.EMBEDDING_FUNCTION = None
     app.state.RERANKING_FUNCTION = None

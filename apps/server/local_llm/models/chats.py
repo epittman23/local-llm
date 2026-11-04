@@ -53,6 +53,11 @@ def chat_search_content_query(text: str) -> str:
     return ' '.join(word for word in words if not word.startswith(CHAT_SEARCH_FILTER_PREFIXES)).strip()
 
 
+def like_escape(text: str) -> str:
+    """Text for a LIKE pattern with `ESCAPE '\\'`: its `\\`, `%` and `_` match themselves (#292)."""
+    return text.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+
+
 def chat_search_terms(text: str) -> list[str]:
     return list(dict.fromkeys(re.findall(r'[a-z0-9]+', text.lower())))
 
@@ -70,12 +75,12 @@ def chat_search_message_content_match_sql(dialect_name: str, key: str) -> str:
             EXISTS (
                 SELECT 1
                 FROM json_each(Chat.chat, '$.history.messages') AS history_message
-                WHERE LOWER(history_message.value->>'content') LIKE '%' || :{key} || '%'
+                WHERE LOWER(history_message.value->>'content') LIKE '%' || :{key} || '%' ESCAPE '\\'
             )
             OR EXISTS (
                 SELECT 1
                 FROM json_each(Chat.chat, '$.messages') AS legacy_message
-                WHERE LOWER(legacy_message.value->>'content') LIKE '%' || :{key} || '%'
+                WHERE LOWER(legacy_message.value->>'content') LIKE '%' || :{key} || '%' ESCAPE '\\'
             )
         )
         """
@@ -89,19 +94,19 @@ def chat_search_message_content_match_sql(dialect_name: str, key: str) -> str:
                 WHERE message.chat_id = Chat.id
                 AND message.user_id = Chat.user_id
                 AND json_typeof(message.content) = 'string'
-                AND LOWER(message.content #>> '{{}}') LIKE '%' || :{key} || '%'
+                AND LOWER(message.content #>> '{{}}') LIKE '%' || :{key} || '%' ESCAPE '\\'
             )
             OR EXISTS (
                 SELECT 1
                 FROM json_each(Chat.chat#>'{{history,messages}}') AS history_message
                 WHERE json_typeof(history_message.value->'content') = 'string'
-                AND LOWER(history_message.value->>'content') LIKE '%' || :{key} || '%'
+                AND LOWER(history_message.value->>'content') LIKE '%' || :{key} || '%' ESCAPE '\\'
             )
             OR EXISTS (
                 SELECT 1
                 FROM json_array_elements(Chat.chat->'messages') AS legacy_message
                 WHERE json_typeof(legacy_message->'content') = 'string'
-                AND LOWER(legacy_message->>'content') LIKE '%' || :{key} || '%'
+                AND LOWER(legacy_message->>'content') LIKE '%' || :{key} || '%' ESCAPE '\\'
             )
         )
         """
@@ -605,6 +610,8 @@ class ChatTable:
 
     def _chat_import_form_to_chat_model(self, user_id: str, form_data: ChatImportForm) -> ChatModel:
         id = str(uuid.uuid4())
+        now = int(time.time())
+        updated_at = form_data.updated_at if form_data.updated_at else now
         chat = ChatModel(
             **{
                 'id': id,
@@ -616,8 +623,11 @@ class ChatTable:
                 'pinned': form_data.pinned,
                 'folder_id': form_data.folder_id,
                 'current_message_id': form_data.current_message_id or self.get_current_message_id(form_data.chat),
-                'created_at': (form_data.created_at if form_data.created_at else int(time.time())),
-                'updated_at': (form_data.updated_at if form_data.updated_at else int(time.time())),
+                'created_at': (form_data.created_at if form_data.created_at else now),
+                'updated_at': updated_at,
+                # Read as of its own last update, as a new chat starts read: an
+                # import used to leave every chat unread (#295).
+                'last_read_at': updated_at,
             }
         )
         return chat
@@ -1435,7 +1445,7 @@ class ChatTable:
             if filter:
                 query_key = filter.get('query')
                 if query_key:
-                    stmt = stmt.filter(Chat.title.ilike(f'%{query_key}%'))
+                    stmt = stmt.filter(Chat.title.ilike(f'%{like_escape(query_key)}%', escape='\\'))
 
                 order_by = filter.get('order_by')
                 direction = filter.get('direction')
@@ -1522,7 +1532,7 @@ class ChatTable:
             if filter:
                 query_key = filter.get('query')
                 if query_key:
-                    stmt = stmt.filter(Chat.title.ilike(f'%{query_key}%'))
+                    stmt = stmt.filter(Chat.title.ilike(f'%{like_escape(query_key)}%', escape='\\'))
 
                 order_by = filter.get('order_by')
                 direction = filter.get('direction')
@@ -1941,6 +1951,28 @@ class ChatTable:
                 }
             )
 
+    async def get_export_chat_ids_by_user_id(self, user_id: str, db: AsyncSession | None = None) -> list[str]:
+        """The ids of the chats a user's export includes, newest first: taken once, before any is sent (#294)."""
+        async with get_async_db_context(db) as session:
+            result = await session.execute(
+                select(Chat.id)
+                .filter_by(user_id=user_id)
+                .where(Chat.meta['internal'].as_boolean().is_not(True))
+                .order_by(Chat.updated_at.desc(), Chat.id)
+            )
+            return list(result.scalars().all())
+
+    async def get_chats_by_ids_and_user_id(
+        self, ids: list[str], user_id: str, db: AsyncSession | None = None
+    ) -> list[ChatModel]:
+        """The user's chats with these ids, in the order given; ids no longer there are left out."""
+        if not ids:
+            return []
+        async with get_async_db_context(db) as session:
+            result = await session.execute(select(Chat).filter(Chat.user_id == user_id, Chat.id.in_(ids)))
+            found = {chat.id: chat for chat in (ChatModel.model_validate(row) for row in result.scalars().all())}
+            return [found[chat_id] for chat_id in ids if chat_id in found]
+
     # list pinned chats
     async def get_pinned_chats_by_user_id(
         self, user_id: str, db: AsyncSession | None = None
@@ -2012,11 +2044,18 @@ class ChatTable:
         ]
 
         # Extract folder names
-        folders = await Folders.search_folders_by_names(
-            user_id,
-            [word.replace('folder:', '') for word in search_text_words if word.startswith('folder:')],
-        )
+        # A bare `folder:` (one still being typed) names nothing yet and is ignored.
+        folder_names = [
+            word.replace('folder:', '')
+            for word in search_text_words
+            if word.startswith('folder:') and word != 'folder:'
+        ]
+        folders = await Folders.search_folders_by_names(user_id, folder_names)
         folder_ids = [folder.id for folder in folders]
+        # A folder filter that names no folder of this user's matches no chat: it
+        # used to be dropped, and a misspelled folder returned every chat (#291).
+        if folder_names and not folder_ids:
+            return []
 
         is_pinned = None
         if 'pinned:true' in search_text_words:
@@ -2075,13 +2114,13 @@ class ChatTable:
             exact_match_clause = None
             if phrase_query:
                 exact_match_clause = or_(
-                    Chat.title.ilike(bindparam('phrase_title_key')),
+                    Chat.title.ilike(bindparam('phrase_title_key'), escape='\\'),
                     text(chat_search_message_content_match_sql(dialect_name, 'phrase_content_key')),
                 )
                 search_params.update(
                     {
-                        'phrase_title_key': f'%{phrase_query}%',
-                        'phrase_content_key': phrase_query,
+                        'phrase_title_key': f'%{like_escape(phrase_query)}%',
+                        'phrase_content_key': like_escape(phrase_query),
                     }
                 )
 
@@ -2091,12 +2130,12 @@ class ChatTable:
                     content_key = f'term_content_key_{term_idx}'
                     term_clauses.append(
                         or_(
-                            Chat.title.ilike(bindparam(title_key)),
+                            Chat.title.ilike(bindparam(title_key), escape='\\'),
                             text(chat_search_message_content_match_sql(dialect_name, content_key)),
                         )
                     )
-                    search_params[title_key] = f'%{term}%'
-                    search_params[content_key] = term
+                    search_params[title_key] = f'%{like_escape(term)}%'
+                    search_params[content_key] = like_escape(term)
 
                 if term_clauses:
                     stmt = stmt.filter(or_(exact_match_clause, and_(*term_clauses)))
@@ -2622,11 +2661,18 @@ class ChatTable:
         if not file_ids:
             return None
 
-        chat_message_file_ids = {
-            item.id for item in await self.get_chat_files_by_chat_id_and_message_id(chat_id, message_id, db=db)
-        }
-        # Remove duplicates and existing file_ids
-        file_ids = list({file_id for file_id in file_ids if file_id and file_id not in chat_message_file_ids})
+        # Each file once, and none already linked to this chat (by any message): a
+        # chat links a file once, and one already linked broke the whole batch, so
+        # the new files in it were never linked (#293).
+        file_ids = list(dict.fromkeys(file_id for file_id in file_ids if file_id))
+        if not file_ids:
+            return None
+        async with get_async_db_context(db) as session:
+            result = await session.execute(
+                select(ChatFile.file_id).filter(ChatFile.chat_id == chat_id, ChatFile.file_id.in_(file_ids))
+            )
+            linked = set(result.scalars().all())
+        file_ids = [file_id for file_id in file_ids if file_id not in linked]
         if not file_ids:
             return None
 
