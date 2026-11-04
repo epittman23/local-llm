@@ -54,4 +54,37 @@ describe('MessageComposer mentions (#256)', () => {
 		fireEvent.keyDown(box, { key: 'Enter' });
 		await waitFor(() => expect(box.value).toBe('@Ada '));
 	});
+
+	it('the arrow keys step from the highlighted suggestion after the list shrank', async () => {
+		vi.mocked(getChannelMembersById).mockResolvedValue({
+			users: [user('u1', 'Ada'), user('u2', 'Alan'), user('u3', 'Alma')]
+		});
+		const client = new QueryClient();
+		render(
+			<QueryClientProvider client={client}>
+				<MessageComposer
+					channel={channel}
+					placeholder="Message"
+					typingUsers={[]}
+					replyTo={null}
+					onCancelReply={vi.fn()}
+					onTyping={vi.fn()}
+					onSubmit={vi.fn()}
+				/>
+			</QueryClientProvider>
+		);
+		const box = screen.getByPlaceholderText('Message') as HTMLTextAreaElement;
+		fireEvent.change(box, { target: { value: '@a', selectionStart: 2 } });
+		fireEvent.select(box, { target: { selectionStart: 2 } });
+		await screen.findByRole('option', { name: /Alma/ }, { timeout: 2000 });
+		fireEvent.keyDown(box, { key: 'ArrowDown' });
+		fireEvent.keyDown(box, { key: 'ArrowDown' });
+
+		act(() => client.setQueryData(['channel-mention-users', 'c1', 'a'], [user('u1', 'Ada'), user('u2', 'Alan')]));
+		await waitFor(() => expect(screen.getAllByRole('option')).toHaveLength(2));
+		expect(screen.getByRole('option', { name: /Alan/ })).toHaveAttribute('aria-selected', 'true');
+		// One step up from Alan is Ada, not a step spent on the gone Alma.
+		fireEvent.keyDown(box, { key: 'ArrowUp' });
+		expect(screen.getByRole('option', { name: /Ada/ })).toHaveAttribute('aria-selected', 'true');
+	});
 });

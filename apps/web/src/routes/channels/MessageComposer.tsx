@@ -146,7 +146,8 @@ export const MessageComposer = forwardRef<
 
 	useEffect(() => setSelected(0), [active?.query, active?.trigger]);
 	// The list can shrink without the query changing (the debounced user search
-	// answering), so the selection is kept within it (#256).
+	// answering), so the selection is kept within it (#256), and the arrow keys
+	// step from what is highlighted.
 	const highlighted = Math.min(selected, suggestions.length - 1);
 
 	const pick = (s: Suggestion) => {
@@ -234,12 +235,12 @@ export const MessageComposer = forwardRef<
 		if (active && suggestions.length > 0) {
 			if (e.key === 'ArrowDown') {
 				e.preventDefault();
-				setSelected((i) => Math.min(i + 1, suggestions.length - 1));
+				setSelected(Math.min(highlighted + 1, suggestions.length - 1));
 				return;
 			}
 			if (e.key === 'ArrowUp') {
 				e.preventDefault();
-				setSelected((i) => Math.max(i - 1, 0));
+				setSelected(Math.max(highlighted - 1, 0));
 				return;
 			}
 			if (e.key === 'Enter' || e.key === 'Tab') {
