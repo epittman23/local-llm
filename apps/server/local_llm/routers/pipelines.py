@@ -57,6 +57,9 @@ async def get_openai_connection(url_idx: int) -> tuple[str, str]:
     return base_urls[url_idx], api_keys[url_idx]
 
 
+NOT_JSON = 'The Pipelines server sent a reply that is not JSON'
+
+
 async def _reply_json(response: aiohttp.ClientResponse, fallback: str | None = None):
     """The Pipelines server's JSON reply, read while the `async with` still holds it.
 
@@ -66,7 +69,13 @@ async def _reply_json(response: aiohttp.ClientResponse, fallback: str | None = N
     came out as "Pipeline not found", or a bare reason phrase (#304).
     """
     if response.ok:
-        return await response.json()
+        try:
+            return await response.json()
+        except (aiohttp.ContentTypeError, ValueError) as e:
+            # An error, as on `main`, so a filter's chat stops: caught as any
+            # other error, the filter (a moderation one, say) would be skipped.
+            log.warning(f'Pipelines server sent a reply that is not JSON for {response.url}: {e}')
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=NOT_JSON) from e
     detail = None
     try:
         body = await response.json(content_type=None)

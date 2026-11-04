@@ -46,6 +46,10 @@ async def _reject_plainly(_request):
     return web.Response(text='nope', status=503)
 
 
+async def _html(_request):
+    return web.Response(text='<html>maintenance</html>', content_type='text/html')
+
+
 async def _valves(_request):
     return web.json_response({'max_tokens': 5})
 
@@ -64,6 +68,8 @@ def _against_server(monkeypatch, call):
                      '/pipelines/upload'):  # fmt: skip
             app.router.add_route('*', path, _reject)
         app.router.add_route('*', '/plain/filter/inlet', _reject_plainly)
+        app.router.add_route('*', '/html/filter/inlet', _html)
+        app.router.add_route('*', '/html/valves', _html)
         app.router.add_get('/ok/valves', _valves)
         app.router.add_post('/ok/valves/update', _valves)
         runner = web.AppRunner(app)
@@ -164,3 +170,17 @@ def test_reading_valves_announces_nothing_and_updating_them_does(monkeypatch):
     assert read == updated == {'max_tokens': 5}
     assert on_read == []
     assert on_update == [pipelines_router.EVENTS.PIPELINE_VALVES_UPDATED.name]
+
+
+@pytest.mark.parametrize(
+    'call',
+    [
+        lambda: pipelines_router.process_pipeline_inlet_filter(REQUEST, {'model': 'gpt'}, ADMIN, _filters('html')),
+        lambda: pipelines_router.get_pipeline_valves(REQUEST, 0, 'html', user=ADMIN),
+    ],
+    ids=['inlet filter', 'valves'],
+)
+def test_a_reply_that_is_not_json_is_an_error_and_never_skips_a_filter(monkeypatch, call):
+    error, _ = _against_server(monkeypatch, _rejection(call))
+
+    assert (error.status_code, error.detail) == (502, pipelines_router.NOT_JSON)
