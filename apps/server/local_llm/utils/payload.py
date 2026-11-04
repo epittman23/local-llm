@@ -66,8 +66,18 @@ async def apply_system_prompt_to_body(
     return form_data
 
 
-# An escape sequence as typed in a model's settings: `\n`, `\t`, `\\`, `\x41`, `\u00e9`, ...
-_ESCAPE_SEQUENCE = re.compile(r'\\(?:[\\\'"abfnrtv]|[0-7]{1,3}|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})')
+# An escape sequence as typed in a model's settings: `\n`, `\t`, `\\`, `\x41`, `\u00e9`, `\N{BULLET}`, ...
+_ESCAPE_SEQUENCE = re.compile(
+    r'\\(?:[\\\'"abfnrtv]|[0-7]{1,3}|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|N\{[A-Za-z0-9 -]+\})'
+)
+
+
+def _decode_escape(match: re.Match) -> str:
+    """The character an escape names, or the escape as typed when it names none (`\\UFFFFFFFF`, an unknown name)."""
+    try:
+        return match.group(0).encode('ascii').decode('unicode_escape')
+    except UnicodeDecodeError:
+        return match.group(0)
 
 
 def stop_sequences(value) -> list:
@@ -78,12 +88,7 @@ def stop_sequences(value) -> list:
     character (#271).
     """
     stops = [value] if isinstance(value, str) else list(value)
-    return [
-        _ESCAPE_SEQUENCE.sub(lambda m: m.group(0).encode('ascii').decode('unicode_escape'), stop)
-        if isinstance(stop, str)
-        else stop
-        for stop in stops
-    ]
+    return [_ESCAPE_SEQUENCE.sub(_decode_escape, stop) if isinstance(stop, str) else stop for stop in stops]
 
 
 # inplace function: form_data is modified

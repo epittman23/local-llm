@@ -26,8 +26,13 @@ CASES = [
     (['\\n', 'a\\tb', '\\u00e9t\\u00e9', '\\x41'], ['\n', 'a\tb', 'été', 'A']),
     (['Fin\\n。'], ['Fin\n。']),
     (['\\\\n'], ['\\n']),
-    # A backslash that starts no escape is left alone.
+    (['\\N{BULLET} '], ['• ']),
+    # A backslash that starts no escape, or one naming no character, is left alone.
     (['C:\\path'], ['C:\\path']),
+    (['end\\'], ['end\\']),
+    (['\\x4', '\\u00e'], ['\\x4', '\\u00e']),
+    (['\\UFFFFFFFF'], ['\\UFFFFFFFF']),
+    (['\\N{NOT A CHARACTER NAME}'], ['\\N{NOT A CHARACTER NAME}']),
 ]
 
 
