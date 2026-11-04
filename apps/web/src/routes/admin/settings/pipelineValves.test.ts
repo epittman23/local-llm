@@ -19,6 +19,11 @@ describe('pipeline valves', () => {
 	it('loads and saves an unset array valve as unset, not as [""] (#251)', () => {
 		expect(formToValves(valvesToForm({ tags: null, name: 'n' }, spec), spec)).toEqual({ tags: null, name: 'n' });
 	});
+	it('loads and saves an empty list as an empty list, not as [""]', () => {
+		expect(valvesToForm({ tags: [] }, spec).tags).toBe('');
+		expect(formToValves(valvesToForm({ tags: [] }, spec), spec).tags).toEqual([]);
+		expect(formToValves({ tags: 'a,, b,' }, spec).tags).toEqual(['a', 'b']);
+	});
 	it('round-trips', () => {
 		const valves = { tags: ['x', 'y'], name: 'n' };
 		expect(formToValves(valvesToForm(valves, spec), spec)).toEqual(valves);

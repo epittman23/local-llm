@@ -19,7 +19,8 @@ export function valvesToForm(valves: ValveValues, spec: ValveSpec): ValveValues 
 }
 
 /**
- * ...and split them back for the server: `"a, b ,c"` -> `['a','b','c']`. An
+ * ...and split them back for the server: `"a, b ,c"` -> `['a','b','c']`, and
+ * `""` -> `[]`. An
  * unset (null) array valve stays null rather than becoming `['']`; the Svelte
  * version calls `.split` on `(value ?? '')` and so sends `['']` for it.
  */
@@ -33,7 +34,9 @@ export function formToValves(form: ValveValues, spec: ValveSpec): ValveValues {
 				? null
 				: String(raw)
 						.split(',')
-						.map((v) => v.trim());
+						.map((v) => v.trim())
+						// An empty Custom box is an empty list, not [''].
+						.filter((v) => v.length > 0);
 	}
 	return valves;
 }
