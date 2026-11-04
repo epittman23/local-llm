@@ -225,6 +225,16 @@ async def automation_worker_loop(app) -> None:
     await scheduler_worker_loop(app)
 
 
+async def _recover_stale_timers() -> None:
+    """Timers left running by an error or a restart run again (#270); a failure here only logs."""
+    try:
+        from local_llm.utils.timers import recover_stale_timers
+
+        await recover_stale_timers(int(time.time_ns()))
+    except Exception:
+        log.exception('Scheduler: timer recovery error')
+
+
 async def scheduler_worker_loop(app) -> None:
     """Unified background scheduler for all time-based work.
 
@@ -260,13 +270,7 @@ async def scheduler_worker_loop(app) -> None:
             # Jitter to spread automation/calendar load across instances; timers keep a tight poll.
             next_scheduler_poll = now + SCHEDULER_POLL_INTERVAL + random.uniform(0, 2)
 
-            # Timers left running by an error or a restart run again (#270).
-            try:
-                from local_llm.utils.timers import recover_stale_timers
-
-                await recover_stale_timers(int(time.time_ns()))
-            except Exception:
-                log.exception('Scheduler: timer recovery error')
+            await _recover_stale_timers()
 
             # ── Automations ──
             if await Config.get('automations.enable'):

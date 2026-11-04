@@ -24,7 +24,7 @@ import pytest
 from local_llm.config import run_migrations
 from local_llm.models.chats import ChatForm, Chats
 from local_llm.models.users import Users
-from local_llm.utils import timers
+from local_llm.utils import automations, timers
 
 MIN = 60 * 1_000_000_000
 
@@ -98,3 +98,30 @@ def test_an_error_while_running_marks_the_timer_failed(monkeypatch):
     meta = _meta(claimed)
     assert meta['status'] == 'error'
     assert 'database went away' in meta['timer_error']
+
+
+def test_a_timer_whose_error_cannot_be_recorded_still_ends_quietly(monkeypatch, caplog):
+    async def broken(*args, **kwargs):
+        raise RuntimeError('database went away')
+
+    monkeypatch.setattr(timers.Chats, 'get_chat_by_id', broken)
+    monkeypatch.setattr(timers, '_set_timer_state', broken)
+
+    _run(timers.execute_due_timer(None, 'any-timer', 'any-claim'))
+
+    assert 'its error could not be recorded' in caplog.text
+
+
+def test_the_scheduler_recovers_timers_and_survives_a_failure(monkeypatch, caplog):
+    seen = []
+
+    async def recover(now_ns):
+        seen.append(now_ns)
+        raise RuntimeError('no database')
+
+    monkeypatch.setattr(timers, 'recover_stale_timers', recover)
+
+    _run(automations._recover_stale_timers())
+
+    assert len(seen) == 1
+    assert 'timer recovery error' in caplog.text
