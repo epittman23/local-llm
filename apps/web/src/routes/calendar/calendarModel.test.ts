@@ -160,9 +160,10 @@ describe('event form', () => {
 			repeat: ''
 		});
 	});
-	it('an edited event reads its repeat rule, unknown rules as none', () => {
+	it('an edited event reads its repeat rule, a rule the menu cannot show as custom', () => {
 		expect(repeatFromRrule('freq=weekly; byday=MO,TU,WE,TH,FR')).toBe('weekdays');
-		expect(repeatFromRrule('FREQ=WEEKLY;INTERVAL=2')).toBe('');
+		expect(repeatFromRrule('FREQ=WEEKLY;INTERVAL=2')).toBe('custom');
+		expect(repeatFromRrule(null)).toBe('');
 		expect(eventFields(ev(at(2026, 8, 1, 9), undefined, { rrule: 'FREQ=DAILY' }), '', null)).toMatchObject({
 			repeat: 'daily',
 			endDate: ''
@@ -224,6 +225,11 @@ describe('clearing a field of an existing event (#158)', () => {
 			ns(at(2026, 8, 1, 9))
 		);
 		expect('form' in out && out.form).toMatchObject({ rrule: undefined, start_at: ns(at(2026, 8, 1, 9)) });
+	});
+	it('choosing No Repeat clears a rule the menu cannot show (#510)', () => {
+		const biweekly = ev(at(2026, 8, 1, 9), at(2026, 8, 1, 10), { rrule: 'FREQ=WEEKLY;INTERVAL=2' });
+		const out = eventPayload({ ...eventFields(biweekly, '', null), repeat: '' }, biweekly);
+		expect('form' in out && out.form.rrule).toBeNull();
 	});
 	it('clearing Repeat on an occurrence makes it one event at that occurrence', () => {
 		const daily = ev(at(2026, 8, 20, 9), at(2026, 8, 20, 10), { rrule: 'FREQ=DAILY', instance_id: 'x' });

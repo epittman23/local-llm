@@ -127,3 +127,75 @@ describe('EventDialog reminder (#324)', () => {
 		expect(vi.mocked(api.updateCalendarEvent).mock.calls[0][2]).toMatchObject({ meta: { alert_minutes: -1 } });
 	});
 });
+
+describe('EventDialog on an event whose repeat rule the menu cannot show (#510)', () => {
+	const biweekly = {
+		id: 'b1',
+		calendar_id: 'personal',
+		user_id: 'u1',
+		title: 'Review',
+		start_at: ns(new Date(2026, 8, 1, 9)),
+		end_at: ns(new Date(2026, 8, 1, 10)),
+		all_day: false,
+		rrule: 'FREQ=WEEKLY;INTERVAL=2',
+		meta: null
+	} as never;
+	const openBiweekly = () =>
+		render(
+			<EventDialog
+				open
+				onOpenChange={() => {}}
+				event={biweekly}
+				calendars={calendars}
+				defaultCalendarId="personal"
+				defaultStartAt={null}
+				onSaved={() => {}}
+			/>
+		);
+	beforeEach(() => {
+		vi.mocked(api.updateCalendarEvent).mockResolvedValue(biweekly);
+	});
+	afterEach(() => {
+		cleanup();
+		vi.clearAllMocks();
+	});
+
+	it('shows the rule as a custom one, and a save keeps it', async () => {
+		openBiweekly();
+		const repeat = (await screen.findByLabelText('Repeat')) as HTMLSelectElement;
+		expect(repeat.value).toBe('custom');
+		expect(repeat.selectedOptions[0].textContent).toBe('Custom rule');
+
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+		await waitFor(() => expect(api.updateCalendarEvent).toHaveBeenCalled());
+		// Undefined, so the request leaves it out and the update keeps the rule.
+		expect(vi.mocked(api.updateCalendarEvent).mock.calls[0][2].rrule).toBeUndefined();
+	});
+
+	it('No Repeat clears it', async () => {
+		openBiweekly();
+		fireEvent.change(await screen.findByLabelText('Repeat'), { target: { value: '' } });
+
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+		await waitFor(() => expect(api.updateCalendarEvent).toHaveBeenCalled());
+		expect(vi.mocked(api.updateCalendarEvent).mock.calls[0][2]).toMatchObject({ rrule: null });
+	});
+
+	it('a new event offers no custom rule', async () => {
+		render(
+			<EventDialog
+				open
+				onOpenChange={() => {}}
+				event={null}
+				calendars={calendars}
+				defaultCalendarId="personal"
+				defaultStartAt={null}
+				onSaved={() => {}}
+			/>
+		);
+		const repeat = (await screen.findByLabelText('Repeat')) as HTMLSelectElement;
+		expect([...repeat.options].map((o) => o.value)).not.toContain('custom');
+	});
+});
