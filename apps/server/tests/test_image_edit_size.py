@@ -44,17 +44,24 @@ def saved(monkeypatch):
 
 
 def _update(**over):
-    form = images.ImagesConfig(**_form(**over))
+    form = images.ImagesConfig(**_form(**{'ENABLE_IMAGE_GENERATION': True, 'ENABLE_IMAGE_EDIT': True, **over}))
     return asyncio.run(images.update_config(request=SimpleNamespace(), form_data=form, user=None))
 
 
-@pytest.mark.parametrize('size', ['1024x', '1024 x 1024 px', '1024X1024', 'x512', 'big'])
+@pytest.mark.parametrize('size', ['1024x', '1024 x 1024 px', '1024X1024', 'x512', 'big', '512x512\n'])
 def test_a_malformed_edit_size_is_refused_on_save(saved, size):
     with pytest.raises(HTTPException) as raised:
         _update(IMAGE_EDIT_SIZE=size)
 
-    assert raised.value.status_code == 400
+    assert (raised.value.status_code, raised.value.detail) == (400, images.EDIT_SIZE_FORMAT)
     assert saved == []
+
+
+@pytest.mark.parametrize('switched_off', ['ENABLE_IMAGE_EDIT', 'ENABLE_IMAGE_GENERATION'])
+def test_an_edit_size_the_page_hides_never_blocks_a_save(saved, switched_off):
+    _update(IMAGE_EDIT_SIZE='1024x', **{switched_off: False})
+
+    assert len(saved) == 1
 
 
 @pytest.mark.parametrize('size', ['512x512', '', None, 'auto'])
@@ -69,8 +76,16 @@ def _size(requested, configured):
     return images._edit_size(SimpleNamespace(IMAGE_EDIT_SIZE=configured), form)
 
 
-def test_an_edit_skips_a_size_it_cannot_read():
+def test_an_edit_skips_a_configured_size_it_cannot_read():
     assert _size(None, '1024x') == (None, None, None)
-    assert _size('1024 x 1024 px', '512x768') == ('512x768', 512, 768)
+    assert _size(None, '512x768') == ('512x768', 512, 768)
     assert _size('256x256', '1024x') == ('256x256', 256, 256)
-    assert _size('auto', None) == (None, None, None)
+    assert _size('auto', '512x512\n') == (None, None, None)
+
+
+@pytest.mark.parametrize('size', ['1024x', '1024 x 1024 px', '1024X1024'])
+def test_an_edit_refuses_a_requested_size_it_cannot_read(size):
+    with pytest.raises(HTTPException) as raised:
+        _size(size, '512x512')
+
+    assert (raised.value.status_code, raised.value.detail) == (400, images.EDIT_SIZE_FORMAT)

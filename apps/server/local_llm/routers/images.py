@@ -297,12 +297,11 @@ async def update_config(request: Request, form_data: ImagesConfig, user=Depends(
             detail=ERROR_MESSAGES.INCORRECT_FORMAT('  (e.g., 512x512).'),
         )
     # The edit size too: one that is not WidthxHeight made every image edit fail (#344).
+    # Checked only while the page shows it, so a value it cannot see never blocks a save.
     edit_size = form_data.IMAGE_EDIT_SIZE
-    if edit_size and edit_size != 'auto' and not re.match(pattern, edit_size):
-        raise HTTPException(
-            status_code=400,
-            detail='The image edit size must be WidthxHeight, such as 512x512, or empty.',
-        )
+    shown = form_data.ENABLE_IMAGE_GENERATION and form_data.ENABLE_IMAGE_EDIT
+    if shown and edit_size and edit_size != 'auto' and not re.fullmatch(r'\d+x\d+', edit_size):
+        raise HTTPException(status_code=400, detail=EDIT_SIZE_FORMAT)
 
     if form_data.IMAGE_STEPS is not None and form_data.IMAGE_STEPS < 0:
         raise HTTPException(
@@ -886,9 +885,15 @@ async def edit_images(request: Request, form_data: EditImageForm, user=Depends(g
     return result
 
 
+EDIT_SIZE_FORMAT = 'The image edit size must be WidthxHeight, such as 512x512, auto, or empty.'
+
+
 def _edit_size(image_config, form_data: EditImageForm) -> tuple[str | None, int | None, int | None]:
     # The requested size wins when it is WidthxHeight; otherwise the configured one, if it is.
-    # Anything else (`auto`, or one saved malformed before #344) is skipped, never raised on.
+    # A configured one it cannot read (saved before #344, or from the environment) is
+    # skipped, never raised on; a requested one is refused, rather than replaced unasked.
+    if form_data.size and form_data.size != 'auto' and not re.fullmatch(r'\d+x\d+', form_data.size):
+        raise HTTPException(status_code=400, detail=EDIT_SIZE_FORMAT)
     for size in (form_data.size, image_config.IMAGE_EDIT_SIZE):
         match = re.fullmatch(r'(\d+)x(\d+)', size or '')
         if match:
