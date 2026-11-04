@@ -414,6 +414,10 @@ export function useChatSession({
 	 * Whether the chat a request was made in is still the one open: opening
 	 * another starts a new set of requests. A reply whose POST answers after
 	 * that must not put its tasks, or its failure, into the chat open now (#515).
+	 * Leaving a chat and coming back also starts a new set, so a reply's POST
+	 * that answers after that drops its task ids and failure marks too. Stop
+	 * goes by the chat's id there, so the ids are not needed; the error toast
+	 * still shows.
 	 */
 	const stillOpen = useCallback((req: ChatRequest) => inFlightRef.current.has(req), []);
 
@@ -511,11 +515,15 @@ export function useChatSession({
 				const ids: string[] = res.task_ids ?? (res.task_id ? [res.task_id] : []);
 				if (req.stopped) await cancelStopped(res.chat_id ?? chatId, ids);
 				else if (stillOpen(req)) setTaskIds(ids.length ? ids : null);
-				if (res.chat_id && !chatIdRef.current && !l.temporary && stillOpen(req)) {
-					chatIdRef.current = adoptedRef.current = res.chat_id;
-					navigate(`/c/${res.chat_id}`, { replace: true });
+				// This request created the chat: list it and save its params even when
+				// the user has gone elsewhere, but open it only if they are still in it.
+				if (res.chat_id && !chatId && !l.temporary) {
 					void refreshList();
 					if (Object.keys(l.params).length) void updateChatById(token, res.chat_id, { params: l.params });
+					if (!chatIdRef.current && stillOpen(req)) {
+						chatIdRef.current = adoptedRef.current = res.chat_id;
+						navigate(`/c/${res.chat_id}`, { replace: true });
+					}
 				}
 			} finally {
 				clearInterval(usage);

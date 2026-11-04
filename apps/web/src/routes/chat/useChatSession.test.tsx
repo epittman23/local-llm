@@ -97,9 +97,9 @@ let probeModels: { id: string }[] = [];
 /** The models selected, when not all of `probeModels`. */
 let probeSelected: string[] | null = null;
 
-function Probe({ id }: { id: string }) {
+function Probe({ id }: { id: string | undefined }) {
 	session = useChatSession({
-		routeChatId: id,
+		routeChatId: id ?? null,
 		folderId: null,
 		models: probeModels as never,
 		selectedModels: probeSelected ?? probeModels.map((m) => m.id),
@@ -111,12 +111,19 @@ function Probe({ id }: { id: string }) {
 }
 
 function Route() {
-	return <Probe id={useParams().id!} />;
+	return <Probe id={useParams().id} />;
 }
 
-function renderAt(id: string) {
+/** Renders the session at chat `id`, or at a new chat (`/`) when `id` is null. */
+function renderAt(id: string | null) {
 	const client = new QueryClient();
-	const router = createMemoryRouter([{ path: '/c/:id', element: <Route /> }], { initialEntries: [`/c/${id}`] });
+	const router = createMemoryRouter(
+		[
+			{ path: '/', element: <Route /> },
+			{ path: '/c/:id', element: <Route /> }
+		],
+		{ initialEntries: [id ? `/c/${id}` : '/'] }
+	);
 	render(
 		<QueryClientProvider client={client}>
 			<RouterProvider router={router} />
@@ -328,22 +335,107 @@ describe('useChatSession loadChat', () => {
 		expect(session.history.messages['B-m']?.content).toBe('hello from B');
 	});
 
-	/** Opens chat A, starts a reply there whose POST answers only when told, then opens chat B. */
-	async function startInAThenOpenB(start: () => void, setup?: () => void) {
-		const send = vi.mocked((await import('@/lib/apis/openai')).generateOpenAIChatCompletion);
-		send.mockClear();
-		let answer: (value: unknown) => void = () => {};
-		send.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)) as never);
-		const router = await openChatA();
-		if (setup) act(setup);
-		act(start);
-		await waitFor(() => expect(send).toHaveBeenCalled());
+	/** Opens chat B from wherever the test is, and waits for it to load. */
+	async function openChatB(router: ReturnType<typeof renderAt>) {
 		await act(() => router.navigate('/c/B'));
 		await waitFor(() => expect(pending.B).toBeDefined());
 		await act(async () => pending.B(undefined));
 		await waitFor(() => expect(session.chat?.id).toBe('B'));
-		return (value: unknown) => act(async () => answer(value));
 	}
+
+	/** Opens chat A, starts a reply there whose POST answers only when told, then opens chat B. */
+	async function startInAThenOpenB(start: () => void, setup?: () => void) {
+		const { send, answer } = await holdNextPost();
+		const router = await openChatA();
+		if (setup) act(setup);
+		act(start);
+		await waitFor(() => expect(send).toHaveBeenCalled());
+		await openChatB(router);
+		return (value: unknown) => act(async () => answer.resolve(value));
+	}
+
+	/** Sends in a new chat (`/`), opens chat B before the POST answers, then goes back to a new chat. */
+	async function sendInNewChatThenLeave() {
+		const { send, answer } = await holdNextPost();
+		const router = renderAt(null);
+		await waitFor(() => expect(session.loading).toBe(false));
+		act(() => session.setParams({ temperature: 0.2 }));
+		act(() => void session.submit('first', [], 'm'));
+		await waitFor(() => expect(send).toHaveBeenCalled());
+		await openChatB(router);
+		await act(() => router.navigate('/'));
+		await waitFor(() => expect(session.chat).toBeNull());
+		return { router, answer: (value: unknown) => act(async () => answer.resolve(value)) };
+	}
+
+	it('a new chat whose POST answers while the user is still in it is opened at its id', async () => {
+		probeModels = [{ id: 'm' }];
+		try {
+			const { send, answer } = await holdNextPost();
+			const router = renderAt(null);
+			await waitFor(() => expect(session.loading).toBe(false));
+			act(() => void session.submit('first', [], 'm'));
+			await waitFor(() => expect(send).toHaveBeenCalled());
+			await act(async () => answer.resolve({ chat_id: 'X', task_ids: ['t1'] }));
+
+			await waitFor(() => expect(router.state.location.pathname).toBe('/c/X'));
+			expect(session.taskIds).toEqual(['t1']);
+			expect(Object.values(session.history.messages).map((m) => m.content)).toContain('first');
+		} finally {
+			probeModels = [];
+		}
+	});
+
+	it('a new chat left before its POST answers is not opened when the user starts another (#515)', async () => {
+		probeModels = [{ id: 'm' }];
+		try {
+			const { router, answer } = await sendInNewChatThenLeave();
+			await answer({ chat_id: 'X', task_ids: ['t1'] });
+
+			expect(router.state.location.pathname).toBe('/');
+			expect(session.taskIds).toBeNull();
+			expect(Object.keys(session.history.messages)).toHaveLength(0);
+		} finally {
+			probeModels = [];
+		}
+	});
+
+	it('a new chat left before its POST answers is still listed and keeps its params (#515)', async () => {
+		probeModels = [{ id: 'm' }];
+		const invalidate = vi.spyOn(QueryClient.prototype, 'invalidateQueries');
+		vi.mocked(chatsApi.updateChatById).mockClear();
+		try {
+			const { answer } = await sendInNewChatThenLeave();
+			invalidate.mockClear();
+			await answer({ chat_id: 'X', task_ids: ['t1'] });
+
+			expect(invalidate).toHaveBeenCalledWith({ queryKey: ['chats'] });
+			expect(chatsApi.updateChatById).toHaveBeenCalledWith('t', 'X', { params: { temperature: 0.2 } });
+		} finally {
+			invalidate.mockRestore();
+			probeModels = [];
+		}
+	});
+
+	it('stopping in a new chat does not cancel the tasks of a reply in the chat left (#515)', async () => {
+		probeModels = [{ id: 'm' }];
+		try {
+			const { send, answer } = await holdNextPost();
+			const router = await openChatA();
+			act(() => void session.submit('in A', [], 'm'));
+			await waitFor(() => expect(send).toHaveBeenCalled());
+			await act(() => router.navigate('/'));
+			await waitFor(() => expect(session.chat).toBeNull());
+			await act(async () => answer.resolve({ task_ids: ['tA'] }));
+			vi.mocked(apis.stopTask).mockClear();
+
+			await act(() => session.stop());
+
+			expect(apis.stopTask).not.toHaveBeenCalled();
+		} finally {
+			probeModels = [];
+		}
+	});
 
 	it('a reply started before another chat opened does not put its tasks in that chat (#515)', async () => {
 		probeModels = [{ id: 'm' }];
