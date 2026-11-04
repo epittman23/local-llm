@@ -2626,6 +2626,8 @@ class ChatTable:
         # chat links a file once, and one already linked broke the whole batch, so
         # the new files in it were never linked (#293).
         file_ids = list(dict.fromkeys(file_id for file_id in file_ids if file_id))
+        if not file_ids:
+            return None
         async with get_async_db_context(db) as session:
             result = await session.execute(
                 select(ChatFile.file_id).filter(ChatFile.chat_id == chat_id, ChatFile.file_id.in_(file_ids))

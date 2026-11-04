@@ -40,6 +40,9 @@ def test_a_file_already_linked_does_not_stop_the_new_ones():
         # The same message again with F and G; then another message with F, H and H.
         second = await Chats.insert_chat_files(f'chat-{tag}', 'm1', [f, g], user.id)
         third = await Chats.insert_chat_files(f'chat-{tag}', 'm2', [f, h, h], user.id)
+        # Every file already linked, or none given: nothing to link.
+        assert await Chats.insert_chat_files(f'chat-{tag}', 'm3', [f, g], user.id) is None
+        assert await Chats.insert_chat_files(f'chat-{tag}', 'm3', [None, ''], user.id) is None
         linked = await Chats.get_chat_files_by_chat_id_and_message_id(f'chat-{tag}', 'm1')
         linked += await Chats.get_chat_files_by_chat_id_and_message_id(f'chat-{tag}', 'm2')
         return (
