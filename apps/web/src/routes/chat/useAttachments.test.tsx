@@ -124,4 +124,33 @@ describe('useAttachments', () => {
 		expect(toast.warning).toHaveBeenCalledWith('Model(s) are not vision capable');
 		expect(toast.error).not.toHaveBeenCalledWith('Selected model(s) do not support image inputs');
 	});
+
+	it.each([
+		['image/heic', 'photo.heic'],
+		['image/heif', 'photo.heif'],
+		['', 'IMG_0001.HEIC']
+	])('a HEIC image (%s %s) is refused, not uploaded raw, and the other files still go (#220)', (type, name) => {
+		const { result } = renderHook(
+			() => useAttachments({ temporary: false, selectedModels: ['m'], models, chatId: null }),
+			{ wrapper }
+		);
+		act(() =>
+			result.current.addFiles([
+				new File([new Uint8Array([0, 0, 0, 24])], name, { type }),
+				new File(['notes'], 'notes.txt', { type: 'text/plain' })
+			])
+		);
+		expect(result.current.files).toEqual([expect.objectContaining({ name: 'notes.txt', status: 'uploading' })]);
+		expect(toast.error).toHaveBeenCalledWith('HEIC images are not supported. Convert the image to JPEG or PNG first.');
+		expect(toast.error).toHaveBeenCalledTimes(1);
+	});
+
+	it('a JPEG whose name ends in .heic is still attached (#220)', () => {
+		const { result } = renderHook(
+			() => useAttachments({ temporary: false, selectedModels: ['m'], models, chatId: null }),
+			{ wrapper }
+		);
+		act(() => result.current.addFiles([new File([new Uint8Array([255, 216])], 'photo.heic', { type: 'image/jpeg' })]));
+		expect(result.current.files).toEqual([expect.objectContaining({ name: 'photo.heic', status: 'uploading' })]);
+	});
 });
