@@ -162,7 +162,8 @@ export const MessageComposer = forwardRef<
 
 	const addFiles = (list: File[]) => {
 		for (const file of list) {
-			if (maxSize !== null && file.size > maxSize * 1024 * 1024) {
+			// 0 or unset is no limit, as on the server (#238).
+			if (maxSize && file.size > maxSize * 1024 * 1024) {
 				toast.error(`File size should not exceed ${maxSize} MB.`);
 				continue;
 			}
