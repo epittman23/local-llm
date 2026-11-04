@@ -719,6 +719,9 @@ async def delete_folder_by_id(
             # Clean up access grants for this folder
             await AccessGrants.revoke_all_access('folder', folder_id, db=db)
 
+        # Other users' chats, which only the folder held, are kept (#315).
+        await Chats.move_other_users_chats_out_of_folders(folder_ids, folder_owner_id, db=db)
+
         await Automations.clear_folder_ids(folder_owner_id, folder_ids, db=db)
         # Exactly the folders whose chats were handled above.
         folder_ids = await Folders.delete_folder_by_id_and_user_id(
