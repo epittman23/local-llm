@@ -1126,6 +1126,11 @@ class KnowledgeFilesResponse(KnowledgeResponse):
     write_access: bool | None = False
 
 
+class KnowledgeFilesBatchResponse(KnowledgeFilesResponse):
+    # Files of a batch add that failed to process; None when every file was added.
+    warnings: dict | None = None
+
+
 @router.get('/{id}', response_model=KnowledgeFilesResponse | None)
 async def get_knowledge_by_id(id: str, user=Depends(get_verified_user), db: AsyncSession = Depends(get_async_session)):
     knowledge = await Knowledges.get_knowledge_by_id(id=id, db=db)
@@ -1511,6 +1516,14 @@ async def add_file_to_knowledge_by_id(
     # used to fail the link silently after the file was embedded.
     await _require_directory_in(id, form_data.directory_id, db)
 
+    # A file already in this base would be embedded into its collection a
+    # second time, and its second link fail unreported (#314).
+    if await Knowledges.has_file(knowledge_id=id, file_id=form_data.file_id, db=db):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.FILE_ALREADY_IN_KNOWLEDGE,
+        )
+
     # Add content to the vector database
     try:
         await process_file(
@@ -1521,13 +1534,16 @@ async def add_file_to_knowledge_by_id(
         )
 
         # Add file to knowledge base
-        await Knowledges.add_file_to_knowledge_by_id(
+        linked = await Knowledges.add_file_to_knowledge_by_id(
             knowledge_id=id,
             file_id=form_data.file_id,
             user_id=user.id,
             directory_id=form_data.directory_id,
             db=db,
         )
+        if linked is None:
+            # The insert failed (it reports that as None), so the file is not in the base.
+            raise Exception('The file could not be added to the knowledge base.')
     except Exception as e:
         log.debug(e)
         raise HTTPException(
@@ -2111,7 +2127,7 @@ async def sync_knowledge_cleanup(
 ############################
 
 
-@router.post('/{id}/files/batch/add', response_model=KnowledgeFilesResponse | None)
+@router.post('/{id}/files/batch/add', response_model=KnowledgeFilesBatchResponse | None)
 async def add_files_to_knowledge_batch(
     request: Request,
     id: str,
@@ -2178,7 +2194,7 @@ async def add_files_to_knowledge_batch(
             new_entries.append(form)
 
     if not new_entries:
-        return KnowledgeFilesResponse(
+        return KnowledgeFilesBatchResponse(
             **knowledge.model_dump(),
             files=await Knowledges.get_file_metadatas_by_id(knowledge.id, db=db),
         )
@@ -2214,7 +2230,7 @@ async def add_files_to_knowledge_batch(
     # If there were any errors, include them in the response
     if result.errors:
         error_details = [f'{err.file_id}: {err.error}' for err in result.errors]
-        return KnowledgeFilesResponse(
+        return KnowledgeFilesBatchResponse(
             **knowledge.model_dump(),
             files=await Knowledges.get_file_metadatas_by_id(knowledge.id, db=db),
             warnings={
@@ -2223,7 +2239,7 @@ async def add_files_to_knowledge_batch(
             },
         )
 
-    return KnowledgeFilesResponse(
+    return KnowledgeFilesBatchResponse(
         **knowledge.model_dump(),
         files=await Knowledges.get_file_metadatas_by_id(knowledge.id, db=db),
     )
