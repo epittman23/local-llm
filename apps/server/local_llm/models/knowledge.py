@@ -497,6 +497,16 @@ class KnowledgeTable:
         except Exception:
             return None
 
+    async def get_knowledge_ids_by_file_id(self, file_id: str, db: AsyncSession | None = None) -> list[str]:
+        """The ids of the knowledge bases linking a file.
+
+        Unlike get_knowledges_by_file_id, an error is raised, not read as "no
+        links": callers use the answer to decide whether a file can be deleted.
+        """
+        async with get_async_db_context(db) as db:
+            result = await db.execute(select(KnowledgeFile.knowledge_id).filter(KnowledgeFile.file_id == file_id))
+            return list(result.scalars().all())
+
     async def get_knowledges_by_file_id(self, file_id: str, db: AsyncSession | None = None) -> list[KnowledgeModel]:
         try:
             async with get_async_db_context(db) as db:
