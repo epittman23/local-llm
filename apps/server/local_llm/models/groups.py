@@ -372,7 +372,7 @@ class GroupTable:
             # Delete existing members
             await db.execute(delete(GroupMember).filter(GroupMember.group_id == group_id))
 
-            # Insert new members
+            # Insert new members, each once: a repeated id would fail the whole replace (#279).
             now = int(time.time())
             new_members = [
                 GroupMember(
@@ -382,7 +382,7 @@ class GroupTable:
                     created_at=now,
                     updated_at=now,
                 )
-                for user_id in user_ids
+                for user_id in dict.fromkeys(user_ids)
             ]
 
             db.add_all(new_members)
@@ -583,21 +583,21 @@ class GroupTable:
 
                 now = int(time.time())
 
-                for user_id in user_ids or []:
-                    try:
-                        db.add(
-                            GroupMember(
-                                id=str(uuid.uuid4()),
-                                group_id=id,
-                                user_id=user_id,
-                                created_at=now,
-                                updated_at=now,
-                            )
-                        )
-                        await db.flush()  # Detect unique constraint violation early
-                    except Exception:
-                        await db.rollback()  # Clear failed INSERT
-                        continue  # Duplicate → ignore
+                # Only the users not yet in the group, each once (#279). Inserting
+                # every one and rolling back on the unique violation undid the whole
+                # transaction, earlier new members (and a caller's own work) included.
+                wanted = list(dict.fromkeys(user_ids or []))
+                existing = set()
+                if wanted:
+                    result = await db.execute(
+                        select(GroupMember.user_id).filter(GroupMember.group_id == id, GroupMember.user_id.in_(wanted))
+                    )
+                    existing = set(result.scalars().all())
+                db.add_all(
+                    GroupMember(id=str(uuid.uuid4()), group_id=id, user_id=user_id, created_at=now, updated_at=now)
+                    for user_id in wanted
+                    if user_id not in existing
+                )
 
                 group.updated_at = now
                 await db.commit()
