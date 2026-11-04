@@ -14,6 +14,7 @@ import {
 	parseAutomationImport,
 	parseRrule,
 	runTarget,
+	timeFromInput,
 	withFrequency,
 	withoutMissingDestinations
 } from './automationModel';
@@ -211,6 +212,30 @@ describe('form', () => {
 		});
 		const toChannel = automationPayload({ ...ready, targetType: 'channel', channelId: 'c1' }, now);
 		expect('form' in toChannel && toChannel.form.folder_id).toBeNull();
+	});
+	it('refuses a one-time run with a cleared date or time, instead of running it at midnight (#322)', () => {
+		const ready = { ...automationFields(null, { now }), name: 'N', prompt: 'P', modelId: 'm' };
+		const once = (onceDate: string, onceTime: string) =>
+			automationPayload({ ...ready, schedule: { ...ready.schedule, frequency: 'ONCE', onceDate, onceTime } }, now);
+		const refusal = { error: 'Pick a date and time for the one-time run' };
+
+		expect(once('2026-12-01', '')).toEqual(refusal);
+		expect(once('', '10:30')).toEqual(refusal);
+		expect(once('', '')).toEqual(refusal);
+		const whole = once('2026-12-01', '10:30');
+		expect('form' in whole && whole.form.data.rrule).toBe('DTSTART:20261201T103000\nRRULE:FREQ=DAILY;COUNT=1');
+	});
+});
+
+describe('timeFromInput (#322)', () => {
+	it('reads a whole time', () => {
+		expect(timeFromInput('09:05')).toEqual({ hour: 9, minute: 5 });
+		expect(timeFromInput('23:59:30')).toEqual({ hour: 23, minute: 59 });
+	});
+	it('is null while the box is cleared or incomplete, so the schedule keeps its time', () => {
+		expect(timeFromInput('')).toBeNull();
+		expect(timeFromInput('9')).toBeNull();
+		expect(timeFromInput('--:--')).toBeNull();
 	});
 });
 

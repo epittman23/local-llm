@@ -103,6 +103,29 @@ describe('placing events', () => {
 		expect(bandEvents(byDay, at(2026, 9, 22))).toEqual([]);
 		expect(eventsInHour([e], at(2026, 9, 19), 0)).toEqual([]);
 	});
+	it('an hour row runs to the next local hour across a DST change (#321)', () => {
+		const tz = process.env.TZ;
+		process.env.TZ = 'America/New_York';
+		try {
+			const rows = (events: Parameters<typeof eventsInHour>[0], day: Date) =>
+				Array.from({ length: 24 }, (_, h) => eventsInHour(events, day, h).length);
+			// 8 Mar 2026, spring forward: 2 AM is skipped, so a 03:30 event is in the 3 AM row only.
+			const spring = ev(new Date(Date.UTC(2026, 2, 8, 7, 30)));
+			const springRows = rows([spring], at(2026, 2, 8));
+			expect(springRows[2]).toBe(0);
+			expect(springRows[3]).toBe(1);
+			expect(springRows.reduce((a, b) => a + b)).toBe(1);
+			// 1 Nov 2026, fall back: 1 AM happens twice, and its row holds both 01:30s.
+			const first = ev(new Date(Date.UTC(2026, 10, 1, 5, 30)));
+			const second = ev(new Date(Date.UTC(2026, 10, 1, 6, 30)));
+			const fallRows = rows([first, second], at(2026, 10, 1));
+			expect(fallRows[1]).toBe(2);
+			expect(fallRows.reduce((a, b) => a + b)).toBe(2);
+		} finally {
+			if (tz === undefined) delete process.env.TZ;
+			else process.env.TZ = tz;
+		}
+	});
 	it('a timed event is in its start hour, then in the band on later days', () => {
 		const e = ev(at(2026, 9, 19, 22), at(2026, 9, 21, 10));
 		const byDay = eventsByDay([e]);

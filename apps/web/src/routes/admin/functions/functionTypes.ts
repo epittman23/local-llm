@@ -90,3 +90,37 @@ export function filterAndSortFunctions(
 			: sign * ((a.updated_at ?? 0) - (b.updated_at ?? 0))
 	);
 }
+
+/**
+ * The toast an Import JSON ends with, from how many of the file's functions
+ * were created: it used to say "Functions imported successfully" even when
+ * every create had failed, after each failure's own error (#209).
+ */
+export const importSummary = (created: number, total: number): ['success' | 'warning' | 'error', string] => {
+	if (created === total) return ['success', 'Functions imported successfully'];
+	if (created === 0) return ['error', total === 1 ? 'The function was not imported' : 'No functions were imported'];
+	return ['warning', `Imported ${created} of ${total} functions`];
+};
+
+/**
+ * Creates the file's functions one at a time and reports how it went: each
+ * refused create's own error, then one summary from `importSummary`, through
+ * `notify` (sonner's `toast` on the page). A create
+ * that throws or returns nothing counts as not created.
+ */
+export async function importFunctions<T>(
+	functions: T[],
+	create: (fn: T) => Promise<unknown>,
+	notify: Record<'success' | 'warning' | 'error', (message: string) => unknown>
+) {
+	let created = 0;
+	for (const fn of functions) {
+		const res = await create(fn).catch((error) => {
+			notify.error(`${error}`);
+			return null;
+		});
+		if (res) created += 1;
+	}
+	const [kind, message] = importSummary(created, functions.length);
+	notify[kind](message);
+}
