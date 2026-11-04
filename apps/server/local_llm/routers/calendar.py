@@ -283,7 +283,12 @@ async def get_events(
         except Exception as e:
             log.warning(f'Failed to compute automation events: {e}', exc_info=True)
 
-    return [e.model_dump() if hasattr(e, 'model_dump') else e for e in expanded]
+    # In time order (#324): stored events, recurring instances and automation
+    # runs came back in the order they were gathered, and a month cell shows
+    # the first few, so an earlier event could be hidden behind "+N more".
+    events_out = [e.model_dump() if hasattr(e, 'model_dump') else e for e in expanded]
+    events_out.sort(key=lambda e: e.get('start_at') or 0)
+    return events_out
 
 
 @router.post('/events/create', response_model=CalendarEventModel)
