@@ -228,15 +228,19 @@ async def add_user_to_group(
         if form_data.user_ids:
             form_data.user_ids = await Users.get_valid_user_ids(form_data.user_ids, db=db)
 
+        before = set(await Groups.get_group_user_ids_by_id(id, db=db))
         group = await Groups.add_users_to_group(id, form_data.user_ids, db=db)
         if group:
-            await publish_event(
-                request,
-                EVENTS.GROUP_MEMBER_ADDED,
-                actor=user,
-                subject_id=id,
-                data={'user_ids': form_data.user_ids},
-            )
+            # Only the users this added: not those already members, nor one twice (#279).
+            added = [user_id for user_id in dict.fromkeys(form_data.user_ids or []) if user_id not in before]
+            if added:
+                await publish_event(
+                    request,
+                    EVENTS.GROUP_MEMBER_ADDED,
+                    actor=user,
+                    subject_id=id,
+                    data={'user_ids': added},
+                )
             return GroupResponse(
                 **group.model_dump(),
                 member_count=await Groups.get_group_member_count_by_id(group.id, db=db),

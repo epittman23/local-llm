@@ -89,10 +89,15 @@ export function eventsByDay(events: CalendarEventModel[]): Record<string, Calend
 	return map;
 }
 
-/** Timed events that *start* in a given local hour of a day (the week and day grids); all-day events are in the band. */
+/**
+ * Timed events that *start* in a given local hour of a day (the week and day grids); all-day events are in the band.
+ * The hour runs to the next hour's local start, not a fixed 60 minutes (#321): on a spring-forward day the skipped
+ * hour is empty instead of repeating the next one, and on a fall-back day the repeated hour holds both of its passes.
+ */
 export function eventsInHour(events: CalendarEventModel[], day: Date, hour: number): CalendarEventModel[] {
 	const from = new Date(day.getFullYear(), day.getMonth(), day.getDate(), hour).getTime();
-	return events.filter((e) => !e.all_day && e.start_at / NS >= from && e.start_at / NS < from + 3_600_000);
+	const to = new Date(day.getFullYear(), day.getMonth(), day.getDate(), hour + 1).getTime();
+	return events.filter((e) => !e.all_day && e.start_at / NS >= from && e.start_at / NS < to);
 }
 
 /**
