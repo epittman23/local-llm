@@ -1434,20 +1434,10 @@ async def chat_web_search_handler(request: Request, form_data: dict, extra_param
                 detail = 'Query generation failed'
             raise Exception(detail)
 
-        response = res['choices'][0]['message']['content']
-
-        try:
-            bracket_start = response.rfind('{')
-            bracket_end = response.rfind('}') + 1
-
-            if bracket_start == -1 or bracket_end == -1:
-                raise Exception('No JSON object found in the response')
-
-            response = response[bracket_start:bracket_end]
-            queries = JSONCodec.loads(response)
-            queries = queries.get('queries', [])
-        except Exception:
-            queries = [response]
+        response = res['choices'][0]['message']['content'] or ''
+        found = _first_json_object(response)
+        # A reply without a JSON object is taken as the query itself.
+        queries = found.get('queries', []) if found is not None else [response]
 
         if ENABLE_QUERIES_CACHE:
             request.state.cached_queries = queries
@@ -1812,20 +1802,8 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
                         detail = 'Image prompt generation failed'
                     raise Exception(detail)
 
-                response = res['choices'][0]['message']['content']
-
-                try:
-                    bracket_start = response.rfind('{')
-                    bracket_end = response.rfind('}') + 1
-
-                    if bracket_start == -1 or bracket_end == -1:
-                        raise Exception('No JSON object found in the response')
-
-                    response = response[bracket_start:bracket_end]
-                    response = JSONCodec.loads(response)
-                    prompt = response.get('prompt', [])
-                except Exception:
-                    prompt = user_message
+                found = _first_json_object(res['choices'][0]['message']['content'] or '')
+                prompt = found.get('prompt', []) if found is not None else user_message
 
             except Exception as e:
                 log.exception(e)
@@ -1922,19 +1900,10 @@ async def chat_completion_files_handler(
                     },
                     user,
                 )
-                queries_response = queries_response['choices'][0]['message']['content']
-
-                try:
-                    bracket_start = queries_response.rfind('{')
-                    bracket_end = queries_response.rfind('}') + 1
-
-                    if bracket_start == -1 or bracket_end == -1:
-                        raise Exception('No JSON object found in the response')
-
-                    queries_response = queries_response[bracket_start:bracket_end]
-                    queries_response = JSONCodec.loads(queries_response)
-                except Exception:
-                    queries_response = {'queries': [queries_response]}
+                queries_response = queries_response['choices'][0]['message']['content'] or ''
+                found = _first_json_object(queries_response)
+                # A reply without a JSON object is taken as the query itself.
+                queries_response = found if found is not None else {'queries': [queries_response]}
 
                 queries = queries_response.get('queries', [])
             except Exception:
@@ -3760,6 +3729,27 @@ def _messages_for_tasks(message_list: list[dict]) -> list[dict]:
             }
         )
     return messages
+
+
+def _first_json_object(text: str) -> dict | None:
+    """The first JSON object in a task model's reply, or None when it has none.
+
+    Read with the JSON decoder from each `{` in turn, so a brace inside one of
+    its strings (a search query about `{set}` syntax) does not cut it short,
+    as slicing from the last `{` did (#168).
+    """
+    decoder = json.JSONDecoder()
+    start = text.find('{')
+    while start != -1:
+        try:
+            value, _ = decoder.raw_decode(text, start)
+        except ValueError:
+            pass
+        else:
+            if isinstance(value, dict):
+                return value
+        start = text.find('{', start + 1)
+    return None
 
 
 def _task_reply_json(res: dict, text_from_message) -> str:
