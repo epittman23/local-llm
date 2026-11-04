@@ -13,6 +13,7 @@ Run from apps/server:
 import asyncio
 from types import SimpleNamespace
 
+import pytest
 from pydantic import BaseModel
 
 from local_llm.utils import filter as filter_utils
@@ -22,24 +23,21 @@ class _ValvesA(BaseModel):
     token: str = ''
 
 
-def _filter_a(seen):
-    class Module:
-        UserValves = _ValvesA
+def _module(filter_type, seen, name, user_valves=None):
+    """A filter module whose `filter_type` handler records the valves it is given.
 
-        def inlet(self, body, __user__):
-            seen['a'] = __user__.get('valves')
-            return body
+    It takes `body` (or a stream filter's `event`) by keyword, as the filter
+    pipeline passes it.
+    """
 
-    return Module()
+    def handler(self, __user__, **payload):
+        seen[name] = __user__.get('valves')
+        return payload.get('event', payload.get('body'))
 
-
-def _filter_b(seen):
-    class Module:
-        def inlet(self, body, __user__):
-            seen['b'] = __user__.get('valves')
-            return body
-
-    return Module()
+    attrs = {filter_type: handler}
+    if user_valves:
+        attrs['UserValves'] = user_valves
+    return type(f'Filter{name.upper()}', (), attrs)()
 
 
 class FakeContext:
@@ -47,23 +45,30 @@ class FakeContext:
         return user_valves_class(token=f'{filter_id}-{user_id}')
 
 
-def test_a_filter_without_user_valves_does_not_see_another_filters(monkeypatch):
+@pytest.mark.parametrize('filter_type', ['inlet', 'outlet', 'stream'])
+@pytest.mark.parametrize('with_context', [True, False])
+def test_a_filter_without_user_valves_does_not_see_another_filters(monkeypatch, filter_type, with_context):
     seen = {}
-    modules = {'a': _filter_a(seen), 'b': _filter_b(seen)}
+    modules = {'a': _module(filter_type, seen, 'a', _ValvesA), 'b': _module(filter_type, seen, 'b')}
 
     async def get_function_module(request, filter_id, load_from_db=True, function=None):
         return modules[filter_id]
 
+    async def get_user_valves(filter_id, user_id, user_valves_class):
+        return user_valves_class(token=f'{filter_id}-{user_id}')
+
     monkeypatch.setattr(filter_utils, 'ENABLE_PLUGINS', True)
     monkeypatch.setattr(filter_utils, 'get_function_module', get_function_module)
+    # Outlet callers pass no filter context, so the valves come from the database.
+    monkeypatch.setattr(filter_utils, 'get_user_valves', get_user_valves)
     user = {'id': 'u1', 'name': 'Ada'}
 
     asyncio.run(
         filter_utils.process_filter_functions(
             None,
-            FakeContext(),
+            FakeContext() if with_context else None,
             [SimpleNamespace(id='a'), SimpleNamespace(id='b')],
-            'inlet',
+            filter_type,
             {'messages': []},
             {'__user__': user},
         )
