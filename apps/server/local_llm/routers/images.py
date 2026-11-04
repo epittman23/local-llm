@@ -296,6 +296,13 @@ async def update_config(request: Request, form_data: ImagesConfig, user=Depends(
             status_code=400,
             detail=ERROR_MESSAGES.INCORRECT_FORMAT('  (e.g., 512x512).'),
         )
+    # The edit size too: one that is not WidthxHeight made every image edit fail (#344).
+    edit_size = form_data.IMAGE_EDIT_SIZE
+    if edit_size and edit_size != 'auto' and not re.match(pattern, edit_size):
+        raise HTTPException(
+            status_code=400,
+            detail='The image edit size must be WidthxHeight, such as 512x512, or empty.',
+        )
 
     if form_data.IMAGE_STEPS is not None and form_data.IMAGE_STEPS < 0:
         raise HTTPException(
@@ -881,11 +888,12 @@ async def edit_images(request: Request, form_data: EditImageForm, user=Depends(g
 
 def _edit_size(image_config, form_data: EditImageForm) -> tuple[str | None, int | None, int | None]:
     # The requested size wins when it is WidthxHeight; otherwise the configured one, if it is.
-    size = next((s for s in (form_data.size, image_config.IMAGE_EDIT_SIZE) if s and 'x' in s), None)
-    if size is None:
-        return None, None, None
-    width, height = tuple(map(int, size.split('x')))
-    return size, width, height
+    # Anything else (`auto`, or one saved malformed before #344) is skipped, never raised on.
+    for size in (form_data.size, image_config.IMAGE_EDIT_SIZE):
+        match = re.fullmatch(r'(\d+)x(\d+)', size or '')
+        if match:
+            return size, int(match.group(1)), int(match.group(2))
+    return None, None, None
 
 
 def _is_own_file_url(parsed, request: Request) -> bool:
