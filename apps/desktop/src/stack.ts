@@ -215,6 +215,36 @@ export function spawnInGroup(command: string, logFile: string, env: NodeJS.Proce
 	}
 }
 
+/**
+ * This checkout's compose containers, in any state, one id a line. `down` removes
+ * them, so any left (running, restarting or stopped) means it did not finish.
+ */
+export function composeRunningCommand(repo: string): string {
+	return `docker compose -f ${shellQuote(join(repo, 'infra', 'docker-compose.yml'))} ps -a -q`;
+}
+
+/**
+ * How many container ids `ps -q` listed; null when compose could not be asked. Only
+ * id lines count: the login shell it runs in may print a profile's greeting too.
+ */
+export function countRunning(output: string | null): number | null {
+	if (output === null) return null;
+	return output.split('\n').filter((line) => /^[0-9a-f]{12,64}$/.test(line.trim())).length;
+}
+
+/**
+ * How many of the stack's containers still run after a stop (#435). make's EXIT
+ * trap runs compose down, but make's own exit status cannot say whether that
+ * worked (it was interrupted either way), so compose is asked directly.
+ */
+export function runningServices(repo: string, env: NodeJS.ProcessEnv, timeoutMs = 15_000): Promise<number | null> {
+	return new Promise((resolve) => {
+		execFile(loginShell(env), ['-lc', composeRunningCommand(repo)], { env, timeout: timeoutMs }, (error, stdout) =>
+			resolve(countRunning(error ? null : String(stdout)))
+		);
+	});
+}
+
 export function runInShell(command: string, env: NodeJS.ProcessEnv, timeoutMs: number): Promise<void> {
 	return new Promise((resolve) => {
 		execFile(loginShell(env), ['-lc', command], { env, timeout: timeoutMs }, () => resolve());

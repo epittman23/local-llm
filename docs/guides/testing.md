@@ -265,7 +265,8 @@ Run these from `apps/desktop/`:
   `make backend` runs (`test/fixtures/`, whose README says which one is not
   captured). `main.stop.test.ts` loads `main.ts` against a fake Electron and
   covers its stop: a Cancel during startup, a quit while the window loads,
-  Retry during a stop, and the "Leave it" offer.
+  Retry during a stop, the "Leave it" offer, and services left after a
+  stop.
 - `bun run typecheck`, and `bun run lint` / `bun run format` (Biome; the
   pre-commit hook lints this app too, not only formats it).
 - `bun run package:dir`: the unpacked package CI builds.

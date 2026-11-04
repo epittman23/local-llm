@@ -38,7 +38,11 @@ function renderActions() {
 	if (!progress) return;
 	// No log for a remote server: nothing was started here.
 	const hasLog = progress.log.length > 0;
-	if (progress.error) {
+	if (progress.error && progress.kind === 'shutdown') {
+		// A stop that went wrong: the log says why; there is nothing to retry.
+		if (hasLog) actions.append(button('Open log', 'open-log'));
+		actions.append(button('Quit', 'quit', true));
+	} else if (progress.error) {
 		actions.append(button('Settings', 'settings'));
 		if (hasLog) actions.append(button('Open log', 'open-log'));
 		actions.append(button('Quit', 'quit'), button('Retry', 'retry', true));

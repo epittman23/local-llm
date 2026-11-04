@@ -50,7 +50,9 @@ const h = vi.hoisted(() => {
 		/** What the next /ready probe answers; a promise holds it in flight. */
 		ready: (): Promise<number | null> => Promise.resolve(200),
 		stopResult: { forced: false, llama: [] as number[] },
-		llama: [] as number[]
+		llama: [] as number[],
+		/** Containers compose still lists as running after a clean stop; null when it can't be asked. */
+		servicesLeft: 0 as number | null
 	};
 	let nextId = 1;
 
@@ -134,6 +136,7 @@ const h = vi.hoisted(() => {
 		state.ready = () => Promise.resolve(200);
 		state.stopResult = { forced: false, llama: [] };
 		state.llama = [];
+		state.servicesLeft = 0;
 	}
 
 	return { state, FakeWindow, Emitter, electron, reset, start: () => markReady() };
@@ -158,7 +161,8 @@ vi.mock('./stack', async (original) => ({
 		h.state.stops.push(pgid);
 		return h.state.stopResult;
 	},
-	llamaServerPids: async () => h.state.llama
+	llamaServerPids: async () => h.state.llama,
+	runningServices: async () => h.state.servicesLeft
 }));
 
 const tick = (ms = 0) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -312,4 +316,59 @@ test('after a forced stop that left a llama-server, a signal quits too (#421)', 
 	await tick(10);
 	expect(h.state.exits).toEqual([0]);
 	expect(h.state.stops).toEqual([990201]);
+});
+
+async function cleanStop() {
+	await launch();
+	appWindows()[0]?.emit('ready-to-show');
+	await tick(10);
+	appWindows()[0]?.userClose();
+	await tick(50);
+}
+
+type Shown = { progress: { error?: string; steps: { id: string; state: string }[] } };
+
+test('a clean stop that left the services running says so and waits (#435)', async () => {
+	h.state.servicesLeft = 2;
+	await cleanStop();
+	await tick(700);
+
+	expect(h.state.exits).toEqual([]);
+	const shown = (await statusCall('status:ready')) as Shown;
+	expect(shown.progress.steps.find((s) => s.id === 'services')?.state).toBe('failed');
+	expect(shown.progress.error).toContain('2 containers are still there');
+
+	await statusCall('status:action', 'quit');
+	expect(h.state.exits).toEqual([0]);
+});
+
+test('a clean stop quits once the services are down (#435)', async () => {
+	await cleanStop();
+	await tick(700);
+	expect(h.state.exits).toEqual([0]);
+});
+
+test('a stop it cannot check says so and waits, rather than calling it clean (#435)', async () => {
+	h.state.servicesLeft = null;
+	await cleanStop();
+	await tick(700);
+
+	expect(h.state.exits).toEqual([]);
+	const shown = (await statusCall('status:ready')) as Shown;
+	expect(shown.progress.error).toContain('Could not check');
+	await statusCall('status:action', 'quit');
+	expect(h.state.exits).toEqual([0]);
+});
+
+test('a forced stop that left the services fails the force step, and mentions a llama-server left (#435)', async () => {
+	h.state.stopResult = { forced: true, llama: [777] };
+	h.state.llama = [777];
+	h.state.servicesLeft = 1;
+	await cleanStop();
+
+	const shown = (await statusCall('status:ready')) as Shown;
+	expect(shown.progress.steps.find((s) => s.id === 'force')?.state).toBe('failed');
+	expect(shown.progress.error).toContain('1 container is still there');
+	expect(shown.progress.error).toContain('llama-server');
+	expect(h.state.exits).toEqual([]);
 });

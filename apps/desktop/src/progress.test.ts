@@ -118,6 +118,26 @@ describe('shutdown', () => {
 		expect(states(p)).toMatchObject({ services: 'failed', force: 'done' });
 		expect(p.offerStopLlama).toBe(true);
 	});
+
+	it('shows the steps a forced stop never reached as not reached, not as nothing to do (#427)', () => {
+		const p = run(begin(), [
+			{ type: 'timeout', step: 'requests', at: 90_000 },
+			{ type: 'begin', step: 'force', at: 90_001, detail: 'killing the process group' },
+			{ type: 'offer-stop-llama' },
+			{ type: 'complete', at: 95_000 }
+		]);
+		expect(states(p)).toMatchObject({
+			window: 'done',
+			requests: 'failed',
+			jobs: 'skipped',
+			model: 'skipped',
+			services: 'skipped',
+			force: 'done'
+		});
+		for (const id of ['jobs', 'model', 'services']) {
+			expect(p.steps.find((s) => s.id === id)?.detail).toBe('not reached');
+		}
+	});
 });
 
 describe('lines', () => {
