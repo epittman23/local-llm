@@ -764,10 +764,11 @@ async def execute_automation(app, automation: AutomationModel) -> None:
 ####################
 
 
+_LEGACY_ALERT_LEAD_NS = 60 * 60 * 1_000_000_000
+
+
 def already_alerted(meta: dict | None, start_at: int) -> bool:
     """Whether the occurrence starting at `start_at` (ns) was already alerted (#183)."""
-    from local_llm.models.calendar import MAX_ALERT_LEAD_NS
-
     if not meta:
         return False
     alerted_for = meta.get('alerted_for')
@@ -775,9 +776,13 @@ def already_alerted(meta: dict | None, start_at: int) -> bool:
         return alerted_for == start_at
     # Rows alerted before alerted_for existed carry only alerted_at, the time
     # of the alert. It belongs to this occurrence only if it came within the
-    # longest lead before it; an earlier one was for another start.
+    # longest lead there was then, an hour; an earlier one was for another
+    # start. Leads are longer now (#184), but no such row has one.
     alerted_at = meta.get('alerted_at')
-    return isinstance(alerted_at, int) and start_at - MAX_ALERT_LEAD_NS <= alerted_at <= start_at + MAX_ALERT_LEAD_NS
+    return (
+        isinstance(alerted_at, int)
+        and start_at - _LEGACY_ALERT_LEAD_NS <= alerted_at <= start_at + _LEGACY_ALERT_LEAD_NS
+    )
 
 
 async def _check_calendar_alerts(app) -> None:
