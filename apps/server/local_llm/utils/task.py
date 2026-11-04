@@ -285,9 +285,9 @@ async def fill_task_template(
     again (#305). Now the placeholders for the user's text (and `literals`,
     such as {{TYPE}}) become tokens first, while the template holds no user
     text; the template's own variables are filled next; and the tokens are
-    swapped back last, in one pass. So neither the user's text nor a value
-    filled in (a bio, say) is read for placeholders, and the tokens carry a
-    nonce no text can guess.
+    swapped back last, in one pass. So the user's text is never read for
+    placeholders, a value filled in (a bio, say) is never read for the
+    prompt or messages ones, and the tokens carry a nonce no text can guess.
     """
     nonce = uuid.uuid4().hex
     pieces: list[str] = []

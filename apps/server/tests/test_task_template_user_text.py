@@ -36,6 +36,8 @@ def test_a_title_prompt_keeps_the_users_placeholders_as_written():
 
 
 def test_a_query_prompt_keeps_a_prompt_placeholder_inside_a_message():
+    # Passed before the fix too (the prompt went in before the messages); it
+    # guards the order the tokens are swapped back in.
     messages = [{'role': 'user', 'content': 'What does {{prompt}} do in a template?'}]
 
     prompt = _run(task.query_generation_template('Q: {{prompt}}\nHistory: {{MESSAGES}}', messages, USER))
