@@ -197,7 +197,8 @@ export default function Connections() {
 		return null;
 	};
 
-	const saveOpenAI = async (next: OpenAIState) => {
+	/** Saves the OpenAI upstreams; whether the server took them. */
+	const saveOpenAI = async (next: OpenAIState): Promise<boolean> => {
 		const urls = stripTrailingSlashes(next.urls);
 		const state = { ...next, urls, keys: alignKeys(urls, next.keys) };
 		const prev = openai;
@@ -208,12 +209,17 @@ export default function Connections() {
 			OPENAI_API_KEYS: state.keys,
 			OPENAI_API_CONFIGS: state.configs
 		}).catch(failed);
-		if (!res) return void (prev && setOpenAI(prev));
+		if (!res) {
+			if (prev) setOpenAI(prev);
+			return false;
+		}
 		toast.success('OpenAI API settings updated');
 		refreshModels();
+		return true;
 	};
 
-	const saveOllama = async (next: OllamaState) => {
+	/** Saves the Ollama upstreams; whether the server took them. */
+	const saveOllama = async (next: OllamaState): Promise<boolean> => {
 		const state = { ...next, urls: stripTrailingSlashes(next.urls) };
 		const prev = ollama;
 		setOllama(state);
@@ -222,9 +228,13 @@ export default function Connections() {
 			OLLAMA_BASE_URLS: state.urls,
 			OLLAMA_API_CONFIGS: state.configs
 		}).catch(failed);
-		if (!res) return void (prev && setOllama(prev));
+		if (!res) {
+			if (prev) setOllama(prev);
+			return false;
+		}
 		toast.success('Ollama API settings updated');
 		refreshModels();
+		return true;
 	};
 
 	const saveDirect = async (next: DirectState) => {
@@ -250,9 +260,11 @@ export default function Connections() {
 		}
 	};
 
+	// "Settings saved" only when both saves were taken: it used to follow two
+	// failures, after each had shown its own error (#239).
 	const submitAll = async () => {
-		await Promise.all([openai && saveOpenAI(openai), ollama && saveOllama(ollama)]);
-		await saved();
+		const results = await Promise.all([openai ? saveOpenAI(openai) : true, ollama ? saveOllama(ollama) : true]);
+		if (results.every(Boolean)) await saved();
 	};
 
 	const ready = openai && ollama && direct;

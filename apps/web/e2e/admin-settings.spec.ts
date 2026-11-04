@@ -551,6 +551,28 @@ test.describe('settings: Connections', () => {
 		await expect(m.getByRole('switch', { name: 'Direct Connections' })).not.toBeChecked();
 	});
 
+	test('Save reports the save as done only when both upstreams took it (#239)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockUpstreams(page);
+		await page.route('**/openai/config/update', (route) => json(route, { detail: 'upstream refused' }, 500));
+		await page.route('**/ollama/config/update', (route) => json(route, { detail: 'ollama refused' }, 500));
+		await page.goto('/?settings=admin:connections');
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('upstream refused')).toBeVisible();
+		await expect(page.getByText('ollama refused')).toBeVisible();
+		// Counted once, after a moment for a false success toast to render.
+		await page.waitForTimeout(300);
+		expect(await page.getByText('Settings saved successfully!').count()).toBe(0);
+	});
+
+	test('Save says the save is done when both upstreams took it', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockUpstreams(page);
+		await page.goto('/?settings=admin:connections');
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('Settings saved successfully!')).toBeVisible();
+	});
+
 	test('the OpenAI API switch turns the list off and saves that', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const seen = await mockUpstreams(page);
