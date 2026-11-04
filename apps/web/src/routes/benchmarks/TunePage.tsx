@@ -32,6 +32,8 @@ import {
 	stopTune,
 	streamTuneLog
 } from '@/lib/apis/benchmarks';
+// The helpers throw the server's detail as a string; errorMessage reads any shape (#143).
+import { errorMessage } from '@/lib/apis/errors';
 import { useAuthStore } from '@/lib/stores/authStore';
 
 const DEFAULT_OPTION = '__default__';
@@ -143,7 +145,7 @@ export function TunePage() {
 		try {
 			[res, controller] = await streamTuneLog(token, sweepId);
 		} catch (err: any) {
-			setStatusError(err?.detail ?? 'Failed to start live status stream');
+			setStatusError(errorMessage(err, 'Failed to start live status stream'));
 			return;
 		}
 
@@ -163,7 +165,7 @@ export function TunePage() {
 		} catch (err: any) {
 			if (err?.name !== 'AbortError') {
 				console.error('Tune log stream error:', err);
-				setStatusError(err?.detail ?? 'Live status stream ended unexpectedly');
+				setStatusError(errorMessage(err, 'Live status stream ended unexpectedly'));
 			}
 		} finally {
 			setStreaming(false);
@@ -177,7 +179,7 @@ export function TunePage() {
 		try {
 			setStatus(await getTuneStatus(token, viewSweepId));
 		} catch (err: any) {
-			setStatusError(err?.detail ?? 'Failed to load sweep status');
+			setStatusError(errorMessage(err, 'Failed to load sweep status'));
 		} finally {
 			setRefreshing(false);
 		}
@@ -226,7 +228,7 @@ export function TunePage() {
 			await manualRefresh();
 			await queryClient.invalidateQueries({ queryKey: ['recent-sweeps'] });
 		},
-		onError: (err: any) => setStatusError(err?.detail ?? 'Failed to stop sweep')
+		onError: (err) => setStatusError(errorMessage(err, 'Failed to stop sweep'))
 	});
 
 	const resumeMutation = useMutation({
@@ -464,7 +466,7 @@ export function TunePage() {
 
 				{startMutation.isError && (
 					<div className="border-destructive/20 bg-destructive/10 text-destructive rounded-lg border px-3 py-2 text-sm">
-						{(startMutation.error as any)?.detail ?? 'Failed to start sweep'}
+						{errorMessage(startMutation.error, 'Failed to start sweep')}
 					</div>
 				)}
 				{status?.last_error && (
@@ -523,7 +525,7 @@ export function TunePage() {
 
 				{resumeMutation.isError && (
 					<div className="border-destructive/20 bg-destructive/10 text-destructive rounded-lg border px-3 py-2 text-sm">
-						{(resumeMutation.error as any)?.detail ?? 'Failed to resume sweep'}
+						{errorMessage(resumeMutation.error, 'Failed to resume sweep')}
 					</div>
 				)}
 			</div>
