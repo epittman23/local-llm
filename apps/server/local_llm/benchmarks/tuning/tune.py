@@ -53,6 +53,12 @@ baseline is above 0 can be adopted or refined around
 (`Sweep.beat_baseline()`). When none is, the verdict is `rejected` and
 refine has no neighbourhood to descend into.
 
+Defaults that cannot run end the sweep (added 2026-11-04, #139): with no
+baseline items to pair with, every candidate would read as thin and be kept
+for good, so the round stops at the baseline's failure and the verdict is
+`indeterminate`, naming why the defaults could not run
+(`Sweep.verdict_for()`).
+
 Adoption is deliberately manual: `sweep_report()`'s `adoption` field is the
 override diff for a human to review, and nothing in this module writes
 llama-env.sh. That file is the source of truth for serving configuration in
@@ -1180,6 +1186,9 @@ class Sweep:
             self.visits += 1
             next_attempt[cand.sha] = attempt + 1
             if outcome['status'] == 'infeasible':
+                if cand.baseline:
+                    # Nothing can be paired with defaults that do not run (#139).
+                    break
                 continue
             if outcome['drift']:
                 if self.o.on_drift == 'cooldown':
@@ -1207,6 +1216,21 @@ class Sweep:
                 elif not self.fall_back(rnd):
                     cut_short = True
                     break
+
+        if self.baseline is not None and self.baseline.status == 'infeasible':
+            # Every candidate is scored on items paired with the baseline; with
+            # none, all of them would read as thin and be kept round after
+            # round, so the sweep ends here and the verdict says why (#139).
+            self.ended_reason = 'baseline'
+            await BenchmarkTuneRounds.close_round(
+                self.sweep_id,
+                rnd,
+                baseline_gen_tps=None,
+                drift_ratio=None,
+                decision=f'stopped: the baseline could not run ({self.baseline.reason})'[:400],
+                survivors=0,
+            )
+            return []
 
         if cut_short:
             # Leave the round open (no close_round) and nobody eliminated: a
@@ -1527,6 +1551,27 @@ class Sweep:
             if pause['resolution'] is None:
                 await BenchmarkTunePauses.close_pause(pause['pause_id'], resolution='abandoned')
 
+    def verdict_for(self, *, blocked: list[str], winner: Candidate | None) -> tuple[str, str]:
+        """The verdict and its reason, before the correctness guard has its say."""
+        if self.ended_reason in ('budget', 'visits', 'interrupted', 'cancelled', 'drift'):
+            return 'incomplete', {
+                'budget': 'the time budget ran out mid-sweep',
+                'visits': 'the max-visits cap was reached',
+                'interrupted': 'stopped by a task cancellation',
+                'cancelled': 'a cancellation was requested',
+                'drift': 'gave up on drift recovery before finishing',
+            }[self.ended_reason]
+        if self.ended_reason == 'baseline':
+            why = self.baseline.reason if self.baseline else ''
+            return 'indeterminate', (
+                f"the profile's defaults could not run ({why}), so no candidate can be compared with them"
+            )[:400]
+        if blocked:
+            return 'indeterminate', '; '.join(blocked)[:400]
+        if winner is None:
+            return 'rejected', 'no candidate beat the profile defaults'
+        return 'adopted', ''
+
     async def finish(self, alive: list[Candidate]) -> dict:
         """Decide, record and return a structured report. Three verdicts,
         matching the original's three exit codes (0 adopted/rejected, 1
@@ -1539,21 +1584,7 @@ class Sweep:
         ranked = self.beat_baseline(alive, scored)
         winner = ranked[0] if ranked else None
 
-        if self.ended_reason in ('budget', 'visits', 'interrupted', 'cancelled', 'drift'):
-            verdict = 'incomplete'
-            reason = {
-                'budget': 'the time budget ran out mid-sweep',
-                'visits': 'the max-visits cap was reached',
-                'interrupted': 'stopped by a task cancellation',
-                'cancelled': 'a cancellation was requested',
-                'drift': 'gave up on drift recovery before finishing',
-            }[self.ended_reason]
-        elif blocked:
-            verdict, reason = 'indeterminate', '; '.join(blocked)[:400]
-        elif winner is None:
-            verdict, reason = 'rejected', 'no candidate beat the profile defaults'
-        else:
-            verdict, reason = 'adopted', ''
+        verdict, reason = self.verdict_for(blocked=blocked, winner=winner)
 
         guard = None
         if verdict == 'adopted':
