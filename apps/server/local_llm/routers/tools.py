@@ -839,7 +839,9 @@ async def update_tools_valves_by_id(
         form_data = {k: v for k, v in form_data.items() if v is not None}
         valves = Valves(**form_data)
         valves_dict = valves.model_dump(exclude_unset=True)
-        await Tools.update_tool_valves_by_id(id, valves_dict, db=db)
+        # A failed save is an error, not a success with the submitted values (#288).
+        if await Tools.update_tool_valves_by_id(id, valves_dict, db=db) is None:
+            raise ValueError(f'the valves of tool {id} were not saved')
         await publish_event(
             request,
             EVENTS.TOOL_VALVES_UPDATED,
@@ -978,7 +980,8 @@ async def update_tools_user_valves_by_id(
             form_data = {k: v for k, v in form_data.items() if v is not None}
             user_valves = UserValves(**form_data)
             user_valves_dict = user_valves.model_dump(exclude_unset=True)
-            await Tools.update_user_valves_by_id_and_user_id(id, user.id, user_valves_dict, db=db)
+            if await Tools.update_user_valves_by_id_and_user_id(id, user.id, user_valves_dict, db=db) is None:
+                raise ValueError(f'the user valves of tool {id} were not saved')
             await publish_event(
                 request,
                 EVENTS.TOOL_VALVES_UPDATED,
