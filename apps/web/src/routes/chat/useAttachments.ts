@@ -80,12 +80,21 @@ export function useAttachments({
 		async (original: File, opts: { context?: 'full' } = {}) => {
 			let file = original;
 			const maxSize = config?.file?.max_size ?? null;
-			if (maxSize !== null && file.size > maxSize * 1024 * 1024) {
+			// 0 or unset is no limit, as on the server (#238).
+			if (maxSize && file.size > maxSize * 1024 * 1024) {
 				toast.error(`File size should not exceed ${maxSize} MB.`);
 				return;
 			}
 			if (file.size === 0) {
 				toast.error('You cannot upload an empty file.');
+				return;
+			}
+			// HEIC/HEIF: most browsers cannot decode it, so it cannot be shown or
+			// scaled, and uploaded raw it fails at the provider. The Svelte app
+			// converted it to JPEG with a dependency this port does not carry, so it
+			// is refused (#220). The name counts only when the browser gave no type.
+			if (/^image\/hei[cf]$/i.test(file.type) || (!file.type && /\.hei[cf]$/i.test(file.name))) {
+				toast.error('HEIC images are not supported. Convert the image to JPEG or PNG first.');
 				return;
 			}
 			const itemId = uuid();
