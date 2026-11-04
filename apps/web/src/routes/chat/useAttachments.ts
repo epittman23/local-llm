@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { uploadFile } from '@/lib/apis/files';
 import { processUrl } from '@/lib/apis/retrieval';
-import { allCapable, canUploadFiles, canUploadWeb, imageTargetSize } from '@/lib/chat/attachments';
+import { allCapable, anyCapable, canUploadFiles, canUploadWeb, imageTargetSize } from '@/lib/chat/attachments';
 import type { ChatFile } from '@/lib/chat/history';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -80,12 +80,21 @@ export function useAttachments({
 		async (original: File, opts: { context?: 'full' } = {}) => {
 			let file = original;
 			const maxSize = config?.file?.max_size ?? null;
-			if (maxSize !== null && file.size > maxSize * 1024 * 1024) {
+			// 0 or unset is no limit, as on the server (#238).
+			if (maxSize && file.size > maxSize * 1024 * 1024) {
 				toast.error(`File size should not exceed ${maxSize} MB.`);
 				return;
 			}
 			if (file.size === 0) {
 				toast.error('You cannot upload an empty file.');
+				return;
+			}
+			// HEIC/HEIF: most browsers cannot decode it, so it cannot be shown or
+			// scaled, and uploaded raw it fails at the provider. The Svelte app
+			// converted it to JPEG with a dependency this port does not carry, so it
+			// is refused (#220). The name counts only when the browser gave no type.
+			if (/^image\/hei[cf]$/i.test(file.type) || (!file.type && /\.hei[cf]$/i.test(file.name))) {
+				toast.error('HEIC images are not supported. Convert the image to JPEG or PNG first.');
 				return;
 			}
 			const itemId = uuid();
@@ -199,9 +208,17 @@ export function useAttachments({
 				toast.error(`You can only chat with a maximum of ${maxCount} file(s) at a time.`);
 				return;
 			}
-			if (list.some((f) => f.type.startsWith('image/')) && !allCapable(selectedModels, models, 'vision'))
+			const images = list.some((f) => f.type.startsWith('image/'));
+			let accepted = list;
+			// No selected model can read an image: refuse it, as the Svelte app did,
+			// rather than upload one the provider rejects at send (#219). Some can:
+			// keep it, with a warning.
+			if (images && !anyCapable(selectedModels, models, 'vision')) {
+				toast.error('Selected model(s) do not support image inputs');
+				accepted = list.filter((f) => !f.type.startsWith('image/'));
+			} else if (images && !allCapable(selectedModels, models, 'vision'))
 				toast.warning('Model(s) are not vision capable');
-			for (const f of list) void uploadOne(f, opts);
+			for (const f of accepted) void uploadOne(f, opts);
 		},
 		[user, selectedModels, models, config, uploadOne]
 	);
