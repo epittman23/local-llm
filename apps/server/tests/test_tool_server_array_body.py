@@ -133,3 +133,38 @@ def test_an_object_body_is_unchanged(monkeypatch):
     assert _call(monkeypatch, {'list_id': 'l1', 'tags': ['a']}, spec) == [
         ('https://lists.test/lists/l1/tags', {'tags': ['a']})
     ]
+
+
+def test_an_array_body_without_items_is_offered_with_any_items():
+    """OpenAI refuses an array schema without `items`."""
+    assert _tool(_spec({'type': 'array'}))['parameters']['properties']['body'] == {'type': 'array', 'items': {}}
+
+
+OPTIONAL_TAGS = [
+    # FastAPI's `tags: list[str] | None = Body(None)`.
+    {'anyOf': [TAG_ARRAY, {'type': 'null'}], 'title': 'Tags'},
+    {'oneOf': [{'type': 'null'}, TAG_ARRAY]},
+    # OpenAPI 3.1's type list.
+    {'type': ['array', 'null'], 'items': {'type': 'string'}},
+]
+
+
+@pytest.mark.parametrize('schema', OPTIONAL_TAGS)
+def test_an_optional_array_body_is_offered_as_an_array(schema):
+    body = _tool(_spec(schema))['parameters']['properties']['body']
+
+    assert body['type'] == 'array'
+    assert body['items'] == {'type': 'string'}
+
+
+@pytest.mark.parametrize('schema', OPTIONAL_TAGS)
+def test_an_optional_array_body_is_sent_as_the_array(monkeypatch, schema):
+    sent = _call(monkeypatch, {'list_id': 'l1', 'body': ['a']}, _spec(schema))
+
+    assert sent == [('https://lists.test/lists/l1/tags', ['a'])]
+
+
+def test_a_union_of_an_array_and_an_object_is_not_read_as_an_array():
+    schema = {'anyOf': [TAG_ARRAY, {'type': 'object'}]}
+
+    assert 'body' not in _tool(_spec(schema))['parameters']['properties']

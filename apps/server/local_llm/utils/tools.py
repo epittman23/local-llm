@@ -1202,9 +1202,9 @@ def convert_openapi_to_tool_payload(openapi_spec):
                         tool['parameters']['required'] = list(
                             set(tool['parameters']['required'] + resolved_schema['required'])
                         )
-                elif _is_array_body(resolved_schema):
+                elif (array_body := _array_body_schema(resolved_schema)) is not None:
                     body_property = _array_body_property(parameters)
-                    tool['parameters']['properties'][body_property] = resolved_schema
+                    tool['parameters']['properties'][body_property] = array_body
                     if operation['requestBody'].get('required'):
                         tool['parameters']['required'].append(body_property)
 
@@ -1824,9 +1824,34 @@ def _body_field_names(operation: dict, components: dict) -> set[str]:
     return set(properties) if isinstance(properties, dict) else set()
 
 
-def _is_array_body(schema: dict) -> bool:
-    """Whether a request body schema is a JSON array (one with properties is read as an object, as before)."""
-    return not schema.get('properties') and schema.get('type') == 'array'
+def _array_body_schema(schema: dict) -> dict | None:
+    """The array a request body schema describes, as the tool offers it; None if it is not one (#191).
+
+    An optional array counts too: an `anyOf` or `oneOf` of one array and null,
+    as FastAPI writes `list[str] | None`, or a type list such as
+    `['array', 'null']`. The argument can simply be left out, so the array is
+    offered as a plain array. A schema with properties is read as an object, as
+    before. OpenAI refuses an array schema without `items`, so a missing one is
+    `{}` (any item).
+    """
+    if schema.get('properties'):
+        return None
+    kind = schema.get('type')
+    if kind == 'array' or (isinstance(kind, list) and 'array' in kind and set(kind) <= {'array', 'null'}):
+        array = {**schema, 'type': 'array'}
+    else:
+        array = None
+        for keyword in ('anyOf', 'oneOf'):
+            branches = schema.get(keyword)
+            if not isinstance(branches, list):
+                continue
+            rest = [branch for branch in branches if not (isinstance(branch, dict) and branch.get('type') == 'null')]
+            if len(rest) == 1 and isinstance(rest[0], dict) and rest[0].get('type') == 'array':
+                outer = {key: value for key, value in schema.items() if key not in ('anyOf', 'oneOf')}
+                array = {**outer, **rest[0]}
+        if array is None:
+            return None
+    return array if 'items' in array else {**array, 'items': {}}
 
 
 def _array_body_property(parameters: list[dict]) -> str:
@@ -1870,7 +1895,7 @@ async def execute_tool_server(
         # The JSON body: an object of the body's fields, or an array body's list (None: send none).
         body_params: dict | list | None = {}
         components = openapi.get('components', {})
-        if _is_array_body(_json_body_schema(operation, components)):
+        if _array_body_schema(_json_body_schema(operation, components)) is not None:
             # The array itself is the body, from its one argument (#191); omitted, no body.
             body_property = _array_body_property(parameters)
             body_params = params[body_property] if body_property in params else None
@@ -1883,7 +1908,8 @@ async def execute_tool_server(
             parameter_names = {param['name'] for param in parameters} - body_fields
             body_params = {key: value for key, value in params.items() if key not in parameter_names}
 
-        # Methods that may carry a body always send one, empty when the operation takes none.
+        # Methods that may carry a body send one, empty when the operation takes none;
+        # an array body whose argument was left out sends none.
         body = (
             {'json': body_params}
             if body_params is not None and http_method in ['post', 'put', 'patch', 'delete']
