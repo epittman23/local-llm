@@ -11,7 +11,9 @@ const settings = vi.hoisted(() => ({
 		{ url: 'https://unnamed.example', info: { name: '' } },
 		{ url: 'https://spaces.example', info: { name: '   ' } },
 		{ url: 'https://named.example', info: { name: 'Weather' } },
-		{ url: 'https://no-info.example' }
+		{ url: 'https://no-info.example' },
+		// A name that is not text, as an imported JSON file can hold.
+		{ url: 'https://number.example', info: { name: 42 } }
 	]
 }));
 vi.mock('@/lib/settings/userSettings', () => ({
@@ -30,7 +32,8 @@ describe('personal tool servers (#263)', () => {
 			'https://unnamed.example',
 			'https://spaces.example',
 			'Weather',
-			'https://no-info.example'
+			'https://no-info.example',
+			'42'
 		]);
 	});
 });
