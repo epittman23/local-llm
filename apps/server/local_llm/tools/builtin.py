@@ -2081,15 +2081,13 @@ async def list_knowledge_bases(
 
         knowledge_bases = []
         for knowledge_base in result.items:
-            files = await Knowledges.get_files_by_id(knowledge_base.id)
-            file_count = len(files) if files else 0
-
             knowledge_bases.append(
                 {
                     'id': knowledge_base.id,
                     'name': knowledge_base.name,
                     'description': knowledge_base.description or '',
-                    'file_count': file_count,
+                    # Counted by the search itself, without loading each file's text (#186).
+                    'file_count': knowledge_base.file_count or 0,
                     'updated_at': knowledge_base.updated_at,
                 }
             )
@@ -2141,15 +2139,13 @@ async def search_knowledge_bases(
 
         knowledge_bases = []
         for knowledge_base in result.items:
-            files = await Knowledges.get_files_by_id(knowledge_base.id)
-            file_count = len(files) if files else 0
-
             knowledge_bases.append(
                 {
                     'id': knowledge_base.id,
                     'name': knowledge_base.name,
                     'description': knowledge_base.description or '',
-                    'file_count': file_count,
+                    # Counted by the search itself, without loading each file's text (#186).
+                    'file_count': knowledge_base.file_count or 0,
                     'updated_at': knowledge_base.updated_at,
                 }
             )
@@ -3099,8 +3095,12 @@ async def list_knowledge(
                         user_group_ids=set(user_group_ids),
                     )
                 ):
-                    kb_files = await Knowledges.get_files_by_id(knowledge.id)
-                    file_count = len(kb_files) if kb_files else 0
+                    # Counted, and for the targeted base paged, without loading
+                    # each file's text, and in a stable order (#186).
+                    targeted = bool(knowledge_id and knowledge_id == knowledge.id)
+                    file_count, paged_files = await Knowledges.get_file_page_by_id(
+                        knowledge.id, skip=skip, limit=count if targeted else 0
+                    )
 
                     kb_entry = {
                         'id': knowledge.id,
@@ -3110,10 +3110,9 @@ async def list_knowledge(
                     }
 
                     # Include file listing only when this KB is targeted
-                    if knowledge_id and knowledge_id == knowledge.id:
-                        if kb_files:
-                            paged_files = kb_files[skip : skip + count]
-                            kb_entry['files'] = [{'id': f.id, 'filename': f.filename} for f in paged_files]
+                    if targeted:
+                        if file_count:
+                            kb_entry['files'] = [{'id': fid, 'filename': name} for fid, name in paged_files]
                             kb_entry['files_skip'] = skip
                             kb_entry['files_count'] = len(paged_files)
                             kb_entry['files_total'] = file_count
