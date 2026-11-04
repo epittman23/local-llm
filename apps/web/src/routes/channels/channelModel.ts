@@ -406,7 +406,8 @@ export function isPublicChannel(
  * (+layout.svelte's channelEventHandler). Returns null when the list must be
  * refetched instead: a channel was created, or a message came from a channel
  * the list does not know yet. A new message from someone else in a channel
- * that is not open bumps its count; anything else leaves the list alone.
+ * that is not open bumps its count; anything else leaves the list alone,
+ * thread replies included, which the server's count leaves out (#255).
  */
 export function applyUnreadEvent(
 	list: Channel[],
@@ -416,7 +417,8 @@ export function applyUnreadEvent(
 ): Channel[] | null {
 	const type = event.data?.type;
 	if (type === 'channel:created') return null;
-	if (type !== 'message' || event.user?.id === selfId || event.channel_id === openChannelId) return list;
+	if (type !== 'message' || isThreadReply(event) || event.user?.id === selfId || event.channel_id === openChannelId)
+		return list;
 	if (!list.some((c) => c.id === event.channel_id)) return null;
 	return list.map((c) =>
 		c.id === event.channel_id
@@ -424,6 +426,9 @@ export function applyUnreadEvent(
 			: c
 	);
 }
+
+/** A reply in a thread, a model's in thread mode included: not a channel's own message. */
+export const isThreadReply = (event: ChannelEvent) => Boolean(event.data?.data?.parent_id);
 
 /** The list with one channel's unread count cleared. */
 export const markRead = (list: Channel[], channelId: string) =>
