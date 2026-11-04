@@ -876,12 +876,14 @@ def _is_invalid_grant(status: int, body: str) -> bool:
     return error == 'invalid_grant'
 
 
+# Refresh a token this long before it expires.
+REFRESH_MARGIN_SECONDS = 5 * 60
+
+
 def _needs_refresh(session, force_refresh: bool) -> bool:
-    return (
-        force_refresh
-        or session.expires_at is None
-        or dt.datetime.now() + dt.timedelta(minutes=5) >= dt.datetime.fromtimestamp(session.expires_at)
-    )
+    # Epoch seconds, not datetimes: a naive local conversion of the non-expiring
+    # sentinel (9999-12-31 UTC) is in the year 10000 east of UTC and raised (#285).
+    return force_refresh or session.expires_at is None or time.time() + REFRESH_MARGIN_SECONDS >= session.expires_at
 
 
 async def _token_refreshed_if_needed(manager, session, force_refresh: bool) -> dict | None:
