@@ -2116,12 +2116,19 @@ class OAuthManager:
         log.debug("User's current groups: %s", [g.name for g in user_current_groups])
         log.debug('All groups available in Local LLM: %s', [g.name for g in all_available_groups])
 
+        # The default group is the app's own (sign-up adds every new user to it),
+        # not the IdP's, so the claim does not remove it (#275). Without this,
+        # sign-up added a user to it and this sync, in the same callback,
+        # took them out again; as it would at every later login.
+        default_group_id = await Config.get('ui.default_group_id')
+
         # Remove groups that user is no longer a part of
         for group_model in user_current_groups:
             if (
                 groups_claim_present
                 and group_model.name not in user_oauth_groups
                 and not is_in_blocked_groups(group_model.name, blocked_groups)
+                and not (default_group_id and group_model.id == default_group_id)
             ):
                 # Remove group from user
                 log.debug('Removing user from group %s as it is no longer in their oauth groups', group_model.name)
