@@ -41,6 +41,7 @@ def _qdrant(monkeypatch, distance, scores, named=False, broken=False):
             pass
 
         def get_collection(self, collection_name):
+            assert collection_name == 'docs'
             if broken:
                 raise RuntimeError('no access to the collection info')
             params = SimpleNamespace(distance=SimpleNamespace(value=distance))
@@ -63,19 +64,24 @@ def _qdrant(monkeypatch, distance, scores, named=False, broken=False):
 
 
 def _milvus(monkeypatch, metric, distances, broken=False):
+    timeouts = []
+
     class MilvusClient:
         def __init__(self, **_kwargs):
             pass
 
-        def list_indexes(self, collection_name, field_name=None):
-            return ['vector_index']
+        def list_indexes(self, collection_name, field_name='', timeout=None):
+            timeouts.append(timeout)
+            return ['vector_index'] if (collection_name, field_name) == ('docs', 'vector') else []
 
-        def describe_index(self, collection_name, index_name):
+        def describe_index(self, collection_name, index_name, timeout=None):
+            timeouts.append(timeout)
             if broken:
                 raise RuntimeError('no index')
-            return {'metric_type': metric, 'field_name': 'vector'}
+            return {'field_name': 'vector', **({'metric_type': metric} if metric else {})}
 
-        def search(self, **_kwargs):
+        def search(self, timeout=None, **_kwargs):
+            timeouts.append(timeout)
             return [
                 [{'id': i, 'distance': d, 'entity': {'data': {'text': f'hit {i}'}}} for i, d in enumerate(distances)]
             ]
@@ -83,7 +89,12 @@ def _milvus(monkeypatch, metric, distances, broken=False):
     module = ModuleType('pymilvus')
     module.MilvusClient = MilvusClient
     monkeypatch.setitem(sys.modules, 'pymilvus', module)
-    hits = asyncio.run(external._retrieve_milvus({'endpoint': 'http://m.invalid'}, {}, KNOWLEDGE, 'q', 3, _embed))
+    hits = asyncio.run(
+        external._retrieve_milvus(
+            {'endpoint': 'http://m.invalid', 'config': {'timeout': 7}}, {}, KNOWLEDGE, 'q', 3, _embed
+        )
+    )
+    assert timeouts and set(timeouts) == {7}  # every call is bounded
     return [hit['distance'] for hit in hits]
 
 
@@ -116,3 +127,7 @@ def test_a_milvus_similarity_is_reported_as_it_is(monkeypatch, metric):
 
 def test_a_milvus_index_that_cannot_be_read_reports_distances_as_they_are(monkeypatch):
     assert _milvus(monkeypatch, 'L2', [2.0], broken=True) == pytest.approx([2.0])
+
+
+def test_a_milvus_index_without_a_metric_reports_distances_as_they_are(monkeypatch):
+    assert _milvus(monkeypatch, None, [2.0]) == pytest.approx([2.0])

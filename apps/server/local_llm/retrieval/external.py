@@ -115,11 +115,11 @@ def _qdrant_metric(client, collection_name: str, vector_field: str | None) -> st
         return None
 
 
-def _milvus_metric(client, collection_name: str, vector_field: str) -> str | None:
+def _milvus_metric(client, collection_name: str, vector_field: str, timeout: float) -> str | None:
     """The metric of the index on the vector field, or None if it cannot be read."""
     try:
-        for index_name in client.list_indexes(collection_name, field_name=vector_field) or []:
-            metric = (client.describe_index(collection_name, index_name) or {}).get('metric_type')
+        for index_name in client.list_indexes(collection_name, field_name=vector_field, timeout=timeout) or []:
+            metric = (client.describe_index(collection_name, index_name, timeout=timeout) or {}).get('metric_type')
             if metric:
                 return str(metric)
     except Exception as e:
@@ -226,7 +226,9 @@ async def _retrieve_milvus(connection, auth_config, knowledge, query, count, emb
             'limit': count,
             'output_fields': list(output_fields),
         }
-        return client.search(**kwargs), _milvus_metric(client, collection_name, vector_field)
+        # Each call bounded, as the connection is: none of them is otherwise (#503).
+        timeout = config.get('timeout') or 30
+        return client.search(**kwargs, timeout=timeout), _milvus_metric(client, collection_name, vector_field, timeout)
 
     response, metric = await asyncio.to_thread(_search)
     mapping = {
@@ -418,9 +420,9 @@ async def retrieve_external_knowledge_for_connection(
             raise RuntimeError(f'Unsupported external knowledge provider: {connection.get("provider")}')
 
     # The queries take turns, each one's best hit first, so the first query
-    # cannot fill the budget alone (#349). Merged by rank, not score: whether
-    # a higher score is better depends on the collection's metric, which is
-    # unknown here. A chunk returned more than once, by several queries or
+    # cannot fill the budget alone (#349). Merged by rank, not score: a score
+    # is a similarity when the collection's metric could be read (#503), but
+    # stays as the provider gave it when it could not. A chunk returned more than once, by several queries or
     # twice by one, is kept once, at its best rank; the key includes the
     # content because document_id_field may map a parent document shared by
     # several chunks. It is built as text because either field may be mapped
