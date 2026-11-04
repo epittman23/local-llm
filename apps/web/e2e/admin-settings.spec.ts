@@ -1850,7 +1850,9 @@ test.describe('settings: Documents', () => {
 			web: { ENABLE_WEB_SEARCH: true }
 		});
 		expect(cfg).not.toHaveProperty('CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES');
+		// A plain Save lets the server keep a loaded model that did not change (#532).
 		expect(sent(calls, '/retrieval/embedding/update')[0]).toEqual({
+			force_reload: false,
 			RAG_EMBEDDING_ENGINE: '',
 			RAG_EMBEDDING_MODEL: 'sentence-transformers/all-MiniLM-L6-v2',
 			RAG_EMBEDDING_BATCH_SIZE: 1,
@@ -1979,7 +1981,10 @@ test.describe('settings: Documents', () => {
 		await e.getByLabel('Embedding Model', { exact: true }).fill('BAAI/bge-small-en');
 		await e.getByRole('button', { name: 'Update embedding model' }).click();
 		await expect(page.getByText('Embedding model updated')).toBeVisible();
-		expect(sent(calls, '/retrieval/embedding/update')[0]).toMatchObject({ RAG_EMBEDDING_MODEL: 'BAAI/bge-small-en' });
+		expect(sent(calls, '/retrieval/embedding/update')[0]).toMatchObject({
+			RAG_EMBEDDING_MODEL: 'BAAI/bge-small-en',
+			force_reload: true
+		});
 		expect(sent(calls, '/retrieval/config/update')).toHaveLength(0);
 	});
 

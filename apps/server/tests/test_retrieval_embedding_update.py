@@ -1,4 +1,4 @@
-"""`POST /retrieval/embedding/update` with a local model that will not load.
+"""`POST /retrieval/embedding/update`: a local model that will not load, and when a model is loaded at all.
 
 `get_ef` logs a load failure and returns None. The route used to unload the
 working model first, then save the new name and report success, after which
@@ -7,7 +7,9 @@ These pin that a model that fails to load is refused with a message naming
 it and saying truthfully whether an embedding model is still in use, that
 nothing is saved and the state is untouched, that a model that loads
 replaces the old one, and that an external engine (for which `get_ef`
-returns None by design) still saves.
+returns None by design) still saves. Also that a plain Documents save keeps a
+loaded model it did not change, and loads one that differs from the model
+loaded, and that a blank local model is refused (#532).
 """
 
 import asyncio
@@ -65,7 +67,7 @@ def _loader(monkeypatch, *, fails: bool):
 
 
 def _request():
-    state = SimpleNamespace(ef=OLD_EF, EMBEDDING_FUNCTION=OLD_EMBEDDING_FUNCTION)
+    state = SimpleNamespace(ef=OLD_EF, ef_model='old/model', EMBEDDING_FUNCTION=OLD_EMBEDDING_FUNCTION)
     return SimpleNamespace(app=SimpleNamespace(state=state))
 
 
@@ -241,6 +243,18 @@ def test_a_plain_save_loads_a_model_that_changed_or_is_not_loaded(stored, monkey
     assert loads == [model]
     assert request.app.state.ef is not None
     assert request.app.state.ef is not OLD_EF
+
+
+def test_a_plain_save_loads_the_stored_model_when_another_one_is_loaded(stored, values, monkeypatch):
+    """A config import stored a new name without loading it (#532)."""
+    values['RAG_EMBEDDING_MODEL'] = 'imported/model'
+    loads = _counting_loader(monkeypatch)
+    request = _request()
+
+    _update(request, RAG_EMBEDDING_ENGINE='', RAG_EMBEDDING_MODEL='imported/model', force_reload=False)
+
+    assert loads == ['imported/model']
+    assert request.app.state.ef_model == 'imported/model'
 
 
 def test_a_blank_local_model_is_refused_and_nothing_saved(stored, monkeypatch):

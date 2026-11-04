@@ -542,12 +542,14 @@ async def update_embedding_config(request: Request, form_data: EmbeddingModelUpd
             status_code=status.HTTP_400_BAD_REQUEST,
             detail='Choose an embedding model: the local engine needs one.',
         )
-    # The loaded model is kept when a save changes nothing about it.
+    # The loaded model is kept when it is the one asked for. Compared with the
+    # model this process holds, not the stored name, which a config import or
+    # another worker's update can have changed without loading it.
     keep_loaded = (
         not form_data.force_reload
         and request.app.state.ef is not None
-        and config.RAG_EMBEDDING_ENGINE == form_data.RAG_EMBEDDING_ENGINE == ''
-        and config.RAG_EMBEDDING_MODEL == form_data.RAG_EMBEDDING_MODEL.strip()
+        and form_data.RAG_EMBEDDING_ENGINE == ''
+        and getattr(request.app.state, 'ef_model', None) == form_data.RAG_EMBEDDING_MODEL.strip()
     )
     try:
         config.RAG_EMBEDDING_ENGINE = form_data.RAG_EMBEDDING_ENGINE
@@ -625,6 +627,7 @@ async def update_embedding_config(request: Request, form_data: EmbeddingModelUpd
         await config.save()
         replaced_internal_model = request.app.state.ef is not None and not keep_loaded
         request.app.state.ef = ef
+        request.app.state.ef_model = config.RAG_EMBEDDING_MODEL if ef is not None else None
         request.app.state.EMBEDDING_FUNCTION = embedding_function
         if replaced_internal_model:
             free_replaced_embedding_model()
