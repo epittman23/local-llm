@@ -693,7 +693,8 @@ async def delete_folder_by_id(
     folder_owner_id = folder.user_id
 
     folder_ids = await Folders.get_folder_ids_by_id_and_user_id_in_subtree(id, folder_owner_id, db=db)
-    if await Chats.count_chats_by_folder_ids_and_user_id(folder_ids, folder_owner_id, db=db):
+    # Only deleting the chats needs the permission; keeping them moves them out (#316).
+    if delete_contents and await Chats.count_chats_by_folder_ids_and_user_id(folder_ids, folder_owner_id, db=db):
         chat_delete_permission = await has_permission(
             user.id, 'chat.delete', await Config.get('user.permissions'), db=db
         )
