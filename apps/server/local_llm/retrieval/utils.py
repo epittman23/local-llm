@@ -710,7 +710,13 @@ async def query_collection(
     queries: list[str],
     embedding_function,
     k: int,
+    allow_hybrid: bool = True,
 ) -> dict:
+    """Vector search over the collections, or hybrid search when it is enabled.
+
+    allow_hybrid=False keeps it to vector search whatever the setting: a caller
+    that asked for no hybrid search used to get it anyway (#354).
+    """
     config = await Config.get_many(
         'rag.enable_hybrid_search',
         'rag.top_k_reranker',
@@ -719,7 +725,7 @@ async def query_collection(
         'rag.enable_hybrid_search_enriched_texts',
     )
     # When request is provided, try hybrid search + reranking if enabled
-    if request and config.get('rag.enable_hybrid_search'):
+    if request and allow_hybrid and config.get('rag.enable_hybrid_search'):
         try:
             reranking_function = (
                 (lambda query, documents: request.app.state.RERANKING_FUNCTION(query, documents))
