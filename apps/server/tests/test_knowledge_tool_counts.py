@@ -95,3 +95,48 @@ def test_listing_and_searching_bases_count_without_loading_files(monkeypatch):
     for tool, args in ((builtin.list_knowledge_bases, {}), (builtin.search_knowledge_bases, {'query': kb.name})):
         out = json.loads(_run(tool(**args, count=50, __request__=SimpleNamespace(), __user__={'id': user.id})))
         assert [b['file_count'] for b in out if b['id'] == kb.id] == [4], tool.__name__
+
+
+def _list(user, kb, **page):
+    return json.loads(
+        _run(
+            builtin.list_knowledge(
+                knowledge_id=kb.id,
+                __request__=SimpleNamespace(),
+                __user__={'id': user.id, 'role': 'admin'},
+                __model_knowledge__=[{'type': 'collection', 'id': kb.id}],
+                **page,
+            )
+        )
+    )
+
+
+def test_a_page_past_the_end_or_out_of_range_is_empty_and_keeps_the_rest(monkeypatch):
+    user, kb, _ids = _run(_base(2))
+
+    for page in ({'skip': 10**19, 'count': 5}, {'skip': 5, 'count': 5}):
+        (entry,) = _list(user, kb, **page)['knowledge_bases']
+        assert entry['file_count'] == 2
+        assert entry['files'] == []
+        assert entry['has_more'] is False
+
+
+def test_negative_skip_and_count_are_read_as_zero(monkeypatch):
+    user, kb, ids = _run(_base(2))
+
+    (entry,) = _list(user, kb, skip=-2, count=50)['knowledge_bases']
+    assert [f['id'] for f in entry['files']] == ids
+    assert entry['files_skip'] == 0
+
+    (entry,) = _list(user, kb, skip=0, count=-1)['knowledge_bases']
+    assert entry['files'] == []
+    assert entry['has_more'] is True
+
+
+def test_the_count_matches_the_files_listed_when_a_link_outlived_its_file():
+    user, kb, ids = _run(_base(3))
+    _run(Files.delete_file_by_id(ids[0]))
+
+    total, page = _run(Knowledges.get_file_page_by_id(kb.id, skip=0, limit=50))
+
+    assert total == len(page)

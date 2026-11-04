@@ -3062,7 +3062,8 @@ async def list_knowledge(
     if isinstance(knowledge_id, str) and knowledge_id.lower() in ('none', 'null', ''):
         knowledge_id = None
 
-    count = min(count, 200)
+    count = max(min(count, 200), 0)
+    skip = max(skip, 0)
 
     try:
         from local_llm.models.access_grants import AccessGrants

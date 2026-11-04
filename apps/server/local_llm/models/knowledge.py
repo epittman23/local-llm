@@ -650,12 +650,22 @@ class KnowledgeTable:
 
         Columns only, so no file's extracted text is loaded, and in a total
         order (`created_at` has whole seconds, so name and id break ties), so
-        paging neither repeats nor skips a file (#186).
+        paging neither repeats nor skips a file (#186). The count joins the
+        files as the page does, so a page always agrees with its total (SQLite
+        does not enforce the cascade that removes a deleted file's link).
         """
         async with get_async_db_context(db) as db:
-            total = await db.scalar(
-                select(func.count(KnowledgeFile.id)).where(KnowledgeFile.knowledge_id == knowledge_id)
+            total = int(
+                await db.scalar(
+                    select(func.count())
+                    .select_from(KnowledgeFile)
+                    .join(File, File.id == KnowledgeFile.file_id)
+                    .where(KnowledgeFile.knowledge_id == knowledge_id)
+                )
+                or 0
             )
+            if limit <= 0 or skip >= total:
+                return total, []
             result = await db.execute(
                 select(File.id, File.filename)
                 .join(KnowledgeFile, File.id == KnowledgeFile.file_id)
@@ -664,7 +674,7 @@ class KnowledgeTable:
                 .offset(max(skip, 0))
                 .limit(max(limit, 0))
             )
-            return int(total or 0), [(row.id, row.filename) for row in result.all()]
+            return total, [(row.id, row.filename) for row in result.all()]
 
     async def get_file_metadatas_by_id(
         self, knowledge_id: str, db: AsyncSession | None = None
