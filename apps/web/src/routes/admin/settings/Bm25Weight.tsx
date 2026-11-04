@@ -1,6 +1,10 @@
 import { SettingNumber, SettingRow } from '@/components/settings/controls';
 
-/** The server's own weight when none is set (`RAG_HYBRID_BM25_WEIGHT`). */
+/**
+ * config.py's fallback when `RAG_HYBRID_BM25_WEIGHT` is unset. A deployment
+ * that sets the variable starts from its value instead, until the Documents
+ * tab is first saved, which stores a weight of its own.
+ */
 export const DEFAULT_BM25_WEIGHT = 0.5;
 
 const resetButton =

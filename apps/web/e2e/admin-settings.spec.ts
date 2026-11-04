@@ -1961,6 +1961,11 @@ test.describe('settings: Documents', () => {
 			ENABLE_RAG_HYBRID_SEARCH: true,
 			HYBRID_BM25_WEIGHT: 0.3
 		});
+		// Reset sends the number, which the server saves; "Default" sent null, which it kept as before.
+		await r.getByRole('button', { name: 'Reset to 0.5' }).click();
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect.poll(() => sent(calls, '/retrieval/config/update').length).toBe(2);
+		expect(sent(calls, '/retrieval/config/update')[1]).toMatchObject({ HYBRID_BM25_WEIGHT: 0.5 });
 	});
 
 	test('chunk settings the splitters cannot use are refused before anything is sent (#235)', async ({ page }) => {
