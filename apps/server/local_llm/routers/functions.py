@@ -537,7 +537,9 @@ async def update_function_valves_by_id(
                 valves = Valves(**form_data)
 
                 valves_dict = valves.model_dump(exclude_unset=True)
-                await Functions.update_function_valves_by_id(id, valves_dict, db=db)
+                # A failed save is an error, not a success with the submitted values (#288).
+                if await Functions.update_function_valves_by_id(id, valves_dict, db=db) is None:
+                    raise ValueError(f'the valves of function {id} were not saved')
                 await publish_event(
                     request,
                     EVENTS.FUNCTION_VALVES_UPDATED,
@@ -644,7 +646,8 @@ async def update_function_user_valves_by_id(
                 form_data = {k: v for k, v in form_data.items() if v is not None}
                 user_valves = UserValves(**form_data)
                 user_valves_dict = user_valves.model_dump(exclude_unset=True)
-                await Functions.update_user_valves_by_id_and_user_id(id, user.id, user_valves_dict, db=db)
+                if await Functions.update_user_valves_by_id_and_user_id(id, user.id, user_valves_dict, db=db) is None:
+                    raise ValueError(f'the user valves of function {id} were not saved')
                 await publish_event(
                     request,
                     EVENTS.FUNCTION_VALVES_UPDATED,
