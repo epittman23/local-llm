@@ -849,6 +849,26 @@ class KnowledgeTable:
 
     # ── Directory CRUD ────────────────────────────────────────────────
 
+    @staticmethod
+    async def _sibling_has_name(
+        db: AsyncSession, knowledge_id: str, parent_id: str | None, name: str, exclude_id: str | None = None
+    ) -> bool:
+        """Whether another directory at this level already has this name.
+
+        The unique constraint on (knowledge_id, parent_id, name) does not cover
+        the root, since databases treat NULL parents as distinct: two root
+        directories named "docs" were accepted, and the sync could only ever
+        use one of them (#312).
+        """
+        stmt = select(KnowledgeDirectory.id).filter(
+            KnowledgeDirectory.knowledge_id == knowledge_id,
+            KnowledgeDirectory.name == name,
+            KnowledgeDirectory.parent_id.is_(None) if parent_id is None else KnowledgeDirectory.parent_id == parent_id,
+        )
+        if exclude_id:
+            stmt = stmt.filter(KnowledgeDirectory.id != exclude_id)
+        return (await db.execute(stmt.limit(1))).first() is not None
+
     async def create_directory(
         self,
         knowledge_id: str,
@@ -859,6 +879,8 @@ class KnowledgeTable:
     ) -> KnowledgeDirectoryModel | None:
         async with get_async_db_context(db) as db:
             try:
+                if await self._sibling_has_name(db, knowledge_id, parent_id, name):
+                    return None
                 now = int(time.time())
                 directory = KnowledgeDirectory(
                     id=str(uuid.uuid4()),
@@ -969,6 +991,12 @@ class KnowledgeTable:
     ) -> KnowledgeDirectoryModel | None:
         async with get_async_db_context(db) as db:
             try:
+                row = await db.get(KnowledgeDirectory, directory_id)
+                current = KnowledgeDirectoryModel.model_validate(row) if row is not None else None
+                if current is not None and await self._sibling_has_name(
+                    db, current.knowledge_id, current.parent_id, name, exclude_id=directory_id
+                ):
+                    return None
                 await db.execute(
                     update(KnowledgeDirectory).filter_by(id=directory_id).values(name=name, updated_at=int(time.time()))
                 )
@@ -983,8 +1011,15 @@ class KnowledgeTable:
         directory_id: str,
         new_parent_id: str | None,
         db: AsyncSession | None = None,
+        new_name: str | None = None,
     ) -> KnowledgeDirectoryModel | None:
-        """Move a directory to a new parent, with cycle detection."""
+        """Move a directory to a new parent, with cycle detection.
+
+        With new_name, the directory is renamed in the same update, and the
+        name is checked against its new siblings once: a move and a rename
+        run one after the other could apply the move and then refuse the
+        rename, or refuse a move whose final name is free.
+        """
         async with get_async_db_context(db) as db:
             try:
                 # Cycle detection: walk up from new_parent_id to ensure
@@ -1000,11 +1035,21 @@ class KnowledgeTable:
                         row = result.first()
                         current = row[0] if row else None
 
-                await db.execute(
-                    update(KnowledgeDirectory)
-                    .filter_by(id=directory_id)
-                    .values(parent_id=new_parent_id, updated_at=int(time.time()))
-                )
+                row = await db.get(KnowledgeDirectory, directory_id)
+                moving = KnowledgeDirectoryModel.model_validate(row) if row is not None else None
+                if moving is not None and await self._sibling_has_name(
+                    db,
+                    moving.knowledge_id,
+                    new_parent_id,
+                    new_name if new_name is not None else moving.name,
+                    exclude_id=directory_id,
+                ):
+                    return None
+
+                values: dict = {'parent_id': new_parent_id, 'updated_at': int(time.time())}
+                if new_name is not None:
+                    values['name'] = new_name
+                await db.execute(update(KnowledgeDirectory).filter_by(id=directory_id).values(**values))
                 await db.commit()
                 return await self.get_directory_by_id(directory_id, db=db)
             except Exception as e:
@@ -1019,11 +1064,9 @@ class KnowledgeTable:
         db: AsyncSession | None = None,
     ) -> KnowledgeDirectoryModel | None:
         """Update directory name and/or parent. Pass parent_id=None to move to root."""
-        # Handle move if parent_id is being changed
+        # A move, with any rename applied in the same update
         if parent_id != '__unset__':
-            result = await self.move_directory(directory_id, parent_id, db=db)
-            if result is None:
-                return None  # Cycle detected or error
+            return await self.move_directory(directory_id, parent_id, db=db, new_name=name)
 
         if name is not None:
             return await self.rename_directory(directory_id, name, db=db)
