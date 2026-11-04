@@ -66,8 +66,26 @@ describe('messages', () => {
 				{ role: 'system', content: 'Be brief' },
 				{ role: 'user', content: 'Hi' }
 			],
-			temperature: 0.2
+			params: { temperature: 0.2 }
 		});
+	});
+	it('sends the parameters under params, custom and app-only ones too, for the backend to sort (#208)', () => {
+		const body = chatRequest('m', '', [{ role: 'user', content: 'Hi' }], {
+			temperature: 0.2,
+			function_calling: 'native',
+			custom_params: { top_k: '40' }
+		});
+		expect(body).toEqual({
+			model: 'm',
+			stream: true,
+			messages: [{ role: 'user', content: 'Hi' }],
+			params: { temperature: 0.2, function_calling: 'native', custom_params: { top_k: '40' } }
+		});
+		expect(body).not.toHaveProperty('temperature');
+		expect(body).not.toHaveProperty('function_calling');
+	});
+	it('sends no params when none is set', () => {
+		expect(chatRequest('m', '', [], { top_p: null, stop: '' })).not.toHaveProperty('params');
 	});
 	it('streams into the last assistant message, or starts one, skipping a leading newline', () => {
 		const one = appendAssistant([{ role: 'user', content: 'Hi' }], '\n');

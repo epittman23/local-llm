@@ -64,7 +64,16 @@ export async function readCompletionStream(
 	}
 }
 
-/** The request body: an optional system message, the conversation, and whichever parameters are set. */
+/**
+ * The request body: an optional system message, the conversation, and
+ * whichever parameters are set, under `params`, the field the chat page uses
+ * too (the chat page also splits `stop` into sequences; this sends it as typed).
+ * The backend reads only `params`: it applies the provider's parameters from
+ * it, decodes `custom_params`, and keeps this app's own settings (function
+ * calling, reasoning tags, ...) from the provider. Spread at the top level,
+ * custom parameters were never applied and those settings reached the
+ * provider as unknown fields (#208).
+ */
 export function chatRequest(
 	modelId: string,
 	system: string,
@@ -78,7 +87,7 @@ export function chatRequest(
 		model: modelId,
 		stream: true,
 		messages: [...(system ? [{ role: 'system', content: system }] : []), ...messages],
-		...active
+		...(Object.keys(active).length ? { params: active } : {})
 	};
 }
 
