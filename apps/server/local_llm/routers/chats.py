@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel
@@ -294,7 +294,7 @@ async def require_chat_import_permission(request: Request, user, db: AsyncSessio
 async def get_session_user_chat_list(
     request: Request,
     user=Depends(get_verified_user),
-    page: int | None = None,
+    page: int | None = Query(None, ge=1),
     include_pinned: bool | None = False,
     include_folders: bool | None = False,
     sort_by: str = 'updated_at',
@@ -350,8 +350,8 @@ async def mark_chats_read_by_user_id(
 
 @router.get('/stats/usage', response_model=ChatUsageStatsListResponse)
 async def get_session_user_chat_usage_stats(
-    items_per_page: int | None = 50,
-    page: int | None = 1,
+    items_per_page: int | None = Query(50, ge=1),
+    page: int | None = Query(1, ge=1),
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
@@ -484,7 +484,7 @@ async def delete_all_user_chats(
 async def get_user_chat_list_by_user_id(
     request: Request,
     user_id: str,
-    page: int | None = None,
+    page: int | None = Query(None, ge=1),
     query: str | None = None,
     order_by: str | None = None,
     direction: str | None = None,
@@ -613,7 +613,7 @@ async def set_chat_config(form_data: ChatConfigForm, user=Depends(get_admin_user
 async def search_user_chats(
     request: Request,
     text: str,
-    page: int | None = None,
+    page: int | None = Query(None, ge=1),
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
@@ -674,7 +674,7 @@ async def get_chats_by_folder_id(
 async def get_chat_list_by_folder_id(
     request: Request,
     folder_id: str,
-    page: int | None = 1,
+    page: int | None = Query(1, ge=1),
     sort_by: str = 'unread_updated_at',
     sort_dir: str = 'desc',
     user=Depends(get_verified_user),
@@ -807,7 +807,7 @@ async def get_all_user_chats_in_db(user=Depends(get_admin_user), db: AsyncSessio
 @router.get('/archived', response_model=list[ChatTitleIdResponse])
 async def get_archived_session_user_chat_list(
     request: Request,
-    page: int | None = None,
+    page: int | None = Query(None, ge=1),
     query: str | None = None,
     order_by: str | None = None,
     direction: str | None = None,
@@ -916,7 +916,7 @@ async def unshare_all_chats(
 
 @router.get('/shared', response_model=list[SharedChatResponse])
 async def get_shared_session_user_chat_list(
-    page: int | None = None,
+    page: int | None = Query(None, ge=1),
     query: str | None = None,
     order_by: str | None = None,
     direction: str | None = None,
