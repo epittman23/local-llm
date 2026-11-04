@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { ServerUnreachableError } from '@/lib/apis/errors';
 import { type UpdateSteps, updateModels, updateSummary } from './ollamaStreams';
 
 // #246: "Update All Models" caught every pull failure to the console and then
@@ -40,34 +41,45 @@ describe('updateModels', () => {
 
 	it('reports a pull that could not reach the server', async () => {
 		const { s, seen } = steps(async () => {
-			throw new Error('Failed to fetch');
+			throw new ServerUnreachableError(new TypeError('Failed to fetch'));
 		});
 
 		const outcome = await updateModels(['a', 'b'], s);
 
 		expect(outcome.failed).toEqual([
-			{ id: 'a', error: 'Failed to fetch' },
-			{ id: 'b', error: 'Failed to fetch' }
+			{ id: 'a', error: 'Could not reach the server' },
+			{ id: 'b', error: 'Could not reach the server' }
 		]);
 		expect(seen.done).toEqual(['a', 'b']);
 	});
 
-	it('reports an error the stream carries, and a refusal without one', async () => {
+	it('reports an error the stream carries, and a refusal by what its body says', async () => {
 		const responses: Record<string, Response> = {
 			a: stream([{ error: 'pull model manifest: file does not exist' }]),
 			b: stream([{ detail: 'Ollama: unreachable' }], 500),
-			c: stream([], 502),
-			d: stream([{ status: 'success' }])
+			c: new Response('<html><h1>502 Bad Gateway</h1></html>', { status: 502, statusText: 'Bad Gateway' }),
+			d: new Response(null, { status: 503, statusText: 'Service Unavailable' }),
+			e: stream([{ status: 'success' }])
 		};
 		const { s } = steps(async (id) => [responses[id], null]);
 
-		const outcome = await updateModels(['a', 'b', 'c', 'd'], s);
+		const outcome = await updateModels(['a', 'b', 'c', 'd', 'e'], s);
 
 		expect(outcome.failed).toEqual([
 			{ id: 'a', error: 'pull model manifest: file does not exist' },
 			{ id: 'b', error: 'Ollama: unreachable' },
-			{ id: 'c', error: 'HTTP 502' }
+			{ id: 'c', error: '502 Bad Gateway' },
+			{ id: 'd', error: '503 Service Unavailable' }
 		]);
+	});
+
+	it('a line that is not JSON in a good stream is a failure, not a crash', async () => {
+		const { s } = steps(async () => [new Response('not json\n'), null]);
+
+		const outcome = await updateModels(['a'], s);
+
+		expect(outcome.failed).toHaveLength(1);
+		expect(outcome.failed[0].id).toBe('a');
 	});
 
 	it('a cancelled pull is not a failure, and the update stops there', async () => {
@@ -98,11 +110,7 @@ describe('updateModels', () => {
 });
 
 describe('updateSummary', () => {
-	it('says cancelled, then the failures, then all up to date', () => {
-		expect(updateSummary({ failed: [{ id: 'a', error: 'x' }], cancelled: true })).toEqual([
-			'info',
-			'Model update cancelled'
-		]);
+	it('lists the failures, grouped by why', () => {
 		expect(updateSummary({ failed: [{ id: 'a', error: 'x' }], cancelled: false })).toEqual([
 			'error',
 			'Could not update 1 model: a (x)'
@@ -110,12 +118,24 @@ describe('updateSummary', () => {
 		expect(
 			updateSummary({
 				failed: [
-					{ id: 'a', error: 'x' },
-					{ id: 'b', error: 'y' }
+					{ id: 'a', error: 'Ollama: unreachable' },
+					{ id: 'b', error: 'Ollama: unreachable' },
+					{ id: 'c', error: 'no such model' }
 				],
 				cancelled: false
 			})
-		).toEqual(['error', 'Could not update 2 models: a (x), b (y)']);
+		).toEqual(['error', 'Could not update 3 models: a, b (Ollama: unreachable); c (no such model)']);
+	});
+
+	it('a cancel does not hide the failures before it', () => {
+		expect(updateSummary({ failed: [{ id: 'a', error: 'x' }], cancelled: true })).toEqual([
+			'error',
+			'Model update cancelled. Could not update 1 model: a (x)'
+		]);
+		expect(updateSummary({ failed: [], cancelled: true })).toEqual(['info', 'Model update cancelled']);
+	});
+
+	it('says all up to date only when nothing failed', () => {
 		expect(updateSummary({ failed: [], cancelled: false })).toEqual(['success', 'All models are up to date']);
 	});
 });
