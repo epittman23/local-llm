@@ -181,3 +181,77 @@ def test_an_external_engine_is_saved_without_a_local_model(stored, monkeypatch):
     assert stored['rag.embedding_model'] == 'text-embedding-3-small'
     assert request.app.state.ef is None
     assert request.app.state.EMBEDDING_FUNCTION is not OLD_EMBEDDING_FUNCTION
+
+
+def _counting_loader(monkeypatch):
+    """A loader that loads and counts how often it did (#532)."""
+    loads = []
+
+    class SentenceTransformer:
+        def __init__(self, path, **kwargs):
+            loads.append(path)
+            self.path = path
+
+    monkeypatch.setitem(sys.modules, 'sentence_transformers', SimpleNamespace(SentenceTransformer=SentenceTransformer))
+    return loads
+
+
+def test_a_plain_save_keeps_the_loaded_model_when_it_is_unchanged(stored, monkeypatch):
+    """The Documents page's Save sends the embedding settings every time (#532)."""
+    loads = _counting_loader(monkeypatch)
+    request = _request()
+
+    _update(
+        request,
+        RAG_EMBEDDING_ENGINE='',
+        RAG_EMBEDDING_MODEL='old/model',
+        RAG_EMBEDDING_BATCH_SIZE=8,
+        force_reload=False,
+    )
+
+    assert loads == []
+    assert request.app.state.ef is OLD_EF
+    # The other settings still apply: the embedding function is built again around the same model.
+    assert request.app.state.EMBEDDING_FUNCTION is not OLD_EMBEDDING_FUNCTION
+    assert stored['rag.embedding_batch_size'] == 8
+
+
+def test_the_update_button_reloads_an_unchanged_model(stored, monkeypatch):
+    loads = _counting_loader(monkeypatch)
+    request = _request()
+
+    _update(request, RAG_EMBEDDING_ENGINE='', RAG_EMBEDDING_MODEL='old/model')
+
+    assert loads == ['old/model']
+    assert request.app.state.ef is not OLD_EF
+
+
+@pytest.mark.parametrize(
+    ('model', 'loaded'),
+    [('new/model', OLD_EF), ('old/model', None)],
+    ids=['model_changed', 'nothing_loaded'],
+)
+def test_a_plain_save_loads_a_model_that_changed_or_is_not_loaded(stored, monkeypatch, model, loaded):
+    loads = _counting_loader(monkeypatch)
+    request = _request()
+    request.app.state.ef = loaded
+
+    _update(request, RAG_EMBEDDING_ENGINE='', RAG_EMBEDDING_MODEL=model, force_reload=False)
+
+    assert loads == [model]
+    assert request.app.state.ef is not None
+    assert request.app.state.ef is not OLD_EF
+
+
+def test_a_blank_local_model_is_refused_and_nothing_saved(stored, monkeypatch):
+    loads = _counting_loader(monkeypatch)
+    request = _request()
+
+    with pytest.raises(HTTPException) as raised:
+        _update(request, RAG_EMBEDDING_ENGINE='', RAG_EMBEDDING_MODEL='  ', force_reload=False)
+
+    assert raised.value.status_code == 400
+    assert 'embedding model' in raised.value.detail.lower()
+    assert stored == {}
+    assert loads == []
+    assert request.app.state.ef is OLD_EF
