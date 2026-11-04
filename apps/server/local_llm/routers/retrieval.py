@@ -1824,6 +1824,11 @@ def has_vector_results(result) -> bool:
     return bool(result and result.ids and result.ids[0])
 
 
+def _done_status(mark_completed: bool) -> dict:
+    """The file data a successful processing step writes: completed, or only the error cleared."""
+    return {'status': 'completed', 'error': None} if mark_completed else {'error': None}
+
+
 @router.post('/process/file')
 async def process_file(
     request: Request,
@@ -1843,6 +1848,7 @@ async def process_file_for(
     *,
     check_collection_access: bool = True,
     record_failure: bool = True,
+    mark_completed: bool = True,
 ):
     """
     Process a file and save its content to the vector database.
@@ -1853,7 +1859,10 @@ async def process_file_for(
     for a caller that has already authorized the change and is only
     mirroring the file's chunks into the collections that hold it; with
     `record_failure=False` a failure there is only raised, without marking the
-    file itself failed (its own content and collection are fine).
+    file itself failed (its own content and collection are fine). With
+    `mark_completed=False` a success leaves the file's status for the caller to
+    finish: an upload to a knowledge base marks it completed only once it is
+    linked, since the status stream ends at the first "completed" (#311).
     Note: granular session management is used to prevent connection pool exhaustion.
     The session is committed before external API calls, and updates use a fresh session.
     """
@@ -1994,7 +2003,7 @@ async def process_file_for(
             hash = calculate_sha256_string(text_content)
 
             if config.BYPASS_EMBEDDING_AND_RETRIEVAL:
-                await Files.update_file_data_by_id(file.id, {'status': 'completed', 'error': None}, db=db)
+                await Files.update_file_data_by_id(file.id, _done_status(mark_completed), db=db)
                 await Files.update_file_hash_by_id(file.id, hash, db=db)
                 await publish_event(
                     request,
@@ -2053,7 +2062,7 @@ async def process_file_for(
 
                             await Files.update_file_data_by_id(
                                 file.id,
-                                {'status': 'completed', 'error': None},
+                                _done_status(mark_completed),
                                 db=session,
                             )
                             await Files.update_file_hash_by_id(file.id, hash, db=session)
