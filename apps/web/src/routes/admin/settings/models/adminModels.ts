@@ -251,3 +251,27 @@ export const nextAccessGrants = (model: Rec): Rec[] =>
 	isPublicModel(model)
 		? []
 		: [...(model.access_grants ?? []), { principal_type: 'user', principal_id: '*', permission: 'read' }];
+
+// --- import ------------------------------------------------------------------------
+
+export type ModelsImportResult = { imported: string[]; skipped: { id: string | null; reason: string }[] };
+
+/**
+ * The toast for what `/models/import` did (#337): how many models it imported,
+ * and which it skipped and why, up to three by name. It used to answer true
+ * whatever it skipped, and the page said every import succeeded.
+ */
+export function importResultMessage(result: ModelsImportResult): {
+	kind: 'success' | 'warning' | 'error';
+	text: string;
+} {
+	const imported = result.imported.length;
+	const text = `Imported ${imported} model${imported === 1 ? '' : 's'}`;
+	if (result.skipped.length === 0) return { kind: 'success', text };
+	const named = result.skipped.slice(0, 3).map((s) => `${s.id ?? 'an entry without an id'} (${s.reason})`);
+	const more = result.skipped.length - named.length;
+	return {
+		kind: imported > 0 ? 'warning' : 'error',
+		text: `${text}; skipped ${result.skipped.length}: ${named.join(', ')}${more > 0 ? ` and ${more} more` : ''}`
+	};
+}
