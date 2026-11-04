@@ -12,7 +12,7 @@ import { updateChatById } from '@/lib/apis/chats';
 import type { ChatFile, History } from '@/lib/chat/history';
 import { cssUrl } from '@/lib/chat/prefs';
 import { type Citation, citationIndex, citationsOf } from '@/lib/chat/sources';
-import { initialModels, needsWebSearchConfirm, newChatTemporary, webSearchConfirmText } from '@/lib/chat/request';
+import { needsWebSearchConfirm, newChatTemporary, webSearchConfirmText } from '@/lib/chat/request';
 import {
 	canUploadFiles,
 	canUploadWeb,
@@ -39,6 +39,7 @@ import { ChatBanners } from './ChatBanners';
 import { ChatPlaceholder } from './ChatPlaceholder';
 import { CitationDialog } from './CitationDialog';
 import { useMessageActions } from './MessageActions';
+import { useModelPick } from './useModelPick';
 import { ModelSelector } from './ModelSelector';
 import { ServerDialogs } from './ServerDialogs';
 import { useChatPrefs } from './useChatPrefs';
@@ -60,7 +61,7 @@ export function ChatPage() {
 	const user = useAuthStore((s) => s.user);
 	const config = useConfigStore((s) => s.config);
 	const { settings } = useUserSettings();
-	const { models, loaded } = useModels();
+	const { models } = useModels();
 
 	const folder = useQuery({
 		queryKey: ['folder', folderId],
@@ -242,36 +243,7 @@ export function ChatPage() {
 	}, [folder.isError, folder.error, navigate]);
 
 	// A saved chat brings its own models; a new one picks them (URL, folder, user, defaults).
-	const pickedFor = useRef<string | null>(null);
-	useEffect(() => {
-		if (!loaded) return;
-		if (id) {
-			// While switching chats `session.chat` is still the previous chat's
-			// record for a render or two; only take models from this route's own.
-			if (session.chat?.id !== id) return;
-			const saved = session.chat?.chat?.models as string[] | undefined;
-			if (saved && pickedFor.current !== id) {
-				pickedFor.current = id;
-				setSelectedModels(admin || (chatPerms.multiple_models ?? true) ? saved : saved.slice(0, 1));
-			}
-			return;
-		}
-		if (folderId && !folder.isFetched) return;
-		const key = `new:${folderId ?? ''}`;
-		if (pickedFor.current === key) return;
-		pickedFor.current = key;
-		setSelectedModels(
-			initialModels({
-				url: search.get('models') || search.get('model'),
-				folderModels: folder.data?.data?.model_ids,
-				userModels: (settings as { models?: string[] } | null)?.models,
-				defaults: (config as { default_models?: string } | null)?.default_models,
-				models
-			})
-		);
-		// Only when the chat or the model list changes.
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [loaded, id, folderId, folder.isFetched, session.chat]);
+	const modelsChosen = useModelPick(session.chat, folder, setSelectedModels);
 
 	// `?temporary-chat=true` (also the New Temporary Chat shortcut) switches a new chat to temporary.
 	useEffect(() => {
@@ -514,7 +486,7 @@ export function ChatPage() {
 					onSubmit={(text, files) => requestSend(text, files, true)}
 					wide={prefs.widescreen}
 					// Until the chat on screen has loaded, a message would be built on the previous one (docs/history/code-review.md L11).
-					disabled={session.loading}
+					disabled={session.loading || !modelsChosen}
 					onPasteText={prefs.largeTextAsFile ? (file) => attachments.addFiles([file], { context: 'full' }) : undefined}
 				/>
 				<ConfirmDialog
