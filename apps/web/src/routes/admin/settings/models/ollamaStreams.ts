@@ -1,3 +1,4 @@
+import { errorBody, errorMessage, isAbort } from '@/lib/apis/errors';
 import { splitStream } from '@/lib/utils/api-helpers';
 
 type Rec = Record<string, any>;
@@ -42,3 +43,78 @@ export const uploadedModelfile = (digest: string, content: string) => `FROM @${d
 
 /** The stock Modelfile shown for an uploaded GGUF. */
 export const DEFAULT_MODELFILE = `TEMPLATE """{{ .System }}\nUSER: {{ .Prompt }}\nASSISTANT: """\nPARAMETER num_ctx 4096\nPARAMETER stop "</s>"\nPARAMETER stop "USER:"\nPARAMETER stop "ASSISTANT:"`;
+
+export type UpdateOutcome = { failed: { id: string; error: string }[]; cancelled: boolean };
+
+export type UpdateSteps = {
+	pull: (id: string) => Promise<[Response | null, AbortController | null]>;
+	isCancelled: () => boolean;
+	/** The model about to be pulled, then (with its controller, once there is one) the pull in flight. */
+	onModel: (id: string) => void;
+	onController: (id: string, controller: AbortController | null) => void;
+	onProgress: (percent: number) => void;
+	onDone: (id: string) => void;
+};
+
+/**
+ * "Update All Models": pulls each model in turn, and says which pulls failed.
+ * A failure used to go to the console only, and the result was always
+ * "All models are up to date", even when every pull failed (#246).
+ * A cancelled pull is not a failure.
+ */
+export async function updateModels(ids: string[], steps: UpdateSteps): Promise<UpdateOutcome> {
+	const failed: UpdateOutcome['failed'] = [];
+	const fail = (id: string, error: unknown) => {
+		if (!isAbort(error)) failed.push({ id, error: errorMessage(error) });
+	};
+	for (const id of ids) {
+		if (steps.isCancelled()) break;
+		steps.onModel(id);
+		let pulled: [Response | null, AbortController | null] = [null, null];
+		try {
+			pulled = await steps.pull(id);
+		} catch (error) {
+			fail(id, error);
+		}
+		const [res, controller] = pulled;
+		steps.onController(id, controller);
+		try {
+			if (res && !res.ok) {
+				// A refusal: its body says why (FastAPI's detail, Ollama's error, or
+				// a proxy's page), and is not a stream of progress.
+				fail(id, await errorBody(res));
+			} else if (res?.body) {
+				const reader = lineReader(res);
+				for (;;) {
+					const { value, done } = await reader.read();
+					if (done) break;
+					for (const data of parseStreamLines(value)) {
+						const failure = streamError(data);
+						if (failure) throw new Error(failure);
+						if (data.status && data.digest) steps.onProgress(progressPercent(data));
+					}
+				}
+			}
+		} catch (error) {
+			fail(id, error);
+		}
+		steps.onDone(id);
+	}
+	return { failed, cancelled: steps.isCancelled() };
+}
+
+/** The models that failed, grouped by why: one Ollama outage is one reason, not one per model. */
+const failureList = (failed: UpdateOutcome['failed']): string => {
+	const byError = new Map<string, string[]>();
+	for (const { id, error } of failed) byError.set(error, [...(byError.get(error) ?? []), id]);
+	const reasons = [...byError].map(([error, ids]) => `${ids.join(', ')} (${error})`).join('; ');
+	return `Could not update ${failed.length} model${failed.length === 1 ? '' : 's'}: ${reasons}`;
+};
+
+/** The toast an update ends with: the failures (even after a cancel), cancelled, or all up to date. */
+export const updateSummary = ({ failed, cancelled }: UpdateOutcome): ['info' | 'error' | 'success', string] => {
+	if (failed.length > 0)
+		return ['error', cancelled ? `Model update cancelled. ${failureList(failed)}` : failureList(failed)];
+	if (cancelled) return ['info', 'Model update cancelled'];
+	return ['success', 'All models are up to date'];
+};
