@@ -541,15 +541,15 @@ class PromptsTable:
                 if not history_entry or history_entry.prompt_id != prompt_id:
                     return None
 
-                # Restore prompt content from the snapshot
+                # Restore the versioned content from the snapshot. Name, command, tags
+                # and access grants are the prompt's identity, edited at once and
+                # outside the history (#221), so switching versions keeps them:
+                # restoring an old name and tags undid every later rename (#222).
                 snapshot = history_entry.snapshot
                 if snapshot:
-                    prompt.name = snapshot.get('name', prompt.name)
                     prompt.content = snapshot.get('content', prompt.content)
                     prompt.data = snapshot.get('data', prompt.data)
                     prompt.meta = snapshot.get('meta', prompt.meta)
-                    prompt.tags = snapshot.get('tags', prompt.tags)
-                    # Note: command and access_grants are not restored from snapshot
 
                 prompt.version_id = version_id
                 prompt.updated_at = int(time.time())
