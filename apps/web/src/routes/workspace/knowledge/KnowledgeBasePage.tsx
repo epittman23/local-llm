@@ -154,7 +154,9 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 	// --- what the file list shows -------------------------------------------
 	const [query, setQuery] = useState('');
 	const debouncedQuery = useDebouncedValue(query, 300);
-	const [viewOption, setViewOption] = useState<string>(() => localStorage.workspaceViewOption || '');
+	// Unfiltered at first, as in the Svelte page: `workspaceViewOption` is the
+	// workspace lists' setting, and read here it hid a shared base's files (#230).
+	const [viewOption, setViewOption] = useState<string>('');
 	const [sortKey, setSortKey] = useState('');
 	const [direction, setDirection] = useState('');
 	const [includeContent, setIncludeContent] = useState(false);
