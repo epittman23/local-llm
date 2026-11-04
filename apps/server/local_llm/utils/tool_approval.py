@@ -1,3 +1,6 @@
+import asyncio
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any, Literal
 
 from fastapi import HTTPException, status
@@ -17,12 +20,47 @@ class ResolveToolCallForm(BaseModel):
     timed_out: bool = False
 
 
+# One lock per message being resolved, with the number of requests holding or
+# awaiting it, so the entry goes once the last one is done.
+_resolving: dict[tuple[str, str], tuple[asyncio.Lock, list[int]]] = {}
+
+
+@asynccontextmanager
+async def _resolving_message(chat_id: str, message_id: str) -> AsyncIterator[None]:
+    """Resolve one message's tool calls one request at a time (in this process).
+
+    Without it, two resolves could both read the call as unresolved before
+    either saved, and both resume the reply (#174).
+    """
+    key = (chat_id, message_id)
+    lock, users = _resolving.setdefault(key, (asyncio.Lock(), [0]))
+    users[0] += 1
+    try:
+        async with lock:
+            yield
+    finally:
+        users[0] -= 1
+        if not users[0]:
+            del _resolving[key]
+
+
 async def resolve_tool_call_output(
     chat_id: str,
     message_id: str,
     form_data: ResolveToolCallForm,
     user,
     db: AsyncSession | None = None,
+) -> dict:
+    async with _resolving_message(chat_id, message_id):
+        return await _resolve_tool_call_output(chat_id, message_id, form_data, user, db)
+
+
+async def _resolve_tool_call_output(
+    chat_id: str,
+    message_id: str,
+    form_data: ResolveToolCallForm,
+    user,
+    db: AsyncSession | None,
 ) -> dict:
     chat = await Chats.get_chat_by_id(chat_id, db=db)
     if not chat or (chat.user_id != user.id and user.role != 'admin'):
@@ -52,10 +90,31 @@ async def resolve_tool_call_output(
     function_call.setdefault('call_id', form_data.call_id)
     tool_name = function_call.get('name')
 
-    if any(
-        item.get('type') == 'function_call_output' and item.get('call_id') == form_data.call_id for item in output
-    ) or function_call.get('status') not in {'pending', 'queued', 'requires_approval'}:
+    # An approved call stays `queued` until the resumed reply runs it, so
+    # `approved` marks it resolved too; resolving it again would resume the
+    # reply a second time and run the tool twice (#174).
+    if (
+        any(item.get('type') == 'function_call_output' and item.get('call_id') == form_data.call_id for item in output)
+        or function_call.get('status') not in {'pending', 'queued', 'requires_approval'}
+        or function_call.get('approved') is True
+    ):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Tool call has already been resolved.')
+
+    # A resolve resumes the reply, and a resume runs every approved call that
+    # has no output yet; while one is waiting to run or running, a second
+    # resume would run it again, so nothing else is resolved until it has.
+    result_call_ids = {
+        item.get('call_id') for item in output if item.get('type') == 'function_call_output' and item.get('call_id')
+    }
+    if any(
+        item.get('type') == 'function_call'
+        and item.get('approved') is True
+        and (item.get('call_id') or item.get('id')) not in result_call_ids
+        for item in output
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail='An approved tool call has not finished running yet.'
+        )
 
     if form_data.action == 'approve':
         if tool_name == 'ask_user':

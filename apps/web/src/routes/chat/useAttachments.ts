@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { uploadFile } from '@/lib/apis/files';
 import { processUrl } from '@/lib/apis/retrieval';
-import { allCapable, canUploadFiles, canUploadWeb, imageTargetSize } from '@/lib/chat/attachments';
+import { allCapable, anyCapable, canUploadFiles, canUploadWeb, imageTargetSize } from '@/lib/chat/attachments';
 import type { ChatFile } from '@/lib/chat/history';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -86,6 +86,14 @@ export function useAttachments({
 			}
 			if (file.size === 0) {
 				toast.error('You cannot upload an empty file.');
+				return;
+			}
+			// HEIC/HEIF: most browsers cannot decode it, so it cannot be shown or
+			// scaled, and uploaded raw it fails at the provider. The Svelte app
+			// converted it to JPEG with a dependency this port does not carry, so it
+			// is refused (#220). The name counts only when the browser gave no type.
+			if (/^image\/hei[cf]$/i.test(file.type) || (!file.type && /\.hei[cf]$/i.test(file.name))) {
+				toast.error('HEIC images are not supported. Convert the image to JPEG or PNG first.');
 				return;
 			}
 			const itemId = uuid();
@@ -199,9 +207,17 @@ export function useAttachments({
 				toast.error(`You can only chat with a maximum of ${maxCount} file(s) at a time.`);
 				return;
 			}
-			if (list.some((f) => f.type.startsWith('image/')) && !allCapable(selectedModels, models, 'vision'))
+			const images = list.some((f) => f.type.startsWith('image/'));
+			let accepted = list;
+			// No selected model can read an image: refuse it, as the Svelte app did,
+			// rather than upload one the provider rejects at send (#219). Some can:
+			// keep it, with a warning.
+			if (images && !anyCapable(selectedModels, models, 'vision')) {
+				toast.error('Selected model(s) do not support image inputs');
+				accepted = list.filter((f) => !f.type.startsWith('image/'));
+			} else if (images && !allCapable(selectedModels, models, 'vision'))
 				toast.warning('Model(s) are not vision capable');
-			for (const f of list) void uploadOne(f, opts);
+			for (const f of accepted) void uploadOne(f, opts);
 		},
 		[user, selectedModels, models, config, uploadOne]
 	);
@@ -212,12 +228,24 @@ export function useAttachments({
 				toast.error('You do not have permission to upload web content.');
 				return;
 			}
-			for (const url of urls) {
-				const itemId = uuid();
-				setFiles((fs) => [
-					...fs,
-					{ itemId, type: 'text', name: url, collection_name: '', status: 'uploading', context: 'full', url, error: '' }
-				]);
+			// Every page is listed before the first is fetched, so a clear (another
+			// chat opened) meanwhile removes them all: one added later would land in
+			// the next chat's list (#217). Each is then only patched or dropped.
+			const items = urls.map((url) => ({ url, itemId: uuid() }));
+			setFiles((fs) => [
+				...fs,
+				...items.map(({ url, itemId }) => ({
+					itemId,
+					type: 'text',
+					name: url,
+					collection_name: '',
+					status: 'uploading' as const,
+					context: 'full' as const,
+					url,
+					error: ''
+				}))
+			]);
+			for (const { url, itemId } of items) {
 				try {
 					const res = await processUrl(token, url);
 					if (!res) throw new Error('Failed to process the page.');
