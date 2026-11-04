@@ -4,9 +4,9 @@
 limits honoured it. `max_iterations = -1` reached the tool-call loop as
 `iterations < -1`, which is never true, so a sub-agent could not make a
 single tool call; and `max_output = -1` made `len(summary) > -1` true for
-every summary, which was cut to nothing. -1 now becomes None for both,
-which the tool-call loop and the truncation read as no limit. Any other
-value below 1 is 1.
+every summary: its last character was dropped and the truncation marker
+appended. -1 now becomes None for both, which the tool-call loop and the
+truncation read as no limit. Any other value below 1 is 1.
 
 Run from apps/server:
 

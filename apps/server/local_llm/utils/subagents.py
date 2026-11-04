@@ -281,7 +281,8 @@ def _subagent_limits(config: dict) -> tuple[int, int, int | None, int | None]:
     checks test for it); the iteration and output limits become None, which is
     what the tool-call loop and the summary truncation read as no limit. -1
     used to stop a sub-agent before its first tool call, and truncate every
-    summary to nothing (#193). Any other value below 1 is 1.
+    summary: its last character was dropped and the marker appended (#193).
+    Any other value below 1 is 1.
     """
     max_concurrent = int(config.get('subagents.max_concurrent') or 20)
     max_async = int(config.get('subagents.max_async') or 20)
