@@ -144,6 +144,8 @@ class ERROR_MESSAGES(StrEnum):
     def FILE_TOO_LARGE(size=''):
         return f"Oops! The file you're trying to upload is too large. Please upload a file that is less than {size}."
 
+    # The folder sync recognises this refusal by "duplicate content" in it
+    # (isDuplicateContent, apps/web/.../knowledge/knowledgeFiles.ts): keep those words.
     DUPLICATE_CONTENT = 'Duplicate content detected. Please provide unique content to proceed.'
     FILE_NOT_PROCESSED = (
         'Extracted content is not available for this file. Please ensure that the file is processed before proceeding.'

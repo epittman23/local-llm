@@ -45,9 +45,10 @@ const failureReason = (error: unknown): string => {
  * Everything KnowledgeBase.svelte does to get content *into* a knowledge base:
  * single files, webpages, whole directories (picked or dropped), and the
  * incremental "sync directory" (hash locally -> ask the server what changed ->
- * remove deleted files -> make missing folders -> upload only what's new or
- * modified, each modified file's old copy removed once its new one is in). `uploading` is the list of in-flight single uploads, shown above
- * the server's own list; `syncing` is the status line for directory work.
+ * remove deleted files -> make missing folders -> upload what's new or
+ * modified, in the order `syncUploads` gives). `uploading` is the list of
+ * in-flight single uploads, shown above the server's own list; `syncing` is
+ * the status line for directory work.
  *
  * `refresh` reloads the file list (from page 1, as the Svelte page's init()
  * did); it is called after each successful upload and sync.
