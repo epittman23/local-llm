@@ -1713,3 +1713,20 @@ def test_a_reply_keeps_usage_and_timings_from_different_chunks(monkeypatch):
     usage = _final_usage(observed)
     assert (usage['input_tokens'], usage['output_tokens'], usage['total_tokens']) == (10, 2, 12)
     assert (usage['cost'], usage['predicted_ms']) == (0.002, 40.0)
+
+
+def test_tool_arguments_that_are_not_an_object_get_a_parse_error(monkeypatch):
+    """#166: `[]` as a tool call's arguments raised AttributeError and ended the reply."""
+    observed = _run(
+        [tool_call_stream('lookup', '[]'), [chunk('Sorry, retrying.'), DONE]],
+        {'chat_id': SAVED_CHAT, 'tools': [tool('lookup', result={'hits': 1})]},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    final = [s for s in _saved(observed) if s.get('done') is True][-1]
+    assert 'error' not in final
+    assert 'Sorry, retrying.' in json.dumps(final)
+    assert 'Tool call arguments could not be parsed' in json.dumps(observed['calls'])
