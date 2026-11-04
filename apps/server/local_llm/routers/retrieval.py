@@ -527,6 +527,15 @@ def free_replaced_embedding_model() -> None:
 
 @router.post('/embedding/update')
 async def update_embedding_config(request: Request, form_data: EmbeddingModelUpdateForm, user=Depends(get_admin_user)):
+    # Checked before anything changes: a batch size below 1 (or none) fails
+    # every embedding once saved, 0 with an error and a negative one by
+    # returning no vectors (#353).
+    batch_size = form_data.RAG_EMBEDDING_BATCH_SIZE
+    if batch_size is None or batch_size < 1:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f'Embedding Batch Size must be at least 1 (got {batch_size}).',
+        )
     config = await get_retrieval_config()
     log.info('Updating embedding model: %s to %s', config.RAG_EMBEDDING_MODEL, form_data.RAG_EMBEDDING_MODEL)
     # The new model is loaded before the old one is let go, and nothing is saved
