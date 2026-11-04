@@ -270,10 +270,15 @@ export function InterfaceSettings({
 							placeholder="Aptos"
 							value={fontInput ?? fontFamily ?? ''}
 							onChange={(e) => {
+								const font = normalizeAppFontFamily(e.target.value) || null;
 								setFontInput(e.target.value);
-								applyFont(normalizeAppFontFamily(e.target.value) || null);
+								applyFont(font);
+								// Committed as it is typed, not on blur: Enter saves the form
+								// before any blur, and saved the font as it was (#261). Kept
+								// open, so clearing the box mid-edit does not hide it.
+								setFontOpen(true);
+								set('fontFamily', font);
 							}}
-							onBlur={(e) => set('fontFamily', normalizeAppFontFamily(e.target.value) || null)}
 						/>
 					)}
 				</div>

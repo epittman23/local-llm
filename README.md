@@ -197,8 +197,8 @@ Anything marked *admin* also needs `role === 'admin'`.
 | `/benchmarks/answers` | Answers |
 | `/benchmarks/report` | Reports |
 | `/benchmarks/tune` | Tuning |
-| `/notes` | Notes list. Needs the backend's `features.enable_notes` (and not a denied `notes` permission); otherwise you're sent to `/` |
-| `/notes/new` | Creates a note (optionally from `?title=&content=`) and opens it |
+| `/notes` | Notes list. Needs the backend's `features.enable_notes` (and not a denied `notes` permission); otherwise you're sent to `/`. With `?title=&content=`, creates that note and opens it, as `/notes/new` does; if the create fails, says so and shows the list |
+| `/notes/new` | Creates a note (optionally from `?title=&content=`) and opens it; if the create fails, says so and shows the list |
 | `/notes/<id>` | Note editor (TipTap, autosave) |
 | `/calendar` | Month/week/day views. Needs `features.enable_calendar` and, for a non-admin, the `calendar` permission |
 | `/automations` | List. Needs `features.enable_automations` and, for a non-admin, the `automations` permission |
