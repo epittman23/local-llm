@@ -8,10 +8,13 @@ import {
 	folderOptions,
 	folderPath,
 	formatSchedule,
+	importAutomationForms,
+	importMessage,
 	localDate,
 	parseAutomationImport,
 	parseRrule,
 	runTarget,
+	timeFromInput,
 	withFrequency,
 	withoutMissingDestinations
 } from './automationModel';
@@ -210,6 +213,30 @@ describe('form', () => {
 		const toChannel = automationPayload({ ...ready, targetType: 'channel', channelId: 'c1' }, now);
 		expect('form' in toChannel && toChannel.form.folder_id).toBeNull();
 	});
+	it('refuses a one-time run with a cleared date or time, instead of running it at midnight (#322)', () => {
+		const ready = { ...automationFields(null, { now }), name: 'N', prompt: 'P', modelId: 'm' };
+		const once = (onceDate: string, onceTime: string) =>
+			automationPayload({ ...ready, schedule: { ...ready.schedule, frequency: 'ONCE', onceDate, onceTime } }, now);
+		const refusal = { error: 'Pick a date and time for the one-time run' };
+
+		expect(once('2026-12-01', '')).toEqual(refusal);
+		expect(once('', '10:30')).toEqual(refusal);
+		expect(once('', '')).toEqual(refusal);
+		const whole = once('2026-12-01', '10:30');
+		expect('form' in whole && whole.form.data.rrule).toBe('DTSTART:20261201T103000\nRRULE:FREQ=DAILY;COUNT=1');
+	});
+});
+
+describe('timeFromInput (#322)', () => {
+	it('reads a whole time', () => {
+		expect(timeFromInput('09:05')).toEqual({ hour: 9, minute: 5 });
+		expect(timeFromInput('23:59:30')).toEqual({ hour: 23, minute: 59 });
+	});
+	it('is null while the box is cleared or incomplete, so the schedule keeps its time', () => {
+		expect(timeFromInput('')).toBeNull();
+		expect(timeFromInput('9')).toBeNull();
+		expect(timeFromInput('--:--')).toBeNull();
+	});
 });
 
 describe('import', () => {
@@ -241,5 +268,93 @@ describe('import', () => {
 	});
 	it('refuses a file that is not a list', () => {
 		expect(() => parseAutomationImport('{"x":1}', new Set())).toThrow('Invalid JSON format');
+	});
+});
+
+describe('importing each automation on its own (#323)', () => {
+	const now = new Date(2026, 9, 1, 12);
+	const form = (name: string, rrule = 'RRULE:FREQ=DAILY;BYHOUR=9;BYMINUTE=0') => ({
+		name,
+		folder_id: null,
+		data: { prompt: 'p', model_id: 'm', rrule, target: { type: 'chat' as const } },
+		is_active: true
+	});
+
+	it('keeps going past a refused one, and says which could not be created', async () => {
+		const created: string[] = [];
+		const outcome = await importAutomationForms(
+			[form('A'), form('B'), form('C')],
+			1,
+			async (f) => {
+				if (f.name === 'B') throw 'Invalid schedule';
+				created.push(f.name);
+			},
+			now
+		);
+
+		expect(created).toEqual(['A', 'C']);
+		expect(outcome).toEqual({ imported: 2, skipped: 1, passed: 0, failed: [{ name: 'B', error: 'Invalid schedule' }] });
+		expect(importMessage(outcome)).toEqual({
+			ok: false,
+			message: 'Imported 2 automations; skipped 1 incomplete; 1 could not be created: B (Invalid schedule)'
+		});
+	});
+
+	it('skips a one-time automation whose time has passed, and imports one still to come', async () => {
+		const created: string[] = [];
+		const outcome = await importAutomationForms(
+			[
+				form('Ran', 'DTSTART:20260901T090000\nRRULE:FREQ=DAILY;COUNT=1'),
+				form('Soon', 'DTSTART:20261201T090000\nRRULE:FREQ=DAILY;COUNT=1')
+			],
+			0,
+			async (f) => {
+				created.push(f.name);
+			},
+			now
+		);
+
+		expect(created).toEqual(['Soon']);
+		expect(importMessage(outcome)).toEqual({
+			ok: true,
+			message: 'Imported 1 automation; skipped 1 one-time automation whose time has passed'
+		});
+	});
+
+	it('leaves a one-count rule of another shape to the server, which may still run it', async () => {
+		const created: string[] = [];
+		await importAutomationForms(
+			[form('Friday', 'DTSTART:20260901T090000\nRRULE:FREQ=WEEKLY;BYDAY=FR;COUNT=1')],
+			0,
+			async (f) => {
+				created.push(f.name);
+			},
+			now
+		);
+
+		expect(created).toEqual(['Friday']);
+	});
+
+	it('names the first three failures and counts the rest, and reads an error object', async () => {
+		const outcome = await importAutomationForms(
+			['A', 'B', 'C', 'D', 'E'].map((n) => form(n)),
+			0,
+			async () => {
+				throw { detail: 'Automation limit reached (10)' };
+			},
+			now
+		);
+
+		expect(importMessage(outcome).message).toBe(
+			'Imported 0 automations; 5 could not be created: A (Automation limit reached (10)); ' +
+				'B (Automation limit reached (10)); C (Automation limit reached (10)); and 2 more'
+		);
+	});
+
+	it('reports a clean import plainly', () => {
+		expect(importMessage({ imported: 3, skipped: 0, passed: 0, failed: [] })).toEqual({
+			ok: true,
+			message: 'Imported 3 automations'
+		});
 	});
 });

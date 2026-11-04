@@ -53,6 +53,7 @@ import {
 	defaultsMetadata,
 	defaultsSnapshot,
 	filterModels,
+	importResultMessage,
 	isPresetModel,
 	mergeModels,
 	modelsConfigBody,
@@ -377,8 +378,10 @@ export default function AdminModels() {
 	const importFile = async (file: File) => {
 		setImporting(true);
 		try {
-			if (await importModelFile(token, await file.text())) {
-				toast.success('Models imported successfully');
+			const result = await importModelFile(token, await file.text());
+			if (result) {
+				const message = importResultMessage(result);
+				toast[message.kind](message.text);
 				await refreshApp();
 				await init();
 			} else {

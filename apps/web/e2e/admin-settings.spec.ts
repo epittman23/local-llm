@@ -2411,7 +2411,8 @@ test.describe('settings: Models', () => {
 					: json(route, { id: url.searchParams.get('id') });
 			if (path === '/models/model/access/update')
 				return json(route, { id: body.id, access_grants: body.access_grants });
-			if (path === '/models/import') return json(route, true);
+			if (path === '/models/import')
+				return json(route, { imported: (body?.models ?? []).map((m: { id: string }) => m.id), skipped: [] });
 			if (path === '/models/delete/all') return json(route, true);
 			if (path === '/models/model' && req.method() === 'GET')
 				return json(route, { ...served.find((m) => m.id === url.searchParams.get('id')), full: true });
@@ -2693,7 +2694,7 @@ test.describe('settings: Models', () => {
 			mimeType: 'application/json',
 			buffer: Buffer.from(JSON.stringify([{ id: 'x', name: 'X', access_grants: [pub] }]))
 		});
-		await expect(page.getByText('Models imported successfully')).toBeVisible();
+		await expect(page.getByText('Imported 1 model')).toBeVisible();
 		// Left out, not empty: for a model that exists, the server keeps what is
 		// left out, and an empty list would wipe its sharing (#524).
 		expect(posts(calls, '/models/import')[0]).toEqual({

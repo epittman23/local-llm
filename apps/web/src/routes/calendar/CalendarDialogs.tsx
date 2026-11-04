@@ -15,21 +15,12 @@ import {
 } from '@/lib/apis/calendar';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
-import { type EventFields, SCHEDULED_TASKS_ID, eventFields, eventPayload } from './calendarModel';
+import { type EventFields, SCHEDULED_TASKS_ID, eventFields, eventPayload, reminderOptions } from './calendarModel';
 
 const bare = 'w-full bg-transparent text-sm outline-hidden placeholder:text-muted-foreground/50';
 const label = 'text-muted-foreground mb-1 text-xs';
 const select = 'w-full cursor-pointer bg-transparent text-sm outline-hidden [&>option]:bg-popover';
 
-const REMINDERS: [number, string][] = [
-	[-1, 'None'],
-	[0, 'At time of event'],
-	[5, '5 minutes before'],
-	[10, '10 minutes before'],
-	[15, '15 minutes before'],
-	[30, '30 minutes before'],
-	[60, '1 hour before']
-];
 const REPEATS: [string, string][] = [
 	['', 'No Repeat'],
 	['daily', 'Daily'],
@@ -240,7 +231,7 @@ export function EventDialog({
 									value={f.alertMinutes}
 									onChange={(e) => set({ alertMinutes: Number(e.target.value) })}
 								>
-									{REMINDERS.map(([v, l]) => (
+									{reminderOptions(f.alertMinutes, Math.max(event?.meta?.alert_minutes ?? 10, -1)).map(([v, l]) => (
 										<option key={v} value={v}>
 											{l}
 										</option>
