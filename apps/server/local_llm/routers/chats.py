@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import re
 from uuid import uuid4
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response, status
@@ -257,13 +256,17 @@ def chat_search_snippet(chat: dict, search_text: str, max_length: int = 200) -> 
             if not isinstance(content, str):
                 continue
 
-            # Found in the text itself, case-insensitively: an index in
-            # content.lower() is off wherever lowering lengthens a character
-            # (U+0130 becomes two), and the window missed the match (#339).
-            match = re.search(re.escape(needle), content, re.IGNORECASE)
-            if match is None:
+            lowered = content.lower()
+            index = lowered.find(needle)
+            if index == -1:
                 continue
-            index, match_end = match.start(), match.end()
+            match_end = index + len(needle)
+            if len(lowered) != len(content):
+                # Lowering lengthened a character (U+0130 becomes two), so an
+                # index in the lowered text is off in the original, and the
+                # window missed the match (#339): map it back.
+                origin = [position for position, char in enumerate(content) for _ in char.lower()]
+                index, match_end = origin[index], origin[match_end - 1] + 1
 
             start = max(index - max_length // 2, 0)
             end = min(start + max_length, len(content))

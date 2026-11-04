@@ -10,6 +10,7 @@ Run from apps/server:
     python -m pytest tests/test_chat_search_snippet.py
 """
 
+from local_llm.models.chats import chat_search_content_query
 from local_llm.routers.chats import chat_search_snippet
 
 
@@ -40,3 +41,18 @@ def test_a_search_term_is_looked_for_when_the_whole_text_matches_nowhere():
 
 def test_no_match_gives_no_snippet():
     assert chat_search_snippet(_chat('nothing here'), 'needle') is None
+
+
+def test_a_search_with_a_dotted_capital_i_shows_its_own_match():
+    content = 'x' * 50 + ' İzmir ' + 'y' * 400
+
+    snippet = chat_search_snippet(_chat('intro message about it', content), chat_search_content_query('İzmir'))
+
+    assert snippet is not None and 'İzmir' in snippet
+
+
+def test_a_match_longer_than_half_the_window_is_shown_whole():
+    needle = 'n' * 150
+    snippet = chat_search_snippet(_chat('a' * 100 + needle + 'b' * 100), needle)
+
+    assert snippet is not None and needle in snippet
