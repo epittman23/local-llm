@@ -54,11 +54,17 @@ def world():
             )
             assert feedback is not None
             ids.append(feedback.id)
-        # Equal timestamps for all four, so only the tiebreaker orders them.
+        # Equal timestamps for all four, so only the tiebreaker orders them; and
+        # ids that sort against the insertion order, so an unordered query
+        # (which SQLite returns in insertion order) cannot pass by chance.
+        fixed = [f'fb-{tag}-{letter}' for letter in 'dcba']
         async with get_async_db_context() as db:
-            await db.execute(update(Feedback).filter(Feedback.id.in_(ids)).values(created_at=100, updated_at=100))
+            for old_id, new_id in zip(ids, fixed, strict=True):
+                await db.execute(
+                    update(Feedback).filter(Feedback.id == old_id).values(id=new_id, created_at=100, updated_at=100)
+                )
             await db.commit()
-        return model_id, users, ids
+        return model_id, users, fixed
 
     return _run(build())
 
@@ -92,3 +98,19 @@ def test_ascending_ties_are_ordered_by_id_ascending(world):
     model_id, _, ids = world
 
     assert [i for _, i in _page(model_id, order_by='updated_at', direction='asc')] == sorted(ids)
+
+
+def test_every_sort_key_the_admin_table_sends_is_known():
+    # #205 was a key mismatch between the two sides; read the table's keys
+    # from its source so a rename on either side fails here.
+    import re
+    from pathlib import Path
+
+    from local_llm.models.feedbacks import _FEEDBACK_ORDER_COLUMNS
+
+    source = (Path(__file__).parents[3] / 'apps/web/src/routes/admin/evaluations/Feedbacks.tsx').read_text()
+    columns = source[source.index('const COLUMNS') : source.index('];', source.index('const COLUMNS'))]
+    keys = re.findall(r"key: '([^']+)'", columns)
+
+    assert keys == ['user', 'model_id', 'rating', 'updated_at']
+    assert set(keys) <= set(_FEEDBACK_ORDER_COLUMNS)

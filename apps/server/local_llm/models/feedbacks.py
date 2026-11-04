@@ -148,14 +148,14 @@ class ModelHistoryResponse(BaseModel):
     history: list[ModelHistoryEntry]
 
 
-# The columns the feedback list can be ordered by, as callables so each query
-# builds its own expression.
+# The columns the feedback list can be ordered by. The admin table's User
+# column sends 'user'; 'username' is kept for other callers.
 _FEEDBACK_ORDER_COLUMNS = {
-    'username': lambda: User.name,
-    'user': lambda: User.name,
-    'model_id': lambda: Feedback.data['model_id'].as_string(),
-    'rating': lambda: Feedback.data['rating'].as_string(),
-    'updated_at': lambda: Feedback.updated_at,
+    'username': User.name,
+    'user': User.name,
+    'model_id': Feedback.data['model_id'].as_string(),
+    'rating': Feedback.data['rating'].as_string(),
+    'updated_at': Feedback.updated_at,
 }
 
 
@@ -256,9 +256,9 @@ class FeedbackTable:
             if column is None:
                 stmt = stmt.order_by(Feedback.created_at.desc(), Feedback.id.desc())
             elif filter.get('direction') == 'asc':
-                stmt = stmt.order_by(column().asc(), Feedback.id.asc())
+                stmt = stmt.order_by(column.asc(), Feedback.id.asc())
             else:
-                stmt = stmt.order_by(column().desc(), Feedback.id.desc())
+                stmt = stmt.order_by(column.desc(), Feedback.id.desc())
 
             # Count before pagination without wrapping the ordered item query.
             count_result = await db.execute(count_stmt)
