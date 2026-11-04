@@ -230,6 +230,19 @@ describe('clearing a field of an existing event (#158)', () => {
 		const biweekly = ev(at(2026, 8, 1, 9), at(2026, 8, 1, 10), { rrule: 'FREQ=WEEKLY;INTERVAL=2' });
 		const out = eventPayload({ ...eventFields(biweekly, '', null), repeat: '' }, biweekly);
 		expect('form' in out && out.form.rrule).toBeNull();
+		// From one of its occurrences too: it becomes one event at that occurrence.
+		const occurrence = {
+			...biweekly,
+			start_at: ns(at(2026, 8, 15, 9)),
+			end_at: ns(at(2026, 8, 15, 10)),
+			instance_id: 'x'
+		};
+		const single = eventPayload(
+			{ ...eventFields(occurrence, '', null), repeat: '' },
+			occurrence,
+			ns(at(2026, 8, 1, 9))
+		);
+		expect('form' in single && single.form).toMatchObject({ rrule: null, start_at: ns(at(2026, 8, 15, 9)) });
 	});
 	it('clearing Repeat on an occurrence makes it one event at that occurrence', () => {
 		const daily = ev(at(2026, 8, 20, 9), at(2026, 8, 20, 10), { rrule: 'FREQ=DAILY', instance_id: 'x' });
