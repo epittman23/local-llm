@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { updateKnowledgeById } from '@/lib/apis/knowledge';
+import { searchKnowledgeFilesById, updateKnowledgeById } from '@/lib/apis/knowledge';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { KnowledgeBasePage } from './KnowledgeBasePage';
 import { KB_FILE_MOVE } from './knowledgeFiles';
@@ -109,6 +109,22 @@ beforeEach(() => {
 afterEach(() => {
 	vi.useRealTimers();
 	vi.clearAllMocks();
+});
+
+describe('KnowledgeBasePage file filter (#230)', () => {
+	afterEach(() => {
+		delete localStorage.workspaceViewOption;
+	});
+
+	it("opens unfiltered, whatever the workspace lists' View setting is", async () => {
+		// Set on a list page; it filtered this page too, so a shared base looked empty.
+		localStorage.workspaceViewOption = 'created';
+		renderPage();
+
+		await screen.findByText('file1.txt');
+		expect(vi.mocked(searchKnowledgeFilesById).mock.calls[0][3]).toBe('');
+		expect((screen.getByLabelText('View') as HTMLSelectElement).value).toBe('');
+	});
 });
 
 describe('KnowledgeBasePage pagination after the list changes (#229)', () => {
