@@ -144,6 +144,8 @@ class ERROR_MESSAGES(StrEnum):
         return f"Oops! The file you're trying to upload is too large. Please upload a file that is less than {size}."
 
     DUPLICATE_CONTENT = 'Duplicate content detected. Please provide unique content to proceed.'
+    FILE_ALREADY_IN_KNOWLEDGE = 'This file is already in this knowledge base.'
+    FILE_NOT_ADDED_TO_KNOWLEDGE = 'The file could not be added to the knowledge base.'
     FILE_NOT_PROCESSED = (
         'Extracted content is not available for this file. Please ensure that the file is processed before proceeding.'
     )
