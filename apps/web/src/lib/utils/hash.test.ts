@@ -1,11 +1,13 @@
 import { createHash } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { computeFileHash, sha256Fallback, writeBitLength } from './hash';
+import { computeFileHash, paddedLength, sha256Fallback, writeBitLength } from './hash';
 
 // #258: the pure-JS SHA-256, used when crypto.subtle is missing (the app over
 // plain HTTP on a LAN), wrote only the low 32 bits of the message's length in
 // bits. From 2^32 bits (512 MiB) on, every digest was wrong, so a directory
-// sync saw a mismatch and re-uploaded the file every time.
+// sync saw a mismatch and re-uploaded the file every time. And the padded
+// length was worked out with 32-bit operators, which wrapped from just under
+// 2 GiB on, so the fallback threw a RangeError there.
 
 const nodeSha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 const bytesOf = (n: number) => Uint8Array.from({ length: n }, (_, i) => (i * 31 + 7) & 0xff);
@@ -44,6 +46,25 @@ describe('writeBitLength', () => {
 		expect(written(2 ** 29)).toEqual([...before, 0, 0, 0, 1, 0, 0, 0, 0]);
 		expect(written(2 ** 29 + 1)).toEqual([...before, 0, 0, 0, 1, 0, 0, 0, 8]);
 		expect(written(5 * 2 ** 30)).toEqual([...before, 0, 0, 0, 10, 0, 0, 0, 0]);
+	});
+});
+
+describe('paddedLength', () => {
+	it('rounds the message, the 0x80 byte and the 8-byte length up to whole 64-byte blocks', () => {
+		expect(paddedLength(0)).toBe(64);
+		expect(paddedLength(55)).toBe(64);
+		expect(paddedLength(56)).toBe(128);
+		expect(paddedLength(64)).toBe(128);
+		expect(paddedLength(119)).toBe(128);
+		expect(paddedLength(120)).toBe(192);
+	});
+
+	it('does not wrap at 2 GiB or 4 GiB, where 32-bit operators did', () => {
+		expect(paddedLength(2 ** 31 - 73)).toBe(2 ** 31 - 64);
+		expect(paddedLength(2 ** 31 - 72)).toBe(2 ** 31);
+		expect(paddedLength(2 ** 31)).toBe(2 ** 31 + 64);
+		expect(paddedLength(2 ** 32 - 8)).toBe(2 ** 32 + 64);
+		expect(paddedLength(5 * 2 ** 30)).toBe(5 * 2 ** 30 + 64);
 	});
 });
 
