@@ -2688,7 +2688,10 @@ async def _selected_tools(
     tools_dict = {}
     mcp_tools_dict = {}
     db_tool_ids = []
-    for tool_id in tool_ids:
+    # Once each, in order: a server listed twice connected twice, and the
+    # second client replaced the first in mcp_clients, so the first was never
+    # disconnected (#521).
+    for tool_id in dict.fromkeys(tool_ids):
         if tool_id.startswith('server:mcp:'):
             server_id = tool_id[len('server:mcp:') :]
             try:

@@ -144,3 +144,58 @@ def test_clients_reach_teardown_when_a_later_setup_step_fails(monkeypatch, tool_
     assert metadata['mcp_clients'] == {'docs': client}
     assert client.disconnects == 1
     assert not client.connected
+
+
+def test_a_server_listed_twice_connects_once(monkeypatch):
+    """`tool_ids` naming one MCP server twice must not connect it twice (#521).
+
+    The second client overwrote the first in mcp_clients, so the teardown
+    never disconnected the first one.
+    """
+    clients = []
+
+    async def connect(request, server_id, user, metadata, extra_params):
+        client = _FakeClient()
+        clients.append(client)
+        await client.connect('http://mcp.test')
+        return client, await client.list_tool_specs()
+
+    monkeypatch.setattr(middleware, 'connect_mcp_server', connect)
+    metadata = {'tool_ids': ['server:mcp:docs', 'server:mcp:docs']}
+    mcp_clients = {}
+
+    async def run():
+        try:
+            return await middleware._selected_tools(
+                None, {'messages': []}, SimpleNamespace(id='u1'), metadata, {}, {'m1': {}}, 'm1', None, mcp_clients
+            )
+        finally:
+            metadata['mcp_clients'] = mcp_clients
+            await main._disconnect_mcp_clients(metadata)
+
+    tools = asyncio.run(run())
+
+    assert len(clients) == 1
+    assert sorted(tools) == ['docs_fetch', 'docs_search']
+    assert not clients[0].connected
+
+
+def test_a_tool_listed_twice_is_loaded_once(monkeypatch):
+    """A database tool id given twice is asked for once (#521)."""
+    asked = []
+
+    async def get_tools(request, tool_ids, user, extra_params):
+        asked.append(list(tool_ids))
+        return {}
+
+    monkeypatch.setattr(middleware, 'get_tools', get_tools)
+    monkeypatch.setattr(middleware, 'ENABLE_PLUGINS', True)
+    metadata = {'tool_ids': ['calc', 'calc', 'web']}
+
+    asyncio.run(
+        middleware._selected_tools(
+            None, {'messages': []}, SimpleNamespace(id='u1'), metadata, {}, {'m1': {}}, 'm1', None, {}
+        )
+    )
+
+    assert asked == [['calc', 'web']]
