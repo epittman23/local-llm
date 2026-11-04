@@ -1148,12 +1148,6 @@ def convert_openapi_to_tool_payload(openapi_spec):
         if not isinstance(methods, dict):
             continue
 
-        # Path-level parameters apply to all operations under this path
-        # unless overridden at the operation level (matched by name + in).
-        path_level_params = methods.get('parameters', [])
-        if not isinstance(path_level_params, list):
-            path_level_params = []
-
         for method, operation in methods.items():
             if method not in OPENAPI_HTTP_METHODS:
                 continue
@@ -1169,21 +1163,11 @@ def convert_openapi_to_tool_payload(openapi_spec):
                     'parameters': {'type': 'object', 'properties': {}, 'required': []},
                 }
 
-                # Merge path-level and operation-level parameters.
-                # Operation-level params override path-level params with the
-                # same (name, in) pair per the OpenAPI spec.
-                op_params = operation.get('parameters', [])
-                if not isinstance(op_params, list):
-                    op_params = []
-                merged_params = {}
-                for param in path_level_params:
-                    if isinstance(param, dict) and param.get('name'):
-                        merged_params[(param['name'], param.get('in', ''))] = param
-                for param in op_params:
-                    if isinstance(param, dict) and param.get('name'):
-                        merged_params[(param['name'], param.get('in', ''))] = param
+                # Path-level and operation-level parameters, the operation's
+                # winning on the same (name, in) pair per the OpenAPI spec.
+                parameters = _operation_parameters(methods, operation)
 
-                for param in merged_params.values():
+                for param in parameters:
                     param_name = param.get('name')
                     if not param_name or _is_reserved_header(param):
                         continue
@@ -1209,22 +1193,20 @@ def convert_openapi_to_tool_payload(openapi_spec):
                     if param.get('required'):
                         tool['parameters']['required'].append(param_name)
 
-                # Extract and resolve requestBody if available
-                request_body = operation.get('requestBody')
-                if request_body:
-                    content = request_body.get('content', {})
-                    json_schema = content.get('application/json', {}).get('schema')
-                    if json_schema:
-                        resolved_schema = resolve_schema(json_schema, openapi_spec.get('components', {}))
-
-                        if resolved_schema.get('properties'):
-                            tool['parameters']['properties'].update(resolved_schema['properties'])
-                            if 'required' in resolved_schema:
-                                tool['parameters']['required'] = list(
-                                    set(tool['parameters']['required'] + resolved_schema['required'])
-                                )
-                        elif resolved_schema.get('type') == 'array':
-                            tool['parameters'] = resolved_schema  # special case for array
+                # The JSON request body's fields join the parameters; an array
+                # body is one property of its own (#191).
+                resolved_schema = _json_body_schema(operation, openapi_spec.get('components', {}))
+                if resolved_schema.get('properties'):
+                    tool['parameters']['properties'].update(resolved_schema['properties'])
+                    if 'required' in resolved_schema:
+                        tool['parameters']['required'] = list(
+                            set(tool['parameters']['required'] + resolved_schema['required'])
+                        )
+                elif _is_array_body(resolved_schema):
+                    body_property = _array_body_property(parameters)
+                    tool['parameters']['properties'][body_property] = resolved_schema
+                    if operation['requestBody'].get('required'):
+                        tool['parameters']['required'].append(body_property)
 
                 tool_payload.append(tool)
 
@@ -1826,15 +1808,40 @@ async def _tool_server_response_data(response):
         return f'data:{content_type};base64,{b64}'
 
 
-def _body_field_names(operation: dict, components: dict) -> set[str]:
-    """The property names of an operation's JSON request body, its $refs resolved; empty if it has none."""
+def _json_body_schema(operation: dict, components: dict) -> dict:
+    """An operation's JSON request body schema, its $refs resolved; empty if it has none."""
     schema = operation.get('requestBody')
     for key in ('content', 'application/json', 'schema'):
         schema = schema.get(key) if isinstance(schema, dict) else None
-    if not isinstance(schema, dict):
-        return set()
-    properties = resolve_schema(schema, components or {}).get('properties')
+    if not isinstance(schema, dict) or not schema:
+        return {}
+    return resolve_schema(schema, components or {})
+
+
+def _body_field_names(operation: dict, components: dict) -> set[str]:
+    """The property names of an operation's JSON request body, its $refs resolved; empty if it has none."""
+    properties = _json_body_schema(operation, components).get('properties')
     return set(properties) if isinstance(properties, dict) else set()
+
+
+def _is_array_body(schema: dict) -> bool:
+    """Whether a request body schema is a JSON array (one with properties is read as an object, as before)."""
+    return not schema.get('properties') and schema.get('type') == 'array'
+
+
+def _array_body_property(parameters: list[dict]) -> str:
+    """The tool argument an array request body is offered as (#191).
+
+    A tool's parameters must be an object, so the array is one property of it,
+    `body`, beside the operation's parameters; `request_body` (and so on) if a
+    parameter already has that name. The tool spec and the call both name it
+    from the operation's parameters, so they agree.
+    """
+    taken = {param.get('name') for param in parameters}
+    name = 'body'
+    while name in taken:
+        name = f'request_{name}'
+    return name
 
 
 async def execute_tool_server(
@@ -1860,18 +1867,28 @@ async def execute_tool_server(
         headers = _with_parameters(headers, routed.header, fold_case=True)
         cookies = _with_parameters(cookies, routed.cookie, fold_case=False)
 
-        body_params = {}
-        if operation.get('requestBody', {}).get('content'):
+        # The JSON body: an object of the body's fields, or an array body's list (None: send none).
+        body_params: dict | list | None = {}
+        components = openapi.get('components', {})
+        if _is_array_body(_json_body_schema(operation, components)):
+            # The array itself is the body, from its one argument (#191); omitted, no body.
+            body_property = _array_body_property(parameters)
+            body_params = params[body_property] if body_property in params else None
+        elif operation.get('requestBody', {}).get('content'):
             # The tool's arguments flatten the body's fields together with the operation's
             # parameters. A parameter goes in the path, query, header or cookie and not in
             # the body too, unless the body schema has a field of that name: then it goes
             # in both (#189), as for PUT /users/{id} whose body also requires id.
-            body_fields = _body_field_names(operation, openapi.get('components', {}))
+            body_fields = _body_field_names(operation, components)
             parameter_names = {param['name'] for param in parameters} - body_fields
             body_params = {key: value for key, value in params.items() if key not in parameter_names}
 
         # Methods that may carry a body always send one, empty when the operation takes none.
-        body = {'json': body_params} if http_method in ['post', 'put', 'patch', 'delete'] else {}
+        body = (
+            {'json': body_params}
+            if body_params is not None and http_method in ['post', 'put', 'patch', 'delete']
+            else {}
+        )
 
         async with aiohttp.ClientSession(
             trust_env=True, timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT_TOOL_SERVER)
