@@ -129,6 +129,9 @@ export function TunePage() {
 	const [streaming, setStreaming] = useState(false);
 	const [refreshing, setRefreshing] = useState(false);
 	const streamControllerRef = useRef<AbortController | null>(null);
+	// A Start or Resume that answers after the page is gone must not open a
+	// stream nothing would abort (#144).
+	const unmountedRef = useRef(false);
 
 	const stopStreaming = () => {
 		streamControllerRef.current?.abort();
@@ -137,17 +140,25 @@ export function TunePage() {
 	};
 
 	const startStreaming = async (sweepId: string | null) => {
+		if (unmountedRef.current) return;
 		stopStreaming();
 		setStatusError(null);
 
+		// Stored before the fetch, so leaving the page or switching sweeps
+		// while it is pending aborts it (#144), as ServePage does.
+		const controller = new AbortController();
+		streamControllerRef.current = controller;
+		// A newer stream (or unmount) replaced this one: leave its state alone.
+		const replaced = () => controller.signal.aborted;
+
 		let res: Response | null;
-		let controller: AbortController | null;
 		try {
-			[res, controller] = await streamTuneLog(token, sweepId);
+			[res] = await streamTuneLog(token, sweepId, controller);
 		} catch (err: any) {
-			setStatusError(errorMessage(err, 'Failed to start live status stream'));
+			if (!replaced()) setStatusError(errorMessage(err, 'Failed to start live status stream'));
 			return;
 		}
+		if (replaced()) return;
 
 		if (!res || !res.body) {
 			setStatusError('Failed to start live status stream');
@@ -156,26 +167,29 @@ export function TunePage() {
 		// The stream opener returns any response; a refusal (401, 500) has a
 		// JSON body that yields no events, and the page would go quiet (#143).
 		if (!res.ok) {
-			setStatusError(errorMessage(await errorBody(res), 'Failed to start live status stream'));
+			const body = await errorBody(res);
+			if (!replaced()) setStatusError(errorMessage(body, 'Failed to start live status stream'));
 			return;
 		}
 
-		streamControllerRef.current = controller;
 		setStreaming(true);
 
 		try {
 			for await (const evt of parseBenchmarksEventStream(res.body)) {
+				if (replaced()) break;
 				if (evt.event === 'done') break;
 				if (evt.data) setStatus(evt.data);
 			}
 		} catch (err: any) {
-			if (err?.name !== 'AbortError') {
+			if (err?.name !== 'AbortError' && !replaced()) {
 				console.error('Tune log stream error:', err);
 				setStatusError(errorMessage(err, 'Live status stream ended unexpectedly'));
 			}
 		} finally {
-			setStreaming(false);
-			streamControllerRef.current = null;
+			if (streamControllerRef.current === controller) {
+				setStreaming(false);
+				streamControllerRef.current = null;
+			}
 		}
 	};
 
@@ -199,8 +213,12 @@ export function TunePage() {
 
 	// Watch whatever sweep is currently active/latest, if any, on mount.
 	useEffect(() => {
+		unmountedRef.current = false;
 		startStreaming(null);
-		return stopStreaming;
+		return () => {
+			unmountedRef.current = true;
+			stopStreaming();
+		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 

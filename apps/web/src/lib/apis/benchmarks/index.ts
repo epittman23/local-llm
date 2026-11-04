@@ -1055,9 +1055,10 @@ export const getRecentSweeps = async (token: string = '', limit: number = 20) =>
 // convention, consumed via `parseBenchmarksEventStream`.
 export const streamTuneLog = async (
 	token: string = '',
-	sweepId: string | null = null
+	sweepId: string | null = null,
+	// Passed in by a caller that must be able to abort before the fetch resolves (#144).
+	controller: AbortController = new AbortController()
 ): Promise<[Response | null, AbortController]> => {
-	const controller = new AbortController();
 	let error = null;
 
 	const searchParams = new URLSearchParams();
