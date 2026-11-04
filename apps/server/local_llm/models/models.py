@@ -186,23 +186,30 @@ class ModelForm(BaseModel):
 
 # A model whose `meta.tags` holds a tag of this name, ignoring case (#280). It
 # used to be a LIKE over the whole serialized meta, which also matched a
-# capability key such as "vision", a knowledge file's name or any quoted text,
+# capability key such as "vision", a knowledge file's name or any quoted value,
 # and read `%` and `_` in a tag as wildcards. A tag is `{"name": ...}`, or a
 # bare string in rows saved before tags were normalized; a meta whose `tags`
-# is not a list has none.
+# is not a list has none. `meta` is JSON stored as text, and some text the
+# app's encoder writes (an escaped NUL, a lone surrogate, NaN) is not valid
+# jsonb, so a row Postgres cannot read is skipped rather than failing the
+# query (`pg_input_is_valid`, Postgres 16, as infra/docker-compose.yml runs).
 _HAS_TAG_SQL = {
     'postgresql': """EXISTS (
         SELECT 1 FROM jsonb_array_elements(
-            CASE WHEN jsonb_typeof(CAST(model.meta AS jsonb) -> 'tags') = 'array'
+            CASE WHEN NOT pg_input_is_valid(model.meta, 'jsonb') THEN '[]'::jsonb
+                WHEN jsonb_typeof(CAST(model.meta AS jsonb) -> 'tags') = 'array'
                 THEN CAST(model.meta AS jsonb) -> 'tags' ELSE '[]'::jsonb END
         ) AS tag
-        WHERE lower(CASE jsonb_typeof(tag) WHEN 'object' THEN tag ->> 'name' ELSE tag #>> '{}' END) = :model_tag
+        WHERE lower(CASE jsonb_typeof(tag) WHEN 'object' THEN tag ->> 'name' ELSE tag #>> '{}' END)
+            = lower(:model_tag)
     )""",
     'sqlite': """EXISTS (
         SELECT 1 FROM json_each(
-            CASE WHEN json_type(model.meta, '$.tags') = 'array' THEN json_extract(model.meta, '$.tags') ELSE '[]' END
+            CASE WHEN NOT json_valid(model.meta) THEN '[]'
+                WHEN json_type(model.meta, '$.tags') = 'array' THEN json_extract(model.meta, '$.tags')
+                ELSE '[]' END
         ) AS tag
-        WHERE {name} = :model_tag
+        WHERE {compare}
     )""",
 }
 
@@ -210,11 +217,10 @@ _HAS_TAG_SQL = {
 def _has_tag(dialect: str, tag: str):
     if dialect == 'sqlite':
         name = "CASE tag.type WHEN 'object' THEN json_extract(tag.value, '$.name') ELSE tag.value END"
-        if tag.isascii():
-            # SQLite's lower() folds ASCII only, so a non-ASCII tag is matched exact-case, as before.
-            name, tag = f'lower({name})', tag.lower()
-        return text(_HAS_TAG_SQL['sqlite'].format(name=name)).bindparams(model_tag=tag)
-    return text(_HAS_TAG_SQL['postgresql']).bindparams(model_tag=tag.lower())
+        # SQLite's lower() folds ASCII only, so a non-ASCII tag is matched exact-case, as before.
+        compare = f'lower({name}) = lower(:model_tag)' if tag.isascii() else f'{name} = :model_tag'
+        return text(_HAS_TAG_SQL['sqlite'].format(compare=compare)).bindparams(model_tag=tag)
+    return text(_HAS_TAG_SQL['postgresql']).bindparams(model_tag=tag)
 
 
 class ModelsTable:

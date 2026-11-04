@@ -2,9 +2,11 @@
 
 `search_models` filtered by tag with `LIKE '%"<tag>"%'` over the whole
 serialized meta. So `vision` matched every model with the `vision`
-capability, a word in a description or a knowledge file's name matched too,
-and `%` and `_` in a tag were wildcards. The filter now looks only at the
-names in `meta.tags`, case-insensitively as before.
+capability, and any value equal to the tag (a description, a knowledge file's
+name) matched too, and `%` and `_` in a tag were wildcards. The filter now
+looks only at the names in `meta.tags`, case-insensitively as before. A meta
+Postgres cannot read as jsonb is skipped there, not an error for the whole
+listing.
 
 The same script runs on the test run's SQLite database and, with
 TEST_DATABASE_URL (CI provides one), on a fresh Postgres, since the match is
@@ -36,11 +38,15 @@ import asyncio, json
 import local_llm.config  # runs the migrations
 from local_llm.models.models import ModelForm, Models
 from local_llm.models.users import Users
+from local_llm.internal.db import get_async_db
+from sqlalchemy import text
 
 MODELS = {
     'tagged': {'tags': [{'name': 'vision'}], 'capabilities': {'vision': True}},
     'capability-only': {'tags': [{'name': 'chat'}], 'capabilities': {'vision': True}},
-    'description-only': {'description': 'Reads "vision" papers', 'tags': []},
+    'description-only': {'description': 'vision', 'tags': []},
+    # Text the app's own encoder writes that Postgres cannot read as jsonb.
+    'unreadable': {'description': 'a\x00b', 'tags': [{'name': 'vision'}]},
     'knowledge-only': {'knowledge': [{'type': 'file', 'id': 'f1', 'name': 'vision'}]},
     'cased': {'tags': [{'name': 'Vision'}]},
     'percent': {'tags': [{'name': '50%_off'}]},
@@ -56,8 +62,25 @@ async def main():
         await Models.insert_new_model(
             ModelForm(id=name, base_model_id='base', name=name, meta=meta, params={}), 'tagger'
         )
+    # Shapes only a raw write or an old row can have.
+    async with get_async_db() as db:
+        for model_id, meta in {
+            'bare-strings': '{"tags": ["vision", 5]}',
+            'tags-not-a-list': '{"tags": {"name": "vision"}}',
+            'nameless': '{"tags": [{"label": "vision"}, {"name": 5}]}',
+            'null-meta': None,
+            'json-null': 'null',
+        }.items():
+            await db.execute(
+                text(
+                    'INSERT INTO model (id, user_id, base_model_id, name, meta, params, is_active,'
+                    " updated_at, created_at) VALUES (:id, 'tagger', 'base', :id, :meta, '{}', true, 0, 0)"
+                ),
+                {'id': model_id, 'meta': meta},
+            )
+        await db.commit()
     found = {}
-    for tag in ['vision', 'VISION', '50%_off', '%', 'Ünïcode', 'chat', 'missing']:
+    for tag in ['vision', 'VISION', '50%_off', '%', 'Ünïcode', 'chat', '5', 'missing']:
         result = await Models.search_models('tagger', {'tag': tag}, limit=100)
         found[tag] = sorted(model.id for model in result.items)
     print('FOUND ' + json.dumps(found))
@@ -67,12 +90,14 @@ asyncio.run(main())
 """
 
 EXPECTED = {
-    'vision': ['cased', 'tagged'],
-    'VISION': ['cased', 'tagged'],
+    # `unreadable` holds the tag but cannot be read on Postgres; SQLite reads it.
+    'vision': ['bare-strings', 'cased', 'tagged'],
+    'VISION': ['bare-strings', 'cased', 'tagged'],
     '50%_off': ['percent'],
     '%': [],
     'Ünïcode': ['unicode'],
     'chat': ['capability-only'],
+    '5': ['bare-strings', 'nameless'],
     'missing': [],
 }
 
@@ -86,11 +111,16 @@ def _search(env):
     return json.loads(line.removeprefix('FOUND '))
 
 
+def _with(found, tag, *model_ids):
+    return {**found, tag: sorted([*found[tag], *model_ids])}
+
+
 def test_the_tag_filter_matches_tags_only_on_sqlite(tmp_path):
     env = {k: v for k, v in os.environ.items() if k != 'DATABASE_URL'}
     env.update({'DATA_DIR': str(tmp_path), 'HF_HUB_OFFLINE': '1'})
 
-    assert _search(env) == EXPECTED
+    # SQLite reads the escaped NUL, so the unreadable-on-Postgres row matches.
+    assert _search(env) == _with(_with(EXPECTED, 'vision', 'unreadable'), 'VISION', 'unreadable')
 
 
 def test_the_tag_filter_matches_tags_only_on_postgres(fresh_database, tmp_path):
@@ -131,10 +161,10 @@ def test_the_tag_filter_in_process_on_sqlite():
     assert asyncio.run(run()) == {f'VISION-{tag}': [f'tagged-{tag}'], f'Ünï-{tag}': [f'unicode-{tag}']}
 
 
-def test_the_postgres_filter_compares_the_lowercased_tag_by_name():
+def test_the_postgres_filter_compares_tag_names_in_lower_case_and_skips_unreadable_meta():
     clause = models_module._has_tag('postgresql', 'Vision')
     sql = str(clause.compile(dialect=postgresql.dialect(), compile_kwargs={'literal_binds': True}))
 
-    assert 'jsonb_array_elements' in sql
+    assert "pg_input_is_valid(model.meta, 'jsonb')" in sql
     assert "tag ->> 'name'" in sql
-    assert "= 'vision'" in sql
+    assert "= lower('Vision')" in sql
