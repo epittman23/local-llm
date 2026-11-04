@@ -145,6 +145,9 @@ export const MessageComposer = forwardRef<
 	}, [active, users.data, models.data, channels.data]);
 
 	useEffect(() => setSelected(0), [active?.query, active?.trigger]);
+	// The list can shrink without the query changing (the debounced user search
+	// answering), so the selection is kept within it (#256).
+	const highlighted = Math.min(selected, suggestions.length - 1);
 
 	const pick = (s: Suggestion) => {
 		if (!active) return;
@@ -241,7 +244,7 @@ export const MessageComposer = forwardRef<
 			}
 			if (e.key === 'Enter' || e.key === 'Tab') {
 				e.preventDefault();
-				pick(suggestions[selected]);
+				pick(suggestions[highlighted]);
 				return;
 			}
 			if (e.key === 'Escape') {
@@ -276,12 +279,12 @@ export const MessageComposer = forwardRef<
 							key={`${s.kind}-${s.id}`}
 							type="button"
 							role="option"
-							aria-selected={i === selected}
+							aria-selected={i === highlighted}
 							onMouseDown={(e) => e.preventDefault()}
 							onClick={() => pick(s)}
 							className={cn(
 								'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm',
-								i === selected && 'bg-muted'
+								i === highlighted && 'bg-muted'
 							)}
 						>
 							{s.kind === 'channel' ? (
