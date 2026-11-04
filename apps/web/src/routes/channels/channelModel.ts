@@ -23,7 +23,8 @@ export type ChannelMessage = {
 	 * any (`true`/`false`); `GET …/messages/{id}/data` has the object.
 	 */
 	data?: MessageData | boolean | null;
-	meta?: { model_id?: string; model_name?: string } | null;
+	/** A model's reply carries the model; `done` is set once its pipeline has finished. */
+	meta?: { model_id?: string; model_name?: string; done?: boolean } | null;
 	reactions?: Reaction[];
 	reply_count?: number;
 	latest_reply_at?: number | null;

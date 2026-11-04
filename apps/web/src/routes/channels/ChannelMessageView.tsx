@@ -323,7 +323,13 @@ export function ChannelMessageView({
 								{message.data === true ? (
 									<div className="bg-muted my-2 h-4 w-40 animate-pulse rounded" />
 								) : !message.content.trim() && message.meta?.model_id ? (
-									<div className="bg-muted my-1 h-4 w-24 animate-pulse rounded" aria-label="Thinking" />
+									// A model reply is empty while it is under way, and "Thinking" until
+									// done; one that finished with no text says so instead of spinning (#329).
+									message.meta.done ? (
+										files.length === 0 && <p className="text-muted-foreground my-0.5 text-sm italic">No response</p>
+									) : (
+										<div className="bg-muted my-1 h-4 w-24 animate-pulse rounded" aria-label="Thinking" />
+									)
 								) : (
 									<div className="flex flex-wrap items-baseline">
 										{/* The chat renderer, as the Svelte channel used: raw HTML in a message shows as text (docs/history/code-review.md H1). */}

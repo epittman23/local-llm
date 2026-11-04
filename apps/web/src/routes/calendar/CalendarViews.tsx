@@ -6,6 +6,7 @@ import {
 	type CalendarViewMode,
 	DAY_NAMES,
 	NS,
+	bandEvents,
 	dayKey,
 	eventsByDay,
 	eventsInHour,
@@ -18,21 +19,27 @@ import {
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
-/** One event in a grid cell: a colored dot, the start time (unless all-day), the title. Automation runs are dimmed. */
+/**
+ * One event in a grid cell: a colored dot, the start time (unless all-day, or in the band, where the
+ * start may be on an earlier day), the title. Automation runs are dimmed.
+ */
 function EventChip({
 	event,
 	color,
-	onClick
+	onClick,
+	hideTime = false
 }: {
 	event: CalendarEventModel;
 	color: string | null | undefined;
 	onClick: (e: CalendarEventModel) => void;
+	hideTime?: boolean;
 }) {
-	const time = event.all_day
-		? null
-		: new Date(event.start_at / NS)
-				.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
-				.replace(' ', '');
+	const time =
+		event.all_day || hideTime
+			? null
+			: new Date(event.start_at / NS)
+					.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+					.replace(' ', '');
 	return (
 		<Tip content={`${event.title}${event.location ? ` · ${event.location}` : ''}`}>
 			<button
@@ -106,6 +113,9 @@ export function CalendarViews({
 	const chip = (e: CalendarEventModel) => (
 		<EventChip key={e.instance_id || e.id} event={e} color={colors[e.calendar_id]} onClick={onEventClick} />
 	);
+	const bandChip = (e: CalendarEventModel) => (
+		<EventChip key={e.instance_id || e.id} event={e} color={colors[e.calendar_id]} onClick={onEventClick} hideTime />
+	);
 	const cell = (label: string, onActivate: () => void) => ({
 		role: 'button' as const,
 		tabIndex: 0,
@@ -164,6 +174,7 @@ export function CalendarViews({
 	}
 
 	const days = view === 'week' ? weekDays(date) : [date];
+	const bands = days.map((day) => bandEvents(byDay, day));
 	return (
 		<div className="flex min-h-0 flex-1 flex-col px-3 pb-3">
 			<div className="bg-background flex-1 overflow-auto rounded-2xl border">
@@ -185,6 +196,36 @@ export function CalendarViews({
 								</div>
 							))}
 						</div>
+					)}
+					{bands.some((band) => band.length > 0) && (
+						<section
+							aria-label="All-day and continuing events"
+							className={cn(
+								'grid border-b',
+								view === 'week' ? 'grid-cols-[52px_repeat(7,1fr)]' : 'grid-cols-[56px_1fr]'
+							)}
+						>
+							<div className="text-muted-foreground pt-1 pr-2 text-right text-[0.625rem] select-none">all-day</div>
+							{days.map((day, i) => {
+								const shown = view === 'week' ? bands[i].slice(0, 3) : bands[i];
+								return (
+									<ul
+										key={day.toISOString()}
+										aria-label={day.toDateString()}
+										className="flex min-w-0 flex-col gap-0.5 border-l border-border/50 p-0.5"
+									>
+										{shown.map((e) => (
+											<li key={e.instance_id || e.id}>{bandChip(e)}</li>
+										))}
+										{view === 'week' && bands[i].length > 3 && (
+											<li>
+												<More count={bands[i].length - 3} onClick={() => onOpenDay(day)} />
+											</li>
+										)}
+									</ul>
+								);
+							})}
+						</section>
 					)}
 					{HOURS.map((hour) => (
 						<div
