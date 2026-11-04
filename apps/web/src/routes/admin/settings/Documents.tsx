@@ -441,7 +441,7 @@ export default function Documents() {
 								<div className="w-16">
 									<SettingNumber
 										aria-label="Embedding Batch Size"
-										min={-2}
+										min={1}
 										max={16000}
 										step={1}
 										value={emb.batchSize}

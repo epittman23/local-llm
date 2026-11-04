@@ -10,6 +10,9 @@ replaces the old one, and that an external engine (for which `get_ef`
 returns None by design) still saves. Also that a plain Documents save keeps a
 loaded model it did not change, and loads one that differs from the model
 loaded, and that a blank local model is refused (#532).
+
+A batch size below 1, or none, is refused before anything changes too:
+once saved it failed every embedding (#353).
 """
 
 import asyncio
@@ -269,3 +272,30 @@ def test_a_blank_local_model_is_refused_and_nothing_saved(stored, monkeypatch):
     assert stored == {}
     assert loads == []
     assert request.app.state.ef is OLD_EF
+
+
+@pytest.mark.parametrize('batch_size', [0, -1, -2, None])
+def test_a_batch_size_below_1_is_refused_and_nothing_changes(stored, monkeypatch, batch_size):
+    """A saved 0 failed every embedding with an error, and -1 returned no vectors (#353)."""
+    _loader(monkeypatch, fails=False)
+    request = _request()
+
+    with pytest.raises(HTTPException) as raised:
+        _update(request, RAG_EMBEDDING_ENGINE='', RAG_EMBEDDING_MODEL='new/model', RAG_EMBEDDING_BATCH_SIZE=batch_size)
+
+    assert raised.value.status_code == 400
+    assert 'Embedding Batch Size must be a whole number of at least 1' in raised.value.detail
+    assert stored == {}
+    assert request.app.state.ef is OLD_EF
+    assert request.app.state.EMBEDDING_FUNCTION is OLD_EMBEDDING_FUNCTION
+
+
+def test_a_batch_size_of_1_or_more_is_saved(stored, monkeypatch):
+    _loader(monkeypatch, fails=False)
+
+    result = _update(_request(), RAG_EMBEDDING_ENGINE='', RAG_EMBEDDING_MODEL='new/model', RAG_EMBEDDING_BATCH_SIZE=1)
+    assert result['RAG_EMBEDDING_BATCH_SIZE'] == 1
+    assert stored['rag.embedding_batch_size'] == 1
+
+    _update(_request(), RAG_EMBEDDING_ENGINE='', RAG_EMBEDDING_MODEL='new/model', RAG_EMBEDDING_BATCH_SIZE=64)
+    assert stored['rag.embedding_batch_size'] == 64

@@ -197,6 +197,14 @@ describe('embedding', () => {
 		);
 		expect(embeddingError({ ...e, engine: 'azure_openai', azure: { url: 'u', key: 'k', version: 'v' } })).toBeNull();
 	});
+	it('refuses an embedding batch size below 1, and accepts 1 or more or a cleared box (#353)', () => {
+		for (const batchSize of [0, -1, -2, 1.5])
+			expect(embeddingError({ ...e, engine: 'openai', model: 'm', batchSize })).toBe(
+				'Embedding Batch Size must be a whole number of at least 1.'
+			);
+		for (const batchSize of [1, 64, null])
+			expect(embeddingError({ ...e, engine: 'openai', model: 'm', batchSize })).toBeNull();
+	});
 	it('offers a model per engine', () => {
 		expect(embeddingModelFor('')).toBe('sentence-transformers/all-MiniLM-L6-v2');
 		expect(embeddingModelFor('ollama')).toBe('');
