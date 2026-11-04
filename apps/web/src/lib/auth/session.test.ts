@@ -38,3 +38,23 @@ describe('restoring the session at startup (#240)', () => {
 		expect(localStorage.getItem('token')).toBeNull();
 	});
 });
+
+describe('the time zone (#324)', () => {
+	it('is sent on every load with a session, not only at sign-in', async () => {
+		const sent: unknown[] = [];
+		fetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+			const url = String(input);
+			if (url.endsWith('/api/config')) return json({ name: 'Local LLM', features: {} });
+			if (url.endsWith('/auths/update/timezone')) {
+				sent.push(JSON.parse(String(init?.body)));
+				return json(true);
+			}
+			if (url.includes('/auths/')) return json({ id: 'u', token: 'saved-token', role: 'user' });
+			return json({});
+		});
+
+		await initAuth();
+
+		expect(sent).toEqual([{ timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }]);
+	});
+});

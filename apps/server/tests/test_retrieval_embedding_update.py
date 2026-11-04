@@ -8,6 +8,9 @@ it and saying truthfully whether an embedding model is still in use, that
 nothing is saved and the state is untouched, that a model that loads
 replaces the old one, and that an external engine (for which `get_ef`
 returns None by design) still saves.
+
+A batch size below 1, or none, is refused before anything changes too:
+once saved it failed every embedding (#353).
 """
 
 import asyncio
@@ -181,3 +184,30 @@ def test_an_external_engine_is_saved_without_a_local_model(stored, monkeypatch):
     assert stored['rag.embedding_model'] == 'text-embedding-3-small'
     assert request.app.state.ef is None
     assert request.app.state.EMBEDDING_FUNCTION is not OLD_EMBEDDING_FUNCTION
+
+
+@pytest.mark.parametrize('batch_size', [0, -1, -2, None])
+def test_a_batch_size_below_1_is_refused_and_nothing_changes(stored, monkeypatch, batch_size):
+    """A saved 0 failed every embedding with an error, and -1 returned no vectors (#353)."""
+    _loader(monkeypatch, fails=False)
+    request = _request()
+
+    with pytest.raises(HTTPException) as raised:
+        _update(request, RAG_EMBEDDING_ENGINE='', RAG_EMBEDDING_MODEL='new/model', RAG_EMBEDDING_BATCH_SIZE=batch_size)
+
+    assert raised.value.status_code == 400
+    assert 'Embedding Batch Size must be a whole number of at least 1' in raised.value.detail
+    assert stored == {}
+    assert request.app.state.ef is OLD_EF
+    assert request.app.state.EMBEDDING_FUNCTION is OLD_EMBEDDING_FUNCTION
+
+
+def test_a_batch_size_of_1_or_more_is_saved(stored, monkeypatch):
+    _loader(monkeypatch, fails=False)
+
+    result = _update(_request(), RAG_EMBEDDING_ENGINE='', RAG_EMBEDDING_MODEL='new/model', RAG_EMBEDDING_BATCH_SIZE=1)
+    assert result['RAG_EMBEDDING_BATCH_SIZE'] == 1
+    assert stored['rag.embedding_batch_size'] == 1
+
+    _update(_request(), RAG_EMBEDDING_ENGINE='', RAG_EMBEDDING_MODEL='new/model', RAG_EMBEDDING_BATCH_SIZE=64)
+    assert stored['rag.embedding_batch_size'] == 64

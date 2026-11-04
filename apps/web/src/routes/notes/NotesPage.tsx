@@ -28,6 +28,7 @@ import {
 	groupNotes,
 	importableNote,
 	nextSort,
+	openLinkedNote,
 	safeFileName
 } from './notesModel';
 
@@ -74,8 +75,9 @@ function Notes() {
 	const creating = params.has('title') || params.has('content');
 	useEffect(() => {
 		if (!creating) return;
-		createNote(token, params.get('title') ?? undefined, params.get('content') ?? '').then(
-			(id) => id && navigate(`/notes/${id}`, { replace: true })
+		void openLinkedNote(
+			() => createNote(token, params.get('title') ?? undefined, params.get('content') ?? ''),
+			(to) => navigate(to, { replace: true })
 		);
 		// Once, for the link that brought us here.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -399,12 +401,10 @@ function NewNote() {
 	const navigate = useNavigate();
 	const [params] = useSearchParams();
 	useEffect(() => {
-		createNote(token, params.get('title') ?? undefined, params.get('content') ?? '')
-			.then((id) => navigate(id ? `/notes/${id}` : '/notes', { replace: true }))
-			.catch((err) => {
-				toast.error(`${err}`);
-				navigate('/notes', { replace: true });
-			});
+		void openLinkedNote(
+			() => createNote(token, params.get('title') ?? undefined, params.get('content') ?? ''),
+			(to) => navigate(to, { replace: true })
+		);
 		// Once.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
