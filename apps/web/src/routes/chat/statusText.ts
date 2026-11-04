@@ -28,7 +28,10 @@ export function statusText(s: Status): string {
 			}
 			break;
 	}
-	const description = typeof s.description === 'string' ? s.description : '';
-	const found = (Array.isArray(s.urls) ? s.urls : Array.isArray(s.items) ? s.items : []).length;
-	return description.replaceAll('{{count}}', String(found)).replaceAll('{{searchQuery}}', String(s.query ?? ''));
+	let text = typeof s.description === 'string' ? s.description : '';
+	// As the original: {{count}} is the sites a web search found, filled only when it lists them.
+	const found = Array.isArray(s.urls) ? s.urls : Array.isArray(s.items) ? s.items : null;
+	if (found) text = text.replaceAll('{{count}}', String(found.length));
+	if (s.query !== undefined) text = text.replaceAll('{{searchQuery}}', String(s.query));
+	return text;
 }

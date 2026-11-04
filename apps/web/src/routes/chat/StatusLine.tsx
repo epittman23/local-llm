@@ -10,7 +10,7 @@ import { statusText } from './statusText';
  */
 export function StatusLine({ message }: { message: Message }) {
 	const [open, setOpen] = useState(false);
-	// Keyed by its text and how often that text came before: statuses only ever append.
+	// Keyed by its text and how often that text came before.
 	const seen = new Map<string, number>();
 	const shown = (message.statusHistory ?? [])
 		.filter((s) => !s.hidden)
@@ -23,11 +23,14 @@ export function StatusLine({ message }: { message: Message }) {
 		});
 	const last = shown.at(-1);
 	if (!last) return null;
+	// Done once the reply's latest status is, shown or not: a search that ends
+	// with a hidden status must not pulse on.
+	const working = message.statusHistory?.at(-1)?.done === false;
 	return (
 		<div className="mb-1 text-sm">
 			<button
 				type="button"
-				className={cn('text-muted-foreground', !last.done && 'animate-pulse')}
+				className={cn('text-muted-foreground line-clamp-1 text-left', working && 'animate-pulse')}
 				onClick={() => setOpen((o) => !o)}
 				aria-expanded={open}
 			>
@@ -36,7 +39,9 @@ export function StatusLine({ message }: { message: Message }) {
 			{open && shown.length > 1 && (
 				<ul className="text-muted-foreground mt-1 border-l-2 pl-3 text-xs">
 					{shown.map((s) => (
-						<li key={s.key}>{s.text}</li>
+						<li key={s.key} className="line-clamp-1">
+							{s.text}
+						</li>
 					))}
 				</ul>
 			)}

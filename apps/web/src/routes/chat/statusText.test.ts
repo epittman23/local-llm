@@ -30,6 +30,11 @@ describe('statusText', () => {
 		expect(statusText({ description: 'Searching "{{searchQuery}}"', query: 'weather' })).toBe('Searching "weather"');
 	});
 
+	it('leaves {{count}} alone in a status that lists no sites, as the original did', () => {
+		expect(statusText({ description: 'Found {{count}} rows', count: 5 })).toBe('Found {{count}} rows');
+		expect(statusText({ description: 'Searching "{{searchQuery}}"' })).toBe('Searching "{{searchQuery}}"');
+	});
+
 	it('shows any other description as it is, and nothing without one', () => {
 		expect(statusText({ action: 'web_search', description: 'Searching the web' })).toBe('Searching the web');
 		expect(statusText({ description: 'Running tool' })).toBe('Running tool');

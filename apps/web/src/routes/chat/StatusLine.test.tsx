@@ -42,6 +42,18 @@ describe('StatusLine', () => {
 		expect(container).toBeEmptyDOMElement();
 	});
 
+	it('stops pulsing once the latest status is done, even when that status is hidden', () => {
+		render(
+			<StatusLine
+				message={reply([
+					{ action: 'knowledge_search', query: 'q', done: false },
+					{ action: 'knowledge_search', query: 'q', done: true, hidden: true }
+				])}
+			/>
+		);
+		expect(screen.getByRole('button', { name: 'Searching Knowledge for "q"' })).not.toHaveClass('animate-pulse');
+	});
+
 	it('pulses while the latest status is not done', () => {
 		render(<StatusLine message={reply([{ action: 'knowledge_search', query: 'q', done: false }])} />);
 		expect(screen.getByRole('button', { name: 'Searching Knowledge for "q"' })).toHaveClass('animate-pulse');
