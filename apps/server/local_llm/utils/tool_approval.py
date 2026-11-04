@@ -100,6 +100,22 @@ async def _resolve_tool_call_output(
     ):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Tool call has already been resolved.')
 
+    # A resolve resumes the reply, and a resume runs every approved call that
+    # has no output yet; while one is waiting to run or running, a second
+    # resume would run it again, so nothing else is resolved until it has.
+    result_call_ids = {
+        item.get('call_id') for item in output if item.get('type') == 'function_call_output' and item.get('call_id')
+    }
+    if any(
+        item.get('type') == 'function_call'
+        and item.get('approved') is True
+        and (item.get('call_id') or item.get('id')) not in result_call_ids
+        for item in output
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail='An approved tool call has not finished running yet.'
+        )
+
     if form_data.action == 'approve':
         if tool_name == 'ask_user':
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='ask_user requires an answer or deny.')

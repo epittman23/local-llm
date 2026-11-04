@@ -5,9 +5,10 @@ had left the pending statuses, but approving leaves a call `queued` (with
 `approved: True`) until the resumed reply runs it. A second resolve before
 that, from another tab or an approve followed by a reject, went through, and
 each resolve resumes the reply, which runs every approved call without an
-output: the tool ran twice, or got both a rejection and a real output. Two
-resolves at the same moment could also both pass the check before either
-saved.
+output: the tool ran twice, or got both a rejection and a real output.
+Resolving another call of the message while an approved one had not run yet
+started a second resume the same way. Two resolves at the same moment could
+also both pass the check before either saved.
 
 A fake chat store stands in for the database; it yields to the event loop on
 every read and write, so concurrent resolves interleave as requests would.
@@ -127,3 +128,37 @@ def test_a_rejected_call_cannot_be_approved(chats):
         return refused.value
 
     assert asyncio.run(run()).status_code == 409
+
+
+@pytest.mark.parametrize('action', ['approve', 'reject'])
+def test_no_call_is_resolved_while_an_approved_one_has_not_run(chats, action):
+    """A resolve resumes the reply, which runs every approved call without an output.
+
+    Resolving another call while one approved call had not run yet started a
+    second resume, which ran that call again.
+    """
+    fake = chats([_call('queued', approved=True), {**_call('queued'), 'call_id': 'c2'}])
+
+    async def run():
+        with pytest.raises(HTTPException) as refused:
+            await resolve_tool_call_output('chat1', 'm1', ResolveToolCallForm(call_id='c2', action=action), USER)
+        return refused.value
+
+    assert asyncio.run(run()).status_code == 409
+    assert fake.writes == []
+
+
+def test_a_call_can_be_resolved_once_the_approved_one_has_run(chats):
+    output = [
+        _call('completed', approved=True),
+        {'type': 'function_call_output', 'call_id': 'c1', 'output': [], 'status': 'completed'},
+        {**_call('pending'), 'call_id': 'c2'},
+    ]
+    fake = chats(output)
+
+    async def run():
+        await resolve_tool_call_output('chat1', 'm1', ResolveToolCallForm(call_id='c2', action='approve'), USER)
+
+    asyncio.run(run())
+
+    assert fake.message['output'][2]['approved'] is True
