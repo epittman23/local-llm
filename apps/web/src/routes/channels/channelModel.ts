@@ -483,7 +483,11 @@ export const mentionsToText = (content: string) =>
 		(_all, kind: string, id: string, label: string | undefined) => `${kind === 'C' ? '#' : '@'}${label || id}`
 	);
 
-/** "You, Ann and Bob reacted with :tada:" (Message.svelte's tooltip: three names, then "and N others" past four). */
+/**
+ * "You, Ann and Bob reacted with :tada:", from Message.svelte's tooltip: up to
+ * four names, then three and "and N others". Unlike the original, which named
+ * three, all four are named when exactly four reacted (#257).
+ */
 export function reactionTooltip(reaction: Reaction, selfId: string | undefined): string {
 	const names = reaction.users.map((u) => (u.id === selfId ? 'You' : (u.name ?? 'Someone')));
 	const total = names.length;

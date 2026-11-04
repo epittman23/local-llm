@@ -411,7 +411,7 @@ describe('channelPayload', () => {
 });
 
 describe('display helpers', () => {
-	it('lists up to three names, then the rest as a count', () => {
+	it('names up to three people, or three and the rest as a count past four', () => {
 		const users = ['me', 'a', 'b', 'c', 'd'].map((id) => ({ id, name: id.toUpperCase() }));
 		expect(reactionTooltip({ name: 'tada', users: users.slice(0, 2), count: 2 }, 'me')).toBe(
 			'You and A reacted with :tada:'
