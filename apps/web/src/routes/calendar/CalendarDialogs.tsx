@@ -231,7 +231,7 @@ export function EventDialog({
 									value={f.alertMinutes}
 									onChange={(e) => set({ alertMinutes: Number(e.target.value) })}
 								>
-									{reminderOptions(f.alertMinutes).map(([v, l]) => (
+									{reminderOptions(f.alertMinutes, Math.max(event?.meta?.alert_minutes ?? 10, -1)).map(([v, l]) => (
 										<option key={v} value={v}>
 											{l}
 										</option>

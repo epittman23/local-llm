@@ -149,19 +149,29 @@ export const REMINDERS: [number, string][] = [
 ];
 
 /**
- * The reminder choices, with the event's own value added when it is not one
- * of them (#324). A reminder set elsewhere (the assistant's calendar tool, say,
+ * The reminder choices, with the given values (the event's saved one and the
+ * form's current one) added when they are not among them (#324). A reminder set elsewhere (the assistant's calendar tool, say,
  * at 120 minutes) showed as "None", and picking None then changed nothing.
  */
-export function reminderOptions(current: number): [number, string][] {
-	if (REMINDERS.some(([minutes]) => minutes === current)) return REMINDERS;
-	const label =
-		current % 60 === 0
-			? `${current / 60} hour${current === 60 ? '' : 's'} before`
-			: `${current} minute${current === 1 ? '' : 's'} before`;
-	const own: [number, string] = [current, label];
-	return [...REMINDERS, own].sort((a, b) => a[0] - b[0]);
+export function reminderOptions(...values: number[]): [number, string][] {
+	const own = [...new Set(values)]
+		.filter((minutes) => minutes >= 0 && !REMINDERS.some(([listed]) => listed === minutes))
+		.map((minutes): [number, string] => [minutes, reminderLabel(minutes)]);
+	return own.length ? [...REMINDERS, ...own].sort((a, b) => a[0] - b[0]) : REMINDERS;
 }
+
+/** The server sends a reminder at most this long before the event (`MAX_ALERT_LEAD_MINUTES`). */
+const MAX_REMINDER_MINUTES = 22 * 60;
+
+const leadLabel = (minutes: number) =>
+	minutes % 60 === 0
+		? `${minutes / 60} hour${minutes === 60 ? '' : 's'} before`
+		: `${minutes} minute${minutes === 1 ? '' : 's'} before`;
+
+const reminderLabel = (minutes: number) =>
+	minutes > MAX_REMINDER_MINUTES
+		? `${leadLabel(minutes)} (sent ${leadLabel(MAX_REMINDER_MINUTES)})`
+		: leadLabel(minutes);
 
 export type EventFields = {
 	title: string;
@@ -202,7 +212,8 @@ export function eventFields(
 			endTime: event.end_at ? nsToTime(event.end_at) : '',
 			allDay: event.all_day,
 			location: event.location || '',
-			alertMinutes: event.meta?.alert_minutes ?? 10,
+			// Any negative means no reminder, as the server reads it.
+			alertMinutes: Math.max(event.meta?.alert_minutes ?? 10, -1),
 			repeat: repeatFromRrule(event.rrule)
 		};
 	}

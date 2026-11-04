@@ -191,12 +191,13 @@ export const initAuth = async () => {
 		// setSession so no gate ever sees a user with the anonymous config.
 		const userConfig = await getBackendConfig().catch(() => null);
 		if (userConfig) useConfigStore.getState().setConfig(userConfig);
-		useAuthStore.getState().setSession(token, sessionUser);
 		// On every load, as the original did, not only at sign-in (#324): a
 		// restored session kept the zone of the last sign-in, which recurring
-		// events and automation schedules are expanded in.
+		// events and automation schedules are expanded in. Before the session is
+		// set, so the first page's requests already use it; it never throws.
 		const timezone = getUserTimezone();
-		if (timezone) void updateUserTimezone(token, timezone);
+		if (timezone) await updateUserTimezone(token, timezone);
+		useAuthStore.getState().setSession(token, sessionUser);
 	} catch (error) {
 		console.error('Failed to restore session:', error);
 		useAuthStore.getState().clearSession();
