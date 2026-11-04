@@ -2764,8 +2764,8 @@ def _lines_page(content: str, start_line, end_line) -> dict:
     s = max(1, int(start_line)) - 1  # 1-indexed to 0-indexed
     e = min(total_lines, int(end_line) if end_line else s + 100)
     if e <= s:
-        where = 'past the end of the file' if s >= total_lines else 'before start_line'
-        return {'content': '', 'total_lines': total_lines, 'note': f'No lines: the range ends {where}.'}
+        why = 'start_line is past the end of the file' if s >= total_lines else 'end_line is before start_line'
+        return {'content': '', 'total_lines': total_lines, 'note': f'No lines: {why}.'}
     page = {
         'content': '\n'.join(f'{s + i + 1}: {line}' for i, line in enumerate(all_lines[s:e])),
         'total_lines': total_lines,
@@ -2788,7 +2788,7 @@ def _number_page(content: str, offset: int, sliced: str) -> tuple[str, bool]:
     numbered = [f'{start_ln + i}: {line}' for i, line in enumerate(lines)]
     if len(lines) > 1 and lines[-1] == '':
         numbered[-1] = ''
-    return '\n'.join(numbered), offset > 0 and content[offset - 1] != '\n'
+    return '\n'.join(numbered), 0 < offset <= len(content) and content[offset - 1] != '\n'
 
 
 async def view_file(
@@ -2811,7 +2811,9 @@ async def view_file(
     :param line_numbers: If true, prefix each line with its 1-indexed line number
     :param start_line: Optional 1-indexed start line (overrides offset/max_chars when set)
     :param end_line: Optional 1-indexed end line (inclusive)
-    :return: JSON with the file's id, filename, content, and pagination metadata if truncated
+    :return: JSON with the file's id, filename, content, and pagination metadata if truncated;
+        with line_numbers, first_line_continued is true when the page starts mid-line; a line range
+        that selects nothing returns empty content and a note saying why
     """
     if __request__ is None:
         return JSONCodec.dumps({'error': 'Request context not available'})
@@ -2917,7 +2919,9 @@ async def view_knowledge_file(
     :param line_numbers: If true, prefix each line with its 1-indexed line number
     :param start_line: Optional 1-indexed start line (overrides offset/max_chars when set)
     :param end_line: Optional 1-indexed end line (inclusive)
-    :return: JSON with the file's id, filename, content, and pagination metadata if truncated
+    :return: JSON with the file's id, filename, content, and pagination metadata if truncated;
+        with line_numbers, first_line_continued is true when the page starts mid-line; a line range
+        that selects nothing returns empty content and a note saying why
     """
     if __request__ is None:
         return JSONCodec.dumps({'error': 'Request context not available'})

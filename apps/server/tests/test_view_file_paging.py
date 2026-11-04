@@ -116,3 +116,18 @@ def test_a_line_range_still_reads_as_before(tool):
     assert page['showing_lines'] == '59-60'
     assert page['content'].split('\n')[0].startswith('59: ')
     assert 'note' not in page
+
+
+@pytest.mark.parametrize('tool', [builtin.view_file, builtin.view_knowledge_file])
+def test_a_numbered_page_past_the_end_is_empty_not_an_error(tool):
+    page = _page(tool, offset=len(CONTENT) + 5, max_chars=20, line_numbers=True)
+
+    assert 'error' not in page
+    assert page['returned_chars'] == 0
+    assert 'first_line_continued' not in page
+
+
+@pytest.mark.parametrize('tool', [builtin.view_file, builtin.view_knowledge_file])
+def test_the_note_says_which_end_of_the_range_selects_nothing(tool):
+    assert 'start_line is past the end' in _page(tool, start_line=200)['note']
+    assert 'end_line is before start_line' in _page(tool, start_line=10, end_line=5)['note']
