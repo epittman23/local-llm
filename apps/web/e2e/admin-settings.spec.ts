@@ -1937,7 +1937,7 @@ test.describe('settings: Documents', () => {
 		await expect(modal(page).getByLabel('Max Upload Count')).toHaveValue('7');
 	});
 
-	test('hybrid search reveals reranking; an external engine clears the model; BM25 weight is Default until made Custom', async ({
+	test('hybrid search reveals reranking; an external engine clears the model; the BM25 weight shows its default and saves a change (#233)', async ({
 		page
 	}) => {
 		await mockWorkspaceBackend(page);
@@ -1952,8 +1952,7 @@ test.describe('settings: Documents', () => {
 		await expect(r.getByLabel('API Base URL')).toBeVisible();
 		await r.getByLabel('Reranking Engine').selectOption('');
 		await expect(r.getByLabel('Reranking Model')).toHaveValue('BAAI/bge-reranker-v2-m3');
-		await expect(r.getByLabel('BM25 Weight slider')).toHaveCount(0);
-		await r.getByRole('button', { name: 'Default' }).click();
+		await expect(r.getByLabel('BM25 Weight slider')).toHaveValue('0.5');
 		await expect(r.getByLabel('BM25 Weight', { exact: true })).toHaveValue('0.5');
 		await r.getByLabel('BM25 Weight', { exact: true }).fill('0.3');
 		await modal(page).getByRole('button', { name: 'Save' }).click();
@@ -1962,6 +1961,11 @@ test.describe('settings: Documents', () => {
 			ENABLE_RAG_HYBRID_SEARCH: true,
 			HYBRID_BM25_WEIGHT: 0.3
 		});
+		// Reset sends the number, which the server saves; "Default" sent null, which it kept as before.
+		await r.getByRole('button', { name: 'Reset to 0.5' }).click();
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect.poll(() => sent(calls, '/retrieval/config/update').length).toBe(2);
+		expect(sent(calls, '/retrieval/config/update')[1]).toMatchObject({ HYBRID_BM25_WEIGHT: 0.5 });
 	});
 
 	test('chunk settings the splitters cannot use are refused before anything is sent (#235)', async ({ page }) => {

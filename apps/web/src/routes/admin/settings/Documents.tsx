@@ -32,6 +32,7 @@ import {
 import { useAdminConfigSaved } from '@/lib/settings/useAdminSaved';
 import { useConfigDraft } from '@/lib/settings/useConfigDraft';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { Bm25Weight } from './Bm25Weight';
 import { ExtractionFields } from './ExtractionFields';
 import {
 	type EmbeddingForm,
@@ -592,48 +593,7 @@ export default function Documents() {
 													title="The score should be a value between 0.0 (0%) and 1.0 (100%)."
 												/>
 
-												<SettingRow
-													label="BM25 Weight"
-													description="Balance semantic and lexical weighting for hybrid search."
-												>
-													<button
-														type="button"
-														className={actionButton}
-														onClick={() => setRag({ HYBRID_BM25_WEIGHT: bm25 === null ? 0.5 : null })}
-													>
-														{bm25 === null ? 'Default' : 'Custom'}
-													</button>
-												</SettingRow>
-												{bm25 !== null && (
-													<div className="flex items-center gap-2">
-														<div className="flex-1">
-															<input
-																type="range"
-																aria-label="BM25 Weight slider"
-																min={0}
-																max={1}
-																step={0.05}
-																value={bm25}
-																onChange={(e) => setRag({ HYBRID_BM25_WEIGHT: Number(e.target.value) })}
-																className="h-2 w-full cursor-pointer"
-															/>
-															<div className="text-muted-foreground/70 flex justify-between py-0.5 text-[0.6875rem]">
-																<div>semantic</div>
-																<div>lexical</div>
-															</div>
-														</div>
-														<div className="w-16">
-															<SettingNumber
-																aria-label="BM25 Weight"
-																min={0}
-																max={1}
-																step="any"
-																value={bm25}
-																onChange={(v) => setRag({ HYBRID_BM25_WEIGHT: v === '' ? null : v })}
-															/>
-														</div>
-													</div>
-												)}
+												<Bm25Weight value={bm25} onChange={(w) => setRag({ HYBRID_BM25_WEIGHT: w })} />
 											</>
 										)}
 									</>
