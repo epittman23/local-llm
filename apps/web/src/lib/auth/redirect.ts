@@ -13,12 +13,20 @@ const ORIGIN = 'http://app.invalid';
  * against a list of prefixes: URL parsing drops a tab or newline and reads a
  * backslash as a slash, so `/\t/host` resolves to `//host` and left the app
  * past the old prefix checks (#206). What is returned is the resolved path,
- * so the router is handed exactly what was checked.
+ * which resolves to itself again, so the router sees the path that was
+ * checked.
  */
 export function safeRedirect(target: string | null | undefined): string | null {
-	// A target that URL cannot parse at all (`//[`) is no path here either.
-	if (!target?.startsWith('/') || !URL.canParse(target, ORIGIN)) return null;
-	const url = new URL(target, ORIGIN);
-	if (url.origin !== ORIGIN) return null;
+	if (!target?.startsWith('/')) return null;
+	let url: URL;
+	try {
+		url = new URL(target, ORIGIN);
+	} catch {
+		// A target that URL cannot parse at all (`//[`) is no path here either.
+		return null;
+	}
+	// A dot segment can leave a path starting `//` on this origin
+	// (`/.//host`), which the router would then read as another host.
+	if (url.origin !== ORIGIN || url.pathname.startsWith('//')) return null;
 	return `${url.pathname}${url.search}${url.hash}`;
 }

@@ -33,6 +33,17 @@ describe('safeRedirect, resolved as the router resolves it (#206)', () => {
 		])
 			expect(safeRedirect(t), JSON.stringify(t)).toBeNull();
 	});
+	it('drops a target whose dot segments leave a path starting //', () => {
+		for (const t of [
+			'/.//evil.example',
+			'/a/..//evil.example',
+			'/..//evil.example',
+			'/%2e//evil.example',
+			'/./\\evil.example',
+			'/.\t//evil.example'
+		])
+			expect(safeRedirect(t), JSON.stringify(t)).toBeNull();
+	});
 	it('drops them the way a ?redirect= link delivers them, percent-decoded', () => {
 		const fromLink = new URLSearchParams('redirect=%2F%09%2Fevil.example%2Fx').get('redirect');
 		expect(fromLink).toBe('/\t/evil.example/x');
