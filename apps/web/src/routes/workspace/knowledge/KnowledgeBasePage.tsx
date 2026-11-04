@@ -260,7 +260,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 		const res = await updateKnowledgeById(token, id, {
 			name: next.name,
 			description: next.description
-		} as never).catch((e) => {
+		}).catch((e) => {
 			toast.error(`${e}`);
 			return null;
 		});
@@ -275,9 +275,9 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 		toast.success('Knowledge updated successfully');
 	}, 1000);
 	const edit = (patch: Partial<Knowledge>) => {
-		const next = { ...knowledge, ...patch };
-		setKnowledge(next);
-		scheduleSave(next);
+		// Merged into the latest state, so an access reply applied meanwhile is kept.
+		setKnowledge((k) => ({ ...k, ...patch }));
+		scheduleSave({ ...knowledge, ...patch });
 	};
 
 	// --- access -------------------------------------------------------------
