@@ -364,3 +364,33 @@ test('a send waiting for the model list is dropped when another chat is opened (
 	await page.waitForTimeout(500);
 	expect(chat.seen.completions).toHaveLength(0);
 });
+
+test("a send waiting for the model list goes with the model's default tools, even when the tools load last (#373)", async ({
+	page
+}) => {
+	const chat = await mockChat(page);
+	const withTool = MODELS.map((m) => (m.id === 'llama' ? { ...m, info: { meta: { toolIds: ['calc'] } } } : m));
+	let releaseModels = () => {};
+	let releaseTools = () => {};
+	const modelsHeld = new Promise<void>((resolve) => (releaseModels = resolve));
+	const toolsHeld = new Promise<void>((resolve) => (releaseTools = resolve));
+	await page.route('**/api/models*', async (route) => {
+		await modelsHeld;
+		return json(route, { data: withTool });
+	});
+	await page.route(/\/api\/v1\/tools\/(\?|$)/, async (route) => {
+		await toolsHeld;
+		return json(route, [{ id: 'calc', name: 'Calculator', meta: {} }]);
+	});
+	await page.goto('/?models=llama');
+	await chat.socket.connected;
+	await page.keyboard.type('What is 2+2?');
+	await page.keyboard.press('Enter');
+
+	releaseModels();
+	await page.waitForTimeout(500);
+	expect(chat.seen.completions).toHaveLength(0);
+	releaseTools();
+	await expect.poll(() => chat.seen.completions.length).toBe(1);
+	expect(chat.seen.completions[0]).toMatchObject({ model: 'llama', tool_ids: ['calc'] });
+});

@@ -245,9 +245,10 @@ export function ChatPage() {
 
 	// A saved chat brings its own models; a new one picks them (URL, folder, user, defaults).
 	const modelsChosen = useModelPick(session.chat, folder, setSelectedModels);
-	// A send before the page has chosen its models waits for them, in the box (#373).
+	// A send before the page has chosen its models waits for them, and for the tools
+	// whose defaults they may turn on, in the box (#373).
 	const heldSend = useHeldSend(
-		modelsChosen,
+		modelsChosen && (tools.isSuccess || tools.isError),
 		id ?? `new:${folderId ?? ''}`,
 		(text, files) => requestSend(text, files, true),
 		() => input.current?.submit()

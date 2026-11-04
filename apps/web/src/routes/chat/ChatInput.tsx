@@ -133,7 +133,10 @@ export const ChatInput = forwardRef<
 	useImperativeHandle(ref, () => ({
 		focus: () => area.current?.focus(),
 		setText: (t) => setText(t),
-		submit: () => submit()
+		submit: () => {
+			// Nothing to send (the box was emptied meanwhile): nothing to refuse either.
+			if (text.trim() || files.length) submit();
+		}
 	}));
 
 	const command = commandAt(text, cursor);
