@@ -5,7 +5,7 @@ import logging
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Request
 from mcp.shared.auth import OAuthMetadata
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from local_llm.config import BannerModel
 from local_llm.env import AIOHTTP_CLIENT_SESSION_SSL, AIOHTTP_CLIENT_TIMEOUT
@@ -236,6 +236,12 @@ class ToolServerConnection(BaseModel):
     info: dict | None = None
 
     model_config = ConfigDict(extra='allow')
+
+    @field_validator('config', mode='after')
+    @classmethod
+    def _config_never_null(cls, value: dict | None) -> dict:
+        # Stored as null, it stopped the backend starting (#363): store {} instead.
+        return value if value is not None else {}
 
 
 class ToolServersConfigForm(BaseModel):
