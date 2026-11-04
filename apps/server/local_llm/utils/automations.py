@@ -177,12 +177,23 @@ def validate_rrule(s: str, tz: str = None) -> None:
         raise ValueError(ERROR_MESSAGES.AUTOMATION_NO_FUTURE_RUNS)
 
 
-def next_run_ns(s: str, tz: str = None) -> int | None:
-    """Next occurrence as epoch nanoseconds, respecting user timezone."""
+def next_run_ns(s: str, tz: str | None = None, anchor_ns: int | None = None) -> int | None:
+    """Next occurrence as epoch nanoseconds, respecting user timezone.
+
+    `anchor_ns` is when the rule is read from: a rule without DTSTART takes
+    the time it does not state from there (now, by default). A claimed run
+    passes its own due time, so a late claim does not move the rule's time
+    of day (#512).
+    """
     zi = _resolve_tz(tz)
     now = dt.datetime.now(zi) if zi else dt.datetime.now()
     now_naive = now.replace(tzinfo=None)
-    when = _parse_rule(s, now_naive).after(now_naive)
+    anchor = (
+        dt.datetime.fromtimestamp(anchor_ns / 1_000_000_000, tz=zi).replace(tzinfo=None)
+        if anchor_ns is not None
+        else now_naive
+    )
+    when = _parse_rule(s, anchor).after(now_naive)
     if when is None:
         return None
     if zi:
