@@ -118,3 +118,23 @@ def test_a_failed_folder_delete_is_an_error_and_hides_no_chat(tree, monkeypatch)
     assert r.status_code == 400
     # The chats were moved out first, so none points at a folder that is gone.
     assert [_run(Chats.get_chat_by_id(cid)).folder_id for cid in tree.chats] == [None, None, None]
+
+
+def test_deleting_a_folder_with_its_chats_deletes_them_all(tree, monkeypatch):
+    r = _client(tree.user, monkeypatch).delete(f'/folders/{tree.ids[0]}', params={'delete_contents': True})
+
+    assert r.status_code == 200 and r.json() is True
+    assert _run(_folders_left(tree.ids, tree.user.id)) == []
+    assert [_run(Chats.get_chat_by_id(cid)) for cid in tree.chats] == [None, None, None]
+
+
+def test_a_failed_chat_move_is_an_error_and_deletes_no_folder(tree, monkeypatch):
+    async def refuse(*_a, **_k):
+        return False
+
+    monkeypatch.setattr(folders_router.Chats, 'move_chats_by_user_id_and_folder_id', refuse)
+    r = _client(tree.user, monkeypatch).delete(f'/folders/{tree.ids[0]}', params={'delete_contents': False})
+
+    assert r.status_code == 400
+    # The chats stayed in folders that still exist.
+    assert _run(_folders_left(tree.ids, tree.user.id)) == tree.ids

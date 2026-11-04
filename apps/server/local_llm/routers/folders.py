@@ -708,15 +708,21 @@ async def delete_folder_by_id(
     try:
         for folder_id in folder_ids:
             if delete_contents:
-                await Chats.delete_chats_by_user_id_and_folder_id(folder_owner_id, folder_id, db=db)
+                done = await Chats.delete_chats_by_user_id_and_folder_id(folder_owner_id, folder_id, db=db)
             else:
-                await Chats.move_chats_by_user_id_and_folder_id(folder_owner_id, folder_id, None, db=db)
+                done = await Chats.move_chats_by_user_id_and_folder_id(folder_owner_id, folder_id, None, db=db)
+            # These report a failure by returning False, not by raising.
+            if not done:
+                raise RuntimeError(f'Could not move or delete the chats of folder {folder_id}')
 
             # Clean up access grants for this folder
             await AccessGrants.revoke_all_access('folder', folder_id, db=db)
 
         await Automations.clear_folder_ids(folder_owner_id, folder_ids, db=db)
-        folder_ids = await Folders.delete_folder_by_id_and_user_id(folder.id, folder_owner_id, db=db)
+        # Exactly the folders whose chats were handled above.
+        folder_ids = await Folders.delete_folder_by_id_and_user_id(
+            folder.id, folder_owner_id, db=db, folder_ids=folder_ids
+        )
     except Exception as e:
         log.exception(e)
         log.error(f'Error deleting folder: {id}')

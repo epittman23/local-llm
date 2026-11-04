@@ -379,7 +379,9 @@ class FolderTable:
             log.error(f'update_folder: {e}')
             return
 
-    async def delete_folder_by_id_and_user_id(self, id: str, user_id: str, db: AsyncSession | None = None) -> list[str]:
+    async def delete_folder_by_id_and_user_id(
+        self, id: str, user_id: str, db: AsyncSession | None = None, folder_ids: list[str] | None = None
+    ) -> list[str]:
         """Delete a folder and every folder under it, in one transaction; returns their ids.
 
         Each child used to be deleted and committed on its own, and an error
@@ -387,8 +389,12 @@ class FolderTable:
         deleted and told the caller nothing was, so its chats were never moved
         or deleted, and stayed hidden in folders that no longer existed (#281).
         An error now reaches the caller, and leaves every folder in place.
+
+        `folder_ids`, when given, is the subtree as the caller already took it,
+        so exactly the folders it handled are deleted.
         """
-        folder_ids = await self.get_folder_ids_by_id_and_user_id_in_subtree(id, user_id, db=db)
+        if folder_ids is None:
+            folder_ids = await self.get_folder_ids_by_id_and_user_id_in_subtree(id, user_id, db=db)
         if not folder_ids:
             return []
         async with get_async_db_context(db) as db:
