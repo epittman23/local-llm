@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
 	type FunctionListItem,
 	filterAndSortFunctions,
+	importFunctions,
 	importSummary,
 	parseFunctionImport,
 	sanitizeIncomingFunction
@@ -93,5 +94,44 @@ describe('importSummary (#209)', () => {
 	});
 	it('says how many when some failed', () => {
 		expect(importSummary(1, 3)).toEqual(['warning', 'Imported 1 of 3 functions']);
+	});
+});
+
+describe('importFunctions (#209)', () => {
+	const run = async (create: (fn: string) => Promise<unknown>, functions = ['a', 'b']) => {
+		const notify = vi.fn();
+		await importFunctions(functions, create, notify);
+		return notify.mock.calls;
+	};
+
+	it('says imported only when every create succeeded', async () => {
+		expect(await run(async (id) => ({ id }))).toEqual([['success', 'Functions imported successfully']]);
+	});
+	it('reports each refused create, then that none were imported, when all failed', async () => {
+		expect(await run(async (id) => Promise.reject(`${id} is taken`))).toEqual([
+			['error', 'a is taken'],
+			['error', 'b is taken'],
+			['error', 'No functions were imported']
+		]);
+	});
+	it('says how many when some failed, counting a create that returned nothing as failed', async () => {
+		const calls = await run(async (id) => (id === 'b' ? null : { id }), ['a', 'b', 'c']);
+		expect(calls).toEqual([['warning', 'Imported 2 of 3 functions']]);
+	});
+	it('creates the functions one at a time, in order', async () => {
+		const seen: string[] = [];
+		let active = 0;
+		await run(
+			async (id) => {
+				active += 1;
+				expect(active).toBe(1);
+				await Promise.resolve();
+				seen.push(id);
+				active -= 1;
+				return { id };
+			},
+			['a', 'b', 'c']
+		);
+		expect(seen).toEqual(['a', 'b', 'c']);
 	});
 });

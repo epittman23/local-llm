@@ -101,3 +101,25 @@ export const importSummary = (created: number, total: number): ['success' | 'war
 	if (created === 0) return ['error', total === 1 ? 'The function was not imported' : 'No functions were imported'];
 	return ['warning', `Imported ${created} of ${total} functions`];
 };
+
+/**
+ * Creates the file's functions one at a time and reports how it went: each
+ * refused create's own error, then one summary from `importSummary`. A create
+ * that throws or returns nothing counts as not created.
+ */
+export async function importFunctions<T>(
+	functions: T[],
+	create: (fn: T) => Promise<unknown>,
+	notify: (kind: 'success' | 'warning' | 'error', message: string) => void
+) {
+	let created = 0;
+	for (const fn of functions) {
+		const res = await create(fn).catch((error) => {
+			notify('error', `${error}`);
+			return null;
+		});
+		if (res) created += 1;
+	}
+	const [kind, message] = importSummary(created, functions.length);
+	notify(kind, message);
+}

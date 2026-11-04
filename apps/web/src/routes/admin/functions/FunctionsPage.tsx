@@ -43,7 +43,7 @@ import {
 	FUNCTION_TYPES,
 	type FunctionListItem,
 	filterAndSortFunctions,
-	importSummary,
+	importFunctions,
 	parseFunctionImport
 } from './functionTypes';
 
@@ -210,16 +210,11 @@ export function FunctionsPage() {
 					toast.error('No valid functions found in that file.');
 					return;
 				}
-				let created = 0;
-				for (const fn of functions) {
-					const res = await createNewFunction(token, fn).catch((error) => {
-						toast.error(`${error}`);
-						return null;
-					});
-					if (res) created += 1;
-				}
-				const [kind, message] = importSummary(created, functions.length);
-				toast[kind](message);
+				await importFunctions(
+					functions,
+					(fn) => createNewFunction(token, fn),
+					(kind, message) => toast[kind](message)
+				);
 				refresh();
 			} catch (error) {
 				toast.error(`${error}`);
