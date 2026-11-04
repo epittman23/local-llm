@@ -1703,9 +1703,19 @@ async def download_model(
     file_path = partial_download_path(form_data.url, file_name)
     if file_path is None or file_name is None:
         return None
-    return StreamingResponse(
-        download_file_stream(url, form_data.url, file_path, file_name),
-    )
+
+    async def events():
+        # A failure once the stream has started used to cut it off with no
+        # message, so the tab showed nothing (#250); it ends with an error event,
+        # as the upload's stream does.
+        try:
+            async for event in download_file_stream(url, form_data.url, file_path, file_name):
+                yield event
+        except Exception as exc:
+            log.warning('Model download from %s failed: %s', form_data.url, exc)
+            yield f'data: {JSONCodec.dumps({"error": str(exc)})}\n\n'
+
+    return StreamingResponse(events())
 
 
 @router.post('/models/upload')
