@@ -109,6 +109,42 @@ class OAuthClientMetadata(MCPOAuthClientMetadata):
     pass
 
 
+def _token_endpoint_auth_method(offered: list[str] | None, *, has_secret: bool) -> str:
+    """The token endpoint auth method to register or use with an authorization server (#273).
+
+    `client_secret_post` whenever the server lists it, or lists nothing.
+    Otherwise the first method the server lists that this client supports
+    (`client_secret_basic` or `none`), in the server's own order, except that
+    a client with no secret takes `none` when it is listed. When the server
+    lists neither, `client_secret_post` is kept: the server's first choice
+    (`private_key_jwt`, say) is one this client cannot use, and taking it
+    failed validation.
+    """
+    if not offered or 'client_secret_post' in offered:
+        return 'client_secret_post'
+    usable = [method for method in offered if method in ('client_secret_basic', 'none')]
+    if not has_secret and 'none' in usable:
+        return 'none'
+    return usable[0] if usable else 'client_secret_post'
+
+
+def _refresh_client_auth(
+    client_id: str, client_secret: str | None, method: str | None
+) -> tuple[dict, aiohttp.BasicAuth | None]:
+    """The client credentials for a refresh request, sent as its registered method asks (#273).
+
+    `client_secret_basic` sends them in an Authorization header, as authlib
+    does for the code exchange, and not in the body; `none` sends the
+    client id only; `client_secret_post` (the default) sends both in the body.
+    Returns the body fields and the Basic auth, if any.
+    """
+    if method == 'client_secret_basic' and client_secret:
+        return {}, aiohttp.BasicAuth(client_id, client_secret, encoding='latin1')
+    if method == 'none' or not client_secret:
+        return {'client_id': client_id}, None
+    return {'client_id': client_id, 'client_secret': client_secret}, None
+
+
 OAuthResourceParameterMode = Literal['auto', 'include', 'omit']
 
 
@@ -539,15 +575,10 @@ async def get_oauth_client_info_with_dynamic_client_registration(
                             ):
                                 oauth_client_metadata.scope = ' '.join(oauth_server_metadata.scopes_supported)
 
-                            if (
-                                oauth_server_metadata.token_endpoint_auth_methods_supported
-                                and oauth_client_metadata.token_endpoint_auth_method
-                                not in oauth_server_metadata.token_endpoint_auth_methods_supported
-                            ):
-                                # Pick the first supported method from the server
-                                oauth_client_metadata.token_endpoint_auth_method = (
-                                    oauth_server_metadata.token_endpoint_auth_methods_supported[0]
-                                )
+                            # Registration issues a secret for a secret method, so prefer one.
+                            oauth_client_metadata.token_endpoint_auth_method = _token_endpoint_auth_method(
+                                oauth_server_metadata.token_endpoint_auth_methods_supported, has_secret=True
+                            )
 
                             break
                         except Exception as e:
@@ -677,13 +708,10 @@ async def get_oauth_client_info_with_static_credentials(
         )
 
         # Determine token_endpoint_auth_method
-        token_endpoint_auth_method = 'client_secret_post'
-        if (
-            oauth_server_metadata
-            and oauth_server_metadata.token_endpoint_auth_methods_supported
-            and token_endpoint_auth_method not in oauth_server_metadata.token_endpoint_auth_methods_supported
-        ):
-            token_endpoint_auth_method = oauth_server_metadata.token_endpoint_auth_methods_supported[0]
+        token_endpoint_auth_method = _token_endpoint_auth_method(
+            oauth_server_metadata.token_endpoint_auth_methods_supported if oauth_server_metadata else None,
+            has_secret=bool(oauth_client_secret),
+        )
 
         oauth_client_info = OAuthClientInformationFull(
             client_id=oauth_client_id,
@@ -1215,17 +1243,19 @@ class OAuthClientManager:
                 return None
 
             # Prepare refresh request
+            client_info = await self.get_client_info(client_id)
+            credentials, basic_auth = _refresh_client_auth(
+                client.client_id,
+                getattr(client, 'client_secret', None),
+                getattr(client_info, 'token_endpoint_auth_method', None),
+            )
             refresh_data = {
                 'grant_type': 'refresh_token',
                 'refresh_token': token_data['refresh_token'],
-                'client_id': client.client_id,
+                **credentials,
             }
-            client_info = await self.get_client_info(client_id)
             if should_send_oauth_resource(client_info):
                 refresh_data['resource'] = client_info.resource
-
-            if hasattr(client, 'client_secret') and client.client_secret:
-                refresh_data['client_secret'] = client.client_secret
 
             # Add scope if available in client kwargs (some providers require it on refresh)
             if (
@@ -1241,6 +1271,7 @@ class OAuthClientManager:
                     token_endpoint,
                     data=refresh_data,
                     headers={'Content-Type': 'application/x-www-form-urlencoded'},
+                    auth=basic_auth,
                     ssl=AIOHTTP_CLIENT_SESSION_SSL,
                 ) as r:
                     if r.status == 200:
