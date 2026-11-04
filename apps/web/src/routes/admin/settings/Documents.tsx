@@ -632,7 +632,7 @@ export default function Documents() {
 								{...bound}
 								name="FILE_MAX_SIZE"
 								label="Max Upload Size"
-								description="Maximum file size in MB. Leave empty for unlimited."
+								description="Maximum file size in MB. Leave empty or set 0 for unlimited."
 								placeholder="Leave empty for unlimited"
 								min={0}
 							/>

@@ -127,6 +127,8 @@ export function prepareImagesConfig(config: Rec, nodes: NodeRow[], editNodes: No
 	if (!openai) return { ok: false, error: 'Invalid JSON format for OpenAI Additional Parameters.' };
 	payload.AUTOMATIC1111_PARAMS = automatic1111;
 	payload.IMAGES_OPENAI_API_PARAMS = openai;
+	// A cleared Steps box is no step count (the engine's default), not '' (#237).
+	if (config.IMAGE_STEPS === '') payload.IMAGE_STEPS = null;
 
 	return { ok: true, payload };
 }
