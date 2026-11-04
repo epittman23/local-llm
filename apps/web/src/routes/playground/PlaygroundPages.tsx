@@ -16,7 +16,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { getModels } from '@/lib/apis';
 import { imageEdits, imageGenerations } from '@/lib/apis/images';
-import { chatCompletion } from '@/lib/apis/openai';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore, useDocumentTitle } from '@/lib/stores/configStore';
@@ -28,9 +27,9 @@ import {
 	chatRequest,
 	chatToExport,
 	chatToText,
-	initialModel,
-	readCompletionStream
+	initialModel
 } from './playgroundModel';
+import { useStreamRunner } from './useStreamRunner';
 
 type ModelInfo = { id: string; name: string };
 
@@ -104,28 +103,6 @@ function ModelSelect({
 			))}
 		</select>
 	);
-}
-
-/** Runs a streamed completion, with a Stop that aborts the request itself (the Svelte loop only stopped between chunks). */
-function useStreamRunner() {
-	const token = useAuthStore((s) => s.token) ?? '';
-	const [running, setRunning] = useState(false);
-	const controller = useRef<AbortController | null>(null);
-	useEffect(() => () => controller.current?.abort(), []);
-	const run = async (body: object, onText: (t: string) => void) => {
-		setRunning(true);
-		try {
-			const [res, ctrl] = await chatCompletion(token, body);
-			controller.current = ctrl;
-			await readCompletionStream(res, onText, ctrl.signal);
-		} catch (err) {
-			if (!controller.current?.signal.aborted) toast.error(`${err instanceof Error ? err.message : err}`);
-		} finally {
-			controller.current = null;
-			setRunning(false);
-		}
-	};
-	return { running, run, stop: () => controller.current?.abort('User: Stop Response') };
 }
 
 /** Ports components/playground/Chat.svelte: a hand-built conversation (either role), system instructions, parameters, run and stream. */
