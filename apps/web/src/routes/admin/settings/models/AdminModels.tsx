@@ -39,7 +39,7 @@ import { copyToClipboard } from '@/lib/utils';
 import { useShiftKey } from '@/lib/utils/useShiftKey';
 import { routePaths } from '@/routes/routePaths';
 import { ModelEditor } from '@/routes/workspace/models/ModelEditor';
-import { parseModelImport } from '@/routes/workspace/models/modelImport';
+import { importPayload, parseModelImport } from '@/routes/workspace/models/modelImport';
 import { ManageModelsModal } from './ManageModelsModal';
 import { ModelDefaultsPanel } from './ModelDefaultsPanel';
 import { ModelRow, type RowHandlers } from './ModelRow';
@@ -379,7 +379,7 @@ export default function AdminModels() {
 		setImporting(true);
 		try {
 			const parsed = parseModelImport(await file.text());
-			if (await importModels(token, parsed)) {
+			if (await importModels(token, importPayload(parsed))) {
 				toast.success('Models imported successfully');
 				await refreshApp();
 				await init();

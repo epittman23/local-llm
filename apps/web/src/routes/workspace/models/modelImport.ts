@@ -76,6 +76,20 @@ export function importUpdate(existing: Json, incoming: IncomingModel): Json {
 	};
 }
 
+/**
+ * The models an admin's import sends to the server's `/models/import`, which
+ * updates a model whose id exists and creates the rest. For an existing model
+ * that endpoint keeps whatever a model leaves out, so `access_grants` is left
+ * out (the file never brings any, and an empty list would wipe the model's
+ * sharing), and so is a base model the file does not name (#524). A new model
+ * starts with no grants and no base model either way.
+ */
+export function importPayload(models: IncomingModel[]): Json[] {
+	return models.map(({ access_grants: _never, base_model_id, ...model }) =>
+		base_model_id ? { ...model, base_model_id } : model
+	);
+}
+
 /** Saves one imported model: updates the model with its id (see importUpdate), or creates it when there is none. */
 export async function saveImportedModel(token: string, model: IncomingModel) {
 	const existing = await getModelById(token, model.id).catch(() => null);

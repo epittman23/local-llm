@@ -2678,7 +2678,7 @@ test.describe('settings: Models', () => {
 		expect(calls.some((c) => c.path === '/models/delete/all')).toBe(true);
 	});
 
-	test('Actions: Import refuses a file that is not JSON, and sends models without any access grants', async ({
+	test('Actions: Import refuses a file that is not JSON, and sends models without grants or a missing base model', async ({
 		page
 	}) => {
 		await mockWorkspaceBackend(page);
@@ -2694,8 +2694,10 @@ test.describe('settings: Models', () => {
 			buffer: Buffer.from(JSON.stringify([{ id: 'x', name: 'X', access_grants: [pub] }]))
 		});
 		await expect(page.getByText('Models imported successfully')).toBeVisible();
+		// Left out, not empty: for a model that exists, the server keeps what is
+		// left out, and an empty list would wipe its sharing (#524).
 		expect(posts(calls, '/models/import')[0]).toEqual({
-			models: [expect.objectContaining({ id: 'x', name: 'X', access_grants: [] })]
+			models: [{ id: 'x', name: 'X', meta: {}, params: {} }]
 		});
 	});
 
