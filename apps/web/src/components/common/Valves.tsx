@@ -9,13 +9,17 @@ export type ValveProperty = {
 	description?: string | null;
 	type?: string;
 	default?: unknown;
-	enum?: string[];
+	enum?: Array<string | number | boolean>;
 	input?: { type?: string; options?: Array<{ value: string; label?: string } | string> };
 };
 export type ValvesSpec = { properties?: Record<string, ValveProperty>; required?: string[] } | null;
 export type ValveValues = Record<string, unknown>;
 
 const fieldClass = 'border-border bg-background w-full rounded-lg border px-3 py-2 text-sm outline-hidden';
+
+/** The enum entry a `<select>`'s text stands for, with its own type: `'2'` is `2` in `[1, 2, 3]`. */
+export const enumOption = (options: ReadonlyArray<string | number | boolean>, text: string) =>
+	options.find((option) => String(option) === text) ?? text;
 
 const optionValue = (o: { value: string; label?: string } | string) => (typeof o === 'string' ? o : o.value);
 const optionLabel = (o: { value: string; label?: string } | string) =>
@@ -110,10 +114,16 @@ export function Valves({
 				if (value !== null) {
 					if (p.enum) {
 						field = (
-							<select className={fieldClass} value={String(value)} onChange={(e) => set(name, e.target.value)}>
+							<select
+								className={fieldClass}
+								value={String(value)}
+								// The option itself, not the select's text: a Literal[1, 2, 3]
+								// valve refused "2" (#201).
+								onChange={(e) => set(name, enumOption(p.enum ?? [], e.target.value))}
+							>
 								{p.enum.map((option) => (
-									<option key={option} value={option}>
-										{option}
+									<option key={String(option)} value={String(option)}>
+										{String(option)}
 									</option>
 								))}
 							</select>
