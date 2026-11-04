@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { uploadFile } from '@/lib/apis/files';
 import { processUrl } from '@/lib/apis/retrieval';
-import { allCapable, canUploadFiles, canUploadWeb, imageTargetSize } from '@/lib/chat/attachments';
+import { allCapable, anyCapable, canUploadFiles, canUploadWeb, imageTargetSize } from '@/lib/chat/attachments';
 import type { ChatFile } from '@/lib/chat/history';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -199,9 +199,17 @@ export function useAttachments({
 				toast.error(`You can only chat with a maximum of ${maxCount} file(s) at a time.`);
 				return;
 			}
-			if (list.some((f) => f.type.startsWith('image/')) && !allCapable(selectedModels, models, 'vision'))
+			const images = list.some((f) => f.type.startsWith('image/'));
+			let accepted = list;
+			// No selected model can read an image: refuse it, as the Svelte app did,
+			// rather than upload one the provider rejects at send (#219). Some can:
+			// keep it, with a warning.
+			if (images && !anyCapable(selectedModels, models, 'vision')) {
+				toast.error('Selected model(s) do not support image inputs');
+				accepted = list.filter((f) => !f.type.startsWith('image/'));
+			} else if (images && !allCapable(selectedModels, models, 'vision'))
 				toast.warning('Model(s) are not vision capable');
-			for (const f of list) void uploadOne(f, opts);
+			for (const f of accepted) void uploadOne(f, opts);
 		},
 		[user, selectedModels, models, config, uploadOne]
 	);
