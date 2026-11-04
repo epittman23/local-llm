@@ -14,7 +14,7 @@ from local_llm.models.config import Config
 from local_llm.utils.auth import get_admin_user, get_verified_user
 from local_llm.utils.headers import bearer_auth_header, get_custom_headers
 from local_llm.utils.mcp.client import MCPClient
-from local_llm.utils.misc import chunk_settings_error, jwt_expiry_error
+from local_llm.utils.misc import chunk_settings_error, embedding_batch_size_error, jwt_expiry_error
 from local_llm.utils.oauth import (
     OAuthClientInformationFull,
     apply_connection_oauth_options,
@@ -111,6 +111,11 @@ async def import_config(request: Request, form_data: ImportConfigForm, user=Depe
         )
         if error:
             raise HTTPException(status_code=400, detail=error)
+    # And its embedding batch size: one below 1 fails every embedding (#353).
+    if 'rag.embedding_batch_size' in form_data.config and (
+        error := embedding_batch_size_error(form_data.config['rag.embedding_batch_size'])
+    ):
+        raise HTTPException(status_code=400, detail=error)
     await Config.upsert(form_data.config)
     await publish_event(
         request,
