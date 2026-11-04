@@ -134,7 +134,7 @@ async def apply_filter_valves(function_module, filter_context, valves_by_id, fil
 
 def get_filter_params(sig, filter_id, filter_type, form_data, extra_params):
     params = {'event': form_data} if filter_type == 'stream' else {'body': form_data}
-    return params | {
+    params |= {
         k: v
         for k, v in {
             **extra_params,
@@ -142,6 +142,11 @@ def get_filter_params(sig, filter_id, filter_type, form_data, extra_params):
         }.items()
         if k in sig.parameters
     }
+    # Each filter gets its own `__user__`, so the user valves set on it below
+    # reach neither later filters nor the caller (#173).
+    if isinstance(params.get('__user__'), dict):
+        params['__user__'] = dict(params['__user__'])
+    return params
 
 
 async def apply_user_valves(function_module, filter_context, filter_id, params):
