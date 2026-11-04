@@ -1,3 +1,4 @@
+import logging
 import time
 import uuid
 
@@ -10,6 +11,8 @@ from local_llm.models.access_grants import AccessGrantModel, AccessGrants
 from local_llm.models.groups import Groups
 from local_llm.models.users import User, UserModel, UserResponse
 from local_llm.utils.json_codec import JSONCodec
+
+log = logging.getLogger(__name__)
 
 ####################
 # Note DB Schema
@@ -397,7 +400,8 @@ class NoteTable:
 
                 await db.commit()
                 return await self._to_note_model(note, db=db)
-        except Exception:
+        except Exception as e:
+            log.warning('Could not pin or unpin note %s: %s', id, e)
             return None
 
     async def get_pinned_notes_by_user_id(
@@ -432,7 +436,8 @@ class NoteTable:
                 await db.execute(delete(Note).filter(Note.id == id))
                 await db.commit()
                 return True
-        except Exception:
+        except Exception as e:
+            log.warning('Could not delete note %s: %s', id, e)
             return False
 
     async def get_pinned_note_ids(self, user_id: str, db: AsyncSession | None = None) -> list[str]:
