@@ -411,7 +411,7 @@ describe('channelPayload', () => {
 });
 
 describe('display helpers', () => {
-	it('lists up to three names, then the rest as a count', () => {
+	it('names up to three people, or three and the rest as a count past four', () => {
 		const users = ['me', 'a', 'b', 'c', 'd'].map((id) => ({ id, name: id.toUpperCase() }));
 		expect(reactionTooltip({ name: 'tada', users: users.slice(0, 2), count: 2 }, 'me')).toBe(
 			'You and A reacted with :tada:'
@@ -419,6 +419,14 @@ describe('display helpers', () => {
 		expect(reactionTooltip({ name: 'tada', users, count: 5 }, 'me')).toBe(
 			'You, A and B and 2 others reacted with :tada:'
 		);
+	});
+	it('names all four people when exactly four reacted (#257)', () => {
+		const users = ['me', 'a', 'b', 'c'].map((id) => ({ id, name: id.toUpperCase() }));
+		expect(reactionTooltip({ name: 'tada', users, count: 4 }, 'me')).toBe('You, A, B and C reacted with :tada:');
+		expect(reactionTooltip({ name: 'tada', users: users.slice(0, 3), count: 3 }, 'me')).toBe(
+			'You, A and B reacted with :tada:'
+		);
+		expect(reactionTooltip({ name: 'tada', users: users.slice(1, 2), count: 1 }, 'me')).toBe('A reacted with :tada:');
 	});
 	it('builds attachment URLs', () => {
 		expect(attachmentUrl({ url: 'f1', content_type: 'image/png' }, '/api/v1')).toBe('/api/v1/files/f1/content');
