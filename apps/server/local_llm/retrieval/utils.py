@@ -19,7 +19,7 @@ from langchain_classic.retrievers import (
     EnsembleRetriever,
 )
 from langchain_community.retrievers import BM25Retriever
-from langchain_core.callbacks import CallbackManagerForRetrieverRun, Callbacks
+from langchain_core.callbacks import AsyncCallbackManagerForRetrieverRun, CallbackManagerForRetrieverRun, Callbacks
 from langchain_core.documents import BaseDocumentCompressor, Document
 from langchain_core.retrievers import BaseRetriever
 
@@ -328,6 +328,41 @@ class VectorSearchRetriever(BaseRetriever):
         return _search_result_to_documents(result)
 
 
+class _StoredTextRetriever(BaseRetriever):
+    """Another retriever's documents, each with its chunk's stored text as content.
+
+    With enriched texts on, BM25 scores each chunk with its filename, title,
+    headings and source appended. That text is for scoring only: kept as the
+    content, it reached the reranker, the model and the citations (#357).
+    Chunks are matched by the hash of their stored text, CHUNK_HASH_KEY.
+    """
+
+    retriever: Any
+    texts_by_hash: dict[str, str]
+
+    def _stored(self, documents: list[Document]) -> list[Document]:
+        return [
+            Document(
+                page_content=self.texts_by_hash.get(
+                    str(document.metadata.get(CHUNK_HASH_KEY, '')), document.page_content
+                ),
+                metadata=document.metadata,
+            )
+            for document in documents
+        ]
+
+    def _get_relevant_documents(self, query: str, *, run_manager: CallbackManagerForRetrieverRun) -> list[Document]:
+        return self._stored(self.retriever.invoke(query))
+
+    async def _aget_relevant_documents(
+        self,
+        query: str,
+        *,
+        run_manager: AsyncCallbackManagerForRetrieverRun,
+    ) -> list[Document]:
+        return self._stored(await self.retriever.ainvoke(query))
+
+
 def query_doc(collection_name: str, query_embedding: list[float], k: int, user: UserModel = None):
     try:
         log.debug('query_doc:doc %s', collection_name)
@@ -556,6 +591,11 @@ async def query_doc_with_hybrid_search(
             metadatas=bm25_metadatas,
         )
         bm25_retriever.k = k
+        if enable_enriched_texts:
+            bm25_retriever = _StoredTextRetriever(
+                retriever=bm25_retriever,
+                texts_by_hash={meta[CHUNK_HASH_KEY]: original_texts[idx] for idx, meta in enumerate(bm25_metadatas)},
+            )
 
         vector_search_retriever = VectorSearchRetriever(
             collection_name=collection_name,
