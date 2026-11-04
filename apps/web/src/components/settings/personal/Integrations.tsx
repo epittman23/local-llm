@@ -57,7 +57,7 @@ export default function Integrations() {
 				<ul className="flex flex-col gap-1" aria-label="Tool servers">
 					{tools.map((t, i) => (
 						<li key={i} className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs">
-							<span className="min-w-0 flex-1 truncate">{t.info?.name ?? t.url}</span>
+							<span className="min-w-0 flex-1 truncate">{t.info?.name?.trim() || t.url}</span>
 							<Switch
 								aria-label={`Enable ${t.url}`}
 								checked={t.config?.enable !== false}
