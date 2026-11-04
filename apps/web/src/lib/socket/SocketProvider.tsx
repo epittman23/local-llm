@@ -8,7 +8,7 @@
 // websocket_heartbeat_interval config read; the heartbeat runs on the same 30s
 // literal the backend itself defaults to when that config value is absent.
 
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { toast } from 'sonner';
 import { WEBUI_BASE_URL } from '@/lib/constants';
@@ -31,11 +31,15 @@ export const useSocket = () => useContext(SocketContext);
  * Mounted once at the app root (see src/components/App.tsx), inside
  * react-router's persistent root, so the connection survives client-side
  * navigation instead of being torn down and re-established per route.
+ *
+ * The socket is handed to the children before it connects (#519). The backend
+ * joins the user's room while connecting, so an event can arrive right after;
+ * a listener attached only once the socket had connected missed it.
  */
 export function SocketProvider({ children }: { children: React.ReactNode }) {
 	const token = useAuthStore((state) => state.token);
 	const [connected, setConnected] = useState(false);
-	const socketRef = useRef<Socket | null>(null);
+	const [socket, setSocket] = useState<Socket | null>(null);
 
 	useEffect(() => {
 		if (!token) return;
@@ -47,9 +51,11 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 			randomizationFactor: 0.5,
 			path: '/ws/socket.io',
 			transports: ['websocket', 'polling'],
-			auth: { token }
+			auth: { token },
+			// Connected by the effect below, once the children have attached their listeners.
+			autoConnect: false
 		});
-		socketRef.current = socket;
+		setSocket(socket);
 
 		let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 		let disconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -111,10 +117,16 @@ export function SocketProvider({ children }: { children: React.ReactNode }) {
 			if (heartbeatInterval) clearInterval(heartbeatInterval);
 			clearDisconnectTimer();
 			socket.disconnect();
-			socketRef.current = null;
+			setSocket(null);
 			setConnected(false);
 		};
 	}, [token]);
 
-	return <SocketContext.Provider value={{ socket: socketRef.current, connected }}>{children}</SocketContext.Provider>;
+	// A parent's effects run after its children's, so by now every child that
+	// got this socket has attached its listeners.
+	useEffect(() => {
+		socket?.connect();
+	}, [socket]);
+
+	return <SocketContext.Provider value={{ socket, connected }}>{children}</SocketContext.Provider>;
 }
