@@ -36,11 +36,24 @@ def test_optional_int_env(monkeypatch, value, expected):
     assert optional_int_env('LLLM_TEST_INT') == expected
 
 
-@pytest.mark.parametrize(('value', 'cap'), [('', None), ('0.5', None), ('2', 2 * 1024 * 1024)])
-def test_the_settings_load_with_the_value(tmp_path, value, cap):
+@pytest.mark.parametrize(
+    ('value', 'cap_setting', 'cap'),
+    [
+        ('', None, None),
+        ('0.5', None, None),
+        ('2', None, 2 * 1024 * 1024),
+        # Its own setting wins, a 0 included (a cap of 0, as before), and an empty one falls back.
+        ('2', '0', 0),
+        ('2', '500', 500),
+        ('2', '', 2 * 1024 * 1024),
+    ],
+)
+def test_the_settings_load_with_the_value(tmp_path, value, cap_setting, cap):
     env = {**os.environ, 'RAG_FILE_MAX_SIZE': value, 'DATA_DIR': str(tmp_path), 'HF_HUB_OFFLINE': '1'}
     env.pop('DATABASE_URL', None)
     env.pop('RAG_METADATA_MAX_VALUE_CHARS', None)
+    if cap_setting is not None:
+        env['RAG_METADATA_MAX_VALUE_CHARS'] = cap_setting
     script = (
         'import json, local_llm.env as e, local_llm.config as c;'
         'print("LOADED " + json.dumps([e.RAG_METADATA_MAX_VALUE_CHARS, c.RAG_FILE_MAX_SIZE]))'

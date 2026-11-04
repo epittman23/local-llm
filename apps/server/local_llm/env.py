@@ -787,9 +787,9 @@ def optional_int_env(name: str) -> int | None:
 # archive that expands enormously during extraction can exhaust memory. RAG_FILE_MAX_SIZE is in MB.
 # Only the environment variable is read here, at startup: a limit set in Admin Settings > Documents
 # does not change this cap.
-RAG_METADATA_MAX_VALUE_CHARS = optional_int_env('RAG_METADATA_MAX_VALUE_CHARS') or (
-    (optional_int_env('RAG_FILE_MAX_SIZE') or 0) * 1024 * 1024 or None
-)
+RAG_METADATA_MAX_VALUE_CHARS = optional_int_env('RAG_METADATA_MAX_VALUE_CHARS')
+if RAG_METADATA_MAX_VALUE_CHARS is None:
+    RAG_METADATA_MAX_VALUE_CHARS = (optional_int_env('RAG_FILE_MAX_SIZE') or 0) * 1024 * 1024 or None
 
 MINERU_MAX_MARKDOWN_BYTES = (
     int(os.getenv('MINERU_MAX_MARKDOWN_BYTES')) if os.getenv('MINERU_MAX_MARKDOWN_BYTES') else None
