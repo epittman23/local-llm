@@ -1426,13 +1426,8 @@ async def get_channel_message(
     if message.channel_id != id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ERROR_MESSAGES.DEFAULT())
 
-    message_user = await Users.get_user_by_id(message.user_id, db=db)
-    return MessageResponse(
-        **{
-            **message.model_dump(),
-            'user': UserNameResponse(**message_user.model_dump()) if message_user else None,
-        }
-    )
+    # Its author as get_message_by_id resolved it, a webhook included (#330).
+    return MessageResponse(**message.model_dump())
 
 
 ############################
