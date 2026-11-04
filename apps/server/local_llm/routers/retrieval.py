@@ -73,7 +73,9 @@ from local_llm.retrieval.utils import (
     get_loader_config,
     get_model_path,
     get_reranking_function,
+    in_document_order,
     is_youtube_url,
+    number_chunks,
     query_collection,
     query_collection_with_hybrid_search,
     query_doc,
@@ -1733,6 +1735,8 @@ def save_docs_to_vector_db(
         }
         for doc in docs
     ]
+    # Each chunk's place in its file, for reading a whole file back in order.
+    number_chunks(metadatas)
 
     try:
         if VECTOR_DB_CLIENT.has_collection(collection_name=collection_name):
@@ -1914,13 +1918,13 @@ async def process_file_for(
                 stored_content = (file.data or {}).get('content')
 
                 if has_vector_results(file_result):
-                    # Normal path: reuse the already-processed per-file chunks.
+                    # Normal path: reuse the already-processed per-file chunks,
+                    # in the file's order, which the knowledge base's copies
+                    # are numbered by (#355).
+                    ordered = in_document_order(file_result.model_dump())
                     docs = [
-                        Document(
-                            page_content=file_result.documents[0][idx],
-                            metadata=file_result.metadatas[0][idx],
-                        )
-                        for idx, id in enumerate(file_result.ids[0])
+                        Document(page_content=text, metadata=meta)
+                        for text, meta in zip(ordered['documents'][0], ordered['metadatas'][0], strict=True)
                     ]
                 elif stored_content is not None:
                     # Repair path: vector chunks are missing, but SQL still has the file text.
