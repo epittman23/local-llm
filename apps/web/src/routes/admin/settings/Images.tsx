@@ -370,8 +370,7 @@ export default function Images() {
 										<SettingField label="Steps" htmlFor="img-IMAGE_STEPS">
 											<SettingNumber
 												id="img-IMAGE_STEPS"
-												required
-												placeholder="Enter Number of Steps (e.g. 50)"
+												placeholder="Leave empty for the engine's default (e.g. 50)"
 												value={c.IMAGE_STEPS}
 												onChange={(v) => set({ IMAGE_STEPS: v })}
 											/>

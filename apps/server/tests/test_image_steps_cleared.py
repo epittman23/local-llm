@@ -88,3 +88,29 @@ def test_a_negative_step_count_is_still_refused(saved):
 
     assert exc.value.status_code == 400
     assert saved == []
+
+
+# What "no step count" means when an image is generated.
+
+
+def test_no_step_count_sends_no_steps_to_the_engine():
+    config = SimpleNamespace(IMAGE_STEPS=None)
+
+    assert 'steps' not in images._sampling_params(config, images.CreateImageForm(prompt='p'))
+    assert images._sampling_params(config, images.CreateImageForm(prompt='p', steps=12))['steps'] == 12
+    assert images._sampling_params(SimpleNamespace(IMAGE_STEPS=30), images.CreateImageForm(prompt='p'))['steps'] == 30
+
+
+@pytest.mark.parametrize(('steps', 'expected'), [(None, 20), (35, 35)])
+def test_comfyui_keeps_the_workflows_own_steps_when_none_is_set(steps, expected):
+    from local_llm.utils.images import comfyui
+
+    workflow = {'3': {'inputs': {'steps': 20, 'seed': 1}}}
+    nodes = [comfyui.ComfyUINodeInput(type='steps', node_ids=['3'], key='steps')]
+    payload = comfyui.ComfyUICreateImageForm(
+        workflow=comfyui.ComfyUIWorkflow(workflow='{}', nodes=nodes), prompt='p', width=512, height=512, steps=steps
+    )
+
+    comfyui._apply_workflow_nodes(workflow, nodes, 'model', payload)
+
+    assert workflow['3']['inputs']['steps'] == expected
