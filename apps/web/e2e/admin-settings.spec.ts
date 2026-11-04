@@ -1551,12 +1551,19 @@ test.describe('settings: Images', () => {
 			page,
 			imagesCfg({ IMAGE_GENERATION_ENGINE: 'automatic1111', AUTOMATIC1111_BASE_URL: 'http://sd:7860/' })
 		);
+		const verified: string[] = [];
+		page.on('request', (req) => {
+			const url = new URL(req.url());
+			if (url.pathname.endsWith('/config/url/verify')) verified.push(url.search);
+		});
 		await page.goto('/?settings=admin:images');
 		await create(page).getByLabel('Base URL').fill('http://sd:7861/');
 		await create(page).getByRole('button', { name: 'Verify connection' }).click();
 		await expect(page.getByText('Server connection verified')).toBeVisible();
 		const order = calls.map((c) => c.path).filter((p) => p === '/config/update' || p === '/config/url/verify');
 		expect(order).toEqual(['/config/update', '/config/url/verify']);
+		// The generation engine's Verify names no target (#236).
+		expect(verified).toEqual(['']);
 		expect(updates(calls)[0].AUTOMATIC1111_BASE_URL).toBe('http://sd:7861/');
 		await expect(create(page).getByPlaceholder('Enter api auth string (e.g. username:password)')).toHaveAttribute(
 			'type',

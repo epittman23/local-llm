@@ -113,3 +113,24 @@ def test_an_unreachable_generation_comfyui_is_refused(server):
 
     with pytest.raises(HTTPException):
         _verify()
+
+
+def test_over_http_no_target_is_generation_and_an_unknown_one_is_refused(server):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from local_llm.utils.auth import get_admin_user
+
+    app = FastAPI()
+    app.include_router(images.router)
+    app.dependency_overrides[get_admin_user] = lambda: SimpleNamespace(id='admin', role='admin')
+    server.config(IMAGE_GENERATION_ENGINE='comfyui')
+    http = TestClient(app)
+
+    assert http.get('/config/url/verify').json() is True
+    assert http.get('/config/url/verify', params={'target': 'edit'}).json() is True
+    assert [url for url, _ in server.checked] == [
+        'http://gen-comfy:8188/object_info',
+        'http://edit-comfy:8188/object_info',
+    ]
+    assert http.get('/config/url/verify', params={'target': 'bogus'}).status_code == 422
