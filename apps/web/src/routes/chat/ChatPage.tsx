@@ -13,7 +13,13 @@ import type { ChatFile, History } from '@/lib/chat/history';
 import { cssUrl } from '@/lib/chat/prefs';
 import { type Citation, citationIndex, citationsOf } from '@/lib/chat/sources';
 import { initialModels, needsWebSearchConfirm, newChatTemporary, webSearchConfirmText } from '@/lib/chat/request';
-import { canUploadFiles, canUploadWeb, featureButtons, modelDefaults } from '@/lib/chat/attachments';
+import {
+	canUploadFiles,
+	canUploadWeb,
+	featureButtons,
+	modelDefaults,
+	warnModelsWithoutVision
+} from '@/lib/chat/attachments';
 import { canUseFeature } from '@/lib/access/features';
 import { getTools } from '@/lib/apis/tools';
 import { useUserSettings } from '@/lib/settings/userSettings';
@@ -27,6 +33,7 @@ import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { ChatMenu } from './ChatMenu';
 import { AttachMenu, IntegrationsMenu, type Toggles } from './InputMenus';
 import { useAttachments } from './useAttachments';
+import { useOnChatSwitch } from './useOnChatSwitch';
 import { ChatMessages, type MessageHandlers } from './ChatMessages';
 import { ChatBanners } from './ChatBanners';
 import { ChatPlaceholder } from './ChatPlaceholder';
@@ -124,6 +131,14 @@ export function ChatPage() {
 		toolIds
 	});
 	const attachments = useAttachments({ temporary: temporary && !id, selectedModels, models, chatId: session.chatId });
+	const input = useRef<ChatInputHandle>(null);
+	// Files attached and text typed in one chat are not carried into the next
+	// (#217). Declared before the effects below that fill them for the chat now
+	// opened (`?load-url=`, `?q=`), so it runs first.
+	useOnChatSwitch(id, session.adoptedChatId, () => {
+		attachments.clear();
+		input.current?.setText('');
+	});
 
 	// One model selected: take its default tools and feature switches (Chat.svelte's setDefaults).
 	const defaultsFor = useRef<string | null>(null);
@@ -164,7 +179,6 @@ export function ChatPage() {
 		// Once.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [id]);
-	const input = useRef<ChatInputHandle>(null);
 	const scroller = useRef<HTMLDivElement>(null);
 	const atBottom = useRef(true);
 
@@ -193,6 +207,13 @@ export function ChatPage() {
 	/** Sends a prompt now (true if it went, or was queued). */
 	const send = (text: string, files: ChatFile[] = []) => {
 		scrollOnce.current = true;
+		warnModelsWithoutVision(
+			atModel ? [atModel.id] : selectedModels,
+			models,
+			files,
+			session.history,
+			toggles.imageGeneration
+		);
 		const ok = session.submit(text, files, atModel?.id);
 		if (ok) attachments.clear();
 		return ok;
