@@ -95,3 +95,47 @@ def test_a_rewritten_tool_still_imports():
 
     assert namespace['ConfigParser'].__module__ == 'configparser'
     assert 'ENV' in namespace
+
+
+@pytest.mark.parametrize('line_break', ['\x0c', '\x0b', '\x1c', '\x85', ' ', ' '])
+def test_a_character_python_does_not_end_lines_at_shifts_nothing(line_break):
+    # str.splitlines breaks at these, the tokenizer does not, so a split on
+    # them put the rewrite on the wrong line.
+    src = f'# page one{line_break}page two\nx = 1; from os import path\nx = 1; from config import X\n'
+
+    assert (
+        replace_imports(src)
+        == f'# page one{line_break}page two\nx = 1; from os import path\nx = 1; from local_llm.config import X\n'
+    )
+
+
+def test_a_wrong_line_cannot_land_inside_a_character():
+    src = 's = " "\nx = "é"\nab; from config import X\n'
+
+    assert replace_imports(src) == 's = " "\nx = "é"\nab; from local_llm.config import X\n'
+
+
+@pytest.mark.parametrize('newline', ['\r\n', '\r'])
+def test_other_line_endings_are_kept(newline):
+    src = f'import os{newline}from config import X{newline}'
+
+    assert replace_imports(src) == f'import os{newline}from local_llm.config import X{newline}'
+
+
+def test_source_too_deep_to_parse_is_left_alone():
+    src = 'from config import X\nY = ' + '+'.join(['1'] * 200_000) + '\n'
+
+    assert replace_imports(src) == src
+
+
+def test_source_without_a_legacy_import_is_not_parsed(monkeypatch):
+    import ast
+
+    def refuse(*args, **kwargs):
+        raise AssertionError('parsed')
+
+    monkeypatch.setattr(ast, 'parse', refuse)
+
+    assert replace_imports('from local_llm.config import X\nfrom configparser import C\n') == (
+        'from local_llm.config import X\nfrom configparser import C\n'
+    )

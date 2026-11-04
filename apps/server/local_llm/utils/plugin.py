@@ -5,12 +5,14 @@ import asyncio
 import importlib
 import importlib.abc
 import importlib.machinery
+import io
 import logging
 import re
 import subprocess
 import sys
 import tempfile
 import types
+import warnings
 from typing import Any
 
 import aiofiles
@@ -231,6 +233,9 @@ if not any(isinstance(finder, _OldPackageAlias) for finder in sys.meta_path):
 # The oldest plugin import style named this package's modules without it.
 _LEGACY_IMPORT_ROOTS = frozenset({'utils', 'apps', 'main', 'config'})
 _FROM_KEYWORD = re.compile(r'from\s+')
+# A cheap first look: only source that may hold a legacy import is parsed. This
+# runs on every load of a stored plugin, and its saved source no longer matches.
+_MAY_HAVE_LEGACY_IMPORT = re.compile(r'\bfrom[\s\\]+(?:utils|apps|main|config)\b')
 
 
 def replace_imports(content):
@@ -242,9 +247,14 @@ def replace_imports(content):
     `from local_llm.configparser`, and rewrote docstrings and strings too.
     Source that does not parse is returned as it is.
     """
+    if not _MAY_HAVE_LEGACY_IMPORT.search(content):
+        return content
     try:
-        tree = ast.parse(content)
-    except (SyntaxError, ValueError):
+        with warnings.catch_warnings():
+            # A plugin's own invalid escapes warn again when it is executed.
+            warnings.simplefilter('ignore', SyntaxWarning)
+            tree = ast.parse(content)
+    except (SyntaxError, ValueError, RecursionError, MemoryError):
         return content
 
     positions = sorted(
@@ -258,7 +268,9 @@ def replace_imports(content):
         ),
         reverse=True,
     )
-    lines = content.splitlines(keepends=True)
+    # Python's own line ends only (\n, \r\n, \r), as ast counts them; str.splitlines
+    # also splits at a form feed or U+2028, which would shift every line after.
+    lines = io.StringIO(content, newline='').readlines()
     for lineno, col_offset in positions:
         line = lines[lineno]
         # The column is in UTF-8 bytes.
