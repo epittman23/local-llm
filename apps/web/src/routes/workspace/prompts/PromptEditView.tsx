@@ -213,6 +213,9 @@ export function PromptEditView({
 		try {
 			await setProductionPromptVersion(token, prompt.id, entry.id);
 			setVersionId(entry.id);
+			// That version's content is live now, so a new version starts from it;
+			// the dialog kept the previous one and saving would undo the switch (#222).
+			if (entry.snapshot?.content !== undefined) setContent(entry.snapshot.content);
 			toast.success('Production version updated');
 		} catch (error) {
 			toast.error(`${error}`);

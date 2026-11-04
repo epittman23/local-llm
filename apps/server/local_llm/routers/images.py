@@ -8,11 +8,12 @@ import mimetypes
 import re
 import uuid
 from types import SimpleNamespace
+from typing import Literal
 from urllib.parse import urlparse
 
 import aiofiles
 import aiohttp
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse
 from PIL import Image, ImageOps
 from pydantic import BaseModel, field_validator
@@ -333,9 +334,34 @@ def get_automatic1111_api_auth(image_config):
         return f'Basic {auth1111_base64_encoded_string}'
 
 
+async def _comfyui_reachable(base_url: str, api_key: str | None) -> None:
+    headers = {'Authorization': f'Bearer {api_key}'} if api_key else None
+    try:
+        session = await get_session()
+        async with session.get(url=f'{base_url}/object_info', headers=headers, ssl=AIOHTTP_CLIENT_SESSION_SSL) as r:
+            r.raise_for_status()
+    except Exception:
+        raise HTTPException(status_code=400, detail=ERROR_MESSAGES.INVALID_URL)
+
+
 @router.get('/config/url/verify')
-async def verify_url(request: Request, user=Depends(get_admin_user)):
+async def verify_url(
+    request: Request,
+    target: Literal['generation', 'edit'] = Query('generation', description="Which engine's server to check"),
+    user=Depends(get_admin_user),
+):
+    """Check the stored server URL of the generation engine, or (target=edit) of the edit engine.
+
+    The edit tab's Verify used to call this too, and it checked only the
+    generation engine, so a wrong edit ComfyUI URL was "verified" (#236).
+    """
     image_config = await get_image_config()
+    if target == 'edit':
+        if image_config.IMAGE_EDIT_ENGINE == 'comfyui':
+            await _comfyui_reachable(
+                image_config.IMAGES_EDIT_COMFYUI_BASE_URL, image_config.IMAGES_EDIT_COMFYUI_API_KEY
+            )
+        return True
     if image_config.IMAGE_GENERATION_ENGINE == 'automatic1111':
         try:
             session = await get_session()
@@ -349,20 +375,8 @@ async def verify_url(request: Request, user=Depends(get_admin_user)):
         except Exception:
             raise HTTPException(status_code=400, detail=ERROR_MESSAGES.INVALID_URL)
     elif image_config.IMAGE_GENERATION_ENGINE == 'comfyui':
-        headers = None
-        if image_config.COMFYUI_API_KEY:
-            headers = {'Authorization': f'Bearer {image_config.COMFYUI_API_KEY}'}
-        try:
-            session = await get_session()
-            async with session.get(
-                url=f'{image_config.COMFYUI_BASE_URL}/object_info',
-                headers=headers,
-                ssl=AIOHTTP_CLIENT_SESSION_SSL,
-            ) as r:
-                r.raise_for_status()
-                return True
-        except Exception:
-            raise HTTPException(status_code=400, detail=ERROR_MESSAGES.INVALID_URL)
+        await _comfyui_reachable(image_config.COMFYUI_BASE_URL, image_config.COMFYUI_API_KEY)
+        return True
     else:
         return True
 

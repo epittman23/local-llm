@@ -314,7 +314,8 @@ export default function Pipelines() {
 																	value={String(value)}
 																	onChange={(e) => setValve(key, e.target.value)}
 																	autoComplete="off"
-																	required
+																	// An empty list is a value; an empty text is not.
+																	required={prop.type !== 'array'}
 																/>
 															)}
 														</div>
