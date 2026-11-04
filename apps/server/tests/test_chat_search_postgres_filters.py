@@ -100,3 +100,13 @@ def test_the_search_still_matches_the_words_it_was_given(monkeypatch):
     _, params = _search(monkeypatch, '0x00ff')
 
     assert '%0x00ff%' in params
+
+
+def test_the_search_escapes_like_wildcards_for_postgres(monkeypatch):
+    """`%`, `_` and backslash are escaped, with an explicit ESCAPE, in every LIKE (#292)."""
+    sql, params = _search(monkeypatch, '50%_x\\y')
+
+    assert "LIKE '%%' || %(phrase_content_key)s || '%%' ESCAPE '\\'" in sql
+    assert "ESCAPE '\\'" in sql.split('ILIKE', 1)[1]
+    assert '%50\\%\\_x\\\\y%' in params
+    assert '50\\%\\_x\\\\y' in params
