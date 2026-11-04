@@ -372,8 +372,8 @@ export function useChatSession({
 			if (res && !(res.task_ids ?? []).length && chatIdRef.current === id && idle()) void loadChat(id);
 		};
 		socket.on('connect', onConnect);
-		// Already connected when this listener attached (the provider exposes
-		// the socket only after its first connect): check once now.
+		// Already connected when this listener attached (a chat page opened
+		// after the socket's first connect): check once now.
 		if (socket.connected) void onConnect();
 		return () => {
 			socket.off('connect', onConnect);
