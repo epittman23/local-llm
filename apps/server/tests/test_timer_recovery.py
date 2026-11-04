@@ -105,7 +105,7 @@ def test_a_timer_whose_error_cannot_be_recorded_still_ends_quietly(monkeypatch, 
         raise RuntimeError('database went away')
 
     monkeypatch.setattr(timers.Chats, 'get_chat_by_id', broken)
-    monkeypatch.setattr(timers, '_set_timer_state', broken)
+    monkeypatch.setattr(timers, '_record_timer_error', broken)
 
     _run(timers.execute_due_timer(None, 'any-timer', 'any-claim'))
 
@@ -125,3 +125,41 @@ def test_the_scheduler_recovers_timers_and_survives_a_failure(monkeypatch, caplo
 
     assert len(seen) == 1
     assert 'timer recovery error' in caplog.text
+
+
+def test_a_chat_that_only_looks_like_a_running_timer_is_left_alone():
+    """An imported chat can carry any meta; only internal timer chats are recovered."""
+    uid = f'timers-{uuid.uuid4().hex[:10]}'
+    _run(Users.insert_new_user(uid, 'user', f'{uid}@example.com', role='user'))
+    chat_id = str(uuid.uuid4())
+    _run(
+        Chats.insert_new_chat(
+            chat_id,
+            uid,
+            ChatForm(chat={'id': chat_id, 'title': 'Imported', 'history': {'messages': {}}}),
+            internal_meta={'status': 'running', 'note': 'from an export'},
+        )
+    )
+
+    recovered = _run(timers.recover_stale_timers(time.time_ns()))
+
+    assert chat_id not in recovered
+    assert _meta(chat_id)['status'] == 'running'
+
+
+def test_a_run_that_outlived_recovery_does_not_fail_the_new_claim(monkeypatch):
+    now = time.time_ns()
+    claimed = _timer('running', now, now - MIN)
+    # Recovered and claimed again while the old run hung.
+    _run(timers._set_timer_state(claimed, 'running', timer_claim_id='new-claim'))
+
+    async def unlocked(*args, **kwargs):
+        raise RuntimeError('redis timed out')
+
+    monkeypatch.setattr(timers, '_execute_due_timer', unlocked)
+
+    _run(timers.execute_due_timer(None, claimed, 'old-claim'))
+
+    meta = _meta(claimed)
+    assert meta['status'] == 'running'
+    assert meta['timer_claim_id'] == 'new-claim'
