@@ -84,6 +84,15 @@ export const STARTUP_OWN: StepDef[] = [
 	{ id: 'open', label: 'Open the app' }
 ];
 
+/** First, when a stack an earlier launch started is still running for another address or checkout (#431). */
+export const STARTUP_STOP_EARLIER: StepDef[] = [
+	{
+		id: 'earlier',
+		label: 'Stop the backend an earlier launch started',
+		hint: { afterMs: 15_000, text: 'It stops as on close: open requests, benchmark runs and the served model first.' }
+	}
+];
+
 export const STARTUP_ATTACH: StepDef[] = [
 	{ id: 'check', label: 'Check for a running backend' },
 	{ id: 'ready', label: 'Wait until it is ready' },

@@ -5,7 +5,7 @@
 //
 // The fake is built inside vi.hoisted because vi.mock factories may only use
 // hoisted values; it follows docs/audit/2026-10-28-desktop/repro/P1/main-harness.ts.
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -371,4 +371,50 @@ test('a forced stop that left the services fails the force step, and mentions a 
 	expect(shown.progress.error).toContain('1 container is still there');
 	expect(shown.progress.error).toContain('llama-server');
 	expect(h.state.exits).toEqual([]);
+});
+
+// --- A stack an earlier launch started, found in owned.json (#431) -------------
+
+function recordEarlierStack(record: Record<string, unknown>, config?: Record<string, unknown>) {
+	writeFileSync(join(h.state.userData, 'owned.json'), JSON.stringify({ pgid: 4242, startTicks: '1', ...record }));
+	if (config) writeFileSync(join(h.state.userData, 'config.json'), JSON.stringify(config));
+}
+
+const HERE = { serverUrl: 'http://127.0.0.1:4000', repoPath: '/home/u/local-llm' };
+const ownedFile = () => JSON.parse(readFileSync(join(h.state.userData, 'owned.json'), 'utf8'));
+
+test('a launch records the address and checkout it started the stack for (#431)', async () => {
+	writeFileSync(join(h.state.userData, 'config.json'), JSON.stringify(HERE));
+	await launch();
+
+	expect(h.state.spawned).toBe(1);
+	expect(ownedFile()).toMatchObject({ pgid: 990201, origin: HERE.serverUrl, repo: HERE.repoPath });
+});
+
+test('a stack started for this address and checkout is adopted, not stopped (#431)', async () => {
+	recordEarlierStack({ origin: HERE.serverUrl, repo: HERE.repoPath }, HERE);
+	await launch();
+
+	expect(h.state.spawned).toBe(0);
+	expect(h.state.stops).toEqual([]);
+	expect(appWindows()).toHaveLength(1);
+});
+
+test('a stack started for another address is stopped, and a new one started (#431)', async () => {
+	recordEarlierStack({ origin: 'http://127.0.0.1:4100', repo: HERE.repoPath }, HERE);
+	await launch();
+
+	expect(h.state.stops).toEqual([4242]);
+	expect(h.state.spawned).toBe(1);
+	expect(ownedFile()).toMatchObject({ pgid: 990201, origin: HERE.serverUrl });
+});
+
+test('a launch for a remote server stops the stack an earlier launch left running (#431)', async () => {
+	recordEarlierStack({ origin: HERE.serverUrl, repo: HERE.repoPath }, HERE);
+	vi.stubEnv('LLLM_SERVER_URL', 'https://llm.example.invalid');
+	await launch();
+
+	expect(h.state.stops).toEqual([4242]);
+	expect(h.state.spawned).toBe(0);
+	expect(existsSync(join(h.state.userData, 'owned.json'))).toBe(false);
 });

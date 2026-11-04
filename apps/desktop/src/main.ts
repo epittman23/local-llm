@@ -44,6 +44,7 @@ import {
 	SHUTDOWN,
 	STARTUP_ATTACH,
 	STARTUP_OWN,
+	STARTUP_STOP_EARLIER,
 	startupRemote
 } from './progress';
 import {
@@ -59,6 +60,7 @@ import {
 	llamaServerPids,
 	makeBackendCommand,
 	type OwnedRecord,
+	ownedAction,
 	parseOwned,
 	probe,
 	readProcStat,
@@ -329,6 +331,18 @@ async function startup(): Promise<void> {
 	const now = Date.now;
 
 	try {
+		const record = readOwned();
+		const earlier = ownedAction(
+			record,
+			isAdoptable(record, readProcStat),
+			origin,
+			config.repoPath,
+			isLocalOrigin(origin)
+		);
+		if (earlier === 'stop' && record) await stopEarlier(record);
+		// Cancelled while it stopped: shutdown() has already quit.
+		if (abort.signal.aborted) return;
+
 		if (!isLocalOrigin(origin)) {
 			setProgress(createProgress('startup', 'Connecting to Local LLM', startupRemote(origin), now()));
 			openStatus('progress');
@@ -341,8 +355,7 @@ async function startup(): Promise<void> {
 		}
 
 		const port = localPort(origin);
-		const record = readOwned();
-		const adoptable = isAdoptable(record, readProcStat);
+		const adoptable = earlier === 'adopt';
 		const [health, dev] = await Promise.all([probe(`${origin}/health`), probe(DEV_SERVER_URL)]);
 		const repo = config.repoPath;
 		const webDir = join(repo, 'apps', 'web');
@@ -408,7 +421,7 @@ async function startup(): Promise<void> {
 		if (!child.pid) return fail('Could not start make backend.');
 		const started = { pgid: child.pid, child, exitCode: undefined as number | null | undefined };
 		owned = started;
-		writeOwned({ pgid: child.pid, startTicks: readProcStat(child.pid)?.startTicks ?? '' });
+		writeOwned({ pgid: child.pid, startTicks: readProcStat(child.pid)?.startTicks ?? '', origin, repo });
 		child.once('exit', (code) => {
 			started.exitCode = code;
 		});
@@ -425,6 +438,39 @@ async function startup(): Promise<void> {
 		fail(error instanceof Error ? error.message : String(error));
 		if (owned && !groupAlive(owned.pgid)) forgetOwned();
 	}
+}
+
+/**
+ * Stops the stack an earlier launch started for another server address or
+ * checkout (#431), the way closing the app would, before this launch goes on.
+ * If it has to be forced, compose is brought down in its own checkout.
+ */
+async function stopEarlier(record: OwnedRecord): Promise<void> {
+	setProgress(createProgress('startup', 'Starting Local LLM', STARTUP_STOP_EARLIER, Date.now()));
+	openStatus('progress');
+	dispatch({
+		type: 'begin',
+		step: 'earlier',
+		at: Date.now(),
+		detail: record.origin ? `started for ${record.origin}` : undefined
+	});
+	// Forgotten first: a cancel or a crash from here on must never signal it a
+	// second time, since a second SIGINT makes uvicorn skip its teardown.
+	rmSync(OWNED_FILE, { force: true });
+	followLog(true);
+	const repo = record.repo ?? config.repoPath;
+	const env = childEnv(process.env);
+	await stopGroup(record.pgid, {
+		kill: process.kill,
+		sleep,
+		now: Date.now,
+		composeDown: () => runInShell(composeDownCommand(repo), env, 60_000),
+		leftoverLlama: llamaServerPids,
+		onTimeout: () => dispatch({ type: 'timeout', step: 'earlier', at: Date.now() })
+	});
+	tail?.stop();
+	tail = null;
+	dispatch({ type: 'finish', step: 'earlier', at: Date.now() });
 }
 
 function forgetOwned(): void {
