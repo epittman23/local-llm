@@ -1405,12 +1405,15 @@ async def _text_item(item: dict, ctx: _SourceContext):
 
 
 async def _note_item(item: dict, ctx: _SourceContext):
+    """A note, once read access is checked: as for files and knowledge bases, a
+    note in a folder the user may read counts as readable (#358)."""
     note = await Notes.get_note_by_id(item.get('id'))
     user = ctx.user
     if note and (
         user.role == 'admin'
         or note.user_id == user.id
         or await AccessGrants.has_access(user_id=user.id, resource_type='note', resource_id=note.id, permission='read')
+        or ('note', note.id) in ctx.folder_items
     ):
         return _single_document(
             note.data.get('content', {}).get('md', ''),
