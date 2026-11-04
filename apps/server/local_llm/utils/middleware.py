@@ -6085,8 +6085,9 @@ class _StreamPass:
         """The reply's usage after a chunk of this stream that reports usage.
 
         A provider can report its running usage on several chunks of one
-        stream (llama.cpp's per-token timings do), so each report replaces the
-        keys it carries rather than adding to them (#155). Each request of a
+        stream (llama.cpp does with its timings when a request asks for them
+        per token), so each report replaces the keys it carries rather than
+        adding to them (#155). Each request of a
         reply, such as a tool-call round, is billed on its own, so the stream's
         usage is added to the reply's from before it.
         """

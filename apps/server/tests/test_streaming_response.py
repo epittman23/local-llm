@@ -1644,19 +1644,26 @@ def test_usage_of_each_tool_call_round_still_adds_up(monkeypatch):
     assert (usage['input_tokens'], usage['output_tokens'], usage['total_tokens']) == (30, 7, 37)
 
 
+API_STREAM_WITH_OUTLET_FILTERS = {
+    'no_emitter': True,
+    'env': {'ENABLE_API_OUTLET_FILTERS': True},
+    'sorted_filters': ['f'],
+}
+
+
 def test_usage_repeated_on_an_api_stream_is_counted_once(monkeypatch):
     """#155: the API stream the outlet filters read adds up a stream's usage the same way."""
     observed = _run(
         [
             [
                 _usage_chunk('a', prompt_tokens=10, completion_tokens=1, total_tokens=11),
-                _usage_chunk('b', prompt_tokens=10, completion_tokens=2, total_tokens=12),
+                _usage_chunk('b', prompt_tokens=10, completion_tokens=2, total_tokens=12, cost=0.002),
                 sse({'choices': [], 'timings': {'prompt_n': 10, 'predicted_n': 2, 'predicted_ms': 40.0}}),
                 DONE,
             ]
         ],
         {},
-        {'no_emitter': True, 'env': {'ENABLE_API_OUTLET_FILTERS': True}, 'sorted_filters': ['f']},
+        API_STREAM_WITH_OUTLET_FILTERS,
         {},
         None,
         monkeypatch,
@@ -1664,4 +1671,45 @@ def test_usage_repeated_on_an_api_stream_is_counted_once(monkeypatch):
 
     usage = observed['assistant_message']['usage']
     assert (usage['input_tokens'], usage['output_tokens'], usage['total_tokens']) == (10, 2, 12)
+    # A chunk replaces only the keys it carries: the cost and token counts of
+    # the usage chunk stay beside the timings that came after it.
+    assert (usage['prompt_tokens'], usage['completion_tokens'], usage['cost']) == (10, 2, 0.002)
     assert usage['predicted_ms'] == 40.0
+
+
+def test_responses_usage_on_an_api_stream_is_kept(monkeypatch):
+    """#155: a Responses API stream's usage reaches the outlet filters' message too."""
+    completed = {'id': 'resp_1', 'output': [], 'usage': {'input_tokens': 3, 'output_tokens': 2}}
+    observed = _run(
+        [[sse({'type': 'response.completed', 'response': completed}), DONE]],
+        {},
+        API_STREAM_WITH_OUTLET_FILTERS,
+        {},
+        None,
+        monkeypatch,
+    )
+
+    usage = observed['assistant_message']['usage']
+    assert (usage['input_tokens'], usage['output_tokens'], usage['total_tokens']) == (3, 2, 5)
+
+
+def test_a_reply_keeps_usage_and_timings_from_different_chunks(monkeypatch):
+    """#155: in a reply too, a chunk replaces only the keys it carries."""
+    observed = _run(
+        [
+            [
+                _usage_chunk('a', prompt_tokens=10, completion_tokens=2, total_tokens=12, cost=0.002),
+                sse({'choices': [], 'timings': {'prompt_n': 10, 'predicted_n': 2, 'predicted_ms': 40.0}}),
+                DONE,
+            ]
+        ],
+        {'chat_id': SAVED_CHAT},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    usage = _final_usage(observed)
+    assert (usage['input_tokens'], usage['output_tokens'], usage['total_tokens']) == (10, 2, 12)
+    assert (usage['cost'], usage['predicted_ms']) == (0.002, 40.0)
