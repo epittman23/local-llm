@@ -30,6 +30,15 @@ from local_llm.routers import chats as chats_router
 importlib.import_module('local_llm.config')
 
 
+async def _stamp_newest_first(ids):
+    """Distinct update times, the first id newest, so the export's order is known."""
+    base = int(time.time()) - 1000
+    async with get_async_db() as db:
+        for n, chat_id in enumerate(ids):
+            await db.execute(update(Chat).where(Chat.id == chat_id).values(updated_at=base - n))
+        await db.commit()
+
+
 def test_a_chat_updated_during_the_export_is_neither_skipped_nor_repeated(monkeypatch):
     tag = uuid.uuid4().hex[:8]
     monkeypatch.setattr(chats_router, 'CHAT_EXPORT_BATCH_SIZE', 3)
@@ -39,6 +48,7 @@ def test_a_chat_updated_during_the_export_is_neither_skipped_nor_repeated(monkey
         ids = [f'c{n}-{tag}' for n in range(8)]
         for n, chat_id in enumerate(ids):
             await Chats.insert_new_chat(chat_id, user.id, ChatForm(chat={'title': f'Chat {n}'}))
+        await _stamp_newest_first(ids)
         # An internal chat (a sub-agent's, say) is not exported.
         await Chats.insert_new_chat(f'internal-{tag}', user.id, ChatForm(chat={'title': 'x'}))
         async with get_async_db() as db:
@@ -70,6 +80,7 @@ def test_a_chat_deleted_during_the_export_is_left_out(monkeypatch):
         ids = [f'd{n}-{tag}' for n in range(4)]
         for n, chat_id in enumerate(ids):
             await Chats.insert_new_chat(chat_id, user.id, ChatForm(chat={'title': f'Chat {n}'}))
+        await _stamp_newest_first(ids)
         exported = []
         async for line in chats_router.generate_chat_export_ndjson(user.id):
             exported.append(json.loads(line)['id'])
