@@ -129,6 +129,9 @@ export function TunePage() {
 	const [streaming, setStreaming] = useState(false);
 	const [refreshing, setRefreshing] = useState(false);
 	const streamControllerRef = useRef<AbortController | null>(null);
+	// A Start or Resume that answers after the page is gone must not open a
+	// stream nothing would abort (#144).
+	const unmountedRef = useRef(false);
 
 	const stopStreaming = () => {
 		streamControllerRef.current?.abort();
@@ -137,6 +140,7 @@ export function TunePage() {
 	};
 
 	const startStreaming = async (sweepId: string | null) => {
+		if (unmountedRef.current) return;
 		stopStreaming();
 		setStatusError(null);
 
@@ -163,7 +167,8 @@ export function TunePage() {
 		// The stream opener returns any response; a refusal (401, 500) has a
 		// JSON body that yields no events, and the page would go quiet (#143).
 		if (!res.ok) {
-			setStatusError(errorMessage(await errorBody(res), 'Failed to start live status stream'));
+			const body = await errorBody(res);
+			if (!replaced()) setStatusError(errorMessage(body, 'Failed to start live status stream'));
 			return;
 		}
 
@@ -208,8 +213,12 @@ export function TunePage() {
 
 	// Watch whatever sweep is currently active/latest, if any, on mount.
 	useEffect(() => {
+		unmountedRef.current = false;
 		startStreaming(null);
-		return stopStreaming;
+		return () => {
+			unmountedRef.current = true;
+			stopStreaming();
+		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
