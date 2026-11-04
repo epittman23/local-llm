@@ -53,6 +53,11 @@ def chat_search_content_query(text: str) -> str:
     return ' '.join(word for word in words if not word.startswith(CHAT_SEARCH_FILTER_PREFIXES)).strip()
 
 
+def like_escape(text: str) -> str:
+    """Text for a LIKE pattern with `ESCAPE '\\'`: its `\\`, `%` and `_` match themselves (#292)."""
+    return text.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+
+
 def chat_search_terms(text: str) -> list[str]:
     return list(dict.fromkeys(re.findall(r'[a-z0-9]+', text.lower())))
 
@@ -70,12 +75,12 @@ def chat_search_message_content_match_sql(dialect_name: str, key: str) -> str:
             EXISTS (
                 SELECT 1
                 FROM json_each(Chat.chat, '$.history.messages') AS history_message
-                WHERE LOWER(history_message.value->>'content') LIKE '%' || :{key} || '%'
+                WHERE LOWER(history_message.value->>'content') LIKE '%' || :{key} || '%' ESCAPE '\\'
             )
             OR EXISTS (
                 SELECT 1
                 FROM json_each(Chat.chat, '$.messages') AS legacy_message
-                WHERE LOWER(legacy_message.value->>'content') LIKE '%' || :{key} || '%'
+                WHERE LOWER(legacy_message.value->>'content') LIKE '%' || :{key} || '%' ESCAPE '\\'
             )
         )
         """
@@ -89,19 +94,19 @@ def chat_search_message_content_match_sql(dialect_name: str, key: str) -> str:
                 WHERE message.chat_id = Chat.id
                 AND message.user_id = Chat.user_id
                 AND json_typeof(message.content) = 'string'
-                AND LOWER(message.content #>> '{{}}') LIKE '%' || :{key} || '%'
+                AND LOWER(message.content #>> '{{}}') LIKE '%' || :{key} || '%' ESCAPE '\\'
             )
             OR EXISTS (
                 SELECT 1
                 FROM json_each(Chat.chat#>'{{history,messages}}') AS history_message
                 WHERE json_typeof(history_message.value->'content') = 'string'
-                AND LOWER(history_message.value->>'content') LIKE '%' || :{key} || '%'
+                AND LOWER(history_message.value->>'content') LIKE '%' || :{key} || '%' ESCAPE '\\'
             )
             OR EXISTS (
                 SELECT 1
                 FROM json_array_elements(Chat.chat->'messages') AS legacy_message
                 WHERE json_typeof(legacy_message->'content') = 'string'
-                AND LOWER(legacy_message->>'content') LIKE '%' || :{key} || '%'
+                AND LOWER(legacy_message->>'content') LIKE '%' || :{key} || '%' ESCAPE '\\'
             )
         )
         """
@@ -1435,7 +1440,7 @@ class ChatTable:
             if filter:
                 query_key = filter.get('query')
                 if query_key:
-                    stmt = stmt.filter(Chat.title.ilike(f'%{query_key}%'))
+                    stmt = stmt.filter(Chat.title.ilike(f'%{like_escape(query_key)}%', escape='\\'))
 
                 order_by = filter.get('order_by')
                 direction = filter.get('direction')
@@ -1522,7 +1527,7 @@ class ChatTable:
             if filter:
                 query_key = filter.get('query')
                 if query_key:
-                    stmt = stmt.filter(Chat.title.ilike(f'%{query_key}%'))
+                    stmt = stmt.filter(Chat.title.ilike(f'%{like_escape(query_key)}%', escape='\\'))
 
                 order_by = filter.get('order_by')
                 direction = filter.get('direction')
@@ -2075,13 +2080,13 @@ class ChatTable:
             exact_match_clause = None
             if phrase_query:
                 exact_match_clause = or_(
-                    Chat.title.ilike(bindparam('phrase_title_key')),
+                    Chat.title.ilike(bindparam('phrase_title_key'), escape='\\'),
                     text(chat_search_message_content_match_sql(dialect_name, 'phrase_content_key')),
                 )
                 search_params.update(
                     {
-                        'phrase_title_key': f'%{phrase_query}%',
-                        'phrase_content_key': phrase_query,
+                        'phrase_title_key': f'%{like_escape(phrase_query)}%',
+                        'phrase_content_key': like_escape(phrase_query),
                     }
                 )
 
@@ -2091,12 +2096,12 @@ class ChatTable:
                     content_key = f'term_content_key_{term_idx}'
                     term_clauses.append(
                         or_(
-                            Chat.title.ilike(bindparam(title_key)),
+                            Chat.title.ilike(bindparam(title_key), escape='\\'),
                             text(chat_search_message_content_match_sql(dialect_name, content_key)),
                         )
                     )
-                    search_params[title_key] = f'%{term}%'
-                    search_params[content_key] = term
+                    search_params[title_key] = f'%{like_escape(term)}%'
+                    search_params[content_key] = like_escape(term)
 
                 if term_clauses:
                     stmt = stmt.filter(or_(exact_match_clause, and_(*term_clauses)))
