@@ -167,8 +167,15 @@ test.describe('workspace knowledge list', () => {
 		await expect(page.getByText('Read Only')).toHaveCount(2); // Base 2, and connected Base 3
 
 		await page.getByLabel('Search Knowledge').fill('Base 2');
+		// The list shows its spinner as soon as the debounced query changes,
+		// before that request reaches the mock, so Base 1 going is not yet
+		// proof of the request (#157): wait for the filtered result, which
+		// only the request's answer brings, and poll the log.
 		await expect(page.getByText('Base 1', { exact: true })).toHaveCount(0);
-		expect(calls.some((c) => c.path === '/search' && c.search.includes('query=Base+2'))).toBe(true);
+		await expect(page.getByText('Base 2', { exact: true })).toBeVisible();
+		await expect
+			.poll(() => calls.some((c) => c.path === '/search' && c.search.includes('query=Base+2')))
+			.toBe(true);
 	});
 
 	test('create dialog posts the form and opens the new base', async ({ page }) => {
