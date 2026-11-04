@@ -420,6 +420,14 @@ describe('display helpers', () => {
 			'You, A and B and 2 others reacted with :tada:'
 		);
 	});
+	it('names all four people when exactly four reacted (#257)', () => {
+		const users = ['me', 'a', 'b', 'c'].map((id) => ({ id, name: id.toUpperCase() }));
+		expect(reactionTooltip({ name: 'tada', users, count: 4 }, 'me')).toBe('You, A, B and C reacted with :tada:');
+		expect(reactionTooltip({ name: 'tada', users: users.slice(0, 3), count: 3 }, 'me')).toBe(
+			'You, A and B reacted with :tada:'
+		);
+		expect(reactionTooltip({ name: 'tada', users: users.slice(1, 2), count: 1 }, 'me')).toBe('A reacted with :tada:');
+	});
 	it('builds attachment URLs', () => {
 		expect(attachmentUrl({ url: 'f1', content_type: 'image/png' }, '/api/v1')).toBe('/api/v1/files/f1/content');
 		expect(attachmentUrl({ url: 'https://x/y.png' }, '/api/v1')).toBe('https://x/y.png');
