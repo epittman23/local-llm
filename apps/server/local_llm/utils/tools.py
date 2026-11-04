@@ -10,6 +10,7 @@ from collections.abc import Awaitable, Callable
 from functools import cache, partial, update_wrapper
 from typing import (
     Any,
+    NamedTuple,
     get_args,
     get_type_hints,
 )
@@ -1706,25 +1707,59 @@ def _operation_parameters(methods: dict, operation: dict) -> list[dict]:
     return list(merged_params.values())
 
 
-def _route_params(parameters: list[dict], params: dict) -> tuple[dict, dict]:
-    """The call's arguments that fill the route's path and query parameters."""
-    path_params = {}
-    query_params = {}
+# OpenAPI: a header parameter named one of these "SHALL be ignored".
+_IGNORED_HEADER_PARAMETERS = frozenset({'accept', 'content-type', 'authorization'})
+
+
+class _RoutedParams(NamedTuple):
+    path: dict
+    query: dict
+    header: dict[str, str]
+    cookie: dict[str, str]
+
+
+def _parameter_text(value: Any) -> str:
+    """A header or cookie value as text: OpenAPI's default "simple" style, so an array joins with commas."""
+    if isinstance(value, list | tuple):
+        return ','.join(_parameter_text(item) for item in value)
+    if isinstance(value, bool):
+        return 'true' if value else 'false'
+    return str(value)
+
+
+def _route_params(parameters: list[dict], params: dict) -> _RoutedParams:
+    """The call's arguments that fill the route's path, query, header and cookie parameters."""
+    routed = _RoutedParams({}, {}, {}, {})
     for param in parameters:
         param_name = param['name']
         if param_name not in params:
             continue
         param_in = param.get('in')
+        value = params[param_name]
         if param_in == 'path':
-            path_params[param_name] = params[param_name]
+            routed.path[param_name] = value
+            continue
+        # Skip empty values for optional params (LLMs sometimes
+        # pass "" instead of omitting optional parameters).
+        if value is None or (value == '' and not param.get('required')):
+            continue
         if param_in == 'query':
-            value = params[param_name]
-            # Skip empty values for optional params (LLMs sometimes
-            # pass "" instead of omitting optional parameters).
-            if value is None or (value == '' and not param.get('required')):
-                continue
-            query_params[param_name] = value
-    return path_params, query_params
+            routed.query[param_name] = value
+        elif param_in == 'header' and param_name.lower() not in _IGNORED_HEADER_PARAMETERS:
+            routed.header[param_name] = _parameter_text(value)
+        elif param_in == 'cookie':
+            routed.cookie[param_name] = _parameter_text(value)
+    return routed
+
+
+def _with_parameters(own: dict[str, str], parameters: dict[str, str], *, fold_case: bool) -> dict[str, str]:
+    """The connection's headers or cookies plus the call's, the connection's own winning a clash (#190)."""
+    taken = {name.lower() if fold_case else name for name in own}
+    merged = dict(own)
+    for name, value in parameters.items():
+        if (name.lower() if fold_case else name) not in taken:
+            merged[name] = value
+    return merged
 
 
 def _operation_url(url: str, route_path: str, path_params: dict, query_params: dict) -> str:
@@ -1778,8 +1813,11 @@ async def execute_tool_server(
         route_path, methods, http_method, operation = matching_operation
 
         parameters = _operation_parameters(methods, operation)
-        path_params, query_params = _route_params(parameters, params)
-        final_url = _operation_url(url, route_path, path_params, query_params)
+        routed = _route_params(parameters, params)
+        final_url = _operation_url(url, route_path, routed.path, routed.query)
+        # Header names are case-insensitive; cookie names are not.
+        headers = _with_parameters(headers, routed.header, fold_case=True)
+        cookies = _with_parameters(cookies, routed.cookie, fold_case=False)
 
         body_params = {}
         if operation.get('requestBody', {}).get('content'):
