@@ -398,3 +398,53 @@ export function parseAutomationImport(
 	}
 	return { forms, skipped };
 }
+
+export type ImportOutcome = {
+	imported: number;
+	/** Items without a prompt, model or schedule. */
+	skipped: number;
+	/** One-time automations whose time has passed: an export holds them once they have run. */
+	passed: number;
+	failed: { name: string; error: string }[];
+};
+
+/**
+ * Creates each imported automation on its own (#323). They used to be created
+ * in one try, so the first refusal (most often an exported one-time automation
+ * that has already run, which the server refuses as having no future run)
+ * stopped the import with the earlier ones made, and importing again made
+ * those twice. A one-time automation whose time has passed is skipped.
+ */
+export async function importAutomationForms(
+	forms: AutomationForm[],
+	skipped: number,
+	create: (form: AutomationForm) => Promise<unknown>,
+	now = new Date()
+): Promise<ImportOutcome> {
+	const outcome: ImportOutcome = { imported: 0, skipped, passed: 0, failed: [] };
+	for (const form of forms) {
+		if (oncePassed(parseRrule(form.data.rrule, now), now)) {
+			outcome.passed++;
+			continue;
+		}
+		try {
+			await create(form);
+			outcome.imported++;
+		} catch (error) {
+			outcome.failed.push({ name: form.name, error: `${error}` });
+		}
+	}
+	return outcome;
+}
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/** What an import did, for its toast: an error when any automation could not be created. */
+export function importMessage(o: ImportOutcome): { ok: boolean; message: string } {
+	const parts = [`Imported ${plural(o.imported, 'automation')}`];
+	if (o.passed) parts.push(`skipped ${plural(o.passed, 'one-time automation')} whose time has passed`);
+	if (o.skipped) parts.push(`skipped ${o.skipped} incomplete`);
+	if (o.failed.length)
+		parts.push(`${o.failed.length} could not be created: ${o.failed.map((f) => `${f.name} (${f.error})`).join('; ')}`);
+	return { ok: o.failed.length === 0, message: parts.join('; ') };
+}
