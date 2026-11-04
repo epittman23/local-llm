@@ -2767,6 +2767,22 @@ test.describe('settings: Models > Manage', () => {
 		expect(calls.filter((c) => c.path.startsWith('/api/pull')).map((c) => c.body.name)).toEqual(['llama3:8b', 'phi3']);
 	});
 
+	test('Ollama: Update All Models says which pulls failed instead of all up to date (#246)', async ({ page }) => {
+		await mockManage(page);
+		// Registered after mockManage, so it answers the pulls instead.
+		await page.route('**/ollama/api/pull**', (route) =>
+			route.fulfill({
+				status: 500,
+				contentType: 'application/json',
+				body: JSON.stringify({ detail: 'Ollama: unreachable' })
+			})
+		);
+		await open(page);
+		await dialog(page).getByRole('button', { name: 'Update All Models' }).click();
+		await expect(page.getByText('Could not update 2 models: llama3:8b, phi3 (Ollama: unreachable)')).toBeVisible();
+		await expect(page.getByText('All models are up to date')).toHaveCount(0);
+	});
+
 	test('Ollama: the experimental GGUF upload stays hidden until asked for', async ({ page }) => {
 		await mockManage(page);
 		await open(page);
