@@ -21,6 +21,7 @@ import itertools
 import logging
 import os
 import random
+import re
 import time
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -115,20 +116,36 @@ def _parse_rule(s: str, now: dt.datetime | None = None):
 
     if rule._interval < 1:
         raise ValueError('RRULE INTERVAL must be a positive integer')
-    dtstart = None
     if has_dtstart:
-        emitted = ((anchor - start) // step) if anchor > start else 0
-        emitted *= len(rule._byminute or (0,)) * len(rule._bysecond or (0,))
+        steps = ((anchor - start) // step) if anchor > start else 0
+        emitted = steps * len(rule._byminute or (0,)) * len(rule._bysecond or (0,))
         if emitted <= 100_000:
-            if rule._dtstart.tzinfo:
-                dtstart = start
-            else:
-                return parsed
-    if not has_dtstart or dtstart is None:
-        epoch = dt.datetime(2000, 1, 1)
-        dtstart = epoch + ((anchor - epoch) // step) * step
+            return rrulestr(stripped, dtstart=start, ignoretz=True) if rule._dtstart.tzinfo else parsed
+        # Too many steps to walk from DTSTART: move it forward by whole steps,
+        # which keeps the rule's phase (every 5 minutes from 10:07 stays on
+        # :07, :12, ...), as rebuilding it from an epoch-aligned start did not (#267).
+        moved = start + steps * step
+        count = getattr(rule, '_count', None)
+        if not count:
+            return rrulestr(stripped, dtstart=moved, ignoretz=True)
+        if re.search(r'\bBY', stripped, re.IGNORECASE):
+            # A filtered or expanded step is not one run each, so the runs left
+            # cannot be counted: keep DTSTART, and walk at most COUNT runs.
+            return rrulestr(stripped, dtstart=start, ignoretz=True)
+        # One run per step, `steps` of them before `moved`: what is left of
+        # COUNT runs from there, and a COUNT that ran out stays run out.
+        left = count - steps
+        if left <= 0:
+            return rrulestr(_with_count(stripped, 1), dtstart=start, ignoretz=True)
+        return rrulestr(_with_count(stripped, left), dtstart=moved, ignoretz=True)
 
+    epoch = dt.datetime(2000, 1, 1)
+    dtstart = epoch + ((anchor - epoch) // step) * step
     return rrulestr(stripped, dtstart=dtstart, ignoretz=True)
+
+
+def _with_count(rule: str, count: int) -> str:
+    return re.sub(r'COUNT=\d+', f'COUNT={count}', rule, flags=re.IGNORECASE)
 
 
 def validate_rrule(s: str, tz: str = None) -> None:
