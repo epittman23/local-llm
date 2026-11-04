@@ -5,7 +5,7 @@ import logging
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, Request
 from mcp.shared.auth import OAuthMetadata
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from local_llm.config import BannerModel
 from local_llm.env import AIOHTTP_CLIENT_SESSION_SSL, AIOHTTP_CLIENT_TIMEOUT
@@ -95,6 +95,24 @@ class ImportConfigForm(BaseModel):
     config: dict
 
 
+def without_null_settings(config: dict) -> dict:
+    """An imported config with a null tool-server `config` or arena model `meta` stored as `{}`.
+
+    Readers call `.get(...)` on those, and a null broke startup and every later
+    tool-server listing until the next restart repaired it (#363).
+    """
+    if isinstance(config.get('tool_server.connections'), list):
+        config['tool_server.connections'] = [
+            {**c, 'config': c.get('config') or {}} if isinstance(c, dict) else c
+            for c in config['tool_server.connections']
+        ]
+    if isinstance(config.get('evaluation.arena.models'), list):
+        config['evaluation.arena.models'] = [
+            {**m, 'meta': m.get('meta') or {}} if isinstance(m, dict) else m for m in config['evaluation.arena.models']
+        ]
+    return config
+
+
 @router.post('/import', response_model=dict)
 async def import_config(request: Request, form_data: ImportConfigForm, user=Depends(get_admin_user)):
     # The same check as the admin form: an imported unusable JWT expiry
@@ -111,7 +129,7 @@ async def import_config(request: Request, form_data: ImportConfigForm, user=Depe
         )
         if error:
             raise HTTPException(status_code=400, detail=error)
-    await Config.upsert(form_data.config)
+    await Config.upsert(without_null_settings(form_data.config))
     await publish_event(
         request,
         EVENTS.CONFIG_IMPORTED,
@@ -236,6 +254,12 @@ class ToolServerConnection(BaseModel):
     info: dict | None = None
 
     model_config = ConfigDict(extra='allow')
+
+    @field_validator('config', mode='after')
+    @classmethod
+    def _config_never_null(cls, value: dict | None) -> dict:
+        # Stored as null, it stopped the backend starting (#363): store {} instead.
+        return value if value is not None else {}
 
 
 class ToolServersConfigForm(BaseModel):
