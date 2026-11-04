@@ -669,9 +669,9 @@ async def speech(request: Request, user=Depends(get_verified_user)):
             )
 
     except ValueError:
-        # No api.openai.com connection: not found, with the message (it was the
-        # function itself, which made every such call a 500, and a 401) (#300).
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.OPENAI_NOT_FOUND())
+        # No api.openai.com connection: not found, with the message. The detail
+        # was a function, which made every such call a 500 (and it said 401) (#300).
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=ERROR_MESSAGES.OPENAI_NOT_FOUND)
 
 
 async def get_all_models_responses(request: Request, user: UserModel) -> list:
