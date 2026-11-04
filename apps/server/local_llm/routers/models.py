@@ -378,17 +378,29 @@ class ModelsImportResult(BaseModel):
     skipped: list[ModelImportSkip] = []
 
 
-def _import_entry_problem(model_data: object, seen_ids: set[str]) -> tuple[str | None, str | None]:
-    """An import entry's id, and why it cannot be imported whoever imports it, or None."""
-    model_id = model_data.get('id') if isinstance(model_data, dict) else None
+def _import_entry_problem(model_data: object, imported_ids: list[str]) -> tuple[str | None, str | None]:
+    """An import entry's id, and why it cannot be imported whoever imports it, or None.
+
+    `imported_ids` are the ids already imported from this file: a later copy is skipped.
+    """
+    if not isinstance(model_data, dict):
+        return None, 'no valid id'
+    model_id = model_data.get('id')
     if not isinstance(model_id, str) or not is_valid_model_id(model_id):
         return (model_id if isinstance(model_id, str) else None), 'no valid id'
-    if model_id in seen_ids:
+    if model_id in imported_ids:
         return model_id, 'listed more than once'
-    seen_ids.add(model_id)
     if not all(isinstance(model_data.get(key) or {}, dict) for key in ('meta', 'params')):
         return model_id, 'invalid: meta and params must be objects'
+    if not isinstance((model_data.get('meta') or {}).get('knowledge') or [], list):
+        return model_id, 'invalid: meta.knowledge must be a list'
     return model_id, None
+
+
+def _invalid(error: ValidationError) -> str:
+    """The first problem pydantic found, with the field it is in."""
+    first = error.errors()[0]
+    return f'invalid: {".".join(map(str, first["loc"]))}: {first["msg"]}'
 
 
 async def _base_model_ids(request: Request, user) -> set[str]:
@@ -458,14 +470,13 @@ async def import_models(
             base_model_ids = None
             imported_ids: list[str] = []
             skipped: list[ModelImportSkip] = []
-            seen_ids: set[str] = set()
 
             def skip(model_id: str | None, reason: str) -> None:
                 log.warning('import_models: user %s skipped model %s (%s)', user.id, model_id, reason)
                 skipped.append(ModelImportSkip(id=model_id, reason=reason))
 
             for model_data in data:
-                model_id, problem = _import_entry_problem(model_data, seen_ids)
+                model_id, problem = _import_entry_problem(model_data, imported_ids)
                 if problem or model_id is None:
                     skip(model_id, problem or 'no valid id')
                     continue
@@ -514,7 +525,7 @@ async def import_models(
                     try:
                         updated_model = ModelForm(**{**existing_model.model_dump(), **model_data})
                     except ValidationError as e:
-                        skip(model_id, f'invalid: {e.errors()[0]["msg"]}')
+                        skip(model_id, _invalid(e))
                         continue
                     # Only filter access_grants when explicitly provided
                     # in the payload to avoid altering existing ACLs on
@@ -528,6 +539,8 @@ async def import_models(
                             'sharing.public_models',
                         )
                     if await Models.update_model_by_id(model_id, updated_model, db=db) is None:
+                        # A shared session is left failed by the error: free it for the next entry.
+                        await db.rollback()
                         skip(model_id, 'could not be saved')
                         continue
                 else:
@@ -537,7 +550,7 @@ async def import_models(
                     try:
                         new_model = ModelForm(**model_data)
                     except ValidationError as e:
-                        skip(model_id, f'invalid: {e.errors()[0]["msg"]}')
+                        skip(model_id, _invalid(e))
                         continue
 
                     if user.role != 'admin':
@@ -560,6 +573,8 @@ async def import_models(
                         'sharing.public_models',
                     )
                     if await Models.insert_new_model(user_id=user.id, form_data=new_model, db=db) is None:
+                        # A shared session is left failed by the error: free it for the next entry.
+                        await db.rollback()
                         skip(model_id, 'could not be saved')
                         continue
 

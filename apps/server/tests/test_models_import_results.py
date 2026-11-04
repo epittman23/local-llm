@@ -69,6 +69,12 @@ def client(monkeypatch):
     monkeypatch.setattr(models_router, 'publish_event', nothing)
     app = FastAPI()
     app.include_router(models_router.router, prefix='/models')
+    # The connections' own models, as get_all_models leaves them: an Ollama one and a preset.
+    app.state.MODELS = {
+        'llama3:8b': {'id': 'llama3:8b', 'owned_by': 'ollama'},
+        'gpt-4o': {'id': 'gpt-4o', 'owned_by': 'openai'},
+        'a-preset': {'id': 'a-preset', 'preset': True},
+    }
     return TestClient(app)
 
 
@@ -148,3 +154,81 @@ def test_a_model_the_importer_cannot_write_is_skipped_by_name(client, admin, mem
 
     assert response.json() == {'imported': [], 'skipped': [{'id': model_id, 'reason': 'no write access'}]}
     assert _run(Models.get_model_by_id(model_id)).name == 'Imported'
+
+
+def test_a_member_s_entries_are_each_skipped_for_their_own_reason(client, member):
+    mine, cleared, invalid, fine = _id(), _id(), _id(), _id()
+    for model_id in (mine, cleared, invalid):
+        assert _run(Models.insert_new_model(ModelForm(**_entry(model_id)), member.id))
+    knowledge = {'knowledge': [{'type': 'file', 'id': f'not-a-file-{uuid.uuid4().hex[:8]}'}]}
+
+    response = client.post(
+        '/models/import',
+        headers=member.headers,
+        json={
+            'models': [
+                _entry(mine, meta=knowledge),
+                _entry(cleared, base_model_id=None),
+                _entry(invalid, name=None),
+                _entry(_id(), base_model_id=None),
+                _entry('llama3', base_model_id='gpt-4o'),
+                _entry('gpt-4o', base_model_id='llama3:8b'),
+                _entry(fine, name='Mine'),
+            ]
+        },
+    )
+
+    body = response.json()
+    assert body['imported'] == [fine]
+    assert [(skip['id'], skip['reason'].split(':')[0]) for skip in body['skipped']] == [
+        (mine, 'knowledge file access denied'),
+        (cleared, 'cannot clear base model'),
+        (invalid, 'invalid'),
+        (body['skipped'][3]['id'], 'no base model set'),
+        ('llama3', 'id belongs to a base model'),
+        ('gpt-4o', 'id belongs to a base model'),
+    ]
+    assert _run(Models.get_model_by_id(fine)).name == 'Mine'
+
+
+def test_a_repeated_id_is_skipped_only_once_a_copy_of_it_was_imported(client, admin):
+    model_id = _id()
+
+    response = client.post(
+        '/models/import',
+        headers=admin.headers,
+        json={'models': [_entry(model_id, name=None), _entry(model_id), _entry(model_id, name='Third')]},
+    )
+
+    body = response.json()
+    assert body['imported'] == [model_id]
+    assert [skip['reason'] for skip in body['skipped']] == [
+        'invalid: name: Input should be a valid string',
+        'listed more than once',
+    ]
+    assert _run(Models.get_model_by_id(model_id)).name == 'Imported'
+
+
+def test_an_update_heals_a_self_base_and_takes_the_grants_it_is_given(client, admin):
+    model_id = _id()
+    assert _run(Models.insert_new_model(ModelForm(**_entry(model_id)), admin.id))
+
+    response = client.post(
+        '/models/import',
+        headers=admin.headers,
+        json={'models': [_entry(model_id, base_model_id=model_id, access_grants=[])]},
+    )
+
+    assert response.json() == {'imported': [model_id], 'skipped': []}
+    assert _run(Models.get_model_by_id(model_id)).base_model_id is None
+
+
+def test_knowledge_that_is_not_a_list_is_skipped_not_a_500(client, member):
+    model_id = _id()
+
+    response = client.post(
+        '/models/import', headers=member.headers, json={'models': [_entry(model_id, meta={'knowledge': 5})]}
+    )
+
+    assert response.status_code == 200
+    assert response.json()['skipped'] == [{'id': model_id, 'reason': 'invalid: meta.knowledge must be a list'}]
