@@ -262,6 +262,7 @@ test('Retry during a stop does not start the stack again', async () => {
 
 	expect(h.state.spawned).toBe(1);
 	expect(appWindows()).toHaveLength(0);
+	await tick(800); // let the stop finish, so its exit does not land in the next test
 });
 
 test('after a forced stop that left a llama-server, "Leave it" quits and leaves it running (#421)', async () => {
