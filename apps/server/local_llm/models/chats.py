@@ -608,6 +608,21 @@ class ChatTable:
             )
             return [ChatModel.model_validate(chat) for chat in result.scalars().all()]
 
+    async def delete_internal_chats_by_note_id(self, note_id: str, db: AsyncSession | None = None) -> None:
+        """Delete every user's internal chat with a note, as its deletion leaves them unreachable (#333)."""
+        async with get_async_db_context(db) as session:
+            result = await session.execute(
+                select(Chat.id).where(
+                    Chat.meta['internal'].as_boolean().is_(True),
+                    Chat.meta['type'].as_string() == 'note',
+                    Chat.meta['note_id'].as_string() == note_id,
+                )
+            )
+            chat_ids = result.scalars().all()
+        for chat_id in chat_ids:
+            if not await self.delete_chat_by_id(chat_id, db=db):
+                log.warning('Could not delete chat %s of deleted note %s', chat_id, note_id)
+
     def _chat_import_form_to_chat_model(self, user_id: str, form_data: ChatImportForm) -> ChatModel:
         id = str(uuid.uuid4())
         now = int(time.time())
