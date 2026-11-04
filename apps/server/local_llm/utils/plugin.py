@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import asyncio
 import importlib
 import importlib.abc
@@ -227,21 +228,45 @@ if not any(isinstance(finder, _OldPackageAlias) for finder in sys.meta_path):
     sys.meta_path.insert(0, _OldPackageAlias())
 
 
+# The oldest plugin import style named this package's modules without it.
+_LEGACY_IMPORT_ROOTS = frozenset({'utils', 'apps', 'main', 'config'})
+_FROM_KEYWORD = re.compile(r'from\s+')
+
+
 def replace_imports(content):
-    """
-    Replace the import paths in the content.
-    """
-    replacements = {
-        'from utils': 'from local_llm.utils',
-        'from apps': 'from local_llm.apps',
-        'from main': 'from local_llm.main',
-        'from config': 'from local_llm.config',
-    }
+    """Map a plugin's legacy imports (`from utils.misc import x`) into this package.
 
-    for old, new in replacements.items():
-        content = content.replace(old, new)
+    Only real `from <root>` import statements whose module is exactly one of
+    `_LEGACY_IMPORT_ROOTS`, or inside one, are rewritten (#269). Plain text
+    replacement used to turn `from configparser` into
+    `from local_llm.configparser`, and rewrote docstrings and strings too.
+    Source that does not parse is returned as it is.
+    """
+    try:
+        tree = ast.parse(content)
+    except (SyntaxError, ValueError):
+        return content
 
-    return content
+    positions = sorted(
+        (
+            (node.lineno - 1, node.col_offset)
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom)
+            and node.level == 0
+            and node.module
+            and node.module.split('.')[0] in _LEGACY_IMPORT_ROOTS
+        ),
+        reverse=True,
+    )
+    lines = content.splitlines(keepends=True)
+    for lineno, col_offset in positions:
+        line = lines[lineno]
+        # The column is in UTF-8 bytes.
+        start = len(line.encode('utf-8')[:col_offset].decode('utf-8'))
+        keyword = _FROM_KEYWORD.match(line, start)
+        if keyword:
+            lines[lineno] = f'{line[: keyword.end()]}local_llm.{line[keyword.end() :]}'
+    return ''.join(lines)
 
 
 # May the intent of the one who wrote it survive every
