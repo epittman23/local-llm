@@ -19,6 +19,7 @@ import importlib
 import uuid
 
 from local_llm.models.chats import ChatImportForm, Chats
+from local_llm.models.folders import FolderForm, Folders
 from local_llm.models.users import Users
 
 # Importing the config runs the migrations on the test run's database.
@@ -31,20 +32,24 @@ def test_imported_chats_start_read():
 
     async def run():
         user = await Users.insert_new_user(f'u-{tag}', 'Una', f'u-{tag}@example.invalid', role='user')
+        folder = await Folders.insert_new_folder(user.id, FolderForm(name='Imported'))
         forms = [
             ChatImportForm(
                 chat={'title': 'Old', 'history': {'messages': {'m1': message}, 'currentId': 'm1'}},
+                folder_id=folder.id,
                 created_at=1_700_000_000,
                 updated_at=1_700_000_500,
             ),
-            ChatImportForm(chat={'title': 'Undated'}),
+            ChatImportForm(chat={'title': 'Undated'}, folder_id=folder.id),
         ]
         imported = await Chats.import_chats(user.id, forms)
-        return [await Chats.get_chat_by_id(chat.id) for chat in imported]
+        stored = [await Chats.get_chat_by_id(chat.id) for chat in imported]
+        return stored, await Chats.count_unread_by_folder_ids(user.id, [folder.id])
 
-    stored = asyncio.run(run())
+    stored, unread = asyncio.run(run())
 
-    assert [chat.updated_at for chat in stored][0] == 1_700_000_500
-    for chat in stored:
-        assert chat.last_read_at is not None
-        assert chat.last_read_at >= chat.updated_at
+    # Read as of its own last update, as the migration's backfill did for old chats.
+    assert stored[0].last_read_at == stored[0].updated_at == 1_700_000_500
+    assert stored[1].last_read_at == stored[1].updated_at
+    # So the folder they were imported into counts none unread.
+    assert not unread
