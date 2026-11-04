@@ -8,7 +8,7 @@ rules see [`AGENTS.md`](AGENTS.md); for running the app see
 [`README.md`](README.md).
 
 This file is a structural index only. It does not restate rationale that
-already lives in `AGENTS.md`'s "Conventions" section — it points there
+already lives in `AGENTS.md` or `docs/decisions.md`; it points there
 instead.
 
 ## Top-level tree
@@ -18,6 +18,8 @@ local-llm/
 ├── .github/                   CI workflows (ci.yml; pr-gate.yml, the tripwire; auto-merge.yml + update-branches.yml), Dependabot, scripts/ (PR gate, lint ratchet)
 ├── .pre-commit-config.yaml    the only definition of lint and format checks (CI runs it)
 ├── .gitleaksignore            gitleaks findings that are not secrets, with reasons
+├── .git-blame-ignore-revs     bulk formatting commits that `git blame` skips (GitHub's blame reads it)
+├── .gitignore                 what stays untracked (see "Local/generated" below)
 ├── .claude/                   agent skills, the reviewer subagent and project settings (docs/guides/agent-tooling.md)
 ├── .mcp.json                  project MCP servers: codebase-memory-mcp
 ├── AGENTS.md                  agent and contributor guide (CLAUDE.md links to it)
@@ -443,8 +445,9 @@ a shell orchestrator, `lllm-*` commands, and a Rich/plain terminal CLI
 (`llama_console.py`, backing `lllm-profiles`/`lllm-check`/`lllm-vram`) with
 no replacement of its own; those diagnostics now live in the app's own
 Benchmarks section (Serve/Live pages), same as serving itself since
-Phase 2a/2b. Per-module purpose and rationale are documented in detail in
-[`AGENTS.md`](AGENTS.md)'s "Conventions" section — this entry is a
+Phase 2a/2b. What each target does is in [`AGENTS.md`](AGENTS.md)'s
+"Commands" section and `make help`, and the check targets in
+[`docs/guides/testing.md`](docs/guides/testing.md); this entry is a
 summary, not a replacement.
 
 ## Local/generated (not tracked)
