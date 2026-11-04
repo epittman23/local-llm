@@ -52,8 +52,16 @@ def test_a_44_character_secret_that_is_not_a_fernet_key_is_hashed(secret):
     assert _hashed(secret).decrypt(token) == b'x'
 
 
-def test_a_real_fernet_key_is_used_as_it_is():
-    key = Fernet.generate_key().decode()
+@pytest.mark.parametrize(
+    'key',
+    [
+        Fernet.generate_key().decode(),
+        # `openssl rand -base64 32`: the standard alphabet, which Fernet accepts too.
+        base64.b64encode(bytes(range(200, 232))).decode(),
+    ],
+)
+def test_a_real_fernet_key_is_used_as_it_is(key):
+    assert len(key) == 44
 
     token = fernet_from_secret(key).encrypt(b'x')
 
