@@ -127,6 +127,26 @@ def test_failed_rerank_and_failed_embedding_keep_top_k_in_original_order(caplog)
     assert any('embedding' in r.getMessage().lower() for r in caplog.records if r.levelno >= logging.WARNING)
 
 
+def _raising_reranker(query, documents):
+    raise RuntimeError('CUDA out of memory')
+
+
+def test_a_reranker_that_raises_falls_back_to_similarity_like_one_that_fails(caplog):
+    """A local CrossEncoder or ColBERT reranker raises instead of returning None (#533)."""
+    with caplog.at_level(logging.WARNING, logger=retrieval.log.name):
+        result = _compress(_raising_reranker)
+
+    assert [d.page_content for d in result] == ['d2', 'd3']
+    assert [round(d.metadata['score'], 6) for d in result] == [1.0, 0.8]
+    assert any('CUDA out of memory' in r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING)
+
+
+def test_a_reranker_that_raises_and_a_failed_embedding_keep_top_k_in_original_order():
+    result = _compress(_raising_reranker, embedding_function=_broken_embed)
+
+    assert [d.page_content for d in result] == ['d0', 'd1']
+
+
 def test_without_a_reranker_an_embedding_failure_still_raises():
     with pytest.raises(RuntimeError, match='embedding service down'):
         _compress(None, embedding_function=_broken_embed)

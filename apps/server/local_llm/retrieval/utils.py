@@ -1807,7 +1807,13 @@ class RerankCompressor(BaseDocumentCompressor):
 
         scores = None
         if reranking:
-            scores = await asyncio.to_thread(self.reranking_function, query, documents)
+            try:
+                scores = await asyncio.to_thread(self.reranking_function, query, documents)
+            except Exception as e:
+                # A local reranker (CrossEncoder, ColBERT) raises where the external one
+                # returns None; both fail over the same way, or the collection is dropped (#533).
+                log.warning('Reranker raised: %s', e)
+                scores = None
             if scores is None:
                 # Score by embedding similarity instead, as when no reranker is configured, so a
                 # failed rerank still gets top-k and the relevance threshold.
