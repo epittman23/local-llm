@@ -63,7 +63,7 @@ test('chat: builds a conversation, runs it with the system prompt and parameters
 	await expect(page.getByLabel('assistant message 2')).toHaveCount(0);
 });
 
-test('chat: parameters set in Controls go under params, as the chat page sends them (#208)', async ({ page }) => {
+test('chat: parameters set in Controls go under params, the field the backend reads (#208)', async ({ page }) => {
 	await mockWorkspaceBackend(page);
 	const seen = await mockPlayground(page);
 	await page.goto('/playground');

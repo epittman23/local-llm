@@ -66,7 +66,8 @@ export async function readCompletionStream(
 
 /**
  * The request body: an optional system message, the conversation, and
- * whichever parameters are set, under `params` as the chat page sends them.
+ * whichever parameters are set, under `params`, the field the chat page uses
+ * too (the chat page also splits `stop` into sequences; this sends it as typed).
  * The backend reads only `params`: it applies the provider's parameters from
  * it, decodes `custom_params`, and keeps this app's own settings (function
  * calling, reasoning tags, ...) from the provider. Spread at the top level,
