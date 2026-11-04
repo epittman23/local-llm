@@ -80,7 +80,8 @@ export function useAttachments({
 		async (original: File, opts: { context?: 'full' } = {}) => {
 			let file = original;
 			const maxSize = config?.file?.max_size ?? null;
-			if (maxSize !== null && file.size > maxSize * 1024 * 1024) {
+			// 0 or unset is no limit, as on the server (#238).
+			if (maxSize && file.size > maxSize * 1024 * 1024) {
 				toast.error(`File size should not exceed ${maxSize} MB.`);
 				return;
 			}
