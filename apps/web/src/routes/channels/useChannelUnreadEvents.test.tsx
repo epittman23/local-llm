@@ -10,6 +10,8 @@ import { CHANNELS_KEY, useChannelUnreadEvents } from './useChannels';
 
 // #254: only the tab looked at last plays the sound and shows the desktop
 // notification for a channel message; every tab still shows its own toast.
+// #255: a thread reply is announced but not counted, as the server does not
+// count it; a model's reply is not announced while it is still empty.
 
 const toast = vi.hoisted(() => Object.assign(vi.fn(), { error: vi.fn() }));
 vi.mock('sonner', () => ({ toast }));
@@ -29,11 +31,14 @@ const audio = vi.fn(function (this: { play: () => Promise<void> }) {
 });
 const notification = Object.assign(vi.fn(), { permission: 'granted' });
 
-const wrapper = ({ children }: { children: ReactNode }) => (
-	<QueryClientProvider client={new QueryClient()}>
-		<MemoryRouter>{children}</MemoryRouter>
-	</QueryClientProvider>
-);
+const withClient =
+	(client: QueryClient) =>
+	({ children }: { children: ReactNode }) => (
+		<QueryClientProvider client={client}>
+			<MemoryRouter>{children}</MemoryRouter>
+		</QueryClientProvider>
+	);
+const wrapper = ({ children }: { children: ReactNode }) => withClient(new QueryClient())({ children });
 
 const message = {
 	channel_id: 'c1',
@@ -42,7 +47,7 @@ const message = {
 	data: { type: 'message', data: { content: 'hello', user: { name: 'Ben' } } }
 };
 
-describe('useChannelUnreadEvents (#254)', () => {
+describe('useChannelUnreadEvents (#254, #255)', () => {
 	beforeEach(() => {
 		useAuthStore.setState({ token: 't', user: { id: 'u1', name: 'Ann', role: 'admin' } } as never);
 		useConfigStore.setState({ config: { name: 'x', version: '1', features: { enable_channels: true } } } as never);
@@ -74,24 +79,38 @@ describe('useChannelUnreadEvents (#254)', () => {
 		expect(notification).not.toHaveBeenCalled();
 	});
 
-	it('neither announces nor counts a thread reply (#255)', () => {
+	it("announces a person's thread reply but does not count it (#255)", () => {
 		vi.mocked(isLastActiveTab).mockReturnValue(true);
 		const client = new QueryClient();
 		client.setQueryData(CHANNELS_KEY, [{ id: 'c1', name: 'general', type: 'group', unread_count: 0 }]);
-		renderHook(() => useChannelUnreadEvents(), {
-			wrapper: ({ children }: { children: ReactNode }) => (
-				<QueryClientProvider client={client}>
-					<MemoryRouter>{children}</MemoryRouter>
-				</QueryClientProvider>
-			)
-		});
+		renderHook(() => useChannelUnreadEvents(), { wrapper: withClient(client) });
 		handlers.get('events:channel')?.({
 			...message,
 			data: { type: 'message', data: { ...message.data.data, parent_id: 'm1' } }
 		});
+		expect(toast).toHaveBeenCalledWith('Ben (#general)', expect.anything());
+		expect(client.getQueryData<{ unread_count: number }[]>(CHANNELS_KEY)?.[0].unread_count).toBe(0);
+	});
+
+	it("does not announce a model's reply while it is still empty (#255)", () => {
+		vi.mocked(isLastActiveTab).mockReturnValue(true);
+		renderHook(() => useChannelUnreadEvents(), { wrapper });
+		handlers.get('events:channel')?.({
+			...message,
+			data: { type: 'message', data: { ...message.data.data, content: '', meta: { model_id: 'm' } } }
+		});
 		expect(toast).not.toHaveBeenCalled();
 		expect(audio).not.toHaveBeenCalled();
 		expect(notification).not.toHaveBeenCalled();
-		expect(client.getQueryData<{ unread_count: number }[]>(CHANNELS_KEY)?.[0].unread_count).toBe(0);
+	});
+
+	it("announces a model's reply that already has text", () => {
+		vi.mocked(isLastActiveTab).mockReturnValue(true);
+		renderHook(() => useChannelUnreadEvents(), { wrapper });
+		handlers.get('events:channel')?.({
+			...message,
+			data: { type: 'message', data: { ...message.data.data, content: 'done', meta: { model_id: 'm' } } }
+		});
+		expect(toast).toHaveBeenCalledOnce();
 	});
 });

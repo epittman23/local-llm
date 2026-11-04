@@ -14,7 +14,6 @@ import {
 	type Channel,
 	type ChannelEvent,
 	applyUnreadEvent,
-	isThreadReply,
 	markRead,
 	mentionsToText,
 	sortChannels
@@ -131,9 +130,12 @@ export function useChannelUnreadEvents() {
 			if (next) queryClient.setQueryData(CHANNELS_KEY, next);
 			else queryClient.invalidateQueries({ queryKey: CHANNELS_KEY });
 
-			// Not announced either: the thread shows its replies, and the badge does not count them (#255).
-			if (type !== 'message' || isThreadReply(event)) return;
+			if (type !== 'message') return;
 			const data = event.data?.data ?? {};
+			// A model's reply arrives empty and is filled in by later updates: an
+			// empty toast says nothing (#255). A person's reply, in a thread too, is
+			// still announced, as in the original, though the badge leaves it out.
+			if (data.meta?.model_id && !String(data.content ?? '').trim()) return;
 			const title = `${data.user?.name ?? 'Someone'}${event.channel?.type !== 'dm' && event.channel?.name ? ` (#${event.channel.name})` : ''}`;
 			const body = mentionsToText(String(data.content ?? ''));
 			toast(title, {
