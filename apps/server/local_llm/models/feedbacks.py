@@ -148,6 +148,17 @@ class ModelHistoryResponse(BaseModel):
     history: list[ModelHistoryEntry]
 
 
+# The columns the feedback list can be ordered by, as callables so each query
+# builds its own expression.
+_FEEDBACK_ORDER_COLUMNS = {
+    'username': lambda: User.name,
+    'user': lambda: User.name,
+    'model_id': lambda: Feedback.data['model_id'].as_string(),
+    'rating': lambda: Feedback.data['rating'].as_string(),
+    'updated_at': lambda: Feedback.updated_at,
+}
+
+
 class FeedbackTable:
     async def insert_new_feedback(
         self, user_id: str, form_data: FeedbackForm, db: AsyncSession | None = None
@@ -236,32 +247,18 @@ class FeedbackTable:
                     stmt = stmt.filter(model_id_filter)
                     count_stmt = count_stmt.filter(model_id_filter)
 
-                order_by = filter.get('order_by')
-                direction = filter.get('direction')
-
-                if order_by == 'username':
-                    if direction == 'asc':
-                        stmt = stmt.order_by(User.name.asc())
-                    else:
-                        stmt = stmt.order_by(User.name.desc())
-                elif order_by == 'model_id':
-                    if direction == 'asc':
-                        stmt = stmt.order_by(Feedback.data['model_id'].as_string().asc())
-                    else:
-                        stmt = stmt.order_by(Feedback.data['model_id'].as_string().desc())
-                elif order_by == 'rating':
-                    if direction == 'asc':
-                        stmt = stmt.order_by(Feedback.data['rating'].as_string().asc())
-                    else:
-                        stmt = stmt.order_by(Feedback.data['rating'].as_string().desc())
-                elif order_by == 'updated_at':
-                    if direction == 'asc':
-                        stmt = stmt.order_by(Feedback.updated_at.asc())
-                    else:
-                        stmt = stmt.order_by(Feedback.updated_at.desc())
-
+            # Every page has a total order: the chosen column, then the id in the
+            # same direction, so OFFSET paging neither repeats nor skips rows.
+            # The admin table's User column sends 'user'; the backend knew only
+            # 'username', and an unknown key (or none, once a model filter was
+            # set) left the query unordered (#205). Newest first is the default.
+            column = _FEEDBACK_ORDER_COLUMNS.get(filter.get('order_by') or '')
+            if column is None:
+                stmt = stmt.order_by(Feedback.created_at.desc(), Feedback.id.desc())
+            elif filter.get('direction') == 'asc':
+                stmt = stmt.order_by(column().asc(), Feedback.id.asc())
             else:
-                stmt = stmt.order_by(Feedback.created_at.desc())
+                stmt = stmt.order_by(column().desc(), Feedback.id.desc())
 
             # Count before pagination without wrapping the ordered item query.
             count_result = await db.execute(count_stmt)
