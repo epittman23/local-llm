@@ -18,6 +18,7 @@ from sqlalchemy import (
     select,
     update,
 )
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from local_llm.env import DEFAULT_GROUP_SHARE_PERMISSION
@@ -373,7 +374,7 @@ class GroupTable:
             # Delete existing members
             await db.execute(delete(GroupMember).filter(GroupMember.group_id == group_id))
 
-            # Insert new members
+            # Insert new members, each once: a repeated id would fail the whole replace (#279).
             now = int(time.time())
             new_members = [
                 GroupMember(
@@ -383,7 +384,7 @@ class GroupTable:
                     created_at=now,
                     updated_at=now,
                 )
-                for user_id in user_ids
+                for user_id in dict.fromkeys(user_ids)
             ]
 
             db.add_all(new_members)
@@ -583,34 +584,41 @@ class GroupTable:
     ) -> GroupModel | None:
         try:
             async with get_async_db_context(db) as db:
-                result = await db.execute(select(Group).filter_by(id=id))
-                group = result.scalars().first()
-                if not group:
-                    return None
-
-                now = int(time.time())
-
-                for user_id in user_ids or []:
-                    try:
-                        db.add(
-                            GroupMember(
-                                id=str(uuid.uuid4()),
-                                group_id=id,
-                                user_id=user_id,
-                                created_at=now,
-                                updated_at=now,
+                # Only the users not yet in the group, each once (#279). Inserting
+                # every one and rolling back on the unique violation undid the whole
+                # transaction, earlier new members (and a caller's own work) included.
+                wanted = list(dict.fromkeys(user_ids or []))
+                # A user added by another request between the read and the commit
+                # fails the commit; read the members again and retry, once.
+                for attempt in range(2):
+                    result = await db.execute(select(Group).filter_by(id=id))
+                    group = result.scalars().first()
+                    if not group:
+                        return None
+                    now = int(time.time())
+                    existing = set()
+                    if wanted:
+                        result = await db.execute(
+                            select(GroupMember.user_id).filter(
+                                GroupMember.group_id == id, GroupMember.user_id.in_(wanted)
                             )
                         )
-                        await db.flush()  # Detect unique constraint violation early
-                    except Exception:
-                        await db.rollback()  # Clear failed INSERT
-                        continue  # Duplicate → ignore
-
-                group.updated_at = now
-                await db.commit()
-                await db.refresh(group)
-
-                return GroupModel.model_validate(group)
+                        existing = set(result.scalars().all())
+                    db.add_all(
+                        GroupMember(id=str(uuid.uuid4()), group_id=id, user_id=user_id, created_at=now, updated_at=now)
+                        for user_id in wanted
+                        if user_id not in existing
+                    )
+                    group.updated_at = now
+                    try:
+                        await db.commit()
+                    except IntegrityError:
+                        await db.rollback()
+                        if attempt:
+                            raise
+                        continue
+                    await db.refresh(group)
+                    return GroupModel.model_validate(group)
 
         except Exception as e:
             log.exception(e)
