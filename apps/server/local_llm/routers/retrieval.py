@@ -30,7 +30,7 @@ from langchain_text_splitters import (
     RecursiveCharacterTextSplitter,
     TokenTextSplitter,
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from local_llm.config import (
@@ -2880,8 +2880,9 @@ async def _validate_collection_access(collection_names: list[str], user, access_
 class QueryDocForm(BaseModel):
     collection_name: str
     query: str
-    k: int | None = None
-    k_reranker: int | None = None
+    # At least 1: 0 or less asked for no results, which is never meant (#354).
+    k: int | None = Field(default=None, ge=1)
+    k_reranker: int | None = Field(default=None, ge=1)
     r: float | None = None
     hybrid: bool | None = None
     hybrid_bm25_weight: float | None = None
@@ -2911,8 +2912,9 @@ async def query_doc_handler(
                     if request.app.state.RERANKING_FUNCTION
                     else None
                 ),
-                k_reranker=form_data.k_reranker or config.TOP_K_RERANKER,
-                r=(form_data.r if form_data.r else config.RELEVANCE_THRESHOLD),
+                # An explicit r of 0 is an override too (#354).
+                k_reranker=form_data.k_reranker if form_data.k_reranker is not None else config.TOP_K_RERANKER,
+                r=form_data.r if form_data.r is not None else config.RELEVANCE_THRESHOLD,
                 hybrid_bm25_weight=(
                     form_data.hybrid_bm25_weight
                     if form_data.hybrid_bm25_weight is not None
@@ -2945,8 +2947,9 @@ async def query_doc_handler(
 class QueryCollectionsForm(BaseModel):
     collection_names: list[str]
     query: str
-    k: int | None = None
-    k_reranker: int | None = None
+    # At least 1: 0 or less asked for no results, which is never meant (#354).
+    k: int | None = Field(default=None, ge=1)
+    k_reranker: int | None = Field(default=None, ge=1)
     r: float | None = None
     hybrid: bool | None = None
     hybrid_bm25_weight: float | None = None
@@ -2976,8 +2979,9 @@ async def query_collection_handler(
                     if request.app.state.RERANKING_FUNCTION
                     else None
                 ),
-                k_reranker=form_data.k_reranker or config.TOP_K_RERANKER,
-                r=(form_data.r if form_data.r else config.RELEVANCE_THRESHOLD),
+                # An explicit r of 0 is an override too (#354).
+                k_reranker=form_data.k_reranker if form_data.k_reranker is not None else config.TOP_K_RERANKER,
+                r=form_data.r if form_data.r is not None else config.RELEVANCE_THRESHOLD,
                 hybrid_bm25_weight=(
                     form_data.hybrid_bm25_weight
                     if form_data.hybrid_bm25_weight is not None
@@ -2998,6 +3002,8 @@ async def query_collection_handler(
                     query, prefix=prefix, user=user
                 ),
                 k=form_data.k if form_data.k else config.TOP_K,
+                # hybrid=false asked for vector search only (#354).
+                allow_hybrid=False,
             )
 
     except HTTPException:
