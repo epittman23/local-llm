@@ -6,7 +6,7 @@ from uuid import uuid4
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from local_llm.config import ENABLE_ADMIN_EXPORT
@@ -989,8 +989,8 @@ class TagForm(BaseModel):
 
 
 class TagFilterForm(TagForm):
-    skip: int | None = 0
-    limit: int | None = 50
+    skip: int | None = Field(0, ge=0)
+    limit: int | None = Field(50, ge=1)
 
 
 @router.post('/tags', response_model=list[ChatTitleIdResponse])
