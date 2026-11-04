@@ -177,6 +177,7 @@ def test_a_server_listed_twice_connects_once(monkeypatch):
 
     assert len(clients) == 1
     assert sorted(tools) == ['docs_fetch', 'docs_search']
+    assert clients[0].disconnects == 1
     assert not clients[0].connected
 
 
@@ -199,3 +200,29 @@ def test_a_tool_listed_twice_is_loaded_once(monkeypatch):
     )
 
     assert asked == [['calc', 'web']]
+
+
+def test_a_tool_listed_twice_gives_the_model_its_tools_once(monkeypatch):
+    """With the real loader, a tool id given twice no longer adds a second,
+    prefixed copy of each of its functions (`calc_add` beside `add`) (#521)."""
+    import test_tool_loading
+
+    test_tool_loading._install_get_tools(monkeypatch, {}, [])
+    monkeypatch.setattr(middleware, 'ENABLE_PLUGINS', True)
+    metadata = {'tool_ids': ['calc', 'calc']}
+
+    loaded = asyncio.run(
+        middleware._selected_tools(
+            None,
+            {'messages': []},
+            SimpleNamespace(id='u1', role='user'),
+            metadata,
+            {'__user__': {'id': 'u1'}, '__metadata__': {}},
+            {'m1': {}},
+            'm1',
+            None,
+            {},
+        )
+    )
+
+    assert sorted(loaded) == ['add', 'blank_doc']
