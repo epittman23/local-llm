@@ -104,10 +104,12 @@ async def get_custom_headers(custom_headers: dict, user=None, metadata: dict = N
 def _header_value(value: str) -> str:
     """A substituted value as a header can carry it (#175).
 
-    Printable ASCII is left as it is, so existing setups see the same headers.
-    Anything else (a non-ASCII name, a control character) is percent-encoded as
-    UTF-8, as the user-name header in include_user_info_headers is; httpx, the
-    MCP client, refuses a header value it cannot encode as ASCII.
+    Printable ASCII is left as it is, so existing setups see the same headers;
+    that includes a `%`, so a receiver cannot tell an ASCII value that looks
+    percent-encoded from one that was. Anything else (a non-ASCII name, a
+    control character) is percent-encoded as UTF-8, as the user-name header in
+    include_user_info_headers is: httpx2, the MCP client, refuses a header
+    value it cannot encode as ASCII, and h11 refuses a control character.
     """
     if value.isascii() and value.isprintable():
         return value
@@ -150,7 +152,8 @@ def parse_custom_headers(
         '{{USER_NAME}}': (user.name.strip() if user else '') or '',
         '{{USER_EMAIL}}': (user.email.strip() if user else '') or '',
         '{{USER_ROLE}}': (user.role if user else '') or '',
-        '{{USER_GROUPS}}': ','.join(group.name.strip() for group in user_groups) if user_groups else '',
+        # Each name is encoded on its own, so the separator stays a plain comma.
+        '{{USER_GROUPS}}': ','.join(_header_value(group.name.strip()) for group in user_groups) if user_groups else '',
         '{{USER_GROUP_IDS}}': ','.join(group.id for group in user_groups) if user_groups else '',
         '{{USER_AGENT}}': user_agent,
     }
