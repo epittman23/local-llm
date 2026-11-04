@@ -643,6 +643,39 @@ class KnowledgeTable:
         except Exception:
             return []
 
+    async def get_file_page_by_id(
+        self, knowledge_id: str, skip: int = 0, limit: int = 50, db: AsyncSession | None = None
+    ) -> tuple[int, list[tuple[str, str]]]:
+        """A base's file count and one page of (id, filename): oldest added first, then by name.
+
+        Columns only, so no file's extracted text is loaded, and in a total
+        order (`created_at` has whole seconds, so name and id break ties), so
+        paging neither repeats nor skips a file (#186). The count joins the
+        files as the page does, so a page always agrees with its total (SQLite
+        does not enforce the cascade that removes a deleted file's link).
+        """
+        async with get_async_db_context(db) as db:
+            total = int(
+                await db.scalar(
+                    select(func.count())
+                    .select_from(KnowledgeFile)
+                    .join(File, File.id == KnowledgeFile.file_id)
+                    .where(KnowledgeFile.knowledge_id == knowledge_id)
+                )
+                or 0
+            )
+            if limit <= 0 or skip >= total:
+                return total, []
+            result = await db.execute(
+                select(File.id, File.filename)
+                .join(KnowledgeFile, File.id == KnowledgeFile.file_id)
+                .where(KnowledgeFile.knowledge_id == knowledge_id)
+                .order_by(KnowledgeFile.created_at.asc(), File.filename.asc(), File.id.asc())
+                .offset(max(skip, 0))
+                .limit(max(limit, 0))
+            )
+            return total, [(row.id, row.filename) for row in result.all()]
+
     async def get_file_metadatas_by_id(
         self, knowledge_id: str, db: AsyncSession | None = None
     ) -> list[FileMetadataResponse]:
