@@ -6,11 +6,11 @@ import { enumOption, Valves } from './Valves';
 // valve was sent "2", and the backend's pydantic model refused the save.
 
 describe('an enum valve', () => {
-	const pick = (enumValues: Array<string | number | boolean>, current: unknown, text: string) => {
+	const pick = (enumValues: Array<string | number | boolean>, current: unknown, text: string, type = 'integer') => {
 		const onChange = vi.fn();
 		render(
 			<Valves
-				spec={{ properties: { level: { title: 'Level', type: 'integer', enum: enumValues } } }}
+				spec={{ properties: { level: { title: 'Level', type, enum: enumValues } } }}
 				valves={{ level: current }}
 				onChange={onChange}
 			/>
@@ -24,7 +24,7 @@ describe('an enum valve', () => {
 	});
 
 	it('keeps a string option a string', () => {
-		expect(pick(['low', 'high'], 'low', 'high')).toEqual({ level: 'high' });
+		expect(pick(['low', 'high'], 'low', 'high', 'string')).toEqual({ level: 'high' });
 	});
 
 	it('shows the current numeric value as selected', () => {
@@ -39,6 +39,32 @@ describe('an enum valve', () => {
 	});
 });
 
+describe('an enum valve with no default', () => {
+	it('starts at its first option when made Custom, not at an unsavable empty value', () => {
+		const onChange = vi.fn();
+		render(
+			<Valves
+				spec={{ properties: { level: { title: 'Level', type: 'integer', enum: [1, 2, 3] } } }}
+				valves={{ level: null }}
+				onChange={onChange}
+			/>
+		);
+		fireEvent.click(screen.getByRole('button', { name: /Default/ }));
+		expect(onChange).toHaveBeenCalledWith({ level: 1 });
+	});
+
+	it('offers no null option for an Optional Literal', () => {
+		render(
+			<Valves
+				spec={{ properties: { level: { title: 'Level', enum: [null, 1, 2] } } }}
+				valves={{ level: 1 }}
+				onChange={vi.fn()}
+			/>
+		);
+		expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['1', '2']);
+	});
+});
+
 describe('enumOption', () => {
 	it('is the entry the text stands for, with its own type', () => {
 		expect(enumOption([1, 2, 3], '2')).toBe(2);
@@ -47,7 +73,8 @@ describe('enumOption', () => {
 		expect(enumOption(['a', 'b'], 'b')).toBe('b');
 	});
 
-	it('is the text itself when no entry matches', () => {
+	it('is the text itself when no entry matches, and never a null entry', () => {
 		expect(enumOption([1, 2], 'x')).toBe('x');
+		expect(enumOption([null, 1], 'null')).toBe('null');
 	});
 });

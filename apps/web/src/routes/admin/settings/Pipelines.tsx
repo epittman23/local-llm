@@ -11,6 +11,7 @@ import {
 	SettingsForm,
 	SettingsSection
 } from '@/components/settings/controls';
+import { enumChoices, enumOption } from '@/components/common/Valves';
 import {
 	deletePipeline,
 	downloadPipeline,
@@ -283,11 +284,12 @@ export default function Pipelines() {
 															{prop.enum ? (
 																<SettingSelect
 																	value={String(value)}
-																	onChange={(v) => setValve(key, v)}
+																	// The option itself, not its text: a Literal[1, 2, 3] valve refuses "2" (#201).
+																	onChange={(v) => setValve(key, enumOption(prop.enum ?? [], v))}
 																	className="w-full"
 																	aria-label={prop.title ?? key}
 																>
-																	{prop.enum.map((option) => (
+																	{enumChoices(prop.enum).map((option) => (
 																		<option key={String(option)} value={String(option)}>
 																			{String(option)}
 																		</option>
