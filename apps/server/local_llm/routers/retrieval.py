@@ -544,7 +544,8 @@ async def update_embedding_config(request: Request, form_data: EmbeddingModelUpd
         )
     # The loaded model is kept when it is the one asked for. Compared with the
     # model this process holds, not the stored name, which a config import or
-    # another worker's update can have changed without loading it.
+    # another worker's update can have changed without loading it. The name is
+    # recorded by this route, so the first save after a start loads the model once.
     keep_loaded = (
         not form_data.force_reload
         and request.app.state.ef is not None

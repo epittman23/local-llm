@@ -665,9 +665,6 @@ async def initialize_runtime_config(app: FastAPI):
     app.state.EMBEDDING_FUNCTION = None
     app.state.RERANKING_FUNCTION = None
     app.state.ef = None
-    # The name of the internal model `ef` holds, which the stored setting can
-    # differ from (a config import, another worker's update).
-    app.state.ef_model = None
     app.state.rf = None
     app.state.YOUTUBE_LOADER_TRANSLATION = None
 
@@ -684,7 +681,6 @@ async def initialize_runtime_config(app: FastAPI):
             'rag.external_reranker_timeout',
         )
         app.state.ef = get_ef(rag_config.get('rag.embedding_engine'), rag_config.get('rag.embedding_model'))
-        app.state.ef_model = rag_config.get('rag.embedding_model') if app.state.ef is not None else None
         if rag_config.get('rag.enable_hybrid_search') and not rag_config.get('rag.bypass_embedding_and_retrieval'):
             app.state.rf = get_rf(
                 rag_config.get('rag.reranking_engine'),
