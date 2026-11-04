@@ -81,4 +81,41 @@ describe('useStreamRunner (#207)', () => {
 		expect(toast.error).toHaveBeenCalledWith('Model not found');
 		expect(result.current.running).toBe(false);
 	});
+
+	it('a new run stops one still waiting, and Stop then reaches the new one', async () => {
+		const signals = pendingFetch();
+		const { result } = renderHook(() => useStreamRunner());
+		act(() => {
+			void result.current.run({ model: 'm' }, vi.fn());
+		});
+		await waitFor(() => expect(signals).toHaveLength(1));
+		act(() => {
+			void result.current.run({ model: 'm' }, vi.fn());
+		});
+		await waitFor(() => expect(signals).toHaveLength(2));
+		expect(signals[0]?.aborted).toBe(true);
+		// The first run's end does not end the second's running state.
+		await act(async () => {});
+		expect(result.current.running).toBe(true);
+
+		act(() => result.current.stop());
+		expect(signals[1]?.aborted).toBe(true);
+	});
+
+	it('a Stop before the response logs nothing', async () => {
+		const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const signals = pendingFetch();
+		const { result } = renderHook(() => useStreamRunner());
+		let done: Promise<void> | undefined;
+		act(() => {
+			done = result.current.run({ model: 'm' }, vi.fn());
+		});
+		await waitFor(() => expect(signals).toHaveLength(1));
+		act(() => result.current.stop());
+		await act(async () => {
+			await done;
+		});
+		expect(error).not.toHaveBeenCalled();
+		error.mockRestore();
+	});
 });

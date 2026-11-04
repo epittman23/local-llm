@@ -382,7 +382,8 @@ export const chatCompletion = async (
 		},
 		body: JSON.stringify(body)
 	}).catch((err) => {
-		console.error(err);
+		// An abort is the caller's own doing, not an error worth logging.
+		if (!controller.signal.aborted) console.error(err);
 		error = requestError(err);
 		return null;
 	});

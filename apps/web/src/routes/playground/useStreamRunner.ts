@@ -17,6 +17,8 @@ export function useStreamRunner() {
 	const controller = useRef<AbortController | null>(null);
 	useEffect(() => () => controller.current?.abort(), []);
 	const run = async (body: object, onText: (t: string) => void) => {
+		// A run still going is stopped, so no request is left that Stop cannot reach.
+		controller.current?.abort();
 		const ctrl = new AbortController();
 		controller.current = ctrl;
 		setRunning(true);
@@ -26,8 +28,11 @@ export function useStreamRunner() {
 		} catch (err) {
 			if (!ctrl.signal.aborted) toast.error(`${err instanceof Error ? err.message : err}`);
 		} finally {
-			if (controller.current === ctrl) controller.current = null;
-			setRunning(false);
+			// Only the latest run ends the running state; an earlier one it replaced does not.
+			if (controller.current === ctrl) {
+				controller.current = null;
+				setRunning(false);
+			}
 		}
 	};
 	return { running, run, stop: () => controller.current?.abort('User: Stop Response') };
