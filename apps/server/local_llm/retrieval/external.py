@@ -87,6 +87,46 @@ def _safe_identifier(value: str, label: str) -> str:
     return value
 
 
+# Metrics whose score is a distance, lower is better; every other reports a similarity.
+_DISTANCE_METRICS = {'euclid', 'manhattan', 'l2', 'hamming', 'jaccard'}
+
+
+def _as_similarity(score, metric: str | None):
+    """A provider's score as a similarity, higher is better, as every other source reports one (#503).
+
+    Cosine and inner product already are one; a distance d (Euclid, Manhattan,
+    L2, ...) becomes 1 / (1 + d), which keeps the order, the closest hit
+    scoring 1. An unknown metric leaves the score as it is.
+    """
+    if not isinstance(score, int | float) or (metric or '').lower() not in _DISTANCE_METRICS:
+        return score
+    return 1 / (1 + max(float(score), 0.0))
+
+
+def _qdrant_metric(client, collection_name: str, vector_field: str | None) -> str | None:
+    """The distance the collection's vectors (or its named vector) are compared by, or None if it cannot be read."""
+    try:
+        vectors = client.get_collection(collection_name).config.params.vectors
+        params = vectors.get(vector_field or '') if isinstance(vectors, dict) else vectors
+        distance = getattr(params, 'distance', None)
+        return str(getattr(distance, 'value', distance)) if distance is not None else None
+    except Exception as e:
+        log.warning('Could not read the metric of Qdrant collection %s: %s', collection_name, e)
+        return None
+
+
+def _milvus_metric(client, collection_name: str, vector_field: str) -> str | None:
+    """The metric of the index on the vector field, or None if it cannot be read."""
+    try:
+        for index_name in client.list_indexes(collection_name, field_name=vector_field) or []:
+            metric = (client.describe_index(collection_name, index_name) or {}).get('metric_type')
+            if metric:
+                return str(metric)
+    except Exception as e:
+        log.warning('Could not read the metric of Milvus collection %s: %s', collection_name, e)
+    return None
+
+
 async def _retrieve_qdrant(connection, auth_config, knowledge, query, count, embedding_function) -> list[dict]:
     try:
         from qdrant_client import QdrantClient
@@ -113,14 +153,15 @@ async def _retrieve_qdrant(connection, auth_config, knowledge, query, count, emb
             api_key=(auth_config or {}).get('api_key'),
             timeout=config.get('timeout') or 30,
         )
-        return client.query_points(
+        response = client.query_points(
             collection_name=collection_name,
             query=vector,
             using=vector_field,
             limit=count,
         )
+        return response, _qdrant_metric(client, collection_name, vector_field)
 
-    response = await asyncio.to_thread(_search)
+    response, metric = await asyncio.to_thread(_search)
     mapping = {
         'content_field': source_config.get('content_field') or 'payload.text',
         'metadata_field': source_config.get('metadata_field') or 'payload.metadata',
@@ -130,7 +171,9 @@ async def _retrieve_qdrant(connection, auth_config, knowledge, query, count, emb
 
     normalized = []
     for point in response.points:
-        normalized.append(_normalize_result(point.model_dump(), mapping, knowledge, distance=point.score))
+        result = point.model_dump()
+        result['score'] = _as_similarity(result.get('score'), metric)
+        normalized.append(_normalize_result(result, mapping, knowledge, distance=result['score']))
     return normalized
 
 
@@ -183,9 +226,9 @@ async def _retrieve_milvus(connection, auth_config, knowledge, query, count, emb
             'limit': count,
             'output_fields': list(output_fields),
         }
-        return client.search(**kwargs)
+        return client.search(**kwargs), _milvus_metric(client, collection_name, vector_field)
 
-    response = await asyncio.to_thread(_search)
+    response, metric = await asyncio.to_thread(_search)
     mapping = {
         'content_field': content_field,
         'metadata_field': metadata_field,
@@ -200,9 +243,9 @@ async def _retrieve_milvus(connection, auth_config, knowledge, query, count, emb
         result = {
             **entity,
             'id': item.get('id') or entity.get('id'),
-            'distance': item.get('distance'),
+            'distance': _as_similarity(item.get('distance'), metric),
         }
-        normalized.append(_normalize_result(result, mapping, knowledge, distance=item.get('distance')))
+        normalized.append(_normalize_result(result, mapping, knowledge, distance=result['distance']))
     return normalized
 
 
