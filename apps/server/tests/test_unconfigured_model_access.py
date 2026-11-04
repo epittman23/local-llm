@@ -76,3 +76,39 @@ def test_a_user_sees_only_their_own_and_shared_models(visible):
     ids, _ = visible(USER)
 
     assert ids == ['mine', 'shared']
+
+
+def test_rows_built_the_way_the_model_list_builds_them(visible):
+    # The rule depends on a workspace row's info carrying the row's id, so
+    # build the list as get_all_models does: base models, then workspace rows
+    # (an override and a preset), then the default metadata.
+    from local_llm.models.models import ModelMeta, ModelModel, ModelParams
+
+    def row(id, user_id, base_model_id=None):
+        return ModelModel(
+            id=id,
+            user_id=user_id,
+            base_model_id=base_model_id,
+            name=id,
+            params=ModelParams(),
+            meta=ModelMeta(),
+            is_active=True,
+            updated_at=0,
+            created_at=0,
+        )
+
+    base = [
+        {'id': 'provider-model', 'name': 'p', 'owned_by': 'openai'},
+        {'id': 'mine', 'name': 'm', 'owned_by': 'openai'},
+    ]
+    models = models_util._apply_workspace_models(
+        base, [row('mine', USER.id), row('shared', 'someone', base_model_id='provider-model')]
+    )
+    models_util._apply_default_metadata(models, {'capabilities': {'vision': True}})
+    assert [model['info']['meta']['capabilities'] for model in models] == [{'vision': True}] * 3
+
+    async def run(user):
+        return [model['id'] for model in await models_util.get_filtered_models(models, user)]
+
+    assert asyncio.run(run(ADMIN)) == ['provider-model', 'shared']
+    assert asyncio.run(run(USER)) == ['mine', 'shared']
