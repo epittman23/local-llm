@@ -39,7 +39,13 @@ import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { useShiftKey } from '@/lib/utils/useShiftKey';
 import { routePaths } from '@/routes/routePaths';
 import { FunctionCodeWarning } from './FunctionEditor';
-import { FUNCTION_TYPES, type FunctionListItem, filterAndSortFunctions, parseFunctionImport } from './functionTypes';
+import {
+	FUNCTION_TYPES,
+	type FunctionListItem,
+	filterAndSortFunctions,
+	importSummary,
+	parseFunctionImport
+} from './functionTypes';
 
 const LIST_KEY = ['functions', 'list'];
 const rowIconButton = 'text-muted-foreground flex size-6 items-center justify-center rounded-lg transition';
@@ -204,13 +210,16 @@ export function FunctionsPage() {
 					toast.error('No valid functions found in that file.');
 					return;
 				}
+				let created = 0;
 				for (const fn of functions) {
-					await createNewFunction(token, fn).catch((error) => {
+					const res = await createNewFunction(token, fn).catch((error) => {
 						toast.error(`${error}`);
 						return null;
 					});
+					if (res) created += 1;
 				}
-				toast.success('Functions imported successfully');
+				const [kind, message] = importSummary(created, functions.length);
+				toast[kind](message);
 				refresh();
 			} catch (error) {
 				toast.error(`${error}`);

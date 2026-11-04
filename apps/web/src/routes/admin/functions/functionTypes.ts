@@ -90,3 +90,14 @@ export function filterAndSortFunctions(
 			: sign * ((a.updated_at ?? 0) - (b.updated_at ?? 0))
 	);
 }
+
+/**
+ * The toast an Import JSON ends with, from how many of the file's functions
+ * were created: it used to say "Functions imported successfully" even when
+ * every create had failed, after each failure's own error (#209).
+ */
+export const importSummary = (created: number, total: number): ['success' | 'warning' | 'error', string] => {
+	if (created === total) return ['success', 'Functions imported successfully'];
+	if (created === 0) return ['error', total === 1 ? 'The function was not imported' : 'No functions were imported'];
+	return ['warning', `Imported ${created} of ${total} functions`];
+};

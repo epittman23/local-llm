@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	type FunctionListItem,
 	filterAndSortFunctions,
+	importSummary,
 	parseFunctionImport,
 	sanitizeIncomingFunction
 } from './functionTypes';
@@ -79,5 +80,18 @@ describe('imports', () => {
 		});
 		expect(out).toEqual({ id: 'x', name: 'X', content: 'c', meta: { description: '' } });
 		expect(sanitizeIncomingFunction([])).toBeNull();
+	});
+});
+
+describe('importSummary (#209)', () => {
+	it('says imported only when every function was created', () => {
+		expect(importSummary(2, 2)).toEqual(['success', 'Functions imported successfully']);
+	});
+	it('says none were imported when every create failed', () => {
+		expect(importSummary(0, 3)).toEqual(['error', 'No functions were imported']);
+		expect(importSummary(0, 1)).toEqual(['error', 'The function was not imported']);
+	});
+	it('says how many when some failed', () => {
+		expect(importSummary(1, 3)).toEqual(['warning', 'Imported 1 of 3 functions']);
 	});
 });
