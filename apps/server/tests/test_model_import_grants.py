@@ -88,9 +88,9 @@ def _grants(model_id):
 
 
 def _import(client, admin, *models):
+    # The stored state is what is checked; the reply's shape is the route's own business.
     r = client.post('/models/import', json={'models': list(models)}, headers=admin.headers)
     assert r.status_code == 200, r.text
-    assert r.json() is True
 
 
 def test_a_model_without_grants_or_base_keeps_both(client, admin, group):

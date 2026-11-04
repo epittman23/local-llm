@@ -1,10 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createNewModel, getModelById, updateModelById } from '@/lib/apis/models';
-import { importPayload, importUpdate, parseModelImport, sanitizeIncomingModel, saveImportedModel } from './modelImport';
+import { createNewModel, getModelById, importModels, updateModelById } from '@/lib/apis/models';
+import {
+	importModelFile,
+	importPayload,
+	importUpdate,
+	parseModelImport,
+	sanitizeIncomingModel,
+	saveImportedModel
+} from './modelImport';
 
 vi.mock('@/lib/apis/models', () => ({
 	createNewModel: vi.fn(async () => ({})),
 	getModelById: vi.fn(),
+	importModels: vi.fn(async () => true),
 	updateModelById: vi.fn(async () => ({}))
 }));
 
@@ -153,5 +161,21 @@ describe('importPayload', () => {
 			params: { temperature: 1 }
 		});
 		expect(b).toEqual({ id: 'b', name: 'B', meta: {}, params: {} });
+	});
+});
+
+describe('importModelFile', () => {
+	it('sends the parsed file without grants or a missing base model, and gives the server reply (#524)', async () => {
+		const file = JSON.stringify([
+			{ id: 'x', name: 'X', access_grants: [{ principal_type: 'user', principal_id: '*' }] }
+		]);
+		await expect(importModelFile('tok', file)).resolves.toBe(true);
+		expect(importModels).toHaveBeenCalledWith('tok', [{ id: 'x', name: 'X', meta: {}, params: {} }]);
+	});
+
+	it('refuses a file that is not JSON without sending anything', async () => {
+		vi.mocked(importModels).mockClear();
+		await expect(importModelFile('tok', 'not json')).rejects.toThrow(SyntaxError);
+		expect(importModels).not.toHaveBeenCalled();
 	});
 });

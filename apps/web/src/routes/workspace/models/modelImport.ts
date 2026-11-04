@@ -1,5 +1,5 @@
 import { type AccessGrant, dedupeAccessGrants } from '@/lib/access/accessGrants';
-import { createNewModel, getModelById, updateModelById } from '@/lib/apis/models';
+import { createNewModel, getModelById, importModels, updateModelById } from '@/lib/apis/models';
 
 // Models arrive from three places the app doesn't control -- an imported JSON
 // file, a message from the community site, and a model being shared out. Same
@@ -89,6 +89,10 @@ export function importPayload(models: IncomingModel[]): Json[] {
 		base_model_id ? { ...model, base_model_id } : model
 	);
 }
+
+/** Imports a models file as Admin Settings > Models does: parsed, then sent as `importPayload` shapes it. */
+export const importModelFile = async (token: string, text: string) =>
+	importModels(token, importPayload(parseModelImport(text)));
 
 /** Saves one imported model: updates the model with its id (see importUpdate), or creates it when there is none. */
 export async function saveImportedModel(token: string, model: IncomingModel) {
