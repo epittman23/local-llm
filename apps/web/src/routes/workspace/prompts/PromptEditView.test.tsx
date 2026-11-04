@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { updatePromptMetadata } from '@/lib/apis/prompts';
+import { getPromptHistory, setProductionPromptVersion, updatePromptMetadata } from '@/lib/apis/prompts';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { PromptEditView } from './PromptEditView';
 
@@ -95,5 +95,38 @@ describe('PromptEditView metadata autosave (#228)', () => {
 		const view = renderView();
 		view.unmount();
 		expect(updatePromptMetadata).not.toHaveBeenCalled();
+	});
+});
+
+describe('PromptEditView production switch (#222)', () => {
+	it('starts a new version from the content just made production', async () => {
+		vi.mocked(getPromptHistory).mockResolvedValue([
+			{ id: 'v2', commit_message: 'Second', created_at: 2, snapshot: { content: 'V2 content' } },
+			{ id: 'v1', commit_message: 'First', created_at: 1, snapshot: { content: 'V1 content' } }
+		] as never);
+		vi.mocked(setProductionPromptVersion).mockResolvedValue({} as never);
+		render(
+			<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+				<TooltipProvider>
+					<MemoryRouter>
+						<PromptEditView
+							prompt={{ ...prompt, content: 'V2 content', version_id: 'v2' }}
+							disabled={false}
+							onSubmit={vi.fn()}
+						/>
+					</MemoryRouter>
+				</TooltipProvider>
+			</QueryClientProvider>
+		);
+		await act(async () => {});
+
+		fireEvent.click(screen.getByText('First'));
+		await act(async () => {
+			fireEvent.click(screen.getByText('Set as Production'));
+		});
+		expect(setProductionPromptVersion).toHaveBeenCalledWith('t', 'p1', 'v1');
+
+		fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+		expect(screen.getByLabelText('Prompt Content')).toHaveValue('V1 content');
 	});
 });
