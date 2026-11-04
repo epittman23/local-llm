@@ -687,6 +687,41 @@ def merge_and_sort_query_results(query_results: list[dict], k: int) -> dict:
     }
 
 
+def _in_document_order(result: dict) -> dict:
+    """A collection's chunks, each file's in the order they appear in it (#355).
+
+    Vector stores return a whole collection in no set order: pgvector has no
+    ORDER BY, and its ids are random, so after deletes and a VACUUM a file's
+    chunks could come back shuffled and a full-context read garbled the
+    document. Files keep the order they first appear in; a file's chunks are
+    sorted by their `start_index`, and chunks without one keep their place
+    after those that have it.
+    """
+    if not (result.get('documents') and result.get('metadatas') and result.get('ids')):
+        return result
+    documents, metadatas, ids = result['documents'][0], result['metadatas'][0], result['ids'][0]
+    first_seen: dict[str, int] = {}
+
+    def key(position: int):
+        metadata = metadatas[position] or {}
+        file_key = str(metadata.get('file_id') or metadata.get('source') or '')
+        group = first_seen.setdefault(file_key, len(first_seen))
+        start = metadata.get('start_index')
+        if isinstance(start, int) and not isinstance(start, bool):
+            return (group, 0, start, position)
+        return (group, 1, 0, position)
+
+    # Keys in input order, so a file's group is where it first appears.
+    keys = [key(position) for position in range(len(documents))]
+    order = sorted(range(len(documents)), key=keys.__getitem__)
+    return {
+        **result,
+        'documents': [[documents[i] for i in order]],
+        'metadatas': [[metadatas[i] for i in order]],
+        'ids': [[ids[i] for i in order]],
+    }
+
+
 def get_all_items_from_collections(collection_names: list[str]) -> dict:
     results = []
 
@@ -695,7 +730,7 @@ def get_all_items_from_collections(collection_names: list[str]) -> dict:
             try:
                 result = get_doc(collection_name=collection_name)
                 if result is not None:
-                    results.append(result.model_dump())
+                    results.append(_in_document_order(result.model_dump()))
             except Exception as e:
                 log.exception(f'Error when querying the collection: {e}')
         else:
