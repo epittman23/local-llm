@@ -53,3 +53,50 @@ def test_saving_a_tool_server_with_a_null_config_stores_an_empty_one():
     connection = ToolServerConnection(url='http://a', path='openapi.json', auth_type=None, key=None, config=None)
 
     assert connection.config == {}
+
+
+def _admin_client(router, prefix, monkeypatch):
+    from types import SimpleNamespace
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from local_llm.utils.auth import get_admin_user
+
+    async def publish(*_a, **_k):
+        return None
+
+    monkeypatch.setattr(router, 'publish_event', publish)
+    app = FastAPI()
+    app.include_router(router.router, prefix=prefix)
+    app.dependency_overrides[get_admin_user] = lambda: SimpleNamespace(id='admin', role='admin')
+    return TestClient(app)
+
+
+def test_an_imported_null_config_or_meta_is_stored_as_empty(monkeypatch):
+    from local_llm.routers import configs
+
+    r = _admin_client(configs, '/configs', monkeypatch).post(
+        '/configs/import',
+        json={
+            'config': {
+                'tool_server.connections': [{'url': 'http://a', 'path': 'openapi.json', 'config': None}],
+                'evaluation.arena.models': [{'id': 'arena', 'meta': None}],
+            }
+        },
+    )
+
+    assert r.status_code == 200, r.text
+    assert asyncio.run(Config.get('tool_server.connections'))[0]['config'] == {}
+    assert asyncio.run(Config.get('evaluation.arena.models'))[0]['meta'] == {}
+
+
+def test_arena_models_saved_with_a_null_meta_store_an_empty_one(monkeypatch):
+    from local_llm.routers import evaluations
+
+    r = _admin_client(evaluations, '/evaluations', monkeypatch).post(
+        '/evaluations/config', json={'EVALUATION_ARENA_MODELS': [{'id': 'arena', 'name': 'Arena', 'meta': None}]}
+    )
+
+    assert r.status_code == 200, r.text
+    assert asyncio.run(Config.get('evaluation.arena.models'))[0]['meta'] == {}
