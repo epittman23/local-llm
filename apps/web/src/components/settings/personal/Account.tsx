@@ -73,6 +73,10 @@ export default function Account() {
 	// changes the password instead of saving the tab. Forms cannot nest, so it
 	// comes after the tab's form, and the fields name it with `form=`.
 	const passwordForm = useId();
+	// One password change at a time: a second Enter while the first is in flight
+	// would send the old password again, and fail beside the first one's success.
+	const changing = useRef(false);
+	const [changingPassword, setChangingPassword] = useState(false);
 	const [apiKey, setApiKey] = useState('');
 	const [confirmDeleteKey, setConfirmDeleteKey] = useState(false);
 	const fileRef = useRef<HTMLInputElement>(null);
@@ -141,9 +145,17 @@ export default function Account() {
 		setSaving(false);
 	};
 
-	const submitPassword = (e: FormEvent) => {
+	const submitPassword = async (e: FormEvent) => {
 		e.preventDefault();
-		if (passwords.current && passwords.next) void changePassword();
+		if (!passwords.current || !passwords.next || changing.current) return;
+		changing.current = true;
+		setChangingPassword(true);
+		try {
+			await changePassword();
+		} finally {
+			changing.current = false;
+			setChangingPassword(false);
+		}
 	};
 
 	const changePassword = async () => {
@@ -355,7 +367,7 @@ export default function Account() {
 								size="sm"
 								variant="outline"
 								className="self-start"
-								disabled={!passwords.current || !passwords.next}
+								disabled={!passwords.current || !passwords.next || changingPassword}
 							>
 								Update password
 							</Button>

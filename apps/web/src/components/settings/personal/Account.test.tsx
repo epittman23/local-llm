@@ -158,6 +158,22 @@ describe('Account tab: the password fields have a form of their own (#260)', () 
 		expect(users.updateUserVariables).not.toHaveBeenCalled();
 	});
 
+	it('sends one change at a time, however often it is submitted', async () => {
+		let answer: (ok: boolean) => void = () => {};
+		vi.mocked(auths.updateUserPassword).mockImplementation(() => new Promise((resolve) => (answer = resolve)));
+		const current = await fill();
+		const form = document.getElementById(current.getAttribute('form') ?? '') as HTMLFormElement;
+		fireEvent.submit(form);
+		fireEvent.submit(form);
+		await waitFor(() => expect(screen.getByRole('button', { name: 'Update password' })).toBeDisabled());
+		fireEvent.submit(form);
+		expect(auths.updateUserPassword).toHaveBeenCalledTimes(1);
+		answer(false);
+		await waitFor(() => expect(screen.getByRole('button', { name: 'Update password' })).toBeDisabled());
+		// Refused: the fields are cleared, so the button stays off until they are filled again.
+		expect(screen.getByLabelText('Current Password')).toHaveValue('');
+	});
+
 	it('does nothing while a password is missing', async () => {
 		render(<Account />);
 		const current = await screen.findByLabelText('Current Password');
