@@ -274,8 +274,16 @@ async def process_pending_internal_messages(
         await source_request.app.state.CHAT_COMPLETION_HANDLER(request, form_data, user=user)
 
 
-def _subagent_limits(config: dict) -> tuple[int, int, int, int]:
-    """(max concurrent foreground, max background, max tool iterations, max output chars); -1 means unlimited."""
+def _subagent_limits(config: dict) -> tuple[int, int, int | None, int | None]:
+    """(max concurrent foreground, max background, max tool iterations, max output chars).
+
+    -1 means unlimited for each. The two concurrency limits keep -1 (their
+    checks test for it); the iteration and output limits become None, which is
+    what the tool-call loop and the summary truncation read as no limit. -1
+    used to stop a sub-agent before its first tool call, and truncate every
+    summary: its last character was dropped and the marker appended (#193).
+    Any other value below 1 is 1.
+    """
     max_concurrent = int(config.get('subagents.max_concurrent') or 20)
     max_async = int(config.get('subagents.max_async') or 20)
     max_iterations = int(config.get('subagents.max_iterations') or 30)
@@ -284,7 +292,12 @@ def _subagent_limits(config: dict) -> tuple[int, int, int, int]:
         max_concurrent = max(1, max_concurrent)
     if max_async != -1:
         max_async = max(1, max_async)
-    return max_concurrent, max_async, max_iterations, max_output
+    return (
+        max_concurrent,
+        max_async,
+        None if max_iterations == -1 else max(1, max_iterations),
+        None if max_output == -1 else max(1, max_output),
+    )
 
 
 async def _run_settings(metadata: dict, background: bool) -> dict:
@@ -566,7 +579,7 @@ class _SubagentRun:
                     'error': 'Sub-agent chat or completion message no longer exists.',
                 }
             summary = _message_text(message)
-            if len(summary) > self.max_output:
+            if self.max_output is not None and len(summary) > self.max_output:
                 summary = f'{summary[: self.max_output]}\n\n[output truncated]'
             error = message.get('error')
             return {
