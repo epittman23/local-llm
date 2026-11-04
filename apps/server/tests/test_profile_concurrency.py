@@ -52,8 +52,18 @@ DEFINITION = {
 class FakeSession:
     """Records statements; UPDATEs match `updated` rows; a SELECT returns `row`."""
 
-    def __init__(self, *, row=None, updated=1, commit_error: Exception | None = None, max_version=1):
+    def __init__(
+        self,
+        *,
+        row=None,
+        updated=1,
+        commit_error: Exception | None = None,
+        flush_error: Exception | None = None,
+        execute_error: Exception | None = None,
+        max_version=1,
+    ):
         self.row, self.updated, self.commit_error, self.max_version = row, updated, commit_error, max_version
+        self.flush_error, self.execute_error = flush_error, execute_error
         self.statements: list[str] = []
         self.added: list = []
         self.committed = self.rolled_back = False
@@ -61,6 +71,8 @@ class FakeSession:
     async def execute(self, statement):
         sql = str(statement.compile(compile_kwargs={'literal_binds': True}))
         self.statements.append(sql)
+        if self.execute_error and 'is_default=true' in sql.replace(' ', ''):
+            raise self.execute_error
         if sql.lstrip().upper().startswith('UPDATE'):
             return SimpleNamespace(rowcount=self.updated)
         return SimpleNamespace(scalars=lambda: SimpleNamespace(first=lambda: self.row), scalar=lambda: self.max_version)
@@ -69,6 +81,8 @@ class FakeSession:
         self.added.append(obj)
 
     async def flush(self):
+        if self.flush_error:
+            raise self.flush_error
         for obj in self.added:
             if getattr(obj, 'profile_id', None) is None:
                 obj.profile_id = 7
@@ -166,12 +180,19 @@ def test_set_default_of_a_missing_profile_says_so(session):
 # --- create and add_version (#153) ---------------------------------------------
 
 
-def _integrity_error() -> IntegrityError:
-    return IntegrityError('INSERT', {}, Exception('duplicate key value violates unique constraint'))
+class _DbError(Exception):
+    def __init__(self, message: str, sqlstate: str):
+        super().__init__(message)
+        self.sqlstate = sqlstate
+
+
+def _integrity_error(sqlstate: str = '23505') -> IntegrityError:
+    return IntegrityError('INSERT', {}, _DbError('duplicate key value violates unique constraint', sqlstate))
 
 
 def test_a_create_that_loses_the_race_for_its_name_is_a_conflict(session):
-    s = session(commit_error=_integrity_error())
+    # The unique name fails on the profile's own INSERT, at flush.
+    s = session(flush_error=_integrity_error())
 
     with pytest.raises(ProfileConflict, match="'qwen25c' already exists"):
         asyncio.run(profiles_model.BenchmarkProfiles.create(name='qwen25c', display_name='Q', definition=DEFINITION))
@@ -186,6 +207,33 @@ def test_an_edit_that_loses_the_race_for_its_version_number_is_a_conflict(sessio
         asyncio.run(profiles_model.BenchmarkProfiles.add_version(3, definition=DEFINITION))
 
     assert s.rolled_back
+
+
+def test_a_failure_that_is_not_a_unique_violation_is_not_called_a_conflict(session):
+    check_violation = _integrity_error(sqlstate='23514')
+    s = session(commit_error=check_violation)
+
+    with pytest.raises(IntegrityError) as raised:
+        asyncio.run(profiles_model.BenchmarkProfiles.add_version(3, definition=DEFINITION))
+
+    assert raised.value is check_violation
+    assert s.rolled_back
+
+
+def test_a_set_default_that_loses_the_race_to_another_is_a_conflict(session):
+    s = session(execute_error=_integrity_error())
+
+    with pytest.raises(ProfileConflict, match='made the default at the same time'):
+        asyncio.run(profiles_model.BenchmarkProfiles.set_default(3))
+
+    assert s.rolled_back and not s.committed
+
+
+def test_a_set_default_failing_otherwise_is_raised_as_it_is(session):
+    session(execute_error=_integrity_error(sqlstate='23503'))
+
+    with pytest.raises(IntegrityError):
+        asyncio.run(profiles_model.BenchmarkProfiles.set_default(3))
 
 
 def test_the_router_answers_a_conflict_with_409(monkeypatch):
@@ -205,6 +253,7 @@ def test_the_router_answers_a_conflict_with_409(monkeypatch):
 
     monkeypatch.setattr(profiles_router.BenchmarkProfiles, 'create', conflict)
     monkeypatch.setattr(profiles_router.BenchmarkProfiles, 'add_version', conflict)
+    monkeypatch.setattr(profiles_router.BenchmarkProfiles, 'set_default', conflict)
     client = TestClient(app)
 
     monkeypatch.setattr(profiles_router.BenchmarkProfiles, 'get_by_name', no_profile)
@@ -215,3 +264,9 @@ def test_the_router_answers_a_conflict_with_409(monkeypatch):
     edited = client.post('/qwen25c/versions', json={'definition': DEFINITION})
     assert edited.status_code == 409
     assert 'another edit' in edited.json()['detail']
+
+    entry.version = SimpleNamespace(version=1, model_dump=lambda exclude=None: dict(DEFINITION))
+    cloned = client.post('/qwen25c/clone', json={'name': 'qwen25c-copy', 'display_name': 'Q copy'})
+    assert cloned.status_code == 409
+
+    assert client.post('/qwen25c/default').status_code == 409

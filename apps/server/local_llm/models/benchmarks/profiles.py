@@ -34,6 +34,13 @@ from local_llm.internal.db import Base, get_async_db_context
 log = logging.getLogger(__name__)
 
 
+def _unique_violation(error: IntegrityError) -> bool:
+    """Whether a unique constraint failed (a lost race), not a CHECK, NOT NULL or foreign key."""
+    orig = error.orig
+    sqlstate = getattr(orig, 'sqlstate', None) or getattr(orig, 'pgcode', None)
+    return sqlstate == '23505' or 'UNIQUE constraint failed' in str(orig)
+
+
 ####################
 # Benchmark Serving Profile DB Schema
 #
@@ -302,6 +309,8 @@ class BenchmarkProfileTable:
                 # Another create of the same name got in after the router's
                 # check: a conflict to report, not a 500 (#153).
                 await db.rollback()
+                if not _unique_violation(e):
+                    raise
                 raise ProfileConflict(f"a profile named '{name}' already exists") from e
             return (await self._entries(db, [profile]))[0]
 
@@ -342,6 +351,8 @@ class BenchmarkProfileTable:
                 await db.commit()
             except IntegrityError as e:
                 await db.rollback()
+                if not _unique_violation(e):
+                    raise
                 raise ProfileConflict('another edit of this profile was saved first; reload it and try again') from e
             await db.refresh(row)
             return BenchmarkProfileVersionModel.model_validate(row)
@@ -364,25 +375,35 @@ class BenchmarkProfileTable:
     async def set_default(self, profile_id: int, db: AsyncSession | None = None) -> None:
         """Make a profile the default, unless it is archived.
 
-        Clear, then set, in one transaction: the partial unique index is checked
-        per statement, so this order never has two defaults. The set is guarded
-        on `archived_at IS NULL` in the UPDATE itself, not by an earlier read,
-        so an archive that commits in between makes it match nothing; the
-        rollback then keeps the old default (#152).
+        Clear, then set, in one transaction, as two statements: the partial
+        unique index is checked row by row, so clearing first never has two
+        defaults. The set is guarded on `archived_at IS NULL` in the UPDATE
+        itself, not by an earlier read, so an archive that commits in between
+        makes it match nothing; the rollback then keeps the old default (#152).
+        A set-default that commits in between makes the index refuse this one,
+        a conflict (409) rather than a 500.
         """
         async with get_async_db_context(db) as db:
-            await db.execute(
-                update(BenchmarkProfile).filter(BenchmarkProfile.is_default.is_(True)).values(is_default=False)
-            )
-            # An UPDATE returns a CursorResult, which carries rowcount.
-            result = cast(
-                CursorResult,
+            try:
                 await db.execute(
-                    update(BenchmarkProfile)
-                    .filter(BenchmarkProfile.profile_id == profile_id, BenchmarkProfile.archived_at.is_(None))
-                    .values(is_default=True)
-                ),
-            )
+                    update(BenchmarkProfile).filter(BenchmarkProfile.is_default.is_(True)).values(is_default=False)
+                )
+                # An UPDATE returns a CursorResult, which carries rowcount.
+                result = cast(
+                    CursorResult,
+                    await db.execute(
+                        update(BenchmarkProfile)
+                        .filter(BenchmarkProfile.profile_id == profile_id, BenchmarkProfile.archived_at.is_(None))
+                        .values(is_default=True)
+                    ),
+                )
+            except IntegrityError as e:
+                await db.rollback()
+                if not _unique_violation(e):
+                    raise
+                raise ProfileConflict(
+                    'another profile was made the default at the same time; reload and try again'
+                ) from e
             if not result.rowcount:
                 raise await self._refusal(db, profile_id, 'an archived profile cannot be the default')
             await db.commit()

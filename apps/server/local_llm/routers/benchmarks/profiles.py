@@ -246,6 +246,8 @@ async def set_default(name: str, user=Depends(get_admin_user)):
     entry = await _get_or_404(name)
     try:
         await BenchmarkProfiles.set_default(entry.profile.profile_id)
+    except ProfileConflict as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e)) from e
     except ProfileError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     return await _get_or_404(name)
