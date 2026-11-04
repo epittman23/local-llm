@@ -1554,3 +1554,179 @@ def test_a_continued_reply_adds_its_usage_to_what_was_stored(monkeypatch):
     assert final['usage']['total_tokens'] == 200
     # The canonical counts are summed (prompt_tokens is an alias that keeps the latest value).
     assert (final['usage']['input_tokens'], final['usage']['output_tokens']) == (130, 70)
+
+
+def _usage_chunk(text, **usage):
+    return sse({'choices': [{'delta': {'content': text}}], 'usage': usage})
+
+
+def _final_usage(observed):
+    return [s for s in _saved(observed) if s.get('done') is True][-1]['usage']
+
+
+def test_usage_repeated_within_one_stream_is_counted_once(monkeypatch):
+    """#155: a provider that reports its running usage on several chunks of one stream.
+
+    Each usage-bearing chunk was added to the total, so three chunks of one
+    reply counted the prompt three times. Within a stream the latest report
+    is the stream's usage.
+    """
+    observed = _run(
+        [
+            [
+                _usage_chunk('a', prompt_tokens=10, completion_tokens=1, total_tokens=11),
+                _usage_chunk('b', prompt_tokens=10, completion_tokens=2, total_tokens=12),
+                _usage_chunk('c', prompt_tokens=10, completion_tokens=3, total_tokens=13),
+                DONE,
+            ]
+        ],
+        {'chat_id': SAVED_CHAT},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    usage = _final_usage(observed)
+    assert (usage['input_tokens'], usage['output_tokens'], usage['total_tokens']) == (10, 3, 13)
+    # What the page is shown as it streams is the same running figure, then
+    # the reply's total once more with the closing event.
+    assert [e['usage']['total_tokens'] for e in _emitted(observed) if 'usage' in e] == [11, 12, 13, 13]
+
+
+def test_llama_cpp_timings_on_every_chunk_are_counted_once(monkeypatch):
+    """#155: llama.cpp's per-token timings repeat the stream's running counts on each chunk."""
+    observed = _run(
+        [
+            [
+                sse({'choices': [{'delta': {'content': 'a'}}], 'timings': {'prompt_n': 5, 'predicted_n': 1}}),
+                sse({'choices': [{'delta': {'content': 'b'}}], 'timings': {'prompt_n': 5, 'predicted_n': 2}}),
+                DONE,
+            ]
+        ],
+        {'chat_id': SAVED_CHAT},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    usage = _final_usage(observed)
+    assert (usage['input_tokens'], usage['output_tokens'], usage['total_tokens']) == (5, 2, 7)
+    assert (usage['prompt_n'], usage['predicted_n']) == (5, 2)
+
+
+def test_usage_of_each_tool_call_round_still_adds_up(monkeypatch):
+    """#155: each request of a reply is billed on its own, so the rounds are summed."""
+    first = tool_call_stream('lookup', '{"q": "x"}')
+    observed = _run(
+        [
+            [
+                *first[:-1],
+                sse({'choices': [], 'usage': {'prompt_tokens': 10, 'completion_tokens': 4, 'total_tokens': 14}}),
+                sse({'choices': [], 'usage': {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15}}),
+                DONE,
+            ],
+            [
+                _usage_chunk('Found', prompt_tokens=20, completion_tokens=1, total_tokens=21),
+                _usage_chunk(' it', prompt_tokens=20, completion_tokens=2, total_tokens=22),
+                DONE,
+            ],
+        ],
+        {'chat_id': SAVED_CHAT, 'tools': [tool('lookup', result={'hits': 1})]},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    usage = _final_usage(observed)
+    assert (usage['input_tokens'], usage['output_tokens'], usage['total_tokens']) == (30, 7, 37)
+
+
+API_STREAM_WITH_OUTLET_FILTERS = {
+    'no_emitter': True,
+    'env': {'ENABLE_API_OUTLET_FILTERS': True},
+    'sorted_filters': ['f'],
+}
+
+
+def test_usage_repeated_on_an_api_stream_is_counted_once(monkeypatch):
+    """#155: the API stream the outlet filters read adds up a stream's usage the same way."""
+    observed = _run(
+        [
+            [
+                _usage_chunk('a', prompt_tokens=10, completion_tokens=1, total_tokens=11),
+                _usage_chunk('b', prompt_tokens=10, completion_tokens=2, total_tokens=12, cost=0.002),
+                sse({'choices': [], 'timings': {'prompt_n': 10, 'predicted_n': 2, 'predicted_ms': 40.0}}),
+                DONE,
+            ]
+        ],
+        {},
+        API_STREAM_WITH_OUTLET_FILTERS,
+        {},
+        None,
+        monkeypatch,
+    )
+
+    usage = observed['assistant_message']['usage']
+    assert (usage['input_tokens'], usage['output_tokens'], usage['total_tokens']) == (10, 2, 12)
+    # A chunk replaces only the keys it carries: the cost and token counts of
+    # the usage chunk stay beside the timings that came after it.
+    assert (usage['prompt_tokens'], usage['completion_tokens'], usage['cost']) == (10, 2, 0.002)
+    assert usage['predicted_ms'] == 40.0
+
+
+def test_responses_usage_on_an_api_stream_is_kept(monkeypatch):
+    """#155: a Responses API stream's usage reaches the outlet filters' message too."""
+    completed = {'id': 'resp_1', 'output': [], 'usage': {'input_tokens': 3, 'output_tokens': 2}}
+    observed = _run(
+        [[sse({'type': 'response.completed', 'response': completed}), DONE]],
+        {},
+        API_STREAM_WITH_OUTLET_FILTERS,
+        {},
+        None,
+        monkeypatch,
+    )
+
+    usage = observed['assistant_message']['usage']
+    assert (usage['input_tokens'], usage['output_tokens'], usage['total_tokens']) == (3, 2, 5)
+
+
+def test_a_reply_keeps_usage_and_timings_from_different_chunks(monkeypatch):
+    """#155: in a reply too, a chunk replaces only the keys it carries."""
+    observed = _run(
+        [
+            [
+                _usage_chunk('a', prompt_tokens=10, completion_tokens=2, total_tokens=12, cost=0.002),
+                sse({'choices': [], 'timings': {'prompt_n': 10, 'predicted_n': 2, 'predicted_ms': 40.0}}),
+                DONE,
+            ]
+        ],
+        {'chat_id': SAVED_CHAT},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    usage = _final_usage(observed)
+    assert (usage['input_tokens'], usage['output_tokens'], usage['total_tokens']) == (10, 2, 12)
+    assert (usage['cost'], usage['predicted_ms']) == (0.002, 40.0)
+
+
+def test_tool_arguments_that_are_not_an_object_get_a_parse_error(monkeypatch):
+    """#166: `[]` as a tool call's arguments raised AttributeError and ended the reply."""
+    observed = _run(
+        [tool_call_stream('lookup', '[]'), [chunk('Sorry, retrying.'), DONE]],
+        {'chat_id': SAVED_CHAT, 'tools': [tool('lookup', result={'hits': 1})]},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    final = [s for s in _saved(observed) if s.get('done') is True][-1]
+    assert 'error' not in final
+    assert 'Sorry, retrying.' in json.dumps(final)
+    assert 'Tool call arguments could not be parsed' in json.dumps(observed['calls'])
