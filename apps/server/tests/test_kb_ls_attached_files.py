@@ -75,3 +75,17 @@ def test_all_files_still_include_attached_ones(monkeypatch):
     files = asyncio.run(knowledge_fs._get_accessible_files({'id': 'u1'}, MODEL_KNOWLEDGE))
 
     assert sorted(f['id'] for f in files) == ['a1', 'k1', 'k2']
+
+
+def test_ls_with_only_attached_files_lists_them(monkeypatch):
+    _install(monkeypatch)
+
+    async def no_kbs(user, model_knowledge, knowledge_id=None):
+        return []
+
+    monkeypatch.setattr(knowledge_fs, '_get_accessible_kb_ids', no_kbs)
+
+    out = asyncio.run(knowledge_fs._kb_ls([], set(), {'id': 'u1'}, [{'type': 'file', 'id': 'a1'}]))
+
+    assert out.startswith('Attached Files:')
+    assert out.count('attached.pdf') == 1
