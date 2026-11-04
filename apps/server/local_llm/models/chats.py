@@ -612,14 +612,17 @@ class ChatTable:
         """Delete every user's internal chat with a note, as its deletion leaves them unreachable (#333)."""
         async with get_async_db_context(db) as session:
             result = await session.execute(
-                select(Chat.id).where(
+                select(Chat.id, Chat.user_id).where(
                     Chat.meta['internal'].as_boolean().is_(True),
                     Chat.meta['type'].as_string() == 'note',
                     Chat.meta['note_id'].as_string() == note_id,
                 )
             )
-            chat_ids = result.scalars().all()
-        for chat_id in chat_ids:
+            chats = result.all()
+        for chat_id, user_id in chats:
+            # And the chats spawned from it (subagents, timers), as the chat delete route does.
+            for child_id in await self.get_internal_chat_ids_by_parent_id(chat_id, user_id):
+                await self.delete_chat_by_id(child_id, db=db)
             if not await self.delete_chat_by_id(chat_id, db=db):
                 log.warning('Could not delete chat %s of deleted note %s', chat_id, note_id)
 

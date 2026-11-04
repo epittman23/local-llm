@@ -431,16 +431,21 @@ class NoteTable:
 
     async def delete_note_by_id(self, id: str, db: AsyncSession | None = None) -> bool:
         try:
-            async with get_async_db_context(db) as db:
-                await AccessGrants.revoke_all_access('note', id, db=db)
-                await db.execute(delete(PinnedNote).filter(PinnedNote.note_id == id))
-                await db.execute(delete(Note).filter(Note.id == id))
-                await db.commit()
+            async with get_async_db_context(db) as session:
+                await AccessGrants.revoke_all_access('note', id, db=session)
+                await session.execute(delete(PinnedNote).filter(PinnedNote.note_id == id))
+                await session.execute(delete(Note).filter(Note.id == id))
+                await session.commit()
         except Exception as e:
             log.warning('Could not delete note %s: %s', id, e)
             return False
         # Each user's chat with the note, which nothing else reaches (#333).
-        await Chats.delete_internal_chats_by_note_id(id, db=db)
+        # The note is gone by now, so a failure here is logged, not reported:
+        # the note must still read as deleted.
+        try:
+            await Chats.delete_internal_chats_by_note_id(id, db=db)
+        except Exception as e:
+            log.warning('Could not delete the chats of deleted note %s: %s', id, e)
         return True
 
     async def get_pinned_note_ids(self, user_id: str, db: AsyncSession | None = None) -> list[str]:

@@ -19,6 +19,7 @@ from sqlalchemy import func, select
 
 from local_llm.internal.db import get_async_db_context
 from local_llm.models.channels import ChannelMember, Channels, ChannelWebhook, ChannelWebhookForm, CreateChannelForm
+from local_llm.models.chat_messages import ChatMessage, ChatMessages
 from local_llm.models.chats import Chat, ChatForm, Chats
 from local_llm.models.messages import Message, MessageForm, MessageReaction, Messages
 from local_llm.models.notes import NoteForm, Notes
@@ -56,10 +57,6 @@ def test_deleting_a_channel_removes_its_messages_reactions_members_and_webhooks(
 
         gone = {
             'messages': await _count(Message, Message.channel_id == channel.id),
-            'reactions': await _count(
-                MessageReaction,
-                MessageReaction.message_id.in_(select(Message.id).where(Message.channel_id == channel.id)),
-            ),
             'members': await _count(ChannelMember, ChannelMember.channel_id == channel.id),
             'webhooks': await _count(ChannelWebhook, ChannelWebhook.channel_id == channel.id),
         }
@@ -72,7 +69,8 @@ def test_deleting_a_channel_removes_its_messages_reactions_members_and_webhooks(
 
     gone, kept = _run(go())
 
-    assert gone == {'messages': 0, 'reactions': 0, 'members': 0, 'webhooks': 0}
+    # The reactions are checked by message id in the next test.
+    assert gone == {'messages': 0, 'members': 0, 'webhooks': 0}
     assert kept['messages'] == 2 and kept['members'] >= 1 and kept['webhooks'] == 1
 
 
@@ -106,9 +104,41 @@ def test_deleting_a_note_removes_every_users_chat_with_it():
                 internal_meta={'internal': True, 'type': 'note', 'note_id': note_id},
             )
 
+        ann_chat = (await Chats.get_internal_chats_by_note_id(note.id, ann.id))[0]
+        await ChatMessages.upsert_message('m1', ann_chat.id, ann.id, {'role': 'user', 'content': 'hi'})
+        # A chat spawned from the note chat, as a subagent or a timer is.
+        child = await Chats.insert_new_chat(
+            str(uuid.uuid4()),
+            ann.id,
+            ChatForm(chat={'title': 'subagent'}),
+            internal_meta={'internal': True, 'parent_chat_id': ann_chat.id},
+        )
+
         assert await Notes.delete_note_by_id(note.id)
 
         note_chats = Chat.meta['note_id'].as_string()
-        return await _count(Chat, note_chats == note.id), await _count(Chat, note_chats == other.id)
+        return (
+            await _count(Chat, note_chats == note.id),
+            await _count(Chat, note_chats == other.id),
+            await _count(ChatMessage, ChatMessage.chat_id == ann_chat.id),
+            await Chats.get_chat_by_id(child.id),
+        )
 
-    assert _run(go()) == (0, 1)
+    assert _run(go()) == (0, 1, 0, None)
+
+
+def test_a_failed_chat_cleanup_still_reports_the_note_deleted(monkeypatch):
+    """The note is committed as deleted before its chats go, so it must read as deleted."""
+    tag = uuid.uuid4().hex[:8]
+
+    async def failing(*_a, **_k):
+        raise RuntimeError('database went away')
+
+    monkeypatch.setattr(Chats, 'delete_internal_chats_by_note_id', failing)
+
+    async def go():
+        ann = await Users.insert_new_user(f'ann{tag}', 'Ann', f'ann{tag}@example.invalid', role='user')
+        note = await Notes.insert_new_note(ann.id, NoteForm(title='Plan'))
+        return await Notes.delete_note_by_id(note.id), await Notes.get_note_by_id(note.id)
+
+    assert _run(go()) == (True, None)
