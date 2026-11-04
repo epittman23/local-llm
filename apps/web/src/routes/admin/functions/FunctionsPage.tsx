@@ -210,11 +210,7 @@ export function FunctionsPage() {
 					toast.error('No valid functions found in that file.');
 					return;
 				}
-				await importFunctions(
-					functions,
-					(fn) => createNewFunction(token, fn),
-					(kind, message) => toast[kind](message)
-				);
+				await importFunctions(functions, (fn) => createNewFunction(token, fn), toast);
 				refresh();
 			} catch (error) {
 				toast.error(`${error}`);

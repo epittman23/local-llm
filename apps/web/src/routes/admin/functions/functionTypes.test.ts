@@ -99,9 +99,14 @@ describe('importSummary (#209)', () => {
 
 describe('importFunctions (#209)', () => {
 	const run = async (create: (fn: string) => Promise<unknown>, functions = ['a', 'b']) => {
-		const notify = vi.fn();
+		const calls: [string, string][] = [];
+		const notify = {
+			success: vi.fn((m: string) => calls.push(['success', m])),
+			warning: vi.fn((m: string) => calls.push(['warning', m])),
+			error: vi.fn((m: string) => calls.push(['error', m]))
+		};
 		await importFunctions(functions, create, notify);
-		return notify.mock.calls;
+		return calls;
 	};
 
 	it('says imported only when every create succeeded', async () => {

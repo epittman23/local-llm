@@ -104,22 +104,23 @@ export const importSummary = (created: number, total: number): ['success' | 'war
 
 /**
  * Creates the file's functions one at a time and reports how it went: each
- * refused create's own error, then one summary from `importSummary`. A create
+ * refused create's own error, then one summary from `importSummary`, through
+ * `notify` (sonner's `toast` on the page). A create
  * that throws or returns nothing counts as not created.
  */
 export async function importFunctions<T>(
 	functions: T[],
 	create: (fn: T) => Promise<unknown>,
-	notify: (kind: 'success' | 'warning' | 'error', message: string) => void
+	notify: Record<'success' | 'warning' | 'error', (message: string) => unknown>
 ) {
 	let created = 0;
 	for (const fn of functions) {
 		const res = await create(fn).catch((error) => {
-			notify('error', `${error}`);
+			notify.error(`${error}`);
 			return null;
 		});
 		if (res) created += 1;
 	}
 	const [kind, message] = importSummary(created, functions.length);
-	notify(kind, message);
+	notify[kind](message);
 }
