@@ -11,6 +11,7 @@ import {
 	formatHour,
 	headerText,
 	monthGrid,
+	reminderOptions,
 	repeatFromRrule,
 	stepDate,
 	visibleRange,
@@ -330,5 +331,29 @@ describe('calendars and automations', () => {
 		expect(
 			automationTarget(ev(at(2026, 8, 1), undefined, { meta: { automation_id: 'a1', chat_id: 'channel:ch1' } }))
 		).toBe('/channels/ch1');
+	});
+});
+
+describe('reminder options (#324)', () => {
+	it('are the standard ones when the event uses one of them', () => {
+		expect(reminderOptions(10).map(([m]) => m)).toEqual([-1, 0, 5, 10, 15, 30, 60]);
+	});
+	it("add the event's own value, in order, when it is not one of them", () => {
+		expect(reminderOptions(120)).toContainEqual([120, '2 hours before']);
+		expect(reminderOptions(45).map(([m]) => m)).toEqual([-1, 0, 5, 10, 15, 30, 45, 60]);
+		expect(reminderOptions(45)).toContainEqual([45, '45 minutes before']);
+		expect(reminderOptions(1)).toContainEqual([1, '1 minute before']);
+	});
+	it("list both the saved value and the form's, and no negative but None", () => {
+		expect(reminderOptions(30, 120).map(([m]) => m)).toEqual([-1, 0, 5, 10, 15, 30, 60, 120]);
+		expect(reminderOptions(-5).map(([m]) => m)).toEqual([-1, 0, 5, 10, 15, 30, 60]);
+	});
+	it('read any negative saved reminder as none, as the server does', () => {
+		expect(eventFields(ev(at(2026, 8, 1, 9), undefined, { meta: { alert_minutes: -5 } }), '', null).alertMinutes).toBe(
+			-1
+		);
+	});
+	it('say when the server will send a reminder earlier than asked', () => {
+		expect(reminderOptions(1440)).toContainEqual([1440, '24 hours before (sent 22 hours before)']);
 	});
 });
