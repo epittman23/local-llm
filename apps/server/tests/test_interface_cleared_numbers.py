@@ -54,20 +54,32 @@ CHAT = {
 def test_a_cleared_autocomplete_length_is_its_default():
     form = TaskConfigForm(**{**TASK, 'AUTOCOMPLETE_GENERATION_INPUT_MAX_LENGTH': None})
 
-    assert form.AUTOCOMPLETE_GENERATION_INPUT_MAX_LENGTH == config.AUTOCOMPLETE_GENERATION_INPUT_MAX_LENGTH
+    # The default is what a fresh install is seeded with.
+    assert form.AUTOCOMPLETE_GENERATION_INPUT_MAX_LENGTH == config.DEFAULT_CONFIG['task.autocomplete.input_max_length']
 
 
 @pytest.mark.parametrize(
-    ('field', 'default'),
+    ('field', 'key'),
     [
-        ('CONTEXT_COMPACTION_TOKEN_THRESHOLD', config.CONTEXT_COMPACTION_TOKEN_THRESHOLD),
-        ('CONTEXT_COMPACTION_RETENTION_PERCENTAGE', config.CONTEXT_COMPACTION_RETENTION_PERCENTAGE),
+        ('CONTEXT_COMPACTION_TOKEN_THRESHOLD', 'chat.context_compaction.token_threshold'),
+        ('CONTEXT_COMPACTION_RETENTION_PERCENTAGE', 'chat.context_compaction.retention_percentage'),
     ],
 )
-def test_a_cleared_compaction_number_is_its_default(field, default):
+def test_a_cleared_compaction_number_is_its_default(field, key):
     form = ChatConfigForm(**{**CHAT, field: None})
 
-    assert getattr(form, field) == default
+    assert getattr(form, field) == config.DEFAULT_CONFIG[key]
+
+
+def test_a_left_out_retention_and_a_cleared_one_agree():
+    left_out = {k: v for k, v in CHAT.items() if k != 'CONTEXT_COMPACTION_RETENTION_PERCENTAGE'}
+
+    assert (
+        ChatConfigForm(**left_out).CONTEXT_COMPACTION_RETENTION_PERCENTAGE
+        == ChatConfigForm(
+            **{**CHAT, 'CONTEXT_COMPACTION_RETENTION_PERCENTAGE': None}
+        ).CONTEXT_COMPACTION_RETENTION_PERCENTAGE
+    )
 
 
 def test_values_that_are_set_are_kept():
