@@ -99,3 +99,70 @@ def test_web_search_falls_back_to_the_whole_reply_without_json(monkeypatch):
 
     # Not a fragment cut at the brace.
     assert searched == [['set comprehension {syntax']]
+
+
+class _Stop(Exception):
+    pass
+
+
+def test_retrieval_queries_keep_a_brace(monkeypatch):
+    queries = []
+
+    async def generate_queries(request, form, user):
+        return {'choices': [{'message': {'content': 'Here: {"queries": ["dict {key: value} syntax"]}'}}]}
+
+    async def emit(event):
+        if event['data'].get('action') == 'queries_generated':
+            queries.append(event['data']['queries'])
+            raise _Stop
+
+    monkeypatch.setattr(middleware, 'generate_queries', generate_queries)
+    body = {
+        'model': 'm',
+        'messages': [{'role': 'user', 'content': 'q'}],
+        'metadata': {'files': [{'type': 'file', 'id': 'f1'}]},
+    }
+
+    with pytest.raises(_Stop):
+        asyncio.run(middleware.chat_completion_files_handler(None, body, {'__event_emitter__': emit}, None))
+
+    assert queries == [['dict {key: value} syntax']]
+
+
+@pytest.mark.parametrize(
+    ('reply', 'expected'),
+    [
+        ('{"prompt": "a cat in a {box}, watercolour"}', 'a cat in a {box}, watercolour'),
+        ('no json at all', 'draw a cat'),  # the user's message, as before
+    ],
+)
+def test_image_prompt_keeps_a_brace(monkeypatch, reply, expected):
+    prompts = []
+
+    class FakeConfig:
+        @staticmethod
+        async def get(key):
+            return True
+
+    async def generate_image_prompt(request, form, user):
+        return {'choices': [{'message': {'content': reply}}]}
+
+    async def image_generations(request, form_data, metadata, user):
+        prompts.append(form_data.prompt)
+        raise _Stop
+
+    async def emit(event):
+        pass
+
+    monkeypatch.setattr(middleware, 'Config', FakeConfig)
+    monkeypatch.setattr(middleware, 'generate_image_prompt', generate_image_prompt)
+    monkeypatch.setattr(middleware, 'image_generations', image_generations)
+    form = {'model': 'm', 'messages': [{'role': 'user', 'content': 'draw a cat'}]}
+    extra = {'__metadata__': {'chat_id': 'local:c1'}, '__event_emitter__': emit}
+
+    try:
+        asyncio.run(middleware.chat_image_generation_handler(None, form, extra, None))
+    except _Stop:
+        pass
+
+    assert prompts == [expected]
