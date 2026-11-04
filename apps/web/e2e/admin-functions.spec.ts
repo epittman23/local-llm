@@ -250,6 +250,31 @@ test.describe('admin functions', () => {
 		expect(created).toEqual({ id: 'imp', name: 'Imported', content: 'class Filter: pass', meta: { description: 'x' } });
 	});
 
+	test('Import JSON says nothing was imported when every create failed (#209)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockFunctionsApi(page, [fn(1)]);
+		// Registered after the mock, so it answers the creates: as on re-importing an export.
+		await page.route('**/api/v1/functions/create', (route) =>
+			route.fulfill({ status: 400, contentType: 'application/json', body: JSON.stringify({ detail: 'Id taken' }) })
+		);
+		await page.goto('/admin/functions');
+		await page.getByRole('button', { name: 'Create' }).first().waitFor();
+		const file = {
+			name: 'fns.json',
+			mimeType: 'application/json',
+			buffer: Buffer.from(
+				JSON.stringify([
+					{ id: 'a', name: 'A', content: 'class Filter: pass' },
+					{ id: 'b', name: 'B', content: 'class Filter: pass' }
+				])
+			)
+		};
+		await page.locator('#documents-import-input').setInputFiles(file);
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await expect(page.getByText('No functions were imported')).toBeVisible();
+		expect(await page.getByText('Functions imported successfully').count()).toBe(0);
+	});
+
 	test('a posted message does not replace the create form', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		await mockFunctionsApi(page, []);
