@@ -105,8 +105,8 @@ test.describe('personal settings', () => {
 			features: { enable_login_form: true, enable_password_change_form: true }
 		});
 		await mockUserSettings(page);
-		const profiles: any[] = [];
-		const passwords: any[] = [];
+		const profiles: unknown[] = [];
+		const passwords: unknown[] = [];
 		await page.route('**/api/v1/auths/update/profile', (route) => {
 			profiles.push(route.request().postDataJSON());
 			return json(route, { id: 'u1', ...route.request().postDataJSON() });
