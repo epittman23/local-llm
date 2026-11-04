@@ -453,7 +453,12 @@ async def signin(
                 group_names = [name.strip() for name in group_names if name.strip()]
 
                 if group_names:
-                    await Groups.sync_groups_by_group_names(user.id, group_names, db=db)
+                    # Sign-up put the user in the default group; the header does not take
+                    # them out of it (#275).
+                    default_group_id = await Config.get('ui.default_group_id')
+                    await Groups.sync_groups_by_group_names(
+                        user.id, group_names, db=db, keep_group_ids=[default_group_id] if default_group_id else []
+                    )
 
             if LLLM_AUTH_TRUSTED_ROLE_HEADER:
                 trusted_role = request.headers.get(LLLM_AUTH_TRUSTED_ROLE_HEADER, '').lower().strip()

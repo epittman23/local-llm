@@ -1,6 +1,7 @@
 import logging
 import time
 import uuid
+from collections.abc import Collection
 
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import (
@@ -512,8 +513,14 @@ class GroupTable:
             return new_groups
 
     async def sync_groups_by_group_names(
-        self, user_id: str, group_names: list[str], db: AsyncSession | None = None
+        self,
+        user_id: str,
+        group_names: list[str],
+        db: AsyncSession | None = None,
+        keep_group_ids: Collection[str] = (),
     ) -> bool:
+        """Make the user's memberships exactly the named groups, except that a
+        group in `keep_group_ids` (the default group, #275) is never removed."""
         async with get_async_db_context(db) as db:
             try:
                 now = int(time.time())
@@ -533,7 +540,7 @@ class GroupTable:
 
                 # 3. Determine adds + removals
                 groups_to_add = target_group_ids - existing_group_ids
-                groups_to_remove = existing_group_ids - target_group_ids
+                groups_to_remove = existing_group_ids - target_group_ids - set(keep_group_ids)
 
                 # 4. Remove in one bulk delete
                 if groups_to_remove:
