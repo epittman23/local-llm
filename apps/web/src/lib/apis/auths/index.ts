@@ -429,7 +429,8 @@ export const createAPIKey = async (token: string) => {
 	return res.api_key;
 };
 
-export const getAPIKey = async (token: string) => {
+/** The user's API key, or null when they have none (a 404); any other failure throws (#526). */
+export const getAPIKey = async (token: string): Promise<string | null> => {
 	let error = null;
 
 	const res = await fetch(`${WEBUI_API_BASE_URL}/auths/api_key`, {
@@ -440,6 +441,7 @@ export const getAPIKey = async (token: string) => {
 		}
 	})
 		.then(async (res) => {
+			if (res.status === 404) return { api_key: null };
 			if (!res.ok) throw await errorBody(res);
 			return res.json();
 		})
