@@ -87,3 +87,43 @@ describe('EventDialog on an occurrence of a repeating event (#318)', () => {
 		expect(await screen.findByText(/deletes every occurrence of this event/)).toBeTruthy();
 	});
 });
+
+describe('EventDialog reminder (#324)', () => {
+	const single = {
+		...(occurrence as object),
+		id: 'e1',
+		rrule: null,
+		instance_id: undefined,
+		meta: { alert_minutes: 120 }
+	} as never;
+	beforeEach(() => {
+		vi.mocked(api.updateCalendarEvent).mockResolvedValue(single);
+	});
+	afterEach(() => {
+		cleanup();
+		vi.clearAllMocks();
+	});
+
+	it('shows a reminder that is not one of the choices, keeps it listed, and can turn it off', async () => {
+		render(
+			<EventDialog
+				open
+				onOpenChange={() => {}}
+				event={single}
+				calendars={calendars}
+				defaultCalendarId="personal"
+				defaultStartAt={null}
+				onSaved={() => {}}
+			/>
+		);
+		const reminder = screen.getByLabelText('Reminder') as HTMLSelectElement;
+		expect(reminder.value).toBe('120');
+		fireEvent.change(reminder, { target: { value: '30' } });
+		// The event's own value stays a choice after another is picked.
+		expect(screen.getByRole('option', { name: '2 hours before' })).toBeTruthy();
+		fireEvent.change(reminder, { target: { value: '-1' } });
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+		await waitFor(() => expect(api.updateCalendarEvent).toHaveBeenCalled());
+		expect(vi.mocked(api.updateCalendarEvent).mock.calls[0][2]).toMatchObject({ meta: { alert_minutes: -1 } });
+	});
+});

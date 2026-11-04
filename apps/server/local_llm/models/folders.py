@@ -4,7 +4,7 @@ import time
 import uuid
 
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import JSON, BigInteger, Boolean, Column, Text, and_, func, or_, select
+from sqlalchemy import JSON, BigInteger, Boolean, Column, Text, and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from local_llm.internal.db import Base, get_async_db_context
@@ -379,40 +379,28 @@ class FolderTable:
             log.error(f'update_folder: {e}')
             return
 
-    async def delete_folder_by_id_and_user_id(self, id: str, user_id: str, db: AsyncSession | None = None) -> list[str]:
-        try:
-            folder_ids = []
-            async with get_async_db_context(db) as db:
-                result = await db.execute(select(Folder).filter_by(id=id, user_id=user_id))
-                folder = result.scalars().first()
-                if not folder:
-                    return folder_ids
+    async def delete_folder_by_id_and_user_id(
+        self, id: str, user_id: str, db: AsyncSession | None = None, folder_ids: list[str] | None = None
+    ) -> list[str]:
+        """Delete a folder and every folder under it, in one transaction; returns their ids.
 
-                folder_ids.append(folder.id)
-                seen_ids = {folder.id}
+        Each child used to be deleted and committed on its own, and an error
+        swallowed into `[]`: a failure part way left some of the subtree
+        deleted and told the caller nothing was, so its chats were never moved
+        or deleted, and stayed hidden in folders that no longer existed (#281).
+        An error now reaches the caller, and leaves every folder in place.
 
-                # Delete all children folders
-                async def delete_children(folder):
-                    folder_children = await self.get_folders_by_parent_id_and_user_id(folder.id, user_id, db=db)
-                    for folder_child in folder_children:
-                        if folder_child.id in seen_ids:
-                            continue
-                        seen_ids.add(folder_child.id)
-                        await delete_children(folder_child)
-                        folder_ids.append(folder_child.id)
-
-                        child_result = await db.execute(select(Folder).filter_by(id=folder_child.id))
-                        child_folder = child_result.scalars().first()
-                        await db.delete(child_folder)
-                        await db.commit()
-
-                await delete_children(folder)
-                await db.delete(folder)
-                await db.commit()
-                return folder_ids
-        except Exception as e:
-            log.error(f'delete_folder: {e}')
+        `folder_ids`, when given, is the subtree as the caller already took it,
+        so exactly the folders it handled are deleted.
+        """
+        if folder_ids is None:
+            folder_ids = await self.get_folder_ids_by_id_and_user_id_in_subtree(id, user_id, db=db)
+        if not folder_ids:
             return []
+        async with get_async_db_context(db) as db:
+            await db.execute(delete(Folder).where(Folder.user_id == user_id, Folder.id.in_(folder_ids)))
+            await db.commit()
+        return folder_ids
 
     def normalize_folder_name(self, name: str) -> str:
         # Replace _ and space with a single space, lower case, collapse multiple spaces

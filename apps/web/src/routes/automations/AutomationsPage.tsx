@@ -31,7 +31,14 @@ import { dayjs } from '@/lib/utils/dates';
 import { useDebouncedValue } from '@/lib/utils/useDebouncedValue';
 import { FeatureGate } from '@/routes/common/FeatureGate';
 import { AutomationDialog } from './AutomationDialog';
-import { destinationLabel, formatSchedule, parseAutomationImport, toAutomationForm } from './automationModel';
+import {
+	destinationLabel,
+	formatSchedule,
+	importAutomationForms,
+	importMessage,
+	parseAutomationImport,
+	toAutomationForm
+} from './automationModel';
 import { useDestinations } from './useDestinations';
 
 const PER_PAGE = 30;
@@ -146,12 +153,11 @@ function Automations() {
 		if (!file) return;
 		try {
 			const { forms, skipped } = parseAutomationImport(await file.text(), new Set(folders.map((f) => f.id)));
-			for (const form of forms) await createAutomation(token, form);
-			toast.success(
-				skipped
-					? `Imported ${forms.length} automations; skipped ${skipped} incomplete`
-					: 'Imported automations successfully'
+			const { ok, message } = importMessage(
+				await importAutomationForms(forms, skipped, (form) => createAutomation(token, form))
 			);
+			if (ok) toast.success(message);
+			else toast.error(message);
 		} catch (err) {
 			toast.error(`${err}`);
 		}
