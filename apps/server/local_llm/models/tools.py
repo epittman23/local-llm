@@ -254,9 +254,8 @@ class ToolsTable:
             log.exception(f'Error getting tool valves by id {id}')
             return None
 
-    async def update_tool_valves_by_id(
-        self, id: str, valves: dict, db: AsyncSession | None = None
-    ) -> ToolValves | None:
+    async def update_tool_valves_by_id(self, id: str, valves: dict, db: AsyncSession | None = None) -> ToolModel | None:
+        """The tool with its valves saved, or None when they were not (#288)."""
         try:
             async with get_async_db_context(db) as db:
                 await db.execute(
@@ -264,7 +263,8 @@ class ToolsTable:
                 )
                 await db.commit()
                 return await self.get_tool_by_id(id, db=db)
-        except Exception:
+        except Exception as e:
+            log.exception(f'Error updating tool valves by id {id}: {e}')
             return None
 
     async def get_user_valves_by_id_and_user_id(
@@ -300,8 +300,9 @@ class ToolsTable:
 
             user_settings['tools']['valves'][id] = encrypt_valves(valves)
 
-            # Update the user settings in the database
-            await Users.update_user_by_id(user_id, {'settings': user_settings}, db=db)
+            # Update the user settings in the database; None when that saved nothing (#288).
+            if not await Users.update_user_by_id(user_id, {'settings': user_settings}, db=db):
+                return None
 
             return valves
         except Exception as e:
