@@ -1,14 +1,20 @@
-import { describe, expect, it } from 'vitest';
+import { toast } from 'sonner';
+import { describe, expect, it, vi } from 'vitest';
 import {
 	allCapable,
+	anyCapable,
 	commandAt,
 	featureButtons,
 	fillPromptVariables,
 	imageTargetSize,
 	isUrl,
 	modelDefaults,
+	modelsWithoutVision,
+	warnModelsWithoutVision,
 	replaceCommand
 } from './attachments';
+
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
 const models = [
 	{
@@ -27,6 +33,35 @@ const user = (features = {}, role = 'user') =>
 	({ id: 'u', name: 'U', email: '', role, permissions: { features } }) as any;
 
 describe('capabilities and buttons', () => {
+	it('warns at send for an image earlier in the conversation, not only one attached now (#219)', () => {
+		const history = {
+			currentId: 'q',
+			messages: {
+				q: { id: 'q', parentId: null, childrenIds: [], role: 'user', content: 'see', files: [{ type: 'image' }] }
+			}
+		} as never;
+		warnModelsWithoutVision(['a', 'b'], [{ ...models[0], name: 'Alpha' }, models[1]], [], history, false);
+		expect(toast.error).toHaveBeenCalledWith('Model Alpha is not vision capable');
+		expect(toast.error).toHaveBeenCalledTimes(1);
+	});
+
+	it('models without vision are named only when an image goes out and none is generated (#219)', () => {
+		const named = [{ ...models[0], name: 'Alpha' }, models[1]];
+		const png = [{ type: 'file', content_type: 'image/png' }];
+		expect(modelsWithoutVision(['a', 'b'], named, png, false)).toEqual(['Alpha']);
+		expect(modelsWithoutVision(['a'], models, [{ type: 'image' }], false)).toEqual(['a']);
+		expect(modelsWithoutVision(['a'], named, png, true)).toEqual([]);
+		expect(modelsWithoutVision(['a'], named, [{ type: 'file', content_type: 'text/plain' }], false)).toEqual([]);
+		expect(modelsWithoutVision(['b'], named, png, false)).toEqual([]);
+	});
+
+	it('any capable: one selected model with the capability, an unset one counting (#219)', () => {
+		expect(anyCapable(['a'], models, 'vision')).toBe(false);
+		expect(anyCapable(['a', 'b'], models, 'vision')).toBe(true);
+		expect(anyCapable(['a'], models, 'web_search')).toBe(true);
+		expect(anyCapable([], models, 'vision')).toBe(false);
+	});
+
 	it('treats an unset capability as present', () => {
 		expect(allCapable(['b'], models, 'vision')).toBe(true);
 		expect(allCapable(['a', 'b'], models, 'vision')).toBe(false);

@@ -21,6 +21,7 @@ import itertools
 import logging
 import os
 import random
+import re
 import time
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -76,10 +77,12 @@ def _resolve_tz(tz: str = None) -> ZoneInfo | None:
 def _parse_rule(s: str, now: dt.datetime | None = None):
     """Parse RRULE with clock-aligned DTSTART for sub-daily frequencies.
 
-    SECONDLY/MINUTELY/HOURLY rules use a fixed epoch DTSTART (2000-01-01 00:00)
-    so intervals snap to clock boundaries (e.g. every 5min = :00, :05, :10).
-    A longer rule without a DTSTART starts at `now` (the user's clock) on the
-    minute, so a time or day it does not state comes from there.
+    A SECONDLY/MINUTELY/HOURLY rule without a DTSTART starts from a fixed epoch
+    (2000-01-01 00:00), so intervals snap to clock boundaries (every 5 min =
+    :00, :05, :10). One with a DTSTART far in the past is moved forward by
+    whole steps from it, keeping its phase and what is left of its COUNT
+    (#267). A longer rule without a DTSTART starts at `now` (the user's clock)
+    on the minute, so a time or day it does not state comes from there.
     """
     upper = s.upper()
     if 'EXRULE' in upper:
@@ -115,20 +118,43 @@ def _parse_rule(s: str, now: dt.datetime | None = None):
 
     if rule._interval < 1:
         raise ValueError('RRULE INTERVAL must be a positive integer')
-    dtstart = None
     if has_dtstart:
-        emitted = ((anchor - start) // step) if anchor > start else 0
-        emitted *= len(rule._byminute or (0,)) * len(rule._bysecond or (0,))
+        steps = ((anchor - start) // step) if anchor > start else 0
+        emitted = steps * len(rule._byminute or (0,)) * len(rule._bysecond or (0,))
         if emitted <= 100_000:
-            if rule._dtstart.tzinfo:
-                dtstart = start
-            else:
-                return parsed
-    if not has_dtstart or dtstart is None:
-        epoch = dt.datetime(2000, 1, 1)
-        dtstart = epoch + ((anchor - epoch) // step) * step
+            return rrulestr(stripped, dtstart=start, ignoretz=True) if rule._dtstart.tzinfo else parsed
+        # Too many steps to walk from DTSTART: move it forward by whole steps,
+        # which keeps the rule's phase (every 5 minutes from 10:07 stays on
+        # :07, :12, ...), as rebuilding it from an epoch-aligned start did not (#267).
+        moved = start + steps * step
+        count = getattr(rule, '_count', None)
+        if not count:
+            return rrulestr(stripped, dtstart=moved, ignoretz=True)
+        left = count - steps
+        if left > 0:
+            recounted = _with_count(stripped, left)
+        else:
+            recounted = _with_count(stripped, 1)
+        if re.search(r'\bBY', stripped, re.IGNORECASE) or recounted is None:
+            # A filtered or expanded step is not one run each, so the runs left
+            # cannot be counted (nor a COUNT that cannot be rewritten): keep
+            # DTSTART. Exact, but the next run is found by walking every run
+            # before it, at most COUNT, which can take seconds.
+            return rrulestr(stripped, dtstart=start, ignoretz=True)
+        # One run per step, `steps` of them before `moved`: what is left of
+        # COUNT runs from there. A COUNT that ran out stays run out: its one
+        # remaining run is at the original start, long past.
+        return rrulestr(recounted, dtstart=moved if left > 0 else start, ignoretz=True)
 
+    epoch = dt.datetime(2000, 1, 1)
+    dtstart = epoch + ((anchor - epoch) // step) * step
     return rrulestr(stripped, dtstart=dtstart, ignoretz=True)
+
+
+def _with_count(rule: str, count: int) -> str | None:
+    """The rule with COUNT set to `count`, or None when it has not exactly one COUNT to set."""
+    replaced, n = re.subn(r'COUNT=[+-]?\d+', f'COUNT={count}', rule, flags=re.IGNORECASE)
+    return replaced if n == 1 else None
 
 
 def validate_rrule(s: str, tz: str = None) -> None:
@@ -174,11 +200,8 @@ def next_n_runs_ns(s: str, n: int = 5, tz: str = None) -> list[int]:
     result = []
     now = dt.datetime.now(zi).replace(tzinfo=None) if zi else dt.datetime.now()
     rule = _parse_rule(s, now)
-    when = now
-    for _ in range(n):
-        when = rule.after(when)
-        if not when:
-            break
+    # One walk for all n, rather than n walks from DTSTART (#267).
+    for when in rule.xafter(now, count=n):
         if zi:
             dt_tz = when.replace(tzinfo=zi)
             result.append(int(dt_tz.timestamp() * 1_000_000_000))
@@ -753,10 +776,11 @@ async def execute_automation(app, automation: AutomationModel) -> None:
 ####################
 
 
+_LEGACY_ALERT_LEAD_NS = 60 * 60 * 1_000_000_000
+
+
 def already_alerted(meta: dict | None, start_at: int) -> bool:
     """Whether the occurrence starting at `start_at` (ns) was already alerted (#183)."""
-    from local_llm.models.calendar import MAX_ALERT_LEAD_NS
-
     if not meta:
         return False
     alerted_for = meta.get('alerted_for')
@@ -764,9 +788,13 @@ def already_alerted(meta: dict | None, start_at: int) -> bool:
         return alerted_for == start_at
     # Rows alerted before alerted_for existed carry only alerted_at, the time
     # of the alert. It belongs to this occurrence only if it came within the
-    # longest lead before it; an earlier one was for another start.
+    # longest lead there was then, an hour; an earlier one was for another
+    # start. Leads are longer now (#184), but no such row has one.
     alerted_at = meta.get('alerted_at')
-    return isinstance(alerted_at, int) and start_at - MAX_ALERT_LEAD_NS <= alerted_at <= start_at + MAX_ALERT_LEAD_NS
+    return (
+        isinstance(alerted_at, int)
+        and start_at - _LEGACY_ALERT_LEAD_NS <= alerted_at <= start_at + _LEGACY_ALERT_LEAD_NS
+    )
 
 
 async def _check_calendar_alerts(app) -> None:
