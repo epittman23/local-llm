@@ -1564,6 +1564,30 @@ test.describe('settings: Images', () => {
 		);
 	});
 
+	test("the edit engine's Verify checks the edit server, not the generation one (#236)", async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockImages(
+			page,
+			imagesCfg({
+				ENABLE_IMAGE_GENERATION: true,
+				IMAGES_OPENAI_API_KEY: 'sk',
+				IMAGE_GENERATION_MODEL: 'dall-e-3',
+				ENABLE_IMAGE_EDIT: true,
+				IMAGE_EDIT_ENGINE: 'comfyui',
+				IMAGES_EDIT_COMFYUI_BASE_URL: 'http://comfy:8188'
+			})
+		);
+		const verified: string[] = [];
+		page.on('request', (req) => {
+			const url = new URL(req.url());
+			if (url.pathname.endsWith('/config/url/verify')) verified.push(url.search);
+		});
+		await page.goto('/?settings=admin:images');
+		await edit(page).getByRole('button', { name: 'Verify connection' }).click();
+		await expect(page.getByText('Server connection verified')).toBeVisible();
+		expect(verified).toEqual(['?target=edit']);
+	});
+
 	test('a save that cannot be sent (bad params) stops the verify too', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockImages(

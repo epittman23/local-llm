@@ -266,9 +266,9 @@ export default function Images() {
 	};
 
 	// The backend verifies the URL it has stored, so what is on screen is saved first.
-	const verify = async () => {
+	const verify = async (target: 'generation' | 'edit' = 'generation') => {
 		if (!(await persist())) return;
-		const res = await verifyConfigUrl(token).catch((e) => void toast.error(`${e}`));
+		const res = await verifyConfigUrl(token, target).catch((e) => void toast.error(`${e}`));
 		if (res) toast.success('Server connection verified');
 	};
 
@@ -406,7 +406,7 @@ export default function Images() {
 									placeholder="Enter URL (e.g. http://127.0.0.1:7860/)"
 									value={c.AUTOMATIC1111_BASE_URL}
 									onChange={(v) => set({ AUTOMATIC1111_BASE_URL: v })}
-									onVerify={verify}
+									onVerify={() => verify('generation')}
 								/>
 								{secret('AUTOMATIC1111_API_AUTH', 'Enter api auth string (e.g. username:password)', {
 									label: 'API Auth String',
@@ -425,7 +425,7 @@ export default function Images() {
 									placeholder="Enter URL (e.g. http://127.0.0.1:7860/)"
 									value={c.COMFYUI_BASE_URL}
 									onChange={(v) => set({ COMFYUI_BASE_URL: v })}
-									onVerify={verify}
+									onVerify={() => verify('generation')}
 								/>
 								{secret('COMFYUI_API_KEY', 'sk-1234', {
 									description: 'Use an API key when your ComfyUI server requires one.'
@@ -507,7 +507,7 @@ export default function Images() {
 									placeholder="Enter URL (e.g. http://127.0.0.1:7860/)"
 									value={c.IMAGES_EDIT_COMFYUI_BASE_URL}
 									onChange={(v) => set({ IMAGES_EDIT_COMFYUI_BASE_URL: v })}
-									onVerify={verify}
+									onVerify={() => verify('edit')}
 								/>
 								{secret('IMAGES_EDIT_COMFYUI_API_KEY', 'sk-1234', {
 									description: 'Use an API key when your ComfyUI server requires one.'
