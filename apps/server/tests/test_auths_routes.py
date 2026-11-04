@@ -38,6 +38,7 @@ from local_llm.env import REDIS_KEY_PREFIX
 from local_llm.internal.db import get_async_db_context
 from local_llm.models.auths import Auth, Auths
 from local_llm.models.config import Config
+from local_llm.models.groups import GroupForm, Groups
 from local_llm.models.users import Users
 from local_llm.routers import auths as auths_router
 from local_llm.utils.auth import create_token, get_password_hash, verify_password
@@ -186,6 +187,30 @@ def test_a_role_header_counts_only_when_configured_and_valid(client, monkeypatch
     monkeypatch.setattr(auths_router, 'LLLM_AUTH_TRUSTED_ROLE_HEADER', 'X-Role')
     assert _signin(client, '', '', headers={**headers, 'X-Role': 'superuser'}).json()['role'] == 'user'
     assert _signin(client, '', '', headers=headers).json()['role'] == 'admin'
+
+
+def test_a_groups_header_keeps_the_default_group(client, config, monkeypatch):
+    # #275: sign-up adds every new user to the default group; the trusted
+    # groups header then made the user's groups exactly the listed ones,
+    # taking them out of it again.
+    monkeypatch.setattr(auths_router, 'LLLM_AUTH_TRUSTED_EMAIL_HEADER', 'X-Email')
+    monkeypatch.setattr(auths_router, 'LLLM_AUTH_TRUSTED_GROUPS_HEADER', 'X-Groups')
+    account = _account('user')
+    tag = uuid.uuid4().hex[:8]
+    ids = {}
+    for name in ('Everyone', 'engineering', 'staff'):
+        group = _run(Groups.insert_new_group('admin', GroupForm(name=f'{name}-{tag}', description='')))
+        assert group is not None
+        ids[name] = group.id
+    for name in ('Everyone', 'engineering'):
+        _run(Groups.add_users_to_group(ids[name], [account.id]))
+    config['ui.default_group_id'] = ids['Everyone']
+
+    r = _signin(client, '', '', headers={'X-Email': account.email, 'X-Groups': f'staff-{tag}'})
+
+    assert r.status_code == 200, r.text
+    left = {group.id for group in _run(Groups.get_groups_by_member_id(account.id))}
+    assert left == {ids['Everyone'], ids['staff']}
 
 
 # --- sign-up --------------------------------------------------------------------
