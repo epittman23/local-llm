@@ -1,4 +1,5 @@
 import type { AutomationForm, AutomationResponse } from '@/lib/apis/automations';
+import { errorMessage } from '@/lib/apis/errors';
 import { routePaths } from '@/routes/routePaths';
 
 // The rules behind the Automations surface: the schedule picker's RRULE
@@ -423,7 +424,7 @@ export async function importAutomationForms(
 ): Promise<ImportOutcome> {
 	const outcome: ImportOutcome = { imported: 0, skipped, passed: 0, failed: [] };
 	for (const form of forms) {
-		if (oncePassed(parseRrule(form.data.rrule, now), now)) {
+		if (pickerOncePassed(form.data.rrule, now)) {
 			outcome.passed++;
 			continue;
 		}
@@ -431,11 +432,25 @@ export async function importAutomationForms(
 			await create(form);
 			outcome.imported++;
 		} catch (error) {
-			outcome.failed.push({ name: form.name, error: `${error}` });
+			outcome.failed.push({ name: form.name, error: errorMessage(error) });
 		}
 	}
 	return outcome;
 }
+
+/**
+ * A one-time rule exactly as the picker writes it (one daily run from a
+ * start), whose start has passed. Any other rule with a run count of 1, such
+ * as a weekly one whose first run is still to come, is left to the server.
+ */
+function pickerOncePassed(rrule: string, now: Date): boolean {
+	if (!DTSTART.test(rrule)) return false;
+	const parts = ruleParts(rrule);
+	const picker = Object.keys(parts).length === 2 && parts.FREQ === 'DAILY' && parts.COUNT === '1';
+	return picker && oncePassed(parseRrule(rrule, now), now);
+}
+
+const MAX_NAMED_FAILURES = 3;
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
@@ -444,7 +459,11 @@ export function importMessage(o: ImportOutcome): { ok: boolean; message: string 
 	const parts = [`Imported ${plural(o.imported, 'automation')}`];
 	if (o.passed) parts.push(`skipped ${plural(o.passed, 'one-time automation')} whose time has passed`);
 	if (o.skipped) parts.push(`skipped ${o.skipped} incomplete`);
-	if (o.failed.length)
-		parts.push(`${o.failed.length} could not be created: ${o.failed.map((f) => `${f.name} (${f.error})`).join('; ')}`);
+	if (o.failed.length) {
+		// The first few by name, so a large import's toast stays readable.
+		const named = o.failed.slice(0, MAX_NAMED_FAILURES).map((f) => `${f.name} (${f.error})`);
+		const more = o.failed.length - named.length;
+		parts.push(`${o.failed.length} could not be created: ${named.join('; ')}${more ? `; and ${more} more` : ''}`);
+	}
 	return { ok: o.failed.length === 0, message: parts.join('; ') };
 }

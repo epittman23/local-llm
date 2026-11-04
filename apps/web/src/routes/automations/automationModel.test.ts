@@ -296,6 +296,36 @@ describe('importing each automation on its own (#323)', () => {
 		});
 	});
 
+	it('leaves a one-count rule of another shape to the server, which may still run it', async () => {
+		const created: string[] = [];
+		await importAutomationForms(
+			[form('Friday', 'DTSTART:20260901T090000\nRRULE:FREQ=WEEKLY;BYDAY=FR;COUNT=1')],
+			0,
+			async (f) => {
+				created.push(f.name);
+			},
+			now
+		);
+
+		expect(created).toEqual(['Friday']);
+	});
+
+	it('names the first three failures and counts the rest, and reads an error object', async () => {
+		const outcome = await importAutomationForms(
+			['A', 'B', 'C', 'D', 'E'].map((n) => form(n)),
+			0,
+			async () => {
+				throw { detail: 'Automation limit reached (10)' };
+			},
+			now
+		);
+
+		expect(importMessage(outcome).message).toBe(
+			'Imported 0 automations; 5 could not be created: A (Automation limit reached (10)); ' +
+				'B (Automation limit reached (10)); C (Automation limit reached (10)); and 2 more'
+		);
+	});
+
 	it('reports a clean import plainly', () => {
 		expect(importMessage({ imported: 3, skipped: 0, passed: 0, failed: [] })).toEqual({
 			ok: true,
