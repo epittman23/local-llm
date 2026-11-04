@@ -301,7 +301,14 @@ async def load_tool_module_by_id(tool_id, content=None):
         await aiofiles.os.remove(temp_file.name)
 
 
-async def load_function_module_by_id(function_id: str, content: str | None = None):
+async def load_function_module_by_id(function_id: str, content: str | None = None, deactivate_on_error: bool = False):
+    """Load a function's module and its object (Pipe, Filter, Action or Event).
+
+    A runtime load of stored code that fails switches the stored function off; its
+    callers pass ``deactivate_on_error=True``. The create, update and sync routes check
+    new code with the default, so a rejected edit leaves the stored function as it was,
+    not off behind an error that says nothing changed (#302).
+    """
     if not ENABLE_PLUGINS:
         raise RuntimeError('Plugins are disabled by ENABLE_PLUGINS=false')
 
@@ -353,10 +360,12 @@ async def load_function_module_by_id(function_id: str, content: str | None = Non
             raise Exception('No Function class found in the module')
     except Exception as e:
         log.error(f'Error loading module: {function_id}: {e}')
-        # Cleanup by removing the module in case of error
-        del sys.modules[module_name]
+        # Cleanup by removing the module in case of error; another load of the same
+        # id may have removed it already.
+        sys.modules.pop(module_name, None)
 
-        await Functions.update_function_by_id(function_id, {'is_active': False})
+        if deactivate_on_error:
+            await Functions.update_function_by_id(function_id, {'is_active': False})
         raise e
     finally:
         await aiofiles.os.remove(temp_file.name)
@@ -447,7 +456,9 @@ async def get_function_module_from_cache(
             if function_contents_cache[function_id] == content:
                 return functions_cache[function_id], None, None
 
-        function_module, function_type, frontmatter = await load_function_module_by_id(function_id, content)
+        function_module, function_type, frontmatter = await load_function_module_by_id(
+            function_id, content, deactivate_on_error=True
+        )
     else:
         # Load from cache (e.g. "stream" hook)
         # This is useful for performance reasons
@@ -455,7 +466,9 @@ async def get_function_module_from_cache(
         if function_id in functions_cache:
             return functions_cache[function_id], None, None
 
-        function_module, function_type, frontmatter = await load_function_module_by_id(function_id)
+        function_module, function_type, frontmatter = await load_function_module_by_id(
+            function_id, deactivate_on_error=True
+        )
 
     functions_cache[function_id] = function_module
     function_contents_cache[function_id] = content
