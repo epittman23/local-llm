@@ -726,29 +726,20 @@ async def generate_chat_export_ndjson(user_id: str):
 
     Uses short-lived DB sessions per batch to avoid holding locks for the
     entire duration, which is critical for SQLite environments.
+
+    The chat ids are taken once, first, and the chats fetched by id a batch at
+    a time. Paging by OFFSET over `updated_at` skipped one chat and sent
+    another twice whenever a chat was updated during the export (#294).
     """
-    skip = 0
+    chat_ids = await Chats.get_export_chat_ids_by_user_id(user_id)
 
-    while True:
-        result = await Chats.get_chats_by_user_id(
-            user_id,
-            skip=skip,
-            limit=CHAT_EXPORT_BATCH_SIZE,
-            db=None,
-        )
-        if not result.items:
-            break
-
-        for chat in result.items:
+    for start in range(0, len(chat_ids), CHAT_EXPORT_BATCH_SIZE):
+        batch = chat_ids[start : start + CHAT_EXPORT_BATCH_SIZE]
+        for chat in await Chats.get_chats_by_ids_and_user_id(batch, user_id):
             try:
                 yield ChatResponse.model_validate(chat, from_attributes=True).model_dump_json() + '\n'
             except Exception as e:
                 log.exception(f'Error serializing chat {chat.id}: {e}')
-
-        if len(result.items) < CHAT_EXPORT_BATCH_SIZE:
-            break
-
-        skip += CHAT_EXPORT_BATCH_SIZE
 
 
 @router.get('/all')

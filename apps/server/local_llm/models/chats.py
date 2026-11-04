@@ -1941,6 +1941,28 @@ class ChatTable:
                 }
             )
 
+    async def get_export_chat_ids_by_user_id(self, user_id: str, db: AsyncSession | None = None) -> list[str]:
+        """The ids of the chats a user's export includes, newest first: taken once, before any is sent (#294)."""
+        async with get_async_db_context(db) as session:
+            result = await session.execute(
+                select(Chat.id)
+                .filter_by(user_id=user_id)
+                .where(Chat.meta['internal'].as_boolean().is_not(True))
+                .order_by(Chat.updated_at.desc(), Chat.id)
+            )
+            return list(result.scalars().all())
+
+    async def get_chats_by_ids_and_user_id(
+        self, ids: list[str], user_id: str, db: AsyncSession | None = None
+    ) -> list[ChatModel]:
+        """The user's chats with these ids, in the order given; ids no longer there are left out."""
+        if not ids:
+            return []
+        async with get_async_db_context(db) as session:
+            result = await session.execute(select(Chat).filter(Chat.user_id == user_id, Chat.id.in_(ids)))
+            found = {chat.id: chat for chat in (ChatModel.model_validate(row) for row in result.scalars().all())}
+            return [found[chat_id] for chat_id in ids if chat_id in found]
+
     # list pinned chats
     async def get_pinned_chats_by_user_id(
         self, user_id: str, db: AsyncSession | None = None
