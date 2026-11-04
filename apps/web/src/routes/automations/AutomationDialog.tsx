@@ -134,10 +134,7 @@ function ScheduleField({ value, onChange }: { value: Schedule; onChange: (s: Sch
 								aria-label="Time"
 								className={small}
 								value={`${pad(value.hour)}:${pad(value.minute)}`}
-								onChange={(e) => {
-									const time = timeFromInput(e.target.value);
-									if (time) set(time);
-								}}
+								onChange={(e) => set(timeFromInput(e.target.value) ?? {})}
 							/>
 						</label>
 					)}
