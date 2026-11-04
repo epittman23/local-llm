@@ -1434,20 +1434,14 @@ async def chat_web_search_handler(request: Request, form_data: dict, extra_param
                 detail = 'Query generation failed'
             raise Exception(detail)
 
-        response = res['choices'][0]['message']['content']
-
-        try:
-            bracket_start = response.rfind('{')
-            bracket_end = response.rfind('}') + 1
-
-            if bracket_start == -1 or bracket_end == -1:
-                raise Exception('No JSON object found in the response')
-
-            response = response[bracket_start:bracket_end]
-            queries = JSONCodec.loads(response)
-            queries = queries.get('queries', [])
-        except Exception:
-            queries = [response]
+        response = res['choices'][0]['message']['content'] or ''
+        found = _last_json_object(response)
+        if found is not None:
+            queries = found.get('queries', [])
+        else:
+            # A reply with no braces is taken as the query itself; one whose
+            # JSON did not parse (cut short, say) gives way to the user's message.
+            queries = [user_message or ''] if '{' in response else [response]
 
         if ENABLE_QUERIES_CACHE:
             request.state.cached_queries = queries
@@ -1812,20 +1806,8 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
                         detail = 'Image prompt generation failed'
                     raise Exception(detail)
 
-                response = res['choices'][0]['message']['content']
-
-                try:
-                    bracket_start = response.rfind('{')
-                    bracket_end = response.rfind('}') + 1
-
-                    if bracket_start == -1 or bracket_end == -1:
-                        raise Exception('No JSON object found in the response')
-
-                    response = response[bracket_start:bracket_end]
-                    response = JSONCodec.loads(response)
-                    prompt = response.get('prompt', [])
-                except Exception:
-                    prompt = user_message
+                found = _last_json_object(res['choices'][0]['message']['content'] or '')
+                prompt = found.get('prompt', []) if found is not None else user_message
 
             except Exception as e:
                 log.exception(e)
@@ -1922,19 +1904,13 @@ async def chat_completion_files_handler(
                     },
                     user,
                 )
-                queries_response = queries_response['choices'][0]['message']['content']
-
-                try:
-                    bracket_start = queries_response.rfind('{')
-                    bracket_end = queries_response.rfind('}') + 1
-
-                    if bracket_start == -1 or bracket_end == -1:
-                        raise Exception('No JSON object found in the response')
-
-                    queries_response = queries_response[bracket_start:bracket_end]
-                    queries_response = JSONCodec.loads(queries_response)
-                except Exception:
-                    queries_response = {'queries': [queries_response]}
+                queries_response = queries_response['choices'][0]['message']['content'] or ''
+                found = _last_json_object(queries_response)
+                if found is None:
+                    # As in web search: a reply with no braces is the query; one whose JSON
+                    # did not parse gives no queries, so the user's message is used below.
+                    found = {'queries': [] if '{' in queries_response else [queries_response]}
+                queries_response = found
 
                 queries = queries_response.get('queries', [])
             except Exception:
@@ -3758,6 +3734,39 @@ def _messages_for_tasks(message_list: list[dict]) -> list[dict]:
             }
         )
     return messages
+
+
+_JSON_OBJECT_START = re.compile(r'\{\s*["}]')
+
+
+def _last_json_object(text: str) -> dict | None:
+    """The last JSON object in a task model's reply, or None when it has none.
+
+    Objects are read with the JSON decoder from left to right, each one whole,
+    so a brace inside one of their strings (a search query about `{set}`
+    syntax) is neither the start nor the end of an object, as it was when the
+    reply was sliced from its last `{` (#168). The last one is the answer when
+    the model echoes the template's example first. Only a `{` that can open an
+    object (`{"` or `{}`) is tried, so a reply full of code braces is not
+    decoded at every one.
+    """
+    decoder = json.JSONDecoder()
+    found = None
+    pos = 0
+    while match := _JSON_OBJECT_START.search(text, pos):
+        try:
+            value, end = decoder.raw_decode(text, match.start())
+        except ValueError:
+            pos = match.start() + 1
+            continue
+        except RecursionError:
+            # Nested past the interpreter's limit: no task reply looks like
+            # this, and retrying at each inner brace would take quadratic time.
+            break
+        if isinstance(value, dict):
+            found = value
+        pos = end
+    return found
 
 
 def _task_reply_json(res: dict, text_from_message) -> str:
