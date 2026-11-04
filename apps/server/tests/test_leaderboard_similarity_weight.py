@@ -68,6 +68,8 @@ def test_a_search_never_turns_a_win_into_points_lost():
 
     stats = evaluations._calculate_elo(feedbacks, evaluations._compute_similarities(feedbacks, 'query'))
 
-    assert stats['A']['rating'] >= 1000.0
-    assert stats['B']['rating'] <= 1000.0
+    # No relevance, so no change, as for a feedback without tags; the result
+    # still counts as a win and a loss.
+    assert stats['A']['rating'] == pytest.approx(1000.0)
+    assert stats['B']['rating'] == pytest.approx(1000.0)
     assert (stats['A']['won'], stats['B']['lost']) == (1, 1)
