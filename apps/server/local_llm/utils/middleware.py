@@ -4100,7 +4100,7 @@ async def outlet_filter_handler(ctx):
                                 if not output_changed and original_message.get('output'):
                                     # The new text goes into the output too: the next request reads it (#502).
                                     message['output'] = message_update['output'] = with_output_text(
-                                        original_message['output'], original_content, message_content or ''
+                                        original_message['output'], message_content or ''
                                     )
                             await Chats.upsert_message_to_chat_by_id_and_message_id(
                                 chat_id,

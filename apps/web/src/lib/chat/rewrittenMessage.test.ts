@@ -16,21 +16,37 @@ const reply = (content: string, output?: OutputItem[]) =>
 	({ id: 'r', role: 'assistant', content, output, parentId: null, childrenIds: [] }) as unknown as Message;
 
 describe('rewrittenMessage (#502)', () => {
-	it("puts the new text in the output's message, keeping its other items", () => {
-		const patch = rewrittenMessage(reply('Old answer', [call, text('Old answer')]), { content: 'New answer' });
+	it("puts the new text in the output's message, keeping its other items, $ signs and all", () => {
+		const patch = rewrittenMessage(reply('Old answer', [call, text('Old answer')]), {
+			content: 'Area: $$x^2$$ and $& $1'
+		});
 
 		expect(patch.originalContent).toBe('Old answer');
 		expect(patch.output?.[0]).toEqual(call);
-		expect(getOutputText(patch.output)).toBe('New answer');
+		expect(getOutputText(patch.output)).toBe('Area: $$x^2$$ and $& $1');
 	});
 
-	it('replaces the text even when it spans several message items', () => {
-		const existing = reply('First\nSecond', [text('First', 'a'), call, text('Second', 'b')]);
+	it('puts the text where the last message was, as an edit does, dropping reasoning', () => {
+		const reasoning: OutputItem = { type: 'reasoning', id: 'rs1', summary: [] };
+		const existing = reply('Let me check.\nIt is 4', [
+			reasoning,
+			text('Let me check.', 'a'),
+			call,
+			text('It is 4', 'b')
+		]);
 
-		const patch = rewrittenMessage(existing, { content: 'All new' });
+		const patch = rewrittenMessage(existing, { content: 'It is 4.\n\n-- checked' });
 
-		expect(getOutputText(patch.output)).toBe('All new');
-		expect(patch.output?.map((i) => i.type)).toEqual(['message', 'function_call']);
+		expect(patch.output?.map((i) => i.type)).toEqual(['function_call', 'message']);
+		expect(patch.output?.[1].id).toBe('b');
+		expect(getOutputText(patch.output)).toBe('It is 4.\n\n-- checked');
+	});
+
+	it('adds a message to an output that had no text', () => {
+		const patch = rewrittenMessage(reply('', [call]), { content: 'Added by an action' });
+
+		expect(patch.output?.[0]).toEqual(call);
+		expect(getOutputText(patch.output)).toBe('Added by an action');
 	});
 
 	it('keeps an output the rewrite brings, and changes nothing when the text is the same', () => {

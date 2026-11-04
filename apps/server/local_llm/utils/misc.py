@@ -267,34 +267,38 @@ def get_text_from_message(message: dict) -> str | None:
     return get_content_from_message(message)
 
 
-def with_output_text(output: list, old_text: str, new_text: str) -> list:
-    """The output with its message text replaced by `new_text`, its other items kept (#502).
+def with_output_text(output: list, new_text: str) -> list:
+    """The output with its text replaced by `new_text`, as the web client's edit does it (#502, #211).
 
-    For a message whose content was rewritten (an outlet filter, an action):
-    the next request is built from `output`, so it must carry the new text.
-    The text part holding `old_text` takes the new one; when the old text is
-    not found as written (it spans several message items), the first message
-    item takes the new text and the other message items go.
+    For a reply whose content was rewritten (an outlet filter, an action): the
+    next request is built from `output`, so it must carry the new text. The
+    message items become one item holding it, where the last of them was, and
+    reasoning goes (it argued for the text being replaced); tool calls, their
+    outputs and code runs stay where they were. No text leaves no message item.
     """
+    text = new_text.strip()
+    messages = [i for i, item in enumerate(output) if isinstance(item, dict) and item.get('type') == 'message']
+    last = messages[-1] if messages else -1
+    edited = (
+        [
+            {
+                'type': 'message',
+                'id': (output[last].get('id') if last >= 0 else None) or f'msg_{uuid.uuid4().hex}',
+                'role': 'assistant',
+                'status': 'completed',
+                'content': [{'type': 'output_text', 'text': text}],
+            }
+        ]
+        if text
+        else []
+    )
+    kept = []
     for index, item in enumerate(output):
-        parts = item.get('content') if isinstance(item, dict) and item.get('type') == 'message' else None
-        if not isinstance(parts, list):
-            continue
-        for part_index, part in enumerate(parts):
-            text = part.get('text') if isinstance(part, dict) else None
-            if old_text and isinstance(text, str) and old_text in text:
-                new_parts = [*parts]
-                new_parts[part_index] = {**part, 'text': text.replace(old_text, new_text, 1)}
-                return [*output[:index], {**item, 'content': new_parts}, *output[index + 1 :]]
-    rewritten, placed = [], False
-    for item in output:
-        if isinstance(item, dict) and item.get('type') == 'message':
-            if placed:
-                continue
-            placed = True
-            item = {**item, 'content': [{'type': 'output_text', 'text': new_text}]}
-        rewritten.append(item)
-    return rewritten
+        if index == last:
+            kept.extend(edited)
+        if not (isinstance(item, dict) and item.get('type') in ('message', 'reasoning')):
+            kept.append(item)
+    return kept if last >= 0 else [*kept, *edited]
 
 
 def get_output_text(output: list | None) -> str:

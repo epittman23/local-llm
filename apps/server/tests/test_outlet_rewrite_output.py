@@ -29,18 +29,31 @@ CALL = {'type': 'function_call', 'id': 'fc1', 'call_id': 'c1', 'name': 'lookup',
 def test_with_output_text_replaces_the_text_and_keeps_the_other_items():
     output = [CALL, _text('Old answer')]
 
-    rewritten = with_output_text(output, 'Old answer', 'New answer')
+    rewritten = with_output_text(output, 'New answer, $$x^2$$')
 
     assert rewritten[0] == CALL
-    assert get_output_text(rewritten) == 'New answer'
+    assert get_output_text(rewritten) == 'New answer, $$x^2$$'
+    assert rewritten[1]['id'] == 'msg1'
     assert get_output_text(output) == 'Old answer'  # not changed in place
 
 
-def test_with_output_text_replaces_text_that_spans_several_message_items():
-    rewritten = with_output_text([_text('First', 'a'), CALL, _text('Second', 'b')], 'First\nSecond', 'All new')
+def test_with_output_text_puts_the_text_where_the_last_message_was_and_drops_reasoning():
+    reasoning = {'type': 'reasoning', 'id': 'rs1', 'summary': []}
+    output = [reasoning, _text('Let me check.', 'a'), CALL, _text('It is 4', 'b')]
 
-    assert get_output_text(rewritten) == 'All new'
-    assert [item['type'] for item in rewritten] == ['message', 'function_call']
+    rewritten = with_output_text(output, 'It is 4.\n\n-- checked')
+
+    assert [item['type'] for item in rewritten] == ['function_call', 'message']
+    assert rewritten[1]['id'] == 'b'
+    assert get_output_text(rewritten) == 'It is 4.\n\n-- checked'
+
+
+def test_with_output_text_adds_a_message_to_an_output_without_one_and_none_for_no_text():
+    added = with_output_text([CALL], 'Added by a filter')
+
+    assert added[0] == CALL
+    assert get_output_text(added) == 'Added by a filter'
+    assert with_output_text([CALL, _text('Old')], '  ') == [CALL]
 
 
 def test_an_outlet_rewrite_of_the_content_is_saved_into_the_output_and_sent(monkeypatch):
@@ -92,7 +105,7 @@ def test_an_outlet_rewrite_of_the_content_is_saved_into_the_output_and_sent(monk
         {
             'originalContent': 'Old answer',
             'content': 'Filtered answer',
-            'output': [CALL, _text('Filtered answer')],
+            'output': [CALL, {**_text('Filtered answer'), 'status': 'completed'}],
         }
     ]
     sent = emitted[-1]['data']['messages'][0]
