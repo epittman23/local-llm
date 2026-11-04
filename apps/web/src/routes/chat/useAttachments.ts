@@ -212,12 +212,24 @@ export function useAttachments({
 				toast.error('You do not have permission to upload web content.');
 				return;
 			}
-			for (const url of urls) {
-				const itemId = uuid();
-				setFiles((fs) => [
-					...fs,
-					{ itemId, type: 'text', name: url, collection_name: '', status: 'uploading', context: 'full', url, error: '' }
-				]);
+			// Every page is listed before the first is fetched, so a clear (another
+			// chat opened) meanwhile removes them all: one added later would land in
+			// the next chat's list (#217). Each is then only patched or dropped.
+			const items = urls.map((url) => ({ url, itemId: uuid() }));
+			setFiles((fs) => [
+				...fs,
+				...items.map(({ url, itemId }) => ({
+					itemId,
+					type: 'text',
+					name: url,
+					collection_name: '',
+					status: 'uploading' as const,
+					context: 'full' as const,
+					url,
+					error: ''
+				}))
+			]);
+			for (const { url, itemId } of items) {
 				try {
 					const res = await processUrl(token, url);
 					if (!res) throw new Error('Failed to process the page.');

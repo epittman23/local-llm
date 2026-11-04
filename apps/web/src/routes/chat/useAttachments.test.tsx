@@ -9,6 +9,11 @@ import { useAttachments } from './useAttachments';
 // An upload that never answers, so the test sees the state while it is in flight.
 vi.mock('@/lib/apis/files', () => ({ uploadFile: vi.fn(() => new Promise(() => {})) }));
 vi.mock('@/lib/apis/users', () => ({ getUserSettings: vi.fn(async () => ({ ui: {} })), updateUserSettings: vi.fn() }));
+// Each page is processed when the test answers it.
+const pages: ((v: unknown) => void)[] = [];
+vi.mock('@/lib/apis/retrieval', () => ({
+	processUrl: vi.fn(() => new Promise((resolve) => pages.push(resolve)))
+}));
 
 const wrapper = ({ children }: { children: ReactNode }) => (
 	<QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
@@ -64,5 +69,27 @@ describe('useAttachments', () => {
 		expect(result.current.files).toEqual([
 			expect.objectContaining({ name: 'Pasted_Text_1.txt', status: 'uploading', context: 'full' })
 		]);
+	});
+
+	it('pages still waiting when the list is cleared do not come back into it (#217)', async () => {
+		const { result } = renderHook(
+			() => useAttachments({ temporary: false, selectedModels: ['m'], models, chatId: null }),
+			{ wrapper }
+		);
+		let adding: Promise<void> | undefined;
+		act(() => {
+			adding = result.current.addWeb(['https://a.example/1', 'https://a.example/2']);
+		});
+		// Both are listed at once, so Send waits for both.
+		expect(result.current.files.map((f) => f.name)).toEqual(['https://a.example/1', 'https://a.example/2']);
+
+		act(() => result.current.clear());
+		await act(async () => {
+			pages[0]({ name: 'one', content: 'page one' });
+			await waitFor(() => expect(pages).toHaveLength(2));
+			pages[1]({ name: 'two', content: 'page two' });
+			await adding;
+		});
+		expect(result.current.files).toEqual([]);
 	});
 });

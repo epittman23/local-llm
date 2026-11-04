@@ -45,4 +45,16 @@ describe('useOnChatSwitch', () => {
 		rerender({ chatId: 'B', adoptedChatId: null });
 		expect(reset).toHaveBeenCalledTimes(1);
 	});
+
+	it('resets when a chat is opened from a new one', () => {
+		const { reset, rerender } = setup(null);
+		rerender({ chatId: 'B', adoptedChatId: null });
+		expect(reset).toHaveBeenCalledTimes(1);
+	});
+
+	it('resets when the chat opened is not the one adopted', () => {
+		const { reset, rerender } = setup(null);
+		rerender({ chatId: 'Y', adoptedChatId: 'X' });
+		expect(reset).toHaveBeenCalledTimes(1);
+	});
 });
