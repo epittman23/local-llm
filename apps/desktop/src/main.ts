@@ -51,10 +51,13 @@ import {
 	buildUiCommand,
 	childEnv,
 	composeDownCommand,
+	DEV_SERVER_IDENTITY_PATH,
 	DEV_SERVER_URL,
 	decideStart,
+	fetchText,
 	groupAlive,
 	isAdoptable,
+	isOwnDevServer,
 	isUiStale,
 	LogTail,
 	llamaServerPids,
@@ -362,14 +365,18 @@ async function startup(): Promise<void> {
 
 		const port = localPort(origin);
 		const adoptable = earlier === 'adopt';
-		const [health, dev] = await Promise.all([probe(`${origin}/health`), probe(DEV_SERVER_URL)]);
 		const repo = config.repoPath;
 		const webDir = join(repo, 'apps', 'web');
+		const [health, dev] = await Promise.all([
+			probe(`${origin}/health`),
+			fetchText(`${DEV_SERVER_URL}${DEV_SERVER_IDENTITY_PATH}`)
+		]);
 		const plan = decideStart({
 			origin,
 			local: true,
 			backendUp: health !== null,
-			devServerUp: dev !== null,
+			// Only this checkout's `make frontend`, not whatever else took :5174 (#432).
+			devServerUp: isOwnDevServer(dev, webDir),
 			adoptable,
 			// Only worth walking apps/web for when the stack is about to be started.
 			uiStale: health === null && !adoptable && existsSync(webDir) ? await isUiStale(webDir) : false,

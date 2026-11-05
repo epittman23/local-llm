@@ -1,4 +1,4 @@
-import { appendFileSync, mkdtempSync, utimesSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -9,6 +9,7 @@ import {
 	DEV_SERVER_URL,
 	decideStart,
 	isAdoptable,
+	isOwnDevServer,
 	LogTail,
 	makeBackendCommand,
 	newestMtime,
@@ -268,5 +269,49 @@ describe('services left after a stop (#435)', () => {
 		expect(countRunning(null)).toBeNull();
 		// A login profile's greeting is not a container.
 		expect(countRunning('Welcome back\n3f2a9c1d4e5b\n')).toBe(1);
+	});
+});
+
+describe('the dev server check (#432)', () => {
+	// What apps/web/astro.config.mjs's dev server answers at DEV_SERVER_IDENTITY_PATH.
+	const devServerIdentity = (webRoot: string) => JSON.stringify({ app: 'local-llm', webRoot });
+
+	function checkout() {
+		const repo = mkdtempSync(join(tmpdir(), 'lllm-repo-'));
+		const webDir = join(repo, 'apps', 'web');
+		mkdirSync(webDir, { recursive: true });
+		return { repo, webDir };
+	}
+
+	it("takes this checkout's dev server, by its identity answer", () => {
+		const { webDir } = checkout();
+		expect(isOwnDevServer(devServerIdentity(`${webDir}/`), webDir)).toBe(true);
+	});
+
+	it('takes it through a symlinked checkout path too', () => {
+		const { repo, webDir } = checkout();
+		const link = `${repo}-link`;
+		symlinkSync(repo, link);
+		expect(isOwnDevServer(devServerIdentity(webDir), join(link, 'apps', 'web'))).toBe(true);
+	});
+
+	it("does not take another checkout's dev server", () => {
+		const { webDir } = checkout();
+		const other = checkout();
+		expect(isOwnDevServer(devServerIdentity(other.webDir), webDir)).toBe(false);
+	});
+
+	it('does not take another project, which answers that path with its own page', () => {
+		const { webDir } = checkout();
+		expect(isOwnDevServer(null, webDir)).toBe(false);
+		expect(isOwnDevServer('<!doctype html><title>Another app</title>', webDir)).toBe(false);
+		expect(isOwnDevServer('{"app":"something-else"}', webDir)).toBe(false);
+		expect(isOwnDevServer(JSON.stringify({ app: 'local-llm', webRoot: 7 }), webDir)).toBe(false);
+	});
+
+	it('does not take a directory that no longer exists', () => {
+		const { webDir } = checkout();
+		expect(isOwnDevServer(devServerIdentity('/nonexistent/apps/web'), webDir)).toBe(false);
+		expect(isOwnDevServer(devServerIdentity(webDir), '/nonexistent/apps/web')).toBe(false);
 	});
 });
