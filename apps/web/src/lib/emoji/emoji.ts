@@ -22,18 +22,34 @@ export function buildEmojiIndex(
 	shortCodes: Record<string, string | string[]>,
 	groups: Record<string, string[]>
 ): EmojiIndex {
+	// The shortcode data keys some emojis by their bare code points (`2764`),
+	// which render as monochrome text on many platforms; the groups also list
+	// the fully qualified form, with the emoji variation selector U+FE0F
+	// (`2764-FE0F`). Each character is built from that form when there is one (#325).
+	const qualified: Record<string, string> = {};
+	for (const codes of Object.values(groups)) {
+		for (const code of codes) {
+			const bare = code
+				.split('-')
+				.filter((part) => part !== 'FE0F')
+				.join('-');
+			if (bare !== code) qualified[bare] ??= code;
+		}
+	}
+	const charOf = (code: string) => codeToChar(qualified[code] ?? code);
+
 	const byName: Record<string, string> = {};
 	const namesByCode: Record<string, string[]> = {};
 	for (const [code, value] of Object.entries(shortCodes)) {
 		const names = typeof value === 'string' ? [value] : value;
 		namesByCode[code] = names;
-		for (const n of names) byName[n] = codeToChar(code);
+		for (const n of names) byName[n] = charOf(code);
 	}
 	const all: EmojiIndex['all'] = [];
 	for (const [group, codes] of Object.entries(groups)) {
 		for (const code of codes) {
 			const names = namesByCode[code];
-			if (names?.length) all.push({ char: codeToChar(code), name: names[0], names, group });
+			if (names?.length) all.push({ char: charOf(code), name: names[0], names, group });
 		}
 	}
 	return { byName, all, groups: Object.keys(groups) };
