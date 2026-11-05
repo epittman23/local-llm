@@ -1467,3 +1467,15 @@ def chunk_settings_error(chunk_size, chunk_overlap) -> str | None:
     if chunk_overlap >= chunk_size:
         return f'Chunk Overlap must be smaller than Chunk Size ({chunk_overlap} is not smaller than {chunk_size}).'
     return None
+
+
+def embedding_batch_size_error(batch_size) -> str | None:
+    """Why embedding could not use this batch size, or None (#353).
+
+    Once saved, a size of 0 fails every embedding with an error, a negative
+    one returns no vectors (and an IndexError later), and none fails as soon
+    as it is read; for every engine, internal or external.
+    """
+    if isinstance(batch_size, bool) or not isinstance(batch_size, int) or batch_size < 1:
+        return f'Embedding Batch Size must be a whole number of at least 1 (got {batch_size!r}).'
+    return None

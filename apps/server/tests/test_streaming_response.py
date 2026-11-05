@@ -1763,3 +1763,70 @@ def test_a_failed_responses_api_reply_without_an_error_object_is_still_an_error(
     errors = [d['error'] for d in _emitted(observed) if 'error' in d]
     assert errors and errors[0]['message']
     assert {'error': {'content': errors[0]}} in _saved(observed)
+
+
+@pytest.mark.parametrize(
+    'error_chunk',
+    [
+        OPENROUTER_ERROR_CHUNK,
+        sse({'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'error'}]}),
+        json.dumps({'error': {'message': 'upstream failed'}}) + '\n',
+    ],
+    ids=['error object', 'finish_reason error', 'plain error line'],
+)
+def test_a_stream_that_errors_after_tool_call_deltas_runs_no_tool(monkeypatch, error_chunk):
+    """#501: an errored completion's half-sent tool calls were still run."""
+    calls = [
+        chunk(tool_calls=[call_delta(0, 'call_1', 'lookup', '')]),
+        chunk(tool_calls=[call_delta(0, arguments='{"q": 1}')]),
+    ]
+    observed = _run(
+        [[*calls, error_chunk, DONE], [chunk('should not be asked for'), DONE]],
+        {'chat_id': SAVED_CHAT, 'tools': [tool('lookup', result='r')]},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    assert not [c for c in observed['calls'] if c[0] == 'tool']
+    assert [d for d in _emitted(observed) if 'error' in d]
+    assert len([c for c in observed['calls'] if c[0] == 'generate_chat_completion']) <= 1
+    assert 'should not be asked for' not in json.dumps(observed['assistant_message'])
+    assert _call_statuses(observed) == ['failed']
+
+
+def _call_statuses(observed):
+    """The final status of each function_call item, as the reply was last saved."""
+    output = (_saved(observed) or [{}])[-1].get('output') or []
+    return [item.get('status') for item in output if item.get('type') == 'function_call']
+
+
+def test_a_responses_api_stream_that_fails_after_a_function_call_runs_no_tool(monkeypatch):
+    """#501, for the Responses API: a function_call item, then `response.failed`."""
+    failed = sse({'type': 'response.failed', 'response': {'error': {'code': 'server_error', 'message': 'cut off'}}})
+    observed = _run(
+        [[*RESP_CALL[:3], failed, DONE], RESP_TEXT],
+        {'chat_id': SAVED_CHAT, 'tools': [tool('lookup', result={'v': 1})]},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    assert not [c for c in observed['calls'] if c[0] == 'tool']
+    assert {'error': {'code': 'server_error', 'message': 'cut off'}} in _emitted(observed)
+    assert _call_statuses(observed) == ['failed']
+
+
+def test_a_stream_without_an_error_still_runs_its_tool_calls(monkeypatch):
+    observed = _run(
+        [tool_call_stream('lookup', '{"q": 1}'), [chunk('Found it'), DONE]],
+        {'chat_id': SAVED_CHAT, 'tools': [tool('lookup', result='r')]},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    assert [c for c in observed['calls'] if c[0] == 'tool']
