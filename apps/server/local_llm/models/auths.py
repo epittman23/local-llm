@@ -211,11 +211,28 @@ class AuthsTable:
         new_password: str,
         db: AsyncSession | None = None,
     ) -> bool:
-        """Set a new password hash for an existing user."""
+        """Set a new password hash for an existing user; False when there is no such user.
+
+        A user with no credentials row yet gets one: SCIM created users without
+        one until #296, and setting their password then changed nothing while
+        the admin was told it had.
+        """
         async with get_async_db_context(db) as session:
             auth_row = await session.get(Auth, user_id)
             if auth_row is None:
-                return False
+                user = await session.get(User, user_id)
+                if user is None:
+                    return False
+                session.add(Auth(id=user_id, email=user.email, password=new_password, active=True))
+                try:
+                    await session.commit()
+                    return True
+                except IntegrityError:
+                    # Another request made the row meanwhile: set the password on it.
+                    await session.rollback()
+                    auth_row = await session.get(Auth, user_id)
+                    if auth_row is None:
+                        raise
             auth_row.password = new_password
             await session.commit()
             return True
