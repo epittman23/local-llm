@@ -5,6 +5,7 @@
 //
 // The fake is built inside vi.hoisted because vi.mock factories may only use
 // hoisted values; it follows docs/audit/2026-10-28-desktop/repro/P1/main-harness.ts.
+import { EventEmitter } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -56,7 +57,9 @@ const h = vi.hoisted(() => {
 		/** Containers compose still lists as running after a clean stop; null when it can't be asked. */
 		servicesLeft: 0 as number | null,
 		/** What answers on the dev server's :5174, by URL; nothing by default (#432). */
-		devServer: null as ((url: string) => string | null) | null
+		devServer: null as ((url: string) => string | null) | null,
+		/** Builds the next spawned child; the default is one that started (#433). */
+		spawnChild: null as (() => unknown) | null
 	};
 	let nextId = 1;
 
@@ -143,6 +146,7 @@ const h = vi.hoisted(() => {
 		state.llama = [];
 		state.servicesLeft = 0;
 		state.devServer = null;
+		state.spawnChild = null;
 	}
 
 	return { state, FakeWindow, Emitter, electron, reset, start: () => markReady() };
@@ -167,7 +171,7 @@ vi.mock('./stack', async (original) => ({
 	fetchText: async (url: string) => h.state.devServer?.(url) ?? null,
 	spawnInGroup: () => {
 		h.state.spawned++;
-		return Object.assign(new h.Emitter(), { pid: 990201 });
+		return h.state.spawnChild?.() ?? Object.assign(new h.Emitter(), { pid: 990201 });
 	},
 	stopGroup: async (pgid: number) => {
 		h.state.stops.push(pgid);
@@ -499,4 +503,30 @@ test("this checkout's dev server is loaded in place of the built UI (#432)", asy
 
 	expect(asked).toEqual(['http://localhost:5174/__lllm/dev-server']);
 	expect(appWindows().map((w) => w.loaded)).toEqual(['http://localhost:5174']);
+});
+
+// --- A login shell that cannot be spawned (#433) --------------------------------
+
+test('a login shell that cannot be spawned fails the start, saying why, with no uncaught error (#433)', async () => {
+	// Node's own: an 'error' with no listener throws. spawn gives no pid, then emits it.
+	h.state.spawnChild = () => {
+		const child = Object.assign(new EventEmitter(), { pid: undefined });
+		setImmediate(() => child.emit('error', new Error('spawn /nonexistent/shell ENOENT')));
+		return child;
+	};
+	const uncaught: unknown[] = [];
+	const record = (error: unknown) => uncaught.push(error);
+	process.on('uncaughtException', record);
+	try {
+		await launch();
+		await tick(50);
+	} finally {
+		process.off('uncaughtException', record);
+	}
+
+	expect(uncaught).toEqual([]);
+	const shown = (await statusCall('status:ready')) as Shown;
+	expect(shown.progress.error).toContain('Could not start make backend');
+	expect(shown.progress.error).toContain('spawn /nonexistent/shell ENOENT');
+	expect(existsSync(join(h.state.userData, 'owned.json'))).toBe(false);
 });
