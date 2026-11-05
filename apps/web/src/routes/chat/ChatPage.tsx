@@ -12,7 +12,7 @@ import { updateChatById } from '@/lib/apis/chats';
 import type { ChatFile, History } from '@/lib/chat/history';
 import { cssUrl } from '@/lib/chat/prefs';
 import { type Citation, citationIndex, citationsOf } from '@/lib/chat/sources';
-import { initialModels, needsWebSearchConfirm, newChatTemporary, webSearchConfirmText } from '@/lib/chat/request';
+import { needsWebSearchConfirm, newChatTemporary, webSearchConfirmText } from '@/lib/chat/request';
 import {
 	canUploadFiles,
 	canUploadWeb,
@@ -34,11 +34,14 @@ import { ChatMenu } from './ChatMenu';
 import { AttachMenu, IntegrationsMenu, type Toggles } from './InputMenus';
 import { useAttachments } from './useAttachments';
 import { useOnChatSwitch } from './useOnChatSwitch';
+import { useParamsAutosave } from './useParamsAutosave';
 import { ChatMessages, type MessageHandlers } from './ChatMessages';
 import { ChatBanners } from './ChatBanners';
 import { ChatPlaceholder } from './ChatPlaceholder';
 import { CitationDialog } from './CitationDialog';
 import { useMessageActions } from './MessageActions';
+import { useHeldSend } from './useHeldSend';
+import { useModelPick } from './useModelPick';
 import { ModelSelector } from './ModelSelector';
 import { ServerDialogs } from './ServerDialogs';
 import { useChatPrefs } from './useChatPrefs';
@@ -60,7 +63,7 @@ export function ChatPage() {
 	const user = useAuthStore((s) => s.user);
 	const config = useConfigStore((s) => s.config);
 	const { settings } = useUserSettings();
-	const { models, loaded } = useModels();
+	const { models } = useModels();
 
 	const folder = useQuery({
 		queryKey: ['folder', folderId],
@@ -242,36 +245,15 @@ export function ChatPage() {
 	}, [folder.isError, folder.error, navigate]);
 
 	// A saved chat brings its own models; a new one picks them (URL, folder, user, defaults).
-	const pickedFor = useRef<string | null>(null);
-	useEffect(() => {
-		if (!loaded) return;
-		if (id) {
-			// While switching chats `session.chat` is still the previous chat's
-			// record for a render or two; only take models from this route's own.
-			if (session.chat?.id !== id) return;
-			const saved = session.chat?.chat?.models as string[] | undefined;
-			if (saved && pickedFor.current !== id) {
-				pickedFor.current = id;
-				setSelectedModels(admin || (chatPerms.multiple_models ?? true) ? saved : saved.slice(0, 1));
-			}
-			return;
-		}
-		if (folderId && !folder.isFetched) return;
-		const key = `new:${folderId ?? ''}`;
-		if (pickedFor.current === key) return;
-		pickedFor.current = key;
-		setSelectedModels(
-			initialModels({
-				url: search.get('models') || search.get('model'),
-				folderModels: folder.data?.data?.model_ids,
-				userModels: (settings as { models?: string[] } | null)?.models,
-				defaults: (config as { default_models?: string } | null)?.default_models,
-				models
-			})
-		);
-		// Only when the chat or the model list changes.
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [loaded, id, folderId, folder.isFetched, session.chat]);
+	const modelsChosen = useModelPick(session.chat, folder, setSelectedModels);
+	// A send before the page has chosen its models waits for them, and for the tools
+	// whose defaults they may turn on, in the box (#373).
+	const heldSend = useHeldSend(
+		modelsChosen && (tools.isSuccess || tools.isError),
+		id ?? `new:${folderId ?? ''}`,
+		(text, files) => requestSend(text, files, true),
+		() => input.current?.submit()
+	);
 
 	// `?temporary-chat=true` (also the New Temporary Chat shortcut) switches a new chat to temporary.
 	useEffect(() => {
@@ -317,27 +299,7 @@ export function ChatPage() {
 	// The controls panel edits the chat's own params; a saved chat keeps them (debounced).
 	const controlsOpen = useUIStore((s) => s.controlsOpen);
 	const setControlsOpen = useUIStore((s) => s.setControlsOpen);
-	const paramsDirty = useRef(false);
-	// Params edited in one chat are never saved into the next: the pending
-	// debounce below is flushed to the chat being left, then cleared.
-	const paramsFor = useRef<{ id: string | null; params: Record<string, any> }>({ id, params: session.params });
-	useEffect(() => {
-		const prev = paramsFor.current;
-		if (prev.id !== id) {
-			if (paramsDirty.current && prev.id)
-				void updateChatById(token, prev.id, { params: prev.params }).catch((e) => toast.error(`${e}`));
-			paramsDirty.current = false;
-		}
-		paramsFor.current = { id, params: session.params };
-	}, [id, session.params, token]);
-	useEffect(() => {
-		if (!paramsDirty.current || !id) return;
-		const t = setTimeout(() => {
-			paramsDirty.current = false;
-			void updateChatById(token, id, { params: session.params }).catch((e) => toast.error(`${e}`));
-		}, 500);
-		return () => clearTimeout(t);
-	}, [session.params, id, token]);
+	const saveParams = useParamsAutosave(id, token);
 	const [preview, setPreview] = useState<string | null>(null);
 	useEffect(() => setPreview(null), [id]);
 
@@ -511,7 +473,7 @@ export function ChatPage() {
 							/>
 						</>
 					}
-					onSubmit={(text, files) => requestSend(text, files, true)}
+					onSubmit={heldSend}
 					wide={prefs.widescreen}
 					// Until the chat on screen has loaded, a message would be built on the previous one (docs/history/code-review.md L11).
 					disabled={session.loading}
@@ -546,8 +508,8 @@ export function ChatPage() {
 					<ChatControls
 						params={session.params}
 						onParams={(p) => {
-							paramsDirty.current = true;
 							session.setParams(p);
+							saveParams(p);
 						}}
 						files={session.chatFiles}
 						onRemoveFile={(i) => session.setChatFiles(session.chatFiles.filter((_, j) => j !== i))}

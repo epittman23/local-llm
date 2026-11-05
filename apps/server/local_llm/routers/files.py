@@ -166,6 +166,11 @@ async def process_uploaded_file(
     db: AsyncSession | None = None,
 ):
     async def _process_handler(db_session):
+        # An upload into a knowledge base is completed only once it is linked
+        # there: the status stream ends at the first "completed", which each
+        # step below used to write (#311).
+        knowledge_id = file_metadata.get('knowledge_id')
+        final_step = not knowledge_id
         try:
             content_type = file.content_type
 
@@ -189,11 +194,12 @@ async def process_uploaded_file(
                     file_metadata,
                     user,
                 )
-                await process_file(
+                await process_file_for(
                     request,
                     ProcessFileForm(file_id=file_item.id, content=result.get('text', '')),
-                    user=user,
-                    db=db_session,
+                    user,
+                    db_session,
+                    mark_completed=final_step,
                 )
 
             elif (
@@ -209,11 +215,12 @@ async def process_uploaded_file(
                     # extraction causes "Timeout reached while detecting
                     # encoding" errors.
                     log.info('Video file detected (%s), skipping text extraction', content_type)
-                    await Files.update_file_data_by_id(
-                        file_item.id,
-                        {'status': 'completed'},
-                        db=db_session,
-                    )
+                    if final_step:
+                        await Files.update_file_data_by_id(
+                            file_item.id,
+                            {'status': 'completed'},
+                            db=db_session,
+                        )
                 else:
                     raise Exception(f'File type {content_type} is not supported for processing')
 
@@ -222,17 +229,17 @@ async def process_uploaded_file(
                 # configured content extraction engine.
                 if not content_type:
                     log.info('File type %s is not provided, but trying to process anyway', file.content_type)
-                await process_file(
+                await process_file_for(
                     request,
                     ProcessFileForm(file_id=file_item.id),
-                    user=user,
-                    db=db_session,
+                    user,
+                    db_session,
+                    mark_completed=final_step,
                 )
 
             # Auto-link to Knowledge Collection when uploaded from one (#24807).
             # Mirrors POST /knowledge/{id}/file/add so linking doesn't depend
             # on the frontend staying connected after upload.
-            knowledge_id = file_metadata.get('knowledge_id')
             if knowledge_id:
                 try:
                     # Gate like POST /knowledge/{id}/file/add: a client-supplied
@@ -258,11 +265,12 @@ async def process_uploaded_file(
                         # Keep the generic file status stream open until the
                         # KB-specific vector write and durable link both finish.
                         await Files.update_file_data_by_id(file_item.id, {'status': 'processing'}, db=db_session)
-                        await process_file(
+                        await process_file_for(
                             request,
                             ProcessFileForm(file_id=file_item.id, collection_name=knowledge_id),
-                            user=user,
-                            db=db_session,
+                            user,
+                            db_session,
+                            mark_completed=False,
                         )
                         knowledge_file = await Knowledges.add_file_to_knowledge_by_id(
                             knowledge_id=knowledge_id,
@@ -279,6 +287,8 @@ async def process_uploaded_file(
                     # Marked failed below; discarded once the client has read that.
                     run_in_background(_discard_orphan_upload(file_item.id, knowledge_id))
                     raise
+                # Linked (or refused, and left unlinked): only now is the upload done.
+                await Files.update_file_data_by_id(file_item.id, {'status': 'completed', 'error': None}, db=db_session)
 
         except Exception as e:
             log.error(f'Error processing file: {file_item.id}')

@@ -1,5 +1,5 @@
 import { Copy, Plus, RefreshCw, Trash2 } from 'lucide-react';
-import { type ChangeEvent, type FormEvent, useEffect, useId, useRef, useState } from 'react';
+import { type ChangeEvent, type FormEvent, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import {
 	updateUserPassword,
 	updateUserProfile
 } from '@/lib/apis/auths';
+import { errorMessage } from '@/lib/apis/errors';
 import { getUserVariables, updateUserVariables } from '@/lib/apis/users';
 import { signOut } from '@/lib/auth/session';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -78,12 +79,30 @@ export default function Account() {
 	const changing = useRef(false);
 	const [changingPassword, setChangingPassword] = useState(false);
 	const [apiKey, setApiKey] = useState('');
+	// Why the key did not load. Only a 404 means there is none; on any other
+	// failure the tab must not offer to create one, which would replace it (#526).
+	const [apiKeyError, setApiKeyError] = useState<string | null>(null);
+	const [retryingKey, setRetryingKey] = useState(false);
 	const [confirmDeleteKey, setConfirmDeleteKey] = useState(false);
 	const fileRef = useRef<HTMLInputElement>(null);
 	const perms = user?.permissions as { features?: { api_keys?: boolean } } | undefined;
 	const canApiKeys =
 		(features.enable_api_keys ?? true) !== false && (user?.role === 'admin' || Boolean(perms?.features?.api_keys));
 	const canPassword = Boolean(features.enable_login_form) && Boolean(features.enable_password_change_form);
+
+	const loadAPIKey = useCallback(
+		async (live: () => boolean = () => true) => {
+			try {
+				const key = await getAPIKey(token);
+				if (!live()) return;
+				setApiKey(key ?? '');
+				setApiKeyError(null);
+			} catch (e) {
+				if (live()) setApiKeyError(errorMessage(e));
+			}
+		},
+		[token]
+	);
 
 	useEffect(() => {
 		let live = true;
@@ -108,13 +127,13 @@ export default function Account() {
 			});
 			setCustomGender(!GENDERS.includes(u.gender ?? ''));
 			setRows(variableRows((vars as { variables?: unknown } | null)?.variables));
-			if (canApiKeys) setApiKey(((await getAPIKey(token).catch(() => '')) as string) ?? '');
+			if (canApiKeys) await loadAPIKey(() => live);
 		})();
 		return () => {
 			live = false;
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [token]);
+	}, [token, loadAPIKey]);
 
 	const save = async () => {
 		if (!profile) return;
@@ -376,7 +395,23 @@ export default function Account() {
 
 					{canApiKeys && (
 						<SettingsSection title="API Key">
-							{apiKey ? (
+							{apiKeyError ? (
+								<div className="flex flex-wrap items-center gap-2 text-xs">
+									<span className="text-destructive">{`The API key could not be loaded: ${apiKeyError}`}</span>
+									<Button
+										type="button"
+										size="sm"
+										variant="outline"
+										disabled={retryingKey}
+										onClick={() => {
+											setRetryingKey(true);
+											void loadAPIKey().finally(() => setRetryingKey(false));
+										}}
+									>
+										Try again
+									</Button>
+								</div>
+							) : apiKey ? (
 								<div className="flex items-center gap-1.5">
 									<Input readOnly type="password" aria-label="API Key" value={apiKey} className="h-8 text-xs" />
 									<Button

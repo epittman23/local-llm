@@ -1,6 +1,6 @@
 {
 	"_comment": "basedpyright findings allowed per file and rule; may only shrink. See .github/scripts/lint_ratchet.py.",
-	"total": 2195,
+	"total": 2190,
 	"counts": {
 		"apps/server/local_llm/benchmarks/analysis/compare.py": {
 			"reportArgumentType": 9,
@@ -422,7 +422,6 @@
 			"reportArgumentType": 12,
 			"reportAttributeAccessIssue": 7,
 			"reportCallIssue": 1,
-			"reportOptionalOperand": 1,
 			"reportOptionalSubscript": 1
 		},
 		"apps/server/local_llm/routers/knowledge.py": {
@@ -631,7 +630,7 @@
 			"reportAssignmentType": 2,
 			"reportAttributeAccessIssue": 17,
 			"reportIncompatibleVariableOverride": 1,
-			"reportOptionalMemberAccess": 15,
+			"reportOptionalMemberAccess": 13,
 			"reportPossiblyUnboundVariable": 7,
 			"reportReturnType": 14
 		},
@@ -644,7 +643,6 @@
 			"reportArgumentType": 1
 		},
 		"apps/server/local_llm/utils/plugin.py": {
-			"reportArgumentType": 2,
 			"reportPossiblyUnboundVariable": 1
 		},
 		"apps/server/local_llm/utils/redis.py": {

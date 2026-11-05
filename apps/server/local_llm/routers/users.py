@@ -966,8 +966,13 @@ async def update_user_by_id(
                 raise HTTPException(400, detail=str(e))
 
             hashed = await get_password_hash(form_data.password)
-            if await Auths.update_user_password_by_id(user_id, hashed, db=db):
-                await revoke_user_tokens(request, user_id)
+            # A write that changed nothing is an error, not a password set (#296).
+            if not await Auths.update_user_password_by_id(user_id, hashed, db=db):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=ERROR_MESSAGES.DEFAULT('The password was not changed'),
+                )
+            await revoke_user_tokens(request, user_id)
 
         # Build update dict from only the provided fields
         update_data = {}
