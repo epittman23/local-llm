@@ -25,6 +25,7 @@ import {
 } from 'electron';
 import {
 	type Bounds,
+	configProblem,
 	DEFAULT_SERVER_URL,
 	type DesktopConfig,
 	isLocalOrigin,
@@ -32,8 +33,11 @@ import {
 	localPort,
 	normalizeServerUrl,
 	readConfig,
+	relaunchArgs,
 	resolveServerUrl,
-	writeConfig
+	type ServerOverride,
+	serverOverride,
+	updateConfig
 } from './config';
 import { classifyOpen, isAllowedPermission } from './policy';
 import {
@@ -122,10 +126,28 @@ function storedConfig(): DesktopConfig {
 	return readConfig(CONFIG_FILE, { serverUrl: DEFAULT_SERVER_URL, repoPath: buildInfoRepo() });
 }
 
+/** Set by a save in Settings, which replaces the override for the rest of this launch (#424). */
+let overrideReplaced = false;
+
+/** The `--server-url` / LLLM_SERVER_URL this launch still uses in place of the stored setting. */
+function activeOverride(): ServerOverride | null {
+	return overrideReplaced ? null : serverOverride(process.argv, process.env);
+}
+
 /** The stored settings, with `--server-url` / LLLM_SERVER_URL applied on top (never saved). */
 function loadConfig(): DesktopConfig {
 	const stored = storedConfig();
-	return { ...stored, serverUrl: resolveServerUrl(process.argv, process.env, stored.serverUrl) };
+	const [argv, env] = overrideReplaced ? [[], {}] : [process.argv, process.env];
+	return { ...stored, serverUrl: resolveServerUrl(argv, env, stored.serverUrl) };
+}
+
+/** config.json as written, or null when there is none to read. */
+function storedText(): string | null {
+	try {
+		return readFileSync(CONFIG_FILE, 'utf8');
+	} catch {
+		return null;
+	}
 }
 
 // --- The progress window -------------------------------------------------------
@@ -218,10 +240,20 @@ function savedBounds(): Partial<Rectangle> {
 
 function saveBounds(bounds: Bounds): void {
 	try {
-		writeConfig(CONFIG_FILE, { ...storedConfig(), bounds });
+		// Only the bounds: the rest of the file stays as written (#437).
+		updateConfig(CONFIG_FILE, { bounds });
 	} catch {
 		// Not worth interrupting a close for.
 	}
+}
+
+/**
+ * Saves the app window's size before a quit destroys it: destroy() and
+ * app.exit() emit no 'close', so only the window's own close button saved
+ * it before (#425).
+ */
+function saveWindowBounds(): void {
+	if (mainWindow && !mainWindow.isDestroyed()) saveBounds(mainWindow.getNormalBounds());
 }
 
 function openApp(url: string): Promise<void> {
@@ -332,6 +364,9 @@ async function startup(): Promise<void> {
 	phase = 'starting';
 	config = loadConfig();
 	const origin = config.serverUrl;
+	// A stored server URL set aside for the default is said, not silent (#437);
+	// not while an override is what this launch uses instead.
+	const problem = activeOverride() ? undefined : (configProblem(storedText()) ?? undefined);
 	const abort = new AbortController();
 	startAbort = abort;
 	const now = Date.now;
@@ -355,7 +390,7 @@ async function startup(): Promise<void> {
 		if (!isLocalOrigin(origin)) {
 			setProgress(createProgress('startup', 'Connecting to Local LLM', startupRemote(origin), now()));
 			openStatus('progress');
-			dispatch({ type: 'begin', step: 'check', at: now() });
+			dispatch({ type: 'begin', step: 'check', at: now(), detail: problem });
 			if ((await probe(`${origin}/health`, 5000)) === null) {
 				return fail(`Nothing answered at ${origin}. Check the address in Settings, or retry.`);
 			}
@@ -388,7 +423,7 @@ async function startup(): Promise<void> {
 			openStatus('progress');
 			const found =
 				plan.mode === 'adopt' ? 'found the backend this app started earlier' : `found a running backend at ${origin}`;
-			dispatch({ type: 'begin', step: 'check', at: now(), detail: found });
+			dispatch({ type: 'begin', step: 'check', at: now(), detail: problem ? `${found}. ${problem}` : found });
 			dispatch({ type: 'begin', step: 'ready', at: now() });
 			const adopted = plan.mode === 'adopt' && record ? record.pgid : null;
 			if (adopted) {
@@ -407,7 +442,7 @@ async function startup(): Promise<void> {
 
 		setProgress(createProgress('startup', 'Starting Local LLM', STARTUP_OWN, now()));
 		openStatus('progress');
-		dispatch({ type: 'begin', step: 'check', at: now() });
+		dispatch({ type: 'begin', step: 'check', at: now(), detail: problem });
 		if (!isRepoRoot(repo)) {
 			return fail(`No local-llm checkout at ${repo}. Set the repository folder in Settings.`);
 		}
@@ -531,6 +566,7 @@ function forgetOwned(): void {
  * owned (attached, remote, or a failed start) it just quits.
  */
 async function shutdown(): Promise<void> {
+	saveWindowBounds();
 	if (phase === 'stopped') {
 		app.exit(0);
 		return;
@@ -652,15 +688,23 @@ interface SettingsInput {
 	repoPath: string;
 }
 
-function saveSettings(input: SettingsInput): { error?: string; restart?: boolean } {
+function saveSettings(input: SettingsInput): { error?: string; restart?: boolean; replaced?: ServerOverride } {
 	const serverUrl = normalizeServerUrl(String(input.serverUrl ?? ''));
 	if (!serverUrl) return { error: 'The server URL must be an http:// or https:// address.' };
 	const repoPath = String(input.repoPath ?? '').trim();
 	if (isLocalOrigin(serverUrl) && !isRepoRoot(repoPath)) {
 		return { error: `${repoPath || 'That folder'} is not a local-llm checkout (no Makefile and apps/server).` };
 	}
-	writeConfig(CONFIG_FILE, { ...storedConfig(), serverUrl, repoPath });
-	return { restart: phase === 'running' };
+	try {
+		updateConfig(CONFIG_FILE, { serverUrl, repoPath }, true);
+	} catch (error) {
+		// Shown in the dialog, which otherwise would say nothing (#426).
+		return { error: `Could not save the settings: ${error instanceof Error ? error.message : String(error)}` };
+	}
+	// What the user saved is what Retry starts with, not the override (#424).
+	const replaced = activeOverride() ?? undefined;
+	overrideReplaced = true;
+	return { restart: phase === 'running', replaced };
 }
 
 function registerIpc(): void {
@@ -672,7 +716,14 @@ function registerIpc(): void {
 		'status:get-settings',
 		fromStatus(() => {
 			const stored = storedConfig();
-			return { serverUrl: stored.serverUrl, repoPath: stored.repoPath, running: phase === 'running' };
+			return {
+				serverUrl: stored.serverUrl,
+				repoPath: stored.repoPath,
+				running: phase === 'running',
+				override: activeOverride(),
+				// What the field cannot show: a stored URL set aside for the default (#437).
+				problem: configProblem(storedText())
+			};
 		})
 	);
 	ipcMain.handle(
@@ -709,8 +760,11 @@ function registerIpc(): void {
 					await stopLlama();
 					return app.exit(0);
 				case 'restart':
-					app.relaunch();
-					return owned ? shutdown() : app.exit(0);
+					// Another launch, which --server-url and LLLM_SERVER_URL were not for (#424).
+					delete process.env.LLLM_SERVER_URL;
+					app.relaunch({ args: relaunchArgs(process.argv) });
+					// shutdown() saves the window size, and with nothing owned just quits.
+					return shutdown();
 				case 'close-settings':
 					if (phase === 'running') statusWindow?.destroy();
 					else statusView = 'progress';

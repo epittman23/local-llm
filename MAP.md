@@ -418,8 +418,9 @@ structural summary.
   - `isOwnDevServer()`, whether `:5174` is this checkout's `make frontend`.
 - **`src/progress.ts`**: the progress dialog's step reducer, driven by the
   Makefile's and the backend's `==> ` markers.
-- **`src/config.ts`** (settings in `~/.config/Local LLM/config.json`) and
-  **`src/policy.ts`** (navigation and permission rules). Both are pure.
+- **`src/config.ts`** (settings in `~/.config/Local LLM/config.json`: pure
+  parsing, plus reading it and writing changed fields over it) and
+  **`src/policy.ts`** (navigation and permission rules, pure).
 - **`src/preload.ts`**: the app window's bridge (`window.lllmDesktop`), the
   seam for future native features. **`src/status-preload.ts`** is the
   dialog's bridge.
