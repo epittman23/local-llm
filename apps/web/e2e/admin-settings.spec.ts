@@ -551,6 +551,40 @@ test.describe('settings: Connections', () => {
 		await expect(m.getByRole('switch', { name: 'Direct Connections' })).not.toBeChecked();
 	});
 
+	test('Save reports the save as done only when both upstreams took it (#239)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockUpstreams(page);
+		await page.route('**/openai/config/update', (route) => json(route, { detail: 'upstream refused' }, 500));
+		await page.route('**/ollama/config/update', (route) => json(route, { detail: 'ollama refused' }, 500));
+		await page.goto('/?settings=admin:connections');
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('upstream refused')).toBeVisible();
+		await expect(page.getByText('ollama refused')).toBeVisible();
+		// Counted once, after a moment for a false success toast to render.
+		await page.waitForTimeout(300);
+		expect(await page.getByText('Settings saved successfully!').count()).toBe(0);
+	});
+
+	test('Save does not say the save is done when only one upstream took it (#239)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockUpstreams(page);
+		await page.route('**/ollama/config/update', (route) => json(route, { detail: 'ollama refused' }, 500));
+		await page.goto('/?settings=admin:connections');
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('OpenAI API settings updated')).toBeVisible();
+		await expect(page.getByText('ollama refused')).toBeVisible();
+		await page.waitForTimeout(300);
+		expect(await page.getByText('Settings saved successfully!').count()).toBe(0);
+	});
+
+	test('Save says the save is done when both upstreams took it', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockUpstreams(page);
+		await page.goto('/?settings=admin:connections');
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('Settings saved successfully!')).toBeVisible();
+	});
+
 	test('the OpenAI API switch turns the list off and saves that', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const seen = await mockUpstreams(page);
@@ -1551,17 +1585,48 @@ test.describe('settings: Images', () => {
 			page,
 			imagesCfg({ IMAGE_GENERATION_ENGINE: 'automatic1111', AUTOMATIC1111_BASE_URL: 'http://sd:7860/' })
 		);
+		const verified: string[] = [];
+		page.on('request', (req) => {
+			const url = new URL(req.url());
+			if (url.pathname.endsWith('/config/url/verify')) verified.push(url.search);
+		});
 		await page.goto('/?settings=admin:images');
 		await create(page).getByLabel('Base URL').fill('http://sd:7861/');
 		await create(page).getByRole('button', { name: 'Verify connection' }).click();
 		await expect(page.getByText('Server connection verified')).toBeVisible();
 		const order = calls.map((c) => c.path).filter((p) => p === '/config/update' || p === '/config/url/verify');
 		expect(order).toEqual(['/config/update', '/config/url/verify']);
+		// The generation engine's Verify names no target (#236).
+		expect(verified).toEqual(['']);
 		expect(updates(calls)[0].AUTOMATIC1111_BASE_URL).toBe('http://sd:7861/');
 		await expect(create(page).getByPlaceholder('Enter api auth string (e.g. username:password)')).toHaveAttribute(
 			'type',
 			'password'
 		);
+	});
+
+	test("the edit engine's Verify checks the edit server, not the generation one (#236)", async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockImages(
+			page,
+			imagesCfg({
+				ENABLE_IMAGE_GENERATION: true,
+				IMAGES_OPENAI_API_KEY: 'sk',
+				IMAGE_GENERATION_MODEL: 'dall-e-3',
+				ENABLE_IMAGE_EDIT: true,
+				IMAGE_EDIT_ENGINE: 'comfyui',
+				IMAGES_EDIT_COMFYUI_BASE_URL: 'http://comfy:8188'
+			})
+		);
+		const verified: string[] = [];
+		page.on('request', (req) => {
+			const url = new URL(req.url());
+			if (url.pathname.endsWith('/config/url/verify')) verified.push(url.search);
+		});
+		await page.goto('/?settings=admin:images');
+		await edit(page).getByRole('button', { name: 'Verify connection' }).click();
+		await expect(page.getByText('Server connection verified')).toBeVisible();
+		expect(verified).toEqual(['?target=edit']);
 	});
 
 	test('a save that cannot be sent (bad params) stops the verify too', async ({ page }) => {
@@ -2346,7 +2411,8 @@ test.describe('settings: Models', () => {
 					: json(route, { id: url.searchParams.get('id') });
 			if (path === '/models/model/access/update')
 				return json(route, { id: body.id, access_grants: body.access_grants });
-			if (path === '/models/import') return json(route, true);
+			if (path === '/models/import')
+				return json(route, { imported: (body?.models ?? []).map((m: { id: string }) => m.id), skipped: [] });
 			if (path === '/models/delete/all') return json(route, true);
 			if (path === '/models/model' && req.method() === 'GET')
 				return json(route, { ...served.find((m) => m.id === url.searchParams.get('id')), full: true });
@@ -2504,6 +2570,37 @@ test.describe('settings: Models', () => {
 		});
 	});
 
+	test('hiding a model with no record creates it once, and showing it again updates it (#249)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockModels(page);
+		// Registered after mockModels, so it answers first: a record created here
+		// is listed from then on, as the server would list it.
+		const created: Rec[] = [];
+		await page.route('**/api/v1/models/**', (route) => {
+			const path = new URL(route.request().url()).pathname.replace('/api/v1', '');
+			if (path === '/models/create') created.push(route.request().postDataJSON());
+			if (path === '/models/base') return json(route, [...records(), ...created]);
+			return route.fallback();
+		});
+		await page.goto('/?settings=admin:models');
+		await moreMenu(page, 'mistral', 'Mistral');
+		await page.getByRole('menuitem', { name: 'Hide Model' }).click();
+		await expect(page.getByText('Model mistral is now hidden')).toBeVisible();
+		await moreMenu(page, 'mistral', 'Mistral');
+		await page.getByRole('menuitem', { name: 'Show Model' }).click();
+		await expect(page.getByText('Model mistral is now visible')).toBeVisible();
+		expect(posts(calls, '/models/create').map((b) => b.id)).toEqual(['mistral']);
+		expect(posts(calls, '/models/model/update')).toEqual([
+			expect.objectContaining({ id: 'mistral', meta: expect.objectContaining({ hidden: false }) })
+		]);
+		// The enable switch now toggles the record instead of creating it again.
+		await row(page, 'mistral').getByRole('switch').click();
+		await expect
+			.poll(() => calls.filter((c) => c.path.startsWith('/models/model/toggle')).map((c) => c.path))
+			.toEqual(['/models/model/toggle?id=mistral']);
+		expect(posts(calls, '/models/create')).toHaveLength(1);
+	});
+
 	test('Move Down reorders and enables Save, which sends the new order and nothing else changed', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockModels(page);
@@ -2597,7 +2694,7 @@ test.describe('settings: Models', () => {
 			mimeType: 'application/json',
 			buffer: Buffer.from(JSON.stringify([{ id: 'x', name: 'X', access_grants: [pub] }]))
 		});
-		await expect(page.getByText('Models imported successfully')).toBeVisible();
+		await expect(page.getByText('Imported 1 model')).toBeVisible();
 		expect(posts(calls, '/models/import')[0]).toEqual({
 			models: [expect.objectContaining({ id: 'x', name: 'X', access_grants: [] })]
 		});
@@ -2765,6 +2862,22 @@ test.describe('settings: Models > Manage', () => {
 		await dialog(page).getByRole('button', { name: 'Update All Models' }).click();
 		await expect(page.getByText('All models are up to date')).toBeVisible();
 		expect(calls.filter((c) => c.path.startsWith('/api/pull')).map((c) => c.body.name)).toEqual(['llama3:8b', 'phi3']);
+	});
+
+	test('Ollama: Update All Models says which pulls failed instead of all up to date (#246)', async ({ page }) => {
+		await mockManage(page);
+		// Registered after mockManage, so it answers the pulls instead.
+		await page.route('**/ollama/api/pull**', (route) =>
+			route.fulfill({
+				status: 500,
+				contentType: 'application/json',
+				body: JSON.stringify({ detail: 'Ollama: unreachable' })
+			})
+		);
+		await open(page);
+		await dialog(page).getByRole('button', { name: 'Update All Models' }).click();
+		await expect(page.getByText('Could not update 2 models: llama3:8b, phi3 (Ollama: unreachable)')).toBeVisible();
+		await expect(page.getByText('All models are up to date')).toHaveCount(0);
 	});
 
 	test('Ollama: the experimental GGUF upload stays hidden until asked for', async ({ page }) => {

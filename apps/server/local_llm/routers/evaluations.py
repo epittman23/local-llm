@@ -207,10 +207,16 @@ def _compute_similarities(feedbacks: list[LeaderboardFeedbackData], query: str) 
     similarities = np.dot(tag_embeddings, query_embedding) / (tag_norms * query_norm + 1e-9)
     tag_similarity_map = dict(zip(all_tags, similarities.tolist(), strict=True))
 
+    # Cosine similarity runs from -1 to 1; below 0 a tag points away from the
+    # query, which is no relevance, not negative relevance. A negative weight
+    # reversed the result, so the winner lost points (#204).
     return {
         feedback.id: max(
-            (tag_similarity_map.get(tag, 0) for tag in _tags(feedback.data)),
-            default=0,
+            0.0,
+            max(
+                (tag_similarity_map.get(tag, 0) for tag in _tags(feedback.data)),
+                default=0,
+            ),
         )
         for feedback in feedbacks
     }
@@ -306,7 +312,10 @@ async def update_config(
     if form_data.ENABLE_EVALUATION_ARENA_MODELS is not None:
         updates['evaluation.arena.enable'] = form_data.ENABLE_EVALUATION_ARENA_MODELS
     if form_data.EVALUATION_ARENA_MODELS is not None:
-        updates['evaluation.arena.models'] = form_data.EVALUATION_ARENA_MODELS
+        # A null meta is stored as {}: the model list reads it with .get (#363).
+        updates['evaluation.arena.models'] = [
+            {**model, 'meta': model.get('meta') or {}} for model in form_data.EVALUATION_ARENA_MODELS
+        ]
     await Config.upsert(updates)
     values = await get_config_values(EVALUATION_CONFIG_KEYS)
     await publish_event(
