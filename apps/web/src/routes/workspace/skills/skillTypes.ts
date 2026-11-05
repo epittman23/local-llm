@@ -5,7 +5,8 @@ export type SkillDraft = {
 	name: string;
 	description: string;
 	content: string;
-	is_active: boolean;
+	/** Sent only for a new skill: an edit leaves it out, and the server keeps the stored value. */
+	is_active?: boolean;
 	meta?: { tags: string[] };
 	access_grants: AccessGrant[];
 };
@@ -22,11 +23,11 @@ export type SkillListItem = {
 };
 
 /**
- * A skill as the API returns it, reduced to what the editor edits and saves
- * back. `is_active` and `meta` are carried through because Save writes the
- * whole form (`routers/skills.py`'s update): dropping them here re-enabled a
- * disabled skill and cleared its tags on every save (#227). `SkillMeta.tags`
- * is nullable on the server, so a null reads as no tags.
+ * A skill as the API returns it, reduced to what the editor shows. `is_active`
+ * and `meta` are carried through for the page, though an edit no longer sends
+ * them back: the update route writes only the fields it is sent (#527), so
+ * the stored ones are kept (#227). `SkillMeta.tags` is nullable on the
+ * server, so a null reads as no tags.
  */
 export function toSkillDraft(
 	s: Omit<SkillDraft, 'meta' | 'access_grants'> & {

@@ -26,7 +26,6 @@ import {
 	getBaseModelTags,
 	getBaseModels,
 	getModelById,
-	importModels,
 	toggleModelById,
 	updateModelAccessGrants,
 	updateModelById
@@ -39,7 +38,7 @@ import { copyToClipboard } from '@/lib/utils';
 import { useShiftKey } from '@/lib/utils/useShiftKey';
 import { routePaths } from '@/routes/routePaths';
 import { ModelEditor } from '@/routes/workspace/models/ModelEditor';
-import { parseModelImport } from '@/routes/workspace/models/modelImport';
+import { importModelFile } from '@/routes/workspace/models/modelImport';
 import { ManageModelsModal } from './ManageModelsModal';
 import { ModelDefaultsPanel } from './ModelDefaultsPanel';
 import { ModelRow, type RowHandlers } from './ModelRow';
@@ -379,8 +378,7 @@ export default function AdminModels() {
 	const importFile = async (file: File) => {
 		setImporting(true);
 		try {
-			const parsed = parseModelImport(await file.text());
-			const result = await importModels(token, parsed);
+			const result = await importModelFile(token, await file.text());
 			if (result) {
 				const message = importResultMessage(result);
 				toast[message.kind](message.text);
