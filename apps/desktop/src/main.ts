@@ -424,7 +424,14 @@ async function startup(): Promise<void> {
 
 		const env = childEnv(process.env, { LLLM_STOP_JOBS_ON_SHUTDOWN: 'true' });
 		const child = spawnInGroup(makeBackendCommand(repo, port), LOG_FILE, env);
-		if (!child.pid) return fail('Could not start make backend.');
+		// A login shell that cannot be spawned gives no pid and then emits
+		// 'error', which with no listener is an uncaught exception (#433).
+		const spawnError = new Promise<Error>((resolve) => child.once('error', resolve));
+		if (!child.pid) {
+			const error = await Promise.race([spawnError, sleep(1000).then(() => null)]);
+			if (abort.signal.aborted) throw new Cancelled();
+			return fail(`Could not start make backend${error ? ` (${error.message})` : ''}.`);
+		}
 		const started = { pgid: child.pid, child, exitCode: undefined as number | null | undefined };
 		owned = started;
 		writeOwned({ pgid: child.pid, startTicks: readProcStat(child.pid)?.startTicks ?? '', origin, repo });
