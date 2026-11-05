@@ -51,9 +51,10 @@ class _Config:
         return {key: self.values[key] for key in keys if key in self.values}
 
 
-def _proxy(monkeypatch, prefix_id: str | None = 'p', listed: str = 'p.llama3'):
+def _proxy(monkeypatch, prefix_id: str | None = 'p', listed: str = 'p.llama3', events: list | None = None):
     """Fakes the connection and Ollama; gives the request and what was sent."""
     sent: list[tuple[str, dict]] = []
+    published = [] if events is None else events
 
     async def send_request(url, *args, payload: str | bytes = b'{}', **kwargs):
         sent.append((url, json.loads(payload)))
@@ -62,10 +63,13 @@ def _proxy(monkeypatch, prefix_id: str | None = 'p', listed: str = 'p.llama3'):
     async def nothing(*args, **kwargs):
         return None
 
+    async def publish_event(request, event, **kwargs):
+        published.append(kwargs)
+
     monkeypatch.setattr(ollama, 'Config', _Config(prefix_id))
     monkeypatch.setattr(ollama, 'send_request', send_request)
     monkeypatch.setattr(ollama, 'get_all_models', nothing)
-    monkeypatch.setattr(ollama, 'publish_event', nothing)
+    monkeypatch.setattr(ollama, 'publish_event', publish_event)
     monkeypatch.setattr(ollama, 'check_model_access', nothing)
     monkeypatch.setattr(ollama.Models, 'get_model_by_id', nothing)
     return _request({listed: {'urls': [0]}}), sent
@@ -125,15 +129,28 @@ def test_a_connection_without_a_prefix_sends_the_model_as_it_is(monkeypatch):
     assert [payload for _, payload in sent] == [{'model': 'llama3'}, {'model': 'llama3'}]
 
 
-def test_a_named_instance_strips_only_its_own_prefix(monkeypatch):
-    request, sent = _proxy(monkeypatch)
-    asyncio.run(ollama.delete_model(request, ollama.ModelNameForm(model='p.llama3'), url_idx=0, user=USER))
-    asyncio.run(ollama.delete_model(request, ollama.ModelNameForm(model='other.llama3'), url_idx=0, user=USER))
+def test_a_named_instance_is_sent_the_name_as_given(monkeypatch):
+    # With url_idx, the caller has Ollama's own name (Manage Ollama lists it from
+    # /api/tags/{url_idx}); a native name that starts like the prefix is kept.
+    request, sent = _proxy(monkeypatch, prefix_id='qwen2')
+    asyncio.run(ollama.delete_model(request, ollama.ModelNameForm(model='qwen2.5-coder:7b'), url_idx=0, user=USER))
+    asyncio.run(ollama.push_model(request, ollama.PushModelForm(model='qwen2.5-coder:7b'), url_idx=0, user=USER))
 
-    assert [payload for _, payload in sent] == [{'model': 'llama3'}, {'model': 'other.llama3'}]
+    assert [payload for _, payload in sent] == [{'model': 'qwen2.5-coder:7b'}, {'model': 'qwen2.5-coder:7b'}]
 
 
-# --- 2. A chat message needs content or tool calls, checked once both are read -------
+def test_a_copy_is_announced_by_the_id_the_app_lists_it_under(monkeypatch):
+    events = []
+    request, _ = _proxy(monkeypatch, events=events)
+    for destination in ('llama3-copy', 'p.llama3-copy'):
+        asyncio.run(
+            ollama.copy_model(request, ollama.CopyModelForm(source='p.llama3', destination=destination), user=USER)
+        )
+
+    assert [event['subject_id'] for event in events] == ['p.llama3-copy', 'p.llama3-copy']
+
+
+# --- 2. A chat message needs something to say, checked once all of it is read -------
 
 
 def test_a_tool_call_turn_without_content_is_accepted():
@@ -144,11 +161,29 @@ def test_a_tool_call_turn_without_content_is_accepted():
     assert message.tool_calls == [{'function': {'name': 'now', 'arguments': {}}}]
 
 
-def test_a_message_with_neither_content_nor_tool_calls_is_refused():
+def test_a_message_with_nothing_in_it_is_refused():
     with pytest.raises(ValidationError, match="At least one of 'content' or 'tool_calls'"):
         ollama.ChatMessage(role='user')
     with pytest.raises(ValidationError, match="At least one of 'content' or 'tool_calls'"):
         ollama.ChatMessage(role='user', content=None, tool_calls=None)
+
+
+def test_an_image_only_turn_from_the_chat_is_accepted():
+    from local_llm.utils.payload import convert_messages_openai_to_ollama
+
+    # The composer sends files with no prompt; the converter then sets no content.
+    (message,) = convert_messages_openai_to_ollama(
+        [{'role': 'user', 'content': [{'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,AAA'}}]}]
+    )
+    form = ollama.GenerateChatCompletionForm.model_validate({'model': 'llava', 'messages': [message]})
+
+    assert form.messages[0].images == ['AAA']
+
+
+def test_a_thinking_only_turn_is_accepted():
+    message = ollama.ChatMessage.model_validate({'role': 'assistant', 'thinking': 'hm'})
+
+    assert message.model_dump(exclude_none=True) == {'role': 'assistant', 'thinking': 'hm'}
 
 
 def test_a_message_with_content_is_accepted_as_before():
@@ -224,4 +259,72 @@ def test_a_successful_upload_leaves_no_file_either(monkeypatch, tmp_path):
 def test_an_upload_the_client_stops_reading_removes_the_file(monkeypatch, tmp_path):
     _upload(monkeypatch, tmp_path, blob_status=201, read_all=False)
 
+    assert not (tmp_path / 'm.gguf').exists()
+
+
+def test_an_upload_the_client_disconnects_from_mid_push_removes_the_file(monkeypatch, tmp_path):
+    """As Starlette abandons the stream: it cancels the task the stream runs in."""
+
+    async def slow_blob(request):
+        await asyncio.sleep(5)
+        return web.Response(status=201)
+
+    async def run():
+        app = web.Application(client_max_size=16 * 1024 * 1024)
+        app.router.add_post('/api/blobs/{digest}', slow_blob)
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, '127.0.0.1', 0)
+        await site.start()
+        session = aiohttp.ClientSession(trust_env=False)
+
+        async def fresh_session():
+            return session
+
+        config = _Config(prefix_id=None)
+        config.values['ollama.base_urls'] = [f'http://127.0.0.1:{runner.addresses[0][1]}']
+        monkeypatch.setattr(ollama, 'Config', config)
+        monkeypatch.setattr(ollama, 'get_session', fresh_session)
+        monkeypatch.setattr(ollama, 'UPLOAD_DIR', str(tmp_path))
+        try:
+            upload = UploadFile(file=io.BytesIO(os.urandom(256 * 1024)), filename='m.gguf')
+            response = await ollama.upload_model(_request(), file=upload, url_idx=0, user=USER)
+
+            async def receive():
+                await asyncio.sleep(0.3)  # mid-push, while Ollama takes the blob
+                return {'type': 'http.disconnect'}
+
+            async def send(message):
+                return None
+
+            scope = {'type': 'http', 'asgi': {'spec_version': '2.3'}, 'method': 'POST', 'headers': []}
+            await asyncio.wait_for(response(scope, receive, send), timeout=4)
+        finally:
+            await session.close()
+            await runner.cleanup()
+
+    asyncio.run(run())
+
+    assert not (tmp_path / 'm.gguf').exists()
+
+
+def test_an_upload_that_fails_while_it_is_saved_leaves_no_file(monkeypatch, tmp_path):
+    class Broken(io.BytesIO):
+        def __init__(self):
+            super().__init__(os.urandom(1024))
+            self.reads = 0
+
+        def read(self, size: int | None = -1, /) -> bytes:
+            self.reads += 1
+            if self.reads > 1:
+                raise OSError('the connection dropped')
+            return super().read(size)
+
+    monkeypatch.setattr(ollama, 'Config', _Config(prefix_id=None))
+    monkeypatch.setattr(ollama, 'UPLOAD_DIR', str(tmp_path))
+    monkeypatch.setattr(ollama, 'AIOHTTP_FILE_STREAM_CHUNK_SIZE', 256)
+    upload = UploadFile(file=Broken(), filename='m.gguf')
+
+    with pytest.raises(OSError, match='the connection dropped'):
+        asyncio.run(ollama.upload_model(_request(), file=upload, url_idx=0, user=USER))
     assert not (tmp_path / 'm.gguf').exists()
