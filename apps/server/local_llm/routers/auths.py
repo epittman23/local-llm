@@ -335,6 +335,10 @@ async def update_timezone(
     db: AsyncSession = Depends(get_async_session),
 ):
     if session_user:
+        # The browser sends its zone on every load (#324): only a change is
+        # written and announced to webhooks and event functions.
+        if getattr(session_user, 'timezone', None) == form_data.timezone:
+            return {'status': True}
         await Users.update_user_by_id(
             session_user.id,
             {'timezone': form_data.timezone},

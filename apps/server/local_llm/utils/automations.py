@@ -232,6 +232,39 @@ def next_n_runs_ns(s: str, n: int = 5, tz: str = None) -> list[int]:
     return result
 
 
+def runs_between_ns(
+    s: str, anchor_ns: int, start_ns: int, end_ns: int, tz: str | None = None, limit: int = 5000
+) -> list[int]:
+    """The runs the rule makes in [start_ns, end_ns), as epoch nanoseconds, at most `limit`.
+
+    The rule is read as the scheduler reads it (`_parse_rule`), anchored at
+    `anchor_ns`, the automation's next run: a rule without DTSTART takes its
+    unstated time from there, as the scheduler's did, and a COUNT counts from
+    the rule's own DTSTART. The Scheduled Tasks calendar used to re-anchor
+    the rule at the next run, so a COUNT started over there and it showed
+    runs that never come (#356).
+    """
+    if start_ns >= end_ns:
+        return []
+    zi = _resolve_tz(tz)
+
+    def local(ns: int) -> dt.datetime:
+        return dt.datetime.fromtimestamp(ns / 1_000_000_000, tz=zi).replace(tzinfo=None)
+
+    rule = _parse_rule(s, local(anchor_ns))
+    runs: list[int] = []
+    # The scan runs in wall-clock time; starting a few hours early covers a DST change.
+    for when in rule.xafter(local(start_ns) - dt.timedelta(hours=3), inc=True):
+        when_ns = int((when.replace(tzinfo=zi) if zi else when).timestamp() * 1_000_000_000)
+        if when_ns >= end_ns or len(runs) >= limit:
+            break
+        # A wall-clock time the clocks skip lands on a later one, which the rule
+        # then gives again: the scheduler runs that instant once.
+        if when_ns >= start_ns and (not runs or when_ns > runs[-1]):
+            runs.append(when_ns)
+    return runs
+
+
 def rrule_interval_seconds(s: str, sample: int = 50) -> int | None:
     """The shortest gap between consecutive occurrences, in seconds.
 
