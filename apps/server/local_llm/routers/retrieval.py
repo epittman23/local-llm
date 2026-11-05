@@ -514,6 +514,10 @@ class EmbeddingModelUpdateForm(BaseModel):
     RAG_EMBEDDING_BATCH_SIZE: int | None = 1
     ENABLE_ASYNC_EMBEDDING: bool | None = True
     RAG_EMBEDDING_CONCURRENT_REQUESTS: int | None = 0
+    # Load the model even when it is unchanged and loaded: the Documents page's
+    # "Update embedding model" button does, to fetch it again. Its plain Save
+    # sends false, so saving other settings does not load the model again (#532).
+    force_reload: bool = True
 
 
 def free_replaced_embedding_model() -> None:
@@ -538,9 +542,23 @@ async def update_embedding_config(request: Request, form_data: EmbeddingModelUpd
     log.info('Updating embedding model: %s to %s', config.RAG_EMBEDDING_MODEL, form_data.RAG_EMBEDDING_MODEL)
     # The new model is loaded before the old one is let go, and nothing is saved
     # unless it loads, so a failure leaves the working configuration in place.
-    # It is loaded even when unchanged: the Documents page's download button
-    # sends the same request as a plain save, to re-fetch the model.
     embedding_in_use = config.RAG_EMBEDDING_ENGINE != '' or request.app.state.ef is not None
+    if form_data.RAG_EMBEDDING_ENGINE == '' and not form_data.RAG_EMBEDDING_MODEL.strip():
+        # Saved, it would leave no model loaded, and every upload and query would fail (#532).
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Choose an embedding model: the local engine needs one.',
+        )
+    # The loaded model is kept when it is the one asked for. Compared with the
+    # model this process holds, not the stored name, which a config import or
+    # another worker's update can have changed without loading it. The name is
+    # recorded by this route, so the first save after a start loads the model once.
+    keep_loaded = (
+        not form_data.force_reload
+        and request.app.state.ef is not None
+        and form_data.RAG_EMBEDDING_ENGINE == ''
+        and getattr(request.app.state, 'ef_model', None) == form_data.RAG_EMBEDDING_MODEL.strip()
+    )
     try:
         config.RAG_EMBEDDING_ENGINE = form_data.RAG_EMBEDDING_ENGINE
         config.RAG_EMBEDDING_MODEL = form_data.RAG_EMBEDDING_MODEL.strip()
@@ -561,9 +579,13 @@ async def update_embedding_config(request: Request, form_data: EmbeddingModelUpd
             config.RAG_AZURE_OPENAI_API_KEY = form_data.azure_openai_config.key or ''
             config.RAG_AZURE_OPENAI_API_VERSION = form_data.azure_openai_config.version or ''
 
-        ef = get_ef(
-            config.RAG_EMBEDDING_ENGINE,
-            config.RAG_EMBEDDING_MODEL,
+        ef = (
+            request.app.state.ef
+            if keep_loaded
+            else get_ef(
+                config.RAG_EMBEDDING_ENGINE,
+                config.RAG_EMBEDDING_MODEL,
+            )
         )
         # get_ef returns None for an external engine too; only a named internal model must load.
         if config.RAG_EMBEDDING_ENGINE == '' and config.RAG_EMBEDDING_MODEL and ef is None:
@@ -611,8 +633,9 @@ async def update_embedding_config(request: Request, form_data: EmbeddingModelUpd
         )
 
         await config.save()
-        replaced_internal_model = request.app.state.ef is not None
+        replaced_internal_model = request.app.state.ef is not None and not keep_loaded
         request.app.state.ef = ef
+        request.app.state.ef_model = config.RAG_EMBEDDING_MODEL if ef is not None else None
         request.app.state.EMBEDDING_FUNCTION = embedding_function
         if replaced_internal_model:
             free_replaced_embedding_model()
