@@ -1,5 +1,6 @@
 import { toast } from 'sonner';
 import { create } from 'zustand';
+import { errorBody, errorMessage } from '@/lib/apis/errors';
 import { pullModel } from '@/lib/apis/ollama';
 import {
 	isNotableStatus,
@@ -71,6 +72,12 @@ export async function startPull(
 	}
 	const [res, controller] = pulled;
 	if (!res) return;
+	if (!res.ok) {
+		// A refusal is one message, not a progress stream: read as one, a body that
+		// is not JSON gave a toast per line and then "Download canceled" (#505).
+		toast.error(errorMessage(await errorBody(res)));
+		return;
+	}
 
 	const reader = lineReader(res);
 	useDownloadPool.setState((s) => ({

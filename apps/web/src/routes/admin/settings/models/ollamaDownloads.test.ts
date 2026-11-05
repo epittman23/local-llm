@@ -104,6 +104,23 @@ describe('startPull', () => {
 		expect(useDownloadPool.getState().pool).toEqual({});
 	});
 
+	it("shows a refused pull's reason once and reads nothing, whatever its body (#505)", async () => {
+		for (const res of [
+			new Response('Internal Server Error', { status: 500 }),
+			new Response(JSON.stringify({ detail: 'Ollama API is disabled' }), { status: 503 })
+		]) {
+			vi.clearAllMocks();
+			pullModel.mockResolvedValue([res, new AbortController()]);
+
+			await startPull('t', 'llama3:8b', 0);
+
+			expect(lineReader).not.toHaveBeenCalled();
+			expect(toastError).toHaveBeenCalledTimes(1);
+			expect(toastError.mock.calls[0][0]).not.toBe('Download canceled');
+			expect(useDownloadPool.getState().pool).toEqual({});
+		}
+	});
+
 	it('ends quietly when the pull is aborted', async () => {
 		const reader = fakeReader([fail(new DOMException('aborted', 'AbortError'))]);
 		pullWith(reader);
