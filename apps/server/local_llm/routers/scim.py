@@ -24,6 +24,7 @@ from local_llm.internal.db import get_async_session
 from local_llm.models.auths import Auths
 from local_llm.models.groups import GroupModel, Groups
 from local_llm.models.users import UserModel, Users
+from local_llm.utils.auth import get_password_hash
 from local_llm.utils.validate import validate_profile_image_url
 
 log = logging.getLogger(__name__)
@@ -717,6 +718,11 @@ async def create_user(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail='Failed to stamp SCIM user',
         )
+
+    # Credentials, as every other way of creating a user makes: a random password
+    # nobody knows (as for an OAuth sign-up), so an admin can later set a real one.
+    # Without them, setting this user's password changed nothing (#296).
+    await Auths.update_user_password_by_id(user_id, await get_password_hash(str(uuid.uuid4())), db=db)
 
     await publish_event(
         request,
