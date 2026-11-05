@@ -34,6 +34,7 @@ import { ChatMenu } from './ChatMenu';
 import { AttachMenu, IntegrationsMenu, type Toggles } from './InputMenus';
 import { useAttachments } from './useAttachments';
 import { useOnChatSwitch } from './useOnChatSwitch';
+import { useParamsAutosave } from './useParamsAutosave';
 import { ChatMessages, type MessageHandlers } from './ChatMessages';
 import { ChatBanners } from './ChatBanners';
 import { ChatPlaceholder } from './ChatPlaceholder';
@@ -298,27 +299,7 @@ export function ChatPage() {
 	// The controls panel edits the chat's own params; a saved chat keeps them (debounced).
 	const controlsOpen = useUIStore((s) => s.controlsOpen);
 	const setControlsOpen = useUIStore((s) => s.setControlsOpen);
-	const paramsDirty = useRef(false);
-	// Params edited in one chat are never saved into the next: the pending
-	// debounce below is flushed to the chat being left, then cleared.
-	const paramsFor = useRef<{ id: string | null; params: Record<string, any> }>({ id, params: session.params });
-	useEffect(() => {
-		const prev = paramsFor.current;
-		if (prev.id !== id) {
-			if (paramsDirty.current && prev.id)
-				void updateChatById(token, prev.id, { params: prev.params }).catch((e) => toast.error(`${e}`));
-			paramsDirty.current = false;
-		}
-		paramsFor.current = { id, params: session.params };
-	}, [id, session.params, token]);
-	useEffect(() => {
-		if (!paramsDirty.current || !id) return;
-		const t = setTimeout(() => {
-			paramsDirty.current = false;
-			void updateChatById(token, id, { params: session.params }).catch((e) => toast.error(`${e}`));
-		}, 500);
-		return () => clearTimeout(t);
-	}, [session.params, id, token]);
+	const saveParams = useParamsAutosave(id, token);
 	const [preview, setPreview] = useState<string | null>(null);
 	useEffect(() => setPreview(null), [id]);
 
@@ -527,8 +508,8 @@ export function ChatPage() {
 					<ChatControls
 						params={session.params}
 						onParams={(p) => {
-							paramsDirty.current = true;
 							session.setParams(p);
+							saveParams(p);
 						}}
 						files={session.chatFiles}
 						onRemoveFile={(i) => session.setChatFiles(session.chatFiles.filter((_, j) => j !== i))}
