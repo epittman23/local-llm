@@ -15,7 +15,7 @@ from fastapi import (
     status,
 )
 from fastapi.responses import RedirectResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from local_llm.config import BYPASS_ADMIN_ACCESS_CONTROL
@@ -366,7 +366,59 @@ class ModelsImportForm(BaseModel):
     models: list[dict]
 
 
-@router.post('/import', response_model=bool)
+class ModelImportSkip(BaseModel):
+    id: str | None = None
+    reason: str
+
+
+class ModelsImportResult(BaseModel):
+    """What an import did, entry by entry (#337): it used to answer true whatever it skipped."""
+
+    imported: list[str] = []
+    skipped: list[ModelImportSkip] = []
+
+
+def _import_entry_problem(model_data: object, imported_ids: list[str]) -> tuple[str | None, str | None]:
+    """An import entry's id, and why it cannot be imported whoever imports it, or None.
+
+    `imported_ids` are the ids already imported from this file: a later copy is skipped.
+    """
+    if not isinstance(model_data, dict):
+        return None, 'no valid id'
+    model_id = model_data.get('id')
+    if not isinstance(model_id, str) or not is_valid_model_id(model_id):
+        return (model_id if isinstance(model_id, str) else None), 'no valid id'
+    if model_id in imported_ids:
+        return model_id, 'listed more than once'
+    if not all(isinstance(model_data.get(key) or {}, dict) for key in ('meta', 'params')):
+        return model_id, 'invalid: meta and params must be objects'
+    if not isinstance((model_data.get('meta') or {}).get('knowledge') or [], list):
+        return model_id, 'invalid: meta.knowledge must be a list'
+    return model_id, None
+
+
+def _invalid(error: ValidationError) -> str:
+    """The first problem pydantic found, with the field it is in."""
+    first = error.errors()[0]
+    return f'invalid: {".".join(map(str, first["loc"]))}: {first["msg"]}'
+
+
+async def _base_model_ids(request: Request, user) -> set[str]:
+    """The ids of the connections' own models, which an import may not take for a preset."""
+    ids: set[str] = set()
+    if not request.app.state.MODELS:
+        await get_all_models(request, user=user)
+    for base_model in request.app.state.MODELS.values():
+        base_model_id = base_model.get('id')
+        if base_model.get('preset') or not base_model_id:
+            continue
+        ids.add(base_model_id)
+        if base_model.get('owned_by') == 'ollama':
+            ids.add(base_model_id.split(':', 1)[0])
+    return ids
+
+
+@router.post('/import', response_model=ModelsImportResult)
 async def import_models(
     request: Request,
     user=Depends(get_verified_user),
@@ -390,7 +442,9 @@ async def import_models(
             model_ids = [
                 model_data.get('id')
                 for model_data in data
-                if model_data.get('id') and is_valid_model_id(model_data.get('id'))
+                if isinstance(model_data, dict)
+                and isinstance(model_data.get('id'), str)
+                and is_valid_model_id(model_data.get('id'))
             ]
             existing_models = {
                 model.id: model for model in (await Models.get_models_by_ids(model_ids, db=db) if model_ids else [])
@@ -414,123 +468,117 @@ async def import_models(
                 writable_model_ids = set(existing_model_ids)
 
             base_model_ids = None
-            imported_ids = []
+            imported_ids: list[str] = []
+            skipped: list[ModelImportSkip] = []
+
+            def skip(model_id: str | None, reason: str) -> None:
+                log.warning('import_models: user %s skipped model %s (%s)', user.id, model_id, reason)
+                skipped.append(ModelImportSkip(id=model_id, reason=reason))
+
             for model_data in data:
-                model_id = model_data.get('id')
+                model_id, problem = _import_entry_problem(model_data, imported_ids)
+                if problem or model_id is None:
+                    skip(model_id, problem or 'no valid id')
+                    continue
 
-                if model_id and is_valid_model_id(model_id):
-                    if model_data.get('base_model_id') == model_id:
-                        # Should never be stored: heal bad exports/API payloads.
-                        model_data['base_model_id'] = None
+                if model_data.get('base_model_id') == model_id:
+                    # Should never be stored: heal bad exports/API payloads.
+                    model_data['base_model_id'] = None
 
-                    # Defense-in-depth: skip models referencing inaccessible files
-                    try:
-                        await _verify_knowledge_file_access(
-                            (model_data.get('meta') or {}).get('knowledge'),
-                            user,
-                            db,
-                        )
-                    except HTTPException:
-                        log.warning(
-                            'import_models: user %s skipped model %s (knowledge file access denied)',
-                            user.id,
-                            model_id,
-                        )
+                # Defense-in-depth: skip models referencing inaccessible files
+                try:
+                    await _verify_knowledge_file_access(
+                        (model_data.get('meta') or {}).get('knowledge'),
+                        user,
+                        db,
+                    )
+                except HTTPException:
+                    skip(model_id, 'knowledge file access denied')
+                    continue
+
+                existing_model = existing_models.get(model_id)
+                if existing_model:
+                    # Enforce ownership/write-access before allowing overwrite
+                    if (
+                        user.role != 'admin'
+                        and existing_model.user_id != user.id
+                        and model_id not in writable_model_ids
+                    ):
+                        skip(model_id, 'no write access')
                         continue
 
-                    existing_model = existing_models.get(model_id)
-                    if existing_model:
-                        # Enforce ownership/write-access before allowing overwrite
-                        if (
-                            user.role != 'admin'
-                            and existing_model.user_id != user.id
-                            and model_id not in writable_model_ids
-                        ):
-                            log.warning(
-                                'import_models: user %s skipped model %s (no write access)',
-                                user.id,
-                                model_id,
-                            )
-                            continue
+                    if (
+                        user.role != 'admin'
+                        and existing_model.base_model_id
+                        and not model_data.get('base_model_id', existing_model.base_model_id)
+                    ):
+                        skip(model_id, 'cannot clear base model')
+                        continue
 
-                        if (
-                            user.role != 'admin'
-                            and existing_model.base_model_id
-                            and not model_data.get('base_model_id', existing_model.base_model_id)
-                        ):
-                            log.warning(
-                                'import_models: user %s skipped model %s (cannot clear base model)',
-                                user.id,
-                                model_id,
-                            )
-                            continue
+                    # Update existing model
+                    model_data['meta'] = {
+                        **existing_model.meta.model_dump(),
+                        **(model_data.get('meta') or {}),
+                    }
+                    model_data['params'] = model_data.get('params', {})
 
-                        # Update existing model
-                        model_data['meta'] = {
-                            **existing_model.meta.model_dump(),
-                            **(model_data.get('meta') or {}),
-                        }
-                        model_data['params'] = model_data.get('params', {})
-
+                    try:
                         updated_model = ModelForm(**{**existing_model.model_dump(), **model_data})
-                        # Only filter access_grants when explicitly provided
-                        # in the payload to avoid altering existing ACLs on
-                        # metadata-only imports.
-                        if 'access_grants' in model_data:
-                            updated_model.access_grants = await filter_allowed_access_grants(
-                                await Config.get('user.permissions'),
-                                user.id,
-                                user.role,
-                                updated_model.access_grants,
-                                'sharing.public_models',
-                            )
-                        await Models.update_model_by_id(model_id, updated_model, db=db)
-                    else:
-                        # Insert new model
-                        model_data['meta'] = model_data.get('meta', {})
-                        model_data['params'] = model_data.get('params', {})
-                        new_model = ModelForm(**model_data)
-
-                        if user.role != 'admin':
-                            if not new_model.base_model_id:
-                                log.warning(
-                                    'import_models: user %s skipped model %s (no base model set)',
-                                    user.id,
-                                    model_id,
-                                )
-                                continue
-
-                            if base_model_ids is None:
-                                base_model_ids = set()
-                                if not request.app.state.MODELS:
-                                    await get_all_models(request, user=user)
-                                for base_model in request.app.state.MODELS.values():
-                                    base_model_id = base_model.get('id')
-                                    if base_model.get('preset') or not base_model_id:
-                                        continue
-
-                                    base_model_ids.add(base_model_id)
-                                    if base_model.get('owned_by') == 'ollama':
-                                        base_model_ids.add(base_model_id.split(':', 1)[0])
-
-                            if model_id in base_model_ids:
-                                log.warning(
-                                    'import_models: user %s skipped model %s (id belongs to a base model)',
-                                    user.id,
-                                    model_id,
-                                )
-                                continue
-
-                        new_model.access_grants = await filter_allowed_access_grants(
+                    except ValidationError as e:
+                        skip(model_id, _invalid(e))
+                        continue
+                    # Only filter access_grants when explicitly provided
+                    # in the payload to avoid altering existing ACLs on
+                    # metadata-only imports.
+                    if 'access_grants' in model_data:
+                        updated_model.access_grants = await filter_allowed_access_grants(
                             await Config.get('user.permissions'),
                             user.id,
                             user.role,
-                            new_model.access_grants,
+                            updated_model.access_grants,
                             'sharing.public_models',
                         )
-                        await Models.insert_new_model(user_id=user.id, form_data=new_model, db=db)
+                    if await Models.update_model_by_id(model_id, updated_model, db=db) is None:
+                        # A shared session is left failed by the error: free it for the next entry.
+                        await db.rollback()
+                        skip(model_id, 'could not be saved')
+                        continue
+                else:
+                    # Insert new model
+                    model_data['meta'] = model_data.get('meta', {})
+                    model_data['params'] = model_data.get('params', {})
+                    try:
+                        new_model = ModelForm(**model_data)
+                    except ValidationError as e:
+                        skip(model_id, _invalid(e))
+                        continue
 
-                    imported_ids.append(model_id)
+                    if user.role != 'admin':
+                        if not new_model.base_model_id:
+                            skip(model_id, 'no base model set')
+                            continue
+
+                        if base_model_ids is None:
+                            base_model_ids = await _base_model_ids(request, user)
+
+                        if model_id in base_model_ids:
+                            skip(model_id, 'id belongs to a base model')
+                            continue
+
+                    new_model.access_grants = await filter_allowed_access_grants(
+                        await Config.get('user.permissions'),
+                        user.id,
+                        user.role,
+                        new_model.access_grants,
+                        'sharing.public_models',
+                    )
+                    if await Models.insert_new_model(user_id=user.id, form_data=new_model, db=db) is None:
+                        # A shared session is left failed by the error: free it for the next entry.
+                        await db.rollback()
+                        skip(model_id, 'could not be saved')
+                        continue
+
+                imported_ids.append(model_id)
             await publish_event(
                 request,
                 EVENTS.MODEL_IMPORTED,
@@ -538,7 +586,7 @@ async def import_models(
                 subject_type='model',
                 data={'count': len(imported_ids), 'model_ids': imported_ids},
             )
-            return True
+            return ModelsImportResult(imported=imported_ids, skipped=skipped)
         else:
             raise HTTPException(status_code=400, detail='Invalid JSON format')
     except Exception as e:
