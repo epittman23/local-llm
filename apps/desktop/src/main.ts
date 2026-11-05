@@ -55,10 +55,13 @@ import {
 	buildUiCommand,
 	childEnv,
 	composeDownCommand,
+	DEV_SERVER_IDENTITY_PATH,
 	DEV_SERVER_URL,
 	decideStart,
+	fetchText,
 	groupAlive,
 	isAdoptable,
+	isOwnDevServer,
 	isUiStale,
 	LogTail,
 	llamaServerPids,
@@ -397,14 +400,18 @@ async function startup(): Promise<void> {
 
 		const port = localPort(origin);
 		const adoptable = earlier === 'adopt';
-		const [health, dev] = await Promise.all([probe(`${origin}/health`), probe(DEV_SERVER_URL)]);
 		const repo = config.repoPath;
 		const webDir = join(repo, 'apps', 'web');
+		const [health, dev] = await Promise.all([
+			probe(`${origin}/health`),
+			fetchText(`${DEV_SERVER_URL}${DEV_SERVER_IDENTITY_PATH}`)
+		]);
 		const plan = decideStart({
 			origin,
 			local: true,
 			backendUp: health !== null,
-			devServerUp: dev !== null,
+			// Only this checkout's `make frontend`, not whatever else took :5174 (#432).
+			devServerUp: isOwnDevServer(dev, webDir),
 			adoptable,
 			// Only worth walking apps/web for when the stack is about to be started.
 			uiStale: health === null && !adoptable && existsSync(webDir) ? await isUiStale(webDir) : false,
@@ -459,7 +466,14 @@ async function startup(): Promise<void> {
 
 		const env = childEnv(process.env, { LLLM_STOP_JOBS_ON_SHUTDOWN: 'true' });
 		const child = spawnInGroup(makeBackendCommand(repo, port), LOG_FILE, env);
-		if (!child.pid) return fail('Could not start make backend.');
+		// A login shell that cannot be spawned gives no pid and then emits
+		// 'error', which with no listener is an uncaught exception (#433).
+		const spawnError = new Promise<Error>((resolve) => child.once('error', resolve));
+		if (!child.pid) {
+			const error = await Promise.race([spawnError, sleep(1000).then(() => null)]);
+			if (abort.signal.aborted) throw new Cancelled();
+			return fail(`Could not start make backend${error ? ` (${error.message})` : ''}.`);
+		}
 		const started = { pgid: child.pid, child, exitCode: undefined as number | null | undefined };
 		owned = started;
 		writeOwned({ pgid: child.pid, startTicks: readProcStat(child.pid)?.startTicks ?? '', origin, repo });

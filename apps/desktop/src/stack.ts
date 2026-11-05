@@ -6,12 +6,19 @@
 // as arguments, so they are unit-tested without spawning anything.
 
 import { type ChildProcess, execFile, spawn } from 'node:child_process';
-import { closeSync, openSync, readFileSync, readSync, statSync } from 'node:fs';
+import { closeSync, openSync, readFileSync, readSync, realpathSync, statSync } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 
 export const DEV_SERVER_URL = 'http://localhost:5174';
+
+/**
+ * Where `make frontend`'s dev server says which checkout it serves
+ * (apps/web/astro.config.mjs). Anything else on :5174, such as another
+ * project's Vite server moved up from a taken :5173, answers it otherwise.
+ */
+export const DEV_SERVER_IDENTITY_PATH = '/__lllm/dev-server';
 
 /** The `make frontend` dev server proxies to this port and no other. */
 export const DEV_SERVER_BACKEND_PORT = 4000;
@@ -64,14 +71,18 @@ export function decideStart(input: StartInput): StartPlan {
 	return { mode: 'own', loadUrl, buildUi: input.uiStale && !useDevServer };
 }
 
-/** apps/web inputs whose change means `dist/` is out of date. */
-export const UI_SOURCES = ['src', 'public', 'package.json', 'bun.lock', 'astro.config.mjs'];
+/** apps/web inputs whose change means `dist/` is out of date; tsconfig.json holds the path aliases (#429). */
+export const UI_SOURCES = ['src', 'public', 'package.json', 'bun.lock', 'astro.config.mjs', 'tsconfig.json'];
 
 export function uiBuildIsStale(builtAt: number | null, newestSource: number): boolean {
 	return builtAt === null || newestSource > builtAt;
 }
 
-/** The newest modification time among these files and everything under these directories. */
+/**
+ * The newest modification time among these files and everything under these
+ * directories, the directories included: a rename or a deletion changes only
+ * the directory it happened in, as the files left keep their times (#429).
+ */
 export async function newestMtime(paths: string[]): Promise<number> {
 	let newest = 0;
 	for (const path of paths) {
@@ -84,7 +95,7 @@ export async function newestMtime(paths: string[]): Promise<number> {
 		newest = Math.max(newest, info.mtimeMs);
 		if (!info.isDirectory()) continue;
 		for (const entry of await readdir(path, { recursive: true, withFileTypes: true })) {
-			if (!entry.isFile()) continue;
+			if (!entry.isFile() && !entry.isDirectory()) continue;
 			try {
 				newest = Math.max(newest, (await stat(join(entry.parentPath, entry.name))).mtimeMs);
 			} catch {
@@ -367,6 +378,39 @@ export async function probe(url: string, timeoutMs = 1500): Promise<number | nul
 		return response.status;
 	} catch {
 		return null;
+	}
+}
+
+/** The body of a GET that answered 200, or null for any other answer or none in time. */
+export async function fetchText(url: string, timeoutMs = 1500): Promise<string | null> {
+	try {
+		const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs), redirect: 'manual' });
+		if (response.status !== 200) {
+			await response.body?.cancel();
+			return null;
+		}
+		return await response.text();
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Whether `body`, the dev server's answer at DEV_SERVER_IDENTITY_PATH, names
+ * `webDir` (this checkout's apps/web) as what it serves, so the app never
+ * loads another project, or another checkout, in place of its own UI (#432).
+ */
+export function isOwnDevServer(body: string | null, webDir: string): boolean {
+	if (body === null) return false;
+	try {
+		const identity: unknown = JSON.parse(body);
+		if (typeof identity !== 'object' || identity === null) return false;
+		const { app, webRoot } = identity as { app?: unknown; webRoot?: unknown };
+		if (app !== 'local-llm' || typeof webRoot !== 'string') return false;
+		return realpathSync(webRoot) === realpathSync(webDir);
+	} catch {
+		// Not JSON (another project's page), or a directory that is gone.
+		return false;
 	}
 }
 

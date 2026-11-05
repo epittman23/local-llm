@@ -5,6 +5,7 @@
 //
 // The fake is built inside vi.hoisted because vi.mock factories may only use
 // hoisted values; it follows docs/audit/2026-10-28-desktop/repro/P1/main-harness.ts.
+import { EventEmitter } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -58,7 +59,11 @@ const h = vi.hoisted(() => {
 		/** The args of each app.relaunch (#424). */
 		relaunches: [] as unknown[],
 		/** The application menu's template, so a test can click an item. */
-		menu: [] as unknown[]
+		menu: [] as unknown[],
+		/** What answers on the dev server's :5174, by URL; nothing by default (#432). */
+		devServer: null as ((url: string) => string | null) | null,
+		/** Builds the next spawned child; the default is one that started (#433). */
+		spawnChild: null as (() => unknown) | null
 	};
 	let nextId = 1;
 
@@ -153,6 +158,8 @@ const h = vi.hoisted(() => {
 		state.servicesLeft = 0;
 		state.relaunches = [];
 		state.menu = [];
+		state.devServer = null;
+		state.spawnChild = null;
 	}
 
 	return { state, FakeWindow, Emitter, electron, reset, start: () => markReady() };
@@ -168,10 +175,16 @@ vi.mock('./stack', async (original) => ({
 	isUiStale: async () => false,
 	readProcStat: () => ({ comm: 'make', startTicks: '1' }),
 	// Nothing answers before the stack starts, so the app starts its own.
-	probe: async (url: string) => (url.endsWith('/ready') ? h.state.ready() : null),
+	probe: async (url: string) =>
+		url.endsWith('/ready')
+			? h.state.ready()
+			: url.startsWith('http://localhost:5174') && h.state.devServer
+				? 200
+				: null,
+	fetchText: async (url: string) => h.state.devServer?.(url) ?? null,
 	spawnInGroup: () => {
 		h.state.spawned++;
-		return Object.assign(new h.Emitter(), { pid: 990201 });
+		return h.state.spawnChild?.() ?? Object.assign(new h.Emitter(), { pid: 990201 });
 	},
 	stopGroup: async (pgid: number) => {
 		h.state.stops.push(pgid);
@@ -629,4 +642,62 @@ test('Restart now while the app runs its own stack saves the window size and sto
 	expect(h.state.relaunches).toHaveLength(1);
 	expect(h.state.stops).toEqual([990201]);
 	expect(storedFile().bounds).toEqual({ x: 3, y: 4, width: 1000, height: 750 });
+});
+
+// --- What answers on the dev server's port (#432) ------------------------------
+
+test("another project's server on :5174 is not loaded in place of the built UI (#432)", async () => {
+	writeFileSync(join(h.state.userData, 'config.json'), JSON.stringify(HERE));
+	// Any page at any path, as a Vite server for some other project gives.
+	h.state.devServer = () => '<!doctype html><title>Another app</title>';
+	await launch();
+
+	expect(h.state.spawned).toBe(1);
+	expect(appWindows().map((w) => w.loaded)).toEqual([HERE.serverUrl]);
+});
+
+test("this checkout's dev server is loaded in place of the built UI (#432)", async () => {
+	const repo = mkdtempSync(join(tmpdir(), 'lllm-repo-'));
+	const webDir = join(repo, 'apps', 'web');
+	mkdirSync(webDir, { recursive: true });
+	writeFileSync(join(h.state.userData, 'config.json'), JSON.stringify({ ...HERE, repoPath: repo }));
+	const asked: string[] = [];
+	h.state.devServer = (url) => {
+		asked.push(url);
+		return JSON.stringify({ app: 'local-llm', webRoot: `${webDir}/` });
+	};
+	try {
+		await launch();
+	} finally {
+		rmSync(repo, { recursive: true, force: true });
+	}
+
+	expect(asked).toEqual(['http://localhost:5174/__lllm/dev-server']);
+	expect(appWindows().map((w) => w.loaded)).toEqual(['http://localhost:5174']);
+});
+
+// --- A login shell that cannot be spawned (#433) --------------------------------
+
+test('a login shell that cannot be spawned fails the start, saying why, with no uncaught error (#433)', async () => {
+	// Node's own: an 'error' with no listener throws. spawn gives no pid, then emits it.
+	h.state.spawnChild = () => {
+		const child = Object.assign(new EventEmitter(), { pid: undefined });
+		setImmediate(() => child.emit('error', new Error('spawn /nonexistent/shell ENOENT')));
+		return child;
+	};
+	const uncaught: unknown[] = [];
+	const record = (error: unknown) => uncaught.push(error);
+	process.on('uncaughtException', record);
+	try {
+		await launch();
+		await tick(50);
+	} finally {
+		process.off('uncaughtException', record);
+	}
+
+	expect(uncaught).toEqual([]);
+	const shown = (await statusCall('status:ready')) as Shown;
+	expect(shown.progress.error).toContain('Could not start make backend');
+	expect(shown.progress.error).toContain('spawn /nonexistent/shell ENOENT');
+	expect(existsSync(join(h.state.userData, 'owned.json'))).toBe(false);
 });
