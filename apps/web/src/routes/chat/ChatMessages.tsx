@@ -11,6 +11,7 @@ import { formatSecondsTimestamp } from '@/lib/utils/dates';
 import { citationsOf, sourceIdsOf, stripCitations } from '@/lib/chat/sources';
 import { type ChatPrefs, chatPrefs } from '@/lib/chat/prefs';
 import { modelImage } from './ModelSelector';
+import { StatusLine } from './StatusLine';
 import { useChatPrefs } from './useChatPrefs';
 import { useModels } from './useModels';
 
@@ -182,32 +183,6 @@ function UserMessage({
 				</div>
 			)}
 			{actions}
-		</div>
-	);
-}
-
-function StatusLine({ message }: { message: Message }) {
-	const [open, setOpen] = useState(false);
-	const shown = (message.statusHistory ?? []).filter((s) => !s.hidden);
-	const last = shown.at(-1);
-	if (!last) return null;
-	return (
-		<div className="mb-1 text-sm">
-			<button
-				type="button"
-				className={cn('text-muted-foreground', !last.done && 'animate-pulse')}
-				onClick={() => setOpen((o) => !o)}
-				aria-expanded={open}
-			>
-				{String(last.description ?? '')}
-			</button>
-			{open && shown.length > 1 && (
-				<ul className="text-muted-foreground mt-1 border-l-2 pl-3 text-xs">
-					{shown.map((s, i) => (
-						<li key={i}>{String(s.description ?? '')}</li>
-					))}
-				</ul>
-			)}
 		</div>
 	);
 }
