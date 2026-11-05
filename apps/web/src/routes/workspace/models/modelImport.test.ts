@@ -1,10 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createNewModel, getModelById, updateModelById } from '@/lib/apis/models';
-import { importUpdate, parseModelImport, sanitizeIncomingModel, saveImportedModel } from './modelImport';
+import { createNewModel, getModelById, importModels, updateModelById } from '@/lib/apis/models';
+import {
+	importModelFile,
+	importPayload,
+	importUpdate,
+	parseModelImport,
+	sanitizeIncomingModel,
+	saveImportedModel
+} from './modelImport';
 
 vi.mock('@/lib/apis/models', () => ({
 	createNewModel: vi.fn(async () => ({})),
 	getModelById: vi.fn(),
+	importModels: vi.fn(async () => true),
 	updateModelById: vi.fn(async () => ({}))
 }));
 
@@ -128,5 +136,46 @@ describe('saveImportedModel', () => {
 		vi.mocked(getModelById).mockResolvedValueOnce({ id: 'm', meta: {} });
 		vi.mocked(updateModelById).mockRejectedValueOnce('Access prohibited');
 		await expect(saveImportedModel('tok', incoming)).rejects.toBe('Access prohibited');
+	});
+});
+
+describe('importPayload', () => {
+	const parsed = parseModelImport(
+		JSON.stringify([
+			{ id: 'a', name: 'A', base_model_id: 'llama3', meta: { description: 'd' }, params: { temperature: 1 } },
+			{ id: 'b', name: 'B', access_grants: [{ principal_type: 'user', principal_id: '*', permission: 'read' }] }
+		])
+	);
+
+	it("leaves grants out, so the server's /models/import keeps an existing model's sharing (#524)", () => {
+		for (const model of importPayload(parsed)) expect(model).not.toHaveProperty('access_grants');
+	});
+
+	it('leaves a missing base model out, so an existing model keeps its own (#524)', () => {
+		const [a, b] = importPayload(parsed);
+		expect(a).toEqual({
+			id: 'a',
+			name: 'A',
+			base_model_id: 'llama3',
+			meta: { description: 'd' },
+			params: { temperature: 1 }
+		});
+		expect(b).toEqual({ id: 'b', name: 'B', meta: {}, params: {} });
+	});
+});
+
+describe('importModelFile', () => {
+	it('sends the parsed file without grants or a missing base model, and gives the server reply (#524)', async () => {
+		const file = JSON.stringify([
+			{ id: 'x', name: 'X', access_grants: [{ principal_type: 'user', principal_id: '*' }] }
+		]);
+		await expect(importModelFile('tok', file)).resolves.toBe(true);
+		expect(importModels).toHaveBeenCalledWith('tok', [{ id: 'x', name: 'X', meta: {}, params: {} }]);
+	});
+
+	it('refuses a file that is not JSON without sending anything', async () => {
+		vi.mocked(importModels).mockClear();
+		await expect(importModelFile('tok', 'not json')).rejects.toThrow(SyntaxError);
+		expect(importModels).not.toHaveBeenCalled();
 	});
 });
