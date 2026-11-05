@@ -6,6 +6,7 @@ import * as apis from '@/lib/apis';
 import * as chatsApi from '@/lib/apis/chats';
 import * as usersApi from '@/lib/apis/users';
 import { updateMessage } from '@/lib/chat/history';
+import { getOutputText } from '@/lib/chat/structuredOutput';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { useChatSession } from './useChatSession';
 
@@ -326,6 +327,32 @@ describe('useChatSession loadChat', () => {
 		});
 		expect(chatsApi.updateChatById).not.toHaveBeenCalled();
 		expect(session.history.messages['B-m']?.content).toBe('hello from B');
+	});
+
+	it("an action's new text replaces the reply's output text too, which the next request reads (#502)", async () => {
+		await openChatA();
+		const before = session.history.messages['A-m'];
+		act(() =>
+			session.setHistory((h) =>
+				updateMessage(h, 'A-m', {
+					output: [{ type: 'message', role: 'assistant', content: [{ type: 'output_text', text: before.content }] }]
+				})
+			)
+		);
+		let run: Promise<void> | undefined;
+		act(() => {
+			run = session.runAction('act', session.history.messages['A-m']);
+		});
+		await waitFor(() => expect(pending.action).toBeDefined());
+		await act(async () => {
+			pending.action({ messages: [{ id: 'A-m', content: 'rewritten' }] });
+			await run;
+		});
+
+		const after = session.history.messages['A-m'];
+		expect(after.content).toBe('rewritten');
+		expect(after.originalContent).toBe(before.content);
+		expect(getOutputText(after.output)).toBe('rewritten');
 	});
 
 	const savedTo = () => vi.mocked(chatsApi.updateChatById).mock.calls.map((c) => c[1]);

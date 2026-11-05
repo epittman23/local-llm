@@ -114,6 +114,7 @@ from local_llm.utils.misc import (
     replace_system_message_content,
     set_last_user_message_content,
     strip_empty_content_blocks,
+    with_output_text,
 )
 from local_llm.utils.payload import apply_params_to_form_data, apply_system_prompt_to_body, resolve_system_prompt
 from local_llm.utils.response import merge_usage, normalize_usage
@@ -4096,6 +4097,11 @@ async def outlet_filter_handler(ctx):
                             }
                             if content_changed:
                                 message_update['content'] = message_content or ''
+                                if not output_changed and original_message.get('output'):
+                                    # The new text goes into the output too: the next request reads it (#502).
+                                    message['output'] = message_update['output'] = with_output_text(
+                                        original_message['output'], message_content or ''
+                                    )
                             await Chats.upsert_message_to_chat_by_id_and_message_id(
                                 chat_id,
                                 outlet_message_id,
