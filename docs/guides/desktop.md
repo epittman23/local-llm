@@ -173,9 +173,11 @@ and an unpacked package. The unit tests cover:
   sequence;
 - `src/progress.ts`, replayed against logs from real runs in
   `test/fixtures/`;
-- `src/main.ts`'s stop: a Cancel during startup, a quit while the window
-  loads, Retry during a stop, the "Leave it" offer, and services left after
-  a stop, run against a fake Electron in `src/main.stop.test.ts`.
+- `src/main.ts`'s start and stop: a Cancel during startup, a quit while the
+  window loads, Retry during a stop, the "Leave it" offer, services left
+  after a stop, a stack an earlier launch left running, and a login shell
+  that cannot be spawned, run against a fake Electron in
+  `src/main.stop.test.ts`.
 
 Launching, closing and attaching the real stack are checked by hand: see
 [testing.md](testing.md#desktop-appsdesktop).
