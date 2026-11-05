@@ -2753,6 +2753,44 @@ async def grep_knowledge_files(
         return JSONCodec.dumps({'error': str(e)})
 
 
+def _lines_page(content: str, start_line, end_line) -> dict:
+    """Lines start_line..end_line (1-indexed, inclusive; 100 when end_line is unset), numbered, as view_file's fields.
+
+    A range that selects nothing (it starts past the end, or ends before it
+    starts) says so in `note`, instead of a reversed `showing_lines` (#513).
+    """
+    all_lines = content.split('\n')
+    total_lines = len(all_lines)
+    s = max(1, int(start_line)) - 1  # 1-indexed to 0-indexed
+    e = min(total_lines, int(end_line) if end_line else s + 100)
+    if e <= s:
+        why = 'start_line is past the end of the file' if s >= total_lines else 'end_line is before start_line'
+        return {'content': '', 'total_lines': total_lines, 'note': f'No lines: {why}.'}
+    page = {
+        'content': '\n'.join(f'{s + i + 1}: {line}' for i, line in enumerate(all_lines[s:e])),
+        'total_lines': total_lines,
+        'showing_lines': f'{s + 1}-{e}',
+    }
+    if e < total_lines:
+        page['truncated'] = True
+        page['next_start_line'] = e + 1
+    return page
+
+
+def _number_page(content: str, offset: int, sliced: str) -> tuple[str, bool]:
+    """A character page of `content` with each line numbered, and whether its first line began on an earlier page.
+
+    A page that ends on a newline gives the empty rest after it no number:
+    that number is the next page's first line, which showed it twice (#513).
+    """
+    start_ln = content[:offset].count('\n') + 1
+    lines = sliced.split('\n')
+    numbered = [f'{start_ln + i}: {line}' for i, line in enumerate(lines)]
+    if len(lines) > 1 and lines[-1] == '':
+        numbered[-1] = ''
+    return '\n'.join(numbered), 0 < offset <= len(content) and content[offset - 1] != '\n'
+
+
 async def view_file(
     file_id: str,
     offset: int = 0,
@@ -2773,7 +2811,9 @@ async def view_file(
     :param line_numbers: If true, prefix each line with its 1-indexed line number
     :param start_line: Optional 1-indexed start line (overrides offset/max_chars when set)
     :param end_line: Optional 1-indexed end line (inclusive)
-    :return: JSON with the file's id, filename, content, and pagination metadata if truncated
+    :return: JSON with the file's id, filename, content, and pagination metadata if truncated;
+        with line_numbers, first_line_continued is true when the page starts mid-line; a line range
+        that selects nothing returns empty content and a note saying why
     """
     if __request__ is None:
         return JSONCodec.dumps({'error': 'Request context not available'})
@@ -2815,25 +2855,15 @@ async def view_file(
 
         # Line-based addressing (overrides char-based offset/max_chars)
         if start_line is not None:
-            all_lines = content.split('\n')
-            total_lines = len(all_lines)
-            s = max(1, int(start_line)) - 1  # 1-indexed to 0-indexed
-            e = min(total_lines, int(end_line) if end_line else s + 100)
-            selected = all_lines[s:e]
-            sliced = '\n'.join(f'{s + i + 1}: {line}' for i, line in enumerate(selected))
-            is_truncated = e < total_lines
+            page = _lines_page(content, start_line, end_line)
             result = {
                 'id': file.id,
                 'filename': file.filename,
-                'content': sliced,
+                'content': page.pop('content'),
                 'updated_at': file.updated_at,
                 'created_at': file.created_at,
-                'total_lines': total_lines,
-                'showing_lines': f'{s + 1}-{e}',
+                **page,
             }
-            if is_truncated:
-                result['truncated'] = True
-                result['next_start_line'] = e + 1
             return JSONCodec.dumps(result, ensure_ascii=False)
 
         sliced = content[offset : offset + max_chars]
@@ -2842,10 +2872,9 @@ async def view_file(
         returned = len(sliced)
         is_truncated = (offset + returned) < total_chars
 
+        continued = False
         if line_numbers:
-            start_ln = content[:offset].count('\n') + 1
-            lines = sliced.split('\n')
-            sliced = '\n'.join(f'{start_ln + i}: {line}' for i, line in enumerate(lines))
+            sliced, continued = _number_page(content, offset, sliced)
 
         result = {
             'id': file.id,
@@ -2854,6 +2883,8 @@ async def view_file(
             'updated_at': file.updated_at,
             'created_at': file.created_at,
         }
+        if continued:
+            result['first_line_continued'] = True
 
         if is_truncated or offset > 0:
             result['truncated'] = is_truncated
@@ -2888,7 +2919,9 @@ async def view_knowledge_file(
     :param line_numbers: If true, prefix each line with its 1-indexed line number
     :param start_line: Optional 1-indexed start line (overrides offset/max_chars when set)
     :param end_line: Optional 1-indexed end line (inclusive)
-    :return: JSON with the file's id, filename, content, and pagination metadata if truncated
+    :return: JSON with the file's id, filename, content, and pagination metadata if truncated;
+        with line_numbers, first_line_continued is true when the page starts mid-line; a line range
+        that selects nothing returns empty content and a note saying why
     """
     if __request__ is None:
         return JSONCodec.dumps({'error': 'Request context not available'})
@@ -2958,28 +2991,18 @@ async def view_knowledge_file(
 
         # Line-based addressing (overrides char-based offset/max_chars)
         if start_line is not None:
-            all_lines = content.split('\n')
-            total_lines = len(all_lines)
-            s = max(1, int(start_line)) - 1
-            e = min(total_lines, int(end_line) if end_line else s + 100)
-            selected = all_lines[s:e]
-            sliced = '\n'.join(f'{s + i + 1}: {line}' for i, line in enumerate(selected))
-            is_truncated = e < total_lines
+            page = _lines_page(content, start_line, end_line)
             result = {
                 'id': file.id,
                 'filename': file.filename,
-                'content': sliced,
+                'content': page.pop('content'),
                 'updated_at': file.updated_at,
                 'created_at': file.created_at,
-                'total_lines': total_lines,
-                'showing_lines': f'{s + 1}-{e}',
+                **page,
             }
             if knowledge_info:
                 result['knowledge_id'] = knowledge_info['id']
                 result['knowledge_name'] = knowledge_info['name']
-            if is_truncated:
-                result['truncated'] = True
-                result['next_start_line'] = e + 1
             return JSONCodec.dumps(result, ensure_ascii=False)
 
         sliced = content[offset : offset + max_chars]
@@ -2988,10 +3011,9 @@ async def view_knowledge_file(
         returned = len(sliced)
         is_truncated = (offset + returned) < total_chars
 
+        continued = False
         if line_numbers:
-            start_ln = content[:offset].count('\n') + 1
-            lines = sliced.split('\n')
-            sliced = '\n'.join(f'{start_ln + i}: {line}' for i, line in enumerate(lines))
+            sliced, continued = _number_page(content, offset, sliced)
 
         result = {
             'id': file.id,
@@ -3000,6 +3022,8 @@ async def view_knowledge_file(
             'updated_at': file.updated_at,
             'created_at': file.created_at,
         }
+        if continued:
+            result['first_line_continued'] = True
         if knowledge_info:
             result['knowledge_id'] = knowledge_info['id']
             result['knowledge_name'] = knowledge_info['name']

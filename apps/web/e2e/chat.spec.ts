@@ -1,5 +1,5 @@
 import { expect, test } from './test';
-import { json, mockChat, savedChat } from './chat-helpers';
+import { json, MODELS, mockChat, savedChat } from './chat-helpers';
 
 test('a new chat: greeting and suggestions, send, stream, and the URL becomes the saved chat', async ({ page }) => {
 	const chat = await mockChat(page);
@@ -302,4 +302,95 @@ test('a request refused because the session expired signs out and says so', asyn
 	await page.keyboard.press('Enter');
 	await expect(page.getByText('Session expired. Please sign in again.')).toBeVisible();
 	await expect(page).toHaveURL(/\/auth\?redirect=/);
+});
+
+test('a message sent the moment the box appears waits for the model list, then goes (#373)', async ({ page }) => {
+	const chat = await mockChat(page);
+	let release = () => {};
+	const held = new Promise<void>((resolve) => (release = resolve));
+	await page.route('**/api/models*', async (route) => {
+		await held;
+		return json(route, { data: MODELS });
+	});
+	await page.goto('/?models=llama');
+	await chat.socket.connected;
+	const box = page.getByRole('textbox', { name: 'Message' });
+	await expect(box).toBeFocused();
+
+	await page.keyboard.type('Hello there');
+	await page.keyboard.press('Enter');
+	await expect(box).toHaveValue('Hello there');
+	// Typed after Enter while it waits: it goes too, as the box is what is sent.
+	await page.keyboard.type(', and more');
+	expect(chat.seen.completions).toHaveLength(0);
+
+	release();
+	await expect.poll(() => chat.seen.completions.length).toBe(1);
+	expect(chat.seen.completions[0]).toMatchObject({
+		model: 'llama',
+		user_message: { content: 'Hello there, and more' }
+	});
+	await expect(box).toHaveValue('');
+	await expect(page.getByText('Model not selected')).toHaveCount(0);
+});
+
+test('a send waiting for the model list is dropped when another chat is opened (#373)', async ({ page }) => {
+	await page.context().addInitScript(() => window.localStorage.setItem('sidebar', 'true'));
+	const chat = await mockChat(page, {
+		chats: [
+			savedChat('c2', 'Other chat', [
+				{ id: 'u1', role: 'user', content: 'Q' },
+				{ id: 'a1', role: 'assistant', content: 'A', model: 'qwen', done: true }
+			])
+		]
+	});
+	let release = () => {};
+	const held = new Promise<void>((resolve) => (release = resolve));
+	await page.route('**/api/models*', async (route) => {
+		await held;
+		return json(route, { data: MODELS });
+	});
+	await page.goto('/?models=llama');
+	await chat.socket.connected;
+	await page.keyboard.type('meant for a new chat');
+	await page.keyboard.press('Enter');
+
+	await page.getByTestId('chat-item').filter({ hasText: 'Other chat' }).getByRole('link').click();
+	await expect(page).toHaveURL(/\/c\/c2$/);
+	// The other chat is on screen (the URL changes before the page does).
+	await expect(page.getByTestId('user-message')).toContainText('Q');
+	release();
+	await expect(page.getByTestId('response-message')).toContainText('A');
+	await page.waitForTimeout(500);
+	expect(chat.seen.completions).toHaveLength(0);
+});
+
+test("a send waiting for the model list goes with the model's default tools, even when the tools load last (#373)", async ({
+	page
+}) => {
+	const chat = await mockChat(page);
+	const withTool = MODELS.map((m) => (m.id === 'llama' ? { ...m, info: { meta: { toolIds: ['calc'] } } } : m));
+	let releaseModels = () => {};
+	let releaseTools = () => {};
+	const modelsHeld = new Promise<void>((resolve) => (releaseModels = resolve));
+	const toolsHeld = new Promise<void>((resolve) => (releaseTools = resolve));
+	await page.route('**/api/models*', async (route) => {
+		await modelsHeld;
+		return json(route, { data: withTool });
+	});
+	await page.route(/\/api\/v1\/tools\/(\?|$)/, async (route) => {
+		await toolsHeld;
+		return json(route, [{ id: 'calc', name: 'Calculator', meta: {} }]);
+	});
+	await page.goto('/?models=llama');
+	await chat.socket.connected;
+	await page.keyboard.type('What is 2+2?');
+	await page.keyboard.press('Enter');
+
+	releaseModels();
+	await page.waitForTimeout(500);
+	expect(chat.seen.completions).toHaveLength(0);
+	releaseTools();
+	await expect.poll(() => chat.seen.completions.length).toBe(1);
+	expect(chat.seen.completions[0]).toMatchObject({ model: 'llama', tool_ids: ['calc'] });
 });
