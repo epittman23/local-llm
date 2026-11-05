@@ -192,15 +192,22 @@ export function embeddingError(e: EmbeddingForm): string | null {
 		return 'Embedding Batch Size must be a whole number of at least 1.';
 	if (e.engine === '' && e.model.split('/').length - 1 > 1)
 		return 'Model filesystem path detected. Model shortname is required for update, cannot continue.';
-	if ((e.engine === 'ollama' || e.engine === 'openai') && blank(e.model)) return 'Embedding model is required.';
+	// The local engine too: saved without a model, nothing would be loaded to embed with (#532).
+	if ((e.engine === '' || e.engine === 'ollama' || e.engine === 'openai') && blank(e.model))
+		return 'Embedding model is required.';
 	if (e.engine === 'azure_openai' && (blank(e.azure.key) || blank(e.azure.url) || blank(e.azure.version)))
 		return 'Azure OpenAI URL, key and version are required.';
 	return null;
 }
 
-/** The body of `POST /retrieval/embedding/update`: only the chosen engine's connection is sent. */
-export function buildEmbeddingPayload(e: EmbeddingForm) {
+/**
+ * The body of `POST /retrieval/embedding/update`: only the chosen engine's
+ * connection is sent. `forceReload: false`, for a plain Save, lets the server
+ * keep a loaded model that did not change instead of loading it again (#532).
+ */
+export function buildEmbeddingPayload(e: EmbeddingForm, { forceReload = true }: { forceReload?: boolean } = {}) {
 	const payload: Rec & { RAG_EMBEDDING_ENGINE: string; RAG_EMBEDDING_MODEL: string } = {
+		force_reload: forceReload,
 		RAG_EMBEDDING_ENGINE: e.engine,
 		RAG_EMBEDDING_MODEL: e.model,
 		RAG_EMBEDDING_BATCH_SIZE: e.batchSize ?? 1,

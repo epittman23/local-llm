@@ -43,15 +43,21 @@ const EMBEDDING = {
 
 let rag: Record<string, unknown> = RAG;
 let posted: string[] = [];
+/** The bodies of the POSTs, by path. */
+let bodies: Record<string, unknown> = {};
 
 beforeEach(() => {
 	rag = RAG;
 	posted = [];
+	bodies = {};
 	toastError.mockReset();
 	useAuthStore.setState({ token: 't' } as never);
 	vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
 		const path = String(url);
-		if (init?.method === 'POST') posted.push(path.replace(/^.*\/retrieval/, ''));
+		if (init?.method === 'POST') {
+			posted.push(path.replace(/^.*\/retrieval/, ''));
+			bodies[path.replace(/^.*\/retrieval/, '')] = JSON.parse(String(init.body ?? 'null'));
+		}
 		if (path.endsWith('/retrieval/config')) return new Response(JSON.stringify(rag), { status: 200 });
 		if (path.endsWith('/retrieval/embedding')) return new Response(JSON.stringify(EMBEDDING), { status: 200 });
 		return new Response(JSON.stringify({}), { status: 200 });
@@ -93,5 +99,31 @@ describe('Documents save with a JSON box the server refuses (#234)', () => {
 
 		await waitFor(() => expect(posted).toEqual(['/embedding/update', '/config/update']));
 		expect(toastError).not.toHaveBeenCalled();
+	});
+});
+
+describe('Documents: the embedding model is loaded again only when asked (#532)', () => {
+	const open = async () => {
+		render(
+			<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+				<Documents />
+			</QueryClientProvider>
+		);
+		return screen.findByRole('button', { name: 'Save' });
+	};
+
+	it('Save asks the server not to reload an unchanged model', async () => {
+		fireEvent.click(await open());
+
+		await waitFor(() => expect(posted).toContain('/embedding/update'));
+		expect(bodies['/embedding/update']).toMatchObject({ force_reload: false });
+	});
+
+	it('Update embedding model asks for a reload', async () => {
+		await open();
+		fireEvent.click(screen.getByRole('button', { name: 'Update embedding model' }));
+
+		await waitFor(() => expect(posted).toEqual(['/embedding/update']));
+		expect(bodies['/embedding/update']).toMatchObject({ force_reload: true });
 	});
 });
