@@ -134,6 +134,8 @@ describe('configProblem (#437)', () => {
 
 	it('says when the file is not a JSON object', () => {
 		expect(configProblem('{not json')).toContain('not a JSON object');
+		// Its window-size saves are skipped, which keeps the file for the user to fix.
+		expect(configProblem('{not json')).toContain('window size is not saved');
 		expect(configProblem('[1, 2]')).toContain('not a JSON object');
 	});
 

@@ -361,8 +361,9 @@ async function startup(): Promise<void> {
 	phase = 'starting';
 	config = loadConfig();
 	const origin = config.serverUrl;
-	// A stored server URL set aside for the default is said, not silent (#437).
-	const problem = configProblem(storedText()) ?? undefined;
+	// A stored server URL set aside for the default is said, not silent (#437);
+	// not while an override is what this launch uses instead.
+	const problem = activeOverride() ? undefined : (configProblem(storedText()) ?? undefined);
 	const abort = new AbortController();
 	startAbort = abort;
 	const now = Date.now;
@@ -705,7 +706,9 @@ function registerIpc(): void {
 				serverUrl: stored.serverUrl,
 				repoPath: stored.repoPath,
 				running: phase === 'running',
-				override: activeOverride()
+				override: activeOverride(),
+				// What the field cannot show: a stored URL set aside for the default (#437).
+				problem: configProblem(storedText())
 			};
 		})
 	);

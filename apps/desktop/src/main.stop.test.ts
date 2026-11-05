@@ -56,7 +56,9 @@ const h = vi.hoisted(() => {
 		/** Containers compose still lists as running after a clean stop; null when it can't be asked. */
 		servicesLeft: 0 as number | null,
 		/** The args of each app.relaunch (#424). */
-		relaunches: [] as unknown[]
+		relaunches: [] as unknown[],
+		/** The application menu's template, so a test can click an item. */
+		menu: [] as unknown[]
 	};
 	let nextId = 1;
 
@@ -125,7 +127,13 @@ const h = vi.hoisted(() => {
 		BrowserWindow: FakeWindow,
 		dialog: {},
 		ipcMain: { handle: (name: string, f: (...args: unknown[]) => unknown) => state.handlers.set(name, f) },
-		Menu: { setApplicationMenu: () => {}, buildFromTemplate: () => ({}) },
+		Menu: {
+			setApplicationMenu: () => {},
+			buildFromTemplate: (template: unknown[]) => {
+				state.menu = template;
+				return {};
+			}
+		},
 		screen: { getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 1000, height: 1000 } }) },
 		session: { defaultSession: { setPermissionRequestHandler: () => {}, setPermissionCheckHandler: () => {} } },
 		shell: { openExternal: () => {}, openPath: () => {} }
@@ -144,6 +152,7 @@ const h = vi.hoisted(() => {
 		state.llama = [];
 		state.servicesLeft = 0;
 		state.relaunches = [];
+		state.menu = [];
 	}
 
 	return { state, FakeWindow, Emitter, electron, reset, start: () => markReady() };
@@ -181,6 +190,19 @@ function statusCall(name: string, ...args: unknown[]) {
 	if (!status) throw new Error('no status window');
 	const event = { sender: { id: status.webContents.id }, senderFrame: { url: pathToFileURL(h.state.statusHtml).href } };
 	return h.state.handlers.get(name)?.(event, ...args);
+}
+
+/** Clicks a menu item by its label, searching every submenu. */
+function clickMenu(label: string) {
+	type Item = { label?: string; click?: () => void; submenu?: Item[] };
+	const find = (items: Item[]): Item | undefined =>
+		items.reduce<Item | undefined>(
+			(found, item) => found ?? (item.label === label ? item : find(item.submenu ?? [])),
+			undefined
+		);
+	const item = find(h.state.menu as Item[]);
+	if (!item?.click) throw new Error(`no menu item ${label}`);
+	item.click();
 }
 
 const appWindows = () => h.FakeWindow.getAllWindows().filter((w) => w.loaded.startsWith('http'));
@@ -468,7 +490,7 @@ test('an earlier stack forced to stop cleanly lets the launch go on (#431)', asy
 
 const configFile = () => join(h.state.userData, 'config.json');
 const storedFile = () => JSON.parse(readFileSync(configFile(), 'utf8'));
-type Settings = { serverUrl: string; override: { url: string; from: string } | null };
+type Settings = { serverUrl: string; override: { url: string; from: string } | null; problem: string | null };
 type Saved = { error?: string; restart?: boolean; replaced?: { url: string; from: string } };
 
 test('Settings names an active LLLM_SERVER_URL, and a save replaces it for Retry (#424)', async () => {
@@ -572,4 +594,39 @@ test('a signal saves the window size too (#425)', async () => {
 	sigint();
 	await tick(800);
 	expect(storedFile().bounds).toEqual({ x: 1, y: 2, width: 800, height: 600 });
+});
+
+test('a mistyped stored URL is not reported while an override is what this launch uses, and Settings still names it (#437)', async () => {
+	writeFileSync(configFile(), JSON.stringify({ serverUrl: 'llm.example.ts.net', repoPath: HERE.repoPath }));
+	vi.stubEnv('LLLM_SERVER_URL', 'https://nothing.invalid');
+	await launch();
+
+	const shown = (await statusCall('status:ready')) as Shown;
+	expect(shown.progress.steps.find((s) => s.id === 'check')?.detail).toBeUndefined();
+	const settings = (await statusCall('status:get-settings')) as Settings;
+	expect(settings.problem).toContain('"llm.example.ts.net"');
+});
+
+test('Settings has no problem to name for a valid file (#437)', async () => {
+	writeFileSync(configFile(), JSON.stringify(HERE));
+	await launch();
+	expect(((await statusCall('status:get-settings')) as Settings).problem).toBeNull();
+});
+
+test('Restart now while the app runs its own stack saves the window size and stops the stack once (#424, #425)', async () => {
+	writeFileSync(configFile(), JSON.stringify(HERE));
+	await launch();
+	const win = appWindows()[0];
+	if (win) win.bounds = { x: 3, y: 4, width: 1000, height: 750 };
+	win?.emit('ready-to-show');
+	await tick(10);
+	clickMenu('Settings…');
+	await tick(10);
+
+	await statusCall('status:action', 'restart');
+	await tick(50);
+
+	expect(h.state.relaunches).toHaveLength(1);
+	expect(h.state.stops).toEqual([990201]);
+	expect(storedFile().bounds).toEqual({ x: 3, y: 4, width: 1000, height: 750 });
 });

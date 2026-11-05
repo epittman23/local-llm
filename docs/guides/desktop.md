@@ -123,9 +123,11 @@ for the rest of that launch, so Retry starts with what was saved, and
 
 A save that cannot be written says why in the dialog. When the server URL in
 `config.json` is not an `http://` or `https://` address, the app uses the
-local default and says so in the startup dialog's first step. Saving the
-window's size or the settings rewrites only those fields, so a hand edit
-stays in the file to be fixed.
+local default and says so in the startup dialog's first step and in
+Settings. Saving the window's size or the settings rewrites only those
+fields, so a hand edit stays in the file to be fixed. A `config.json` that is
+not a JSON object at all is left alone too: the defaults are used, and the
+window's size is not saved until Settings saves over it.
 
 ## Files
 

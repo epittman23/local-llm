@@ -105,7 +105,9 @@ function storedObject(text: string | null): Record<string, unknown> | null {
  */
 export function configProblem(text: string | null): string | null {
 	const stored = storedObject(text);
-	if (stored === null) return 'config.json is not a JSON object, so the default settings are used.';
+	if (stored === null) {
+		return 'config.json is not a JSON object, so the default settings are used, and the window size is not saved until Settings saves over it.';
+	}
 	const url = stored.serverUrl;
 	if (url === undefined || (typeof url === 'string' && normalizeServerUrl(url))) return null;
 	return (

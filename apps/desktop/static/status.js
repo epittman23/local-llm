@@ -131,6 +131,8 @@ async function loadSettings() {
 	$('server-override').textContent = settings.override
 		? `This launch uses ${settings.override.url}, from ${settings.override.from}, in place of the saved address. Saving replaces it.`
 		: '';
+	$('server-problem').hidden = !settings.problem;
+	$('server-problem').textContent = settings.problem ?? '';
 	$('settings-message').textContent = '';
 	$('restart').hidden = true;
 }
@@ -157,9 +159,13 @@ $('settings-form').addEventListener('submit', async (event) => {
 		return;
 	}
 	$('server-override').hidden = true;
+	$('server-problem').hidden = true;
 	const instead = result.replaced ? `, in place of ${result.replaced.url} from ${result.replaced.from}` : '';
 	if (result.restart || settingsRunning) {
-		message.textContent = `Saved. It applies the next time Local LLM starts${instead}.`;
+		// A launch with the override again uses it again; Restart now leaves it out (#424).
+		message.textContent = result.replaced
+			? `Saved. Restart now starts with it, without ${result.replaced.url} from ${result.replaced.from}.`
+			: 'Saved. It applies the next time Local LLM starts.';
 		$('restart').hidden = false;
 	} else {
 		message.textContent = `Saved. Retry to start with it${instead}.`;
