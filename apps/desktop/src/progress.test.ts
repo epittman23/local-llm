@@ -88,8 +88,21 @@ describe('shutdown', () => {
 			force: 'pending'
 		});
 		expect(p.steps.find((s) => s.id === 'model')?.detail).toBe('none running');
-		// The optional force step stays silent.
-		expect(p.steps.find((s) => s.id === 'force')?.detail).toBeUndefined();
+	});
+
+	it('skips an optional step silently, and gives any other its skip reason (#430)', () => {
+		const defs = [
+			{ id: 'quiet', label: 'Quiet', optional: true, skipReason: 'not needed' },
+			{ id: 'told', label: 'Told', skipReason: 'none running' },
+			{ id: 'last', label: 'Last' }
+		];
+		const p = reduce(createProgress('shutdown', 'Stopping', defs, 0), { type: 'begin', step: 'last', at: 1 });
+
+		expect(p.steps.map((s) => [s.id, s.state, s.detail])).toEqual([
+			['quiet', 'skipped', undefined],
+			['told', 'skipped', 'none running'],
+			['last', 'running', undefined]
+		]);
 	});
 
 	it('follows the output while uvicorn cancels a held request', () => {
