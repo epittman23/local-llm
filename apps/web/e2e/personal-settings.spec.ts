@@ -65,6 +65,19 @@ test.describe('personal settings', () => {
 		expect(posts.at(-1).ui.pinnedModels).toEqual(['m1']);
 	});
 
+	test('Interface saves a font typed and submitted with Enter (#261)', async ({ page }) => {
+		await mockWorkspaceBackend(page, { role: 'user' });
+		const posts = await mockUserSettings(page);
+		await page.goto('/?settings=interface');
+		const m = modal(page);
+		await m.getByRole('button', { name: 'Font Family: Default' }).click();
+		const box = m.getByLabel('Font Family name');
+		await box.fill('Aptos');
+		await box.press('Enter');
+		await expect.poll(() => posts.length).toBe(1);
+		expect(posts[0].ui.fontFamily).toBe('Aptos');
+	});
+
 	test('Account saves the profile and variables, and rejects bad variable keys', async ({ page }) => {
 		await mockWorkspaceBackend(page, { role: 'user' });
 		await mockUserSettings(page);

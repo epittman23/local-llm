@@ -175,7 +175,9 @@ test('editing autosaves the title and the body as html, markdown and json', asyn
 	const seen = await mockNotes(page, [note('a', 'Groceries')]);
 	await page.goto('/notes/a');
 	const editor = page.getByRole('textbox', { name: 'Note content' });
-	await expect(editor).toContainText('Body of Groceries');
+	// The editor is a lazy chunk, which the dev server compiles on its first
+	// request: under parallel load that alone took over the default 5 s (#500).
+	await expect(editor).toContainText('Body of Groceries', { timeout: 20_000 });
 	await page.getByLabel('Title', { exact: true }).fill('Weekly groceries');
 	// Put the caret at the end of the existing text before typing: a click in
 	// the middle of the (mostly empty) editor box then Ctrl+End raced the

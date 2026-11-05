@@ -428,8 +428,7 @@ export function applyChatEvent(history: History, event: ChatEvent): { history: H
 			let h = history;
 			for (const msg of data?.messages ?? []) {
 				const existing = h.messages[msg?.id];
-				if (existing && existing.content !== msg.content)
-					h = updateMessage(h, msg.id, { originalContent: existing.content, ...msg });
+				if (existing && existing.content !== msg.content) h = updateMessage(h, msg.id, rewrittenMessage(existing, msg));
 			}
 			return { history: h, effects };
 		}
@@ -559,6 +558,24 @@ function editedOutput(m: Message, content: string): OutputItem[] | undefined {
 		if (item?.type !== 'message' && item?.type !== 'reasoning') kept.push(item);
 	});
 	return lastMessage === -1 ? [...kept, ...edited] : kept;
+}
+
+/**
+ * The patch for a message an action function or an outlet filter rewrote:
+ * the new fields, with the old text kept as `originalContent`. The new text
+ * goes into the message's `output` too, as an edit's does (`editedOutput`),
+ * unless the rewrite brings an output of its own (not the one the message
+ * had): the next request is built from `output`, so the model (and the next
+ * action) would otherwise get the old text (#502).
+ */
+export function rewrittenMessage(existing: Message, rewrite: Partial<Message>): Partial<Message> {
+	const content = rewrite.content;
+	if (content === undefined || content === existing.content) return rewrite;
+	const patch: Partial<Message> = { originalContent: existing.content, ...rewrite };
+	// An outlet event sends the output back as it was when only the text changed.
+	const ownOutput = rewrite.output !== undefined && JSON.stringify(rewrite.output) !== JSON.stringify(existing.output);
+	if (!ownOutput && existing.output?.length) patch.output = editedOutput(existing, content);
+	return patch;
 }
 
 /** Edits a message in place, keeping the previous text of a reply as `originalContent` (Messages.svelte's editMessage without submit). */
