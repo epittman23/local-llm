@@ -187,6 +187,9 @@ export function toEmbeddingForm(res: Rec): EmbeddingForm {
 
 /** Why the embedding model cannot be applied, or null. */
 export function embeddingError(e: EmbeddingForm): string | null {
+	// A cleared box is sent as 1. Below 1 fails every embedding once saved (#353).
+	if (e.batchSize !== null && (!Number.isInteger(e.batchSize) || e.batchSize < 1))
+		return 'Embedding Batch Size must be a whole number of at least 1.';
 	if (e.engine === '' && e.model.split('/').length - 1 > 1)
 		return 'Model filesystem path detected. Model shortname is required for update, cannot continue.';
 	if ((e.engine === 'ollama' || e.engine === 'openai') && blank(e.model)) return 'Embedding model is required.';

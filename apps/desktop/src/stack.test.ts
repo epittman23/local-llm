@@ -13,6 +13,7 @@ import {
 	LogTail,
 	makeBackendCommand,
 	newestMtime,
+	ownedAction,
 	parseOwned,
 	parseProcStat,
 	type StartInput,
@@ -150,10 +151,48 @@ describe('crash recovery', () => {
 
 	it('parses owned.json defensively', () => {
 		expect(parseOwned('{"pgid":4242,"startTicks":"9"}')).toEqual({ pgid: 4242, startTicks: '9' });
+		expect(parseOwned('{"pgid":4242,"startTicks":"9","origin":"http://127.0.0.1:4100","repo":"/r"}')).toEqual({
+			pgid: 4242,
+			startTicks: '9',
+			origin: 'http://127.0.0.1:4100',
+			repo: '/r'
+		});
+		expect(parseOwned('{"pgid":4242,"startTicks":"9","origin":5,"repo":null}')).toEqual({
+			pgid: 4242,
+			startTicks: '9'
+		});
 		expect(parseOwned('{"pgid":1,"startTicks":"9"}')).toBeNull();
 		expect(parseOwned('{"pgid":-5,"startTicks":"9"}')).toBeNull();
 		expect(parseOwned('nope')).toBeNull();
 		expect(parseOwned(null)).toBeNull();
+	});
+});
+
+describe('ownedAction (#431)', () => {
+	const record = { pgid: 4242, startTicks: '9', origin: 'http://127.0.0.1:4000', repo: '/home/u/local-llm' };
+	const here = { origin: 'http://127.0.0.1:4000', repo: '/home/u/local-llm', local: true };
+	const act = (r: Parameters<typeof ownedAction>[0], running: boolean, at = here) =>
+		ownedAction(r, running, at.origin, at.repo, at.local);
+
+	it('adopts only a stack started for this address and checkout', () => {
+		expect(act(record, true)).toBe('adopt');
+		expect(act(record, true, { ...here, repo: '/home/u/local-llm/' })).toBe('adopt');
+	});
+
+	it('stops a running stack started for another address or checkout, or from a launch for a remote server', () => {
+		expect(act(record, true, { ...here, origin: 'http://127.0.0.1:4100' })).toBe('stop');
+		expect(act(record, true, { ...here, repo: '/home/u/other' })).toBe('stop');
+		expect(act(record, true, { origin: 'https://llm.example.invalid', repo: here.repo, local: false })).toBe('stop');
+	});
+
+	it('stops a running stack whose record predates the address and checkout', () => {
+		expect(act({ pgid: 4242, startTicks: '9' }, true)).toBe('stop');
+	});
+
+	it('leaves alone what is not running, or not recorded', () => {
+		expect(act(record, false)).toBe('none');
+		expect(act(record, false, { ...here, origin: 'http://127.0.0.1:4100' })).toBe('none');
+		expect(act(null, true)).toBe('none');
 	});
 });
 
