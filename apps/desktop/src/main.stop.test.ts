@@ -56,6 +56,10 @@ const h = vi.hoisted(() => {
 		llama: [] as number[],
 		/** Containers compose still lists as running after a clean stop; null when it can't be asked. */
 		servicesLeft: 0 as number | null,
+		/** The args of each app.relaunch (#424). */
+		relaunches: [] as unknown[],
+		/** The application menu's template, so a test can click an item. */
+		menu: [] as unknown[],
 		/** What answers on the dev server's :5174, by URL; nothing by default (#432). */
 		devServer: null as ((url: string) => string | null) | null,
 		/** Builds the next spawned child; the default is one that started (#433). */
@@ -78,8 +82,9 @@ const h = vi.hoisted(() => {
 		isMinimized() {
 			return false;
 		}
+		bounds = { x: 0, y: 0, width: 100, height: 100 };
 		getNormalBounds() {
-			return { x: 0, y: 0, width: 100, height: 100 };
+			return this.bounds;
 		}
 		destroy() {
 			if (this.destroyed) return;
@@ -122,12 +127,18 @@ const h = vi.hoisted(() => {
 			on: (name: string, f: Listener) => state.appEvents.on(name, f),
 			whenReady: () => new Promise<void>((resolve) => (markReady = resolve)),
 			exit: (code: number) => state.exits.push(code),
-			relaunch: () => {}
+			relaunch: (options?: { args?: string[] }) => state.relaunches.push(options?.args)
 		},
 		BrowserWindow: FakeWindow,
 		dialog: {},
 		ipcMain: { handle: (name: string, f: (...args: unknown[]) => unknown) => state.handlers.set(name, f) },
-		Menu: { setApplicationMenu: () => {}, buildFromTemplate: () => ({}) },
+		Menu: {
+			setApplicationMenu: () => {},
+			buildFromTemplate: (template: unknown[]) => {
+				state.menu = template;
+				return {};
+			}
+		},
 		screen: { getDisplayMatching: () => ({ workArea: { x: 0, y: 0, width: 1000, height: 1000 } }) },
 		session: { defaultSession: { setPermissionRequestHandler: () => {}, setPermissionCheckHandler: () => {} } },
 		shell: { openExternal: () => {}, openPath: () => {} }
@@ -145,6 +156,8 @@ const h = vi.hoisted(() => {
 		state.stopHold = Promise.resolve();
 		state.llama = [];
 		state.servicesLeft = 0;
+		state.relaunches = [];
+		state.menu = [];
 		state.devServer = null;
 		state.spawnChild = null;
 	}
@@ -190,6 +203,19 @@ function statusCall(name: string, ...args: unknown[]) {
 	if (!status) throw new Error('no status window');
 	const event = { sender: { id: status.webContents.id }, senderFrame: { url: pathToFileURL(h.state.statusHtml).href } };
 	return h.state.handlers.get(name)?.(event, ...args);
+}
+
+/** Clicks a menu item by its label, searching every submenu. */
+function clickMenu(label: string) {
+	type Item = { label?: string; click?: () => void; submenu?: Item[] };
+	const find = (items: Item[]): Item | undefined =>
+		items.reduce<Item | undefined>(
+			(found, item) => found ?? (item.label === label ? item : find(item.submenu ?? [])),
+			undefined
+		);
+	const item = find(h.state.menu as Item[]);
+	if (!item?.click) throw new Error(`no menu item ${label}`);
+	item.click();
 }
 
 const appWindows = () => h.FakeWindow.getAllWindows().filter((w) => w.loaded.startsWith('http'));
@@ -343,7 +369,7 @@ async function cleanStop() {
 	await tick(50);
 }
 
-type Shown = { progress: { error?: string; steps: { id: string; state: string }[] } };
+type Shown = { progress: { error?: string; steps: { id: string; state: string; detail?: string }[] } };
 
 test('a clean stop that left the services running says so and waits (#435)', async () => {
 	h.state.servicesLeft = 2;
@@ -471,6 +497,151 @@ test('an earlier stack forced to stop cleanly lets the launch go on (#431)', asy
 	await launch();
 
 	expect(h.state.spawned).toBe(1);
+});
+
+// --- Settings and config.json (#424, #425, #426, #437) --------------------------
+
+const configFile = () => join(h.state.userData, 'config.json');
+const storedFile = () => JSON.parse(readFileSync(configFile(), 'utf8'));
+type Settings = { serverUrl: string; override: { url: string; from: string } | null; problem: string | null };
+type Saved = { error?: string; restart?: boolean; replaced?: { url: string; from: string } };
+
+test('Settings names an active LLLM_SERVER_URL, and a save replaces it for Retry (#424)', async () => {
+	writeFileSync(configFile(), JSON.stringify(HERE));
+	vi.stubEnv('LLLM_SERVER_URL', 'https://nothing.invalid');
+	await launch();
+	expect(((await statusCall('status:ready')) as Shown).progress.error).toContain('https://nothing.invalid');
+
+	const settings = (await statusCall('status:get-settings')) as Settings;
+	expect(settings.serverUrl).toBe(HERE.serverUrl);
+	expect(settings.override).toEqual({ url: 'https://nothing.invalid', from: 'LLLM_SERVER_URL' });
+
+	const saved = (await statusCall('status:save-settings', HERE)) as Saved;
+	expect(saved.error).toBeUndefined();
+	expect(saved.replaced).toEqual({ url: 'https://nothing.invalid', from: 'LLLM_SERVER_URL' });
+	expect(((await statusCall('status:get-settings')) as Settings).override).toBeNull();
+
+	void statusCall('status:action', 'retry'); // settles once the window shows
+	await tick(50);
+	expect(h.state.spawned).toBe(1);
+	expect(appWindows().map((w) => w.loaded)).toEqual([HERE.serverUrl]);
+});
+
+test('Restart now relaunches without --server-url or LLLM_SERVER_URL (#424)', async () => {
+	const argv = process.argv;
+	process.argv = [...argv, '--server-url=https://nothing.invalid'];
+	vi.stubEnv('LLLM_SERVER_URL', 'https://nothing.invalid');
+	try {
+		await launch();
+		await statusCall('status:action', 'restart');
+	} finally {
+		process.argv = argv;
+	}
+
+	expect(h.state.relaunches).toHaveLength(1);
+	expect(h.state.relaunches[0]).not.toContain('--server-url=https://nothing.invalid');
+	expect(process.env.LLLM_SERVER_URL).toBeUndefined();
+	expect(h.state.exits).toEqual([0]);
+});
+
+test('a save that cannot be written says so in the dialog (#426)', async () => {
+	writeFileSync(configFile(), JSON.stringify(HERE));
+	h.state.ready = () => new Promise<number>(() => {}); // held in its start, so Settings is all that runs
+	await launch();
+	mkdirSync(`${configFile()}.tmp`); // the temporary file a save writes first
+
+	const saved = (await statusCall('status:save-settings', HERE)) as Saved;
+	expect(saved.error).toContain('Could not save the settings');
+	expect(saved.restart).toBeUndefined();
+});
+
+test('a mistyped server URL in config.json is reported at startup, and a bounds save keeps it (#437)', async () => {
+	writeFileSync(
+		configFile(),
+		JSON.stringify({ serverUrl: 'llm.example.ts.net', repoPath: HERE.repoPath, theme: 'dark' })
+	);
+	await launch();
+
+	const shown = (await statusCall('status:ready')) as Shown;
+	expect(shown.progress.steps.find((s) => s.id === 'check')?.detail).toContain('"llm.example.ts.net"');
+
+	const win = appWindows()[0];
+	expect(win).toBeDefined();
+	if (win) win.bounds = { x: 10, y: 20, width: 900, height: 700 };
+	win?.emit('ready-to-show');
+	await tick(10);
+	win?.userClose();
+	await tick(800);
+
+	expect(storedFile()).toEqual({
+		serverUrl: 'llm.example.ts.net',
+		repoPath: HERE.repoPath,
+		theme: 'dark',
+		bounds: { x: 10, y: 20, width: 900, height: 700 }
+	});
+});
+
+test('quitting from the menu or Ctrl+Q saves the window size, though no close event comes (#425)', async () => {
+	writeFileSync(configFile(), JSON.stringify(HERE));
+	await launch();
+	const win = appWindows()[0];
+	if (win) win.bounds = { x: 10, y: 20, width: 900, height: 700 };
+	win?.emit('ready-to-show');
+	await tick(10);
+
+	h.state.appEvents.emit('before-quit', { preventDefault: () => {} });
+	await tick(800);
+
+	expect(h.state.stops).toEqual([990201]);
+	expect(storedFile().bounds).toEqual({ x: 10, y: 20, width: 900, height: 700 });
+});
+
+test('a signal saves the window size too (#425)', async () => {
+	writeFileSync(configFile(), JSON.stringify(HERE));
+	await launch();
+	const win = appWindows()[0];
+	if (win) win.bounds = { x: 1, y: 2, width: 800, height: 600 };
+	win?.emit('ready-to-show');
+	await tick(10);
+
+	sigint();
+	await tick(800);
+	expect(storedFile().bounds).toEqual({ x: 1, y: 2, width: 800, height: 600 });
+});
+
+test('a mistyped stored URL is not reported while an override is what this launch uses, and Settings still names it (#437)', async () => {
+	writeFileSync(configFile(), JSON.stringify({ serverUrl: 'llm.example.ts.net', repoPath: HERE.repoPath }));
+	vi.stubEnv('LLLM_SERVER_URL', 'https://nothing.invalid');
+	await launch();
+
+	const shown = (await statusCall('status:ready')) as Shown;
+	expect(shown.progress.steps.find((s) => s.id === 'check')?.detail).toBeUndefined();
+	const settings = (await statusCall('status:get-settings')) as Settings;
+	expect(settings.problem).toContain('"llm.example.ts.net"');
+});
+
+test('Settings has no problem to name for a valid file (#437)', async () => {
+	writeFileSync(configFile(), JSON.stringify(HERE));
+	await launch();
+	expect(((await statusCall('status:get-settings')) as Settings).problem).toBeNull();
+});
+
+test('Restart now while the app runs its own stack saves the window size and stops the stack once (#424, #425)', async () => {
+	writeFileSync(configFile(), JSON.stringify(HERE));
+	await launch();
+	const win = appWindows()[0];
+	if (win) win.bounds = { x: 3, y: 4, width: 1000, height: 750 };
+	win?.emit('ready-to-show');
+	await tick(10);
+	clickMenu('Settings…');
+	await tick(10);
+
+	await statusCall('status:action', 'restart');
+	await tick(50);
+
+	expect(h.state.relaunches).toHaveLength(1);
+	expect(h.state.stops).toEqual([990201]);
+	expect(storedFile().bounds).toEqual({ x: 3, y: 4, width: 1000, height: 750 });
 });
 
 // --- What answers on the dev server's port (#432) ------------------------------
