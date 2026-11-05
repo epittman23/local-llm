@@ -12,7 +12,10 @@ from; `git show d863707:<path>` opens it. Its layout is mapped in
 `make frontend` from the repo root (it needs `make backend` running too, for
 the API it proxies to). Standalone: `bun install && bun run dev`, a dev
 server on `:5174`, unprefixed, proxying `/api`, `/ollama`, `/openai`,
-`/oauth` and `/ws` to `:4000` (`LLLM_BACKEND_URL` to override).
+`/oauth` and `/ws` to `:4000` (`LLLM_BACKEND_URL` to override). It also
+answers `/__lllm/dev-server` with the `apps/web` it serves
+(`dev-server-identity.mjs`): the desktop app loads the dev server in place of
+the build only when that is its own checkout's, so keep the plugin.
 
 **`astro dev` daemonizes.** This Astro version's `dev` command always spawns
 the real server as a background process, even without `--background`; the
