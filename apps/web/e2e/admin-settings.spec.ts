@@ -551,6 +551,40 @@ test.describe('settings: Connections', () => {
 		await expect(m.getByRole('switch', { name: 'Direct Connections' })).not.toBeChecked();
 	});
 
+	test('Save reports the save as done only when both upstreams took it (#239)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockUpstreams(page);
+		await page.route('**/openai/config/update', (route) => json(route, { detail: 'upstream refused' }, 500));
+		await page.route('**/ollama/config/update', (route) => json(route, { detail: 'ollama refused' }, 500));
+		await page.goto('/?settings=admin:connections');
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('upstream refused')).toBeVisible();
+		await expect(page.getByText('ollama refused')).toBeVisible();
+		// Counted once, after a moment for a false success toast to render.
+		await page.waitForTimeout(300);
+		expect(await page.getByText('Settings saved successfully!').count()).toBe(0);
+	});
+
+	test('Save does not say the save is done when only one upstream took it (#239)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockUpstreams(page);
+		await page.route('**/ollama/config/update', (route) => json(route, { detail: 'ollama refused' }, 500));
+		await page.goto('/?settings=admin:connections');
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('OpenAI API settings updated')).toBeVisible();
+		await expect(page.getByText('ollama refused')).toBeVisible();
+		await page.waitForTimeout(300);
+		expect(await page.getByText('Settings saved successfully!').count()).toBe(0);
+	});
+
+	test('Save says the save is done when both upstreams took it', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockUpstreams(page);
+		await page.goto('/?settings=admin:connections');
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('Settings saved successfully!')).toBeVisible();
+	});
+
 	test('the OpenAI API switch turns the list off and saves that', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const seen = await mockUpstreams(page);
@@ -2377,7 +2411,8 @@ test.describe('settings: Models', () => {
 					: json(route, { id: url.searchParams.get('id') });
 			if (path === '/models/model/access/update')
 				return json(route, { id: body.id, access_grants: body.access_grants });
-			if (path === '/models/import') return json(route, true);
+			if (path === '/models/import')
+				return json(route, { imported: (body?.models ?? []).map((m: { id: string }) => m.id), skipped: [] });
 			if (path === '/models/delete/all') return json(route, true);
 			if (path === '/models/model' && req.method() === 'GET')
 				return json(route, { ...served.find((m) => m.id === url.searchParams.get('id')), full: true });
@@ -2659,7 +2694,7 @@ test.describe('settings: Models', () => {
 			mimeType: 'application/json',
 			buffer: Buffer.from(JSON.stringify([{ id: 'x', name: 'X', access_grants: [pub] }]))
 		});
-		await expect(page.getByText('Models imported successfully')).toBeVisible();
+		await expect(page.getByText('Imported 1 model')).toBeVisible();
 		expect(posts(calls, '/models/import')[0]).toEqual({
 			models: [expect.objectContaining({ id: 'x', name: 'X', access_grants: [] })]
 		});
