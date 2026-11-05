@@ -3,7 +3,7 @@ import react from '@astrojs/react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'astro/config';
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { devServerIdentity } from './dev-server-identity.mjs';
 
 // Mirrors d863707:apps/openwebui/vite.config.ts's dev-server proxy: the backend
 // isn't containerized, so both frontends point at the same host process,
@@ -28,21 +28,8 @@ export default defineConfig({
 			APP_VERSION: JSON.stringify(appVersion),
 			APP_BUILD_HASH: JSON.stringify(process.env.APP_BUILD_HASH || 'dev-build')
 		},
-		plugins: [
-			tailwindcss(),
-			{
-				// The desktop app loads this dev server in place of the build only
-				// when it names the checkout the app is set to (apps/desktop/src/stack.ts's
-				// DEV_SERVER_IDENTITY_PATH), not whatever else took :5174 (#432).
-				name: 'lllm-dev-server-identity',
-				configureServer(server) {
-					server.middlewares.use('/__lllm/dev-server', (_request, response) => {
-						response.setHeader('content-type', 'application/json');
-						response.end(JSON.stringify({ app: 'local-llm', webRoot: fileURLToPath(new URL('.', import.meta.url)) }));
-					});
-				}
-			}
-		],
+		// devServerIdentity: the desktop app's check that :5174 is this checkout's (#432).
+		plugins: [tailwindcss(), devServerIdentity()],
 		server: {
 			proxy: {
 				'/api': { target: backendTarget, changeOrigin: true, ws: true },
