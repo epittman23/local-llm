@@ -1,14 +1,20 @@
-import { appendFileSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
 	childEnv,
 	composeRunningCommand,
 	countRunning,
+	DEV_SERVER_IDENTITY_PATH,
 	DEV_SERVER_URL,
 	decideStart,
+	fetchText,
 	isAdoptable,
+	isOwnDevServer,
 	isUiStale,
 	LogTail,
 	makeBackendCommand,
@@ -302,5 +308,105 @@ describe('services left after a stop (#435)', () => {
 		expect(countRunning(null)).toBeNull();
 		// A login profile's greeting is not a container.
 		expect(countRunning('Welcome back\n3f2a9c1d4e5b\n')).toBe(1);
+	});
+});
+
+describe('the dev server check (#432)', () => {
+	// What apps/web/astro.config.mjs's dev server answers at DEV_SERVER_IDENTITY_PATH.
+	const devServerIdentity = (webRoot: string) => JSON.stringify({ app: 'local-llm', webRoot });
+
+	function checkout() {
+		const repo = mkdtempSync(join(tmpdir(), 'lllm-repo-'));
+		const webDir = join(repo, 'apps', 'web');
+		mkdirSync(webDir, { recursive: true });
+		return { repo, webDir };
+	}
+
+	it("takes this checkout's dev server, by its identity answer", () => {
+		const { webDir } = checkout();
+		expect(isOwnDevServer(devServerIdentity(`${webDir}/`), webDir)).toBe(true);
+	});
+
+	it('takes it through a symlinked checkout path too', () => {
+		const { repo, webDir } = checkout();
+		const link = `${repo}-link`;
+		symlinkSync(repo, link);
+		expect(isOwnDevServer(devServerIdentity(webDir), join(link, 'apps', 'web'))).toBe(true);
+	});
+
+	it("does not take another checkout's dev server", () => {
+		const { webDir } = checkout();
+		const other = checkout();
+		expect(isOwnDevServer(devServerIdentity(other.webDir), webDir)).toBe(false);
+	});
+
+	it('does not take another project, which answers that path with its own page', () => {
+		const { webDir } = checkout();
+		expect(isOwnDevServer(null, webDir)).toBe(false);
+		expect(isOwnDevServer('<!doctype html><title>Another app</title>', webDir)).toBe(false);
+		expect(isOwnDevServer('{"app":"something-else"}', webDir)).toBe(false);
+		expect(isOwnDevServer(JSON.stringify({ app: 'local-llm', webRoot: 7 }), webDir)).toBe(false);
+	});
+
+	it("matches what apps/web's dev server answers, path and body", async () => {
+		type Use = (path: string, handle: (request: unknown, response: unknown) => void) => void;
+		const web = (await import(pathToFileURL(join(__dirname, '..', '..', 'web', 'dev-server-identity.mjs')).href)) as {
+			DEV_SERVER_IDENTITY_PATH: string;
+			devServerIdentity: (webRoot?: string) => { configureServer: (server: { middlewares: { use: Use } }) => void };
+		};
+		const { webDir } = checkout();
+		let route = '';
+		let body: string | null = null;
+		web.devServerIdentity(`${webDir}/`).configureServer({
+			middlewares: {
+				use: (path, handle) => {
+					route = path;
+					handle({}, { setHeader: () => {}, end: (text: string) => (body = text) });
+				}
+			}
+		});
+
+		expect(web.DEV_SERVER_IDENTITY_PATH).toBe(DEV_SERVER_IDENTITY_PATH);
+		expect(route).toBe(DEV_SERVER_IDENTITY_PATH);
+		expect(isOwnDevServer(body, webDir)).toBe(true);
+	});
+
+	it('does not take a directory that no longer exists', () => {
+		const { webDir } = checkout();
+		expect(isOwnDevServer(devServerIdentity('/nonexistent/apps/web'), webDir)).toBe(false);
+		expect(isOwnDevServer(devServerIdentity(webDir), '/nonexistent/apps/web')).toBe(false);
+	});
+});
+
+describe('fetchText (#432)', () => {
+	async function serve(status: number, body: string) {
+		const server = createServer((_request, response) => {
+			response.writeHead(status, status === 302 ? { location: '/elsewhere' } : {});
+			response.end(body);
+		});
+		await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+		const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/x`;
+		return { url, close: () => new Promise((resolve) => server.close(resolve)) };
+	}
+
+	it('gives the body of a 200, and null for any other status, a redirect included', async () => {
+		for (const [status, expected] of [
+			[200, 'hello'],
+			[404, null],
+			[302, null]
+		] as const) {
+			const { url, close } = await serve(status, 'hello');
+			try {
+				expect(await fetchText(url)).toBe(expected);
+			} finally {
+				await close();
+			}
+		}
+	});
+
+	it('gives null when nothing listens', async () => {
+		const { url, close } = await serve(200, '');
+		await close();
+		expect(await fetchText(url)).toBeNull();
 	});
 });

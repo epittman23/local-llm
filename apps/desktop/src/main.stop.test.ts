@@ -5,9 +5,8 @@
 //
 // The fake is built inside vi.hoisted because vi.mock factories may only use
 // hoisted values; it follows docs/audit/2026-10-28-desktop/repro/P1/main-harness.ts.
-
 import { EventEmitter } from 'node:events';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -57,6 +56,8 @@ const h = vi.hoisted(() => {
 		llama: [] as number[],
 		/** Containers compose still lists as running after a clean stop; null when it can't be asked. */
 		servicesLeft: 0 as number | null,
+		/** What answers on the dev server's :5174, by URL; nothing by default (#432). */
+		devServer: null as ((url: string) => string | null) | null,
 		/** Builds the next spawned child; the default is one that started (#433). */
 		spawnChild: null as (() => unknown) | null
 	};
@@ -144,6 +145,7 @@ const h = vi.hoisted(() => {
 		state.stopHold = Promise.resolve();
 		state.llama = [];
 		state.servicesLeft = 0;
+		state.devServer = null;
 		state.spawnChild = null;
 	}
 
@@ -160,7 +162,13 @@ vi.mock('./stack', async (original) => ({
 	isUiStale: async () => false,
 	readProcStat: () => ({ comm: 'make', startTicks: '1' }),
 	// Nothing answers before the stack starts, so the app starts its own.
-	probe: async (url: string) => (url.endsWith('/ready') ? h.state.ready() : null),
+	probe: async (url: string) =>
+		url.endsWith('/ready')
+			? h.state.ready()
+			: url.startsWith('http://localhost:5174') && h.state.devServer
+				? 200
+				: null,
+	fetchText: async (url: string) => h.state.devServer?.(url) ?? null,
 	spawnInGroup: () => {
 		h.state.spawned++;
 		return h.state.spawnChild?.() ?? Object.assign(new h.Emitter(), { pid: 990201 });
@@ -463,6 +471,38 @@ test('an earlier stack forced to stop cleanly lets the launch go on (#431)', asy
 	await launch();
 
 	expect(h.state.spawned).toBe(1);
+});
+
+// --- What answers on the dev server's port (#432) ------------------------------
+
+test("another project's server on :5174 is not loaded in place of the built UI (#432)", async () => {
+	writeFileSync(join(h.state.userData, 'config.json'), JSON.stringify(HERE));
+	// Any page at any path, as a Vite server for some other project gives.
+	h.state.devServer = () => '<!doctype html><title>Another app</title>';
+	await launch();
+
+	expect(h.state.spawned).toBe(1);
+	expect(appWindows().map((w) => w.loaded)).toEqual([HERE.serverUrl]);
+});
+
+test("this checkout's dev server is loaded in place of the built UI (#432)", async () => {
+	const repo = mkdtempSync(join(tmpdir(), 'lllm-repo-'));
+	const webDir = join(repo, 'apps', 'web');
+	mkdirSync(webDir, { recursive: true });
+	writeFileSync(join(h.state.userData, 'config.json'), JSON.stringify({ ...HERE, repoPath: repo }));
+	const asked: string[] = [];
+	h.state.devServer = (url) => {
+		asked.push(url);
+		return JSON.stringify({ app: 'local-llm', webRoot: `${webDir}/` });
+	};
+	try {
+		await launch();
+	} finally {
+		rmSync(repo, { recursive: true, force: true });
+	}
+
+	expect(asked).toEqual(['http://localhost:5174/__lllm/dev-server']);
+	expect(appWindows().map((w) => w.loaded)).toEqual(['http://localhost:5174']);
 });
 
 // --- A login shell that cannot be spawned (#433) --------------------------------
