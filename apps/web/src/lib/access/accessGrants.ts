@@ -31,6 +31,22 @@ type LegacyAccessControl = {
 /** `*` as a principal id means "everyone" (`user:*`) or "anyone with the link" (`anyone:*`). */
 const WILDCARD = '*';
 
+const grantKey = (g: AccessGrant) => `${g.principal_type}:${g.principal_id}:${g.permission}`;
+
+/**
+ * Whether the server dropped any of the grants sent. An access/update route
+ * answers with the grants it stored, after removing those this user may not
+ * set; a reply without a grant list says nothing, so nothing counts as dropped.
+ */
+export function grantsDropped(sent: AccessGrant[], stored: unknown): boolean {
+	if (!Array.isArray(stored)) return false;
+	const kept = new Set((stored as AccessGrant[]).map(grantKey));
+	return sent.some((g) => !kept.has(grantKey(g)));
+}
+
+/** Shown instead of "Saved" when `grantsDropped`. */
+export const DROPPED_GRANTS_WARNING = 'Some access settings were not saved: you are not allowed to share this way.';
+
 export function dedupeAccessGrants(grants: AccessGrant[] | null | undefined): AccessGrant[] {
 	if (!Array.isArray(grants)) return [];
 	const byKey = new Map<string, AccessGrant>();
