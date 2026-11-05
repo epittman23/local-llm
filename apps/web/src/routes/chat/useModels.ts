@@ -45,5 +45,5 @@ export function useModels() {
 			return (Array.isArray(res) ? res : []) as ChatModel[];
 		}
 	});
-	return { models: q.data ?? [], loaded: q.isSuccess };
+	return { models: q.data ?? [], loaded: q.isSuccess, failed: q.isError };
 }

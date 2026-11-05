@@ -12,7 +12,10 @@ from; `git show d863707:<path>` opens it. Its layout is mapped in
 `make frontend` from the repo root (it needs `make backend` running too, for
 the API it proxies to). Standalone: `bun install && bun run dev`, a dev
 server on `:5174`, unprefixed, proxying `/api`, `/ollama`, `/openai`,
-`/oauth` and `/ws` to `:4000` (`LLLM_BACKEND_URL` to override).
+`/oauth` and `/ws` to `:4000` (`LLLM_BACKEND_URL` to override). It also
+answers `/__lllm/dev-server` with the `apps/web` it serves
+(`dev-server-identity.mjs`): the desktop app loads the dev server in place of
+the build only when that is its own checkout's, so keep the plugin.
 
 **`astro dev` daemonizes.** This Astro version's `dev` command always spawns
 the real server as a background process, even without `--background`; the
@@ -57,8 +60,10 @@ not the migration plan's original "new-york".
   server died the first time a `/ws` connection closed. Keep `--bun` off it.
 - **`astro dev` daemonizes.** The Makefile wraps it so Ctrl-C works; if a
   stray one is left running, `cd apps/web && bunx astro dev stop`.
-- **Sending in the first second after load** shows "Model not selected"
-  until the model list arrives (the Svelte app behaved the same).
+- **Sending in the first second after load** waits until the page has
+  chosen its models and loaded the tools (whose defaults a model may turn
+  on), then goes with what the box holds; opening another chat meanwhile
+  drops it (`useHeldSend`, #373). It used to show "Model not selected".
 - **English only.** No page calls `useTranslation` yet, so only the `en-US`
   locale ships and there is no language picker (the other 63 locale files
   were removed on 2026-10-10).

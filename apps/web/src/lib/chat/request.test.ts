@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { addResponses, addUserMessage, emptyHistory } from './history';
 import {
 	completionBody,
@@ -7,6 +7,7 @@ import {
 	isTemporaryChatId,
 	needsWebSearchConfirm,
 	newChatTemporary,
+	promptVariables,
 	requestFeatures,
 	stopTokens,
 	turnFiles,
@@ -163,5 +164,35 @@ describe('temporary chats and web search confirmation', () => {
 		expect(webSearchConfirmText({ features: { web_search_confirmation_content: '  ' } })).toBe(
 			'Your query will be sent to the configured web search provider.'
 		);
+	});
+});
+
+describe('{{USER_LANGUAGE}} (#326)', () => {
+	const prefer = (languages: string[], language: string) => {
+		vi.spyOn(navigator, 'languages', 'get').mockReturnValue(languages);
+		vi.spyOn(navigator, 'language', 'get').mockReturnValue(language);
+	};
+	afterEach(() => {
+		vi.restoreAllMocks();
+		localStorage.clear();
+	});
+
+	it("is the user's first preferred language, not the interface's only locale", () => {
+		prefer(['de-DE', 'en-US'], 'en-US');
+		localStorage.setItem('locale', 'en-US');
+
+		expect(promptVariables(null)['{{USER_LANGUAGE}}']).toBe('de-DE');
+	});
+
+	it("is the browser's language when it lists no preferences", () => {
+		prefer([], 'fr-FR');
+
+		expect(promptVariables(null)['{{USER_LANGUAGE}}']).toBe('fr-FR');
+	});
+
+	it('falls back to en-US when the browser names none', () => {
+		prefer([], '');
+
+		expect(promptVariables(null)['{{USER_LANGUAGE}}']).toBe('en-US');
 	});
 });

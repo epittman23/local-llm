@@ -585,12 +585,13 @@ Rules:
 - Do not save secrets, credentials, transient task steps, or unsupported guesses.
 - Use path when there is a clear path for the memory.
 - Leave path empty when there is no clear place for the memory.
+- On replace, leave path out to keep the memory's current path; an empty path clears it. Use move to change only the path.
 - Prefer replace/move/remove over duplicate add when an existing memory should change.
 - Do not invent type, status, trait, score, importance, or stability schemas.
 - Return only JSON in this shape:
   {{"operations":[
     {{"action":"add","type":"user|context","path":"...","content":"..."}},
-    {{"action":"replace","id":"...","type":"user|context","path":"...","content":"..."}},
+    {{"action":"replace","id":"...","type":"user|context","content":"..."}},
     {{"action":"move","id":"...","path":"..."}},
     {{"action":"remove","id":"..."}}
   ]}}
