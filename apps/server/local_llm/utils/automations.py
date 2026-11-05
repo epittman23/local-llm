@@ -177,12 +177,39 @@ def validate_rrule(s: str, tz: str = None) -> None:
         raise ValueError(ERROR_MESSAGES.AUTOMATION_NO_FUTURE_RUNS)
 
 
-def next_run_ns(s: str, tz: str = None) -> int | None:
-    """Next occurrence as epoch nanoseconds, respecting user timezone."""
+_FREQ = re.compile(r'(?:^|[\s:;])FREQ=([A-Z]+)')
+
+
+def _sub_daily(s: str) -> bool:
+    """Whether the rule repeats more often than daily (SECONDLY, MINUTELY or HOURLY).
+
+    A rule that does not parse raises here as `_parse_rule` would. The
+    frequency is then read from the rule's own text, which dateutil has just
+    accepted: its parsed rule keeps it only in a private attribute.
+    """
+    rrulestr(s, ignoretz=True)
+    match = _FREQ.search(s.upper())
+    return match is not None and match.group(1) in ('SECONDLY', 'MINUTELY', 'HOURLY')
+
+
+def next_run_ns(s: str, tz: str | None = None, anchor_ns: int | None = None) -> int | None:
+    """Next occurrence as epoch nanoseconds, respecting user timezone.
+
+    `anchor_ns` is when the rule is read from: a rule without DTSTART takes
+    the time it does not state from there (now, by default). A claimed run
+    passes its own due time, so a late claim does not move the rule's time
+    of day (#512).
+    """
     zi = _resolve_tz(tz)
     now = dt.datetime.now(zi) if zi else dt.datetime.now()
     now_naive = now.replace(tzinfo=None)
-    when = _parse_rule(s, now_naive).after(now_naive)
+    anchor = now_naive
+    # Only a daily or longer rule takes anything from its anchor; a shorter one
+    # is aligned to its own grid, and anchoring it far back only made the walk
+    # to now longer.
+    if anchor_ns is not None and not _sub_daily(s):
+        anchor = dt.datetime.fromtimestamp(anchor_ns / 1_000_000_000, tz=zi).replace(tzinfo=None)
+    when = _parse_rule(s, anchor).after(now_naive)
     if when is None:
         return None
     if zi:
