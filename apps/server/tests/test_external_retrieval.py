@@ -121,11 +121,12 @@ def test_one_query_keeps_the_provider_order(monkeypatch):
 # shows the value as relevance and the other providers report a similarity.
 
 
-def _retrieve_pgvector(monkeypatch, rows: list[dict]):
+def _retrieve_pgvector(monkeypatch, rows: list[dict], connection=None, fetch=None, connected: list | None = None):
     import pgvector.psycopg
     import psycopg
 
     executed = []
+    connected = [] if connected is None else connected
 
     class Cursor:
         def __enter__(self):
@@ -138,6 +139,8 @@ def _retrieve_pgvector(monkeypatch, rows: list[dict]):
             executed.append(params)
 
         def fetchall(self):
+            if fetch:
+                fetch()
             return rows
 
     class Connection(Cursor):
@@ -147,12 +150,15 @@ def _retrieve_pgvector(monkeypatch, rows: list[dict]):
     async def embed(query, prefix=None):
         return [0.25, 0.5, 1.0]
 
-    monkeypatch.setattr(psycopg, 'connect', lambda *a, **k: Connection())
+    def connect(*args, **kwargs):
+        connected.append((args, kwargs))
+        return Connection()
+
+    monkeypatch.setattr(psycopg, 'connect', connect)
     monkeypatch.setattr(pgvector.psycopg, 'register_vector', lambda conn: None)
     knowledge = SimpleNamespace(id='kb', name='KB', meta={'external': {'source': {'name': 'docs'}}})
-    hits = asyncio.run(
-        external._retrieve_pgvector({'endpoint': 'postgresql://example.invalid/db'}, {}, knowledge, 'q', 3, embed)
-    )
+    connection = connection or {'endpoint': 'postgresql://example.invalid/db'}
+    hits = asyncio.run(external._retrieve_pgvector(connection, {}, knowledge, 'q', 3, embed))
     return hits, executed
 
 
@@ -190,3 +196,44 @@ def test_pgvector_reports_similarity_best_first(monkeypatch):
     assert [hit['content'] for hit in hits] == ['closest', 'further', 'no vector']
     assert [hit['distance'] for hit in hits][:2] == pytest.approx([0.9, 0.6])
     assert hits[2]['distance'] is None
+
+
+# A query with no time limit (#514): pgvector had a connect timeout only, so a
+# server that took the connection and then never answered stalled the turn.
+
+
+def test_pgvector_bounds_the_search_by_the_connection_timeout(monkeypatch):
+    connected = []
+    _retrieve_pgvector(
+        monkeypatch,
+        [],
+        connection={'endpoint': 'postgresql://example.invalid/db', 'config': {'timeout': 7}},
+        connected=connected,
+    )
+
+    ((_, kwargs),) = connected
+    assert kwargs['connect_timeout'] == 7
+    assert kwargs['options'] == '-c statement_timeout=7000'
+
+
+def test_pgvector_keeps_the_endpoints_own_options(monkeypatch):
+    endpoint = 'postgresql://example.invalid/db?options=-c%20search_path%3Ddocs'
+    connected = []
+    _retrieve_pgvector(monkeypatch, [], connection={'endpoint': endpoint}, connected=connected)
+
+    ((_, kwargs),) = connected
+    assert kwargs['options'] == '-c search_path=docs -c statement_timeout=30000'
+
+
+def test_pgvector_gives_up_on_a_server_that_never_answers(monkeypatch):
+    import time
+
+    # Without a bound the search returns its rows once the fetch ends; with one,
+    # the turn is told the search did not answer instead of waiting for it.
+    with pytest.raises(RuntimeError, match='did not answer'):
+        _retrieve_pgvector(
+            monkeypatch,
+            [],
+            connection={'endpoint': 'postgresql://example.invalid/db', 'config': {'timeout': 0.1}},
+            fetch=lambda: time.sleep(3),
+        )

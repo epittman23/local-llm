@@ -278,9 +278,12 @@ async def _retrieve_pgvector(connection, auth_config, knowledge, query, count, e
     document_id_field = source_config.get('document_id_field') or 'id'
 
     vector = await embedding_function(query, prefix=RAG_EMBEDDING_QUERY_PREFIX)
+    timeout = float(config.get('timeout') or 30)
+    endpoint = connection.get('endpoint')
 
     def _search():
         from psycopg import sql
+        from psycopg.conninfo import conninfo_to_dict
 
         table_identifier = sql.SQL('.').join(
             sql.Identifier(_safe_identifier(part, 'table name')) for part in table_name.split('.')
@@ -295,10 +298,17 @@ async def _retrieve_pgvector(connection, auth_config, knowledge, query, count, e
             else sql.SQL("'{}'::jsonb")
         )
 
+        # The search bounded by the server too, not only the connect (#514). Added
+        # to the endpoint's own libpq options, which the argument would replace.
+        own_options = conninfo_to_dict(endpoint or '').get('options')
+        options = f'-c statement_timeout={int(timeout * 1000)}'
+        if own_options:
+            options = f'{own_options} {options}'
         with psycopg.connect(
-            connection.get('endpoint'),
+            endpoint,
             row_factory=dict_row,
             connect_timeout=config.get('timeout') or 30,
+            options=options,
         ) as conn:
             register_vector(conn)
             with conn.cursor() as cur:
@@ -328,7 +338,12 @@ async def _retrieve_pgvector(connection, auth_config, knowledge, query, count, e
                 )
                 return cur.fetchall()
 
-    rows = await asyncio.to_thread(_search)
+    # A server that stops answering mid-query never ends the statement, so the
+    # turn waits no longer than the connect and the search could each take (#514).
+    try:
+        rows = await asyncio.wait_for(asyncio.to_thread(_search), timeout=2 * timeout + 1)
+    except TimeoutError as exc:
+        raise RuntimeError(f'The pgvector server did not answer within {2 * timeout + 1:g} s') from exc
     mapping = {
         'content_field': 'content',
         'metadata_field': 'metadata',
