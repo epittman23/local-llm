@@ -7,6 +7,7 @@ import {
 	defaultsMetadata,
 	defaultsSnapshot,
 	filterModels,
+	importResultMessage,
 	isPresetModel,
 	mergeModels,
 	modelsConfigBody,
@@ -279,5 +280,33 @@ describe('togglePlan', () => {
 	it('flips one that has a record (it carries base_model_id) or is a preset', () => {
 		expect(togglePlan({ id: 'a', name: 'A', base_model_id: null }, true)).toEqual({ action: 'toggle', id: 'a' });
 		expect(togglePlan({ id: 'p', name: 'P', base_model_id: 'x' }, true)).toEqual({ action: 'toggle', id: 'p' });
+	});
+});
+
+describe('importResultMessage (#337)', () => {
+	it('counts what was imported', () => {
+		expect(importResultMessage({ imported: ['a'], skipped: [] })).toEqual({
+			kind: 'success',
+			text: 'Imported 1 model'
+		});
+		expect(importResultMessage({ imported: ['a', 'b'], skipped: [] }).text).toBe('Imported 2 models');
+	});
+
+	it('names what was skipped and why, up to three', () => {
+		const skipped = [
+			{ id: 'x', reason: 'no write access' },
+			{ id: null, reason: 'no valid id' },
+			{ id: 'y', reason: 'could not be saved' },
+			{ id: 'z', reason: 'listed more than once' },
+			{ id: 'w', reason: 'listed more than once' }
+		];
+		expect(importResultMessage({ imported: ['a'], skipped })).toEqual({
+			kind: 'warning',
+			text: 'Imported 1 model; skipped 5: x (no write access), an entry without an id (no valid id), y (could not be saved) and 2 more'
+		});
+		expect(importResultMessage({ imported: [], skipped: skipped.slice(0, 1) })).toEqual({
+			kind: 'error',
+			text: 'Imported 0 models; skipped 1: x (no write access)'
+		});
 	});
 });

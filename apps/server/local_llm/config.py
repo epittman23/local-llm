@@ -23,6 +23,7 @@ from local_llm.env import (
     PACKAGE_DIR,
     legacy_name,
     log,
+    optional_int_env,
 )
 from local_llm.models.config import Config
 from local_llm.utils.json_codec import JSONCodec
@@ -739,9 +740,9 @@ ENABLE_RAG_HYBRID_SEARCH_ENRICHED_TEXTS = (
 
 RAG_FULL_CONTEXT = os.getenv('RAG_FULL_CONTEXT', 'False').lower() == 'true'
 
-RAG_FILE_MAX_COUNT = int(os.getenv('RAG_FILE_MAX_COUNT')) if os.getenv('RAG_FILE_MAX_COUNT') else None
+RAG_FILE_MAX_COUNT = optional_int_env('RAG_FILE_MAX_COUNT')
 
-RAG_FILE_MAX_SIZE = int(os.getenv('RAG_FILE_MAX_SIZE')) if os.getenv('RAG_FILE_MAX_SIZE') else None
+RAG_FILE_MAX_SIZE = optional_int_env('RAG_FILE_MAX_SIZE')
 
 ENABLE_KNOWLEDGE_FILE_RETENTION = os.getenv('ENABLE_KNOWLEDGE_FILE_RETENTION', 'False').lower() == 'true'
 

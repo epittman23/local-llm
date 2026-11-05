@@ -89,10 +89,15 @@ export function eventsByDay(events: CalendarEventModel[]): Record<string, Calend
 	return map;
 }
 
-/** Timed events that *start* in a given local hour of a day (the week and day grids); all-day events are in the band. */
+/**
+ * Timed events that *start* in a given local hour of a day (the week and day grids); all-day events are in the band.
+ * The hour runs to the next hour's local start, not a fixed 60 minutes (#321): on a spring-forward day the skipped
+ * hour is empty instead of repeating the next one, and on a fall-back day the repeated hour holds both of its passes.
+ */
 export function eventsInHour(events: CalendarEventModel[], day: Date, hour: number): CalendarEventModel[] {
 	const from = new Date(day.getFullYear(), day.getMonth(), day.getDate(), hour).getTime();
-	return events.filter((e) => !e.all_day && e.start_at / NS >= from && e.start_at / NS < from + 3_600_000);
+	const to = new Date(day.getFullYear(), day.getMonth(), day.getDate(), hour + 1).getTime();
+	return events.filter((e) => !e.all_day && e.start_at / NS >= from && e.start_at / NS < to);
 }
 
 /**
@@ -137,6 +142,42 @@ export const nsToDate = (ns: number) => {
 export const nsToTime = (ns: number) => new Date(ns / NS).toTimeString().slice(0, 5);
 export const dateTimeToNs = (date: string, time: string) => new Date(`${date}T${time || '00:00'}`).getTime() * NS;
 
+/** The reminder choices the event form offers, as minutes before (-1: none). */
+export const REMINDERS: [number, string][] = [
+	[-1, 'None'],
+	[0, 'At time of event'],
+	[5, '5 minutes before'],
+	[10, '10 minutes before'],
+	[15, '15 minutes before'],
+	[30, '30 minutes before'],
+	[60, '1 hour before']
+];
+
+/**
+ * The reminder choices, with the given values (the event's saved one and the
+ * form's current one) added when they are not among them (#324). A reminder set elsewhere (the assistant's calendar tool, say,
+ * at 120 minutes) showed as "None", and picking None then changed nothing.
+ */
+export function reminderOptions(...values: number[]): [number, string][] {
+	const own = [...new Set(values)]
+		.filter((minutes) => minutes >= 0 && !REMINDERS.some(([listed]) => listed === minutes))
+		.map((minutes): [number, string] => [minutes, reminderLabel(minutes)]);
+	return own.length ? [...REMINDERS, ...own].sort((a, b) => a[0] - b[0]) : REMINDERS;
+}
+
+/** The server sends a reminder at most this long before the event (`MAX_ALERT_LEAD_MINUTES`). */
+const MAX_REMINDER_MINUTES = 22 * 60;
+
+const leadLabel = (minutes: number) =>
+	minutes % 60 === 0
+		? `${minutes / 60} hour${minutes === 60 ? '' : 's'} before`
+		: `${minutes} minute${minutes === 1 ? '' : 's'} before`;
+
+const reminderLabel = (minutes: number) =>
+	minutes > MAX_REMINDER_MINUTES
+		? `${leadLabel(minutes)} (sent ${leadLabel(MAX_REMINDER_MINUTES)})`
+		: leadLabel(minutes);
+
 export type EventFields = {
 	title: string;
 	description: string;
@@ -176,7 +217,8 @@ export function eventFields(
 			endTime: event.end_at ? nsToTime(event.end_at) : '',
 			allDay: event.all_day,
 			location: event.location || '',
-			alertMinutes: event.meta?.alert_minutes ?? 10,
+			// Any negative means no reminder, as the server reads it.
+			alertMinutes: Math.max(event.meta?.alert_minutes ?? 10, -1),
 			repeat: repeatFromRrule(event.rrule)
 		};
 	}
