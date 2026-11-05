@@ -87,6 +87,46 @@ def _safe_identifier(value: str, label: str) -> str:
     return value
 
 
+# Metrics whose score is a distance, lower is better; every other reports a similarity.
+_DISTANCE_METRICS = {'euclid', 'manhattan', 'l2', 'hamming', 'jaccard'}
+
+
+def _as_similarity(score, metric: str | None):
+    """A provider's score as a similarity, higher is better, as every other source reports one (#503).
+
+    Cosine and inner product already are one; a distance d (Euclid, Manhattan,
+    L2, ...) becomes 1 / (1 + d), which keeps the order, the closest hit
+    scoring 1. An unknown metric leaves the score as it is.
+    """
+    if not isinstance(score, int | float) or (metric or '').lower() not in _DISTANCE_METRICS:
+        return score
+    return 1 / (1 + max(float(score), 0.0))
+
+
+def _qdrant_metric(client, collection_name: str, vector_field: str | None) -> str | None:
+    """The distance the collection's vectors (or its named vector) are compared by, or None if it cannot be read."""
+    try:
+        vectors = client.get_collection(collection_name).config.params.vectors
+        params = vectors.get(vector_field or '') if isinstance(vectors, dict) else vectors
+        distance = getattr(params, 'distance', None)
+        return str(getattr(distance, 'value', distance)) if distance is not None else None
+    except Exception as e:
+        log.warning('Could not read the metric of Qdrant collection %s: %s', collection_name, e)
+        return None
+
+
+def _milvus_metric(client, collection_name: str, vector_field: str, timeout: float) -> str | None:
+    """The metric of the index on the vector field, or None if it cannot be read."""
+    try:
+        for index_name in client.list_indexes(collection_name, field_name=vector_field, timeout=timeout) or []:
+            metric = (client.describe_index(collection_name, index_name, timeout=timeout) or {}).get('metric_type')
+            if metric:
+                return str(metric)
+    except Exception as e:
+        log.warning('Could not read the metric of Milvus collection %s: %s', collection_name, e)
+    return None
+
+
 async def _retrieve_qdrant(connection, auth_config, knowledge, query, count, embedding_function) -> list[dict]:
     try:
         from qdrant_client import QdrantClient
@@ -113,14 +153,15 @@ async def _retrieve_qdrant(connection, auth_config, knowledge, query, count, emb
             api_key=(auth_config or {}).get('api_key'),
             timeout=config.get('timeout') or 30,
         )
-        return client.query_points(
+        response = client.query_points(
             collection_name=collection_name,
             query=vector,
             using=vector_field,
             limit=count,
         )
+        return response, _qdrant_metric(client, collection_name, vector_field)
 
-    response = await asyncio.to_thread(_search)
+    response, metric = await asyncio.to_thread(_search)
     mapping = {
         'content_field': source_config.get('content_field') or 'payload.text',
         'metadata_field': source_config.get('metadata_field') or 'payload.metadata',
@@ -130,7 +171,9 @@ async def _retrieve_qdrant(connection, auth_config, knowledge, query, count, emb
 
     normalized = []
     for point in response.points:
-        normalized.append(_normalize_result(point.model_dump(), mapping, knowledge, distance=point.score))
+        result = point.model_dump()
+        result['score'] = _as_similarity(result.get('score'), metric)
+        normalized.append(_normalize_result(result, mapping, knowledge, distance=result['score']))
     return normalized
 
 
@@ -183,9 +226,11 @@ async def _retrieve_milvus(connection, auth_config, knowledge, query, count, emb
             'limit': count,
             'output_fields': list(output_fields),
         }
-        return client.search(**kwargs)
+        # Each call bounded, as the connection is: none of them is otherwise (#503).
+        timeout = config.get('timeout') or 30
+        return client.search(**kwargs, timeout=timeout), _milvus_metric(client, collection_name, vector_field, timeout)
 
-    response = await asyncio.to_thread(_search)
+    response, metric = await asyncio.to_thread(_search)
     mapping = {
         'content_field': content_field,
         'metadata_field': metadata_field,
@@ -200,10 +245,20 @@ async def _retrieve_milvus(connection, auth_config, knowledge, query, count, emb
         result = {
             **entity,
             'id': item.get('id') or entity.get('id'),
-            'distance': item.get('distance'),
+            'distance': _as_similarity(item.get('distance'), metric),
         }
-        normalized.append(_normalize_result(result, mapping, knowledge, distance=item.get('distance')))
+        normalized.append(_normalize_result(result, mapping, knowledge, distance=result['distance']))
     return normalized
+
+
+def _pgvector_timeout(value) -> float:
+    """The connection's timeout in seconds, or 30 for none or one Postgres cannot take (#514)."""
+    try:
+        timeout = float(value) if value not in (None, '') else 30.0
+    except (TypeError, ValueError):
+        return 30.0
+    # statement_timeout is whole milliseconds up to INT_MAX, and 0 means no limit.
+    return timeout if 0.001 <= timeout <= 2_147_483 else 30.0
 
 
 async def _retrieve_pgvector(connection, auth_config, knowledge, query, count, embedding_function) -> list[dict]:
@@ -233,9 +288,12 @@ async def _retrieve_pgvector(connection, auth_config, knowledge, query, count, e
     document_id_field = source_config.get('document_id_field') or 'id'
 
     vector = await embedding_function(query, prefix=RAG_EMBEDDING_QUERY_PREFIX)
+    timeout = _pgvector_timeout(config.get('timeout'))
+    endpoint = connection.get('endpoint')
 
     def _search():
         from psycopg import sql
+        from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
         table_identifier = sql.SQL('.').join(
             sql.Identifier(_safe_identifier(part, 'table name')) for part in table_name.split('.')
@@ -250,13 +308,29 @@ async def _retrieve_pgvector(connection, auth_config, knowledge, query, count, e
             else sql.SQL("'{}'::jsonb")
         )
 
+        # A server gone after the connect is noticed through TCP, not after the
+        # kernel's two-hour keepalive default (#514). Client-side libpq settings,
+        # never sent to the server, each kept as the endpoint gives it if it does.
+        tcp = {
+            'keepalives': 1,
+            'keepalives_idle': max(1, round(timeout)),
+            'keepalives_interval': max(1, round(timeout / 3)),
+            'keepalives_count': 3,
+            'tcp_user_timeout': round(2 * timeout * 1000),
+        }
+        own = conninfo_to_dict(endpoint or '')
+        conninfo = make_conninfo(endpoint or '', **{key: value for key, value in tcp.items() if key not in own})
         with psycopg.connect(
-            connection.get('endpoint'),
+            conninfo,
             row_factory=dict_row,
-            connect_timeout=config.get('timeout') or 30,
+            connect_timeout=max(1, round(timeout)),
         ) as conn:
             register_vector(conn)
             with conn.cursor() as cur:
+                # The search bounded by the server too, for this transaction only
+                # (SET LOCAL): not as a startup option, which a pooler such as
+                # PgBouncer refuses by default (#514).
+                cur.execute("SELECT set_config('statement_timeout', %s, true)", (f'{round(timeout * 1000)}ms',))
                 cur.execute(
                     sql.SQL(
                         """
@@ -283,7 +357,12 @@ async def _retrieve_pgvector(connection, auth_config, knowledge, query, count, e
                 )
                 return cur.fetchall()
 
-    rows = await asyncio.to_thread(_search)
+    # A server that stops answering mid-query never ends the statement, so the
+    # turn waits no longer than the connect and the statements could take (#514).
+    try:
+        rows = await asyncio.wait_for(asyncio.to_thread(_search), timeout=2 * timeout + 1)
+    except TimeoutError as exc:
+        raise RuntimeError(f'The pgvector server did not answer within {2 * timeout + 1:g} s') from exc
     mapping = {
         'content_field': 'content',
         'metadata_field': 'metadata',
@@ -375,9 +454,9 @@ async def retrieve_external_knowledge_for_connection(
             raise RuntimeError(f'Unsupported external knowledge provider: {connection.get("provider")}')
 
     # The queries take turns, each one's best hit first, so the first query
-    # cannot fill the budget alone (#349). Merged by rank, not score: whether
-    # a higher score is better depends on the collection's metric, which is
-    # unknown here. A chunk returned more than once, by several queries or
+    # cannot fill the budget alone (#349). Merged by rank, not score: a score
+    # is a similarity when the collection's metric could be read (#503), but
+    # stays as the provider gave it when it could not. A chunk returned more than once, by several queries or
     # twice by one, is kept once, at its best rank; the key includes the
     # content because document_id_field may map a parent document shared by
     # several chunks. It is built as text because either field may be mapped

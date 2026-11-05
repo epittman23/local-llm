@@ -242,6 +242,7 @@ form p {
 	margin: 0;
 	font-size: 12px;
 }
-#settings-message.error-text {
+#settings-message.error-text,
+#server-problem {
 	color: var(--bad);
 }

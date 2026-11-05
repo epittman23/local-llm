@@ -58,7 +58,7 @@ CALENDAR_ALERT_LOOKAHEAD_MINUTES = int(os.getenv('CALENDAR_ALERT_LOOKAHEAD_MINUT
 ####################
 
 
-def _resolve_tz(tz: str = None) -> ZoneInfo | None:
+def _resolve_tz(tz: str | None = None) -> ZoneInfo | None:
     """Safely resolve a timezone string to ZoneInfo.
 
     Returns None (→ server-local fallback) when *tz* is empty, None,
@@ -177,12 +177,39 @@ def validate_rrule(s: str, tz: str = None) -> None:
         raise ValueError(ERROR_MESSAGES.AUTOMATION_NO_FUTURE_RUNS)
 
 
-def next_run_ns(s: str, tz: str = None) -> int | None:
-    """Next occurrence as epoch nanoseconds, respecting user timezone."""
+_FREQ = re.compile(r'(?:^|[\s:;])FREQ=([A-Z]+)')
+
+
+def _sub_daily(s: str) -> bool:
+    """Whether the rule repeats more often than daily (SECONDLY, MINUTELY or HOURLY).
+
+    A rule that does not parse raises here as `_parse_rule` would. The
+    frequency is then read from the rule's own text, which dateutil has just
+    accepted: its parsed rule keeps it only in a private attribute.
+    """
+    rrulestr(s, ignoretz=True)
+    match = _FREQ.search(s.upper())
+    return match is not None and match.group(1) in ('SECONDLY', 'MINUTELY', 'HOURLY')
+
+
+def next_run_ns(s: str, tz: str | None = None, anchor_ns: int | None = None) -> int | None:
+    """Next occurrence as epoch nanoseconds, respecting user timezone.
+
+    `anchor_ns` is when the rule is read from: a rule without DTSTART takes
+    the time it does not state from there (now, by default). A claimed run
+    passes its own due time, so a late claim does not move the rule's time
+    of day (#512).
+    """
     zi = _resolve_tz(tz)
     now = dt.datetime.now(zi) if zi else dt.datetime.now()
     now_naive = now.replace(tzinfo=None)
-    when = _parse_rule(s, now_naive).after(now_naive)
+    anchor = now_naive
+    # Only a daily or longer rule takes anything from its anchor; a shorter one
+    # is aligned to its own grid, and anchoring it far back only made the walk
+    # to now longer.
+    if anchor_ns is not None and not _sub_daily(s):
+        anchor = dt.datetime.fromtimestamp(anchor_ns / 1_000_000_000, tz=zi).replace(tzinfo=None)
+    when = _parse_rule(s, anchor).after(now_naive)
     if when is None:
         return None
     if zi:
@@ -208,6 +235,39 @@ def next_n_runs_ns(s: str, n: int = 5, tz: str = None) -> list[int]:
         else:
             result.append(int(when.timestamp() * 1_000_000_000))
     return result
+
+
+def runs_between_ns(
+    s: str, anchor_ns: int, start_ns: int, end_ns: int, tz: str | None = None, limit: int = 5000
+) -> list[int]:
+    """The runs the rule makes in [start_ns, end_ns), as epoch nanoseconds, at most `limit`.
+
+    The rule is read as the scheduler reads it (`_parse_rule`), anchored at
+    `anchor_ns`, the automation's next run: a rule without DTSTART takes its
+    unstated time from there, as the scheduler's did, and a COUNT counts from
+    the rule's own DTSTART. The Scheduled Tasks calendar used to re-anchor
+    the rule at the next run, so a COUNT started over there and it showed
+    runs that never come (#356).
+    """
+    if start_ns >= end_ns:
+        return []
+    zi = _resolve_tz(tz)
+
+    def local(ns: int) -> dt.datetime:
+        return dt.datetime.fromtimestamp(ns / 1_000_000_000, tz=zi).replace(tzinfo=None)
+
+    rule = _parse_rule(s, local(anchor_ns))
+    runs: list[int] = []
+    # The scan runs in wall-clock time; starting a few hours early covers a DST change.
+    for when in rule.xafter(local(start_ns) - dt.timedelta(hours=3), inc=True):
+        when_ns = int((when.replace(tzinfo=zi) if zi else when).timestamp() * 1_000_000_000)
+        if when_ns >= end_ns or len(runs) >= limit:
+            break
+        # A wall-clock time the clocks skip lands on a later one, which the rule
+        # then gives again: the scheduler runs that instant once.
+        if when_ns >= start_ns and (not runs or when_ns > runs[-1]):
+            runs.append(when_ns)
+    return runs
 
 
 def rrule_interval_seconds(s: str, sample: int = 50) -> int | None:
