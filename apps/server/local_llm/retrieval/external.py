@@ -251,6 +251,16 @@ async def _retrieve_milvus(connection, auth_config, knowledge, query, count, emb
     return normalized
 
 
+def _pgvector_timeout(value) -> float:
+    """The connection's timeout in seconds, or 30 for none or one Postgres cannot take (#514)."""
+    try:
+        timeout = float(value) if value not in (None, '') else 30.0
+    except (TypeError, ValueError):
+        return 30.0
+    # statement_timeout is whole milliseconds up to INT_MAX, and 0 means no limit.
+    return timeout if 0.001 <= timeout <= 2_147_483 else 30.0
+
+
 async def _retrieve_pgvector(connection, auth_config, knowledge, query, count, embedding_function) -> list[dict]:
     try:
         import psycopg
@@ -278,9 +288,12 @@ async def _retrieve_pgvector(connection, auth_config, knowledge, query, count, e
     document_id_field = source_config.get('document_id_field') or 'id'
 
     vector = await embedding_function(query, prefix=RAG_EMBEDDING_QUERY_PREFIX)
+    timeout = _pgvector_timeout(config.get('timeout'))
+    endpoint = connection.get('endpoint')
 
     def _search():
         from psycopg import sql
+        from psycopg.conninfo import conninfo_to_dict, make_conninfo
 
         table_identifier = sql.SQL('.').join(
             sql.Identifier(_safe_identifier(part, 'table name')) for part in table_name.split('.')
@@ -295,13 +308,29 @@ async def _retrieve_pgvector(connection, auth_config, knowledge, query, count, e
             else sql.SQL("'{}'::jsonb")
         )
 
+        # A server gone after the connect is noticed through TCP, not after the
+        # kernel's two-hour keepalive default (#514). Client-side libpq settings,
+        # never sent to the server, each kept as the endpoint gives it if it does.
+        tcp = {
+            'keepalives': 1,
+            'keepalives_idle': max(1, round(timeout)),
+            'keepalives_interval': max(1, round(timeout / 3)),
+            'keepalives_count': 3,
+            'tcp_user_timeout': round(2 * timeout * 1000),
+        }
+        own = conninfo_to_dict(endpoint or '')
+        conninfo = make_conninfo(endpoint or '', **{key: value for key, value in tcp.items() if key not in own})
         with psycopg.connect(
-            connection.get('endpoint'),
+            conninfo,
             row_factory=dict_row,
-            connect_timeout=config.get('timeout') or 30,
+            connect_timeout=max(1, round(timeout)),
         ) as conn:
             register_vector(conn)
             with conn.cursor() as cur:
+                # The search bounded by the server too, for this transaction only
+                # (SET LOCAL): not as a startup option, which a pooler such as
+                # PgBouncer refuses by default (#514).
+                cur.execute("SELECT set_config('statement_timeout', %s, true)", (f'{round(timeout * 1000)}ms',))
                 cur.execute(
                     sql.SQL(
                         """
@@ -328,7 +357,12 @@ async def _retrieve_pgvector(connection, auth_config, knowledge, query, count, e
                 )
                 return cur.fetchall()
 
-    rows = await asyncio.to_thread(_search)
+    # A server that stops answering mid-query never ends the statement, so the
+    # turn waits no longer than the connect and the statements could take (#514).
+    try:
+        rows = await asyncio.wait_for(asyncio.to_thread(_search), timeout=2 * timeout + 1)
+    except TimeoutError as exc:
+        raise RuntimeError(f'The pgvector server did not answer within {2 * timeout + 1:g} s') from exc
     mapping = {
         'content_field': 'content',
         'metadata_field': 'metadata',
