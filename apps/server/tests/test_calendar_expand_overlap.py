@@ -62,3 +62,57 @@ def test_a_long_occurrence_is_found_across_a_spring_forward_change():
 
     # The 28 March occurrence ends at 00:30 on Monday 30 March (CEST).
     assert _starts(got) == [_ns('2026-03-28 23:30')]
+
+
+# --- #509: all-day ends across a DST change, and the instance cap -------------
+
+
+def _all_day(start: str, end: str, rrule: str) -> dict:
+    return {**_event(start, end, rrule), 'all_day': True}
+
+
+def test_an_all_day_occurrence_ends_at_the_next_midnight_across_a_dst_change():
+    """Its end was its start plus 24 hours, which is 23:00 on a 25-hour day and 01:00 the day after a 23-hour one."""
+    day = _all_day('2026-10-20 00:00', '2026-10-21 00:00', 'FREQ=DAILY')
+
+    fall = expand_recurring_event(day, _ns('2026-10-25 00:00'), _ns('2026-10-26 00:00'), tz=TZ)
+    spring = expand_recurring_event(
+        _all_day('2026-03-20 00:00', '2026-03-21 00:00', 'FREQ=DAILY'),
+        _ns('2026-03-29 00:00'),
+        _ns('2026-03-30 00:00'),
+        tz=TZ,
+    )
+
+    assert [(i['start_at'], i['end_at']) for i in fall] == [(_ns('2026-10-25 00:00'), _ns('2026-10-26 00:00'))]
+    assert [(i['start_at'], i['end_at']) for i in spring] == [(_ns('2026-03-29 00:00'), _ns('2026-03-30 00:00'))]
+
+
+def test_an_all_day_occurrence_saved_as_the_web_form_saves_it_stays_on_its_day():
+    """The form saves an all-day event as 00:00 to 23:59; across spring-forward its end landed at 00:59 the next day."""
+    day = _all_day('2026-03-20 00:00', '2026-03-20 23:59', 'FREQ=DAILY')
+
+    got = expand_recurring_event(day, _ns('2026-03-29 00:00'), _ns('2026-03-30 00:00'), tz=TZ)
+
+    assert [(i['start_at'], i['end_at']) for i in got] == [(_ns('2026-03-29 00:00'), _ns('2026-03-29 23:59'))]
+
+
+def test_a_timed_occurrence_keeps_its_exact_length_across_a_dst_change():
+    meeting = _event('2026-10-20 09:00', '2026-10-20 10:00', 'FREQ=DAILY')
+
+    got = expand_recurring_event(meeting, _ns('2026-10-25 00:00'), _ns('2026-10-26 00:00'), tz=TZ)
+
+    assert [i['end_at'] - i['start_at'] for i in got] == [3600 * 1_000_000_000]
+
+
+def test_the_instance_cap_counts_the_instances_kept_not_the_ones_walked_past():
+    """The lookback walks the day before the range too; those once used up the cap before the range was reached."""
+    hourly = _event('2026-10-01 00:00', '2026-10-01 02:00', 'FREQ=HOURLY')
+
+    got = expand_recurring_event(hourly, _ns('2026-10-15 00:00'), _ns('2026-10-16 00:00'), tz=TZ, max_instances=30)
+
+    # The one from 23:00 the evening before, still under way at midnight, then every hour of the day.
+    assert len(got) == 25
+    assert _starts(got)[0] == _ns('2026-10-14 23:00')
+    assert _starts(got)[-1] == _ns('2026-10-15 23:00')
+    capped = expand_recurring_event(hourly, _ns('2026-10-15 00:00'), _ns('2026-10-16 00:00'), tz=TZ, max_instances=10)
+    assert len(capped) == 10
