@@ -280,6 +280,9 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   `@tailwindcss/vite`; the dev-server proxy mirrors the Svelte app's
   `vite.config.ts` (`d863707:apps/openwebui/vite.config.ts`) exactly (`/api`, `/ollama`, `/openai`, `/oauth`, `/ws`
   → `:4000`); `base` is `/`, where `main.py` mounts the build.
+- **`dev-server-identity.mjs`** — the dev-server plugin answering
+  `/__lllm/dev-server` with the `apps/web` it serves, which the desktop app
+  checks before loading `:5174` in place of the build.
 - **`components.json`** — shadcn/ui's own config: `radix-nova` preset,
   Lucide icons, CSS variables. See `docs/decisions.md`'s 2026-09-18
   entry for why this preset and not the migration plan's original
@@ -411,7 +414,8 @@ structural summary.
   - the `make backend` / build / `compose down` commands, run in a login
     shell;
   - `stopGroup()`, one SIGINT and a bounded wait;
-  - `probe()` and `LogTail`.
+  - `probe()`, `fetchText()` and `LogTail`;
+  - `isOwnDevServer()`, whether `:5174` is this checkout's `make frontend`.
 - **`src/progress.ts`**: the progress dialog's step reducer, driven by the
   Makefile's and the backend's `==> ` markers.
 - **`src/config.ts`** (settings in `~/.config/Local LLM/config.json`) and

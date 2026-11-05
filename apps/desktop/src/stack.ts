@@ -6,12 +6,19 @@
 // as arguments, so they are unit-tested without spawning anything.
 
 import { type ChildProcess, execFile, spawn } from 'node:child_process';
-import { closeSync, openSync, readFileSync, readSync, statSync } from 'node:fs';
+import { closeSync, openSync, readFileSync, readSync, realpathSync, statSync } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 
 export const DEV_SERVER_URL = 'http://localhost:5174';
+
+/**
+ * Where `make frontend`'s dev server says which checkout it serves
+ * (apps/web/astro.config.mjs). Anything else on :5174, such as another
+ * project's Vite server moved up from a taken :5173, answers it otherwise.
+ */
+export const DEV_SERVER_IDENTITY_PATH = '/__lllm/dev-server';
 
 /** The `make frontend` dev server proxies to this port and no other. */
 export const DEV_SERVER_BACKEND_PORT = 4000;
@@ -371,6 +378,39 @@ export async function probe(url: string, timeoutMs = 1500): Promise<number | nul
 		return response.status;
 	} catch {
 		return null;
+	}
+}
+
+/** The body of a GET that answered 200, or null for any other answer or none in time. */
+export async function fetchText(url: string, timeoutMs = 1500): Promise<string | null> {
+	try {
+		const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs), redirect: 'manual' });
+		if (response.status !== 200) {
+			await response.body?.cancel();
+			return null;
+		}
+		return await response.text();
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Whether `body`, the dev server's answer at DEV_SERVER_IDENTITY_PATH, names
+ * `webDir` (this checkout's apps/web) as what it serves, so the app never
+ * loads another project, or another checkout, in place of its own UI (#432).
+ */
+export function isOwnDevServer(body: string | null, webDir: string): boolean {
+	if (body === null) return false;
+	try {
+		const identity: unknown = JSON.parse(body);
+		if (typeof identity !== 'object' || identity === null) return false;
+		const { app, webRoot } = identity as { app?: unknown; webRoot?: unknown };
+		if (app !== 'local-llm' || typeof webRoot !== 'string') return false;
+		return realpathSync(webRoot) === realpathSync(webDir);
+	} catch {
+		// Not JSON (another project's page), or a directory that is gone.
+		return false;
 	}
 }
 

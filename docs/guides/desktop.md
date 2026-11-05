@@ -52,7 +52,7 @@ running:
 | A backend already up (from a terminal) | connects to it: nothing is restarted or rebuilt | leaves it running |
 | The stack it started before it crashed, for the same server address and checkout | adopts it (`owned.json`; the same `make`, by pid and start time) | stops it |
 | That stack, started for another address or checkout, recorded by an earlier version of the app (which named neither), or found by a launch for a remote server | stops it first, as closing the app would, then goes on as if it had not been found; if the stop had to be forced and left containers or a `llama-server` running, it says so and waits for Retry | as the row that then applies |
-| `make frontend` on `:5174` | loads the hot-reloading dev server instead of the build, and skips the build | the dev server is left alone |
+| `make frontend` on `:5174`, from the configured checkout | loads the hot-reloading dev server instead of the build, and skips the build; it asks the dev server at `/__lllm/dev-server` which `apps/web` it serves, so another project's server that took `:5174`, or another checkout's, is ignored | the dev server is left alone |
 | A server address that isn't loopback | connects only (after stopping an earlier stack, above) | nothing to stop |
 
 `:5174` and `:4000` are different origins, so each keeps its own login.
