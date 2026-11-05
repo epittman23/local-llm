@@ -1,5 +1,6 @@
 import logging
 import time
+import typing
 from typing import Literal
 from uuid import uuid4
 
@@ -345,7 +346,11 @@ class AutomationTable:
 
             for row in rows:
                 row.last_run_at = now_ns
-                row.next_run_at = next_run_ns(row.data.get('rrule', ''), tz=timezone_by_user_id.get(row.user_id))
+                # Read from the run's own due time, so a late claim does not move the rule's time (#512).
+                due = typing.cast(int, row.next_run_at)
+                row.next_run_at = next_run_ns(
+                    row.data.get('rrule', ''), tz=timezone_by_user_id.get(row.user_id), anchor_ns=due
+                )
                 if row.next_run_at is None:
                     # The rule has run its last occurrence. Left active with no
                     # next run, it was expanded by the calendar from the epoch.
