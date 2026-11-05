@@ -50,9 +50,10 @@ running:
 |---|---|---|
 | Nothing answering on `:4000` | builds `apps/web` if any source is newer than `dist/`, then runs `make backend` | stops everything it started |
 | A backend already up (from a terminal) | connects to it: nothing is restarted or rebuilt | leaves it running |
-| The stack it started before it crashed | adopts it (`owned.json`; the same `make`, by pid and start time) | stops it |
+| The stack it started before it crashed, for the same server address and checkout | adopts it (`owned.json`; the same `make`, by pid and start time) | stops it |
+| That stack, started for another address or checkout, recorded by an earlier version of the app (which named neither), or found by a launch for a remote server | stops it first, as closing the app would, then goes on as if it had not been found; if the stop had to be forced and left containers or a `llama-server` running, it says so and waits for Retry | as the row that then applies |
 | `make frontend` on `:5174` | loads the hot-reloading dev server instead of the build, and skips the build | the dev server is left alone |
-| A server address that isn't loopback | connects only | nothing to stop |
+| A server address that isn't loopback | connects only (after stopping an earlier stack, above) | nothing to stop |
 
 `:5174` and `:4000` are different origins, so each keeps its own login.
 
@@ -123,7 +124,8 @@ without saving it.
 Everything lives in `~/.config/Local LLM/`, the same for the packaged app and
 `make desktop`:
 - `config.json`: the settings and the window's size;
-- `owned.json`: the process group of the stack it started, while it runs;
+- `owned.json`: the process group of the stack it started, and the server
+  address and checkout it was started for, while it runs;
 - `logs/backend.log`: the build and `make backend` output of the stack it
   started (the previous run's is `backend.log.1`).
 
