@@ -31,6 +31,8 @@
 			<form id="settings-form">
 				<label for="server-url">Server URL</label>
 				<input id="server-url" type="text" spellcheck="false" autocomplete="off" required />
+				<p id="server-override" class="muted" hidden></p>
+				<p id="server-problem" hidden></p>
 				<p class="muted">
 					At 127.0.0.1 or localhost, the app starts the local stack when nothing is running and stops it on close.
 					At any other address, such as a remote server, it only connects.
