@@ -1426,13 +1426,8 @@ async def get_channel_message(
     if message.channel_id != id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ERROR_MESSAGES.DEFAULT())
 
-    message_user = await Users.get_user_by_id(message.user_id, db=db)
-    return MessageResponse(
-        **{
-            **message.model_dump(),
-            'user': UserNameResponse(**message_user.model_dump()) if message_user else None,
-        }
-    )
+    # Its author as get_message_by_id resolved it, a webhook included (#330).
+    return MessageResponse(**message.model_dump())
 
 
 ############################
@@ -1511,13 +1506,10 @@ async def pin_channel_message(
     try:
         await Messages.update_is_pinned_by_id(message_id, form_data.is_pinned, user.id, db=db)
         message = await Messages.get_message_by_id(message_id, db=db)
-        message_user = await Users.get_user_by_id(message.user_id, db=db)
-        message_data = MessageUserResponse(
-            **{
-                **message.model_dump(),
-                'user': UserNameResponse(**message_user.model_dump()) if message_user else None,
-            }
-        )
+        # Its author as get_message_by_id resolved it: a webhook's message keeps
+        # the webhook's name, where it used to be relabelled as the webhook's
+        # creator, which the page then showed (#330).
+        message_data = MessageUserResponse(**message.model_dump())
 
         await sio.emit(
             'events:channel',

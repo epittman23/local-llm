@@ -267,6 +267,40 @@ def get_text_from_message(message: dict) -> str | None:
     return get_content_from_message(message)
 
 
+def with_output_text(output: list, new_text: str) -> list:
+    """The output with its text replaced by `new_text`, as the web client's edit does it (#502, #211).
+
+    For a reply whose content was rewritten (an outlet filter, an action): the
+    next request is built from `output`, so it must carry the new text. The
+    message items become one item holding it, where the last of them was, and
+    reasoning goes (it argued for the text being replaced); tool calls, their
+    outputs and code runs stay where they were. No text leaves no message item.
+    """
+    text = new_text.strip()
+    messages = [i for i, item in enumerate(output) if isinstance(item, dict) and item.get('type') == 'message']
+    last = messages[-1] if messages else -1
+    edited = (
+        [
+            {
+                'type': 'message',
+                'id': (output[last].get('id') if last >= 0 else None) or f'msg_{uuid.uuid4().hex}',
+                'role': 'assistant',
+                'status': 'completed',
+                'content': [{'type': 'output_text', 'text': text}],
+            }
+        ]
+        if text
+        else []
+    )
+    kept = []
+    for index, item in enumerate(output):
+        if index == last:
+            kept.extend(edited)
+        if not (isinstance(item, dict) and item.get('type') in ('message', 'reasoning')):
+            kept.append(item)
+    return kept if last >= 0 else [*kept, *edited]
+
+
 def get_output_text(output: list | None) -> str:
     if not isinstance(output, list):
         return ''
@@ -1432,4 +1466,16 @@ def chunk_settings_error(chunk_size, chunk_overlap) -> str | None:
         return 'Chunk Overlap cannot be negative.'
     if chunk_overlap >= chunk_size:
         return f'Chunk Overlap must be smaller than Chunk Size ({chunk_overlap} is not smaller than {chunk_size}).'
+    return None
+
+
+def embedding_batch_size_error(batch_size) -> str | None:
+    """Why embedding could not use this batch size, or None (#353).
+
+    Once saved, a size of 0 fails every embedding with an error, a negative
+    one returns no vectors (and an IndexError later), and none fails as soon
+    as it is read; for every engine, internal or external.
+    """
+    if isinstance(batch_size, bool) or not isinstance(batch_size, int) or batch_size < 1:
+        return f'Embedding Batch Size must be a whole number of at least 1 (got {batch_size!r}).'
     return None
