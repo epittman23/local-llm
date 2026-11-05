@@ -56,11 +56,76 @@ export const filesToUpload = (manifest: DirectoryManifestEntry[], diff: SyncDiff
 			diff.modified.some((m) => m.filename === entry.filename && m.path === entry.path)
 	);
 
-/** Ids to remove before uploading: deleted files plus the stale copies of modified ones. */
-export const staleFileIds = (diff: SyncDiff): string[] => [
-	...diff.deleted.map((d) => d.file_id),
-	...diff.modified.map((m) => m.stale_file_id)
-];
+/** Ids to remove before uploading: the files gone from the folder. */
+export const deletedFileIds = (diff: SyncDiff): string[] => diff.deleted.map((d) => d.file_id);
+
+/** The old copies of these modified files: their `stale_file_id`s. */
+export const replacedFileIds = (
+	diff: SyncDiff,
+	entries: Pick<DirectoryManifestEntry, 'filename' | 'path'>[]
+): string[] =>
+	diff.modified
+		.filter((m) => entries.some((entry) => entry.filename === m.filename && entry.path === m.path))
+		.map((m) => m.stale_file_id);
+
+/** Whether an upload failed because the base already holds its text (the server's DUPLICATE_CONTENT). */
+export const isDuplicateContent = (reason: string): boolean => /duplicate content/i.test(reason);
+
+export type UploadOutcome = { ok: true } | { ok: false; reason: string };
+
+/**
+ * The upload half of a folder sync, after deleted files and folders are gone:
+ *
+ * 1. Modified files first, each while its old copy is still in the base, so a
+ *    new version that fails to upload leaves the old one in place instead of
+ *    the file missing until a later sync (#317).
+ * 2. Then the old copies of those that uploaded are removed, with the old
+ *    copies of those refused as duplicate content: the base checks a new
+ *    version's text against every copy it holds, so a file re-saved with the
+ *    same text, or two files that swapped contents, is refused while an old
+ *    copy is there. Those are uploaded again once it is gone, as before #317.
+ * 3. Added files last, so a copy of a modified file's old text (copy, then
+ *    edit) is not refused because of the copy it replaces.
+ *
+ * If removing the old copies fails, the files refused as duplicates are
+ * counted as failed and not retried: they would be refused again.
+ */
+export async function syncUploads(
+	manifest: DirectoryManifestEntry[],
+	diff: SyncDiff,
+	upload: (entry: DirectoryManifestEntry, attempt: 'first' | 'again') => Promise<UploadOutcome>,
+	removeFiles: (fileIds: string[]) => Promise<unknown>
+): Promise<{ attempted: number; failed: number; removeError: unknown }> {
+	const modified = filesToUpload(manifest, { ...diff, added: [] });
+	const added = filesToUpload(manifest, { ...diff, modified: [] });
+	let failed = 0;
+
+	const uploaded: DirectoryManifestEntry[] = [];
+	const refusedAsDuplicate: DirectoryManifestEntry[] = [];
+	for (const entry of modified) {
+		const outcome = await upload(entry, 'first');
+		if (outcome.ok) uploaded.push(entry);
+		else if (isDuplicateContent(outcome.reason)) refusedAsDuplicate.push(entry);
+		else failed++;
+	}
+
+	let removeError: unknown = null;
+	const oldCopies = replacedFileIds(diff, [...uploaded, ...refusedAsDuplicate]);
+	if (oldCopies.length > 0) {
+		try {
+			await removeFiles(oldCopies);
+		} catch (error) {
+			removeError = error;
+		}
+	}
+	for (const entry of refusedAsDuplicate) {
+		if (removeError !== null || !(await upload(entry, 'again')).ok) failed++;
+	}
+
+	for (const entry of added) if (!(await upload(entry, 'first')).ok) failed++;
+
+	return { attempted: modified.length + added.length, failed, removeError };
+}
 
 /**
  * Creates each directory in `diff.mkdir` (the server lists parents before

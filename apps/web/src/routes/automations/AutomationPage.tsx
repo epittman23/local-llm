@@ -21,7 +21,7 @@ import { dayjs } from '@/lib/utils/dates';
 import { FeatureGate } from '@/routes/common/FeatureGate';
 import { AutomationDialog } from './AutomationDialog';
 import { AutomationsHeader } from './AutomationsPage';
-import { destinationLabel, formatSchedule, runTarget } from './automationModel';
+import { destinationLabel, formatSchedule, nextRunAt, runTarget } from './automationModel';
 import { useAutomationResults } from './useAutomationResults';
 import { useDestinations } from './useDestinations';
 
@@ -184,7 +184,7 @@ function Automation() {
 					<Row label="Schedule">{formatSchedule(a.data.rrule)}</Row>
 					<Row label="Destination">{destinationLabel(a, folders, channels, true)}</Row>
 					<Row label="Model">{a.data.model_id}</Row>
-					<Row label="Next run">{formatWhen(a.next_runs?.[0] ?? a.next_run_at, 'Not scheduled')}</Row>
+					<Row label="Next run">{formatWhen(nextRunAt(a), 'Not scheduled')}</Row>
 					<Row label="Last run">{formatWhen(a.last_run_at, 'Never')}</Row>
 				</div>
 				<hr className="my-1.5" />
