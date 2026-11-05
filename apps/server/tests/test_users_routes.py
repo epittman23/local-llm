@@ -215,6 +215,17 @@ def test_a_password_reset_revokes_the_users_tokens(client, world, redis):
     assert (EVENTS.AUTH_PASSWORD_CHANGED, world.user.id, None) in world.events
 
 
+def test_a_password_reset_that_writes_nothing_is_refused(client, world, monkeypatch):
+    async def no_write(user_id, password, db=None):
+        return False
+
+    monkeypatch.setattr(users_router.Auths, 'update_user_password_by_id', no_write)
+    r = client.post(f'/users/{world.user.id}/update', json={PW_KEY: 'a-new-password-1'}, headers=world.admin.headers)
+    assert r.status_code == 400
+    # Not announced as changed (#296).
+    assert all(event != EVENTS.AUTH_PASSWORD_CHANGED for event, *_ in world.events)
+
+
 def test_updating_an_unknown_user_is_refused(client, world):
     r = client.post('/users/no-such-user/update', json={'name': 'x'}, headers=world.admin.headers)
     assert r.status_code == 400

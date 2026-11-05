@@ -1,4 +1,5 @@
 import type { AutomationForm, AutomationResponse } from '@/lib/apis/automations';
+import { errorMessage } from '@/lib/apis/errors';
 import { routePaths } from '@/routes/routePaths';
 
 // The rules behind the Automations surface: the schedule picker's RRULE
@@ -211,6 +212,24 @@ export function formatSchedule(rrule: string): string {
 export const oncePassed = (s: Schedule, now = new Date()) =>
 	s.frequency === 'ONCE' && new Date(`${s.onceDate}T${s.onceTime}`) <= now;
 
+/**
+ * A one-time run without a whole date and time (#322). A cleared box sent
+ * `DTSTART:20261201T00`, which the server took as midnight, and an invalid
+ * date passed `oncePassed`, since it compares as neither past nor future.
+ */
+export const onceIncomplete = (s: Schedule) =>
+	s.frequency === 'ONCE' && !(/^\d{4}-\d{2}-\d{2}$/.test(s.onceDate) && /^\d{2}:\d{2}$/.test(s.onceTime));
+
+/**
+ * The hour and minute a time box holds, or null while it is cleared or
+ * incomplete (#322): `''` used to read as hour 0 with no minute, which built
+ * `BYMINUTE=undefined` and a save the server refused.
+ */
+export function timeFromInput(value: string): { hour: number; minute: number } | null {
+	const m = /^(\d{2}):(\d{2})/.exec(value);
+	return m ? { hour: Number(m[1]), minute: Number(m[2]) } : null;
+}
+
 // --- destinations --------------------------------------------------------
 
 export type Folder = { id: string; name: string; parent_id?: string | null; shared?: boolean };
@@ -257,6 +276,10 @@ export function destinationLabel(
 /** Where a run links to: its channel, or its chat. */
 export const runTarget = (chatId: string) =>
 	chatId.startsWith('channel:') ? `${routePaths.channels}/${chatId.slice('channel:'.length)}` : `/c/${chatId}`;
+
+/** When an automation runs next, or null when it will not: a paused one does not run, whatever its rule says (#324). */
+export const nextRunAt = (a: Pick<AutomationResponse, 'is_active' | 'next_runs' | 'next_run_at'>): number | null =>
+	a.is_active ? (a.next_runs?.[0] ?? a.next_run_at ?? null) : null;
 
 // --- the form ------------------------------------------------------------
 
@@ -321,6 +344,7 @@ export function withoutMissingDestinations(
 export function automationPayload(f: AutomationFields, now = new Date()): { error: string } | { form: AutomationForm } {
 	if (!f.name.trim() || !f.prompt.trim() || !f.modelId.trim()) return { error: 'Name, prompt, and model are required' };
 	if (f.targetType === 'channel' && !f.channelId) return { error: 'Channel is required' };
+	if (onceIncomplete(f.schedule)) return { error: 'Pick a date and time for the one-time run' };
 	if (oncePassed(f.schedule, now)) return { error: 'Scheduled time must be in the future' };
 	const channel = f.targetType === 'channel';
 	return {
@@ -397,4 +421,72 @@ export function parseAutomationImport(
 		});
 	}
 	return { forms, skipped };
+}
+
+export type ImportOutcome = {
+	imported: number;
+	/** Items without a prompt, model or schedule. */
+	skipped: number;
+	/** One-time automations whose time has passed: an export holds them once they have run. */
+	passed: number;
+	failed: { name: string; error: string }[];
+};
+
+/**
+ * Creates each imported automation on its own (#323). They used to be created
+ * in one try, so the first refusal (most often an exported one-time automation
+ * that has already run, which the server refuses as having no future run)
+ * stopped the import with the earlier ones made, and importing again made
+ * those twice. A one-time automation whose time has passed is skipped.
+ */
+export async function importAutomationForms(
+	forms: AutomationForm[],
+	skipped: number,
+	create: (form: AutomationForm) => Promise<unknown>,
+	now = new Date()
+): Promise<ImportOutcome> {
+	const outcome: ImportOutcome = { imported: 0, skipped, passed: 0, failed: [] };
+	for (const form of forms) {
+		if (pickerOncePassed(form.data.rrule, now)) {
+			outcome.passed++;
+			continue;
+		}
+		try {
+			await create(form);
+			outcome.imported++;
+		} catch (error) {
+			outcome.failed.push({ name: form.name, error: errorMessage(error) });
+		}
+	}
+	return outcome;
+}
+
+/**
+ * A one-time rule exactly as the picker writes it (one daily run from a
+ * start), whose start has passed. Any other rule with a run count of 1, such
+ * as a weekly one whose first run is still to come, is left to the server.
+ */
+function pickerOncePassed(rrule: string, now: Date): boolean {
+	if (!DTSTART.test(rrule)) return false;
+	const parts = ruleParts(rrule);
+	const picker = Object.keys(parts).length === 2 && parts.FREQ === 'DAILY' && parts.COUNT === '1';
+	return picker && oncePassed(parseRrule(rrule, now), now);
+}
+
+const MAX_NAMED_FAILURES = 3;
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/** What an import did, for its toast: an error when any automation could not be created. */
+export function importMessage(o: ImportOutcome): { ok: boolean; message: string } {
+	const parts = [`Imported ${plural(o.imported, 'automation')}`];
+	if (o.passed) parts.push(`skipped ${plural(o.passed, 'one-time automation')} whose time has passed`);
+	if (o.skipped) parts.push(`skipped ${o.skipped} incomplete`);
+	if (o.failed.length) {
+		// The first few by name, so a large import's toast stays readable.
+		const named = o.failed.slice(0, MAX_NAMED_FAILURES).map((f) => `${f.name} (${f.error})`);
+		const more = o.failed.length - named.length;
+		parts.push(`${o.failed.length} could not be created: ${named.join('; ')}${more ? `; and ${more} more` : ''}`);
+	}
+	return { ok: o.failed.length === 0, message: parts.join('; ') };
 }
