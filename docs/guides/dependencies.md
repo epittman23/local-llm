@@ -63,9 +63,11 @@ any reranking model must therefore already be in the local Hugging Face cache.
 If one is missing, the backend still starts, but loading the embedding
 function fails and knowledge uploads are not embedded. In Admin Settings >
 Documents, a missing embedding model is refused with an error that says
-whether an earlier model is still in use; nothing is saved. Every Documents
-save loads the embedding model, so while it is missing the page's other
-settings cannot be saved either, unless retrieval is bypassed. A reranking
+whether an earlier model is still in use; nothing is saved. A Documents save
+loads the embedding model only when it changed or none is loaded (the Update
+embedding model button always loads it), so while a newly chosen model is
+missing the page's other settings cannot be saved either, unless retrieval is
+bypassed. A blank local model name is refused. A reranking
 model that cannot load is not refused: the save goes through with hybrid
 search turned off, a warning names the model, and the toggle shows off. A
 Web Search save reloads the reranker too, so it can give the same warning.

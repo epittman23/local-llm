@@ -165,6 +165,7 @@ describe('embedding', () => {
 	});
 	it("sends only the chosen engine's connection", () => {
 		expect(buildEmbeddingPayload(e)).toEqual({
+			force_reload: true,
 			RAG_EMBEDDING_ENGINE: 'openai',
 			RAG_EMBEDDING_MODEL: 'text-embedding-3-small',
 			RAG_EMBEDDING_BATCH_SIZE: 1,
@@ -176,6 +177,10 @@ describe('embedding', () => {
 		expect(local).not.toHaveProperty('openai_config');
 		expect(local).not.toHaveProperty('ollama_config');
 	});
+	it('asks for a reload unless told not to (#532)', () => {
+		expect(buildEmbeddingPayload(e).force_reload).toBe(true);
+		expect(buildEmbeddingPayload(e, { forceReload: false }).force_reload).toBe(false);
+	});
 	it('a cleared batch size or concurrency is sent as the default', () => {
 		const p = buildEmbeddingPayload({ ...e, batchSize: null, concurrent: null });
 		expect(p.RAG_EMBEDDING_BATCH_SIZE).toBe(1);
@@ -184,6 +189,7 @@ describe('embedding', () => {
 	it('refuses a filesystem path for the local model, a missing hosted model, or a half-filled Azure connection', () => {
 		expect(embeddingError({ ...e, engine: '', model: '/models/all-MiniLM' })).toMatch(/filesystem path/);
 		expect(embeddingError({ ...e, engine: '', model: 'sentence-transformers/all-MiniLM-L6-v2' })).toBeNull();
+		expect(embeddingError({ ...e, engine: '', model: ' ' })).toBe('Embedding model is required.');
 		expect(embeddingError({ ...e, engine: 'ollama', model: '' })).toBe('Embedding model is required.');
 		expect(embeddingError({ ...e, engine: 'openai', model: '' })).toBe('Embedding model is required.');
 		expect(embeddingError({ ...e, engine: 'azure_openai', azure: { url: 'u', key: 'k', version: '' } })).toMatch(
