@@ -95,6 +95,15 @@ describe('startPull', () => {
 		expect(toastSuccess).not.toHaveBeenCalled();
 	});
 
+	it('shows one toast for an error the server sends, not "Download canceled" after it (#505)', async () => {
+		pullWith(fakeReader([line('{"error":"pull model manifest: file does not exist"}')]));
+
+		await startPull('t', 'nope:1b', 0);
+
+		expect(toastError.mock.calls).toEqual([['pull model manifest: file does not exist']]);
+		expect(useDownloadPool.getState().pool).toEqual({});
+	});
+
 	it('ends quietly when the pull is aborted', async () => {
 		const reader = fakeReader([fail(new DOMException('aborted', 'AbortError'))]);
 		pullWith(reader);

@@ -104,7 +104,11 @@ export async function startPull(
 		} catch (err) {
 			toast.error(typeof err === 'string' ? err : `${(err as Error)?.message ?? err}`);
 			// The stream is dead after an error the server sent; a line that is not JSON leaves it readable.
-			if (typeof err === 'string') break;
+			// Failed, like a read error, so "Download canceled" does not follow the error (#505).
+			if (typeof err === 'string') {
+				failed = true;
+				break;
+			}
 		}
 	}
 
