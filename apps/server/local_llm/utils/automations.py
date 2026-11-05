@@ -177,14 +177,19 @@ def validate_rrule(s: str, tz: str = None) -> None:
         raise ValueError(ERROR_MESSAGES.AUTOMATION_NO_FUTURE_RUNS)
 
 
+_FREQ = re.compile(r'(?:^|[\s:;])FREQ=([A-Z]+)')
+
+
 def _sub_daily(s: str) -> bool:
     """Whether the rule repeats more often than daily (SECONDLY, MINUTELY or HOURLY).
 
-    A rule that does not parse raises here as `_parse_rule` would.
+    A rule that does not parse raises here as `_parse_rule` would. The
+    frequency is then read from the rule's own text, which dateutil has just
+    accepted: its parsed rule keeps it only in a private attribute.
     """
-    parsed = rrulestr(s, ignoretz=True)
-    rules = parsed._rrule if isinstance(parsed, rruleset) else [parsed]
-    return bool(rules) and rules[0]._freq in (SECONDLY, MINUTELY, HOURLY)
+    rrulestr(s, ignoretz=True)
+    match = _FREQ.search(s.upper())
+    return match is not None and match.group(1) in ('SECONDLY', 'MINUTELY', 'HOURLY')
 
 
 def next_run_ns(s: str, tz: str | None = None, anchor_ns: int | None = None) -> int | None:

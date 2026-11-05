@@ -17,7 +17,9 @@ import datetime as dt
 import time
 import uuid
 
-from local_llm.utils.automations import next_run_ns
+import pytest
+
+from local_llm.utils.automations import _sub_daily, next_run_ns
 
 MINUTE_NS = 60 * 1_000_000_000
 
@@ -107,3 +109,17 @@ def test_a_sub_daily_rule_ignores_a_far_anchor_and_stays_on_its_grid():
 
     assert anchored == next_run_ns('RRULE:FREQ=MINUTELY;INTERVAL=5')
     assert elapsed < 0.5
+
+
+def test_a_rules_frequency_is_read_however_the_rule_is_written():
+    assert _sub_daily('RRULE:FREQ=MINUTELY;INTERVAL=5')
+    assert _sub_daily('rrule:freq=hourly')
+    assert _sub_daily('FREQ=SECONDLY;INTERVAL=30')
+    assert _sub_daily('DTSTART:20260101T090000\nRRULE:INTERVAL=2;FREQ=HOURLY')
+    assert not _sub_daily('RRULE:FREQ=DAILY;BYHOUR=9,10')
+    assert not _sub_daily('DTSTART:20260101T090000\nRRULE:FREQ=WEEKLY;BYDAY=MO')
+
+
+def test_a_rule_that_does_not_parse_still_raises_when_its_frequency_is_asked():
+    with pytest.raises(ValueError):
+        _sub_daily('RRULE:FREQ=FORTNIGHTLY')
