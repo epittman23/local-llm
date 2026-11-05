@@ -6,6 +6,8 @@ import logging
 
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import JSON, Column, Index, PrimaryKeyConstraint, String, delete, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # local imports
@@ -46,6 +48,10 @@ class TagModel(BaseModel):
 class TagChatIdForm(BaseModel):
     name: str
     chat_id: str
+
+
+# The insert that can skip a conflict, for each database the app runs on.
+INSERTS = {'postgresql': pg_insert, 'sqlite': sqlite_insert}
 
 
 class TagTable:
@@ -129,17 +135,19 @@ class TagTable:
         names_by_id: dict[str, str] = {}
         for name in names:
             names_by_id.setdefault(name.replace(' ', '_').lower(), name)
+        # Sorted, so two inserts for one user lock their rows in the same order
+        # and cannot deadlock on Postgres.
+        rows = [{'id': tag_id, 'name': name, 'user_id': user_id} for tag_id, name in sorted(names_by_id.items())]
         async with get_async_db_context(db) as db:
-            result = await db.execute(select(Tag.id).filter(Tag.id.in_(names_by_id), Tag.user_id == user_id))
-            existing = {row[0] for row in result.all()}
-            new_tags = [
-                Tag(id=tag_id, name=name, user_id=user_id)
-                for tag_id, name in names_by_id.items()
-                if tag_id not in existing
-            ]
-            if new_tags:
-                db.add_all(new_tags)
-                await db.commit()
+            # One insert that skips tags already there, not a check and then an
+            # insert: two tag writes finishing together for one user could both
+            # find a tag missing, and the second then hit the key (#531).
+            dialect = (await db.connection()).dialect.name
+            if dialect not in INSERTS:
+                raise NotImplementedError(f'Unsupported dialect: {dialect}')
+            insert = INSERTS[dialect]
+            await db.execute(insert(Tag).values(rows).on_conflict_do_nothing(index_elements=['id', 'user_id']))
+            await db.commit()
 
 
 Tags = TagTable()  # singleton tag repository

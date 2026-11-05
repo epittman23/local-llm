@@ -133,6 +133,8 @@ type EmbeddingModelUpdateForm = {
 	RAG_EMBEDDING_BATCH_SIZE?: number;
 	ENABLE_ASYNC_EMBEDDING?: boolean;
 	RAG_EMBEDDING_CONCURRENT_REQUESTS?: number;
+	/** Load the model even when it is unchanged and loaded (default true). */
+	force_reload?: boolean;
 };
 
 export const updateEmbeddingConfig = async (token: string, payload: EmbeddingModelUpdateForm) => {

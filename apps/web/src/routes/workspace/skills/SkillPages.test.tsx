@@ -28,7 +28,7 @@ vi.mock('@/lib/apis/skills', () => ({
 }));
 
 describe('SkillEditPage', () => {
-	it('saves an edited skill with its loaded is_active and tags, not active and untagged (#227)', async () => {
+	it('saves an edited skill without its is_active and tags, which the server keeps (#227, #527)', async () => {
 		render(
 			<TooltipProvider>
 				<RouterProvider
@@ -45,10 +45,9 @@ describe('SkillEditPage', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
 		await waitFor(() => expect(updateSkillById).toHaveBeenCalledOnce());
-		expect(vi.mocked(updateSkillById).mock.calls[0]?.[2]).toMatchObject({
-			content: 'new',
-			is_active: false,
-			meta: { tags: ['imported'] }
-		});
+		const sent = vi.mocked(updateSkillById).mock.calls[0]?.[2];
+		expect(sent).toMatchObject({ content: 'new' });
+		expect(sent).not.toHaveProperty('is_active');
+		expect(sent).not.toHaveProperty('meta');
 	});
 });

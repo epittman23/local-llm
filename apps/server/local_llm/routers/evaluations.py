@@ -312,7 +312,10 @@ async def update_config(
     if form_data.ENABLE_EVALUATION_ARENA_MODELS is not None:
         updates['evaluation.arena.enable'] = form_data.ENABLE_EVALUATION_ARENA_MODELS
     if form_data.EVALUATION_ARENA_MODELS is not None:
-        updates['evaluation.arena.models'] = form_data.EVALUATION_ARENA_MODELS
+        # A null meta is stored as {}: the model list reads it with .get (#363).
+        updates['evaluation.arena.models'] = [
+            {**model, 'meta': model.get('meta') or {}} for model in form_data.EVALUATION_ARENA_MODELS
+        ]
     await Config.upsert(updates)
     values = await get_config_values(EVALUATION_CONFIG_KEYS)
     await publish_event(
