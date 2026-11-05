@@ -121,12 +121,20 @@ def test_one_query_keeps_the_provider_order(monkeypatch):
 # shows the value as relevance and the other providers report a similarity.
 
 
-def _retrieve_pgvector(monkeypatch, rows: list[dict], connection=None, fetch=None, connected: list | None = None):
+def _retrieve_pgvector(
+    monkeypatch,
+    rows: list[dict],
+    connection=None,
+    fetch=None,
+    connected: list | None = None,
+    statements: list | None = None,
+):
     import pgvector.psycopg
     import psycopg
 
     executed = []
     connected = [] if connected is None else connected
+    recorded: list = [] if statements is None else statements
 
     class Cursor:
         def __enter__(self):
@@ -137,6 +145,7 @@ def _retrieve_pgvector(monkeypatch, rows: list[dict], connection=None, fetch=Non
 
         def execute(self, query, params):
             executed.append(params)
+            recorded.append((str(query), params))
 
         def fetchall(self):
             if fetch:
@@ -171,7 +180,8 @@ def test_pgvector_sends_the_embedding_as_a_vector(monkeypatch):
 
     _, executed = _retrieve_pgvector(monkeypatch, [])
 
-    (embedding, collection, count) = executed[0]
+    # The search is the last statement: the statement timeout is set before it (#514).
+    (embedding, collection, count) = executed[-1]
     assert isinstance(embedding, Vector)
     assert embedding.to_list() == [0.25, 0.5, 1.0]
     assert (collection, count) == ('docs', 3)
@@ -202,38 +212,76 @@ def test_pgvector_reports_similarity_best_first(monkeypatch):
 # server that took the connection and then never answered stalled the turn.
 
 
-def test_pgvector_bounds_the_search_by_the_connection_timeout(monkeypatch):
-    connected = []
-    _retrieve_pgvector(
-        monkeypatch,
-        [],
-        connection={'endpoint': 'postgresql://example.invalid/db', 'config': {'timeout': 7}},
-        connected=connected,
+def _pgvector_timeouts(monkeypatch, connection: dict):
+    """What the provider connects with, as one dict, and the statements it runs."""
+    from psycopg.conninfo import conninfo_to_dict
+
+    connected, statements = [], []
+    _retrieve_pgvector(monkeypatch, [], connection=connection, connected=connected, statements=statements)
+    (((conninfo,), kwargs),) = connected
+    return {**conninfo_to_dict(conninfo), **kwargs}, statements
+
+
+def test_pgvector_bounds_the_search_on_the_server_for_its_own_transaction(monkeypatch):
+    kwargs, statements = _pgvector_timeouts(
+        monkeypatch, {'endpoint': 'postgresql://example.invalid/db', 'config': {'timeout': 7}}
     )
 
-    ((_, kwargs),) = connected
+    # SET LOCAL, as set_config(..., true) is: no startup parameter, which a
+    # pooler such as PgBouncer refuses by default, and nothing left on a pooled
+    # session after the transaction.
+    (first, params), (search, _) = statements
+    assert "set_config('statement_timeout', %s, true)" in first
+    assert params == ('7000ms',)
+    assert 'ORDER BY distance' in search
     assert kwargs['connect_timeout'] == 7
-    assert kwargs['options'] == '-c statement_timeout=7000'
+    assert 'statement_timeout' not in kwargs.get('options', '')
 
 
-def test_pgvector_keeps_the_endpoints_own_options(monkeypatch):
-    endpoint = 'postgresql://example.invalid/db?options=-c%20search_path%3Ddocs'
-    connected = []
-    _retrieve_pgvector(monkeypatch, [], connection={'endpoint': endpoint}, connected=connected)
+def test_pgvector_notices_a_dead_server_through_tcp(monkeypatch):
+    kwargs, _ = _pgvector_timeouts(
+        monkeypatch, {'endpoint': 'postgresql://example.invalid/db', 'config': {'timeout': 9}}
+    )
 
-    ((_, kwargs),) = connected
-    assert kwargs['options'] == '-c search_path=docs -c statement_timeout=30000'
+    # Client-side libpq settings, never sent to the server: without them a
+    # server gone after the connect holds the search's thread for the kernel's
+    # keepalive default, over two hours.
+    assert kwargs['keepalives'] == '1'
+    assert kwargs['keepalives_idle'] == '9'
+    assert kwargs['keepalives_interval'] == '3'
+    assert kwargs['keepalives_count'] == '3'
+    assert kwargs['tcp_user_timeout'] == '18000'
+
+
+def test_pgvector_leaves_what_the_endpoint_sets_itself(monkeypatch):
+    endpoint = 'postgresql://example.invalid/db?options=-c%20search_path%3Ddocs&keepalives_idle=5'
+    kwargs, _ = _pgvector_timeouts(monkeypatch, {'endpoint': endpoint})
+
+    # As the endpoint gives them, and only the missing settings added.
+    assert kwargs['options'] == '-c search_path=docs'
+    assert kwargs['keepalives_idle'] == '5'
+    assert kwargs['keepalives_interval'] == '10'
+
+
+@pytest.mark.parametrize('timeout', [-5, 0, '0', 'soon', 1e12, None])
+def test_pgvector_uses_the_default_for_a_timeout_postgres_cannot_take(monkeypatch, timeout):
+    kwargs, statements = _pgvector_timeouts(
+        monkeypatch, {'endpoint': 'postgresql://example.invalid/db', 'config': {'timeout': timeout}}
+    )
+
+    assert statements[0][1] == ('30000ms',)
+    assert kwargs['connect_timeout'] == 30
 
 
 def test_pgvector_gives_up_on_a_server_that_never_answers(monkeypatch):
     import time
 
-    # Without a bound the search returns its rows once the fetch ends; with one,
-    # the turn is told the search did not answer instead of waiting for it.
+    # Without a bound the search returns its rows once the fetch ends; with one
+    # (2 x 0.1 + 1 s), the turn is told the search did not answer instead.
     with pytest.raises(RuntimeError, match='did not answer'):
         _retrieve_pgvector(
             monkeypatch,
             [],
             connection={'endpoint': 'postgresql://example.invalid/db', 'config': {'timeout': 0.1}},
-            fetch=lambda: time.sleep(3),
+            fetch=lambda: time.sleep(1.5),
         )
