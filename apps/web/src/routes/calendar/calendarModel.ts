@@ -127,11 +127,18 @@ export const REPEAT_RRULES: Record<string, string> = {
 	yearly: 'FREQ=YEARLY'
 };
 
-/** The repeat option for a stored RRULE; '' (no repeat) for none or for a rule the form cannot express. */
+/** The Repeat choice for a stored rule the menu cannot show: it keeps the rule as it is. */
+export const CUSTOM_REPEAT = 'custom';
+
+/**
+ * The repeat option for a stored RRULE: '' (no repeat) for none, and
+ * CUSTOM_REPEAT for a rule the form cannot express, so choosing No Repeat can
+ * clear it (#510).
+ */
 export function repeatFromRrule(rrule: string | null | undefined): string {
 	if (!rrule) return '';
 	const normalized = rrule.toUpperCase().replace(/\s/g, '');
-	return Object.entries(REPEAT_RRULES).find(([, v]) => v === normalized)?.[0] ?? '';
+	return Object.entries(REPEAT_RRULES).find(([, v]) => v === normalized)?.[0] ?? CUSTOM_REPEAT;
 }
 
 /** `YYYY-MM-DD` and `HH:MM` in local time, for date/time inputs. */
@@ -291,9 +298,9 @@ export function eventPayload(
 			start_at: start,
 			end_at: end ?? blank,
 			all_day: f.allDay,
-			// A rule the Repeat menu cannot show opens as "No Repeat"; leave it out
-			// so the update keeps it, rather than clearing it on any edit.
-			rrule: REPEAT_RRULES[f.repeat] || (editing?.rrule && !repeatFromRrule(editing.rrule) ? undefined : blank),
+			// A rule the Repeat menu cannot show opens as "Custom rule"; left out
+			// while that is chosen, so the update keeps it. No Repeat clears it.
+			rrule: f.repeat === CUSTOM_REPEAT ? undefined : REPEAT_RRULES[f.repeat] || blank,
 			location: f.location.trim() || blank,
 			meta: { alert_minutes: f.alertMinutes }
 		}
