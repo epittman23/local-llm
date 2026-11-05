@@ -650,6 +650,21 @@ class ChatTable:
         )
         return chat
 
+    @staticmethod
+    def _normalise_imported_tags(form_data: ChatImportForm) -> list[str]:
+        """Store an imported chat's tags as tag ids, as a tag write does, and
+        return their names, so their rows can be created (#531). Only names
+        are kept: a `meta.tags` that is not a list is stored as no tags, and
+        an item that is not a name is dropped, since everything that reads
+        the tags expects a list of ids."""
+        meta = form_data.meta or {}
+        if 'tags' not in meta:
+            return []
+        tags = meta['tags'] if isinstance(meta['tags'], list) else []
+        names = [t for t in tags if isinstance(t, str) and t.strip() and t.replace(' ', '_').lower() != 'none']
+        form_data.meta = {**meta, 'tags': list(dict.fromkeys(t.replace(' ', '_').lower() for t in names))}
+        return names
+
     async def import_chats(
         self,
         user_id: str,
@@ -673,13 +688,17 @@ class ChatTable:
                 log.info('Import: cleared %d dangling folder_id(s) for user %s', cleared, user_id)
 
             chats = []
+            tag_names: list[str] = []
 
             for form_data in chat_import_forms:
+                tag_names.extend(self._normalise_imported_tags(form_data))
                 chat = self._chat_import_form_to_chat_model(user_id, form_data)
                 chats.append(Chat(**chat.model_dump()))
 
             session.add_all(chats)
             await session.commit()
+            # The tag rows a tag write would create (#531).
+            await Tags.ensure_tags_exist(tag_names, user_id, db=session)
 
             # Dual-write messages to chat_message table
             for form_data, imported_chat in zip(chat_import_forms, chats, strict=True):
