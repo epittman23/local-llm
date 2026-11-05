@@ -256,14 +256,22 @@ def chat_search_snippet(chat: dict, search_text: str, max_length: int = 200) -> 
             if not isinstance(content, str):
                 continue
 
-            index = content.lower().find(needle)
+            lowered = content.lower()
+            index = lowered.find(needle)
             if index == -1:
                 continue
+            match_end = index + len(needle)
+            if len(lowered) != len(content):
+                # Lowering lengthened a character (U+0130 becomes two), so an
+                # index in the lowered text is off in the original, and the
+                # window missed the match (#339): map it back.
+                origin = [position for position, char in enumerate(content) for _ in char.lower()]
+                index, match_end = origin[index], origin[match_end - 1] + 1
 
             start = max(index - max_length // 2, 0)
             end = min(start + max_length, len(content))
-            if index + len(needle) > end:
-                end = min(index + len(needle), len(content))
+            if match_end > end:
+                end = min(match_end, len(content))
                 start = max(end - max_length, 0)
 
             snippet = ' '.join(content[start:end].split())
