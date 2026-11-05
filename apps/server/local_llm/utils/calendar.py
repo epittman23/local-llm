@@ -55,6 +55,12 @@ def expand_recurring_event(
 
     original_end_ns = event_dict.get('end_at')
     duration_ns = (original_end_ns - original_start_ns) if original_end_ns else None
+    # An all-day occurrence lasts its days on the wall clock: added as exact
+    # nanoseconds, its end moved by an hour across a DST change and could
+    # spill into the next day (#509). A timed one keeps its exact length.
+    wall_length = (
+        to_local_datetime(original_end_ns) - original_start if original_end_ns and event_dict.get('all_day') else None
+    )
     # Look back far enough to find an occurrence still running when the
     # range starts: it overlaps the range, as a one-off would (#171). The
     # extra day covers a DST change, as the scan runs in wall-clock time.
@@ -62,18 +68,24 @@ def expand_recurring_event(
 
     instances = []
     previous_start = None
-    for occurrence_start in rule.xafter(scan_start, count=max_instances, inc=True):
-        if occurrence_start >= range_end or occurrence_start == previous_start:
+    # The cap counts the instances kept, not the ones walked past in the
+    # lookback before the range, which once used it up first (#509).
+    for occurrence_start in rule.xafter(scan_start, inc=True):
+        if occurrence_start >= range_end or occurrence_start == previous_start or len(instances) >= max_instances:
             break
         previous_start = occurrence_start
 
         instance_start_ns = int(occurrence_start.replace(tzinfo=user_timezone).timestamp() * 1_000_000_000)
+        if wall_length is not None:
+            end_ns = int((occurrence_start + wall_length).replace(tzinfo=user_timezone).timestamp() * 1_000_000_000)
+        else:
+            end_ns = (instance_start_ns + duration_ns) if duration_ns else None
 
-        if instance_start_ns >= range_start_ns or (duration_ns and instance_start_ns + duration_ns > range_start_ns):
+        if instance_start_ns >= range_start_ns or (end_ns is not None and end_ns > range_start_ns):
             instance = {
                 **event_dict,
                 'start_at': instance_start_ns,
-                'end_at': (instance_start_ns + duration_ns) if duration_ns else None,
+                'end_at': end_ns,
                 'instance_id': f'{event_dict["id"]}_{instance_start_ns}',
             }
             instances.append(instance)
