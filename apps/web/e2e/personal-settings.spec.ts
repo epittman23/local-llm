@@ -65,6 +65,19 @@ test.describe('personal settings', () => {
 		expect(posts.at(-1).ui.pinnedModels).toEqual(['m1']);
 	});
 
+	test('Interface saves a font typed and submitted with Enter (#261)', async ({ page }) => {
+		await mockWorkspaceBackend(page, { role: 'user' });
+		const posts = await mockUserSettings(page);
+		await page.goto('/?settings=interface');
+		const m = modal(page);
+		await m.getByRole('button', { name: 'Font Family: Default' }).click();
+		const box = m.getByLabel('Font Family name');
+		await box.fill('Aptos');
+		await box.press('Enter');
+		await expect.poll(() => posts.length).toBe(1);
+		expect(posts[0].ui.fontFamily).toBe('Aptos');
+	});
+
 	test('Account saves the profile and variables, and rejects bad variable keys', async ({ page }) => {
 		await mockWorkspaceBackend(page, { role: 'user' });
 		await mockUserSettings(page);
@@ -97,6 +110,40 @@ test.describe('personal settings', () => {
 		await expect.poll(() => variables.length).toBe(1);
 		expect(profiles[0].name).toBe('New Name');
 		expect(JSON.stringify(variables[0])).toContain('"region":"eu"');
+	});
+
+	test('Enter in a password field changes the password, not the profile (#260)', async ({ page }) => {
+		await mockWorkspaceBackend(page, {
+			role: 'user',
+			features: { enable_login_form: true, enable_password_change_form: true }
+		});
+		await mockUserSettings(page);
+		const profiles: unknown[] = [];
+		const passwords: unknown[] = [];
+		await page.route('**/api/v1/auths/update/profile', (route) => {
+			profiles.push(route.request().postDataJSON());
+			return json(route, { id: 'u1', ...route.request().postDataJSON() });
+		});
+		await page.route('**/api/v1/auths/update/password', (route) => {
+			passwords.push(route.request().postDataJSON());
+			return json(route, { detail: 'Incorrect password' }, 400);
+		});
+		await page.goto('/?settings=account');
+		const m = modal(page);
+		await expect(m.getByLabel('Name')).toHaveValue('Test User');
+
+		await m.getByLabel('Current Password').fill('old-pass');
+		await m.getByLabel('New Password').fill('new-pass');
+		await m.getByLabel('Confirm Password').fill('new-pass');
+		await m.getByLabel('Confirm Password').press('Enter');
+		await expect(page.getByText('Incorrect password')).toBeVisible();
+		expect(passwords).toEqual([{ password: 'old-pass', new_password: 'new-pass' }]);
+		expect(profiles).toHaveLength(0);
+
+		// And Enter in a profile field still saves the tab, not the password.
+		await m.getByLabel('Name').press('Enter');
+		await expect.poll(() => profiles.length).toBe(1);
+		expect(passwords).toHaveLength(1);
 	});
 
 	test('Archived Chats lists, and unarchives, an archived chat', async ({ page }) => {

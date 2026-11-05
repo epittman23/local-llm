@@ -715,6 +715,9 @@ async def pin_note_by_id(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.DEFAULT())
 
     note = await Notes.toggle_note_pinned_by_id(id, user.id, db=db)
+    if note is None:
+        # The toggle reports a failure as None, which was read as a note (#332).
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ERROR_MESSAGES.DEFAULT())
     pinned_note_ids = await Notes.get_pinned_note_ids(user.id, db=db)
     note.is_pinned = note.id in pinned_note_ids
     await publish_event(
@@ -764,7 +767,9 @@ async def delete_note_by_id(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ERROR_MESSAGES.DEFAULT())
 
     try:
-        note = await Notes.delete_note_by_id(id, db=db)
+        # The delete reports a failure as False; it was announced as done (#332).
+        if not await Notes.delete_note_by_id(id, db=db):
+            raise RuntimeError(f'Note {id} could not be deleted')
         await close_room(f'note:{id}')
         await publish_event(
             request,

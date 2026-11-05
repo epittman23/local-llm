@@ -14,12 +14,10 @@ const pad = (n: number) => String(n).padStart(2, '0');
 export function promptVariables(user: { name?: string; email?: string } | null, location?: string, at = new Date()) {
 	const date = `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
 	const time = at.toTimeString().split(' ')[0];
-	let language = 'en-US';
-	try {
-		language = localStorage.getItem('locale') || 'en-US';
-	} catch {
-		/* storage unavailable */
-	}
+	// The user's first preferred language, as the original took it (#326). The
+	// interface ships only en-US, so the language detector resolves every
+	// browser to it; the stored `locale` it used to read said en-US for everyone.
+	const language = (typeof navigator !== 'undefined' && (navigator.languages?.[0] || navigator.language)) || 'en-US';
 	return {
 		'{{USER_NAME}}': user?.name,
 		'{{USER_EMAIL}}': user?.email || 'Unknown',

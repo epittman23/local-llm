@@ -22,7 +22,9 @@ export const initI18n = (defaultLocale?: string) => {
 			debug: false,
 			detection: {
 				order: detectionOrder,
-				caches: ['localStorage'],
+				// Not cached: with en-US the only locale, the detector wrote en-US over
+				// whatever `locale` held (#326).
+				caches: [],
 				lookupQuerystring: 'lang',
 				lookupLocalStorage: 'locale'
 			},

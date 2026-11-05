@@ -10,6 +10,7 @@ import {
 	importableNote,
 	nextSort,
 	noteAccessProps,
+	openLinkedNote,
 	parseGeneratedTitle,
 	safeFileName,
 	saveNoteAccess,
@@ -229,5 +230,30 @@ describe('saving access', () => {
 		b.resolve({ id: 'n', access_grants: [group, ...publicRead] });
 		await saveB;
 		expect(cached(client)?.access_grants).toEqual([group, ...publicRead]);
+	});
+});
+
+describe('openLinkedNote (#210)', () => {
+	beforeEach(() => vi.clearAllMocks());
+	const run = async (create: () => Promise<string | null | undefined>) => {
+		const open = vi.fn();
+		await openLinkedNote(create, open);
+		return open.mock.calls;
+	};
+
+	it('opens the created note', async () => {
+		expect(await run(async () => 'n1')).toEqual([['/notes/n1']]);
+		expect(toast.error).not.toHaveBeenCalled();
+	});
+	it('says why when the create fails, and opens the list', async () => {
+		expect(await run(() => Promise.reject('Notes are not allowed'))).toEqual([['/notes']]);
+		expect(toast.error.mock.calls).toEqual([['Notes are not allowed']]);
+	});
+	it('says so when the create returns no note, and opens the list', async () => {
+		for (const id of [undefined, null, '']) {
+			vi.clearAllMocks();
+			expect(await run(async () => id)).toEqual([['/notes']]);
+			expect(toast.error.mock.calls).toEqual([['The note could not be created']]);
+		}
 	});
 });
