@@ -126,6 +126,11 @@ async function loadSettings() {
 	$('server-url').value = settings.serverUrl;
 	$('repo-path').value = settings.repoPath;
 	settingsRunning = settings.running;
+	// The address in use when --server-url or LLLM_SERVER_URL overrides the saved one (#424).
+	$('server-override').hidden = !settings.override;
+	$('server-override').textContent = settings.override
+		? `This launch uses ${settings.override.url}, from ${settings.override.from}, in place of the saved address. Saving replaces it.`
+		: '';
 	$('settings-message').textContent = '';
 	$('restart').hidden = true;
 }
@@ -139,15 +144,25 @@ function showView(view) {
 $('settings-form').addEventListener('submit', async (event) => {
 	event.preventDefault();
 	const message = $('settings-message');
-	const result = await api.saveSettings({ serverUrl: $('server-url').value, repoPath: $('repo-path').value });
+	let result;
+	try {
+		result = await api.saveSettings({ serverUrl: $('server-url').value, repoPath: $('repo-path').value });
+	} catch (error) {
+		// Never a silent failure (#426).
+		result = { error: `Could not save the settings: ${error instanceof Error ? error.message : error}` };
+	}
 	message.classList.toggle('error-text', Boolean(result.error));
 	if (result.error) {
 		message.textContent = result.error;
-	} else if (result.restart || settingsRunning) {
-		message.textContent = 'Saved. It applies the next time Local LLM starts.';
+		return;
+	}
+	$('server-override').hidden = true;
+	const instead = result.replaced ? `, in place of ${result.replaced.url} from ${result.replaced.from}` : '';
+	if (result.restart || settingsRunning) {
+		message.textContent = `Saved. It applies the next time Local LLM starts${instead}.`;
 		$('restart').hidden = false;
 	} else {
-		message.textContent = 'Saved. Retry to start with it.';
+		message.textContent = `Saved. Retry to start with it${instead}.`;
 	}
 });
 

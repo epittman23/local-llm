@@ -117,13 +117,22 @@ Moving to the dedicated server means setting the server URL to its
 `https://` address and restarting the app. Nothing else changes. Use a real
 certificate (Tailscale serve, Caddy); a self-signed one is not handled.
 `--server-url=<url>` or `LLLM_SERVER_URL` override the setting for one launch
-without saving it.
+without saving it. Settings says when one is in use. Saving there replaces it
+for the rest of that launch, so Retry starts with what was saved, and
+**Restart now** starts the next launch without it.
+
+A save that cannot be written says why in the dialog. When the server URL in
+`config.json` is not an `http://` or `https://` address, the app uses the
+local default and says so in the startup dialog's first step. Saving the
+window's size or the settings rewrites only those fields, so a hand edit
+stays in the file to be fixed.
 
 ## Files
 
 Everything lives in `~/.config/Local LLM/`, the same for the packaged app and
 `make desktop`:
-- `config.json`: the settings and the window's size;
+- `config.json`: the settings and the window's size, saved on every way of
+  quitting;
 - `owned.json`: the process group of the stack it started, and the server
   address and checkout it was started for, while it runs;
 - `logs/backend.log`: the build and `make backend` output of the stack it
