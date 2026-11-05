@@ -16,18 +16,23 @@ import {
 	type DirectoryFileEntry,
 	type DirectoryManifestEntry,
 	type SyncDiff,
+	type UploadOutcome,
 	buildDirectoryManifest,
 	createMissingDirectories,
 	filesToUpload,
 	getDirectoryUploadPath,
+	deletedFileIds,
 	hasHiddenFolder,
-	staleFileIds
+	syncUploads
 } from './knowledgeFiles';
 
 export type UploadingItem = { itemId: string; name: string; size: number | null };
 
 let itemCounter = 0;
 const nextItemId = () => `upload-${Date.now()}-${itemCounter++}`;
+
+const displayPath = (entry: DirectoryManifestEntry) =>
+	entry.path ? `${entry.path}/${entry.filename}` : entry.filename;
 
 /** The message worth showing for whatever a failed upload rejected with. */
 const failureReason = (error: unknown): string => {
@@ -40,9 +45,10 @@ const failureReason = (error: unknown): string => {
  * Everything KnowledgeBase.svelte does to get content *into* a knowledge base:
  * single files, webpages, whole directories (picked or dropped), and the
  * incremental "sync directory" (hash locally -> ask the server what changed ->
- * remove stale files -> make missing folders -> upload only what's new or
- * modified). `uploading` is the list of in-flight single uploads, shown above
- * the server's own list; `syncing` is the status line for directory work.
+ * remove deleted files -> make missing folders -> upload what's new or
+ * modified, in the order `syncUploads` gives). `uploading` is the list of
+ * in-flight single uploads, shown above the server's own list; `syncing` is
+ * the status line for directory work.
  *
  * `refresh` reloads the file list (from page 1, as the Svelte page's init()
  * did); it is called after each successful upload and sync.
@@ -164,6 +170,25 @@ export function useKnowledgeUploads({
 		}
 	};
 
+	/** Uploads one manifest entry into the base; the reason it failed, if it did. */
+	const uploadEntry = async (
+		entry: DirectoryManifestEntry,
+		directoryIdFor: string | null | undefined
+	): Promise<UploadOutcome> => {
+		const file = new File([entry.file], entry.filename, { type: entry.file.type });
+		const result = await uploadFile(token, file, {
+			knowledge_id: knowledgeId,
+			file_hash: entry.checksum,
+			directory_id: directoryIdFor
+		}).catch((error) => ({ error }));
+		if (!result || (result as { error?: unknown }).error) {
+			const reason = failureReason((result as { error?: unknown } | null)?.error);
+			console.error('Upload failed:', displayPath(entry), reason);
+			return { ok: false, reason };
+		}
+		return { ok: true };
+	};
+
 	/** Uploads each manifest entry in turn, reporting progress; returns how many failed. */
 	const uploadManifestEntries = async (
 		entries: DirectoryManifestEntry[],
@@ -171,18 +196,8 @@ export function useKnowledgeUploads({
 	) => {
 		let failed = 0;
 		for (const [index, entry] of entries.entries()) {
-			const displayPath = entry.path ? `${entry.path}/${entry.filename}` : entry.filename;
-			setSyncing(`Uploading ${index + 1}/${entries.length}: ${displayPath}`);
-			const file = new File([entry.file], entry.filename, { type: entry.file.type });
-			const uploaded = await uploadFile(token, file, {
-				knowledge_id: knowledgeId,
-				file_hash: entry.checksum,
-				directory_id: resolveDirectoryId(entry)
-			}).catch((error) => ({ error }));
-			if (!uploaded || (uploaded as { error?: unknown }).error) {
-				failed++;
-				console.error('Upload failed:', displayPath, failureReason((uploaded as { error?: unknown } | null)?.error));
-			}
+			setSyncing(`Uploading ${index + 1}/${entries.length}: ${displayPath(entry)}`);
+			if (!(await uploadEntry(entry, resolveDirectoryId(entry))).ok) failed++;
 		}
 		if (failed > 0) toast.error(`Upload failed for ${failed} of ${entries.length} files.`);
 		return failed;
@@ -241,16 +256,35 @@ export function useKnowledgeUploads({
 				toast.error('Failed to compare files.');
 				return;
 			}
-			const stale = staleFileIds(diff);
-			if (stale.length > 0 || diff.rmdir.length > 0) {
-				setSyncing(`Removing ${stale.length} stale files...`);
-				await syncKnowledgeCleanup(token, knowledgeId, stale, diff.rmdir);
+			const deleted = deletedFileIds(diff);
+			if (deleted.length > 0 || diff.rmdir.length > 0) {
+				setSyncing(`Removing ${deleted.length} deleted files...`);
+				await syncKnowledgeCleanup(token, knowledgeId, deleted, diff.rmdir);
 			}
 			const idByPath = await createMissingDirectories(diff, mkdirVia);
-			const failed = await uploadManifestEntries(filesToUpload(manifest, diff), (entry) =>
-				entry.path ? idByPath[entry.path] : null
+			const total = filesToUpload(manifest, diff).length;
+			let started = 0;
+			const { attempted, failed, removeError } = await syncUploads(
+				manifest,
+				diff,
+				(entry, attempt) => {
+					if (attempt === 'first') started++;
+					setSyncing(
+						attempt === 'first'
+							? `Uploading ${started}/${total}: ${displayPath(entry)}`
+							: `Uploading again: ${displayPath(entry)}`
+					);
+					return uploadEntry(entry, entry.path ? idByPath[entry.path] : null);
+				},
+				(fileIds) => {
+					setSyncing(`Removing ${fileIds.length} replaced files...`);
+					return syncKnowledgeCleanup(token, knowledgeId, fileIds, []);
+				}
 			);
-			if (failed === 0) {
+			if (removeError !== null)
+				toast.error(`The old copies of modified files could not be removed: ${failureReason(removeError)}`);
+			if (failed > 0) toast.error(`Upload failed for ${failed} of ${attempted} files.`);
+			if (failed === 0 && removeError === null) {
 				toast.success(
 					`Sync complete: ${diff.added.length} added, ${diff.modified.length} modified, ${diff.deleted.length} deleted, ${diff.unmodified_count} unmodified`
 				);

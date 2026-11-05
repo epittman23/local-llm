@@ -29,6 +29,7 @@ import {
 	isGenerating,
 	messagesList,
 	normalizeHistory,
+	rewrittenMessage,
 	saveReplyAsCopy,
 	updateMessage
 } from '@/lib/chat/history';
@@ -813,11 +814,7 @@ export function useChatSession({
 			let h = historyRef.current;
 			for (const m of res.messages) {
 				const cur = m.id ? h.messages[m.id] : undefined;
-				if (cur)
-					h = updateMessage(h, cur.id, {
-						...(m.content !== undefined && m.content !== cur.content ? { originalContent: cur.content } : {}),
-						...m
-					});
+				if (cur) h = updateMessage(h, cur.id, rewrittenMessage(cur, m));
 			}
 			setHistory(h);
 			await save(h);
