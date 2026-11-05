@@ -3,6 +3,7 @@ import react from '@astrojs/react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'astro/config';
 import { readFileSync } from 'node:fs';
+import { devServerIdentity } from './dev-server-identity.mjs';
 
 // Mirrors d863707:apps/openwebui/vite.config.ts's dev-server proxy: the backend
 // isn't containerized, so both frontends point at the same host process,
@@ -27,7 +28,8 @@ export default defineConfig({
 			APP_VERSION: JSON.stringify(appVersion),
 			APP_BUILD_HASH: JSON.stringify(process.env.APP_BUILD_HASH || 'dev-build')
 		},
-		plugins: [tailwindcss()],
+		// devServerIdentity: the desktop app's check that :5174 is this checkout's (#432).
+		plugins: [tailwindcss(), devServerIdentity()],
 		server: {
 			proxy: {
 				'/api': { target: backendTarget, changeOrigin: true, ws: true },
