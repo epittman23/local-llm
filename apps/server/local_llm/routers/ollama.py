@@ -16,7 +16,7 @@ import aiohttp
 from aiocache import cached
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, validator
+from pydantic import BaseModel, ConfigDict, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from local_llm.config import UPLOAD_DIR
@@ -382,6 +382,19 @@ async def get_ollama_connection_config() -> tuple[list, dict]:
     return config.get('ollama.base_urls', []), config.get('ollama.api_configs', {})
 
 
+async def _ollama_connection(url_idx: int) -> tuple[str, str | None, str | None]:
+    """Connection `url_idx`'s base URL, API key and prefix_id.
+
+    A model is listed under its connection's prefix_id, so a route that finds
+    it by that id strips the prefix before naming it to Ollama, which knows
+    it only by its own name (#345).
+    """
+    base_urls, api_configs = await get_ollama_connection_config()
+    url = base_urls[url_idx]
+    api_config = api_configs.get(str(url_idx), api_configs.get(url, {}))
+    return url, get_api_key(url_idx, url, api_configs), api_config.get('prefix_id')
+
+
 @cached(
     ttl=MODELS_CACHE_TTL,
     # key_builder (not key) is the per-call hook in aiocache 0.12; `key=` is a
@@ -697,15 +710,16 @@ async def push_model(
         models = request.app.state.OLLAMA_MODELS
         if form_data.model not in models:
             raise HTTPException(status_code=400, detail=ERROR_MESSAGES.MODEL_NOT_FOUND(form_data.model))
-        url_idx = models[form_data.model]['urls'][0]
+        url_idx = int(models[form_data.model]['urls'][0])
 
-    url = (await Config.get('ollama.base_urls', []))[url_idx]
+    url, key, prefix_id = await _ollama_connection(url_idx)
     log.debug('url: %s', url)
+    form_data.model = strip_provider_model_prefix(form_data.model, prefix_id)
 
     return await send_request(
         f'{url}/api/push',
         payload=form_data.model_dump_json(exclude_none=True).encode(),
-        key=get_api_key(url_idx, url, (await Config.get('ollama.api_configs', {}))),
+        key=key,
         user=user,
         stream=True,
         passthrough=True,
@@ -769,14 +783,17 @@ async def copy_model(
         models = request.app.state.OLLAMA_MODELS
         if form_data.source not in models:
             raise HTTPException(status_code=400, detail=ERROR_MESSAGES.MODEL_NOT_FOUND(form_data.source))
-        url_idx = models[form_data.source]['urls'][0]
+        url_idx = int(models[form_data.source]['urls'][0])
 
-    url = (await Config.get('ollama.base_urls', []))[url_idx]
-    key = get_api_key(url_idx, url, (await Config.get('ollama.api_configs', {})))
+    url, key, prefix_id = await _ollama_connection(url_idx)
+    payload = {
+        'source': strip_provider_model_prefix(form_data.source, prefix_id),
+        'destination': strip_provider_model_prefix(form_data.destination, prefix_id),
+    }
 
     await send_request(
         f'{url}/api/copy',
-        payload=form_data.model_dump_json(exclude_none=True).encode(),
+        payload=JSONCodec.dumps(payload),
         key=key,
         user=user,
     )
@@ -811,10 +828,12 @@ async def delete_model(
         models = request.app.state.OLLAMA_MODELS
         if model not in models:
             raise HTTPException(status_code=400, detail=ERROR_MESSAGES.MODEL_NOT_FOUND(model))
-        url_idx = models[model]['urls'][0]
+        url_idx = int(models[model]['urls'][0])
 
-    url = (await Config.get('ollama.base_urls', []))[url_idx]
-    key = get_api_key(url_idx, url, (await Config.get('ollama.api_configs', {})))
+    url, key, prefix_id = await _ollama_connection(url_idx)
+    for field in ('model', 'name'):
+        if isinstance(payload.get(field), str):
+            payload[field] = strip_provider_model_prefix(payload[field], prefix_id)
 
     await send_request(
         f'{url}/api/delete',
@@ -852,12 +871,12 @@ async def show_model_info(
     await get_all_models(request, user=user)
     models = request.app.state.OLLAMA_MODELS
 
-    if model not in models:
+    if not isinstance(model, str) or model not in models:
         raise HTTPException(status_code=400, detail=ERROR_MESSAGES.MODEL_NOT_FOUND(model))
 
     url_idx = random.choice(models[model]['urls'])
-    url = (await Config.get('ollama.base_urls', []))[url_idx]
-    key = get_api_key(url_idx, url, (await Config.get('ollama.api_configs', {})))
+    url, key, prefix_id = await _ollama_connection(url_idx)
+    payload['model'] = strip_provider_model_prefix(model, prefix_id)
 
     return await send_request(
         f'{url}/api/show',
@@ -1037,12 +1056,13 @@ class ChatMessage(BaseModel):
     images: list[str] | None = None
     model_config = ConfigDict(extra='allow')
 
-    @validator('content', pre=True)
-    @classmethod
-    def check_at_least_one_field(cls, field_value, values, **kwargs):
-        if field_value is None and ('tool_calls' not in values or values['tool_calls'] is None):
+    @model_validator(mode='after')
+    def check_at_least_one_field(self) -> ChatMessage:
+        # After both fields are read: a check on `content` alone ran before
+        # `tool_calls` was, and never ran for a message that left it out (#345).
+        if self.content is None and self.tool_calls is None:
             raise ValueError("At least one of 'content' or 'tool_calls' must be provided")
-        return field_value
+        return self
 
 
 class GenerateChatCompletionForm(BaseModel):
@@ -1726,11 +1746,28 @@ async def upload_model(
     # Stage 1: persist the uploaded file to disk
     chunk_size = AIOHTTP_FILE_STREAM_CHUNK_SIZE
 
-    async with aiofiles.open(file_path, 'wb') as out_f:
-        while chunk := await file.read(chunk_size):
-            await out_f.write(chunk)
+    async def remove_upload():
+        # Removed however the upload ends, not only after a successful push: a
+        # failed one left a file of several gigabytes behind (#345).
+        if await aiofiles.os.path.exists(file_path):
+            await asyncio.to_thread(os.remove, file_path)
+
+    try:
+        async with aiofiles.open(file_path, 'wb') as out_f:
+            while chunk := await file.read(chunk_size):
+                await out_f.write(chunk)
+    except BaseException:
+        await remove_upload()
+        raise
 
     async def file_process_stream():
+        try:
+            async for event in upload_events():
+                yield event
+        finally:
+            await remove_upload()
+
+    async def upload_events():
         nonlocal ollama_url
         total_size = await aiofiles.os.path.getsize(file_path)
         log.info('Total Model Size: %s', total_size)
@@ -1767,7 +1804,7 @@ async def upload_model(
                     raise Exception('Ollama: Could not create blob, Please try again.')
 
             log.info('Uploaded to /api/blobs')
-            await asyncio.to_thread(os.remove, file_path)
+            await remove_upload()
 
             # Stage 4: create the model
             model, _ext = os.path.splitext(filename)
