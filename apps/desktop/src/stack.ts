@@ -8,7 +8,7 @@
 import { type ChildProcess, execFile, spawn } from 'node:child_process';
 import { closeSync, openSync, readFileSync, readSync, statSync } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 
 export const DEV_SERVER_URL = 'http://localhost:5174';
@@ -41,7 +41,7 @@ export interface StartInput {
 	local: boolean;
 	backendUp: boolean;
 	devServerUp: boolean;
-	/** owned.json names a `make backend` this app started and is still running. */
+	/** owned.json names a `make backend` this app started for this address and checkout, still running. */
 	adoptable: boolean;
 	uiStale: boolean;
 	port: number;
@@ -64,14 +64,18 @@ export function decideStart(input: StartInput): StartPlan {
 	return { mode: 'own', loadUrl, buildUi: input.uiStale && !useDevServer };
 }
 
-/** apps/web inputs whose change means `dist/` is out of date. */
-export const UI_SOURCES = ['src', 'public', 'package.json', 'bun.lock', 'astro.config.mjs'];
+/** apps/web inputs whose change means `dist/` is out of date; tsconfig.json holds the path aliases (#429). */
+export const UI_SOURCES = ['src', 'public', 'package.json', 'bun.lock', 'astro.config.mjs', 'tsconfig.json'];
 
 export function uiBuildIsStale(builtAt: number | null, newestSource: number): boolean {
 	return builtAt === null || newestSource > builtAt;
 }
 
-/** The newest modification time among these files and everything under these directories. */
+/**
+ * The newest modification time among these files and everything under these
+ * directories, the directories included: a rename or a deletion changes only
+ * the directory it happened in, as the files left keep their times (#429).
+ */
 export async function newestMtime(paths: string[]): Promise<number> {
 	let newest = 0;
 	for (const path of paths) {
@@ -84,7 +88,7 @@ export async function newestMtime(paths: string[]): Promise<number> {
 		newest = Math.max(newest, info.mtimeMs);
 		if (!info.isDirectory()) continue;
 		for (const entry of await readdir(path, { recursive: true, withFileTypes: true })) {
-			if (!entry.isFile()) continue;
+			if (!entry.isFile() && !entry.isDirectory()) continue;
 			try {
 				newest = Math.max(newest, (await stat(join(entry.parentPath, entry.name))).mtimeMs);
 			} catch {
@@ -110,6 +114,9 @@ export async function isUiStale(webDir: string): Promise<boolean> {
 export interface OwnedRecord {
 	pgid: number;
 	startTicks: string;
+	/** The server address and checkout it was started for; absent in a record written before #431. */
+	origin?: string;
+	repo?: string;
 }
 
 export interface ProcStat {
@@ -152,12 +159,34 @@ export function isAdoptable(record: OwnedRecord | null, stat_: (pid: number) => 
 export function parseOwned(text: string | null): OwnedRecord | null {
 	try {
 		const raw = JSON.parse(text ?? '');
-		return Number.isInteger(raw?.pgid) && raw.pgid > 1 && typeof raw.startTicks === 'string'
-			? { pgid: raw.pgid, startTicks: raw.startTicks }
-			: null;
+		if (!(Number.isInteger(raw?.pgid) && raw.pgid > 1 && typeof raw.startTicks === 'string')) return null;
+		const record: OwnedRecord = { pgid: raw.pgid, startTicks: raw.startTicks };
+		if (typeof raw.origin === 'string') record.origin = raw.origin;
+		if (typeof raw.repo === 'string') record.repo = raw.repo;
+		return record;
 	} catch {
 		return null;
 	}
+}
+
+/**
+ * What a launch does with the stack owned.json names, `running` saying it is
+ * still the same `make` (#431). It is adopted only when it was started for
+ * this server address and checkout. Otherwise it is stopped: adopted, it
+ * would be waited on at the wrong address, and a launch that starts nothing
+ * (a remote server) would leave it running. A record from before #431 names
+ * neither, so its stack is stopped too.
+ */
+export function ownedAction(
+	record: OwnedRecord | null,
+	running: boolean,
+	origin: string,
+	repo: string,
+	local: boolean
+): 'adopt' | 'stop' | 'none' {
+	if (!record || !running) return 'none';
+	const same = record.origin === origin && record.repo !== undefined && resolve(record.repo) === resolve(repo);
+	return local && same ? 'adopt' : 'stop';
 }
 
 // --- Commands ----------------------------------------------------------------

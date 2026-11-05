@@ -1,4 +1,4 @@
-import { appendFileSync, mkdtempSync, utimesSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -9,14 +9,17 @@ import {
 	DEV_SERVER_URL,
 	decideStart,
 	isAdoptable,
+	isUiStale,
 	LogTail,
 	makeBackendCommand,
 	newestMtime,
+	ownedAction,
 	parseOwned,
 	parseProcStat,
 	type StartInput,
 	shellQuote,
 	stopGroup,
+	UI_SOURCES,
 	uiBuildIsStale
 } from './stack';
 
@@ -92,6 +95,38 @@ describe('the UI build', () => {
 		utimesSync(dir, 2000, 2000);
 		expect(await newestMtime([dir, join(dir, 'missing')])).toBe(5_000_000);
 	});
+
+	it('sees a file deleted or renamed in a subdirectory, by the directory it left (#429)', async () => {
+		const dir = mkdtempSync(join(tmpdir(), 'lllm-mtime-'));
+		const pages = join(dir, 'pages');
+		mkdirSync(pages);
+		writeFileSync(join(pages, 'old.astro'), '');
+		writeFileSync(join(pages, 'kept.astro'), '');
+		for (const path of [join(pages, 'old.astro'), join(pages, 'kept.astro'), pages, dir]) utimesSync(path, 1000, 1000);
+		expect(await newestMtime([dir])).toBe(1_000_000);
+
+		rmSync(join(pages, 'old.astro'));
+		utimesSync(pages, 7000, 7000); // what the deletion does to it, at a known time
+		expect(await newestMtime([dir])).toBe(7_000_000);
+	});
+
+	it('counts the TypeScript config, which holds the path aliases, as a source (#429)', async () => {
+		const web = mkdtempSync(join(tmpdir(), 'lllm-web-'));
+		mkdirSync(join(web, 'dist'));
+		mkdirSync(join(web, 'src'));
+		writeFileSync(join(web, 'dist', 'index.html'), '');
+		writeFileSync(join(web, 'src', 'main.ts'), '');
+		writeFileSync(join(web, 'tsconfig.json'), '{}');
+		utimesSync(join(web, 'src', 'main.ts'), 1000, 1000);
+		utimesSync(join(web, 'src'), 1000, 1000);
+		utimesSync(join(web, 'tsconfig.json'), 1000, 1000);
+		utimesSync(join(web, 'dist', 'index.html'), 5000, 5000);
+		expect(await isUiStale(web)).toBe(false);
+
+		utimesSync(join(web, 'tsconfig.json'), 9000, 9000);
+		expect(await isUiStale(web)).toBe(true);
+		expect(UI_SOURCES).toContain('tsconfig.json');
+	});
 });
 
 describe('crash recovery', () => {
@@ -116,10 +151,48 @@ describe('crash recovery', () => {
 
 	it('parses owned.json defensively', () => {
 		expect(parseOwned('{"pgid":4242,"startTicks":"9"}')).toEqual({ pgid: 4242, startTicks: '9' });
+		expect(parseOwned('{"pgid":4242,"startTicks":"9","origin":"http://127.0.0.1:4100","repo":"/r"}')).toEqual({
+			pgid: 4242,
+			startTicks: '9',
+			origin: 'http://127.0.0.1:4100',
+			repo: '/r'
+		});
+		expect(parseOwned('{"pgid":4242,"startTicks":"9","origin":5,"repo":null}')).toEqual({
+			pgid: 4242,
+			startTicks: '9'
+		});
 		expect(parseOwned('{"pgid":1,"startTicks":"9"}')).toBeNull();
 		expect(parseOwned('{"pgid":-5,"startTicks":"9"}')).toBeNull();
 		expect(parseOwned('nope')).toBeNull();
 		expect(parseOwned(null)).toBeNull();
+	});
+});
+
+describe('ownedAction (#431)', () => {
+	const record = { pgid: 4242, startTicks: '9', origin: 'http://127.0.0.1:4000', repo: '/home/u/local-llm' };
+	const here = { origin: 'http://127.0.0.1:4000', repo: '/home/u/local-llm', local: true };
+	const act = (r: Parameters<typeof ownedAction>[0], running: boolean, at = here) =>
+		ownedAction(r, running, at.origin, at.repo, at.local);
+
+	it('adopts only a stack started for this address and checkout', () => {
+		expect(act(record, true)).toBe('adopt');
+		expect(act(record, true, { ...here, repo: '/home/u/local-llm/' })).toBe('adopt');
+	});
+
+	it('stops a running stack started for another address or checkout, or from a launch for a remote server', () => {
+		expect(act(record, true, { ...here, origin: 'http://127.0.0.1:4100' })).toBe('stop');
+		expect(act(record, true, { ...here, repo: '/home/u/other' })).toBe('stop');
+		expect(act(record, true, { origin: 'https://llm.example.invalid', repo: here.repo, local: false })).toBe('stop');
+	});
+
+	it('stops a running stack whose record predates the address and checkout', () => {
+		expect(act({ pgid: 4242, startTicks: '9' }, true)).toBe('stop');
+	});
+
+	it('leaves alone what is not running, or not recorded', () => {
+		expect(act(record, false)).toBe('none');
+		expect(act(record, false, { ...here, origin: 'http://127.0.0.1:4100' })).toBe('none');
+		expect(act(null, true)).toBe('none');
 	});
 });
 

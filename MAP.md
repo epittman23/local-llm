@@ -406,7 +406,8 @@ structural summary.
   windows may open, and the dialog's IPC handlers, which check their sender.
 - **`src/stack.ts`**:
   - the start decision and the UI-staleness check;
-  - crash adoption (`owned.json` against `/proc/<pid>/stat`);
+  - crash adoption (`owned.json` against `/proc/<pid>/stat`, and the address
+    and checkout it records), or stopping a mismatched stack;
   - the `make backend` / build / `compose down` commands, run in a login
     shell;
   - `stopGroup()`, one SIGINT and a bounded wait;
