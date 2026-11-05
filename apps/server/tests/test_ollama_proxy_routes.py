@@ -162,9 +162,9 @@ def test_a_tool_call_turn_without_content_is_accepted():
 
 
 def test_a_message_with_nothing_in_it_is_refused():
-    with pytest.raises(ValidationError, match="At least one of 'content' or 'tool_calls'"):
+    with pytest.raises(ValidationError, match='A message needs content, tool_calls, images or thinking'):
         ollama.ChatMessage(role='user')
-    with pytest.raises(ValidationError, match="At least one of 'content' or 'tool_calls'"):
+    with pytest.raises(ValidationError, match='A message needs content, tool_calls, images or thinking'):
         ollama.ChatMessage(role='user', content=None, tool_calls=None)
 
 

@@ -234,8 +234,8 @@ async def get_ollama_runtime_config() -> tuple[bool, list[str], dict]:
     )
 
 
-async def listed_prefix(idx: int, listed: bool) -> str | None:
-    """The prefix to strip from a model id before naming it to connection `idx`.
+def listed_prefix(api_config: dict, listed: bool) -> str | None:
+    """The prefix to strip from a model id before naming it to a connection.
 
     The app lists a connection's models under its prefix_id, and Ollama knows
     them only by their own names, so a route that found the model in that list
@@ -243,10 +243,7 @@ async def listed_prefix(idx: int, listed: bool) -> str | None:
     name, from /api/tags/{url_idx}; a native name that starts like the prefix
     (qwen2.5 under prefix qwen2) must reach Ollama whole.
     """
-    if not listed:
-        return None
-    _, api_config, _ = await get_ollama_connection(idx)
-    return api_config.get('prefix_id')
+    return api_config.get('prefix_id') if listed else None
 
 
 async def get_ollama_connection(idx: int) -> tuple[str, dict, str | None]:
@@ -716,9 +713,9 @@ async def push_model(
             raise HTTPException(status_code=400, detail=ERROR_MESSAGES.MODEL_NOT_FOUND(form_data.model))
         url_idx = int(models[form_data.model]['urls'][0])
 
-    url, _, key = await get_ollama_connection(url_idx)
+    url, api_config, key = await get_ollama_connection(url_idx)
     log.debug('url: %s', url)
-    form_data.model = strip_provider_model_prefix(form_data.model, await listed_prefix(url_idx, listed))
+    form_data.model = strip_provider_model_prefix(form_data.model, listed_prefix(api_config, listed))
 
     return await send_request(
         f'{url}/api/push',
@@ -790,8 +787,8 @@ async def copy_model(
             raise HTTPException(status_code=400, detail=ERROR_MESSAGES.MODEL_NOT_FOUND(form_data.source))
         url_idx = int(models[form_data.source]['urls'][0])
 
-    url, _, key = await get_ollama_connection(url_idx)
-    prefix_id = await listed_prefix(url_idx, listed)
+    url, api_config, key = await get_ollama_connection(url_idx)
+    prefix_id = listed_prefix(api_config, listed)
     # A copy stays on the source's connection, so the destination takes its prefix too.
     payload = {
         'source': strip_provider_model_prefix(form_data.source, prefix_id),
@@ -839,8 +836,8 @@ async def delete_model(
             raise HTTPException(status_code=400, detail=ERROR_MESSAGES.MODEL_NOT_FOUND(model))
         url_idx = int(models[model]['urls'][0])
 
-    url, _, key = await get_ollama_connection(url_idx)
-    prefix_id = await listed_prefix(url_idx, listed)
+    url, api_config, key = await get_ollama_connection(url_idx)
+    prefix_id = listed_prefix(api_config, listed)
     for field in ('model', 'name'):
         if isinstance(payload.get(field), str):
             payload[field] = strip_provider_model_prefix(payload[field], prefix_id)
@@ -885,8 +882,8 @@ async def show_model_info(
         raise HTTPException(status_code=400, detail=ERROR_MESSAGES.MODEL_NOT_FOUND(model))
 
     url_idx = random.choice(models[model]['urls'])
-    url, _, key = await get_ollama_connection(url_idx)
-    payload['model'] = strip_provider_model_prefix(model, await listed_prefix(url_idx, True))
+    url, api_config, key = await get_ollama_connection(url_idx)
+    payload['model'] = strip_provider_model_prefix(model, listed_prefix(api_config, True))
 
     return await send_request(
         f'{url}/api/show',
@@ -1074,7 +1071,7 @@ class ChatMessage(BaseModel):
         # carry something too, and the chat sends both.
         thinking = (self.model_extra or {}).get('thinking')
         if self.content is None and self.tool_calls is None and not self.images and not thinking:
-            raise ValueError("At least one of 'content' or 'tool_calls' must be provided")
+            raise ValueError('A message needs content, tool_calls, images or thinking')
         return self
 
 
@@ -1819,7 +1816,8 @@ async def upload_model(
                     raise Exception('Ollama: Could not create blob, Please try again.')
 
             log.info('Uploaded to /api/blobs')
-            remove_upload()
+            # Off the event loop here: unlinking a multi-gigabyte file can take a while.
+            await asyncio.to_thread(remove_upload)
 
             # Stage 4: create the model
             model, _ext = os.path.splitext(filename)
