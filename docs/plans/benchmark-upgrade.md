@@ -10,7 +10,9 @@ Progress: PR 4 and the audit batches B0-B3 have landed. **PR 1 (HumanEval+
 and MBPP+) was implemented on 2026-10-25**; its differences from section 7.2
 are in that day's decisions entry. **PR 2 (LiveCodeBench) was implemented
 the same day**, with the differences from section 7.3 in its own decisions
-entry. PR 3 (the pre-screen) is not started.
+entry. **PR 3 (the pre-screen) was implemented on 2026-10-28**, with its
+differences from section 7.4 in that day's decisions entry; it has not yet
+been run on the GPU.
 
 Scope: four upgrades to `apps/server/local_llm/benchmarks/` and the
 Benchmarks pages in `apps/web`:
