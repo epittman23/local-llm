@@ -6,10 +6,14 @@ from uuid import uuid4
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from local_llm.config import ENABLE_ADMIN_EXPORT
+from local_llm.config import (
+    CONTEXT_COMPACTION_RETENTION_PERCENTAGE,
+    CONTEXT_COMPACTION_TOKEN_THRESHOLD,
+    ENABLE_ADMIN_EXPORT,
+)
 from local_llm.constants import ERROR_MESSAGES
 from local_llm.env import ENABLE_ADMIN_CHAT_ACCESS
 from local_llm.events import EVENTS, publish_event
@@ -206,9 +210,21 @@ class ChatConfigForm(BaseModel):
     ENABLE_CONTEXT_COMPACTION: bool
     CONTEXT_COMPACTION_TOKEN_THRESHOLD: int
     CONTEXT_COMPACTION_TOKEN_CAP: int | None = None
-    CONTEXT_COMPACTION_RETENTION_PERCENTAGE: int = 40
+    # The configured default, the same whether the field is left out or cleared.
+    CONTEXT_COMPACTION_RETENTION_PERCENTAGE: int = CONTEXT_COMPACTION_RETENTION_PERCENTAGE
     CONTEXT_COMPACTION_PROMPT_TEMPLATE: str
     ENABLE_TOOL_PERMISSIONS: bool = False
+
+    @field_validator('CONTEXT_COMPACTION_TOKEN_THRESHOLD', 'CONTEXT_COMPACTION_RETENTION_PERCENTAGE', mode='before')
+    @classmethod
+    def _cleared_is_default(cls, value, info):
+        # The Interface tab sends a cleared number as null; it means the
+        # default, not a failed save (#248).
+        if value is not None:
+            return value
+        if info.field_name == 'CONTEXT_COMPACTION_TOKEN_THRESHOLD':
+            return CONTEXT_COMPACTION_TOKEN_THRESHOLD
+        return CONTEXT_COMPACTION_RETENTION_PERCENTAGE
 
 
 class CompactChatForm(BaseModel):
@@ -240,14 +256,22 @@ def chat_search_snippet(chat: dict, search_text: str, max_length: int = 200) -> 
             if not isinstance(content, str):
                 continue
 
-            index = content.lower().find(needle)
+            lowered = content.lower()
+            index = lowered.find(needle)
             if index == -1:
                 continue
+            match_end = index + len(needle)
+            if len(lowered) != len(content):
+                # Lowering lengthened a character (U+0130 becomes two), so an
+                # index in the lowered text is off in the original, and the
+                # window missed the match (#339): map it back.
+                origin = [position for position, char in enumerate(content) for _ in char.lower()]
+                index, match_end = origin[index], origin[match_end - 1] + 1
 
             start = max(index - max_length // 2, 0)
             end = min(start + max_length, len(content))
-            if index + len(needle) > end:
-                end = min(index + len(needle), len(content))
+            if match_end > end:
+                end = min(match_end, len(content))
                 start = max(end - max_length, 0)
 
             snippet = ' '.join(content[start:end].split())
@@ -726,29 +750,20 @@ async def generate_chat_export_ndjson(user_id: str):
 
     Uses short-lived DB sessions per batch to avoid holding locks for the
     entire duration, which is critical for SQLite environments.
+
+    The chat ids are taken once, first, and the chats fetched by id a batch at
+    a time. Paging by OFFSET over `updated_at` skipped one chat and sent
+    another twice whenever a chat was updated during the export (#294).
     """
-    skip = 0
+    chat_ids = await Chats.get_export_chat_ids_by_user_id(user_id)
 
-    while True:
-        result = await Chats.get_chats_by_user_id(
-            user_id,
-            skip=skip,
-            limit=CHAT_EXPORT_BATCH_SIZE,
-            db=None,
-        )
-        if not result.items:
-            break
-
-        for chat in result.items:
+    for start in range(0, len(chat_ids), CHAT_EXPORT_BATCH_SIZE):
+        batch = chat_ids[start : start + CHAT_EXPORT_BATCH_SIZE]
+        for chat in await Chats.get_chats_by_ids_and_user_id(batch, user_id):
             try:
                 yield ChatResponse.model_validate(chat, from_attributes=True).model_dump_json() + '\n'
             except Exception as e:
                 log.exception(f'Error serializing chat {chat.id}: {e}')
-
-        if len(result.items) < CHAT_EXPORT_BATCH_SIZE:
-            break
-
-        skip += CHAT_EXPORT_BATCH_SIZE
 
 
 @router.get('/all')
@@ -1339,7 +1354,14 @@ async def delete_chat_by_id(
     # Cancel any in-flight LLM tasks (streaming, title/tags generation) before
     # deleting the chat to prevent orphaned requests.
     await stop_item_tasks(request.app.state.redis, id)
-    await Chats.delete_orphan_tags_for_user(chat.meta.get('tags', []), user.id, threshold=1, db=db)
+    # The chat owner's tags: an admin deleting another user's chat used to
+    # clean up the admin's own tag rows instead (#338). Only chats that are not
+    # archived or internal are counted, so such a chat does not count itself:
+    # a threshold of 1 would drop a tag that one other chat still uses.
+    counted = not chat.archived and not (chat.meta or {}).get('internal')
+    await Chats.delete_orphan_tags_for_user(
+        chat.meta.get('tags', []), chat.user_id, threshold=1 if counted else 0, db=db
+    )
 
     # Cascade to internal child chats spawned from this one.
     for child_id in await Chats.get_internal_chat_ids_by_parent_id(id, chat.user_id):

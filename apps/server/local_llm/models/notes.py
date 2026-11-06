@@ -1,3 +1,4 @@
+import logging
 import time
 import uuid
 
@@ -7,9 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from local_llm.internal.db import Base, get_async_db_context
 from local_llm.models.access_grants import AccessGrantModel, AccessGrants
+from local_llm.models.chats import Chats
 from local_llm.models.groups import Groups
 from local_llm.models.users import User, UserModel, UserResponse
 from local_llm.utils.json_codec import JSONCodec
+
+log = logging.getLogger(__name__)
 
 ####################
 # Note DB Schema
@@ -397,7 +401,8 @@ class NoteTable:
 
                 await db.commit()
                 return await self._to_note_model(note, db=db)
-        except Exception:
+        except Exception as e:
+            log.warning('Could not pin or unpin note %s: %s', id, e)
             return None
 
     async def get_pinned_notes_by_user_id(
@@ -426,14 +431,22 @@ class NoteTable:
 
     async def delete_note_by_id(self, id: str, db: AsyncSession | None = None) -> bool:
         try:
-            async with get_async_db_context(db) as db:
-                await AccessGrants.revoke_all_access('note', id, db=db)
-                await db.execute(delete(PinnedNote).filter(PinnedNote.note_id == id))
-                await db.execute(delete(Note).filter(Note.id == id))
-                await db.commit()
-                return True
-        except Exception:
+            async with get_async_db_context(db) as session:
+                await AccessGrants.revoke_all_access('note', id, db=session)
+                await session.execute(delete(PinnedNote).filter(PinnedNote.note_id == id))
+                await session.execute(delete(Note).filter(Note.id == id))
+                await session.commit()
+        except Exception as e:
+            log.warning('Could not delete note %s: %s', id, e)
             return False
+        # Each user's chat with the note, which nothing else reaches (#333).
+        # The note is gone by now, so a failure here is logged, not reported:
+        # the note must still read as deleted.
+        try:
+            await Chats.delete_internal_chats_by_note_id(id, db=db)
+        except Exception as e:
+            log.warning('Could not delete the chats of deleted note %s: %s', id, e)
+        return True
 
     async def get_pinned_note_ids(self, user_id: str, db: AsyncSession | None = None) -> list[str]:
         async with get_async_db_context(db) as db:

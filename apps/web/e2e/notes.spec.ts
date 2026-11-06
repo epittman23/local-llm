@@ -131,6 +131,30 @@ test('Create makes a dated note and opens it; ?title= makes one from a link', as
 	});
 });
 
+test('a ?title= link whose create fails says so and shows the list, not an endless spinner (#210)', async ({
+	page
+}) => {
+	await mockWorkspaceBackend(page, enabled);
+	await mockNotes(page, [note('n1', 'Groceries')]);
+	await page.route('**/api/v1/notes/create', (route) => json(route, { detail: 'Notes are not allowed' }, 403));
+	for (const link of ['/notes?title=From%20link', '/notes/new?title=From%20link']) {
+		await page.goto(link);
+		await expect(page.getByText('Notes are not allowed')).toBeVisible();
+		await expect(page).toHaveURL(/\/notes$/);
+		await expect(page.getByText('Groceries')).toBeVisible();
+	}
+});
+
+test('a ?title= link whose create returns no note says so and shows the list (#210)', async ({ page }) => {
+	await mockWorkspaceBackend(page, enabled);
+	await mockNotes(page, [note('n1', 'Groceries')]);
+	await page.route('**/api/v1/notes/create', (route) => json(route, null));
+	await page.goto('/notes?content=%23%20Hello');
+	await expect(page.getByText('The note could not be created')).toBeVisible();
+	await expect(page).toHaveURL(/\/notes$/);
+	await expect(page.getByText('Groceries')).toBeVisible();
+});
+
 test('importing: md/txt become notes, anything else is refused', async ({ page }) => {
 	await mockWorkspaceBackend(page, enabled);
 	const seen = await mockNotes(page);
@@ -151,7 +175,9 @@ test('editing autosaves the title and the body as html, markdown and json', asyn
 	const seen = await mockNotes(page, [note('a', 'Groceries')]);
 	await page.goto('/notes/a');
 	const editor = page.getByRole('textbox', { name: 'Note content' });
-	await expect(editor).toContainText('Body of Groceries');
+	// The editor is a lazy chunk, which the dev server compiles on its first
+	// request: under parallel load that alone took over the default 5 s (#500).
+	await expect(editor).toContainText('Body of Groceries', { timeout: 20_000 });
 	await page.getByLabel('Title', { exact: true }).fill('Weekly groceries');
 	// Put the caret at the end of the existing text before typing: a click in
 	// the middle of the (mostly empty) editor box then Ctrl+End raced the

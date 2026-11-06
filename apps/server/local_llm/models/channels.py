@@ -905,8 +905,19 @@ class ChannelTable:
             return False
 
     async def delete_channel_by_id(self, id: str, db: AsyncSession | None = None) -> bool:
+        """Delete a channel and what only it held: its messages and their
+        reactions, files, memberships and webhooks, in one commit (#333)."""
+        # Imported here: messages.py is imported by modules this one is imported by.
+        from local_llm.models.messages import Message, MessageReaction
+
         async with get_async_db_context(db) as db:
             await AccessGrants.revoke_all_access('channel', id, db=db)
+            message_ids = select(Message.id).where(Message.channel_id == id)
+            await db.execute(delete(MessageReaction).where(MessageReaction.message_id.in_(message_ids)))
+            await db.execute(delete(ChannelFile).where(ChannelFile.channel_id == id))
+            await db.execute(delete(Message).where(Message.channel_id == id))
+            await db.execute(delete(ChannelMember).where(ChannelMember.channel_id == id))
+            await db.execute(delete(ChannelWebhook).where(ChannelWebhook.channel_id == id))
             await db.execute(delete(Channel).filter(Channel.id == id))
             await db.commit()
             return True

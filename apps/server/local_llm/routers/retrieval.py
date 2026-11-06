@@ -30,7 +30,7 @@ from langchain_text_splitters import (
     RecursiveCharacterTextSplitter,
     TokenTextSplitter,
 )
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from local_llm.config import (
@@ -73,7 +73,9 @@ from local_llm.retrieval.utils import (
     get_loader_config,
     get_model_path,
     get_reranking_function,
+    in_document_order,
     is_youtube_url,
+    number_chunks,
     query_collection,
     query_collection_with_hybrid_search,
     query_doc,
@@ -124,6 +126,7 @@ from local_llm.utils.auth import get_admin_user, get_verified_user
 from local_llm.utils.misc import (
     calculate_sha256_string,
     chunk_settings_error,
+    embedding_batch_size_error,
     sanitize_text_for_db,
 )
 
@@ -511,6 +514,10 @@ class EmbeddingModelUpdateForm(BaseModel):
     RAG_EMBEDDING_BATCH_SIZE: int | None = 1
     ENABLE_ASYNC_EMBEDDING: bool | None = True
     RAG_EMBEDDING_CONCURRENT_REQUESTS: int | None = 0
+    # Load the model even when it is unchanged and loaded: the Documents page's
+    # "Update embedding model" button does, to fetch it again. Its plain Save
+    # sends false, so saving other settings does not load the model again (#532).
+    force_reload: bool = True
 
 
 def free_replaced_embedding_model() -> None:
@@ -527,13 +534,31 @@ def free_replaced_embedding_model() -> None:
 
 @router.post('/embedding/update')
 async def update_embedding_config(request: Request, form_data: EmbeddingModelUpdateForm, user=Depends(get_admin_user)):
+    # Checked before anything changes: a batch size below 1, or none, fails
+    # every embedding once saved (#353).
+    if batch_size_error := embedding_batch_size_error(form_data.RAG_EMBEDDING_BATCH_SIZE):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=batch_size_error)
     config = await get_retrieval_config()
     log.info('Updating embedding model: %s to %s', config.RAG_EMBEDDING_MODEL, form_data.RAG_EMBEDDING_MODEL)
     # The new model is loaded before the old one is let go, and nothing is saved
     # unless it loads, so a failure leaves the working configuration in place.
-    # It is loaded even when unchanged: the Documents page's download button
-    # sends the same request as a plain save, to re-fetch the model.
     embedding_in_use = config.RAG_EMBEDDING_ENGINE != '' or request.app.state.ef is not None
+    if form_data.RAG_EMBEDDING_ENGINE == '' and not form_data.RAG_EMBEDDING_MODEL.strip():
+        # Saved, it would leave no model loaded, and every upload and query would fail (#532).
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='Choose an embedding model: the local engine needs one.',
+        )
+    # The loaded model is kept when it is the one asked for. Compared with the
+    # model this process holds, not the stored name, which a config import or
+    # another worker's update can have changed without loading it. The name is
+    # recorded by this route, so the first save after a start loads the model once.
+    keep_loaded = (
+        not form_data.force_reload
+        and request.app.state.ef is not None
+        and form_data.RAG_EMBEDDING_ENGINE == ''
+        and getattr(request.app.state, 'ef_model', None) == form_data.RAG_EMBEDDING_MODEL.strip()
+    )
     try:
         config.RAG_EMBEDDING_ENGINE = form_data.RAG_EMBEDDING_ENGINE
         config.RAG_EMBEDDING_MODEL = form_data.RAG_EMBEDDING_MODEL.strip()
@@ -554,9 +579,13 @@ async def update_embedding_config(request: Request, form_data: EmbeddingModelUpd
             config.RAG_AZURE_OPENAI_API_KEY = form_data.azure_openai_config.key or ''
             config.RAG_AZURE_OPENAI_API_VERSION = form_data.azure_openai_config.version or ''
 
-        ef = get_ef(
-            config.RAG_EMBEDDING_ENGINE,
-            config.RAG_EMBEDDING_MODEL,
+        ef = (
+            request.app.state.ef
+            if keep_loaded
+            else get_ef(
+                config.RAG_EMBEDDING_ENGINE,
+                config.RAG_EMBEDDING_MODEL,
+            )
         )
         # get_ef returns None for an external engine too; only a named internal model must load.
         if config.RAG_EMBEDDING_ENGINE == '' and config.RAG_EMBEDDING_MODEL and ef is None:
@@ -604,8 +633,9 @@ async def update_embedding_config(request: Request, form_data: EmbeddingModelUpd
         )
 
         await config.save()
-        replaced_internal_model = request.app.state.ef is not None
+        replaced_internal_model = request.app.state.ef is not None and not keep_loaded
         request.app.state.ef = ef
+        request.app.state.ef_model = config.RAG_EMBEDDING_MODEL if ef is not None else None
         request.app.state.EMBEDDING_FUNCTION = embedding_function
         if replaced_internal_model:
             free_replaced_embedding_model()
@@ -1733,6 +1763,8 @@ def save_docs_to_vector_db(
         }
         for doc in docs
     ]
+    # Each chunk's place in its file, for reading a whole file back in order.
+    number_chunks(metadatas)
 
     try:
         if VECTOR_DB_CLIENT.has_collection(collection_name=collection_name):
@@ -1824,6 +1856,11 @@ def has_vector_results(result) -> bool:
     return bool(result and result.ids and result.ids[0])
 
 
+def _done_status(mark_completed: bool) -> dict:
+    """The file data a successful processing step writes: completed, or only the error cleared."""
+    return {'status': 'completed', 'error': None} if mark_completed else {'error': None}
+
+
 @router.post('/process/file')
 async def process_file(
     request: Request,
@@ -1843,6 +1880,7 @@ async def process_file_for(
     *,
     check_collection_access: bool = True,
     record_failure: bool = True,
+    mark_completed: bool = True,
 ):
     """
     Process a file and save its content to the vector database.
@@ -1853,7 +1891,10 @@ async def process_file_for(
     for a caller that has already authorized the change and is only
     mirroring the file's chunks into the collections that hold it; with
     `record_failure=False` a failure there is only raised, without marking the
-    file itself failed (its own content and collection are fine).
+    file itself failed (its own content and collection are fine). With
+    `mark_completed=False` a success leaves the file's status for the caller to
+    finish: an upload to a knowledge base marks it completed only once it is
+    linked, since the status stream ends at the first "completed" (#311).
     Note: granular session management is used to prevent connection pool exhaustion.
     The session is committed before external API calls, and updates use a fresh session.
     """
@@ -1914,13 +1955,13 @@ async def process_file_for(
                 stored_content = (file.data or {}).get('content')
 
                 if has_vector_results(file_result):
-                    # Normal path: reuse the already-processed per-file chunks.
+                    # Normal path: reuse the already-processed per-file chunks,
+                    # in the file's order, which the knowledge base's copies
+                    # are numbered by (#355).
+                    ordered = in_document_order(file_result.model_dump())
                     docs = [
-                        Document(
-                            page_content=file_result.documents[0][idx],
-                            metadata=file_result.metadatas[0][idx],
-                        )
-                        for idx, id in enumerate(file_result.ids[0])
+                        Document(page_content=text, metadata=meta)
+                        for text, meta in zip(ordered['documents'][0], ordered['metadatas'][0], strict=True)
                     ]
                 elif stored_content is not None:
                     # Repair path: vector chunks are missing, but SQL still has the file text.
@@ -1994,7 +2035,7 @@ async def process_file_for(
             hash = calculate_sha256_string(text_content)
 
             if config.BYPASS_EMBEDDING_AND_RETRIEVAL:
-                await Files.update_file_data_by_id(file.id, {'status': 'completed', 'error': None}, db=db)
+                await Files.update_file_data_by_id(file.id, _done_status(mark_completed), db=db)
                 await Files.update_file_hash_by_id(file.id, hash, db=db)
                 await publish_event(
                     request,
@@ -2053,7 +2094,7 @@ async def process_file_for(
 
                             await Files.update_file_data_by_id(
                                 file.id,
-                                {'status': 'completed', 'error': None},
+                                _done_status(mark_completed),
                                 db=session,
                             )
                             await Files.update_file_hash_by_id(file.id, hash, db=session)
@@ -2866,8 +2907,9 @@ async def _validate_collection_access(collection_names: list[str], user, access_
 class QueryDocForm(BaseModel):
     collection_name: str
     query: str
-    k: int | None = None
-    k_reranker: int | None = None
+    # At least 1: 0 or less asked for no results, which is never meant (#354).
+    k: int | None = Field(default=None, ge=1)
+    k_reranker: int | None = Field(default=None, ge=1)
     r: float | None = None
     hybrid: bool | None = None
     hybrid_bm25_weight: float | None = None
@@ -2897,8 +2939,9 @@ async def query_doc_handler(
                     if request.app.state.RERANKING_FUNCTION
                     else None
                 ),
-                k_reranker=form_data.k_reranker or config.TOP_K_RERANKER,
-                r=(form_data.r if form_data.r else config.RELEVANCE_THRESHOLD),
+                # An explicit r of 0 is an override too (#354).
+                k_reranker=form_data.k_reranker if form_data.k_reranker is not None else config.TOP_K_RERANKER,
+                r=form_data.r if form_data.r is not None else config.RELEVANCE_THRESHOLD,
                 hybrid_bm25_weight=(
                     form_data.hybrid_bm25_weight
                     if form_data.hybrid_bm25_weight is not None
@@ -2931,8 +2974,9 @@ async def query_doc_handler(
 class QueryCollectionsForm(BaseModel):
     collection_names: list[str]
     query: str
-    k: int | None = None
-    k_reranker: int | None = None
+    # At least 1: 0 or less asked for no results, which is never meant (#354).
+    k: int | None = Field(default=None, ge=1)
+    k_reranker: int | None = Field(default=None, ge=1)
     r: float | None = None
     hybrid: bool | None = None
     hybrid_bm25_weight: float | None = None
@@ -2962,8 +3006,9 @@ async def query_collection_handler(
                     if request.app.state.RERANKING_FUNCTION
                     else None
                 ),
-                k_reranker=form_data.k_reranker or config.TOP_K_RERANKER,
-                r=(form_data.r if form_data.r else config.RELEVANCE_THRESHOLD),
+                # An explicit r of 0 is an override too (#354).
+                k_reranker=form_data.k_reranker if form_data.k_reranker is not None else config.TOP_K_RERANKER,
+                r=form_data.r if form_data.r is not None else config.RELEVANCE_THRESHOLD,
                 hybrid_bm25_weight=(
                     form_data.hybrid_bm25_weight
                     if form_data.hybrid_bm25_weight is not None
@@ -2984,6 +3029,8 @@ async def query_collection_handler(
                     query, prefix=prefix, user=user
                 ),
                 k=form_data.k if form_data.k else config.TOP_K,
+                # hybrid=false asked for vector search only (#354).
+                allow_hybrid=False,
             )
 
     except HTTPException:
