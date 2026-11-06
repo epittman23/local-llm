@@ -73,10 +73,11 @@ not the migration plan's original "new-york".
   drops it (`useHeldSend`, #373). It used to show "Model not selected".
 - **Enter while an attachment is still uploading** holds the message
   ("Sends when the upload finishes") and sends it once every upload is
-  done, as Chat.svelte queued it. Editing the text meanwhile lets go of
-  it, and so does an upload that fails, so a message never goes half
-  written or without its file (`ChatInput`). Enter used to do nothing
-  then, and say nothing.
+  done and the chat is not reloading (Chat.svelte cleared the box and
+  queued such a message instead). Editing the text lets go of it at once,
+  and so does a held upload failing or being removed, so a message never
+  goes half written or without its file (`ChatInput`). Enter used to do
+  nothing then, and say nothing.
 - **English only.** No page calls `useTranslation` yet, so only the `en-US`
   locale ships and there is no language picker (the other 63 locale files
   were removed on 2026-10-10).

@@ -87,7 +87,7 @@ describe('ChatInput: Enter while an attachment is uploading', () => {
 
 	function showWith(files: Record<string, unknown>[]) {
 		const onSubmit = vi.fn(() => true);
-		const ui = (fs: Record<string, unknown>[]) => (
+		const ui = (fs: Record<string, unknown>[], disabled = false) => (
 			<QueryClientProvider client={new QueryClient()}>
 				<TooltipProvider>
 					<ChatInput
@@ -97,13 +97,18 @@ describe('ChatInput: Enter while an attachment is uploading', () => {
 						queued={[]}
 						onRemoveQueued={vi.fn()}
 						files={fs}
+						disabled={disabled}
 					/>
 				</TooltipProvider>
 			</QueryClientProvider>
 		);
 		const { rerender } = render(ui(files));
 		const box = screen.getByRole('textbox', { name: 'Message' }) as HTMLTextAreaElement;
-		return { box, onSubmit, setFiles: (fs: Record<string, unknown>[]) => rerender(ui(fs)) };
+		return {
+			box,
+			onSubmit,
+			setFiles: (fs: Record<string, unknown>[], disabled = false) => rerender(ui(fs, disabled))
+		};
 	}
 	const status = () => screen.queryByText('Sends when the upload finishes');
 
@@ -150,5 +155,30 @@ describe('ChatInput: Enter while an attachment is uploading', () => {
 		expect(status()).toBeNull();
 		setFiles([uploaded]);
 		expect(onSubmit).not.toHaveBeenCalled();
+	});
+
+	it('waits while the chat reloads, and sends after', () => {
+		const { box, onSubmit, setFiles } = showWith([uploading]);
+		type(box, 'read this');
+		fireEvent.keyDown(box, { key: 'Enter' });
+		// The upload ends while the chat is reloading (a tool call resolved, a missed reply end).
+		setFiles([uploaded], true);
+		expect(onSubmit).not.toHaveBeenCalled();
+		expect(status()).toBeTruthy();
+		setFiles([uploaded], false);
+		expect(onSubmit).toHaveBeenCalledExactlyOnceWith('read this', [uploaded]);
+	});
+
+	it('lets go at once when one held upload is gone while another is still going', () => {
+		const other = { itemId: 'f2', type: 'text', name: 'Other', status: 'uploading' };
+		const { box, onSubmit, setFiles } = showWith([uploading, other]);
+		type(box, 'read this');
+		fireEvent.keyDown(box, { key: 'Enter' });
+		expect(status()).toBeTruthy();
+		setFiles([other]);
+		expect(status()).toBeNull();
+		setFiles([{ ...other, status: 'uploaded' }]);
+		expect(onSubmit).not.toHaveBeenCalled();
+		expect(box.value).toBe('read this');
 	});
 });
