@@ -60,6 +60,13 @@ not the migration plan's original "new-york".
   server died the first time a `/ws` connection closed. Keep `--bun` off it.
 - **`astro dev` daemonizes.** The Makefile wraps it so Ctrl-C works; if a
   stray one is left running, `cd apps/web && bunx astro dev stop`.
+- **`package.json` pins `@emnapi/core` and `@emnapi/runtime` to one
+  version** (`overrides`). `@astrojs/astro2tsx` (under `@astrojs/check`)
+  depends on the core but not the runtime, so it gets whichever runtime is
+  hoisted. After #768 that was rolldown's `2.0.0-beta.2` against a 1.11.3
+  core, and `astro check` could not load: it exits 0 then, so CI passed
+  without checking anything until `.github/scripts/astro_check.py`. Drop
+  the pin once `astro2tsx` declares the runtime itself (0.1.3 does not).
 - **Sending in the first second after load** waits until the page has
   chosen its models and loaded the tools (whose defaults a model may turn
   on), then goes with what the box holds; opening another chat meanwhile
