@@ -1,8 +1,15 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { DROPPED_GRANTS_WARNING } from '@/lib/access/accessGrants';
-import { getChatAccessGrants, getChatById, shareChatById, updateChatAccessGrants } from '@/lib/apis/chats';
+import {
+	deleteSharedChatById,
+	getChatAccessGrants,
+	getChatById,
+	shareChatById,
+	updateChatAccessGrants
+} from '@/lib/apis/chats';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { ShareChatDialog } from './ChatDialogs';
 
@@ -35,7 +42,9 @@ const PUBLIC_READ = { principal_type: 'user', principal_id: '*', permission: 're
 const open = (onOpenChange = vi.fn()) => {
 	render(
 		<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-			<ShareChatDialog open onOpenChange={onOpenChange} chatId="c1" />
+			<TooltipProvider>
+				<ShareChatDialog open onOpenChange={onOpenChange} chatId="c1" />
+			</TooltipProvider>
 		</QueryClientProvider>
 	);
 	return onOpenChange;
@@ -113,5 +122,89 @@ describe('ShareChatDialog: who can open the link (#334)', () => {
 		expect(await screen.findByLabelText('Visibility')).toHaveValue('private');
 		expect(onOpenChange).not.toHaveBeenCalledWith(false);
 		expect(toastSuccess).toHaveBeenCalledWith(expect.stringMatching(/Copied/));
+	});
+
+	const options = () =>
+		Array.from((screen.getByLabelText('Visibility') as HTMLSelectElement).options).map((o) => o.value);
+
+	it("offers Public and Open only as the user's sharing permissions allow", async () => {
+		vi.mocked(getChatById).mockResolvedValue({ share_id: 's1' } as never);
+		vi.mocked(getChatAccessGrants).mockResolvedValue([]);
+
+		signIn({});
+		open();
+		await screen.findByLabelText('Visibility');
+		expect(options()).toEqual(['private']);
+	});
+
+	it('offers Public and Open to a user allowed both', async () => {
+		vi.mocked(getChatById).mockResolvedValue({ share_id: 's1' } as never);
+		vi.mocked(getChatAccessGrants).mockResolvedValue([]);
+		signIn({ sharing: { public_chats: true, open_chats: true } });
+		open();
+		await screen.findByLabelText('Visibility');
+		expect(options()).toEqual(['private', 'public', 'open']);
+	});
+
+	it('offers an admin every choice, whatever the permissions say', async () => {
+		vi.mocked(getChatById).mockResolvedValue({ share_id: 's1' } as never);
+		vi.mocked(getChatAccessGrants).mockResolvedValue([]);
+		useAuthStore.setState({ status: 'authenticated', token: 't', user: { role: 'admin', permissions: {} } } as never);
+		open();
+		await screen.findByLabelText('Visibility');
+		expect(options()).toEqual(['private', 'public', 'open']);
+	});
+
+	it('goes back to what was stored when a save fails', async () => {
+		vi.mocked(getChatById).mockResolvedValue({ share_id: 's1' } as never);
+		vi.mocked(getChatAccessGrants).mockResolvedValue([]);
+		vi.mocked(updateChatAccessGrants).mockRejectedValue('refused');
+		open();
+
+		fireEvent.change(await screen.findByLabelText('Visibility'), { target: { value: 'public' } });
+
+		await waitFor(() => expect(toastError).toHaveBeenCalledWith('refused'));
+		await waitFor(() => expect(screen.getByLabelText('Visibility')).toHaveValue('private'));
+	});
+
+	it('sends two quick changes one after the other, and reports only the last', async () => {
+		vi.mocked(getChatById).mockResolvedValue({ share_id: 's1' } as never);
+		let stored: unknown[] = [];
+		vi.mocked(getChatAccessGrants).mockImplementation(async () => stored as never);
+		let release: () => void = () => {};
+		const order: string[] = [];
+		vi.mocked(updateChatAccessGrants).mockImplementation(async (_t, _id, grants) => {
+			const label = (grants as unknown[]).length ? 'public' : 'private';
+			order.push(`start ${label}`);
+			if (label === 'public') await new Promise<void>((resolve) => (release = resolve));
+			stored = grants as unknown[];
+			order.push(`end ${label}`);
+			return { id: 'c1' } as never;
+		});
+		open();
+		const visibility = await screen.findByLabelText('Visibility');
+
+		fireEvent.change(visibility, { target: { value: 'public' } });
+		await waitFor(() => expect(order).toEqual(['start public']));
+		fireEvent.change(visibility, { target: { value: 'private' } });
+		release();
+
+		await waitFor(() => expect(order).toEqual(['start public', 'end public', 'start private', 'end private']));
+		await waitFor(() => expect(toastSuccess).toHaveBeenCalledTimes(1));
+		expect(toastWarning).not.toHaveBeenCalled();
+		expect(screen.getByLabelText('Visibility')).toHaveValue('private');
+	});
+
+	it('keeps the panel when deleting the link fails', async () => {
+		vi.mocked(getChatById).mockResolvedValue({ share_id: 's1' } as never);
+		vi.mocked(getChatAccessGrants).mockResolvedValue([PUBLIC_READ] as never);
+		vi.mocked(deleteSharedChatById).mockRejectedValue('not now');
+		open();
+		await screen.findByLabelText('Visibility');
+
+		fireEvent.click(screen.getByRole('button', { name: 'Delete this link' }));
+
+		await waitFor(() => expect(toastError).toHaveBeenCalledWith('not now'));
+		expect(screen.getByLabelText('Visibility')).toHaveValue('public');
 	});
 });

@@ -60,34 +60,55 @@ export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { 
 	// serves it only to its owner and the users and groups granted read here, as
 	// ShareChatModal.svelte's AccessControl panel set them.
 	const [grants, setGrants] = useState<AccessGrant[] | null>(null);
+	// What the server last said it stored: the panel goes back to it when a save fails.
+	const saved = useRef<AccessGrant[]>([]);
 	useEffect(() => {
 		if (!open || !shared) return;
 		let current = true;
 		getChatAccessGrants(token, chatId)
-			.then((stored) => current && setGrants(Array.isArray(stored) ? (stored as AccessGrant[]) : []))
+			.then((stored) => {
+				if (!current) return;
+				saved.current = Array.isArray(stored) ? (stored as AccessGrant[]) : [];
+				setGrants(saved.current);
+			})
 			.catch((e) => current && toast.error(`${e}`));
 		return () => {
 			current = false;
 		};
 	}, [open, shared, token, chatId]);
 
-	// Shown at once; only the latest save's re-read is applied, since the server
-	// replaces the grants wholesale and drops those this user may not set (as #522).
+	// Shown at once. Each save waits for the one before it, so the server applies
+	// them in order: it replaces the grants wholesale, and two in flight together
+	// could be stored either way round. Only the latest save's re-read is shown,
+	// since the server drops grants this user may not set (as #522).
 	const accessSaves = useRef(0);
-	const saveAccess = async (next: AccessGrant[]) => {
+	const saveChain = useRef<Promise<unknown>>(Promise.resolve());
+	const saveAccess = (next: AccessGrant[]) => {
 		const seq = ++accessSaves.current;
-		const previous = grants ?? [];
 		setGrants(next);
-		const saved = await updateChatAccessGrants(token, chatId, next).catch((e) => void toast.error(`${e}`));
-		const latest = accessSaves.current === seq;
-		if (!saved) {
-			if (latest) setGrants(previous);
-			return;
-		}
-		const stored = await getChatAccessGrants(token, chatId).catch(() => null);
-		if (latest && Array.isArray(stored)) setGrants(stored as AccessGrant[]);
-		if (grantsDropped(next, stored)) toast.warning(DROPPED_GRANTS_WARNING);
-		else toast.success('Access updated');
+		const run = async () => {
+			const ok = await updateChatAccessGrants(token, chatId, next).then(
+				() => true,
+				(e) => void toast.error(`${e}`)
+			);
+			const latest = () => accessSaves.current === seq;
+			if (!ok) {
+				if (latest()) setGrants(saved.current);
+				return;
+			}
+			const stored = await getChatAccessGrants(token, chatId).catch(() => null);
+			if (!Array.isArray(stored)) {
+				if (latest()) toast.error('Saved, but the access could not be read back. Reopen the dialog to check it.');
+				return;
+			}
+			saved.current = stored as AccessGrant[];
+			if (!latest()) return;
+			setGrants(saved.current);
+			if (grantsDropped(next, stored)) toast.warning(DROPPED_GRANTS_WARNING);
+			else toast.success('Access updated');
+		};
+		saveChain.current = saveChain.current.then(run, run);
+		return saveChain.current;
 	};
 
 	const copy = async () => {
@@ -105,8 +126,16 @@ export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { 
 		void chat.refetch();
 	};
 	const unshare = async () => {
-		await deleteSharedChatById(token, chatId).catch((e) => toast.error(`${e}`));
-		setGrants(null);
+		const deleted = await deleteSharedChatById(token, chatId).then(
+			() => true,
+			(e) => void toast.error(`${e}`)
+		);
+		if (deleted) {
+			// The link and its grants are gone; a save still in flight must not show them again.
+			accessSaves.current += 1;
+			saved.current = [];
+			setGrants(null);
+		}
 		void chat.refetch();
 	};
 
