@@ -714,6 +714,21 @@ if LLLM_AUTH and LLLM_SECRET_KEY == '':
         'or export it yourself when starting uvicorn by hand.'
     )
 
+# Checked here, not when the first session is signed (#508). The message never
+# repeats the secret.
+LLLM_SECRET_KEY_MIN_BYTES = 32
+if LLLM_AUTH and LLLM_SECRET_KEY != LLLM_SECRET_KEY.strip():
+    raise SystemExit(
+        'LLLM_SECRET_KEY starts or ends with whitespace, which is usually a copying slip. '
+        'Remove it in infra/.env, or wherever the variable is set.'
+    )
+if LLLM_AUTH and len(LLLM_SECRET_KEY.encode()) < LLLM_SECRET_KEY_MIN_BYTES:
+    raise SystemExit(
+        f'LLLM_SECRET_KEY is {len(LLLM_SECRET_KEY.encode())} bytes long; it must be at least '
+        f'{LLLM_SECRET_KEY_MIN_BYTES}, the key size of the HS256 signature it signs sessions with. '
+        '`openssl rand -base64 24` gives a random 32-character one.'
+    )
+
 ENABLE_COMPRESSION_MIDDLEWARE = os.getenv('ENABLE_COMPRESSION_MIDDLEWARE', 'True').lower() == 'true'
 
 ####################################
