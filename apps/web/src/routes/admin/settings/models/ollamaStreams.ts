@@ -3,6 +3,16 @@ import { splitStream } from '@/lib/utils/api-helpers';
 
 type Rec = Record<string, any>;
 
+/**
+ * What Manage Ollama shows for a refused request: the server's own words,
+ * FastAPI's `detail` or Ollama's `error` passed through, else the status (#504).
+ */
+export const refusalMessage = async (res: Response): Promise<string> =>
+	errorMessage(await errorBody(res), `${res.status}`);
+
+/** What it shows for a failure that was thrown: its text, never "[object Object]" (#504). */
+export const failureMessage = (err: unknown): string => errorMessage(err, 'The request failed.');
+
 /** A streamed response (`pull`, `create`, `upload`) as a reader of newline-separated chunks. */
 export const lineReader = (res: Response) =>
 	res.body!.pipeThrough(new TextDecoderStream()).pipeThrough(splitStream('\n')).getReader();
@@ -100,10 +110,7 @@ export async function finishUpload(res: Response, steps: UploadSteps): Promise<v
 	if (payload === null) return steps.notify.success(`Model ${done.model_created} created`);
 	const created = await steps.create(payload);
 	if (created?.ok) await steps.followCreate(created);
-	else
-		steps.notify.error(
-			((await created?.json().catch(() => null)) as { detail?: string } | null)?.detail ?? 'Failed to create the model'
-		);
+	else steps.notify.error(created ? await refusalMessage(created) : 'Failed to create the model');
 }
 
 /** The Modelfile the GGUF upload creates its model from. */

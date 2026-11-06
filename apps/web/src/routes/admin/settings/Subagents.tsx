@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { SettingField, SettingRow, SettingSwitch, SettingsForm, SettingTextarea } from '@/components/settings/controls';
 import { getSubagentsConfig, setSubagentsConfig } from '@/lib/apis/configs';
@@ -29,13 +29,19 @@ const toForm = (c: Config | null) => ({
 });
 type Form = ReturnType<typeof toForm>;
 
+/**
+ * A limit field: -1 means no limit, as the server reads it (#602); any other
+ * value keeps the field's own bounds. The browser's `min` is -1, so the lower
+ * bound is checked here instead, and there is no `step`, whose base would be -1.
+ */
 function NumberField({
 	id,
 	label,
 	unit,
 	value,
 	onChange,
-	...limits
+	min,
+	max
 }: {
 	id: string;
 	label: string;
@@ -44,18 +50,24 @@ function NumberField({
 	onChange: (n: number) => void;
 	min?: number;
 	max?: number;
-	step?: number;
 }) {
+	const input = useRef<HTMLInputElement>(null);
+	const below = min !== undefined && value !== -1 && value < min;
+	useEffect(() => {
+		input.current?.setCustomValidity(below ? `Enter -1 for no limit, or at least ${min}.` : '');
+	}, [below, min]);
 	return (
-		<SettingField label={label} htmlFor={id}>
+		<SettingField label={label} htmlFor={id} description="Set -1 for no limit.">
 			<div className="flex items-center gap-2">
 				<input
+					ref={input}
 					id={id}
 					type="number"
 					className={`${settingInputClass} w-24`}
 					value={value}
 					onChange={(e) => onChange(Number(e.target.value))}
-					{...limits}
+					min={-1}
+					max={max}
 				/>
 				<span className="text-muted-foreground text-xs">{unit}</span>
 			</div>
@@ -109,7 +121,6 @@ export default function Subagents() {
 							unit="simultaneous sub-agents"
 							value={form.maxConcurrent}
 							onChange={(maxConcurrent) => set({ maxConcurrent })}
-							min={-1}
 						/>
 						<SettingRow
 							label="Enable background sub-agents"
@@ -130,7 +141,6 @@ export default function Subagents() {
 								unit="background sub-agents"
 								value={form.maxAsync}
 								onChange={(maxAsync) => set({ maxAsync })}
-								min={-1}
 							/>
 						)}
 						<NumberField
@@ -150,7 +160,6 @@ export default function Subagents() {
 							onChange={(maxOutput) => set({ maxOutput })}
 							min={1000}
 							max={100000}
-							step={1000}
 						/>
 						<SettingField label="System prompt" htmlFor="sa-prompt" description="Leave empty for the built-in default.">
 							<SettingTextarea
