@@ -455,6 +455,10 @@ async def check_model_access(user, model, model_info=None, db=None):
         if model_info is None or model_info.id != model.get('id'):
             model_info = await Models.get_model_by_id(model.get('id'), db=db)
         if not model_info:
+            # No workspace row means no access control configured yet: the
+            # admins' to use, as get_filtered_models lists it to them (#603).
+            if user.role == 'admin':
+                return
             raise Exception('Model not found')
 
         # One group-membership fetch shared by the direct check and every
