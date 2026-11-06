@@ -143,17 +143,21 @@ def apply_params_to_form_data(form_data: dict, model: dict, params: dict | None 
     else:
         if isinstance(params, dict):
             for key, value in params.items():
-                if value is not None and key not in form_data:
+                # logit_bias is set below, converted from the text Advanced Params holds (#616).
+                if value is not None and key not in form_data and key != 'logit_bias':
                     form_data[key] = value
 
-        if 'logit_bias' in params and params['logit_bias'] is not None and 'logit_bias' not in form_data:
+        # A body's own logit_bias is kept; the OpenAI router converts or refuses it.
+        if params.get('logit_bias') is not None and 'logit_bias' not in form_data:
             try:
                 logit_bias = convert_logit_bias_input_to_json(params['logit_bias'])
-
+            except (ValueError, AttributeError):
+                # Passed on as given, as before; the OpenAI router answers 400 for it.
+                log.warning('logit_bias is not "token:bias" pairs or an object: %r', params['logit_bias'])
+                form_data['logit_bias'] = params['logit_bias']
+            else:
                 if logit_bias:
                     form_data['logit_bias'] = JSONCodec.loads(logit_bias)
-            except Exception as e:
-                log.exception(f'Error parsing logit_bias: {e}')
 
     return form_data
 
