@@ -179,12 +179,25 @@ test('editing autosaves the title and the body as html, markdown and json', asyn
 	// request: under parallel load that alone took over the default 5 s (#500).
 	await expect(editor).toContainText('Body of Groceries', { timeout: 20_000 });
 	await page.getByLabel('Title', { exact: true }).fill('Weekly groceries');
-	// Put the caret at the end of the existing text before typing: a click in
-	// the middle of the (mostly empty) editor box then Ctrl+End raced the
-	// editor taking focus under CI load, and typed at the start instead.
+	// Put the caret at the end of the existing text before typing. The click
+	// sets the browser's caret there at once, but ProseMirror reads it into
+	// its own selection about 10 ms after the focus event, and a key pressed
+	// before that is handled at the selection it still has, the start of the
+	// document: Enter split the paragraph there and the heading landed in
+	// front of the text (most runs on four cores). Focus alone doesn't show
+	// it, and neither did End, a native caret move ProseMirror reads the same
+	// way. So wait for the editor's own selection (TipTap puts the editor on
+	// its DOM element) to reach the end of the paragraph.
 	await editor.getByText('Body of Groceries').click();
-	await expect(editor).toBeFocused();
-	await page.keyboard.press('End');
+	await expect
+		.poll(() =>
+			editor.evaluate(
+				(el) =>
+					(el as unknown as { editor: { state: { selection: { $head: { parentOffset: number } } } } }).editor.state
+						.selection.$head.parentOffset
+			)
+		)
+		.toBe('Body of Groceries'.length);
 	await page.keyboard.press('Enter');
 	await page.keyboard.type('## Produce');
 	await expect.poll(() => seen.updates.at(-1)?.data?.content?.md).toBe('Body of Groceries\n\n## Produce');
