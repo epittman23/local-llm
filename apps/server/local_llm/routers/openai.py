@@ -42,6 +42,7 @@ from local_llm.models.users import UserModel
 from local_llm.utils.access_control import check_model_access, has_permission
 from local_llm.utils.anthropic import ANTHROPIC_VERSION, get_anthropic_models, is_anthropic_url
 from local_llm.utils.auth import get_admin_user, get_verified_user
+from local_llm.utils.client_disconnect import ClientDisconnected, unless_client_leaves, watched_request
 from local_llm.utils.headers import get_custom_headers, include_user_info_headers
 from local_llm.utils.json_codec import JSONCodec
 from local_llm.utils.misc import convert_logit_bias_input_to_json, url_host_matches
@@ -1660,16 +1661,22 @@ async def generate_chat_completion(
 
     r = None
     streaming = False
+    # A client waiting on this call (the route itself, or a chat answered in
+    # its request) cancels the upstream request by leaving before it answers (#614).
+    watched = watched_request(request, generate_chat_completion)
     try:
         session = await get_session()
-        r = await session.request(
-            method='POST',
-            url=request_url,
-            data=body,
-            headers=headers,
-            cookies=cookies,
-            ssl=AIOHTTP_CLIENT_SESSION_SSL,
-            timeout=get_client_timeout(stream=is_streaming_request),
+        r = await unless_client_leaves(
+            watched,
+            session.request(
+                method='POST',
+                url=request_url,
+                data=body,
+                headers=headers,
+                cookies=cookies,
+                ssl=AIOHTTP_CLIENT_SESSION_SSL,
+                timeout=get_client_timeout(stream=is_streaming_request),
+            ),
         )
 
         if 'text/event-stream' not in r.headers.get('Content-Type', ''):
@@ -1680,6 +1687,9 @@ async def generate_chat_completion(
             return await _sse_error_response(r, report_failure)
         streaming = True
         return StreamingResponse(stream_wrapper(r), status_code=r.status, headers=_clean_proxy_headers(r.headers))
+    except ClientDisconnected:
+        log.info('The client left before %s answered; its request was cancelled', url)
+        raise HTTPException(status_code=499, detail='The client disconnected before the model answered')
     except Exception as e:
         log.exception(e)
         raise HTTPException(
