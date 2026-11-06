@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
 	DEFAULT_MODELFILE,
+	finishUpload,
 	isNotableStatus,
 	modelLabel,
 	parseStreamLines,
@@ -74,5 +75,98 @@ describe('uploaded Modelfile', () => {
 	it('starts FROM the uploaded blob', () => {
 		expect(uploadedModelfile('sha256:abc', 'PARAMETER num_ctx 4096')).toBe('FROM @sha256:abc\nPARAMETER num_ctx 4096');
 		expect(DEFAULT_MODELFILE).toContain('PARAMETER num_ctx 4096');
+	});
+});
+
+describe('finishUpload (#250)', () => {
+	const stream = (...events: object[]) =>
+		new Response(events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join(''), { status: 200 });
+
+	const steps = () => {
+		const calls: string[] = [];
+		return {
+			calls,
+			onProgress: (percent: number) => calls.push(`progress ${percent}`),
+			onBlob: (digest: string) => calls.push(`blob ${digest}`),
+			create: vi.fn(async (payload: Record<string, unknown>) => {
+				calls.push(`create ${JSON.stringify(payload)}`);
+				return new Response('{"status":"success"}\n', { status: 200 });
+			}),
+			followCreate: vi.fn(async () => {
+				calls.push('follow');
+			}),
+			notify: {
+				error: (message: string) => calls.push(`error ${message}`),
+				success: (message: string) => calls.push(`success ${message}`)
+			}
+		};
+	};
+
+	it('does not create the model again when the server made it (file mode)', async () => {
+		const s = steps();
+		await finishUpload(
+			stream({ progress: 50 }, { done: true, blob: 'sha256:abc', name: 'm.gguf', model_created: 'm' }),
+			s
+		);
+
+		expect(s.calls).toEqual(['progress 50', 'blob sha256:abc', 'success Model m created']);
+		expect(s.create).not.toHaveBeenCalled();
+	});
+
+	it('creates the model from the stored blob after a URL download', async () => {
+		const s = steps();
+		await finishUpload(stream({ done: true, blob: 'sha256:abc', name: 'm.Q4.gguf' }), s);
+
+		expect(s.create).toHaveBeenCalledWith({ model: 'm.Q4', files: { 'm.Q4.gguf': 'sha256:abc' } });
+		expect(s.calls.at(-1)).toBe('follow');
+	});
+
+	it('shows an error the stream carries, and creates nothing', async () => {
+		const s = steps();
+		await finishUpload(stream({ progress: 10 }, { error: 'Ollama: Could not create blob' }), s);
+
+		expect(s.calls).toEqual(['progress 10', 'error Ollama: Could not create blob']);
+		expect(s.create).not.toHaveBeenCalled();
+	});
+
+	it('says so when the stream ends before the blob is stored', async () => {
+		const s = steps();
+		await finishUpload(stream({ progress: 10 }), s);
+
+		expect(s.calls.at(-1)).toBe('error The upload ended before the model was stored.');
+	});
+
+	it('shows the reason a create was refused', async () => {
+		const s = steps();
+		s.create.mockResolvedValueOnce(new Response('{"detail":"model exists"}', { status: 400 }));
+		await finishUpload(stream({ done: true, blob: 'sha256:abc', name: 'm.gguf' }), s);
+
+		expect(s.calls.at(-1)).toBe('error model exists');
+		expect(s.followCreate).not.toHaveBeenCalled();
+	});
+
+	it('says the create failed when its refusal is not JSON (a proxy error page)', async () => {
+		const s = steps();
+		s.create.mockResolvedValueOnce(new Response('Bad Gateway', { status: 502 }));
+		await finishUpload(stream({ done: true, blob: 'sha256:abc', name: 'm.gguf' }), s);
+
+		expect(s.calls.at(-1)).toBe('error Failed to create the model');
+	});
+
+	it('skips a line that is not an event object', async () => {
+		const s = steps();
+		await finishUpload(new Response('null\n', { status: 200 }), s);
+
+		expect(s.calls).toEqual(['error The upload ended before the model was stored.']);
+	});
+
+	it('skips a line it cannot read and carries on', async () => {
+		const s = steps();
+		const body = `data: not json\n\ndata: ${JSON.stringify({ done: true, blob: 'b', name: 'n', model_created: 'n' })}\n\n`;
+		const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+		await finishUpload(new Response(body, { status: 200 }), s);
+		error.mockRestore();
+
+		expect(s.calls.at(-1)).toBe('success Model n created');
 	});
 });

@@ -296,6 +296,12 @@ async def update_config(request: Request, form_data: ImagesConfig, user=Depends(
             status_code=400,
             detail=ERROR_MESSAGES.INCORRECT_FORMAT('  (e.g., 512x512).'),
         )
+    # The edit size too: one that is not WidthxHeight made every image edit fail (#344).
+    # Checked only while the page shows it, so a value it cannot see never blocks a save.
+    edit_size = form_data.IMAGE_EDIT_SIZE
+    shown = form_data.ENABLE_IMAGE_GENERATION and form_data.ENABLE_IMAGE_EDIT
+    if shown and edit_size and edit_size != 'auto' and _parse_size(edit_size) is None:
+        raise HTTPException(status_code=400, detail=EDIT_SIZE_FORMAT)
 
     if form_data.IMAGE_STEPS is not None and form_data.IMAGE_STEPS < 0:
         raise HTTPException(
@@ -879,13 +885,34 @@ async def edit_images(request: Request, form_data: EditImageForm, user=Depends(g
     return result
 
 
+EDIT_SIZE_FORMAT = 'The image edit size must be WidthxHeight, such as 512x512, auto, or empty.'
+
+
+def _parse_size(value: str | None) -> tuple[int, int] | None:
+    """WidthxHeight as two whole numbers, or None for anything else.
+
+    Read by splitting, not with a regex, which a long requested value could
+    make slow; no real size is anywhere near 16 characters.
+    """
+    if not value or len(value) > 16:
+        return None
+    width, sep, height = value.partition('x')
+    if not sep or not all(part.isascii() and part.isdigit() for part in (width, height)):
+        return None
+    return int(width), int(height)
+
+
 def _edit_size(image_config, form_data: EditImageForm) -> tuple[str | None, int | None, int | None]:
     # The requested size wins when it is WidthxHeight; otherwise the configured one, if it is.
-    size = next((s for s in (form_data.size, image_config.IMAGE_EDIT_SIZE) if s and 'x' in s), None)
-    if size is None:
-        return None, None, None
-    width, height = tuple(map(int, size.split('x')))
-    return size, width, height
+    # A configured one it cannot read (saved before #344, or from the environment) is
+    # skipped, never raised on; a requested one is refused, rather than replaced unasked.
+    if form_data.size and form_data.size != 'auto' and _parse_size(form_data.size) is None:
+        raise HTTPException(status_code=400, detail=EDIT_SIZE_FORMAT)
+    for size in (form_data.size, image_config.IMAGE_EDIT_SIZE):
+        parsed = _parse_size(size)
+        if parsed:
+            return size, *parsed
+    return None, None, None
 
 
 def _is_own_file_url(parsed, request: Request) -> bool:
