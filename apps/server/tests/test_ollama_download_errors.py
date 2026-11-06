@@ -42,12 +42,34 @@ def _events(monkeypatch, tmp_path, stream):
 def test_a_failure_part_way_ends_the_stream_with_an_error_event(monkeypatch, tmp_path):
     async def stream(*_args):
         yield 'data: {"progress": 50}\n\n'
-        raise RuntimeError('Download failed: HTTP 503 Service Unavailable')
+        raise ollama.ModelDownloadError('refused', 'Download failed: HTTP 503 Service Unavailable')
 
     assert _events(monkeypatch, tmp_path, stream) == [
         {'progress': 50},
-        {'error': 'Download failed: HTTP 503 Service Unavailable'},
+        {'error': ollama.DOWNLOAD_ERRORS['refused']},
     ]
+
+
+@pytest.mark.parametrize('kind', ['resume', 'refused', 'blob'])
+def test_each_kind_of_failure_is_named_by_a_fixed_message(monkeypatch, tmp_path, kind):
+    async def stream(*_args):
+        raise ollama.ModelDownloadError(kind, 'the detail, for the log')
+        yield ''
+
+    (event,) = _events(monkeypatch, tmp_path, stream)
+    assert event == {'error': ollama.DOWNLOAD_ERRORS[kind]}
+    assert 'detail' not in event['error']
+
+
+def test_any_other_failure_gives_the_general_message_and_logs_the_detail(monkeypatch, tmp_path, caplog):
+    async def stream(*_args):
+        raise OSError('No space left on device: /data/cache/part')
+        yield ''
+
+    (event,) = _events(monkeypatch, tmp_path, stream)
+
+    assert event == {'error': ollama.DOWNLOAD_FAILED}
+    assert 'No space left on device' in caplog.text
 
 
 def test_a_download_that_succeeds_streams_as_before(monkeypatch, tmp_path):
