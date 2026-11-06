@@ -19,7 +19,7 @@ import {
 	DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
-import type { AccessGrant } from '@/lib/access/accessGrants';
+import { type AccessGrant, DROPPED_GRANTS_WARNING, grantsDropped } from '@/lib/access/accessGrants';
 import { getFileById, renameFileById, updateFileDataContentById } from '@/lib/apis/files';
 import {
 	createKnowledgeDirectory,
@@ -154,7 +154,9 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 	// --- what the file list shows -------------------------------------------
 	const [query, setQuery] = useState('');
 	const debouncedQuery = useDebouncedValue(query, 300);
-	const [viewOption, setViewOption] = useState<string>(() => localStorage.workspaceViewOption || '');
+	// Unfiltered at first, as in the Svelte page: `workspaceViewOption` is the
+	// workspace lists' setting, and read here it hid a shared base's files (#230).
+	const [viewOption, setViewOption] = useState<string>('');
 	const [sortKey, setSortKey] = useState('');
 	const [direction, setDirection] = useState('');
 	const [includeContent, setIncludeContent] = useState(false);
@@ -253,12 +255,12 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 			toast.error('Please fill in all fields.');
 			return;
 		}
+		// Name and description only: the grants are the access dialog's to save,
+		// and these could be older than one it saved meanwhile (#522).
 		const res = await updateKnowledgeById(token, id, {
-			...next,
 			name: next.name,
-			description: next.description,
-			access_grants: next.access_grants ?? []
-		} as never).catch((e) => {
+			description: next.description
+		}).catch((e) => {
 			toast.error(`${e}`);
 			return null;
 		});
@@ -273,9 +275,36 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 		toast.success('Knowledge updated successfully');
 	}, 1000);
 	const edit = (patch: Partial<Knowledge>) => {
-		const next = { ...knowledge, ...patch };
-		setKnowledge(next);
-		scheduleSave(next);
+		// Merged into the latest state, so an access reply applied meanwhile is kept.
+		setKnowledge((k) => ({ ...k, ...patch }));
+		scheduleSave({ ...knowledge, ...patch });
+	};
+
+	// --- access -------------------------------------------------------------
+	// Shown at once, so a second edit made before the reply builds on the first.
+	// Only the latest save's reply is applied: the server replaces the grants
+	// wholesale, so it alone says what is stored. That reply has the grants left
+	// after the server drops those this user may not set (#522, as #482 for notes).
+	const accessSaves = useRef(0);
+	const saveAccess = async (grants: AccessGrant[]) => {
+		const seq = ++accessSaves.current;
+		const previous = knowledge.access_grants ?? [];
+		setKnowledge((k) => ({ ...k, access_grants: grants }));
+		const res: { access_grants?: unknown } | null | undefined = await updateKnowledgeAccessGrants(
+			token,
+			id,
+			grants
+		).catch((e) => void toast.error(`${e}`));
+		const latest = accessSaves.current === seq;
+		if (!res) {
+			if (latest) setKnowledge((k) => ({ ...k, access_grants: previous }));
+			return;
+		}
+		const stored = res.access_grants;
+		if (latest && Array.isArray(stored)) setKnowledge((k) => ({ ...k, access_grants: stored as AccessGrant[] }));
+		if (grantsDropped(grants, stored)) toast.warning(DROPPED_GRANTS_WARNING);
+		else toast.success('Saved');
+		onChanged();
 	};
 
 	// --- dialogs ------------------------------------------------------------
@@ -446,16 +475,7 @@ function KnowledgeBaseView({ id, initial, onChanged }: { id: string; initial: Kn
 				share={Boolean(user?.permissions?.sharing?.knowledge) || isAdmin}
 				sharePublic={Boolean(user?.permissions?.sharing?.public_knowledge) || isAdmin}
 				shareUsers={(user?.permissions?.access_grants?.allow_users ?? true) || isAdmin}
-				onChange={async (grants) => {
-					setKnowledge((k) => ({ ...k, access_grants: grants }));
-					try {
-						await updateKnowledgeAccessGrants(token, id, grants);
-						toast.success('Saved');
-						onChanged();
-					} catch (error) {
-						toast.error(`${error}`);
-					}
-				}}
+				onChange={saveAccess}
 			/>
 		);
 	}

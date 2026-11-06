@@ -91,3 +91,25 @@ def test_a_production_save_still_goes_live():
 
     assert (live.content, live.tags) == ('V2 live', ['b'])
     assert updated.version_id != p.version_id
+
+
+def test_switching_the_production_version_keeps_the_name_command_and_tags():
+    # #222: the editor saves name, command and tags at once through
+    # update_prompt_metadata, outside the history. Making a version production
+    # copied the name and tags back from that version's snapshot, undoing the
+    # rename until the next save.
+    async def scenario():
+        command = f'sum{uuid.uuid4().hex[:8]}'
+        p = await _prompt(command)
+        v1 = p.version_id
+        v2_form = PromptForm(command=command, name='Sum', content='V2 content', access_grants=[], tags=['a'])
+        v2 = (await Prompts.update_prompt_by_id(p.id, v2_form, 'u1')).version_id
+        await Prompts.update_prompt_metadata(p.id, 'New name', f'{command}x', ['b'])
+        to_v1 = await Prompts.update_prompt_version(p.id, v1)
+        to_v2 = await Prompts.update_prompt_version(p.id, v2)
+        return command, to_v1, to_v2
+
+    command, to_v1, to_v2 = _run(scenario())
+
+    assert (to_v1.name, to_v1.command, to_v1.tags, to_v1.content) == ('New name', f'{command}x', ['b'], 'V1 content')
+    assert (to_v2.name, to_v2.command, to_v2.tags, to_v2.content) == ('New name', f'{command}x', ['b'], 'V2 content')

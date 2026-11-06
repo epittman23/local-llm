@@ -88,8 +88,21 @@ describe('shutdown', () => {
 			force: 'pending'
 		});
 		expect(p.steps.find((s) => s.id === 'model')?.detail).toBe('none running');
-		// The optional force step stays silent.
-		expect(p.steps.find((s) => s.id === 'force')?.detail).toBeUndefined();
+	});
+
+	it('skips an optional step silently, and gives any other its skip reason (#430)', () => {
+		const defs = [
+			{ id: 'quiet', label: 'Quiet', optional: true, skipReason: 'not needed' },
+			{ id: 'told', label: 'Told', skipReason: 'none running' },
+			{ id: 'last', label: 'Last' }
+		];
+		const p = reduce(createProgress('shutdown', 'Stopping', defs, 0), { type: 'begin', step: 'last', at: 1 });
+
+		expect(p.steps.map((s) => [s.id, s.state, s.detail])).toEqual([
+			['quiet', 'skipped', undefined],
+			['told', 'skipped', 'none running'],
+			['last', 'running', undefined]
+		]);
 	});
 
 	it('follows the output while uvicorn cancels a held request', () => {
@@ -117,6 +130,26 @@ describe('shutdown', () => {
 		]);
 		expect(states(p)).toMatchObject({ services: 'failed', force: 'done' });
 		expect(p.offerStopLlama).toBe(true);
+	});
+
+	it('shows the steps a forced stop never reached as not reached, not as nothing to do (#427)', () => {
+		const p = run(begin(), [
+			{ type: 'timeout', step: 'requests', at: 90_000 },
+			{ type: 'begin', step: 'force', at: 90_001, detail: 'killing the process group' },
+			{ type: 'offer-stop-llama' },
+			{ type: 'complete', at: 95_000 }
+		]);
+		expect(states(p)).toMatchObject({
+			window: 'done',
+			requests: 'failed',
+			jobs: 'skipped',
+			model: 'skipped',
+			services: 'skipped',
+			force: 'done'
+		});
+		for (const id of ['jobs', 'model', 'services']) {
+			expect(p.steps.find((s) => s.id === id)?.detail).toBe('not reached');
+		}
 	});
 });
 

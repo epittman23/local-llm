@@ -132,6 +132,7 @@ from local_llm.models.access_grants import AccessGrants
 from local_llm.models.channels import Channels
 from local_llm.models.chats import ChatForm, Chats
 from local_llm.models.config import Config
+from local_llm.models.files import Files
 from local_llm.models.functions import Functions
 from local_llm.models.messages import Messages
 from local_llm.models.models import Models, normalize_model_tags
@@ -195,6 +196,7 @@ from local_llm.tasks import (
     list_task_ids_by_item_id,
     list_tasks,
     redis_task_command_listener,
+    stop_all_tasks,
     stop_item_tasks,
     stop_task,
 )  # Import from tasks.py
@@ -275,7 +277,7 @@ from local_llm.utils.tools import set_terminal_servers, set_tool_servers
 
 if SAFE_MODE:
     print('SAFE MODE ENABLED')
-    # Functions.deactivate_all_functions() is awaited in lifespan below
+    # Functions are deactivated in lifespan, before its first published event
 
 logging.basicConfig(stream=sys.stdout, level=GLOBAL_LOG_LEVEL)
 log = logging.getLogger(__name__)
@@ -340,6 +342,16 @@ async def require_redis(client, attempts: int = 20, delay: float = 0.5):
     raise RuntimeError(f'Redis at REDIS_URL is not reachable: {last_error}')
 
 
+async def _enter_safe_mode() -> None:
+    """Deactivate every function, or refuse to start: SAFE_MODE with them still active would run them."""
+    if await Functions.deactivate_all_functions() is not True:
+        raise RuntimeError(
+            'SAFE_MODE is set but the functions could not be deactivated, so startup stops rather than run them. '
+            'Check the database, or start without SAFE_MODE.'
+        )
+    log.warning('SAFE_MODE: every function is deactivated')
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Store reference to main event loop for sync->async calls (e.g., embedding generation)
@@ -359,6 +371,12 @@ async def lifespan(app: FastAPI):
     app.state.instance_id = INSTANCE_ID
     start_logger()
 
+    if SAFE_MODE:
+        # First, before any other startup step: publishing an event dispatches
+        # event functions, which SAFE_MODE exists to keep from running (#361).
+        # The migrations ran at import, so the table is there.
+        await _enter_safe_mode()
+
     # The vector store's client is created lazily (retrieval/vector/factory.py);
     # connect it now so a misconfigured store fails startup, not the first upload.
     await asyncio.to_thread(VECTOR_DB_CLIENT.resolve)
@@ -370,6 +388,9 @@ async def lifespan(app: FastAPI):
     await seed_registered_defaults()
     await initialize_runtime_config(app)
     await migrate_legacy_webhook_config()
+    # Uploads a restart cut off mid-processing would show as uploading forever (#309).
+    if interrupted := await Files.fail_interrupted_processing():
+        log.warning('Marked %s upload(s) interrupted by the last restart as failed', interrupted)
     await publish_event(app, EVENTS.SYSTEM_STARTUP_STARTED, source='system')
 
     # Create admin account from env vars if specified and no users exist
@@ -377,9 +398,6 @@ async def lifespan(app: FastAPI):
         if await create_admin_user(LLLM_ADMIN_EMAIL, LLLM_ADMIN_PASSWORD, LLLM_ADMIN_NAME):
             # Disable signup since we now have an admin
             await Config.upsert({'ui.enable_signup': False})
-
-    if SAFE_MODE:
-        await Functions.deactivate_all_functions()
 
     # This should be blocking (sync) so functions are not deactivated on first /get_models calls
     # when the first user lands on the / route.
@@ -463,7 +481,20 @@ async def lifespan(app: FastAPI):
 
     yield
 
+    await _shutdown(app)
+
+
+async def _shutdown(app) -> None:
+    """The lifespan's teardown, in order."""
     await publish_event(app, EVENTS.SYSTEM_SHUTDOWN_STARTED, source='system')
+
+    # Running chat replies first, while the HTTP pool, the database and a
+    # served model they may be streaming from are still up: cancelled, each
+    # saves what arrived as stopped. Closing the pool under them broke their
+    # streams instead (#362). Sub-agent runs are in the same registry; served
+    # models, tune sweeps and Tests jobs are not, and outlive this unless
+    # LLLM_STOP_JOBS_ON_SHUTDOWN stops them next.
+    await stop_all_tasks(wait_seconds=10)
 
     if LLLM_STOP_JOBS_ON_SHUTDOWN:
         await benchmarks.shutdown()
@@ -592,15 +623,44 @@ app.state.BASE_MODELS = []
 ########################################
 
 
-async def initialize_runtime_config(app: FastAPI):
-    # Migrate legacy access_control → access_grants on boot.
+async def migrate_legacy_access_control() -> list[dict]:
+    """Migrate legacy access_control to access_grants in tool servers and arena models; returns the connections.
+
+    A connection's `config` or an arena model's `meta` stored as null is read
+    as empty and stored back as `{}`. `c.get('config', {})` gave None for one,
+    and `'access_control' in None` stopped the backend starting (#363); later
+    readers of the stored value would meet the same None.
+    """
     from local_llm.utils.access_control import migrate_access_control
 
     connections = await Config.get('tool_server.connections', []) or []
-    if any('access_control' in c.get('config', {}) for c in connections):
+    repaired = False
+    for connection in connections:
+        if connection.get('config') is None:
+            connection['config'] = {}
+            repaired = True
+    if repaired or any('access_control' in c['config'] for c in connections):
         for connection in connections:
-            migrate_access_control(connection.get('config', {}))
+            migrate_access_control(connection['config'])
         await Config.upsert({'tool_server.connections': connections})
+
+    arena_models = await Config.get('evaluation.arena.models', []) or []
+    repaired = False
+    for model in arena_models:
+        if model.get('meta') is None:
+            model['meta'] = {}
+            repaired = True
+    if repaired or any('access_control' in m['meta'] for m in arena_models):
+        for model in arena_models:
+            migrate_access_control(model['meta'])
+        await Config.upsert({'evaluation.arena.models': arena_models})
+
+    return connections
+
+
+async def initialize_runtime_config(app: FastAPI):
+    # Migrate legacy access_control → access_grants on boot.
+    connections = await migrate_legacy_access_control()
 
     for tool_server_connection in connections:
         if tool_server_connection.get('type', 'openapi') == 'mcp':
@@ -630,12 +690,6 @@ async def initialize_runtime_config(app: FastAPI):
                         server_id,
                         f'{type(e).__name__}: {e}' if str(e) else type(e).__name__,
                     )
-
-    arena_models = await Config.get('evaluation.arena.models', []) or []
-    if any('access_control' in m.get('meta', {}) for m in arena_models):
-        for model in arena_models:
-            migrate_access_control(model.get('meta', {}))
-        await Config.upsert({'evaluation.arena.models': arena_models})
 
     app.state.EMBEDDING_FUNCTION = None
     app.state.RERANKING_FUNCTION = None
@@ -1911,6 +1965,14 @@ async def chat_completion(
 
     # Fan out: one task per model
     if metadata.get('session_id') and metadata.get('chat_id'):
+        if missing_base_model and model_id:
+            # The fallback chosen above, for the copy that asked for the broken
+            # preset; the fan-out reads its models from message_ids, which still
+            # name the preset (#360). The chat record above keeps the preset.
+            message_ids = [
+                {**entry, 'model_id': model['id']} if entry.get('model_id') == model_id else entry
+                for entry in message_ids
+            ]
         return await _fan_out_chat(request, form_data, user, metadata, model, message_ids, tasks)
 
     # Legacy/direct: single model, synchronous

@@ -148,6 +148,42 @@ test.describe('settings: Sub-agents', () => {
 	});
 });
 
+test.describe('settings: Sub-agents limits (#602)', () => {
+	test('saves -1 for iterations and output, and still refuses a bounded value below the minimum', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockConfigApi(page, '/configs', {
+			'/configs/subagents': {
+				ENABLE_SUBAGENTS: true,
+				SUBAGENTS_BACKGROUND_ENABLED: false,
+				SUBAGENTS_MAX_CONCURRENT: 20,
+				SUBAGENTS_MAX_ASYNC: 20,
+				SUBAGENTS_MAX_ITERATIONS: -1,
+				SUBAGENTS_MAX_OUTPUT: -1,
+				SUBAGENTS_SYSTEM_PROMPT: ''
+			}
+		});
+		await page.goto('/?settings=admin:subagents');
+		const m = modal(page);
+		await expect(m.getByLabel('Max iterations')).toHaveValue('-1');
+		await expect(m.getByLabel('Max output')).toHaveValue('-1');
+		const posted = () => calls.filter((c) => c.method === 'POST' && c.path === '/configs/subagents');
+
+		// The browser's own validation used to block Save on the whole tab here.
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect
+			.poll(() => posted()[0]?.body)
+			.toMatchObject({ SUBAGENTS_MAX_ITERATIONS: -1, SUBAGENTS_MAX_OUTPUT: -1 });
+
+		await m.getByLabel('Max output').fill('500');
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect(m.getByLabel('Max output')).toHaveJSProperty(
+			'validationMessage',
+			'Enter -1 for no limit, or at least 1000.'
+		);
+		expect(posted()).toHaveLength(1);
+	});
+});
+
 test.describe('settings: Code Execution', () => {
 	const cfg = {
 		ENABLE_CODE_EXECUTION: true,
@@ -549,6 +585,40 @@ test.describe('settings: Connections', () => {
 		await page.waitForTimeout(300);
 		expect(await page.getByText('Connections settings updated').count()).toBe(0);
 		await expect(m.getByRole('switch', { name: 'Direct Connections' })).not.toBeChecked();
+	});
+
+	test('Save reports the save as done only when both upstreams took it (#239)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockUpstreams(page);
+		await page.route('**/openai/config/update', (route) => json(route, { detail: 'upstream refused' }, 500));
+		await page.route('**/ollama/config/update', (route) => json(route, { detail: 'ollama refused' }, 500));
+		await page.goto('/?settings=admin:connections');
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('upstream refused')).toBeVisible();
+		await expect(page.getByText('ollama refused')).toBeVisible();
+		// Counted once, after a moment for a false success toast to render.
+		await page.waitForTimeout(300);
+		expect(await page.getByText('Settings saved successfully!').count()).toBe(0);
+	});
+
+	test('Save does not say the save is done when only one upstream took it (#239)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockUpstreams(page);
+		await page.route('**/ollama/config/update', (route) => json(route, { detail: 'ollama refused' }, 500));
+		await page.goto('/?settings=admin:connections');
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('OpenAI API settings updated')).toBeVisible();
+		await expect(page.getByText('ollama refused')).toBeVisible();
+		await page.waitForTimeout(300);
+		expect(await page.getByText('Settings saved successfully!').count()).toBe(0);
+	});
+
+	test('Save says the save is done when both upstreams took it', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockUpstreams(page);
+		await page.goto('/?settings=admin:connections');
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText('Settings saved successfully!')).toBeVisible();
 	});
 
 	test('the OpenAI API switch turns the list off and saves that', async ({ page }) => {
@@ -1551,17 +1621,48 @@ test.describe('settings: Images', () => {
 			page,
 			imagesCfg({ IMAGE_GENERATION_ENGINE: 'automatic1111', AUTOMATIC1111_BASE_URL: 'http://sd:7860/' })
 		);
+		const verified: string[] = [];
+		page.on('request', (req) => {
+			const url = new URL(req.url());
+			if (url.pathname.endsWith('/config/url/verify')) verified.push(url.search);
+		});
 		await page.goto('/?settings=admin:images');
 		await create(page).getByLabel('Base URL').fill('http://sd:7861/');
 		await create(page).getByRole('button', { name: 'Verify connection' }).click();
 		await expect(page.getByText('Server connection verified')).toBeVisible();
 		const order = calls.map((c) => c.path).filter((p) => p === '/config/update' || p === '/config/url/verify');
 		expect(order).toEqual(['/config/update', '/config/url/verify']);
+		// The generation engine's Verify names no target (#236).
+		expect(verified).toEqual(['']);
 		expect(updates(calls)[0].AUTOMATIC1111_BASE_URL).toBe('http://sd:7861/');
 		await expect(create(page).getByPlaceholder('Enter api auth string (e.g. username:password)')).toHaveAttribute(
 			'type',
 			'password'
 		);
+	});
+
+	test("the edit engine's Verify checks the edit server, not the generation one (#236)", async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockImages(
+			page,
+			imagesCfg({
+				ENABLE_IMAGE_GENERATION: true,
+				IMAGES_OPENAI_API_KEY: 'sk',
+				IMAGE_GENERATION_MODEL: 'dall-e-3',
+				ENABLE_IMAGE_EDIT: true,
+				IMAGE_EDIT_ENGINE: 'comfyui',
+				IMAGES_EDIT_COMFYUI_BASE_URL: 'http://comfy:8188'
+			})
+		);
+		const verified: string[] = [];
+		page.on('request', (req) => {
+			const url = new URL(req.url());
+			if (url.pathname.endsWith('/config/url/verify')) verified.push(url.search);
+		});
+		await page.goto('/?settings=admin:images');
+		await edit(page).getByRole('button', { name: 'Verify connection' }).click();
+		await expect(page.getByText('Server connection verified')).toBeVisible();
+		expect(verified).toEqual(['?target=edit']);
 	});
 
 	test('a save that cannot be sent (bad params) stops the verify too', async ({ page }) => {
@@ -1660,6 +1761,10 @@ test.describe('settings: Images', () => {
 	});
 });
 
+// What update_rag_config warns when a save turned hybrid search off (#232).
+const RERANKER_WARNING =
+	"Hybrid search was turned off: the reranking model 'BAAI/bge-reranker-v2-m3' could not be loaded (the backend log says why).";
+
 test.describe('settings: Documents', () => {
 	const ragCfg = (over: Rec = {}) => ({
 		CONTENT_EXTRACTION_ENGINE: '',
@@ -1716,7 +1821,10 @@ test.describe('settings: Documents', () => {
 		...over
 	});
 
-	async function mockDocuments(page: Page, opts: { rag?: Rec; embedding?: Rec; failEmbeddingUpdate?: boolean } = {}) {
+	async function mockDocuments(
+		page: Page,
+		opts: { rag?: Rec; embedding?: Rec; failEmbeddingUpdate?: boolean; saved?: (body: Rec) => Rec } = {}
+	) {
 		const calls: Call[] = [];
 		const record = (route: any) => {
 			const req = route.request();
@@ -1737,7 +1845,7 @@ test.describe('settings: Documents', () => {
 				return json(route, opts.embedding ?? embeddingCfg());
 			if (path === '/retrieval/embedding/update')
 				return opts.failEmbeddingUpdate ? json(route, { detail: 'Model not found' }, 400) : json(route, body);
-			if (path === '/retrieval/config/update') return json(route, body);
+			if (path === '/retrieval/config/update') return json(route, opts.saved ? opts.saved(body) : body);
 			return json(route, true);
 		});
 		await page.route('**/api/v1/files/all', (route) => (record(route), json(route, true)));
@@ -1778,7 +1886,9 @@ test.describe('settings: Documents', () => {
 			web: { ENABLE_WEB_SEARCH: true }
 		});
 		expect(cfg).not.toHaveProperty('CONTENT_EXTRACTION_SUPPORTED_MEDIA_MIME_TYPES');
+		// A plain Save lets the server keep a loaded model that did not change (#532).
 		expect(sent(calls, '/retrieval/embedding/update')[0]).toEqual({
+			force_reload: false,
 			RAG_EMBEDDING_ENGINE: '',
 			RAG_EMBEDDING_MODEL: 'sentence-transformers/all-MiniLM-L6-v2',
 			RAG_EMBEDDING_BATCH_SIZE: 1,
@@ -1907,7 +2017,10 @@ test.describe('settings: Documents', () => {
 		await e.getByLabel('Embedding Model', { exact: true }).fill('BAAI/bge-small-en');
 		await e.getByRole('button', { name: 'Update embedding model' }).click();
 		await expect(page.getByText('Embedding model updated')).toBeVisible();
-		expect(sent(calls, '/retrieval/embedding/update')[0]).toMatchObject({ RAG_EMBEDDING_MODEL: 'BAAI/bge-small-en' });
+		expect(sent(calls, '/retrieval/embedding/update')[0]).toMatchObject({
+			RAG_EMBEDDING_MODEL: 'BAAI/bge-small-en',
+			force_reload: true
+		});
 		expect(sent(calls, '/retrieval/config/update')).toHaveLength(0);
 	});
 
@@ -1930,7 +2043,7 @@ test.describe('settings: Documents', () => {
 		await expect(modal(page).getByLabel('Max Upload Count')).toHaveValue('7');
 	});
 
-	test('hybrid search reveals reranking; an external engine clears the model; BM25 weight is Default until made Custom', async ({
+	test('hybrid search reveals reranking; an external engine clears the model; the BM25 weight shows its default and saves a change (#233)', async ({
 		page
 	}) => {
 		await mockWorkspaceBackend(page);
@@ -1945,8 +2058,7 @@ test.describe('settings: Documents', () => {
 		await expect(r.getByLabel('API Base URL')).toBeVisible();
 		await r.getByLabel('Reranking Engine').selectOption('');
 		await expect(r.getByLabel('Reranking Model')).toHaveValue('BAAI/bge-reranker-v2-m3');
-		await expect(r.getByLabel('BM25 Weight slider')).toHaveCount(0);
-		await r.getByRole('button', { name: 'Default' }).click();
+		await expect(r.getByLabel('BM25 Weight slider')).toHaveValue('0.5');
 		await expect(r.getByLabel('BM25 Weight', { exact: true })).toHaveValue('0.5');
 		await r.getByLabel('BM25 Weight', { exact: true }).fill('0.3');
 		await modal(page).getByRole('button', { name: 'Save' }).click();
@@ -1955,6 +2067,47 @@ test.describe('settings: Documents', () => {
 			ENABLE_RAG_HYBRID_SEARCH: true,
 			HYBRID_BM25_WEIGHT: 0.3
 		});
+		// Reset sends the number, which the server saves; "Default" sent null, which it kept as before.
+		await r.getByRole('button', { name: 'Reset to 0.5' }).click();
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect.poll(() => sent(calls, '/retrieval/config/update').length).toBe(2);
+		expect(sent(calls, '/retrieval/config/update')[1]).toMatchObject({ HYBRID_BM25_WEIGHT: 0.5 });
+	});
+
+	test('chunk settings the splitters cannot use are refused before anything is sent (#235)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockDocuments(page);
+		await page.goto('/?settings=admin:documents');
+		const m = modal(page);
+		await expect(m.getByLabel('Chunk Size')).toHaveValue('1000');
+		await m.getByLabel('Chunk Overlap').fill('2000');
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect(
+			page.getByText('Chunk Overlap must be smaller than Chunk Size (2000 is not smaller than 1000).')
+		).toBeVisible();
+		expect(sent(calls, '/retrieval/embedding/update')).toHaveLength(0);
+		expect(sent(calls, '/retrieval/config/update')).toHaveLength(0);
+		await m.getByLabel('Chunk Overlap').fill('200');
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect.poll(() => sent(calls, '/retrieval/config/update').length).toBe(1);
+		expect(sent(calls, '/retrieval/config/update')[0]).toMatchObject({ CHUNK_SIZE: 1000, CHUNK_OVERLAP: 200 });
+	});
+
+	test('a reranker that cannot load: the save says hybrid search went off, and the switch shows it (#232)', async ({
+		page
+	}) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockDocuments(page, {
+			rag: ragCfg({ ENABLE_RAG_HYBRID_SEARCH: true }),
+			saved: (body) => ({ ...body, ENABLE_RAG_HYBRID_SEARCH: false, warnings: [RERANKER_WARNING] })
+		});
+		await page.goto('/?settings=admin:documents');
+		const r = region(page, 'Retrieval');
+		await expect(r.getByRole('switch', { name: 'Hybrid Search', exact: true })).toBeChecked();
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText(RERANKER_WARNING)).toBeVisible();
+		await expect(r.getByRole('switch', { name: 'Hybrid Search', exact: true })).not.toBeChecked();
+		expect(sent(calls, '/retrieval/config/update')[0]).toMatchObject({ ENABLE_RAG_HYBRID_SEARCH: true });
 	});
 
 	test('full context mode hides the segmented-retrieval settings; a template with several placeholders is flagged', async ({
@@ -2003,6 +2156,28 @@ test.describe('settings: Documents', () => {
 		await expect(page.getByText('Success', { exact: true })).toHaveCount(0);
 	});
 
+	test('Danger Zone: a reindex where files failed says so instead of Success (#308)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		await mockDocuments(page);
+		await page.route('**/api/v1/knowledge/reindex', (route) =>
+			json(route, {
+				status: false,
+				total: 3,
+				reindexed: 2,
+				failed: [{ file_id: 'f1', filename: 'report.pdf', error: 'embedding failed' }]
+			})
+		);
+		await page.goto('/?settings=admin:documents');
+		await region(page, 'Danger Zone').getByRole('button', { name: 'Reindex' }).click();
+		await page.getByRole('alertdialog').getByRole('button', { name: 'Confirm' }).click();
+		await expect(
+			page.getByText(
+				'1 of 3 files could not be embedded again and are missing from knowledge search until they are (report.pdf); the backend log has the errors.'
+			)
+		).toBeVisible();
+		await expect(page.getByText('Success', { exact: true })).toHaveCount(0);
+	});
+
 	test('Danger Zone: reindex runs knowledge files, knowledge metadata, then memories, in that order', async ({
 		page
 	}) => {
@@ -2048,7 +2223,7 @@ test.describe('settings: Web Search', () => {
 		...over
 	});
 
-	async function mockWeb(page: Page, web: Rec = webCfg()) {
+	async function mockWeb(page: Page, web: Rec = webCfg(), saved: (body: Rec) => Rec = (body) => body) {
 		const calls: Call[] = [];
 		await page.route('**/api/v1/retrieval/config**', (route) => {
 			const req = route.request();
@@ -2062,7 +2237,7 @@ test.describe('settings: Web Search', () => {
 			calls.push({ method: req.method(), path, body });
 			// The document settings share this endpoint; this tab must leave them alone.
 			if (req.method() === 'GET') return json(route, { CONTENT_EXTRACTION_ENGINE: 'tika', web });
-			return json(route, body);
+			return json(route, saved(body));
 		});
 		return { calls };
 	}
@@ -2091,6 +2266,21 @@ test.describe('settings: Web Search', () => {
 			LINKUP_SEARCH_PARAMS: {},
 			WEB_LOADER_CONCURRENT_REQUESTS: 10
 		});
+	});
+
+	test('a save that turned hybrid search off shows the warning, though this tab has no such switch (#232)', async ({
+		page
+	}) => {
+		await mockWorkspaceBackend(page);
+		await mockWeb(page, webCfg(), (body) => ({
+			...body,
+			ENABLE_RAG_HYBRID_SEARCH: false,
+			warnings: [RERANKER_WARNING]
+		}));
+		await page.goto('/?settings=admin:web');
+		await expect(modal(page).getByLabel('Domain Filter List')).toHaveValue('example.com, !bad.com');
+		await modal(page).getByRole('button', { name: 'Save' }).click();
+		await expect(page.getByText(RERANKER_WARNING)).toBeVisible();
 	});
 
 	test('the engine choice decides which connection boxes show; required ones block the save', async ({ page }) => {
@@ -2262,7 +2452,8 @@ test.describe('settings: Models', () => {
 					: json(route, { id: url.searchParams.get('id') });
 			if (path === '/models/model/access/update')
 				return json(route, { id: body.id, access_grants: body.access_grants });
-			if (path === '/models/import') return json(route, true);
+			if (path === '/models/import')
+				return json(route, { imported: (body?.models ?? []).map((m: { id: string }) => m.id), skipped: [] });
 			if (path === '/models/delete/all') return json(route, true);
 			if (path === '/models/model' && req.method() === 'GET')
 				return json(route, { ...served.find((m) => m.id === url.searchParams.get('id')), full: true });
@@ -2420,6 +2611,37 @@ test.describe('settings: Models', () => {
 		});
 	});
 
+	test('hiding a model with no record creates it once, and showing it again updates it (#249)', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockModels(page);
+		// Registered after mockModels, so it answers first: a record created here
+		// is listed from then on, as the server would list it.
+		const created: Rec[] = [];
+		await page.route('**/api/v1/models/**', (route) => {
+			const path = new URL(route.request().url()).pathname.replace('/api/v1', '');
+			if (path === '/models/create') created.push(route.request().postDataJSON());
+			if (path === '/models/base') return json(route, [...records(), ...created]);
+			return route.fallback();
+		});
+		await page.goto('/?settings=admin:models');
+		await moreMenu(page, 'mistral', 'Mistral');
+		await page.getByRole('menuitem', { name: 'Hide Model' }).click();
+		await expect(page.getByText('Model mistral is now hidden')).toBeVisible();
+		await moreMenu(page, 'mistral', 'Mistral');
+		await page.getByRole('menuitem', { name: 'Show Model' }).click();
+		await expect(page.getByText('Model mistral is now visible')).toBeVisible();
+		expect(posts(calls, '/models/create').map((b) => b.id)).toEqual(['mistral']);
+		expect(posts(calls, '/models/model/update')).toEqual([
+			expect.objectContaining({ id: 'mistral', meta: expect.objectContaining({ hidden: false }) })
+		]);
+		// The enable switch now toggles the record instead of creating it again.
+		await row(page, 'mistral').getByRole('switch').click();
+		await expect
+			.poll(() => calls.filter((c) => c.path.startsWith('/models/model/toggle')).map((c) => c.path))
+			.toEqual(['/models/model/toggle?id=mistral']);
+		expect(posts(calls, '/models/create')).toHaveLength(1);
+	});
+
 	test('Move Down reorders and enables Save, which sends the new order and nothing else changed', async ({ page }) => {
 		await mockWorkspaceBackend(page);
 		const { calls } = await mockModels(page);
@@ -2498,7 +2720,7 @@ test.describe('settings: Models', () => {
 		expect(calls.some((c) => c.path === '/models/delete/all')).toBe(true);
 	});
 
-	test('Actions: Import refuses a file that is not JSON, and sends models without any access grants', async ({
+	test('Actions: Import refuses a file that is not JSON, and sends models without grants or a missing base model', async ({
 		page
 	}) => {
 		await mockWorkspaceBackend(page);
@@ -2513,9 +2735,11 @@ test.describe('settings: Models', () => {
 			mimeType: 'application/json',
 			buffer: Buffer.from(JSON.stringify([{ id: 'x', name: 'X', access_grants: [pub] }]))
 		});
-		await expect(page.getByText('Models imported successfully')).toBeVisible();
+		await expect(page.getByText('Imported 1 model')).toBeVisible();
+		// Left out, not empty: for a model that exists, the server keeps what is
+		// left out, and an empty list would wipe its sharing (#524).
 		expect(posts(calls, '/models/import')[0]).toEqual({
-			models: [expect.objectContaining({ id: 'x', name: 'X', access_grants: [] })]
+			models: [{ id: 'x', name: 'X', meta: {}, params: {} }]
 		});
 	});
 
@@ -2681,6 +2905,22 @@ test.describe('settings: Models > Manage', () => {
 		await dialog(page).getByRole('button', { name: 'Update All Models' }).click();
 		await expect(page.getByText('All models are up to date')).toBeVisible();
 		expect(calls.filter((c) => c.path.startsWith('/api/pull')).map((c) => c.body.name)).toEqual(['llama3:8b', 'phi3']);
+	});
+
+	test('Ollama: Update All Models says which pulls failed instead of all up to date (#246)', async ({ page }) => {
+		await mockManage(page);
+		// Registered after mockManage, so it answers the pulls instead.
+		await page.route('**/ollama/api/pull**', (route) =>
+			route.fulfill({
+				status: 500,
+				contentType: 'application/json',
+				body: JSON.stringify({ detail: 'Ollama: unreachable' })
+			})
+		);
+		await open(page);
+		await dialog(page).getByRole('button', { name: 'Update All Models' }).click();
+		await expect(page.getByText('Could not update 2 models: llama3:8b, phi3 (Ollama: unreachable)')).toBeVisible();
+		await expect(page.getByText('All models are up to date')).toHaveCount(0);
 	});
 
 	test('Ollama: the experimental GGUF upload stays hidden until asked for', async ({ page }) => {

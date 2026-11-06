@@ -26,7 +26,6 @@ import {
 	getBaseModelTags,
 	getBaseModels,
 	getModelById,
-	importModels,
 	toggleModelById,
 	updateModelAccessGrants,
 	updateModelById
@@ -39,7 +38,7 @@ import { copyToClipboard } from '@/lib/utils';
 import { useShiftKey } from '@/lib/utils/useShiftKey';
 import { routePaths } from '@/routes/routePaths';
 import { ModelEditor } from '@/routes/workspace/models/ModelEditor';
-import { parseModelImport } from '@/routes/workspace/models/modelImport';
+import { importModelFile } from '@/routes/workspace/models/modelImport';
 import { ManageModelsModal } from './ManageModelsModal';
 import { ModelDefaultsPanel } from './ModelDefaultsPanel';
 import { ModelRow, type RowHandlers } from './ModelRow';
@@ -54,6 +53,7 @@ import {
 	defaultsMetadata,
 	defaultsSnapshot,
 	filterModels,
+	importResultMessage,
 	isPresetModel,
 	mergeModels,
 	modelsConfigBody,
@@ -200,7 +200,16 @@ export default function AdminModels() {
 		const plan = upsertPlan(model, overrides, recordIds);
 		try {
 			if (plan.action === 'update') await updateModelById(token, plan.id, plan.body);
-			else await createNewModel(token, plan.body);
+			else {
+				await createNewModel(token, plan.body);
+				// A record now exists, so the next change updates it instead of
+				// creating it again, which the server refuses (#249): upsertPlan
+				// keys on recordIds, togglePlan on the row having base_model_id.
+				// Recorded locally, not by re-reading everything, which would drop
+				// an unsaved reorder and run once per model in a bulk action.
+				setRecordIds((ids) => new Set(ids).add(plan.body.id));
+				patchModel(plan.body.id, { base_model_id: plan.body.base_model_id ?? null });
+			}
 			if (notify) toast.success('Model updated successfully');
 			return true;
 		} catch (error) {
@@ -369,9 +378,10 @@ export default function AdminModels() {
 	const importFile = async (file: File) => {
 		setImporting(true);
 		try {
-			const parsed = parseModelImport(await file.text());
-			if (await importModels(token, parsed)) {
-				toast.success('Models imported successfully');
+			const result = await importModelFile(token, await file.text());
+			if (result) {
+				const message = importResultMessage(result);
+				toast[message.kind](message.text);
 				await refreshApp();
 				await init();
 			} else {

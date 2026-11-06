@@ -10,6 +10,7 @@ from collections.abc import Awaitable, Callable
 from functools import cache, partial, update_wrapper
 from typing import (
     Any,
+    NamedTuple,
     get_args,
     get_type_hints,
 )
@@ -34,6 +35,11 @@ from local_llm.env import (
     ENABLE_PLUGINS,
     FORWARD_SESSION_INFO_HEADER_CHAT_ID,
     FORWARD_SESSION_INFO_HEADER_MESSAGE_ID,
+    FORWARD_USER_INFO_HEADER_JWT,
+    FORWARD_USER_INFO_HEADER_USER_EMAIL,
+    FORWARD_USER_INFO_HEADER_USER_ID,
+    FORWARD_USER_INFO_HEADER_USER_NAME,
+    FORWARD_USER_INFO_HEADER_USER_ROLE,
     REDIS_KEY_PREFIX,
 )
 from local_llm.models.access_grants import AccessGrants
@@ -1142,12 +1148,6 @@ def convert_openapi_to_tool_payload(openapi_spec):
         if not isinstance(methods, dict):
             continue
 
-        # Path-level parameters apply to all operations under this path
-        # unless overridden at the operation level (matched by name + in).
-        path_level_params = methods.get('parameters', [])
-        if not isinstance(path_level_params, list):
-            path_level_params = []
-
         for method, operation in methods.items():
             if method not in OPENAPI_HTTP_METHODS:
                 continue
@@ -1163,23 +1163,13 @@ def convert_openapi_to_tool_payload(openapi_spec):
                     'parameters': {'type': 'object', 'properties': {}, 'required': []},
                 }
 
-                # Merge path-level and operation-level parameters.
-                # Operation-level params override path-level params with the
-                # same (name, in) pair per the OpenAPI spec.
-                op_params = operation.get('parameters', [])
-                if not isinstance(op_params, list):
-                    op_params = []
-                merged_params = {}
-                for param in path_level_params:
-                    if isinstance(param, dict) and param.get('name'):
-                        merged_params[(param['name'], param.get('in', ''))] = param
-                for param in op_params:
-                    if isinstance(param, dict) and param.get('name'):
-                        merged_params[(param['name'], param.get('in', ''))] = param
+                # Path-level and operation-level parameters, the operation's
+                # winning on the same (name, in) pair per the OpenAPI spec.
+                parameters = _operation_parameters(methods, operation)
 
-                for param in merged_params.values():
+                for param in parameters:
                     param_name = param.get('name')
-                    if not param_name:
+                    if not param_name or _is_reserved_header(param):
                         continue
                     param_schema = param.get('schema', {})
                     description = param_schema.get('description', '')
@@ -1203,22 +1193,20 @@ def convert_openapi_to_tool_payload(openapi_spec):
                     if param.get('required'):
                         tool['parameters']['required'].append(param_name)
 
-                # Extract and resolve requestBody if available
-                request_body = operation.get('requestBody')
-                if request_body:
-                    content = request_body.get('content', {})
-                    json_schema = content.get('application/json', {}).get('schema')
-                    if json_schema:
-                        resolved_schema = resolve_schema(json_schema, openapi_spec.get('components', {}))
-
-                        if resolved_schema.get('properties'):
-                            tool['parameters']['properties'].update(resolved_schema['properties'])
-                            if 'required' in resolved_schema:
-                                tool['parameters']['required'] = list(
-                                    set(tool['parameters']['required'] + resolved_schema['required'])
-                                )
-                        elif resolved_schema.get('type') == 'array':
-                            tool['parameters'] = resolved_schema  # special case for array
+                # The JSON request body's fields join the parameters; an array
+                # body is one property of its own (#191).
+                resolved_schema = _json_body_schema(operation, openapi_spec.get('components', {}))
+                if resolved_schema.get('properties'):
+                    tool['parameters']['properties'].update(resolved_schema['properties'])
+                    if 'required' in resolved_schema:
+                        tool['parameters']['required'] = list(
+                            set(tool['parameters']['required'] + resolved_schema['required'])
+                        )
+                elif (array_body := _array_body_schema(resolved_schema)) is not None:
+                    body_property = _array_body_property(parameters)
+                    tool['parameters']['properties'][body_property] = array_body
+                    if operation['requestBody'].get('required'):
+                        tool['parameters']['required'].append(body_property)
 
                 tool_payload.append(tool)
 
@@ -1706,25 +1694,95 @@ def _operation_parameters(methods: dict, operation: dict) -> list[dict]:
     return list(merged_params.values())
 
 
-def _route_params(parameters: list[dict], params: dict) -> tuple[dict, dict]:
-    """The call's arguments that fill the route's path and query parameters."""
-    path_params = {}
-    query_params = {}
+# Header parameters never taken from the model's arguments, nor offered to it
+# (#190), lowercased. OpenAPI says Accept, Content-Type and Authorization "SHALL
+# be ignored"; the rest frame the request or are headers this app sends itself
+# (identity, session, terminal context), which a call may simply not carry, so
+# "the connection's own value wins" alone would not keep them out.
+_RESERVED_HEADER_PARAMETERS = frozenset(
+    name.lower()
+    for name in (
+        'Accept',
+        'Content-Type',
+        'Authorization',
+        'Host',
+        'Content-Length',
+        'Transfer-Encoding',
+        'Connection',
+        'Cookie',
+        'X-User-Id',
+        'X-Session-Id',
+        TERMINAL_CONTEXT_HEADER,
+        FORWARD_USER_INFO_HEADER_USER_NAME,
+        FORWARD_USER_INFO_HEADER_USER_ID,
+        FORWARD_USER_INFO_HEADER_USER_EMAIL,
+        FORWARD_USER_INFO_HEADER_USER_ROLE,
+        FORWARD_USER_INFO_HEADER_JWT,
+        FORWARD_SESSION_INFO_HEADER_CHAT_ID,
+        FORWARD_SESSION_INFO_HEADER_MESSAGE_ID,
+    )
+)
+
+
+def _is_reserved_header(param: dict) -> bool:
+    return param.get('in') == 'header' and str(param.get('name', '')).lower() in _RESERVED_HEADER_PARAMETERS
+
+
+class _RoutedParams(NamedTuple):
+    path: dict
+    query: dict
+    header: dict[str, str]
+    cookie: dict[str, str]
+
+
+def _parameter_text(value: Any) -> str:
+    """A header or cookie value as text, in OpenAPI's default "simple" style.
+
+    An array joins its values with commas, skipping nulls; an object joins its
+    keys and values the same way (`{'a': 1, 'b': 2}` is `a,1,b,2`).
+    """
+    if isinstance(value, dict):
+        value = [part for key, item in value.items() if item is not None for part in (key, item)]
+    if isinstance(value, list | tuple):
+        return ','.join(_parameter_text(item) for item in value if item is not None)
+    if isinstance(value, bool):
+        return 'true' if value else 'false'
+    return str(value)
+
+
+def _route_params(parameters: list[dict], params: dict) -> _RoutedParams:
+    """The call's arguments that fill the route's path, query, header and cookie parameters."""
+    routed = _RoutedParams({}, {}, {}, {})
     for param in parameters:
         param_name = param['name']
         if param_name not in params:
             continue
         param_in = param.get('in')
+        value = params[param_name]
         if param_in == 'path':
-            path_params[param_name] = params[param_name]
+            routed.path[param_name] = value
+            continue
+        # Skip empty values for optional params (LLMs sometimes
+        # pass "" instead of omitting optional parameters).
+        if value is None or (value == '' and not param.get('required')):
+            continue
         if param_in == 'query':
-            value = params[param_name]
-            # Skip empty values for optional params (LLMs sometimes
-            # pass "" instead of omitting optional parameters).
-            if value is None or (value == '' and not param.get('required')):
-                continue
-            query_params[param_name] = value
-    return path_params, query_params
+            routed.query[param_name] = value
+        elif param_in == 'header' and not _is_reserved_header(param):
+            routed.header[param_name] = _parameter_text(value)
+        elif param_in == 'cookie':
+            routed.cookie[param_name] = _parameter_text(value)
+    return routed
+
+
+def _with_parameters(own: dict[str, str], parameters: dict[str, str], *, fold_case: bool) -> dict[str, str]:
+    """The connection's headers or cookies plus the call's, the connection's own winning a clash (#190)."""
+    taken = {name.lower() if fold_case else name for name in own}
+    merged = dict(own)
+    for name, value in parameters.items():
+        if (name.lower() if fold_case else name) not in taken:
+            merged[name] = value
+    return merged
 
 
 def _operation_url(url: str, route_path: str, path_params: dict, query_params: dict) -> str:
@@ -1750,6 +1808,67 @@ async def _tool_server_response_data(response):
         return f'data:{content_type};base64,{b64}'
 
 
+def _json_body_schema(operation: dict, components: dict) -> dict:
+    """An operation's JSON request body schema, its $refs resolved; empty if it has none."""
+    schema = operation.get('requestBody')
+    for key in ('content', 'application/json', 'schema'):
+        schema = schema.get(key) if isinstance(schema, dict) else None
+    if not isinstance(schema, dict) or not schema:
+        return {}
+    return resolve_schema(schema, components or {})
+
+
+def _body_field_names(operation: dict, components: dict) -> set[str]:
+    """The property names of an operation's JSON request body, its $refs resolved; empty if it has none."""
+    properties = _json_body_schema(operation, components).get('properties')
+    return set(properties) if isinstance(properties, dict) else set()
+
+
+def _array_body_schema(schema: dict) -> dict | None:
+    """The array a request body schema describes, as the tool offers it; None if it is not one (#191).
+
+    An optional array counts too: an `anyOf` or `oneOf` of one array and null,
+    as FastAPI writes `list[str] | None`, or a type list such as
+    `['array', 'null']`. The argument can simply be left out, so the array is
+    offered as a plain array. A schema with properties is read as an object, as
+    before. OpenAI refuses an array schema without `items`, so a missing one is
+    `{}` (any item).
+    """
+    if schema.get('properties'):
+        return None
+    kind = schema.get('type')
+    if kind == 'array' or (isinstance(kind, list) and 'array' in kind and set(kind) <= {'array', 'null'}):
+        array = {**schema, 'type': 'array'}
+    else:
+        array = None
+        for keyword in ('anyOf', 'oneOf'):
+            branches = schema.get(keyword)
+            if not isinstance(branches, list):
+                continue
+            rest = [branch for branch in branches if not (isinstance(branch, dict) and branch.get('type') == 'null')]
+            if len(rest) == 1 and isinstance(rest[0], dict) and rest[0].get('type') == 'array':
+                outer = {key: value for key, value in schema.items() if key not in ('anyOf', 'oneOf')}
+                array = {**outer, **rest[0]}
+        if array is None:
+            return None
+    return array if 'items' in array else {**array, 'items': {}}
+
+
+def _array_body_property(parameters: list[dict]) -> str:
+    """The tool argument an array request body is offered as (#191).
+
+    A tool's parameters must be an object, so the array is one property of it,
+    `body`, beside the operation's parameters; `request_body` (and so on) if a
+    parameter already has that name. The tool spec and the call both name it
+    from the operation's parameters, so they agree.
+    """
+    taken = {param.get('name') for param in parameters}
+    name = 'body'
+    while name in taken:
+        name = f'request_{name}'
+    return name
+
+
 async def execute_tool_server(
     url: str,
     headers: dict[str, str],
@@ -1767,18 +1886,35 @@ async def execute_tool_server(
         route_path, methods, http_method, operation = matching_operation
 
         parameters = _operation_parameters(methods, operation)
-        path_params, query_params = _route_params(parameters, params)
-        final_url = _operation_url(url, route_path, path_params, query_params)
+        routed = _route_params(parameters, params)
+        final_url = _operation_url(url, route_path, routed.path, routed.query)
+        # Header names are case-insensitive; cookie names are not.
+        headers = _with_parameters(headers, routed.header, fold_case=True)
+        cookies = _with_parameters(cookies, routed.cookie, fold_case=False)
 
-        body_params = {}
-        if operation.get('requestBody', {}).get('content'):
+        # The JSON body: an object of the body's fields, or an array body's list (None: send none).
+        body_params: dict | list | None = {}
+        components = openapi.get('components', {})
+        if _array_body_schema(_json_body_schema(operation, components)) is not None:
+            # The array itself is the body, from its one argument (#191); omitted, no body.
+            body_property = _array_body_property(parameters)
+            body_params = params[body_property] if body_property in params else None
+        elif operation.get('requestBody', {}).get('content'):
             # The tool's arguments flatten the body's fields together with the operation's
-            # parameters; those go in the path, query, header or cookie, not in the body too.
-            parameter_names = {param['name'] for param in parameters}
+            # parameters. A parameter goes in the path, query, header or cookie and not in
+            # the body too, unless the body schema has a field of that name: then it goes
+            # in both (#189), as for PUT /users/{id} whose body also requires id.
+            body_fields = _body_field_names(operation, components)
+            parameter_names = {param['name'] for param in parameters} - body_fields
             body_params = {key: value for key, value in params.items() if key not in parameter_names}
 
-        # Methods that may carry a body always send one, empty when the operation takes none.
-        body = {'json': body_params} if http_method in ['post', 'put', 'patch', 'delete'] else {}
+        # Methods that may carry a body send one, empty when the operation takes none;
+        # an array body whose argument was left out sends none.
+        body = (
+            {'json': body_params}
+            if body_params is not None and http_method in ['post', 'put', 'patch', 'delete']
+            else {}
+        )
 
         async with aiohttp.ClientSession(
             trust_env=True, timeout=aiohttp.ClientTimeout(total=AIOHTTP_CLIENT_TIMEOUT_TOOL_SERVER)

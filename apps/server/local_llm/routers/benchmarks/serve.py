@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import collections
+import contextlib
 import json
 import logging
 
@@ -160,7 +161,21 @@ async def _start_serve_locked(form_data: ServeStartForm):
     except ProfileError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
-    _job = ServeProcess(config=resolved, profile_version_id=entry.version.version_id)
+    job = ServeProcess(config=resolved, profile_version_id=entry.version.version_id)
+    # Something already answering on the port is not ours: a hand-started
+    # server, or an orphan left by an earlier backend whose recorder is gone
+    # (while that recorder still runs, the active-run check above refuses
+    # first). The new llama-server could not bind, and its telemetry would be
+    # filed under this configuration while measuring the other one (#156).
+    if await _port_answers(job.port):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=ERROR_MESSAGES.DEFAULT(
+                f'something is already serving on port {job.port} and this backend did not start it; '
+                'stop it (it may be a llama-server left running by an earlier backend), then start again'
+            ),
+        )
+    _job = job
     try:
         await _job.start()
     except LauncherError as e:
@@ -169,6 +184,20 @@ async def _start_serve_locked(form_data: ServeStartForm):
     _log_buffer.clear()
     _drain_task = asyncio.create_task(_drain_log(_job))
     return {'started': True, 'warning': _job.warning}
+
+
+async def _port_answers(port: int | None) -> bool:
+    """Whether anything accepts a TCP connection on the loopback port."""
+    if not port:
+        return False
+    try:
+        _, writer = await asyncio.wait_for(asyncio.open_connection('127.0.0.1', port), timeout=1.0)
+    except (OSError, TimeoutError):
+        return False
+    writer.close()
+    with contextlib.suppress(OSError):
+        await writer.wait_closed()
+    return True
 
 
 @router.post('/stop')

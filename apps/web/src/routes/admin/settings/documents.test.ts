@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest';
 import {
 	buildEmbeddingPayload,
 	buildRagPayload,
+	chunkSettingsError,
 	contextPlaceholders,
 	embeddingError,
 	embeddingModelFor,
 	mineruUrlForMode,
 	parseList,
 	ragFormError,
+	ragSaveOutcome,
+	reindexProblem,
 	rerankingModelFor,
 	toEmbeddingForm,
 	toRagForm
@@ -85,7 +88,7 @@ describe('ragFormError', () => {
 	it('rejects headers that are not a JSON object, and bad JSON in the other boxes', () => {
 		const external = { CONTENT_EXTRACTION_ENGINE: 'external', EXTERNAL_DOCUMENT_LOADER_URL: 'http://x' };
 		expect(ragFormError({ ...external, EXTERNAL_DOCUMENT_LOADER_HEADERS: '["a"]' })).toBe(
-			'Headers must be a valid JSON object'
+			'External Document Loader Headers must be a valid JSON object'
 		);
 		expect(ragFormError({ ...external, EXTERNAL_DOCUMENT_LOADER_HEADERS: '{"a":"b"}' })).toBeNull();
 		expect(ragFormError({ CONTENT_EXTRACTION_ENGINE: 'datalab_marker', DATALAB_MARKER_ADDITIONAL_CONFIG: '{x' })).toBe(
@@ -162,6 +165,7 @@ describe('embedding', () => {
 	});
 	it("sends only the chosen engine's connection", () => {
 		expect(buildEmbeddingPayload(e)).toEqual({
+			force_reload: true,
 			RAG_EMBEDDING_ENGINE: 'openai',
 			RAG_EMBEDDING_MODEL: 'text-embedding-3-small',
 			RAG_EMBEDDING_BATCH_SIZE: 1,
@@ -173,6 +177,10 @@ describe('embedding', () => {
 		expect(local).not.toHaveProperty('openai_config');
 		expect(local).not.toHaveProperty('ollama_config');
 	});
+	it('asks for a reload unless told not to (#532)', () => {
+		expect(buildEmbeddingPayload(e).force_reload).toBe(true);
+		expect(buildEmbeddingPayload(e, { forceReload: false }).force_reload).toBe(false);
+	});
 	it('a cleared batch size or concurrency is sent as the default', () => {
 		const p = buildEmbeddingPayload({ ...e, batchSize: null, concurrent: null });
 		expect(p.RAG_EMBEDDING_BATCH_SIZE).toBe(1);
@@ -181,12 +189,21 @@ describe('embedding', () => {
 	it('refuses a filesystem path for the local model, a missing hosted model, or a half-filled Azure connection', () => {
 		expect(embeddingError({ ...e, engine: '', model: '/models/all-MiniLM' })).toMatch(/filesystem path/);
 		expect(embeddingError({ ...e, engine: '', model: 'sentence-transformers/all-MiniLM-L6-v2' })).toBeNull();
+		expect(embeddingError({ ...e, engine: '', model: ' ' })).toBe('Embedding model is required.');
 		expect(embeddingError({ ...e, engine: 'ollama', model: '' })).toBe('Embedding model is required.');
 		expect(embeddingError({ ...e, engine: 'openai', model: '' })).toBe('Embedding model is required.');
 		expect(embeddingError({ ...e, engine: 'azure_openai', azure: { url: 'u', key: 'k', version: '' } })).toMatch(
 			/Azure/
 		);
 		expect(embeddingError({ ...e, engine: 'azure_openai', azure: { url: 'u', key: 'k', version: 'v' } })).toBeNull();
+	});
+	it('refuses an embedding batch size below 1, and accepts 1 or more or a cleared box (#353)', () => {
+		for (const batchSize of [0, -1, -2, 1.5])
+			expect(embeddingError({ ...e, engine: 'openai', model: 'm', batchSize })).toBe(
+				'Embedding Batch Size must be a whole number of at least 1.'
+			);
+		for (const batchSize of [1, 64, null])
+			expect(embeddingError({ ...e, engine: 'openai', model: 'm', batchSize })).toBeNull();
 	});
 	it('offers a model per engine', () => {
 		expect(embeddingModelFor('')).toBe('sentence-transformers/all-MiniLM-L6-v2');
@@ -222,5 +239,71 @@ describe('contextPlaceholders', () => {
 		expect(contextPlaceholders('Use [context] to answer')).toBe(1);
 		expect(contextPlaceholders('[context] and {{CONTEXT}}')).toBe(2);
 		expect(contextPlaceholders(null)).toBe(0);
+	});
+});
+
+describe('chunkSettingsError', () => {
+	it('refuses what the text splitters cannot use (#235)', () => {
+		expect(chunkSettingsError(0, 0)).toBe('Chunk Size must be at least 1.');
+		expect(chunkSettingsError(1.5, 0)).toBe('Chunk Size must be at least 1.');
+		expect(chunkSettingsError(100, -1)).toBe('Chunk Overlap cannot be negative.');
+		expect(chunkSettingsError(100, 200)).toBe(
+			'Chunk Overlap must be smaller than Chunk Size (200 is not smaller than 100).'
+		);
+		expect(chunkSettingsError(100, 100)).toBe(
+			'Chunk Overlap must be smaller than Chunk Size (100 is not smaller than 100).'
+		);
+	});
+
+	it('accepts working settings, and leaves a cleared box to the server', () => {
+		expect(chunkSettingsError(1000, 100)).toBeNull();
+		expect(chunkSettingsError(1, 0)).toBeNull();
+		expect(chunkSettingsError(null, 100)).toBeNull();
+		expect(chunkSettingsError(1000, null)).toBeNull();
+	});
+
+	it('is part of the form check, so the embedding model is not applied first', () => {
+		expect(ragFormError({ CHUNK_SIZE: 100, CHUNK_OVERLAP: 200 })).toBe(
+			'Chunk Overlap must be smaller than Chunk Size (200 is not smaller than 100).'
+		);
+	});
+});
+
+describe('ragSaveOutcome', () => {
+	it('passes on the warnings and takes over hybrid search when the server turned it off', () => {
+		const res = {
+			status: true,
+			warnings: ['Hybrid search was turned off: the reranking model could not be loaded. CrossEncoder error'],
+			ENABLE_RAG_HYBRID_SEARCH: false
+		};
+		expect(ragSaveOutcome({ ENABLE_RAG_HYBRID_SEARCH: true }, res)).toEqual({
+			warnings: ['Hybrid search was turned off: the reranking model could not be loaded. CrossEncoder error'],
+			changes: { ENABLE_RAG_HYBRID_SEARCH: false }
+		});
+	});
+
+	it('changes nothing when the server stored what was sent', () => {
+		const res = { status: true, warnings: [], ENABLE_RAG_HYBRID_SEARCH: true };
+		expect(ragSaveOutcome({ ENABLE_RAG_HYBRID_SEARCH: true }, res)).toEqual({ warnings: [], changes: {} });
+	});
+
+	it('copes with a response that has no warnings or flag (an older server)', () => {
+		expect(ragSaveOutcome({ ENABLE_RAG_HYBRID_SEARCH: true }, { status: true })).toEqual({ warnings: [], changes: {} });
+		expect(ragSaveOutcome({ ENABLE_RAG_HYBRID_SEARCH: true }, null)).toEqual({ warnings: [], changes: {} });
+	});
+});
+
+describe('reindexProblem', () => {
+	it('says how many files failed and names the first few (#308)', () => {
+		const failed = ['a.pdf', 'b.pdf', 'c.pdf', 'd.pdf'].map((filename, i) => ({ file_id: `f${i}`, filename }));
+		expect(reindexProblem({ status: false, total: 10, reindexed: 6, failed })).toBe(
+			'4 of 10 files could not be embedded again and are missing from knowledge search until they are (a.pdf, b.pdf, c.pdf, and 1 more); the backend log has the errors.'
+		);
+	});
+
+	it('is null when everything was embedded, or for an older server that answered true', () => {
+		expect(reindexProblem({ status: true, total: 3, reindexed: 3, failed: [] })).toBeNull();
+		expect(reindexProblem(true)).toBeNull();
+		expect(reindexProblem(null)).toBeNull();
 	});
 });

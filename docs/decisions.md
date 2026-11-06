@@ -7,6 +7,25 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-03**: **Admin banners are shown again (#243).** The banners
+  set in Admin Settings > General were saved but displayed nowhere. The
+  2026-09-27 Phase 8 entry left the stores the Svelte tabs refreshed
+  (banners among them) to Phase 10's chat, and Phase 10 did not port the
+  display or record it as a gap.
+
+  **What.** `routes/chat/ChatBanners.tsx` shows them above a new chat, as
+  the original's chat navbar did, and not inside an existing chat.
+  - **Closing:** a dismissible banner stays dismissed in this browser
+    (`localStorage` `dismissedBannerIds`, the original's key, pruned to
+    banners that still exist). Any other banner stays closed until the page
+    is reloaded, across new chats, as in the original.
+  - **Safety:** content goes through `SafeMarkdown`.
+  - **Refresh:** saving General refreshes the list, so an admin sees the
+    saved banners at once.
+  - **Not ported:**
+    - the "Learn More" link: the backend's `BannerModel` has no URL and
+      the editor has no field for one;
+    - the license-trial and seat banners: there is no license system here.
 - **2026-10-28**: **A llama-bench pre-screen added: Benchmarks > Pre-screen.**
   This is PR 3 of `docs/plans/benchmark-upgrade.md`, its last.
 

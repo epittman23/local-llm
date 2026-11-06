@@ -53,8 +53,19 @@ def chat_search_content_query(text: str) -> str:
     return ' '.join(word for word in words if not word.startswith(CHAT_SEARCH_FILTER_PREFIXES)).strip()
 
 
+def like_escape(text: str) -> str:
+    """Text for a LIKE pattern with `ESCAPE '\\'`: its `\\`, `%` and `_` match themselves (#292)."""
+    return text.replace('\\', '\\\\').replace('%', '\\%').replace('_', '\\_')
+
+
 def chat_search_terms(text: str) -> list[str]:
     return list(dict.fromkeys(re.findall(r'[a-z0-9]+', text.lower())))
+
+
+# A JSON escape for NUL: a backslash, not itself escaped, then u0000. In
+# JSON text an escaped backslash is two, so an odd run of them before
+# "u0000" is an escape and an even run is the user's own text (#289).
+CHAT_JSON_NUL = r'(^|[^\\])(\\\\)*\\u0000'
 
 
 def chat_search_message_content_match_sql(dialect_name: str, key: str) -> str:
@@ -64,12 +75,12 @@ def chat_search_message_content_match_sql(dialect_name: str, key: str) -> str:
             EXISTS (
                 SELECT 1
                 FROM json_each(Chat.chat, '$.history.messages') AS history_message
-                WHERE LOWER(history_message.value->>'content') LIKE '%' || :{key} || '%'
+                WHERE LOWER(history_message.value->>'content') LIKE '%' || :{key} || '%' ESCAPE '\\'
             )
             OR EXISTS (
                 SELECT 1
                 FROM json_each(Chat.chat, '$.messages') AS legacy_message
-                WHERE LOWER(legacy_message.value->>'content') LIKE '%' || :{key} || '%'
+                WHERE LOWER(legacy_message.value->>'content') LIKE '%' || :{key} || '%' ESCAPE '\\'
             )
         )
         """
@@ -83,19 +94,19 @@ def chat_search_message_content_match_sql(dialect_name: str, key: str) -> str:
                 WHERE message.chat_id = Chat.id
                 AND message.user_id = Chat.user_id
                 AND json_typeof(message.content) = 'string'
-                AND LOWER(message.content #>> '{{}}') LIKE '%' || :{key} || '%'
+                AND LOWER(message.content #>> '{{}}') LIKE '%' || :{key} || '%' ESCAPE '\\'
             )
             OR EXISTS (
                 SELECT 1
                 FROM json_each(Chat.chat#>'{{history,messages}}') AS history_message
                 WHERE json_typeof(history_message.value->'content') = 'string'
-                AND LOWER(history_message.value->>'content') LIKE '%' || :{key} || '%'
+                AND LOWER(history_message.value->>'content') LIKE '%' || :{key} || '%' ESCAPE '\\'
             )
             OR EXISTS (
                 SELECT 1
                 FROM json_array_elements(Chat.chat->'messages') AS legacy_message
                 WHERE json_typeof(legacy_message->'content') = 'string'
-                AND LOWER(legacy_message->>'content') LIKE '%' || :{key} || '%'
+                AND LOWER(legacy_message->>'content') LIKE '%' || :{key} || '%' ESCAPE '\\'
             )
         )
         """
@@ -597,8 +608,28 @@ class ChatTable:
             )
             return [ChatModel.model_validate(chat) for chat in result.scalars().all()]
 
+    async def delete_internal_chats_by_note_id(self, note_id: str, db: AsyncSession | None = None) -> None:
+        """Delete every user's internal chat with a note, as its deletion leaves them unreachable (#333)."""
+        async with get_async_db_context(db) as session:
+            result = await session.execute(
+                select(Chat.id, Chat.user_id).where(
+                    Chat.meta['internal'].as_boolean().is_(True),
+                    Chat.meta['type'].as_string() == 'note',
+                    Chat.meta['note_id'].as_string() == note_id,
+                )
+            )
+            chats = result.all()
+        for chat_id, user_id in chats:
+            # And the chats spawned from it (subagents, timers), as the chat delete route does.
+            for child_id in await self.get_internal_chat_ids_by_parent_id(chat_id, user_id):
+                await self.delete_chat_by_id(child_id, db=db)
+            if not await self.delete_chat_by_id(chat_id, db=db):
+                log.warning('Could not delete chat %s of deleted note %s', chat_id, note_id)
+
     def _chat_import_form_to_chat_model(self, user_id: str, form_data: ChatImportForm) -> ChatModel:
         id = str(uuid.uuid4())
+        now = int(time.time())
+        updated_at = form_data.updated_at if form_data.updated_at else now
         chat = ChatModel(
             **{
                 'id': id,
@@ -610,11 +641,29 @@ class ChatTable:
                 'pinned': form_data.pinned,
                 'folder_id': form_data.folder_id,
                 'current_message_id': form_data.current_message_id or self.get_current_message_id(form_data.chat),
-                'created_at': (form_data.created_at if form_data.created_at else int(time.time())),
-                'updated_at': (form_data.updated_at if form_data.updated_at else int(time.time())),
+                'created_at': (form_data.created_at if form_data.created_at else now),
+                'updated_at': updated_at,
+                # Read as of its own last update, as a new chat starts read: an
+                # import used to leave every chat unread (#295).
+                'last_read_at': updated_at,
             }
         )
         return chat
+
+    @staticmethod
+    def _normalise_imported_tags(form_data: ChatImportForm) -> list[str]:
+        """Store an imported chat's tags as tag ids, as a tag write does, and
+        return their names, so their rows can be created (#531). Only names
+        are kept: a `meta.tags` that is not a list is stored as no tags, and
+        an item that is not a name is dropped, since everything that reads
+        the tags expects a list of ids."""
+        meta = form_data.meta or {}
+        if 'tags' not in meta:
+            return []
+        tags = meta['tags'] if isinstance(meta['tags'], list) else []
+        names = [t for t in tags if isinstance(t, str) and t.strip() and t.replace(' ', '_').lower() != 'none']
+        form_data.meta = {**meta, 'tags': list(dict.fromkeys(t.replace(' ', '_').lower() for t in names))}
+        return names
 
     async def import_chats(
         self,
@@ -639,13 +688,17 @@ class ChatTable:
                 log.info('Import: cleared %d dangling folder_id(s) for user %s', cleared, user_id)
 
             chats = []
+            tag_names: list[str] = []
 
             for form_data in chat_import_forms:
+                tag_names.extend(self._normalise_imported_tags(form_data))
                 chat = self._chat_import_form_to_chat_model(user_id, form_data)
                 chats.append(Chat(**chat.model_dump()))
 
             session.add_all(chats)
             await session.commit()
+            # The tag rows a tag write would create (#531).
+            await Tags.ensure_tags_exist(tag_names, user_id, db=session)
 
             # Dual-write messages to chat_message table
             for form_data, imported_chat in zip(chat_import_forms, chats, strict=True):
@@ -1087,7 +1140,9 @@ class ChatTable:
             )
             metadata_row = result.first()
 
-        if metadata_row is not None:
+        # A row whose column is still NULL falls back to the chat JSON, which
+        # may hold what an older writer put only there (#290).
+        if metadata_row is not None and metadata_row[0] is not None:
             return metadata_row[0]
 
         chat = await self.get_chat_by_id(chat_id)
@@ -1217,10 +1272,12 @@ class ChatTable:
                 self._repair_chat_current_id(chat)
                 history = chat.get('history', {})
 
+                saved_message = None
                 if message_id in history.get('messages', {}):
                     status_history = history['messages'][message_id].get('statusHistory', [])
                     status_history.append(status)
                     history['messages'][message_id]['statusHistory'] = status_history
+                    saved_message = history['messages'][message_id]
 
                 chat['history'] = history
                 chat_item.chat = chat
@@ -1228,10 +1285,38 @@ class ChatTable:
                 chat_item.current_message_id = self.get_current_message_id(chat)
                 flag_modified(chat_item, 'chat')
                 await session.commit()
+                updated_chat = ChatModel.model_validate(chat_item)
+                user_id = str(chat_item.user_id)
 
-                return ChatModel.model_validate(chat_item)
+            if saved_message is not None:
+                await self._mirror_message_row(
+                    id, message_id, user_id, saved_message, {'statusHistory': saved_message.get('statusHistory', [])}
+                )
+            return updated_chat
         except Exception:
             return None
+
+    async def _mirror_message_row(
+        self, chat_id: str, message_id: str, user_id: str, message: Any, fields: dict
+    ) -> None:
+        """Write what changed in the chat JSON to the message's chat_message row too.
+
+        Reads prefer the row (get_message_metadata, the messages map forks and
+        compaction build from), so a writer that changed only the JSON was
+        invisible to them (#290). An existing row gets only `fields`: writing
+        the whole JSON message would also carry over its other fields (its
+        usage, or a `done` a later save already changed). A missing row is
+        created from the whole message. As in
+        upsert_message_to_chat_by_id_and_message_id, a failure here is logged
+        and does not undo the JSON write.
+        """
+        try:
+            existing = await ChatMessages.get_message_by_id(f'{chat_id}-{message_id}')
+            await ChatMessages.upsert_message(
+                message_id=message_id, chat_id=chat_id, user_id=user_id, data=fields if existing else message
+            )
+        except Exception as e:
+            log.warning(f'Failed to write to chat_message table: {e}')
 
     async def add_message_files_by_id_and_message_id(
         self, id: str, message_id: str, files: list[dict]
@@ -1250,11 +1335,13 @@ class ChatTable:
             history = chat.get('history', {})
 
             message_files = []
+            saved_message = None
 
             if message_id in history.get('messages', {}):
                 message_files = history['messages'][message_id].get('files', [])
                 message_files = message_files + files
                 history['messages'][message_id]['files'] = message_files
+                saved_message = history['messages'][message_id]
 
             # Written here rather than through update_chat_by_id: with session sharing off that opens a second
             # connection, which then blocks on the lock this one holds.
@@ -1264,7 +1351,15 @@ class ChatTable:
             flag_modified(chat_item, 'chat')
             chat_item.updated_at = int(time.time())
             await session.commit()
-            return message_files
+            user_id = str(chat_item.user_id)
+
+        # After the session closes, so the row write does not wait on this chat's lock.
+        if saved_message is not None:
+            cleaned = self._clean_null_bytes(saved_message)
+            await self._mirror_message_row(
+                id, message_id, user_id, cleaned, {'files': self._clean_null_bytes(message_files)}
+            )
+        return message_files
 
     async def insert_shared_chat_by_chat_id(self, chat_id: str, db: AsyncSession | None = None) -> ChatModel | None:
         """Create a shared snapshot for a chat. Returns the original chat with share_id set."""
@@ -1387,7 +1482,7 @@ class ChatTable:
             if filter:
                 query_key = filter.get('query')
                 if query_key:
-                    stmt = stmt.filter(Chat.title.ilike(f'%{query_key}%'))
+                    stmt = stmt.filter(Chat.title.ilike(f'%{like_escape(query_key)}%', escape='\\'))
 
                 order_by = filter.get('order_by')
                 direction = filter.get('direction')
@@ -1455,6 +1550,8 @@ class ChatTable:
         skip: int = 0,
         limit: int = 50,
         db: AsyncSession | None = None,
+        updated_after: int | None = None,
+        updated_before: int | None = None,
     ) -> list[ChatTitleIdResponse]:
         async with get_async_db_context(db) as session:
             stmt = select(Chat.id, Chat.title, Chat.updated_at, Chat.created_at, Chat.last_read_at).filter_by(
@@ -1463,11 +1560,16 @@ class ChatTable:
             stmt = stmt.where(Chat.meta['internal'].as_boolean().is_not(True))
             if not include_archived:
                 stmt = stmt.filter_by(archived=False)
+            # Unix seconds, inclusive: an empty search lists chats through here (#181).
+            if updated_after is not None:
+                stmt = stmt.filter(Chat.updated_at >= updated_after)
+            if updated_before is not None:
+                stmt = stmt.filter(Chat.updated_at <= updated_before)
 
             if filter:
                 query_key = filter.get('query')
                 if query_key:
-                    stmt = stmt.filter(Chat.title.ilike(f'%{query_key}%'))
+                    stmt = stmt.filter(Chat.title.ilike(f'%{like_escape(query_key)}%', escape='\\'))
 
                 order_by = filter.get('order_by')
                 direction = filter.get('direction')
@@ -1886,6 +1988,28 @@ class ChatTable:
                 }
             )
 
+    async def get_export_chat_ids_by_user_id(self, user_id: str, db: AsyncSession | None = None) -> list[str]:
+        """The ids of the chats a user's export includes, newest first: taken once, before any is sent (#294)."""
+        async with get_async_db_context(db) as session:
+            result = await session.execute(
+                select(Chat.id)
+                .filter_by(user_id=user_id)
+                .where(Chat.meta['internal'].as_boolean().is_not(True))
+                .order_by(Chat.updated_at.desc(), Chat.id)
+            )
+            return list(result.scalars().all())
+
+    async def get_chats_by_ids_and_user_id(
+        self, ids: list[str], user_id: str, db: AsyncSession | None = None
+    ) -> list[ChatModel]:
+        """The user's chats with these ids, in the order given; ids no longer there are left out."""
+        if not ids:
+            return []
+        async with get_async_db_context(db) as session:
+            result = await session.execute(select(Chat).filter(Chat.user_id == user_id, Chat.id.in_(ids)))
+            found = {chat.id: chat for chat in (ChatModel.model_validate(row) for row in result.scalars().all())}
+            return [found[chat_id] for chat_id in ids if chat_id in found]
+
     # list pinned chats
     async def get_pinned_chats_by_user_id(
         self, user_id: str, db: AsyncSession | None = None
@@ -1926,15 +2050,27 @@ class ChatTable:
         skip: int = 0,
         limit: int = 60,
         db: AsyncSession | None = None,
+        updated_after: int | None = None,
+        updated_before: int | None = None,
     ) -> list[ChatModel]:
         """
         Filters chats based on a search query using Python, allowing pagination using skip and limit.
+
+        updated_after and updated_before (Unix seconds, inclusive) limit the
+        chats searched, in the query itself (#181).
         """
         search_text = sanitize_text_for_db(search_text).lower().strip()
 
         if not search_text:
             return await self.get_chat_list_by_user_id(
-                user_id, include_archived, filter={}, skip=skip, limit=limit, db=db
+                user_id,
+                include_archived,
+                filter={},
+                skip=skip,
+                limit=limit,
+                db=db,
+                updated_after=updated_after,
+                updated_before=updated_before,
             )
 
         search_text_words = search_text.split()
@@ -1945,11 +2081,18 @@ class ChatTable:
         ]
 
         # Extract folder names
-        folders = await Folders.search_folders_by_names(
-            user_id,
-            [word.replace('folder:', '') for word in search_text_words if word.startswith('folder:')],
-        )
+        # A bare `folder:` (one still being typed) names nothing yet and is ignored.
+        folder_names = [
+            word.replace('folder:', '')
+            for word in search_text_words
+            if word.startswith('folder:') and word != 'folder:'
+        ]
+        folders = await Folders.search_folders_by_names(user_id, folder_names)
         folder_ids = [folder.id for folder in folders]
+        # A folder filter that names no folder of this user's matches no chat: it
+        # used to be dropped, and a misspelled folder returned every chat (#291).
+        if folder_names and not folder_ids:
+            return []
 
         is_pinned = None
         if 'pinned:true' in search_text_words:
@@ -1995,6 +2138,11 @@ class ChatTable:
             if folder_ids:
                 stmt = stmt.filter(Chat.folder_id.in_(folder_ids))
 
+            if updated_after is not None:
+                stmt = stmt.filter(Chat.updated_at >= updated_after)
+            if updated_before is not None:
+                stmt = stmt.filter(Chat.updated_at <= updated_before)
+
             # Check if the database dialect is either 'sqlite' or 'postgresql'
             bind = await session.connection()
             dialect_name = bind.dialect.name
@@ -2003,13 +2151,13 @@ class ChatTable:
             exact_match_clause = None
             if phrase_query:
                 exact_match_clause = or_(
-                    Chat.title.ilike(bindparam('phrase_title_key')),
+                    Chat.title.ilike(bindparam('phrase_title_key'), escape='\\'),
                     text(chat_search_message_content_match_sql(dialect_name, 'phrase_content_key')),
                 )
                 search_params.update(
                     {
-                        'phrase_title_key': f'%{phrase_query}%',
-                        'phrase_content_key': phrase_query,
+                        'phrase_title_key': f'%{like_escape(phrase_query)}%',
+                        'phrase_content_key': like_escape(phrase_query),
                     }
                 )
 
@@ -2019,12 +2167,12 @@ class ChatTable:
                     content_key = f'term_content_key_{term_idx}'
                     term_clauses.append(
                         or_(
-                            Chat.title.ilike(bindparam(title_key)),
+                            Chat.title.ilike(bindparam(title_key), escape='\\'),
                             text(chat_search_message_content_match_sql(dialect_name, content_key)),
                         )
                     )
-                    search_params[title_key] = f'%{term}%'
-                    search_params[content_key] = term
+                    search_params[title_key] = f'%{like_escape(term)}%'
+                    search_params[content_key] = like_escape(term)
 
                 if term_clauses:
                     stmt = stmt.filter(or_(exact_match_clause, and_(*term_clauses)))
@@ -2059,11 +2207,20 @@ class ChatTable:
                     )
 
             elif dialect_name == 'postgresql':
-                # Safety filter: JSON field must not contain \u0000
-                stmt = stmt.filter(text("Chat.chat::text NOT LIKE '%\\\\u0000%'"))
-
-                # Safety filter: title must not contain actual null bytes
-                stmt = stmt.filter(text("Chat.title::text NOT LIKE '%\\x00%'"))
+                # A JSON-escaped NUL (\u0000) cannot be turned into text, and the
+                # content match reads Chat.chat's messages with ->>, so a chat
+                # holding one would fail the whole search. Writes strip NULs, but
+                # rows from before that may hold them. CHAT_JSON_NUL matches only
+                # a real escape, not a backslash the user typed before "u0000",
+                # which JSON stores doubled; the regex runs only on rows that
+                # contain the characters at all, so most rows cost a LIKE scan as
+                # before. The LIKE patterns that stood here matched "x00" in a
+                # title and any written \u0000, hiding chats about hex and escapes
+                # from every search (#289). A title needs no filter: Postgres text
+                # cannot hold a NUL at all.
+                stmt = stmt.filter(
+                    text(f"(Chat.chat::text NOT LIKE '%\\\\u0000%' OR Chat.chat::text !~ '{CHAT_JSON_NUL}')")
+                )
 
                 if 'none' in tag_ids:
                     stmt = stmt.filter(
@@ -2513,6 +2670,19 @@ class ChatTable:
         except Exception:
             return False
 
+    async def move_other_users_chats_out_of_folders(
+        self, folder_ids: list[str], owner_id: str, db: AsyncSession | None = None
+    ) -> None:
+        """Move to the top level the chats in these folders that are not the
+        folder owner's: a shared folder can hold a write grantee's chats, which
+        its deletion must neither delete nor leave pointing at a folder that is
+        gone (#315). A failure raises."""
+        async with get_async_db_context(db) as session:
+            await session.execute(
+                update(Chat).filter(Chat.folder_id.in_(folder_ids), Chat.user_id != owner_id).values(folder_id=None)
+            )
+            await session.commit()
+
     async def delete_shared_chats_by_user_id(self, user_id: str, db: AsyncSession | None = None) -> bool:
         """Delete all shared chat snapshots created by a user."""
         from local_llm.models.shared_chats import SharedChat as SharedChatTable
@@ -2541,11 +2711,18 @@ class ChatTable:
         if not file_ids:
             return None
 
-        chat_message_file_ids = {
-            item.id for item in await self.get_chat_files_by_chat_id_and_message_id(chat_id, message_id, db=db)
-        }
-        # Remove duplicates and existing file_ids
-        file_ids = list({file_id for file_id in file_ids if file_id and file_id not in chat_message_file_ids})
+        # Each file once, and none already linked to this chat (by any message): a
+        # chat links a file once, and one already linked broke the whole batch, so
+        # the new files in it were never linked (#293).
+        file_ids = list(dict.fromkeys(file_id for file_id in file_ids if file_id))
+        if not file_ids:
+            return None
+        async with get_async_db_context(db) as session:
+            result = await session.execute(
+                select(ChatFile.file_id).filter(ChatFile.chat_id == chat_id, ChatFile.file_id.in_(file_ids))
+            )
+            linked = set(result.scalars().all())
+        file_ids = [file_id for file_id in file_ids if file_id not in linked]
         if not file_ids:
             return None
 

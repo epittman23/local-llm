@@ -10,6 +10,7 @@ vi.mock('@/lib/apis/auths', async (original) => ({
 	...(await original<typeof import('@/lib/apis/auths')>()),
 	getSessionUser: vi.fn(),
 	updateUserProfile: vi.fn(),
+	updateUserPassword: vi.fn(),
 	getAPIKey: vi.fn()
 }));
 vi.mock('@/lib/apis/users', async (original) => ({
@@ -18,6 +19,10 @@ vi.mock('@/lib/apis/users', async (original) => ({
 	updateUserVariables: vi.fn()
 }));
 const toastError = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/auth/session', async (original) => ({
+	...(await original<typeof import('@/lib/auth/session')>()),
+	signOut: vi.fn()
+}));
 vi.mock('sonner', () => ({ toast: { error: toastError, success: vi.fn() } }));
 
 const sessionUser = {
@@ -103,5 +108,152 @@ describe('Account tab after its loads (#259)', () => {
 		reject('profile load failed');
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		expect(toastError).not.toHaveBeenCalled();
+	});
+});
+
+describe('Account tab: the password fields have a form of their own (#260)', () => {
+	beforeEach(() => {
+		useAuthStore.setState({
+			token: 'jwt',
+			user: { id: 'u1', name: 'Ann', role: 'user', profile_image_url: '/api/v1/users/u1/profile/image' }
+		} as never);
+		useConfigStore.setState({
+			config: {
+				name: 'x',
+				version: '1',
+				features: { enable_api_keys: false, enable_login_form: true, enable_password_change_form: true }
+			}
+		} as never);
+		vi.mocked(auths.getSessionUser).mockResolvedValue(sessionUser);
+		vi.mocked(users.getUserVariables).mockResolvedValue({ variables: {} });
+		vi.mocked(auths.updateUserPassword).mockResolvedValue(true);
+	});
+	afterEach(() => {
+		cleanup();
+		vi.clearAllMocks();
+	});
+
+	const fill = async () => {
+		render(<Account />);
+		const current = await screen.findByLabelText('Current Password');
+		fireEvent.change(current, { target: { value: 'old-pass' } });
+		fireEvent.change(screen.getByLabelText('New Password'), { target: { value: 'new-pass' } });
+		fireEvent.change(screen.getByLabelText('Confirm Password'), { target: { value: 'new-pass' } });
+		return current as HTMLInputElement;
+	};
+
+	it('submitting it changes the password and saves nothing else', async () => {
+		const current = await fill();
+		// What Enter in a password field submits is the form its `form=` names, a
+		// form outside the tab's. (happy-dom ignores `form=`; the e2e spec presses Enter.)
+		const form = document.getElementById(current.getAttribute('form') ?? '') as HTMLFormElement;
+		expect(form).toHaveAttribute('aria-label', 'Change Password');
+		expect(saveButton().closest('form')?.contains(form)).toBe(false);
+		for (const field of ['New Password', 'Confirm Password'])
+			expect(screen.getByLabelText(field)).toHaveAttribute('form', form.id);
+		expect(screen.getByRole('button', { name: 'Update password' })).toHaveAttribute('form', form.id);
+		fireEvent.submit(form);
+		await waitFor(() => expect(auths.updateUserPassword).toHaveBeenCalledWith('jwt', 'old-pass', 'new-pass'));
+		expect(auths.updateUserProfile).not.toHaveBeenCalled();
+		expect(users.updateUserVariables).not.toHaveBeenCalled();
+	});
+
+	it('sends one change at a time, however often it is submitted', async () => {
+		let answer: (ok: boolean) => void = () => {};
+		vi.mocked(auths.updateUserPassword).mockImplementation(() => new Promise((resolve) => (answer = resolve)));
+		const current = await fill();
+		const form = document.getElementById(current.getAttribute('form') ?? '') as HTMLFormElement;
+		fireEvent.submit(form);
+		fireEvent.submit(form);
+		await waitFor(() => expect(screen.getByRole('button', { name: 'Update password' })).toBeDisabled());
+		fireEvent.submit(form);
+		expect(auths.updateUserPassword).toHaveBeenCalledTimes(1);
+		answer(false);
+		await waitFor(() => expect(screen.getByRole('button', { name: 'Update password' })).toBeDisabled());
+		// Refused: the fields are cleared, so the button stays off until they are filled again.
+		expect(screen.getByLabelText('Current Password')).toHaveValue('');
+	});
+
+	it('does nothing while a password is missing', async () => {
+		render(<Account />);
+		const current = await screen.findByLabelText('Current Password');
+		fireEvent.submit(document.getElementById(current.getAttribute('form') ?? '') as HTMLFormElement);
+		await Promise.resolve();
+		expect(auths.updateUserPassword).not.toHaveBeenCalled();
+	});
+
+	it("the tab's Save does not change the password", async () => {
+		vi.mocked(auths.updateUserProfile).mockImplementation(async (_t, body) => ({ id: 'u1', ...body }));
+		vi.mocked(users.updateUserVariables).mockImplementation(async (_t, variables) => ({ variables }));
+		await fill();
+		fireEvent.click(saveButton());
+		await waitFor(() => expect(auths.updateUserProfile).toHaveBeenCalled());
+		expect(auths.updateUserPassword).not.toHaveBeenCalled();
+	});
+});
+
+describe('Account tab: the API key (#526)', () => {
+	beforeEach(() => {
+		useAuthStore.setState({
+			token: 'jwt',
+			user: { id: 'u1', name: 'Ann', role: 'admin', profile_image_url: '/api/v1/users/u1/profile/image' }
+		} as never);
+		useConfigStore.setState({ config: { name: 'x', version: '1', features: { enable_api_keys: true } } } as never);
+		// No answer queued by an earlier test is left over.
+		vi.mocked(auths.getAPIKey).mockReset();
+		vi.mocked(auths.getSessionUser).mockResolvedValue(sessionUser);
+		vi.mocked(users.getUserVariables).mockResolvedValue({ variables: {} });
+	});
+	afterEach(() => {
+		cleanup();
+		vi.clearAllMocks();
+	});
+
+	it('does not offer to create a key when the key failed to load, which would replace it', async () => {
+		vi.mocked(auths.getAPIKey).mockRejectedValueOnce('Internal Server Error');
+		render(<Account />);
+
+		expect(await screen.findByText(/The API key could not be loaded: Internal Server Error/)).toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: 'Create new secret key' })).toBeNull();
+	});
+
+	it('loads the key again on Try again', async () => {
+		vi.mocked(auths.getAPIKey).mockRejectedValueOnce('Internal Server Error').mockResolvedValueOnce('sk-1');
+		render(<Account />);
+		fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+
+		expect(await screen.findByDisplayValue('sk-1')).toBeInTheDocument();
+		expect(screen.queryByText(/could not be loaded/)).toBeNull();
+	});
+
+	it('cannot be clicked again while it is loading the key', async () => {
+		let answer: (key: string) => void = () => undefined;
+		vi.mocked(auths.getAPIKey)
+			.mockRejectedValueOnce('Internal Server Error')
+			.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)));
+		render(<Account />);
+		const retry = await screen.findByRole('button', { name: 'Try again' });
+		fireEvent.click(retry);
+
+		await waitFor(() => expect(retry).toBeDisabled());
+		fireEvent.click(retry);
+		expect(auths.getAPIKey).toHaveBeenCalledTimes(2);
+		answer('sk-1');
+		expect(await screen.findByDisplayValue('sk-1')).toBeInTheDocument();
+	});
+
+	it('offers to create a key when there is none', async () => {
+		vi.mocked(auths.getAPIKey).mockResolvedValueOnce(null);
+		render(<Account />);
+
+		expect(await screen.findByRole('button', { name: 'Create new secret key' })).toBeInTheDocument();
+	});
+
+	it('shows a key that loaded', async () => {
+		vi.mocked(auths.getAPIKey).mockResolvedValueOnce('sk-1');
+		render(<Account />);
+
+		expect(await screen.findByDisplayValue('sk-1')).toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: 'Create new secret key' })).toBeNull();
 	});
 });

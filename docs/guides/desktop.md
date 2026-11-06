@@ -50,11 +50,16 @@ running:
 |---|---|---|
 | Nothing answering on `:4000` | builds `apps/web` if any source is newer than `dist/`, then runs `make backend` | stops everything it started |
 | A backend already up (from a terminal) | connects to it: nothing is restarted or rebuilt | leaves it running |
-| The stack it started before it crashed | adopts it (`owned.json`; the same `make`, by pid and start time) | stops it |
-| `make frontend` on `:5174` | loads the hot-reloading dev server instead of the build, and skips the build | the dev server is left alone |
-| A server address that isn't loopback | connects only | nothing to stop |
+| The stack it started before it crashed, for the same server address and checkout | adopts it (`owned.json`; the same `make`, by pid and start time) | stops it |
+| That stack, started for another address or checkout, recorded by an earlier version of the app (which named neither), or found by a launch for a remote server | stops it first, as closing the app would, then goes on as if it had not been found; if the stop had to be forced and left containers or a `llama-server` running, it says so and waits for Retry | as the row that then applies |
+| `make frontend` on `:5174`, from the configured checkout | loads the hot-reloading dev server instead of the build, and skips the build; it asks the dev server at `/__lllm/dev-server` which `apps/web` it serves, so another project's server that took `:5174`, or another checkout's, is ignored | the dev server is left alone |
+| A server address that isn't loopback | connects only (after stopping an earlier stack, above) | nothing to stop |
 
 `:5174` and `:4000` are different origins, so each keeps its own login.
+
+The sources it compares with `dist/` are `apps/web`'s `src/` and `public/`
+(every file and folder in them, so a renamed or deleted file counts),
+`package.json`, `bun.lock`, `astro.config.mjs` and `tsconfig.json`.
 
 The backend it starts runs `make backend LLLM_UVICORN_FLAGS='--timeout-graceful-shutdown 10'`
 with `LLLM_STOP_JOBS_ON_SHUTDOWN=true`.
@@ -81,15 +86,27 @@ If it started the stack, the dialog shows the shutdown:
 2. **One SIGINT goes to `make`'s process group,** exactly as Ctrl-C would.
    Never a second one: uvicorn takes a second SIGINT as "force exit" and skips
    the teardown that stops the served model.
-3. **uvicorn finishes open requests** (cancelled after 10 s), then stops
+3. **uvicorn finishes open requests** (cancelled after 10 s), then stops any
+   chat reply still being written, saving what arrived (up to 10 s more), then
    benchmark jobs and the served model.
 4. **The Makefile's trap brings the Compose services down** (Postgres,
    Redis, Jupyter and SearXNG).
 
 The app waits until the whole group has exited, with a budget of 90 s. Past
-that, it kills the group, runs `docker compose down` itself, and offers to stop
+that, it kills the group, marks the steps it never reached as "not reached"
+and runs `docker compose down` itself. Either way it then asks Compose
+(`docker compose ps -a`, up to 15 s more) whether any of the services' containers
+are left. If some are, or Compose cannot be asked, the step fails and the
+dialog stays open with the log and Quit, since `docker compose down` did not
+work or could not be confirmed. Otherwise, past the budget, it offers to stop
 any `llama-server` still running. That server runs in its own session,
-outside the group, so it is offered rather than killed unasked.
+outside the group, so it is offered rather than killed unasked: "Stop
+llama-server" stops it and quits, while "Leave it", closing the dialog or
+quitting leaves it running and quits.
+
+A Cancel in the startup dialog (or closing it) runs the same stop. Once a stop
+has begun, the app window does not open, even if the backend answers just
+then, so nothing can start a second stop.
 
 The steps follow the `==> ` marker lines that the Makefile and the backend's
 shutdown hook print. Those lines are an interface: change their text only
@@ -106,14 +123,26 @@ Moving to the dedicated server means setting the server URL to its
 `https://` address and restarting the app. Nothing else changes. Use a real
 certificate (Tailscale serve, Caddy); a self-signed one is not handled.
 `--server-url=<url>` or `LLLM_SERVER_URL` override the setting for one launch
-without saving it.
+without saving it. Settings says when one is in use. Saving there replaces it
+for the rest of that launch, so Retry starts with what was saved, and
+**Restart now** starts the next launch without it.
+
+A save that cannot be written says why in the dialog. When the server URL in
+`config.json` is not an `http://` or `https://` address, the app uses the
+local default and says so in the startup dialog's first step and in
+Settings. Saving the window's size or the settings rewrites only those
+fields, so a hand edit stays in the file to be fixed. A `config.json` that is
+not a JSON object at all is left alone too: the defaults are used, and the
+window's size is not saved until Settings saves over it.
 
 ## Files
 
 Everything lives in `~/.config/Local LLM/`, the same for the packaged app and
 `make desktop`:
-- `config.json`: the settings and the window's size;
-- `owned.json`: the process group of the stack it started, while it runs;
+- `config.json`: the settings and the window's size, saved on every way of
+  quitting;
+- `owned.json`: the process group of the stack it started, and the server
+  address and checkout it was started for, while it runs;
 - `logs/backend.log`: the build and `make backend` output of the stack it
   started (the previous run's is `backend.log.1`).
 
@@ -156,7 +185,12 @@ and an unpacked package. The unit tests cover:
 - `src/config.ts`, `src/policy.ts` and `src/stack.ts`'s decisions and stop
   sequence;
 - `src/progress.ts`, replayed against logs from real runs in
-  `test/fixtures/`.
+  `test/fixtures/`;
+- `src/main.ts`'s start and stop: a Cancel during startup, a quit while the
+  window loads, Retry during a stop, the "Leave it" offer, services left
+  after a stop, a stack an earlier launch left running, and a login shell
+  that cannot be spawned, run against a fake Electron in
+  `src/main.stop.test.ts`.
 
-Launching, closing and attaching are checked by hand: see
+Launching, closing and attaching the real stack are checked by hand: see
 [testing.md](testing.md#desktop-appsdesktop).

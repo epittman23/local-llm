@@ -276,14 +276,49 @@ export type ChatEffect =
 	| { kind: 'reload' }
 	| { kind: 'title'; title: string }
 	| { kind: 'tags' }
-	| { kind: 'inactive' }
-	| { kind: 'cancelled' }
+	/** The chat has no running task; `messageId` is the reply the event was about. */
+	| { kind: 'inactive'; messageId?: string }
+	/** `current`: the cancelled reply is the current one or a sibling of it, not one a later send replaced. */
+	| { kind: 'cancelled'; current: boolean }
 	| { kind: 'notification'; level: string; content: string }
 	| { kind: 'dialog'; type: 'confirmation' | 'input' | 'execute' | 'ask_user'; data: any };
 
 /** Strips `<details>` blocks (reasoning, tool calls) from a finished reply: what is copied or spoken. */
 const visibleText = (m: Message) =>
 	getOutputText(m.output) || m.content.replace(/<details[^>]*>[\s\S]*?<\/details>/gi, '').trim();
+
+/**
+ * Whether a reply waits on the user on purpose: a tool call pending approval
+ * or an ask_user question, with no result yet. Such a reply is not done, and
+ * its task has ended, by design (the server's own check in
+ * drain_approved_tool_calls).
+ */
+function pausedForUser(m: Message): boolean {
+	const items = Array.isArray(m.output) ? (m.output as Record<string, unknown>[]) : [];
+	const answered = new Set(items.filter((i) => i.type === 'function_call_output').map((i) => i.call_id));
+	return items.some(
+		(i) =>
+			i.type === 'function_call' &&
+			['pending', 'queued', 'requires_approval'].includes(String(i.status)) &&
+			!answered.has(i.call_id)
+	);
+}
+
+/**
+ * Whether a reply is still marked as being written with nothing after it: an
+ * assistant leaf that is not done and is not paused for the user. With no
+ * task left for the chat, such a reply missed its done event (#214).
+ * `messageId` limits the check to that reply and its sibling columns; without
+ * it, every reply counts.
+ */
+export function hasPendingAssistantLeaf(history: History, messageId?: string | null): boolean {
+	const anchor = messageId ? history.messages[messageId] : undefined;
+	const ids = anchor ? siblingsOf(history, anchor) : messageId ? [] : Object.keys(history.messages);
+	return ids.some((id) => {
+		const m = history.messages[id];
+		return m?.role === 'assistant' && !m.done && (m.childrenIds?.length ?? 0) === 0 && !pausedForUser(m);
+	});
+}
 
 /**
  * Applies one `events` socket event (Chat.svelte's chatEventHandler and its
@@ -305,7 +340,7 @@ export function applyChatEvent(history: History, event: ChatEvent): { history: H
 			patch = { statusHistory: [...(message.statusHistory ?? []), data] };
 			break;
 		case 'chat:active':
-			if (!data?.active) effects.push({ kind: 'inactive' });
+			if (!data?.active) effects.push({ kind: 'inactive', messageId: id });
 			break;
 		case 'chat:completion': {
 			const { done, choices, content, output, sources, selected_model_id, error, usage } = data ?? {};
@@ -350,8 +385,12 @@ export function applyChatEvent(history: History, event: ChatEvent): { history: H
 			patch = { output, content };
 			break;
 		}
-		case 'chat:tasks:cancel':
-			effects.push({ kind: 'cancelled' });
+		case 'chat:tasks:cancel': {
+			const current = history.currentId ? history.messages[history.currentId] : undefined;
+			effects.push({
+				kind: 'cancelled',
+				current: id === history.currentId || (Boolean(message.parentId) && current?.parentId === message.parentId)
+			});
 			if (id === history.currentId && message.parentId) {
 				let h = history;
 				for (const c of history.messages[message.parentId]?.childrenIds ?? []) h = updateMessage(h, c, { done: true });
@@ -359,6 +398,7 @@ export function applyChatEvent(history: History, event: ChatEvent): { history: H
 			}
 			patch = { done: true };
 			break;
+		}
 		case 'chat:message:delta':
 		case 'message':
 			patch = { content: message.content + (data?.content ?? '') };
@@ -388,8 +428,7 @@ export function applyChatEvent(history: History, event: ChatEvent): { history: H
 			let h = history;
 			for (const msg of data?.messages ?? []) {
 				const existing = h.messages[msg?.id];
-				if (existing && existing.content !== msg.content)
-					h = updateMessage(h, msg.id, { originalContent: existing.content, ...msg });
+				if (existing && existing.content !== msg.content) h = updateMessage(h, msg.id, rewrittenMessage(existing, msg));
 			}
 			return { history: h, effects };
 		}
@@ -519,6 +558,24 @@ function editedOutput(m: Message, content: string): OutputItem[] | undefined {
 		if (item?.type !== 'message' && item?.type !== 'reasoning') kept.push(item);
 	});
 	return lastMessage === -1 ? [...kept, ...edited] : kept;
+}
+
+/**
+ * The patch for a message an action function or an outlet filter rewrote:
+ * the new fields, with the old text kept as `originalContent`. The new text
+ * goes into the message's `output` too, as an edit's does (`editedOutput`),
+ * unless the rewrite brings an output of its own (not the one the message
+ * had): the next request is built from `output`, so the model (and the next
+ * action) would otherwise get the old text (#502).
+ */
+export function rewrittenMessage(existing: Message, rewrite: Partial<Message>): Partial<Message> {
+	const content = rewrite.content;
+	if (content === undefined || content === existing.content) return rewrite;
+	const patch: Partial<Message> = { originalContent: existing.content, ...rewrite };
+	// An outlet event sends the output back as it was when only the text changed.
+	const ownOutput = rewrite.output !== undefined && JSON.stringify(rewrite.output) !== JSON.stringify(existing.output);
+	if (!ownOutput && existing.output?.length) patch.output = editedOutput(existing, content);
+	return patch;
 }
 
 /** Edits a message in place, keeping the previous text of a reply as `originalContent` (Messages.svelte's editMessage without submit). */

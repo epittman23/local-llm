@@ -21,6 +21,7 @@ import itertools
 import logging
 import os
 import random
+import re
 import time
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -57,7 +58,7 @@ CALENDAR_ALERT_LOOKAHEAD_MINUTES = int(os.getenv('CALENDAR_ALERT_LOOKAHEAD_MINUT
 ####################
 
 
-def _resolve_tz(tz: str = None) -> ZoneInfo | None:
+def _resolve_tz(tz: str | None = None) -> ZoneInfo | None:
     """Safely resolve a timezone string to ZoneInfo.
 
     Returns None (→ server-local fallback) when *tz* is empty, None,
@@ -76,10 +77,12 @@ def _resolve_tz(tz: str = None) -> ZoneInfo | None:
 def _parse_rule(s: str, now: dt.datetime | None = None):
     """Parse RRULE with clock-aligned DTSTART for sub-daily frequencies.
 
-    SECONDLY/MINUTELY/HOURLY rules use a fixed epoch DTSTART (2000-01-01 00:00)
-    so intervals snap to clock boundaries (e.g. every 5min = :00, :05, :10).
-    A longer rule without a DTSTART starts at `now` (the user's clock) on the
-    minute, so a time or day it does not state comes from there.
+    A SECONDLY/MINUTELY/HOURLY rule without a DTSTART starts from a fixed epoch
+    (2000-01-01 00:00), so intervals snap to clock boundaries (every 5 min =
+    :00, :05, :10). One with a DTSTART far in the past is moved forward by
+    whole steps from it, keeping its phase and what is left of its COUNT
+    (#267). A longer rule without a DTSTART starts at `now` (the user's clock)
+    on the minute, so a time or day it does not state comes from there.
     """
     upper = s.upper()
     if 'EXRULE' in upper:
@@ -115,20 +118,43 @@ def _parse_rule(s: str, now: dt.datetime | None = None):
 
     if rule._interval < 1:
         raise ValueError('RRULE INTERVAL must be a positive integer')
-    dtstart = None
     if has_dtstart:
-        emitted = ((anchor - start) // step) if anchor > start else 0
-        emitted *= len(rule._byminute or (0,)) * len(rule._bysecond or (0,))
+        steps = ((anchor - start) // step) if anchor > start else 0
+        emitted = steps * len(rule._byminute or (0,)) * len(rule._bysecond or (0,))
         if emitted <= 100_000:
-            if rule._dtstart.tzinfo:
-                dtstart = start
-            else:
-                return parsed
-    if not has_dtstart or dtstart is None:
-        epoch = dt.datetime(2000, 1, 1)
-        dtstart = epoch + ((anchor - epoch) // step) * step
+            return rrulestr(stripped, dtstart=start, ignoretz=True) if rule._dtstart.tzinfo else parsed
+        # Too many steps to walk from DTSTART: move it forward by whole steps,
+        # which keeps the rule's phase (every 5 minutes from 10:07 stays on
+        # :07, :12, ...), as rebuilding it from an epoch-aligned start did not (#267).
+        moved = start + steps * step
+        count = getattr(rule, '_count', None)
+        if not count:
+            return rrulestr(stripped, dtstart=moved, ignoretz=True)
+        left = count - steps
+        if left > 0:
+            recounted = _with_count(stripped, left)
+        else:
+            recounted = _with_count(stripped, 1)
+        if re.search(r'\bBY', stripped, re.IGNORECASE) or recounted is None:
+            # A filtered or expanded step is not one run each, so the runs left
+            # cannot be counted (nor a COUNT that cannot be rewritten): keep
+            # DTSTART. Exact, but the next run is found by walking every run
+            # before it, at most COUNT, which can take seconds.
+            return rrulestr(stripped, dtstart=start, ignoretz=True)
+        # One run per step, `steps` of them before `moved`: what is left of
+        # COUNT runs from there. A COUNT that ran out stays run out: its one
+        # remaining run is at the original start, long past.
+        return rrulestr(recounted, dtstart=moved if left > 0 else start, ignoretz=True)
 
+    epoch = dt.datetime(2000, 1, 1)
+    dtstart = epoch + ((anchor - epoch) // step) * step
     return rrulestr(stripped, dtstart=dtstart, ignoretz=True)
+
+
+def _with_count(rule: str, count: int) -> str | None:
+    """The rule with COUNT set to `count`, or None when it has not exactly one COUNT to set."""
+    replaced, n = re.subn(r'COUNT=[+-]?\d+', f'COUNT={count}', rule, flags=re.IGNORECASE)
+    return replaced if n == 1 else None
 
 
 def validate_rrule(s: str, tz: str = None) -> None:
@@ -151,12 +177,39 @@ def validate_rrule(s: str, tz: str = None) -> None:
         raise ValueError(ERROR_MESSAGES.AUTOMATION_NO_FUTURE_RUNS)
 
 
-def next_run_ns(s: str, tz: str = None) -> int | None:
-    """Next occurrence as epoch nanoseconds, respecting user timezone."""
+_FREQ = re.compile(r'(?:^|[\s:;])FREQ=([A-Z]+)')
+
+
+def _sub_daily(s: str) -> bool:
+    """Whether the rule repeats more often than daily (SECONDLY, MINUTELY or HOURLY).
+
+    A rule that does not parse raises here as `_parse_rule` would. The
+    frequency is then read from the rule's own text, which dateutil has just
+    accepted: its parsed rule keeps it only in a private attribute.
+    """
+    rrulestr(s, ignoretz=True)
+    match = _FREQ.search(s.upper())
+    return match is not None and match.group(1) in ('SECONDLY', 'MINUTELY', 'HOURLY')
+
+
+def next_run_ns(s: str, tz: str | None = None, anchor_ns: int | None = None) -> int | None:
+    """Next occurrence as epoch nanoseconds, respecting user timezone.
+
+    `anchor_ns` is when the rule is read from: a rule without DTSTART takes
+    the time it does not state from there (now, by default). A claimed run
+    passes its own due time, so a late claim does not move the rule's time
+    of day (#512).
+    """
     zi = _resolve_tz(tz)
     now = dt.datetime.now(zi) if zi else dt.datetime.now()
     now_naive = now.replace(tzinfo=None)
-    when = _parse_rule(s, now_naive).after(now_naive)
+    anchor = now_naive
+    # Only a daily or longer rule takes anything from its anchor; a shorter one
+    # is aligned to its own grid, and anchoring it far back only made the walk
+    # to now longer.
+    if anchor_ns is not None and not _sub_daily(s):
+        anchor = dt.datetime.fromtimestamp(anchor_ns / 1_000_000_000, tz=zi).replace(tzinfo=None)
+    when = _parse_rule(s, anchor).after(now_naive)
     if when is None:
         return None
     if zi:
@@ -174,17 +227,47 @@ def next_n_runs_ns(s: str, n: int = 5, tz: str = None) -> list[int]:
     result = []
     now = dt.datetime.now(zi).replace(tzinfo=None) if zi else dt.datetime.now()
     rule = _parse_rule(s, now)
-    when = now
-    for _ in range(n):
-        when = rule.after(when)
-        if not when:
-            break
+    # One walk for all n, rather than n walks from DTSTART (#267).
+    for when in rule.xafter(now, count=n):
         if zi:
             dt_tz = when.replace(tzinfo=zi)
             result.append(int(dt_tz.timestamp() * 1_000_000_000))
         else:
             result.append(int(when.timestamp() * 1_000_000_000))
     return result
+
+
+def runs_between_ns(
+    s: str, anchor_ns: int, start_ns: int, end_ns: int, tz: str | None = None, limit: int = 5000
+) -> list[int]:
+    """The runs the rule makes in [start_ns, end_ns), as epoch nanoseconds, at most `limit`.
+
+    The rule is read as the scheduler reads it (`_parse_rule`), anchored at
+    `anchor_ns`, the automation's next run: a rule without DTSTART takes its
+    unstated time from there, as the scheduler's did, and a COUNT counts from
+    the rule's own DTSTART. The Scheduled Tasks calendar used to re-anchor
+    the rule at the next run, so a COUNT started over there and it showed
+    runs that never come (#356).
+    """
+    if start_ns >= end_ns:
+        return []
+    zi = _resolve_tz(tz)
+
+    def local(ns: int) -> dt.datetime:
+        return dt.datetime.fromtimestamp(ns / 1_000_000_000, tz=zi).replace(tzinfo=None)
+
+    rule = _parse_rule(s, local(anchor_ns))
+    runs: list[int] = []
+    # The scan runs in wall-clock time; starting a few hours early covers a DST change.
+    for when in rule.xafter(local(start_ns) - dt.timedelta(hours=3), inc=True):
+        when_ns = int((when.replace(tzinfo=zi) if zi else when).timestamp() * 1_000_000_000)
+        if when_ns >= end_ns or len(runs) >= limit:
+            break
+        # A wall-clock time the clocks skip lands on a later one, which the rule
+        # then gives again: the scheduler runs that instant once.
+        if when_ns >= start_ns and (not runs or when_ns > runs[-1]):
+            runs.append(when_ns)
+    return runs
 
 
 def rrule_interval_seconds(s: str, sample: int = 50) -> int | None:
@@ -225,6 +308,16 @@ async def automation_worker_loop(app) -> None:
     await scheduler_worker_loop(app)
 
 
+async def _recover_stale_timers() -> None:
+    """Timers left running by an error or a restart run again (#270); a failure here only logs."""
+    try:
+        from local_llm.utils.timers import recover_stale_timers
+
+        await recover_stale_timers(int(time.time_ns()))
+    except Exception:
+        log.exception('Scheduler: timer recovery error')
+
+
 async def scheduler_worker_loop(app) -> None:
     """Unified background scheduler for all time-based work.
 
@@ -259,6 +352,8 @@ async def scheduler_worker_loop(app) -> None:
                 continue
             # Jitter to spread automation/calendar load across instances; timers keep a tight poll.
             next_scheduler_poll = now + SCHEDULER_POLL_INTERVAL + random.uniform(0, 2)
+
+            await _recover_stale_timers()
 
             # ── Automations ──
             if await Config.get('automations.enable'):
@@ -417,6 +512,21 @@ async def _set_terminal_cwd(app, server_id: str, user, cwd: str, chat_id: str) -
         log.warning(f'Failed to set terminal CWD: {e}')
 
 
+async def _announce_run(app, user, automation: AutomationModel, chat_id: str) -> None:
+    """Publish AUTOMATION_RUN_STARTED, once per run and before its reply is dispatched (#264).
+
+    Both a scheduled and a manual run, into a chat or a channel, come through
+    here, so the router publishes nothing itself.
+    """
+    await publish_event(
+        app,
+        EVENTS.AUTOMATION_RUN_STARTED,
+        actor=user,
+        subject_id=automation.id,
+        data={'name': automation.name, 'chat_id': chat_id},
+    )
+
+
 async def _execute_channel_automation(
     app,
     automation: AutomationModel,
@@ -497,7 +607,10 @@ async def _execute_channel_automation(
     if filter_ids:
         form_data['filter_ids'] = filter_ids
 
+    await _announce_run(app, user, automation, f'channel:{channel.id}')
     await app.state.CHAT_COMPLETION_HANDLER(request, form_data, user=user)
+    # Recorded before automation:result, on which the automation page refetches its runs.
+    await _record_run(automation.id, 'success', chat_id=f'channel:{channel.id}')
 
     from local_llm.socket.main import sio
 
@@ -512,8 +625,6 @@ async def _execute_channel_automation(
         },
         room=f'user:{automation.user_id}',
     )
-
-    await _record_run(automation.id, 'success', chat_id=f'channel:{channel.id}')
     await publish_event(
         app,
         EVENTS.AUTOMATION_RUN_COMPLETED,
@@ -685,31 +796,28 @@ async def execute_automation(app, automation: AutomationModel) -> None:
 
         # Call the full chat completion pipeline (same as POST /api/chat/completions).
         # The handler reference is stored on app.state to avoid circular imports.
+        # It returns once the reply is dispatched to background tasks, so the
+        # run's outcome is recorded only once they end: a model or provider
+        # failure then reaches the run history (#264). This runs in the
+        # background itself, so waiting holds up no other automation.
+        # Started before the dispatch, so a reply that fails at once still
+        # reads started, then failed. A manual run is announced here too.
+        await _announce_run(app, user, automation, chat.id)
         request = _build_request(app, token=token)
-        await app.state.CHAT_COMPLETION_HANDLER(request, form_data, user=user)
-
-        # Notify user
-        from local_llm.socket.main import sio
-
-        await sio.emit(
-            'automation:result',
-            {
-                'automation_id': automation.id,
-                'name': automation.name,
-                'chat_id': chat.id,
-                'status': 'success',
-            },
-            room=f'user:{automation.user_id}',
-        )
-
-        await _record_run(automation.id, 'success', chat_id=chat.id)
-        await publish_event(
-            app,
-            EVENTS.AUTOMATION_RUN_COMPLETED,
-            actor=user,
-            subject_id=automation.id,
-            data={'name': automation.name, 'chat_id': chat.id},
-        )
+        response = await app.state.CHAT_COMPLETION_HANDLER(request, form_data, user=user)
+        run = {'automation_id': automation.id, 'chat_id': chat.id, 'message_id': assistant_msg_id}
+        try:
+            reason = await _wait_for_reply(response)
+        except asyncio.CancelledError:
+            # The backend is stopping (a --reload restart or a shutdown):
+            # the run still gets its row and its FAILED event.
+            await asyncio.shield(finish_automation_run(app, user, run, error=REPLY_INTERRUPTED))
+            raise
+        if reason == REPLY_INTERRUPTED:
+            # Shutdown is under way: recorded under shield, as above.
+            await asyncio.shield(finish_automation_run(app, user, run, error=reason))
+        else:
+            await finish_automation_run(app, user, run, error=reason)
 
     except Exception as e:
         log.exception(f'Automation {automation.id} failed')
@@ -728,11 +836,34 @@ async def execute_automation(app, automation: AutomationModel) -> None:
 ####################
 
 
+_LEGACY_ALERT_LEAD_NS = 60 * 60 * 1_000_000_000
+
+
+def already_alerted(meta: dict | None, start_at: int) -> bool:
+    """Whether the occurrence starting at `start_at` (ns) was already alerted (#183)."""
+    if not meta:
+        return False
+    alerted_for = meta.get('alerted_for')
+    if isinstance(alerted_for, int):
+        return alerted_for == start_at
+    # Rows alerted before alerted_for existed carry only alerted_at, the time
+    # of the alert. It belongs to this occurrence only if it came within the
+    # longest lead there was then, an hour; an earlier one was for another
+    # start. Leads are longer now (#184), but no such row has one.
+    alerted_at = meta.get('alerted_at')
+    return (
+        isinstance(alerted_at, int)
+        and start_at - _LEGACY_ALERT_LEAD_NS <= alerted_at <= start_at + _LEGACY_ALERT_LEAD_NS
+    )
+
+
 async def _check_calendar_alerts(app) -> None:
     """Check for upcoming calendar events and send alert notifications.
 
-    De-duplication is DB-backed via meta.alerted_at — survives restarts
-    and works across multiple instances.
+    De-duplication is DB-backed via meta.alerted_for, the start of the
+    occurrence last alerted, so it survives restarts and works across
+    instances. A moved event, and each occurrence of a recurring one, has a
+    start it was not alerted for, so it alerts again (#183).
     """
     from local_llm.models.calendar import CalendarEvents, CalendarEventUpdateForm
     from local_llm.socket.main import sio
@@ -750,8 +881,7 @@ async def _check_calendar_alerts(app) -> None:
         return
 
     for event, _user_tz in upcoming:
-        # Skip if already alerted for this start time
-        if event.meta and event.meta.get('alerted_at'):
+        if already_alerted(event.meta, event.start_at):
             continue
 
         # Compute minutes until event starts
@@ -782,7 +912,7 @@ async def _check_calendar_alerts(app) -> None:
         try:
             await CalendarEvents.update_event_by_id(
                 event.id,
-                CalendarEventUpdateForm(meta={'alerted_at': now_ns}),
+                CalendarEventUpdateForm(meta={'alerted_at': now_ns, 'alerted_for': event.start_at}),
             )
         except Exception:
             log.debug('Failed to mark event %s as alerted', event.id, exc_info=True)
@@ -808,11 +938,117 @@ async def _check_calendar_alerts(app) -> None:
             log.debug('Failed to send notification for calendar alert %s', event.id, exc_info=True)
 
 
+# How long a run waits for its reply before recording it as unfinished. Long
+# enough for a thinking model on slow local hardware; the reply itself is not
+# stopped, only no longer waited for.
+REPLY_WAIT_SECONDS = 30 * 60
+REPLY_STOPPED = 'The reply was stopped'
+REPLY_INTERRUPTED = 'The backend stopped before the reply finished'
+
+
+async def _wait_for_reply(response, wait_seconds: float = REPLY_WAIT_SECONDS) -> str | None:
+    """Wait for the background tasks a chat completion dispatched to end.
+
+    Returns why the run failed when the wait itself says so: a task was
+    cancelled (someone pressed Stop) or the reply outlasted the wait.
+    Otherwise None, and the stored message tells the outcome: the reply's
+    own task saves its errors there. A task no longer registered has ended.
+    """
+    from local_llm.tasks import tasks as running
+
+    task_ids = response.get('task_ids') if isinstance(response, dict) else None
+    pending = [running[t] for t in task_ids or [] if t in running]
+    if not pending:
+        return None
+    done, still_running = await asyncio.wait(pending, timeout=wait_seconds)
+    if still_running:
+        return f'The reply did not finish within {round(wait_seconds)} s'
+    if any(task.cancelled() for task in done):
+        # Shutdown cancels running replies too (#362); that is not a Stop.
+        from local_llm import tasks as registry
+
+        return REPLY_INTERRUPTED if registry.stopping else REPLY_STOPPED
+    return None
+
+
+def _error_text(stored) -> str:
+    """Readable text for an error saved on a message: {'content': str | provider dict} or a bare value."""
+    content = stored.get('content') if isinstance(stored, dict) else stored
+    if isinstance(content, dict):
+        content = content.get('message') or content.get('detail') or content.get('error') or content
+    return str(content)[:4000] if content else 'The reply failed'
+
+
+async def _reply_error(chat_id: str, message_id: str) -> str | None:
+    """Why a stored reply failed, or None if it finished without an error."""
+    message = await Chats.get_message_by_id_and_message_id(chat_id, message_id)
+    if message is None:
+        return 'The reply was not found'
+    if message.get('error'):
+        return _error_text(message['error'])
+    if not message.get('done'):
+        return 'The reply did not finish'
+    return None
+
+
+async def finish_automation_run(app, user, metadata: dict, error: str | None = None) -> None:
+    """Record how an automation's reply ended, once it has (#264).
+
+    Unless the caller already knows the error, the stored message says: the
+    reply's task saves its error there, whether the request failed or a
+    provider error arrived inside the stream (which does not raise); a reply
+    that is missing or not done did not finish. The run is recorded before
+    automation:result is emitted, so the page that refetches on it sees the
+    row. An automation deleted meanwhile gets no row. Never raises:
+    recording the outcome must not fail the run.
+    """
+    automation_id = metadata.get('automation_id')
+    if not automation_id:
+        return
+    chat_id = metadata.get('chat_id')
+    try:
+        if error is None and chat_id and metadata.get('message_id'):
+            error = await _reply_error(chat_id, metadata['message_id'])
+    except Exception:
+        log.exception('could not read the reply of automation %s', automation_id)
+        error = 'The reply could not be read'
+    try:
+        automation = await Automations.get_by_id(automation_id)
+        if automation is None:
+            return
+        name = automation.name
+    except Exception:
+        log.exception('could not look up automation %s', automation_id)
+        name = ''
+    status = 'error' if error else 'success'
+    try:
+        await _record_run(automation_id, status, chat_id=chat_id, error=error)
+    except Exception:
+        log.exception('could not record the run of automation %s', automation_id)
+    try:
+        from local_llm.socket.main import sio
+
+        await sio.emit(
+            'automation:result',
+            {'automation_id': automation_id, 'name': name, 'chat_id': chat_id, 'status': status},
+            room=f'user:{user.id}',
+        )
+        await publish_event(
+            app,
+            EVENTS.AUTOMATION_RUN_FAILED if error else EVENTS.AUTOMATION_RUN_COMPLETED,
+            actor=user,
+            subject_id=automation_id,
+            data={'name': name, 'chat_id': chat_id, **({'error': error} if error else {})},
+        )
+    except Exception:
+        log.exception('could not announce the outcome of automation %s', automation_id)
+
+
 async def _record_run(
     automation_id: str,
     status: str,
-    chat_id: str = None,
-    error: str = None,
+    chat_id: str | None = None,
+    error: str | None = None,
 ):
     """Insert a run record into automation_run."""
     async with get_async_db() as db:

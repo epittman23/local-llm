@@ -993,6 +993,105 @@ async def send_notification(request, channel, message, active_user_ids, db=None)
     return True
 
 
+MODEL_CONTEXT_LIMIT = 50
+MODEL_CONTEXT_SLACK = 10
+
+
+async def _collect_message_files(message, user, images: list, files: list) -> None:
+    """Adds a message's images (as URLs or base64) to ``images`` and its other files to ``files``."""
+    for file in (message.data or {}).get('files', []):
+        if file.get('type', '') == 'image':
+            images.append(file.get('url', ''))
+        elif file.get('content_type', '').startswith('image/'):
+            image = await get_image_base64_from_file_id(file.get('id', ''), user=user)
+            if image:
+                images.append(image)
+        elif file.get('id'):
+            files.append(file)
+
+
+async def _model_context_messages(
+    channel_id: str, message, mode: str, limit: int = MODEL_CONTEXT_LIMIT, db=None
+) -> list:
+    """The earlier messages a model answering ``message`` sees, oldest first (#328).
+
+    - In a thread: the thread's root, then its last ``limit`` replies before the trigger.
+    - At the top level in ``channel`` response mode, where a model answers at the top
+      level too: the last ``limit`` top-level messages before the trigger.
+    - At the top level in ``thread`` mode, the answer starts a new thread: no more.
+
+    In every case the message the trigger replies to comes first, if it is in this
+    channel and not already there. The trigger itself is left out (it is the user
+    turn), and so is a model message with no content yet, such as another model's
+    placeholder for the same trigger.
+    """
+    # Messages newer than the trigger (another model's placeholder, say) are fetched
+    # too and then dropped; the slack keeps them from shrinking the window.
+    fetch = limit + 1 + MODEL_CONTEXT_SLACK
+    lead = []
+    if message.parent_id:
+        root = await Messages.get_message_by_id(message.parent_id, include_thread_replies=False, db=db)
+        # Like get_messages_by_parent_id: never show a thread root from another channel.
+        if not root or root.channel_id != channel_id:
+            return []
+        recent = await Messages.get_messages_by_parent_id(channel_id, root.id, limit=fetch, db=db)
+        replies = [m for m in recent if m.id != root.id]
+        lead = [root]
+    elif mode == 'channel':
+        replies = await Messages.get_messages_by_channel_id(channel_id, limit=fetch, db=db)
+    else:
+        replies = []
+
+    earlier = sorted(
+        (m for m in replies if m.id != message.id and m.created_at < message.created_at),
+        key=lambda m: m.created_at,
+    )[-limit:]
+
+    # The full message, not the trigger's slim copy, whose data is only a flag.
+    replied_to = (
+        await Messages.get_message_by_id(message.reply_to_id, include_thread_replies=False, db=db)
+        if message.reply_to_id
+        else None
+    )
+    if replied_to and replied_to.channel_id == channel_id and replied_to.id not in {m.id for m in [*lead, *earlier]}:
+        lead.append(replied_to)
+    return [m for m in [*lead, *earlier] if not _unanswered_model_reply(m)]
+
+
+def _unanswered_model_reply(message) -> bool:
+    """A model reply with no answer in it: still empty, or finished as an error (#329)."""
+    meta = message.meta or {}
+    content = (message.content or '').strip()
+    return bool(meta.get('model_id')) and (not content or (bool(meta.get('done')) and content.startswith('Error: ')))
+
+
+async def _fail_model_reply(channel_id: str, message_id: str, error: Exception) -> None:
+    """Finishes a model's empty channel reply as ``Error: ...``, marked done (#329).
+
+    The reply is inserted before the chat pipeline runs; a failure the pipeline
+    raises before its own task starts (``Model not found``, say) never reaches the
+    channel, which shows an empty model reply as "Thinking" for good. This goes
+    through the channel emitter's own error path, which saves the reply and sends
+    the update to the channel's room.
+
+    The reply is shown to every member of the channel, so only an HTTP error's
+    detail (what a chat shows its own user) is given; anything else is logged and
+    shown as a generic error. In a narrow race (Redis failing after the task has
+    started) the error text is shown until the task's first update replaces it.
+    """
+    from local_llm.socket import main as socket_main
+
+    detail = str(error.detail) if isinstance(error, HTTPException) else 'An error occurred'
+    try:
+        emitter = await socket_main.get_event_emitter({'chat_id': f'channel:{channel_id}', 'message_id': message_id})
+        if emitter:
+            await emitter(
+                {'type': 'chat:message:error', 'data': {'error': {'content': detail or type(error).__name__}}}
+            )
+    except Exception as e:
+        log.exception('Could not report the failed channel reply %s: %s', message_id, e)
+
+
 async def model_response_handler(request, channel, message, user, db=None):
     MODELS = {model['id']: model for model in await get_filtered_models(await get_all_models(request, user=user), user)}
 
@@ -1023,22 +1122,13 @@ async def model_response_handler(request, channel, message, user, db=None):
         model = MODELS.get(model_id, None)
 
         if model:
+            response_message = None
             try:
-                # reverse to get in chronological order
-                thread_messages = (
-                    await Messages.get_messages_by_parent_id(
-                        channel.id,
-                        message.parent_id if message.parent_id else message.id,
-                        db=db,
-                    )
-                )[::-1]
-                response_parent_id = (
-                    message.parent_id
-                    if message.parent_id
-                    else (
-                        message.id if await Config.get('channels.model_response_mode', 'thread') == 'thread' else None
-                    )
+                mode = await Config.get('channels.model_response_mode', 'thread')
+                thread_messages = await _model_context_messages(
+                    channel.id, message, mode, limit=MODEL_CONTEXT_LIMIT, db=db
                 )
+                response_parent_id = message.parent_id or (message.id if mode == 'thread' else None)
 
                 response_message, channel = await new_message_handler(
                     request,
@@ -1075,30 +1165,29 @@ async def model_response_handler(request, channel, message, user, db=None):
                         message_model = MODELS.get(message_model_id, None)
                         username = message_model.get('name', message_model_id) if message_model else message_model_id
                     else:
-                        username = message_user.name if message_user else 'Unknown'
+                        # The resolved sender (a webhook's own name, say) before the posting account.
+                        sender = getattr(thread_message, 'user', None) or message_user
+                        username = sender.name if sender else 'Unknown'
 
                     thread_history.append(f'{username}: {replace_all_mentions(thread_message.content)}')
-
-                    thread_message_files = (thread_message.data or {}).get('files', [])
-                    for file in thread_message_files:
-                        if file.get('type', '') == 'image':
-                            images.append(file.get('url', ''))
-                        elif file.get('content_type', '').startswith('image/'):
-                            image = await get_image_base64_from_file_id(file.get('id', ''), user=user)
-                            if image:
-                                images.append(image)
-                        elif file.get('id'):
-                            files.append(file)
+                    # Files come from the thread, or from the message being replied to;
+                    # not from every recent message in the channel.
+                    if message.parent_id or thread_message.id == message.reply_to_id:
+                        await _collect_message_files(thread_message, user, images, files)
+                # The trigger is the user turn, not history; its files are sent all the same.
+                await _collect_message_files(message, user, images, files)
 
                 thread_history_string = '\n\n'.join(thread_history)
+                setting = 'threaded conversation' if message.parent_id or mode == 'thread' else 'channel conversation'
+                history_name = 'thread history' if message.parent_id else 'conversation so far'
                 system_message = {
                     'role': 'system',
                     'content': (
-                        f'You are {model.get("name", model_id)}, participating in a threaded conversation. Be concise '
+                        f'You are {model.get("name", model_id)}, participating in a {setting}. Be concise '
                         'and conversational.'
                     )
                     + (
-                        f"Here's the thread history:\n\n\n{thread_history_string}\n\n\nContinue the conversation "
+                        f"Here's the {history_name}:\n\n\n{thread_history_string}\n\n\nContinue the conversation "
                         f'naturally as {model.get("name", model_id)}, addressing the most recent message while being '
                         'aware of the full context.'
                         if thread_history
@@ -1162,6 +1251,8 @@ async def model_response_handler(request, channel, message, user, db=None):
 
             except Exception as e:
                 log.exception(e)
+                if response_message is not None:
+                    await _fail_model_reply(channel.id, response_message.id, e)
 
     return True
 
@@ -1335,13 +1426,8 @@ async def get_channel_message(
     if message.channel_id != id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=ERROR_MESSAGES.DEFAULT())
 
-    message_user = await Users.get_user_by_id(message.user_id, db=db)
-    return MessageResponse(
-        **{
-            **message.model_dump(),
-            'user': UserNameResponse(**message_user.model_dump()) if message_user else None,
-        }
-    )
+    # Its author as get_message_by_id resolved it, a webhook included (#330).
+    return MessageResponse(**message.model_dump())
 
 
 ############################
@@ -1420,13 +1506,10 @@ async def pin_channel_message(
     try:
         await Messages.update_is_pinned_by_id(message_id, form_data.is_pinned, user.id, db=db)
         message = await Messages.get_message_by_id(message_id, db=db)
-        message_user = await Users.get_user_by_id(message.user_id, db=db)
-        message_data = MessageUserResponse(
-            **{
-                **message.model_dump(),
-                'user': UserNameResponse(**message_user.model_dump()) if message_user else None,
-            }
-        )
+        # Its author as get_message_by_id resolved it: a webhook's message keeps
+        # the webhook's name, where it used to be relabelled as the webhook's
+        # creator, which the page then showed (#330).
+        message_data = MessageUserResponse(**message.model_dump())
 
         await sio.emit(
             'events:channel',

@@ -465,6 +465,52 @@ test('pinned messages and the member list', async ({ page }) => {
 	await expect(info.getByRole('button', { name: 'Add Member' })).toHaveCount(0);
 });
 
+test('a refused unpin puts the message back, and a failed load is not shown as no pins (#252)', async ({ page }) => {
+	await mockWorkspaceBackend(page, { role: 'user', ...enabled });
+	await mockChannels(page, {
+		messages: [message('m1', 'hello')],
+		pinned: [message('p1', 'an important note', { is_pinned: true })]
+	});
+	let pinnedLoads = 0;
+	// Registered after mockChannels, so these answer first: the first load fails, and so does every unpin.
+	await page.route(/\/api\/v1\/channels\/c1\/messages\/(pinned|p1\/pin)/, (route) => {
+		const url = route.request().url();
+		if (url.includes('/p1/pin')) return json(route, { detail: 'Not allowed' }, 403);
+		pinnedLoads += 1;
+		return pinnedLoads === 1
+			? json(route, { detail: 'Server error' }, 500)
+			: json(
+					route,
+					new URL(url).searchParams.get('page') === '1' ? [message('p1', 'an important note', { is_pinned: true })] : []
+				);
+	});
+	await page.goto('/channels/c1');
+	await page.getByRole('button', { name: 'Pinned Messages' }).click();
+	const dialog = page.getByRole('dialog', { name: 'Pinned Messages' });
+	await expect(dialog.getByText('Pinned messages could not be loaded.')).toBeVisible();
+	await expect(dialog.getByText('No pinned messages')).toHaveCount(0);
+	await dialog.getByRole('button', { name: 'Retry' }).click();
+	await expect(dialog.getByText('an important note')).toBeVisible();
+
+	await dialog.getByTestId('channel-message').hover();
+	await dialog.getByRole('button', { name: 'Unpin' }).click();
+	await expect(page.getByText('Not allowed')).toBeVisible();
+	await expect(dialog.getByText('an important note')).toBeVisible();
+	await expect(dialog.getByText('No pinned messages')).toHaveCount(0);
+});
+
+test('a refused hide brings the DM back to the sidebar (#252)', async ({ page }) => {
+	await mockWorkspaceBackend(page, { role: 'user', ...enabled });
+	await mockChannels(page, { channels: [channel('d1', '', { type: 'dm', users: [me, ann] })] });
+	await page.route(/\/api\/v1\/channels\/d1\/members\/active/, (route) => json(route, { detail: 'Not allowed' }, 403));
+	await page.goto('/');
+	const list = page.getByRole('list', { name: 'Channels' });
+	await list.getByRole('link', { name: 'Ann' }).hover();
+	await page.getByRole('button', { name: 'Hide conversation' }).click();
+	await expect(page.getByText('Not allowed')).toBeVisible();
+	await expect(list.getByRole('link', { name: 'Ann' })).toBeVisible();
+});
+
 test('a read-only channel disables the composer and the message tools', async ({ page }) => {
 	await mockWorkspaceBackend(page, { role: 'user', ...enabled });
 	await mockChannels(page, {

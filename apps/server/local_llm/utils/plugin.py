@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+import ast
 import asyncio
 import importlib
 import importlib.abc
 import importlib.machinery
+import io
 import logging
 import re
 import subprocess
 import sys
 import tempfile
 import types
+import warnings
 from typing import Any
 
 import aiofiles
@@ -227,21 +230,55 @@ if not any(isinstance(finder, _OldPackageAlias) for finder in sys.meta_path):
     sys.meta_path.insert(0, _OldPackageAlias())
 
 
+# The oldest plugin import style named this package's modules without it.
+_LEGACY_IMPORT_ROOTS = frozenset({'utils', 'apps', 'main', 'config'})
+_FROM_KEYWORD = re.compile(r'from\s+')
+# A cheap first look: only source that may hold a legacy import is parsed. This
+# runs on every load of a stored plugin, and its saved source no longer matches.
+_MAY_HAVE_LEGACY_IMPORT = re.compile(r'\bfrom[\s\\]+(?:utils|apps|main|config)\b')
+
+
 def replace_imports(content):
-    """
-    Replace the import paths in the content.
-    """
-    replacements = {
-        'from utils': 'from local_llm.utils',
-        'from apps': 'from local_llm.apps',
-        'from main': 'from local_llm.main',
-        'from config': 'from local_llm.config',
-    }
+    """Map a plugin's legacy imports (`from utils.misc import x`) into this package.
 
-    for old, new in replacements.items():
-        content = content.replace(old, new)
+    Only real `from <root>` import statements whose module is exactly one of
+    `_LEGACY_IMPORT_ROOTS`, or inside one, are rewritten (#269). Plain text
+    replacement used to turn `from configparser` into
+    `from local_llm.configparser`, and rewrote docstrings and strings too.
+    Source that does not parse is returned as it is.
+    """
+    if not _MAY_HAVE_LEGACY_IMPORT.search(content):
+        return content
+    try:
+        with warnings.catch_warnings():
+            # A plugin's own invalid escapes warn again when it is executed.
+            warnings.simplefilter('ignore', SyntaxWarning)
+            tree = ast.parse(content)
+    except (SyntaxError, ValueError, RecursionError, MemoryError):
+        return content
 
-    return content
+    positions = sorted(
+        (
+            (node.lineno - 1, node.col_offset)
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ImportFrom)
+            and node.level == 0
+            and node.module
+            and node.module.split('.')[0] in _LEGACY_IMPORT_ROOTS
+        ),
+        reverse=True,
+    )
+    # Python's own line ends only (\n, \r\n, \r), as ast counts them; str.splitlines
+    # also splits at a form feed or U+2028, which would shift every line after.
+    lines = io.StringIO(content, newline='').readlines()
+    for lineno, col_offset in positions:
+        line = lines[lineno]
+        # The column is in UTF-8 bytes.
+        start = len(line.encode('utf-8')[:col_offset].decode('utf-8'))
+        keyword = _FROM_KEYWORD.match(line, start)
+        if keyword:
+            lines[lineno] = f'{line[: keyword.end()]}local_llm.{line[keyword.end() :]}'
+    return ''.join(lines)
 
 
 # May the intent of the one who wrote it survive every
@@ -301,7 +338,14 @@ async def load_tool_module_by_id(tool_id, content=None):
         await aiofiles.os.remove(temp_file.name)
 
 
-async def load_function_module_by_id(function_id: str, content: str | None = None):
+async def load_function_module_by_id(function_id: str, content: str | None = None, deactivate_on_error: bool = False):
+    """Load a function's module and its object (Pipe, Filter, Action or Event).
+
+    A runtime load of stored code that fails switches the stored function off; its
+    callers pass ``deactivate_on_error=True``. The create, update and sync routes check
+    new code with the default, so a rejected edit leaves the stored function as it was,
+    not off behind an error that says nothing changed (#302).
+    """
     if not ENABLE_PLUGINS:
         raise RuntimeError('Plugins are disabled by ENABLE_PLUGINS=false')
 
@@ -353,10 +397,12 @@ async def load_function_module_by_id(function_id: str, content: str | None = Non
             raise Exception('No Function class found in the module')
     except Exception as e:
         log.error(f'Error loading module: {function_id}: {e}')
-        # Cleanup by removing the module in case of error
-        del sys.modules[module_name]
+        # Cleanup by removing the module in case of error; another load of the same
+        # id may have removed it already.
+        sys.modules.pop(module_name, None)
 
-        await Functions.update_function_by_id(function_id, {'is_active': False})
+        if deactivate_on_error:
+            await Functions.update_function_by_id(function_id, {'is_active': False})
         raise e
     finally:
         await aiofiles.os.remove(temp_file.name)
@@ -447,7 +493,9 @@ async def get_function_module_from_cache(
             if function_contents_cache[function_id] == content:
                 return functions_cache[function_id], None, None
 
-        function_module, function_type, frontmatter = await load_function_module_by_id(function_id, content)
+        function_module, function_type, frontmatter = await load_function_module_by_id(
+            function_id, content, deactivate_on_error=True
+        )
     else:
         # Load from cache (e.g. "stream" hook)
         # This is useful for performance reasons
@@ -455,7 +503,9 @@ async def get_function_module_from_cache(
         if function_id in functions_cache:
             return functions_cache[function_id], None, None
 
-        function_module, function_type, frontmatter = await load_function_module_by_id(function_id)
+        function_module, function_type, frontmatter = await load_function_module_by_id(
+            function_id, deactivate_on_error=True
+        )
 
     functions_cache[function_id] = function_module
     function_contents_cache[function_id] = content

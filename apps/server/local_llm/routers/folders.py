@@ -35,6 +35,17 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def added_folder_entries(before: list | None, after: list | None) -> list | None:
+    """The entries in `after` that `before` does not hold, by type and id.
+
+    Anything that is not a list is returned as it is, for the access check to refuse.
+    """
+    if not isinstance(after, list):
+        return after
+    held = {(e.get('type'), e.get('id')) for e in before if isinstance(e, dict)} if isinstance(before, list) else set()
+    return [e for e in after if not (isinstance(e, dict) and (e.get('type'), e.get('id')) in held)]
+
+
 async def get_folder_unread_counts(user_id: str, db: AsyncSession | None = None) -> dict[str, int]:
     folders = await Folders.get_folders_by_user_id(user_id, db=db)
     parent_by_id = {folder.id: folder.parent_id for folder in folders}
@@ -169,7 +180,12 @@ async def create_folder(
                         status_code=status.HTTP_404_NOT_FOUND,
                         detail=ERROR_MESSAGES.NOT_FOUND,
                     )
-                if not await can_read_all_folder_files(form_data.data['files'], owner, db=db):
+                # The owner's access carries the entries to the folder's chats, and the
+                # editor adds only what they can read themselves, and a note only if they
+                # own it or may write it (#358).
+                if not await can_read_all_folder_files(
+                    form_data.data['files'], owner, db=db
+                ) or not await can_read_all_folder_files(form_data.data['files'], user, db=db, note_permission='write'):
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
@@ -343,6 +359,20 @@ async def update_folder_name_by_id(
                     detail=ERROR_MESSAGES.NOT_FOUND,
                 )
             if not await can_read_all_folder_files(form_data.data['files'], owner, db=db):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+                )
+            # An editor adds only what they can read themselves, and a note only if
+            # they own it or may write it, as sharing a note on requires: the owner's
+            # access carries the folder's entries to its chats, and an admin owner's
+            # carries any note (#358). Entries already in the folder may stay.
+            if owner.id != user.id and not await can_read_all_folder_files(
+                added_folder_entries((folder.data or {}).get('files'), form_data.data['files']),
+                user,
+                db=db,
+                note_permission='write',
+            ):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
@@ -693,7 +723,8 @@ async def delete_folder_by_id(
     folder_owner_id = folder.user_id
 
     folder_ids = await Folders.get_folder_ids_by_id_and_user_id_in_subtree(id, folder_owner_id, db=db)
-    if await Chats.count_chats_by_folder_ids_and_user_id(folder_ids, folder_owner_id, db=db):
+    # Only deleting the chats needs the permission; keeping them moves them out (#316).
+    if delete_contents and await Chats.count_chats_by_folder_ids_and_user_id(folder_ids, folder_owner_id, db=db):
         chat_delete_permission = await has_permission(
             user.id, 'chat.delete', await Config.get('user.permissions'), db=db
         )
@@ -703,47 +734,43 @@ async def delete_folder_by_id(
                 detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
             )
 
-    folders = []
-    folders.append(folder)
-    while folders:
-        folder = folders.pop()
-        if folder:
-            try:
-                folder_ids = await Folders.delete_folder_by_id_and_user_id(folder.id, folder_owner_id, db=db)
+    # The chats first, then the folders, so a failure part way never leaves a
+    # chat pointing at a folder that is gone, where the sidebar hides it (#281).
+    try:
+        # Other users' chats, which only the folder held, are kept (#315). First,
+        # before anything is deleted or any grant revoked, so a failure here
+        # changes nothing.
+        await Chats.move_other_users_chats_out_of_folders(folder_ids, folder_owner_id, db=db)
+        for folder_id in folder_ids:
+            if delete_contents:
+                done = await Chats.delete_chats_by_user_id_and_folder_id(folder_owner_id, folder_id, db=db)
+            else:
+                done = await Chats.move_chats_by_user_id_and_folder_id(folder_owner_id, folder_id, None, db=db)
+            # These report a failure by returning False, not by raising.
+            if not done:
+                raise RuntimeError(f'Could not move or delete the chats of folder {folder_id}')
 
-                for folder_id in folder_ids:
-                    if delete_contents:
-                        await Chats.delete_chats_by_user_id_and_folder_id(folder_owner_id, folder_id, db=db)
-                    else:
-                        await Chats.move_chats_by_user_id_and_folder_id(folder_owner_id, folder_id, None, db=db)
+            # Clean up access grants for this folder
+            await AccessGrants.revoke_all_access('folder', folder_id, db=db)
 
-                    # Clean up access grants for this folder
-                    await AccessGrants.revoke_all_access('folder', folder_id, db=db)
-
-                await Automations.clear_folder_ids(folder_owner_id, folder_ids, db=db)
-
-                await publish_event(
-                    request,
-                    EVENTS.FOLDER_DELETED,
-                    actor=user,
-                    subject_id=id,
-                    data={'folder_ids': folder_ids, 'delete_contents': delete_contents},
-                )
-                return True
-            except Exception as e:
-                log.exception(e)
-                log.error(f'Error deleting folder: {id}')
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=ERROR_MESSAGES.DEFAULT('Error deleting folder'),
-                )
-            finally:
-                # Get all subfolders
-                subfolders = await Folders.get_folders_by_parent_id_and_user_id(folder.id, folder_owner_id, db=db)
-                folders.extend(subfolders)
-
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=ERROR_MESSAGES.NOT_FOUND,
+        await Automations.clear_folder_ids(folder_owner_id, folder_ids, db=db)
+        # Exactly the folders whose chats were handled above.
+        folder_ids = await Folders.delete_folder_by_id_and_user_id(
+            folder.id, folder_owner_id, db=db, folder_ids=folder_ids
         )
+    except Exception as e:
+        log.exception(e)
+        log.error(f'Error deleting folder: {id}')
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ERROR_MESSAGES.DEFAULT('Error deleting folder'),
+        )
+
+    await publish_event(
+        request,
+        EVENTS.FOLDER_DELETED,
+        actor=user,
+        subject_id=id,
+        data={'folder_ids': folder_ids, 'delete_contents': delete_contents},
+    )
+    return True

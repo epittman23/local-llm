@@ -393,13 +393,14 @@ async def update_function_by_id(
         function_module, function_type, frontmatter = await load_function_module_by_id(id, content=form_data.content)
         form_data.meta.manifest = frontmatter
 
-        FUNCTIONS = get_functions_cache(request)
-        FUNCTIONS[id] = function_module
-
         updated = {**form_data.model_dump(exclude={'id'}), 'type': function_type}
         log.debug(updated)
 
         function = await Functions.update_function_by_id(id, updated, db=db)
+        # Cached only once saved: a cached module whose code was not saved would run
+        # while the API says the update was rejected.
+        if function:
+            get_functions_cache(request)[id] = function_module
 
         if function_type == 'filter' and getattr(function_module, 'toggle', None):
             await Functions.update_function_metadata_by_id(id, {'toggle': True}, db=db)
@@ -536,7 +537,9 @@ async def update_function_valves_by_id(
                 valves = Valves(**form_data)
 
                 valves_dict = valves.model_dump(exclude_unset=True)
-                await Functions.update_function_valves_by_id(id, valves_dict, db=db)
+                # A failed save is an error, not a success with the submitted values (#288).
+                if await Functions.update_function_valves_by_id(id, valves_dict, db=db) is None:
+                    raise ValueError(f'the valves of function {id} were not saved')
                 await publish_event(
                     request,
                     EVENTS.FUNCTION_VALVES_UPDATED,
@@ -643,7 +646,8 @@ async def update_function_user_valves_by_id(
                 form_data = {k: v for k, v in form_data.items() if v is not None}
                 user_valves = UserValves(**form_data)
                 user_valves_dict = user_valves.model_dump(exclude_unset=True)
-                await Functions.update_user_valves_by_id_and_user_id(id, user.id, user_valves_dict, db=db)
+                if await Functions.update_user_valves_by_id_and_user_id(id, user.id, user_valves_dict, db=db) is None:
+                    raise ValueError(f'the user valves of function {id} were not saved')
                 await publish_event(
                     request,
                     EVENTS.FUNCTION_VALVES_UPDATED,

@@ -316,8 +316,14 @@ async def _vector_memory_results(request, query: str, user):
         return None
 
 
-def _vector_hit_labels(results, seen_ids: set) -> list[tuple[str, str]]:
-    """(section, label) for each vector hit not already shown, with its path prefix moved into the label."""
+def _vector_hit_labels(results, seen_ids: set, rows_by_id: dict | None = None) -> list[tuple[str, str]]:
+    """(section, label) for each vector hit not already shown, with its path prefix moved into the label.
+
+    A hit whose memory is in ``rows_by_id`` is labelled from that row, so an
+    edit whose vector write failed is shown as stored, not as the vector's
+    older text (#303).
+    """
+    rows_by_id = rows_by_id or {}
     if not (results and hasattr(results, 'documents') and results.documents):
         return []
     labels = []
@@ -334,6 +340,10 @@ def _vector_hit_labels(results, seen_ids: set) -> list[tuple[str, str]]:
             continue
         if memory_id:
             seen_ids.add(memory_id)
+        row = rows_by_id.get(memory_id) if memory_id else None
+        if row is not None:
+            labels.append((Memories.normalize_memory_type(row.type), memory_label(row)))
+            continue
 
         content = str(doc)
         path = metadata.get('path')
@@ -361,7 +371,8 @@ def _memory_sections(all_memories: list, query: str, results) -> dict[str, list[
             seen_ids.add(memory.id)
             sections['neighborhood'].append(memory_label(memory))
 
-    for section, label in _vector_hit_labels(results, seen_ids):
+    rows_by_id = {memory.id: memory for memory in all_memories or []}
+    for section, label in _vector_hit_labels(results, seen_ids, rows_by_id):
         sections[section].append(label)
     return sections
 
@@ -574,12 +585,13 @@ Rules:
 - Do not save secrets, credentials, transient task steps, or unsupported guesses.
 - Use path when there is a clear path for the memory.
 - Leave path empty when there is no clear place for the memory.
+- On replace, leave path out to keep the memory's current path; an empty path clears it. Use move to change only the path.
 - Prefer replace/move/remove over duplicate add when an existing memory should change.
 - Do not invent type, status, trait, score, importance, or stability schemas.
 - Return only JSON in this shape:
   {{"operations":[
     {{"action":"add","type":"user|context","path":"...","content":"..."}},
-    {{"action":"replace","id":"...","type":"user|context","path":"...","content":"..."}},
+    {{"action":"replace","id":"...","type":"user|context","content":"..."}},
     {{"action":"move","id":"...","path":"..."}},
     {{"action":"remove","id":"..."}}
   ]}}

@@ -4,7 +4,8 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { toast } from 'sonner';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { updateKnowledgeById } from '@/lib/apis/knowledge';
+import type { AccessGrant } from '@/lib/access/accessGrants';
+import { searchKnowledgeFilesById, updateKnowledgeAccessGrants, updateKnowledgeById } from '@/lib/apis/knowledge';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { KnowledgeBasePage } from './KnowledgeBasePage';
 import { KB_FILE_MOVE } from './knowledgeFiles';
@@ -53,6 +54,25 @@ vi.mock('@/lib/apis/knowledge', () => ({
 	addFileToKnowledgeById: vi.fn(),
 	syncKnowledgeCleanup: vi.fn(),
 	syncKnowledgeDiff: vi.fn()
+}));
+
+// The access dialog, reduced to what the page gives it and what it sends back.
+const accessDialog = vi.hoisted(() => ({ send: [] as AccessGrant[] }));
+vi.mock('@/components/common/AccessControlModal', () => ({
+	AccessControlModal: ({
+		accessGrants,
+		onChange
+	}: {
+		accessGrants: AccessGrant[];
+		onChange: (grants: AccessGrant[]) => Promise<void>;
+	}) => (
+		<div>
+			<output data-testid="shown-grants">{accessGrants.map((g) => g.principal_id).join(',')}</output>
+			<button type="button" onClick={() => void onChange(accessDialog.send)}>
+				Send grants
+			</button>
+		</div>
+	)
 }));
 
 vi.mock('@/lib/apis/files', () => ({
@@ -109,6 +129,22 @@ beforeEach(() => {
 afterEach(() => {
 	vi.useRealTimers();
 	vi.clearAllMocks();
+});
+
+describe('KnowledgeBasePage file filter (#230)', () => {
+	afterEach(() => {
+		delete localStorage.workspaceViewOption;
+	});
+
+	it("opens unfiltered, whatever the workspace lists' View setting is", async () => {
+		// Set on a list page; it filtered this page too, so a shared base looked empty.
+		localStorage.workspaceViewOption = 'created';
+		renderPage();
+
+		await screen.findByText('file1.txt');
+		expect(vi.mocked(searchKnowledgeFilesById).mock.calls[0][3]).toBe('');
+		expect((screen.getByLabelText('View') as HTMLSelectElement).value).toBe('');
+	});
 });
 
 describe('KnowledgeBasePage pagination after the list changes (#229)', () => {
@@ -295,5 +331,111 @@ describe('KnowledgeBasePage name and description autosave (#228)', () => {
 		fireEvent.change(screen.getByLabelText('Knowledge Name'), { target: { value: 'Renamed' } });
 		fireEvent.click(screen.getByText('Back'));
 		await vi.waitFor(() => expect(error).toHaveBeenCalledWith('Name taken'));
+	});
+});
+
+describe('KnowledgeBasePage access dialog (#522)', () => {
+	const grant = (principal_id: string): AccessGrant =>
+		({ principal_type: 'user', principal_id, permission: 'read' }) as AccessGrant;
+	const shown = () => screen.getByTestId('shown-grants').textContent;
+	const send = (grants: AccessGrant[]) => {
+		accessDialog.send = grants;
+		fireEvent.click(screen.getByText('Send grants'));
+	};
+	const open = async () => {
+		renderPage();
+		await screen.findByText('file1.txt');
+	};
+
+	it('shows the grants the server stored, and warns when it dropped some', async () => {
+		vi.mocked(updateKnowledgeAccessGrants).mockResolvedValue({ id: 'kb1', access_grants: [grant('a')] });
+		const warning = vi.spyOn(toast, 'warning');
+		const success = vi.spyOn(toast, 'success');
+		await open();
+
+		send([grant('a'), grant('*')]);
+
+		await waitFor(() => expect(shown()).toBe('a'));
+		expect(warning).toHaveBeenCalledWith('Some access settings were not saved: you are not allowed to share this way.');
+		expect(success).not.toHaveBeenCalled();
+	});
+
+	it('says Saved when the server kept every grant', async () => {
+		vi.mocked(updateKnowledgeAccessGrants).mockResolvedValue({ id: 'kb1', access_grants: [grant('a')] });
+		const success = vi.spyOn(toast, 'success');
+		await open();
+
+		send([grant('a')]);
+
+		await waitFor(() => expect(success).toHaveBeenCalledWith('Saved'));
+		expect(shown()).toBe('a');
+	});
+
+	it('shows the sent grants at once, before the server answers', async () => {
+		vi.mocked(updateKnowledgeAccessGrants).mockReturnValue(new Promise(() => undefined));
+		await open();
+
+		send([grant('a')]);
+
+		await waitFor(() => expect(shown()).toBe('a'));
+	});
+
+	it('shows only the latest of two saves whose answers arrive in reverse order', async () => {
+		const answers: ((v: unknown) => void)[] = [];
+		vi.mocked(updateKnowledgeAccessGrants).mockImplementation(() => new Promise((r) => answers.push(r)));
+		await open();
+		send([grant('a')]);
+		await waitFor(() => expect(answers).toHaveLength(1));
+		send([grant('b')]);
+		await waitFor(() => expect(answers).toHaveLength(2));
+
+		answers[1]({ id: 'kb1', access_grants: [grant('b')] });
+		await waitFor(() => expect(shown()).toBe('b'));
+		answers[0]({ id: 'kb1', access_grants: [grant('a')] });
+		await new Promise((r) => setTimeout(r, 0));
+
+		expect(shown()).toBe('b');
+	});
+
+	it('puts the previous grants back when the save fails, and says why', async () => {
+		vi.mocked(updateKnowledgeAccessGrants).mockRejectedValue('Not allowed');
+		const error = vi.spyOn(toast, 'error');
+		await open();
+
+		send([grant('a')]);
+
+		await waitFor(() => expect(error).toHaveBeenCalledWith('Not allowed'));
+		expect(shown()).toBe('');
+	});
+
+	it('leaves a newer save alone when an older one fails', async () => {
+		let failFirst: (e: unknown) => void = () => undefined;
+		vi.mocked(updateKnowledgeAccessGrants)
+			.mockImplementationOnce(() => new Promise((_r, reject) => (failFirst = reject)))
+			.mockResolvedValueOnce({ id: 'kb1', access_grants: [grant('b')] });
+		const error = vi.spyOn(toast, 'error');
+		await open();
+		send([grant('a')]);
+		send([grant('b')]);
+		await waitFor(() => expect(shown()).toBe('b'));
+
+		failFirst('offline');
+		await waitFor(() => expect(error).toHaveBeenCalledWith('offline'));
+
+		expect(shown()).toBe('b');
+	});
+
+	it('a name edit saved after an access change does not send the grants again', async () => {
+		vi.mocked(updateKnowledgeAccessGrants).mockResolvedValue({ id: 'kb1', access_grants: [grant('a')] });
+		vi.mocked(updateKnowledgeById).mockResolvedValue({ id: 'kb1' } as never);
+		await open();
+		fireEvent.change(screen.getByLabelText('Knowledge Name'), { target: { value: 'Renamed' } });
+		send([grant('a')]);
+		await waitFor(() => expect(shown()).toBe('a'));
+
+		fireEvent.click(screen.getByText('Back'));
+
+		expect(updateKnowledgeById).toHaveBeenCalledTimes(1);
+		expect(vi.mocked(updateKnowledgeById).mock.calls[0][2]).not.toHaveProperty('access_grants');
 	});
 });

@@ -6,12 +6,19 @@
 // as arguments, so they are unit-tested without spawning anything.
 
 import { type ChildProcess, execFile, spawn } from 'node:child_process';
-import { closeSync, openSync, readFileSync, readSync, statSync } from 'node:fs';
+import { closeSync, openSync, readFileSync, readSync, realpathSync, statSync } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 
 export const DEV_SERVER_URL = 'http://localhost:5174';
+
+/**
+ * Where `make frontend`'s dev server says which checkout it serves
+ * (apps/web/astro.config.mjs). Anything else on :5174, such as another
+ * project's Vite server moved up from a taken :5173, answers it otherwise.
+ */
+export const DEV_SERVER_IDENTITY_PATH = '/__lllm/dev-server';
 
 /** The `make frontend` dev server proxies to this port and no other. */
 export const DEV_SERVER_BACKEND_PORT = 4000;
@@ -21,8 +28,9 @@ export const DEV_SERVER_BACKEND_PORT = 4000;
 // lifespan teardown that stops the served model would never run.
 export const GRACEFUL_SHUTDOWN_SECONDS = 10;
 
-// 10 s of graceful timeout, up to 15 s for ServeProcess.stop() (three 5 s
-// graces), 20 s each for a tune sweep and a Tests job, compose down, margin.
+// 10 s of graceful timeout, up to 10 s for running chat replies to save, up
+// to 15 s for ServeProcess.stop() (three 5 s graces), 20 s each for a tune
+// sweep and a Tests job, compose down, margin.
 export const STOP_BUDGET_MS = 90_000;
 
 export type Mode = 'remote' | 'attach' | 'adopt' | 'own';
@@ -40,7 +48,7 @@ export interface StartInput {
 	local: boolean;
 	backendUp: boolean;
 	devServerUp: boolean;
-	/** owned.json names a `make backend` this app started and is still running. */
+	/** owned.json names a `make backend` this app started for this address and checkout, still running. */
 	adoptable: boolean;
 	uiStale: boolean;
 	port: number;
@@ -63,14 +71,18 @@ export function decideStart(input: StartInput): StartPlan {
 	return { mode: 'own', loadUrl, buildUi: input.uiStale && !useDevServer };
 }
 
-/** apps/web inputs whose change means `dist/` is out of date. */
-export const UI_SOURCES = ['src', 'public', 'package.json', 'bun.lock', 'astro.config.mjs'];
+/** apps/web inputs whose change means `dist/` is out of date; tsconfig.json holds the path aliases (#429). */
+export const UI_SOURCES = ['src', 'public', 'package.json', 'bun.lock', 'astro.config.mjs', 'tsconfig.json'];
 
 export function uiBuildIsStale(builtAt: number | null, newestSource: number): boolean {
 	return builtAt === null || newestSource > builtAt;
 }
 
-/** The newest modification time among these files and everything under these directories. */
+/**
+ * The newest modification time among these files and everything under these
+ * directories, the directories included: a rename or a deletion changes only
+ * the directory it happened in, as the files left keep their times (#429).
+ */
 export async function newestMtime(paths: string[]): Promise<number> {
 	let newest = 0;
 	for (const path of paths) {
@@ -83,7 +95,7 @@ export async function newestMtime(paths: string[]): Promise<number> {
 		newest = Math.max(newest, info.mtimeMs);
 		if (!info.isDirectory()) continue;
 		for (const entry of await readdir(path, { recursive: true, withFileTypes: true })) {
-			if (!entry.isFile()) continue;
+			if (!entry.isFile() && !entry.isDirectory()) continue;
 			try {
 				newest = Math.max(newest, (await stat(join(entry.parentPath, entry.name))).mtimeMs);
 			} catch {
@@ -109,6 +121,9 @@ export async function isUiStale(webDir: string): Promise<boolean> {
 export interface OwnedRecord {
 	pgid: number;
 	startTicks: string;
+	/** The server address and checkout it was started for; absent in a record written before #431. */
+	origin?: string;
+	repo?: string;
 }
 
 export interface ProcStat {
@@ -151,12 +166,34 @@ export function isAdoptable(record: OwnedRecord | null, stat_: (pid: number) => 
 export function parseOwned(text: string | null): OwnedRecord | null {
 	try {
 		const raw = JSON.parse(text ?? '');
-		return Number.isInteger(raw?.pgid) && raw.pgid > 1 && typeof raw.startTicks === 'string'
-			? { pgid: raw.pgid, startTicks: raw.startTicks }
-			: null;
+		if (!(Number.isInteger(raw?.pgid) && raw.pgid > 1 && typeof raw.startTicks === 'string')) return null;
+		const record: OwnedRecord = { pgid: raw.pgid, startTicks: raw.startTicks };
+		if (typeof raw.origin === 'string') record.origin = raw.origin;
+		if (typeof raw.repo === 'string') record.repo = raw.repo;
+		return record;
 	} catch {
 		return null;
 	}
+}
+
+/**
+ * What a launch does with the stack owned.json names, `running` saying it is
+ * still the same `make` (#431). It is adopted only when it was started for
+ * this server address and checkout. Otherwise it is stopped: adopted, it
+ * would be waited on at the wrong address, and a launch that starts nothing
+ * (a remote server) would leave it running. A record from before #431 names
+ * neither, so its stack is stopped too.
+ */
+export function ownedAction(
+	record: OwnedRecord | null,
+	running: boolean,
+	origin: string,
+	repo: string,
+	local: boolean
+): 'adopt' | 'stop' | 'none' {
+	if (!record || !running) return 'none';
+	const same = record.origin === origin && record.repo !== undefined && resolve(record.repo) === resolve(repo);
+	return local && same ? 'adopt' : 'stop';
 }
 
 // --- Commands ----------------------------------------------------------------
@@ -212,6 +249,36 @@ export function spawnInGroup(command: string, logFile: string, env: NodeJS.Proce
 	} finally {
 		closeSync(fd);
 	}
+}
+
+/**
+ * This checkout's compose containers, in any state, one id a line. `down` removes
+ * them, so any left (running, restarting or stopped) means it did not finish.
+ */
+export function composeRunningCommand(repo: string): string {
+	return `docker compose -f ${shellQuote(join(repo, 'infra', 'docker-compose.yml'))} ps -a -q`;
+}
+
+/**
+ * How many container ids `ps -q` listed; null when compose could not be asked. Only
+ * id lines count: the login shell it runs in may print a profile's greeting too.
+ */
+export function countRunning(output: string | null): number | null {
+	if (output === null) return null;
+	return output.split('\n').filter((line) => /^[0-9a-f]{12,64}$/.test(line.trim())).length;
+}
+
+/**
+ * How many of the stack's containers still run after a stop (#435). make's EXIT
+ * trap runs compose down, but make's own exit status cannot say whether that
+ * worked (it was interrupted either way), so compose is asked directly.
+ */
+export function runningServices(repo: string, env: NodeJS.ProcessEnv, timeoutMs = 15_000): Promise<number | null> {
+	return new Promise((resolve) => {
+		execFile(loginShell(env), ['-lc', composeRunningCommand(repo)], { env, timeout: timeoutMs }, (error, stdout) =>
+			resolve(countRunning(error ? null : String(stdout)))
+		);
+	});
 }
 
 export function runInShell(command: string, env: NodeJS.ProcessEnv, timeoutMs: number): Promise<void> {
@@ -311,6 +378,39 @@ export async function probe(url: string, timeoutMs = 1500): Promise<number | nul
 		return response.status;
 	} catch {
 		return null;
+	}
+}
+
+/** The body of a GET that answered 200, or null for any other answer or none in time. */
+export async function fetchText(url: string, timeoutMs = 1500): Promise<string | null> {
+	try {
+		const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs), redirect: 'manual' });
+		if (response.status !== 200) {
+			await response.body?.cancel();
+			return null;
+		}
+		return await response.text();
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Whether `body`, the dev server's answer at DEV_SERVER_IDENTITY_PATH, names
+ * `webDir` (this checkout's apps/web) as what it serves, so the app never
+ * loads another project, or another checkout, in place of its own UI (#432).
+ */
+export function isOwnDevServer(body: string | null, webDir: string): boolean {
+	if (body === null) return false;
+	try {
+		const identity: unknown = JSON.parse(body);
+		if (typeof identity !== 'object' || identity === null) return false;
+		const { app, webRoot } = identity as { app?: unknown; webRoot?: unknown };
+		if (app !== 'local-llm' || typeof webRoot !== 'string') return false;
+		return realpathSync(webRoot) === realpathSync(webDir);
+	} catch {
+		// Not JSON (another project's page), or a directory that is gone.
+		return false;
 	}
 }
 

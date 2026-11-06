@@ -16,6 +16,7 @@ Run from apps/server:
 from __future__ import annotations
 
 import asyncio
+import socket
 import time
 from types import SimpleNamespace
 
@@ -64,6 +65,9 @@ class _StubServeProcess:
 
     instances: list[_StubServeProcess] = []
     fail_with: Exception | None = None
+    #: The port the real one resolves in __post_init__; None (the router then
+    #: skips its port check) unless a test sets one.
+    port: int | None = None
 
     def __init__(self, config, **kwargs):
         self.config = config
@@ -186,6 +190,40 @@ def test_start_409_when_a_run_is_already_active(client, monkeypatch):
     monkeypatch.setattr(BenchmarkRuns, 'get_any_active_run', fake_get_any_active_run)
     resp = client.post('/start', json={'profile': 'qwen25c'})
     assert resp.status_code == 409
+
+
+def test_start_409_when_something_already_answers_on_the_port(client, monkeypatch):
+    """An orphaned or hand-started server holds the port: refuse rather than start beside it (#156)."""
+
+    async def fake_get_by_name(name, db=None):
+        return _entry(name=name)
+
+    monkeypatch.setattr(BenchmarkProfiles, 'get_by_name', fake_get_by_name)
+    with socket.socket() as listener:
+        listener.bind(('127.0.0.1', 0))
+        listener.listen()
+        monkeypatch.setattr(_StubServeProcess, 'port', listener.getsockname()[1])
+        resp = client.post('/start', json={'profile': 'qwen25c'})
+
+    assert resp.status_code == 409
+    assert 'already serving on port' in resp.json()['detail']
+    assert serve_router._job is None
+    assert all(not proc.running for proc in _StubServeProcess.instances)
+
+
+def test_start_proceeds_when_the_port_is_free(client, monkeypatch):
+    async def fake_get_by_name(name, db=None):
+        return _entry(name=name)
+
+    monkeypatch.setattr(BenchmarkProfiles, 'get_by_name', fake_get_by_name)
+    with socket.socket() as probe:
+        probe.bind(('127.0.0.1', 0))
+        free_port = probe.getsockname()[1]
+    monkeypatch.setattr(_StubServeProcess, 'port', free_port)
+
+    resp = client.post('/start', json={'profile': 'qwen25c'})
+
+    assert resp.status_code == 200
 
 
 def test_start_passes_overrides_through_to_resolve(client, monkeypatch):

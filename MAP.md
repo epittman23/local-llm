@@ -8,7 +8,7 @@ rules see [`AGENTS.md`](AGENTS.md); for running the app see
 [`README.md`](README.md).
 
 This file is a structural index only. It does not restate rationale that
-already lives in `AGENTS.md`'s "Conventions" section — it points there
+already lives in `AGENTS.md` or `docs/decisions.md`; it points there
 instead.
 
 ## Top-level tree
@@ -18,6 +18,8 @@ local-llm/
 ├── .github/                   CI workflows (ci.yml; pr-gate.yml, the tripwire; auto-merge.yml + update-branches.yml), Dependabot, scripts/ (PR gate, lint ratchet)
 ├── .pre-commit-config.yaml    the only definition of lint and format checks (CI runs it)
 ├── .gitleaksignore            gitleaks findings that are not secrets, with reasons
+├── .git-blame-ignore-revs     bulk formatting commits that `git blame` skips (GitHub's blame reads it)
+├── .gitignore                 what stays untracked (see "Local/generated" below)
 ├── .claude/                   agent skills, the reviewer subagent and project settings (docs/guides/agent-tooling.md)
 ├── .mcp.json                  project MCP servers: codebase-memory-mcp
 ├── AGENTS.md                  agent and contributor guide (CLAUDE.md links to it)
@@ -290,6 +292,9 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   `@tailwindcss/vite`; the dev-server proxy mirrors the Svelte app's
   `vite.config.ts` (`d863707:apps/openwebui/vite.config.ts`) exactly (`/api`, `/ollama`, `/openai`, `/oauth`, `/ws`
   → `:4000`); `base` is `/`, where `main.py` mounts the build.
+- **`dev-server-identity.mjs`** — the dev-server plugin answering
+  `/__lllm/dev-server` with the `apps/web` it serves, which the desktop app
+  checks before loading `:5174` in place of the build.
 - **`components.json`** — shadcn/ui's own config: `radix-nova` preset,
   Lucide icons, CSS variables. See `docs/decisions.md`'s 2026-09-18
   entry for why this preset and not the migration plan's original
@@ -416,15 +421,18 @@ structural summary.
   windows may open, and the dialog's IPC handlers, which check their sender.
 - **`src/stack.ts`**:
   - the start decision and the UI-staleness check;
-  - crash adoption (`owned.json` against `/proc/<pid>/stat`);
+  - crash adoption (`owned.json` against `/proc/<pid>/stat`, and the address
+    and checkout it records), or stopping a mismatched stack;
   - the `make backend` / build / `compose down` commands, run in a login
     shell;
   - `stopGroup()`, one SIGINT and a bounded wait;
-  - `probe()` and `LogTail`.
+  - `probe()`, `fetchText()` and `LogTail`;
+  - `isOwnDevServer()`, whether `:5174` is this checkout's `make frontend`.
 - **`src/progress.ts`**: the progress dialog's step reducer, driven by the
   Makefile's and the backend's `==> ` markers.
-- **`src/config.ts`** (settings in `~/.config/Local LLM/config.json`) and
-  **`src/policy.ts`** (navigation and permission rules). Both are pure.
+- **`src/config.ts`** (settings in `~/.config/Local LLM/config.json`: pure
+  parsing, plus reading it and writing changed fields over it) and
+  **`src/policy.ts`** (navigation and permission rules, pure).
 - **`src/preload.ts`**: the app window's bridge (`window.lllmDesktop`), the
   seam for future native features. **`src/status-preload.ts`** is the
   dialog's bridge.
@@ -455,8 +463,9 @@ a shell orchestrator, `lllm-*` commands, and a Rich/plain terminal CLI
 (`llama_console.py`, backing `lllm-profiles`/`lllm-check`/`lllm-vram`) with
 no replacement of its own; those diagnostics now live in the app's own
 Benchmarks section (Serve/Live pages), same as serving itself since
-Phase 2a/2b. Per-module purpose and rationale are documented in detail in
-[`AGENTS.md`](AGENTS.md)'s "Conventions" section — this entry is a
+Phase 2a/2b. What each target does is in [`AGENTS.md`](AGENTS.md)'s
+"Commands" section and `make help`, and the check targets in
+[`docs/guides/testing.md`](docs/guides/testing.md); this entry is a
 summary, not a replacement.
 
 ## Local/generated (not tracked)

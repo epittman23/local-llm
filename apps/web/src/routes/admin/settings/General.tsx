@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -77,7 +78,7 @@ export const interfaceDefaults = (value: unknown): Record<string, any> =>
  * from (a user's own setting overrides one). Folded away by default; the edits
  * go into the draft and are saved with the rest of the tab.
  */
-function DefaultInterfaceSettings({
+export function DefaultInterfaceSettings({
 	value,
 	onChange
 }: {
@@ -85,6 +86,9 @@ function DefaultInterfaceSettings({
 	onChange: (next: Record<string, any>) => void;
 }) {
 	const [open, setOpen] = useState(false);
+	// Bumped by Clear, to start the rows' own state (an open font box and what
+	// was typed in it) over with the cleared values.
+	const [cleared, setCleared] = useState(0);
 	const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
 	const autocompleteEnabled = useConfigStore((s) => Boolean(s.config?.features?.enable_autocomplete_generation));
 	const defaults = interfaceDefaults(value);
@@ -120,7 +124,10 @@ function DefaultInterfaceSettings({
 							<button
 								type="button"
 								className="text-muted-foreground hover:text-foreground text-[0.6875rem] transition"
-								onClick={() => onChange({})}
+								onClick={() => {
+									onChange({});
+									setCleared((n) => n + 1);
+								}}
 							>
 								Clear
 							</button>
@@ -128,6 +135,7 @@ function DefaultInterfaceSettings({
 					</div>
 					<div className="max-h-[28rem] overflow-y-auto rounded-lg border p-3">
 						<InterfaceSettings
+							key={cleared}
 							mode="defaults"
 							values={defaults}
 							onChange={(p) => onChange({ ...defaults, ...p })}
@@ -146,6 +154,7 @@ function DefaultInterfaceSettings({
 export default function General() {
 	const token = useAuthStore((s) => s.token) ?? '';
 	const saved = useAdminConfigSaved();
+	const queryClient = useQueryClient();
 	const { draft, setDraft, isLoading } = useConfigDraft<Draft>(['general'], async () => ({
 		admin: await getAdminConfig(token),
 		banners: await getBanners(token).catch(() => [] as Banner[])
@@ -161,6 +170,8 @@ export default function General() {
 		try {
 			const res = await updateAdminConfig(token, draft.admin);
 			await setBanners(token, draft.banners);
+			// The new chat's banners (ChatBanners) show the saved list, not a cached one.
+			void queryClient.invalidateQueries({ queryKey: ['banners'] });
 			if (res) await saved();
 			else toast.error('Failed to update settings');
 		} catch (error) {

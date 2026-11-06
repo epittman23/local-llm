@@ -46,6 +46,13 @@ JUPYTER_TOKEN=
 SEARXNG_SECRET=
 ```
 
+The backend refuses to start when `LLLM_SECRET_KEY` is shorter than 32 bytes
+(the command above gives 32 characters) or starts or ends with whitespace,
+and when `JWT_EXPIRES_IN`, if set, is a duration sign-in cannot use: one it
+cannot read, or one under a minute. That variable only sets the default the
+first time the backend starts; after that, Admin Settings > Authentication (JWT
+Expiration) holds the session length in use.
+
 `make backend` also starts two optional-to-use services beside Postgres and
 Redis: a Jupyter server for the code interpreter and SearXNG for web search
 (see [docs/guides/assistant-tools.md](docs/guides/assistant-tools.md)). The
@@ -203,8 +210,8 @@ Anything marked *admin* also needs `role === 'admin'`.
 | `/benchmarks/report` | Reports |
 | `/benchmarks/tune` | Tuning |
 | `/benchmarks/prescreen` | Pre-screen: llama-bench over a grid of offload and batch flags, as an Optuna study, and the switch for its dashboard |
-| `/notes` | Notes list. Needs the backend's `features.enable_notes` (and not a denied `notes` permission); otherwise you're sent to `/` |
-| `/notes/new` | Creates a note (optionally from `?title=&content=`) and opens it |
+| `/notes` | Notes list. Needs the backend's `features.enable_notes` (and not a denied `notes` permission); otherwise you're sent to `/`. With `?title=&content=`, creates that note and opens it, as `/notes/new` does; if the create fails, says so and shows the list |
+| `/notes/new` | Creates a note (optionally from `?title=&content=`) and opens it; if the create fails, says so and shows the list |
 | `/notes/<id>` | Note editor (TipTap, autosave) |
 | `/calendar` | Month/week/day views. Needs `features.enable_calendar` and, for a non-admin, the `calendar` permission |
 | `/automations` | List. Needs `features.enable_automations` and, for a non-admin, the `automations` permission |

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 from uuid import uuid4
@@ -28,6 +29,16 @@ from local_llm.models.groups import Groups
 from local_llm.models.users import User, UserModel, UserResponse
 
 log = logging.getLogger(__name__)
+
+# The longest a reminder can come before its occurrence; the calendar tool
+# offers reminders of any length (#184), and a longer one comes this long
+# before. Each series keeps a single meta.alerted_for, which is right only
+# while at most one occurrence of a series is due at once. Rules are a day or
+# more apart, but the day clocks go forward has 23 hours, and an occurrence is
+# still due for a grace window after its start: 22 hours keeps clear of both.
+MAX_ALERT_LEAD_MINUTES = 22 * 60
+MAX_ALERT_LEAD_NS = MAX_ALERT_LEAD_MINUTES * 60 * 1_000_000_000
+DAY_NS = 24 * 60 * 60 * 1_000_000_000
 MIN_CALENDAR_RRULE_INTERVAL_SECONDS = 24 * 60 * 60
 
 
@@ -756,43 +767,86 @@ class CalendarEventTable:
         """
         from local_llm.models.users import User as UserRow
 
-        # Use the maximum possible lookahead (60 min) to cast a wide net;
-        # per-event filtering happens in Python after fetching.
-        max_lookahead_ns = max(default_lookahead_ns, 60 * 60 * 1_000_000_000)
+        # Use the longest lead (22 hours) to cast a wide net; per-event
+        # filtering happens in Python after fetching.
+        max_lookahead_ns = max(default_lookahead_ns, MAX_ALERT_LEAD_NS)
         upper = now_ns + max_lookahead_ns
 
         async with get_async_db_context(db) as db:
+            # A recurring series is fetched whenever it began before the window
+            # closes: its row's start_at is only its first occurrence (#183).
             result = await db.execute(
                 select(CalendarEvent, UserRow.timezone)
                 .outerjoin(UserRow, UserRow.id == CalendarEvent.user_id)
                 .filter(
                     CalendarEvent.is_cancelled == false(),
-                    CalendarEvent.start_at >= now_ns - grace_ns,
                     CalendarEvent.start_at <= upper,
+                    or_(
+                        CalendarEvent.start_at >= now_ns - grace_ns,
+                        CalendarEvent.rrule.isnot(None) & (CalendarEvent.rrule != ''),
+                    ),
                 )
             )
             rows = result.all()
 
-        events = []
-        for event, tz in rows:
-            model = CalendarEventModel.model_validate(event)
-            # meta is user-writable and this poll is shared by every user.
-            alert_minutes = (model.meta or {}).get('alert_minutes')
-            if not isinstance(alert_minutes, (int, float)):
-                alert_minutes = None
+        models = [(CalendarEventModel.model_validate(event), tz) for event, tz in rows]
 
-            if alert_minutes is not None:
-                if alert_minutes < 0:
-                    # alert_minutes < 0 means "no alert"
-                    continue
-                event_lookahead_ns = alert_minutes * 60 * 1_000_000_000
-            else:
-                event_lookahead_ns = default_lookahead_ns
+        def due() -> list[tuple[CalendarEventModel, str | None]]:
+            events = []
+            for model, tz in models:
+                for occurrence in self._occurrences_in(model, now_ns - grace_ns, upper, tz):
+                    events.extend(self._if_alert_due(occurrence, tz, now_ns, default_lookahead_ns))
+            return events
 
-            if model.start_at <= now_ns + event_lookahead_ns:
-                events.append((model, tz))
+        # Off the event loop: expanding a series walks its rule from its first
+        # start, as routers/calendar.py does for the same reason (#367).
+        return await asyncio.to_thread(due)
 
-        return events
+    @staticmethod
+    def _occurrences_in(
+        model: CalendarEventModel, start_ns: int, end_ns: int, tz: str | None
+    ) -> list[CalendarEventModel]:
+        """The event, or each occurrence of a recurring one, that starts in [start_ns, end_ns].
+
+        A recurring all-day series is left out: its start is local midnight, so
+        every occurrence would remind the evening before (a one-off all-day
+        event keeps its single reminder). A rule the expander cannot use
+        (EXRULE) is left out too, rather than warned about on every poll.
+        """
+        if not model.rrule:
+            return [model] if start_ns <= model.start_at <= end_ns else []
+        if model.all_day or 'EXRULE' in model.rrule.upper():
+            return []
+        from local_llm.utils.calendar import expand_recurring_event
+
+        occurrences = []
+        # The expander compares local clock times, so on the night clocks go
+        # back the repeated hour can fall outside a one-hour range; expand a
+        # day further and filter exactly below.
+        for instance in expand_recurring_event(model.model_dump(), start_ns, end_ns + DAY_NS, tz):
+            if start_ns <= instance['start_at'] <= end_ns:
+                occurrences.append(
+                    model.model_copy(update={'start_at': instance['start_at'], 'end_at': instance.get('end_at')})
+                )
+        return occurrences
+
+    @staticmethod
+    def _if_alert_due(
+        model: CalendarEventModel, tz: str | None, now_ns: int, default_lookahead_ns: int
+    ) -> list[tuple[CalendarEventModel, str | None]]:
+        """[(model, tz)] when this occurrence is inside its own alert lookahead, else []."""
+        # meta is user-writable and this poll is shared by every user.
+        alert_minutes = (model.meta or {}).get('alert_minutes')
+        if not isinstance(alert_minutes, (int, float)):
+            alert_minutes = None
+        if alert_minutes is not None and alert_minutes < 0:
+            return []  # alert_minutes < 0 means "no alert"
+        event_lookahead_ns = (
+            min(alert_minutes * 60 * 1_000_000_000, MAX_ALERT_LEAD_NS)
+            if alert_minutes is not None
+            else default_lookahead_ns
+        )
+        return [(model, tz)] if model.start_at <= now_ns + event_lookahead_ns else []
 
     async def delete_event_by_id(self, id: str, db: AsyncSession | None = None) -> bool:
         try:

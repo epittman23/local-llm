@@ -335,6 +335,10 @@ async def update_timezone(
     db: AsyncSession = Depends(get_async_session),
 ):
     if session_user:
+        # The browser sends its zone on every load (#324): only a change is
+        # written and announced to webhooks and event functions.
+        if getattr(session_user, 'timezone', None) == form_data.timezone:
+            return {'status': True}
         await Users.update_user_by_id(
             session_user.id,
             {'timezone': form_data.timezone},
@@ -453,7 +457,12 @@ async def signin(
                 group_names = [name.strip() for name in group_names if name.strip()]
 
                 if group_names:
-                    await Groups.sync_groups_by_group_names(user.id, group_names, db=db)
+                    # Sign-up put the user in the default group; the header does not take
+                    # them out of it (#275).
+                    default_group_id = await Config.get('ui.default_group_id')
+                    await Groups.sync_groups_by_group_names(
+                        user.id, group_names, db=db, keep_group_ids=[default_group_id] if default_group_id else []
+                    )
 
             if LLLM_AUTH_TRUSTED_ROLE_HEADER:
                 trusted_role = request.headers.get(LLLM_AUTH_TRUSTED_ROLE_HEADER, '').lower().strip()

@@ -32,6 +32,7 @@ import {
 import { useAdminConfigSaved } from '@/lib/settings/useAdminSaved';
 import { useConfigDraft } from '@/lib/settings/useConfigDraft';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { Bm25Weight } from './Bm25Weight';
 import { ExtractionFields } from './ExtractionFields';
 import {
 	type EmbeddingForm,
@@ -41,6 +42,8 @@ import {
 	embeddingError,
 	embeddingModelFor,
 	ragFormError,
+	ragSaveOutcome,
+	reindexProblem,
 	rerankingModelFor,
 	toEmbeddingForm,
 	toRagForm
@@ -119,8 +122,12 @@ export default function Documents() {
 	const setCredentials = (section: 'openai' | 'ollama' | 'azure') => (changes: Rec) =>
 		setDraft((d) => d && { ...d, embedding: { ...d.embedding, [section]: { ...d.embedding[section], ...changes } } });
 
-	/** Applies the embedding model; false (after saying why) if it cannot be, in which case the form is put back to what the server has. */
-	const applyEmbedding = async (): Promise<boolean> => {
+	/**
+	 * Applies the embedding model; false (after saying why) if it cannot be, in
+	 * which case the form is put back to what the server has. `forceReload`
+	 * loads it even when unchanged, as the Update button asks (#532).
+	 */
+	const applyEmbedding = async (forceReload: boolean): Promise<boolean> => {
 		if (!draft) return false;
 		const invalid = embeddingError(draft.embedding);
 		if (invalid) {
@@ -128,7 +135,7 @@ export default function Documents() {
 			return false;
 		}
 		try {
-			await updateEmbeddingConfig(token, buildEmbeddingPayload(draft.embedding));
+			await updateEmbeddingConfig(token, buildEmbeddingPayload(draft.embedding, { forceReload }));
 			return true;
 		} catch (error) {
 			toast.error(`${error}`);
@@ -141,7 +148,7 @@ export default function Documents() {
 	const updateEmbeddingModel = async () => {
 		setEmbeddingLoading(true);
 		try {
-			if (await applyEmbedding()) toast.success('Embedding model updated');
+			if (await applyEmbedding(true)) toast.success('Embedding model updated');
 		} finally {
 			setEmbeddingLoading(false);
 		}
@@ -157,9 +164,14 @@ export default function Documents() {
 		}
 		setSaving(true);
 		try {
+			// Built first: what cannot be sent stops the save before the embedding changes (#234).
+			const payload = buildRagPayload(rag);
 			// Bypassing retrieval means there is no embedding model to keep in step.
-			if (!rag.BYPASS_EMBEDDING_AND_RETRIEVAL && !(await applyEmbedding())) return;
-			await updateRAGConfig(token, buildRagPayload(rag));
+			if (!rag.BYPASS_EMBEDDING_AND_RETRIEVAL && !(await applyEmbedding(false))) return;
+			const res = await updateRAGConfig(token, payload);
+			const { warnings, changes } = ragSaveOutcome(rag, res);
+			if (Object.keys(changes).length) setRag(changes);
+			for (const warning of warnings) toast.warning(warning, { duration: 15000 });
 			await saved();
 		} catch (error) {
 			toast.error(`${error}`);
@@ -170,10 +182,13 @@ export default function Documents() {
 
 	const reindexAll = async () => {
 		try {
-			await reindexKnowledgeFiles(token);
+			const report = await reindexKnowledgeFiles(token);
 			await reindexKnowledgeMetadata(token);
 			await reindexMemoryVectors(token);
-			toast.success('Success');
+			// Files that failed to embed again are said, not hidden behind "Success" (#308).
+			const problem = reindexProblem(report);
+			if (problem) toast.error(problem, { duration: 15000 });
+			else toast.success('Success');
 		} catch (error) {
 			toast.error(`${error}`);
 		}
@@ -261,7 +276,7 @@ export default function Documents() {
 										label="Chunk Size"
 										description="Maximum size for each text chunk."
 										placeholder="Enter Chunk Size"
-										min={0}
+										min={1}
 									/>
 									<BoundNumber
 										{...bound}
@@ -426,7 +441,7 @@ export default function Documents() {
 								<div className="w-16">
 									<SettingNumber
 										aria-label="Embedding Batch Size"
-										min={-2}
+										min={1}
 										max={16000}
 										step={1}
 										value={emb.batchSize}
@@ -584,48 +599,7 @@ export default function Documents() {
 													title="The score should be a value between 0.0 (0%) and 1.0 (100%)."
 												/>
 
-												<SettingRow
-													label="BM25 Weight"
-													description="Balance semantic and lexical weighting for hybrid search."
-												>
-													<button
-														type="button"
-														className={actionButton}
-														onClick={() => setRag({ HYBRID_BM25_WEIGHT: bm25 === null ? 0.5 : null })}
-													>
-														{bm25 === null ? 'Default' : 'Custom'}
-													</button>
-												</SettingRow>
-												{bm25 !== null && (
-													<div className="flex items-center gap-2">
-														<div className="flex-1">
-															<input
-																type="range"
-																aria-label="BM25 Weight slider"
-																min={0}
-																max={1}
-																step={0.05}
-																value={bm25}
-																onChange={(e) => setRag({ HYBRID_BM25_WEIGHT: Number(e.target.value) })}
-																className="h-2 w-full cursor-pointer"
-															/>
-															<div className="text-muted-foreground/70 flex justify-between py-0.5 text-[0.6875rem]">
-																<div>semantic</div>
-																<div>lexical</div>
-															</div>
-														</div>
-														<div className="w-16">
-															<SettingNumber
-																aria-label="BM25 Weight"
-																min={0}
-																max={1}
-																step="any"
-																value={bm25}
-																onChange={(v) => setRag({ HYBRID_BM25_WEIGHT: v === '' ? null : v })}
-															/>
-														</div>
-													</div>
-												)}
+												<Bm25Weight value={bm25} onChange={(w) => setRag({ HYBRID_BM25_WEIGHT: w })} />
 											</>
 										)}
 									</>
@@ -662,7 +636,7 @@ export default function Documents() {
 								{...bound}
 								name="FILE_MAX_SIZE"
 								label="Max Upload Size"
-								description="Maximum file size in MB. Leave empty for unlimited."
+								description="Maximum file size in MB. Leave empty or set 0 for unlimited."
 								placeholder="Leave empty for unlimited"
 								min={0}
 							/>
@@ -670,7 +644,7 @@ export default function Documents() {
 								{...bound}
 								name="FILE_MAX_COUNT"
 								label="Max Upload Count"
-								description="Maximum number of files that can be used at once in chat."
+								description="Maximum number of files that can be used at once in chat. Leave empty or set 0 for unlimited."
 								placeholder="Leave empty for unlimited"
 								min={0}
 							/>

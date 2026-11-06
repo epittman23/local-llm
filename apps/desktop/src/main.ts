@@ -25,6 +25,7 @@ import {
 } from 'electron';
 import {
 	type Bounds,
+	configProblem,
 	DEFAULT_SERVER_URL,
 	type DesktopConfig,
 	isLocalOrigin,
@@ -32,8 +33,11 @@ import {
 	localPort,
 	normalizeServerUrl,
 	readConfig,
+	relaunchArgs,
 	resolveServerUrl,
-	writeConfig
+	type ServerOverride,
+	serverOverride,
+	updateConfig
 } from './config';
 import { classifyOpen, isAllowedPermission } from './policy';
 import {
@@ -44,25 +48,32 @@ import {
 	SHUTDOWN,
 	STARTUP_ATTACH,
 	STARTUP_OWN,
+	STARTUP_STOP_EARLIER,
 	startupRemote
 } from './progress';
 import {
 	buildUiCommand,
 	childEnv,
 	composeDownCommand,
+	DEV_SERVER_IDENTITY_PATH,
 	DEV_SERVER_URL,
 	decideStart,
+	fetchText,
 	groupAlive,
 	isAdoptable,
+	isOwnDevServer,
 	isUiStale,
 	LogTail,
 	llamaServerPids,
 	makeBackendCommand,
 	type OwnedRecord,
+	ownedAction,
 	parseOwned,
 	probe,
 	readProcStat,
 	runInShell,
+	runningServices,
+	type StopResult,
 	spawnInGroup,
 	stopGroup
 } from './stack';
@@ -79,7 +90,9 @@ const CONFIG_FILE = join(USER_DATA, 'config.json');
 const OWNED_FILE = join(USER_DATA, 'owned.json');
 const LOG_FILE = join(USER_DATA, 'logs', 'backend.log');
 
-type Phase = 'idle' | 'starting' | 'running' | 'failed' | 'stopping';
+// 'stopped': a forced stop left a llama-server and the dialog offers to stop it;
+// nothing of the stack is left to stop, so any way of quitting just exits (#421).
+type Phase = 'idle' | 'starting' | 'running' | 'failed' | 'stopping' | 'stopped';
 
 let phase: Phase = 'idle';
 let config: DesktopConfig;
@@ -94,6 +107,8 @@ let owned: { pgid: number; child?: ChildProcess; exitCode?: number | null } | nu
 let buildChild: ChildProcess | null = null;
 let tail: LogTail | null = null;
 let startAbort: AbortController | null = null;
+/** The stop of a stack an earlier launch started, while it runs (#431). */
+let earlierStop: Promise<StopResult> | null = null;
 
 class Cancelled extends Error {}
 
@@ -111,10 +126,28 @@ function storedConfig(): DesktopConfig {
 	return readConfig(CONFIG_FILE, { serverUrl: DEFAULT_SERVER_URL, repoPath: buildInfoRepo() });
 }
 
+/** Set by a save in Settings, which replaces the override for the rest of this launch (#424). */
+let overrideReplaced = false;
+
+/** The `--server-url` / LLLM_SERVER_URL this launch still uses in place of the stored setting. */
+function activeOverride(): ServerOverride | null {
+	return overrideReplaced ? null : serverOverride(process.argv, process.env);
+}
+
 /** The stored settings, with `--server-url` / LLLM_SERVER_URL applied on top (never saved). */
 function loadConfig(): DesktopConfig {
 	const stored = storedConfig();
-	return { ...stored, serverUrl: resolveServerUrl(process.argv, process.env, stored.serverUrl) };
+	const [argv, env] = overrideReplaced ? [[], {}] : [process.argv, process.env];
+	return { ...stored, serverUrl: resolveServerUrl(argv, env, stored.serverUrl) };
+}
+
+/** config.json as written, or null when there is none to read. */
+function storedText(): string | null {
+	try {
+		return readFileSync(CONFIG_FILE, 'utf8');
+	} catch {
+		return null;
+	}
 }
 
 // --- The progress window -------------------------------------------------------
@@ -207,13 +240,26 @@ function savedBounds(): Partial<Rectangle> {
 
 function saveBounds(bounds: Bounds): void {
 	try {
-		writeConfig(CONFIG_FILE, { ...storedConfig(), bounds });
+		// Only the bounds: the rest of the file stays as written (#437).
+		updateConfig(CONFIG_FILE, { bounds });
 	} catch {
 		// Not worth interrupting a close for.
 	}
 }
 
+/**
+ * Saves the app window's size before a quit destroys it: destroy() and
+ * app.exit() emit no 'close', so only the window's own close button saved
+ * it before (#425).
+ */
+function saveWindowBounds(): void {
+	if (mainWindow && !mainWindow.isDestroyed()) saveBounds(mainWindow.getNormalBounds());
+}
+
 function openApp(url: string): Promise<void> {
+	// Every startup path awaits before it gets here; a stop begun meanwhile (a
+	// Cancel during the last probe) owns the dialog, and no window opens (#423).
+	if (phase !== 'starting') return Promise.resolve();
 	appOrigin = new URL(url).origin;
 	dispatch({ type: 'begin', step: 'open', at: Date.now() });
 	const win = new BrowserWindow({
@@ -239,6 +285,13 @@ function openApp(url: string): Promise<void> {
 	});
 	return new Promise((resolve) => {
 		win.once('ready-to-show', () => {
+			// A stop that began while the page loaded owns the dialog and the
+			// phase; this window is already destroyed, and must not reopen (#423).
+			if (phase !== 'starting') {
+				if (!win.isDestroyed()) win.destroy();
+				resolve();
+				return;
+			}
 			// Shown before the dialog closes, or no window would be left
 			// open for a moment and the app would quit.
 			win.show();
@@ -311,15 +364,33 @@ async function startup(): Promise<void> {
 	phase = 'starting';
 	config = loadConfig();
 	const origin = config.serverUrl;
+	// A stored server URL set aside for the default is said, not silent (#437);
+	// not while an override is what this launch uses instead.
+	const problem = activeOverride() ? undefined : (configProblem(storedText()) ?? undefined);
 	const abort = new AbortController();
 	startAbort = abort;
 	const now = Date.now;
 
 	try {
+		const record = readOwned();
+		const earlier = ownedAction(
+			record,
+			isAdoptable(record, readProcStat),
+			origin,
+			config.repoPath,
+			isLocalOrigin(origin)
+		);
+		if (earlier === 'stop' && record) {
+			const left = await stopEarlier(record);
+			// Cancelled while it stopped: shutdown() saw the stop through and quit.
+			if (abort.signal.aborted) return;
+			if (left) return fail(left);
+		}
+
 		if (!isLocalOrigin(origin)) {
 			setProgress(createProgress('startup', 'Connecting to Local LLM', startupRemote(origin), now()));
 			openStatus('progress');
-			dispatch({ type: 'begin', step: 'check', at: now() });
+			dispatch({ type: 'begin', step: 'check', at: now(), detail: problem });
 			if ((await probe(`${origin}/health`, 5000)) === null) {
 				return fail(`Nothing answered at ${origin}. Check the address in Settings, or retry.`);
 			}
@@ -328,16 +399,19 @@ async function startup(): Promise<void> {
 		}
 
 		const port = localPort(origin);
-		const record = readOwned();
-		const adoptable = isAdoptable(record, readProcStat);
-		const [health, dev] = await Promise.all([probe(`${origin}/health`), probe(DEV_SERVER_URL)]);
+		const adoptable = earlier === 'adopt';
 		const repo = config.repoPath;
 		const webDir = join(repo, 'apps', 'web');
+		const [health, dev] = await Promise.all([
+			probe(`${origin}/health`),
+			fetchText(`${DEV_SERVER_URL}${DEV_SERVER_IDENTITY_PATH}`)
+		]);
 		const plan = decideStart({
 			origin,
 			local: true,
 			backendUp: health !== null,
-			devServerUp: dev !== null,
+			// Only this checkout's `make frontend`, not whatever else took :5174 (#432).
+			devServerUp: isOwnDevServer(dev, webDir),
 			adoptable,
 			// Only worth walking apps/web for when the stack is about to be started.
 			uiStale: health === null && !adoptable && existsSync(webDir) ? await isUiStale(webDir) : false,
@@ -349,7 +423,7 @@ async function startup(): Promise<void> {
 			openStatus('progress');
 			const found =
 				plan.mode === 'adopt' ? 'found the backend this app started earlier' : `found a running backend at ${origin}`;
-			dispatch({ type: 'begin', step: 'check', at: now(), detail: found });
+			dispatch({ type: 'begin', step: 'check', at: now(), detail: problem ? `${found}. ${problem}` : found });
 			dispatch({ type: 'begin', step: 'ready', at: now() });
 			const adopted = plan.mode === 'adopt' && record ? record.pgid : null;
 			if (adopted) {
@@ -368,7 +442,7 @@ async function startup(): Promise<void> {
 
 		setProgress(createProgress('startup', 'Starting Local LLM', STARTUP_OWN, now()));
 		openStatus('progress');
-		dispatch({ type: 'begin', step: 'check', at: now() });
+		dispatch({ type: 'begin', step: 'check', at: now(), detail: problem });
 		if (!isRepoRoot(repo)) {
 			return fail(`No local-llm checkout at ${repo}. Set the repository folder in Settings.`);
 		}
@@ -392,10 +466,17 @@ async function startup(): Promise<void> {
 
 		const env = childEnv(process.env, { LLLM_STOP_JOBS_ON_SHUTDOWN: 'true' });
 		const child = spawnInGroup(makeBackendCommand(repo, port), LOG_FILE, env);
-		if (!child.pid) return fail('Could not start make backend.');
+		// A login shell that cannot be spawned gives no pid and then emits
+		// 'error', which with no listener is an uncaught exception (#433).
+		const spawnError = new Promise<Error>((resolve) => child.once('error', resolve));
+		if (!child.pid) {
+			const error = await Promise.race([spawnError, sleep(1000).then(() => null)]);
+			if (abort.signal.aborted) throw new Cancelled();
+			return fail(`Could not start make backend${error ? ` (${error.message})` : ''}.`);
+		}
 		const started = { pgid: child.pid, child, exitCode: undefined as number | null | undefined };
 		owned = started;
-		writeOwned({ pgid: child.pid, startTicks: readProcStat(child.pid)?.startTicks ?? '' });
+		writeOwned({ pgid: child.pid, startTicks: readProcStat(child.pid)?.startTicks ?? '', origin, repo });
 		child.once('exit', (code) => {
 			started.exitCode = code;
 		});
@@ -414,6 +495,65 @@ async function startup(): Promise<void> {
 	}
 }
 
+/**
+ * Stops the stack an earlier launch started for another server address or
+ * checkout (#431), the way closing the app would, before this launch goes on.
+ * If it has to be forced, compose is brought down in its own checkout. Gives
+ * what is left running after a forced stop, or null.
+ */
+async function stopEarlier(record: OwnedRecord): Promise<string | null> {
+	setProgress(createProgress('startup', 'Starting Local LLM', STARTUP_STOP_EARLIER, Date.now()));
+	openStatus('progress');
+	dispatch({
+		type: 'begin',
+		step: 'earlier',
+		at: Date.now(),
+		detail: record.origin ? `started for ${record.origin}` : undefined
+	});
+	// Forgotten first: a cancel or a crash from here on must never signal it a
+	// second time, since a second SIGINT makes uvicorn skip its teardown.
+	rmSync(OWNED_FILE, { force: true });
+	followLog(true);
+	const repo = record.repo ?? config.repoPath;
+	const env = childEnv(process.env);
+	// Kept, so a quit meanwhile waits for it (forced if need be) instead of leaving it half-stopped.
+	earlierStop = stopGroup(record.pgid, {
+		kill: process.kill,
+		sleep,
+		now: Date.now,
+		composeDown: () => runInShell(composeDownCommand(repo), env, 60_000),
+		leftoverLlama: llamaServerPids,
+		onTimeout: () => {
+			dispatch({ type: 'timeout', step: 'earlier', at: Date.now() });
+			dispatch({
+				type: 'begin',
+				step: 'force',
+				at: Date.now(),
+				detail: 'killing the process group, then docker compose down'
+			});
+		}
+	});
+	const result = await earlierStop;
+	earlierStop = null;
+	tail?.stop();
+	tail = null;
+	if (!result.forced) {
+		dispatch({ type: 'finish', step: 'earlier', at: Date.now() });
+		return null;
+	}
+	dispatch({ type: 'finish', step: 'force', at: Date.now() });
+	const left = await runningServices(repo, env);
+	const problems = [
+		left === null ? 'docker compose ps failed, so its services may still be running' : '',
+		left ? `${left} of its ${left === 1 ? 'containers is' : 'containers are'} still there` : '',
+		result.llama.length > 0 ? `a llama-server is still running (pid ${result.llama.join(', ')})` : ''
+	].filter(Boolean);
+	return problems.length > 0
+		? `The backend an earlier launch started had to be forced to stop, and ${problems.join('; ')}. ` +
+				`\`docker compose -f ${join(repo, 'infra', 'docker-compose.yml')} down\` stops the services. Retry once they are stopped.`
+		: null;
+}
+
 function forgetOwned(): void {
 	owned = null;
 	rmSync(OWNED_FILE, { force: true });
@@ -426,6 +566,11 @@ function forgetOwned(): void {
  * owned (attached, remote, or a failed start) it just quits.
  */
 async function shutdown(): Promise<void> {
+	saveWindowBounds();
+	if (phase === 'stopped') {
+		app.exit(0);
+		return;
+	}
 	if (phase === 'stopping') return;
 	phase = 'stopping';
 	startAbort?.abort();
@@ -437,6 +582,8 @@ async function shutdown(): Promise<void> {
 		}
 	}
 	if (!owned) {
+		// Its one SIGINT is sent: see that stop through, so it can still be forced.
+		if (earlierStop) await earlierStop;
 		tail?.stop();
 		app.exit(0);
 		return;
@@ -464,15 +611,40 @@ async function shutdown(): Promise<void> {
 		onTimeout: () => {
 			const running = progress.steps.find((s) => s.state === 'running');
 			if (running) dispatch({ type: 'timeout', step: running.id, at: Date.now() });
-			dispatch({ type: 'begin', step: 'force', at: Date.now(), detail: 'killing the process group' });
+			dispatch({
+				type: 'begin',
+				step: 'force',
+				at: Date.now(),
+				detail: 'killing the process group, then docker compose down'
+			});
 		}
 	});
 	tail?.stop();
 	forgetOwned();
+	// compose down ran (make's trap, or the forced path itself), but nothing says
+	// whether it worked, so compose is asked what is left (#435).
+	const left = await runningServices(repo, env);
+	if (left !== 0) {
+		const llama = result.forced && result.llama.length > 0 ? ' A llama-server is still running too.' : '';
+		dispatch({
+			type: 'fail',
+			step: result.forced ? 'force' : 'services',
+			message:
+				(left === null
+					? 'Could not check that the services stopped: docker compose ps failed. '
+					: `The services did not stop: ${left} ${left === 1 ? 'container is' : 'containers are'} still there. `) +
+				'`docker compose -f infra/docker-compose.yml down` stops them; the log shows why.' +
+				llama,
+			at: Date.now()
+		});
+		phase = 'stopped';
+		return;
+	}
 	if (result.forced && result.llama.length > 0) {
 		// Its own session keeps it out of the group; offer, don't kill unasked.
 		dispatch({ type: 'offer-stop-llama' });
 		dispatch({ type: 'complete', at: Date.now() });
+		phase = 'stopped';
 		return;
 	}
 	dispatch({ type: 'complete', at: Date.now() });
@@ -516,15 +688,23 @@ interface SettingsInput {
 	repoPath: string;
 }
 
-function saveSettings(input: SettingsInput): { error?: string; restart?: boolean } {
+function saveSettings(input: SettingsInput): { error?: string; restart?: boolean; replaced?: ServerOverride } {
 	const serverUrl = normalizeServerUrl(String(input.serverUrl ?? ''));
 	if (!serverUrl) return { error: 'The server URL must be an http:// or https:// address.' };
 	const repoPath = String(input.repoPath ?? '').trim();
 	if (isLocalOrigin(serverUrl) && !isRepoRoot(repoPath)) {
 		return { error: `${repoPath || 'That folder'} is not a local-llm checkout (no Makefile and apps/server).` };
 	}
-	writeConfig(CONFIG_FILE, { ...storedConfig(), serverUrl, repoPath });
-	return { restart: phase === 'running' };
+	try {
+		updateConfig(CONFIG_FILE, { serverUrl, repoPath }, true);
+	} catch (error) {
+		// Shown in the dialog, which otherwise would say nothing (#426).
+		return { error: `Could not save the settings: ${error instanceof Error ? error.message : String(error)}` };
+	}
+	// What the user saved is what Retry starts with, not the override (#424).
+	const replaced = activeOverride() ?? undefined;
+	overrideReplaced = true;
+	return { restart: phase === 'running', replaced };
 }
 
 function registerIpc(): void {
@@ -536,7 +716,14 @@ function registerIpc(): void {
 		'status:get-settings',
 		fromStatus(() => {
 			const stored = storedConfig();
-			return { serverUrl: stored.serverUrl, repoPath: stored.repoPath, running: phase === 'running' };
+			return {
+				serverUrl: stored.serverUrl,
+				repoPath: stored.repoPath,
+				running: phase === 'running',
+				override: activeOverride(),
+				// What the field cannot show: a stored URL set aside for the default (#437).
+				problem: configProblem(storedText())
+			};
 		})
 	);
 	ipcMain.handle(
@@ -563,6 +750,8 @@ function registerIpc(): void {
 				case 'quit':
 					return shutdown();
 				case 'retry':
+					// Offered only after a failed start; never during or after a stop.
+					if (phase !== 'failed') return;
 					statusView = 'progress';
 					return startup();
 				case 'open-log':
@@ -571,8 +760,11 @@ function registerIpc(): void {
 					await stopLlama();
 					return app.exit(0);
 				case 'restart':
-					app.relaunch();
-					return owned ? shutdown() : app.exit(0);
+					// Another launch, which --server-url and LLLM_SERVER_URL were not for (#424).
+					delete process.env.LLLM_SERVER_URL;
+					app.relaunch({ args: relaunchArgs(process.argv) });
+					// shutdown() saves the window size, and with nothing owned just quits.
+					return shutdown();
 				case 'close-settings':
 					if (phase === 'running') statusWindow?.destroy();
 					else statusView = 'progress';
@@ -653,7 +845,7 @@ if (!app.requestSingleInstanceLock()) {
 	// Every way of quitting (the menu, Ctrl+Q, the session ending, Ctrl-C on
 	// `make desktop`) goes through shutdown(), so an owned stack is stopped.
 	app.on('before-quit', (event) => {
-		if (owned && phase !== 'stopping') {
+		if ((owned || earlierStop) && phase !== 'stopping') {
 			event.preventDefault();
 			void shutdown();
 		}

@@ -19,7 +19,7 @@ from langchain_classic.retrievers import (
     EnsembleRetriever,
 )
 from langchain_community.retrievers import BM25Retriever
-from langchain_core.callbacks import CallbackManagerForRetrieverRun, Callbacks
+from langchain_core.callbacks import AsyncCallbackManagerForRetrieverRun, CallbackManagerForRetrieverRun, Callbacks
 from langchain_core.documents import BaseDocumentCompressor, Document
 from langchain_core.retrievers import BaseRetriever
 
@@ -328,6 +328,41 @@ class VectorSearchRetriever(BaseRetriever):
         return _search_result_to_documents(result)
 
 
+class _StoredTextRetriever(BaseRetriever):
+    """Another retriever's documents, each with its chunk's stored text as content.
+
+    With enriched texts on, BM25 scores each chunk with its filename, title,
+    headings and source appended. That text is for scoring only: kept as the
+    content, it reached the reranker, the model and the citations (#357).
+    Chunks are matched by the hash of their stored text, CHUNK_HASH_KEY.
+    """
+
+    retriever: Any
+    texts_by_hash: dict[str, str]
+
+    def _stored(self, documents: list[Document]) -> list[Document]:
+        return [
+            Document(
+                page_content=self.texts_by_hash.get(
+                    str(document.metadata.get(CHUNK_HASH_KEY, '')), document.page_content
+                ),
+                metadata=document.metadata,
+            )
+            for document in documents
+        ]
+
+    def _get_relevant_documents(self, query: str, *, run_manager: CallbackManagerForRetrieverRun) -> list[Document]:
+        return self._stored(self.retriever.invoke(query))
+
+    async def _aget_relevant_documents(
+        self,
+        query: str,
+        *,
+        run_manager: AsyncCallbackManagerForRetrieverRun,
+    ) -> list[Document]:
+        return self._stored(await self.retriever.ainvoke(query))
+
+
 def query_doc(collection_name: str, query_embedding: list[float], k: int, user: UserModel = None):
     try:
         log.debug('query_doc:doc %s', collection_name)
@@ -447,6 +482,17 @@ async def query_doc_with_native_hybrid_search(
             return None
 
         documents = _search_result_to_documents(result)
+        if not documents and hybrid_bm25_weight >= 1:
+            # Keywords only, and no chunk had them all: vector search answers,
+            # rather than chat getting no context at all (#347).
+            vector_result = await ASYNC_VECTOR_DB_CLIENT.hybrid_search(
+                collection_name=collection_name,
+                query=query,
+                vectors=[await embedding_function(query, RAG_EMBEDDING_QUERY_PREFIX)],
+                limit=k,
+                hybrid_bm25_weight=0.0,
+            )
+            documents = _search_result_to_documents(vector_result) if vector_result else []
         if not documents:
             return {'distances': [[]], 'documents': [[]], 'metadatas': [[]]}
 
@@ -545,6 +591,11 @@ async def query_doc_with_hybrid_search(
             metadatas=bm25_metadatas,
         )
         bm25_retriever.k = k
+        if enable_enriched_texts:
+            bm25_retriever = _StoredTextRetriever(
+                retriever=bm25_retriever,
+                texts_by_hash={meta[CHUNK_HASH_KEY]: original_texts[idx] for idx, meta in enumerate(bm25_metadatas)},
+            )
 
         vector_search_retriever = VectorSearchRetriever(
             collection_name=collection_name,
@@ -676,6 +727,58 @@ def merge_and_sort_query_results(query_results: list[dict], k: int) -> dict:
     }
 
 
+CHUNK_INDEX_KEY = 'chunk_index'
+
+
+def number_chunks(metadatas: list[dict]) -> None:
+    """Gives each chunk its place in its file, CHUNK_INDEX_KEY, counted in list order (#355).
+
+    Chunks are numbered within their file (`file_id`, else `source`), since one
+    save can hold several. The splitters' `start_index` is no order: it starts
+    again at 0 for every markdown section and every PDF page.
+    """
+    counts: dict[str, int] = {}
+    for metadata in metadatas:
+        group = str(metadata.get('file_id') or metadata.get('source') or '')
+        metadata[CHUNK_INDEX_KEY] = counts.get(group, 0)
+        counts[group] = metadata[CHUNK_INDEX_KEY] + 1
+
+
+def in_document_order(result: dict) -> dict:
+    """A collection's chunks, each file's in the order they were saved in (#355).
+
+    Vector stores return a collection in no set order: pgvector has no ORDER
+    BY, and its ids are random, so after deletes and a VACUUM a file's chunks
+    could come back shuffled and a full-context read garbled the document.
+    Files keep the order they first appear in; a file's chunks are sorted by
+    CHUNK_INDEX_KEY. Chunks saved before it existed have none and keep their
+    stored order, after any that have one.
+    """
+    if not (result.get('documents') and result.get('metadatas') and result.get('ids')):
+        return result
+    documents, metadatas, ids = result['documents'][0], result['metadatas'][0], result['ids'][0]
+    first_seen: dict[str, int] = {}
+
+    def key(position: int):
+        metadata = metadatas[position] or {}
+        file_key = str(metadata.get('file_id') or metadata.get('source') or '')
+        group = first_seen.setdefault(file_key, len(first_seen))
+        index = metadata.get(CHUNK_INDEX_KEY)
+        if isinstance(index, int) and not isinstance(index, bool):
+            return (group, 0, index, position)
+        return (group, 1, 0, position)
+
+    # Keys in input order, so a file's group is where it first appears.
+    keys = [key(position) for position in range(len(documents))]
+    order = sorted(range(len(documents)), key=keys.__getitem__)
+    return {
+        **result,
+        'documents': [[documents[i] for i in order]],
+        'metadatas': [[metadatas[i] for i in order]],
+        'ids': [[ids[i] for i in order]],
+    }
+
+
 def get_all_items_from_collections(collection_names: list[str]) -> dict:
     results = []
 
@@ -684,7 +787,7 @@ def get_all_items_from_collections(collection_names: list[str]) -> dict:
             try:
                 result = get_doc(collection_name=collection_name)
                 if result is not None:
-                    results.append(result.model_dump())
+                    results.append(in_document_order(result.model_dump()))
             except Exception as e:
                 log.exception(f'Error when querying the collection: {e}')
         else:
@@ -699,7 +802,13 @@ async def query_collection(
     queries: list[str],
     embedding_function,
     k: int,
+    allow_hybrid: bool = True,
 ) -> dict:
+    """Vector search over the collections, or hybrid search when it is enabled.
+
+    allow_hybrid=False keeps it to vector search whatever the setting: a caller
+    that asked for no hybrid search used to get it anyway (#354).
+    """
     config = await Config.get_many(
         'rag.enable_hybrid_search',
         'rag.top_k_reranker',
@@ -708,7 +817,7 @@ async def query_collection(
         'rag.enable_hybrid_search_enriched_texts',
     )
     # When request is provided, try hybrid search + reranking if enabled
-    if request and config.get('rag.enable_hybrid_search'):
+    if request and allow_hybrid and config.get('rag.enable_hybrid_search'):
         try:
             reranking_function = (
                 (lambda query, documents: request.app.state.RERANKING_FUNCTION(query, documents))
@@ -1394,12 +1503,15 @@ async def _text_item(item: dict, ctx: _SourceContext):
 
 
 async def _note_item(item: dict, ctx: _SourceContext):
+    """A note, once read access is checked: as for files and knowledge bases, a
+    note in a folder the user may read counts as readable (#358)."""
     note = await Notes.get_note_by_id(item.get('id'))
     user = ctx.user
     if note and (
         user.role == 'admin'
         or note.user_id == user.id
         or await AccessGrants.has_access(user_id=user.id, resource_type='note', resource_id=note.id, permission='read')
+        or ('note', note.id) in ctx.folder_items
     ):
         return _single_document(
             note.data.get('content', {}).get('md', ''),
@@ -1796,7 +1908,16 @@ class RerankCompressor(BaseDocumentCompressor):
 
         scores = None
         if reranking:
-            scores = await asyncio.to_thread(self.reranking_function, query, documents)
+            try:
+                scores = await asyncio.to_thread(self.reranking_function, query, documents)
+            except Exception as e:
+                # A local reranker (CrossEncoder, ColBERT) raises where the external one
+                # returns None; both fail over the same way, or the collection is dropped (#533).
+                log.warning('Reranker raised; falling back to embedding similarity: %s', e, exc_info=True)
+                scores = None
+            if scores is not None and len(scores) != len(documents):
+                log.warning('Reranker returned %d scores for %d documents', len(scores), len(documents))
+                scores = None
             if scores is None:
                 # Score by embedding similarity instead, as when no reranker is configured, so a
                 # failed rerank still gets top-k and the relevance threshold.

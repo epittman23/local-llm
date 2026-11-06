@@ -719,6 +719,32 @@ if LLLM_AUTH and LLLM_SECRET_KEY == '':
         'or export it yourself when starting uvicorn by hand.'
     )
 
+LLLM_SECRET_KEY_MIN_BYTES = 32
+
+
+def secret_key_problem(key: str) -> str | None:
+    """Why `key` cannot sign sessions, for the startup message, or None if it can.
+
+    Checked when the backend starts, not when the first session is signed
+    (#508). The message never repeats the key.
+    """
+    if key != key.strip():
+        return (
+            'LLLM_SECRET_KEY starts or ends with whitespace, which is usually a copying slip. '
+            'Remove it in infra/.env, or wherever the variable is set.'
+        )
+    if len(key.encode()) < LLLM_SECRET_KEY_MIN_BYTES:
+        return (
+            f'LLLM_SECRET_KEY is {len(key.encode())} bytes long; it must be at least '
+            f'{LLLM_SECRET_KEY_MIN_BYTES}, the key size of the HS256 signature it signs sessions with. '
+            '`openssl rand -base64 24` gives a random 32-character one.'
+        )
+    return None
+
+
+if LLLM_AUTH and (_secret_key_problem := secret_key_problem(LLLM_SECRET_KEY)):
+    raise SystemExit(_secret_key_problem)
+
 ENABLE_COMPRESSION_MIDDLEWARE = os.getenv('ENABLE_COMPRESSION_MIDDLEWARE', 'True').lower() == 'true'
 
 ####################################
@@ -770,14 +796,31 @@ BYPASS_RETRIEVAL_ACCESS_CONTROL = os.getenv('BYPASS_RETRIEVAL_ACCESS_CONTROL', '
 # denied — closing the legacy unscoped namespace.
 ENABLE_RETRIEVAL_UNSCOPED_COLLECTIONS = os.getenv('ENABLE_RETRIEVAL_UNSCOPED_COLLECTIONS', 'False').lower() == 'true'
 
-# Falls back to the upload size limit, because a document cannot legitimately carry more metadata
-# than the file itself is allowed to be. Left unbounded, a small archive that expands enormously
-# during extraction can exhaust memory. RAG_FILE_MAX_SIZE is in MB.
-RAG_METADATA_MAX_VALUE_CHARS = (
-    int(os.getenv('RAG_METADATA_MAX_VALUE_CHARS'))
-    if os.getenv('RAG_METADATA_MAX_VALUE_CHARS')
-    else ((int(os.getenv('RAG_FILE_MAX_SIZE', '0')) or 0) * 1024 * 1024 or None)
-)
+
+def optional_int_env(name: str) -> int | None:
+    """A whole-number setting from the environment; None when unset, empty or not a whole number.
+
+    `int(os.getenv(name, '0'))` raised at import for a variable set but empty
+    (or `0.5`), so the backend did not start at all (#301).
+    """
+    value = (os.getenv(name) or '').strip()
+    if not value:
+        return None
+    try:
+        return int(value)
+    except ValueError:
+        log.warning('%s=%r is not a whole number; it is ignored', name, value)
+        return None
+
+
+# Falls back to the upload size limit as the environment sets it, because a document cannot
+# legitimately carry more metadata than the file itself is allowed to be. Left unbounded, a small
+# archive that expands enormously during extraction can exhaust memory. RAG_FILE_MAX_SIZE is in MB.
+# Only the environment variable is read here, at startup: a limit set in Admin Settings > Documents
+# does not change this cap.
+RAG_METADATA_MAX_VALUE_CHARS = optional_int_env('RAG_METADATA_MAX_VALUE_CHARS')
+if RAG_METADATA_MAX_VALUE_CHARS is None:
+    RAG_METADATA_MAX_VALUE_CHARS = (optional_int_env('RAG_FILE_MAX_SIZE') or 0) * 1024 * 1024 or None
 
 MINERU_MAX_MARKDOWN_BYTES = (
     int(os.getenv('MINERU_MAX_MARKDOWN_BYTES')) if os.getenv('MINERU_MAX_MARKDOWN_BYTES') else None

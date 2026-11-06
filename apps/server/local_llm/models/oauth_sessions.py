@@ -1,10 +1,7 @@
-import base64
-import hashlib
 import logging
 import time
 import uuid
 
-from cryptography.fernet import Fernet
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import BigInteger, Column, Index, Text, delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from local_llm.env import OAUTH_SESSION_TOKEN_ENCRYPTION_KEY
 from local_llm.internal.db import Base, get_async_db_context
 from local_llm.utils.json_codec import JSONCodec
+from local_llm.utils.secret_keys import fernet_from_secret
 
 log = logging.getLogger(__name__)
 
@@ -69,18 +67,7 @@ class OAuthSessionTable:
         if not self.encryption_key:
             raise Exception('OAUTH_SESSION_TOKEN_ENCRYPTION_KEY is not set')
 
-        # check if encryption key is in the right format for Fernet (32 url-safe base64-encoded bytes)
-        if len(self.encryption_key) != 44:
-            key_bytes = hashlib.sha256(self.encryption_key.encode()).digest()
-            self.encryption_key = base64.urlsafe_b64encode(key_bytes)
-        else:
-            self.encryption_key = self.encryption_key.encode()
-
-        try:
-            self.fernet = Fernet(self.encryption_key)
-        except Exception as e:
-            log.error(f'Error initializing Fernet with provided key: {e}')
-            raise
+        self.fernet = fernet_from_secret(self.encryption_key)
 
     def _encrypt_token(self, token) -> str:
         """Encrypt OAuth tokens for storage"""

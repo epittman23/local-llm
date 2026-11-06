@@ -1156,6 +1156,9 @@ async def search_notes(
     if not __user__:
         return JSONCodec.dumps({'error': 'User context not available'})
 
+    if count < 1:
+        return JSONCodec.dumps([])
+
     try:
         user_id = __user__.get('id')
         user_group_ids = [group.id for group in await Groups.get_groups_by_member_id(user_id)]
@@ -1167,23 +1170,17 @@ async def search_notes(
                 'user_id': user_id,
                 'group_ids': user_group_ids,
                 'permission': 'read',
+                # The range is part of the query (notes keep nanoseconds): filtering
+                # newest matches afterwards found nothing in a past range (#181).
+                'updated_after': start_timestamp * 1_000_000_000 if start_timestamp else None,
+                'updated_before': end_timestamp * 1_000_000_000 if end_timestamp else None,
             },
             skip=0,
-            limit=count * 3,  # Fetch more for filtering
+            limit=count,
         )
-
-        # Convert timestamps to nanoseconds for comparison
-        start_ts = start_timestamp * 1_000_000_000 if start_timestamp else None
-        end_ts = end_timestamp * 1_000_000_000 if end_timestamp else None
 
         notes = []
         for note in result.items:
-            # Apply date filters (updated_at is in nanoseconds)
-            if start_ts and note.updated_at < start_ts:
-                continue
-            if end_ts and note.updated_at > end_ts:
-                continue
-
             # Extract a snippet from the markdown content
             content_snippet = ''
             if note.data and note.data.get('content', {}).get('md'):
@@ -1537,6 +1534,9 @@ async def search_chats(
     if not __user__:
         return JSONCodec.dumps({'error': 'User context not available'})
 
+    if count < 1:
+        return JSONCodec.dumps([])
+
     try:
         user_id = __user__.get('id')
 
@@ -1545,19 +1545,18 @@ async def search_chats(
             search_text=query,
             include_archived=False,
             skip=0,
-            limit=count * 3,  # Fetch more for filtering
+            # One more, for the current chat, which is left out below.
+            limit=count + 1,
+            # The range is part of the query: filtering newest matches
+            # afterwards found nothing in a past range (#181).
+            updated_after=start_timestamp or None,
+            updated_before=end_timestamp or None,
         )
 
         results = []
         for chat in chats:
             # Skip the current chat to avoid showing it in search results
             if __chat_id__ and chat.id == __chat_id__:
-                continue
-
-            # Apply date filters (updated_at is in seconds)
-            if start_timestamp and chat.updated_at < start_timestamp:
-                continue
-            if end_timestamp and chat.updated_at > end_timestamp:
                 continue
 
             # Find a matching message snippet
@@ -2082,15 +2081,13 @@ async def list_knowledge_bases(
 
         knowledge_bases = []
         for knowledge_base in result.items:
-            files = await Knowledges.get_files_by_id(knowledge_base.id)
-            file_count = len(files) if files else 0
-
             knowledge_bases.append(
                 {
                     'id': knowledge_base.id,
                     'name': knowledge_base.name,
                     'description': knowledge_base.description or '',
-                    'file_count': file_count,
+                    # Counted by the search itself, without loading each file's text (#186).
+                    'file_count': knowledge_base.file_count or 0,
                     'updated_at': knowledge_base.updated_at,
                 }
             )
@@ -2142,15 +2139,13 @@ async def search_knowledge_bases(
 
         knowledge_bases = []
         for knowledge_base in result.items:
-            files = await Knowledges.get_files_by_id(knowledge_base.id)
-            file_count = len(files) if files else 0
-
             knowledge_bases.append(
                 {
                     'id': knowledge_base.id,
                     'name': knowledge_base.name,
                     'description': knowledge_base.description or '',
-                    'file_count': file_count,
+                    # Counted by the search itself, without loading each file's text (#186).
+                    'file_count': knowledge_base.file_count or 0,
                     'updated_at': knowledge_base.updated_at,
                 }
             )
@@ -2758,6 +2753,44 @@ async def grep_knowledge_files(
         return JSONCodec.dumps({'error': str(e)})
 
 
+def _lines_page(content: str, start_line, end_line) -> dict:
+    """Lines start_line..end_line (1-indexed, inclusive; 100 when end_line is unset), numbered, as view_file's fields.
+
+    A range that selects nothing (it starts past the end, or ends before it
+    starts) says so in `note`, instead of a reversed `showing_lines` (#513).
+    """
+    all_lines = content.split('\n')
+    total_lines = len(all_lines)
+    s = max(1, int(start_line)) - 1  # 1-indexed to 0-indexed
+    e = min(total_lines, int(end_line) if end_line else s + 100)
+    if e <= s:
+        why = 'start_line is past the end of the file' if s >= total_lines else 'end_line is before start_line'
+        return {'content': '', 'total_lines': total_lines, 'note': f'No lines: {why}.'}
+    page = {
+        'content': '\n'.join(f'{s + i + 1}: {line}' for i, line in enumerate(all_lines[s:e])),
+        'total_lines': total_lines,
+        'showing_lines': f'{s + 1}-{e}',
+    }
+    if e < total_lines:
+        page['truncated'] = True
+        page['next_start_line'] = e + 1
+    return page
+
+
+def _number_page(content: str, offset: int, sliced: str) -> tuple[str, bool]:
+    """A character page of `content` with each line numbered, and whether its first line began on an earlier page.
+
+    A page that ends on a newline gives the empty rest after it no number:
+    that number is the next page's first line, which showed it twice (#513).
+    """
+    start_ln = content[:offset].count('\n') + 1
+    lines = sliced.split('\n')
+    numbered = [f'{start_ln + i}: {line}' for i, line in enumerate(lines)]
+    if len(lines) > 1 and lines[-1] == '':
+        numbered[-1] = ''
+    return '\n'.join(numbered), 0 < offset <= len(content) and content[offset - 1] != '\n'
+
+
 async def view_file(
     file_id: str,
     offset: int = 0,
@@ -2778,7 +2811,9 @@ async def view_file(
     :param line_numbers: If true, prefix each line with its 1-indexed line number
     :param start_line: Optional 1-indexed start line (overrides offset/max_chars when set)
     :param end_line: Optional 1-indexed end line (inclusive)
-    :return: JSON with the file's id, filename, content, and pagination metadata if truncated
+    :return: JSON with the file's id, filename, content, and pagination metadata if truncated;
+        with line_numbers, first_line_continued is true when the page starts mid-line; a line range
+        that selects nothing returns empty content and a note saying why
     """
     if __request__ is None:
         return JSONCodec.dumps({'error': 'Request context not available'})
@@ -2820,25 +2855,15 @@ async def view_file(
 
         # Line-based addressing (overrides char-based offset/max_chars)
         if start_line is not None:
-            all_lines = content.split('\n')
-            total_lines = len(all_lines)
-            s = max(1, int(start_line)) - 1  # 1-indexed to 0-indexed
-            e = min(total_lines, int(end_line) if end_line else s + 100)
-            selected = all_lines[s:e]
-            sliced = '\n'.join(f'{s + i + 1}: {line}' for i, line in enumerate(selected))
-            is_truncated = e < total_lines
+            page = _lines_page(content, start_line, end_line)
             result = {
                 'id': file.id,
                 'filename': file.filename,
-                'content': sliced,
+                'content': page.pop('content'),
                 'updated_at': file.updated_at,
                 'created_at': file.created_at,
-                'total_lines': total_lines,
-                'showing_lines': f'{s + 1}-{e}',
+                **page,
             }
-            if is_truncated:
-                result['truncated'] = True
-                result['next_start_line'] = e + 1
             return JSONCodec.dumps(result, ensure_ascii=False)
 
         sliced = content[offset : offset + max_chars]
@@ -2847,10 +2872,9 @@ async def view_file(
         returned = len(sliced)
         is_truncated = (offset + returned) < total_chars
 
+        continued = False
         if line_numbers:
-            start_ln = content[:offset].count('\n') + 1
-            lines = sliced.split('\n')
-            sliced = '\n'.join(f'{start_ln + i}: {line}' for i, line in enumerate(lines))
+            sliced, continued = _number_page(content, offset, sliced)
 
         result = {
             'id': file.id,
@@ -2859,6 +2883,8 @@ async def view_file(
             'updated_at': file.updated_at,
             'created_at': file.created_at,
         }
+        if continued:
+            result['first_line_continued'] = True
 
         if is_truncated or offset > 0:
             result['truncated'] = is_truncated
@@ -2893,7 +2919,9 @@ async def view_knowledge_file(
     :param line_numbers: If true, prefix each line with its 1-indexed line number
     :param start_line: Optional 1-indexed start line (overrides offset/max_chars when set)
     :param end_line: Optional 1-indexed end line (inclusive)
-    :return: JSON with the file's id, filename, content, and pagination metadata if truncated
+    :return: JSON with the file's id, filename, content, and pagination metadata if truncated;
+        with line_numbers, first_line_continued is true when the page starts mid-line; a line range
+        that selects nothing returns empty content and a note saying why
     """
     if __request__ is None:
         return JSONCodec.dumps({'error': 'Request context not available'})
@@ -2963,28 +2991,18 @@ async def view_knowledge_file(
 
         # Line-based addressing (overrides char-based offset/max_chars)
         if start_line is not None:
-            all_lines = content.split('\n')
-            total_lines = len(all_lines)
-            s = max(1, int(start_line)) - 1
-            e = min(total_lines, int(end_line) if end_line else s + 100)
-            selected = all_lines[s:e]
-            sliced = '\n'.join(f'{s + i + 1}: {line}' for i, line in enumerate(selected))
-            is_truncated = e < total_lines
+            page = _lines_page(content, start_line, end_line)
             result = {
                 'id': file.id,
                 'filename': file.filename,
-                'content': sliced,
+                'content': page.pop('content'),
                 'updated_at': file.updated_at,
                 'created_at': file.created_at,
-                'total_lines': total_lines,
-                'showing_lines': f'{s + 1}-{e}',
+                **page,
             }
             if knowledge_info:
                 result['knowledge_id'] = knowledge_info['id']
                 result['knowledge_name'] = knowledge_info['name']
-            if is_truncated:
-                result['truncated'] = True
-                result['next_start_line'] = e + 1
             return JSONCodec.dumps(result, ensure_ascii=False)
 
         sliced = content[offset : offset + max_chars]
@@ -2993,10 +3011,9 @@ async def view_knowledge_file(
         returned = len(sliced)
         is_truncated = (offset + returned) < total_chars
 
+        continued = False
         if line_numbers:
-            start_ln = content[:offset].count('\n') + 1
-            lines = sliced.split('\n')
-            sliced = '\n'.join(f'{start_ln + i}: {line}' for i, line in enumerate(lines))
+            sliced, continued = _number_page(content, offset, sliced)
 
         result = {
             'id': file.id,
@@ -3005,6 +3022,8 @@ async def view_knowledge_file(
             'updated_at': file.updated_at,
             'created_at': file.created_at,
         }
+        if continued:
+            result['first_line_continued'] = True
         if knowledge_info:
             result['knowledge_id'] = knowledge_info['id']
             result['knowledge_name'] = knowledge_info['name']
@@ -3067,7 +3086,8 @@ async def list_knowledge(
     if isinstance(knowledge_id, str) and knowledge_id.lower() in ('none', 'null', ''):
         knowledge_id = None
 
-    count = min(count, 200)
+    count = max(min(count, 200), 0)
+    skip = max(skip, 0)
 
     try:
         from local_llm.models.access_grants import AccessGrants
@@ -3100,8 +3120,12 @@ async def list_knowledge(
                         user_group_ids=set(user_group_ids),
                     )
                 ):
-                    kb_files = await Knowledges.get_files_by_id(knowledge.id)
-                    file_count = len(kb_files) if kb_files else 0
+                    # Counted, and for the targeted base paged, without loading
+                    # each file's text, and in a stable order (#186).
+                    targeted = bool(knowledge_id and knowledge_id == knowledge.id)
+                    file_count, paged_files = await Knowledges.get_file_page_by_id(
+                        knowledge.id, skip=skip, limit=count if targeted else 0
+                    )
 
                     kb_entry = {
                         'id': knowledge.id,
@@ -3111,10 +3135,9 @@ async def list_knowledge(
                     }
 
                     # Include file listing only when this KB is targeted
-                    if knowledge_id and knowledge_id == knowledge.id:
-                        if kb_files:
-                            paged_files = kb_files[skip : skip + count]
-                            kb_entry['files'] = [{'id': f.id, 'filename': f.filename} for f in paged_files]
+                    if targeted:
+                        if file_count:
+                            kb_entry['files'] = [{'id': fid, 'filename': name} for fid, name in paged_files]
                             kb_entry['files_skip'] = skip
                             kb_entry['files_count'] = len(paged_files)
                             kb_entry['files_total'] = file_count
@@ -4361,7 +4384,7 @@ async def create_calendar_event(
     :param calendar_id: Target calendar ID (optional, uses default calendar if omitted)
     :param all_day: Whether this is an all-day event (default: false)
     :param location: Event location (optional)
-    :param reminder_minutes: Minutes before the event to send a notification (optional, default: 10). Use 0 for "at time of event", -1 for no notification.
+    :param reminder_minutes: Minutes before the event to send a notification (optional, default: 10). Use 0 for "at time of event", -1 for no notification; at most 1320 (22 hours before).
     :return: JSON with the created event details including id
     """  # noqa: E501 - the model reads this docstring as the tool description
     if __request__ is None:
@@ -4514,7 +4537,7 @@ async def update_calendar_event(
     :param all_day: Whether this is an all-day event (optional)
     :param location: New event location (optional)
     :param is_cancelled: Set to true to cancel the event (optional)
-    :param reminder_minutes: Minutes before the event to send a reminder notification (optional). Use 0 for "at time of event", -1 for no reminder. Accepts any positive integer for custom timing (e.g. 120 for 2 hours before).
+    :param reminder_minutes: Minutes before the event to send a reminder notification (optional). Use 0 for "at time of event", -1 for no reminder. Accepts any positive integer for custom timing (e.g. 120 for 2 hours before); a reminder comes at most 22 hours (1320 minutes) before.
     :return: JSON with the updated event details
     """  # noqa: E501 - the model reads this docstring as the tool description
     if __request__ is None:

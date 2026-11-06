@@ -126,7 +126,8 @@ function ChannelView({ id }: { id: string }) {
 			key={threadId}
 			channel={channel}
 			threadId={threadId}
-			onClose={() => setThreadId(null)}
+			// Only this thread: a delete confirmed after another thread opened must not close that one.
+			onClose={() => setThreadId((t) => (t === threadId ? null : t))}
 			onPinChange={pinChange}
 		/>
 	);

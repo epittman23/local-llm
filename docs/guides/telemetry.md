@@ -9,7 +9,13 @@ Phase 2c) — `telemetry_argv()` builds the recorder's argv directly from the
 already-resolved `ResolvedConfig` and the fingerprint `serving/fingerprint.py`
 already computed for this run, so the two cannot disagree the way a second
 shell computation could have. The recorder waits for the port to open,
-samples `nvidia-smi` every 5 seconds by default, scrapes `/metrics` on the
+and since 2026-11-03 for the server it was started for to be the one
+holding it: the launcher passes the server's pid (`--server-pid`), and the
+recorder checks through `/proc` that this process owns the listening
+socket. If that server exits first, typically because an orphaned or
+hand-started server already held the port, the recorder gives up and opens
+no run, rather than filing the other server's telemetry under this
+configuration (#156). It then samples `nvidia-smi` every 5 seconds by default, scrapes `/metrics` on the
 same pass, parses the server's own load output, and writes each of those as
 it happens into the app's own Postgres database
 (`infra/docker-compose.yml`), the same one the chat interface itself uses.

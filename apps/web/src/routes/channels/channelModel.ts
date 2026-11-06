@@ -23,7 +23,8 @@ export type ChannelMessage = {
 	 * any (`true`/`false`); `GET …/messages/{id}/data` has the object.
 	 */
 	data?: MessageData | boolean | null;
-	meta?: { model_id?: string; model_name?: string } | null;
+	/** A model's reply carries the model; `done` is set once its pipeline has finished. */
+	meta?: { model_id?: string; model_name?: string; done?: boolean } | null;
 	reactions?: Reaction[];
 	reply_count?: number;
 	latest_reply_at?: number | null;
@@ -405,7 +406,8 @@ export function isPublicChannel(
  * (+layout.svelte's channelEventHandler). Returns null when the list must be
  * refetched instead: a channel was created, or a message came from a channel
  * the list does not know yet. A new message from someone else in a channel
- * that is not open bumps its count; anything else leaves the list alone.
+ * that is not open bumps its count; anything else leaves the list alone,
+ * thread replies included, which the server's count leaves out (#255).
  */
 export function applyUnreadEvent(
 	list: Channel[],
@@ -415,7 +417,8 @@ export function applyUnreadEvent(
 ): Channel[] | null {
 	const type = event.data?.type;
 	if (type === 'channel:created') return null;
-	if (type !== 'message' || event.user?.id === selfId || event.channel_id === openChannelId) return list;
+	if (type !== 'message' || isThreadReply(event) || event.user?.id === selfId || event.channel_id === openChannelId)
+		return list;
 	if (!list.some((c) => c.id === event.channel_id)) return null;
 	return list.map((c) =>
 		c.id === event.channel_id
@@ -423,6 +426,9 @@ export function applyUnreadEvent(
 			: c
 	);
 }
+
+/** A reply in a thread, a model's in thread mode included: not a channel's own message. */
+export const isThreadReply = (event: ChannelEvent) => Boolean(event.data?.data?.parent_id);
 
 /** The list with one channel's unread count cleared. */
 export const markRead = (list: Channel[], channelId: string) =>
@@ -482,13 +488,20 @@ export const mentionsToText = (content: string) =>
 		(_all, kind: string, id: string, label: string | undefined) => `${kind === 'C' ? '#' : '@'}${label || id}`
 	);
 
-/** "You, Ann and Bob reacted with :tada:" (Message.svelte's tooltip: three names, then "and N others" past four). */
+/**
+ * "You, Ann and Bob reacted with :tada:", from Message.svelte's tooltip: up to
+ * four names, then three and "and N others". Unlike the original, which named
+ * three, all four are named when exactly four reacted (#257).
+ */
 export function reactionTooltip(reaction: Reaction, selfId: string | undefined): string {
 	const names = reaction.users.map((u) => (u.id === selfId ? 'You' : (u.name ?? 'Someone')));
 	const total = names.length;
+	// Up to four people are named; with more, three and a count. Four used to
+	// show three names and no count, leaving one person out (#257).
+	const shown = total > 4 ? names.slice(0, 3) : names;
 	let who = '';
-	names.slice(0, 3).forEach((name, idx) => {
-		who += idx === 0 ? name : `${idx === Math.min(2, total - 1) ? ' and ' : ', '}${name}`;
+	shown.forEach((name, idx) => {
+		who += idx === 0 ? name : `${idx === shown.length - 1 ? ' and ' : ', '}${name}`;
 	});
 	if (total > 4) who += ` and ${total - 3} others`;
 	return `${who} reacted with :${reaction.name}:`;

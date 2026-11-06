@@ -2,12 +2,13 @@ import asyncio
 import base64
 import datetime as dt
 import fnmatch
-import hashlib
 import logging
 import re
 import sys
+import time
 import urllib
 import uuid
+import weakref
 from dataclasses import dataclass, field
 from functools import partialmethod
 from types import SimpleNamespace
@@ -18,7 +19,7 @@ import jwt
 from authlib.integrations.starlette_client import OAuth
 from authlib.oauth2.rfc6749.errors import OAuth2Error
 from authlib.oidc.core import UserInfo
-from cryptography.fernet import Fernet, InvalidToken
+from cryptography.fernet import InvalidToken
 from fastapi import (
     HTTPException,
     status,
@@ -95,6 +96,7 @@ from local_llm.utils.auth import (
 from local_llm.utils.groups import apply_default_group_assignment
 from local_llm.utils.json_codec import JSONCodec
 from local_llm.utils.misc import parse_duration
+from local_llm.utils.secret_keys import fernet_from_secret
 from local_llm.utils.validate import validate_profile_image_url
 
 # Some IdPs put private params in ID token JOSE headers (CAS: client_id, CyberArk: app_id).
@@ -105,6 +107,42 @@ JWSRegistry.__init__ = partialmethod(JWSRegistry.__init__, strict_check_header=F
 class OAuthClientMetadata(MCPOAuthClientMetadata):
     token_endpoint_auth_method: Literal['none', 'client_secret_basic', 'client_secret_post'] = 'client_secret_post'
     pass
+
+
+def _token_endpoint_auth_method(offered: list[str] | None, *, has_secret: bool) -> str:
+    """The token endpoint auth method to register or use with an authorization server (#273).
+
+    `client_secret_post` whenever the server lists it, or lists nothing.
+    Otherwise the first method the server lists that this client supports
+    (`client_secret_basic` or `none`), in the server's own order, except that
+    a client with no secret takes `none` when it is listed. When the server
+    lists neither, `client_secret_post` is kept: the server's first choice
+    (`private_key_jwt`, say) is one this client cannot use, and taking it
+    failed validation.
+    """
+    if not offered or 'client_secret_post' in offered:
+        return 'client_secret_post'
+    usable = [method for method in offered if method in ('client_secret_basic', 'none')]
+    if not has_secret and 'none' in usable:
+        return 'none'
+    return usable[0] if usable else 'client_secret_post'
+
+
+def _refresh_client_auth(
+    client_id: str, client_secret: str | None, method: str | None
+) -> tuple[dict, aiohttp.BasicAuth | None]:
+    """The client credentials for a refresh request, sent as its registered method asks (#273).
+
+    `client_secret_basic` sends them in an Authorization header, as authlib
+    does for the code exchange, and not in the body; `none` sends the
+    client id only; `client_secret_post` (the default) sends both in the body.
+    Returns the body fields and the Basic auth, if any.
+    """
+    if method == 'client_secret_basic' and client_secret:
+        return {}, aiohttp.BasicAuth(client_id, client_secret, encoding='latin1')
+    if method == 'none' or not client_secret:
+        return {'client_id': client_id}, None
+    return {'client_id': client_id, 'client_secret': client_secret}, None
 
 
 OAuthResourceParameterMode = Literal['auto', 'include', 'omit']
@@ -248,19 +286,7 @@ def _normalize_token_expiry(token: dict) -> dict:
     return token
 
 
-FERNET = None
-
-if len(OAUTH_CLIENT_INFO_ENCRYPTION_KEY) != 44:
-    key_bytes = hashlib.sha256(OAUTH_CLIENT_INFO_ENCRYPTION_KEY.encode()).digest()
-    OAUTH_CLIENT_INFO_ENCRYPTION_KEY = base64.urlsafe_b64encode(key_bytes)
-else:
-    OAUTH_CLIENT_INFO_ENCRYPTION_KEY = OAUTH_CLIENT_INFO_ENCRYPTION_KEY.encode()
-
-try:
-    FERNET = Fernet(OAUTH_CLIENT_INFO_ENCRYPTION_KEY)
-except Exception as e:
-    log.error(f'Error initializing Fernet with provided key: {e}')
-    raise
+FERNET = fernet_from_secret(OAUTH_CLIENT_INFO_ENCRYPTION_KEY)
 
 
 def encrypt_data(data) -> str:
@@ -537,15 +563,10 @@ async def get_oauth_client_info_with_dynamic_client_registration(
                             ):
                                 oauth_client_metadata.scope = ' '.join(oauth_server_metadata.scopes_supported)
 
-                            if (
-                                oauth_server_metadata.token_endpoint_auth_methods_supported
-                                and oauth_client_metadata.token_endpoint_auth_method
-                                not in oauth_server_metadata.token_endpoint_auth_methods_supported
-                            ):
-                                # Pick the first supported method from the server
-                                oauth_client_metadata.token_endpoint_auth_method = (
-                                    oauth_server_metadata.token_endpoint_auth_methods_supported[0]
-                                )
+                            # Registration issues a secret for a secret method, so prefer one.
+                            oauth_client_metadata.token_endpoint_auth_method = _token_endpoint_auth_method(
+                                oauth_server_metadata.token_endpoint_auth_methods_supported, has_secret=True
+                            )
 
                             break
                         except Exception as e:
@@ -675,13 +696,10 @@ async def get_oauth_client_info_with_static_credentials(
         )
 
         # Determine token_endpoint_auth_method
-        token_endpoint_auth_method = 'client_secret_post'
-        if (
-            oauth_server_metadata
-            and oauth_server_metadata.token_endpoint_auth_methods_supported
-            and token_endpoint_auth_method not in oauth_server_metadata.token_endpoint_auth_methods_supported
-        ):
-            token_endpoint_auth_method = oauth_server_metadata.token_endpoint_auth_methods_supported[0]
+        token_endpoint_auth_method = _token_endpoint_auth_method(
+            oauth_server_metadata.token_endpoint_auth_methods_supported if oauth_server_metadata else None,
+            has_secret=bool(oauth_client_secret),
+        )
 
         oauth_client_info = OAuthClientInformationFull(
             client_id=oauth_client_id,
@@ -809,6 +827,103 @@ async def recover_static_oauth_client_metadata(connection: dict, oauth_client_in
         recovered['resource'] = resource_metadata.resource
 
     return recovered
+
+
+class RefreshRejected(Exception):
+    """The refresh grant is gone: the token endpoint answered invalid_grant, or there is no refresh token (#284).
+
+    Only this deletes the session, and only once its access token has
+    expired. Anything else that stops a refresh may pass or is the client's
+    configuration rather than the user's grant (a network or DNS error, an
+    IdP 5xx or 429, a discovery document that did not load, invalid_client
+    or invalid_scope after a settings change, an HTML 401 from a proxy), so
+    the session is kept for the next attempt.
+    """
+
+
+# How long one refresh may take. It runs under its session's lock, so a hung IdP
+# would otherwise hold every request for that session for aiohttp's default 300 s.
+OAUTH_REFRESH_TIMEOUT = aiohttp.ClientTimeout(total=30)
+
+# One lock per session being refreshed, kept while anything references it. Keyed by
+# the event loop too: an asyncio.Lock used under one loop cannot be awaited under another.
+# The lock is per process; see _token_refreshed_if_needed for several workers.
+_REFRESH_LOCKS: weakref.WeakValueDictionary[tuple[asyncio.AbstractEventLoop, str], asyncio.Lock] = (
+    weakref.WeakValueDictionary()
+)
+
+
+def _is_invalid_grant(status: int, body: str) -> bool:
+    """Whether a token endpoint's error reply says the refresh grant itself is gone (RFC 6749 section 5.2)."""
+    if status not in (400, 401):
+        return False
+    try:
+        error = JSONCodec.loads(body).get('error')
+    except Exception:
+        return False
+    return error == 'invalid_grant'
+
+
+# Refresh a token this long before it expires.
+REFRESH_MARGIN_SECONDS = 5 * 60
+
+
+def _needs_refresh(session, force_refresh: bool) -> bool:
+    # Epoch seconds, not datetimes: a naive local conversion of the non-expiring
+    # sentinel (9999-12-31 UTC) is in the year 10000 east of UTC and raised (#285).
+    return force_refresh or session.expires_at is None or time.time() + REFRESH_MARGIN_SECONDS >= session.expires_at
+
+
+async def _token_refreshed_if_needed(manager, session, force_refresh: bool) -> dict | None:
+    """The session's token, refreshed first when it is close to expiry (#284).
+
+    Refreshes of one session run one at a time in this process: two
+    requests near expiry would otherwise both send the same refresh token,
+    and with rotation the second is refused. A request that waited finds the
+    token the one before it obtained and uses that. Across several worker
+    processes the race can still happen, so a refusal deletes the session
+    only if it still holds the token that was refused.
+
+    A refusal or a transient failure returns the current token while it has
+    not expired, and keeps the session. A refusal after expiry deletes it.
+    The refresh and the store of its result are shielded from cancellation:
+    a rotated refresh token that was not stored would be lost.
+    """
+    if not _needs_refresh(session, force_refresh):
+        return session.token
+    key = (asyncio.get_running_loop(), session.id)
+    lock = _REFRESH_LOCKS.get(key)
+    if lock is None:
+        lock = _REFRESH_LOCKS[key] = asyncio.Lock()
+    async with lock:
+        current = await OAuthSessions.get_session_by_id(session.id)
+        if current is None:
+            return None
+        if current.token != session.token:
+            # Refreshed by the request this one waited for.
+            return current.token
+        log.debug('Token refresh needed for user %s, provider %s', current.user_id, current.provider)
+        unexpired = current.expires_at is not None and time.time() < current.expires_at
+        try:
+            refreshed = await asyncio.shield(manager._refresh_token(current))
+        except RefreshRejected as e:
+            if unexpired:
+                log.warning(f'Token refresh refused for session {current.id}; using its token until it expires: {e}')
+                return current.token
+            latest = await OAuthSessions.get_session_by_id(current.id)
+            if latest is not None and latest.token == current.token:
+                log.warning(f'Token refresh refused for session {current.id} ({current.provider}), deleting it: {e}')
+                await OAuthSessions.delete_session_by_id(current.id)
+                return None
+            # Another worker refreshed it meanwhile; its token is the live one.
+            return latest.token if latest is not None else None
+        if refreshed:
+            return refreshed
+        if unexpired:
+            log.warning(f'Token refresh failed for session {current.id}; keeping it and its unexpired token')
+            return current.token
+        log.warning(f'Token refresh failed for session {current.id}; keeping it for the next attempt')
+        return None
 
 
 class OAuthClientManager:
@@ -1044,23 +1159,7 @@ class OAuthClientManager:
                 log.warning(f'No OAuth session found for user {user_id}, client_id {client_id}')
                 return None
 
-            if (
-                force_refresh
-                or session.expires_at is None
-                or dt.datetime.now() + dt.timedelta(minutes=5) >= dt.datetime.fromtimestamp(session.expires_at)
-            ):
-                log.debug('Token refresh needed for user %s, client_id %s', user_id, session.provider)
-                refreshed_token = await self._refresh_token(session)
-                if refreshed_token:
-                    return refreshed_token
-                else:
-                    log.warning(
-                        f'Token refresh failed for user {user_id}, client_id {session.provider}, deleting session '
-                        f'{session.id}'
-                    )
-                    await OAuthSessions.delete_session_by_id(session.id)
-                    return None
-            return session.token
+            return await _token_refreshed_if_needed(self, session, force_refresh)
 
         except Exception as e:
             log.error(f'Error getting OAuth token for user {user_id}: {e}')
@@ -1068,13 +1167,16 @@ class OAuthClientManager:
 
     async def _refresh_token(self, session) -> dict:
         """
-        Refresh an OAuth token if needed, with concurrency protection.
+        Refresh an OAuth token and store it; _token_refreshed_if_needed serialises the calls.
 
         Args:
             session: The OAuth session object
 
         Returns:
-            dict: Refreshed token data, or None if refresh failed
+            dict: Refreshed token data, or None if the refresh failed and may succeed later
+
+        Raises:
+            RefreshRejected: the provider refused the refresh for good
         """
         try:
             # Perform the actual refresh
@@ -1089,6 +1191,8 @@ class OAuthClientManager:
                 log.error(f'Failed to refresh token for session {session.id}')
                 return None
 
+        except RefreshRejected:
+            raise
         except Exception as e:
             log.error(f'Error refreshing token for session {session.id}: {e}')
             return None
@@ -1108,8 +1212,7 @@ class OAuthClientManager:
         token_data = session.token
 
         if not token_data.get('refresh_token'):
-            log.warning(f'No refresh token available for session {session.id}')
-            return None
+            raise RefreshRejected(f'no refresh token available for session {session.id}')
 
         try:
             client = await self.get_client(client_id)
@@ -1118,7 +1221,7 @@ class OAuthClientManager:
                 return None
 
             token_endpoint = None
-            async with aiohttp.ClientSession(trust_env=True) as session_http:
+            async with aiohttp.ClientSession(trust_env=True, timeout=OAUTH_REFRESH_TIMEOUT) as session_http:
                 async with session_http.get(await self.get_server_metadata_url(client_id)) as r:
                     if r.status == 200:
                         openid_data = await r.json()
@@ -1130,17 +1233,19 @@ class OAuthClientManager:
                 return None
 
             # Prepare refresh request
+            client_info = await self.get_client_info(client_id)
+            credentials, basic_auth = _refresh_client_auth(
+                client.client_id,
+                getattr(client, 'client_secret', None),
+                getattr(client_info, 'token_endpoint_auth_method', None),
+            )
             refresh_data = {
                 'grant_type': 'refresh_token',
                 'refresh_token': token_data['refresh_token'],
-                'client_id': client.client_id,
+                **credentials,
             }
-            client_info = await self.get_client_info(client_id)
             if should_send_oauth_resource(client_info):
                 refresh_data['resource'] = client_info.resource
-
-            if hasattr(client, 'client_secret') and client.client_secret:
-                refresh_data['client_secret'] = client.client_secret
 
             # Add scope if available in client kwargs (some providers require it on refresh)
             if (
@@ -1151,11 +1256,12 @@ class OAuthClientManager:
                 refresh_data['scope'] = client.client_kwargs['scope']
 
             # Make refresh request
-            async with aiohttp.ClientSession(trust_env=True) as session_http:
+            async with aiohttp.ClientSession(trust_env=True, timeout=OAUTH_REFRESH_TIMEOUT) as session_http:
                 async with session_http.post(
                     token_endpoint,
                     data=refresh_data,
                     headers={'Content-Type': 'application/x-www-form-urlencoded'},
+                    auth=basic_auth,
                     ssl=AIOHTTP_CLIENT_SESSION_SSL,
                 ) as r:
                     if r.status == 200:
@@ -1172,8 +1278,12 @@ class OAuthClientManager:
                     else:
                         error_text = await r.text()
                         log.error(f'Token refresh failed for client_id {client_id}: {r.status} - {error_text}')
+                        if _is_invalid_grant(r.status, error_text):
+                            raise RefreshRejected(f'{r.status} - {error_text}')
                         return None
 
+        except RefreshRejected:
+            raise
         except Exception as e:
             log.error(f'Exception during token refresh for client_id {client_id}: {e}')
             return None
@@ -1744,24 +1854,7 @@ class OAuthManager:
                 )
                 return None
 
-            if (
-                force_refresh
-                or session.expires_at is None
-                or dt.datetime.now() + dt.timedelta(minutes=5) >= dt.datetime.fromtimestamp(session.expires_at)
-            ):
-                log.debug('Token refresh needed for user %s, provider %s', user_id, session.provider)
-                refreshed_token = await self._refresh_token(session)
-                if refreshed_token:
-                    return refreshed_token
-                else:
-                    log.warning(
-                        f'Token refresh failed for user {user_id}, provider {session.provider}, deleting session '
-                        f'{session.id}'
-                    )
-                    await OAuthSessions.delete_session_by_id(session.id)
-
-                    return None
-            return session.token
+            return await _token_refreshed_if_needed(self, session, force_refresh)
 
         except Exception as e:
             log.error(f'Error getting OAuth token for user {user_id}: {e}')
@@ -1769,13 +1862,16 @@ class OAuthManager:
 
     async def _refresh_token(self, session) -> dict:
         """
-        Refresh an OAuth token if needed, with concurrency protection.
+        Refresh an OAuth token and store it; _token_refreshed_if_needed serialises the calls.
 
         Args:
             session: The OAuth session object
 
         Returns:
-            dict: Refreshed token data, or None if refresh failed
+            dict: Refreshed token data, or None if the refresh failed and may succeed later
+
+        Raises:
+            RefreshRejected: the provider refused the refresh for good
         """
         try:
             # Perform the actual refresh
@@ -1790,6 +1886,8 @@ class OAuthManager:
                 log.error(f'Failed to refresh token for session {session.id}')
                 return None
 
+        except RefreshRejected:
+            raise
         except Exception as e:
             log.error(f'Error refreshing token for session {session.id}: {e}')
             return None
@@ -1809,8 +1907,7 @@ class OAuthManager:
         auth_config = await get_oauth_runtime_config()
 
         if not token_data.get('refresh_token'):
-            log.warning(f'No refresh token available for session {session.id}')
-            return None
+            raise RefreshRejected(f'no refresh token available for session {session.id}')
 
         try:
             client = self.get_client(provider)
@@ -1820,7 +1917,7 @@ class OAuthManager:
 
             server_metadata_url = self.get_server_metadata_url(provider)
             token_endpoint = None
-            async with aiohttp.ClientSession(trust_env=True) as session_http:
+            async with aiohttp.ClientSession(trust_env=True, timeout=OAUTH_REFRESH_TIMEOUT) as session_http:
                 async with session_http.get(server_metadata_url) as r:
                     if r.status == 200:
                         openid_data = await r.json()
@@ -1850,7 +1947,7 @@ class OAuthManager:
                 refresh_data['scope'] = client.client_kwargs['scope']
 
             # Make refresh request
-            async with aiohttp.ClientSession(trust_env=True) as session_http:
+            async with aiohttp.ClientSession(trust_env=True, timeout=OAUTH_REFRESH_TIMEOUT) as session_http:
                 async with session_http.post(
                     token_endpoint,
                     data=refresh_data,
@@ -1871,8 +1968,12 @@ class OAuthManager:
                     else:
                         error_text = await r.text()
                         log.error(f'Token refresh failed for provider {provider}: {r.status} - {error_text}')
+                        if _is_invalid_grant(r.status, error_text):
+                            raise RefreshRejected(f'{r.status} - {error_text}')
                         return None
 
+        except RefreshRejected:
+            raise
         except Exception as e:
             log.error(f'Exception during token refresh for provider {provider}: {e}')
             return None
@@ -2036,12 +2137,19 @@ class OAuthManager:
         log.debug("User's current groups: %s", [g.name for g in user_current_groups])
         log.debug('All groups available in Local LLM: %s', [g.name for g in all_available_groups])
 
+        # The default group is the app's own (sign-up adds every new user to it),
+        # not the IdP's, so the claim does not remove it (#275). Without this,
+        # sign-up added a user to it and this sync, in the same callback,
+        # took them out again; as it would at every later login.
+        default_group_id = await Config.get('ui.default_group_id') if groups_claim_present else None
+
         # Remove groups that user is no longer a part of
         for group_model in user_current_groups:
             if (
                 groups_claim_present
                 and group_model.name not in user_oauth_groups
                 and not is_in_blocked_groups(group_model.name, blocked_groups)
+                and not (default_group_id and group_model.id == default_group_id)
             ):
                 # Remove group from user
                 log.debug('Removing user from group %s as it is no longer in their oauth groups', group_model.name)

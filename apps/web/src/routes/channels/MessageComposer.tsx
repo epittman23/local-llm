@@ -145,6 +145,10 @@ export const MessageComposer = forwardRef<
 	}, [active, users.data, models.data, channels.data]);
 
 	useEffect(() => setSelected(0), [active?.query, active?.trigger]);
+	// The list can shrink without the query changing (the debounced user search
+	// answering), so the selection is kept within it (#256), and the arrow keys
+	// step from what is highlighted.
+	const highlighted = Math.min(selected, suggestions.length - 1);
 
 	const pick = (s: Suggestion) => {
 		if (!active) return;
@@ -162,7 +166,8 @@ export const MessageComposer = forwardRef<
 
 	const addFiles = (list: File[]) => {
 		for (const file of list) {
-			if (maxSize !== null && file.size > maxSize * 1024 * 1024) {
+			// 0 or unset is no limit, as on the server (#238).
+			if (maxSize && file.size > maxSize * 1024 * 1024) {
 				toast.error(`File size should not exceed ${maxSize} MB.`);
 				continue;
 			}
@@ -230,17 +235,17 @@ export const MessageComposer = forwardRef<
 		if (active && suggestions.length > 0) {
 			if (e.key === 'ArrowDown') {
 				e.preventDefault();
-				setSelected((i) => Math.min(i + 1, suggestions.length - 1));
+				setSelected(Math.min(highlighted + 1, suggestions.length - 1));
 				return;
 			}
 			if (e.key === 'ArrowUp') {
 				e.preventDefault();
-				setSelected((i) => Math.max(i - 1, 0));
+				setSelected(Math.max(highlighted - 1, 0));
 				return;
 			}
 			if (e.key === 'Enter' || e.key === 'Tab') {
 				e.preventDefault();
-				pick(suggestions[selected]);
+				pick(suggestions[highlighted]);
 				return;
 			}
 			if (e.key === 'Escape') {
@@ -275,12 +280,12 @@ export const MessageComposer = forwardRef<
 							key={`${s.kind}-${s.id}`}
 							type="button"
 							role="option"
-							aria-selected={i === selected}
+							aria-selected={i === highlighted}
 							onMouseDown={(e) => e.preventDefault()}
 							onClick={() => pick(s)}
 							className={cn(
 								'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm',
-								i === selected && 'bg-muted'
+								i === highlighted && 'bg-muted'
 							)}
 						>
 							{s.kind === 'channel' ? (

@@ -49,14 +49,30 @@ const isJsonObjectText = (text: string) => {
 };
 const objectOrEmpty = (text: unknown) => (typeof text === 'string' && text.trim() !== '' ? JSON.parse(text) : {});
 
-/** What the chosen extraction engine cannot run without, or a malformed JSON box; null when the form is fine. */
+/**
+ * Why the text splitters could not use these chunk settings, or null (#235);
+ * the same rule as the server's `_chunk_settings_error`. A cleared box (null)
+ * leaves the stored value, which the server checks.
+ */
+export function chunkSettingsError(size: unknown, overlap: unknown): string | null {
+	const isNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+	if (isNumber(size) && (size < 1 || !Number.isInteger(size))) return 'Chunk Size must be at least 1.';
+	if (isNumber(overlap) && (overlap < 0 || !Number.isInteger(overlap))) return 'Chunk Overlap cannot be negative.';
+	if (isNumber(size) && isNumber(overlap) && overlap >= size)
+		return `Chunk Overlap must be smaller than Chunk Size (${overlap} is not smaller than ${size}).`;
+	return null;
+}
+
+/**
+ * What the chosen extraction engine cannot run without, a malformed JSON box,
+ * or a chunk setting the splitters cannot use; null when the form is fine.
+ */
 export function ragFormError(c: Rec): string | null {
 	const engine = c.CONTENT_EXTRACTION_ENGINE;
-	if (engine === 'external') {
-		if (blank(c.EXTERNAL_DOCUMENT_LOADER_URL)) return 'External Document Loader URL required.';
-		if (c.EXTERNAL_DOCUMENT_LOADER_HEADERS && !isJsonObjectText(c.EXTERNAL_DOCUMENT_LOADER_HEADERS))
-			return 'Headers must be a valid JSON object';
-	}
+	if (engine === 'external' && blank(c.EXTERNAL_DOCUMENT_LOADER_URL)) return 'External Document Loader URL required.';
+	// Saved whichever engine is selected, and the server takes only an object (#234).
+	if (c.EXTERNAL_DOCUMENT_LOADER_HEADERS && !isJsonObjectText(c.EXTERNAL_DOCUMENT_LOADER_HEADERS))
+		return 'External Document Loader Headers must be a valid JSON object';
 	if (engine === 'tika' && blank(c.TIKA_SERVER_URL)) return 'Tika Server URL required.';
 	if (engine === 'docling' && blank(c.DOCLING_SERVER_URL)) return 'Docling Server URL required.';
 	if (
@@ -71,8 +87,17 @@ export function ragFormError(c: Rec): string | null {
 	if (engine === 'paddleocr_vl' && blank(c.PADDLEOCR_VL_BASE_URL)) return 'PaddleOCR-vl API URL required.';
 	if (engine === 'mineru' && c.MINERU_API_MODE === 'cloud' && blank(c.MINERU_API_KEY))
 		return 'MinerU API Key required for Cloud API mode.';
-	if (c.DOCLING_PARAMS && !parsesAsJson(c.DOCLING_PARAMS)) return 'Invalid JSON format in Docling Parameters';
-	if (c.MINERU_PARAMS && !parsesAsJson(c.MINERU_PARAMS)) return 'Invalid JSON format in MinerU Parameters';
+	const chunk = chunkSettingsError(c.CHUNK_SIZE, c.CHUNK_OVERLAP);
+	if (chunk) return chunk;
+	// The server takes only an object here, so other JSON (`[]`) is refused too (#234).
+	for (const [key, name] of [
+		['DOCLING_PARAMS', 'Docling Parameters'],
+		['MINERU_PARAMS', 'MinerU Parameters']
+	] as const) {
+		if (!c[key]) continue;
+		if (!parsesAsJson(c[key])) return `Invalid JSON format in ${name}`;
+		if (!isJsonObjectText(c[key])) return `${name} must be a JSON object`;
+	}
 	return null;
 }
 
@@ -99,6 +124,36 @@ export function buildRagPayload(c: Rec): Rec {
 		MINERU_PARAMS: objectOrEmpty(c.MINERU_PARAMS),
 		MINERU_FILE_EXTENSIONS: parseList(c.MINERU_FILE_EXTENSIONS)
 	};
+}
+
+/**
+ * What a save changed on its own (#232): the warnings the server sent, and
+ * the flags it stored differently from what the form sent, for the form to
+ * take over. A reranker that cannot load turns hybrid search off.
+ */
+export function ragSaveOutcome(sent: Rec, res: Rec | null | undefined): { warnings: string[]; changes: Rec } {
+	const warnings = Array.isArray(res?.warnings) ? res.warnings.filter((w: unknown) => typeof w === 'string') : [];
+	const changes: Rec = {};
+	const stored = res?.ENABLE_RAG_HYBRID_SEARCH;
+	if (typeof stored === 'boolean' && stored !== sent.ENABLE_RAG_HYBRID_SEARCH)
+		changes.ENABLE_RAG_HYBRID_SEARCH = stored;
+	return { warnings, changes };
+}
+
+/**
+ * What the admin should be told after Reindex, or null when every file was
+ * embedded again (#308). The reply is POST /knowledge/reindex's report; an
+ * older server answered `true`, which is taken as success.
+ */
+export function reindexProblem(res: Rec | boolean | null | undefined): string | null {
+	if (!res || typeof res !== 'object' || res.status !== false) return null;
+	const failed: Rec[] = Array.isArray(res.failed) ? res.failed : [];
+	const names = failed
+		.slice(0, 3)
+		.map((f) => f.filename || f.file_id)
+		.join(', ');
+	const more = failed.length > 3 ? `, and ${failed.length - 3} more` : '';
+	return `${failed.length} of ${res.total} files could not be embedded again and are missing from knowledge search until they are (${names}${more}); the backend log has the errors.`;
 }
 
 export type Credentials = { url: string; key: string };
@@ -132,17 +187,27 @@ export function toEmbeddingForm(res: Rec): EmbeddingForm {
 
 /** Why the embedding model cannot be applied, or null. */
 export function embeddingError(e: EmbeddingForm): string | null {
+	// A cleared box is sent as 1. Below 1 fails every embedding once saved (#353).
+	if (e.batchSize !== null && (!Number.isInteger(e.batchSize) || e.batchSize < 1))
+		return 'Embedding Batch Size must be a whole number of at least 1.';
 	if (e.engine === '' && e.model.split('/').length - 1 > 1)
 		return 'Model filesystem path detected. Model shortname is required for update, cannot continue.';
-	if ((e.engine === 'ollama' || e.engine === 'openai') && blank(e.model)) return 'Embedding model is required.';
+	// The local engine too: saved without a model, nothing would be loaded to embed with (#532).
+	if ((e.engine === '' || e.engine === 'ollama' || e.engine === 'openai') && blank(e.model))
+		return 'Embedding model is required.';
 	if (e.engine === 'azure_openai' && (blank(e.azure.key) || blank(e.azure.url) || blank(e.azure.version)))
 		return 'Azure OpenAI URL, key and version are required.';
 	return null;
 }
 
-/** The body of `POST /retrieval/embedding/update`: only the chosen engine's connection is sent. */
-export function buildEmbeddingPayload(e: EmbeddingForm) {
+/**
+ * The body of `POST /retrieval/embedding/update`: only the chosen engine's
+ * connection is sent. `forceReload: false`, for a plain Save, lets the server
+ * keep a loaded model that did not change instead of loading it again (#532).
+ */
+export function buildEmbeddingPayload(e: EmbeddingForm, { forceReload = true }: { forceReload?: boolean } = {}) {
 	const payload: Rec & { RAG_EMBEDDING_ENGINE: string; RAG_EMBEDDING_MODEL: string } = {
+		force_reload: forceReload,
 		RAG_EMBEDDING_ENGINE: e.engine,
 		RAG_EMBEDDING_MODEL: e.model,
 		RAG_EMBEDDING_BATCH_SIZE: e.batchSize ?? 1,

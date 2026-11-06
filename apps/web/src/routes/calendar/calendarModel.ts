@@ -74,21 +74,39 @@ export const headerText = (view: CalendarViewMode, d: Date) =>
 /** A local-midnight key for a day, for grouping events. */
 export const dayKey = (d: Date) => String(midnight(d).getTime());
 
-/** Events grouped by every local day they touch (an event spanning three days is under all three). */
+/**
+ * Events grouped by every local day they touch (an event spanning three days is under all three).
+ * The end is exclusive, so an event that ends at midnight is not on the day that midnight starts.
+ */
 export function eventsByDay(events: CalendarEventModel[]): Record<string, CalendarEventModel[]> {
 	const map: Record<string, CalendarEventModel[]> = {};
 	for (const e of events) {
 		const start = midnight(new Date(e.start_at / NS));
-		const last = Math.max(start.getTime(), midnight(new Date((e.end_at || e.start_at) / NS)).getTime());
+		const lastMs = e.end_at && e.end_at > e.start_at ? e.end_at / NS - 1 : e.start_at / NS;
+		const last = Math.max(start.getTime(), midnight(new Date(lastMs)).getTime());
 		for (let d = start; d.getTime() <= last; d = addDays(d, 1)) (map[dayKey(d)] ??= []).push(e);
 	}
 	return map;
 }
 
-/** Events that *start* in a given local hour of a day (the week and day grids). */
+/**
+ * Timed events that *start* in a given local hour of a day (the week and day grids); all-day events are in the band.
+ * The hour runs to the next hour's local start, not a fixed 60 minutes (#321): on a spring-forward day the skipped
+ * hour is empty instead of repeating the next one, and on a fall-back day the repeated hour holds both of its passes.
+ */
 export function eventsInHour(events: CalendarEventModel[], day: Date, hour: number): CalendarEventModel[] {
 	const from = new Date(day.getFullYear(), day.getMonth(), day.getDate(), hour).getTime();
-	return events.filter((e) => e.start_at / NS >= from && e.start_at / NS < from + 3_600_000);
+	const to = new Date(day.getFullYear(), day.getMonth(), day.getDate(), hour + 1).getTime();
+	return events.filter((e) => !e.all_day && e.start_at / NS >= from && e.start_at / NS < to);
+}
+
+/**
+ * The events in a day's band above the hours of the week and day grids: all-day events, and timed
+ * events that began on an earlier day and continue into this one, which have no start hour here (#319).
+ */
+export function bandEvents(byDay: Record<string, CalendarEventModel[]>, day: Date): CalendarEventModel[] {
+	const dayStart = midnight(day).getTime();
+	return (byDay[dayKey(day)] ?? []).filter((e) => e.all_day || e.start_at / NS < dayStart);
 }
 
 export const formatHour = (h: number) => (h === 0 ? '12 AM' : h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`);
@@ -109,11 +127,18 @@ export const REPEAT_RRULES: Record<string, string> = {
 	yearly: 'FREQ=YEARLY'
 };
 
-/** The repeat option for a stored RRULE; '' (no repeat) for none or for a rule the form cannot express. */
+/** The Repeat choice for a stored rule the menu cannot show: it keeps the rule as it is. */
+export const CUSTOM_REPEAT = 'custom';
+
+/**
+ * The repeat option for a stored RRULE: '' (no repeat) for none, and
+ * CUSTOM_REPEAT for a rule the form cannot express, so choosing No Repeat can
+ * clear it (#510).
+ */
 export function repeatFromRrule(rrule: string | null | undefined): string {
 	if (!rrule) return '';
 	const normalized = rrule.toUpperCase().replace(/\s/g, '');
-	return Object.entries(REPEAT_RRULES).find(([, v]) => v === normalized)?.[0] ?? '';
+	return Object.entries(REPEAT_RRULES).find(([, v]) => v === normalized)?.[0] ?? CUSTOM_REPEAT;
 }
 
 /** `YYYY-MM-DD` and `HH:MM` in local time, for date/time inputs. */
@@ -123,6 +148,42 @@ export const nsToDate = (ns: number) => {
 };
 export const nsToTime = (ns: number) => new Date(ns / NS).toTimeString().slice(0, 5);
 export const dateTimeToNs = (date: string, time: string) => new Date(`${date}T${time || '00:00'}`).getTime() * NS;
+
+/** The reminder choices the event form offers, as minutes before (-1: none). */
+export const REMINDERS: [number, string][] = [
+	[-1, 'None'],
+	[0, 'At time of event'],
+	[5, '5 minutes before'],
+	[10, '10 minutes before'],
+	[15, '15 minutes before'],
+	[30, '30 minutes before'],
+	[60, '1 hour before']
+];
+
+/**
+ * The reminder choices, with the given values (the event's saved one and the
+ * form's current one) added when they are not among them (#324). A reminder set elsewhere (the assistant's calendar tool, say,
+ * at 120 minutes) showed as "None", and picking None then changed nothing.
+ */
+export function reminderOptions(...values: number[]): [number, string][] {
+	const own = [...new Set(values)]
+		.filter((minutes) => minutes >= 0 && !REMINDERS.some(([listed]) => listed === minutes))
+		.map((minutes): [number, string] => [minutes, reminderLabel(minutes)]);
+	return own.length ? [...REMINDERS, ...own].sort((a, b) => a[0] - b[0]) : REMINDERS;
+}
+
+/** The server sends a reminder at most this long before the event (`MAX_ALERT_LEAD_MINUTES`). */
+const MAX_REMINDER_MINUTES = 22 * 60;
+
+const leadLabel = (minutes: number) =>
+	minutes % 60 === 0
+		? `${minutes / 60} hour${minutes === 60 ? '' : 's'} before`
+		: `${minutes} minute${minutes === 1 ? '' : 's'} before`;
+
+const reminderLabel = (minutes: number) =>
+	minutes > MAX_REMINDER_MINUTES
+		? `${leadLabel(minutes)} (sent ${leadLabel(MAX_REMINDER_MINUTES)})`
+		: leadLabel(minutes);
 
 export type EventFields = {
 	title: string;
@@ -149,17 +210,22 @@ export function eventFields(
 	now = new Date()
 ): EventFields {
 	if (event) {
+		// The grids read an end as exclusive, so an all-day event that ends at
+		// midnight (as one made in chat can) ends on the day before it; the
+		// form, which saves an all-day end as 23:59 of its date, shows that day.
+		const lastAllDayMoment = event.all_day && event.end_at && event.end_at > event.start_at ? event.end_at - NS : null;
 		return {
 			title: event.title,
 			description: event.description || '',
 			calendarId: event.calendar_id,
 			startDate: nsToDate(event.start_at),
 			startTime: nsToTime(event.start_at),
-			endDate: event.end_at ? nsToDate(event.end_at) : '',
+			endDate: lastAllDayMoment ? nsToDate(lastAllDayMoment) : event.end_at ? nsToDate(event.end_at) : '',
 			endTime: event.end_at ? nsToTime(event.end_at) : '',
 			allDay: event.all_day,
 			location: event.location || '',
-			alertMinutes: event.meta?.alert_minutes ?? 10,
+			// Any negative means no reminder, as the server reads it.
+			alertMinutes: Math.max(event.meta?.alert_minutes ?? 10, -1),
 			repeat: repeatFromRrule(event.rrule)
 		};
 	}
@@ -232,9 +298,9 @@ export function eventPayload(
 			start_at: start,
 			end_at: end ?? blank,
 			all_day: f.allDay,
-			// A rule the Repeat menu cannot show opens as "No Repeat"; leave it out
-			// so the update keeps it, rather than clearing it on any edit.
-			rrule: REPEAT_RRULES[f.repeat] || (editing?.rrule && !repeatFromRrule(editing.rrule) ? undefined : blank),
+			// A rule the Repeat menu cannot show opens as "Custom rule"; left out
+			// while that is chosen, so the update keeps it. No Repeat clears it.
+			rrule: f.repeat === CUSTOM_REPEAT ? undefined : REPEAT_RRULES[f.repeat] || blank,
 			location: f.location.trim() || blank,
 			meta: { alert_minutes: f.alertMinutes }
 		}

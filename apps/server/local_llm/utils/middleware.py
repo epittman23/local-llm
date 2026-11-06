@@ -114,6 +114,7 @@ from local_llm.utils.misc import (
     replace_system_message_content,
     set_last_user_message_content,
     strip_empty_content_blocks,
+    with_output_text,
 )
 from local_llm.utils.payload import apply_params_to_form_data, apply_system_prompt_to_body, resolve_system_prompt
 from local_llm.utils.response import merge_usage, normalize_usage
@@ -794,7 +795,7 @@ def _done(data: dict, current_output: list) -> tuple[list, dict | None]:
 
 
 def _completed(data: dict, current_output: list) -> tuple[list, dict | None]:
-    response_data = data.get('response', {})
+    response_data = data.get('response') or {}
     # Some providers send an empty output on response.completed despite having streamed items
     new_output = response_data.get('output') or current_output
 
@@ -811,7 +812,8 @@ def _completed(data: dict, current_output: list) -> tuple[list, dict | None]:
 
 
 def _failed(data: dict, current_output: list) -> tuple[list, dict | None]:
-    return current_output, {'error': data.get('response', {}).get('error', {})}
+    # `response` may be null on a failure; the caller supplies a message then (#167).
+    return current_output, {'error': (data.get('response') or {}).get('error', {})}
 
 
 _RESPONSES_EVENT_HANDLERS = {
@@ -1434,20 +1436,14 @@ async def chat_web_search_handler(request: Request, form_data: dict, extra_param
                 detail = 'Query generation failed'
             raise Exception(detail)
 
-        response = res['choices'][0]['message']['content']
-
-        try:
-            bracket_start = response.rfind('{')
-            bracket_end = response.rfind('}') + 1
-
-            if bracket_start == -1 or bracket_end == -1:
-                raise Exception('No JSON object found in the response')
-
-            response = response[bracket_start:bracket_end]
-            queries = JSONCodec.loads(response)
-            queries = queries.get('queries', [])
-        except Exception:
-            queries = [response]
+        response = res['choices'][0]['message']['content'] or ''
+        found = _last_json_object(response)
+        if found is not None:
+            queries = found.get('queries', [])
+        else:
+            # A reply with no braces is taken as the query itself; one whose
+            # JSON did not parse (cut short, say) gives way to the user's message.
+            queries = [user_message or ''] if '{' in response else [response]
 
         if ENABLE_QUERIES_CACHE:
             request.state.cached_queries = queries
@@ -1812,20 +1808,8 @@ async def chat_image_generation_handler(request: Request, form_data: dict, extra
                         detail = 'Image prompt generation failed'
                     raise Exception(detail)
 
-                response = res['choices'][0]['message']['content']
-
-                try:
-                    bracket_start = response.rfind('{')
-                    bracket_end = response.rfind('}') + 1
-
-                    if bracket_start == -1 or bracket_end == -1:
-                        raise Exception('No JSON object found in the response')
-
-                    response = response[bracket_start:bracket_end]
-                    response = JSONCodec.loads(response)
-                    prompt = response.get('prompt', [])
-                except Exception:
-                    prompt = user_message
+                found = _last_json_object(res['choices'][0]['message']['content'] or '')
+                prompt = found.get('prompt', []) if found is not None else user_message
 
             except Exception as e:
                 log.exception(e)
@@ -1922,19 +1906,13 @@ async def chat_completion_files_handler(
                     },
                     user,
                 )
-                queries_response = queries_response['choices'][0]['message']['content']
-
-                try:
-                    bracket_start = queries_response.rfind('{')
-                    bracket_end = queries_response.rfind('}') + 1
-
-                    if bracket_start == -1 or bracket_end == -1:
-                        raise Exception('No JSON object found in the response')
-
-                    queries_response = queries_response[bracket_start:bracket_end]
-                    queries_response = JSONCodec.loads(queries_response)
-                except Exception:
-                    queries_response = {'queries': [queries_response]}
+                queries_response = queries_response['choices'][0]['message']['content'] or ''
+                found = _last_json_object(queries_response)
+                if found is None:
+                    # As in web search: a reply with no braces is the query; one whose JSON
+                    # did not parse gives no queries, so the user's message is used below.
+                    found = {'queries': [] if '{' in queries_response else [queries_response]}
+                queries_response = found
 
                 queries = queries_response.get('queries', [])
             except Exception:
@@ -2711,7 +2689,10 @@ async def _selected_tools(
     tools_dict = {}
     mcp_tools_dict = {}
     db_tool_ids = []
-    for tool_id in tool_ids:
+    # Once each, in order: a server listed twice connected twice, and the
+    # second client replaced the first in mcp_clients, so the first was never
+    # disconnected (#521).
+    for tool_id in dict.fromkeys(tool_ids):
         if tool_id.startswith('server:mcp:'):
             server_id = tool_id[len('server:mcp:') :]
             try:
@@ -3220,24 +3201,14 @@ async def build_chat_response_context(request, form_data, user, model, metadata,
 async def execute_tool_call_for_output(request, form_data, user, metadata, event_caller, event_emitter, tool_call):
     tools = metadata.get('tools', {})
     name = tool_call.get('function', {}).get('name', '')
-    tool_args = tool_call.get('function', {}).get('arguments', '{}')
-    params = {}
-    if tool_args and tool_args.strip():
-        try:
-            params = JSONCodec.loads(tool_args)
-        except Exception:
-            try:
-                params = ast.literal_eval(tool_args)
-            except Exception as e:
-                log.debug(e)
-                return {
-                    'tool_call_id': tool_call.get('id', ''),
-                    'content': (
-                        'Error: Tool call arguments could not be parsed. '
-                        'The model generated malformed or incomplete JSON.'
-                    ),
-                }
-    tool_call.setdefault('function', {})['arguments'] = JSONCodec.dumps(params)
+    params = _parse_tool_params(tool_call)
+    if params is None:
+        return {
+            'tool_call_id': tool_call.get('id', ''),
+            'content': (
+                'Error: Tool call arguments could not be parsed. The model generated malformed or incomplete JSON.'
+            ),
+        }
 
     tool = tools.get(name)
     if not tool:
@@ -3463,11 +3434,24 @@ async def drain_approved_tool_calls(request, form_data, user, model, metadata) -
                 ):
                     message['output'] = strip_reasoning_details(output)
 
-            form_data['messages'] = process_messages_with_output(
+            # Keep the system message process_chat_payload built (the chat
+            # prompt, memories, skills, attached knowledge, and retrieved
+            # context when RAG_SYSTEM_CONTEXT is on) and send the user's
+            # images again, resolved as the normal path resolves them: the
+            # stored history alone has neither (#164). What the normal path
+            # adds to the user message itself (retrieved context by default,
+            # file tags, stripped skill mentions) is still missing: the user
+            # message is rebuilt from the stored history alone.
+            system_message = get_system_message(form_data.get('messages', []))
+            _inline_message_images(db_messages)
+            replayed = process_messages_with_output(
                 db_messages,
                 reasoning_format=get_reasoning_format(model),
             )
-            form_data['messages'] = sanitize_tool_pairs(form_data['messages'])
+            form_data['messages'] = sanitize_tool_pairs([system_message, *replayed] if system_message else replayed)
+            # A saved chat stores an image by its file id; resolve it to a
+            # data URL (with the access check) as process_chat_payload does.
+            await convert_url_images_to_base64(form_data, user=user)
 
         if not paused and ENABLE_PLUGINS:
             filter_functions = await get_filter_functions(request, model, metadata.get('filter_ids', []))
@@ -3596,7 +3580,13 @@ def build_response_object(response, response_data):
     return response
 
 
-def update_assistant_message_from_stream(assistant_message, raw):
+def update_assistant_message_from_stream(assistant_message, raw, stream_usage: dict):
+    """Add one streamed line to the assistant message the outlet filters read.
+
+    `stream_usage` holds the usage reported so far on this stream. A provider
+    can report its running usage on several chunks, so each report replaces
+    the keys it carries rather than adding to them (#155).
+    """
     line = raw.decode('utf-8', 'replace') if isinstance(raw, bytes) else raw
     if not isinstance(line, str):
         return
@@ -3626,13 +3616,15 @@ def update_assistant_message_from_stream(assistant_message, raw):
             if output:
                 assistant_message['output'] = output
             if meta and meta.get('usage'):
-                assistant_message['usage'] = merge_usage(assistant_message.get('usage'), meta['usage'])
+                stream_usage.update(meta['usage'])
+                assistant_message['usage'] = normalize_usage(stream_usage)
             continue
 
         raw_usage = data.get('usage', {}) or {}
         raw_usage.update(data.get('timings', {}))
         if raw_usage:
-            assistant_message['usage'] = merge_usage(assistant_message.get('usage'), raw_usage)
+            stream_usage.update(raw_usage)
+            assistant_message['usage'] = normalize_usage(stream_usage)
 
         for choice in data.get('choices', []):
             delta = choice.get('delta', {}) or {}
@@ -3747,6 +3739,39 @@ def _messages_for_tasks(message_list: list[dict]) -> list[dict]:
             }
         )
     return messages
+
+
+_JSON_OBJECT_START = re.compile(r'\{\s*["}]')
+
+
+def _last_json_object(text: str) -> dict | None:
+    """The last JSON object in a task model's reply, or None when it has none.
+
+    Objects are read with the JSON decoder from left to right, each one whole,
+    so a brace inside one of their strings (a search query about `{set}`
+    syntax) is neither the start nor the end of an object, as it was when the
+    reply was sliced from its last `{` (#168). The last one is the answer when
+    the model echoes the template's example first. Only a `{` that can open an
+    object (`{"` or `{}`) is tried, so a reply full of code braces is not
+    decoded at every one.
+    """
+    decoder = json.JSONDecoder()
+    found = None
+    pos = 0
+    while match := _JSON_OBJECT_START.search(text, pos):
+        try:
+            value, end = decoder.raw_decode(text, match.start())
+        except ValueError:
+            pos = match.start() + 1
+            continue
+        except RecursionError:
+            # Nested past the interpreter's limit: no task reply looks like
+            # this, and retrying at each inner brace would take quadratic time.
+            break
+        if isinstance(value, dict):
+            found = value
+        pos = end
+    return found
 
 
 def _task_reply_json(res: dict, text_from_message) -> str:
@@ -4075,6 +4100,11 @@ async def outlet_filter_handler(ctx):
                             }
                             if content_changed:
                                 message_update['content'] = message_content or ''
+                                if not output_changed and original_message.get('output'):
+                                    # The new text goes into the output too: the next request reads it (#502).
+                                    message['output'] = message_update['output'] = with_output_text(
+                                        original_message['output'], message_content or ''
+                                    )
                             await Chats.upsert_message_to_chat_by_id_and_message_id(
                                 chat_id,
                                 outlet_message_id,
@@ -4090,6 +4120,88 @@ async def outlet_filter_handler(ctx):
                 )
     except Exception as e:
         log.debug('Error running outlet filters: %s', e)
+
+
+def _reasoning_output(choice_message: dict) -> list[dict]:
+    """The reasoning item of a non-streaming reply, as a one-item output list (empty without reasoning)."""
+    reasoning_content = choice_message.get('reasoning_content') or choice_message.get('reasoning')
+    reasoning_details = get_reasoning_details(choice_message)
+    if not (reasoning_content or reasoning_details):
+        return []
+    reasoning_item = {
+        'type': 'reasoning',
+        'id': output_id('r'),
+        'status': 'completed',
+        'start_tag': '<think>',
+        'end_tag': '</think>',
+        'attributes': {'type': 'reasoning_content'},
+        'content': [{'type': 'output_text', 'text': reasoning_content}] if reasoning_content else [],
+        'summary': None,
+    }
+    if reasoning_details:
+        reasoning_item['reasoning_details'] = (
+            reasoning_details if isinstance(reasoning_details, list) else [reasoning_details]
+        )
+    return [reasoning_item]
+
+
+async def _publish_chat_failed(request, user, metadata: dict, message: str) -> None:
+    """Tell chat-event subscribers (webhooks) that a saved chat's reply failed."""
+    chat_id = metadata.get('chat_id')
+    if getattr(request.state, 'internal', False) is True or not chat_id or not is_saved_chat_id(chat_id):
+        return
+    webui_url = await Config.get('webui.url')
+    await publish_event(
+        request,
+        EVENTS.CHAT_FAILED,
+        actor=user,
+        subject_id=chat_id,
+        subject_type='chat',
+        data={
+            'user_id': user.id,
+            'chat_id': chat_id,
+            'message_id': metadata.get('message_id'),
+            'model_id': metadata.get('model_id'),
+            'url': f'{webui_url}/c/{chat_id}' if webui_url else f'/c/{chat_id}',
+            'message': message,
+        },
+        message='Chat failed',
+    )
+
+
+async def _finish_reply_without_text(
+    ctx: dict, choice_message: dict, *, finish_reason: str | None, usage: dict, save_to_chat: bool
+) -> None:
+    """Finish a non-streaming reply that has no text, so it does not stay "generating" (#165).
+
+    A native tool-call reply has `content: null`: running its tools is the
+    streaming path's job, so say so. A thinking model can spend its whole
+    budget reasoning and stop for length with ''. The reasoning and usage
+    are kept. It is reported as a failed reply (CHAT_FAILED); the title,
+    tag, follow-up and outlet handlers, which work on an answer, are skipped.
+    """
+    metadata = ctx['metadata']
+    event_emitter = ctx['event_emitter']
+    if choice_message.get('tool_calls'):
+        error = (
+            'The model asked to call tools, which needs a streamed reply. Turn on Stream Chat Response '
+            "(in your Settings, or in the model's Advanced Params), then regenerate."
+        )
+    elif finish_reason == 'length':
+        error = 'The model returned no answer: it reached its token limit, likely while reasoning.'
+    else:
+        error = 'The model returned no text.'
+    output = _reasoning_output(choice_message)
+    extra = {'usage': usage} if usage else {}
+    if save_to_chat:
+        await Chats.upsert_message_to_chat_by_id_and_message_id(
+            metadata['chat_id'],
+            metadata['message_id'],
+            {'done': True, 'role': 'assistant', 'output': output, 'error': {'content': error}, **extra},
+        )
+    await event_emitter({'type': 'chat:completion', 'data': {'done': True, 'output': output, **extra}})
+    await event_emitter({'type': 'chat:message:error', 'data': {'error': {'content': error}}})
+    await _publish_chat_failed(ctx['request'], ctx['user'], metadata, error)
 
 
 async def non_streaming_chat_response_handler(response, ctx):
@@ -4110,7 +4222,8 @@ async def non_streaming_chat_response_handler(response, ctx):
 
     if event_emitter:
         try:
-            if 'error' in response_data:
+            provider_error = 'error' in response_data
+            if provider_error:
                 error = response_data.get('error')
 
                 if isinstance(error, dict):
@@ -4148,7 +4261,11 @@ async def non_streaming_chat_response_handler(response, ctx):
 
             choices = response_data.get('choices', [])
             response_output = response_data.get('output')
-            content = choices[0].get('message', {}).get('content') if choices else ''
+            first_choice = choices[0] if choices else {}
+            if not isinstance(first_choice, dict):
+                first_choice = {}
+            choice_message = first_choice.get('message') or {}
+            content = choice_message.get('content') if choices else ''
 
             if choices and (content or response_output):
                 if content or response_output:
@@ -4164,28 +4281,7 @@ async def non_streaming_chat_response_handler(response, ctx):
                     # Use output from backend if provided (OR-compliant backends),
                     # otherwise generate from response content
                     if not response_output:
-                        choice_message = choices[0].get('message', {})
-                        reasoning_content = choice_message.get('reasoning_content') or choice_message.get('reasoning')
-                        reasoning_details = get_reasoning_details(choice_message)
-                        response_output = []
-                        if reasoning_content or reasoning_details:
-                            reasoning_item = {
-                                'type': 'reasoning',
-                                'id': output_id('r'),
-                                'status': 'completed',
-                                'start_tag': '<think>',
-                                'end_tag': '</think>',
-                                'attributes': {'type': 'reasoning_content'},
-                                'content': (
-                                    [{'type': 'output_text', 'text': reasoning_content}] if reasoning_content else []
-                                ),
-                                'summary': None,
-                            }
-                            if reasoning_details:
-                                reasoning_item['reasoning_details'] = (
-                                    reasoning_details if isinstance(reasoning_details, list) else [reasoning_details]
-                                )
-                            response_output.append(reasoning_item)
+                        response_output = _reasoning_output(choice_message)
                         response_output.append(
                             {
                                 'type': 'message',
@@ -4209,6 +4305,12 @@ async def non_streaming_chat_response_handler(response, ctx):
 
                     # Save message in the database
                     usage = normalize_usage(response_data.get('usage', {}) or {})
+                    if save_to_chat and metadata.get('assistant_message_id'):
+                        # Continuing a reply: the saved usage replaces the stored one, so add it in (#196).
+                        stored = await Chats.get_message_by_id_and_message_id(
+                            metadata['chat_id'], metadata['message_id']
+                        )
+                        usage = merge_usage((stored or {}).get('usage'), usage)
 
                     if save_to_chat:
                         await Chats.upsert_message_to_chat_by_id_and_message_id(
@@ -4232,29 +4334,19 @@ async def non_streaming_chat_response_handler(response, ctx):
                     await outlet_filter_handler(ctx)
                     await background_tasks_handler(ctx)
 
+            elif choices and not provider_error:
+                await _finish_reply_without_text(
+                    ctx,
+                    choice_message,
+                    finish_reason=first_choice.get('finish_reason'),
+                    usage=normalize_usage(response_data.get('usage', {}) or {}),
+                    save_to_chat=save_to_chat,
+                )
+
             response = build_response_object(response, merge_events_into_response(response_data, events))
         except Exception as e:
             log.debug('Error occurred while processing request: %s', e)
-            chat_id = metadata.get('chat_id')
-            if getattr(request.state, 'internal', False) is not True and chat_id and is_saved_chat_id(chat_id):
-                webui_url = await Config.get('webui.url')
-                await publish_event(
-                    request,
-                    EVENTS.CHAT_FAILED,
-                    actor=user,
-                    subject_id=chat_id,
-                    subject_type='chat',
-                    data={
-                        'user_id': user.id,
-                        'chat_id': chat_id,
-                        'message_id': metadata.get('message_id'),
-                        'model_id': metadata.get('model_id'),
-                        'url': f'{webui_url}/c/{chat_id}' if webui_url else f'/c/{chat_id}',
-                        'message': str(e),
-                    },
-                    message='Chat failed',
-                )
-            pass
+            await _publish_chat_failed(request, user, metadata, str(e))
 
         return response
 
@@ -4651,8 +4743,14 @@ def _url_citation_source(title: str, url: str) -> dict:
 def _parse_tool_params(tool_call: dict) -> dict | None:
     """The call's arguments as a dict (JSON, or a Python literal), written back onto it as JSON.
 
-    None when they can't be read."""
+    None when they can't be read, which includes valid JSON that is not an
+    object, such as `[]` or `"x"` (a tool takes named parameters), and a Python
+    literal holding what JSON cannot carry, such as a set (#166)."""
     tool_args = tool_call.get('function', {}).get('arguments', '{}')
+    if isinstance(tool_args, dict):
+        tool_args = JSONCodec.dumps(tool_args)
+    elif not isinstance(tool_args, str | None):
+        return None
     params = {}
     if tool_args and tool_args.strip():
         try:
@@ -4663,7 +4761,14 @@ def _parse_tool_params(tool_call: dict) -> dict | None:
             except Exception as e:
                 log.debug(e)
                 return None
-    tool_call.setdefault('function', {})['arguments'] = JSONCodec.dumps(params)
+    if not isinstance(params, dict):
+        return None
+    try:
+        arguments = JSONCodec.dumps(params)
+    except (TypeError, ValueError) as e:
+        log.debug(e)
+        return None
+    tool_call.setdefault('function', {})['arguments'] = arguments
     return params
 
 
@@ -4771,6 +4876,11 @@ class _StreamingReply:
             self._trim_empty_trailing_message(self.prior_output)
             self.output = []
             self.content_parts = []
+            # Continuing a reply: its usage so far counts too, since the save
+            # at the end replaces the stored usage with self.usage (#196).
+            stored_usage = normalize_usage(message.get('usage') or {}) if message else {}
+            if stored_usage:
+                self.usage = stored_usage
         elif existing_output:
             self.output = existing_output
         elif initial_content:
@@ -4874,7 +4984,7 @@ class _StreamingReply:
             if not line or line.isspace():
                 continue
             if not line.startswith('data:'):
-                await self._handle_plain_line(line)
+                await self._handle_plain_line(stream, line)
                 continue
             try:
                 if await self._handle_data_line(stream, line[5:].strip()):
@@ -4889,7 +4999,7 @@ class _StreamingReply:
         self._finish_stream_output()
         await self._queue_tool_calls(stream)
 
-    async def _handle_plain_line(self, data: str) -> None:
+    async def _handle_plain_line(self, stream: '_StreamPass', data: str) -> None:
         # Some upstreams return plain JSON error lines in a streaming response
         # (without SSE `data:` prefix). Try to normalize these into standard
         # error events so frontend and DB paths still receive them.
@@ -4897,6 +5007,7 @@ class _StreamingReply:
             raw_obj = JSONCodec.loads(data)
             raw_error = raw_obj.get('error') if isinstance(raw_obj, dict) else None
             if raw_error:
+                stream.errored = True
                 await self._save_error(raw_error)
                 await self.event_emitter({'type': 'chat:completion', 'data': {'error': raw_error}})
         except Exception:
@@ -4986,14 +5097,21 @@ class _StreamingReply:
 
             # Normalize and capture usage for DB persistence
             if response_metadata.get('usage'):
-                self.usage = merge_usage(self.usage, response_metadata['usage'])
+                self.usage = stream.add_usage(response_metadata['usage'])
                 response_metadata['usage'] = self.usage
 
-            if response_metadata.get('error'):
+            if 'error' in response_metadata:
+                # `response.failed`: save the error as the Chat Completions path
+                # does, so the reply still reads as failed after a reload, and
+                # give one with no error object a message of its own (#167).
+                error = response_metadata['error'] or {'message': 'The provider ended the reply with an error.'}
+                log.error('Provider returned error (Responses API stream): %s', error)
+                stream.errored = True
+                await self._save_error(error)
                 await self.event_emitter(
                     {
                         'type': 'chat:completion',
-                        'data': {'error': response_metadata['error']},
+                        'data': {'error': error},
                     }
                 )
 
@@ -5030,7 +5148,7 @@ class _StreamingReply:
         raw_usage = data.get('usage', {}) or {}
         raw_usage.update(data.get('timings', {}))  # llama.cpp
         if raw_usage:
-            self.usage = merge_usage(self.usage, raw_usage)
+            self.usage = stream.add_usage(raw_usage)
             await self.event_emitter(
                 {
                     'type': 'chat:completion',
@@ -5048,6 +5166,7 @@ class _StreamingReply:
             error = {'message': 'The provider ended the reply with an error.'}
         if error:
             log.error('Provider returned error (streaming): %s', error)
+            stream.errored = True
             # Text still buffered goes out first, so the reply is not marked
             # failed (and done) before its last words arrive.
             await stream.deltas.flush()
@@ -5452,7 +5571,17 @@ class _StreamingReply:
 
     async def _queue_tool_calls(self, stream: '_StreamPass') -> None:
         """Finish the streamed function_call items and queue their calls; or, for the Responses API, queue
-        the function_call items that have no output yet."""
+        the function_call items that have no output yet. None from a response that ended in an error:
+        its calls may be cut off, and the reply is failed already (#501)."""
+        if stream.errored:
+            answered = {item.get('call_id') for item in self.output if item.get('type') == 'function_call_output'}
+            for item in self.output:
+                # Not run: marked failed, or the reply's finish would show them as completed.
+                if item.get('type') == 'function_call' and item.get('call_id') not in answered:
+                    if item.get('status') in (None, 'in_progress'):
+                        log.warning('Not running tool call %s: its response ended in an error', item.get('name'))
+                        item['status'] = 'failed'
+            return
         if stream.response_tool_calls:
             for tc in stream.response_tool_calls:
                 call_id = tc.get('id', '')
@@ -5524,6 +5653,17 @@ class _StreamingReply:
 
             try:
                 await self.consume(response, self.form_data)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                # The upstream body failed mid-stream (a reset connection, a
+                # payload error, an idle timeout). Keep what already streamed,
+                # finished, and clear the stream snapshot; the caller then
+                # records the error on the message and tells the chat (#163).
+                # Only the stream: later rounds save through _finish().
+                log.exception('the reply stream failed; saving what arrived')
+                await self._save_partial_state(response, cancelled=False)
+                raise
             finally:
                 if response.background:
                     await response.background()
@@ -5609,6 +5749,14 @@ class _StreamingReply:
         await background_tasks_handler(self.ctx)
 
     async def _save_cancelled_state(self, response) -> None:
+        await self._save_partial_state(response, cancelled=True)
+
+    async def _save_partial_state(self, response, *, cancelled: bool) -> None:
+        """Save what streamed so far as finished, and clear the stream snapshot.
+
+        `cancelled` also tells the chat the tasks were cancelled; after a
+        failure the caller reports the error, and that report announces it.
+        """
         # Close the response body iterator to trigger cleanup
         # in stream_wrapper's finally block and release the
         # upstream connection.  Without this, the async
@@ -5620,7 +5768,8 @@ class _StreamingReply:
                 pass
 
         async def save_cancelled_state():
-            await self.event_emitter({'type': 'chat:tasks:cancel'})
+            if cancelled:
+                await self.event_emitter({'type': 'chat:tasks:cancel'})
             if self.save_to_chat:
                 await Chats.upsert_message_to_chat_by_id_and_message_id(
                     self.metadata['chat_id'],
@@ -5960,6 +6109,8 @@ class _StreamPass:
 
     def __init__(self, reply: _StreamingReply, form_data: dict):
         self.response_tool_calls = []
+        # The provider ended this response with an error: its tool calls are not run (#501).
+        self.errored = False
         self.deltas = _DeltaBuffer(
             reply.event_emitter,
             reply.save_stream,
@@ -5969,6 +6120,22 @@ class _StreamPass:
             ),
         )
         self.filter_extra_params = {'__body__': form_data, **reply.extra_params} if reply.filter_functions else None
+        # The reply's usage before this request, and this request's own so far.
+        self.usage_before = reply.usage
+        self.usage = {}
+
+    def add_usage(self, chunk_usage: dict) -> dict:
+        """The reply's usage after a chunk of this stream that reports usage.
+
+        A provider can report its running usage on several chunks of one
+        stream (llama.cpp does with its timings when a request asks for them
+        per token), so each report replaces the keys it carries rather than
+        adding to them (#155). Each request of a
+        reply, such as a tool-call round, is billed on its own, so the stream's
+        usage is added to the reply's from before it.
+        """
+        self.usage = {**self.usage, **chunk_usage}
+        return merge_usage(self.usage_before, self.usage)
 
 
 class _ToolCallRounds:
@@ -6281,6 +6448,7 @@ async def _passthrough_stream(response, ctx: dict, events: list, filter_function
         return f'data: {item}\n\n'
 
     assistant_message = {}
+    stream_usage = {}
     filter_context = FilterContext()
     has_api_outlet_filters = ENABLE_API_OUTLET_FILTERS and bool(filter_functions)
     if ENABLE_API_OUTLET_FILTERS and not has_api_outlet_filters:
@@ -6312,7 +6480,7 @@ async def _passthrough_stream(response, ctx: dict, events: list, filter_function
 
         if data:
             if has_api_outlet_filters:
-                update_assistant_message_from_stream(assistant_message, data)
+                update_assistant_message_from_stream(assistant_message, data, stream_usage)
             yield data
 
     if has_api_outlet_filters and assistant_message:

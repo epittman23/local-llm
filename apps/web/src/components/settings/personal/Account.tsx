@@ -1,5 +1,5 @@
 import { Copy, Plus, RefreshCw, Trash2 } from 'lucide-react';
-import { type ChangeEvent, useEffect, useRef, useState } from 'react';
+import { type ChangeEvent, type FormEvent, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/common/ConfirmDialog';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import {
 	updateUserPassword,
 	updateUserProfile
 } from '@/lib/apis/auths';
+import { errorMessage } from '@/lib/apis/errors';
 import { getUserVariables, updateUserVariables } from '@/lib/apis/users';
 import { signOut } from '@/lib/auth/session';
 import { useAuthStore } from '@/lib/stores/authStore';
@@ -69,13 +70,39 @@ export default function Account() {
 	const [rows, setRows] = useState<VariableRow[]>([]);
 	const [saving, setSaving] = useState(false);
 	const [passwords, setPasswords] = useState({ current: '', next: '', confirm: '' });
+	// The password fields belong to a form of their own (#260), so Enter in one
+	// changes the password instead of saving the tab. Forms cannot nest, so it
+	// comes after the tab's form, and the fields name it with `form=`.
+	const passwordForm = useId();
+	// One password change at a time: a second Enter while the first is in flight
+	// would send the old password again, and fail beside the first one's success.
+	const changing = useRef(false);
+	const [changingPassword, setChangingPassword] = useState(false);
 	const [apiKey, setApiKey] = useState('');
+	// Why the key did not load. Only a 404 means there is none; on any other
+	// failure the tab must not offer to create one, which would replace it (#526).
+	const [apiKeyError, setApiKeyError] = useState<string | null>(null);
+	const [retryingKey, setRetryingKey] = useState(false);
 	const [confirmDeleteKey, setConfirmDeleteKey] = useState(false);
 	const fileRef = useRef<HTMLInputElement>(null);
 	const perms = user?.permissions as { features?: { api_keys?: boolean } } | undefined;
 	const canApiKeys =
 		(features.enable_api_keys ?? true) !== false && (user?.role === 'admin' || Boolean(perms?.features?.api_keys));
 	const canPassword = Boolean(features.enable_login_form) && Boolean(features.enable_password_change_form);
+
+	const loadAPIKey = useCallback(
+		async (live: () => boolean = () => true) => {
+			try {
+				const key = await getAPIKey(token);
+				if (!live()) return;
+				setApiKey(key ?? '');
+				setApiKeyError(null);
+			} catch (e) {
+				if (live()) setApiKeyError(errorMessage(e));
+			}
+		},
+		[token]
+	);
 
 	useEffect(() => {
 		let live = true;
@@ -100,13 +127,13 @@ export default function Account() {
 			});
 			setCustomGender(!GENDERS.includes(u.gender ?? ''));
 			setRows(variableRows((vars as { variables?: unknown } | null)?.variables));
-			if (canApiKeys) setApiKey(((await getAPIKey(token).catch(() => '')) as string) ?? '');
+			if (canApiKeys) await loadAPIKey(() => live);
 		})();
 		return () => {
 			live = false;
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [token]);
+	}, [token, loadAPIKey]);
 
 	const save = async () => {
 		if (!profile) return;
@@ -135,6 +162,19 @@ export default function Account() {
 			toast.error(`${e}`);
 		}
 		setSaving(false);
+	};
+
+	const submitPassword = async (e: FormEvent) => {
+		e.preventDefault();
+		if (!passwords.current || !passwords.next || changing.current) return;
+		changing.current = true;
+		setChangingPassword(true);
+		try {
+			await changePassword();
+		} finally {
+			changing.current = false;
+			setChangingPassword(false);
+		}
 	};
 
 	const changePassword = async () => {
@@ -170,7 +210,14 @@ export default function Account() {
 	const set = (patch: Partial<Profile>) => profile && setProfile({ ...profile, ...patch });
 
 	return (
-		<SettingsForm title="Account" onSubmit={save} saving={saving} loading={!profile} disabled={loadFailed}>
+		<SettingsForm
+			title="Account"
+			onSubmit={save}
+			saving={saving}
+			loading={!profile}
+			disabled={loadFailed}
+			after={canPassword && <form id={passwordForm} aria-label="Change Password" hidden onSubmit={submitPassword} />}
+		>
 			{profile && (
 				<>
 					{loadFailed && (
@@ -305,9 +352,10 @@ export default function Account() {
 
 					{canPassword && (
 						<SettingsSection title="Change Password">
-							{/* Its own inputs, submitted by its own button: the tab's Save must not change the password. */}
+							{/* Its own form, submitted by its own button or Enter: the tab's Save must not change the password, nor Enter here save the tab. */}
 							<SettingInput
 								type="password"
+								form={passwordForm}
 								aria-label="Current Password"
 								placeholder="Current Password"
 								autoComplete="current-password"
@@ -316,6 +364,7 @@ export default function Account() {
 							/>
 							<SettingInput
 								type="password"
+								form={passwordForm}
 								aria-label="New Password"
 								placeholder="New Password"
 								autoComplete="new-password"
@@ -324,6 +373,7 @@ export default function Account() {
 							/>
 							<SettingInput
 								type="password"
+								form={passwordForm}
 								aria-label="Confirm Password"
 								placeholder="Confirm Password"
 								autoComplete="new-password"
@@ -331,12 +381,12 @@ export default function Account() {
 								onChange={(e) => setPasswords({ ...passwords, confirm: e.target.value })}
 							/>
 							<Button
-								type="button"
+								type="submit"
+								form={passwordForm}
 								size="sm"
 								variant="outline"
 								className="self-start"
-								disabled={!passwords.current || !passwords.next}
-								onClick={() => void changePassword()}
+								disabled={!passwords.current || !passwords.next || changingPassword}
 							>
 								Update password
 							</Button>
@@ -345,7 +395,23 @@ export default function Account() {
 
 					{canApiKeys && (
 						<SettingsSection title="API Key">
-							{apiKey ? (
+							{apiKeyError ? (
+								<div className="flex flex-wrap items-center gap-2 text-xs">
+									<span className="text-destructive">{`The API key could not be loaded: ${apiKeyError}`}</span>
+									<Button
+										type="button"
+										size="sm"
+										variant="outline"
+										disabled={retryingKey}
+										onClick={() => {
+											setRetryingKey(true);
+											void loadAPIKey().finally(() => setRetryingKey(false));
+										}}
+									>
+										Try again
+									</Button>
+								</div>
+							) : apiKey ? (
 								<div className="flex items-center gap-1.5">
 									<Input readOnly type="password" aria-label="API Key" value={apiKey} className="h-8 text-xs" />
 									<Button

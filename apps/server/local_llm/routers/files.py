@@ -45,6 +45,7 @@ from local_llm.routers.retrieval import ProcessFileForm, process_file, process_f
 from local_llm.storage.provider import Storage
 from local_llm.utils.access_control.files import has_access_to_file
 from local_llm.utils.auth import get_admin_user, get_verified_user
+from local_llm.utils.background import run_in_background
 from local_llm.utils.json_codec import JSONCodec
 from local_llm.utils.misc import strict_match_mime_type
 
@@ -122,6 +123,39 @@ def _media_supported_for_extraction(
     return bool(content_extraction_engine and _matches_configured_mime_type(supported, content_type))
 
 
+# How long a knowledge upload that failed its base step is kept before it is
+# discarded (#310): the client polls the file's status every second, and must
+# read "failed" before the row is gone, or it takes the upload for a success.
+ORPHAN_DISCARD_DELAY_SECONDS = 10
+
+
+async def _discard_orphan_upload(file_id: str, knowledge_id: str, delay: float = ORPHAN_DISCARD_DELAY_SECONDS):
+    """Delete a knowledge upload whose base step failed, once its failure has been read (#310).
+
+    Left behind, it was never linked to the base, so folder sync uploaded it
+    again on every run and leaked another copy. Skipped if it was linked or
+    processed again meanwhile.
+    """
+    await asyncio.sleep(delay)
+    try:
+        file = await Files.get_file_by_id(file_id)
+        if not file or (file.data or {}).get('status') != 'failed':
+            return
+        if await Knowledges.get_knowledges_by_file_id(file_id):
+            return
+        # By file id only: deleting by hash would take the vectors of the
+        # base's own file with the same content, the usual cause of the failure.
+        await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=knowledge_id, filter={'file_id': file_id})
+        if await ASYNC_VECTOR_DB_CLIENT.has_collection(collection_name=f'file-{file_id}'):
+            await ASYNC_VECTOR_DB_CLIENT.delete_collection(collection_name=f'file-{file_id}')
+        if file.path:
+            await asyncio.to_thread(Storage.delete_file, file.path)
+        await Files.delete_file_by_id(file_id)
+        log.info('Discarded knowledge upload %s, whose base step failed', file_id)
+    except Exception:
+        log.exception(f'Could not discard knowledge upload {file_id}')
+
+
 async def process_uploaded_file(
     request,
     file,
@@ -132,6 +166,11 @@ async def process_uploaded_file(
     db: AsyncSession | None = None,
 ):
     async def _process_handler(db_session):
+        # An upload into a knowledge base is completed only once it is linked
+        # there: the status stream ends at the first "completed", which each
+        # step below used to write (#311).
+        knowledge_id = file_metadata.get('knowledge_id')
+        final_step = not knowledge_id
         try:
             content_type = file.content_type
 
@@ -155,11 +194,12 @@ async def process_uploaded_file(
                     file_metadata,
                     user,
                 )
-                await process_file(
+                await process_file_for(
                     request,
                     ProcessFileForm(file_id=file_item.id, content=result.get('text', '')),
-                    user=user,
-                    db=db_session,
+                    user,
+                    db_session,
+                    mark_completed=final_step,
                 )
 
             elif (
@@ -175,11 +215,12 @@ async def process_uploaded_file(
                     # extraction causes "Timeout reached while detecting
                     # encoding" errors.
                     log.info('Video file detected (%s), skipping text extraction', content_type)
-                    await Files.update_file_data_by_id(
-                        file_item.id,
-                        {'status': 'completed'},
-                        db=db_session,
-                    )
+                    if final_step:
+                        await Files.update_file_data_by_id(
+                            file_item.id,
+                            {'status': 'completed'},
+                            db=db_session,
+                        )
                 else:
                     raise Exception(f'File type {content_type} is not supported for processing')
 
@@ -188,17 +229,17 @@ async def process_uploaded_file(
                 # configured content extraction engine.
                 if not content_type:
                     log.info('File type %s is not provided, but trying to process anyway', file.content_type)
-                await process_file(
+                await process_file_for(
                     request,
                     ProcessFileForm(file_id=file_item.id),
-                    user=user,
-                    db=db_session,
+                    user,
+                    db_session,
+                    mark_completed=final_step,
                 )
 
             # Auto-link to Knowledge Collection when uploaded from one (#24807).
             # Mirrors POST /knowledge/{id}/file/add so linking doesn't depend
             # on the frontend staying connected after upload.
-            knowledge_id = file_metadata.get('knowledge_id')
             if knowledge_id:
                 try:
                     # Gate like POST /knowledge/{id}/file/add: a client-supplied
@@ -224,11 +265,12 @@ async def process_uploaded_file(
                         # Keep the generic file status stream open until the
                         # KB-specific vector write and durable link both finish.
                         await Files.update_file_data_by_id(file_item.id, {'status': 'processing'}, db=db_session)
-                        await process_file(
+                        await process_file_for(
                             request,
                             ProcessFileForm(file_id=file_item.id, collection_name=knowledge_id),
-                            user=user,
-                            db=db_session,
+                            user,
+                            db_session,
+                            mark_completed=False,
                         )
                         knowledge_file = await Knowledges.add_file_to_knowledge_by_id(
                             knowledge_id=knowledge_id,
@@ -242,7 +284,11 @@ async def process_uploaded_file(
                         log.info('Linked file %s to knowledge %s', file_item.id, knowledge_id)
                 except Exception as e:
                     log.warning(f'Failed to link file {file_item.id} to knowledge {knowledge_id}: {e}')
+                    # Marked failed below; discarded once the client has read that.
+                    run_in_background(_discard_orphan_upload(file_item.id, knowledge_id))
                     raise
+                # Linked (or refused, and left unlinked): only now is the upload done.
+                await Files.update_file_data_by_id(file_item.id, {'status': 'completed', 'error': None}, db=db_session)
 
         except Exception as e:
             log.error(f'Error processing file: {file_item.id}')

@@ -23,7 +23,7 @@ from sqlalchemy import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from local_llm.internal.db import Base, get_async_db_context
-from local_llm.utils.response import merge_usage, normalize_usage
+from local_llm.utils.response import normalize_usage
 
 ####################
 # Helpers
@@ -209,6 +209,28 @@ class ChatMessageModel(BaseModel):
 ####################
 
 
+def _model_reply_times(start_date: int | None, end_date: int | None, group_id: str | None):
+    """When each model replied, in the range and, with a group, to its members only.
+
+    The daily and hourly counts share it, so the group filter cannot again
+    apply to one and not the other: the 24-hour chart counted every user (#198).
+    """
+    from local_llm.models.groups import GroupMember
+
+    stmt = select(ChatMessage.created_at, ChatMessage.model_id).filter(
+        ChatMessage.role == 'assistant',
+        ChatMessage.model_id.isnot(None),
+    )
+    if start_date:
+        stmt = stmt.filter(ChatMessage.created_at >= start_date)
+    if end_date:
+        stmt = stmt.filter(ChatMessage.created_at <= end_date)
+    if group_id:
+        group_users = select(GroupMember.user_id).filter(GroupMember.group_id == group_id).scalar_subquery()
+        stmt = stmt.filter(ChatMessage.user_id.in_(group_users))
+    return stmt
+
+
 class ChatMessageTable:
     @staticmethod
     def _apply_message_data(message: ChatMessage, data: dict, now: int) -> None:
@@ -240,10 +262,12 @@ class ChatMessageTable:
         if 'context_summary' in data or 'contextSummary' in data:
             message.context_summary = data.get('context_summary') or data.get('contextSummary')
 
+        # The saved message carries the reply's whole usage (a continue starts
+        # from what was stored), so it replaces the row's: merging added it
+        # again on every later save of the chat (#196).
         usage = get_usage(data)
         if usage:
-            existing_usage = normalize_usage(message.usage)
-            message.usage = existing_usage if usage == existing_usage else merge_usage(existing_usage, usage)
+            message.usage = usage
         message.updated_at = now
 
     @staticmethod
@@ -971,22 +995,7 @@ class ChatMessageTable:
     ) -> dict[str, dict[str, int]]:
         """Get message counts grouped by day and model."""
         async with get_async_db_context(db) as db:
-            from local_llm.models.groups import GroupMember
-
-            stmt = select(ChatMessage.created_at, ChatMessage.model_id).filter(
-                ChatMessage.role == 'assistant',
-                ChatMessage.model_id.isnot(None),
-            )
-
-            if start_date:
-                stmt = stmt.filter(ChatMessage.created_at >= start_date)
-            if end_date:
-                stmt = stmt.filter(ChatMessage.created_at <= end_date)
-            if group_id:
-                group_users = select(GroupMember.user_id).filter(GroupMember.group_id == group_id).scalar_subquery()
-                stmt = stmt.filter(ChatMessage.user_id.in_(group_users))
-
-            result = await db.execute(stmt)
+            result = await db.execute(_model_reply_times(start_date, end_date, group_id))
             results = result.all()
 
             # Group by date -> model -> count
@@ -1013,21 +1022,12 @@ class ChatMessageTable:
         self,
         start_date: int | None = None,
         end_date: int | None = None,
+        group_id: str | None = None,
         db: AsyncSession | None = None,
     ) -> dict[str, dict[str, int]]:
         """Get message counts grouped by hour and model."""
         async with get_async_db_context(db) as db:
-            stmt = select(ChatMessage.created_at, ChatMessage.model_id).filter(
-                ChatMessage.role == 'assistant',
-                ChatMessage.model_id.isnot(None),
-            )
-
-            if start_date:
-                stmt = stmt.filter(ChatMessage.created_at >= start_date)
-            if end_date:
-                stmt = stmt.filter(ChatMessage.created_at <= end_date)
-
-            result = await db.execute(stmt)
+            result = await db.execute(_model_reply_times(start_date, end_date, group_id))
             results = result.all()
 
             # Group by hour -> model -> count

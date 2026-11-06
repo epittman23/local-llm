@@ -84,6 +84,16 @@ export const STARTUP_OWN: StepDef[] = [
 	{ id: 'open', label: 'Open the app' }
 ];
 
+/** First, when a stack an earlier launch started is still running for another address or checkout (#431). */
+export const STARTUP_STOP_EARLIER: StepDef[] = [
+	{
+		id: 'earlier',
+		label: 'Stop the backend an earlier launch started',
+		hint: { afterMs: 15_000, text: 'It stops as on close: open requests, benchmark runs and the served model first.' }
+	},
+	{ id: 'force', label: 'Force stop', optional: true }
+];
+
 export const STARTUP_ATTACH: StepDef[] = [
 	{ id: 'check', label: 'Check for a running backend' },
 	{ id: 'ready', label: 'Wait until it is ready' },
@@ -203,13 +213,20 @@ export function reduce(progress: Progress, event: ProgressEvent): Progress {
 			return update(progress, event.step, (s) =>
 				s.state === 'pending' ? { ...s, state: 'skipped', detail: event.reason } : s
 			);
-		case 'timeout':
-			return update(progress, event.step, (s) => ({
-				...s,
-				state: 'failed',
-				endedAt: event.at,
-				detail: 'did not finish in time'
-			}));
+		case 'timeout': {
+			// The stop is forced from here: the steps after this one never ran,
+			// which is not the same as having nothing to do (#427).
+			const index = progress.steps.findIndex((s) => s.id === event.step);
+			return {
+				...progress,
+				steps: progress.steps.map((s, i) => {
+					if (i === index) return { ...s, state: 'failed', endedAt: event.at, detail: 'did not finish in time' };
+					if (i > index && s.state === 'pending' && !s.optional)
+						return { ...s, state: 'skipped', detail: 'not reached' };
+					return s;
+				})
+			};
+		}
 		case 'fail': {
 			const target =
 				progress.steps.find((s) => s.id === event.step) ??

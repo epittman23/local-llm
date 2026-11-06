@@ -166,7 +166,10 @@ def test_a_partial_download_resumes_from_its_size(monkeypatch, tmp_path):
         yield b'de'
 
     class Response:
-        headers = {'content-length': '2'}
+        # A resumed download: the two bytes after the three already on disk (#341).
+        status = 206
+        reason = 'Partial Content'
+        headers = {'content-length': '2', 'Content-Range': 'bytes 3-4/5'}
         content = SimpleNamespace(iter_chunked=chunks)
 
         async def __aenter__(self):

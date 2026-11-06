@@ -3,13 +3,17 @@ from __future__ import annotations
 import logging
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from local_llm.config import ENABLE_ADMIN_EXPORT
+from local_llm.config import (
+    CONTEXT_COMPACTION_RETENTION_PERCENTAGE,
+    CONTEXT_COMPACTION_TOKEN_THRESHOLD,
+    ENABLE_ADMIN_EXPORT,
+)
 from local_llm.constants import ERROR_MESSAGES
 from local_llm.env import ENABLE_ADMIN_CHAT_ACCESS
 from local_llm.events import EVENTS, publish_event
@@ -206,9 +210,21 @@ class ChatConfigForm(BaseModel):
     ENABLE_CONTEXT_COMPACTION: bool
     CONTEXT_COMPACTION_TOKEN_THRESHOLD: int
     CONTEXT_COMPACTION_TOKEN_CAP: int | None = None
-    CONTEXT_COMPACTION_RETENTION_PERCENTAGE: int = 40
+    # The configured default, the same whether the field is left out or cleared.
+    CONTEXT_COMPACTION_RETENTION_PERCENTAGE: int = CONTEXT_COMPACTION_RETENTION_PERCENTAGE
     CONTEXT_COMPACTION_PROMPT_TEMPLATE: str
     ENABLE_TOOL_PERMISSIONS: bool = False
+
+    @field_validator('CONTEXT_COMPACTION_TOKEN_THRESHOLD', 'CONTEXT_COMPACTION_RETENTION_PERCENTAGE', mode='before')
+    @classmethod
+    def _cleared_is_default(cls, value, info):
+        # The Interface tab sends a cleared number as null; it means the
+        # default, not a failed save (#248).
+        if value is not None:
+            return value
+        if info.field_name == 'CONTEXT_COMPACTION_TOKEN_THRESHOLD':
+            return CONTEXT_COMPACTION_TOKEN_THRESHOLD
+        return CONTEXT_COMPACTION_RETENTION_PERCENTAGE
 
 
 class CompactChatForm(BaseModel):
@@ -240,14 +256,22 @@ def chat_search_snippet(chat: dict, search_text: str, max_length: int = 200) -> 
             if not isinstance(content, str):
                 continue
 
-            index = content.lower().find(needle)
+            lowered = content.lower()
+            index = lowered.find(needle)
             if index == -1:
                 continue
+            match_end = index + len(needle)
+            if len(lowered) != len(content):
+                # Lowering lengthened a character (U+0130 becomes two), so an
+                # index in the lowered text is off in the original, and the
+                # window missed the match (#339): map it back.
+                origin = [position for position, char in enumerate(content) for _ in char.lower()]
+                index, match_end = origin[index], origin[match_end - 1] + 1
 
             start = max(index - max_length // 2, 0)
             end = min(start + max_length, len(content))
-            if index + len(needle) > end:
-                end = min(index + len(needle), len(content))
+            if match_end > end:
+                end = min(match_end, len(content))
                 start = max(end - max_length, 0)
 
             snippet = ' '.join(content[start:end].split())
@@ -294,7 +318,7 @@ async def require_chat_import_permission(request: Request, user, db: AsyncSessio
 async def get_session_user_chat_list(
     request: Request,
     user=Depends(get_verified_user),
-    page: int | None = None,
+    page: int | None = Query(None, ge=1),
     include_pinned: bool | None = False,
     include_folders: bool | None = False,
     sort_by: str = 'updated_at',
@@ -350,8 +374,8 @@ async def mark_chats_read_by_user_id(
 
 @router.get('/stats/usage', response_model=ChatUsageStatsListResponse)
 async def get_session_user_chat_usage_stats(
-    items_per_page: int | None = 50,
-    page: int | None = 1,
+    items_per_page: int | None = Query(50, ge=1),
+    page: int | None = Query(1, ge=1),
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
@@ -484,7 +508,7 @@ async def delete_all_user_chats(
 async def get_user_chat_list_by_user_id(
     request: Request,
     user_id: str,
-    page: int | None = None,
+    page: int | None = Query(None, ge=1),
     query: str | None = None,
     order_by: str | None = None,
     direction: str | None = None,
@@ -613,7 +637,7 @@ async def set_chat_config(form_data: ChatConfigForm, user=Depends(get_admin_user
 async def search_user_chats(
     request: Request,
     text: str,
-    page: int | None = None,
+    page: int | None = Query(None, ge=1),
     user=Depends(get_verified_user),
     db: AsyncSession = Depends(get_async_session),
 ):
@@ -674,7 +698,7 @@ async def get_chats_by_folder_id(
 async def get_chat_list_by_folder_id(
     request: Request,
     folder_id: str,
-    page: int | None = 1,
+    page: int | None = Query(1, ge=1),
     sort_by: str = 'unread_updated_at',
     sort_dir: str = 'desc',
     user=Depends(get_verified_user),
@@ -726,29 +750,20 @@ async def generate_chat_export_ndjson(user_id: str):
 
     Uses short-lived DB sessions per batch to avoid holding locks for the
     entire duration, which is critical for SQLite environments.
+
+    The chat ids are taken once, first, and the chats fetched by id a batch at
+    a time. Paging by OFFSET over `updated_at` skipped one chat and sent
+    another twice whenever a chat was updated during the export (#294).
     """
-    skip = 0
+    chat_ids = await Chats.get_export_chat_ids_by_user_id(user_id)
 
-    while True:
-        result = await Chats.get_chats_by_user_id(
-            user_id,
-            skip=skip,
-            limit=CHAT_EXPORT_BATCH_SIZE,
-            db=None,
-        )
-        if not result.items:
-            break
-
-        for chat in result.items:
+    for start in range(0, len(chat_ids), CHAT_EXPORT_BATCH_SIZE):
+        batch = chat_ids[start : start + CHAT_EXPORT_BATCH_SIZE]
+        for chat in await Chats.get_chats_by_ids_and_user_id(batch, user_id):
             try:
                 yield ChatResponse.model_validate(chat, from_attributes=True).model_dump_json() + '\n'
             except Exception as e:
                 log.exception(f'Error serializing chat {chat.id}: {e}')
-
-        if len(result.items) < CHAT_EXPORT_BATCH_SIZE:
-            break
-
-        skip += CHAT_EXPORT_BATCH_SIZE
 
 
 @router.get('/all')
@@ -807,7 +822,7 @@ async def get_all_user_chats_in_db(user=Depends(get_admin_user), db: AsyncSessio
 @router.get('/archived', response_model=list[ChatTitleIdResponse])
 async def get_archived_session_user_chat_list(
     request: Request,
-    page: int | None = None,
+    page: int | None = Query(None, ge=1),
     query: str | None = None,
     order_by: str | None = None,
     direction: str | None = None,
@@ -916,7 +931,7 @@ async def unshare_all_chats(
 
 @router.get('/shared', response_model=list[SharedChatResponse])
 async def get_shared_session_user_chat_list(
-    page: int | None = None,
+    page: int | None = Query(None, ge=1),
     query: str | None = None,
     order_by: str | None = None,
     direction: str | None = None,
@@ -989,8 +1004,8 @@ class TagForm(BaseModel):
 
 
 class TagFilterForm(TagForm):
-    skip: int | None = 0
-    limit: int | None = 50
+    skip: int | None = Field(0, ge=0)
+    limit: int | None = Field(50, ge=1)
 
 
 @router.post('/tags', response_model=list[ChatTitleIdResponse])
@@ -1339,7 +1354,14 @@ async def delete_chat_by_id(
     # Cancel any in-flight LLM tasks (streaming, title/tags generation) before
     # deleting the chat to prevent orphaned requests.
     await stop_item_tasks(request.app.state.redis, id)
-    await Chats.delete_orphan_tags_for_user(chat.meta.get('tags', []), user.id, threshold=1, db=db)
+    # The chat owner's tags: an admin deleting another user's chat used to
+    # clean up the admin's own tag rows instead (#338). Only chats that are not
+    # archived or internal are counted, so such a chat does not count itself:
+    # a threshold of 1 would drop a tag that one other chat still uses.
+    counted = not chat.archived and not (chat.meta or {}).get('internal')
+    await Chats.delete_orphan_tags_for_user(
+        chat.meta.get('tags', []), chat.user_id, threshold=1 if counted else 0, db=db
+    )
 
     # Cascade to internal child chats spawned from this one.
     for child_id in await Chats.get_internal_chat_ids_by_parent_id(id, chat.user_id):
@@ -1415,6 +1437,19 @@ class ForkForm(BaseModel):
     message_id: str | None = None
 
 
+async def writable_folder_id(user, folder_id: str | None, db: AsyncSession) -> str | None:
+    """The source's folder for a fork of a chat, if the caller may still put chats there.
+
+    A chat can name a folder its owner can no longer write to, such as a shared
+    folder whose grant was taken back; a fork of it goes to no folder, as moving
+    a chat there would be refused (#315). A clone goes through import_chats,
+    which keeps only a folder the caller owns.
+    """
+    if folder_id is None or not await has_folder_write_access(user.id, folder_id, db=db):
+        return None
+    return folder_id
+
+
 @router.post('/{id}/fork', response_model=ChatResponse | None)
 async def fork_chat_by_id(
     request: Request,
@@ -1468,7 +1503,7 @@ async def fork_chat_by_id(
     fork = await Chats.insert_new_chat(
         str(uuid4()),
         user.id,
-        ChatForm(chat=updated_chat, folder_id=chat.folder_id),
+        ChatForm(chat=updated_chat, folder_id=await writable_folder_id(user, chat.folder_id, db)),
         db=db,
         internal_meta=meta,
     )
@@ -1521,6 +1556,7 @@ async def clone_chat_by_id(
                         'meta': chat.meta,
                         'variables': chat.variables or {},
                         'pinned': chat.pinned,
+                        # import_chats keeps only a folder the caller owns.
                         'folder_id': chat.folder_id,
                     }
                 )
@@ -1619,7 +1655,9 @@ async def clone_shared_chat_by_id(
                     'meta': chat.meta,
                     'variables': chat.variables or {},
                     'pinned': chat.pinned,
-                    'folder_id': chat.folder_id,
+                    # A copy of someone else's chat goes to no folder: in one its owner
+                    # shares, the folder's other grantees would see it (#315).
+                    'folder_id': None,
                 }
             )
         ],

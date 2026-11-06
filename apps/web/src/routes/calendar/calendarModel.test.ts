@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	NS,
 	automationTarget,
+	bandEvents,
 	defaultCalendarId,
 	eventFields,
 	eventPayload,
@@ -10,6 +11,7 @@ import {
 	formatHour,
 	headerText,
 	monthGrid,
+	reminderOptions,
 	repeatFromRrule,
 	stepDate,
 	visibleRange,
@@ -78,9 +80,74 @@ describe('placing events', () => {
 		expect(eventsInHour([e], at(2026, 8, 1), 9)).toEqual([e]);
 		expect(eventsInHour([e], at(2026, 8, 1), 10)).toEqual([]);
 	});
+	it('an event that ends at or before its start is on its start day only', () => {
+		for (const end of [at(2026, 8, 1, 22), at(2026, 8, 1, 21)]) {
+			const e = ev(at(2026, 8, 1, 22), end);
+			expect(Object.keys(eventsByDay([e]))).toEqual([String(at(2026, 8, 1).getTime())]);
+		}
+	});
+	it('an occurrence carried over from the day before is in the band', () => {
+		const e = ev(at(2026, 8, 1, 23), at(2026, 8, 2, 1), { rrule: 'FREQ=DAILY', instance_id: 'x_1' });
+		expect(bandEvents(eventsByDay([e]), at(2026, 8, 2))).toEqual([e]);
+	});
+	it('an event that ends at midnight is not on the next day', () => {
+		const e = ev(at(2026, 8, 1, 22), at(2026, 8, 2));
+		expect(Object.keys(eventsByDay([e]))).toEqual([String(at(2026, 8, 1).getTime())]);
+	});
+	// Day and week grids (#319): an hour row holds timed events that start
+	// in it; the band above the hours holds all-day events, and timed events
+	// carried over from an earlier day, on every day they touch.
+	it('an all-day event is in the band on every day, never in an hour', () => {
+		const e = ev(at(2026, 9, 19), at(2026, 9, 21, 23, 59), { all_day: true });
+		const byDay = eventsByDay([e]);
+		for (const d of [19, 20, 21]) expect(bandEvents(byDay, at(2026, 9, d))).toEqual([e]);
+		expect(bandEvents(byDay, at(2026, 9, 22))).toEqual([]);
+		expect(eventsInHour([e], at(2026, 9, 19), 0)).toEqual([]);
+	});
+	it('an hour row runs to the next local hour across a DST change (#321)', () => {
+		const tz = process.env.TZ;
+		process.env.TZ = 'America/New_York';
+		try {
+			const rows = (events: Parameters<typeof eventsInHour>[0], day: Date) =>
+				Array.from({ length: 24 }, (_, h) => eventsInHour(events, day, h).length);
+			// 8 Mar 2026, spring forward: 2 AM is skipped, so a 03:30 event is in the 3 AM row only.
+			const spring = ev(new Date(Date.UTC(2026, 2, 8, 7, 30)));
+			const springRows = rows([spring], at(2026, 2, 8));
+			expect(springRows[2]).toBe(0);
+			expect(springRows[3]).toBe(1);
+			expect(springRows.reduce((a, b) => a + b)).toBe(1);
+			// 1 Nov 2026, fall back: 1 AM happens twice, and its row holds both 01:30s.
+			const first = ev(new Date(Date.UTC(2026, 10, 1, 5, 30)));
+			const second = ev(new Date(Date.UTC(2026, 10, 1, 6, 30)));
+			const fallRows = rows([first, second], at(2026, 10, 1));
+			expect(fallRows[1]).toBe(2);
+			expect(fallRows.reduce((a, b) => a + b)).toBe(2);
+		} finally {
+			if (tz === undefined) delete process.env.TZ;
+			else process.env.TZ = tz;
+		}
+	});
+	it('a timed event is in its start hour, then in the band on later days', () => {
+		const e = ev(at(2026, 9, 19, 22), at(2026, 9, 21, 10));
+		const byDay = eventsByDay([e]);
+		expect(eventsInHour([e], at(2026, 9, 19), 22)).toEqual([e]);
+		expect(bandEvents(byDay, at(2026, 9, 19))).toEqual([]);
+		expect(bandEvents(byDay, at(2026, 9, 20))).toEqual([e]);
+		expect(bandEvents(byDay, at(2026, 9, 21))).toEqual([e]);
+	});
 });
 
 describe('event form', () => {
+	it('an all-day event ending at midnight shows the day before as its end', () => {
+		const chat = ev(at(2026, 9, 20), at(2026, 9, 21), { all_day: true });
+		expect(eventFields(chat, '', null).endDate).toBe('2026-10-20');
+		// Saved unchanged, it stays on the one day.
+		expect(eventPayload(eventFields(chat, '', null), chat)).toMatchObject({
+			form: { start_at: ns(at(2026, 9, 20)), end_at: ns(at(2026, 9, 20, 23, 59)) }
+		});
+		const form = ev(at(2026, 9, 20), at(2026, 9, 21, 23, 59), { all_day: true });
+		expect(eventFields(form, '', null).endDate).toBe('2026-10-21');
+	});
 	it('a new event is one hour from the clicked time', () => {
 		const f = eventFields(null, 'cal', ns(at(2026, 8, 1, 9)));
 		expect(f).toMatchObject({
@@ -93,9 +160,10 @@ describe('event form', () => {
 			repeat: ''
 		});
 	});
-	it('an edited event reads its repeat rule, unknown rules as none', () => {
+	it('an edited event reads its repeat rule, a rule the menu cannot show as custom', () => {
 		expect(repeatFromRrule('freq=weekly; byday=MO,TU,WE,TH,FR')).toBe('weekdays');
-		expect(repeatFromRrule('FREQ=WEEKLY;INTERVAL=2')).toBe('');
+		expect(repeatFromRrule('FREQ=WEEKLY;INTERVAL=2')).toBe('custom');
+		expect(repeatFromRrule(null)).toBe('');
 		expect(eventFields(ev(at(2026, 8, 1, 9), undefined, { rrule: 'FREQ=DAILY' }), '', null)).toMatchObject({
 			repeat: 'daily',
 			endDate: ''
@@ -157,6 +225,24 @@ describe('clearing a field of an existing event (#158)', () => {
 			ns(at(2026, 8, 1, 9))
 		);
 		expect('form' in out && out.form).toMatchObject({ rrule: undefined, start_at: ns(at(2026, 8, 1, 9)) });
+	});
+	it('choosing No Repeat clears a rule the menu cannot show (#510)', () => {
+		const biweekly = ev(at(2026, 8, 1, 9), at(2026, 8, 1, 10), { rrule: 'FREQ=WEEKLY;INTERVAL=2' });
+		const out = eventPayload({ ...eventFields(biweekly, '', null), repeat: '' }, biweekly);
+		expect('form' in out && out.form.rrule).toBeNull();
+		// From one of its occurrences too: it becomes one event at that occurrence.
+		const occurrence = {
+			...biweekly,
+			start_at: ns(at(2026, 8, 15, 9)),
+			end_at: ns(at(2026, 8, 15, 10)),
+			instance_id: 'x'
+		};
+		const single = eventPayload(
+			{ ...eventFields(occurrence, '', null), repeat: '' },
+			occurrence,
+			ns(at(2026, 8, 1, 9))
+		);
+		expect('form' in single && single.form).toMatchObject({ rrule: null, start_at: ns(at(2026, 8, 15, 9)) });
 	});
 	it('clearing Repeat on an occurrence makes it one event at that occurrence', () => {
 		const daily = ev(at(2026, 8, 20, 9), at(2026, 8, 20, 10), { rrule: 'FREQ=DAILY', instance_id: 'x' });
@@ -264,5 +350,29 @@ describe('calendars and automations', () => {
 		expect(
 			automationTarget(ev(at(2026, 8, 1), undefined, { meta: { automation_id: 'a1', chat_id: 'channel:ch1' } }))
 		).toBe('/channels/ch1');
+	});
+});
+
+describe('reminder options (#324)', () => {
+	it('are the standard ones when the event uses one of them', () => {
+		expect(reminderOptions(10).map(([m]) => m)).toEqual([-1, 0, 5, 10, 15, 30, 60]);
+	});
+	it("add the event's own value, in order, when it is not one of them", () => {
+		expect(reminderOptions(120)).toContainEqual([120, '2 hours before']);
+		expect(reminderOptions(45).map(([m]) => m)).toEqual([-1, 0, 5, 10, 15, 30, 45, 60]);
+		expect(reminderOptions(45)).toContainEqual([45, '45 minutes before']);
+		expect(reminderOptions(1)).toContainEqual([1, '1 minute before']);
+	});
+	it("list both the saved value and the form's, and no negative but None", () => {
+		expect(reminderOptions(30, 120).map(([m]) => m)).toEqual([-1, 0, 5, 10, 15, 30, 60, 120]);
+		expect(reminderOptions(-5).map(([m]) => m)).toEqual([-1, 0, 5, 10, 15, 30, 60]);
+	});
+	it('read any negative saved reminder as none, as the server does', () => {
+		expect(eventFields(ev(at(2026, 8, 1, 9), undefined, { meta: { alert_minutes: -5 } }), '', null).alertMinutes).toBe(
+			-1
+		);
+	});
+	it('say when the server will send a reminder earlier than asked', () => {
+		expect(reminderOptions(1440)).toContainEqual([1440, '24 hours before (sent 22 hours before)']);
 	});
 });

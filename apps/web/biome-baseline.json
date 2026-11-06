@@ -1,6 +1,6 @@
 {
 	"_comment": "biome findings allowed per file and rule; may only shrink. See .github/scripts/lint_ratchet.py.",
-	"total": 754,
+	"total": 747,
 	"counts": {
 		"apps/web/biome.jsonc": {
 			"lint/suspicious/useBiomeIgnoreFolder": 1
@@ -554,7 +554,7 @@
 			"lint/correctness/useExhaustiveDependencies": 2,
 			"lint/security/noDangerouslySetInnerHtml": 1,
 			"lint/suspicious/noArrayIndexKey": 3,
-			"lint/suspicious/noExplicitAny": 12
+			"lint/suspicious/noExplicitAny": 9
 		},
 		"apps/web/src/routes/calendar/CalendarDialogs.tsx": {
 			"lint/correctness/useExhaustiveDependencies": 3
@@ -571,7 +571,7 @@
 		},
 		"apps/web/src/routes/channels/ChannelDialogs.tsx": {
 			"lint/a11y/useAriaPropsSupportedByRole": 1,
-			"lint/correctness/useExhaustiveDependencies": 6
+			"lint/correctness/useExhaustiveDependencies": 4
 		},
 		"apps/web/src/routes/channels/ChannelMessageView.tsx": {
 			"lint/a11y/useAriaPropsSupportedByRole": 1,
@@ -698,8 +698,7 @@
 			"lint/a11y/noLabelWithoutControl": 1,
 			"lint/a11y/useValidAnchor": 1,
 			"lint/correctness/useExhaustiveDependencies": 1,
-			"lint/style/useImportType": 1,
-			"lint/suspicious/noExplicitAny": 2
+			"lint/suspicious/noExplicitAny": 1
 		},
 		"apps/web/src/routes/workspace/knowledge/KnowledgeFileList.tsx": {
 			"lint/a11y/useSemanticElements": 4

@@ -32,6 +32,7 @@ import {
 	prepareWebConfig,
 	toWebForm
 } from './webSearch';
+import { ragSaveOutcome } from './documents';
 
 type Rec = Record<string, any>;
 
@@ -134,7 +135,10 @@ export default function WebSearch() {
 		}
 		setSaving(true);
 		try {
-			await updateRAGConfig(token, prepared.payload);
+			const res = await updateRAGConfig(token, prepared.payload);
+			// This tab sends no hybrid-search flag, but the save reloads the
+			// reranker, so it can still turn hybrid search off (#232).
+			for (const warning of ragSaveOutcome({}, res).warnings) toast.warning(warning, { duration: 15000 });
 			await saved();
 		} catch (error) {
 			toast.error(`${error}`);

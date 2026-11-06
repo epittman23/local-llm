@@ -1122,6 +1122,8 @@ def _stream_response(lines, log, name, background=False, aclose=None):
         for line in lines:
             if line == 'CANCEL':
                 raise asyncio.CancelledError()
+            if line == 'RESET':
+                raise ConnectionResetError('upstream closed the connection')
             yield line
 
     content = _LineIterator(lines, log, aclose) if aclose else body()
@@ -1466,3 +1468,365 @@ def test_an_error_detail_on_the_choice_is_kept(monkeypatch):
     observed = _run([[chunk('Half'), on_choice, DONE]], {'chat_id': SAVED_CHAT}, {}, {}, None, monkeypatch)
 
     assert {'error': {'message': 'upstream 503'}} in _emitted(observed)
+
+
+def test_an_upstream_failure_mid_stream_keeps_the_partial_reply(monkeypatch):
+    """#163: the body iterator raising (a reset connection) once lost everything streamed.
+
+    Only a cancellation was handled around it, so nothing saved the text
+    the user had watched arrive, and the stream snapshot was never cleared.
+    The partial reply is now saved, finished, and the error still propagates
+    to the caller, which records it on the message and tells the chat.
+    """
+    log = []
+    _install(monkeypatch, {}, log, [])
+    ctx = _ctx({}, {'chat_id': SAVED_CHAT}, {}, None, log)
+    response = _stream_response([chunk('The answer is'), 'RESET'], log, 'first')
+
+    with pytest.raises(ConnectionResetError):
+        asyncio.run(middleware.streaming_chat_response_handler(response, ctx))
+
+    saved = [c[2] for c in log if c[0] == 'chats.upsert_message']
+    assert any(s.get('done') is True and 'The answer is' in json.dumps(s.get('output')) for s in saved)
+    assert any(c[0] == 'clear_response_stream' for c in log)
+    # The caller reports the error; this path does not announce a cancel.
+    assert not [c for c in log if c[0] == 'emit' and c[1].get('type') == 'chat:tasks:cancel']
+
+
+def test_a_failure_after_the_reply_finished_does_not_save_it_again(monkeypatch):
+    """#163 handles the stream only: a later failure must not overwrite the finished save.
+
+    _finish() has already saved the reply and run the outlet filters (which
+    may have edited it); saving the pre-filter output again would undo that.
+    """
+    log = []
+    _install(monkeypatch, {}, log, [])
+
+    async def failing_background(ctx):
+        raise RuntimeError('title model is gone')
+
+    monkeypatch.setattr(middleware, 'background_tasks_handler', failing_background)
+    ctx = _ctx({}, {'chat_id': SAVED_CHAT}, {}, None, log)
+    response = _stream_response([chunk('All done.'), DONE], log, 'first')
+
+    try:
+        asyncio.run(middleware.streaming_chat_response_handler(response, ctx))
+    except RuntimeError:
+        pass
+
+    done_saves = [c for c in log if c[0] == 'chats.upsert_message' and c[2].get('done') is True]
+    assert len(done_saves) == 1
+    assert len([c for c in log if c[0] == 'clear_response_stream']) == 1
+
+
+def test_a_continued_reply_adds_its_usage_to_what_was_stored(monkeypatch):
+    """#196: a continue started from no usage, so the saved total lost the first part."""
+    stored_usage = {'prompt_tokens': 100, 'completion_tokens': 50, 'total_tokens': 150}
+    observed = _run(
+        [
+            [
+                chunk(' tail'),
+                sse({'choices': [], 'usage': {'prompt_tokens': 30, 'completion_tokens': 20, 'total_tokens': 50}}),
+                DONE,
+            ]
+        ],
+        {'chat_id': SAVED_CHAT, 'assistant_message_id': 'a1'},
+        {
+            'stored_message': {
+                'content': 'head',
+                'usage': stored_usage,
+                'output': [
+                    {
+                        'type': 'message',
+                        'id': 'msg_s',
+                        'status': 'completed',
+                        'content': [{'type': 'output_text', 'text': 'head'}],
+                    }
+                ],
+            }
+        },
+        {},
+        None,
+        monkeypatch,
+    )
+
+    final = [s for s in _saved(observed) if s.get('done') is True][-1]
+    assert final['usage']['total_tokens'] == 200
+    # The canonical counts are summed (prompt_tokens is an alias that keeps the latest value).
+    assert (final['usage']['input_tokens'], final['usage']['output_tokens']) == (130, 70)
+
+
+def _usage_chunk(text, **usage):
+    return sse({'choices': [{'delta': {'content': text}}], 'usage': usage})
+
+
+def _final_usage(observed):
+    return [s for s in _saved(observed) if s.get('done') is True][-1]['usage']
+
+
+def test_usage_repeated_within_one_stream_is_counted_once(monkeypatch):
+    """#155: a provider that reports its running usage on several chunks of one stream.
+
+    Each usage-bearing chunk was added to the total, so three chunks of one
+    reply counted the prompt three times. Within a stream the latest report
+    is the stream's usage.
+    """
+    observed = _run(
+        [
+            [
+                _usage_chunk('a', prompt_tokens=10, completion_tokens=1, total_tokens=11),
+                _usage_chunk('b', prompt_tokens=10, completion_tokens=2, total_tokens=12),
+                _usage_chunk('c', prompt_tokens=10, completion_tokens=3, total_tokens=13),
+                DONE,
+            ]
+        ],
+        {'chat_id': SAVED_CHAT},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    usage = _final_usage(observed)
+    assert (usage['input_tokens'], usage['output_tokens'], usage['total_tokens']) == (10, 3, 13)
+    # What the page is shown as it streams is the same running figure, then
+    # the reply's total once more with the closing event.
+    assert [e['usage']['total_tokens'] for e in _emitted(observed) if 'usage' in e] == [11, 12, 13, 13]
+
+
+def test_llama_cpp_timings_on_every_chunk_are_counted_once(monkeypatch):
+    """#155: llama.cpp's per-token timings repeat the stream's running counts on each chunk."""
+    observed = _run(
+        [
+            [
+                sse({'choices': [{'delta': {'content': 'a'}}], 'timings': {'prompt_n': 5, 'predicted_n': 1}}),
+                sse({'choices': [{'delta': {'content': 'b'}}], 'timings': {'prompt_n': 5, 'predicted_n': 2}}),
+                DONE,
+            ]
+        ],
+        {'chat_id': SAVED_CHAT},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    usage = _final_usage(observed)
+    assert (usage['input_tokens'], usage['output_tokens'], usage['total_tokens']) == (5, 2, 7)
+    assert (usage['prompt_n'], usage['predicted_n']) == (5, 2)
+
+
+def test_usage_of_each_tool_call_round_still_adds_up(monkeypatch):
+    """#155: each request of a reply is billed on its own, so the rounds are summed."""
+    first = tool_call_stream('lookup', '{"q": "x"}')
+    observed = _run(
+        [
+            [
+                *first[:-1],
+                sse({'choices': [], 'usage': {'prompt_tokens': 10, 'completion_tokens': 4, 'total_tokens': 14}}),
+                sse({'choices': [], 'usage': {'prompt_tokens': 10, 'completion_tokens': 5, 'total_tokens': 15}}),
+                DONE,
+            ],
+            [
+                _usage_chunk('Found', prompt_tokens=20, completion_tokens=1, total_tokens=21),
+                _usage_chunk(' it', prompt_tokens=20, completion_tokens=2, total_tokens=22),
+                DONE,
+            ],
+        ],
+        {'chat_id': SAVED_CHAT, 'tools': [tool('lookup', result={'hits': 1})]},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    usage = _final_usage(observed)
+    assert (usage['input_tokens'], usage['output_tokens'], usage['total_tokens']) == (30, 7, 37)
+
+
+API_STREAM_WITH_OUTLET_FILTERS = {
+    'no_emitter': True,
+    'env': {'ENABLE_API_OUTLET_FILTERS': True},
+    'sorted_filters': ['f'],
+}
+
+
+def test_usage_repeated_on_an_api_stream_is_counted_once(monkeypatch):
+    """#155: the API stream the outlet filters read adds up a stream's usage the same way."""
+    observed = _run(
+        [
+            [
+                _usage_chunk('a', prompt_tokens=10, completion_tokens=1, total_tokens=11),
+                _usage_chunk('b', prompt_tokens=10, completion_tokens=2, total_tokens=12, cost=0.002),
+                sse({'choices': [], 'timings': {'prompt_n': 10, 'predicted_n': 2, 'predicted_ms': 40.0}}),
+                DONE,
+            ]
+        ],
+        {},
+        API_STREAM_WITH_OUTLET_FILTERS,
+        {},
+        None,
+        monkeypatch,
+    )
+
+    usage = observed['assistant_message']['usage']
+    assert (usage['input_tokens'], usage['output_tokens'], usage['total_tokens']) == (10, 2, 12)
+    # A chunk replaces only the keys it carries: the cost and token counts of
+    # the usage chunk stay beside the timings that came after it.
+    assert (usage['prompt_tokens'], usage['completion_tokens'], usage['cost']) == (10, 2, 0.002)
+    assert usage['predicted_ms'] == 40.0
+
+
+def test_responses_usage_on_an_api_stream_is_kept(monkeypatch):
+    """#155: a Responses API stream's usage reaches the outlet filters' message too."""
+    completed = {'id': 'resp_1', 'output': [], 'usage': {'input_tokens': 3, 'output_tokens': 2}}
+    observed = _run(
+        [[sse({'type': 'response.completed', 'response': completed}), DONE]],
+        {},
+        API_STREAM_WITH_OUTLET_FILTERS,
+        {},
+        None,
+        monkeypatch,
+    )
+
+    usage = observed['assistant_message']['usage']
+    assert (usage['input_tokens'], usage['output_tokens'], usage['total_tokens']) == (3, 2, 5)
+
+
+def test_a_reply_keeps_usage_and_timings_from_different_chunks(monkeypatch):
+    """#155: in a reply too, a chunk replaces only the keys it carries."""
+    observed = _run(
+        [
+            [
+                _usage_chunk('a', prompt_tokens=10, completion_tokens=2, total_tokens=12, cost=0.002),
+                sse({'choices': [], 'timings': {'prompt_n': 10, 'predicted_n': 2, 'predicted_ms': 40.0}}),
+                DONE,
+            ]
+        ],
+        {'chat_id': SAVED_CHAT},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    usage = _final_usage(observed)
+    assert (usage['input_tokens'], usage['output_tokens'], usage['total_tokens']) == (10, 2, 12)
+    assert (usage['cost'], usage['predicted_ms']) == (0.002, 40.0)
+
+
+def test_tool_arguments_that_are_not_an_object_get_a_parse_error(monkeypatch):
+    """#166: `[]` as a tool call's arguments raised AttributeError and ended the reply."""
+    observed = _run(
+        [tool_call_stream('lookup', '[]'), [chunk('Sorry, retrying.'), DONE]],
+        {'chat_id': SAVED_CHAT, 'tools': [tool('lookup', result={'hits': 1})]},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    final = [s for s in _saved(observed) if s.get('done') is True][-1]
+    assert 'error' not in final
+    assert 'Sorry, retrying.' in json.dumps(final)
+    assert 'Tool call arguments could not be parsed' in json.dumps(observed['calls'])
+
+
+def test_a_failed_responses_api_reply_is_saved_as_failed(monkeypatch):
+    """#167: `response.failed` was shown live but never saved, so after a reload the reply looked complete."""
+    error = {'code': 'server_error', 'message': 'The model crashed'}
+    observed = _run(
+        [[sse({'type': 'response.failed', 'response': {'error': error}}), DONE]],
+        {'chat_id': SAVED_CHAT},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    assert {'error': {'content': error}} in _saved(observed)
+    assert {'error': error} in _emitted(observed)
+
+
+@pytest.mark.parametrize('response', [{}, {'error': None}, None])
+def test_a_failed_responses_api_reply_without_an_error_object_is_still_an_error(monkeypatch, response):
+    """#167: with no error object the failure was neither shown nor saved; with no response at all it raised."""
+    observed = _run(
+        [[sse({'type': 'response.failed', 'response': response}), DONE]],
+        {'chat_id': SAVED_CHAT},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    errors = [d['error'] for d in _emitted(observed) if 'error' in d]
+    assert errors and errors[0]['message']
+    assert {'error': {'content': errors[0]}} in _saved(observed)
+
+
+@pytest.mark.parametrize(
+    'error_chunk',
+    [
+        OPENROUTER_ERROR_CHUNK,
+        sse({'choices': [{'index': 0, 'delta': {}, 'finish_reason': 'error'}]}),
+        json.dumps({'error': {'message': 'upstream failed'}}) + '\n',
+    ],
+    ids=['error object', 'finish_reason error', 'plain error line'],
+)
+def test_a_stream_that_errors_after_tool_call_deltas_runs_no_tool(monkeypatch, error_chunk):
+    """#501: an errored completion's half-sent tool calls were still run."""
+    calls = [
+        chunk(tool_calls=[call_delta(0, 'call_1', 'lookup', '')]),
+        chunk(tool_calls=[call_delta(0, arguments='{"q": 1}')]),
+    ]
+    observed = _run(
+        [[*calls, error_chunk, DONE], [chunk('should not be asked for'), DONE]],
+        {'chat_id': SAVED_CHAT, 'tools': [tool('lookup', result='r')]},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    assert not [c for c in observed['calls'] if c[0] == 'tool']
+    assert [d for d in _emitted(observed) if 'error' in d]
+    assert len([c for c in observed['calls'] if c[0] == 'generate_chat_completion']) <= 1
+    assert 'should not be asked for' not in json.dumps(observed['assistant_message'])
+    assert _call_statuses(observed) == ['failed']
+
+
+def _call_statuses(observed):
+    """The final status of each function_call item, as the reply was last saved."""
+    output = (_saved(observed) or [{}])[-1].get('output') or []
+    return [item.get('status') for item in output if item.get('type') == 'function_call']
+
+
+def test_a_responses_api_stream_that_fails_after_a_function_call_runs_no_tool(monkeypatch):
+    """#501, for the Responses API: a function_call item, then `response.failed`."""
+    failed = sse({'type': 'response.failed', 'response': {'error': {'code': 'server_error', 'message': 'cut off'}}})
+    observed = _run(
+        [[*RESP_CALL[:3], failed, DONE], RESP_TEXT],
+        {'chat_id': SAVED_CHAT, 'tools': [tool('lookup', result={'v': 1})]},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    assert not [c for c in observed['calls'] if c[0] == 'tool']
+    assert {'error': {'code': 'server_error', 'message': 'cut off'}} in _emitted(observed)
+    assert _call_statuses(observed) == ['failed']
+
+
+def test_a_stream_without_an_error_still_runs_its_tool_calls(monkeypatch):
+    observed = _run(
+        [tool_call_stream('lookup', '{"q": 1}'), [chunk('Found it'), DONE]],
+        {'chat_id': SAVED_CHAT, 'tools': [tool('lookup', result='r')]},
+        {},
+        {},
+        None,
+        monkeypatch,
+    )
+
+    assert [c for c in observed['calls'] if c[0] == 'tool']

@@ -1,6 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import type { AccessGrant, Permission } from '@/lib/access/accessGrants';
+import { type AccessGrant, DROPPED_GRANTS_WARNING, grantsDropped, type Permission } from '@/lib/access/accessGrants';
 import { updateNoteAccessGrants } from '@/lib/apis/notes';
 import { markdownToHtml } from '@/lib/editor/markdown';
 import type { SessionUser } from '@/lib/stores/authStore';
@@ -135,8 +135,6 @@ export function withServerGrants<T extends { access_grants?: AccessGrant[] }>(
 // wholesale, so only the newest request says what is stored.
 const accessSaves = new Map<string, number>();
 
-const grantKey = (g: AccessGrant) => `${g.principal_type}:${g.principal_id}:${g.permission}`;
-
 /**
  * Sends a note's new grants. The cache shows them at once, so a second edit
  * made before the reply builds on the first; the latest reply then replaces
@@ -159,8 +157,23 @@ export async function saveNoteAccess(queryClient: QueryClient, token: string, id
 		return;
 	}
 	if (latest) queryClient.setQueryData<Cached>(key, (old) => old && withServerGrants(old, res));
-	const stored = Array.isArray(res.access_grants) ? new Set(res.access_grants.map(grantKey)) : null;
-	if (stored && grants.some((g) => !stored.has(grantKey(g))))
-		toast.warning('Some access settings were not saved: you are not allowed to share this way.');
+	if (grantsDropped(grants, res.access_grants)) toast.warning(DROPPED_GRANTS_WARNING);
 	else toast.success('Saved');
+}
+
+/**
+ * Creates the note a `?title=`/`?content=` link describes and opens it. If the
+ * create fails, says so and opens the list instead: the page shows a spinner
+ * until this navigates, which used to never end on a failure (#210).
+ */
+export async function openLinkedNote(create: () => Promise<string | null | undefined>, open: (path: string) => void) {
+	let id: string | null | undefined;
+	try {
+		id = await create();
+	} catch (err) {
+		toast.error(`${err}`);
+		return open('/notes');
+	}
+	if (!id) toast.error('The note could not be created');
+	open(id ? `/notes/${id}` : '/notes');
 }
