@@ -252,14 +252,40 @@ export const ChatInput = forwardRef<
 	};
 
 	const uploading = files.some((f) => f.status === 'uploading');
+	// Enter while an attachment is still uploading holds the send, and it goes
+	// once every upload is done, as Chat.svelte queued it. It used to be
+	// ignored without a word (Send is disabled then, but Enter was not). The
+	// hold is let go instead if the text changes meanwhile, so a half-written
+	// message is never sent, or if one of the uploads failed and was dropped,
+	// so the message never goes without a file it was sent with.
+	const [held, setHeld] = useState<{ text: string; itemIds: string[] } | null>(null);
 	const submit = () => {
-		if (uploading || disabled) return;
+		if (disabled) return;
+		if (uploading) {
+			setHeld({ text, itemIds: files.filter((f) => f.status === 'uploading').map((f) => String(f.itemId)) });
+			return;
+		}
+		setHeld(null);
 		if (onSubmit(text, files)) {
 			setText('');
 			setCursor(0);
 			area.current?.focus();
 		}
 	};
+	const release = useRef(() => {});
+	release.current = () => {
+		if (!held) return;
+		setHeld(null);
+		const kept = held.itemIds.every((itemId) => files.some((f) => String(f.itemId) === itemId));
+		if (kept && text === held.text) submit();
+	};
+	useEffect(() => {
+		if (held && !uploading) release.current();
+	}, [held, uploading]);
+	// Edited after Enter: let go at once, so "Sends when..." is not left showing.
+	useEffect(() => {
+		if (held && text !== held.text) setHeld(null);
+	}, [held, text]);
 
 	return (
 		<div className={cn('mx-auto w-full px-2.5 pb-3', wide ? 'max-w-none' : 'max-w-3xl')}>
@@ -280,6 +306,19 @@ export const ChatInput = forwardRef<
 						</li>
 					))}
 				</ul>
+			)}
+			{held && (
+				<div role="status" className="bg-muted/50 mb-1.5 flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs">
+					<span className="text-muted-foreground">Sends when the upload finishes</span>
+					<button
+						type="button"
+						aria-label="Don't send when the upload finishes"
+						className="ml-auto"
+						onClick={() => setHeld(null)}
+					>
+						<X className="size-3" />
+					</button>
+				</div>
 			)}
 			<div className="relative">
 				{active && suggestions.length > 0 && (

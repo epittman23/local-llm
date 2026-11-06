@@ -98,6 +98,79 @@ test('attach a web page from the menu, and one typed after #', async ({ page }) 
 	expect(chat.seen.completions[0].files.map((f: any) => f.type)).toEqual(['text', 'text']);
 });
 
+/** Attaches a web page whose processing answers only when `finish` is called (with `ok: false`, a failure). */
+async function attachSlowPage(page: Page) {
+	let finish: (ok?: boolean) => void = () => {};
+	const answered = new Promise<boolean>((resolve) => {
+		finish = (ok = true) => resolve(ok);
+	});
+	await page.route('**/api/v1/retrieval/process/url*', async (route) => {
+		const ok = await answered;
+		if (!ok) return json(route, { detail: 'The page could not be fetched.' }, 500);
+		return json(route, { status: true, collection_name: 'web-col', name: 'Slow page', content: 'text', url: 'u' });
+	});
+	await page.getByRole('button', { name: 'More' }).click();
+	await page.getByRole('menuitem', { name: 'Attach Webpage' }).click();
+	await page.getByLabel('Webpage URLs').fill('https://example.com/slow');
+	await page.getByRole('button', { name: 'Add' }).click();
+	await expect(page.getByTestId('input-file').locator('.animate-spin')).toHaveCount(1);
+	return finish;
+}
+
+test('Enter while a page is still processing sends once it is done', async ({ page }) => {
+	const chat = await mockChat(page);
+	await mockExtras(page);
+	await page.goto('/');
+	await chat.socket.connected;
+	const finish = await attachSlowPage(page);
+	const box = page.getByRole('textbox', { name: 'Message' });
+	await box.fill('read this');
+	await page.keyboard.press('Enter');
+	await expect(page.getByRole('status').filter({ hasText: 'Sends when the upload finishes' })).toBeVisible();
+	expect(chat.seen.completions).toHaveLength(0);
+	finish();
+	await expect.poll(() => chat.seen.completions.length).toBe(1);
+	expect(chat.seen.completions[0].user_message.content).toBe('read this');
+	expect(chat.seen.completions[0].files).toEqual([expect.objectContaining({ type: 'text', name: 'Slow page' })]);
+	await expect(page.getByText('Sends when the upload finishes')).toHaveCount(0);
+});
+
+test('a held send is let go when the text changes meanwhile', async ({ page }) => {
+	const chat = await mockChat(page);
+	await mockExtras(page);
+	await page.goto('/');
+	await chat.socket.connected;
+	const finish = await attachSlowPage(page);
+	const box = page.getByRole('textbox', { name: 'Message' });
+	await box.fill('read this');
+	await page.keyboard.press('Enter');
+	await expect(page.getByText('Sends when the upload finishes')).toBeVisible();
+	// Writing more: the message is not finished, so it does not go.
+	await box.pressSequentially(' and');
+	await expect(page.getByText('Sends when the upload finishes')).toHaveCount(0);
+	finish();
+	await expect(page.getByTestId('input-file').locator('.animate-spin')).toHaveCount(0);
+	await expect(box).toHaveValue('read this and');
+	expect(chat.seen.completions).toHaveLength(0);
+});
+
+test('a held send is let go when its upload fails: the message does not go without the file', async ({ page }) => {
+	const chat = await mockChat(page);
+	await mockExtras(page);
+	await page.goto('/');
+	await chat.socket.connected;
+	const finish = await attachSlowPage(page);
+	const box = page.getByRole('textbox', { name: 'Message' });
+	await box.fill('read this');
+	await page.keyboard.press('Enter');
+	await expect(page.getByText('Sends when the upload finishes')).toBeVisible();
+	finish(false);
+	await expect(page.getByTestId('input-file')).toHaveCount(0);
+	await expect(page.getByText('Sends when the upload finishes')).toHaveCount(0);
+	await expect(box).toHaveValue('read this');
+	expect(chat.seen.completions).toHaveLength(0);
+});
+
 test('# offers knowledge, / inserts a prompt and asks for its variables, @ picks a model for one message', async ({
 	page
 }) => {
