@@ -124,7 +124,10 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
       - run: bun install --frozen-lockfile
-      - run: bunx astro check
+      # Not a bare `bunx astro check`: that exits 0 when it cannot load
+      # @astrojs/check, and from #768 to the fix that added this script
+      # it passed without checking a file.
+      - run: python3 ../../.github/scripts/astro_check.py
       - run: bun run test:coverage
       # lcov names files relative to apps/web; diff-cover needs them
       # relative to the repository, like git's diff.
