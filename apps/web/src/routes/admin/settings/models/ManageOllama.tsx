@@ -11,7 +11,7 @@ import { createModel, deleteModel, downloadModel, getOllamaModels, pullModel, up
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cancelPull, startPull, useDownloadPool } from './ollamaDownloads';
 import {
-	DEFAULT_MODELFILE,
+	finishUpload,
 	isNotableStatus,
 	lineReader,
 	modelLabel,
@@ -19,8 +19,7 @@ import {
 	progressPercent,
 	streamError,
 	updateModels,
-	updateSummary,
-	uploadedModelfile
+	updateSummary
 } from './ollamaStreams';
 
 const inputClass =
@@ -116,7 +115,6 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 	const [uploadMode, setUploadMode] = useState<'file' | 'url'>('file');
 	const [uploadFile, setUploadFile] = useState<File | null>(null);
 	const [uploadUrl, setUploadUrl] = useState('');
-	const [modelfile, setModelfile] = useState(DEFAULT_MODELFILE);
 	const [uploading, setUploading] = useState(false);
 	const [uploadMessage, setUploadMessage] = useState('');
 	const [uploadProgress, setUploadProgress] = useState<number | null>(null);
@@ -223,9 +221,6 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 
 	const upload = async () => {
 		setUploading(true);
-		let name = '';
-		let blob = '';
-		let uploaded = false;
 		try {
 			let res: Response | null = null;
 			if (uploadMode === 'file') {
@@ -239,49 +234,19 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 			}
 
 			if (res?.ok) {
-				const reader = lineReader(res);
-				for (;;) {
-					const { value, done } = await reader.read();
-					if (done) break;
-					try {
-						for (const data of parseStreamLines(value)) {
-							if (data.progress) {
-								setUploadMessage('');
-								setUploadProgress(data.progress);
-							}
-							const failure = streamError(data);
-							if (failure) throw failure;
-							if (data.done) {
-								blob = data.blob;
-								name = data.name;
-								setUploadDigest(data.blob);
-								uploaded = true;
-							}
-						}
-					} catch (err) {
-						console.error(err);
-					}
-				}
+				await finishUpload(res, {
+					onProgress: (percent) => {
+						setUploadMessage('');
+						setUploadProgress(percent);
+					},
+					onBlob: setUploadDigest,
+					create: (payload) => createModel(token, payload, String(urlIdx)) as Promise<Response | null>,
+					followCreate: (created) => followCreate(created, () => undefined),
+					notify: { error: (message) => toast.error(message), success: (message) => toast.success(message) }
+				});
 			} else if (res) {
 				const error = await res.json().catch(() => null);
 				toast.error(error?.detail ?? `${res.status}`);
-			}
-
-			if (uploaded) {
-				// The stored blob becomes a model. (The Svelte tab calls its createModel with
-				// a name and a Modelfile string, which that function takes as payload and
-				// instance -- the request it makes cannot succeed.)
-				const created = (await createModel(
-					token,
-					{ model: `${name}:latest`, modelfile: uploadedModelfile(blob, modelfile) },
-					String(urlIdx)
-				)) as Response | null;
-				if (created?.ok) await followCreate(created, () => undefined);
-				else
-					toast.error(
-						((await created?.json().catch(() => null)) as { detail?: string } | null)?.detail ??
-							'Failed to create the model'
-					);
 			}
 		} catch (error) {
 			toast.error(`${error}`);
@@ -515,18 +480,6 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 						)}
 					</div>
 
-					{readyToUpload && (
-						<div>
-							<div className="my-2.5 text-sm font-normal">Modelfile Content</div>
-							<textarea
-								className={textareaClass}
-								rows={6}
-								aria-label="Modelfile content"
-								value={modelfile}
-								onChange={(e) => setModelfile(e.target.value)}
-							/>
-						</div>
-					)}
 					<div className="text-muted-foreground mt-1 text-xs">
 						To access the GGUF models available for downloading,{' '}
 						<a
