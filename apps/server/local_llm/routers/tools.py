@@ -4,6 +4,7 @@ import asyncio
 import logging
 import re
 import time
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, HttpUrl
@@ -60,6 +61,32 @@ async def get_tool_module(request, tool_id, load_from_db=True):
 # The danger is not in having tools, but in reaching
 # for the wrong one. Let the choice here be deliberate.
 ############################
+
+
+def _server_name(*candidates) -> str:
+    """A tool server's name as lists show it: the first that is not blank (#618).
+
+    An admin's server saved without a name has `''` for one, which showed as a
+    blank row with an empty label; its URL's host, or the default label,
+    stands in.
+    """
+    return next((str(c).strip() for c in candidates if c is not None and str(c).strip()), '')
+
+
+def _server_host(url: object) -> str:
+    """The host (and port) of a tool server's URL, to name it by; '' if it has none.
+
+    Only the host: this list reaches every user with access to the server, and
+    a URL's path, query or userinfo can carry a credential.
+    """
+    try:
+        parts = urlsplit(str(url or '').strip())
+        host, port = parts.hostname, parts.port
+    except ValueError:
+        return ''
+    if not host:
+        return ''
+    return f'{host}:{port}' if port else host
 
 
 @router.get('/', response_model=list[ToolUserResponse])
@@ -121,7 +148,11 @@ async def get_tools(
                 **{
                     'id': server_id,
                     'user_id': server_id,
-                    'name': server.get('openapi', {}).get('info', {}).get('title', 'Tool Server'),
+                    'name': _server_name(
+                        server.get('openapi', {}).get('info', {}).get('title'),
+                        _server_host(connection.get('url')),
+                        'Tool Server',
+                    ),
                     'meta': {
                         'description': server.get('openapi', {}).get('info', {}).get('description', ''),
                     },
@@ -157,7 +188,7 @@ async def get_tools(
                     **{
                         'id': tool_id,
                         'user_id': tool_id,
-                        'name': info.get('name', 'MCP Tool Server'),
+                        'name': _server_name(info.get('name'), _server_host(server.get('url')), 'MCP Tool Server'),
                         'meta': {
                             'description': info.get('description', ''),
                         },

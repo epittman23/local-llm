@@ -92,6 +92,26 @@ describe('trackLastActiveTab (#254)', () => {
 		expect(a.isActive()).toBe(true);
 	});
 
+	it('when the active tab stops tracking without closing, another takes over (#621)', () => {
+		// The app left (a client-side link to a page outside AppShell) but the tab stays open.
+		const channel = bus();
+		const a = tab(channel, 'visible', 'a');
+		clock += 1;
+		const b = tab(channel, 'visible', 'b');
+		expect(a.isActive()).toBe(false);
+		b.stop();
+		expect(a.isActive()).toBe(true);
+	});
+
+	it('a tab that stood down stops without prompting a claim', () => {
+		const channel = bus();
+		const a = tab(channel, 'visible', 'a');
+		clock += 1;
+		const b = tab(channel, 'visible', 'b');
+		a.stop();
+		expect(b.isActive()).toBe(true);
+	});
+
 	it('of two tabs claiming at the same moment, exactly one is active', () => {
 		const channel = bus();
 		const a = tab(channel, 'hidden', 'a');
