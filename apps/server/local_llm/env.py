@@ -714,6 +714,32 @@ if LLLM_AUTH and LLLM_SECRET_KEY == '':
         'or export it yourself when starting uvicorn by hand.'
     )
 
+LLLM_SECRET_KEY_MIN_BYTES = 32
+
+
+def secret_key_problem(key: str) -> str | None:
+    """Why `key` cannot sign sessions, for the startup message, or None if it can.
+
+    Checked when the backend starts, not when the first session is signed
+    (#508). The message never repeats the key.
+    """
+    if key != key.strip():
+        return (
+            'LLLM_SECRET_KEY starts or ends with whitespace, which is usually a copying slip. '
+            'Remove it in infra/.env, or wherever the variable is set.'
+        )
+    if len(key.encode()) < LLLM_SECRET_KEY_MIN_BYTES:
+        return (
+            f'LLLM_SECRET_KEY is {len(key.encode())} bytes long; it must be at least '
+            f'{LLLM_SECRET_KEY_MIN_BYTES}, the key size of the HS256 signature it signs sessions with. '
+            '`openssl rand -base64 24` gives a random 32-character one.'
+        )
+    return None
+
+
+if LLLM_AUTH and (_secret_key_problem := secret_key_problem(LLLM_SECRET_KEY)):
+    raise SystemExit(_secret_key_problem)
+
 ENABLE_COMPRESSION_MIDDLEWARE = os.getenv('ENABLE_COMPRESSION_MIDDLEWARE', 'True').lower() == 'true'
 
 ####################################

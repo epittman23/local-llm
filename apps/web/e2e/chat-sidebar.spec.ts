@@ -98,6 +98,11 @@ test('share copies a link to the public page, and move puts a chat in a folder',
 	await page.getByRole('menuitem', { name: 'Share' }).click();
 	await page.getByRole('button', { name: 'Copy Link' }).click();
 	await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toMatch(/\/s\/share-c1$/);
+	// A new link opens to no one else yet, so the dialog stays to say who may (#334).
+	const dialog = page.getByRole('dialog', { name: 'Share Chat' });
+	await expect(dialog.getByLabel('Visibility')).toHaveValue('private');
+	await page.keyboard.press('Escape');
+	await expect(dialog).toHaveCount(0);
 
 	await item(page, 'Recipe ideas').hover();
 	await page.getByRole('button', { name: 'Chat menu: Recipe ideas' }).click();

@@ -76,6 +76,7 @@ export async function mockChat(
 		feedback: [] as Rec[],
 		deletedMessages: [] as string[]
 	};
+	const grantsByChat = new Map<string, unknown[]>();
 	const byId = new Map(chats.map((c) => [c.id, c]));
 	await page.route('**/api/models*', (route) => json(route, { data: MODELS }));
 	await page.route('**/api/chat/completions', async (route) => {
@@ -136,6 +137,16 @@ export async function mockChat(
 			);
 		}
 		if (path === '/all/tags') return json(route, []);
+		if (path.startsWith('/shared/')) {
+			// A share's access grants (#334): /shared/{chat id}/access and /access/update.
+			const [, , sid] = path.split('/');
+			if (path.endsWith('/access/update')) {
+				seen.actions.push(`access:${sid}`);
+				grantsByChat.set(sid, req.postDataJSON()?.access_grants ?? []);
+				return json(route, byId.get(sid) ?? null);
+			}
+			return json(route, grantsByChat.get(sid) ?? []);
+		}
 		const [, id, action, mid] = path.split('/');
 		const cur = byId.get(id);
 		if (action === 'tags') return json(route, []);
