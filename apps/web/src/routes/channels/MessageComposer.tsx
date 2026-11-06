@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { ArrowUp, FileText, Hash, Paperclip, X } from 'lucide-react';
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { toast } from 'sonner';
 import { Spinner } from '@/components/common/Spinner';
 import { getModels } from '@/lib/apis';
@@ -155,13 +156,17 @@ export const MessageComposer = forwardRef<
 		const insert = `${mentionText(s)} `;
 		const next = text.slice(0, active.start) + insert + text.slice(cursor);
 		const pos = active.start + insert.length;
-		setText(next);
-		// One entry per insertion, in order: encodeMentions gives same-label mentions their occurrences in this order.
-		setMentions((ms) => [...ms, { kind: s.kind, id: s.id, label: s.label }]);
-		requestAnimationFrame(() => {
-			textareaRef.current?.setSelectionRange(pos, pos);
-			setCursor(pos);
+		// Committed now, so the caret can go after the mention in this same
+		// task. It used to wait a frame (requestAnimationFrame), and a key typed
+		// before that frame went in after the mention, then the frame put the
+		// caret back in front of it: "welcome" was sent as "elcomew".
+		flushSync(() => {
+			setText(next);
+			// One entry per insertion, in order: encodeMentions gives same-label mentions their occurrences in this order.
+			setMentions((ms) => [...ms, { kind: s.kind, id: s.id, label: s.label }]);
 		});
+		textareaRef.current?.setSelectionRange(pos, pos);
+		setCursor(pos);
 	};
 
 	const addFiles = (list: File[]) => {

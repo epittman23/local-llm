@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { ArrowUp, BookOpen, FileText, Globe, Image as ImageIcon, Loader2, Square, X } from 'lucide-react';
 import { type ReactNode, forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { toast } from 'sonner';
 import { Tip } from '@/components/common/Tip';
 import { searchKnowledgeBases, searchKnowledgeFiles } from '@/lib/apis/knowledge';
@@ -218,12 +219,21 @@ export const ChatInput = forwardRef<
 
 	useEffect(() => setSelected(0), [active?.trigger, active?.query]);
 
+	// Committed now, so the caret is placed in this same task: placed a frame
+	// later, a key typed before that frame went in at the old caret, and the
+	// frame then moved the caret back in front of it. A dialog that just
+	// closed (the input variables) hands focus back to what opened it after
+	// this, so the frame takes it back, but only if it went: while the box
+	// does not have focus, nothing can be typed into it.
 	const place = (next: string, pos: number) => {
-		setText(next);
+		flushSync(() => setText(next));
+		area.current?.focus();
+		area.current?.setSelectionRange(pos, pos);
+		setCursor(pos);
 		requestAnimationFrame(() => {
-			area.current?.focus();
-			area.current?.setSelectionRange(pos, pos);
-			setCursor(pos);
+			if (!area.current || document.activeElement === area.current) return;
+			area.current.focus();
+			area.current.setSelectionRange(pos, pos);
 		});
 	};
 
