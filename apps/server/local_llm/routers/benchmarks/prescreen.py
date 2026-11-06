@@ -206,7 +206,9 @@ async def get_grids(user=Depends(get_admin_user)):
             grid = load_grid(name)
         except PrescreenRefused as exc:
             log.warning("failed to load pre-screen grid '%s': %s", name, exc)
-            grids.append({'name': name, 'error': ERROR_MESSAGES.internal_error})
+            # The reason stays in the log; starting a sweep on this grid
+            # returns it as that request's 400.
+            grids.append({'name': name, 'error': 'this grid is invalid; the backend log has the reason'})
             continue
         grids.append({'name': name, 'profile': grid.profile, 'knobs': grid.knobs, 'combinations': grid.size()})
     return {'grids': grids}

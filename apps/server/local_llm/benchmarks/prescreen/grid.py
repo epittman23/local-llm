@@ -113,7 +113,10 @@ def load_grid(name: str) -> PrescreenGrid:
         raise PrescreenRefused(f"no pre-screen grid '{name}' (defined: {known})")
     path = PRESCREEN_DIR / f'{name}.toml'
     with path.open('rb') as fh:
-        data = tomllib.load(fh)
+        try:
+            data = tomllib.load(fh)
+        except tomllib.TOMLDecodeError as e:
+            raise PrescreenRefused(f'{path.name} is not valid TOML: {e}') from e
     return PrescreenGrid(path, data)
 
 

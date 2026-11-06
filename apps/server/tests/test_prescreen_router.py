@@ -179,6 +179,23 @@ def test_grids_lists_every_shipped_grid(client):
     assert grids['qwen38']['combinations'] == 40
 
 
+def test_grids_lists_an_invalid_grid_without_failing_the_others(client, monkeypatch, tmp_path):
+    from local_llm.benchmarks.paths import PRESCREEN_DIR
+    from local_llm.benchmarks.prescreen import grid as prescreen_grid
+
+    (tmp_path / 'qwen25c.toml').write_bytes((PRESCREEN_DIR / 'qwen25c.toml').read_bytes())
+    (tmp_path / 'badknob.toml').write_text('profile = "qwen25c"\n\n[knob.LLAMA_CTX]\nvalues = [4096, 8192]\n')
+    (tmp_path / 'badtoml.toml').write_text('profile = \n')
+    monkeypatch.setattr(prescreen_grid, 'PRESCREEN_DIR', tmp_path)
+
+    response = client.get('/api/v1/benchmarks/prescreen/grids')
+    assert response.status_code == 200
+    grids = {g['name']: g for g in response.json()['grids']}
+    assert grids['qwen25c']['combinations'] == 32
+    for name in ('badknob', 'badtoml'):
+        assert grids[name] == {'name': name, 'error': 'this grid is invalid; the backend log has the reason'}
+
+
 def test_sweeps_and_a_sweeps_detail(client, monkeypatch):
     sweeps, points = Sweeps(), Points()
     monkeypatch.setattr(prescreen_router, 'BenchmarkPrescreenSweeps', sweeps)
