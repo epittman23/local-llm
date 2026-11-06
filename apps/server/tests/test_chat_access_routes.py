@@ -462,3 +462,60 @@ def test_cloning_needs_the_import_permission(client, config, people):
     config['user.permissions']['chat']['import'] = False
     assert client.post(f'/chats/{share_id}/clone/shared', headers=people.owner.headers).status_code == 403
     assert client.post(f'/chats/{chat_id}/clone', json={}, headers=people.owner.headers).status_code == 403
+
+
+# --- A copy keeps its source's folder only where the caller may write ------------
+
+
+def _folder(owner) -> str:
+    from local_llm.models.folders import FolderForm, Folders
+
+    folder = _run(Folders.insert_new_folder(owner.id, FolderForm(name=f'f-{uuid.uuid4().hex[:6]}')))
+    assert folder is not None
+    return folder.id
+
+
+def _chat_in(owner, folder_id: str) -> str:
+    chat_id = str(uuid.uuid4())
+    form = ChatForm(chat={'title': 'filed', 'history': copy.deepcopy(HISTORY), 'models': ['m'], 'tags': []})
+    _run(Chats.insert_new_chat(chat_id, owner.id, form.model_copy(update={'folder_id': folder_id})))
+    return chat_id
+
+
+def _copies(client, who, chat_id) -> list[dict]:
+    fork = client.post(f'/chats/{chat_id}/fork', headers=who.headers)
+    clone = client.post(f'/chats/{chat_id}/clone', json={}, headers=who.headers)
+    assert fork.status_code == 200, fork.text
+    assert clone.status_code == 200, clone.text
+    return [fork.json(), clone.json()]
+
+
+def test_a_fork_or_clone_stays_in_the_callers_own_folder(client, people):
+    folder_id = _folder(people.owner)
+    for copy_ in _copies(client, people.owner, _chat_in(people.owner, folder_id)):
+        assert copy_['folder_id'] == folder_id
+
+
+def test_a_fork_or_clone_leaves_out_a_folder_the_caller_cannot_write_to(client, people):
+    # A chat can still name a folder its owner lost access to, such as a shared
+    # folder whose grant was taken back; a copy of it must not be put there.
+    elsewhere = _folder(people.other)
+    for copy_ in _copies(client, people.owner, _chat_in(people.owner, elsewhere)):
+        assert copy_['folder_id'] is None
+
+
+def test_a_cloned_share_does_not_take_the_sharers_folder(client, people):
+    folder_id = _folder(people.owner)
+    chat_id = _chat_in(people.owner, folder_id)
+    share_id = _share(client, people.owner, chat_id)
+    _set_grants(
+        client,
+        people.owner,
+        chat_id,
+        [{'principal_type': 'user', 'principal_id': people.other.id, 'permission': 'read'}],
+    )
+
+    r = client.post(f'/chats/{share_id}/clone/shared', headers=people.other.headers)
+
+    assert r.status_code == 200, r.text
+    assert r.json()['folder_id'] is None

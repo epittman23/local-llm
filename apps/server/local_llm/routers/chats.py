@@ -1437,6 +1437,18 @@ class ForkForm(BaseModel):
     message_id: str | None = None
 
 
+async def writable_folder_id(user, folder_id: str | None, db: AsyncSession) -> str | None:
+    """The source's folder for a copy of a chat, if the caller may still put chats there.
+
+    A chat can name a folder its owner can no longer write to, such as a shared
+    folder whose grant was taken back; a fork or clone of it goes to no folder,
+    as moving a chat there would be refused (#315).
+    """
+    if folder_id is None or not await has_folder_write_access(user.id, folder_id, db=db):
+        return None
+    return folder_id
+
+
 @router.post('/{id}/fork', response_model=ChatResponse | None)
 async def fork_chat_by_id(
     request: Request,
@@ -1490,7 +1502,7 @@ async def fork_chat_by_id(
     fork = await Chats.insert_new_chat(
         str(uuid4()),
         user.id,
-        ChatForm(chat=updated_chat, folder_id=chat.folder_id),
+        ChatForm(chat=updated_chat, folder_id=await writable_folder_id(user, chat.folder_id, db)),
         db=db,
         internal_meta=meta,
     )
@@ -1543,7 +1555,7 @@ async def clone_chat_by_id(
                         'meta': chat.meta,
                         'variables': chat.variables or {},
                         'pinned': chat.pinned,
-                        'folder_id': chat.folder_id,
+                        'folder_id': await writable_folder_id(user, chat.folder_id, db),
                     }
                 )
             ],
@@ -1641,7 +1653,7 @@ async def clone_shared_chat_by_id(
                     'meta': chat.meta,
                     'variables': chat.variables or {},
                     'pinned': chat.pinned,
-                    'folder_id': chat.folder_id,
+                    'folder_id': await writable_folder_id(user, chat.folder_id, db),
                 }
             )
         ],
