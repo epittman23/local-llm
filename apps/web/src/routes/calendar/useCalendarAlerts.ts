@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
 import { useUserSettings } from '@/lib/settings/userSettings';
 import { useSocket } from '@/lib/socket/SocketProvider';
+import { isLastActiveTab } from '@/lib/utils/lastActiveTab';
 import { routePaths } from '@/routes/routePaths';
 
 /** The `data` of a `calendar:alert` event (utils/automations.py's calendar alert check). */
@@ -26,9 +27,10 @@ export const calendarAlertText = (minutes: number) =>
  * branch: an event reminder arrives on the `events` channel, wherever the
  * viewer is, as a toast that opens the calendar, and as a browser
  * notification if they turned those on in Settings and granted the
- * permission. The notification's tag is the event's, so another open tab's
- * copy replaces it rather than stacking (how that looks is up to the browser).
- * Mounted once, in AppShell.
+ * permission. Every open tab shows the toast, but only the last active one
+ * sends the notification, as the original did (`$isLastActiveTab`; #621); its
+ * tag is the event's, in case two tabs both think they are. Mounted once, in
+ * AppShell, beside the channel events hook that tracks the active tab.
  */
 export function useCalendarAlerts() {
 	const { socket } = useSocket();
@@ -47,7 +49,7 @@ export function useCalendarAlerts() {
 				duration: 30000,
 				action: { label: 'Open', onClick: () => navigate(routePaths.calendar) }
 			});
-			if (notify && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+			if (notify && isLastActiveTab() && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
 				new Notification(alert.title, { body, tag: `calendar:${alert.event_id}` });
 			}
 		};

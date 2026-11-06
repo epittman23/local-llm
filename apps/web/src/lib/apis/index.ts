@@ -5,7 +5,14 @@
 // verbatim port covers -- the same call the migration plan made for the Python side's
 // pre-existing Optional-typing debt (docs/decisions.md, 2026-09-15 entry).
 import { WEBUI_BASE_URL } from '@/lib/constants';
-import { convertOpenApiToToolPayload } from '@/lib/utils/api-helpers';
+import {
+	arrayBodyProperty,
+	arrayBodySchema,
+	convertOpenApiToToolPayload,
+	isSendableParameter,
+	jsonBodySchema,
+	parameterText
+} from '@/lib/utils/api-helpers';
 import { normalizeTags } from '@/lib/utils/tags';
 import { parseJsonBlock } from './jsonBlock';
 import { getOpenAIModelsDirect } from './openai';
@@ -590,20 +597,26 @@ export const executeToolServer = async (
 			if (param?.name) mergedParams.set(`${param.name}:${param.in ?? ''}`, param);
 		}
 
-		// Split parameters by type
+		// Split parameters by where they go: path, query or header (#613).
 		const pathParams: Record<string, any> = {};
 		const queryParams: Record<string, any> = {};
+		const headerParams: Record<string, string> = {};
 		let bodyParams: any = {};
 
 		for (const param of mergedParams.values()) {
 			const paramName = param?.name;
-			if (!paramName) continue;
+			if (!paramName || !isSendableParameter(param)) continue;
 			const paramIn = param?.in;
-			if (params.hasOwnProperty(paramName)) {
+			if (Object.hasOwn(params, paramName)) {
+				const value = params[paramName];
 				if (paramIn === 'path') {
-					pathParams[paramName] = params[paramName];
+					pathParams[paramName] = value;
 				} else if (paramIn === 'query') {
-					queryParams[paramName] = params[paramName];
+					queryParams[paramName] = value;
+				} else if (paramIn === 'header') {
+					// As the backend does: an empty optional value is left out.
+					if (value === null || value === undefined || (value === '' && !param.required)) continue;
+					headerParams[paramName] = parameterText(value);
 				}
 			}
 		}
@@ -621,19 +634,34 @@ export const executeToolServer = async (
 			finalUrl += `?${queryString}`;
 		}
 
-		// Handle requestBody composite
-		if (operation.requestBody && operation.requestBody.content) {
-			const contentType = Object.keys(operation.requestBody.content)[0];
+		// The body: an array body is its one argument's list, sent as the array
+		// itself, and none when it was left out (#191, #613); otherwise the arguments.
+		if (arrayBodySchema(jsonBodySchema(operation, serverData.openapi.components)) !== null) {
+			const bodyProperty = arrayBodyProperty([...mergedParams.values()]);
+			// Left out, or null: no body, as the backend sends none.
+			bodyParams = params[bodyProperty] ?? undefined;
+		} else if (operation.requestBody && operation.requestBody.content) {
 			if (params !== undefined) {
-				bodyParams = params;
+				// The arguments without the operation's parameters, which go in the path,
+				// query or header (and are not sent as cookies), unless the body schema
+				// has a field of that name, as the backend does (#189, #613).
+				const bodyFields = new Set(
+					Object.keys(jsonBodySchema(operation, serverData.openapi.components).properties ?? {})
+				);
+				const parameterNames = new Set(
+					[...mergedParams.values()].map((param) => param?.name).filter((n) => n && !bodyFields.has(n))
+				);
+				bodyParams = Object.fromEntries(Object.entries(params).filter(([key]) => !parameterNames.has(key)));
 			} else {
 				// Optional: Fallback or explicit error if body is expected but not provided
 				throw new Error(`Request body expected for operation '${name}' but none found.`);
 			}
 		}
 
-		// Prepare headers and request options
+		// Prepare headers and request options. The page's own headers are all
+		// reserved, so no header parameter can replace one.
 		const headers: Record<string, string> = {
+			...headerParams,
 			'Content-Type': 'application/json',
 			...(token && { authorization: `Bearer ${token}` })
 		};
@@ -644,7 +672,11 @@ export const executeToolServer = async (
 			headers
 		};
 
-		if (['post', 'put', 'patch', 'delete'].includes(httpMethod.toLowerCase()) && operation.requestBody) {
+		if (
+			['post', 'put', 'patch', 'delete'].includes(httpMethod.toLowerCase()) &&
+			operation.requestBody &&
+			bodyParams !== undefined
+		) {
 			requestOptions.body = JSON.stringify(bodyParams);
 		}
 

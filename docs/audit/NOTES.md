@@ -151,7 +151,8 @@ are kept out of this file).
   `getUserTimezone` (frontend); `update_prompt_by_command`,
   `delete_prompt_by_command`, `groups.search_groups`,
   `get_chat_list_by_chat_ids`, the `logit_bias` branch in
-  `apply_params_to_form_data`, `telemetry/instrumentors._uninstrument` (backend).
+  `apply_params_to_form_data` (live since #616),
+  `telemetry/instrumentors._uninstrument` (backend).
 - `chat_message.last_message_at` is set from a field the backend never sends.
 
 ### Coverage notes

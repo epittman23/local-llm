@@ -1,5 +1,6 @@
 import { renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { isLastActiveTab } from '@/lib/utils/lastActiveTab';
 import { calendarAlertText, useCalendarAlerts } from './useCalendarAlerts';
 
 const { socket, navigate, toast, settings } = vi.hoisted(() => ({
@@ -12,6 +13,7 @@ vi.mock('@/lib/socket/SocketProvider', () => ({ useSocket: () => ({ socket, conn
 vi.mock('@/lib/settings/userSettings', () => ({ useUserSettings: () => ({ settings: settings.current }) }));
 vi.mock('react-router', () => ({ useNavigate: () => navigate }));
 vi.mock('sonner', () => ({ toast }));
+vi.mock('@/lib/utils/lastActiveTab', () => ({ isLastActiveTab: vi.fn() }));
 
 // What utils/automations.py's calendar alert check emits on the `events` channel.
 const alert = (minutes_until: number) => ({
@@ -52,6 +54,7 @@ describe('useCalendarAlerts', () => {
 		settings.current = {};
 		NotificationMock = Object.assign(vi.fn(), { permission: 'granted' });
 		vi.stubGlobal('Notification', NotificationMock);
+		vi.mocked(isLastActiveTab).mockReturnValue(true);
 	});
 	afterEach(() => {
 		vi.unstubAllGlobals();
@@ -73,6 +76,15 @@ describe('useCalendarAlerts', () => {
 		renderHook(() => useCalendarAlerts());
 		handler()(alert(0));
 		expect(NotificationMock).toHaveBeenCalledWith('Standup', { body: 'Starting now', tag: 'calendar:e1' });
+	});
+
+	it('sends the browser notification from the last active tab only, and the toast from every tab (#621)', () => {
+		settings.current = { notificationEnabled: true };
+		vi.mocked(isLastActiveTab).mockReturnValue(false);
+		renderHook(() => useCalendarAlerts());
+		handler()(alert(0));
+		expect(toast).toHaveBeenCalledTimes(1);
+		expect(NotificationMock).not.toHaveBeenCalled();
 	});
 
 	it('sends no browser notification when they are off in Settings', () => {
