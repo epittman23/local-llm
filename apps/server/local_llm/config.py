@@ -27,6 +27,7 @@ from local_llm.env import (
 )
 from local_llm.models.config import Config
 from local_llm.utils.json_codec import JSONCodec
+from local_llm.utils.misc import jwt_expiry_startup_error
 
 
 async def seed_registered_defaults():
@@ -2265,6 +2266,11 @@ ENABLE_API_KEYS_ENDPOINT_RESTRICTIONS = (
 API_KEYS_ALLOWED_ENDPOINTS = os.getenv('API_KEYS_ALLOWED_ENDPOINTS', os.getenv('API_KEY_ALLOWED_ENDPOINTS', ''))
 
 JWT_EXPIRES_IN = os.getenv('JWT_EXPIRES_IN', '4w')
+
+# Checked here, not at the first sign-in, which failed on it (#508); the API
+# refuses the same values since #242.
+if _jwt_expiry_problem := jwt_expiry_startup_error(JWT_EXPIRES_IN):
+    raise SystemExit(_jwt_expiry_problem)
 
 if JWT_EXPIRES_IN == '-1':
     log.warning(

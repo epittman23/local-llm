@@ -644,7 +644,7 @@ export default function Documents() {
 								{...bound}
 								name="FILE_MAX_COUNT"
 								label="Max Upload Count"
-								description="Maximum number of files that can be used at once in chat."
+								description="Maximum number of files that can be used at once in chat. Leave empty or set 0 for unlimited."
 								placeholder="Leave empty for unlimited"
 								min={0}
 							/>

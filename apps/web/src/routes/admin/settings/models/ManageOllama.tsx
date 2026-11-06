@@ -11,12 +11,14 @@ import { createModel, deleteModel, downloadModel, getOllamaModels, pullModel, up
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cancelPull, startPull, useDownloadPool } from './ollamaDownloads';
 import {
+	failureMessage,
 	finishUpload,
 	isNotableStatus,
 	lineReader,
 	modelLabel,
 	parseStreamLines,
 	progressPercent,
+	refusalMessage,
 	streamError,
 	updateModels,
 	updateSummary
@@ -81,7 +83,7 @@ async function followCreate(res: Response, onProgress: (digest: string, percent:
 				else if (data.digest) onProgress(data.digest, progressPercent(data));
 			}
 		} catch (err) {
-			toast.error(`${err}`);
+			toast.error(failureMessage(err));
 		}
 	}
 }
@@ -126,7 +128,7 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 		try {
 			setModels((await getOllamaModels(token, urlIdx)) as OllamaModel[]);
 		} catch (error) {
-			toast.error(`${error}`);
+			toast.error(failureMessage(error));
 			setModels(null);
 		}
 	}, [token, urlIdx]);
@@ -184,7 +186,7 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 		try {
 			if (await deleteModel(token, deleteTag, String(urlIdx))) toast.success(`Deleted ${deleteTag}`);
 		} catch (error) {
-			toast.error(`${error}`);
+			toast.error(failureMessage(error));
 		}
 		setDeleteTag('');
 		await refreshModels();
@@ -198,16 +200,16 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 		try {
 			body = JSON.parse(createBody);
 		} catch (error) {
-			toast.error(`${error}`);
+			toast.error(failureMessage(error));
 			return;
 		}
 		setCreating(true);
 		try {
 			const res = (await createModel(token, { model: createName, ...body }, String(urlIdx))) as Response | null;
 			if (res?.ok) await followCreate(res, (digest, percent) => (setCreateDigest(digest), setCreateProgress(percent)));
-			else if (res) toast.error((await res.json().catch(() => null))?.detail ?? `${res.status}`);
+			else if (res) toast.error(await refusalMessage(res));
 		} catch (error) {
-			toast.error(`${error}`);
+			toast.error(failureMessage(error));
 		}
 		await refreshModels();
 		setCreating(false);
@@ -245,11 +247,10 @@ export function ManageOllama({ urlIdx }: { urlIdx: number }) {
 					notify: { error: (message) => toast.error(message), success: (message) => toast.success(message) }
 				});
 			} else if (res) {
-				const error = await res.json().catch(() => null);
-				toast.error(error?.detail ?? `${res.status}`);
+				toast.error(await refusalMessage(res));
 			}
 		} catch (error) {
-			toast.error(`${error}`);
+			toast.error(failureMessage(error));
 		}
 		setUploadUrl('');
 		setUploadFile(null);

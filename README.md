@@ -46,6 +46,13 @@ JUPYTER_TOKEN=
 SEARXNG_SECRET=
 ```
 
+The backend refuses to start when `LLLM_SECRET_KEY` is shorter than 32 bytes
+(the command above gives 32 characters) or starts or ends with whitespace,
+and when `JWT_EXPIRES_IN`, if set, is a duration sign-in cannot use: one it
+cannot read, or one under a minute. That variable only sets the default the
+first time the backend starts; after that, Admin Settings > Authentication (JWT
+Expiration) holds the session length in use.
+
 `make backend` also starts two optional-to-use services beside Postgres and
 Redis: a Jupyter server for the code interpreter and SearXNG for web search
 (see [docs/guides/assistant-tools.md](docs/guides/assistant-tools.md)). The

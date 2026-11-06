@@ -148,6 +148,42 @@ test.describe('settings: Sub-agents', () => {
 	});
 });
 
+test.describe('settings: Sub-agents limits (#602)', () => {
+	test('saves -1 for iterations and output, and still refuses a bounded value below the minimum', async ({ page }) => {
+		await mockWorkspaceBackend(page);
+		const { calls } = await mockConfigApi(page, '/configs', {
+			'/configs/subagents': {
+				ENABLE_SUBAGENTS: true,
+				SUBAGENTS_BACKGROUND_ENABLED: false,
+				SUBAGENTS_MAX_CONCURRENT: 20,
+				SUBAGENTS_MAX_ASYNC: 20,
+				SUBAGENTS_MAX_ITERATIONS: -1,
+				SUBAGENTS_MAX_OUTPUT: -1,
+				SUBAGENTS_SYSTEM_PROMPT: ''
+			}
+		});
+		await page.goto('/?settings=admin:subagents');
+		const m = modal(page);
+		await expect(m.getByLabel('Max iterations')).toHaveValue('-1');
+		await expect(m.getByLabel('Max output')).toHaveValue('-1');
+		const posted = () => calls.filter((c) => c.method === 'POST' && c.path === '/configs/subagents');
+
+		// The browser's own validation used to block Save on the whole tab here.
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect
+			.poll(() => posted()[0]?.body)
+			.toMatchObject({ SUBAGENTS_MAX_ITERATIONS: -1, SUBAGENTS_MAX_OUTPUT: -1 });
+
+		await m.getByLabel('Max output').fill('500');
+		await m.getByRole('button', { name: 'Save' }).click();
+		await expect(m.getByLabel('Max output')).toHaveJSProperty(
+			'validationMessage',
+			'Enter -1 for no limit, or at least 1000.'
+		);
+		expect(posted()).toHaveLength(1);
+	});
+});
+
 test.describe('settings: Code Execution', () => {
 	const cfg = {
 		ENABLE_CODE_EXECUTION: true,
