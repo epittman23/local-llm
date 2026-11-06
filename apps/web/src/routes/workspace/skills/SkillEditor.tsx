@@ -70,17 +70,16 @@ export function SkillEditor({
 			return;
 		}
 		setLoading(true);
-		// Save rewrites every field: an edit keeps the skill's own state (#227);
-		// a new skill, clones included, starts active and untagged.
-		const kept = edit ? skill : null;
+		// An edit leaves the enabled state and tags out, so the server keeps the
+		// stored ones (#227), even when they changed elsewhere since this page
+		// loaded (#527). A new skill, clones included, starts active and untagged.
 		try {
 			await onSubmit({
 				id: edit ? id : slugify(id),
 				name,
 				description,
 				content,
-				is_active: kept?.is_active ?? true,
-				meta: { tags: kept?.meta?.tags ?? [] },
+				...(edit ? {} : { is_active: true, meta: { tags: [] } }),
 				access_grants: accessGrants
 			});
 		} finally {

@@ -47,6 +47,9 @@ async function mockAutomations(page: Page, items: Rec[] = [], runs: Rec[] = []) 
 			return json(route, { items: list, total: list.length });
 		}
 		if (path === '/create') {
+			// Refused as the server refuses a one-time automation that has already run.
+			if (req.postDataJSON()?.name === 'Refused')
+				return route.fulfill({ status: 400, json: { detail: 'RRULE has no future occurrences' } });
 			seen.created.push(req.postDataJSON());
 			return json(route, { id: `new${seen.created.length}`, ...req.postDataJSON() });
 		}
@@ -220,6 +223,22 @@ test('the detail page shows the automation and its runs; run now, edit and delet
 	expect(seen.deleted).toEqual(['a1']);
 });
 
+test('import goes on past an automation the server refuses, and names it (#323)', async ({ page }) => {
+	await mockWorkspaceBackend(page, enabled);
+	const seen = await mockAutomations(page);
+	await page.goto('/automations');
+	const item = (name: string) => ({ name, data: { prompt: 'p', model_id: 'm', rrule: 'RRULE:FREQ=DAILY' } });
+	await page.getByLabel('Import automations file').setInputFiles({
+		name: 'a.json',
+		mimeType: 'application/json',
+		buffer: Buffer.from(JSON.stringify([item('First'), item('Refused'), item('Last')]))
+	});
+	await expect(
+		page.getByText('Imported 2 automations; 1 could not be created: Refused (RRULE has no future occurrences)')
+	).toBeVisible();
+	expect(seen.created.map((a) => a.name)).toEqual(['First', 'Last']);
+});
+
 test('an unknown id goes back to the list; import skips incomplete entries', async ({ page }) => {
 	await mockWorkspaceBackend(page, enabled);
 	const seen = await mockAutomations(page);
@@ -235,7 +254,7 @@ test('an unknown id goes back to the list; import skips incomplete entries', asy
 			])
 		)
 	});
-	await expect(page.getByText('Imported 1 automations; skipped 1 incomplete')).toBeVisible();
+	await expect(page.getByText('Imported 1 automation; skipped 1 incomplete')).toBeVisible();
 	expect(seen.created).toEqual([
 		{
 			name: 'Ok',

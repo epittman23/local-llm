@@ -256,14 +256,22 @@ def chat_search_snippet(chat: dict, search_text: str, max_length: int = 200) -> 
             if not isinstance(content, str):
                 continue
 
-            index = content.lower().find(needle)
+            lowered = content.lower()
+            index = lowered.find(needle)
             if index == -1:
                 continue
+            match_end = index + len(needle)
+            if len(lowered) != len(content):
+                # Lowering lengthened a character (U+0130 becomes two), so an
+                # index in the lowered text is off in the original, and the
+                # window missed the match (#339): map it back.
+                origin = [position for position, char in enumerate(content) for _ in char.lower()]
+                index, match_end = origin[index], origin[match_end - 1] + 1
 
             start = max(index - max_length // 2, 0)
             end = min(start + max_length, len(content))
-            if index + len(needle) > end:
-                end = min(index + len(needle), len(content))
+            if match_end > end:
+                end = min(match_end, len(content))
                 start = max(end - max_length, 0)
 
             snippet = ' '.join(content[start:end].split())
@@ -1346,7 +1354,14 @@ async def delete_chat_by_id(
     # Cancel any in-flight LLM tasks (streaming, title/tags generation) before
     # deleting the chat to prevent orphaned requests.
     await stop_item_tasks(request.app.state.redis, id)
-    await Chats.delete_orphan_tags_for_user(chat.meta.get('tags', []), user.id, threshold=1, db=db)
+    # The chat owner's tags: an admin deleting another user's chat used to
+    # clean up the admin's own tag rows instead (#338). Only chats that are not
+    # archived or internal are counted, so such a chat does not count itself:
+    # a threshold of 1 would drop a tag that one other chat still uses.
+    counted = not chat.archived and not (chat.meta or {}).get('internal')
+    await Chats.delete_orphan_tags_for_user(
+        chat.meta.get('tags', []), chat.user_id, threshold=1 if counted else 0, db=db
+    )
 
     # Cascade to internal child chats spawned from this one.
     for child_id in await Chats.get_internal_chat_ids_by_parent_id(id, chat.user_id):

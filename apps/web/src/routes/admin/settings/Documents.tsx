@@ -122,8 +122,12 @@ export default function Documents() {
 	const setCredentials = (section: 'openai' | 'ollama' | 'azure') => (changes: Rec) =>
 		setDraft((d) => d && { ...d, embedding: { ...d.embedding, [section]: { ...d.embedding[section], ...changes } } });
 
-	/** Applies the embedding model; false (after saying why) if it cannot be, in which case the form is put back to what the server has. */
-	const applyEmbedding = async (): Promise<boolean> => {
+	/**
+	 * Applies the embedding model; false (after saying why) if it cannot be, in
+	 * which case the form is put back to what the server has. `forceReload`
+	 * loads it even when unchanged, as the Update button asks (#532).
+	 */
+	const applyEmbedding = async (forceReload: boolean): Promise<boolean> => {
 		if (!draft) return false;
 		const invalid = embeddingError(draft.embedding);
 		if (invalid) {
@@ -131,7 +135,7 @@ export default function Documents() {
 			return false;
 		}
 		try {
-			await updateEmbeddingConfig(token, buildEmbeddingPayload(draft.embedding));
+			await updateEmbeddingConfig(token, buildEmbeddingPayload(draft.embedding, { forceReload }));
 			return true;
 		} catch (error) {
 			toast.error(`${error}`);
@@ -144,7 +148,7 @@ export default function Documents() {
 	const updateEmbeddingModel = async () => {
 		setEmbeddingLoading(true);
 		try {
-			if (await applyEmbedding()) toast.success('Embedding model updated');
+			if (await applyEmbedding(true)) toast.success('Embedding model updated');
 		} finally {
 			setEmbeddingLoading(false);
 		}
@@ -163,7 +167,7 @@ export default function Documents() {
 			// Built first: what cannot be sent stops the save before the embedding changes (#234).
 			const payload = buildRagPayload(rag);
 			// Bypassing retrieval means there is no embedding model to keep in step.
-			if (!rag.BYPASS_EMBEDDING_AND_RETRIEVAL && !(await applyEmbedding())) return;
+			if (!rag.BYPASS_EMBEDDING_AND_RETRIEVAL && !(await applyEmbedding(false))) return;
 			const res = await updateRAGConfig(token, payload);
 			const { warnings, changes } = ragSaveOutcome(rag, res);
 			if (Object.keys(changes).length) setRag(changes);
@@ -437,7 +441,7 @@ export default function Documents() {
 								<div className="w-16">
 									<SettingNumber
 										aria-label="Embedding Batch Size"
-										min={-2}
+										min={1}
 										max={16000}
 										step={1}
 										value={emb.batchSize}

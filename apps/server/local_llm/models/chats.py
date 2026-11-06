@@ -608,6 +608,24 @@ class ChatTable:
             )
             return [ChatModel.model_validate(chat) for chat in result.scalars().all()]
 
+    async def delete_internal_chats_by_note_id(self, note_id: str, db: AsyncSession | None = None) -> None:
+        """Delete every user's internal chat with a note, as its deletion leaves them unreachable (#333)."""
+        async with get_async_db_context(db) as session:
+            result = await session.execute(
+                select(Chat.id, Chat.user_id).where(
+                    Chat.meta['internal'].as_boolean().is_(True),
+                    Chat.meta['type'].as_string() == 'note',
+                    Chat.meta['note_id'].as_string() == note_id,
+                )
+            )
+            chats = result.all()
+        for chat_id, user_id in chats:
+            # And the chats spawned from it (subagents, timers), as the chat delete route does.
+            for child_id in await self.get_internal_chat_ids_by_parent_id(chat_id, user_id):
+                await self.delete_chat_by_id(child_id, db=db)
+            if not await self.delete_chat_by_id(chat_id, db=db):
+                log.warning('Could not delete chat %s of deleted note %s', chat_id, note_id)
+
     def _chat_import_form_to_chat_model(self, user_id: str, form_data: ChatImportForm) -> ChatModel:
         id = str(uuid.uuid4())
         now = int(time.time())
@@ -632,6 +650,21 @@ class ChatTable:
         )
         return chat
 
+    @staticmethod
+    def _normalise_imported_tags(form_data: ChatImportForm) -> list[str]:
+        """Store an imported chat's tags as tag ids, as a tag write does, and
+        return their names, so their rows can be created (#531). Only names
+        are kept: a `meta.tags` that is not a list is stored as no tags, and
+        an item that is not a name is dropped, since everything that reads
+        the tags expects a list of ids."""
+        meta = form_data.meta or {}
+        if 'tags' not in meta:
+            return []
+        tags = meta['tags'] if isinstance(meta['tags'], list) else []
+        names = [t for t in tags if isinstance(t, str) and t.strip() and t.replace(' ', '_').lower() != 'none']
+        form_data.meta = {**meta, 'tags': list(dict.fromkeys(t.replace(' ', '_').lower() for t in names))}
+        return names
+
     async def import_chats(
         self,
         user_id: str,
@@ -655,13 +688,17 @@ class ChatTable:
                 log.info('Import: cleared %d dangling folder_id(s) for user %s', cleared, user_id)
 
             chats = []
+            tag_names: list[str] = []
 
             for form_data in chat_import_forms:
+                tag_names.extend(self._normalise_imported_tags(form_data))
                 chat = self._chat_import_form_to_chat_model(user_id, form_data)
                 chats.append(Chat(**chat.model_dump()))
 
             session.add_all(chats)
             await session.commit()
+            # The tag rows a tag write would create (#531).
+            await Tags.ensure_tags_exist(tag_names, user_id, db=session)
 
             # Dual-write messages to chat_message table
             for form_data, imported_chat in zip(chat_import_forms, chats, strict=True):

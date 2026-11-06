@@ -1,4 +1,4 @@
-"""`POST /retrieval/embedding/update` with a local model that will not load.
+"""`POST /retrieval/embedding/update`: a local model that will not load, and when a model is loaded at all.
 
 `get_ef` logs a load failure and returns None. The route used to unload the
 working model first, then save the new name and report success, after which
@@ -7,7 +7,12 @@ These pin that a model that fails to load is refused with a message naming
 it and saying truthfully whether an embedding model is still in use, that
 nothing is saved and the state is untouched, that a model that loads
 replaces the old one, and that an external engine (for which `get_ef`
-returns None by design) still saves.
+returns None by design) still saves. Also that a plain Documents save keeps a
+loaded model it did not change, and loads one that differs from the model
+loaded, and that a blank local model is refused (#532).
+
+A batch size below 1, or none, is refused before anything changes too:
+once saved it failed every embedding (#353).
 """
 
 import asyncio
@@ -65,7 +70,7 @@ def _loader(monkeypatch, *, fails: bool):
 
 
 def _request():
-    state = SimpleNamespace(ef=OLD_EF, EMBEDDING_FUNCTION=OLD_EMBEDDING_FUNCTION)
+    state = SimpleNamespace(ef=OLD_EF, ef_model='old/model', EMBEDDING_FUNCTION=OLD_EMBEDDING_FUNCTION)
     return SimpleNamespace(app=SimpleNamespace(state=state))
 
 
@@ -181,3 +186,116 @@ def test_an_external_engine_is_saved_without_a_local_model(stored, monkeypatch):
     assert stored['rag.embedding_model'] == 'text-embedding-3-small'
     assert request.app.state.ef is None
     assert request.app.state.EMBEDDING_FUNCTION is not OLD_EMBEDDING_FUNCTION
+
+
+def _counting_loader(monkeypatch):
+    """A loader that loads and counts how often it did (#532)."""
+    loads = []
+
+    class SentenceTransformer:
+        def __init__(self, path, **kwargs):
+            loads.append(path)
+            self.path = path
+
+    monkeypatch.setitem(sys.modules, 'sentence_transformers', SimpleNamespace(SentenceTransformer=SentenceTransformer))
+    return loads
+
+
+def test_a_plain_save_keeps_the_loaded_model_when_it_is_unchanged(stored, monkeypatch):
+    """The Documents page's Save sends the embedding settings every time (#532)."""
+    loads = _counting_loader(monkeypatch)
+    request = _request()
+
+    _update(
+        request,
+        RAG_EMBEDDING_ENGINE='',
+        RAG_EMBEDDING_MODEL='old/model',
+        RAG_EMBEDDING_BATCH_SIZE=8,
+        force_reload=False,
+    )
+
+    assert loads == []
+    assert request.app.state.ef is OLD_EF
+    # The other settings still apply: the embedding function is built again around the same model.
+    assert request.app.state.EMBEDDING_FUNCTION is not OLD_EMBEDDING_FUNCTION
+    assert stored['rag.embedding_batch_size'] == 8
+
+
+def test_the_update_button_reloads_an_unchanged_model(stored, monkeypatch):
+    loads = _counting_loader(monkeypatch)
+    request = _request()
+
+    _update(request, RAG_EMBEDDING_ENGINE='', RAG_EMBEDDING_MODEL='old/model')
+
+    assert loads == ['old/model']
+    assert request.app.state.ef is not OLD_EF
+
+
+@pytest.mark.parametrize(
+    ('model', 'loaded'),
+    [('new/model', OLD_EF), ('old/model', None)],
+    ids=['model_changed', 'nothing_loaded'],
+)
+def test_a_plain_save_loads_a_model_that_changed_or_is_not_loaded(stored, monkeypatch, model, loaded):
+    loads = _counting_loader(monkeypatch)
+    request = _request()
+    request.app.state.ef = loaded
+
+    _update(request, RAG_EMBEDDING_ENGINE='', RAG_EMBEDDING_MODEL=model, force_reload=False)
+
+    assert loads == [model]
+    assert request.app.state.ef is not None
+    assert request.app.state.ef is not OLD_EF
+
+
+def test_a_plain_save_loads_the_stored_model_when_another_one_is_loaded(stored, values, monkeypatch):
+    """A config import stored a new name without loading it (#532)."""
+    values['RAG_EMBEDDING_MODEL'] = 'imported/model'
+    loads = _counting_loader(monkeypatch)
+    request = _request()
+
+    _update(request, RAG_EMBEDDING_ENGINE='', RAG_EMBEDDING_MODEL='imported/model', force_reload=False)
+
+    assert loads == ['imported/model']
+    assert request.app.state.ef_model == 'imported/model'
+
+
+def test_a_blank_local_model_is_refused_and_nothing_saved(stored, monkeypatch):
+    loads = _counting_loader(monkeypatch)
+    request = _request()
+
+    with pytest.raises(HTTPException) as raised:
+        _update(request, RAG_EMBEDDING_ENGINE='', RAG_EMBEDDING_MODEL='  ', force_reload=False)
+
+    assert raised.value.status_code == 400
+    assert 'embedding model' in raised.value.detail.lower()
+    assert stored == {}
+    assert loads == []
+    assert request.app.state.ef is OLD_EF
+
+
+@pytest.mark.parametrize('batch_size', [0, -1, -2, None])
+def test_a_batch_size_below_1_is_refused_and_nothing_changes(stored, monkeypatch, batch_size):
+    """A saved 0 failed every embedding with an error, and -1 returned no vectors (#353)."""
+    _loader(monkeypatch, fails=False)
+    request = _request()
+
+    with pytest.raises(HTTPException) as raised:
+        _update(request, RAG_EMBEDDING_ENGINE='', RAG_EMBEDDING_MODEL='new/model', RAG_EMBEDDING_BATCH_SIZE=batch_size)
+
+    assert raised.value.status_code == 400
+    assert 'Embedding Batch Size must be a whole number of at least 1' in raised.value.detail
+    assert stored == {}
+    assert request.app.state.ef is OLD_EF
+    assert request.app.state.EMBEDDING_FUNCTION is OLD_EMBEDDING_FUNCTION
+
+
+def test_a_batch_size_of_1_or_more_is_saved(stored, monkeypatch):
+    _loader(monkeypatch, fails=False)
+
+    result = _update(_request(), RAG_EMBEDDING_ENGINE='', RAG_EMBEDDING_MODEL='new/model', RAG_EMBEDDING_BATCH_SIZE=1)
+    assert result['RAG_EMBEDDING_BATCH_SIZE'] == 1
+    assert stored['rag.embedding_batch_size'] == 1
+
+    _update(_request(), RAG_EMBEDDING_ENGINE='', RAG_EMBEDDING_MODEL='new/model', RAG_EMBEDDING_BATCH_SIZE=64)
+    assert stored['rag.embedding_batch_size'] == 64
