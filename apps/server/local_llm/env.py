@@ -180,12 +180,17 @@ FONTS_DIR = Path(os.getenv('FONTS_DIR', PACKAGE_DIR / 'static' / 'fonts'))
 # docs/history/migration-plan.md.
 FRONTEND_BUILD_DIR = Path(os.getenv('FRONTEND_BUILD_DIR', default_frontend_build_dir())).resolve()
 
-# A served llama-server, a tune sweep and a Tests job outlive the backend by
-# default: llama-server runs in its own session so that a `--reload` restart
-# doesn't take the model down with the worker. Set this for a backend that
-# should leave nothing behind when it exits (routers/benchmarks/__init__.py's
-# shutdown()).
+# A served llama-server, a tune sweep, a Tests job and the pre-screen's
+# dashboard outlive the backend by default: llama-server runs in its own
+# session so that a `--reload` restart doesn't take the model down with the
+# worker. (A running pre-screen is stopped at every shutdown: see
+# routers/benchmarks/__init__.py's stop_prescreen().) Set this for a backend
+# that should leave nothing behind when it exits (shutdown() there).
 LLLM_STOP_JOBS_ON_SHUTDOWN = os.getenv('LLLM_STOP_JOBS_ON_SHUTDOWN', 'False').lower() == 'true'
+
+# The loopback port of the pre-screen's optuna-dashboard process
+# (benchmarks/prescreen/dashboard.py). It always binds 127.0.0.1.
+LLLM_OPTUNA_DASHBOARD_PORT = int(os.getenv('LLLM_OPTUNA_DASHBOARD_PORT', '8091'))
 
 ####################################
 # Database
