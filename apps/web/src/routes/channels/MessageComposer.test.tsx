@@ -87,4 +87,38 @@ describe('MessageComposer mentions (#256)', () => {
 		fireEvent.keyDown(box, { key: 'ArrowUp' });
 		expect(screen.getByRole('option', { name: /Ada/ })).toHaveAttribute('aria-selected', 'true');
 	});
+
+	it('a key typed right after picking a mention stays after it (the caret is placed at once)', async () => {
+		// The caret used to be placed a frame later (requestAnimationFrame), so a
+		// letter typed before that frame went in after the mention and the
+		// frame then put the caret back in front of it: "welcome" was sent as
+		// "elcomew" (channels.spec.ts in CI, 2026-11-06).
+		vi.mocked(getChannelMembersById).mockResolvedValue({ users: [user('u1', 'Ada')] });
+		render(
+			<QueryClientProvider client={new QueryClient()}>
+				<MessageComposer
+					channel={channel}
+					placeholder="Message"
+					typingUsers={[]}
+					replyTo={null}
+					onCancelReply={vi.fn()}
+					onTyping={vi.fn()}
+					onSubmit={vi.fn()}
+				/>
+			</QueryClientProvider>
+		);
+		const box = screen.getByPlaceholderText('Message') as HTMLTextAreaElement;
+		fireEvent.change(box, { target: { value: '@a', selectionStart: 2 } });
+		fireEvent.select(box, { target: { selectionStart: 2 } });
+		await screen.findByRole('option', { name: /Ada/ }, { timeout: 2000 });
+		fireEvent.keyDown(box, { key: 'Enter' });
+		expect(box.value).toBe('@Ada ');
+		expect(box.selectionStart).toBe(5);
+
+		// A letter typed before the next frame.
+		box.setRangeText('w', 5, 5, 'end');
+		fireEvent.change(box, { target: { value: '@Ada w', selectionStart: 6 } });
+		await act(() => new Promise<void>((done) => requestAnimationFrame(() => done())));
+		expect(box.selectionStart).toBe(6);
+	});
 });
