@@ -56,6 +56,24 @@ describe('errorDetail and requestError', () => {
 		expect(errorDetail({ detail: [{ msg: 'field required' }, { msg: 'too long' }] })).toBe('field required, too long');
 	});
 
+	it('names the field each validation message is about (#606)', () => {
+		expect(
+			errorDetail({
+				detail: [
+					{ loc: ['body', 'TASK_MODEL'], msg: 'Field required' },
+					{ loc: ['body', 'params', 'top_k'], msg: 'Input should be a valid integer' },
+					{ loc: ['query', 'page'], msg: 'Input should be greater than 0' },
+					{ loc: ['body'], msg: 'Invalid JSON' },
+					{ loc: ['TASK_MODEL'], msg: 'Field required' },
+					{ type: 'missing' }
+				]
+			})
+		).toBe(
+			'TASK_MODEL: Field required, params.top_k: Input should be a valid integer, page: Input should be greater than 0, ' +
+				'Invalid JSON, TASK_MODEL: Field required, {"type":"missing"}'
+		);
+	});
+
 	it('is never falsy, so `if (error) throw error` always throws', () => {
 		for (const err of [undefined, null, {}, { detail: '' }, new SyntaxError('Unexpected token')]) {
 			expect(errorDetail(err)).toBeTruthy();
