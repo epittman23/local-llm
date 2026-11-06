@@ -1,0 +1,32 @@
+# Pre-screen grid for the qwen38 dense profile (Qwen3.8-27B Q3_K_XL, 12.24
+# GiB, -ngl 20 with two -ot pins, against 6 GiB of VRAM).
+#
+# -ngl is the knob this grid exists for: the profile is partially offloaded,
+# and 20 has been a placeholder since 2026-08-23. The values bracket it in
+# both directions. Each VRAM group is walked from the fewest GPU layers up,
+# so the first point that runs out of memory prunes the larger ones
+# (benchmarks/prescreen/grid.py).
+#
+# No cache-type knob: llama-bench sizes its context to the test (-p 512 -n
+# 128 by default), where the KV cache is a few MiB whatever its type, so the
+# pre-screen cannot see what a quantized cache buys at 16K. The load check of
+# the leading candidates at the profile's own context is what can.
+#
+# Values chosen, not measured: nothing has been pre-screened on this machine
+# yet (2026-10-28).
+profile = "qwen38"
+
+[knob.LLAMA_NGL]
+values = [16, 18, 20, 22, 24]
+
+[knob.LLAMA_BATCH]
+values = [512, 1024]
+
+[knob.LLAMA_UBATCH]
+values = [256, 512]
+
+[knob.LLAMA_THREADS]
+values = [8, 12]
+
+[[constraint]]
+expr = "LLAMA_UBATCH <= LLAMA_BATCH"
