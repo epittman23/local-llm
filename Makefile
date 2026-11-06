@@ -331,7 +331,7 @@ test-boot:
 test-web:
 	@cd "$(WEB_DIR)" && \
 	bun install --frozen-lockfile && \
-	bunx astro check && \
+	python3 "$(REPO_ROOT)/.github/scripts/astro_check.py" && \
 	bun run test:coverage && \
 	sed 's#^SF:#SF:apps/web/#' coverage/lcov.info > coverage/lcov-repo.info && \
 	(cd "$(REPO_ROOT)" && uvx "diff-cover@$(DIFF_COVER_VERSION)" apps/web/coverage/lcov-repo.info \

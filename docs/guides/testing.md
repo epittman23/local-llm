@@ -22,7 +22,7 @@ The root Makefile mirrors CI job for job, with the same commands:
 | `make secrets` | Secrets (gitleaks) | gitleaks over the whole git history (CI scans a pull request's own commits, and main's whole history) |
 | `make test-types` | Backend types (basedpyright) | basedpyright over `apps/server/local_llm`, against `basedpyright-baseline.json` |
 | `make test-backend` | Backend (pytest) | `uv lock --check`, `uv sync --frozen --group dev`, then pytest with coverage and a throwaway pgvector Postgres on `127.0.0.1:55432` (`LLLM_TEST_PG_PORT`), so `test_the_app_imports` runs instead of skipping; then diff-cover on the changed lines |
-| `make test-web` | Web (astro check, vitest, build) | `bunx astro check`, `bun run test:coverage` and diff-cover on the changed lines, `bun run build` |
+| `make test-web` | Web (astro check, vitest, build) | `bunx astro check` (through `.github/scripts/astro_check.py`, which also fails a run that printed no summary: `astro check` exits 0 when it cannot load its checker), `bun run test:coverage` and diff-cover on the changed lines, `bun run build` |
 | `make test-e2e` | Web e2e (Playwright) | `CI=1 bun run test:e2e`: CI's command, with the `CI` variable CI sets (two retries, `test.only` fails the run) |
 | `make test-desktop` | Desktop (typecheck, vitest, package smoke) | `bun run typecheck`, `bun run test:unit`, `bun run package:dir` (an unpacked package, no `.rpm`) |
 | `make test-boot` | Boot (real stack) | builds `apps/web`, then `tests/boot_smoke.py` against a throwaway Postgres (`:55433`) and Redis (`:56379`) |
