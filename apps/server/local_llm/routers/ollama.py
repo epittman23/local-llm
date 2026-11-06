@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import datetime as dt
 import hashlib
 import logging
@@ -16,7 +17,7 @@ import aiohttp
 from aiocache import cached
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, validator
+from pydantic import BaseModel, ConfigDict, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from local_llm.config import UPLOAD_DIR
@@ -231,6 +232,18 @@ async def get_ollama_runtime_config() -> tuple[bool, list[str], dict]:
         values.get('ollama.base_urls') or [],
         values.get('ollama.api_configs') or {},
     )
+
+
+def listed_prefix(api_config: dict, listed: bool) -> str | None:
+    """The prefix to strip from a model id before naming it to a connection.
+
+    The app lists a connection's models under its prefix_id, and Ollama knows
+    them only by their own names, so a route that found the model in that list
+    strips it (#345). A caller that named the connection itself has Ollama's own
+    name, from /api/tags/{url_idx}; a native name that starts like the prefix
+    (qwen2.5 under prefix qwen2) must reach Ollama whole.
+    """
+    return api_config.get('prefix_id') if listed else None
 
 
 async def get_ollama_connection(idx: int) -> tuple[str, dict, str | None]:
@@ -692,20 +705,22 @@ async def push_model(
     if not await Config.get('ollama.enable'):
         raise HTTPException(status_code=503, detail=ERROR_MESSAGES.OLLAMA_API_DISABLED)
 
+    listed = url_idx is None
     if url_idx is None:
         await get_all_models(request, user=user)
         models = request.app.state.OLLAMA_MODELS
         if form_data.model not in models:
             raise HTTPException(status_code=400, detail=ERROR_MESSAGES.MODEL_NOT_FOUND(form_data.model))
-        url_idx = models[form_data.model]['urls'][0]
+        url_idx = int(models[form_data.model]['urls'][0])
 
-    url = (await Config.get('ollama.base_urls', []))[url_idx]
+    url, api_config, key = await get_ollama_connection(url_idx)
     log.debug('url: %s', url)
+    form_data.model = strip_provider_model_prefix(form_data.model, listed_prefix(api_config, listed))
 
     return await send_request(
         f'{url}/api/push',
         payload=form_data.model_dump_json(exclude_none=True).encode(),
-        key=get_api_key(url_idx, url, (await Config.get('ollama.api_configs', {}))),
+        key=key,
         user=user,
         stream=True,
         passthrough=True,
@@ -764,19 +779,26 @@ async def copy_model(
     if not await Config.get('ollama.enable'):
         raise HTTPException(status_code=503, detail=ERROR_MESSAGES.OLLAMA_API_DISABLED)
 
+    listed = url_idx is None
     if url_idx is None:
         await get_all_models(request, user=user)
         models = request.app.state.OLLAMA_MODELS
         if form_data.source not in models:
             raise HTTPException(status_code=400, detail=ERROR_MESSAGES.MODEL_NOT_FOUND(form_data.source))
-        url_idx = models[form_data.source]['urls'][0]
+        url_idx = int(models[form_data.source]['urls'][0])
 
-    url = (await Config.get('ollama.base_urls', []))[url_idx]
-    key = get_api_key(url_idx, url, (await Config.get('ollama.api_configs', {})))
+    url, api_config, key = await get_ollama_connection(url_idx)
+    prefix_id = listed_prefix(api_config, listed)
+    # A copy stays on the source's connection, so the destination takes its prefix too.
+    payload = {
+        'source': strip_provider_model_prefix(form_data.source, prefix_id),
+        'destination': strip_provider_model_prefix(form_data.destination, prefix_id),
+    }
+    destination = f'{prefix_id}.{payload["destination"]}' if prefix_id else form_data.destination
 
     await send_request(
         f'{url}/api/copy',
-        payload=form_data.model_dump_json(exclude_none=True).encode(),
+        payload=JSONCodec.dumps(payload),
         key=key,
         user=user,
     )
@@ -784,7 +806,7 @@ async def copy_model(
         request,
         EVENTS.MODEL_PROVIDER_MODEL_CREATED,
         actor=user,
-        subject_id=form_data.destination,
+        subject_id=destination,
         data={'provider': 'ollama', 'source': form_data.source, 'url_idx': url_idx},
     )
     return True
@@ -806,15 +828,19 @@ async def delete_model(
     payload['model'] = payload.get('model', payload.get('name'))
     model = payload.get('model')
 
+    listed = url_idx is None
     if url_idx is None:
         await get_all_models(request, user=user)
         models = request.app.state.OLLAMA_MODELS
         if model not in models:
             raise HTTPException(status_code=400, detail=ERROR_MESSAGES.MODEL_NOT_FOUND(model))
-        url_idx = models[model]['urls'][0]
+        url_idx = int(models[model]['urls'][0])
 
-    url = (await Config.get('ollama.base_urls', []))[url_idx]
-    key = get_api_key(url_idx, url, (await Config.get('ollama.api_configs', {})))
+    url, api_config, key = await get_ollama_connection(url_idx)
+    prefix_id = listed_prefix(api_config, listed)
+    for field in ('model', 'name'):
+        if isinstance(payload.get(field), str):
+            payload[field] = strip_provider_model_prefix(payload[field], prefix_id)
 
     await send_request(
         f'{url}/api/delete',
@@ -852,12 +878,12 @@ async def show_model_info(
     await get_all_models(request, user=user)
     models = request.app.state.OLLAMA_MODELS
 
-    if model not in models:
+    if not isinstance(model, str) or model not in models:
         raise HTTPException(status_code=400, detail=ERROR_MESSAGES.MODEL_NOT_FOUND(model))
 
     url_idx = random.choice(models[model]['urls'])
-    url = (await Config.get('ollama.base_urls', []))[url_idx]
-    key = get_api_key(url_idx, url, (await Config.get('ollama.api_configs', {})))
+    url, api_config, key = await get_ollama_connection(url_idx)
+    payload['model'] = strip_provider_model_prefix(model, listed_prefix(api_config, True))
 
     return await send_request(
         f'{url}/api/show',
@@ -1037,12 +1063,16 @@ class ChatMessage(BaseModel):
     images: list[str] | None = None
     model_config = ConfigDict(extra='allow')
 
-    @validator('content', pre=True)
-    @classmethod
-    def check_at_least_one_field(cls, field_value, values, **kwargs):
-        if field_value is None and ('tool_calls' not in values or values['tool_calls'] is None):
-            raise ValueError("At least one of 'content' or 'tool_calls' must be provided")
-        return field_value
+    @model_validator(mode='after')
+    def check_at_least_one_field(self) -> ChatMessage:
+        # After the whole message is read: a check on `content` alone ran before
+        # `tool_calls` was, refusing a tool-call turn with no content (#345). An
+        # image-only turn (files sent with no prompt) and a thinking-only one
+        # carry something too, and the chat sends both.
+        thinking = (self.model_extra or {}).get('thinking')
+        if self.content is None and self.tool_calls is None and not self.images and not thinking:
+            raise ValueError('A message needs content, tool_calls, images or thinking')
+        return self
 
 
 class GenerateChatCompletionForm(BaseModel):
@@ -1597,6 +1627,23 @@ def parse_huggingface_url(hf_url: str) -> str | None:
         return None
 
 
+class ModelDownloadError(RuntimeError):
+    """A download by URL that failed in a known way: `kind` picks the message shown."""
+
+    def __init__(self, kind: str, detail: str):
+        super().__init__(detail)
+        self.kind = kind
+
+
+# What the admin's tab is told, by kind; the detail goes to the server log only.
+DOWNLOAD_ERRORS = {
+    'resume': 'The download could not be resumed, so its partial file was removed. Try again.',
+    'refused': 'The download host refused the file. The server log has its answer.',
+    'blob': 'Ollama did not accept the model file. Try again.',
+}
+DOWNLOAD_FAILED = 'The download failed. The server log has the reason.'
+
+
 async def download_file_stream(
     ollama_url: str,
     file_url: str,
@@ -1622,25 +1669,29 @@ async def download_file_stream(
         if response.status == 416 and current_size > 0:
             if complete_size != current_size:
                 await asyncio.to_thread(os.remove, file_path)
-                raise RuntimeError(
+                raise ModelDownloadError(
+                    'resume',
                     'Download failed: the server could not resume the partial download (HTTP 416). '
-                    'It was removed; try again.'
+                    'It was removed; try again.',
                 )
             write_mode = None  # The partial file is already the whole file.
         elif response.status == 206 and current_size > 0:
             if first_byte != current_size:
                 # Kept, the partial file would get the same answer on every retry.
                 await asyncio.to_thread(os.remove, file_path)
-                raise RuntimeError(
+                raise ModelDownloadError(
+                    'resume',
                     f'Download failed: asked to resume at byte {current_size}, the server answered '
                     f'{"from byte " + str(first_byte) if first_byte is not None else "without a usable range"}. '
-                    'The partial download was removed; try again.'
+                    'The partial download was removed; try again.',
                 )
             write_mode = 'ab'
         elif response.status == 200:
             write_mode, current_size = 'wb', 0
         else:
-            raise RuntimeError(f'Download failed: HTTP {response.status} {response.reason or ""}'.strip())
+            raise ModelDownloadError(
+                'refused', f'Download failed: HTTP {response.status} {response.reason or ""}'.strip()
+            )
 
         if write_mode:
             total_size = int(response.headers.get('content-length', 0)) + current_size
@@ -1678,7 +1729,7 @@ async def download_file_stream(
                 await asyncio.to_thread(os.remove, file_path)
                 yield f'data: {JSONCodec.dumps({"done": True, "blob": f"sha256:{hashed}", "name": file_name})}\n\n'
             else:
-                raise RuntimeError('Ollama: Could not create blob, Please try again.')
+                raise ModelDownloadError('blob', 'Ollama: Could not create blob, Please try again.')
 
 
 @router.post('/models/download')
@@ -1702,10 +1753,24 @@ async def download_model(
 
     file_path = partial_download_path(form_data.url, file_name)
     if file_path is None or file_name is None:
-        return None
-    return StreamingResponse(
-        download_file_stream(url, form_data.url, file_path, file_name),
-    )
+        # Answered `null` with a 200 before, which the tab could not read (#250).
+        raise HTTPException(status_code=400, detail='The URL does not name a model file.')
+
+    async def events():
+        # A failure once the stream has started used to cut it off with no
+        # message, so the tab showed nothing (#250); it ends with an error event,
+        # as the upload's stream does.
+        try:
+            async for event in download_file_stream(url, form_data.url, file_path, file_name):
+                yield event
+        except Exception as exc:
+            log.warning('Model download from %s failed: %s', form_data.url, exc)
+            # A fixed message by kind, never the exception's own text: that can
+            # carry paths and internals, and the log has it.
+            kind = exc.kind if isinstance(exc, ModelDownloadError) else ''
+            yield f'data: {JSONCodec.dumps({"error": DOWNLOAD_ERRORS.get(kind, DOWNLOAD_FAILED)})}\n\n'
+
+    return StreamingResponse(events())
 
 
 @router.post('/models/upload')
@@ -1726,11 +1791,30 @@ async def upload_model(
     # Stage 1: persist the uploaded file to disk
     chunk_size = AIOHTTP_FILE_STREAM_CHUNK_SIZE
 
-    async with aiofiles.open(file_path, 'wb') as out_f:
-        while chunk := await file.read(chunk_size):
-            await out_f.write(chunk)
+    def remove_upload():
+        # Removed however the upload ends, not only after a successful push: a
+        # failed one left a file of several gigabytes behind (#345). Not awaited:
+        # a client that goes away cancels the stream's task, and an await in its
+        # cleanup would be cancelled too.
+        with contextlib.suppress(FileNotFoundError):
+            os.remove(file_path)
+
+    try:
+        async with aiofiles.open(file_path, 'wb') as out_f:
+            while chunk := await file.read(chunk_size):
+                await out_f.write(chunk)
+    except BaseException:
+        remove_upload()
+        raise
 
     async def file_process_stream():
+        try:
+            async for event in upload_events():
+                yield event
+        finally:
+            remove_upload()
+
+    async def upload_events():
         nonlocal ollama_url
         total_size = await aiofiles.os.path.getsize(file_path)
         log.info('Total Model Size: %s', total_size)
@@ -1767,7 +1851,8 @@ async def upload_model(
                     raise Exception('Ollama: Could not create blob, Please try again.')
 
             log.info('Uploaded to /api/blobs')
-            await asyncio.to_thread(os.remove, file_path)
+            # Off the event loop here: unlinking a multi-gigabyte file can take a while.
+            await asyncio.to_thread(remove_upload)
 
             # Stage 4: create the model
             model, _ext = os.path.splitext(filename)

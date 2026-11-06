@@ -15,7 +15,15 @@ import {
 } from '@/lib/apis/calendar';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { cn } from '@/lib/utils';
-import { type EventFields, SCHEDULED_TASKS_ID, eventFields, eventPayload, reminderOptions } from './calendarModel';
+import {
+	CUSTOM_REPEAT,
+	type EventFields,
+	SCHEDULED_TASKS_ID,
+	eventFields,
+	eventPayload,
+	repeatFromRrule,
+	reminderOptions
+} from './calendarModel';
 
 const bare = 'w-full bg-transparent text-sm outline-hidden placeholder:text-muted-foreground/50';
 const label = 'text-muted-foreground mb-1 text-xs';
@@ -253,6 +261,10 @@ export function EventDialog({
 											{l}
 										</option>
 									))}
+									{/* Only for an event that has one: it keeps the stored rule (#510). */}
+									{editing && repeatFromRrule(editing.rrule) === CUSTOM_REPEAT && (
+										<option value={CUSTOM_REPEAT}>Custom rule</option>
+									)}
 								</select>
 							</div>
 						</div>

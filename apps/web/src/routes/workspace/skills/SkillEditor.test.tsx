@@ -13,7 +13,7 @@ const renderEditor = (props: Parameters<typeof SkillEditor>[0]) =>
 	);
 
 describe('SkillEditor', () => {
-	it('saves a disabled, tagged skill without re-enabling it or dropping its tags (#227)', async () => {
+	it('saves a disabled, tagged skill without sending its enabled state or tags, so neither is overwritten (#227, #527)', async () => {
 		const skill: SkillDraft = {
 			id: 'review',
 			name: 'Review',
@@ -30,12 +30,10 @@ describe('SkillEditor', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
 		await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
-		expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
-			id: 'review',
-			content: 'new',
-			is_active: false,
-			meta: { tags: ['imported'] }
-		});
+		const sent = onSubmit.mock.calls[0]?.[0];
+		expect(sent).toMatchObject({ id: 'review', content: 'new' });
+		expect(sent).not.toHaveProperty('is_active');
+		expect(sent).not.toHaveProperty('meta');
 	});
 
 	it('creates a new skill active and untagged', async () => {
