@@ -1,0 +1,22 @@
+# Pre-screen grid for the qwen25c dense profile (Qwen2.5-Coder-7B Q4_K_M,
+# 4.36 GiB), the only model fully resident on the 6 GB card (-ngl 99).
+#
+# With every layer on the GPU there is no offload to choose, so this grid
+# sweeps the batch sizes, which set the compute buffer and prompt-processing
+# speed, and two thread counts, which should barely matter at full offload.
+#
+# No cache-type knob, for the reason in qwen38.toml. Values chosen, not
+# measured (2026-10-28).
+profile = "qwen25c"
+
+[knob.LLAMA_BATCH]
+values = [256, 512, 1024, 2048]
+
+[knob.LLAMA_UBATCH]
+values = [128, 256, 512, 1024]
+
+[knob.LLAMA_THREADS]
+values = [4, 6]
+
+[[constraint]]
+expr = "LLAMA_UBATCH <= LLAMA_BATCH"
