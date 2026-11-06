@@ -1,11 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
+import { ServerUnreachableError } from '@/lib/apis/errors';
 import {
 	DEFAULT_MODELFILE,
+	failureMessage,
 	finishUpload,
 	isNotableStatus,
 	modelLabel,
 	parseStreamLines,
 	progressPercent,
+	refusalMessage,
 	sanitizeModelTag,
 	streamError,
 	uploadedModelfile
@@ -88,7 +91,7 @@ describe('finishUpload (#250)', () => {
 			calls,
 			onProgress: (percent: number) => calls.push(`progress ${percent}`),
 			onBlob: (digest: string) => calls.push(`blob ${digest}`),
-			create: vi.fn(async (payload: Record<string, unknown>) => {
+			create: vi.fn(async (payload: Record<string, unknown>): Promise<Response | null> => {
 				calls.push(`create ${JSON.stringify(payload)}`);
 				return new Response('{"status":"success"}\n', { status: 200 });
 			}),
@@ -145,9 +148,17 @@ describe('finishUpload (#250)', () => {
 		expect(s.followCreate).not.toHaveBeenCalled();
 	});
 
-	it('says the create failed when its refusal is not JSON (a proxy error page)', async () => {
+	it('names the status of a refusal that is not JSON (a proxy error page)', async () => {
 		const s = steps();
 		s.create.mockResolvedValueOnce(new Response('Bad Gateway', { status: 502 }));
+		await finishUpload(stream({ done: true, blob: 'sha256:abc', name: 'm.gguf' }), s);
+
+		expect(s.calls.at(-1)).toBe('error 502: Bad Gateway');
+	});
+
+	it('says the create failed when it got no response at all', async () => {
+		const s = steps();
+		s.create.mockResolvedValueOnce(null);
 		await finishUpload(stream({ done: true, blob: 'sha256:abc', name: 'm.gguf' }), s);
 
 		expect(s.calls.at(-1)).toBe('error Failed to create the model');
@@ -168,5 +179,48 @@ describe('finishUpload (#250)', () => {
 		error.mockRestore();
 
 		expect(s.calls.at(-1)).toBe('success Model n created');
+	});
+});
+
+describe('the messages Manage Ollama shows for a failure (#504)', () => {
+	it("names a refusal by the server's own words, whatever its shape", async () => {
+		expect(await refusalMessage(new Response(JSON.stringify({ detail: 'Model not found' }), { status: 400 }))).toBe(
+			'Model not found'
+		);
+		expect(
+			await refusalMessage(
+				new Response(JSON.stringify({ detail: [{ msg: 'field required' }, { msg: 'value is not a string' }] }), {
+					status: 422
+				})
+			)
+		).toBe('field required, value is not a string');
+		expect(
+			await refusalMessage(
+				new Response(JSON.stringify({ detail: { error: { message: 'no such model' } } }), { status: 400 })
+			)
+		).toBe('no such model');
+		expect(await refusalMessage(new Response(JSON.stringify({ error: 'model "x" not found' }), { status: 404 }))).toBe(
+			'model "x" not found'
+		);
+	});
+
+	it('names a refusal that says nothing by its status', async () => {
+		expect(await refusalMessage(new Response('Bad Gateway', { status: 502, statusText: 'Bad Gateway' }))).toBe(
+			'502 Bad Gateway: Bad Gateway'
+		);
+		expect(await refusalMessage(new Response('<h1>Oops</h1>', { status: 502, statusText: 'Bad Gateway' }))).toBe(
+			'502 Bad Gateway: Oops'
+		);
+		expect(await refusalMessage(new Response('{}', { status: 400 }))).toBe('400');
+	});
+
+	it('names a thrown failure by its text, never as [object Object]', () => {
+		expect(failureMessage('Ollama: 503, message=Service Unavailable')).toBe('Ollama: 503, message=Service Unavailable');
+		expect(failureMessage({ error: 'pull model manifest: file does not exist' })).toBe(
+			'pull model manifest: file does not exist'
+		);
+		expect(failureMessage(new SyntaxError('Unexpected token } in JSON'))).toBe('Unexpected token } in JSON');
+		expect(failureMessage(new ServerUnreachableError())).toBe('Could not reach the server');
+		expect(failureMessage({})).toBe('The request failed.');
 	});
 });
