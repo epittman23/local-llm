@@ -1,8 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link2, MessageSquare, Search } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { toast } from 'sonner';
+import { AccessControl } from '@/components/common/AccessControl';
 import { Spinner } from '@/components/common/Spinner';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -17,7 +18,15 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { deleteSharedChatById, getChatById, getChatListBySearchText, shareChatById } from '@/lib/apis/chats';
+import { type AccessGrant, DROPPED_GRANTS_WARNING, grantsDropped } from '@/lib/access/accessGrants';
+import {
+	deleteSharedChatById,
+	getChatAccessGrants,
+	getChatById,
+	getChatListBySearchText,
+	shareChatById,
+	updateChatAccessGrants
+} from '@/lib/apis/chats';
 import type { ChatListItem, Folder } from '@/lib/chat/chatList';
 import { useAuthStore } from '@/lib/stores/authStore';
 import { copyToClipboard } from '@/lib/utils';
@@ -37,6 +46,8 @@ export const shareUrl = (shareId: string) => `${window.location.origin}${appHref
  */
 export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { chatId: string }) {
 	const token = useAuthStore((s) => s.token) ?? '';
+	const user = useAuthStore((s) => s.user);
+	const isAdmin = user?.role === 'admin';
 	const chat = useQuery({
 		queryKey: ['chat-share', chatId],
 		enabled: open,
@@ -44,6 +55,40 @@ export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { 
 	});
 	const [busy, setBusy] = useState(false);
 	const shared = Boolean(chat.data?.share_id);
+
+	// Who can open the link (#334). A share starts private: the shared-chat route
+	// serves it only to its owner and the users and groups granted read here, as
+	// ShareChatModal.svelte's AccessControl panel set them.
+	const [grants, setGrants] = useState<AccessGrant[] | null>(null);
+	useEffect(() => {
+		if (!open || !shared) return;
+		let current = true;
+		getChatAccessGrants(token, chatId)
+			.then((stored) => current && setGrants(Array.isArray(stored) ? (stored as AccessGrant[]) : []))
+			.catch((e) => current && toast.error(`${e}`));
+		return () => {
+			current = false;
+		};
+	}, [open, shared, token, chatId]);
+
+	// Shown at once; only the latest save's re-read is applied, since the server
+	// replaces the grants wholesale and drops those this user may not set (as #522).
+	const accessSaves = useRef(0);
+	const saveAccess = async (next: AccessGrant[]) => {
+		const seq = ++accessSaves.current;
+		const previous = grants ?? [];
+		setGrants(next);
+		const saved = await updateChatAccessGrants(token, chatId, next).catch((e) => void toast.error(`${e}`));
+		const latest = accessSaves.current === seq;
+		if (!saved) {
+			if (latest) setGrants(previous);
+			return;
+		}
+		const stored = await getChatAccessGrants(token, chatId).catch(() => null);
+		if (latest && Array.isArray(stored)) setGrants(stored as AccessGrant[]);
+		if (grantsDropped(next, stored)) toast.warning(DROPPED_GRANTS_WARNING);
+		else toast.success('Access updated');
+	};
 
 	const copy = async () => {
 		setBusy(true);
@@ -55,11 +100,13 @@ export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { 
 		if (!res?.share_id) return;
 		await copyToClipboard(shareUrl(res.share_id));
 		toast.success('Copied shared chat URL to clipboard!');
+		// A new link opens to no one but its owner, so the dialog stays to say who else may.
+		if (shared) onOpenChange(false);
 		void chat.refetch();
-		onOpenChange(false);
 	};
 	const unshare = async () => {
 		await deleteSharedChatById(token, chatId).catch((e) => toast.error(`${e}`));
+		setGrants(null);
 		void chat.refetch();
 	};
 
@@ -75,13 +122,23 @@ export function ShareChatDialog({ open, onOpenChange, chatId }: DialogProps & { 
 								<button type="button" className="underline" onClick={unshare}>
 									Delete this link
 								</button>{' '}
-								to stop sharing, or update it with the chat as it is now.
+								to stop sharing, or update it with the chat as it is now. Choose below who can open it.
 							</>
 						) : (
-							'Messages you send after creating your link won’t be shared. Users with the URL will be able to view the shared chat.'
+							'Messages you send after creating your link won’t be shared. Once the link exists, you choose who can open it.'
 						)}
 					</DialogDescription>
 				</DialogHeader>
+				{shared && grants !== null && (
+					<AccessControl
+						accessGrants={grants}
+						onChange={(next) => void saveAccess(next)}
+						accessRoles={['read']}
+						sharePublic={Boolean(user?.permissions?.sharing?.public_chats) || isAdmin}
+						shareOpen={Boolean(user?.permissions?.sharing?.open_chats) || isAdmin}
+						shareUsers={(user?.permissions?.access_grants?.allow_users ?? true) || isAdmin}
+					/>
+				)}
 				<DialogFooter>
 					<Button onClick={copy} disabled={busy || chat.isLoading}>
 						<Link2 className="size-4" /> {shared ? 'Update and Copy Link' : 'Copy Link'}
