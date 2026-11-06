@@ -35,6 +35,17 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def added_folder_entries(before: list | None, after: list | None) -> list | None:
+    """The entries in `after` that `before` does not hold, by type and id.
+
+    Anything that is not a list is returned as it is, for the access check to refuse.
+    """
+    if not isinstance(after, list):
+        return after
+    held = {(e.get('type'), e.get('id')) for e in before if isinstance(e, dict)} if isinstance(before, list) else set()
+    return [e for e in after if not (isinstance(e, dict) and (e.get('type'), e.get('id')) in held)]
+
+
 async def get_folder_unread_counts(user_id: str, db: AsyncSession | None = None) -> dict[str, int]:
     folders = await Folders.get_folders_by_user_id(user_id, db=db)
     parent_by_id = {folder.id: folder.parent_id for folder in folders}
@@ -169,7 +180,12 @@ async def create_folder(
                         status_code=status.HTTP_404_NOT_FOUND,
                         detail=ERROR_MESSAGES.NOT_FOUND,
                     )
-                if not await can_read_all_folder_files(form_data.data['files'], owner, db=db):
+                # The owner's access carries the entries to the folder's chats, and the
+                # editor adds only what they can read themselves, and a note only if they
+                # own it or may write it (#358).
+                if not await can_read_all_folder_files(
+                    form_data.data['files'], owner, db=db
+                ) or not await can_read_all_folder_files(form_data.data['files'], user, db=db, note_permission='write'):
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
@@ -343,6 +359,20 @@ async def update_folder_name_by_id(
                     detail=ERROR_MESSAGES.NOT_FOUND,
                 )
             if not await can_read_all_folder_files(form_data.data['files'], owner, db=db):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+                )
+            # An editor adds only what they can read themselves, and a note only if
+            # they own it or may write it, as sharing a note on requires: the owner's
+            # access carries the folder's entries to its chats, and an admin owner's
+            # carries any note (#358). Entries already in the folder may stay.
+            if owner.id != user.id and not await can_read_all_folder_files(
+                added_folder_entries((folder.data or {}).get('files'), form_data.data['files']),
+                user,
+                db=db,
+                note_permission='write',
+            ):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
@@ -707,6 +737,10 @@ async def delete_folder_by_id(
     # The chats first, then the folders, so a failure part way never leaves a
     # chat pointing at a folder that is gone, where the sidebar hides it (#281).
     try:
+        # Other users' chats, which only the folder held, are kept (#315). First,
+        # before anything is deleted or any grant revoked, so a failure here
+        # changes nothing.
+        await Chats.move_other_users_chats_out_of_folders(folder_ids, folder_owner_id, db=db)
         for folder_id in folder_ids:
             if delete_contents:
                 done = await Chats.delete_chats_by_user_id_and_folder_id(folder_owner_id, folder_id, db=db)

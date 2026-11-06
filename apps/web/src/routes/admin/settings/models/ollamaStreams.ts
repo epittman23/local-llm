@@ -38,6 +38,74 @@ export const isNotableStatus = (data: Rec): boolean =>
 export const modelLabel = (model: { name?: string; id: string; size?: number }): string =>
 	`${model.name ?? model.id} (${((model.size ?? 0) / 1024 ** 3).toFixed(1)} GB)`;
 
+/** The end of a GGUF upload's stream: the stored blob, and the model when the server made it (file mode). */
+export type UploadDone = { blob: string; name: string; model_created?: string };
+
+/**
+ * The model to create from an uploaded GGUF, or null when the server has made it (#250).
+ *
+ * A file upload's server creates the model itself (`model_created`), so a
+ * second create made another model or failed. A URL download only stores
+ * the blob, and is created here the way the file upload's server does it,
+ * from `files`. (The tab used to send a Modelfile, which current Ollama does
+ * not read.)
+ */
+export const createAfterUpload = (done: UploadDone): Rec | null =>
+	done.model_created ? null : { model: done.name.replace(/\.gguf$/i, ''), files: { [done.name]: done.blob } };
+
+export type UploadSteps = {
+	onProgress: (percent: number) => void;
+	onBlob: (digest: string) => void;
+	create: (payload: Rec) => Promise<Response | null>;
+	followCreate: (res: Response) => Promise<void>;
+	notify: { error: (message: string) => void; success: (message: string) => void };
+};
+
+/**
+ * Reads a GGUF upload's (or URL download's) stream to its end, then creates
+ * the model if the server has not. An error in the stream is shown, where it
+ * used to be only logged, and so is a stream that ends before the blob is
+ * stored (#250).
+ */
+export async function finishUpload(res: Response, steps: UploadSteps): Promise<void> {
+	const reader = lineReader(res);
+	let done: UploadDone | null = null;
+	let failure: string | null = null;
+	while (failure === null) {
+		const { value, done: ended } = await reader.read();
+		if (ended) break;
+		let lines: Rec[];
+		try {
+			lines = parseStreamLines(value);
+		} catch (err) {
+			console.error(err);
+			continue;
+		}
+		for (const data of lines) {
+			// Only objects are events; anything else (a bare `null`, say) is skipped.
+			if (data === null || typeof data !== 'object') continue;
+			failure = streamError(data);
+			if (failure !== null) break;
+			if (data.progress) steps.onProgress(data.progress);
+			if (data.done) {
+				done = data as UploadDone;
+				steps.onBlob(done.blob);
+			}
+		}
+	}
+	if (failure !== null) return steps.notify.error(failure);
+	if (done === null) return steps.notify.error('The upload ended before the model was stored.');
+
+	const payload = createAfterUpload(done);
+	if (payload === null) return steps.notify.success(`Model ${done.model_created} created`);
+	const created = await steps.create(payload);
+	if (created?.ok) await steps.followCreate(created);
+	else
+		steps.notify.error(
+			((await created?.json().catch(() => null)) as { detail?: string } | null)?.detail ?? 'Failed to create the model'
+		);
+}
+
 /** The Modelfile the GGUF upload creates its model from. */
 export const uploadedModelfile = (digest: string, content: string) => `FROM @${digest}\n${content}`;
 

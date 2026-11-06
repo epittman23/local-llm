@@ -1627,6 +1627,23 @@ def parse_huggingface_url(hf_url: str) -> str | None:
         return None
 
 
+class ModelDownloadError(RuntimeError):
+    """A download by URL that failed in a known way: `kind` picks the message shown."""
+
+    def __init__(self, kind: str, detail: str):
+        super().__init__(detail)
+        self.kind = kind
+
+
+# What the admin's tab is told, by kind; the detail goes to the server log only.
+DOWNLOAD_ERRORS = {
+    'resume': 'The download could not be resumed, so its partial file was removed. Try again.',
+    'refused': 'The download host refused the file. The server log has its answer.',
+    'blob': 'Ollama did not accept the model file. Try again.',
+}
+DOWNLOAD_FAILED = 'The download failed. The server log has the reason.'
+
+
 async def download_file_stream(
     ollama_url: str,
     file_url: str,
@@ -1652,25 +1669,29 @@ async def download_file_stream(
         if response.status == 416 and current_size > 0:
             if complete_size != current_size:
                 await asyncio.to_thread(os.remove, file_path)
-                raise RuntimeError(
+                raise ModelDownloadError(
+                    'resume',
                     'Download failed: the server could not resume the partial download (HTTP 416). '
-                    'It was removed; try again.'
+                    'It was removed; try again.',
                 )
             write_mode = None  # The partial file is already the whole file.
         elif response.status == 206 and current_size > 0:
             if first_byte != current_size:
                 # Kept, the partial file would get the same answer on every retry.
                 await asyncio.to_thread(os.remove, file_path)
-                raise RuntimeError(
+                raise ModelDownloadError(
+                    'resume',
                     f'Download failed: asked to resume at byte {current_size}, the server answered '
                     f'{"from byte " + str(first_byte) if first_byte is not None else "without a usable range"}. '
-                    'The partial download was removed; try again.'
+                    'The partial download was removed; try again.',
                 )
             write_mode = 'ab'
         elif response.status == 200:
             write_mode, current_size = 'wb', 0
         else:
-            raise RuntimeError(f'Download failed: HTTP {response.status} {response.reason or ""}'.strip())
+            raise ModelDownloadError(
+                'refused', f'Download failed: HTTP {response.status} {response.reason or ""}'.strip()
+            )
 
         if write_mode:
             total_size = int(response.headers.get('content-length', 0)) + current_size
@@ -1708,7 +1729,7 @@ async def download_file_stream(
                 await asyncio.to_thread(os.remove, file_path)
                 yield f'data: {JSONCodec.dumps({"done": True, "blob": f"sha256:{hashed}", "name": file_name})}\n\n'
             else:
-                raise RuntimeError('Ollama: Could not create blob, Please try again.')
+                raise ModelDownloadError('blob', 'Ollama: Could not create blob, Please try again.')
 
 
 @router.post('/models/download')
@@ -1732,10 +1753,24 @@ async def download_model(
 
     file_path = partial_download_path(form_data.url, file_name)
     if file_path is None or file_name is None:
-        return None
-    return StreamingResponse(
-        download_file_stream(url, form_data.url, file_path, file_name),
-    )
+        # Answered `null` with a 200 before, which the tab could not read (#250).
+        raise HTTPException(status_code=400, detail='The URL does not name a model file.')
+
+    async def events():
+        # A failure once the stream has started used to cut it off with no
+        # message, so the tab showed nothing (#250); it ends with an error event,
+        # as the upload's stream does.
+        try:
+            async for event in download_file_stream(url, form_data.url, file_path, file_name):
+                yield event
+        except Exception as exc:
+            log.warning('Model download from %s failed: %s', form_data.url, exc)
+            # A fixed message by kind, never the exception's own text: that can
+            # carry paths and internals, and the log has it.
+            kind = exc.kind if isinstance(exc, ModelDownloadError) else ''
+            yield f'data: {JSONCodec.dumps({"error": DOWNLOAD_ERRORS.get(kind, DOWNLOAD_FAILED)})}\n\n'
+
+    return StreamingResponse(events())
 
 
 @router.post('/models/upload')
