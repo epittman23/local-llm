@@ -10,6 +10,7 @@ import { AnswersPage } from '@/routes/benchmarks/AnswersPage';
 import { BenchmarksLayout } from '@/routes/benchmarks/BenchmarksLayout';
 import { ComparePage } from '@/routes/benchmarks/ComparePage';
 import { LivePage } from '@/routes/benchmarks/LivePage';
+import { PrescreenPage } from '@/routes/benchmarks/PrescreenPage';
 import { ReportPage } from '@/routes/benchmarks/ReportPage';
 import { ServePage } from '@/routes/benchmarks/ServePage';
 import { TestsPage } from '@/routes/benchmarks/TestsPage';
@@ -145,7 +146,8 @@ const router = createBrowserRouter(
 						{ path: routePaths.benchmarksCompare, element: <ComparePage /> },
 						{ path: routePaths.benchmarksAnswers, element: <AnswersPage /> },
 						{ path: routePaths.benchmarksReport, element: <ReportPage /> },
-						{ path: routePaths.benchmarksTune, element: <TunePage /> }
+						{ path: routePaths.benchmarksTune, element: <TunePage /> },
+						{ path: routePaths.benchmarksPrescreen, element: <PrescreenPage /> }
 					]
 				}
 			]
