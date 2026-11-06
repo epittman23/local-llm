@@ -157,7 +157,15 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
-      - run: bunx playwright install --with-deps chromium
+      # No --with-deps: ubuntu-latest already carries every library Chromium
+      # loads, so all it added was nine CJK/Thai/X font packages, which no
+      # test needs (no screenshot or layout assertions), from an Ubuntu mirror
+      # that stalled the step at 6-12 min in 5 of 28 runs on 2026-11-06
+      # (16-33 s otherwise). A runner image that drops a library fails at
+      # browser launch with Playwright's "Host system is missing
+      # dependencies". --only-shell: headless runs use only the headless
+      # shell, so the full Chrome download was never used.
+      - run: bunx playwright install --only-shell chromium
       - run: bun run test:e2e
       # The dev server runs detached (`astro dev --background`) and writes
       # only to .astro/dev.log; Playwright discards the stdout that would

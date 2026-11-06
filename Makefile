@@ -346,7 +346,7 @@ test-web:
 test-e2e:
 	@cd "$(WEB_DIR)" && \
 	bun install --frozen-lockfile && \
-	bunx playwright install chromium && \
+	bunx playwright install --only-shell chromium && \
 	CI=1 bun run test:e2e
 
 # CI's "Desktop (typecheck, vitest, package smoke)". The unpacked package
