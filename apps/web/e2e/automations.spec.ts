@@ -51,7 +51,11 @@ async function mockAutomations(page: Page, items: Rec[] = [], runs: Rec[] = []) 
 			if (req.postDataJSON()?.name === 'Refused')
 				return route.fulfill({ status: 400, json: { detail: 'RRULE has no future occurrences' } });
 			seen.created.push(req.postDataJSON());
-			return json(route, { id: `new${seen.created.length}`, ...req.postDataJSON() });
+			// Kept, as the server keeps it: the page it opens loads it back by id.
+			const body = req.postDataJSON();
+			const created = automation(`new${seen.created.length}`, body.name, body);
+			list = [...list, created];
+			return json(route, created);
 		}
 		const [, id, action] = path.split('/');
 		if (action === 'toggle') {
@@ -176,6 +180,9 @@ test('creating one: required fields, a weekly schedule, a channel destination, t
 			},
 			is_active: true
 		});
+	// The automation itself, not only its URL: one the page cannot load sends it
+	// back to the list, after a URL check alone could already have passed.
+	await expect(page.getByRole('heading', { name: 'Standup notes' })).toBeVisible();
 	await expect(page).toHaveURL(/\/automations\/new1$/);
 });
 

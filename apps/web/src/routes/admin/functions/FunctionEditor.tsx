@@ -54,7 +54,13 @@ export function FunctionEditor({
 	const [showConfirm, setShowConfirm] = useState(false);
 	const [loading, setLoading] = useState(false);
 
+	// The name as of now, for onCodeChange: the code editor can report its
+	// seeded boilerplate through a callback from a render before the user typed a
+	// name, and a `name` read from that render then looked blank, so the
+	// boilerplate's title replaced what was typed.
+	const nameNow = useRef(name);
 	const onNameChange = (value: string) => {
+		nameNow.current = value;
 		setName(value);
 		if (value && !edit && !clone) setId(nameToId(value));
 	};
@@ -63,11 +69,12 @@ export function FunctionEditor({
 		code.current = value;
 		if (edit) return;
 		const fm = extractFrontmatter(value);
-		if (fm.title && !name) {
-			setName(formatSkillName(fm.title));
+		if (fm.title && !nameNow.current) {
+			nameNow.current = formatSkillName(fm.title);
+			setName(nameNow.current);
 			setId(nameToId(fm.title));
 		}
-		if (fm.description && !meta.description) setMeta((m) => ({ ...m, description: fm.description }));
+		if (fm.description) setMeta((m) => (m.description ? m : { ...m, description: fm.description }));
 	};
 
 	const chooseStarter = (value: string) => {

@@ -211,7 +211,11 @@ test.describe('workspace prompts', () => {
 		await dialog.getByLabel('Command').fill('has spaces!');
 		await dialog.getByLabel('Prompt Content').fill('x');
 		await dialog.getByRole('button', { name: /Save & Create/ }).click();
-		await expect(page.getByText('Only alphanumeric characters and hyphens are allowed')).toBeVisible();
+		// The toast: a tooltip with the same text can be in the page too (closing),
+		// and a bare getByText then matched two elements.
+		await expect(
+			page.locator('[data-sonner-toast]').filter({ hasText: 'Only alphanumeric characters and hyphens are allowed' })
+		).toBeVisible();
 		expect(calls.some((c) => c.path === '/create')).toBe(false);
 	});
 
