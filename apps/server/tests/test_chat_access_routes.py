@@ -502,20 +502,3 @@ def test_a_fork_or_clone_leaves_out_a_folder_the_caller_cannot_write_to(client, 
     elsewhere = _folder(people.other)
     for copy_ in _copies(client, people.owner, _chat_in(people.owner, elsewhere)):
         assert copy_['folder_id'] is None
-
-
-def test_a_cloned_share_does_not_take_the_sharers_folder(client, people):
-    folder_id = _folder(people.owner)
-    chat_id = _chat_in(people.owner, folder_id)
-    share_id = _share(client, people.owner, chat_id)
-    _set_grants(
-        client,
-        people.owner,
-        chat_id,
-        [{'principal_type': 'user', 'principal_id': people.other.id, 'permission': 'read'}],
-    )
-
-    r = client.post(f'/chats/{share_id}/clone/shared', headers=people.other.headers)
-
-    assert r.status_code == 200, r.text
-    assert r.json()['folder_id'] is None

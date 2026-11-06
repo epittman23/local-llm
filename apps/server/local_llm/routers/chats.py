@@ -1438,11 +1438,12 @@ class ForkForm(BaseModel):
 
 
 async def writable_folder_id(user, folder_id: str | None, db: AsyncSession) -> str | None:
-    """The source's folder for a copy of a chat, if the caller may still put chats there.
+    """The source's folder for a fork of a chat, if the caller may still put chats there.
 
     A chat can name a folder its owner can no longer write to, such as a shared
-    folder whose grant was taken back; a fork or clone of it goes to no folder,
-    as moving a chat there would be refused (#315).
+    folder whose grant was taken back; a fork of it goes to no folder, as moving
+    a chat there would be refused (#315). A clone goes through import_chats,
+    which keeps only a folder the caller owns.
     """
     if folder_id is None or not await has_folder_write_access(user.id, folder_id, db=db):
         return None
@@ -1555,7 +1556,8 @@ async def clone_chat_by_id(
                         'meta': chat.meta,
                         'variables': chat.variables or {},
                         'pinned': chat.pinned,
-                        'folder_id': await writable_folder_id(user, chat.folder_id, db),
+                        # import_chats keeps only a folder the caller owns.
+                        'folder_id': chat.folder_id,
                     }
                 )
             ],
@@ -1653,7 +1655,9 @@ async def clone_shared_chat_by_id(
                     'meta': chat.meta,
                     'variables': chat.variables or {},
                     'pinned': chat.pinned,
-                    'folder_id': await writable_folder_id(user, chat.folder_id, db),
+                    # A copy of someone else's chat goes to no folder: in one its owner
+                    # shares, the folder's other grantees would see it (#315).
+                    'folder_id': None,
                 }
             )
         ],
