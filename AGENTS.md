@@ -247,7 +247,7 @@ applies it in the same change.
 - **`astro dev` always daemonizes** in this Astro version, even without
   `--background`. Start it with `astro dev --background` and manage it with
   `astro dev stop`, `astro dev status` and `astro dev logs`. `make frontend`
-  and Playwright's `webServer` already handle this; a bare `bun run dev`
+  already handles this; a bare `bun run dev`
   leaves a server running after Ctrl-C.
 - **Run `astro dev` on Node, not Bun** (no `bunx --bun`): Vite's websocket
   proxy calls `socket.destroySoon()`, which Bun lacks.

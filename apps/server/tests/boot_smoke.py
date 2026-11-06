@@ -13,8 +13,10 @@ machine, then:
 3. lists models and gets a chat completion back from the stub;
 4. calls every GET route that takes no path parameter, as the admin, and
    fails on any 5xx;
-5. checks that the API refuses a request without a token;
-6. stops it with SIGINT and expects a clean exit through the lifespan
+5. when there is a frontend build, checks that `/` and a deep link return
+   the app shell and that a missing script is a 404 (SPAStaticFiles);
+6. checks that the API refuses a request without a token;
+7. stops it with SIGINT and expects a clean exit through the lifespan
    teardown.
 
 Needs DATABASE_URL (an empty Postgres with pgvector) and REDIS_URL. It is
@@ -269,6 +271,13 @@ def run_checks(api: Backend, proc: subprocess.Popen, env: dict) -> None:
         page = api.expect('GET', '/', auth=False)
         if '<html' not in str(page).lower():
             raise Failure('GET / did not return the frontend')
+        # A deep link gets the app shell (SPAStaticFiles), and a missing script
+        # does not. The e2e suite serves its build with a stand-in for this
+        # mount (apps/web/e2e/static-server.ts), so this is the real one's check.
+        page = api.expect('GET', '/notes', auth=False)
+        if '<html' not in str(page).lower():
+            raise Failure('GET /notes did not fall back to the frontend')
+        api.expect('GET', '/_astro/missing.js', status=404, auth=False)
 
     # Nothing without a token.
     api.expect('GET', '/api/v1/chats/', status=401, auth=False)

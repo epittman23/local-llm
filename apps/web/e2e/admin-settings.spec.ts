@@ -480,7 +480,12 @@ test.describe('settings: Connections', () => {
 		await expect(page.getByText('API Version is required')).toBeVisible();
 		await dialog.getByLabel('API Version').fill('2024-02-01');
 		await dialog.getByRole('button', { name: 'Save' }).click();
-		await expect(page.getByText('Deployment names are required for Azure OpenAI')).toBeVisible();
+		// Said twice: as a toast, and as the hint in the Advanced section the
+		// refusal opens. A bare getByText matched whichever had rendered, and
+		// failed strict mode whenever both had.
+		const deploymentsRequired = 'Deployment names are required for Azure OpenAI';
+		await expect(page.locator('[data-sonner-toast]').filter({ hasText: deploymentsRequired })).toBeVisible();
+		await expect(dialog.getByText(deploymentsRequired)).toBeVisible();
 		await dialog.getByLabel('Add a model ID').fill('gpt-4o');
 		await dialog.getByRole('button', { name: 'Add', exact: true }).click();
 		await dialog.getByRole('button', { name: 'Save' }).click();

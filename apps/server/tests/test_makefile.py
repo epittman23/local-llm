@@ -136,7 +136,7 @@ def test_e2e_runs_ci_command_with_ci_set(tmp_path):
 def test_playwright_worker_count_is_pinned_in_its_config():
     """The worker count lives in playwright.config.ts, so CI and `make test-e2e` share it."""
     config = (REPO_ROOT / 'apps' / 'web' / 'playwright.config.ts').read_text()
-    assert re.search(r'^\s*workers:\s*2,', config, re.MULTILINE)
+    assert re.search(r'^\s*workers:\s*4,', config, re.MULTILINE)
 
 
 # --- the throwaway Postgres of make test-backend and make test-boot (#147) ---

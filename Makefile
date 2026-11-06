@@ -340,9 +340,9 @@ test-web:
 
 # CI's "Web e2e (Playwright, mocked backend)", with CI's command and CI's
 # environment: CI=1 turns on what CI gets from GitHub's CI=true (two retries,
-# a stray test.only fails the run, no reuse of a running dev server), and the
+# a stray test.only fails the run), and the
 # worker count is pinned in playwright.config.ts for both. Stop
-# `make frontend` first: with CI=1, Playwright refuses to start beside it.
+# `make frontend` first: the suite serves its own build on the same port.
 test-e2e:
 	@cd "$(WEB_DIR)" && \
 	bun install --frozen-lockfile && \
