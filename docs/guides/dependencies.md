@@ -44,6 +44,37 @@ at backend startup, since statsmodels and the parts of scipy it loads take
 about three seconds to import. matplotlib is installed by
 default but optional in code (the report falls back to unicode plots).
 
+### Optuna
+
+`optuna` and `optuna-dashboard` (both MIT, pure Python, added 2026-10-28)
+drive the Benchmarks > Pre-screen page. They bring in `bottle`; everything
+else they need was already installed. Every pre-screen is an Optuna study,
+and Optuna keeps its studies in the app's own Postgres, in a schema of their
+own:
+
+- **The `optuna` schema.** Migration `c8e1f5a2d907` creates it, empty.
+  Optuna creates and migrates its tables inside it (`studies`, `trials`,
+  `version_info`, its own `alembic_version`, ...). A separate schema is what
+  keeps Optuna's `alembic_version` apart from the app's in `public`.
+- **The search path is in the connection URL.**
+  `benchmarks/prescreen/study.py` turns `DATABASE_URL` into a `psycopg` URL
+  with `options=-csearch_path=optuna`. It has to be the URL:
+  `RDBStorage.upgrade()` hands Alembic the bare URL, so a search path set
+  any other way would let an Optuna schema upgrade run in `public`.
+- **The pre-screen refuses** a `DATABASE_URL` that is not Postgres, and an
+  app configured to run in the `optuna` schema itself (`DATABASE_SCHEMA`).
+- **Optuna's own Alembic is a second migration authority**, confined to
+  that schema. `uv.lock` pins Optuna, so its tables change only with a
+  deliberate version bump. After a bump, the first pre-screen or dashboard
+  start finds the stored version behind Optuna's head and upgrades the
+  schema itself (`storage.upgrade()`), with a warning in the backend log.
+  Nothing else needs doing; to check, compare
+  `SELECT version_num FROM optuna.alembic_version` with
+  `optuna.storages.RDBStorage(url).get_head_version()`.
+- **Downgrading the app's migration** drops the schema with `CASCADE`. That
+  removes only Optuna's copy of the studies; the `benchmark_prescreen_*`
+  tables are the record.
+
 ## Runtime data (`DATA_DIR`)
 
 Uploads, caches, the Benchmarks section's grader calibrations and LiveCodeBench's fetched increments (the other benchmarks are vendored), answer exports and

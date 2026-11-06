@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import copy
 import logging
 import mimetypes
@@ -234,6 +235,7 @@ from local_llm.utils.chat_id import (
 from local_llm.utils.chat_variables import (
     normalize_chat_variables,
 )
+from local_llm.utils.client_disconnect import client_waits
 from local_llm.utils.embeddings import generate_embeddings
 from local_llm.utils.json_codec import JSONCodec
 from local_llm.utils.json_response import apply_orjson_http_json
@@ -471,6 +473,10 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             log.warning(f'Failed to initialize terminal servers at startup: {e}')
 
+    # A pre-screen a dead backend left open still holds the GPU through its
+    # orphan; close it before Serve, Tune or Tests can start beside it.
+    await benchmarks.startup()
+
     # Mark application as ready to accept traffic from a startup perspective.
     app.state.startup_complete = True
     await publish_event(app, EVENTS.SYSTEM_STARTUP_COMPLETED, source='system')
@@ -494,6 +500,8 @@ async def _shutdown(app) -> None:
 
     if LLLM_STOP_JOBS_ON_SHUTDOWN:
         await benchmarks.shutdown()
+    else:
+        await benchmarks.stop_prescreen()
 
     # Shutdown: clean up shared resources
     from local_llm.utils.session_pool import close_session
@@ -1754,6 +1762,10 @@ async def _process_chat(request: Request, form_data: dict, user, metadata: dict,
             pass
         raise  # re-raise to ensure proper task cancellation handling
     except Exception as e:
+        if isinstance(e, HTTPException) and e.status_code == 499:
+            # The client left before the model answered (#614): nobody to tell.
+            log.info('Chat request ended: %s', e.detail)
+            raise
         error_detail = e.detail if isinstance(e, HTTPException) else str(e)
         log.error('Error processing chat payload: %s', error_detail)
         if not (metadata.get('chat_id') and metadata.get('message_id')):
@@ -1969,9 +1981,12 @@ async def chat_completion(
             ]
         return await _fan_out_chat(request, form_data, user, metadata, model, message_ids, tasks)
 
-    # Legacy/direct: single model, synchronous
+    # Legacy/direct: single model, synchronous. Without a chat, its client waits
+    # on the answer in this request, so leaving before the upstream answers
+    # cancels it (#614); a saved chat's reply is kept whether or not it stays.
     metadata['message_id'] = message_ids[0]['message_id']
-    return await _process_chat(request, form_data, user, metadata, model, tasks)
+    with client_waits() if not metadata.get('chat_id') else contextlib.nullcontext():
+        return await _process_chat(request, form_data, user, metadata, model, tasks)
 
 
 # Alias for chat_completion (Legacy)
