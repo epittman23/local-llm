@@ -13,8 +13,10 @@ machine, then:
 3. lists models and gets a chat completion back from the stub;
 4. calls every GET route that takes no path parameter, as the admin, and
    fails on any 5xx;
-5. checks that the API refuses a request without a token;
-6. stops it with SIGINT and expects a clean exit through the lifespan
+5. when there is a frontend build, checks that `/` and a deep link return
+   the app shell and that a missing script is a 404 (SPAStaticFiles);
+6. checks that the API refuses a request without a token;
+7. stops it with SIGINT and expects a clean exit through the lifespan
    teardown.
 
 Needs DATABASE_URL (an empty Postgres with pgvector) and REDIS_URL. It is

@@ -51,7 +51,15 @@ async function find(path: string): Promise<string | null> {
 }
 
 createServer(async (request, response) => {
-	const path = decodeURIComponent(new URL(request.url ?? '/', 'http://localhost').pathname);
+	let path: string;
+	try {
+		path = decodeURIComponent(new URL(request.url ?? '/', 'http://localhost').pathname);
+	} catch {
+		// A malformed escape: thrown here, it would end the server for the rest
+		// of the run.
+		response.writeHead(400, { 'Content-Type': 'text/plain' }).end('Bad Request');
+		return;
+	}
 	if (backendPrefixes.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))) {
 		response.writeHead(502, { 'Content-Type': 'text/plain' }).end();
 		return;

@@ -23,7 +23,7 @@ The root Makefile mirrors CI job for job, with the same commands:
 | `make test-types` | Backend types (basedpyright) | basedpyright over `apps/server/local_llm`, against `basedpyright-baseline.json` |
 | `make test-backend` | Backend (pytest) | `uv lock --check`, `uv sync --frozen --group dev`, then pytest with coverage and a throwaway pgvector Postgres on `127.0.0.1:55432` (`LLLM_TEST_PG_PORT`), so `test_the_app_imports` runs instead of skipping; then diff-cover on the changed lines |
 | `make test-web` | Web (astro check, vitest, build) | `bunx astro check`, `bun run test:coverage` and diff-cover on the changed lines, `bun run build` |
-| `make test-e2e` | Web e2e (Playwright) | `CI=1 bun run test:e2e`: CI's command, with the `CI` variable CI sets (two retries, `test.only` fails the run, no reuse of a running dev server) |
+| `make test-e2e` | Web e2e (Playwright) | `CI=1 bun run test:e2e`: CI's command, with the `CI` variable CI sets (two retries, `test.only` fails the run) |
 | `make test-desktop` | Desktop (typecheck, vitest, package smoke) | `bun run typecheck`, `bun run test:unit`, `bun run package:dir` (an unpacked package, no `.rpm`) |
 | `make test-boot` | Boot (real stack) | builds `apps/web`, then `tests/boot_smoke.py` against a throwaway Postgres (`:55433`) and Redis (`:56379`) |
 | `make test` | all six test jobs | the six above |
@@ -377,8 +377,11 @@ the machine. The smoke then uses the running backend:
 2. Signs up the first user (the admin) and signs in.
 3. Gets a chat completion back from the stub.
 4. Calls every GET route that takes no path parameter, failing on any 5xx.
-5. Checks that the API refuses a request without a token.
-6. Stops it with SIGINT and expects a clean exit.
+5. Checks that `/` and a deep link (`/notes`) return the app shell, and a
+   missing `.js` a 404: `SPAStaticFiles`' fallback, which the e2e suite
+   only imitates (`e2e/static-server.ts`). Only when there is a build.
+6. Checks that the API refuses a request without a token.
+7. Stops it with SIGINT and expects a clean exit.
 
 Nothing else in CI starts the app: pytest imports it, and Playwright mocks
 it. `SWEEP_SKIP` in the script lists the routes the sweep leaves out, each
