@@ -38,6 +38,15 @@ async function scaleImage(dataUrl: string, width: number | null, height: number 
 const TEXT_TYPES = /^(text\/|application\/(json|xml|javascript|x-sh|x-yaml|yaml|csv))/;
 
 /**
+ * The most files a chat may hold at once, or null for no limit. 0 or unset
+ * is no limit, as Max Upload Size's is and as the field says (#596).
+ */
+export function uploadCountLimit(config: { file?: { max_count?: number | null } } | null | undefined): number | null {
+	const max = config?.file?.max_count;
+	return max ? max : null;
+}
+
+/**
  * The files attached to the next message (MessageInput.svelte's upload
  * handlers). Uploads go to the server (documents are processed for
  * retrieval, images kept as they are, after the optional scaling); a
@@ -203,7 +212,7 @@ export function useAttachments({
 				toast.error('Model(s) do not support file upload');
 				return;
 			}
-			const maxCount = config?.file?.max_count ?? null;
+			const maxCount = uploadCountLimit(config);
 			if (maxCount !== null && ref.current.length + list.length > maxCount) {
 				toast.error(`You can only chat with a maximum of ${maxCount} file(s) at a time.`);
 				return;
