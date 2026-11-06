@@ -7,6 +7,25 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
 - Keep a short, dated log here of model evaluation results and any changes to the
   model/provider choices above, so future sessions have that context without needing
   to re-derive it.
+- **2026-11-06**: **The e2e suite runs against the built app, at four
+  workers.** It ran against `astro dev` at two. On four cores (CI's
+  runners have four vCPUs) the full suite took 4.9 min that way and 2.0 min
+  against the build, with the same results. The dev server was the
+  bottleneck: a fresh browser context fetches its unbundled modules one by
+  one on every page load, so four workers against it barely helped.
+
+  **What.** `playwright.config.ts`'s `webServer` builds into
+  `.astro/e2e-dist/` and serves it with `e2e/static-server.ts`. That server
+  mirrors `main.py`'s `SPAStaticFiles` (the app shell for any other path, a
+  404 for a missing `.js`) and answers the backend's paths with the 502 the
+  dev proxy gave. Both runs reached the server with the same unmocked
+  requests (`/api/models`, `/static/favicon.png`), each answered 502.
+  - **Coverage moved:** the smoke spec's deep-link check now exercises the
+    stand-in, so `tests/boot_smoke.py` checks the real fallback (`GET
+    /notes`, and a 404 for a missing script). `src/middleware.ts`, which
+    gives only `astro dev` that fallback, has no automated check now.
+  - **Removed:** `e2e/global-teardown.ts` and CI's dev-server log step,
+    which existed for the daemonized dev server.
 - **2026-11-03**: **Admin banners are shown again (#243).** The banners
   set in Admin Settings > General were saved but displayed nowhere. The
   2026-09-27 Phase 8 entry left the stores the Svelte tabs refreshed

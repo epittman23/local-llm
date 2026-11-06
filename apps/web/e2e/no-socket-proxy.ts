@@ -12,6 +12,10 @@ import type { Page } from '@playwright/test';
  * through Phases 5 and 6; it needs a run of ~30s to show. Answering the
  * websocket here (and never completing the Socket.IO handshake) means the
  * request never gets proxied at all.
+ *
+ * The suite now runs against the built app (e2e/static-server.ts), which has
+ * no proxy to crash. The block stays: it keeps every spec's socket in the
+ * same state, open and silent, that the specs were written against.
  */
 export async function blockSocketProxy(page: Page) {
 	await page.routeWebSocket(/\/ws\//, () => {

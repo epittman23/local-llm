@@ -209,15 +209,15 @@ expires.
 Run these from `apps/web/`:
 
 - `bun run test:unit`: Vitest + React Testing Library (`src/**/*.test.tsx`).
-- `bun run test:e2e`: Playwright (`e2e/`). It starts and stops its own dev
-  server (`playwright.config.ts`'s `webServer`, with the same daemon
-  workaround as `make frontend`, plus a `globalTeardown` that force-stops it
-  afterward: a clean Playwright run was observed leaving the daemon alive
-  despite the signal-based path, so this doesn't rely on that alone).
-  The dev server writes only to `apps/web/.astro/dev.log`, which Playwright
-  never prints. When the e2e job fails in CI, it prints that log's last 200
-  lines and uploads the whole file with the `playwright-test-results`
-  artifact, so a dev server that dies mid-run leaves its reason behind.
+- `bun run test:e2e`: Playwright (`e2e/`), against the built app, not the
+  dev server. `playwright.config.ts`'s `webServer` runs `astro build` into
+  `.astro/e2e-dist/` (so the `dist/` that `make backend` serves is left
+  alone) and serves it on `:5174` with `e2e/static-server.ts`, which falls
+  back to the app shell as `main.py`'s `SPAStaticFiles` does and answers
+  the backend's paths (`/api`, `/static`, `/ws`, ...) with the 502 the dev
+  server's proxy gives when no backend runs. The build and the server print
+  into Playwright's output. When the e2e job fails in CI, it uploads the
+  traces as the `playwright-test-results` artifact.
 - `bunx astro check` for types (expect 0 errors).
 - `bun run format` (Biome: formats, and applies safe lint fixes) and
   `bun run lint` (Biome, check only). The config is `biome.jsonc`. The repo's
@@ -227,24 +227,27 @@ Run these from `apps/web/`:
   below). If a commit is rejected because the hook reformatted a file,
   `git add` it and commit again.
 
-**Playwright runs two workers.** At its default worker count (half the
-cores, about 10 on this 20-core machine) the cold `astro dev` server can't
-answer that many browsers in time, and redirect assertions hit their 5 s
-timeout. `playwright.config.ts` pins `workers: 2`, so `bun run test:e2e`,
-`make test-e2e` and CI all run with two.
+**Playwright runs four workers.** `playwright.config.ts` pins `workers: 4`
+(CI's runners have four vCPUs), so `bun run test:e2e`, `make test-e2e` and
+CI all run with four. Against the dev server, which the suite used until
+2026-11-06, the suite ran at two: a fresh browser context fetches the dev
+server's unbundled modules one by one on every page load, so more workers
+barely helped (on four cores, admin-settings took 1.9 min at two workers
+and 1.8 min at four), and at Playwright's default (half the cores) its cold
+start missed 5 s timeouts. Against the build, on four cores, the whole
+suite took 2.0 min at four workers, where the dev server at two had taken
+4.9 min.
 
 **`CI` changes how Playwright behaves.** GitHub sets `CI=true`, and with it
-Playwright retries a failed test twice, fails the run on a stray
-`test.only`, and refuses to reuse a dev server that is already running.
-`make test-e2e` sets `CI=1` so it behaves the same; a bare
-`bun run test:e2e` does none of the three. A test that fails once and
+Playwright retries a failed test twice and fails the run on a stray
+`test.only`. `make test-e2e` sets `CI=1` so it behaves the same; a bare
+`bun run test:e2e` does neither. A test that fails once and
 passes on retry is reported as flaky: the run passes, but fix the test.
 
 The e2e specs mock every `/api/v1/**` response and stub `/ws`, so they need
-**no backend**, and they will fight a `make frontend` you already have
-running: a bare `bun run test:e2e` reuses it and `global-teardown.ts` stops
-it afterward, and `make test-e2e` (with `CI=1`) refuses to start beside it.
-Stop `make frontend` first.
+**no backend**. They serve their own build on `:5174`, `make frontend`'s
+port, and never reuse a server already there, so with `make frontend`
+running they refuse to start. Stop it first.
 
 Because Playwright mocks the backend, a change that touches the
 frontend/backend seam also needs a real run against `make backend`.

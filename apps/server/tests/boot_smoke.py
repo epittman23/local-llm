@@ -269,6 +269,13 @@ def run_checks(api: Backend, proc: subprocess.Popen, env: dict) -> None:
         page = api.expect('GET', '/', auth=False)
         if '<html' not in str(page).lower():
             raise Failure('GET / did not return the frontend')
+        # A deep link gets the app shell (SPAStaticFiles), and a missing script
+        # does not. The e2e suite serves its build with a stand-in for this
+        # mount (apps/web/e2e/static-server.ts), so this is the real one's check.
+        page = api.expect('GET', '/notes', auth=False)
+        if '<html' not in str(page).lower():
+            raise Failure('GET /notes did not fall back to the frontend')
+        api.expect('GET', '/_astro/missing.js', status=404, auth=False)
 
     # Nothing without a token.
     api.expect('GET', '/api/v1/chats/', status=401, auth=False)

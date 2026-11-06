@@ -48,10 +48,10 @@ test('the app shell renders the home route with a working sidebar link', async (
 });
 
 test('a direct load of a deep link falls back to the app shell, not a 404', async ({ page }) => {
-	// src/middleware.ts's job: without it, Astro's static-output dev server
-	// 404s on any path getStaticPaths didn't enumerate (confirmed directly
-	// while building the routing shell). react-router then takes over once
-	// React mounts and renders the real route.
+	// The server's fallback to the app shell, here e2e/static-server.ts's
+	// stand-in for main.py's SPAStaticFiles (boot_smoke.py checks the real
+	// one): Astro emits only "/", so any other path exists only through it.
+	// react-router then takes over once React mounts and renders the route.
 	await page.goto('/notes');
 	await expect(page.getByRole('heading', { name: 'Notes' })).toBeVisible();
 });

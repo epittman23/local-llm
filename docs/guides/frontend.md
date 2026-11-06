@@ -21,8 +21,8 @@ the build only when that is its own checkout's, so keep the plugin.
 the real server as a background process, even without `--background`; the
 CLI wrapper exits almost immediately either way. `astro dev status` shows
 what's running, `astro dev stop` stops it, and `astro dev logs --follow`
-attaches to a running one. `make frontend` and `playwright test` both
-already account for this; a bare `bun run dev` in a terminal leaves the
+attaches to a running one. `make frontend` already accounts for this
+(Playwright runs against the built app, not the dev server); a bare `bun run dev` in a terminal leaves the
 server running after Ctrl-C unless you `astro dev stop` it yourself.
 
 ## Building

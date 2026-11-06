@@ -401,13 +401,14 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   `components/common/EmojiPicker`.
 - **`src/styles/global.css`** — the Tailwind v4 entry and the shadcn Nova
   preset's design tokens.
-- **`e2e/`** — Playwright; `global-teardown.ts` force-stops the dev server
-  after a run (see its own comment for why that isn't left to Playwright's
-  ordinary teardown alone). Specs import `test` from `e2e/test.ts`, not from
-  `@playwright/test`: it auto-applies `no-socket-proxy.ts`, which keeps the
-  app's Socket.IO connection out of the dev server's `/ws` proxy (with no
-  backend running, that proxied websocket crashes the Bun-hosted dev server
-  after ~30s). `workspace-helpers.ts` is the shared session/config mock for
+- **`e2e/`** — Playwright, against the built app: `static-server.ts` serves
+  the build (made into `.astro/e2e-dist/` by `playwright.config.ts`'s
+  `webServer`) the way `main.py`'s `SPAStaticFiles` serves `dist/`, with a
+  502 for the backend's paths. Specs import `test` from `e2e/test.ts`, not
+  from `@playwright/test`: it auto-applies `no-socket-proxy.ts`, which
+  answers the app's Socket.IO connection in the browser and never
+  completes the handshake (it began as the fix for a proxied websocket
+  that crashed the dev server the suite used to run against). `workspace-helpers.ts` is the shared session/config mock for
   the workspace and admin specs; `fake-socket.ts` is a minimal Socket.IO
   server (over `page.routeWebSocket`) for specs that need live events.
 
@@ -496,7 +497,8 @@ knowing about when navigating the filesystem directly:
 - **`apps/web/node_modules/`**, **`apps/web/dist/`**, **`apps/web/.astro/`** —
   the new frontend's dependency tree, production build output (served at
   `/` when present — `FRONTEND_BUILD_DIR` in `apps/server/local_llm/env.py`),
-  and Astro's generated type cache. `bun.lock` beside them **is** tracked.
+  and Astro's generated type cache (plus `.astro/e2e-dist/`, the e2e
+  suite's build). `bun.lock` beside them **is** tracked.
 - **`apps/web/test-results/`**, **`apps/web/playwright-report/`** — Playwright
   output from `bun run test:e2e`.
 - **`apps/desktop/node_modules/`**, **`apps/desktop/dist/`** (tsc output),
