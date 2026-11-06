@@ -2160,7 +2160,7 @@ requires-dist = [
     { name = "sentencepiece", specifier = "==0.2.2" },
     { name = "soundfile", specifier = "==0.14.0" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = "==2.1.6" },
-    { name = "starlette-compress", specifier = "==1.8.0" },
+    { name = "starlette-compress", specifier = "==2.0.0" },
     { name = "starsessions", extras = ["redis"], specifier = "==2.2.1" },
     { name = "statsmodels", specifier = "==0.15.0" },
     { name = "tiktoken", specifier = "==0.14.0" },
@@ -4228,17 +4228,16 @@ wheels = [
 
 [[package]]
 name = "starlette-compress"
-version = "1.8.0"
+version = "2.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "brotli", marker = "platform_python_implementation == 'CPython'" },
-    { name = "brotlicffi", marker = "platform_python_implementation != 'CPython'" },
+    { name = "brotli" },
     { name = "starlette" },
     { name = "zstandard" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ae/a4/bf7bb0dec4aa4541e7523a9d40cf10002d775449e111306959898a935d1c/starlette_compress-1.8.0.tar.gz", hash = "sha256:4dc0077468a2276b6dfd1b4f946fb61b5465a41c996c010486248e65af15b4b6", size = 24841, upload-time = "2026-07-18T00:05:08.216Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/13/33/387f5e5f59899e7031755fdc8a415966a68176580c61650f03a05b634685/starlette_compress-2.0.0.tar.gz", hash = "sha256:1381d5a0e963a845ab6427e8444e62330eda6e7561f1804c6c8c8081564623e6", size = 26190, upload-time = "2026-10-27T05:20:02.572Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/74/9a/8eb13069f311042b0f44b5b3a5c59e50d265863b323757ab51a84564f65f/starlette_compress-1.8.0-py3-none-any.whl", hash = "sha256:3c991e21d31c7f845a004055db9ae3c7e79ed59cac34c8444e9e7e689456b623", size = 14072, upload-time = "2026-07-18T00:05:06.867Z" },
+    { url = "https://files.pythonhosted.org/packages/af/83/060f07243f1ec3a1061aeab577870e9e42abe94c5269945a7915749bc170/starlette_compress-2.0.0-py3-none-any.whl", hash = "sha256:7fcea21754ced44e4487870dcf7993348be6c4d697716fb7984ff5627827f529", size = 15537, upload-time = "2026-10-27T05:20:01.263Z" },
 ]
 
 [[package]]
