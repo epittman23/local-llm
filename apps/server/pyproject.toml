@@ -8,11 +8,11 @@ license = { text = "See LICENSE and NOTICE at the repository root" }
 dependencies = [
     "fastapi==0.136.3",
     "uvicorn[standard]==0.54.0",
-    "pydantic==2.14.1",
+    "pydantic==2.14.2",
     "python-multipart==0.0.32",
     "itsdangerous==2.2.0",
 
-    "python-socketio==5.17.0",
+    "python-socketio==5.17.1",
     "orjson==3.13.0",
     "cryptography==50.0.2",
     "bcrypt==5.0.0",
@@ -42,7 +42,7 @@ dependencies = [
     "redis==8.1.0",
     "hiredis==3.5.0",
 
-    "pytz==2026.5",
+    "pytz==2026.6",
     "APScheduler==3.11.2",
 
     "loguru==0.7.3",
@@ -52,9 +52,9 @@ dependencies = [
     "regex==2026.9.29",
     "mcp==2.3.0",
 
-    "openai==3.37.0",
-    "anthropic==2.2.0",
-    "google-genai==2.33.0",
+    "openai==3.41.0",
+    "anthropic==2.3.0",
+    "google-genai==2.34.0",
 
     "langchain==1.4.7",
     "langchain-community==0.4.2",
@@ -63,9 +63,9 @@ dependencies = [
 
     "fake-useragent==2.2.0",
     "PyMySQL==1.2.0",
-    "boto3==1.43.118",
+    "boto3==1.43.122",
     
-    "transformers==5.20.2",
+    "transformers==5.22.1",
     "sentence-transformers==6.2.0",
     "accelerate==1.15.0",
     "pyarrow==26.0.0",
@@ -74,7 +74,7 @@ dependencies = [
     "ftfy==6.3.1",
     "chardet==7.7.0",
     "pypdf==6.21.4",
-    "fpdf2==2.8.9",
+    "fpdf2==2.9.0",
     "pymdown-extensions==12.3",
     "docx2txt==0.9",
     "python-docx==1.2.0",
@@ -99,7 +99,7 @@ dependencies = [
     "rapidocr==3.10.0",
     "rank-bm25==0.2.2",
 
-    "onnxruntime==1.31.0",
+    "onnxruntime==1.31.1",
     "faster-whisper==1.2.1",
 
     "black==26.10.1",
@@ -107,7 +107,7 @@ dependencies = [
     "pytube==15.0.0",
 
     "pydub==0.25.1",
-    "ddgs==9.16.0",
+    "ddgs==9.16.1",
 
     "google-api-python-client==2.201.0",
     "google-auth-httplib2==0.4.4",
@@ -116,8 +116,8 @@ dependencies = [
     "googleapis-common-protos==1.76.0",
     "google-cloud-storage==3.17.1",
 
-    "azure-identity==1.26.0",
-    "azure-storage-blob==12.31.0",
+    "azure-identity==1.27.0",
+    "azure-storage-blob==12.31.1",
 
 
     # The vector store this install runs on (VECTOR_DB=pgvector in the Makefile).
@@ -128,13 +128,17 @@ dependencies = [
     "scipy==1.18.1",
     # Benchmarks > Compare and Report: cluster-robust errors, Wilson, McNemar, Holm.
     "statsmodels==0.15.0",
+    # Benchmarks > Pre-screen: the llama-bench search (Optuna, its studies in the
+    # `optuna` Postgres schema) and its loopback dashboard.
+    "optuna==5.0.0",
+    "optuna-dashboard==0.21.0",
     "matplotlib==3.11.2",
     "pyyaml==6.0.3",
 
     # CPU build, from the pytorch-cpu index below: torch only serves
     # sentence-transformers' embedding/reranking models here, and a CUDA build
     # would add ~5 GB and compete with llama-server for VRAM.
-    "torch==2.14.1",
+    "torch==2.15.0",
 
     "av==14.0.1", # Caution: Set due to FATAL FIPS SELFTEST FAILURE, see discussion https://github.com/open-webui/open-webui/discussions/15720
 
@@ -164,7 +168,7 @@ classifiers = [
 
 [project.optional-dependencies]
 unstructured = [
-    "unstructured==0.27.34",
+    "unstructured==0.27.36",
 ]
 
 # Every optional backend the inherited code supports and this install doesn't use.
@@ -184,7 +188,7 @@ all = [
     "colbert-ai==0.2.22",
 
     "azure-search-documents==12.0.0",
-    "unstructured==0.27.34",
+    "unstructured==0.27.36",
 ]
 
 [build-system]
@@ -200,9 +204,9 @@ packages = ["local_llm"]
 [dependency-groups]
 dev = [
     "pytest",
-    "pytest-asyncio>=1.0.0",
+    "pytest-asyncio>=1.4.1",
     "pytest-cov>=7.1.0",
-    "ruff>=0.17.2",
+    "ruff>=0.17.3",
 ]
 
 # The single source of the backend's dependencies is this file plus uv.lock;

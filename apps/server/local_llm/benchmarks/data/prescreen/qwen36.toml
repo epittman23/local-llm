@@ -1,0 +1,32 @@
+# Pre-screen grid for the qwen36 MoE profile (Qwen3.6-35B-A3B Q4_K_XL, 20.81
+# GiB, -ngl 99 --n-cpu-moe 34, against 6 GiB of VRAM).
+#
+# --n-cpu-moe decides how many layers' experts stay in system RAM, and
+# generation here is bound by system-RAM bandwidth for exactly those tensors,
+# so it is the knob this grid exists for. Each VRAM group is walked from the
+# most layers' experts in RAM down, so the first point that runs out of
+# memory prunes the rest (benchmarks/prescreen/grid.py). -ngl stays at the
+# profile's 99.
+#
+# Threads: flat from 4 to 14 in a llama-bench sweep on 2026-08-17 (under
+# WSL2, so historical); two values are kept to see whether that holds on
+# native Linux.
+#
+# No cache-type knob, for the reason in qwen38.toml. Values chosen, not
+# measured (2026-10-28).
+profile = "qwen36"
+
+[knob.LLAMA_MOE]
+values = [28, 30, 32, 34, 36]
+
+[knob.LLAMA_BATCH]
+values = [512, 1024]
+
+[knob.LLAMA_UBATCH]
+values = [256, 512]
+
+[knob.LLAMA_THREADS]
+values = [6, 8]
+
+[[constraint]]
+expr = "LLAMA_UBATCH <= LLAMA_BATCH"
