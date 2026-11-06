@@ -40,6 +40,7 @@ export function trackLastActiveTab({
 	id?: string;
 } = {}) {
 	let active = true;
+	let stopped = false;
 	// This tab's latest claim; a claim is later by its time, then by its id.
 	let mine: { at: number; id: string } | null = null;
 	const later = (a: { at: number; id: string }, b: { at: number; id: string } | null) =>
@@ -82,10 +83,17 @@ export function trackLastActiveTab({
 	return {
 		isActive: () => active,
 		stop: () => {
+			// Once: a replaced tracker is stopped again by its own cleanup.
+			if (stopped) return;
+			stopped = true;
 			doc.removeEventListener('visibilitychange', onVisibility);
 			win.removeEventListener('focus', claim);
 			win.removeEventListener('pagehide', onHide);
 			channel?.removeEventListener('message', onMessage);
+			// Hand the role on, as closing does: the tab may stay open without the app,
+			// after a link to a page outside it (#621). No longer listening, it answers
+			// none of the claims this prompts.
+			if (active && mine) post({ type: 'release' });
 			channel?.close();
 		}
 	};
