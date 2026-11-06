@@ -243,8 +243,9 @@ def test_a_note_an_editor_may_write_reaches_the_folders_reader(client, people, f
 
 
 def test_a_note_the_owner_may_only_read_is_kept_but_not_passed_on(client, people, folder, monkeypatch):
-    # Stored, as the owner may read it, and it reaches the owner's own chats;
-    # the folder's readers do not get it, since the owner may not share it on.
+    # Stored, as the owner may read it, but passed on through the folder to no
+    # one, the owner included, since the owner may not share it on; attaching
+    # the note itself still works for the owner.
     reader = _user()
     _run(AccessGrants.grant_access('folder', folder.id, 'user', reader.id, 'read'))
     note = _note(people.third, people.owner)
@@ -252,3 +253,24 @@ def test_a_note_the_owner_may_only_read_is_kept_but_not_passed_on(client, people
     assert _save(client, people.owner, folder.id, [{'type': 'note', 'id': note}]).status_code == 200
     assert _files(folder.id) == [{'type': 'note', 'id': note}]
     assert _context(reader, folder.id, monkeypatch) == []
+    assert _context(people.owner, folder.id, monkeypatch) == []
+
+
+def test_an_editor_of_an_admins_folder_creates_a_subfolder_only_with_notes_they_may_write(client, monkeypatch):
+    admin, editor, third = _user('admin'), _user(), _user()
+    parent = _run(Folders.insert_new_folder(admin.id, FolderForm(name=f'p-{uuid.uuid4().hex[:6]}')))
+    assert parent is not None
+    _run(AccessGrants.grant_access('folder', parent.id, 'user', editor.id, 'write'))
+    read_only = _note(third, editor)
+    writable = _note(third, editor, writers=(editor,))
+
+    def create(note_id):
+        body = {
+            'name': f's-{uuid.uuid4().hex[:6]}',
+            'parent_id': parent.id,
+            'data': {'files': [{'type': 'note', 'id': note_id}]},
+        }
+        return client.post('/folders/', json=body, headers=editor.headers)
+
+    assert create(read_only).status_code == 403
+    assert create(writable).status_code == 200
