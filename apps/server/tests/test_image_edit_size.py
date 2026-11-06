@@ -89,3 +89,27 @@ def test_an_edit_refuses_a_requested_size_it_cannot_read(size):
         _size(size, '512x512')
 
     assert (raised.value.status_code, raised.value.detail) == (400, images.EDIT_SIZE_FORMAT)
+
+
+# The size is read by splitting it, not with a regex: a long requested value of
+# digits made the regex backtrack (CodeQL, polynomial regular expression).
+
+
+def test_a_size_is_read_as_two_whole_numbers():
+    from local_llm.routers.images import _parse_size
+
+    assert _parse_size('512x512') == (512, 512)
+    assert _parse_size('1024x768') == (1024, 768)
+    for bad in (None, '', 'auto', '512', 'x512', '512x', '512x512x2', ' 512x512', '512 x 512', '-1x5', '²x²', '٥x٥'):
+        assert _parse_size(bad) is None, bad
+
+
+def test_a_very_long_size_is_refused_at_once():
+    import time
+
+    from local_llm.routers.images import _parse_size
+
+    started = time.perf_counter()
+    assert _parse_size('0' * 200_000 + 'y') is None
+    assert _parse_size('0' * 200_000 + 'x1') is None
+    assert time.perf_counter() - started < 0.1
