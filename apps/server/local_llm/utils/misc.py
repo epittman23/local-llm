@@ -1151,6 +1151,13 @@ def _duration_pairs(value: str) -> list[tuple[float, str]] | None:
     return pairs or None
 
 
+def jwt_expiry_startup_error(value: str) -> str | None:
+    """The startup message for a JWT_EXPIRES_IN the backend cannot use, or None (#508)."""
+    if problem := jwt_expiry_error(value):
+        return f'JWT_EXPIRES_IN={value!r} cannot be used. {problem}'
+    return None
+
+
 def jwt_expiry_error(value: str) -> str | None:
     """Why `value` cannot be the JWT expiry (auth.jwt_expiry), or None if it can.
 

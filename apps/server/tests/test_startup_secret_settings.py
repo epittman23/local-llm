@@ -81,3 +81,35 @@ def test_a_usable_jwt_expiry_starts(tmp_path, expiry):
     started = _import('local_llm.config', tmp_path, JWT_EXPIRES_IN=expiry)
 
     assert started.returncode == 0, started.stderr[-2000:]
+
+
+# --- The same checks, read directly ------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ('secret', 'says'),
+    [('short', 'is 5 bytes'), ('x' * 31, 'is 31 bytes'), (f' {GOOD_SECRET}', 'whitespace'), ('é' * 15, 'is 30 bytes')],
+)
+def test_secret_key_problem_says_why(secret, says):
+    from local_llm.env import secret_key_problem
+
+    problem = secret_key_problem(secret)
+
+    assert problem and says in problem
+    assert secret.strip() not in problem
+
+
+def test_secret_key_problem_accepts_32_bytes_or_more():
+    from local_llm.env import secret_key_problem
+
+    assert secret_key_problem('A' * 32) is None
+    assert secret_key_problem(GOOD_SECRET) is None
+
+
+def test_jwt_expiry_startup_error_names_the_variable_and_value():
+    from local_llm.utils.misc import jwt_expiry_startup_error
+
+    assert jwt_expiry_startup_error('4w') is None
+    assert jwt_expiry_startup_error('-1') is None
+    problem = jwt_expiry_startup_error('4 weeks')
+    assert problem and problem.startswith("JWT_EXPIRES_IN='4 weeks' cannot be used.")
