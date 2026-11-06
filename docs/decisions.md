@@ -26,9 +26,12 @@ Dated record of why the project is the way it is. Moved verbatim from `docs/CLAU
   - **Coverage moved:** the smoke spec's deep-link check now exercises the
     stand-in, so `tests/boot_smoke.py` checks the real fallback (`GET
     /notes`, and a 404 for a missing script). `src/middleware.ts`, which
-    gives only `astro dev` that fallback, has no automated check now.
-  - **Removed:** `e2e/global-teardown.ts` and CI's dev-server log step,
-    which existed for the daemonized dev server.
+    gives only `astro dev` that fallback, keeps a check of its own: the
+    `dev-server` project runs `astro dev` on `:5175` for two plain requests
+    (`e2e/dev-server.spec.ts`), about 10 s more per run. With the rewrite
+    removed, its deep-link test fails.
+  - **Removed:** CI's dev-server log step. That dev server's log now reaches
+    the run's output through `astro dev logs --follow`.
 - **2026-11-03**: **Admin banners are shown again (#243).** The banners
   set in Admin Settings > General were saved but displayed nowhere. The
   2026-09-27 Phase 8 entry left the stores the Svelte tabs refreshed

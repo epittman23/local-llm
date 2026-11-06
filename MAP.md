@@ -404,7 +404,10 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
 - **`e2e/`** — Playwright, against the built app: `static-server.ts` serves
   the build (made into `.astro/e2e-dist/` by `playwright.config.ts`'s
   `webServer`) the way `main.py`'s `SPAStaticFiles` serves `dist/`, with a
-  502 for the backend's paths. Specs import `test` from `e2e/test.ts`, not
+  502 for the backend's paths. The exception is `dev-server.spec.ts` (its
+  own project), which checks `src/middleware.ts` against `astro dev` on
+  `:5175`; `global-teardown.ts` force-stops that daemon after a run. Other
+  specs import `test` from `e2e/test.ts`, not
   from `@playwright/test`: it auto-applies `no-socket-proxy.ts`, which
   answers the app's Socket.IO connection in the browser and never
   completes the handshake (it began as the fix for a proxied websocket

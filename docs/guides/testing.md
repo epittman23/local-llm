@@ -215,9 +215,15 @@ Run these from `apps/web/`:
   alone) and serves it on `:5174` with `e2e/static-server.ts`, which falls
   back to the app shell as `main.py`'s `SPAStaticFiles` does and answers
   the backend's paths (`/api`, `/static`, `/ws`, ...) with the 502 the dev
-  server's proxy gives when no backend runs. The build and the server print
-  into Playwright's output. When the e2e job fails in CI, it uploads the
-  traces as the `playwright-test-results` artifact.
+  server's proxy gives when no backend runs. One exception: the
+  `dev-server` project (`e2e/dev-server.spec.ts`) checks
+  `src/middleware.ts`'s deep-link fallback against `astro dev` on `:5175`,
+  with plain requests and no browser. That server is a daemon like
+  `make frontend`'s, stopped by its command's EXIT trap and by
+  `global-teardown.ts` (a clean run was observed leaving it alive with the
+  trap alone). Both servers print into Playwright's output. When the e2e
+  job fails in CI, it uploads the traces as the `playwright-test-results`
+  artifact.
 - `bunx astro check` for types (expect 0 errors).
 - `bun run format` (Biome: formats, and applies safe lint fixes) and
   `bun run lint` (Biome, check only). The config is `biome.jsonc`. The repo's
@@ -247,7 +253,8 @@ passes on retry is reported as flaky: the run passes, but fix the test.
 The e2e specs mock every `/api/v1/**` response and stub `/ws`, so they need
 **no backend**. They serve their own build on `:5174`, `make frontend`'s
 port, and never reuse a server already there, so with `make frontend`
-running they refuse to start. Stop it first.
+running they refuse to start. Stop it first: `global-teardown.ts` runs
+`astro dev stop`, which would stop it anyway.
 
 Because Playwright mocks the backend, a change that touches the
 frontend/backend seam also needs a real run against `make backend`.
