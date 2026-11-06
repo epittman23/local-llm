@@ -2460,8 +2460,14 @@ test.describe('settings: Models', () => {
 			if (path === '/models/import')
 				return json(route, { imported: (body?.models ?? []).map((m: { id: string }) => m.id), skipped: [] });
 			if (path === '/models/delete/all') return json(route, true);
+			// An admin may edit any model: without write_access the workspace editor
+			// refuses the model and goes back to the list.
 			if (path === '/models/model' && req.method() === 'GET')
-				return json(route, { ...served.find((m) => m.id === url.searchParams.get('id')), full: true });
+				return json(route, {
+					...served.find((m) => m.id === url.searchParams.get('id')),
+					full: true,
+					write_access: true
+				});
 			return json(route, body ?? true);
 		});
 		await page.route('**/api/v1/configs/models', (route) => {
@@ -2757,6 +2763,9 @@ test.describe('settings: Models', () => {
 		await modal(page).getByRole('tabpanel').getByRole('button', { name: 'Back' }).click();
 		await expect(row(page, 'gpt-4o')).toBeVisible();
 		await row(page, 'helper').getByRole('button', { name: 'Edit Helper' }).click();
+		// The editor itself, not only its URL: a model it cannot edit sends it back
+		// to the list, after a URL check alone could already have passed.
+		await expect(page.getByLabel('Model Name')).toHaveValue('Helper');
 		await expect(page).toHaveURL(/\/workspace\/models\/edit\?id=helper/);
 		await expect(modal(page)).toHaveCount(0);
 	});

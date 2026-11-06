@@ -70,7 +70,12 @@ async function mockKnowledgeApi(page: Page, bases: any[], opts: { pending?: any[
 				json(url.searchParams.get('page') === '1' ? { items, total: items.length } : { items: [], total: items.length })
 			);
 		}
-		if (path === '/create') return route.fulfill(json({ id: 'new-kb', ...body }));
+		if (path === '/create') {
+			// Kept, as the server keeps it: the page it opens loads it back by id.
+			const created = kb(0, { id: 'new-kb', name: body.name, description: body.description, file_count: 0 });
+			state.bases.push(created);
+			return route.fulfill(json(created));
+		}
 		const m = path.match(/^\/([^/]+)(\/.*)?$/);
 		if (!m) return route.fulfill(json({}));
 		const base = state.bases.find((b) => b.id === m[1]);
@@ -187,6 +192,9 @@ test.describe('workspace knowledge list', () => {
 		await dialog.getByLabel('Name').fill('Handbook');
 		await dialog.getByLabel('Description').fill('Everything about us');
 		await dialog.getByRole('button', { name: 'Create Knowledge' }).click();
+		// The base itself, not only its URL: a base the page cannot load sends it
+		// back to the list, after a URL check alone could already have passed.
+		await expect(page.getByLabel('Knowledge Name')).toHaveValue('Handbook');
 		await expect(page).toHaveURL(/\/workspace\/knowledge\/new-kb$/);
 		expect(calls.find((c) => c.path === '/create')?.body).toMatchObject({
 			name: 'Handbook',
