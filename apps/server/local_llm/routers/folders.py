@@ -35,6 +35,17 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def added_folder_entries(before: list | None, after: list | None) -> list | None:
+    """The entries in `after` that `before` does not hold, by type and id.
+
+    Anything that is not a list is returned as it is, for the access check to refuse.
+    """
+    if not isinstance(after, list):
+        return after
+    held = {(e.get('type'), e.get('id')) for e in before if isinstance(e, dict)} if isinstance(before, list) else set()
+    return [e for e in after if not (isinstance(e, dict) and (e.get('type'), e.get('id')) in held)]
+
+
 async def get_folder_unread_counts(user_id: str, db: AsyncSession | None = None) -> dict[str, int]:
     folders = await Folders.get_folders_by_user_id(user_id, db=db)
     parent_by_id = {folder.id: folder.parent_id for folder in folders}
@@ -169,7 +180,11 @@ async def create_folder(
                         status_code=status.HTTP_404_NOT_FOUND,
                         detail=ERROR_MESSAGES.NOT_FOUND,
                     )
-                if not await can_read_all_folder_files(form_data.data['files'], owner, db=db):
+                # The owner's access carries the entries to the folder's chats, and the
+                # editor adds only what they can read themselves (#358).
+                if not await can_read_all_folder_files(
+                    form_data.data['files'], owner, db=db
+                ) or not await can_read_all_folder_files(form_data.data['files'], user, db=db):
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
@@ -343,6 +358,16 @@ async def update_folder_name_by_id(
                     detail=ERROR_MESSAGES.NOT_FOUND,
                 )
             if not await can_read_all_folder_files(form_data.data['files'], owner, db=db):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
+                )
+            # An editor adds only what they can read themselves: the owner's access
+            # carries the folder's entries to its chats (#358). Entries already in
+            # the folder may stay.
+            if owner.id != user.id and not await can_read_all_folder_files(
+                added_folder_entries((folder.data or {}).get('files'), form_data.data['files']), user, db=db
+            ):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=ERROR_MESSAGES.ACCESS_PROHIBITED,

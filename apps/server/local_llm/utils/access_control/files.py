@@ -139,11 +139,13 @@ async def get_accessible_folder_files(
     user: UserModel,
     db: AsyncSession | None = None,
     user_group_ids: set[str] | None = None,
+    note_permission: str = 'read',
 ) -> list[dict]:
     """Filter folder.data['files'] entries to those the caller can read.
 
     Entries carry a 'type' ('file', 'collection' or 'note') and 'id'. Entries of any other
-    shape are dropped because they cannot be access-checked.
+    shape are dropped because they cannot be access-checked. A note needs
+    `note_permission` on it, unless the caller owns it.
     """
     if not isinstance(entries, list):
         return []
@@ -181,7 +183,7 @@ async def get_accessible_folder_files(
                     user_id=user.id,
                     resource_type='note',
                     resource_id=entry_id,
-                    permission='read',
+                    permission=note_permission,
                     user_group_ids=user_group_ids,
                     db=db,
                 )
@@ -206,7 +208,11 @@ async def can_read_all_folder_files(
 
 
 async def get_owner_accessible_folder_files(folder: FolderModel, db: AsyncSession | None = None) -> list[dict]:
-    """Return the folder entries its owner can still delegate."""
+    """Return the folder entries its owner can still delegate.
+
+    A note is passed on only if its owner could share it on directly: they own
+    it or may write it, as changing a note's own sharing requires (#358).
+    """
     files = (folder.data or {}).get('files') or []
     if not files:
         return []
@@ -215,4 +221,4 @@ async def get_owner_accessible_folder_files(folder: FolderModel, db: AsyncSessio
     if not owner:
         return []
 
-    return await get_accessible_folder_files(files, owner, db=db)
+    return await get_accessible_folder_files(files, owner, db=db, note_permission='write')
