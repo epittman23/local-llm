@@ -262,14 +262,50 @@ export const ChatInput = forwardRef<
 	};
 
 	const uploading = files.some((f) => f.status === 'uploading');
+	// Enter while an attachment is still uploading holds the send, and it goes
+	// once every upload is done (Chat.svelte queued such a message instead).
+	// It used to be ignored without a word: Send is disabled then, but Enter
+	// was not. The hold is let go at once if the text changes, so a half-written
+	// message is never sent, and if a held upload fails (and is dropped) or is
+	// removed, so the message never goes without a file it was sent with.
+	// `heldNow` is the hold as of this moment: a send or a cancel clears it at
+	// once, so a release whose render is a step behind cannot send again.
+	const [held, setHeldState] = useState<{ text: string; itemIds: string[] } | null>(null);
+	const heldNow = useRef(held);
+	const setHeld = (next: typeof held) => {
+		heldNow.current = next;
+		setHeldState(next);
+	};
 	const submit = () => {
-		if (uploading || disabled) return;
+		if (disabled) return;
+		if (uploading) {
+			setHeld({ text, itemIds: files.filter((f) => f.status === 'uploading').map((f) => String(f.itemId)) });
+			return;
+		}
+		setHeld(null);
 		if (onSubmit(text, files)) {
 			setText('');
 			setCursor(0);
 			area.current?.focus();
 		}
 	};
+	const keeps = (h: { itemIds: string[] }) =>
+		h.itemIds.every((itemId) => files.some((f) => String(f.itemId) === itemId));
+	const release = useRef(() => {});
+	release.current = () => {
+		const h = heldNow.current;
+		if (!h) return;
+		setHeld(null);
+		if (text === h.text && keeps(h)) submit();
+	};
+	// Not while the chat is loading (a reload in the same chat): the send waits for it.
+	useEffect(() => {
+		if (held && !uploading && !disabled) release.current();
+	}, [held, uploading, disabled]);
+	// Edited, or a held upload gone: let go at once, so "Sends when..." is not left showing.
+	useEffect(() => {
+		if (held && (text !== held.text || !keeps(held))) setHeld(null);
+	});
 
 	return (
 		<div className={cn('mx-auto w-full px-2.5 pb-3', wide ? 'max-w-none' : 'max-w-3xl')}>
@@ -290,6 +326,19 @@ export const ChatInput = forwardRef<
 						</li>
 					))}
 				</ul>
+			)}
+			{held && (
+				<div role="status" className="bg-muted/50 mb-1.5 flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs">
+					<span className="text-muted-foreground">Sends when the upload finishes</span>
+					<button
+						type="button"
+						aria-label="Don't send when the upload finishes"
+						className="ml-auto"
+						onClick={() => setHeld(null)}
+					>
+						<X className="size-3" />
+					</button>
+				</div>
 			)}
 			<div className="relative">
 				{active && suggestions.length > 0 && (

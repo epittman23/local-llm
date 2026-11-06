@@ -9,8 +9,9 @@ type Send = (text: string, files: ChatFile[]) => boolean;
  * refused with "Model not selected". Now a send made then leaves the text in
  * the box, and once `ready` the box is submitted again by `resubmit`, with
  * whatever it holds then. Only that a send is waiting is kept, for the chat
- * `route` it was made in: moving to another chat drops it. If the box cannot
- * send at that moment (a file still uploading), the text stays for Enter.
+ * `route` it was made in: moving to another chat drops it. If a file is still
+ * uploading at that moment, the box holds the send in turn and sends it once
+ * the upload is done (ChatInput).
  */
 export function useHeldSend(ready: boolean, route: string, send: Send, resubmit: () => void): Send {
 	const [held, setHeld] = useState<{ route: string; go: boolean } | null>(null);
