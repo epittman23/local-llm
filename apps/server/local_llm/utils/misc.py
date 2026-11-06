@@ -1152,10 +1152,25 @@ def _duration_pairs(value: str) -> list[tuple[float, str]] | None:
 
 
 def jwt_expiry_startup_error(value: str) -> str | None:
-    """The startup message for a JWT_EXPIRES_IN the backend cannot use, or None (#508)."""
-    if problem := jwt_expiry_error(value):
-        return f'JWT_EXPIRES_IN={value!r} cannot be used. {problem}'
-    return None
+    """The startup message for a JWT_EXPIRES_IN sign-in cannot use, or None (#508).
+
+    Sign-in reads it with parse_duration, which also takes forms the admin
+    settings refuse ('1d 12h', '30min', '1week'); those keep working. Refused:
+    what it cannot read at all, and a duration under a minute (every session
+    would expire at once) or too long to add to today's date.
+    """
+    problem = jwt_expiry_error(value)
+    if problem is None:
+        return None
+    message = f'JWT_EXPIRES_IN={value!r} cannot be used. {problem}'
+    try:
+        delta = parse_duration(value)
+        if delta is None:
+            return None
+        _ = dt.datetime.now(dt.UTC) + delta
+    except (ValueError, OverflowError):
+        return message
+    return message if delta < MIN_JWT_EXPIRY else None
 
 
 def jwt_expiry_error(value: str) -> str | None:

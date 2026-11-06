@@ -76,8 +76,10 @@ def test_a_jwt_expiry_that_cannot_be_used_stops_the_start(tmp_path, expiry):
     assert repr(expiry) in started.stderr
 
 
-@pytest.mark.parametrize('expiry', ['4w', '1d12h', '-1', '0'])
+@pytest.mark.parametrize('expiry', ['4w', '1d12h', '-1', '0', '1d 12h', '30min', '1week'])
 def test_a_usable_jwt_expiry_starts(tmp_path, expiry):
+    # The last three are forms the admin settings refuse, but sign-in reads them
+    # (with parse_duration), so a deployment that set one keeps starting.
     started = _import('local_llm.config', tmp_path, JWT_EXPIRES_IN=expiry)
 
     assert started.returncode == 0, started.stderr[-2000:]
@@ -111,5 +113,8 @@ def test_jwt_expiry_startup_error_names_the_variable_and_value():
 
     assert jwt_expiry_startup_error('4w') is None
     assert jwt_expiry_startup_error('-1') is None
+    assert jwt_expiry_startup_error('1d 12h') is None
+    assert jwt_expiry_startup_error('20s') is not None  # under a minute: every session would expire at once
+    assert jwt_expiry_startup_error('100000000w') is not None  # past any date sign-in can add it to
     problem = jwt_expiry_startup_error('4 weeks')
     assert problem and problem.startswith("JWT_EXPIRES_IN='4 weeks' cannot be used.")
