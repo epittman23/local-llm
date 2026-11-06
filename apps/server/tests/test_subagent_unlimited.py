@@ -8,6 +8,9 @@ every summary: its last character was dropped and the truncation marker
 appended. -1 now becomes None for both, which the tool-call loop and the
 truncation read as no limit. Any other value below 1 is 1.
 
+The Sub-agents admin form saves -1 too since #602; the last test sends it
+through the real config endpoint and store and reads the limits back.
+
 Run from apps/server:
 
     python -m pytest tests/test_subagent_unlimited.py
@@ -19,8 +22,13 @@ import asyncio
 from types import SimpleNamespace
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
+from local_llm.models.config import Config
+from local_llm.routers import configs as configs_router
 from local_llm.utils import subagents
+from local_llm.utils.auth import get_admin_user
 
 
 def _limits(**values):
@@ -99,3 +107,28 @@ def test_a_limited_run_is_still_truncated(run):
 
     assert result['summary'] == 'x' * 10 + '\n\n[output truncated]'
     assert states[0].max_tool_call_iterations == 7
+
+
+def test_minus_one_saved_from_the_admin_form_is_read_back_as_no_limit(monkeypatch):
+    async def nothing(*_a, **_k):
+        return None
+
+    monkeypatch.setattr(configs_router, 'publish_event', nothing)
+    app = FastAPI()
+    app.include_router(configs_router.router, prefix='/configs')
+    app.dependency_overrides[get_admin_user] = lambda: SimpleNamespace(id='admin', role='admin')
+    client = TestClient(app)
+    form = {
+        'ENABLE_SUBAGENTS': True,
+        'SUBAGENTS_BACKGROUND_ENABLED': True,
+        'SUBAGENTS_MAX_CONCURRENT': -1,
+        'SUBAGENTS_MAX_ASYNC': -1,
+        'SUBAGENTS_MAX_ITERATIONS': -1,
+        'SUBAGENTS_MAX_OUTPUT': -1,
+        'SUBAGENTS_SYSTEM_PROMPT': '',
+    }
+
+    assert client.post('/configs/subagents', json=form).status_code == 200
+    assert client.get('/configs/subagents').json() == form
+    stored = asyncio.run(Config.get_many(*configs_router.SUBAGENTS_CONFIG_KEYS.values()))
+    assert subagents._subagent_limits(stored) == (-1, -1, None, None)
