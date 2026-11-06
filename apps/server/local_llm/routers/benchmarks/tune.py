@@ -82,16 +82,21 @@ class TuneStartForm(BaseModel):
 
 
 def running() -> bool:
-    """Whether a sweep is running; the Tests page refuses its jobs meanwhile."""
+    """Whether a sweep is running; the Tests and Pre-screen pages refuse their jobs meanwhile."""
     return _task is not None and not _task.done()
 
 
-def _refuse_alongside_tests() -> None:
+def _refuse_alongside_other_jobs() -> None:
+    from local_llm.routers.benchmarks import prescreen as prescreen_router
     from local_llm.routers.benchmarks import tests as tests_router
 
     if tests_router.active():
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail=ERROR_MESSAGES.DEFAULT('a test job is running')
+        )
+    if prescreen_router.running():
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=ERROR_MESSAGES.DEFAULT('a pre-screen is running')
         )
 
 
@@ -102,7 +107,7 @@ async def start_tune(form_data: TuneStartForm, user=Depends(get_admin_user)):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail=ERROR_MESSAGES.DEFAULT('a sweep is already running')
         )
-    _refuse_alongside_tests()
+    _refuse_alongside_other_jobs()
     opts = form_data.to_options()
     _last_error = None
     _task = asyncio.create_task(_run_sweep(lambda session: tune.start_sweep(opts, session)))
@@ -116,7 +121,7 @@ async def resume_tune(sweep_id: str | None = None, user=Depends(get_admin_user))
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail=ERROR_MESSAGES.DEFAULT('a sweep is already running')
         )
-    _refuse_alongside_tests()
+    _refuse_alongside_other_jobs()
     defaults = tune.SweepOptions()
     _last_error = None
     _task = asyncio.create_task(_run_sweep(lambda session: tune.resume_sweep(sweep_id, defaults, session)))

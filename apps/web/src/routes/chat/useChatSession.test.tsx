@@ -8,6 +8,7 @@ import * as usersApi from '@/lib/apis/users';
 import { updateMessage } from '@/lib/chat/history';
 import { getOutputText } from '@/lib/chat/structuredOutput';
 import { useAuthStore } from '@/lib/stores/authStore';
+import { useConfigStore } from '@/lib/stores/configStore';
 import { useChatSession } from './useChatSession';
 
 // docs/history/bug-review-2026-09-27.md H3: a slow load of the chat the user just
@@ -221,6 +222,32 @@ describe('useChatSession loadChat', () => {
 		);
 		await waitFor(() => expect(asked('next')).toBe(true));
 		expect(session.queue).toHaveLength(0);
+	});
+
+	it('sends files at a Max Upload Count of 0, which means no limit (#596)', async () => {
+		const file = { type: 'file', id: 'f', name: 'f.txt' } as never;
+		const count = (max_count: number) =>
+			act(() => useConfigStore.setState({ config: { file: { max_count } } } as never));
+		await openChatA();
+		writing();
+		let accepted: boolean | undefined;
+		try {
+			count(0);
+			act(() => {
+				accepted = session.submit('two files', [file, file], 'm');
+			});
+			expect(accepted).toBe(true);
+			expect(session.queue).toHaveLength(1);
+
+			count(1);
+			act(() => {
+				accepted = session.submit('still too many', [file, file], 'm');
+			});
+			expect(accepted).toBe(false);
+			expect(session.queue).toHaveLength(1);
+		} finally {
+			useConfigStore.setState({ config: null } as never);
+		}
 	});
 
 	it('a queued prompt waits while another chat is open, then goes in its own chat (#218)', async () => {

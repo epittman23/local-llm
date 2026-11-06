@@ -104,6 +104,6 @@ describe('CodeExecution: a rejected save', () => {
 		await renderTab();
 		save();
 		await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
-		expect(toastError).toHaveBeenCalledWith(msg);
+		expect(toastError).toHaveBeenCalledWith(`CODE_EXECUTION_JUPYTER_TIMEOUT: ${msg}`);
 	});
 });

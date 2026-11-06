@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { AdvancedParams } from '@/components/common/AdvancedParams';
 import { ExperimentalBadge } from '@/components/common/ExperimentalBadge';
@@ -15,6 +15,7 @@ import {
 } from '@/components/settings/controls';
 import { getModels, getTaskConfig, updateTaskConfig } from '@/lib/apis';
 import { getChatConfig, updateChatConfig } from '@/lib/apis/chats';
+import { errorMessage } from '@/lib/apis/errors';
 import { getBaseModels } from '@/lib/apis/models';
 import { toastSaved } from '@/lib/settings/useAdminSaved';
 import { useConfigDraft } from '@/lib/settings/useConfigDraft';
@@ -84,6 +85,41 @@ function PromptField({
 	);
 }
 
+/**
+ * How one half of an Interface save ended (#606). A request can fail after
+ * the server has stored it (a dropped connection, a proxy's 502), so a failed
+ * half is read back: unchanged means it was refused, changed means it landed.
+ */
+export type HalfOutcome = { label: string; state: 'saved' | 'refused' | 'landed' | 'unknown'; reason?: string };
+
+/** What the toast says after a save, or null when both halves were saved. */
+export function saveMessage(halves: HalfOutcome[]): string | null {
+	if (halves.every((h) => h.state === 'saved')) return null;
+	const saved = halves.filter((h) => h.state === 'saved').map((h) => h.label);
+	const refused = halves.filter((h) => h.state === 'refused');
+	if (refused.length === halves.length) {
+		const reasons = [...new Set(refused.map((h) => h.reason))];
+		return reasons.length === 1
+			? `Nothing was saved: ${reasons[0]}`
+			: `Nothing was saved: ${refused.map((h) => `${h.label}: ${h.reason}`).join('; ')}`;
+	}
+	const sentence = (h: HalfOutcome) =>
+		h.state === 'refused'
+			? `The ${h.label} settings were not saved: ${h.reason}.`
+			: h.state === 'landed'
+				? `The ${h.label} settings were stored, but the server answered with an error: ${h.reason}. They now show what the server holds.`
+				: `The ${h.label} settings may not have been saved: ${h.reason}. Reopen the tab to see what the server holds.`;
+	const failed = halves.filter((h) => h.state !== 'saved');
+	if (saved.length && failed.length === 1 && failed[0].state === 'refused')
+		return `The ${saved.join(' and ')} settings were saved, but the ${failed[0].label} settings were not: ${failed[0].reason}`;
+	return [saved.length ? `The ${saved.join(' and ')} settings were saved.` : '', ...failed.map(sentence)]
+		.filter(Boolean)
+		.join(' ');
+}
+
+const withParams = (task: Cfg) => ({ ...task, TASK_MODEL_PARAMS: task.TASK_MODEL_PARAMS ?? {} });
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
 /** Ports admin/Settings/Interface.svelte: task models, chat behaviour, and the generation prompts. */
 export default function Interface() {
 	const token = useAuthStore((s) => s.token) ?? '';
@@ -121,31 +157,74 @@ export default function Interface() {
 	const patchChat = (p: Cfg) => setDraft((d) => d && { ...d, chat: { ...d.chat, ...p } });
 	const num = (v: number | '') => (v === '' ? null : v);
 
+	// What the server held when the tab loaded or last saved, to tell a refused half from one that landed.
+	const stored = useRef<Draft | null>(null);
+	useEffect(() => {
+		if (draft && !stored.current) stored.current = structuredClone(draft);
+	}, [draft]);
+
+	/** One half's outcome, and the values the form should show for it (undefined: keep the edits). */
+	const settle = async (
+		half: keyof Draft,
+		label: string,
+		result: PromiseSettledResult<Cfg | null>,
+		load: () => Promise<Cfg | null>,
+		normalize: (c: Cfg) => Cfg
+	): Promise<HalfOutcome & { value?: Cfg }> => {
+		if (result.status === 'fulfilled')
+			return { label, state: 'saved', value: result.value ? normalize(result.value) : undefined };
+		const reason = errorMessage(result.reason);
+		try {
+			const now = await load();
+			if (!now) return { label, state: 'unknown', reason };
+			const value = normalize(now);
+			return same(value, stored.current?.[half])
+				? { label, state: 'refused', reason }
+				: { label, state: 'landed', reason, value };
+		} catch {
+			return { label, state: 'unknown', reason };
+		}
+	};
+
 	const save = async () => {
 		if (!draft) return;
 		setSaving(true);
 		try {
-			const [nextTask, nextChat] = await Promise.all([
+			const [taskResult, chatResult] = await Promise.allSettled([
 				updateTaskConfig(token, { ...draft.task, TASK_MODEL_PARAMS: configuredParams(draft.task.TASK_MODEL_PARAMS) }),
 				updateChatConfig(token, draft.chat)
 			]);
-			if (nextTask && nextChat)
-				setDraft({ task: { ...nextTask, TASK_MODEL_PARAMS: nextTask.TASK_MODEL_PARAMS ?? {} }, chat: nextChat });
+			const [task, chat] = await Promise.all([
+				settle('task', 'Tasks and Generation', taskResult, () => getTaskConfig(token), withParams),
+				settle(
+					'chat',
+					'Chat',
+					chatResult,
+					() => getChatConfig(token),
+					(c) => c
+				)
+			]);
+			// A half that was saved or landed shows what the server holds; a refused or unknown one keeps its edits.
+			if (stored.current) {
+				if (task.value) stored.current.task = task.value;
+				if (chat.value) stored.current.chat = chat.value;
+			}
+			setDraft((d) => d && { task: task.value ?? d.task, chat: chat.value ?? d.chat });
 			// The chat reads these two off /api/config, so tell it without a refetch.
 			const current = useConfigStore.getState().config;
-			if (current && nextChat) {
+			if (current && chat.value) {
 				setConfig({
 					...current,
 					features: {
 						...current.features,
-						enable_context_compaction: nextChat.ENABLE_CONTEXT_COMPACTION,
-						enable_tool_permissions: nextChat.ENABLE_TOOL_PERMISSIONS
+						enable_context_compaction: chat.value.ENABLE_CONTEXT_COMPACTION,
+						enable_tool_permissions: chat.value.ENABLE_TOOL_PERMISSIONS
 					}
 				});
 			}
-			toastSaved();
-		} catch (error) {
-			toast.error((error as { detail?: string })?.detail ?? `${error}`);
+			const message = saveMessage([task, chat]);
+			if (message) toast.error(message);
+			else toastSaved();
 		} finally {
 			setSaving(false);
 		}

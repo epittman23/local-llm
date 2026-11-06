@@ -48,6 +48,7 @@ import { useAuthStore } from '@/lib/stores/authStore';
 import { useConfigStore } from '@/lib/stores/configStore';
 import { copyToClipboard } from '@/lib/utils';
 import { patchCachedChat } from './sidebar/useChatList';
+import { uploadCountLimit } from './useAttachments';
 import type { ChatModel } from './useModels';
 import { uuid } from '@/lib/utils/uuid';
 
@@ -607,7 +608,7 @@ export function useChatSession({
 				toast.error('Model not selected');
 				return false;
 			}
-			const maxCount = (config as { file?: { max_count?: number | null } } | null)?.file?.max_count ?? null;
+			const maxCount = uploadCountLimit(config as { file?: { max_count?: number | null } } | null);
 			if (maxCount !== null && files.length + l.chatFiles.length > maxCount) {
 				toast.error(`You can only chat with a maximum of ${maxCount} file(s) at a time.`);
 				return false;
