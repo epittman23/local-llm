@@ -64,6 +64,23 @@ export function requestError(err: unknown): unknown {
 }
 
 /**
+ * FastAPI's 422 list as one line, each message after the field it is about
+ * (its `loc` without the request part: `TASK_MODEL: Field required`), so a
+ * form with many fields says which one was refused (#606).
+ */
+function validationMessages(detail: unknown[]): string {
+	return detail
+		.map((e) => {
+			const { msg, loc } = (e ?? {}) as { msg?: string; loc?: unknown };
+			if (!msg) return JSON.stringify(e);
+			const field = Array.isArray(loc) ? loc.filter((part, i) => !(i === 0 && REQUEST_PARTS.has(part))).join('.') : '';
+			return field ? `${field}: ${msg}` : msg;
+		})
+		.join(', ');
+}
+const REQUEST_PARTS = new Set(['body', 'query', 'path', 'header', 'cookie']);
+
+/**
  * What a helper throws for a failure: the body's `detail` (FastAPI's 422
  * list joined into one line), an abort as it is, a network failure as
  * ServerUnreachableError, and anything else as itself. Never falsy, so
@@ -72,9 +89,7 @@ export function requestError(err: unknown): unknown {
 export function errorDetail(err: unknown): unknown {
 	if (isAbort(err) || err instanceof TypeError) return requestError(err);
 	const detail = (err as { detail?: unknown } | null | undefined)?.detail;
-	if (Array.isArray(detail)) {
-		return detail.map((e: { msg?: string }) => e?.msg || JSON.stringify(e)).join(', ');
-	}
+	if (Array.isArray(detail)) return validationMessages(detail);
 	if (detail !== undefined && detail !== null && detail !== '') return detail;
 	return requestError(err);
 }
