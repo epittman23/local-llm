@@ -196,6 +196,7 @@ async def can_read_all_folder_files(
     entries: list[dict] | None,
     user: UserModel,
     db: AsyncSession | None = None,
+    note_permission: str = 'read',
 ) -> bool:
     if entries is None:
         return True
@@ -204,7 +205,7 @@ async def can_read_all_folder_files(
     if not entries:
         return True
 
-    return len(await get_accessible_folder_files(entries, user, db=db)) == len(entries)
+    return len(await get_accessible_folder_files(entries, user, db=db, note_permission=note_permission)) == len(entries)
 
 
 async def get_owner_accessible_folder_files(folder: FolderModel, db: AsyncSession | None = None) -> list[dict]:

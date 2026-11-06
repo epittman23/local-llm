@@ -181,10 +181,11 @@ async def create_folder(
                         detail=ERROR_MESSAGES.NOT_FOUND,
                     )
                 # The owner's access carries the entries to the folder's chats, and the
-                # editor adds only what they can read themselves (#358).
+                # editor adds only what they can read themselves, and a note only if they
+                # own it or may write it (#358).
                 if not await can_read_all_folder_files(
                     form_data.data['files'], owner, db=db
-                ) or not await can_read_all_folder_files(form_data.data['files'], user, db=db):
+                ) or not await can_read_all_folder_files(form_data.data['files'], user, db=db, note_permission='write'):
                     raise HTTPException(
                         status_code=status.HTTP_403_FORBIDDEN,
                         detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
@@ -362,11 +363,15 @@ async def update_folder_name_by_id(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=ERROR_MESSAGES.ACCESS_PROHIBITED,
                 )
-            # An editor adds only what they can read themselves: the owner's access
-            # carries the folder's entries to its chats (#358). Entries already in
-            # the folder may stay.
+            # An editor adds only what they can read themselves, and a note only if
+            # they own it or may write it, as sharing a note on requires: the owner's
+            # access carries the folder's entries to its chats, and an admin owner's
+            # carries any note (#358). Entries already in the folder may stay.
             if owner.id != user.id and not await can_read_all_folder_files(
-                added_folder_entries((folder.data or {}).get('files'), form_data.data['files']), user, db=db
+                added_folder_entries((folder.data or {}).get('files'), form_data.data['files']),
+                user,
+                db=db,
+                note_permission='write',
             ):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
