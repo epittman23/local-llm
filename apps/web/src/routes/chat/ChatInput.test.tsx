@@ -78,3 +78,77 @@ describe('ChatInput: placing the caret after a suggestion', () => {
 		elsewhere.remove();
 	});
 });
+
+describe('ChatInput: Enter while an attachment is uploading', () => {
+	afterEach(cleanup);
+
+	const uploading = { itemId: 'f1', type: 'text', name: 'Page', status: 'uploading' };
+	const uploaded = { ...uploading, status: 'uploaded' };
+
+	function showWith(files: Record<string, unknown>[]) {
+		const onSubmit = vi.fn(() => true);
+		const ui = (fs: Record<string, unknown>[]) => (
+			<QueryClientProvider client={new QueryClient()}>
+				<TooltipProvider>
+					<ChatInput
+						onSubmit={onSubmit}
+						onStop={vi.fn()}
+						generating={false}
+						queued={[]}
+						onRemoveQueued={vi.fn()}
+						files={fs}
+					/>
+				</TooltipProvider>
+			</QueryClientProvider>
+		);
+		const { rerender } = render(ui(files));
+		const box = screen.getByRole('textbox', { name: 'Message' }) as HTMLTextAreaElement;
+		return { box, onSubmit, setFiles: (fs: Record<string, unknown>[]) => rerender(ui(fs)) };
+	}
+	const status = () => screen.queryByText('Sends when the upload finishes');
+
+	it('holds the send, then sends once the upload is done', () => {
+		const { box, onSubmit, setFiles } = showWith([uploading]);
+		type(box, 'read this');
+		fireEvent.keyDown(box, { key: 'Enter' });
+		expect(onSubmit).not.toHaveBeenCalled();
+		expect(status()).toBeTruthy();
+		setFiles([uploaded]);
+		expect(onSubmit).toHaveBeenCalledExactlyOnceWith('read this', [uploaded]);
+		expect(status()).toBeNull();
+		expect(box.value).toBe('');
+	});
+
+	it('lets go when the text is edited, and does not send when the upload is done', () => {
+		const { box, onSubmit, setFiles } = showWith([uploading]);
+		type(box, 'read this');
+		fireEvent.keyDown(box, { key: 'Enter' });
+		expect(status()).toBeTruthy();
+		type(box, 'read this and');
+		expect(status()).toBeNull();
+		setFiles([uploaded]);
+		expect(onSubmit).not.toHaveBeenCalled();
+		expect(box.value).toBe('read this and');
+	});
+
+	it('lets go when the upload fails and is dropped: the message does not go without it', () => {
+		const { box, onSubmit, setFiles } = showWith([uploading]);
+		type(box, 'read this');
+		fireEvent.keyDown(box, { key: 'Enter' });
+		expect(status()).toBeTruthy();
+		setFiles([]);
+		expect(onSubmit).not.toHaveBeenCalled();
+		expect(status()).toBeNull();
+		expect(box.value).toBe('read this');
+	});
+
+	it('can be called off', () => {
+		const { box, onSubmit, setFiles } = showWith([uploading]);
+		type(box, 'read this');
+		fireEvent.keyDown(box, { key: 'Enter' });
+		fireEvent.click(screen.getByRole('button', { name: "Don't send when the upload finishes" }));
+		expect(status()).toBeNull();
+		setFiles([uploaded]);
+		expect(onSubmit).not.toHaveBeenCalled();
+	});
+});
