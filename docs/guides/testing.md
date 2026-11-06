@@ -296,7 +296,7 @@ driver, against a real stack (no model served: llama.cpp was not built).
 From `apps/server/`:
 
 ```bash
-LLLM_SECRET_KEY=<any long string> .venv/bin/python -m pytest tests
+LLLM_SECRET_KEY=<any string of 32 bytes or more> .venv/bin/python -m pytest tests
 ```
 
 The package imports from the working directory, and refuses to load without

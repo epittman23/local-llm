@@ -9,7 +9,7 @@ import { useConfigStore } from '@/lib/stores/configStore';
 import { type ComposerHandle, MessageComposer } from '../channels/MessageComposer';
 import { useKnowledgeUploads } from '../workspace/knowledge/useKnowledgeUploads';
 import { KnowledgePicker } from '../workspace/models/KnowledgePicker';
-import { useAttachments } from './useAttachments';
+import { uploadCountLimit, useAttachments } from './useAttachments';
 
 // #238: an admin's Max Upload Size of 0 means no limit to the server
 // (`if max_size and ...`), but the chat and channel composers read it as
@@ -153,5 +153,42 @@ describe('knowledge base uploads and the upload size limit', () => {
 		expect(await upload()).toEqual([]);
 		expect(uploadFile).not.toHaveBeenCalled();
 		expect(toast.error).toHaveBeenCalledWith('File size should not exceed 1 MB.');
+	});
+});
+
+// #596: a Max Upload Count of 0 refused every attachment the same way, though
+// the field says to leave it empty for unlimited. 0 now means no limit, as
+// Max Upload Size does.
+describe('chat attachments and the upload count limit', () => {
+	const count = (max_count: number | null | undefined) =>
+		useConfigStore.setState({ config: { file: { max_count } } } as never);
+	const attachTwo = () => {
+		const { result } = renderHook(
+			() => useAttachments({ temporary: false, selectedModels: ['m'], models: [{ id: 'm' }] as never, chatId: null }),
+			{ wrapper }
+		);
+		const small = (name: string) => new File(['x'], name, { type: 'text/plain' });
+		act(() => result.current.addFiles([small('a.txt'), small('b.txt')]));
+		return result.current.files;
+	};
+
+	it('a count of 0 is no limit', () => {
+		count(0);
+		expect(attachTwo()).toHaveLength(2);
+		expect(toast.error).not.toHaveBeenCalled();
+	});
+
+	it('a count of 1 still refuses two files', () => {
+		count(1);
+		expect(attachTwo()).toEqual([]);
+		expect(toast.error).toHaveBeenCalledWith('You can only chat with a maximum of 1 file(s) at a time.');
+	});
+
+	it('reads 0 and unset as no limit, and any positive count as the limit', () => {
+		expect(uploadCountLimit({ file: { max_count: 0 } })).toBeNull();
+		expect(uploadCountLimit({ file: { max_count: null } })).toBeNull();
+		expect(uploadCountLimit({ file: {} })).toBeNull();
+		expect(uploadCountLimit(null)).toBeNull();
+		expect(uploadCountLimit({ file: { max_count: 3 } })).toBe(3);
 	});
 });

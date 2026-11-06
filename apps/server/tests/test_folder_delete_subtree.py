@@ -166,3 +166,39 @@ def test_without_chat_delete_deleting_a_folder_with_its_chats_is_refused(tree, m
     assert r.status_code == 403
     assert _run(_folders_left(tree.ids, tree.user.id)) == tree.ids
     assert all(_run(Chats.get_chat_by_id(cid)) for cid in tree.chats)
+
+
+@pytest.mark.parametrize('delete_contents', [False, True], ids=['keeping_chats', 'deleting_chats'])
+def test_another_users_chat_in_a_deleted_folder_moves_out_and_is_kept(tree, monkeypatch, delete_contents):
+    """A shared folder can hold a write grantee's chats; deleting it moved or
+    deleted only the owner's, and left the others pointing at a folder that
+    was gone, where their sidebars hid them (#315)."""
+    tag = uuid.uuid4().hex[:8]
+
+    async def grantee_chat():
+        other = await Users.insert_new_user(f'g-{tag}', 'Gil', f'g-{tag}@example.invalid', role='user')
+        await Chats.insert_new_chat(f'g-{tag}', other.id, ChatForm(chat={'title': 'theirs'}, folder_id=tree.ids[1]))
+        return f'g-{tag}'
+
+    chat_id = _run(grantee_chat())
+
+    r = _client(tree.user, monkeypatch).delete(f'/folders/{tree.ids[0]}', params={'delete_contents': delete_contents})
+
+    assert r.status_code == 200
+    kept = _run(Chats.get_chat_by_id(chat_id))
+    assert kept is not None
+    assert kept.folder_id is None
+
+
+def test_a_failed_move_of_other_users_chats_is_an_error_and_deletes_no_folder(tree, monkeypatch):
+    async def failing(*_a, **_k):
+        raise RuntimeError('database went away')
+
+    monkeypatch.setattr(folders_router.Chats, 'move_other_users_chats_out_of_folders', failing)
+
+    r = _client(tree.user, monkeypatch).delete(f'/folders/{tree.ids[0]}', params={'delete_contents': False})
+
+    assert r.status_code == 400
+    assert _run(_folders_left(tree.ids, tree.user.id)) == tree.ids
+    # Nothing was changed before it: the owner's chats are still in their folders.
+    assert [_run(Chats.get_chat_by_id(cid)).folder_id for cid in tree.chats] == tree.ids

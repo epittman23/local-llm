@@ -2670,6 +2670,19 @@ class ChatTable:
         except Exception:
             return False
 
+    async def move_other_users_chats_out_of_folders(
+        self, folder_ids: list[str], owner_id: str, db: AsyncSession | None = None
+    ) -> None:
+        """Move to the top level the chats in these folders that are not the
+        folder owner's: a shared folder can hold a write grantee's chats, which
+        its deletion must neither delete nor leave pointing at a folder that is
+        gone (#315). A failure raises."""
+        async with get_async_db_context(db) as session:
+            await session.execute(
+                update(Chat).filter(Chat.folder_id.in_(folder_ids), Chat.user_id != owner_id).values(folder_id=None)
+            )
+            await session.commit()
+
     async def delete_shared_chats_by_user_id(self, user_id: str, db: AsyncSession | None = None) -> bool:
         """Delete all shared chat snapshots created by a user."""
         from local_llm.models.shared_chats import SharedChat as SharedChatTable
