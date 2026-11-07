@@ -863,7 +863,9 @@ export const generateTags = async (token: string = '', model: string, messages: 
 
 		// The reply's JSON block, quotes repaired only if it does not parse (#306).
 		const parsed = parseJsonBlock(response);
-		return Array.isArray(parsed?.tags) ? parsed.tags.filter((t: unknown): t is string => typeof t === 'string') : [];
+		return Array.isArray(parsed?.tags)
+			? parsed.tags.filter((t: unknown): t is string => typeof t === 'string' && t.trim() !== '')
+			: [];
 	} catch (e) {
 		console.error('Failed to parse response: ', e);
 		return [];

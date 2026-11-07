@@ -52,7 +52,7 @@ describe('title and tag generation read the reply with it (#306)', () => {
 	});
 
 	it('keeps only the string tags (#647)', async () => {
-		vi.stubGlobal('fetch', reply('{"tags": [{"name": "x"}, "Math", 1, null, "Algebra"]}'));
+		vi.stubGlobal('fetch', reply('{"tags": [{"name": "x"}, "Math", 1, null, "", "  ", "Algebra"]}'));
 		expect(await generateTags('t', 'm', 'messages')).toEqual(['Math', 'Algebra']);
 		vi.stubGlobal('fetch', reply('{"tags": [1, 2]}'));
 		expect(await generateTags('t', 'm', 'messages')).toEqual([]);
