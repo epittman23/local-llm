@@ -2018,7 +2018,6 @@ async def sync_knowledge_diff(
             {
                 'file_id': file_model.id,
                 'checksum': (file_model.meta or {}).get('file_hash'),
-                'hash': file_model.hash,
                 'updated_at': file_model.updated_at or 0,
             }
         )
@@ -2029,7 +2028,6 @@ async def sync_knowledge_diff(
     unmodified_count = 0
     manifest_keys: set[tuple[str, str]] = set()
     kept_checksums: set[str] = set()
-    kept_hashes: set[str] = set()
     extra_copies: list[dict] = []
 
     for entry in form_data.manifest:
@@ -2049,28 +2047,16 @@ async def sync_knowledge_diff(
             # The newest old copy stays until the new version is up (#317).
             primary = max(copies, key=lambda c: c['updated_at'])
             modified.append({'filename': entry.filename, 'path': entry.path, 'stale_file_id': primary['file_id']})
-        if primary['hash']:
-            kept_hashes.add(primary['hash'])
-        extra_copies.extend(
-            {**copy, 'filename': entry.filename}
-            for copy in copies
-            if copy is not primary and copy['checksum'] != entry.checksum
-        )
+        extra_copies.extend({**copy, 'filename': entry.filename} for copy in copies if copy is not primary)
 
     for key, copies in indexed_files.items():
         if key not in manifest_keys:
             extra_copies.extend({**copy, 'filename': key[1]} for copy in copies)
 
-    # Every other copy goes, except one holding text a copy this sync keeps
-    # holds, at any path. Removing it used to delete chunks by its text hash
-    # across the whole base, the kept copy's included (#639). Removal now
-    # deletes by hash only when no other linked file has it (#792), so this
-    # guard is no longer needed; it is kept for now, and #813 removes it.
-    deleted = [
-        {'file_id': copy['file_id'], 'filename': copy['filename']}
-        for copy in extra_copies
-        if not (copy['hash'] and copy['hash'] in kept_hashes)
-    ]
+    # Every other copy goes, one holding the text of a copy this sync keeps
+    # included: removing a file deletes chunks by its text hash only when no
+    # other linked file has that hash (#792), so the kept copy's chunks stay (#813).
+    deleted = [{'file_id': copy['file_id'], 'filename': copy['filename']} for copy in extra_copies]
 
     # A new path whose bytes match a file the base keeps is a copy the base
     # de-duplicates by content: uploading it only failed, every sync, and left
