@@ -1501,3 +1501,22 @@ def embedding_batch_size_error(batch_size) -> str | None:
     if isinstance(batch_size, bool) or not isinstance(batch_size, int) or batch_size < 1:
         return f'Embedding Batch Size must be a whole number of at least 1 (got {batch_size!r}).'
     return None
+
+
+def find_in_lowered(text: str, needle: str) -> tuple[int, int] | None:
+    """Where a lower-cased `needle` sits in `text`, as (start, end) positions in `text` itself.
+
+    The search runs on `text.lower()`, but lowering can lengthen a character
+    (U+0130 becomes two), so an index found there is off in the original and
+    cutting an excerpt with it misses the match (#339, #646). None when there is
+    no match.
+    """
+    lowered = text.lower()
+    index = lowered.find(needle)
+    if index == -1:
+        return None
+    end = index + len(needle)
+    if len(lowered) == len(text):
+        return index, end
+    origin = [position for position, char in enumerate(text) for _ in char.lower()]
+    return origin[index], (origin[end - 1] + 1 if needle else origin[index])
