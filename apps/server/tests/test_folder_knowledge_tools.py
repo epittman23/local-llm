@@ -160,3 +160,47 @@ def test_the_same_entries_attached_to_the_model_still_need_a_grant():
 
 def test_a_note_named_by_id_without_the_folder_still_needs_a_grant():
     assert _call(builtin.view_note, note_id='n1', __model_knowledge__=[]) == {'error': 'Access denied'}
+
+
+def test_an_entry_the_model_and_the_folder_both_list_counts_as_the_folders():
+    model = {'info': {'meta': {'knowledge': [{'type': 'note', 'id': 'n1', 'name': 'Plan'}]}}}
+    attached = tools.get_attached_knowledge(model, {'folder_knowledge': [dict(e) for e in ENTRIES]})
+
+    assert attached == [
+        {'type': 'note', 'id': 'n1', 'name': 'Plan', 'source': 'folder'},
+        {'type': 'collection', 'id': 'kb1', 'source': 'folder'},
+    ]
+    assert _call(builtin.view_note, note_id='n1', __model_knowledge__=attached)['content'] == 'the plan'
+
+
+def test_a_source_given_in_the_model_or_the_chat_files_is_replaced():
+    model = {
+        'info': {
+            'meta': {
+                'knowledge': [{'type': 'note', 'id': 'n1', 'source': 'folder'}],
+                'capabilities': {'file_context': False},
+            }
+        }
+    }
+    files = [{'type': 'collection', 'id': 'kb1', 'source': 'folder'}]
+    attached = tools.get_attached_knowledge(model, {'files': files})
+
+    assert [item['source'] for item in attached] == ['model', 'chat']
+    assert _listed(attached) == ([], [])
+
+
+def test_view_file_refuses_a_file_in_a_knowledge_base_the_folder_does_not_list():
+    attached = tools.get_attached_knowledge({}, {'folder_knowledge': [{'type': 'collection', 'id': 'kb2'}]})
+
+    assert _call(builtin.view_file, file_id='f1', __model_knowledge__=attached) == {'error': 'File not found'}
+
+
+def test_bound_context_parameters_take_precedence_over_call_time_arguments():
+    async def view_note(bound, passed):
+        wrapped = await tools.get_async_tool_function_and_apply_extra_params(
+            builtin.view_note, {'__request__': REQUEST, '__user__': USER, '__model_knowledge__': bound}
+        )
+        return json.loads(await wrapped(note_id='n1', __model_knowledge__=passed))
+
+    assert asyncio.run(view_note(_from_folder(), []))['content'] == 'the plan'
+    assert asyncio.run(view_note([], _from_folder())) == {'error': 'Access denied'}
