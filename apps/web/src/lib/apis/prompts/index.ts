@@ -1,5 +1,6 @@
 import { WEBUI_API_BASE_URL } from '@/lib/constants';
 import { errorBody, errorDetail, requestError } from '@/lib/apis/errors';
+import { keepaliveInit } from '@/lib/apis/keepalive';
 
 type PromptItem = {
 	id?: string; // Prompt ID
@@ -297,10 +298,12 @@ export const updatePromptMetadata = async (
 	promptId: string,
 	name: string,
 	command: string,
-	tags: string[] = []
+	tags: string[] = [],
+	keepalive = false
 ) => {
 	let error = null;
 
+	const body = JSON.stringify({ name, command, tags });
 	const res = await fetch(`${WEBUI_API_BASE_URL}/prompts/id/${promptId}/update/meta`, {
 		method: 'POST',
 		headers: {
@@ -308,7 +311,8 @@ export const updatePromptMetadata = async (
 			'Content-Type': 'application/json',
 			authorization: `Bearer ${token}`
 		},
-		body: JSON.stringify({ name, command, tags })
+		body,
+		...keepaliveInit(body, keepalive)
 	})
 		.then(async (res) => {
 			if (!res.ok) throw await errorBody(res);
