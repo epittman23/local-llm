@@ -90,6 +90,46 @@ describe('useAccessGrants', () => {
 		await waitFor(() => expect(ids(result.current[0])).toBe('b'));
 	});
 
+	it('puts back the grants the server last confirmed when two saves both fail, not the unsaved first change', async () => {
+		const fails: ((e: unknown) => void)[] = [];
+		const { result } = renderHook(() =>
+			useAccessGrants([grant('x')], () => new Promise<Reply>((_resolve, reject) => fails.push(reject)))
+		);
+		act(() => void result.current[1]([grant('a')]));
+		act(() => void result.current[1]([grant('b')]));
+
+		await act(async () => fails[0]('offline'));
+		await act(async () => fails[1]('offline'));
+
+		expect(ids(result.current[0])).toBe('x');
+	});
+
+	it('puts back what an earlier, superseded save stored when the latest save fails', async () => {
+		const answers: { resolve: (v: Reply) => void; reject: (e: unknown) => void }[] = [];
+		const { result } = renderHook(() =>
+			useAccessGrants([grant('x')], () => new Promise<Reply>((resolve, reject) => answers.push({ resolve, reject })))
+		);
+		act(() => void result.current[1]([grant('a'), grant('*')]));
+		act(() => void result.current[1]([grant('b')]));
+
+		await act(async () => answers[0].resolve({ access_grants: [grant('a')] }));
+		await act(async () => answers[1].reject('offline'));
+
+		expect(ids(result.current[0])).toBe('a');
+	});
+
+	it('says the grants could not be read back when the reply has no body, and keeps the sent ones', async () => {
+		const error = vi.spyOn(toast, 'error');
+		const success = vi.spyOn(toast, 'success');
+		const { result } = renderHook(() => useAccessGrants([grant('x')], async () => null));
+
+		await act(() => result.current[1]([grant('a')]));
+
+		expect(error).toHaveBeenCalledWith('Saved, but the access could not be read back. Reopen the dialog to check it.');
+		expect(success).not.toHaveBeenCalled();
+		expect(ids(result.current[0])).toBe('a');
+	});
+
 	it('only keeps the grants when there is nothing to save them to yet', async () => {
 		const success = vi.spyOn(toast, 'success');
 		const { result } = renderHook(() => useAccessGrants([], null));
