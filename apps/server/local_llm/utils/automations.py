@@ -213,6 +213,27 @@ def _sub_daily(s: str) -> bool:
     return match is not None and match.group(1) in ('SECONDLY', 'MINUTELY', 'HOURLY')
 
 
+def pin_rule_time(s: str, tz: str | None = None, now: dt.datetime | None = None) -> str:
+    """The rule as it is saved: with a DTSTART at the user's minute when it takes its time from when it is read.
+
+    A daily or longer rule that does not state both its hour and minute takes
+    them from its anchor, which the scheduler sets to each run's due time
+    (#512). A time the clocks skip is due at a later one, so the rule moved to
+    that time for good (#670). Written down as a DTSTART when the rule is
+    saved, the time is kept. A rule with its own DTSTART, a sub-daily one
+    (aligned to its own grid) and one that states its hour and minute, as the
+    schedule picker's do, are saved as given: the picker shows a rule with a
+    DTSTART as custom text.
+    """
+    upper = s.upper()
+    if 'DTSTART' in upper or _sub_daily(s) or ('BYHOUR=' in upper and 'BYMINUTE=' in upper):
+        return s
+    if now is None:
+        zi = _resolve_tz(tz)
+        now = dt.datetime.now(zi).replace(tzinfo=None) if zi else dt.datetime.now()
+    return f'DTSTART:{now:%Y%m%dT%H%M}00\n{s}'
+
+
 def next_run_ns(s: str, tz: str | None = None, anchor_ns: int | None = None) -> int | None:
     """Next occurrence as epoch nanoseconds, respecting user timezone.
 
