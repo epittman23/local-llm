@@ -191,6 +191,54 @@ def test_a_file_whose_chunks_cannot_be_deleted_stays_listed(monkeypatch):
     assert row is not None
 
 
+def test_sync_cleanup_returns_the_files_it_kept(monkeypatch):
+    # The client reports the removals that did not happen (#639).
+    state = {}
+
+    async def scenario():
+        user, kb, top, files = await _world()
+        _setup(monkeypatch, VectorRecorder(failing={files['outside'].id, files['in_child'].id}))
+        form = knowledge_router.SyncCleanupForm(file_ids=[files['outside'].id], dir_ids=[top.id])
+        state['result'] = await knowledge_router.sync_knowledge_cleanup(kb.id, form, user=user, db=None)
+        return files
+
+    files = _run(scenario())
+
+    assert state['result'] == {'status': True, 'kept': [files['outside'].id, files['in_child'].id]}
+
+
+class FailOnce(VectorRecorder):
+    """Fails the first chunk delete of each listed file, then succeeds."""
+
+    async def delete(self, collection_name, ids=None, filter=None):
+        file_id = (filter or {}).get('file_id')
+        if file_id in self.failing:
+            self.failing = self.failing - {file_id}
+            raise RuntimeError('vector store unavailable')
+        self.deleted.append((collection_name, filter))
+
+
+@pytest.mark.parametrize(
+    ('recorder', 'still_kept'), [(VectorRecorder, True), (FailOnce, False)], ids=['always-fails', 'fails-once']
+)
+def test_sync_cleanup_lists_a_kept_file_once_and_only_while_it_stays(monkeypatch, recorder, still_kept):
+    # A file in a vanished folder is in file_ids and under every dir_id up to the
+    # top, so each pass tries it again (#639).
+    state = {}
+
+    async def scenario():
+        user, kb, top, files = await _world()
+        child = next(d for d in await Knowledges.get_all_directories(kb.id) if d.name == 'child')
+        _setup(monkeypatch, recorder(failing={files['in_child'].id}))
+        form = knowledge_router.SyncCleanupForm(file_ids=[files['in_child'].id], dir_ids=[top.id, child.id])
+        state['result'] = await knowledge_router.sync_knowledge_cleanup(kb.id, form, user=user, db=None)
+        return files
+
+    files = _run(scenario())
+
+    assert state['result'] == {'status': True, 'kept': [files['in_child'].id] if still_kept else []}
+
+
 async def _allowed(*_a, **_k):
     return None
 

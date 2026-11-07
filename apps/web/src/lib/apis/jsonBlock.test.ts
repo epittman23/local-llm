@@ -50,4 +50,18 @@ describe('title and tag generation read the reply with it (#306)', () => {
 		vi.stubGlobal('fetch', reply('no title'));
 		expect(await generateTitle('t', 'm', [])).toBeNull();
 	});
+
+	it('keeps only the string tags (#647)', async () => {
+		vi.stubGlobal('fetch', reply('{"tags": [{"name": "x"}, "Math", 1, null, "", "  ", "Algebra"]}'));
+		expect(await generateTags('t', 'm', 'messages')).toEqual(['Math', 'Algebra']);
+		vi.stubGlobal('fetch', reply('{"tags": [1, 2]}'));
+		expect(await generateTags('t', 'm', 'messages')).toEqual([]);
+	});
+
+	it('gives no title unless it is a non-empty string (#647)', async () => {
+		for (const title of ['42', '{"name": "x"}', '""', 'null', 'true']) {
+			vi.stubGlobal('fetch', reply(`{"title": ${title}}`));
+			expect(await generateTitle('t', 'm', [])).toBeNull();
+		}
+	});
 });

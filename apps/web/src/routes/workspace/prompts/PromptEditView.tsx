@@ -136,9 +136,10 @@ export function PromptEditView({
 	};
 
 	// --- auto-saving metadata -------------------------------------------
-	// Leaving the page saves a pending change at once instead of dropping it.
+	// Leaving the page saves a pending change at once instead of dropping it,
+	// with keepalive when the page itself goes away (#675).
 	const debouncedMetadataSave = useDebouncedCallback(
-		async (next: { name: string; command: string; tags: { name: string }[] }) => {
+		async (next: { name: string; command: string; tags: { name: string }[] }, unloading: boolean) => {
 			if (!isValidCommand(next.command)) {
 				toast.error('Only alphanumeric characters and hyphens are allowed in the command string.');
 				setCommand(saved.current.command);
@@ -150,7 +151,8 @@ export function PromptEditView({
 					prompt.id,
 					next.name,
 					next.command,
-					next.tags.map((t) => t.name)
+					next.tags.map((t) => t.name),
+					unloading
 				);
 				saved.current = next;
 				toast.success('Saved');

@@ -297,6 +297,13 @@ change:
 4. **Recovery:** `kill -9` the app while it owns the stack, then start it
    again. It adopts the stack, and closing it stops everything.
 5. **Cancel** mid-startup: nothing is left running.
+6. **Recovery during a stop:** close the app, and while the dialog shows
+   the shutdown steps, `kill -9` the app. `owned.json` in
+   `~/.config/Local LLM/` says `"stopping": true`. Start it again at once,
+   while `pgrep -a -x make` still lists the stack: it shows
+   "Stop the backend an earlier launch started" instead of adopting it, and
+   `backend.log.1` shows the backend's own shutdown steps finishing, not a
+   forced exit.
 
 On 2026-10-23 steps 1 to 5 were run this way, with Playwright's Electron
 driver, against a real stack (no model served: llama.cpp was not built).
