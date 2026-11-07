@@ -811,6 +811,13 @@ def _completed(data: dict, current_output: list) -> tuple[list, dict | None]:
     }
 
 
+def _incomplete(data: dict, current_output: list) -> tuple[list, dict | None]:
+    # Cut off (by max_output_tokens or a content filter): kept as a completed one is, with the reason (#662).
+    new_output, metadata = _completed(data, current_output)
+    reason = ((data.get('response') or {}).get('incomplete_details') or {}).get('reason')
+    return new_output, {**(metadata or {}), 'incomplete': reason or 'incomplete'}
+
+
 def _failed(data: dict, current_output: list) -> tuple[list, dict | None]:
     # `response` may be null on a failure; the caller supplies a message then (#167).
     return current_output, {'error': (data.get('response') or {}).get('error', {})}
@@ -822,6 +829,7 @@ _RESPONSES_EVENT_HANDLERS = {
     'response.reasoning_summary_part.added': _part_added('summary'),
     'response.output_item.done': _item_done,
     'response.completed': _completed,
+    'response.incomplete': _incomplete,
     'response.failed': _failed,
 }
 
@@ -5100,6 +5108,9 @@ class _StreamingReply:
                 self.usage = stream.add_usage(response_metadata['usage'])
                 response_metadata['usage'] = self.usage
 
+            if response_metadata.get('incomplete'):
+                stream.cut_off = response_metadata['incomplete']
+
             if 'error' in response_metadata:
                 # `response.failed`: save the error as the Chat Completions path
                 # does, so the reply still reads as failed after a reload, and
@@ -5164,6 +5175,11 @@ class _StreamingReply:
         error = data.get('error') or (choices[0].get('error') if choices else None)
         if not error and choices and choices[0].get('finish_reason') == 'error':
             error = {'message': 'The provider ended the reply with an error.'}
+        # A Responses API error event carries its fields at the top level (#662).
+        if not error and data.get('type') == 'error':
+            error = {key: data[key] for key in ('code', 'message', 'param') if data.get(key) is not None} or {
+                'message': 'The provider ended the reply with an error.'
+            }
         if error:
             log.error('Provider returned error (streaming): %s', error)
             stream.errored = True
@@ -5184,6 +5200,8 @@ class _StreamingReply:
 
         if not choices:
             return False
+        if choices[0].get('finish_reason') == 'length':
+            stream.cut_off = 'length'
 
         delta = choices[0].get('delta', {})
         await self._emit_delta_citations(delta.get('annotations'))
@@ -5571,16 +5589,17 @@ class _StreamingReply:
 
     async def _queue_tool_calls(self, stream: '_StreamPass') -> None:
         """Finish the streamed function_call items and queue their calls; or, for the Responses API, queue
-        the function_call items that have no output yet. None from a response that ended in an error:
-        its calls may be cut off, and the reply is failed already (#501)."""
-        if stream.errored:
-            answered = {item.get('call_id') for item in self.output if item.get('type') == 'function_call_output'}
-            for item in self.output:
-                # Not run: marked failed, or the reply's finish would show them as completed.
-                if item.get('type') == 'function_call' and item.get('call_id') not in answered:
-                    if item.get('status') in (None, 'in_progress'):
-                        log.warning('Not running tool call %s: its response ended in an error', item.get('name'))
-                        item['status'] = 'failed'
+        the function_call items that have no output yet. None from a response that ended in an error
+        (#501) or was cut off (#662): its calls may be incomplete. The error is shown already; a cut-off
+        that held back calls is reported here, as it may be a token limit the user can raise."""
+        if stream.errored or stream.cut_off:
+            if self._fail_unrun_calls() and not stream.errored:
+                error = {
+                    'message': f'The reply was cut off (reason: {stream.cut_off}) before its tool calls were complete, '
+                    'so they were not run.'
+                }
+                await self._save_error(error)
+                await self.event_emitter({'type': 'chat:completion', 'data': {'error': error}})
             return
         if stream.response_tool_calls:
             for tc in stream.response_tool_calls:
@@ -5637,6 +5656,20 @@ class _StreamingReply:
                 )
         if responses_api_tool_calls:
             self.tool_calls.append(_split_tool_calls(responses_api_tool_calls))
+
+    def _fail_unrun_calls(self) -> bool:
+        """Mark this response's function_call items that never ran failed, or the reply would show them as
+        finished. True when any were."""
+        answered = {item.get('call_id') for item in self.output if item.get('type') == 'function_call_output'}
+        failed = False
+        for item in self.output:
+            if item.get('type') == 'function_call' and item.get('call_id') not in answered:
+                # Even 'completed': a finished item from a response that ended early was still never run.
+                if item.get('status') in (None, 'in_progress', 'incomplete', 'completed'):
+                    log.warning('Not running tool call %s: its response ended early', item.get('name'))
+                    item['status'] = 'failed'
+                    failed = True
+        return failed
 
     # --- the reply ------------------------------------------------------------
 
@@ -5766,6 +5799,9 @@ class _StreamingReply:
                 await asyncio.shield(response.body_iterator.aclose())
             except (asyncio.CancelledError, Exception):
                 pass
+        if not cancelled:
+            # The body failed mid-stream: its tool calls were never run (#662).
+            self._fail_unrun_calls()
 
         async def save_cancelled_state():
             if cancelled:
@@ -6111,6 +6147,8 @@ class _StreamPass:
         self.response_tool_calls = []
         # The provider ended this response with an error: its tool calls are not run (#501).
         self.errored = False
+        # Why the provider cut this response off ('length', 'max_output_tokens', ...); its calls are not run (#662).
+        self.cut_off: str | None = None
         self.deltas = _DeltaBuffer(
             reply.event_emitter,
             reply.save_stream,
