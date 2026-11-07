@@ -90,6 +90,19 @@ async def _linked_elsewhere(file_id: str, knowledge_id: str, db: AsyncSession) -
     return any(other != knowledge_id for other in linked)
 
 
+async def delete_file_chunks(knowledge_id: str, file: FileModel, db: AsyncSession) -> None:
+    """Delete a file's chunks from a knowledge base's collection.
+
+    By file id, which a file's chunks carry, and by text hash for any of that
+    text stored without one, unless another file linked to the base has the
+    same hash: the delete would take that file's chunks too, leaving it listed
+    but never found (#792).
+    """
+    await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=knowledge_id, filter={'file_id': file.id})
+    if file.hash and not await Knowledges.has_other_file_with_hash(knowledge_id, file.id, file.hash, db=db):
+        await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=knowledge_id, filter={'hash': file.hash})
+
+
 ############################
 # Knowledge Base Embedding
 ############################
@@ -1754,13 +1767,7 @@ async def remove_file_from_knowledge_by_id(
 
     # Remove content from the vector database
     try:
-        await ASYNC_VECTOR_DB_CLIENT.delete(
-            collection_name=knowledge.id, filter={'file_id': form_data.file_id}
-        )  # Remove by file_id first
-
-        await ASYNC_VECTOR_DB_CLIENT.delete(
-            collection_name=knowledge.id, filter={'hash': file.hash}
-        )  # Remove by hash as well in case of duplicates
+        await delete_file_chunks(knowledge.id, file, db)
     except Exception as e:
         log.debug('This was most likely caused by bypassing embedding processing')
         log.debug(e)
@@ -2055,8 +2062,9 @@ async def sync_knowledge_diff(
             extra_copies.extend({**copy, 'filename': key[1]} for copy in copies)
 
     # Every other copy goes, except one holding text a copy this sync keeps
-    # holds, at any path: removing a file also deletes chunks by its text hash
-    # across the whole base, which would take the kept copy's chunks with it.
+    # holds, at any path. Removing it used to delete chunks by its text hash
+    # across the whole base, the kept copy's included (#639); removal now
+    # deletes by hash only when no other linked file has it (#792).
     deleted = [
         {'file_id': copy['file_id'], 'filename': copy['filename']}
         for copy in extra_copies
@@ -2132,8 +2140,7 @@ async def _remove_files_from_knowledge(knowledge_id: str, file_ids: list[str], u
         # Chunks first: if they cannot be deleted, the link stays, so the file
         # is still listed and the removal can be retried (#195).
         try:
-            await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=knowledge_id, filter={'file_id': file_id})
-            await ASYNC_VECTOR_DB_CLIENT.delete(collection_name=knowledge_id, filter={'hash': file.hash})
+            await delete_file_chunks(knowledge_id, file, db)
         except Exception as e:
             log.warning('Kept file %s in knowledge %s: deleting its chunks failed: %s', file_id, knowledge_id, e)
             kept.append(file_id)
