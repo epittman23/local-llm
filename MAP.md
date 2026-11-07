@@ -395,7 +395,8 @@ surface (see `docs/history/migration-plan.md`'s Phases 3-11).
   **`query/`**, **`utils/`** (only the functions from the SvelteKit app's
   `utils/index.ts` that ported pages actually use, plus small React hooks: `useDebouncedValue`, `useDebouncedCallback`, `useShiftKey`),
   **`access/`** (`accessGrants.ts`: the pure grant-rewriting rules behind
-  `AccessControl`), and **`settings/`** (`userSettings.ts`: the user's saved
+  `AccessControl`; `useAccessGrants`, the save-on-change state of the skill,
+  prompt and tool access dialogs, which shows the grants the server stored), and **`settings/`** (`userSettings.ts`: the user's saved
   UI settings through TanStack Query, for model pinning; `useConfigDraft`
   and `useAdminSaved`, the load-edit-save pattern of the admin tabs;
   `useSettingsUrl`, the `?settings=` param).
