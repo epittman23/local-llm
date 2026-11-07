@@ -268,7 +268,10 @@ def runs_between_ns(
     unstated time from there, as the scheduler's did, and a COUNT counts from
     the rule's own DTSTART. The Scheduled Tasks calendar used to re-anchor
     the rule at the next run, so a COUNT started over there and it showed
-    runs that never come (#356).
+    runs that never come (#356). A sub-daily rule, which takes nothing from
+    its anchor but where to start walking, is read from the range's start
+    when that is later, so a range far ahead is not reached by walking every
+    run before it (#667).
     """
     if start_ns >= end_ns:
         return []
@@ -277,10 +280,16 @@ def runs_between_ns(
     def local(ns: int) -> dt.datetime:
         return dt.datetime.fromtimestamp(ns / 1_000_000_000, tz=zi).replace(tzinfo=None)
 
-    rule = _parse_rule(s, local(anchor_ns))
-    runs: list[int] = []
     # The scan runs in wall-clock time; starting a few hours early covers a DST change.
-    for when in rule.xafter(local(start_ns) - dt.timedelta(hours=3), inc=True):
+    scan_start = local(start_ns) - dt.timedelta(hours=3)
+    anchor = local(anchor_ns)
+    if _sub_daily(s):
+        # `_parse_rule` moves a start more than 100,000 steps before the anchor
+        # forward by whole steps, keeping its phase and what is left of its COUNT (#267).
+        anchor = max(anchor, scan_start)
+    rule = _parse_rule(s, anchor)
+    runs: list[int] = []
+    for when in rule.xafter(scan_start, inc=True):
         when_ns = int((when.replace(tzinfo=zi) if zi else when).timestamp() * 1_000_000_000)
         if when_ns >= end_ns or len(runs) >= limit:
             break
