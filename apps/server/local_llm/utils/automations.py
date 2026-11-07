@@ -157,6 +157,23 @@ def _with_count(rule: str, count: int) -> str | None:
     return replaced if n == 1 else None
 
 
+_DTSTART_VALUE = re.compile(r'\d{8}(T\d{6}Z?)?', re.IGNORECASE)
+
+
+def _check_dtstart(s: str) -> None:
+    """Raise ValueError for a DTSTART line that is not a whole date or date-time (#642).
+
+    dateutil reads `DTSTART:20261201T00` and `DTSTART:20261201T` as midnight,
+    so an incomplete start time would run the automation at 00:00. The
+    forms kept are `YYYYMMDD`, `YYYYMMDDTHHMMSS` and the same with `Z`, with
+    or without parameters such as `;TZID=Europe/Paris`.
+    """
+    for line in s.splitlines():
+        head, sep, value = line.strip().partition(':')
+        if re.match(r'DTSTART(;|$)', head, re.IGNORECASE) and not (sep and _DTSTART_VALUE.fullmatch(value.strip())):
+            raise ValueError(f'DTSTART must be a whole date or date-time, got {value.strip()!r}')
+
+
 def validate_rrule(s: str, tz: str = None) -> None:
     """Raise ValueError if the RRULE is malformed or exhausted.
 
@@ -170,6 +187,7 @@ def validate_rrule(s: str, tz: str = None) -> None:
     zi = _resolve_tz(tz)
     now = dt.datetime.now(zi).replace(tzinfo=None) if zi else dt.datetime.now()
     try:
+        _check_dtstart(s)
         rule = _parse_rule(s, now)
     except Exception as e:
         raise ValueError(ERROR_MESSAGES.AUTOMATION_INVALID_RRULE(e))
