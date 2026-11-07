@@ -77,8 +77,8 @@ def test_every_copy_of_a_file_gone_from_the_folder_is_deleted(monkeypatch):
 
 
 def test_an_identical_extra_copy_is_left_alone(monkeypatch):
-    # Removing a file also deletes chunks by its text hash, which would take the
-    # kept copy's chunks with it.
+    # Removing a file used to delete chunks by its text hash, the kept copy's
+    # included (#792).
     twin = ('twin', 'a.txt', 'Y', 'text-Y', 1)
 
     diff = _diff(monkeypatch, [('a.txt', 'Y')], [CURRENT, twin])
@@ -101,8 +101,8 @@ def test_an_extra_copy_with_the_kept_copys_text_is_left_alone(monkeypatch, order
 
 
 def test_a_file_gone_from_the_folder_holding_text_kept_at_another_path_is_left_alone(monkeypatch):
-    # Removing b.txt deletes chunks by its text hash across the whole base,
-    # which would take a.txt's chunks with it.
+    # Removing b.txt used to delete chunks by its text hash across the whole
+    # base, a.txt's included (#792).
     gone = ('gone', 'b.txt', 'Z', 'text-Y', 1)
 
     diff = _diff(monkeypatch, [('a.txt', 'Y')], [CURRENT, gone])

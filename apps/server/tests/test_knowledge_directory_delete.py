@@ -5,8 +5,9 @@ directory delete only dropped the knowledge_file links. The chunks stayed
 in the knowledge base's vector collection, which retrieval searches whole,
 so chat kept answering from the deleted files, and with the link gone they
 could no longer be removed from the UI (#195). It now removes each file as
-the single-file remove and the sync cleanup do: vectors by file_id and
-hash, and the File row unless another knowledge base still links it.
+the single-file remove and the sync cleanup do: vectors by file_id, and by
+hash unless another file in the base has it (#792), and the File row unless
+another knowledge base still links it.
 
 Runs against the suite's temporary SQLite database (tests/conftest.py points
 DATA_DIR at a temp directory, and DATABASE_URL defaults to a file in it, migrated on import),

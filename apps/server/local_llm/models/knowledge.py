@@ -759,6 +759,23 @@ class KnowledgeTable:
         except Exception:
             return False
 
+    async def has_other_file_with_hash(
+        self, knowledge_id: str, file_id: str, hash: str, db: AsyncSession | None = None
+    ) -> bool:
+        """Whether a file other than file_id linked to the base has this text hash.
+
+        An error is raised, not read as "no": the answer decides whether chunks
+        are deleted by hash, which would take that other file's too.
+        """
+        async with get_async_db_context(db) as db:
+            result = await db.execute(
+                select(KnowledgeFile.file_id)
+                .join(File, File.id == KnowledgeFile.file_id)
+                .filter(KnowledgeFile.knowledge_id == knowledge_id, KnowledgeFile.file_id != file_id, File.hash == hash)
+                .limit(1)
+            )
+            return result.scalars().first() is not None
+
     async def remove_file_from_knowledge_by_id(
         self, knowledge_id: str, file_id: str, db: AsyncSession | None = None
     ) -> bool:
