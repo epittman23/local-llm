@@ -2063,8 +2063,9 @@ async def sync_knowledge_diff(
 
     # Every other copy goes, except one holding text a copy this sync keeps
     # holds, at any path. Removing it used to delete chunks by its text hash
-    # across the whole base, the kept copy's included (#639); removal now
-    # deletes by hash only when no other linked file has it (#792).
+    # across the whole base, the kept copy's included (#639). Removal now
+    # deletes by hash only when no other linked file has it (#792), so this
+    # guard is no longer needed; it is kept for now, and #813 removes it.
     deleted = [
         {'file_id': copy['file_id'], 'filename': copy['filename']}
         for copy in extra_copies

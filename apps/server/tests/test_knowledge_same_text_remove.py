@@ -20,6 +20,8 @@ import asyncio
 import uuid
 from types import SimpleNamespace
 
+import pytest
+
 from local_llm.models.files import FileForm, Files
 from local_llm.models.knowledge import KnowledgeForm, Knowledges
 from local_llm.models.users import Users
@@ -174,3 +176,37 @@ def test_deleting_one_of_two_same_text_files_keeps_the_others_chunks(monkeypatch
     kb, files = asyncio.run(scenario())
 
     assert store.owners(kb.id) == [files['twin'].id]
+
+
+@pytest.mark.parametrize('path', ['file-remove', 'sync-cleanup'])
+def test_removing_a_file_with_no_hash_keeps_other_chunks_without_one(monkeypatch, path):
+    # A file with no text hash was deleted by filter={'hash': None}, which matches
+    # every chunk with no hash, such as a batch-added file's.
+    store = _setup(monkeypatch)
+
+    async def scenario():
+        tag = uuid.uuid4().hex[:8]
+        user = await Users.insert_new_user(f'u{tag}', 'Ada', f'u{tag}@example.invalid', role='user')
+        kb = await Knowledges.insert_new_knowledge(user.id, KnowledgeForm(name='Notes', description=''))
+        files = {}
+        for name in ('hashless', 'batch'):
+            f = await Files.insert_new_file(
+                user.id, FileForm(id=f'{name}-{tag}', filename=f'{name}.txt', path=f'/store/{name}')
+            )
+            await Knowledges.add_file_to_knowledge_by_id(kb.id, f.id, user.id)
+            store.add(kb.id, file_id=f.id)
+            files[name] = f
+        user = SimpleNamespace(id=user.id, role='user')
+        if path == 'file-remove':
+            form = knowledge_router.KnowledgeFileIdForm(file_id=files['hashless'].id)
+            await knowledge_router.remove_file_from_knowledge_by_id(
+                None, kb.id, form, delete_file=True, user=user, db=None
+            )
+        else:
+            form = knowledge_router.SyncCleanupForm(file_ids=[files['hashless'].id])
+            await knowledge_router.sync_knowledge_cleanup(kb.id, form, user=user, db=None)
+        return kb, files
+
+    kb, files = asyncio.run(scenario())
+
+    assert store.owners(kb.id) == [files['batch'].id]
