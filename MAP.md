@@ -428,10 +428,12 @@ structural summary.
 - **`src/stack.ts`**:
   - the start decision and the UI-staleness check;
   - crash adoption (`owned.json` against `/proc/<pid>/stat`, and the address
-    and checkout it records), or stopping a mismatched stack;
+    and checkout it records), or stopping a mismatched stack, or waiting for
+    one a crashed launch was stopping;
   - the `make backend` / build / `compose down` commands, run in a login
     shell;
-  - `stopGroup()`, one SIGINT and a bounded wait;
+  - `stopGroup()`, one SIGINT (none for a stack already sent it) and a
+    bounded wait;
   - `probe()`, `fetchText()` and `LogTail`;
   - `isOwnDevServer()`, whether `:5174` is this checkout's `make frontend`.
 - **`src/progress.ts`**: the progress dialog's step reducer, driven by the
